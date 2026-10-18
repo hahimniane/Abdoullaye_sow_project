@@ -463,7 +463,7 @@ test("every label string has French", () => {
     "Label format",
     "Letter sheet — Avery 5524 weatherproof, 6 per page",
     "Thermal printer 4×6",
-    "Labels per package",
+    "Labels per piece",
     "2 — one for each side (recommended)",
     "1 — to replace a single torn label",
     "Use weatherproof polyester or vinyl labels and cover each one with clear packing tape. On a thermal printer use thermal-transfer labels with a resin ribbon; direct-thermal labels fade in a hot container.",

@@ -48,6 +48,13 @@ const LINE_FIELDS: Record<string, string> = {
   quantity: "quantité",
   description: "description",
   owner: "propriétaire",
+  size: "taille",
+  destination: "destination",
+  price: "prix",
+  "pay on arrival": "paiement à l’arrivée",
+  // A line with pieces (line_pieces.js): what they are, and their prices.
+  pieces: "colis",
+  "piece prices": "prix des colis",
 };
 
 // shipment_tracking.js CONTAINER_STATUS_LABEL.
@@ -80,13 +87,33 @@ function plural(count: string, one: string, many: string) {
   return Number(count) === 1 ? one : many;
 }
 
-/** "car 1HG…", "3 barrels", "a line" or a typed description. */
+/**
+ * One counted part of a piece summary (line_pieces.js `pieceSummaryText`):
+ * "2 barrels", "1 box", "3 items", "1 car"; null for anything else (a typed
+ * name, "2 × TV"), which is carried across as written.
+ */
+function piecePart(value: string): string | null {
+  const match = /^(\d+) (barrels?|box(?:es)?|items?|cars?)$/.exec(value);
+  if (!match) return null;
+  const n = match[1];
+  if (match[2].startsWith("barrel")) return `${n} ${plural(n, "baril", "barils")}`;
+  if (match[2].startsWith("box")) return `${n} colis`;
+  if (match[2].startsWith("item")) return `${n} ${plural(n, "article", "articles")}`;
+  return `${n} ${plural(n, "voiture", "voitures")}`;
+}
+
+/** "car 1HG…", "3 barrels", "2 barrels, 1 box, TV", "a line" or a typed description. */
 function lineWhat(value: string) {
   let match = /^car (.+)$/.exec(value);
   if (match) return `la voiture ${match[1]}`;
   match = /^(\d+) barrels?$/.exec(value);
   if (match) return `${match[1]} ${plural(match[1], "baril", "barils")}`;
   if (value === "a line") return "une ligne";
+  // A piece summary: each counted part in French, each typed name as it is.
+  const parts = value.split(", ");
+  if (parts.some((part) => piecePart(part) !== null)) {
+    return parts.map((part) => piecePart(part) ?? part).join(", ");
+  }
   return value;
 }
 
@@ -129,11 +156,25 @@ const rules: Rule[] = [
     `Ajout de ${lineWhat(m[1])} (stock de l’entreprise)${m[2] ? `, destinataire ${m[2]}` : ""}`],
   [/^Added (car \S+|\d+ barrels?|\d+ × .+?) for (.+?)(?:, to (.+))?$/, (m) =>
     `Ajout de ${lineWhat(m[1])} pour ${m[2]}${m[3] ? `, destinataire ${m[3]}` : ""}`],
+  // A line with pieces: "Added 2 barrels, 1 box for Fatou, to Mariama".
+  [/^Added ((?:\d+ (?:barrels?|box(?:es)?|items?)|\d+ × [^,]+)(?:, [^,]+)*?) for (.+?)(?:, to (.+))?$/, (m) =>
+    `Ajout de ${lineWhat(m[1])} pour ${m[2]}${m[3] ? `, destinataire ${m[3]}` : ""}`],
+  // assignContainerLines, per package: "Added 2 barrels, 1 box to MSKU1234567".
+  [/^Added ((?:car \S+|\d+ (?:barrels?|box(?:es)?|items?)|\d+ × [^,]+)(?:, [^,]+)*?) to (.+)$/, (m) =>
+    `Ajout de ${lineWhat(m[1])} à ${m[2]}`],
+  // A split across containers (assignContainerLines with pieceCounts).
+  [/^Split (\S+): (\d+) of (\d+) pieces to (.+), (\d+) stay waiting as (\S+)$/, (m) =>
+    `Partage de ${m[1]} : ${m[2]} colis sur ${m[3]} vers ${m[4]}, ${m[5]} ` +
+      `${Number(m[5]) === 1 ? "reste" : "restent"} en attente sous ${m[6]}`],
+  [/^Split from (\S+): (\d+) pieces? waiting for a container$/, (m) =>
+    `Partagé depuis ${m[1]} : ${m[2]} colis en attente d’un conteneur`],
   [new RegExp(`^Removed (.+) \\((${MONEY})\\) from (.+)$`), (m) =>
     `${removal(m[1])} (${m[2]}) de ${m[3]}`],
   [/^Removed (.+)$/, (m) => removal(m[1])],
-  // updateContainerLine: "Edited 5 barrels (was 3 barrels): quantity for Fatou".
-  [/^Edited (car \S+|\d+ barrels?|\d+ × .+?)(?: \(was (car \S+|\d+ barrels?|\d+ × .+?)\))?: (.+?)(?: for (.+)|( \(business stock\)))?$/, (m) => {
+  // updateContainerLine: "Edited 5 barrels (was 3 barrels): quantity for
+  // Fatou", or with pieces "Edited 2 barrels, 1 box (was 3 barrels): pieces
+  // for Fatou". The fields must all be known, or the sentence is left whole.
+  [/^Edited (.+?)(?: \(was (.+?)\))?: (.+?)(?: for (.+)|( \(business stock\)))?$/, (m) => {
     const fields = fieldList(m[3]);
     if (!fields) return null;
     return `Modification de ${lineWhat(m[1])}` +

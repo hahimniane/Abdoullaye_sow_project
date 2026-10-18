@@ -5041,7 +5041,7 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Letter sheet — Avery 5524 weatherproof, 6 per page":
     "Feuille Lettre — Avery 5524 résistante aux intempéries, 6 par page",
   "Thermal printer 4×6": "Imprimante thermique 4×6",
-  "Labels per package": "Étiquettes par colis",
+  "Labels per piece": "Étiquettes par colis",
   "2 — one for each side (recommended)": "2 — une pour chaque côté (recommandé)",
   "1 — to replace a single torn label": "1 — pour remplacer une seule étiquette déchirée",
   "Use weatherproof polyester or vinyl labels and cover each one with clear packing tape. On a thermal printer use thermal-transfer labels with a resin ribbon; direct-thermal labels fade in a hot container.":
@@ -5152,6 +5152,55 @@ Object.assign(TEXT_TRANSLATIONS, {
     "Un code QR, un code de suivi et les deux numéros de téléphone pour chacun des colis sélectionnés.",
   "— a QR code, tracking code and both phone numbers.":
     "— un code QR, un code de suivi et les deux numéros de téléphone.",
+});
+
+// Pieces on lines (docs/WAITING_PACKAGES.md "Pieces", "Split across
+// containers"): the shared pieces editor, the register form, the split
+// stepper, group money and the public tracking page's parts. Sentences that
+// carry a count are built per language in piece-drafts.ts / waiting-packages.ts.
+Object.assign(TEXT_TRANSLATIONS, {
+  "Remove this piece": "Retirer ce colis",
+  "What is in it (optional)": "Ce qu’il contient (facultatif)",
+  "What is in it": "Ce qu’il contient",
+  "Add another piece": "Ajouter un autre colis",
+  "Barrels, boxes or other things": "Barils, cartons ou autres choses",
+  "All the pieces for one receiver are one package. Save & add another keeps the sender, for a different receiver or country.":
+    "Tous les colis pour un même destinataire forment un seul envoi. « Enregistrer et ajouter un autre » garde l’expéditeur, pour un autre destinataire ou un autre pays.",
+  "Save without printing": "Enregistrer sans imprimer",
+  "Set each piece's price in Edit package.": "Fixez le prix de chaque colis dans « Modifier le colis ».",
+  "Save pay on arrival": "Enregistrer le paiement à l’arrivée",
+  "Added to the container": "Ajouté au conteneur",
+  "Print new labels for the pieces that stay and put them on those pieces. No message is sent now; each part gets its own departed and ready-for-pickup messages.":
+    "Imprimez de nouvelles étiquettes pour les colis qui restent et collez-les sur ces colis. Aucun message n’est envoyé maintenant ; chaque partie reçoit ses propres messages de départ et de mise à disposition.",
+  "Print labels for the pieces that stay": "Imprimer les étiquettes des colis qui restent",
+  "The pieces that stay wait with their own code. No message is sent now; each part gets its own departed and ready-for-pickup messages. Print new labels for the pieces that stay.":
+    "Les colis qui restent attendent avec leur propre code. Aucun message n’est envoyé maintenant ; chaque partie reçoit ses propres messages de départ et de mise à disposition. Imprimez de nouvelles étiquettes pour les colis qui restent.",
+  "Several customers' pieces in one go? Save each customer's share and add the next.":
+    "Les colis de plusieurs clients d’un coup ? Enregistrez la part de chaque client, puis ajoutez la suivante.",
+  Split: "Partagé",
+  // The public tracking page (guest-tracking.tsx).
+  "This shipment travels in parts": "Cet envoi voyage en plusieurs parties",
+  "Each part has its own code and its own updates.": "Chaque partie a son propre code et ses propres mises à jour.",
+  "Final price": "Prix final",
+  Balance: "Solde",
+  "For your privacy, only the shipment status, its payment and shipping details are shown here.":
+    "Pour votre confidentialité, seuls le statut de l’envoi, son paiement et les détails d’expédition sont affichés ici.",
+  // The server's refusals for pieces (container_manifest.js CONTAINER_MESSAGES).
+  "Add at least one piece.": "Ajoutez au moins un colis.",
+  "A package can have at most 60 pieces.": "Un envoi peut compter au plus 60 colis.",
+  "Say what each piece is: a barrel, a box, or something else.":
+    "Indiquez ce qu’est chaque colis : un baril, un carton ou autre chose.",
+  "Say what each box or item is.": "Indiquez ce que contient chaque carton ou ce qu’est chaque article.",
+  "Keep each piece's description to 120 characters.":
+    "Limitez la description de chaque colis à 120 caractères.",
+  "Enter a piece's length, width and height in inches, or leave all three empty.":
+    "Saisissez la longueur, la largeur et la hauteur d’un colis en pouces, ou laissez les trois vides.",
+  "Enter each piece's price in dollars, zero or more.":
+    "Saisissez le prix de chaque colis en dollars, zéro ou plus.",
+  "Choose how many pieces go in: from 1 to the number the package has.":
+    "Choisissez combien de colis partent : de 1 au nombre que compte l’envoi.",
+  "Other parts of this package are still listed. Remove them first.":
+    "D’autres parties de cet envoi sont encore listées. Retirez-les d’abord.",
 });
 
 // Inventory (docs/INVENTORY.md): the products, stock, tags and counter-sales
@@ -5718,6 +5767,12 @@ export const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {
   "Price ($)": "Prix ($)",
   optional: "facultatif",
   "New packages open on this country": "Les nouveaux colis s’ouvrent sur ce pays",
+  // Pieces on lines: aria-labels and placeholders.
+  "What this piece is": "Ce qu’est ce colis",
+  "e.g. a TV, a generator": "p. ex. une télé, un groupe électrogène",
+  "e.g. clothes, shoes": "p. ex. vêtements, chaussures",
+  "One piece fewer": "Un colis de moins",
+  "One piece more": "Un colis de plus",
 };
 
 // Several English strings share one French translation ("Annulé" is the

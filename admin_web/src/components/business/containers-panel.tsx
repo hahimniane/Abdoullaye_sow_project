@@ -71,6 +71,7 @@ import {
   emptyContainerDraft,
   emptyContainerLineDraft,
   filterContainers,
+  lineDraftHasPieces,
   filterParkedCarPicks,
   lineDraftFromParkedCar,
   nextContainerStatus,
@@ -94,7 +95,9 @@ import {
   type LineStage,
   type ParkedCarPick,
 } from "@/lib/container-manifest";
-import { defaultWaitingDestination } from "@/lib/waiting-packages";
+import { buildLineGroups, defaultWaitingDestination, groupForLine } from "@/lib/waiting-packages";
+import { newPieceDraft } from "@/lib/piece-drafts";
+import { PiecesEditor } from "@/components/business/pieces-editor";
 import { OCEAN_CARRIERS, isKnownCarrierScac, oceanCarrierLabel } from "@/lib/ocean-carrier-catalog";
 import {
   DESTINATION_COUNTRIES,
@@ -275,6 +278,8 @@ export function ContainersPanel({
   const [addedThisSitting, setAddedThisSitting] = useState<string[]>([]);
   const [vinHint, setVinHint] = useState("");
   const lastVinRef = useRef("");
+  // After a refused save, each piece shows its own problem until fixed.
+  const [lineTried, setLineTried] = useState(false);
   const [customerPick, setCustomerPick] = useState<LotCustomer | null>(null);
   const [customerMenuOpen, setCustomerMenuOpen] = useState(false);
   const [parkedFilter, setParkedFilter] = useState("");
@@ -311,6 +316,11 @@ export function ContainersPanel({
     });
     return map;
   }, [lines.rows]);
+
+  // Split groups among every line on screen, waiting ones included: a part's
+  // money is its group's (payments live on the root). Built once per change
+  // of the lines, read per row.
+  const lineGroups = useMemo(() => buildLineGroups([...lines.rows, ...waiting.rows]), [lines.rows, waiting.rows]);
 
   // Built once per staff list, read per row (never a find() per row).
   const staffNames = useMemo(() => staffNameIndex(staff.rows), [staff.rows]);
@@ -621,6 +631,7 @@ export function ContainersPanel({
 
   function openAddLine() {
     setLineDraft(emptyContainerLineDraft);
+    setLineTried(false);
     setEditingLineId("");
     setAddedThisSitting([]);
     setVinHint("");
@@ -640,6 +651,7 @@ export function ContainersPanel({
     const draft = containerLineDraftFromRow(row);
     setLineDraft(draft);
     setEditingLineId(String(row.id));
+    setLineTried(false);
     setAddedThisSitting([]);
     setVinHint("");
     // The VIN is the line's own, so the decoder must not fire on render.
@@ -668,6 +680,7 @@ export function ContainersPanel({
       carMake: "",
       carModel: "",
       carYear: "",
+      pieces: d.pieces.length ? d.pieces : [newPieceDraft()],
     }));
   }
 
@@ -795,6 +808,7 @@ export function ContainersPanel({
     const errors = validateContainerLineDraft(lineDraft);
     if (errors.length) {
       setDraftError(containerMessage(errors));
+      setLineTried(true);
       return;
     }
     const line = containerLinePayload(lineDraft);
@@ -829,22 +843,24 @@ export function ContainersPanel({
         closeModal();
         return;
       }
-      // "1 barrel" / "3 barrels" / "2 × tires": the list's own wording.
-      const what = containerLineTitle(line);
+      // "1 barrel" / "2 barrels, 1 box": the list's own wording.
+      const what = containerLineTitle(line, lang);
       const whose = line.customerName || "Business stock";
       setAddedThisSitting((list) => [...list, `${what} — ${whose}${line.receiverName ? ` → ${line.receiverName}` : ""}`]);
       setCustomerPick(null);
       setCustomerMenuOpen(false);
       setDraftError("");
-      setLineDraft((d) => ({ ...emptyContainerLineDraft, kind: d.kind, description: d.description, ownerKind: d.ownerKind }));
+      setLineTried(false);
+      // The next customer's share: the same kind of cargo, a fresh first piece.
+      setLineDraft((d) => ({ ...emptyContainerLineDraft, kind: d.kind, ownerKind: d.ownerKind, pieces: [newPieceDraft(d.pieces[0]?.kind ?? "barrel")] }));
     }, failInModal);
   }
 
   async function removeLine(row: FirestoreRow) {
     if (!selected) return;
     const ok = await confirmImportantAction(
-      `Remove ${containerLineTitle(row)} from ${containerTitle(selected)}?`,
-      `Retirer ${containerLineTitle(row)} de ${containerTitle(selected)} ?`,
+      `Remove ${containerLineTitle(row, "en")} from ${containerTitle(selected)}?`,
+      `Retirer ${containerLineTitle(row, "fr")} de ${containerTitle(selected)} ?`,
     );
     if (!ok) return;
     await runPanelAction(setBusy, setFlash, "Line removed.", async () => {
@@ -857,8 +873,8 @@ export function ContainersPanel({
   async function sendBackToWaiting(row: FirestoreRow) {
     if (!selected) return;
     const ok = await confirmImportantAction(
-      `Send ${containerLineTitle(row)} back to waiting? It leaves ${containerTitle(selected)}; its label and code stay the same.`,
-      `Remettre ${containerLineTitle(row)} en attente ? Il quitte ${containerTitle(selected)} ; son étiquette et son code ne changent pas.`,
+      `Send ${containerLineTitle(row, "en")} back to waiting? It leaves ${containerTitle(selected)}; its label and code stay the same.`,
+      `Remettre ${containerLineTitle(row, "fr")} en attente ? Il quitte ${containerTitle(selected)} ; son étiquette et son code ne changent pas.`,
     );
     if (!ok) return;
     await runPanelAction(setBusy, setFlash, "Package sent back to waiting.", async () => {
@@ -1042,7 +1058,7 @@ export function ContainersPanel({
                 <div className="mini-table-head"><span>Cargo</span><span>Whose</span><span>Added</span><span aria-hidden="true"></span></div>
                 {selectedLines.map((row) => {
                   const vin = cleanVin(row.vinNumber);
-                  const title = containerLineTitle(row);
+                  const title = containerLineTitle(row, lang);
                   const stock = containerLineIsStock(row);
                   const by = staffName(text(row.addedByStaffId, ""));
                   return (
@@ -1051,7 +1067,7 @@ export function ContainersPanel({
                       id={`ctn-line-${String(row.id)}`}
                       key={String(row.id)}
                     >
-                      <span><strong data-no-translate={containerLineTitleIsCopy(row) ? undefined : true}>{title}</strong>{vin && vin !== title && <small data-no-translate>{vin}</small>}{vin && <CopyValue value={vin} label="Copy VIN" />}<LineTrackingCode code={text(row.trackingCode, "")} /><PackageSize line={row} /><PackageMoney line={row} /></span>
+                      <span><strong data-no-translate={containerLineTitleIsCopy(row) ? undefined : true}>{title}</strong>{vin && vin !== title && <small data-no-translate>{vin}</small>}{vin && <CopyValue value={vin} label="Copy VIN" />}<LineTrackingCode code={text(row.trackingCode, "")} /><PackageSize line={row} /><PackageMoney line={row} group={groupForLine(lineGroups, row)} lang={lang} /></span>
                       <span>
                         {stock ? <strong>Business stock</strong> : <strong data-no-translate>{text(row.customerName, "")}</strong>}
                         {!stock && <small data-no-translate>{text(row.customerPhone, "")}</small>}
@@ -1092,6 +1108,7 @@ export function ContainersPanel({
           knownCustomers={knownCustomers}
           staffName={staffName}
           staffOptions={staffOptions}
+          groups={lineGroups}
           onFlash={setFlash}
           enabled={enabled}
         />
@@ -1128,7 +1145,7 @@ export function ContainersPanel({
                   <div className="mini-table-head"><span>Cargo</span><span>Whose</span><span>Container</span><span>State</span></div>
                   {searchHits.map((hit) => {
                     const vin = cleanVin(hit.line.vinNumber);
-                    const title = containerLineTitle(hit.line);
+                    const title = containerLineTitle(hit.line, lang);
                     const stock = containerLineIsStock(hit.line);
                     const containerId = text(hit.container?.id, "");
                     // A container opens its detail; a waiting package opens the waiting list.
@@ -1319,9 +1336,18 @@ export function ContainersPanel({
               )}
               <fieldset className="lst-fieldset">
                 <label className="lst-radio"><input type="radio" name="ctnkind" checked={lineDraft.kind === "car"} onChange={() => setLineKind("car")} /><span>A car</span></label>
-                <label className="lst-radio"><input type="radio" name="ctnkind" checked={lineDraft.kind === "barrels"} onChange={() => setLineKind("barrels")} /><span>Barrels</span></label>
-                <label className="lst-radio"><input type="radio" name="ctnkind" checked={lineDraft.kind === "other"} onChange={() => setLineKind("other")} /><span>Something else</span></label>
+                <label className="lst-radio"><input type="radio" name="ctnkind" checked={lineDraftHasPieces(lineDraft)} onChange={() => setLineKind("barrels")} /><span>Barrels, boxes or other things</span></label>
               </fieldset>
+              {lineDraftHasPieces(lineDraft) && (
+                <PiecesEditor
+                  id="ctn-pieces"
+                  pieces={lineDraft.pieces}
+                  onChange={(pieces) => setLineDraft((d) => ({ ...d, pieces }))}
+                  showErrors={lineTried}
+                  disabled={busy}
+                  lang={lang}
+                />
+              )}
               {lineDraft.kind === "car" && (
                 <fieldset className="lst-fieldset ctn-inlot">
                   <legend>Is this car parked in your lot?</legend>
@@ -1398,15 +1424,6 @@ export function ContainersPanel({
                     </label>
                   </>
                 )}
-                {lineDraft.kind === "barrels" && (
-                  <label className="lst-field"><span>How many barrels</span><input inputMode="numeric" value={lineDraft.quantity} onChange={(e) => setLineDraft((d) => ({ ...d, quantity: e.target.value }))} autoFocus /></label>
-                )}
-                {lineDraft.kind === "other" && (
-                  <>
-                    <label className="lst-field"><span>What it is</span><input value={lineDraft.description} onChange={(e) => setLineDraft((d) => ({ ...d, description: e.target.value }))} placeholder="e.g. tires, a generator" autoFocus /></label>
-                    <label className="lst-field"><span>How many</span><input inputMode="numeric" value={lineDraft.quantity} onChange={(e) => setLineDraft((d) => ({ ...d, quantity: e.target.value }))} /></label>
-                  </>
-                )}
               </div>
               {ownerVisible && (
               <fieldset className="lst-fieldset">
@@ -1455,7 +1472,7 @@ export function ContainersPanel({
                 </div>
               )}
               {ownerVisible && lineDraft.kind !== "car" && !editingLineId && (
-                <p className="lst-hint">Several customers' barrels in one go? Save each customer's share and add the next.</p>
+                <p className="lst-hint">Several customers&apos; pieces in one go? Save each customer&apos;s share and add the next.</p>
               )}
             </div>
             <footer className="lst-modal-foot">
@@ -1476,7 +1493,7 @@ export function ContainersPanel({
         <div className="lst-modal-overlay" role="dialog" aria-modal="true" {...overlayDismiss(closeModal)}>
           <div className="lst-modal" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
             <header className="lst-modal-head">
-              <div><h3>Move line</h3><p>{containerLineTitle(movingLine)} goes to another container that is still loading.</p></div>
+              <div><h3>Move line</h3><p><span data-no-translate>{containerLineTitle(movingLine, lang)}</span> goes to another container that is still loading.</p></div>
               <button className="lst-icon-btn" type="button" onClick={closeModal} aria-label="Close"><X size={18} /></button>
             </header>
             <div className="lst-modal-body">
@@ -1507,7 +1524,7 @@ export function ContainersPanel({
         <div className="lst-modal-overlay" role="dialog" aria-modal="true" {...overlayDismiss(closeModal)}>
           <div className="lst-modal" style={{ maxWidth: 660 }} onClick={(e) => e.stopPropagation()}>
             <header className="lst-modal-head">
-              <div><h3>Edit contacts</h3><p>{containerLineTitle(contactsLine)} — who it belongs to, who collects it, and who hears about it.</p></div>
+              <div><h3>Edit contacts</h3><p><span data-no-translate>{containerLineTitle(contactsLine, lang)}</span> — who it belongs to, who collects it, and who hears about it.</p></div>
               <button className="lst-icon-btn" type="button" onClick={closeModal} aria-label="Close"><X size={18} /></button>
             </header>
             <div className="lst-modal-body">
@@ -1617,6 +1634,8 @@ function auditActionLabel(action: string) {
     line_moved: "Line moved",
     line_contacts_edited: "Contacts edited",
     line_edited: "Line changed",
+    // assignContainerLines with pieceCounts: some pieces went, the rest stay as a part.
+    line_split: "Split",
     shipped: "Shipped",
     arrived: "Ready for pickup",
     deleted: "Deleted",

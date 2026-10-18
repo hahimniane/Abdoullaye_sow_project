@@ -25,6 +25,9 @@ import {
   containerLineFromRow,
   containerLinePayload,
   containerMessage,
+  editKeepsLegacyForm,
+  editedLinePayload,
+  lineDraftHasPieces,
   searchContainerLines,
   validateContainerLineDraft,
   type ContainerCallableFailure,
@@ -42,8 +45,29 @@ import {
   centsToInput,
   type InvoicePaymentMethod,
 } from "./invoice-ledger.ts";
+import {
+  groupRootId,
+  lineCounts,
+  lineGroupSummary,
+  lineHasPieces,
+  nextPartIndex,
+  paidFloorForLine,
+  partIndexOf,
+  partTrackingCode,
+  splitPieces,
+  type LineGroupSummary,
+} from "./line-pieces.ts";
 import { readMoneyInput } from "./money-input.ts";
+import {
+  newPieceDraft,
+  parseInches,
+  piecesCountText,
+  piecesDraftTotalCents,
+  type PieceDraft,
+} from "./piece-drafts.ts";
 import { bankCheckFrom, type BankCheck } from "./zelle-check.ts";
+
+export { parseInches };
 
 type Row = Record<string, unknown>;
 
@@ -66,19 +90,6 @@ type Lang = "en" | "fr";
 // ---------------------------------------------------------------------------
 // Size: inches in, cubic feet out.
 // ---------------------------------------------------------------------------
-
-/**
- * One typed measurement as a number of inches: blank is null, anything that
- * is not a positive number below the cap is NaN (so the form can tell "not
- * filled in" from "filled in wrong"). A decimal comma is read as a point.
- */
-export function parseInches(value: unknown): number | null {
-  const raw = text(value, 20).replace(",", ".");
-  if (!raw) return null;
-  if (!/^\d+(\.\d+)?$/.test(raw)) return Number.NaN;
-  const n = Number(raw);
-  return n > 0 && n <= MAX_PACKAGE_INCHES ? Math.round(n * 100) / 100 : Number.NaN;
-}
 
 /** Length x width x height in cubic feet (L*W*H / 1728), two decimals; null if any side is missing. */
 export function volumeCubicFeet(lengthIn: unknown, widthIn: unknown, heightIn: unknown): number | null {
@@ -291,13 +302,255 @@ export function selectAllMatching(
   return [...next];
 }
 
-/** The `assignContainerLines` request. Duplicates dropped; the caller checks the count first. */
-export function assignLinesRequest(businessId: string, containerId: string, lineIds: readonly string[]) {
+/**
+ * The `assignContainerLines` request. Duplicates dropped; the caller checks
+ * the count first. `going` is how many of each line's pieces go in, from the
+ * split stepper: only a line sending fewer than all of them is named in
+ * `pieceCounts` (docs/WAITING_PACKAGES.md "Split across containers"), so a
+ * plain add is the request it always was.
+ */
+export function assignLinesRequest(
+  businessId: string,
+  containerId: string,
+  lineIds: readonly string[],
+  going: Readonly<Record<string, number>> = {},
+  lines: readonly unknown[] = [],
+) {
+  const ids = [...new Set(lineIds.map((id) => text(id, 200)).filter(Boolean))];
+  const byId = new Map((Array.isArray(lines) ? lines : []).map(asRow).map((row) => [text(row.id, 200), row]));
+  const pieceCounts: Record<string, number> = {};
+  for (const id of ids) {
+    const row = byId.get(id);
+    const n = going[id];
+    if (!row || n === undefined) continue;
+    const total = splittablePieceCount(row);
+    if (total > 1 && Number.isInteger(n) && n >= 1 && n < total) pieceCounts[id] = n;
+  }
   return {
     businessId: text(businessId, 200),
     containerId: text(containerId, 200),
-    lineIds: [...new Set(lineIds.map((id) => text(id, 200)).filter(Boolean))],
+    lineIds: ids,
+    ...(Object.keys(pieceCounts).length ? { pieceCounts } : {}),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Splitting a package across containers.
+// ---------------------------------------------------------------------------
+
+/** How many pieces a waiting line could split: 0 for a car (never split), else its piece count. */
+export function splittablePieceCount(line: unknown): number {
+  const row = asRow(line);
+  if (text(row.kind, 20) === "car") return 0;
+  return lineCounts(row).pieceCount;
+}
+
+/** The stepper's value kept inside 1..m. */
+export function clampPiecesGoing(value: number, total: number): number {
+  const n = Math.round(Number(value));
+  if (!Number.isFinite(n)) return total;
+  return Math.min(Math.max(1, n), Math.max(1, total));
+}
+
+/** "Pieces going in: 2 of 4" / "Colis qui partent : 2 sur 4". */
+export function piecesGoingText(going: number, total: number, lang: Lang = "en"): string {
+  return lang === "fr" ? `Colis qui partent : ${going} sur ${total}` : `Pieces going in: ${going} of ${total}`;
+}
+
+export type SplitPreviewRow = { code: string; pieceCount: number; going: boolean; text: string };
+
+/**
+ * The code the part that stays would get: the root's code and one past the
+ * group's highest part. Exact when the root is among `rows`; otherwise it is
+ * read off the line's own code (the server's answer has the real one).
+ */
+export function previewPartCode(line: unknown, rows: readonly unknown[]): string {
+  const row = asRow(line);
+  const id = text(row.id, 200);
+  const rootId = groupRootId(row, id);
+  const all = (Array.isArray(rows) ? rows : []).map(asRow);
+  const root = rootId === id ? row : all.find((r) => text(r.id, 200) === rootId);
+  const group = all.filter((r) => groupRootId(r, r.id) === rootId);
+  if (!group.some((r) => text(r.id, 200) === id)) group.push(row);
+  const rootCode = root
+    ? text(root.trackingCode, 40)
+    : text(row.trackingCode, 40).replace(/-\d+$/, "");
+  if (!rootCode) return "";
+  return partTrackingCode(rootCode, nextPartIndex(root ?? {}, group));
+}
+
+/**
+ * The two rows under a stepper: "CL-T9W2QA 2 pieces → this container" and
+ * "CL-T9W2QA-2 2 pieces stay waiting". Nothing when every piece goes.
+ */
+export function splitPreviewRows(line: unknown, going: number, rows: readonly unknown[], lang: Lang = "en"): SplitPreviewRow[] {
+  const row = asRow(line);
+  const split = splitPieces(row, going);
+  if (split.error || !split.split) return [];
+  const code = text(row.trackingCode, 40);
+  const partCode = previewPartCode(row, rows);
+  const goes = split.going.length;
+  const stays = split.staying.length;
+  return [
+    {
+      code,
+      pieceCount: goes,
+      going: true,
+      text: lang === "fr" ? `${piecesCountText(goes, lang)} → ce conteneur` : `${piecesCountText(goes, lang)} → this container`,
+    },
+    {
+      code: partCode,
+      pieceCount: stays,
+      going: false,
+      text: piecesStayText(stays, lang),
+    },
+  ];
+}
+
+export type AssignedPart = { lineId: string; partLineId: string; trackingCode: string; pieceCount: number };
+export type AssignAnswer = { assigned: number; alreadyAssigned: number; parts: AssignedPart[] };
+
+/** The `assignContainerLines` answer, read defensively (an older server sends no parts). */
+export function assignAnswerFrom(data: unknown): AssignAnswer {
+  const r = asRow(data);
+  const count = (value: unknown) => {
+    const n = Number(value);
+    return Number.isFinite(n) && n > 0 ? Math.round(n) : 0;
+  };
+  const parts = (Array.isArray(r.parts) ? r.parts : [])
+    .map(asRow)
+    .map((part) => ({
+      lineId: text(part.lineId, 200),
+      partLineId: text(part.partLineId, 200),
+      trackingCode: text(part.trackingCode, 40),
+      pieceCount: count(part.pieceCount),
+    }))
+    .filter((part) => part.partLineId);
+  return { assigned: count(r.assigned), alreadyAssigned: count(r.alreadyAssigned), parts };
+}
+
+/**
+ * The parts that stay waiting, as the labels dialog asks for them: by line id,
+ * with the code and count the answer gave until the live list catches up.
+ */
+export function partLabelStubs(parts: readonly AssignedPart[]): Row[] {
+  return parts.map((part) => ({
+    id: part.partLineId,
+    trackingCode: part.trackingCode,
+    containerId: "",
+    containerStatus: "waiting",
+    kind: "other",
+    quantity: part.pieceCount,
+    pieceCount: part.pieceCount,
+  }));
+}
+
+/** "2 pieces stay waiting" / "2 colis restent en attente". */
+export function piecesStayText(count: number, lang: Lang = "en"): string {
+  if (lang === "fr") return `${count} colis ${count === 1 ? "reste" : "restent"} en attente`;
+  return `${count} ${count === 1 ? "piece stays" : "pieces stay"} waiting`;
+}
+
+/** How many pieces a set of lines holds (one label each): the stored count, else what the line reads as. */
+export function labelsPieceCount(lines: readonly unknown[]): number {
+  let total = 0;
+  for (const raw of Array.isArray(lines) ? lines : []) {
+    const row = asRow(raw);
+    const stored = Number(row.pieceCount);
+    total += Number.isInteger(stored) && stored > 0 ? stored : lineCounts(row).pieceCount;
+  }
+  return total;
+}
+
+/** "Prints 6 labels: 3 pieces × 2" / "Imprime 6 étiquettes : 3 colis × 2". */
+export function labelCountText(pieces: number, copies: number, lang: Lang = "en"): string {
+  const labels = pieces * Math.max(1, copies);
+  if (lang === "fr") {
+    return `Imprime ${labels} ${labels === 1 ? "étiquette" : "étiquettes"} : ${piecesCountText(pieces, lang)} × ${copies}`;
+  }
+  return `Prints ${labels} ${labels === 1 ? "label" : "labels"}: ${piecesCountText(pieces, lang)} × ${copies}`;
+}
+
+/** "2 parts stay waiting with new codes." in the reader's language. */
+export function partsCreatedText(count: number, lang: Lang = "en"): string {
+  if (lang === "fr") {
+    return count === 1
+      ? "1 partie reste en attente avec un nouveau code."
+      : `${count} parties restent en attente avec de nouveaux codes.`;
+  }
+  return count === 1 ? "1 part stays waiting with a new code." : `${count} parts stay waiting with new codes.`;
+}
+
+// ---------------------------------------------------------------------------
+// Group money: a line and the parts split from it share one balance, kept on
+// the root (lineGroupSummary).
+// ---------------------------------------------------------------------------
+
+/**
+ * Every group among the lines a panel already holds, keyed by root id, built
+ * once per change of those lines (never per row). A group whose root is not
+ * among them adds up what is there: its paid amount reads 0 until the root
+ * is loaded.
+ */
+export function buildLineGroups(rows: readonly unknown[]): Map<string, LineGroupSummary> {
+  const buckets = new Map<string, Array<{ id: string; line: Row }>>();
+  for (const raw of Array.isArray(rows) ? rows : []) {
+    const line = asRow(raw);
+    const id = text(line.id, 200);
+    if (!id) continue;
+    const root = groupRootId(line, id);
+    const bucket = buckets.get(root);
+    if (bucket) bucket.push({ id, line });
+    else buckets.set(root, [{ id, line }]);
+  }
+  const groups = new Map<string, LineGroupSummary>();
+  for (const [root, entries] of buckets) groups.set(root, lineGroupSummary(entries, root));
+  return groups;
+}
+
+/** A line's group from the index, or its own one-line group when it is not in it. */
+export function groupForLine(groups: ReadonlyMap<string, LineGroupSummary> | null | undefined, line: unknown): LineGroupSummary {
+  const row = asRow(line);
+  const id = text(row.id, 200);
+  const root = groupRootId(row, id);
+  return groups?.get(root) ?? lineGroupSummary([{ id, line: row }], root);
+}
+
+/** A group's money as the chips and the payment dialog read it (the same statuses as one package). */
+export function groupPayment(group: LineGroupSummary): PackagePayment {
+  const price = group.priceCents !== null && group.priceCents > 0 ? group.priceCents : null;
+  const paid = Math.max(0, group.paidCents);
+  const balance = price === null ? null : Math.max(0, price - paid);
+  let status: PackagePaymentStatus;
+  if (price !== null && paid >= price) status = "paid";
+  else if (price !== null && paid > 0) status = "partial";
+  else if (group.payOnArrival) status = "pay_on_arrival";
+  else status = price === null ? "no_price" : "unpaid";
+  return { status, priceCents: price, paidCents: paid, balanceCents: balance, payOnArrival: group.payOnArrival };
+}
+
+/** "Part 2 of 3" / "Partie 2 sur 3" for a line in a split group; "" for a line alone. */
+export function partHintText(group: LineGroupSummary, line: unknown, lang: Lang = "en"): string {
+  if (group.partCount <= 1) return "";
+  const row = asRow(line);
+  const id = text(row.id, 200);
+  const at = group.parts.findIndex((part) => part.id === id);
+  const index = at >= 0 ? at + 1 : partIndexOf(row);
+  return lang === "fr" ? `Partie ${index} sur ${group.partCount}` : `Part ${index} of ${group.partCount}`;
+}
+
+/** "Group of 3 parts: $310.00" / "Groupe de 3 parties : 310,00 $" - what the balance is the balance of. */
+export function groupMoneyNote(group: LineGroupSummary, lang: Lang = "en"): string {
+  if (group.partCount <= 1) return "";
+  const codes = group.parts.map((part) => part.trackingCode).filter(Boolean).join(", ");
+  return lang === "fr"
+    ? `Paiements partagés par les ${group.partCount} parties${codes ? ` (${codes})` : ""}`
+    : `Payments shared by all ${group.partCount} parts${codes ? ` (${codes})` : ""}`;
+}
+
+/** What a price change on this line may not go below: what the root was paid less what the other parts cover. */
+export function linePaidFloor(group: LineGroupSummary, line: unknown): number {
+  return paidFloorForLine(group, text(asRow(line).id, 200));
 }
 
 /** Too many ticked for one call, as the form says it; null when the count is fine. */
@@ -328,14 +581,14 @@ export function assignedText(count: number, containerTitle: string, lang: Lang =
 // ---------------------------------------------------------------------------
 
 export type WaitingPackageDraft = {
+  /** "car", or the pieces form ("barrels"/"other": a summary the server recomputes). */
   kind: ContainerLineKind;
   vinNumber: string;
   carMake: string;
   carModel: string;
   carYear: string;
-  /** As typed; cars always count one. */
-  quantity: string;
-  description: string;
+  /** What a package that is not a car holds: one entry per barrel, box or thing handed over. */
+  pieces: PieceDraft[];
   customerName: string;
   customerPhone: string;
   receiverName: string;
@@ -344,11 +597,11 @@ export type WaitingPackageDraft = {
   notifyReceiver: boolean;
   destinationCountryId: string;
   destinationCountryName: string;
-  /** Inches as typed. */
+  /** A car's size in inches as typed (each piece has its own). */
   lengthIn: string;
   widthIn: string;
   heightIn: string;
-  /** US dollars as typed; blank is "no price yet". */
+  /** A car's price in US dollars as typed; blank is "no price yet". Pieces are priced one by one. */
   price: string;
   payOnArrival: boolean;
   /** Money taken at the counter as it is dropped off; per package, never carried to the next. */
@@ -375,8 +628,7 @@ export function emptyWaitingPackageDraft(destination: DestinationRef | null = nu
     carMake: "",
     carModel: "",
     carYear: "",
-    quantity: "1",
-    description: "",
+    pieces: [newPieceDraft()],
     customerName: "",
     customerPhone: "",
     receiverName: "",
@@ -395,21 +647,17 @@ export function emptyWaitingPackageDraft(destination: DestinationRef | null = nu
 }
 
 /**
- * "Add another for the same customer": the people, the country and the
- * WhatsApp switches stay; everything about the box itself (what it is, its
- * size, its price) starts over. The kind stays too - the next thing a
- * customer brings is usually another of the same.
+ * "Save & add another": a customer's pieces for one receiver are one package
+ * already, so the next one is for a different receiver or country. Only the
+ * sender stays - name, phone and WhatsApp switch; the receiver, the pieces
+ * and the money start over, on the business's main destination.
  */
-export function nextPackageForSameCustomer(draft: WaitingPackageDraft): WaitingPackageDraft {
+export function nextPackageForSameSender(draft: WaitingPackageDraft, destination: DestinationRef | null = null): WaitingPackageDraft {
   return {
-    ...emptyWaitingPackageDraft({ id: draft.destinationCountryId, name: draft.destinationCountryName }),
-    kind: draft.kind,
+    ...emptyWaitingPackageDraft(destination),
     customerName: draft.customerName,
     customerPhone: draft.customerPhone,
-    receiverName: draft.receiverName,
-    receiverPhone: draft.receiverPhone,
     notifyCustomer: draft.notifyCustomer,
-    notifyReceiver: draft.notifyReceiver,
   };
 }
 
@@ -423,8 +671,7 @@ export function waitingPackageDraftFromRow(row: unknown): WaitingPackageDraft {
     carMake: base.carMake,
     carModel: base.carModel,
     carYear: base.carYear,
-    quantity: base.kind === "car" ? "" : base.quantity,
-    description: base.description,
+    pieces: base.pieces,
     customerName: base.customerName,
     customerPhone: base.customerPhone,
     receiverName: base.receiverName,
@@ -433,10 +680,11 @@ export function waitingPackageDraftFromRow(row: unknown): WaitingPackageDraft {
     notifyReceiver: base.notifyReceiver,
     destinationCountryId: line.destinationCountryId,
     destinationCountryName: line.destinationCountryName,
-    lengthIn: line.lengthIn === null ? "" : trimNumber(line.lengthIn),
-    widthIn: line.widthIn === null ? "" : trimNumber(line.widthIn),
-    heightIn: line.heightIn === null ? "" : trimNumber(line.heightIn),
-    price: line.priceCents !== null && line.priceCents > 0 ? centsToInput(line.priceCents) : "",
+    // A car's own size and price; a package's are on its pieces.
+    lengthIn: base.kind !== "car" || line.lengthIn === null ? "" : trimNumber(line.lengthIn),
+    widthIn: base.kind !== "car" || line.widthIn === null ? "" : trimNumber(line.widthIn),
+    heightIn: base.kind !== "car" || line.heightIn === null ? "" : trimNumber(line.heightIn),
+    price: base.kind === "car" && line.priceCents !== null && line.priceCents > 0 ? centsToInput(line.priceCents) : "",
     payOnArrival: line.payOnArrival,
     // Money on a saved package goes through "Record a payment", never the edit form.
     money: emptyIntakeMoney(),
@@ -453,8 +701,9 @@ function lineDraftOf(draft: WaitingPackageDraft): ContainerLineDraft {
     carMake: draft.carMake,
     carModel: draft.carModel,
     carYear: draft.carYear,
-    quantity: draft.quantity,
-    description: draft.description,
+    quantity: "",
+    description: "",
+    pieces: draft.pieces,
     // A waiting package is always a customer's: stock has no counter drop-off.
     ownerKind: "customer",
     customerName: draft.customerName,
@@ -503,12 +752,30 @@ function readSides(draft: Pick<WaitingPackageDraft, "lengthIn" | "widthIn" | "he
 export function validateWaitingPackage(draft: WaitingPackageDraft, staffIds?: readonly string[]): WaitingPackageError[] {
   const errors: WaitingPackageError[] = validateContainerLineDraft(lineDraftOf(draft));
   if (!text(draft.destinationCountryId, 60)) errors.push("package_destination_required");
-  const { error: sizeError } = readSides(draft);
-  if (sizeError) errors.push(sizeError);
-  const { error: priceError } = readPackagePrice(draft.price);
-  if (priceError) errors.push(priceError);
+  if (!lineDraftHasPieces(draft)) {
+    // A car's own size and price; pieces carry theirs (checked above).
+    const { error: sizeError } = readSides(draft);
+    if (sizeError) errors.push(sizeError);
+    const { error: priceError } = readPackagePrice(draft.price);
+    if (priceError) errors.push(priceError);
+  }
   errors.push(...validateIntakeMoney(draft, staffIds));
   return errors;
+}
+
+/**
+ * What the package costs in all, as the form has it: a car's price, or the
+ * sum of the priced pieces (the server's rule). Null while nothing is priced
+ * or a typed price cannot be read.
+ */
+export function waitingDraftTotalCents(draft: Pick<WaitingPackageDraft, "kind" | "price" | "pieces">): number | null {
+  if (!lineDraftHasPieces(draft)) return readPackagePrice(draft.price).cents;
+  return piecesDraftTotalCents(draft.pieces ?? []);
+}
+
+/** How many labels the package prints: one per piece, one for a car. */
+export function waitingDraftLabelCount(draft: Pick<WaitingPackageDraft, "kind" | "pieces">): number {
+  return lineDraftHasPieces(draft) ? Math.max(1, (draft.pieces ?? []).length) : 1;
 }
 
 // ---------------------------------------------------------------------------
@@ -517,9 +784,9 @@ export function validateWaitingPackage(draft: WaitingPackageDraft, staffIds?: re
 
 export type IntakeMoneyError = PackagePaymentError | "received_by_invalid";
 
-/** The switch can only be turned on once a readable price is entered: a payment is judged against it. */
-export function intakeMoneyAvailable(draft: Pick<WaitingPackageDraft, "price">): boolean {
-  return readPackagePrice(draft.price).cents !== null;
+/** The switch can only be turned on once there is a total to judge a payment against. */
+export function intakeMoneyAvailable(draft: Pick<WaitingPackageDraft, "kind" | "price" | "pieces">): boolean {
+  return waitingDraftTotalCents(draft) !== null;
 }
 
 /**
@@ -529,7 +796,7 @@ export function intakeMoneyAvailable(draft: Pick<WaitingPackageDraft, "price">):
  */
 export function switchIntakeMoney(draft: WaitingPackageDraft, on: boolean): WaitingPackageDraft {
   if (!on) return { ...draft, money: emptyIntakeMoney() };
-  const { cents } = readPackagePrice(draft.price);
+  const cents = waitingDraftTotalCents(draft);
   if (cents === null) return draft;
   return { ...draft, money: { ...emptyIntakeMoney(), received: true, amount: centsToInput(cents) } };
 }
@@ -542,7 +809,8 @@ export function switchIntakeMoney(draft: WaitingPackageDraft, on: boolean): Wait
 export function validateIntakeMoney(draft: WaitingPackageDraft, staffIds?: readonly string[]): IntakeMoneyError[] {
   const money = draft.money;
   if (!money?.received) return [];
-  const { cents } = readPackagePrice(draft.price);
+  // Judged against the total: a car's price or the pieces' sum.
+  const cents = waitingDraftTotalCents(draft);
   const errors: IntakeMoneyError[] = validatePackagePaymentDraft(money, {
     status: cents === null ? "no_price" : "unpaid",
     priceCents: cents,
@@ -581,8 +849,7 @@ export function waitingPackageMessage(codes: readonly WaitingPackageError[]): st
  */
 export const WAITING_PACKAGE_FIELD_ORDER = [
   "wpk-vin",
-  "wpk-quantity",
-  "wpk-description",
+  "wpk-pieces",
   "wpk-length",
   "wpk-destination",
   "wpk-price",
@@ -598,8 +865,13 @@ export type WaitingPackageField = (typeof WAITING_PACKAGE_FIELD_ORDER)[number];
 
 const WAITING_PACKAGE_ERROR_FIELD: Partial<Record<WaitingPackageError, WaitingPackageField>> = {
   vin_required: "wpk-vin",
-  quantity_required: "wpk-quantity",
-  description_required: "wpk-description",
+  pieces_required: "wpk-pieces",
+  pieces_too_many: "wpk-pieces",
+  piece_kind_invalid: "wpk-pieces",
+  piece_description_required: "wpk-pieces",
+  piece_description_too_long: "wpk-pieces",
+  piece_size_invalid: "wpk-pieces",
+  piece_price_invalid: "wpk-pieces",
   size_invalid: "wpk-length",
   package_destination_required: "wpk-destination",
   price_invalid: "wpk-price",
@@ -632,10 +904,15 @@ export function waitingPackageFieldMessage(codes: readonly WaitingPackageError[]
   return own.length ? containerMessage(own) : "";
 }
 
-/** What a package carries beyond its line: country, size, price. Only what was entered. */
+/**
+ * What a package carries beyond its line: country, pay on arrival, and - for
+ * a car - its size and price. A package with pieces sends neither: the server
+ * reads them off the pieces.
+ */
 function packageExtras(draft: WaitingPackageDraft, withPrice = true) {
-  const { sides } = readSides(draft);
-  const { cents } = readPackagePrice(draft.price);
+  const car = !lineDraftHasPieces(draft);
+  const { sides } = car ? readSides(draft) : { sides: null };
+  const cents = car ? readPackagePrice(draft.price).cents : null;
   return {
     destinationCountryId: text(draft.destinationCountryId, 60),
     destinationCountryName: text(draft.destinationCountryName, 120),
@@ -659,24 +936,52 @@ export function addWaitingPackagePayload(businessId: string, draft: WaitingPacka
 
 /**
  * The `updateContainerLine` request for an edited waiting package: no
- * container, and the package's own fields alongside the line's. The price
- * goes through `setContainerLinePrice` (it is audited and checked against
- * what has been paid), so it is left out here.
+ * container, and the package's own fields alongside the line's. A package's
+ * pieces go with their prices (ids kept; the server checks them against what
+ * was paid). A car's price goes through `setContainerLinePrice`, so it is
+ * left out here. A legacy package whose pieces were not touched is sent in
+ * its old form.
  */
-export function updateWaitingPackageRequest(businessId: string, lineId: string, draft: WaitingPackageDraft) {
+export function updateWaitingPackageRequest(businessId: string, lineId: string, draft: WaitingPackageDraft, line: unknown = {}) {
+  const row = { ...asRow(line), id: text(lineId, 200) };
   return {
     businessId: text(businessId, 200),
     lineId: text(lineId, 200),
     containerId: "",
-    line: { ...containerLinePayload(lineDraftOf(draft)), ...packageExtras(draft, false) },
+    line: { ...editedLinePayload(row, lineDraftOf(draft)), ...packageExtras(draft, false) },
   };
 }
 
-/** Whether saving an edit changes the price or the pay-on-arrival switch, so `setContainerLinePrice` is called. */
+/**
+ * Whether saving an edit calls `setContainerLinePrice`: a car's price or the
+ * pay-on-arrival switch changed. A package's piece prices travel in
+ * `updateContainerLine`; here only the switch can make the call.
+ */
 export function packagePriceChanged(line: unknown, draft: WaitingPackageDraft): boolean {
   const before = packagePayment(line);
+  const arrival = before.payOnArrival !== (draft.payOnArrival === true);
+  if (lineDraftHasPieces(draft)) return arrival;
   const { cents } = readPackagePrice(draft.price);
-  return before.priceCents !== cents || before.payOnArrival !== (draft.payOnArrival === true);
+  return before.priceCents !== cents || arrival;
+}
+
+/**
+ * The `setContainerLinePrice` request an edit makes, or null when none is
+ * needed. For a package with pieces it passes the new total unchanged (the
+ * pieces already carry it), so the server only toggles pay on arrival - a
+ * changed total there would be spread evenly over the pieces.
+ */
+export function editPriceRequest(businessId: string, lineId: string, line: unknown, draft: WaitingPackageDraft) {
+  if (!packagePriceChanged(line, draft)) return null;
+  if (!lineDraftHasPieces(draft)) return setPackagePriceRequest(businessId, lineId, draft.price, draft.payOnArrival);
+  const legacy = editKeepsLegacyForm(line, lineDraftOf(draft));
+  return {
+    businessId: text(businessId, 200),
+    lineId: text(lineId, 200),
+    // A legacy package kept in its old form keeps its stored price.
+    priceCents: legacy ? packagePayment(line).priceCents : waitingDraftTotalCents(draft),
+    payOnArrival: draft.payOnArrival === true,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -856,13 +1161,21 @@ export function waitingPackageRow(row: unknown): WaitingPackageRow {
  */
 export function savedPackageStub(response: unknown, draft: WaitingPackageDraft): Row {
   const r = asRow(response);
+  const line = containerLinePayload(lineDraftOf(draft));
   return {
     id: text(r.lineId, 200),
     trackingCode: text(r.trackingCode, 40),
     containerId: "",
     containerStatus: "waiting",
-    ...containerLinePayload(lineDraftOf(draft)),
+    ...line,
+    // The counts the labels dialog adds up (one label per piece).
+    ...lineCounts(line),
   };
+}
+
+/** Whether a stored line is described by its own pieces (not a car, not a legacy line). */
+export function packageHasPieces(line: unknown): boolean {
+  return lineHasPieces(line);
 }
 
 // ---------------------------------------------------------------------------

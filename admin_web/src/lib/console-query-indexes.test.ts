@@ -285,6 +285,8 @@ const SITES: Site[] = [
   // A package's staff view on the tracking page: the business's own line by
   // code, or (platform admin) any line by code. Equalities only, limit 1.
   { file: C("package-staff-view.tsx"), kind: "query", what: "package line by code", shapes: [raw("containerLines", [eq("businessId"), eq("trackingCode")]), raw("containerLines", [eq("trackingCode")])] },
+  // A split package's other parts, for the group's money (payments on the root). Equalities only.
+  { file: C("package-staff-view.tsx"), kind: "query", what: "a split package's parts", shapes: [raw("containerLines", [eq("businessId"), eq("rootLineId")])] },
   { file: C("customer-parking-pools.tsx"), kind: "query", what: "open barrels", shapes: [raw("openBarrels", [eq("status")])] },
   { file: C("customer-console.tsx"), kind: "query", what: "my records", shapes: [] },
   { file: C("recipient-name-field.tsx"), kind: "query", what: "saved recipients", shapes: [raw("savedRecipients", [], { field: "lastUsedAt", direction: "desc" })] },

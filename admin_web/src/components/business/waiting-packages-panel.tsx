@@ -7,6 +7,7 @@ import { Banknote, Pencil, Plus, Printer, RefreshCw, Tag, X } from "lucide-react
 import { ContactPhone } from "@/components/business/contact-phone";
 import { ContainerLabelsDialog } from "@/components/business/container-labels-dialog";
 import { PackagePaymentDialog } from "@/components/business/package-payment-dialog";
+import { PiecesEditor } from "@/components/business/pieces-editor";
 import { runPanelAction } from "@/components/business/operations-panels";
 import { CopyValue } from "@/components/copy-value";
 import { confirmImportantAction } from "@/lib/action-confirmation";
@@ -17,8 +18,11 @@ import {
   containerLineTitleIsCopy,
   containerLineWhatsApp,
   containerLineWhatsAppText,
+  lineDraftHasPieces,
   phoneCountryForDestination,
 } from "@/lib/container-manifest";
+import type { LineGroupSummary } from "@/lib/line-pieces";
+import { newPieceDraft, savePrintLabelsText } from "@/lib/piece-drafts";
 import { destinationCountryName } from "@/lib/destination-countries";
 import { functions } from "@/lib/firebase";
 import { currentLanguage, formatDate, text } from "@/lib/format";
@@ -31,15 +35,17 @@ import {
   PACKAGE_PAYMENT_TONES,
   addWaitingPackagePayload,
   destinationPlace,
+  editPriceRequest,
   emptyWaitingPackageDraft,
   filterWaitingPackages,
   firstInvalidWaitingPackageField,
+  groupForLine,
+  groupPayment,
   intakeMoneyAvailable,
-  nextPackageForSameCustomer,
-  packagePriceChanged,
+  nextPackageForSameSender,
+  partHintText,
   runPackageCall,
   savedPackageStub,
-  setPackagePriceRequest,
   sortWaitingNewestFirst,
   switchIntakeMoney,
   updateWaitingPackageRequest,
@@ -47,6 +53,7 @@ import {
   volumeCubicFeet,
   parseInches,
   waitingCountText,
+  waitingDraftLabelCount,
   waitingPackageDraftFromRow,
   waitingPackageFieldMessage,
   waitingPackageMessage,
@@ -69,11 +76,17 @@ type Row = Record<string, unknown>;
 
 type DestinationOption = { id: string; name: string; label: string };
 
-/** A package's price, paid and balance as a chip and a sub-line; used by the waiting list and the container's lines. */
-export function PackageMoney({ line }: { line: Row }) {
-  const { payment } = waitingPackageRow(line);
+/**
+ * A package's price, paid and balance as a chip and a sub-line; used by the
+ * waiting list and the container's lines. With its `group` (a package split
+ * across containers) the money is the whole group's: payments live on the
+ * root and the balance is shown on every part.
+ */
+export function PackageMoney({ line, group, lang = "en" }: { line: Row; group?: LineGroupSummary; lang?: "en" | "fr" }) {
+  const payment = group ? groupPayment(group) : waitingPackageRow(line).payment;
+  const hint = group ? partHintText(group, line, lang) : "";
   // A package nobody priced shows nothing: most containers' lines predate prices.
-  if (payment.status === "no_price") return null;
+  if (payment.status === "no_price") return hint ? <small className="wpk-part-hint" data-no-translate>{hint}</small> : null;
   return (
     <>
       <span className={statusPillClass(PACKAGE_PAYMENT_TONES[payment.status])}>{PACKAGE_PAYMENT_LABELS[payment.status]}</span>
@@ -82,6 +95,7 @@ export function PackageMoney({ line }: { line: Row }) {
           {moneyText(payment.paidCents)} / {moneyText(payment.priceCents)}
         </small>
       )}
+      {hint && <small className="wpk-part-hint" data-no-translate>{hint}</small>}
     </>
   );
 }
@@ -111,6 +125,11 @@ type WaitingPackagesPanelProps = {
   staffName: (id: string) => string;
   /** Who can be named as having taken a payment's money. */
   staffOptions: readonly { id: string; name: string }[];
+  /**
+   * The split groups among every line the containers panel holds (waiting
+   * and on containers), built once there: a part's money is its group's.
+   */
+  groups: ReadonlyMap<string, LineGroupSummary>;
   onFlash: (message: string) => void;
   /** Counters stay off while the business is a preview. */
   enabled: boolean;
@@ -138,6 +157,7 @@ export function WaitingPackagesPanel({
   knownCustomers,
   staffName,
   staffOptions,
+  groups,
   onFlash,
   enabled,
 }: WaitingPackagesPanelProps) {
@@ -165,6 +185,7 @@ export function WaitingPackagesPanel({
   const shown = useMemo(() => filterWaitingPackages(sorted, filter), [sorted, filter]);
   const searching = text(filter, "").length >= 2;
   const paymentLine = paymentLineId ? sorted.find((row) => text(row.id, "") === paymentLineId) : undefined;
+  const paymentGroup = paymentLine ? groupForLine(groups, paymentLine) : undefined;
 
   const customerMatches = useMemo(() => {
     if (!customerMenuOpen || customerPick) return [];
@@ -241,7 +262,13 @@ export function WaitingPackagesPanel({
       carMake: "",
       carModel: "",
       carYear: "",
-      quantity: kind === "car" ? "" : d.quantity || "1",
+      // A car has no pieces of its own; switching back starts on one barrel.
+      pieces: d.pieces.length ? d.pieces : [newPieceDraft()],
+      lengthIn: "",
+      widthIn: "",
+      heightIn: "",
+      price: "",
+      money: switchIntakeMoney(d, false).money,
     }));
   }
 
@@ -305,10 +332,11 @@ export function WaitingPackagesPanel({
     if (editingId) {
       const line = sorted.find((row) => text(row.id, "") === editingId);
       await runPackageCall(setBusy, async () => {
-        await httpsCallable(functions, "updateContainerLine")(updateWaitingPackageRequest(businessId, editingId, draft));
-        if (line && packagePriceChanged(line, draft)) {
-          await httpsCallable(functions, "setContainerLinePrice")(setPackagePriceRequest(businessId, editingId, draft.price, draft.payOnArrival));
-        }
+        // Piece prices travel with the pieces; setContainerLinePrice only
+        // for a car's price or the pay-on-arrival switch.
+        await httpsCallable(functions, "updateContainerLine")(updateWaitingPackageRequest(businessId, editingId, draft, line));
+        const priceRequest = line ? editPriceRequest(businessId, editingId, line, draft) : null;
+        if (priceRequest) await httpsCallable(functions, "setContainerLinePrice")(priceRequest);
         onFlash("Package updated.");
         closeModal();
       }, fail);
@@ -330,18 +358,19 @@ export function WaitingPackagesPanel({
         closeModal();
         return;
       }
-      // Same customer again: keep the form open on their details.
-      const whose = draft.customerName || "—";
-      setAddedThisSitting((list) => [...list, `${containerLineTitle(stub)} — ${whose}${code ? ` (${code})` : ""}`]);
-      setDraft(nextPackageForSameCustomer(draft));
+      // The same sender again, for another receiver or country: only the
+      // sender's name, phone and WhatsApp switch stay.
+      const whom = draft.receiverName || draft.customerName || "—";
+      setAddedThisSitting((list) => [...list, `${containerLineTitle(stub, lang)} → ${whom}${code ? ` (${code})` : ""}`]);
+      setDraft(nextPackageForSameSender(draft, defaultDestination));
       resetFormState();
     }, fail);
   }
 
   async function remove(row: Row) {
     const ok = await confirmImportantAction(
-      `Remove ${containerLineTitle(row)} from the waiting list? Its label stops working.`,
-      `Retirer ${containerLineTitle(row)} de la liste d’attente ? Son étiquette ne fonctionnera plus.`,
+      `Remove ${containerLineTitle(row, "en")} from the waiting list? Its label stops working.`,
+      `Retirer ${containerLineTitle(row, "fr")} de la liste d’attente ? Son étiquette ne fonctionnera plus.`,
     );
     if (!ok) return;
     await runPanelAction(setBusy, onFlash, "Package removed.", async () => {
@@ -350,6 +379,8 @@ export function WaitingPackagesPanel({
   }
 
   const carFieldsVisible = draft.kind === "car";
+  const piecesMode = lineDraftHasPieces(draft);
+  const labelCount = waitingDraftLabelCount(draft);
 
   return (
     <article className="panel">
@@ -377,9 +408,13 @@ export function WaitingPackagesPanel({
           <div className="ctn-table wpk-table">
             <div className="mini-table-head"><span>Package</span><span>Whose</span><span>Destination</span><span>Payment</span><span aria-hidden="true"></span></div>
             {shown.map((row) => {
-              const { line, vin, payment } = waitingPackageRow(row);
+              const { line, vin } = waitingPackageRow(row);
+              // The group's money: a part shows what the whole package owes.
+              const group = groupForLine(groups, row);
+              const payment = groupPayment(group);
+              const partHint = partHintText(group, row, lang);
               const id = text(row.id, "");
-              const title = containerLineTitle(row);
+              const title = containerLineTitle(row, lang);
               const { summary, warnings } = containerLineWhatsAppText(containerLineWhatsApp(row));
               return (
                 <div className="mini-table-row" id={`wpk-line-${id}`} key={id}>
@@ -415,6 +450,7 @@ export function WaitingPackagesPanel({
                     {payment.balanceCents !== null && payment.balanceCents > 0 && (
                       <small><span data-no-translate>{moneyText(payment.balanceCents)}</span> <span>still owed</span></small>
                     )}
+                    {partHint && <small className="wpk-part-hint" data-no-translate>{partHint}</small>}
                   </span>
                   <span className="ctn-row-actions">
                     <button className="ghost-button" type="button" disabled={busy} onClick={() => { setLabelLines([row]); setModal("labels"); }} title="Print labels" aria-label="Print labels"><Tag size={14} /></button>
@@ -442,10 +478,19 @@ export function WaitingPackagesPanel({
             </header>
             <div className="lst-modal-body">
               <fieldset className="lst-fieldset">
+                <label className="lst-radio"><input type="radio" name="wpkkind" checked={piecesMode} onChange={() => setKind("barrels")} /><span>Barrels, boxes or other things</span></label>
                 <label className="lst-radio"><input type="radio" name="wpkkind" checked={draft.kind === "car"} onChange={() => setKind("car")} /><span>A car</span></label>
-                <label className="lst-radio"><input type="radio" name="wpkkind" checked={draft.kind === "barrels"} onChange={() => setKind("barrels")} /><span>Barrels</span></label>
-                <label className="lst-radio"><input type="radio" name="wpkkind" checked={draft.kind === "other"} onChange={() => setKind("other")} /><span>Something else</span></label>
               </fieldset>
+              {piecesMode && (
+                <PiecesEditor
+                  id="wpk-pieces"
+                  pieces={draft.pieces}
+                  onChange={(pieces) => setDraft((d) => ({ ...d, pieces }))}
+                  showErrors={triedSave}
+                  disabled={busy}
+                  lang={lang}
+                />
+              )}
               <div className="lst-form-grid">
                 {carFieldsVisible && (
                   <>
@@ -470,17 +515,9 @@ export function WaitingPackagesPanel({
                     </label>
                   </>
                 )}
-                {draft.kind === "barrels" && (
-                  <label className="lst-field"><span>How many barrels</span><input id="wpk-quantity" {...invalidProps("wpk-quantity")} inputMode="numeric" value={draft.quantity} onChange={(e) => setDraft((d) => ({ ...d, quantity: e.target.value }))} autoFocus />{fieldErrorNote("wpk-quantity")}</label>
-                )}
-                {draft.kind === "other" && (
-                  <>
-                    <label className="lst-field"><span>What it is</span><input id="wpk-description" {...invalidProps("wpk-description")} value={draft.description} onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))} placeholder="e.g. tires, a generator" autoFocus />{fieldErrorNote("wpk-description")}</label>
-                    <label className="lst-field"><span>How many</span><input id="wpk-quantity" {...invalidProps("wpk-quantity")} inputMode="numeric" value={draft.quantity} onChange={(e) => setDraft((d) => ({ ...d, quantity: e.target.value }))} />{fieldErrorNote("wpk-quantity")}</label>
-                  </>
-                )}
               </div>
 
+              {carFieldsVisible && (
               <div className="lst-form-grid wpk-size-grid">
                 <label className="lst-field"><span>Length (in)</span><input id="wpk-length" {...invalidProps("wpk-length")} inputMode="decimal" value={draft.lengthIn} onChange={(e) => setDraft((d) => ({ ...d, lengthIn: e.target.value }))} placeholder="0" /></label>
                 <label className="lst-field"><span>Width (in)</span><input inputMode="decimal" value={draft.widthIn} onChange={(e) => setDraft((d) => ({ ...d, widthIn: e.target.value }))} placeholder="0" /></label>
@@ -488,6 +525,7 @@ export function WaitingPackagesPanel({
                 <p className="lst-hint wpk-volume" data-no-translate>{volume === null ? "" : `${volume} ft³`}</p>
                 {fieldErrorNote("wpk-length")}
               </div>
+              )}
 
               <div className="lst-form-grid">
                 <label className="lst-field"><span>Destination</span>
@@ -512,7 +550,10 @@ export function WaitingPackagesPanel({
                   {fieldErrorNote("wpk-destination")}
                 </label>
                 <div className="wpk-price-cell">
-                  <label className="lst-field"><span>Price ($)</span><input id="wpk-price" {...invalidProps("wpk-price")} inputMode="decimal" value={draft.price} onChange={(e) => setDraft((d) => ({ ...d, price: e.target.value }))} placeholder={moneyPlaceholder} />{fieldErrorNote("wpk-price")}</label>
+                  {/* A car has one price; pieces are priced one by one above, and add up. */}
+                  {carFieldsVisible && (
+                    <label className="lst-field"><span>Price ($)</span><input id="wpk-price" {...invalidProps("wpk-price")} inputMode="decimal" value={draft.price} onChange={(e) => setDraft((d) => ({ ...d, price: e.target.value }))} placeholder={moneyPlaceholder} />{fieldErrorNote("wpk-price")}</label>
+                  )}
                   <label className="ctn-notify wpk-pay-arrival">
                     <input type="checkbox" checked={draft.payOnArrival} onChange={(e) => setDraft((d) => ({ ...d, payOnArrival: e.target.checked }))} />
                     <span>Pay on arrival</span>
@@ -596,6 +637,7 @@ export function WaitingPackagesPanel({
                 />
               </div>
               {!editingId && <p className="lst-hint">The customer and the receiver get a WhatsApp message when the package is registered, when the container ships and when it arrives. Adding it to a container sends nothing.</p>}
+              {!editingId && <p className="lst-hint">All the pieces for one receiver are one package. Save &amp; add another keeps the sender, for a different receiver or country.</p>}
             </div>
             <footer className="lst-modal-foot wpk-foot">
               {/* Beside the buttons, not at the top of a scrolled body: a refusal or a confirmation is always in view. */}
@@ -604,16 +646,22 @@ export function WaitingPackagesPanel({
                 <p className="lst-hint wpk-foot-note" role="status" aria-live="polite">Added so far: <span data-no-translate>{addedThisSitting.join("; ")}</span>.</p>
               )}
               <button className="lst-btn ghost" type="button" disabled={busy} onClick={closeModal}>Cancel</button>
-              {!editingId && (
+              {editingId ? (
+                <button className="lst-add" type="button" disabled={busy} aria-busy={busy} onClick={() => void save("save")}>
+                  {busy ? <RefreshCw className="spin" size={16} /> : null}
+                  {busy ? "Saving..." : "Save changes"}
+                </button>
+              ) : (
                 <>
-                  <button className="lst-btn ghost" type="button" disabled={busy} onClick={() => void save("another")}>Save &amp; add another for the same customer</button>
-                  <button className="lst-btn ghost" type="button" disabled={busy} onClick={() => void save("print")}><Printer size={16} /> Save &amp; print label</button>
+                  <button className="lst-btn ghost" type="button" disabled={busy} onClick={() => void save("another")}>Save &amp; add another</button>
+                  <button className="lst-btn ghost" type="button" disabled={busy} onClick={() => void save("save")}>Save without printing</button>
+                  {/* The primary action: one label per piece. */}
+                  <button className="lst-add" type="button" disabled={busy} aria-busy={busy} onClick={() => void save("print")}>
+                    {busy ? <RefreshCw className="spin" size={16} /> : <Printer size={16} />}
+                    {busy ? "Saving..." : <span data-no-translate>{savePrintLabelsText(labelCount, lang)}</span>}
+                  </button>
                 </>
               )}
-              <button className="lst-add" type="button" disabled={busy} aria-busy={busy} onClick={() => void save("save")}>
-                {busy ? <RefreshCw className="spin" size={16} /> : editingId ? null : <Plus size={16} />}
-                {busy ? "Saving..." : editingId ? "Save changes" : "Save"}
-              </button>
             </footer>
           </div>
         </div>
@@ -623,6 +671,7 @@ export function WaitingPackagesPanel({
         <PackagePaymentDialog
           businessId={businessId}
           line={paymentLine}
+          group={paymentGroup}
           staffName={staffName}
           staffOptions={staffOptions}
           onClose={closeModal}

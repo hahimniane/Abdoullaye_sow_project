@@ -18,11 +18,15 @@ const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf
 const panelPath = "../components/business/waiting-packages-panel.tsx";
 const paymentPath = "../components/business/package-payment-dialog.tsx";
 const assignPath = "../components/business/add-waiting-packages-dialog.tsx";
+const piecesPath = "../components/business/pieces-editor.tsx";
+const guestPath = "../components/guest-tracking.tsx";
 const containersPath = "../components/business/containers-panel.tsx";
 const operationsPath = "../components/business/operations-panels.tsx";
 const panelSource = read(panelPath);
 const paymentSource = read(paymentPath);
 const assignSource = read(assignPath);
+const piecesSource = read(piecesPath);
+const guestSource = read(guestPath);
 const containersSource = read(containersPath);
 const operationsSource = read(operationsPath);
 const staffViewSource = read("../components/package-staff-view.tsx");
@@ -93,6 +97,7 @@ for (const [name, source, path] of [
   ["the waiting packages list and form", panelSource, panelPath],
   ["the package payment dialog", paymentSource, paymentPath],
   ["the add-waiting-packages dialog", assignSource, assignPath],
+  ["the pieces editor", piecesSource, piecesPath],
 ] as const) {
   test(`every sentence on ${name} has its French`, () => {
     const strings = screenStrings(source, path);
@@ -164,8 +169,12 @@ test("waiting packages are read live from containerLines by business and waiting
   // The panel subscribes through the hook and never queries containerLines itself.
   assert.match(containersSource, /const waiting = useWaitingPackages\(businessId, enabled\);/);
   assert.doesNotMatch(containersSource, /useBusinessCollection\("containerLines"/);
-  // Payments are the line's own, read by business and line.
-  assert.match(paymentSource, /useBusinessCollection\("containerLinePayments", businessId, Boolean\(lineId\), \{\s*pageSize: null,\s*where: \[\["lineId", "==", lineId\]\],/);
+  // Payments are read by business and line - the root's, for a package split
+  // across containers (payments live on the root; the server routes a part's).
+  assert.match(paymentSource, /const paymentsLineId = group\.rootLineId \|\| groupRootId\(line, lineId\);/);
+  assert.match(paymentSource, /useBusinessCollection\("containerLinePayments", businessId, Boolean\(paymentsLineId\), \{\s*pageSize: null,\s*where: \[\["lineId", "==", paymentsLineId\]\],/);
+  // ...and recorded with the line's own id.
+  assert.match(paymentSource, /recordPackagePaymentRequest\(businessId, lineId, draft\)/);
 });
 
 test("every callable the waiting screens use is called through httpsCallable, and nothing is client-written", () => {
@@ -197,10 +206,14 @@ test("the containers panel keeps its props and adds the Waiting list beside the 
   assert.match(containersSource, /\{selectedOpen && \(\s*<span className="panel-action">\s*<button className="lst-btn ghost" type="button" disabled=\{busy \|\| waiting\.rows\.length === 0\} onClick=\{\(\) => setModal\("assign"\)\}>/);
 });
 
-test("the register form offers Save, Save & print label and Save & add another for the same customer", () => {
-  assert.match(panelSource, /void save\("another"\)\}>Save &amp; add another for the same customer<\/button>/);
-  assert.match(panelSource, /void save\("print"\)\}><Printer size=\{16\} \/> Save &amp; print label<\/button>/);
-  assert.match(panelSource, /void save\("save"\)\}/);
+test("the register form's primary action prints one label per piece; Save & add another keeps the sender", () => {
+  assert.match(panelSource, /void save\("another"\)\}>Save &amp; add another<\/button>/);
+  assert.match(panelSource, /void save\("save"\)\}>Save without printing<\/button>/);
+  // "Save and print 3 labels": built per language, the count is the pieces.
+  assert.match(panelSource, /<button className="lst-add" type="button" disabled=\{busy\} aria-busy=\{busy\} onClick=\{\(\) => void save\("print"\)\}>/);
+  assert.match(panelSource, /savePrintLabelsText\(labelCount, lang\)/);
+  assert.match(panelSource, /const labelCount = waitingDraftLabelCount\(draft\);/);
+  assert.match(panelSource, /setDraft\(nextPackageForSameSender\(draft, defaultDestination\)\)/);
   // The destination opens on the main destination.
   assert.match(panelSource, /emptyWaitingPackageDraft\(defaultDestination\)/);
   assert.match(containersSource, /defaultWaitingDestination\(destinations\.rows\)/);
@@ -218,7 +231,7 @@ test("the register form's 'Money received now?' asks what the payment dialog ask
   // Checked against the people offered, sent with the package, cleared for the next one.
   assert.match(panelSource, /validateWaitingPackage\(draft, staffIds\)/);
   assert.match(panelSource, /addWaitingPackagePayload\(businessId, draft\)/);
-  assert.match(panelSource, /setDraft\(nextPackageForSameCustomer\(draft\)\)/);
+  assert.match(panelSource, /setDraft\(nextPackageForSameSender\(draft, defaultDestination\)\)/);
 });
 
 test("the customer's and receiver's phones use the shared picker through ContactPhone", () => {
@@ -250,6 +263,9 @@ test("a refused save brings the first bad field into view, and refusals sit besi
   for (const field of WAITING_PACKAGE_FIELD_ORDER) {
     if (field === "wpk-customer-phone" || field === "wpk-receiver-phone") {
       assert.match(panelSource, new RegExp(`<ContactPhone\\s+id="${field}"`));
+    } else if (field === "wpk-pieces") {
+      // The pieces editor shows each piece's own problem under that piece.
+      assert.match(panelSource, /<PiecesEditor\s+id="wpk-pieces"[\s\S]*?showErrors=\{triedSave\}/);
     } else {
       assert.match(panelSource, new RegExp(`id="${field}" \\{\\.\\.\\.invalidProps\\("${field}"\\)\\}`), field);
     }
@@ -262,6 +278,73 @@ test("a refused save brings the first bad field into view, and refusals sit besi
   assert.match(footer, /\{draftError && <div className="lst-form-error wpk-foot-note" role="alert">\{draftError\}<\/div>\}/);
   assert.match(footer, /role="status" aria-live="polite">Added so far:/);
   assert.doesNotMatch(body, /draftError &&|Added so far/);
+});
+
+test("one pieces editor serves the register form, the waiting edit and the containers panel's line form", () => {
+  for (const [source, id] of [[panelSource, "wpk-pieces"], [containersSource, "ctn-pieces"]] as const) {
+    assert.match(source, /import \{ PiecesEditor \} from "@\/components\/business\/pieces-editor";/);
+    assert.equal((source.match(/<PiecesEditor\b/g) ?? []).length, 1, "one editor per form, not a fork");
+    assert.match(source, new RegExp(`<PiecesEditor\\s+id="${id}"`));
+  }
+  // The editor is thin over the pure helpers; it holds no rule of its own.
+  for (const helper of ["pieceDraftProblems", "piecesDraftTotalCents", "addPieceDraft", "removePieceDraft", "updatePieceDraft"]) {
+    assert.match(piecesSource, new RegExp(`\\b${helper}\\(`), helper);
+  }
+  assert.doesNotMatch(piecesSource, /readMoneyInput\(|pieceErrors\(/);
+  // Its money placeholder follows the language, like the register form's.
+  assert.match(piecesSource, /const moneyPlaceholder = lang === "fr" \? "0,00" : "0\.00";/);
+  // A car is never pieces: the editor shows for every other kind.
+  assert.match(panelSource, /\{piecesMode && \(\s*<PiecesEditor/);
+  assert.match(containersSource, /\{lineDraftHasPieces\(lineDraft\) && \(\s*<PiecesEditor/);
+});
+
+test("an edit sends piece prices with the pieces, and setContainerLinePrice only for a car or the switch", () => {
+  assert.match(panelSource, /updateWaitingPackageRequest\(businessId, editingId, draft, line\)/);
+  assert.match(panelSource, /const priceRequest = line \? editPriceRequest\(businessId, editingId, line, draft\) : null;\s*if \(priceRequest\) await httpsCallable\(functions, "setContainerLinePrice"\)\(priceRequest\);/);
+  // The payment dialog sends a package's total back unchanged: only the switch moves.
+  assert.match(paymentSource, /setContainerLinePrice"\)\(\{ businessId, lineId, priceCents: own\.priceCents, payOnArrival \}\)/);
+});
+
+test("group money is computed once in the containers panel and handed down, never per row", () => {
+  assert.match(containersSource, /const lineGroups = useMemo\(\(\) => buildLineGroups\(\[\.\.\.lines\.rows, \.\.\.waiting\.rows\]\), \[lines\.rows, waiting\.rows\]\);/);
+  assert.match(containersSource, /groups=\{lineGroups\}/);
+  assert.match(containersSource, /<PackageMoney line=\{row\} group=\{groupForLine\(lineGroups, row\)\} lang=\{lang\} \/>/);
+  assert.match(panelSource, /const group = groupForLine\(groups, row\);\s*const payment = groupPayment\(group\);/);
+  assert.match(panelSource, /group=\{paymentGroup\}/);
+  for (const source of [panelSource, containersSource, paymentSource]) {
+    assert.doesNotMatch(source, /buildLineGroups\([^)]*\)\s*\.get|lineGroupSummary\(/, "no group built inside a row");
+  }
+});
+
+test("the split stepper sends pieceCounts and offers the new labels for the pieces that stay", () => {
+  assert.match(assignSource, /assignLinesRequest\(businessId, text\(container\.id, ""\), selected, going, packages\)/);
+  assert.match(assignSource, /const answer = assignAnswerFrom\(response\.data\);/);
+  assert.match(assignSource, /piecesGoingText\(goes, total, lang\)/);
+  assert.match(assignSource, /splitPreviewRows\(line, goes, packages, lang\)/);
+  assert.match(assignSource, /Print labels for the pieces that stay/);
+  // The parts' labels print through the waiting-package path: by line id, no container.
+  assert.match(assignSource, /<ContainerLabelsDialog businessId=\{businessId\} lines=\{partLabelStubs\(parts\)\} onClose=\{onClose\} \/>/);
+  // A car is never split; the stepper shows only for a ticked package with several pieces.
+  assert.match(assignSource, /\{ticked && total > 1 && \(/);
+});
+
+test("the public tracking page shows a split package's parts and the group's money, in both languages", () => {
+  // Parsed defensively in guest-tracking.ts; rendered only when present.
+  assert.match(guestSource, /\{record\.parts && record\.parts\.length > 1 && \(/);
+  assert.match(guestSource, /\{record\.payment && \(/);
+  assert.match(guestSource, /guestStageLabel\(record\.service, part\.stage\)/);
+  for (const english of [
+    "This shipment travels in parts",
+    "Each part has its own code and its own updates.",
+    "Payment",
+    "Final price",
+    "Paid",
+    "Balance",
+    "For your privacy, only the shipment status, its payment and shipping details are shown here.",
+  ]) {
+    assert.ok(guestSource.includes(english), english);
+    assert.notEqual(translateValue(english, "fr"), english, `no French for "${english}"`);
+  }
 });
 
 test("the price and amount placeholders use a decimal comma in French", () => {

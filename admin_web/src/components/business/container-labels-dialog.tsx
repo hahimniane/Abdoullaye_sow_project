@@ -8,13 +8,15 @@ import {
   containerCallableFailure,
   containerLabelsRequest,
   containerLineTitle,
+  containerRowCounts,
   containerTitle,
   readContainerLabelChoice,
   writeContainerLabelChoice,
   type ContainerLabelChoice,
 } from "@/lib/container-manifest";
 import { functions } from "@/lib/firebase";
-import { text } from "@/lib/format";
+import { currentLanguage, text } from "@/lib/format";
+import { labelCountText, labelsPieceCount } from "@/lib/waiting-packages";
 import { overlayDismiss } from "@/lib/overlay-dismiss";
 import { closePendingTab, openPendingTab, sendPendingTab } from "@/lib/pending-tab";
 
@@ -55,6 +57,14 @@ export function ContainerLabelsDialog({
     ? []
     : (lines ?? (line ? [line] : [])).map((row) => text(row.id, "")).filter(Boolean);
   const several = !labelsContainerId && waitingIds.length > 1;
+  const lang = currentLanguage() === "fr" ? "fr" : "en";
+  // One label per piece, times the copies: what the sheet will hold.
+  const pieceTotal = labelsContainerId && !line
+    ? (() => {
+        const counts = containerRowCounts(container, []);
+        return counts.carCount + counts.barrelCount + counts.otherCount;
+      })()
+    : labelsPieceCount(labelsContainerId ? (line ? [line] : []) : (lines ?? (line ? [line] : [])));
 
   async function printLabels() {
     if (busy || (!labelsContainerId && waitingIds.length === 0)) return;
@@ -96,9 +106,9 @@ export function ContainerLabelsDialog({
             {several ? (
               <p>A QR code, tracking code and both phone numbers for each of the selected packages.</p>
             ) : line && !labelsContainerId ? (
-              <p><span data-no-translate>{containerLineTitle(line)}</span> — a QR code, tracking code and both phone numbers.</p>
+              <p><span data-no-translate>{containerLineTitle(line, lang)}</span> — a QR code, tracking code and both phone numbers.</p>
             ) : line ? (
-              <p><span data-no-translate>{containerLineTitle(line)}</span> — only this line's packages.</p>
+              <p><span data-no-translate>{containerLineTitle(line, lang)}</span> — only this line's packages.</p>
             ) : container ? (
               <p><span data-no-translate>{containerTitle(container)}</span> — a QR code and tracking code for every package on this container.</p>
             ) : null}
@@ -118,10 +128,11 @@ export function ContainerLabelsDialog({
             <label className="lst-radio"><input type="radio" name="ctnlabelformat" checked={labelChoice.format === "thermal"} disabled={busy} onChange={() => setLabelChoice((c) => ({ ...c, format: "thermal" }))} /><span>Thermal printer 4×6</span></label>
           </fieldset>
           <fieldset className="lst-fieldset">
-            <legend>Labels per package</legend>
+            <legend>Labels per piece</legend>
             <label className="lst-radio"><input type="radio" name="ctnlabelcopies" checked={labelChoice.copies === 2} disabled={busy} onChange={() => setLabelChoice((c) => ({ ...c, copies: 2 }))} /><span>2 — one for each side (recommended)</span></label>
             <label className="lst-radio"><input type="radio" name="ctnlabelcopies" checked={labelChoice.copies === 1} disabled={busy} onChange={() => setLabelChoice((c) => ({ ...c, copies: 1 }))} /><span>1 — to replace a single torn label</span></label>
           </fieldset>
+          {pieceTotal > 0 && <p className="lst-hint" role="status" data-no-translate>{labelCountText(pieceTotal, labelChoice.copies, lang)}</p>}
           <p className="lst-hint ctn-label-tip">Use weatherproof polyester or vinyl labels and cover each one with clear packing tape. On a thermal printer use thermal-transfer labels with a resin ribbon; direct-thermal labels fade in a hot container.</p>
         </div>
         <footer className="lst-modal-foot">

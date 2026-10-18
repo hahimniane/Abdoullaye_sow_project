@@ -67,7 +67,10 @@ import {
   MAX_ASSIGN_LINES,
   WAITING_STATUS,
   type ContainerRefusal,
+  editedLinePayload,
+  containerCounts as manifestCounts,
 } from "./container-manifest.ts";
+import { newPieceDraft } from "./piece-drafts.ts";
 
 // ---------------------------------------------------------------------------
 // Mirror discipline: the server module is the authority.
@@ -259,19 +262,24 @@ test("a car line needs a VIN of at least six characters", () => {
   );
 });
 
-test("barrels need a count; other needs a description and a count", () => {
+test("a line that is not a car is judged by its pieces, as the server judges them", () => {
   const stock = { ...emptyContainerLineDraft, ownerKind: "stock" as const };
-  assert.deepEqual(validateContainerLineDraft({ ...stock, kind: "barrels" }), ["quantity_required"]);
-  assert.deepEqual(validateContainerLineDraft({ ...stock, kind: "barrels", quantity: "0" }), ["quantity_required"]);
-  assert.deepEqual(validateContainerLineDraft({ ...stock, kind: "barrels", quantity: "12" }), []);
+  // One barrel, nothing else said: a barrel is a barrel.
+  assert.deepEqual(validateContainerLineDraft({ ...stock, kind: "barrels" }), []);
+  assert.deepEqual(validateContainerLineDraft({ ...stock, kind: "barrels", pieces: [] }), ["pieces_required"]);
   assert.deepEqual(
-    validateContainerLineDraft({ ...stock, kind: "other" }),
-    ["description_required", "quantity_required"],
+    validateContainerLineDraft({ ...stock, kind: "other", pieces: [newPieceDraft("box"), newPieceDraft("other")] }),
+    ["piece_description_required"],
+    "each code once",
   );
   assert.deepEqual(
-    validateContainerLineDraft({ ...stock, kind: "other", description: "tires", quantity: "4" }),
+    validateContainerLineDraft({ ...stock, kind: "other", pieces: [{ ...newPieceDraft("other"), description: "tires", price: "45" }] }),
     [],
   );
+  const sixtyOne = Array.from({ length: 61 }, () => newPieceDraft("barrel"));
+  assert.deepEqual(validateContainerLineDraft({ ...stock, kind: "barrels", pieces: sixtyOne }), ["pieces_too_many"]);
+  // The count and description of the old form no longer decide anything.
+  assert.deepEqual(validateContainerLineDraft({ ...stock, kind: "other", quantity: "", description: "" }), []);
 });
 
 test("a customer's line names the customer; stock names no one", () => {
@@ -323,11 +331,20 @@ test("the line payload keeps only the fields its kind and owner use", () => {
     ...emptyContainerLineDraft,
     kind: "barrels",
     quantity: "1200",
+    pieces: [newPieceDraft("barrel"), newPieceDraft("barrel"), { ...newPieceDraft("box"), description: "Clothes", price: "45" }],
     carMake: "ignored",
     customerName: " Aissatou Bah ",
     customerPhone: "+1 646 555 0100",
   });
-  assert.equal(barrels.quantity, 999, "capped like the server");
+  // The summary older apps read is the server's piecesSummaryFields.
+  assert.equal(barrels.quantity, 3, "the piece count, not what was typed in the old field");
+  assert.equal(barrels.kind, "other");
+  assert.equal(barrels.description, "Barrel, Clothes");
+  assert.deepEqual(barrels.pieces, [
+    { id: "", kind: "barrel", description: "", sizeIn: null, priceCents: null },
+    { id: "", kind: "barrel", description: "", sizeIn: null, priceCents: null },
+    { id: "", kind: "box", description: "Clothes", sizeIn: null, priceCents: 4500 },
+  ]);
   assert.equal(barrels.carMake, "");
   assert.equal(barrels.customerName, "Aissatou Bah");
   assert.equal(barrels.customerPhone, "+16465550100", "formatting dropped like the server");
@@ -348,15 +365,19 @@ test("the line payload keeps only the fields its kind and owner use", () => {
   assert.equal(toAgent.notifyReceiver, true);
   assert.equal(toAgent.notifyCustomer, false, "stock has no customer to message");
   assert.equal(toAgent.customerName, "");
+  // Items that say the same thing: the summary names them once.
+  const tires = { ...newPieceDraft("other"), description: " tires " };
   const other = containerLinePayload({
     ...emptyContainerLineDraft,
     kind: "other",
-    description: " tires ",
+    description: "ignored",
     quantity: "4.4",
+    pieces: [tires, tires, tires, tires],
     ownerKind: "stock",
   });
   assert.equal(other.description, "tires");
   assert.equal(other.quantity, 4);
+  assert.equal(containerLineTitle({ ...other, kind: "other" }), "4 × tires");
 });
 
 test("a VIN on another open container is a conflict; arrived ones are not", () => {
@@ -369,6 +390,18 @@ test("a VIN on another open container is a conflict; arrived ones are not", () =
   assert.equal(openContainerHoldingVin(lines, "C"), "", "the container being added to is fine");
   assert.equal(openContainerHoldingVin([lines[0]]), "");
   assert.equal(openContainerHoldingVin([]), "");
+});
+
+test("counts tally pieces: barrel pieces, box and other pieces, cars; a legacy line by its quantity", () => {
+  assert.deepEqual(
+    manifestCounts([
+      { kind: "other", pieces: [{ kind: "barrel" }, { kind: "barrel" }, { kind: "box", description: "TV" }, { kind: "other", description: "Bike" }] },
+      { kind: "car", pieces: [{ kind: "barrel" }] },
+      // A part of a split package counts only its own pieces.
+      { kind: "barrels", rootLineId: "r", partIndex: 2, pieces: [{ kind: "barrel" }] },
+    ]),
+    { lineCount: 3, carCount: 1, barrelCount: 3, otherCount: 2 },
+  );
 });
 
 test("counts tally barrels by quantity and cars and other by line", () => {
@@ -436,7 +469,7 @@ test("a barrel count is copy that reads in French; a typed title is not", () => 
 test("the added-so-far tally names a line the way the list does", () => {
   const panel = readFileSync(new URL("../components/business/containers-panel.tsx", import.meta.url), "utf8");
   assert.doesNotMatch(panel, /\$\{[^}]*quantity\} barrels/);
-  assert.match(panel, /const what = containerLineTitle\(line\);/);
+  assert.match(panel, /const what = containerLineTitle\(line, lang\);/);
 });
 
 test("the VIN index joins lines to containers once, skipping arrived boxes", () => {
@@ -825,7 +858,8 @@ test("a stored line opens the add-line form pre-filled for editing", () => {
     receiverName: "Mariama", receiverPhone: "+224620000000",
     notifyCustomer: false, notifyReceiver: true, trackingCode: "CL-K7M4P2",
   };
-  const draft = containerLineDraftFromRow(car);
+  const { pieces: carPieces, ...draft } = containerLineDraftFromRow(car);
+  assert.equal(carPieces.length, 1, "a car keeps a blank piece ready, should it become pieces");
   assert.deepEqual(draft, {
     kind: "car",
     // The typed-VIN branch, so the car fields show at once.
@@ -845,9 +879,9 @@ test("a stored line opens the add-line form pre-filled for editing", () => {
     notifyCustomer: false,
     notifyReceiver: true,
   });
-  assert.deepEqual(validateContainerLineDraft(draft), []);
+  assert.deepEqual(validateContainerLineDraft({ ...draft, pieces: carPieces }), []);
   // Saved unchanged, the request is the line as stored: nothing to change.
-  const request = updateContainerLineRequest("biz", car, draft);
+  const request = updateContainerLineRequest("biz", car, { ...draft, pieces: carPieces });
   assert.equal(request.lineId, "L1");
   assert.equal(request.containerId, "C1");
   assert.equal(request.businessId, "biz");
@@ -879,7 +913,25 @@ test("a stored line opens the add-line form pre-filled for editing", () => {
   const other = containerLineDraftFromRow({ kind: "other", quantity: 2, description: "Tires", ownerKind: "customer", customerName: "Awa" });
   assert.equal(other.description, "Tires");
   assert.equal(other.quantity, "2");
+  // A legacy line opens as its pieces: 2 "Tires", ids p1 and p2.
+  assert.deepEqual(other.pieces.map((p) => [p.id, p.kind, p.description]), [["p1", "other", "Tires"], ["p2", "other", "Tires"]]);
+  assert.equal(barrels.pieces.length, 3);
   assert.deepEqual(containerLinePayload(other), containerLinePayload({ ...emptyContainerLineDraft, ...other }));
+  // Saved without touching its pieces, a legacy line keeps its old form;
+  // changed pieces are written as pieces, ids kept.
+  const legacyRow = { id: "L2", kind: "other", quantity: 2, description: "Tires", ownerKind: "customer", customerName: "Awa" };
+  const kept = editedLinePayload(legacyRow, { ...other, receiverName: "Moussa" });
+  assert.equal("pieces" in kept, false);
+  assert.equal(kept.quantity, 2);
+  assert.equal(kept.description, "Tires");
+  assert.equal(kept.receiverName, "Moussa");
+  const grown = editedLinePayload(legacyRow, { ...other, pieces: [...other.pieces, { ...newPieceDraft("barrel") }] });
+  assert.deepEqual(grown.pieces?.map((p) => p.id), ["p1", "p2", ""]);
+  // A line with pieces always sends them.
+  const pieced = { id: "L3", kind: "other", ownerKind: "stock", pieces: [{ id: "p1", kind: "box", description: "TV", sizeIn: null, priceCents: 2000 }] };
+  assert.deepEqual(updateContainerLineRequest("biz", pieced, containerLineDraftFromRow(pieced)).line.pieces, [
+    { id: "p1", kind: "box", description: "TV", sizeIn: null, priceCents: 2000 },
+  ]);
   // An unknown kind falls back to a car rather than an impossible form.
   assert.equal(containerLineDraftFromRow({}).kind, "car");
 });

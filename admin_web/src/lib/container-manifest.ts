@@ -18,6 +18,27 @@
 import { businessParkingEndLabel } from "./business-parking-entry.ts";
 import { CALLING_CODE_BY_COUNTRY } from "./calling-code-catalog.ts";
 import { destinationCountryOptionForRow } from "./destination-countries.ts";
+import {
+  groupRootId,
+  lineCounts,
+  lineHasPieces,
+  linePieces,
+  lineSourceOf,
+  partIndexOf,
+  pieceSummaryText,
+  piecesSummaryFields,
+  type LineSource,
+  type Piece,
+} from "./line-pieces.ts";
+import {
+  newPieceDraft,
+  pieceDraftProblems,
+  pieceDraftsFromLine,
+  piecesDifferFromLine,
+  piecesPayload,
+  type PieceDraft,
+  type PiecePayload,
+} from "./piece-drafts.ts";
 
 export const CONTAINER_STATUSES = ["loading", "shipped", "arrived"] as const;
 export type ContainerStatus = (typeof CONTAINER_STATUSES)[number];
@@ -244,7 +265,16 @@ export type ContainerRefusal =
   | "payment_exceeds_balance"
   | "payment_not_found"
   | "payment_already_reverted"
-  | "carrier_invalid";
+  | "carrier_invalid"
+  | "pieces_required"
+  | "pieces_too_many"
+  | "piece_kind_invalid"
+  | "piece_description_required"
+  | "piece_description_too_long"
+  | "piece_size_invalid"
+  | "piece_price_invalid"
+  | "piece_count_invalid"
+  | "line_has_parts";
 
 export const CONTAINER_MESSAGES: Record<ContainerRefusal, string> = {
   container_label_required: "Give the container a working name, or its container or booking number.",
@@ -306,6 +336,21 @@ export const CONTAINER_MESSAGES: Record<ContainerRefusal, string> = {
   payment_not_found: "That payment no longer exists.",
   payment_already_reverted: "That payment was already reverted.",
   carrier_invalid: "Choose the shipping line from the list.",
+  pieces_required: "Add at least one piece.",
+  pieces_too_many: "A package can have at most 60 pieces.",
+  piece_kind_invalid:
+    "Say what each piece is: a barrel, a box, or something else.",
+  piece_description_required: "Say what each box or item is.",
+  piece_description_too_long:
+    "Keep each piece's description to 120 characters.",
+  piece_size_invalid:
+    "Enter a piece's length, width and height in inches, or leave all " +
+    "three empty.",
+  piece_price_invalid: "Enter each piece's price in dollars, zero or more.",
+  piece_count_invalid:
+    "Choose how many pieces go in: from 1 to the number the package has.",
+  line_has_parts:
+    "Other parts of this package are still listed. Remove them first.",
 };
 
 export function containerMessage(codes: readonly ContainerRefusal[]): string {
@@ -500,6 +545,12 @@ export type ContainerLineDraft = {
   notifyCustomer: boolean;
   /** Whether the receiver hears about the shipment on WhatsApp. On by default. */
   notifyReceiver: boolean;
+  /**
+   * What a line that is not a car holds: each barrel, box or other thing
+   * handed over (docs/WAITING_PACKAGES.md "Pieces"). `quantity` and
+   * `description` are what the server writes from them for older apps.
+   */
+  pieces: PieceDraft[];
 };
 
 export const emptyContainerLineDraft: ContainerLineDraft = {
@@ -519,7 +570,13 @@ export const emptyContainerLineDraft: ContainerLineDraft = {
   receiverPhone: "",
   notifyCustomer: true,
   notifyReceiver: true,
+  pieces: [newPieceDraft()],
 };
+
+/** Whether a line draft is described by its pieces (every kind but a car). */
+export function lineDraftHasPieces(draft: { kind: string }): boolean {
+  return text(draft.kind, 20) !== "car";
+}
 
 export type ContainerLineError =
   | "line_kind_invalid"
@@ -529,7 +586,14 @@ export type ContainerLineError =
   | "owner_kind_invalid"
   | "customer_name_required"
   | "customer_phone_invalid"
-  | "receiver_phone_invalid";
+  | "receiver_phone_invalid"
+  | "pieces_required"
+  | "pieces_too_many"
+  | "piece_kind_invalid"
+  | "piece_description_required"
+  | "piece_description_too_long"
+  | "piece_size_invalid"
+  | "piece_price_invalid";
 
 type ContactPhoneError = "customer_phone_invalid" | "receiver_phone_invalid";
 
@@ -557,11 +621,10 @@ export function validateContainerLineDraft(
   }
   if (kind === "car") {
     if (cleanVin(draft.vinNumber).length < MIN_VIN) errors.push("vin_required");
-  } else if (kind === "barrels") {
-    if (positiveInt(draft.quantity) <= 0) errors.push("quantity_required");
-  } else if (kind === "other") {
-    if (!text(draft.description, MAX_LABEL)) errors.push("description_required");
-    if (positiveInt(draft.quantity) <= 0) errors.push("quantity_required");
+  } else if ((CONTAINER_LINE_KINDS as readonly string[]).includes(kind)) {
+    // What the line is comes from its pieces, as on the server
+    // (`linesInPiecesMode`): 1-60 of them, each saying what it is.
+    errors.push(...pieceDraftProblems(draft.pieces ?? []).codes);
   }
   const owner = text(draft.ownerKind, 20);
   if (!(CONTAINER_OWNER_KINDS as readonly string[]).includes(owner)) {
@@ -607,22 +670,84 @@ function lineContacts(
   };
 }
 
-/** The `line` body `addContainerLine` takes, shaped as the server stores it. */
-export function containerLinePayload(draft: ContainerLineDraft) {
+/**
+ * The `line` body `addContainerLine` takes, shaped as the server stores it.
+ * A line that is not a car sends its `pieces`; the kind, quantity and
+ * description beside them are the summary the server recomputes (and what an
+ * older server still reads).
+ */
+/** The `line` body of a request: every field the server takes for a line, `pieces` for all but a car. */
+export type ContainerLinePayload = ReturnType<typeof lineContacts> & {
+  kind: string;
+  vinNumber: string;
+  carMake: string;
+  carModel: string;
+  carYear: string;
+  ownerKind: string;
+  quantity: number;
+  description: string;
+  pieces?: PiecePayload[];
+};
+
+export function containerLinePayload(draft: ContainerLineDraft): ContainerLinePayload {
   const kind = text(draft.kind, 20);
   const owner = text(draft.ownerKind, 20);
   const isCar = kind === "car";
-  return {
-    kind,
+  const base = {
     vinNumber: isCar ? cleanVin(draft.vinNumber) : "",
     carMake: isCar ? text(draft.carMake, 80) : "",
     carModel: isCar ? text(draft.carModel, 80) : "",
     carYear: isCar ? text(draft.carYear, 8) : "",
-    quantity: isCar ? 1 : Math.min(MAX_QUANTITY, positiveInt(draft.quantity)),
-    description: kind === "other" ? text(draft.description, MAX_LABEL) : "",
     ownerKind: owner,
     ...lineContacts(draft, owner),
   };
+  if (isCar) return { kind, ...base, quantity: 1, description: "" };
+  const pieces = piecesPayload(draft.pieces ?? []);
+  const summary = piecesSummaryFields(pieces);
+  return {
+    kind: summary.kind,
+    ...base,
+    quantity: Math.min(MAX_QUANTITY, summary.quantity),
+    description: summary.kind === "other" ? text(summary.description, MAX_LABEL) : "",
+    pieces,
+  };
+}
+
+/**
+ * The same body in the old kind/quantity form, for a line saved before
+ * pieces existed whose pieces were not changed: an edit of its contacts or
+ * destination leaves what it is exactly as stored.
+ */
+function legacyLinePayload(line: unknown, draft: ContainerLineDraft): ContainerLinePayload {
+  const r = asRow(line);
+  const owner = text(draft.ownerKind, 20);
+  const kind = text(r.kind, 20) === "barrels" ? "barrels" : "other";
+  return {
+    kind,
+    vinNumber: "",
+    carMake: "",
+    carModel: "",
+    carYear: "",
+    quantity: Math.min(MAX_QUANTITY, positiveInt(r.quantity) || 1),
+    description: kind === "other" ? text(r.description, MAX_LABEL) : "",
+    ownerKind: owner,
+    ...lineContacts(draft, owner),
+  };
+}
+
+/** Whether an edit keeps a legacy line in its old form (its pieces were left as they read). */
+export function editKeepsLegacyForm(line: unknown, draft: Pick<ContainerLineDraft, "kind" | "pieces">): boolean {
+  const r = asRow(line);
+  const legacy = text(r.kind, 20) !== "car" && !lineHasPieces(r);
+  return lineDraftHasPieces(draft) && legacy && !piecesDifferFromLine(r, draft.pieces ?? []);
+}
+
+/**
+ * What an edit sends for the line itself: its pieces (ids kept), or - for a
+ * legacy line whose pieces were left as they read - its old form.
+ */
+export function editedLinePayload(line: unknown, draft: ContainerLineDraft): ContainerLinePayload {
+  return editKeepsLegacyForm(line, draft) ? legacyLinePayload(line, draft) : containerLinePayload(draft);
 }
 
 // ---------------------------------------------------------------------------
@@ -666,6 +791,8 @@ export function containerLineDraftFromRow(line: unknown): ContainerLineDraft {
     // switch staff turned off stays off.
     notifyCustomer: !text(r.customerPhone, 40) || onUnlessOff(r.notifyCustomer),
     notifyReceiver: !text(r.receiverPhone, 40) || onUnlessOff(r.notifyReceiver),
+    // The line's pieces, ids kept (a legacy line's count expanded).
+    pieces: pieceDraftsFromLine(r),
   };
 }
 
@@ -680,7 +807,7 @@ export function updateContainerLineRequest(
     businessId: text(businessId, MAX_LABEL),
     lineId: text(r.id, MAX_LABEL),
     containerId: text(r.containerId, MAX_LABEL),
-    line: containerLinePayload(draft),
+    line: editedLinePayload(r, draft),
   };
 }
 
@@ -1008,16 +1135,19 @@ export type ContainerCounts = {
   otherCount: number;
 };
 
-/** Barrels count by quantity; cars and other by line. */
+/**
+ * The server's `containerCounts`: lines once each, and the pieces on them by
+ * kind - barrel pieces as barrels, boxes and other things as "other", cars as
+ * cars. A legacy line counts its quantity (`lineCounts`).
+ */
 export function containerCounts(lines: readonly unknown[]): ContainerCounts {
   const out: ContainerCounts = { lineCount: 0, carCount: 0, barrelCount: 0, otherCount: 0 };
   for (const line of Array.isArray(lines) ? lines : []) {
-    const row = asRow(line);
     out.lineCount += 1;
-    const kind = text(row.kind, 20);
-    if (kind === "car") out.carCount += 1;
-    else if (kind === "barrels") out.barrelCount += positiveInt(row.quantity);
-    else out.otherCount += positiveInt(row.quantity) || 1;
+    const counts = lineCounts(asRow(line));
+    out.carCount += counts.carPieces;
+    out.barrelCount += counts.barrelPieces;
+    out.otherCount += counts.packagePieces;
   }
   return out;
 }
@@ -1046,10 +1176,16 @@ export function containerTitle(row: unknown): string {
   return text(r.containerNumber, 20) || text(r.label, MAX_LABEL) || text(r.bookingReference, 60) || "Container";
 }
 
-/** "2019 Toyota Camry" / "12 barrels" / "3 × tires"; a car with no decode shows its VIN. */
-export function containerLineTitle(line: unknown): string {
+/**
+ * "2019 Toyota Camry" / "12 barrels" / "3 × tires"; a car with no decode
+ * shows its VIN. A line with pieces says what they are in the reader's
+ * language ("2 barrels, 1 box" / "2 fûts, 1 colis", the server's
+ * `pieceSummaryText`), so it renders as data-no-translate.
+ */
+export function containerLineTitle(line: unknown, lang: "en" | "fr" = "en"): string {
   const r = asRow(line);
   const kind = text(r.kind, 20);
+  if (kind !== "car" && lineHasPieces(r)) return pieceSummaryText(linePieces(r), lang);
   if (kind === "car") {
     const car = [text(r.carYear, 8), text(r.carMake, 80), text(r.carModel, 80)]
       .filter(Boolean)
@@ -1070,6 +1206,8 @@ export function containerLineTitle(line: unknown): string {
 export function containerLineTitleIsCopy(line: unknown): boolean {
   const r = asRow(line);
   const kind = text(r.kind, 20);
+  // Pieces are named in the reader's language already, typed names inside.
+  if (kind !== "car" && lineHasPieces(r)) return false;
   if (kind === "barrels") return true;
   if (kind !== "car") return false;
   return containerLineTitle(line) === "Car";
@@ -1134,6 +1272,22 @@ export type ContainerLine = {
   paidCents: number;
   /** The customer settles on arrival; the Guinea team records it. */
   payOnArrival: boolean;
+  /** Every piece, old lines included (`linePieces`): a car is one car piece. */
+  pieces: Piece[];
+  /** Whether the line stores its own pieces (false for cars and legacy lines). */
+  hasPieces: boolean;
+  /** The denormalized counts, or what the pieces add up to when absent. */
+  pieceCount: number;
+  barrelPieces: number;
+  packagePieces: number;
+  carPieces: number;
+  source: LineSource;
+  /** When the pieces were received; legacy lines read `createdAt`. */
+  receivedAt: unknown;
+  /** The root of its split group (its own id when never split). */
+  rootLineId: string;
+  /** 1 for the root, 2 for the first part split from it... */
+  partIndex: number;
 };
 
 export function containerLineFromRow(row: unknown): ContainerLine {
@@ -1168,6 +1322,29 @@ export function containerLineFromRow(row: unknown): ContainerLine {
     priceCents: wholeCents(r.priceCents),
     paidCents: wholeCents(r.paidCents) ?? 0,
     payOnArrival: r.payOnArrival === true,
+    ...linePieceFields(r),
+  };
+}
+
+/** The piece and group half of `containerLineFromRow`. */
+function linePieceFields(r: Row) {
+  const pieces = linePieces(r);
+  const counted = lineCounts(r);
+  const stored = (key: keyof typeof counted): number => {
+    const value = r[key];
+    return typeof value === "number" && Number.isFinite(value) && value >= 0 ? Math.round(value) : counted[key];
+  };
+  return {
+    pieces,
+    hasPieces: lineHasPieces(r),
+    pieceCount: stored("pieceCount"),
+    barrelPieces: stored("barrelPieces"),
+    packagePieces: stored("packagePieces"),
+    carPieces: stored("carPieces"),
+    source: lineSourceOf(r.source),
+    receivedAt: r.receivedAt ?? r.createdAt ?? null,
+    rootLineId: groupRootId(r, r.id),
+    partIndex: partIndexOf(r),
   };
 }
 

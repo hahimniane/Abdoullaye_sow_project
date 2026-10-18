@@ -9,6 +9,8 @@ import {
   GUEST_JOURNEY_STAGES,
   GUEST_SHIPPING_FIELDS,
   parseGuestShipping,
+  parseGuestContainerGroup,
+  guestPiecesText,
   guestJourneyStages,
   guestServiceLabel,
   guestStageLabel,
@@ -16,6 +18,57 @@ import {
   parseGuestTrackingResponse,
   validGuestTrackingIdentifier,
 } from "./guest-tracking.ts";
+
+test("a split container line answers with its parts and the group's money, read defensively", () => {
+  const parsed = parseGuestTrackingResponse({
+    version: 1,
+    found: true,
+    record: {
+      trackingCode: "CL-K7M4P2-2",
+      service: "container",
+      stage: "waiting_container",
+      updatedAtMs: 1_725_000_000_000,
+      pieceCount: 2,
+      parts: [
+        { trackingCode: "CL-K7M4P2", stage: "in_transit", pieceCount: 2, priceCents: 20000 },
+        { trackingCode: "CL-K7M4P2-2", stage: "waiting_container", pieceCount: 2, priceCents: null },
+        { trackingCode: "", stage: "booked" },
+        { trackingCode: "CL-XXXXXX", stage: "sailing" },
+        "junk",
+      ],
+      payment: { priceCents: 20000, paidCents: 15000, balanceCents: 5000 },
+    },
+  });
+  assert.ok(parsed.found);
+  if (!parsed.found) return;
+  assert.equal(parsed.record.pieceCount, 2);
+  assert.deepEqual(parsed.record.parts, [
+    { trackingCode: "CL-K7M4P2", stage: "in_transit", pieceCount: 2, priceCents: 20000 },
+    { trackingCode: "CL-K7M4P2-2", stage: "waiting_container", pieceCount: 2, priceCents: null },
+  ]);
+  assert.deepEqual(parsed.record.payment, { priceCents: 20000, paidCents: 15000, balanceCents: 5000 });
+  assert.equal(guestPiecesText(2, "en"), "2 pieces");
+  assert.equal(guestPiecesText(1, "en"), "1 piece");
+  assert.equal(guestPiecesText(2, "fr"), "2 colis");
+});
+
+test("an older answer, an unpriced group or another service carries no parts or payment", () => {
+  const older = parseGuestTrackingResponse({
+    version: 1, found: true,
+    record: { trackingCode: "CL-K7M4P2", service: "container", stage: "booked", updatedAtMs: 1 },
+  });
+  assert.ok(older.found);
+  if (older.found) {
+    assert.equal("parts" in older.record, false);
+    assert.equal("payment" in older.record, false);
+    assert.equal("pieceCount" in older.record, false);
+  }
+  assert.deepEqual(parseGuestContainerGroup("container", { payment: { priceCents: null, paidCents: 0, balanceCents: 0 } }), {});
+  assert.deepEqual(parseGuestContainerGroup("container", { payment: { priceCents: 1000, paidCents: 5000 } }), {
+    payment: { priceCents: 1000, paidCents: 1000, balanceCents: 0 },
+  });
+  assert.deepEqual(parseGuestContainerGroup("barrel", { pieceCount: 3, parts: [{ trackingCode: "BS-K7M4P2", stage: "booked" }] }), {});
+});
 
 test("guest tracking validates human-formatted booking codes", () => {
   assert.equal(validGuestTrackingIdentifier("bs k7m4p2"), true);

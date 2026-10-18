@@ -25,7 +25,7 @@ import {
   intakeMoneyAvailable,
   intakePaymentPayload,
   mainDestinationChanges,
-  nextPackageForSameCustomer,
+  nextPackageForSameSender,
   packageMethodLabel,
   packagePayment,
   packagePaymentEntries,
@@ -55,18 +55,49 @@ import {
   waitingPackageMessage,
   waitingPackageRow,
   wholeBalanceInput,
+  assignAnswerFrom,
+  buildLineGroups,
+  clampPiecesGoing,
+  editPriceRequest,
+  groupForLine,
+  groupMoneyNote,
+  groupPayment,
+  labelCountText,
+  labelsPieceCount,
+  linePaidFloor,
+  partHintText,
+  partLabelStubs,
+  partsCreatedText,
+  piecesGoingText,
+  piecesStayText,
+  previewPartCode,
+  splitPreviewRows,
+  splittablePieceCount,
+  waitingDraftLabelCount,
+  waitingDraftTotalCents,
   type WaitingPackageDraft,
 } from "./waiting-packages.ts";
+import { newPieceDraft, type PieceDraft } from "./piece-drafts.ts";
 import { revealField } from "./reveal-field.ts";
 
 const guinea = { id: "guinea", name: "Guinea" };
 
-/** A complete barrels draft; each test changes what it is about. */
+/** A barrel, priced as typed. */
+function barrel(price = ""): PieceDraft {
+  return { ...newPieceDraft("barrel"), price };
+}
+
+/** A box that says what is in it. */
+function box(description: string, price = ""): PieceDraft {
+  return { ...newPieceDraft("box"), description, price };
+}
+
+/** A complete two-barrel draft; each test changes what it is about. */
 function draft(over: Partial<WaitingPackageDraft> = {}): WaitingPackageDraft {
   return {
     ...emptyWaitingPackageDraft(guinea),
     kind: "barrels",
-    quantity: "2",
+    pieces: [barrel(), barrel()],
     customerName: "Fatou Diallo",
     customerPhone: "+1 (207) 555-0101",
     receiverName: "Mariama Bah",
@@ -382,77 +413,100 @@ test("a blank package opens on the destination it is given, with the WhatsApp sw
   assert.equal(emptyWaitingPackageDraft(null).destinationCountryId, "");
 });
 
-test("add another for the same customer keeps the people, the country and the switches, and clears the box", () => {
+test("save & add another keeps only the sender, for a different receiver or country", () => {
   const first = draft({
-    kind: "other", description: "tires", quantity: "4", destinationCountryId: "senegal", destinationCountryName: "Senegal",
-    lengthIn: "40", widthIn: "30", heightIn: "20", price: "45", payOnArrival: true,
-    notifyCustomer: false, notifyReceiver: true, vinNumber: "ignored", carMake: "Toyota",
+    pieces: [barrel("75"), box("Clothes", "45")], destinationCountryId: "senegal", destinationCountryName: "Senegal",
+    payOnArrival: true, notifyCustomer: false, notifyReceiver: false,
   });
-  const next = nextPackageForSameCustomer(first);
-  for (const kept of ["kind", "customerName", "customerPhone", "receiverName", "receiverPhone", "notifyCustomer", "notifyReceiver", "destinationCountryId", "destinationCountryName"] as const) {
+  const next = nextPackageForSameSender(first, guinea);
+  for (const kept of ["customerName", "customerPhone", "notifyCustomer"] as const) {
     assert.equal(next[kept], first[kept], kept);
   }
-  for (const cleared of ["description", "lengthIn", "widthIn", "heightIn", "price", "vinNumber", "carMake", "carModel", "carYear"] as const) {
-    assert.equal(next[cleared], "", cleared);
-  }
+  assert.equal(next.receiverName, "");
+  assert.equal(next.receiverPhone, "");
+  assert.equal(next.notifyReceiver, true, "the next receiver starts switched on");
+  assert.equal(next.destinationCountryId, "guinea", "back on the main destination");
   assert.equal(next.payOnArrival, false);
-  assert.equal(next.quantity, "1");
+  assert.equal(next.kind, "barrels");
+  assert.equal(next.pieces.length, 1);
+  assert.equal(next.pieces[0].kind, "barrel");
+  assert.equal(next.pieces[0].price, "");
+  assert.deepEqual(next.money, emptyIntakeMoney());
 });
 
-test("a package needs what a line needs, a country, a whole size and a sane price", () => {
+test("a package needs pieces that say what they are, a country, and a car its VIN, size and price", () => {
   assert.deepEqual(validateWaitingPackage(draft()), []);
   assert.deepEqual(validateWaitingPackage(draft({ customerName: "" })), ["customer_name_required"]);
-  assert.deepEqual(validateWaitingPackage(draft({ quantity: "" })), ["quantity_required"]);
+  assert.deepEqual(validateWaitingPackage(draft({ pieces: [] })), ["pieces_required"]);
+  assert.deepEqual(validateWaitingPackage(draft({ pieces: [box("")] })), ["piece_description_required"]);
+  assert.deepEqual(validateWaitingPackage(draft({ pieces: [barrel("-3")] })), ["piece_price_invalid"]);
+  assert.deepEqual(validateWaitingPackage(draft({ pieces: [barrel("0")] })), [], "zero is a price");
+  assert.deepEqual(validateWaitingPackage(draft({ pieces: [{ ...box("TV"), lengthIn: "40" }] })), ["piece_size_invalid"], "two sides are no size");
   assert.deepEqual(validateWaitingPackage(draft({ kind: "car", vinNumber: "123" })), ["vin_required"]);
-  assert.deepEqual(validateWaitingPackage(draft({ kind: "other", description: "", quantity: "1" })), ["description_required"]);
   assert.deepEqual(validateWaitingPackage(draft({ customerPhone: "call me" })), ["customer_phone_invalid"]);
   assert.deepEqual(validateWaitingPackage(draft({ destinationCountryId: "" })), ["package_destination_required"]);
-  assert.deepEqual(validateWaitingPackage(draft({ lengthIn: "40", widthIn: "30", heightIn: "20" })), []);
-  assert.deepEqual(validateWaitingPackage(draft({ lengthIn: "40" })), ["size_invalid"], "two sides are no size");
-  assert.deepEqual(validateWaitingPackage(draft({ lengthIn: "40", widthIn: "x", heightIn: "20" })), ["size_invalid"]);
-  assert.deepEqual(validateWaitingPackage(draft({ price: "-3" })), ["price_invalid"]);
-  assert.deepEqual(validateWaitingPackage(draft({ price: "45.50", payOnArrival: true })), []);
+  // A car keeps its own size and price.
+  const car = { kind: "car" as const, vinNumber: "1HGCM82633A004352" };
+  assert.deepEqual(validateWaitingPackage(draft({ ...car, lengthIn: "40", widthIn: "30", heightIn: "20" })), []);
+  assert.deepEqual(validateWaitingPackage(draft({ ...car, lengthIn: "40" })), ["size_invalid"]);
+  assert.deepEqual(validateWaitingPackage(draft({ ...car, price: "-3" })), ["price_invalid"]);
+  // Pieces ignore the car-only fields entirely.
+  assert.deepEqual(validateWaitingPackage(draft({ lengthIn: "40", price: "x" })), []);
   // Every problem at once, in the server's sentences.
-  const everything = validateWaitingPackage(draft({ customerName: "", destinationCountryId: "", lengthIn: "9", price: "x" }));
-  assert.deepEqual(everything, ["customer_name_required", "package_destination_required", "size_invalid", "price_invalid"]);
+  const everything = validateWaitingPackage(draft({ customerName: "", destinationCountryId: "", pieces: [box("", "x")] }));
+  assert.deepEqual(everything, ["piece_price_invalid", "piece_description_required", "customer_name_required", "package_destination_required"]);
   assert.equal(
-    waitingPackageMessage(["customer_name_required", "size_invalid"]),
-    `${CONTAINER_MESSAGES.customer_name_required} ${CONTAINER_MESSAGES.size_invalid}`,
+    waitingPackageMessage(["customer_name_required", "piece_size_invalid"]),
+    `${CONTAINER_MESSAGES.customer_name_required} ${CONTAINER_MESSAGES.piece_size_invalid}`,
   );
 });
 
-test("the add request carries what the server stores, and only what was entered", () => {
-  assert.deepEqual(
-    addWaitingPackagePayload(" biz ", draft({ lengthIn: "40", widthIn: "30", heightIn: "20", price: "45,50", payOnArrival: true })),
-    {
-      businessId: "biz",
-      kind: "barrels",
-      vinNumber: "",
-      carMake: "",
-      carModel: "",
-      carYear: "",
-      quantity: 2,
-      description: "",
-      ownerKind: "customer",
-      customerName: "Fatou Diallo",
-      customerPhone: "+12075550101",
-      receiverName: "Mariama Bah",
-      receiverPhone: "+224620112233",
-      notifyCustomer: true,
-      notifyReceiver: true,
-      destinationCountryId: "guinea",
-      destinationCountryName: "Guinea",
-      lengthIn: 40,
-      widthIn: 30,
-      heightIn: 20,
-      priceCents: 4550,
-      payOnArrival: true,
-    },
-  );
-  const bare = addWaitingPackagePayload("biz", draft());
-  assert.equal("lengthIn" in bare, false, "no size typed, none sent");
-  assert.equal("priceCents" in bare, false, "no price typed, none sent");
-  assert.equal(bare.payOnArrival, false);
+test("the add request sends the pieces (ids, kinds, sizes, cents) and the summary older servers read", () => {
+  const payload = addWaitingPackagePayload(" biz ", draft({
+    pieces: [barrel("100"), { ...box("Clothes", "45,50"), lengthIn: "20", widthIn: "20", heightIn: "18,5" }],
+    payOnArrival: true,
+    // Car-only fields are not sent for pieces.
+    lengthIn: "40", widthIn: "30", heightIn: "20", price: "99",
+  }));
+  assert.deepEqual(payload, {
+    businessId: "biz",
+    kind: "other",
+    vinNumber: "",
+    carMake: "",
+    carModel: "",
+    carYear: "",
+    ownerKind: "customer",
+    customerName: "Fatou Diallo",
+    customerPhone: "+12075550101",
+    receiverName: "Mariama Bah",
+    receiverPhone: "+224620112233",
+    notifyCustomer: true,
+    notifyReceiver: true,
+    quantity: 2,
+    description: "Barrel, Clothes",
+    pieces: [
+      { id: "", kind: "barrel", description: "", sizeIn: null, priceCents: 10000 },
+      { id: "", kind: "box", description: "Clothes", sizeIn: { l: 20, w: 20, h: 18.5 }, priceCents: 4550 },
+    ],
+    destinationCountryId: "guinea",
+    destinationCountryName: "Guinea",
+    payOnArrival: true,
+  });
+  const barrels = addWaitingPackagePayload("biz", draft());
+  assert.equal(barrels.kind, "barrels");
+  assert.equal(barrels.description, "");
+  assert.equal("priceCents" in barrels, false, "the server sums the pieces");
+  assert.deepEqual(barrels.pieces?.map((p) => p.priceCents), [null, null]);
+});
+
+test("the total is the sum of the priced pieces; a car's is its price", () => {
+  assert.equal(waitingDraftTotalCents(draft()), null);
+  assert.equal(waitingDraftTotalCents(draft({ pieces: [barrel("100"), barrel(""), box("TV", "45.50")] })), 14550);
+  assert.equal(waitingDraftTotalCents(draft({ pieces: [barrel("0")] })), null, "nothing to pay is no price");
+  assert.equal(waitingDraftTotalCents(draft({ pieces: [barrel("x")] })), null);
+  assert.equal(waitingDraftTotalCents(draft({ kind: "car", price: "800" })), 80000);
+  assert.equal(waitingDraftLabelCount(draft({ pieces: [barrel(), barrel(), box("TV")] })), 3);
+  assert.equal(waitingDraftLabelCount(draft({ kind: "car" })), 1);
 });
 
 // ---------------------------------------------------------------------------
@@ -461,29 +515,30 @@ test("the add request carries what the server stores, and only what was entered"
 
 const STAFF = ["owner", "cashier"];
 
-/** A priced draft with the money section switched on. */
+/** Pieces priced at $150 in all, with the money section switched on. */
 function paidDraft(money: Partial<WaitingPackageDraft["money"]> = {}, over: Partial<WaitingPackageDraft> = {}): WaitingPackageDraft {
-  const on = switchIntakeMoney(draft({ price: "150", ...over }), true);
+  const on = switchIntakeMoney(draft({ pieces: [barrel("100"), box("Clothes", "50")], ...over }), true);
   return { ...on, money: { ...on.money, receivedByStaffId: "cashier", ...money } };
 }
 
-test("money received now opens only on a price, on the full price, cash, nobody chosen", () => {
+test("money received now opens only on a total, on the full total, cash, nobody chosen", () => {
   const blank = emptyWaitingPackageDraft(guinea);
   assert.deepEqual(blank.money, { received: false, ...emptyPackagePaymentDraft });
   assert.equal(intakeMoneyAvailable(draft()), false);
-  assert.equal(intakeMoneyAvailable(draft({ price: "x" })), false);
-  assert.equal(intakeMoneyAvailable(draft({ price: "45,50" })), true);
+  assert.equal(intakeMoneyAvailable(draft({ pieces: [barrel("x")] })), false);
+  assert.equal(intakeMoneyAvailable(draft({ pieces: [barrel("45,50")] })), true);
+  assert.equal(intakeMoneyAvailable(draft({ kind: "car", price: "45,50" })), true);
   // No price: the switch does nothing.
   const unpriced = draft();
   assert.equal(switchIntakeMoney(unpriced, true), unpriced);
-  const on = switchIntakeMoney(draft({ price: "45,50" }), true);
+  const on = switchIntakeMoney(draft({ pieces: [barrel("40"), barrel("5,50")] }), true);
   assert.deepEqual(on.money, { received: true, amount: "45.50", method: "cash", note: "", receivedByStaffId: "" });
   // Off forgets what was typed.
   const off = switchIntakeMoney({ ...on, money: { ...on.money, amount: "10", receivedByStaffId: "cashier" } }, false);
   assert.deepEqual(off.money, emptyIntakeMoney());
 });
 
-test("money received now is refused the way the server refuses a payment", () => {
+test("money received now is judged against the total, the way the server refuses a payment", () => {
   assert.deepEqual(validateWaitingPackage(paidDraft(), STAFF), []);
   assert.deepEqual(validateWaitingPackage(paidDraft({ amount: "40" }), STAFF), [], "part now, the rest later");
   assert.deepEqual(validateWaitingPackage(paidDraft({ receivedByStaffId: "" }), STAFF), ["received_by_required"]);
@@ -492,8 +547,8 @@ test("money received now is refused the way the server refuses a payment", () =>
   assert.deepEqual(validateWaitingPackage(paidDraft({ amount: "0" }), STAFF), ["amount_required"]);
   assert.deepEqual(validateWaitingPackage(paidDraft({ amount: "" }), STAFF), ["amount_required"]);
   assert.deepEqual(validateWaitingPackage(paidDraft({ method: "barter" as never }), STAFF), ["payment_method_invalid"]);
-  // The price taken away after the switch was turned on.
-  assert.deepEqual(validateWaitingPackage({ ...paidDraft(), price: "" }, STAFF), ["price_required"]);
+  // The prices taken away after the switch was turned on.
+  assert.deepEqual(validateWaitingPackage({ ...paidDraft(), pieces: [barrel(""), box("Clothes", "")] }, STAFF), ["price_required"]);
   // Switched off: nothing about money is checked.
   assert.deepEqual(validateWaitingPackage(draft({ money: { ...emptyIntakeMoney(), amount: "999" } }), STAFF), []);
   assert.deepEqual(validateIntakeMoney(paidDraft({ receivedByStaffId: "stranger" })), [], "no list, no membership check");
@@ -506,10 +561,10 @@ test("money received now is refused the way the server refuses a payment", () =>
 test("the add request carries the money as payment, in cents, only when it was received", () => {
   const payload = addWaitingPackagePayload("biz", paidDraft({ amount: "60", method: "zelle", note: "  at the counter " }));
   assert.deepEqual(payload.payment, { amountCents: 6000, method: "zelle", receivedByStaffId: "cashier", note: "at the counter" });
-  assert.equal(payload.priceCents, 15000);
+  assert.deepEqual(payload.pieces?.map((p) => p.priceCents), [10000, 5000]);
   assert.deepEqual(intakePaymentPayload(paidDraft()), { amountCents: 15000, method: "cash", receivedByStaffId: "cashier" }, "no note, none sent");
   // Switched off, or never on: the request is what it always was.
-  const before = addWaitingPackagePayload("biz", draft({ price: "150" }));
+  const before = addWaitingPackagePayload("biz", draft({ pieces: [barrel("150")] }));
   assert.equal("payment" in before, false);
   assert.equal(intakePaymentPayload(draft({ money: { ...emptyIntakeMoney(), amount: "60", receivedByStaffId: "cashier" } })), null);
   // An edit never sends money: that is "Record a payment".
@@ -517,19 +572,24 @@ test("the add request carries the money as payment, in cents, only when it was r
 });
 
 test("money is per package: add another, and reopening a saved one, start with none", () => {
-  const next = nextPackageForSameCustomer(paidDraft({ amount: "60" }));
+  const next = nextPackageForSameSender(paidDraft({ amount: "60" }), guinea);
   assert.deepEqual(next.money, emptyIntakeMoney());
-  assert.equal(next.price, "");
   const reopened = waitingPackageDraftFromRow({ id: "w1", kind: "barrels", quantity: 2, priceCents: 15000, paidCents: 6000 });
   assert.deepEqual(reopened.money, emptyIntakeMoney());
 });
 
-test("a car goes with its VIN, cleaned, and counts as one", () => {
-  const car = addWaitingPackagePayload("biz", draft({ kind: "car", vinNumber: " 1hgcm82633a004352 ", carMake: "Honda", carModel: "Accord", carYear: "2003", quantity: "" }));
+test("a car goes with its VIN, cleaned, its size and price, and counts as one", () => {
+  const car = addWaitingPackagePayload("biz", draft({
+    kind: "car", vinNumber: " 1hgcm82633a004352 ", carMake: "Honda", carModel: "Accord", carYear: "2003",
+    lengthIn: "180", widthIn: "70", heightIn: "60", price: "800",
+  }));
   assert.equal(car.kind, "car");
   assert.equal(car.vinNumber, "1HGCM82633A004352");
   assert.equal(car.quantity, 1);
   assert.equal(car.carMake, "Honda");
+  assert.equal("pieces" in car, false, "a car is one implicit piece");
+  assert.equal(car.priceCents, 80000);
+  assert.equal(car.lengthIn, 180);
 });
 
 test("a switch with no number is sent off", () => {
@@ -538,57 +598,194 @@ test("a switch with no number is sent off", () => {
   assert.equal(payload.notifyCustomer, false);
 });
 
-test("a waiting package opens back into the form it was saved from", () => {
-  const original = draft({ lengthIn: "40", widthIn: "30.5", heightIn: "20", price: "45.50", payOnArrival: true });
+test("a waiting package opens back into the form with its pieces, ids kept", () => {
   const stored = {
-    ...addWaitingPackagePayload("biz", original),
-    id: "w1",
-    containerId: "",
-    containerStatus: "waiting",
-    paidCents: 0,
+    id: "w1", kind: "other", quantity: 2, containerId: "", containerStatus: "waiting", paidCents: 0,
+    customerName: "Fatou Diallo", destinationCountryId: "guinea", destinationCountryName: "Guinea", payOnArrival: true,
+    pieces: [
+      { id: "p1", kind: "barrel", description: "", sizeIn: null, priceCents: 10000 },
+      { id: "p7", kind: "box", description: "Clothes", sizeIn: { l: 20, w: 20.5, h: 18 }, priceCents: 4550 },
+    ],
+    priceCents: 14550,
   };
   const reopened = waitingPackageDraftFromRow(stored);
-  assert.equal(reopened.kind, "barrels");
-  assert.equal(reopened.quantity, "2");
-  assert.equal(reopened.customerName, "Fatou Diallo");
-  assert.equal(reopened.destinationCountryId, "guinea");
-  assert.equal(reopened.lengthIn, "40");
-  assert.equal(reopened.widthIn, "30.5");
-  assert.equal(reopened.price, "45.50");
+  assert.equal(reopened.kind, "other");
+  assert.deepEqual(reopened.pieces.map((p) => [p.id, p.kind, p.description, p.lengthIn, p.widthIn, p.heightIn, p.price]), [
+    ["p1", "barrel", "", "", "", "", "100"],
+    ["p7", "box", "Clothes", "20", "20.5", "18", "45.50"],
+  ]);
+  assert.equal(reopened.price, "", "no line price for pieces");
   assert.equal(reopened.payOnArrival, true);
-  assert.deepEqual(validateWaitingPackage(reopened), []);
-  // A line from before sizes and prices existed opens empty there.
-  const old = waitingPackageDraftFromRow({ id: "l", kind: "barrels", quantity: 3, customerName: "A" });
-  assert.equal(old.lengthIn, "");
-  assert.equal(old.price, "");
+  assert.deepEqual(validateWaitingPackage({ ...draft(), ...reopened, customerName: "Fatou Diallo" }), []);
+  // A line from before pieces reads as its pieces: 3 barrels, the price spread.
+  const old = waitingPackageDraftFromRow({ id: "l", kind: "barrels", quantity: 3, customerName: "A", priceCents: 10000 });
+  assert.deepEqual(old.pieces.map((p) => [p.id, p.kind, p.price]), [["p1", "barrel", "33.34"], ["p2", "barrel", "33.33"], ["p3", "barrel", "33.33"]]);
+  // A car keeps its size and price on the line.
+  const car = waitingPackageDraftFromRow({ id: "c", kind: "car", vinNumber: "1HGCM82633A004352", lengthIn: 180, widthIn: 70, heightIn: 60, priceCents: 80000 });
+  assert.equal(car.lengthIn, "180");
+  assert.equal(car.price, "800");
 });
 
-test("an edit has no container and leaves the price to setContainerLinePrice", () => {
-  const request = updateWaitingPackageRequest(" biz ", " w1 ", draft({ price: "45", payOnArrival: true, lengthIn: "40", widthIn: "30", heightIn: "20" }));
+test("an edit sends the pieces with their ids and prices, no container and no line price", () => {
+  const row = {
+    id: "w1", kind: "other", pieces: [
+      { id: "p1", kind: "barrel", description: "", sizeIn: null, priceCents: 10000 },
+      { id: "p2", kind: "box", description: "Clothes", sizeIn: null, priceCents: 4500 },
+    ],
+  };
+  const edited = waitingPackageDraftFromRow(row);
+  const request = updateWaitingPackageRequest(" biz ", " w1 ", { ...edited, pieces: [edited.pieces[0], { ...edited.pieces[1], price: "50" }, box("TV", "")] }, row);
   assert.equal(request.businessId, "biz");
   assert.equal(request.lineId, "w1");
   assert.equal(request.containerId, "");
   assert.equal("priceCents" in request.line, false);
-  assert.equal(request.line.destinationCountryId, "guinea");
-  assert.equal(request.line.lengthIn, 40);
-  assert.equal(request.line.quantity, 2);
+  assert.deepEqual(request.line.pieces?.map((p) => [p.id, p.kind, p.priceCents]), [["p1", "barrel", 10000], ["p2", "box", 5000], ["", "box", null]]);
+  assert.equal(request.line.quantity, 3);
 });
 
-test("a price call is made only when the price or the switch changed", () => {
-  const line = { priceCents: 4550, payOnArrival: false };
-  assert.equal(packagePriceChanged(line, draft({ price: "45.50" })), false);
-  assert.equal(packagePriceChanged(line, draft({ price: "46" })), true);
-  assert.equal(packagePriceChanged(line, draft({ price: "45.50", payOnArrival: true })), true);
-  assert.equal(packagePriceChanged(line, draft({ price: "" })), true);
-  assert.equal(packagePriceChanged({}, draft({ price: "" })), false);
+test("a legacy package edited without touching its pieces is sent in its old form", () => {
+  const legacy = { id: "l1", kind: "barrels", quantity: 3, priceCents: 10000, destinationCountryId: "guinea", customerName: "A" };
+  const reopened = waitingPackageDraftFromRow(legacy);
+  const untouched = updateWaitingPackageRequest("biz", "l1", { ...reopened, receiverName: "Moussa" }, legacy);
+  assert.equal("pieces" in untouched.line, false, "the contacts change, the barrels stay as stored");
+  assert.equal(untouched.line.kind, "barrels");
+  assert.equal(untouched.line.quantity, 3);
+  assert.equal(untouched.line.receiverName, "Moussa");
+  const changed = updateWaitingPackageRequest("biz", "l1", { ...reopened, pieces: [...reopened.pieces, box("TV", "20")] }, legacy);
+  assert.equal(changed.line.pieces?.length, 4, "changed pieces are written as pieces");
+  // Only the switch makes a price call, with the stored total.
+  assert.equal(editPriceRequest("biz", "l1", legacy, reopened), null);
+  assert.deepEqual(editPriceRequest("biz", "l1", legacy, { ...reopened, payOnArrival: true }), {
+    businessId: "biz", lineId: "l1", priceCents: 10000, payOnArrival: true,
+  });
+});
+
+test("a price call is a car's price or the switch; pieces pass their new total unchanged", () => {
+  const car = { kind: "car", priceCents: 4550, payOnArrival: false };
+  const carDraft = (over: Partial<WaitingPackageDraft>) => draft({ kind: "car", vinNumber: "1HGCM82633A004352", ...over });
+  assert.equal(packagePriceChanged(car, carDraft({ price: "45.50" })), false);
+  assert.equal(packagePriceChanged(car, carDraft({ price: "46" })), true);
+  assert.equal(packagePriceChanged(car, carDraft({ price: "45.50", payOnArrival: true })), true);
+  assert.equal(packagePriceChanged(car, carDraft({ price: "" })), true);
+  assert.equal(packagePriceChanged({ kind: "car" }, carDraft({ price: "" })), false);
+  assert.deepEqual(editPriceRequest("biz", "c1", car, carDraft({ price: "46" })), { businessId: "biz", lineId: "c1", priceCents: 4600, payOnArrival: false });
+
+  const pieced = { kind: "other", priceCents: 14500, payOnArrival: false, pieces: [{ id: "p1", kind: "barrel", priceCents: 14500 }] };
+  const piecedDraft = waitingPackageDraftFromRow(pieced);
+  // A new piece price travels in updateContainerLine: no price call for it.
+  assert.equal(editPriceRequest("biz", "w1", pieced, { ...piecedDraft, pieces: [{ ...piecedDraft.pieces[0], price: "150" }] }), null);
+  // The switch: the new total goes back as it is, so the server only toggles it.
+  assert.deepEqual(editPriceRequest("biz", "w1", pieced, { ...piecedDraft, pieces: [{ ...piecedDraft.pieces[0], price: "150" }], payOnArrival: true }), {
+    businessId: "biz", lineId: "w1", priceCents: 15000, payOnArrival: true,
+  });
 });
 
 test("a saved package is usable by the labels dialog before the live list catches up", () => {
-  const stub = savedPackageStub({ lineId: "w9", trackingCode: "CL-K7M4P2" }, draft());
+  const stub = savedPackageStub({ lineId: "w9", trackingCode: "CL-K7M4P2" }, draft({ pieces: [barrel(), barrel(), box("TV")] }));
   assert.equal(stub.id, "w9");
   assert.equal(stub.trackingCode, "CL-K7M4P2");
   assert.equal(stub.containerId, "");
-  assert.equal(stub.quantity, 2);
+  assert.equal(stub.quantity, 3);
+  assert.equal(stub.pieceCount, 3);
+  assert.equal(labelsPieceCount([stub]), 3);
+  assert.equal(labelCountText(3, 2, "en"), "Prints 6 labels: 3 pieces × 2");
+  assert.equal(labelCountText(1, 1, "fr"), "Imprime 1 étiquette : 1 colis × 1");
+});
+
+// ---------------------------------------------------------------------------
+// Splitting a package across containers.
+// ---------------------------------------------------------------------------
+
+const fourPieces = {
+  id: "w4", kind: "other", trackingCode: "CL-T9W2QA", containerId: "", containerStatus: "waiting",
+  pieces: [
+    { id: "p1", kind: "barrel", priceCents: 10000 },
+    { id: "p2", kind: "barrel", priceCents: 10000 },
+    { id: "p3", kind: "box", description: "Clothes", priceCents: 5000 },
+    { id: "p4", kind: "box", description: "Shoes", priceCents: 5000 },
+  ],
+};
+
+test("the assign request names only the packages sending fewer than all their pieces", () => {
+  const car = { id: "c1", kind: "car", vinNumber: "1HGCM82633A004352" };
+  const legacy = { id: "l3", kind: "barrels", quantity: 3 };
+  const request = assignLinesRequest("biz", "box", ["w4", "c1", "l3", "w4"], { w4: 2, c1: 1, l3: 3 }, [fourPieces, car, legacy]);
+  assert.deepEqual(request, { businessId: "biz", containerId: "box", lineIds: ["w4", "c1", "l3"], pieceCounts: { w4: 2 } });
+  // All of them going, or no stepper touched: the request it always was.
+  assert.deepEqual(assignLinesRequest("biz", "box", ["w4"], { w4: 4 }, [fourPieces]), { businessId: "biz", containerId: "box", lineIds: ["w4"] });
+  assert.deepEqual(assignLinesRequest("biz", "box", ["w4"]), { businessId: "biz", containerId: "box", lineIds: ["w4"] });
+  // A car is never split; a legacy line splits by its quantity.
+  assert.equal(splittablePieceCount(car), 0);
+  assert.equal(splittablePieceCount(legacy), 3);
+  assert.equal(clampPiecesGoing(0, 4), 1);
+  assert.equal(clampPiecesGoing(9, 4), 4);
+});
+
+test("the split preview names what goes and the part code that stays", () => {
+  assert.equal(piecesGoingText(2, 4, "en"), "Pieces going in: 2 of 4");
+  assert.equal(piecesGoingText(2, 4, "fr"), "Colis qui partent : 2 sur 4");
+  assert.deepEqual(splitPreviewRows(fourPieces, 2, [fourPieces], "en").map((r) => `${r.code} ${r.text}`), [
+    "CL-T9W2QA 2 pieces → this container",
+    "CL-T9W2QA-2 2 pieces stay waiting",
+  ]);
+  assert.deepEqual(splitPreviewRows(fourPieces, 3, [], "fr").map((r) => `${r.code} ${r.text}`), [
+    "CL-T9W2QA 3 colis → ce conteneur",
+    "CL-T9W2QA-2 1 colis reste en attente",
+  ]);
+  assert.deepEqual(splitPreviewRows(fourPieces, 4, [fourPieces]), [], "all of it goes: nothing to preview");
+  // A part split again takes the next number after the group's highest.
+  const part2 = { ...fourPieces, id: "w5", trackingCode: "CL-T9W2QA-2", rootLineId: "w4", partIndex: 2 };
+  const root = { id: "w4", trackingCode: "CL-T9W2QA", rootLineId: "w4", lastPartIndex: 3 };
+  assert.equal(previewPartCode(part2, [root, part2]), "CL-T9W2QA-4", "a cancelled -3 is never reused");
+  assert.equal(previewPartCode(part2, [part2]), "CL-T9W2QA-3", "without the root, read off the part's own code");
+});
+
+test("the assign answer is read defensively, and its parts become label stubs", () => {
+  assert.deepEqual(assignAnswerFrom({ success: true, assigned: 2 }), { assigned: 2, alreadyAssigned: 0, parts: [] });
+  const answer = assignAnswerFrom({
+    success: true, assigned: 1, alreadyAssigned: 0,
+    parts: [{ lineId: "w4", partLineId: "w9", trackingCode: "CL-T9W2QA-2", pieceCount: 2 }, { lineId: "x" }, null],
+  });
+  assert.deepEqual(answer.parts, [{ lineId: "w4", partLineId: "w9", trackingCode: "CL-T9W2QA-2", pieceCount: 2 }]);
+  const stubs = partLabelStubs(answer.parts);
+  assert.deepEqual(stubs.map((s) => [s.id, s.trackingCode, s.containerId]), [["w9", "CL-T9W2QA-2", ""]]);
+  assert.equal(labelsPieceCount(stubs), 2);
+  assert.equal(partsCreatedText(1, "en"), "1 part stays waiting with a new code.");
+  assert.equal(piecesStayText(2, "en"), "2 pieces stay waiting");
+  assert.equal(piecesStayText(1, "fr"), "1 colis reste en attente");
+});
+
+// ---------------------------------------------------------------------------
+// Group money: payments on the root, balance on every part.
+// ---------------------------------------------------------------------------
+
+test("a split group's money is read once for all its parts", () => {
+  const rows = [
+    { id: "r", rootLineId: "r", trackingCode: "CL-K7M4P2", priceCents: 20000, paidCents: 15000, payOnArrival: false, containerId: "box", kind: "barrels", quantity: 2 },
+    { id: "p", rootLineId: "r", partIndex: 2, trackingCode: "CL-K7M4P2-2", priceCents: 10000, paidCents: 0, containerId: "", kind: "barrels", quantity: 1 },
+    { id: "alone", trackingCode: "CL-BBBBBB", priceCents: 5000, paidCents: 5000, kind: "barrels", quantity: 1 },
+  ];
+  const groups = buildLineGroups(rows);
+  assert.equal(groups.size, 2);
+  const part = groupForLine(groups, rows[1]);
+  assert.equal(part.partCount, 2);
+  assert.equal(part.priceCents, 30000);
+  assert.equal(part.paidCents, 15000);
+  assert.equal(part.balanceCents, 15000);
+  const money = groupPayment(part);
+  assert.equal(money.status, "partial");
+  assert.equal(money.balanceCents, 15000);
+  assert.equal(partHintText(part, rows[1], "en"), "Part 2 of 2");
+  assert.equal(partHintText(part, rows[0], "fr"), "Partie 1 sur 2");
+  assert.equal(partHintText(groupForLine(groups, rows[2]), rows[2]), "", "a line alone has no part hint");
+  assert.equal(groupPayment(groupForLine(groups, rows[2])).status, "paid");
+  // A line the index does not hold is its own group.
+  assert.equal(groupForLine(groups, { id: "new", priceCents: 100 }).priceCents, 100);
+  // The part may not take the group below what the root was paid: $150 paid,
+  // the root covers $200, so the part's floor is 0; the root's is $50.
+  assert.equal(linePaidFloor(part, rows[1]), 0);
+  assert.equal(linePaidFloor(part, rows[0]), 5000);
+  assert.match(groupMoneyNote(part, "en"), /^Payments shared by all 2 parts \(CL-K7M4P2, CL-K7M4P2-2\)$/);
 });
 
 // ---------------------------------------------------------------------------
@@ -647,7 +844,7 @@ test("a package call keeps the busy flag honest and hands a refusal over with it
 
 test("money received with nobody chosen points at Received by, with its own sentence", () => {
   // The live repro: "Money received now?" on, no "Received by" picked.
-  const refused = switchIntakeMoney(draft({ price: "150" }), true);
+  const refused = switchIntakeMoney(draft({ pieces: [barrel("150")] }), true);
   const errors = validateWaitingPackage(refused, ["cashier"]);
   assert.deepEqual(errors, ["received_by_required"]);
   assert.equal(firstInvalidWaitingPackageField(errors), "wpk-received-by");
@@ -657,7 +854,7 @@ test("money received with nobody chosen points at Received by, with its own sent
 
 test("the first invalid field is the first on screen, not the first refusal listed", () => {
   assert.equal(firstInvalidWaitingPackageField(["receiver_phone_invalid", "received_by_required", "price_invalid"]), "wpk-price");
-  assert.equal(firstInvalidWaitingPackageField(["customer_name_required", "quantity_required"]), "wpk-quantity");
+  assert.equal(firstInvalidWaitingPackageField(["customer_name_required", "piece_description_required"]), "wpk-pieces");
   assert.equal(firstInvalidWaitingPackageField(["received_by_invalid", "amount_required"]), "wpk-money-amount");
   // A refusal with no field of its own leaves focus alone; the message is beside the buttons.
   assert.equal(firstInvalidWaitingPackageField(["line_kind_invalid"]), null);

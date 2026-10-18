@@ -21,7 +21,16 @@ import { destinationCountryName, destinationCountryOptionForRow } from "@/lib/de
 import { db } from "@/lib/firebase";
 import { currentLanguage, formatDate, formatDateTime } from "@/lib/format";
 import { moneyText } from "@/lib/invoice-ledger";
-import { PACKAGE_PAYMENT_LABELS, PACKAGE_PAYMENT_TONES, destinationPlace } from "@/lib/waiting-packages";
+import {
+  PACKAGE_PAYMENT_LABELS,
+  PACKAGE_PAYMENT_TONES,
+  buildLineGroups,
+  destinationPlace,
+  groupForLine,
+  groupPayment,
+  partHintText,
+} from "@/lib/waiting-packages";
+import { groupRootId, partIndexOf } from "@/lib/line-pieces";
 import {
   adminHasOperationsAccess,
   packageStaffScope,
@@ -177,7 +186,36 @@ export function PackageStaffView({
   }, [containerId]);
   const containerLoaded = Boolean(containerId) && containerState?.key === containerId;
   const container = containerLoaded ? containerState?.row ?? null : null;
-  const view = useMemo(() => (line ? packageStaffViewModel(line, container) : null), [line, container]);
+  // A part of a package split across containers: its money is the whole
+  // group's (payments live on the root), so the other parts are read too -
+  // equality on businessId and rootLineId, no composite index. A line never
+  // split is a group of one and reads nothing more.
+  const groupBusinessId = line ? String(line.businessId ?? "") : "";
+  const groupRoot = line ? groupRootId(line, String(line.id ?? "")) : "";
+  const split = Boolean(line) && (partIndexOf(line) > 1 || Number(line?.lastPartIndex ?? 0) > 1);
+  const groupKey = split && groupBusinessId && groupRoot ? `${groupBusinessId}|${groupRoot}` : "";
+  const [groupState, setGroupState] = useState<{ key: string; rows: Row[] } | null>(null);
+  useEffect(() => {
+    if (!groupKey) return undefined;
+    const unsubscribe = onSnapshot(
+      query(collection(db, "containerLines"), where("businessId", "==", groupBusinessId), where("rootLineId", "==", groupRoot)),
+      (snap) => setGroupState({ key: groupKey, rows: snap.docs.map((d) => ({ id: d.id, ...d.data() })) }),
+      // Unreadable: the part's own figures stay (the group is a refinement).
+      () => setGroupState({ key: groupKey, rows: [] }),
+    );
+    return unsubscribe;
+  }, [groupKey, groupBusinessId, groupRoot]);
+  const viewLang = currentLanguage() === "fr" ? "fr" : "en";
+  const group = useMemo(() => {
+    if (!line || !groupKey || groupState?.key !== groupKey || groupState.rows.length === 0) return null;
+    return groupForLine(buildLineGroups(groupState.rows), line);
+  }, [line, groupKey, groupState]);
+  const view = useMemo(() => {
+    if (!line) return null;
+    const model = packageStaffViewModel(line, container, viewLang);
+    return group ? { ...model, payment: groupPayment(group) } : model;
+  }, [line, container, viewLang, group]);
+  const partHint = group && line ? partHintText(group, line, viewLang) : "";
   const [labelsOpen, setLabelsOpen] = useState(false);
 
   // Waiting on an admin's role, or nobody this view is for.
@@ -272,7 +310,7 @@ export function PackageStaffView({
                 <div><span>Still owed</span><b data-no-translate>{moneyText(view.payment.balanceCents)}</b></div>
               </>
             )}
-            <div><span>Payment</span><b><span className={`lst-badge ${PACKAGE_PAYMENT_TONES[view.payment.status]}`}>{PACKAGE_PAYMENT_LABELS[view.payment.status]}</span></b></div>
+            <div><span>Payment</span><b><span className={`lst-badge ${PACKAGE_PAYMENT_TONES[view.payment.status]}`}>{PACKAGE_PAYMENT_LABELS[view.payment.status]}</span></b>{partHint && <small data-no-translate>{partHint}</small>}</div>
           </div>
         </section>
       )}

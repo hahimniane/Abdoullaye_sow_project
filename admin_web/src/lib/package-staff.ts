@@ -49,7 +49,9 @@ function text(value: unknown, max = 200): string {
 
 /** The tracking-code alphabet: no 0/O, 1/I/L, no vowels (`package_codes.dart`). */
 export const PACKAGE_TRACKING_ALPHABET = "23456789BCDFGHJKMNPQRSTVWXYZ";
-const PACKAGE_CODE = new RegExp(`^CL([${PACKAGE_TRACKING_ALPHABET}]{6})$`);
+// A part of a package split across containers carries its number: CL-K7M4P2-2
+// (the server's `normalizeTrackingCode`; typed without the dash too).
+const PACKAGE_CODE = new RegExp(`^CL([${PACKAGE_TRACKING_ALPHABET}]{6})([1-9]\\d?)?$`);
 
 /**
  * A typed or linked code as "CL-XXXXXX", or "" when it is not a container
@@ -59,7 +61,8 @@ const PACKAGE_CODE = new RegExp(`^CL([${PACKAGE_TRACKING_ALPHABET}]{6})$`);
 export function packageCodeFrom(raw: unknown): string {
   const compact = text(raw, 60).toUpperCase().replace(/[^A-Z0-9]/g, "");
   const match = PACKAGE_CODE.exec(compact);
-  return match ? `CL-${match[1]}` : "";
+  if (!match) return "";
+  return match[2] ? `CL-${match[1]}-${match[2]}` : `CL-${match[1]}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -355,7 +358,7 @@ function packageContainer(value: unknown): PackageContainer | null {
   };
 }
 
-export function packageStaffViewModel(line: unknown, container: unknown): PackageStaffViewModel {
+export function packageStaffViewModel(line: unknown, container: unknown, lang: "en" | "fr" = "en"): PackageStaffViewModel {
   const row = asRow(line);
   const kindRaw = text(row.kind, 20);
   const kind: PackageKind = kindRaw === "car" || kindRaw === "barrels" ? kindRaw : "other";
@@ -383,7 +386,7 @@ export function packageStaffViewModel(line: unknown, container: unknown): Packag
     size: packageSize(row),
     payment: packagePayment(row),
     code: text(row.trackingCode, 40).toUpperCase(),
-    title: containerLineTitle(row),
+    title: containerLineTitle(row, lang),
     kind,
     quantity,
     vin: kind === "car" ? cleanVin(row.vinNumber) : "",

@@ -32,7 +32,13 @@ test("a container-line code is read the way the app's scanner reads it", () => {
   assert.equal(packageCodeFrom("CL-K7M4P0"), "");
   assert.equal(packageCodeFrom("CL-K7M4PO"), "");
   assert.equal(packageCodeFrom("CL-K7M4P"), "");
-  assert.equal(packageCodeFrom("CL-K7M4P22"), "");
+  // A part of a package split across containers keeps its number, typed
+  // with or without the dash (the server's normalizeTrackingCode).
+  assert.equal(packageCodeFrom("CL-K7M4P2-2"), "CL-K7M4P2-2");
+  assert.equal(packageCodeFrom("clk7m4p22"), "CL-K7M4P2-2");
+  assert.equal(packageCodeFrom("CL-K7M4P2-12"), "CL-K7M4P2-12");
+  assert.equal(packageCodeFrom("CL-K7M4P2-0"), "");
+  assert.equal(packageCodeFrom("CL-K7M4P2-123"), "");
   assert.equal(packageCodeFrom(null), "");
   assert.equal(packageCodeFrom(""), "");
 });

@@ -30,6 +30,29 @@ export type GuestTrackingRecord = {
    * calls it, each field only when known. The box's details, never the
    * person's. */
   shipping?: GuestContainerShipping;
+  /** Container lines only: the pieces this code covers. */
+  pieceCount?: number;
+  /**
+   * Container lines only: every part of the package, in part order, when it
+   * was split across containers (at least the line itself; the page lists
+   * them only when there is more than one).
+   */
+  parts?: GuestTrackingPart[];
+  /** Container lines only, once priced: the whole group's money (payments live on the root). */
+  payment?: GuestTrackingPayment;
+};
+
+export type GuestTrackingPart = {
+  trackingCode: string;
+  stage: GuestTrackingStage;
+  pieceCount: number;
+  priceCents: number | null;
+};
+
+export type GuestTrackingPayment = {
+  priceCents: number;
+  paidCents: number;
+  balanceCents: number;
 };
 
 export type GuestContainerShipping = {
@@ -70,6 +93,63 @@ export function parseGuestShipping(
     if (text) shipping[key] = text.slice(0, 60);
   }
   return Object.keys(shipping).length > 0 ? shipping : undefined;
+}
+
+const wholeCount = (value: unknown): number => {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? Math.trunc(n) : 0;
+};
+const centsOrNull = (value: unknown): number | null => {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  return Number.isInteger(n) && n >= 0 ? n : null;
+};
+
+/**
+ * A container line's group as the page shows it: its pieces, its parts and
+ * its money. Each field is read on its own and dropped when malformed, so an
+ * older server's answer (none of them) reads as before.
+ */
+export function parseGuestContainerGroup(
+  service: string,
+  row: Record<string, unknown>,
+): Pick<GuestTrackingRecord, "pieceCount" | "parts" | "payment"> {
+  if (service !== "container") return {};
+  const out: Pick<GuestTrackingRecord, "pieceCount" | "parts" | "payment"> = {};
+  const pieceCount = wholeCount(row.pieceCount);
+  if (pieceCount > 0) out.pieceCount = pieceCount;
+  if (Array.isArray(row.parts)) {
+    const parts: GuestTrackingPart[] = [];
+    for (const item of row.parts.slice(0, 100)) {
+      if (!item || typeof item !== "object") continue;
+      const part = item as Record<string, unknown>;
+      const trackingCode = typeof part.trackingCode === "string" ? part.trackingCode.trim().slice(0, 60) : "";
+      const stage = String(part.stage ?? "") as GuestTrackingStage;
+      if (!trackingCode || !STAGES.has(stage)) continue;
+      parts.push({trackingCode, stage, pieceCount: wholeCount(part.pieceCount), priceCents: centsOrNull(part.priceCents)});
+    }
+    if (parts.length > 0) out.parts = parts;
+  }
+  if (row.payment && typeof row.payment === "object") {
+    const payment = row.payment as Record<string, unknown>;
+    const priceCents = centsOrNull(payment.priceCents);
+    if (priceCents !== null && priceCents > 0) {
+      const paidCents = Math.min(centsOrNull(payment.paidCents) ?? 0, priceCents);
+      const balance = centsOrNull(payment.balanceCents);
+      out.payment = {
+        priceCents,
+        paidCents,
+        balanceCents: balance === null ? Math.max(0, priceCents - paidCents) : Math.min(balance, priceCents),
+      };
+    }
+  }
+  return out;
+}
+
+/** "3 pieces" / "3 colis" on the result card. */
+export function guestPiecesText(count: number, lang: "en" | "fr" = "en"): string {
+  if (lang === "fr") return `${count} colis`;
+  return `${count} ${count === 1 ? "piece" : "pieces"}`;
 }
 
 export type GuestTrackingResponse =
@@ -142,6 +222,7 @@ export function parseGuestTrackingResponse(value: unknown): GuestTrackingRespons
       updatedAtMs,
       ...(quoteCount !== undefined ? {quoteCount} : {}),
       ...(shipping ? {shipping} : {}),
+      ...parseGuestContainerGroup(service, row),
     },
   };
 }

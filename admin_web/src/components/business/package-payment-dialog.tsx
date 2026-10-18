@@ -8,15 +8,22 @@ import { confirmImportantAction } from "@/lib/action-confirmation";
 import { useBusinessCollection } from "@/lib/business-data";
 import { containerLineTitle } from "@/lib/container-manifest";
 import { functions } from "@/lib/firebase";
-import { formatDateTime, text } from "@/lib/format";
+import { currentLanguage, formatDateTime, text } from "@/lib/format";
+import { groupRootId, type LineGroupSummary } from "@/lib/line-pieces";
 import { INVOICE_PAYMENT_METHODS, INVOICE_PAYMENT_METHOD_LABELS, moneyText, type InvoicePaymentMethod } from "@/lib/invoice-ledger";
 import { overlayDismiss } from "@/lib/overlay-dismiss";
 import {
   PACKAGE_PAYMENT_LABELS,
   PACKAGE_PAYMENT_TONES,
   emptyPackagePaymentDraft,
+  groupForLine,
+  groupMoneyNote,
+  groupPayment,
+  linePaidFloor,
+  packageHasPieces,
   packagePayment,
   packagePaymentEntries,
+  partHintText,
   packagePaymentMessage,
   packagePriceMessage,
   recordPackagePaymentRequest,
@@ -44,10 +51,14 @@ type Row = Record<string, unknown>;
  * meaningful against a price.
  *
  * `line` is the live row, so the balance moves as the server's answer lands.
+ * A package split across containers is one group: its `group` gives the
+ * balance of the whole, the payment is recorded with this part's id (the
+ * server puts it on the root) and the list shows the root's payments.
  */
 export function PackagePaymentDialog({
   businessId,
   line,
+  group: groupProp,
   staffName,
   staffOptions,
   onClose,
@@ -55,26 +66,37 @@ export function PackagePaymentDialog({
 }: {
   businessId: string;
   line: Row;
+  /** The line's split group, from the lines the panel holds; its own one-line group when absent. */
+  group?: LineGroupSummary;
   staffName: (id: string) => string;
   /** The business's people, for "Received by". */
   staffOptions: readonly { id: string; name: string }[];
   onClose: () => void;
   onFlash: (message: string) => void;
 }) {
+  const lang = currentLanguage() === "fr" ? "fr" : "en";
   const lineId = text(line.id, "");
-  const payment = packagePayment(line);
-  // The line's own payments, live. The business filter is what the rule
-  // authorizes the read by; the line filter narrows it.
-  const history = useBusinessCollection("containerLinePayments", businessId, Boolean(lineId), {
+  const group = groupProp ?? groupForLine(null, line);
+  // The group's money: a part's balance is the whole package's.
+  const payment = groupPayment(group);
+  const own = packagePayment(line);
+  // Payments live on the root of the group (the line itself when never split).
+  const paymentsLineId = group.rootLineId || groupRootId(line, lineId);
+  const pieced = packageHasPieces(line);
+  const partHint = partHintText(group, line, lang);
+  const groupNote = groupMoneyNote(group, lang);
+  // The line's (its root's) payments, live. The business filter is what the
+  // rule authorizes the read by; the line filter narrows it.
+  const history = useBusinessCollection("containerLinePayments", businessId, Boolean(paymentsLineId), {
     pageSize: null,
-    where: [["lineId", "==", lineId]],
+    where: [["lineId", "==", paymentsLineId]],
     sort: "query",
   });
   const entries = packagePaymentEntries(history.rows);
 
   const [draft, setDraft] = useState<PackagePaymentDraft>(emptyPackagePaymentDraft);
   const [priceText, setPriceText] = useState(() => waitingPackageDraftFromRow(line).price);
-  const [payOnArrival, setPayOnArrival] = useState(payment.payOnArrival);
+  const [payOnArrival, setPayOnArrival] = useState(own.payOnArrival);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -109,7 +131,18 @@ export function PackagePaymentDialog({
   }
 
   async function savePrice() {
-    const problems = validatePackagePrice(priceText, payment.paidCents);
+    // A package with pieces is priced piece by piece (Edit package): here its
+    // total goes back unchanged, so the server only toggles pay on arrival.
+    if (pieced) {
+      setError("");
+      await runPackageCall(setBusy, async () => {
+        await httpsCallable(functions, "setContainerLinePrice")({ businessId, lineId, priceCents: own.priceCents, payOnArrival });
+        onFlash("Price saved.");
+      }, fail);
+      return;
+    }
+    // A part may not take its group below what the root was paid.
+    const problems = validatePackagePrice(priceText, linePaidFloor(group, line));
     if (problems.length) {
       setError(packagePriceMessage(problems));
       return;
@@ -130,7 +163,7 @@ export function PackagePaymentDialog({
           <div>
             <h3>Record a payment</h3>
             <p>
-              <span data-no-translate>{containerLineTitle(line)}</span>
+              <span data-no-translate>{containerLineTitle(line, lang)}</span>
               {" — "}
               {owed ? <span>{owed}</span> : <span data-no-translate>{moneyText(payment.balanceCents)}</span>}
               {payment.balanceCents !== null && <> <span>still owed</span></>}
@@ -147,26 +180,36 @@ export function PackagePaymentDialog({
                 {moneyText(payment.paidCents)} / {moneyText(payment.priceCents)}
               </small>
             )}
+            {partHint && <small className="wpk-part-hint" data-no-translate>{partHint}</small>}
           </p>
+          {groupNote && <p className="lst-hint" data-no-translate>{groupNote}</p>}
 
           <div className="lst-form-grid">
-            <label className="lst-field"><span>Price ($)</span>
-              <input inputMode="decimal" value={priceText} onChange={(e) => setPriceText(e.target.value)} placeholder="0.00" disabled={busy} />
-            </label>
+            {pieced ? (
+              <div className="lst-field">
+                <span>Price</span>
+                <strong data-no-translate>{own.priceCents === null ? "—" : moneyText(own.priceCents)}</strong>
+                <small className="lst-hint">Set each piece&apos;s price in Edit package.</small>
+              </div>
+            ) : (
+              <label className="lst-field"><span>Price ($)</span>
+                <input inputMode="decimal" value={priceText} onChange={(e) => setPriceText(e.target.value)} placeholder={lang === "fr" ? "0,00" : "0.00"} disabled={busy} />
+              </label>
+            )}
             <label className="ctn-notify wpk-pay-arrival">
               <input type="checkbox" checked={payOnArrival} disabled={busy} onChange={(e) => setPayOnArrival(e.target.checked)} />
               <span>Pay on arrival</span>
             </label>
           </div>
           <div className="wpk-inline-actions">
-            <button className="lst-btn ghost" type="button" disabled={busy} onClick={() => void savePrice()}>Save price</button>
+            <button className="lst-btn ghost" type="button" disabled={busy} onClick={() => void savePrice()}>{pieced ? "Save pay on arrival" : "Save price"}</button>
           </div>
 
           {payment.balanceCents !== null && (
             <>
               <div className="lst-form-grid wpk-payment-form">
                 <label className="lst-field"><span>Amount received ($)</span>
-                  <input inputMode="decimal" value={draft.amount} onChange={(e) => setDraft((d) => ({ ...d, amount: e.target.value }))} placeholder="0.00" disabled={busy} autoFocus />
+                  <input inputMode="decimal" value={draft.amount} onChange={(e) => setDraft((d) => ({ ...d, amount: e.target.value }))} placeholder={lang === "fr" ? "0,00" : "0.00"} disabled={busy} autoFocus />
                 </label>
                 <label className="lst-field"><span>How it arrived</span>
                   <select value={draft.method} disabled={busy} onChange={(e) => setDraft((d) => ({ ...d, method: e.target.value as InvoicePaymentMethod }))}>

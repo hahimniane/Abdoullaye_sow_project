@@ -18,11 +18,13 @@ import {
   query,
   where,
 } from "firebase/firestore";
-import { currentLocale } from "@/lib/format";
+import { currentLanguage, currentLocale } from "@/lib/format";
+import { moneyText } from "@/lib/invoice-ledger";
 import {
   GET_APP_URL,
   GUEST_SHIPPING_FIELDS,
   guestJourneyStages,
+  guestPiecesText,
   guestServiceLabel,
   guestStageLabel,
   guestTrackingErrorKind,
@@ -183,6 +185,7 @@ export function GuestTracking({
     inputRef.current?.focus();
   }
 
+  const lang = currentLanguage() === "fr" ? "fr" : "en";
   const updated = record?.updatedAtMs
     ? new Intl.DateTimeFormat(currentLocale(), {
         dateStyle: "medium",
@@ -287,6 +290,9 @@ export function GuestTracking({
             <span className="status-pill compact">{guestStageLabel(record.service, record.stage)}</span>
           </div>
           <p className="guest-tracking-service">{guestServiceLabel(record.service)}</p>
+          {record.pieceCount !== undefined && (
+            <p className="guest-tracking-service" data-no-translate>{guestPiecesText(record.pieceCount, lang)}</p>
+          )}
           {/* Nothing has started moving until it is paid for, so there is no
               journey to draw - showing one from "Booked" would imply the
               shipment is under way when it is waiting on the customer. */}
@@ -315,6 +321,34 @@ export function GuestTracking({
                     </div>
                   ),
                 )}
+              </dl>
+            </section>
+          )}
+          {/* A package split across containers: each part has its own code
+              and moves on its own; either code finds them all. */}
+          {record.parts && record.parts.length > 1 && (
+            <section aria-labelledby="guest-tracking-parts-title" className="guest-tracking-parts">
+              <h3 id="guest-tracking-parts-title">This shipment travels in parts</h3>
+              <p>Each part has its own code and its own updates.</p>
+              <ul>
+                {record.parts.map((part) => (
+                  <li key={part.trackingCode}>
+                    <code className="ctn-code" data-no-translate>{part.trackingCode}</code>
+                    <span className="status-pill compact">{guestStageLabel(record.service, part.stage)}</span>
+                    <small data-no-translate>{guestPiecesText(part.pieceCount, lang)}</small>
+                    {part.priceCents !== null && <small data-no-translate>{moneyText(part.priceCents)}</small>}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+          {record.payment && (
+            <section aria-labelledby="guest-tracking-payment-title" className="guest-tracking-payment">
+              <h3 id="guest-tracking-payment-title">Payment</h3>
+              <dl>
+                <div><dt>Final price</dt><dd data-no-translate>{moneyText(record.payment.priceCents)}</dd></div>
+                <div><dt>Paid</dt><dd data-no-translate>{moneyText(record.payment.paidCents)}</dd></div>
+                <div><dt>Balance</dt><dd data-no-translate>{moneyText(record.payment.balanceCents)}</dd></div>
               </dl>
             </section>
           )}
@@ -402,9 +436,11 @@ export function GuestTracking({
             <strong>Updated</strong> <time>{updated}</time>
           </p>
           <p className="guest-tracking-privacy">
-            {record.shipping
-              ? "For your privacy, only the shipment status and shipping details are shown here."
-              : "For your privacy, only the booking status is shown here."}
+            {record.payment
+              ? "For your privacy, only the shipment status, its payment and shipping details are shown here."
+              : record.shipping
+                ? "For your privacy, only the shipment status and shipping details are shown here."
+                : "For your privacy, only the booking status is shown here."}
           </p>
           <div className="trk-actions">
             <button className="secondary-button" onClick={() => void copyCode()} type="button">

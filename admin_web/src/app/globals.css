@@ -14204,7 +14204,38 @@ html[data-lang-pending] body {
 .wpk-pick-list li.wpk-blocked .wpk-pick-main > strong { color: var(--muted); }
 .wpk-pick-list li.wpk-flagged { background: rgba(220, 38, 38, 0.08); }
 .wpk-pick-count { margin: 10px 0 0; }
+/* The pieces of one package (pieces-editor.tsx): a card per barrel, box or
+   thing, its kind as a segmented control, then the total. */
+.pcs-editor { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; outline: none; }
+.pcs-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.pcs-piece { border: 1px solid var(--rule); border-radius: 12px; padding: 10px 12px; background: var(--paper); display: flex; flex-direction: column; gap: 8px; }
+.pcs-piece-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pcs-piece-head > strong { min-width: 64px; }
+.pcs-kinds { gap: 6px; flex: 1 1 auto; }
+.pcs-kinds .segment { padding: 6px 12px; font-size: 13.5px; box-shadow: none; cursor: pointer; }
+.pcs-remove { margin-left: auto; }
+.pcs-fields { grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: end; }
+.pcs-fields .lst-field.wide { grid-column: 1 / -1; }
+.pcs-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.pcs-total { font-size: 15px; }
+.wpk-split { display: flex; flex-direction: column; gap: 4px; margin: 6px 12px 10px 42px; padding: 8px 10px; border-radius: 10px; background: var(--mist); }
+.wpk-split-stepper { display: flex; align-items: center; gap: 8px; }
+.wpk-split-stepper .ghost-button { min-width: 30px; justify-content: center; }
+.wpk-split small { color: var(--muted); font-size: 12px; }
+.wpk-split-note { margin: 10px 0 0; }
+.wpk-part-hint { color: var(--brand-strong, #0f766e); font-weight: 600; }
+.guest-tracking-parts { margin: 14px 0 0; }
+.guest-tracking-parts ul { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.guest-tracking-parts li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 10px; border: 1px solid var(--rule); border-radius: 10px; }
+.guest-tracking-parts li small { color: var(--muted); }
+.guest-tracking-payment { margin: 14px 0 0; }
+.guest-tracking-payment dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 8px 0 0; }
+.guest-tracking-payment dd { margin: 0; font-weight: 700; }
 @media (max-width: 720px) {
+  .pcs-fields { grid-template-columns: 1fr 1fr 1fr; }
+  .pcs-fields .pcs-price { grid-column: 1 / -1; }
+  .wpk-split { margin-left: 12px; }
+  .guest-tracking-payment dl { grid-template-columns: 1fr; }
   .wpk-size-grid { grid-template-columns: 1fr 1fr 1fr; }
   .wpk-pick-list label { grid-template-columns: 20px minmax(0, 1fr); }
   .wpk-pick-side { grid-column: 2; align-items: flex-start; text-align: left; }
