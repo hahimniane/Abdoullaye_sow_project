@@ -6322,5 +6322,663 @@
   "zelleFailNoDepositoryAccount": "Pick a checking or savings account: that is where Zelle arrives.",
   "zelleFailCandidateInvalid": "That deposit can't be used for this payment. Check again.",
   "zelleFailCandidateTaken": "Someone just matched that deposit to another payment. The list was checked again.",
-  "zelleFailBankError": "The bank didn't answer. Try again."
+  "zelleFailBankError": "The bank didn't answer. Try again.",
+  "prqSendPackage": "Send a package",
+  "prqSendPackageSubtitle": "Ask a business to take it and get an estimate",
+  "prqMyRequests": "My requests",
+  "prqMyRequestsSubtitle": "Estimates and answers from businesses",
+  "prqSignInTitle": "Sign in to send a request",
+  "prqSignInHint": "Your requests and estimates are kept in your account.",
+  "prqSignIn": "Sign in",
+  "prqRetry": "Try again",
+  "prqCouldNotLoad": "Couldn't load. Check your connection and try again.",
+  "prqStepCountry": "Where is it going?",
+  "prqPickCountry": "Choose a country",
+  "prqSearchCountry": "Search a country",
+  "prqStepBusiness": "Who takes it?",
+  "prqNoBusinesses": "No business takes requests for this country yet.",
+  "prqNoOptions": "No business takes package requests right now.",
+  "prqBusinessStopped": "{name} is not taking requests right now.",
+  "@prqBusinessStopped": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "prqBarrelPrice": "{price} per barrel",
+  "@prqBarrelPrice": {
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "prqBarrelOnEstimate": "Barrels priced on estimate",
+  "prqStepHandoff": "How does it get to them?",
+  "prqBringIn": "Bring it in",
+  "prqBringInNote": "I drop it off at the business",
+  "prqCollect": "Collect from me",
+  "prqCollectNote": "The business picks it up",
+  "prqUnavailableNote": "Not offered by this business",
+  "prqDropOffAt": "Drop-off location",
+  "prqPlannedDay": "Day you plan to come",
+  "prqPickDay": "Choose a day",
+  "prqHoursOn": "Open {from} – {to} that day. Come any time in those hours.",
+  "@prqHoursOn": {
+    "placeholders": {
+      "from": {
+        "type": "String"
+      },
+      "to": {
+        "type": "String"
+      }
+    }
+  },
+  "prqClosedThatDay": "Closed that day. Pick another day.",
+  "prqPlanNote": "This is a plan, not an appointment.",
+  "prqPickupAddress": "Pickup address",
+  "prqPickupDay": "Preferred day",
+  "prqPickupWindow": "Time of day",
+  "prqWindowMorning": "Morning",
+  "prqWindowAfternoon": "Afternoon",
+  "prqWindowEvening": "Evening",
+  "prqPickupNote": "Note for the driver (optional)",
+  "prqCollectAreas": "Picks up in: {areas}",
+  "@prqCollectAreas": {
+    "placeholders": {
+      "areas": {
+        "type": "String"
+      }
+    }
+  },
+  "prqCollectTimeNote": "The business sets the real time and any pickup fee in its estimate.",
+  "prqSender": "You (sender)",
+  "prqSenderName": "Your name",
+  "prqSenderPhone": "Your WhatsApp number",
+  "prqSenderPhoneHint": "The estimate comes on WhatsApp.",
+  "prqReceiver": "Receiver",
+  "prqReceiverName": "Receiver’s name",
+  "prqReceiverPhone": "Receiver’s phone",
+  "prqPieces": "What are you sending?",
+  "prqPieceN": "Piece {n}",
+  "@prqPieceN": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "prqKindBarrel": "Barrel",
+  "prqKindBox": "Box",
+  "prqKindOther": "Other",
+  "prqWhatIsIt": "What is it?",
+  "prqWhatIsItHint": "e.g. TV, suitcase, box of clothes",
+  "prqBarrelInside": "What’s inside (optional)",
+  "prqAddPhoto": "Add photo",
+  "prqPhotosCount": "Photos: {count} of {max}",
+  "@prqPhotosCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "prqTakePhoto": "Take a photo",
+  "prqChoosePhoto": "Choose from photos",
+  "prqPhotoFailed": "Couldn't upload. Tap to retry.",
+  "prqPhotoTooLarge": "That photo is too large. Try another one.",
+  "prqPhotoNotImage": "Only photos can be added (JPEG, PNG or WebP).",
+  "prqRemovePhoto": "Remove photo",
+  "prqRemovePiece": "Remove piece",
+  "prqAddPiece": "+ Add another piece",
+  "prqEstimateNoteBring": "The business sends you an estimate on WhatsApp before anything is decided. You pay when you drop it off.",
+  "prqEstimateNoteCollect": "The business sends you an estimate on WhatsApp before anything is decided. You pay when it is collected.",
+  "prqSendRequest": "Send request",
+  "prqSending": "Sending…",
+  "prqWaitPhotos": "Wait for the photos to finish uploading.",
+  "prqFixErrors": "Check the highlighted fields.",
+  "prqSentTitle": "Request sent",
+  "prqSentCode": "Your request code",
+  "prqSentTo": "Sent to {business}",
+  "@prqSentTo": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "prqNextSteps": "What happens next",
+  "prqNext1": "{business} looks at your pieces and sends an estimate on WhatsApp.",
+  "@prqNext1": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "prqNext1Ready": "Your estimate is ready already: open it to see the prices.",
+  "prqNext2": "Open the estimate and tap Confirm if it suits you.",
+  "prqNext3Bring": "Bring your pieces on the day you planned and pay there.",
+  "prqNext3Collect": "The business collects your pieces and you pay then.",
+  "prqSeeRequest": "See my request",
+  "prqMineEmptyTitle": "No requests yet",
+  "prqMineEmptyHint": "Send a package to get an estimate from a business.",
+  "prqNewRequest": "New request",
+  "prqStatusNew": "Waiting for estimate",
+  "prqStatusEstimateSent": "Estimate ready",
+  "prqStatusConfirmed": "Confirmed",
+  "prqStatusReceived": "Received",
+  "prqStatusDeclined": "Declined",
+  "prqStatusYouDeclined": "You said no",
+  "prqStatusCustomerDeclined": "Customer said no",
+  "prqStatusCancelled": "Cancelled",
+  "prqStatusExpired": "Expired",
+  "prqDetailTitle": "Request {code}",
+  "@prqDetailTitle": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "prqStateWaiting": "{business} is preparing your estimate.",
+  "@prqStateWaiting": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "prqStateWaitingHint": "You will get it on WhatsApp and here.",
+  "prqStateAwaiting": "Your estimate is ready",
+  "prqStateAwaitingHint": "Confirm it if it suits you. Nothing is paid now.",
+  "prqStateConfirmed": "You confirmed this estimate",
+  "prqStateConfirmedByPhone": "Confirmed by phone with {business}",
+  "@prqStateConfirmedByPhone": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "prqPriceDropped": "The price went down since you confirmed. Nothing else to do.",
+  "prqStateReceived": "{business} received your pieces",
+  "@prqStateReceived": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "prqTrackingCode": "Tracking code {code}",
+  "@prqTrackingCode": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "prqTrack": "Track it",
+  "prqStateDeclined": "{business} declined this request",
+  "@prqStateDeclined": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "prqStateCancelled": "{business} cancelled this request",
+  "@prqStateCancelled": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "prqReason": "Reason: {reason}",
+  "@prqReason": {
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "prqStateCustomerDeclined": "You said no to this estimate",
+  "prqStateExpired": "This request expired",
+  "prqStateExpiredHint": "Send a new request if you still need to ship.",
+  "prqChangedBanner": "This estimate changed — see the new one below.",
+  "prqAnswerBy": "Answer by {date}",
+  "@prqAnswerBy": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "prqConfirm": "Confirm",
+  "prqNoThanks": "No thanks",
+  "prqNoThanksTitle": "Say no to this estimate?",
+  "prqNoThanksMessage": "The business is told. You can say why (optional).",
+  "prqReasonOptional": "Reason (optional)",
+  "prqConfirmedDone": "Estimate confirmed.",
+  "prqAlreadyConfirmed": "You had already confirmed this estimate.",
+  "prqDeclinedDone": "Done. The business is told.",
+  "prqTotal": "Total",
+  "prqPickupFee": "Pickup fee",
+  "prqPriceToCome": "Price to come",
+  "prqWhereWhen": "Where and when",
+  "prqBringTo": "Bring it to",
+  "prqPlannedFor": "Planned for {day}",
+  "@prqPlannedFor": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "prqPickupAt": "Pickup at",
+  "prqDayWindow": "{day}, {window}",
+  "@prqDayWindow": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      },
+      "window": {
+        "type": "String"
+      }
+    }
+  },
+  "prqCallBusiness": "Call {business}",
+  "@prqCallBusiness": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "prqBusinessNote": "Note from the business",
+  "prqPayAtDropOff": "You pay at drop-off.",
+  "prqPayAtPickup": "You pay when it is collected.",
+  "prqNotBinding": "The final price is set when the business sees your pieces.",
+  "prqToReceiver": "To {name} · {country}",
+  "@prqToReceiver": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "country": {
+        "type": "String"
+      }
+    }
+  },
+  "prqBarrelsCount": "{count, plural, =1{1 barrel} other{{count} barrels}}",
+  "@prqBarrelsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "prqBoxesCount": "{count, plural, =1{1 box} other{{count} boxes}}",
+  "@prqBoxesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "prqOthersCount": "{count, plural, =1{1 other item} other{{count} other items}}",
+  "@prqOthersCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "prqPiecesCount": "{count, plural, =1{1 piece} other{{count} pieces}}",
+  "@prqPiecesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "prqRequestsTitle": "Requests",
+  "prqEntryCount": "{count, plural, =0{No open requests} =1{1 open request} other{{count} open requests}}",
+  "@prqEntryCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "prqEntryHint": "Customers ask, you send the estimate",
+  "prqChipNeedsEstimate": "Needs estimate · {count}",
+  "@prqChipNeedsEstimate": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "prqChipWaitingCustomer": "Waiting for customer · {count}",
+  "@prqChipWaitingCustomer": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "prqEmptyNeedsEstimate": "Nothing to estimate",
+  "prqEmptyWaiting": "No estimate waiting for an answer",
+  "prqEmptyHint": "Requests customers send you appear here.",
+  "prqBringsItOn": "Brings it {day}",
+  "@prqBringsItOn": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "prqCollectOn": "Collect {day}, {window}",
+  "@prqCollectOn": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      },
+      "window": {
+        "type": "String"
+      }
+    }
+  },
+  "prqNoDay": "No day given",
+  "prqLockedBy": "{name} is writing the estimate",
+  "@prqLockedBy": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "prqAgreedByPhone": "Customer agreed by phone",
+  "prqAgreedByPhoneTitle": "Customer agreed by phone?",
+  "prqAgreedByPhoneMessage": "This confirms estimate version {version} ({total}) for the customer. History records that you did it.",
+  "@prqAgreedByPhoneMessage": {
+    "placeholders": {
+      "version": {
+        "type": "int"
+      },
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "prqAgreedDone": "Confirmed for the customer.",
+  "prqNotReachable": "Customer not reachable on WhatsApp",
+  "prqSentOn": "Sent {date}",
+  "@prqSentOn": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "prqEstimateTotal": "Estimate {total}",
+  "@prqEstimateTotal": {
+    "placeholders": {
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "prqSettings": "Request settings",
+  "prqCustomer": "Customer",
+  "prqEstimateTitle": "Estimate",
+  "prqLockMine": "You are writing this estimate. Others see it as locked.",
+  "prqLockOther": "{name} is writing the estimate until {time}. You can read it.",
+  "@prqLockOther": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "prqLockLapsed": "{name} stopped writing. You can take over.",
+  "@prqLockLapsed": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "prqTakeOver": "Take over",
+  "prqLockLost": "Someone else took over this estimate.",
+  "prqStaleBanner": "This request changed while you were editing.",
+  "prqRefresh": "Refresh",
+  "prqPriceField": "Price ($)",
+  "prqPriceRequired": "Enter a price.",
+  "prqPriceInvalid": "Enter an amount like 45 or 45.50.",
+  "prqPickupFeeField": "Pickup fee ($, optional)",
+  "prqPickupScheduleDay": "Pickup day you will come",
+  "prqNoteToCustomer": "Note to the customer (optional)",
+  "prqSendEstimate": "Send estimate on WhatsApp",
+  "prqEstimateSentDone": "Estimate sent.",
+  "prqEstimateReconfirm": "Estimate sent. The total went up, so the customer must confirm again.",
+  "prqEstimatePriceDropped": "Estimate sent. The total went down; the request stays confirmed.",
+  "prqDecline": "Decline request",
+  "prqDeclineTitle": "Decline this request?",
+  "prqDeclineMessage": "The customer sees your reason on their request.",
+  "prqReasonLabel": "Reason",
+  "prqDeclined": "Request declined.",
+  "prqPhotoOf": "Photo {n} of {count}",
+  "@prqPhotoOf": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "prqAutoEstimate": "Barrel price sent automatically",
+  "prqVersionBy": "Version {version} · {name}",
+  "@prqVersionBy": {
+    "placeholders": {
+      "version": {
+        "type": "int"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "prqClosed": "This request is closed.",
+  "prqActSubmitted": "Sent by the customer",
+  "prqActEstimateSent": "Estimate v{version} sent · {total}",
+  "@prqActEstimateSent": {
+    "placeholders": {
+      "version": {
+        "type": "int"
+      },
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "prqActConfirmedLink": "Customer confirmed",
+  "prqActConfirmedPhone": "Confirmed by phone",
+  "prqActConfirmedCard": "Paid online by card",
+  "prqActCustomerDeclined": "Customer said no",
+  "prqActDeclined": "Declined",
+  "prqActCancelled": "Cancelled",
+  "prqActExpired": "Expired",
+  "prqActReceived": "Received",
+  "prqActLockTakenOver": "Took over the estimate",
+  "prqActReminderSent": "Reminder sent",
+  "prqActOther": "Updated",
+  "prqExpectedTitle": "Expected · {count}",
+  "@prqExpectedTitle": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "prqInShopTitle": "In the shop · {count}",
+  "@prqInShopTitle": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "prqReceived": "Received",
+  "prqPickedUpReceived": "Picked up · Received",
+  "prqCancelRequest": "Cancel request",
+  "prqCancelTitle": "Cancel this request?",
+  "prqCancelMessage": "The customer sees your reason on their request.",
+  "prqCancelledDone": "Request cancelled.",
+  "prqPaidOnline": "Paid online",
+  "prqPlannedDayShort": "Planned {day}",
+  "@prqPlannedDayShort": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "prqReceiveTitle": "Pieces received",
+  "prqReceiveSubtitle": "{code} · confirm the final price of each piece",
+  "@prqReceiveSubtitle": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "prqFinalPrice": "Final price ($)",
+  "prqPriceAllOrNone": "Price every piece, or none.",
+  "prqLineTotal": "Total {total}",
+  "@prqLineTotal": {
+    "placeholders": {
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "prqReceiveAndPrint": "Received · print labels",
+  "prqSaving": "Saving…",
+  "prqReceivedDone": "Received. Tracking code {code}.",
+  "@prqReceivedDone": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "prqAlreadyReceived": "Already received as {code}.",
+  "@prqAlreadyReceived": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "prqPaidOnlineNote": "Paid online by card: {amount}. No payment to take.",
+  "@prqPaidOnlineNote": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "prqDescriptionField": "Description",
+  "prqPayOnArrivalSwitch": "Receiver pays on arrival",
+  "prqSettingsTitle": "Package requests",
+  "prqAccept": "Accept package requests",
+  "prqAcceptNote": "Customers can send you requests from the website and the app.",
+  "prqLinkTitle": "Your request link",
+  "prqLinkNone": "Save once to get your link.",
+  "prqCopy": "Copy",
+  "prqCopied": "Link copied.",
+  "prqShare": "Share",
+  "prqShowQr": "QR code",
+  "prqQrHint": "Print it for your counter. It opens your request form.",
+  "prqSlugField": "Link name",
+  "prqSlugHint": "Lowercase letters, numbers and dashes. You can change it once.",
+  "prqSlugLocked": "The link name was already changed once.",
+  "prqHoursTitle": "Opening hours",
+  "prqHoursHint": "Customers bring pieces in these hours. A location with no open day is not offered for drop-off.",
+  "prqHeadquarters": "Main address",
+  "prqDayClosed": "Closed",
+  "prqHoursRange": "{from} – {to}",
+  "@prqHoursRange": {
+    "placeholders": {
+      "from": {
+        "type": "String"
+      },
+      "to": {
+        "type": "String"
+      }
+    }
+  },
+  "prqPickupSettingsTitle": "We pick up",
+  "prqPickupSettingsNote": "Offer “Collect from me” to customers in the areas you cover.",
+  "prqAreas": "Areas you cover",
+  "prqAreasHint": "e.g. Bronx, Harlem, Newark",
+  "prqCardBarrels": "Card payment for barrels",
+  "prqCardBarrelsNote": "Customers can pay barrels online; those orders show as Expected and paid online.",
+  "prqSaved": "Settings saved.",
+  "prqOwnerOnly": "Only the owner can change these settings.",
+  "prqErrBusinessNotFound": "This request link doesn’t match any business.",
+  "prqErrBusinessUnavailable": "This business can’t take requests right now.",
+  "prqErrRequestsOff": "This business stopped taking requests.",
+  "prqErrDestinationUnavailable": "This business no longer ships to that country.",
+  "prqErrBringInUnavailable": "This business no longer offers drop-off.",
+  "prqErrCollectUnavailable": "This business no longer offers pickup.",
+  "prqErrHandoff": "Choose Bring it in or Collect from me.",
+  "prqErrLocation": "Choose a drop-off location.",
+  "prqErrPlannedDate": "Choose a day between today and 60 days from now.",
+  "prqErrPlannedDayClosed": "The business is closed that day.",
+  "prqErrPickupAddress": "Enter the pickup address.",
+  "prqErrPickupDate": "Choose a pickup day between today and 60 days from now.",
+  "prqErrPickupWindow": "Choose morning, afternoon or evening.",
+  "prqErrSenderName": "Enter your name.",
+  "prqErrSenderPhone": "Enter your WhatsApp number with its country code.",
+  "prqErrReceiverName": "Enter the receiver’s name.",
+  "prqErrReceiverPhone": "Enter the receiver’s phone with its country code.",
+  "prqErrPiecesRequired": "Add at least one piece.",
+  "prqErrTooManyPieces": "20 pieces at most per request.",
+  "prqErrPieceKind": "Choose barrel, box or other for each piece.",
+  "prqErrPieceDescription": "Say what it is.",
+  "prqErrTextTooLong": "Some text is too long. Shorten it.",
+  "prqErrTooManyPhotos": "5 photos at most per piece.",
+  "prqErrPhotoInvalid": "A photo couldn’t be used. Remove it and add it again.",
+  "prqErrRateLimited": "Too many requests in a short time. Try again in an hour.",
+  "prqErrNotFound": "This request can’t be found.",
+  "prqErrEstimateMissing": "There is no estimate to confirm yet.",
+  "prqErrCardOrder": "This order was paid by card. Cancel or refund it from its barrel order.",
+  "prqErrSlugInvalid": "Use 3 to 40 lowercase letters, numbers or dashes.",
+  "prqErrSlugTaken": "That link name is taken. Try another one.",
+  "prqErrHoursInvalid": "Each open day needs a start time before its end time.",
+  "prqErrLocationUnknown": "One of the locations no longer exists. Reload and try again.",
+  "prqErrPickupAreas": "Say which areas you cover.",
+  "prqErrLocked": "Someone else is writing this estimate.",
+  "prqErrPieceMissing": "Every piece needs a price.",
+  "prqErrPieceUnknown": "The pieces changed. Refresh and try again.",
+  "prqErrPickupFee": "Enter a valid pickup fee.",
+  "prqErrPickupSchedule": "Choose a valid pickup day.",
+  "prqErrReasonRequired": "Give a reason.",
+  "prqErrOffline": "You’re offline. Check your connection and try again.",
+  "prqErrAppCheck": "This app couldn’t be verified. Try again in a moment.",
+  "prqErrPermission": "You don’t have access to this.",
+  "prqErrGeneric": "That didn’t work. Try again."
 }

@@ -22756,6 +22756,1740 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The bank didn\'t answer. Try again.'**
   String get zelleFailBankError;
+
+  /// No description provided for @prqSendPackage.
+  ///
+  /// In en, this message translates to:
+  /// **'Send a package'**
+  String get prqSendPackage;
+
+  /// No description provided for @prqSendPackageSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask a business to take it and get an estimate'**
+  String get prqSendPackageSubtitle;
+
+  /// No description provided for @prqMyRequests.
+  ///
+  /// In en, this message translates to:
+  /// **'My requests'**
+  String get prqMyRequests;
+
+  /// No description provided for @prqMyRequestsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimates and answers from businesses'**
+  String get prqMyRequestsSubtitle;
+
+  /// No description provided for @prqSignInTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to send a request'**
+  String get prqSignInTitle;
+
+  /// No description provided for @prqSignInHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Your requests and estimates are kept in your account.'**
+  String get prqSignInHint;
+
+  /// No description provided for @prqSignIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in'**
+  String get prqSignIn;
+
+  /// No description provided for @prqRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get prqRetry;
+
+  /// No description provided for @prqCouldNotLoad.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load. Check your connection and try again.'**
+  String get prqCouldNotLoad;
+
+  /// No description provided for @prqStepCountry.
+  ///
+  /// In en, this message translates to:
+  /// **'Where is it going?'**
+  String get prqStepCountry;
+
+  /// No description provided for @prqPickCountry.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a country'**
+  String get prqPickCountry;
+
+  /// No description provided for @prqSearchCountry.
+  ///
+  /// In en, this message translates to:
+  /// **'Search a country'**
+  String get prqSearchCountry;
+
+  /// No description provided for @prqStepBusiness.
+  ///
+  /// In en, this message translates to:
+  /// **'Who takes it?'**
+  String get prqStepBusiness;
+
+  /// No description provided for @prqNoBusinesses.
+  ///
+  /// In en, this message translates to:
+  /// **'No business takes requests for this country yet.'**
+  String get prqNoBusinesses;
+
+  /// No description provided for @prqNoOptions.
+  ///
+  /// In en, this message translates to:
+  /// **'No business takes package requests right now.'**
+  String get prqNoOptions;
+
+  /// No description provided for @prqBusinessStopped.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is not taking requests right now.'**
+  String prqBusinessStopped(String name);
+
+  /// No description provided for @prqBarrelPrice.
+  ///
+  /// In en, this message translates to:
+  /// **'{price} per barrel'**
+  String prqBarrelPrice(String price);
+
+  /// No description provided for @prqBarrelOnEstimate.
+  ///
+  /// In en, this message translates to:
+  /// **'Barrels priced on estimate'**
+  String get prqBarrelOnEstimate;
+
+  /// No description provided for @prqStepHandoff.
+  ///
+  /// In en, this message translates to:
+  /// **'How does it get to them?'**
+  String get prqStepHandoff;
+
+  /// No description provided for @prqBringIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Bring it in'**
+  String get prqBringIn;
+
+  /// No description provided for @prqBringInNote.
+  ///
+  /// In en, this message translates to:
+  /// **'I drop it off at the business'**
+  String get prqBringInNote;
+
+  /// No description provided for @prqCollect.
+  ///
+  /// In en, this message translates to:
+  /// **'Collect from me'**
+  String get prqCollect;
+
+  /// No description provided for @prqCollectNote.
+  ///
+  /// In en, this message translates to:
+  /// **'The business picks it up'**
+  String get prqCollectNote;
+
+  /// No description provided for @prqUnavailableNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Not offered by this business'**
+  String get prqUnavailableNote;
+
+  /// No description provided for @prqDropOffAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Drop-off location'**
+  String get prqDropOffAt;
+
+  /// No description provided for @prqPlannedDay.
+  ///
+  /// In en, this message translates to:
+  /// **'Day you plan to come'**
+  String get prqPlannedDay;
+
+  /// No description provided for @prqPickDay.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a day'**
+  String get prqPickDay;
+
+  /// No description provided for @prqHoursOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Open {from} – {to} that day. Come any time in those hours.'**
+  String prqHoursOn(String from, String to);
+
+  /// No description provided for @prqClosedThatDay.
+  ///
+  /// In en, this message translates to:
+  /// **'Closed that day. Pick another day.'**
+  String get prqClosedThatDay;
+
+  /// No description provided for @prqPlanNote.
+  ///
+  /// In en, this message translates to:
+  /// **'This is a plan, not an appointment.'**
+  String get prqPlanNote;
+
+  /// No description provided for @prqPickupAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'Pickup address'**
+  String get prqPickupAddress;
+
+  /// No description provided for @prqPickupDay.
+  ///
+  /// In en, this message translates to:
+  /// **'Preferred day'**
+  String get prqPickupDay;
+
+  /// No description provided for @prqPickupWindow.
+  ///
+  /// In en, this message translates to:
+  /// **'Time of day'**
+  String get prqPickupWindow;
+
+  /// No description provided for @prqWindowMorning.
+  ///
+  /// In en, this message translates to:
+  /// **'Morning'**
+  String get prqWindowMorning;
+
+  /// No description provided for @prqWindowAfternoon.
+  ///
+  /// In en, this message translates to:
+  /// **'Afternoon'**
+  String get prqWindowAfternoon;
+
+  /// No description provided for @prqWindowEvening.
+  ///
+  /// In en, this message translates to:
+  /// **'Evening'**
+  String get prqWindowEvening;
+
+  /// No description provided for @prqPickupNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Note for the driver (optional)'**
+  String get prqPickupNote;
+
+  /// No description provided for @prqCollectAreas.
+  ///
+  /// In en, this message translates to:
+  /// **'Picks up in: {areas}'**
+  String prqCollectAreas(String areas);
+
+  /// No description provided for @prqCollectTimeNote.
+  ///
+  /// In en, this message translates to:
+  /// **'The business sets the real time and any pickup fee in its estimate.'**
+  String get prqCollectTimeNote;
+
+  /// No description provided for @prqSender.
+  ///
+  /// In en, this message translates to:
+  /// **'You (sender)'**
+  String get prqSender;
+
+  /// No description provided for @prqSenderName.
+  ///
+  /// In en, this message translates to:
+  /// **'Your name'**
+  String get prqSenderName;
+
+  /// No description provided for @prqSenderPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Your WhatsApp number'**
+  String get prqSenderPhone;
+
+  /// No description provided for @prqSenderPhoneHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The estimate comes on WhatsApp.'**
+  String get prqSenderPhoneHint;
+
+  /// No description provided for @prqReceiver.
+  ///
+  /// In en, this message translates to:
+  /// **'Receiver'**
+  String get prqReceiver;
+
+  /// No description provided for @prqReceiverName.
+  ///
+  /// In en, this message translates to:
+  /// **'Receiver’s name'**
+  String get prqReceiverName;
+
+  /// No description provided for @prqReceiverPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Receiver’s phone'**
+  String get prqReceiverPhone;
+
+  /// No description provided for @prqPieces.
+  ///
+  /// In en, this message translates to:
+  /// **'What are you sending?'**
+  String get prqPieces;
+
+  /// No description provided for @prqPieceN.
+  ///
+  /// In en, this message translates to:
+  /// **'Piece {n}'**
+  String prqPieceN(int n);
+
+  /// No description provided for @prqKindBarrel.
+  ///
+  /// In en, this message translates to:
+  /// **'Barrel'**
+  String get prqKindBarrel;
+
+  /// No description provided for @prqKindBox.
+  ///
+  /// In en, this message translates to:
+  /// **'Box'**
+  String get prqKindBox;
+
+  /// No description provided for @prqKindOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get prqKindOther;
+
+  /// No description provided for @prqWhatIsIt.
+  ///
+  /// In en, this message translates to:
+  /// **'What is it?'**
+  String get prqWhatIsIt;
+
+  /// No description provided for @prqWhatIsItHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. TV, suitcase, box of clothes'**
+  String get prqWhatIsItHint;
+
+  /// No description provided for @prqBarrelInside.
+  ///
+  /// In en, this message translates to:
+  /// **'What’s inside (optional)'**
+  String get prqBarrelInside;
+
+  /// No description provided for @prqAddPhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Add photo'**
+  String get prqAddPhoto;
+
+  /// No description provided for @prqPhotosCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Photos: {count} of {max}'**
+  String prqPhotosCount(int count, int max);
+
+  /// No description provided for @prqTakePhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Take a photo'**
+  String get prqTakePhoto;
+
+  /// No description provided for @prqChoosePhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose from photos'**
+  String get prqChoosePhoto;
+
+  /// No description provided for @prqPhotoFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t upload. Tap to retry.'**
+  String get prqPhotoFailed;
+
+  /// No description provided for @prqPhotoTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'That photo is too large. Try another one.'**
+  String get prqPhotoTooLarge;
+
+  /// No description provided for @prqPhotoNotImage.
+  ///
+  /// In en, this message translates to:
+  /// **'Only photos can be added (JPEG, PNG or WebP).'**
+  String get prqPhotoNotImage;
+
+  /// No description provided for @prqRemovePhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove photo'**
+  String get prqRemovePhoto;
+
+  /// No description provided for @prqRemovePiece.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove piece'**
+  String get prqRemovePiece;
+
+  /// No description provided for @prqAddPiece.
+  ///
+  /// In en, this message translates to:
+  /// **'+ Add another piece'**
+  String get prqAddPiece;
+
+  /// No description provided for @prqEstimateNoteBring.
+  ///
+  /// In en, this message translates to:
+  /// **'The business sends you an estimate on WhatsApp before anything is decided. You pay when you drop it off.'**
+  String get prqEstimateNoteBring;
+
+  /// No description provided for @prqEstimateNoteCollect.
+  ///
+  /// In en, this message translates to:
+  /// **'The business sends you an estimate on WhatsApp before anything is decided. You pay when it is collected.'**
+  String get prqEstimateNoteCollect;
+
+  /// No description provided for @prqSendRequest.
+  ///
+  /// In en, this message translates to:
+  /// **'Send request'**
+  String get prqSendRequest;
+
+  /// No description provided for @prqSending.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending…'**
+  String get prqSending;
+
+  /// No description provided for @prqWaitPhotos.
+  ///
+  /// In en, this message translates to:
+  /// **'Wait for the photos to finish uploading.'**
+  String get prqWaitPhotos;
+
+  /// No description provided for @prqFixErrors.
+  ///
+  /// In en, this message translates to:
+  /// **'Check the highlighted fields.'**
+  String get prqFixErrors;
+
+  /// No description provided for @prqSentTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Request sent'**
+  String get prqSentTitle;
+
+  /// No description provided for @prqSentCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Your request code'**
+  String get prqSentCode;
+
+  /// No description provided for @prqSentTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent to {business}'**
+  String prqSentTo(String business);
+
+  /// No description provided for @prqNextSteps.
+  ///
+  /// In en, this message translates to:
+  /// **'What happens next'**
+  String get prqNextSteps;
+
+  /// No description provided for @prqNext1.
+  ///
+  /// In en, this message translates to:
+  /// **'{business} looks at your pieces and sends an estimate on WhatsApp.'**
+  String prqNext1(String business);
+
+  /// No description provided for @prqNext1Ready.
+  ///
+  /// In en, this message translates to:
+  /// **'Your estimate is ready already: open it to see the prices.'**
+  String get prqNext1Ready;
+
+  /// No description provided for @prqNext2.
+  ///
+  /// In en, this message translates to:
+  /// **'Open the estimate and tap Confirm if it suits you.'**
+  String get prqNext2;
+
+  /// No description provided for @prqNext3Bring.
+  ///
+  /// In en, this message translates to:
+  /// **'Bring your pieces on the day you planned and pay there.'**
+  String get prqNext3Bring;
+
+  /// No description provided for @prqNext3Collect.
+  ///
+  /// In en, this message translates to:
+  /// **'The business collects your pieces and you pay then.'**
+  String get prqNext3Collect;
+
+  /// No description provided for @prqSeeRequest.
+  ///
+  /// In en, this message translates to:
+  /// **'See my request'**
+  String get prqSeeRequest;
+
+  /// No description provided for @prqMineEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No requests yet'**
+  String get prqMineEmptyTitle;
+
+  /// No description provided for @prqMineEmptyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Send a package to get an estimate from a business.'**
+  String get prqMineEmptyHint;
+
+  /// No description provided for @prqNewRequest.
+  ///
+  /// In en, this message translates to:
+  /// **'New request'**
+  String get prqNewRequest;
+
+  /// No description provided for @prqStatusNew.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for estimate'**
+  String get prqStatusNew;
+
+  /// No description provided for @prqStatusEstimateSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimate ready'**
+  String get prqStatusEstimateSent;
+
+  /// No description provided for @prqStatusConfirmed.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirmed'**
+  String get prqStatusConfirmed;
+
+  /// No description provided for @prqStatusReceived.
+  ///
+  /// In en, this message translates to:
+  /// **'Received'**
+  String get prqStatusReceived;
+
+  /// No description provided for @prqStatusDeclined.
+  ///
+  /// In en, this message translates to:
+  /// **'Declined'**
+  String get prqStatusDeclined;
+
+  /// No description provided for @prqStatusYouDeclined.
+  ///
+  /// In en, this message translates to:
+  /// **'You said no'**
+  String get prqStatusYouDeclined;
+
+  /// No description provided for @prqStatusCustomerDeclined.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer said no'**
+  String get prqStatusCustomerDeclined;
+
+  /// No description provided for @prqStatusCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get prqStatusCancelled;
+
+  /// No description provided for @prqStatusExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'Expired'**
+  String get prqStatusExpired;
+
+  /// No description provided for @prqDetailTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Request {code}'**
+  String prqDetailTitle(String code);
+
+  /// No description provided for @prqStateWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'{business} is preparing your estimate.'**
+  String prqStateWaiting(String business);
+
+  /// No description provided for @prqStateWaitingHint.
+  ///
+  /// In en, this message translates to:
+  /// **'You will get it on WhatsApp and here.'**
+  String get prqStateWaitingHint;
+
+  /// No description provided for @prqStateAwaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'Your estimate is ready'**
+  String get prqStateAwaiting;
+
+  /// No description provided for @prqStateAwaitingHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm it if it suits you. Nothing is paid now.'**
+  String get prqStateAwaitingHint;
+
+  /// No description provided for @prqStateConfirmed.
+  ///
+  /// In en, this message translates to:
+  /// **'You confirmed this estimate'**
+  String get prqStateConfirmed;
+
+  /// No description provided for @prqStateConfirmedByPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirmed by phone with {business}'**
+  String prqStateConfirmedByPhone(String business);
+
+  /// No description provided for @prqPriceDropped.
+  ///
+  /// In en, this message translates to:
+  /// **'The price went down since you confirmed. Nothing else to do.'**
+  String get prqPriceDropped;
+
+  /// No description provided for @prqStateReceived.
+  ///
+  /// In en, this message translates to:
+  /// **'{business} received your pieces'**
+  String prqStateReceived(String business);
+
+  /// No description provided for @prqTrackingCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Tracking code {code}'**
+  String prqTrackingCode(String code);
+
+  /// No description provided for @prqTrack.
+  ///
+  /// In en, this message translates to:
+  /// **'Track it'**
+  String get prqTrack;
+
+  /// No description provided for @prqStateDeclined.
+  ///
+  /// In en, this message translates to:
+  /// **'{business} declined this request'**
+  String prqStateDeclined(String business);
+
+  /// No description provided for @prqStateCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'{business} cancelled this request'**
+  String prqStateCancelled(String business);
+
+  /// No description provided for @prqReason.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason: {reason}'**
+  String prqReason(String reason);
+
+  /// No description provided for @prqStateCustomerDeclined.
+  ///
+  /// In en, this message translates to:
+  /// **'You said no to this estimate'**
+  String get prqStateCustomerDeclined;
+
+  /// No description provided for @prqStateExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'This request expired'**
+  String get prqStateExpired;
+
+  /// No description provided for @prqStateExpiredHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Send a new request if you still need to ship.'**
+  String get prqStateExpiredHint;
+
+  /// No description provided for @prqChangedBanner.
+  ///
+  /// In en, this message translates to:
+  /// **'This estimate changed — see the new one below.'**
+  String get prqChangedBanner;
+
+  /// No description provided for @prqAnswerBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Answer by {date}'**
+  String prqAnswerBy(String date);
+
+  /// No description provided for @prqConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm'**
+  String get prqConfirm;
+
+  /// No description provided for @prqNoThanks.
+  ///
+  /// In en, this message translates to:
+  /// **'No thanks'**
+  String get prqNoThanks;
+
+  /// No description provided for @prqNoThanksTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Say no to this estimate?'**
+  String get prqNoThanksTitle;
+
+  /// No description provided for @prqNoThanksMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The business is told. You can say why (optional).'**
+  String get prqNoThanksMessage;
+
+  /// No description provided for @prqReasonOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason (optional)'**
+  String get prqReasonOptional;
+
+  /// No description provided for @prqConfirmedDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimate confirmed.'**
+  String get prqConfirmedDone;
+
+  /// No description provided for @prqAlreadyConfirmed.
+  ///
+  /// In en, this message translates to:
+  /// **'You had already confirmed this estimate.'**
+  String get prqAlreadyConfirmed;
+
+  /// No description provided for @prqDeclinedDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Done. The business is told.'**
+  String get prqDeclinedDone;
+
+  /// No description provided for @prqTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Total'**
+  String get prqTotal;
+
+  /// No description provided for @prqPickupFee.
+  ///
+  /// In en, this message translates to:
+  /// **'Pickup fee'**
+  String get prqPickupFee;
+
+  /// No description provided for @prqPriceToCome.
+  ///
+  /// In en, this message translates to:
+  /// **'Price to come'**
+  String get prqPriceToCome;
+
+  /// No description provided for @prqWhereWhen.
+  ///
+  /// In en, this message translates to:
+  /// **'Where and when'**
+  String get prqWhereWhen;
+
+  /// No description provided for @prqBringTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Bring it to'**
+  String get prqBringTo;
+
+  /// No description provided for @prqPlannedFor.
+  ///
+  /// In en, this message translates to:
+  /// **'Planned for {day}'**
+  String prqPlannedFor(String day);
+
+  /// No description provided for @prqPickupAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Pickup at'**
+  String get prqPickupAt;
+
+  /// No description provided for @prqDayWindow.
+  ///
+  /// In en, this message translates to:
+  /// **'{day}, {window}'**
+  String prqDayWindow(String day, String window);
+
+  /// No description provided for @prqCallBusiness.
+  ///
+  /// In en, this message translates to:
+  /// **'Call {business}'**
+  String prqCallBusiness(String business);
+
+  /// No description provided for @prqBusinessNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Note from the business'**
+  String get prqBusinessNote;
+
+  /// No description provided for @prqPayAtDropOff.
+  ///
+  /// In en, this message translates to:
+  /// **'You pay at drop-off.'**
+  String get prqPayAtDropOff;
+
+  /// No description provided for @prqPayAtPickup.
+  ///
+  /// In en, this message translates to:
+  /// **'You pay when it is collected.'**
+  String get prqPayAtPickup;
+
+  /// No description provided for @prqNotBinding.
+  ///
+  /// In en, this message translates to:
+  /// **'The final price is set when the business sees your pieces.'**
+  String get prqNotBinding;
+
+  /// No description provided for @prqToReceiver.
+  ///
+  /// In en, this message translates to:
+  /// **'To {name} · {country}'**
+  String prqToReceiver(String name, String country);
+
+  /// No description provided for @prqBarrelsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 barrel} other{{count} barrels}}'**
+  String prqBarrelsCount(int count);
+
+  /// No description provided for @prqBoxesCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 box} other{{count} boxes}}'**
+  String prqBoxesCount(int count);
+
+  /// No description provided for @prqOthersCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 other item} other{{count} other items}}'**
+  String prqOthersCount(int count);
+
+  /// No description provided for @prqPiecesCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 piece} other{{count} pieces}}'**
+  String prqPiecesCount(int count);
+
+  /// No description provided for @prqRequestsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Requests'**
+  String get prqRequestsTitle;
+
+  /// No description provided for @prqEntryCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No open requests} =1{1 open request} other{{count} open requests}}'**
+  String prqEntryCount(int count);
+
+  /// No description provided for @prqEntryHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Customers ask, you send the estimate'**
+  String get prqEntryHint;
+
+  /// No description provided for @prqChipNeedsEstimate.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs estimate · {count}'**
+  String prqChipNeedsEstimate(int count);
+
+  /// No description provided for @prqChipWaitingCustomer.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for customer · {count}'**
+  String prqChipWaitingCustomer(int count);
+
+  /// No description provided for @prqEmptyNeedsEstimate.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing to estimate'**
+  String get prqEmptyNeedsEstimate;
+
+  /// No description provided for @prqEmptyWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'No estimate waiting for an answer'**
+  String get prqEmptyWaiting;
+
+  /// No description provided for @prqEmptyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Requests customers send you appear here.'**
+  String get prqEmptyHint;
+
+  /// No description provided for @prqBringsItOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Brings it {day}'**
+  String prqBringsItOn(String day);
+
+  /// No description provided for @prqCollectOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Collect {day}, {window}'**
+  String prqCollectOn(String day, String window);
+
+  /// No description provided for @prqNoDay.
+  ///
+  /// In en, this message translates to:
+  /// **'No day given'**
+  String get prqNoDay;
+
+  /// No description provided for @prqLockedBy.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is writing the estimate'**
+  String prqLockedBy(String name);
+
+  /// No description provided for @prqAgreedByPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer agreed by phone'**
+  String get prqAgreedByPhone;
+
+  /// No description provided for @prqAgreedByPhoneTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer agreed by phone?'**
+  String get prqAgreedByPhoneTitle;
+
+  /// No description provided for @prqAgreedByPhoneMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This confirms estimate version {version} ({total}) for the customer. History records that you did it.'**
+  String prqAgreedByPhoneMessage(int version, String total);
+
+  /// No description provided for @prqAgreedDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirmed for the customer.'**
+  String get prqAgreedDone;
+
+  /// No description provided for @prqNotReachable.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer not reachable on WhatsApp'**
+  String get prqNotReachable;
+
+  /// No description provided for @prqSentOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent {date}'**
+  String prqSentOn(String date);
+
+  /// No description provided for @prqEstimateTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimate {total}'**
+  String prqEstimateTotal(String total);
+
+  /// No description provided for @prqSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Request settings'**
+  String get prqSettings;
+
+  /// No description provided for @prqCustomer.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer'**
+  String get prqCustomer;
+
+  /// No description provided for @prqEstimateTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimate'**
+  String get prqEstimateTitle;
+
+  /// No description provided for @prqLockMine.
+  ///
+  /// In en, this message translates to:
+  /// **'You are writing this estimate. Others see it as locked.'**
+  String get prqLockMine;
+
+  /// No description provided for @prqLockOther.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is writing the estimate until {time}. You can read it.'**
+  String prqLockOther(String name, String time);
+
+  /// No description provided for @prqLockLapsed.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} stopped writing. You can take over.'**
+  String prqLockLapsed(String name);
+
+  /// No description provided for @prqTakeOver.
+  ///
+  /// In en, this message translates to:
+  /// **'Take over'**
+  String get prqTakeOver;
+
+  /// No description provided for @prqLockLost.
+  ///
+  /// In en, this message translates to:
+  /// **'Someone else took over this estimate.'**
+  String get prqLockLost;
+
+  /// No description provided for @prqStaleBanner.
+  ///
+  /// In en, this message translates to:
+  /// **'This request changed while you were editing.'**
+  String get prqStaleBanner;
+
+  /// No description provided for @prqRefresh.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh'**
+  String get prqRefresh;
+
+  /// No description provided for @prqPriceField.
+  ///
+  /// In en, this message translates to:
+  /// **'Price (\$)'**
+  String get prqPriceField;
+
+  /// No description provided for @prqPriceRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a price.'**
+  String get prqPriceRequired;
+
+  /// No description provided for @prqPriceInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter an amount like 45 or 45.50.'**
+  String get prqPriceInvalid;
+
+  /// No description provided for @prqPickupFeeField.
+  ///
+  /// In en, this message translates to:
+  /// **'Pickup fee (\$, optional)'**
+  String get prqPickupFeeField;
+
+  /// No description provided for @prqPickupScheduleDay.
+  ///
+  /// In en, this message translates to:
+  /// **'Pickup day you will come'**
+  String get prqPickupScheduleDay;
+
+  /// No description provided for @prqNoteToCustomer.
+  ///
+  /// In en, this message translates to:
+  /// **'Note to the customer (optional)'**
+  String get prqNoteToCustomer;
+
+  /// No description provided for @prqSendEstimate.
+  ///
+  /// In en, this message translates to:
+  /// **'Send estimate on WhatsApp'**
+  String get prqSendEstimate;
+
+  /// No description provided for @prqEstimateSentDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimate sent.'**
+  String get prqEstimateSentDone;
+
+  /// No description provided for @prqEstimateReconfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimate sent. The total went up, so the customer must confirm again.'**
+  String get prqEstimateReconfirm;
+
+  /// No description provided for @prqEstimatePriceDropped.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimate sent. The total went down; the request stays confirmed.'**
+  String get prqEstimatePriceDropped;
+
+  /// No description provided for @prqDecline.
+  ///
+  /// In en, this message translates to:
+  /// **'Decline request'**
+  String get prqDecline;
+
+  /// No description provided for @prqDeclineTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Decline this request?'**
+  String get prqDeclineTitle;
+
+  /// No description provided for @prqDeclineMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The customer sees your reason on their request.'**
+  String get prqDeclineMessage;
+
+  /// No description provided for @prqReasonLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason'**
+  String get prqReasonLabel;
+
+  /// No description provided for @prqDeclined.
+  ///
+  /// In en, this message translates to:
+  /// **'Request declined.'**
+  String get prqDeclined;
+
+  /// No description provided for @prqPhotoOf.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo {n} of {count}'**
+  String prqPhotoOf(int n, int count);
+
+  /// No description provided for @prqAutoEstimate.
+  ///
+  /// In en, this message translates to:
+  /// **'Barrel price sent automatically'**
+  String get prqAutoEstimate;
+
+  /// No description provided for @prqVersionBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Version {version} · {name}'**
+  String prqVersionBy(int version, String name);
+
+  /// No description provided for @prqClosed.
+  ///
+  /// In en, this message translates to:
+  /// **'This request is closed.'**
+  String get prqClosed;
+
+  /// No description provided for @prqActSubmitted.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent by the customer'**
+  String get prqActSubmitted;
+
+  /// No description provided for @prqActEstimateSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimate v{version} sent · {total}'**
+  String prqActEstimateSent(int version, String total);
+
+  /// No description provided for @prqActConfirmedLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer confirmed'**
+  String get prqActConfirmedLink;
+
+  /// No description provided for @prqActConfirmedPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirmed by phone'**
+  String get prqActConfirmedPhone;
+
+  /// No description provided for @prqActConfirmedCard.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid online by card'**
+  String get prqActConfirmedCard;
+
+  /// No description provided for @prqActCustomerDeclined.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer said no'**
+  String get prqActCustomerDeclined;
+
+  /// No description provided for @prqActDeclined.
+  ///
+  /// In en, this message translates to:
+  /// **'Declined'**
+  String get prqActDeclined;
+
+  /// No description provided for @prqActCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get prqActCancelled;
+
+  /// No description provided for @prqActExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'Expired'**
+  String get prqActExpired;
+
+  /// No description provided for @prqActReceived.
+  ///
+  /// In en, this message translates to:
+  /// **'Received'**
+  String get prqActReceived;
+
+  /// No description provided for @prqActLockTakenOver.
+  ///
+  /// In en, this message translates to:
+  /// **'Took over the estimate'**
+  String get prqActLockTakenOver;
+
+  /// No description provided for @prqActReminderSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Reminder sent'**
+  String get prqActReminderSent;
+
+  /// No description provided for @prqActOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Updated'**
+  String get prqActOther;
+
+  /// No description provided for @prqExpectedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Expected · {count}'**
+  String prqExpectedTitle(int count);
+
+  /// No description provided for @prqInShopTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'In the shop · {count}'**
+  String prqInShopTitle(int count);
+
+  /// No description provided for @prqReceived.
+  ///
+  /// In en, this message translates to:
+  /// **'Received'**
+  String get prqReceived;
+
+  /// No description provided for @prqPickedUpReceived.
+  ///
+  /// In en, this message translates to:
+  /// **'Picked up · Received'**
+  String get prqPickedUpReceived;
+
+  /// No description provided for @prqCancelRequest.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel request'**
+  String get prqCancelRequest;
+
+  /// No description provided for @prqCancelTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel this request?'**
+  String get prqCancelTitle;
+
+  /// No description provided for @prqCancelMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The customer sees your reason on their request.'**
+  String get prqCancelMessage;
+
+  /// No description provided for @prqCancelledDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Request cancelled.'**
+  String get prqCancelledDone;
+
+  /// No description provided for @prqPaidOnline.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid online'**
+  String get prqPaidOnline;
+
+  /// No description provided for @prqPlannedDayShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Planned {day}'**
+  String prqPlannedDayShort(String day);
+
+  /// No description provided for @prqReceiveTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pieces received'**
+  String get prqReceiveTitle;
+
+  /// No description provided for @prqReceiveSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{code} · confirm the final price of each piece'**
+  String prqReceiveSubtitle(String code);
+
+  /// No description provided for @prqFinalPrice.
+  ///
+  /// In en, this message translates to:
+  /// **'Final price (\$)'**
+  String get prqFinalPrice;
+
+  /// No description provided for @prqPriceAllOrNone.
+  ///
+  /// In en, this message translates to:
+  /// **'Price every piece, or none.'**
+  String get prqPriceAllOrNone;
+
+  /// No description provided for @prqLineTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Total {total}'**
+  String prqLineTotal(String total);
+
+  /// No description provided for @prqReceiveAndPrint.
+  ///
+  /// In en, this message translates to:
+  /// **'Received · print labels'**
+  String get prqReceiveAndPrint;
+
+  /// No description provided for @prqSaving.
+  ///
+  /// In en, this message translates to:
+  /// **'Saving…'**
+  String get prqSaving;
+
+  /// No description provided for @prqReceivedDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Received. Tracking code {code}.'**
+  String prqReceivedDone(String code);
+
+  /// No description provided for @prqAlreadyReceived.
+  ///
+  /// In en, this message translates to:
+  /// **'Already received as {code}.'**
+  String prqAlreadyReceived(String code);
+
+  /// No description provided for @prqPaidOnlineNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid online by card: {amount}. No payment to take.'**
+  String prqPaidOnlineNote(String amount);
+
+  /// No description provided for @prqDescriptionField.
+  ///
+  /// In en, this message translates to:
+  /// **'Description'**
+  String get prqDescriptionField;
+
+  /// No description provided for @prqPayOnArrivalSwitch.
+  ///
+  /// In en, this message translates to:
+  /// **'Receiver pays on arrival'**
+  String get prqPayOnArrivalSwitch;
+
+  /// No description provided for @prqSettingsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Package requests'**
+  String get prqSettingsTitle;
+
+  /// No description provided for @prqAccept.
+  ///
+  /// In en, this message translates to:
+  /// **'Accept package requests'**
+  String get prqAccept;
+
+  /// No description provided for @prqAcceptNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Customers can send you requests from the website and the app.'**
+  String get prqAcceptNote;
+
+  /// No description provided for @prqLinkTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your request link'**
+  String get prqLinkTitle;
+
+  /// No description provided for @prqLinkNone.
+  ///
+  /// In en, this message translates to:
+  /// **'Save once to get your link.'**
+  String get prqLinkNone;
+
+  /// No description provided for @prqCopy.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy'**
+  String get prqCopy;
+
+  /// No description provided for @prqCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Link copied.'**
+  String get prqCopied;
+
+  /// No description provided for @prqShare.
+  ///
+  /// In en, this message translates to:
+  /// **'Share'**
+  String get prqShare;
+
+  /// No description provided for @prqShowQr.
+  ///
+  /// In en, this message translates to:
+  /// **'QR code'**
+  String get prqShowQr;
+
+  /// No description provided for @prqQrHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Print it for your counter. It opens your request form.'**
+  String get prqQrHint;
+
+  /// No description provided for @prqSlugField.
+  ///
+  /// In en, this message translates to:
+  /// **'Link name'**
+  String get prqSlugField;
+
+  /// No description provided for @prqSlugHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Lowercase letters, numbers and dashes. You can change it once.'**
+  String get prqSlugHint;
+
+  /// No description provided for @prqSlugLocked.
+  ///
+  /// In en, this message translates to:
+  /// **'The link name was already changed once.'**
+  String get prqSlugLocked;
+
+  /// No description provided for @prqHoursTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Opening hours'**
+  String get prqHoursTitle;
+
+  /// No description provided for @prqHoursHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Customers bring pieces in these hours. A location with no open day is not offered for drop-off.'**
+  String get prqHoursHint;
+
+  /// No description provided for @prqHeadquarters.
+  ///
+  /// In en, this message translates to:
+  /// **'Main address'**
+  String get prqHeadquarters;
+
+  /// No description provided for @prqDayClosed.
+  ///
+  /// In en, this message translates to:
+  /// **'Closed'**
+  String get prqDayClosed;
+
+  /// No description provided for @prqHoursRange.
+  ///
+  /// In en, this message translates to:
+  /// **'{from} – {to}'**
+  String prqHoursRange(String from, String to);
+
+  /// No description provided for @prqPickupSettingsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'We pick up'**
+  String get prqPickupSettingsTitle;
+
+  /// No description provided for @prqPickupSettingsNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Offer “Collect from me” to customers in the areas you cover.'**
+  String get prqPickupSettingsNote;
+
+  /// No description provided for @prqAreas.
+  ///
+  /// In en, this message translates to:
+  /// **'Areas you cover'**
+  String get prqAreas;
+
+  /// No description provided for @prqAreasHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. Bronx, Harlem, Newark'**
+  String get prqAreasHint;
+
+  /// No description provided for @prqCardBarrels.
+  ///
+  /// In en, this message translates to:
+  /// **'Card payment for barrels'**
+  String get prqCardBarrels;
+
+  /// No description provided for @prqCardBarrelsNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Customers can pay barrels online; those orders show as Expected and paid online.'**
+  String get prqCardBarrelsNote;
+
+  /// No description provided for @prqSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings saved.'**
+  String get prqSaved;
+
+  /// No description provided for @prqOwnerOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the owner can change these settings.'**
+  String get prqOwnerOnly;
+
+  /// No description provided for @prqErrBusinessNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'This request link doesn’t match any business.'**
+  String get prqErrBusinessNotFound;
+
+  /// No description provided for @prqErrBusinessUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This business can’t take requests right now.'**
+  String get prqErrBusinessUnavailable;
+
+  /// No description provided for @prqErrRequestsOff.
+  ///
+  /// In en, this message translates to:
+  /// **'This business stopped taking requests.'**
+  String get prqErrRequestsOff;
+
+  /// No description provided for @prqErrDestinationUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This business no longer ships to that country.'**
+  String get prqErrDestinationUnavailable;
+
+  /// No description provided for @prqErrBringInUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This business no longer offers drop-off.'**
+  String get prqErrBringInUnavailable;
+
+  /// No description provided for @prqErrCollectUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This business no longer offers pickup.'**
+  String get prqErrCollectUnavailable;
+
+  /// No description provided for @prqErrHandoff.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose Bring it in or Collect from me.'**
+  String get prqErrHandoff;
+
+  /// No description provided for @prqErrLocation.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a drop-off location.'**
+  String get prqErrLocation;
+
+  /// No description provided for @prqErrPlannedDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a day between today and 60 days from now.'**
+  String get prqErrPlannedDate;
+
+  /// No description provided for @prqErrPlannedDayClosed.
+  ///
+  /// In en, this message translates to:
+  /// **'The business is closed that day.'**
+  String get prqErrPlannedDayClosed;
+
+  /// No description provided for @prqErrPickupAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the pickup address.'**
+  String get prqErrPickupAddress;
+
+  /// No description provided for @prqErrPickupDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a pickup day between today and 60 days from now.'**
+  String get prqErrPickupDate;
+
+  /// No description provided for @prqErrPickupWindow.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose morning, afternoon or evening.'**
+  String get prqErrPickupWindow;
+
+  /// No description provided for @prqErrSenderName.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your name.'**
+  String get prqErrSenderName;
+
+  /// No description provided for @prqErrSenderPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your WhatsApp number with its country code.'**
+  String get prqErrSenderPhone;
+
+  /// No description provided for @prqErrReceiverName.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the receiver’s name.'**
+  String get prqErrReceiverName;
+
+  /// No description provided for @prqErrReceiverPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the receiver’s phone with its country code.'**
+  String get prqErrReceiverPhone;
+
+  /// No description provided for @prqErrPiecesRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Add at least one piece.'**
+  String get prqErrPiecesRequired;
+
+  /// No description provided for @prqErrTooManyPieces.
+  ///
+  /// In en, this message translates to:
+  /// **'20 pieces at most per request.'**
+  String get prqErrTooManyPieces;
+
+  /// No description provided for @prqErrPieceKind.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose barrel, box or other for each piece.'**
+  String get prqErrPieceKind;
+
+  /// No description provided for @prqErrPieceDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Say what it is.'**
+  String get prqErrPieceDescription;
+
+  /// No description provided for @prqErrTextTooLong.
+  ///
+  /// In en, this message translates to:
+  /// **'Some text is too long. Shorten it.'**
+  String get prqErrTextTooLong;
+
+  /// No description provided for @prqErrTooManyPhotos.
+  ///
+  /// In en, this message translates to:
+  /// **'5 photos at most per piece.'**
+  String get prqErrTooManyPhotos;
+
+  /// No description provided for @prqErrPhotoInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'A photo couldn’t be used. Remove it and add it again.'**
+  String get prqErrPhotoInvalid;
+
+  /// No description provided for @prqErrRateLimited.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many requests in a short time. Try again in an hour.'**
+  String get prqErrRateLimited;
+
+  /// No description provided for @prqErrNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'This request can’t be found.'**
+  String get prqErrNotFound;
+
+  /// No description provided for @prqErrEstimateMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'There is no estimate to confirm yet.'**
+  String get prqErrEstimateMissing;
+
+  /// No description provided for @prqErrCardOrder.
+  ///
+  /// In en, this message translates to:
+  /// **'This order was paid by card. Cancel or refund it from its barrel order.'**
+  String get prqErrCardOrder;
+
+  /// No description provided for @prqErrSlugInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Use 3 to 40 lowercase letters, numbers or dashes.'**
+  String get prqErrSlugInvalid;
+
+  /// No description provided for @prqErrSlugTaken.
+  ///
+  /// In en, this message translates to:
+  /// **'That link name is taken. Try another one.'**
+  String get prqErrSlugTaken;
+
+  /// No description provided for @prqErrHoursInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Each open day needs a start time before its end time.'**
+  String get prqErrHoursInvalid;
+
+  /// No description provided for @prqErrLocationUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'One of the locations no longer exists. Reload and try again.'**
+  String get prqErrLocationUnknown;
+
+  /// No description provided for @prqErrPickupAreas.
+  ///
+  /// In en, this message translates to:
+  /// **'Say which areas you cover.'**
+  String get prqErrPickupAreas;
+
+  /// No description provided for @prqErrLocked.
+  ///
+  /// In en, this message translates to:
+  /// **'Someone else is writing this estimate.'**
+  String get prqErrLocked;
+
+  /// No description provided for @prqErrPieceMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'Every piece needs a price.'**
+  String get prqErrPieceMissing;
+
+  /// No description provided for @prqErrPieceUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'The pieces changed. Refresh and try again.'**
+  String get prqErrPieceUnknown;
+
+  /// No description provided for @prqErrPickupFee.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid pickup fee.'**
+  String get prqErrPickupFee;
+
+  /// No description provided for @prqErrPickupSchedule.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a valid pickup day.'**
+  String get prqErrPickupSchedule;
+
+  /// No description provided for @prqErrReasonRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Give a reason.'**
+  String get prqErrReasonRequired;
+
+  /// No description provided for @prqErrOffline.
+  ///
+  /// In en, this message translates to:
+  /// **'You’re offline. Check your connection and try again.'**
+  String get prqErrOffline;
+
+  /// No description provided for @prqErrAppCheck.
+  ///
+  /// In en, this message translates to:
+  /// **'This app couldn’t be verified. Try again in a moment.'**
+  String get prqErrAppCheck;
+
+  /// No description provided for @prqErrPermission.
+  ///
+  /// In en, this message translates to:
+  /// **'You don’t have access to this.'**
+  String get prqErrPermission;
+
+  /// No description provided for @prqErrGeneric.
+  ///
+  /// In en, this message translates to:
+  /// **'That didn’t work. Try again.'**
+  String get prqErrGeneric;
 }
 
 class _AppLocalizationsDelegate

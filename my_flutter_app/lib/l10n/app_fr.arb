@@ -6322,5 +6322,663 @@
   "zelleFailNoDepositoryAccount": "Choisissez un compte courant ou d'épargne : c'est là qu'arrivent les Zelle.",
   "zelleFailCandidateInvalid": "Ce dépôt ne peut pas servir pour ce paiement. Vérifiez à nouveau.",
   "zelleFailCandidateTaken": "Quelqu'un vient d'associer ce dépôt à un autre paiement. La liste a été revérifiée.",
-  "zelleFailBankError": "La banque n'a pas répondu. Réessayez."
+  "zelleFailBankError": "La banque n'a pas répondu. Réessayez.",
+  "prqSendPackage": "Envoyer un colis",
+  "prqSendPackageSubtitle": "Demandez à une entreprise et recevez une estimation",
+  "prqMyRequests": "Mes demandes",
+  "prqMyRequestsSubtitle": "Estimations et réponses des entreprises",
+  "prqSignInTitle": "Connectez-vous pour envoyer une demande",
+  "prqSignInHint": "Vos demandes et estimations sont gardées dans votre compte.",
+  "prqSignIn": "Se connecter",
+  "prqRetry": "Réessayer",
+  "prqCouldNotLoad": "Chargement impossible. Vérifiez votre connexion et réessayez.",
+  "prqStepCountry": "Où va-t-il ?",
+  "prqPickCountry": "Choisissez un pays",
+  "prqSearchCountry": "Rechercher un pays",
+  "prqStepBusiness": "Qui s’en charge ?",
+  "prqNoBusinesses": "Aucune entreprise ne prend encore de demandes pour ce pays.",
+  "prqNoOptions": "Aucune entreprise ne prend de demandes d’envoi pour le moment.",
+  "prqBusinessStopped": "{name} ne prend pas de demandes pour le moment.",
+  "@prqBusinessStopped": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "prqBarrelPrice": "{price} par baril",
+  "@prqBarrelPrice": {
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "prqBarrelOnEstimate": "Barils sur estimation",
+  "prqStepHandoff": "Comment le leur remettre ?",
+  "prqBringIn": "Je l’apporte",
+  "prqBringInNote": "Je le dépose chez l’entreprise",
+  "prqCollect": "Venez le chercher",
+  "prqCollectNote": "L’entreprise vient le récupérer",
+  "prqUnavailableNote": "Non proposé par cette entreprise",
+  "prqDropOffAt": "Lieu de dépôt",
+  "prqPlannedDay": "Jour où vous prévoyez de venir",
+  "prqPickDay": "Choisissez un jour",
+  "prqHoursOn": "Ouvert de {from} à {to} ce jour-là. Venez à tout moment pendant ces heures.",
+  "@prqHoursOn": {
+    "placeholders": {
+      "from": {
+        "type": "String"
+      },
+      "to": {
+        "type": "String"
+      }
+    }
+  },
+  "prqClosedThatDay": "Fermé ce jour-là. Choisissez un autre jour.",
+  "prqPlanNote": "C’est un projet, pas un rendez-vous.",
+  "prqPickupAddress": "Adresse de ramassage",
+  "prqPickupDay": "Jour souhaité",
+  "prqPickupWindow": "Moment de la journée",
+  "prqWindowMorning": "Matin",
+  "prqWindowAfternoon": "Après-midi",
+  "prqWindowEvening": "Soir",
+  "prqPickupNote": "Note pour le chauffeur (facultatif)",
+  "prqCollectAreas": "Ramasse à : {areas}",
+  "@prqCollectAreas": {
+    "placeholders": {
+      "areas": {
+        "type": "String"
+      }
+    }
+  },
+  "prqCollectTimeNote": "L’entreprise fixe l’heure exacte et les frais de ramassage éventuels dans son estimation.",
+  "prqSender": "Vous (expéditeur)",
+  "prqSenderName": "Votre nom",
+  "prqSenderPhone": "Votre numéro WhatsApp",
+  "prqSenderPhoneHint": "L’estimation arrive sur WhatsApp.",
+  "prqReceiver": "Destinataire",
+  "prqReceiverName": "Nom du destinataire",
+  "prqReceiverPhone": "Téléphone du destinataire",
+  "prqPieces": "Qu’envoyez-vous ?",
+  "prqPieceN": "Colis {n}",
+  "@prqPieceN": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "prqKindBarrel": "Baril",
+  "prqKindBox": "Carton",
+  "prqKindOther": "Autre",
+  "prqWhatIsIt": "Qu’est-ce que c’est ?",
+  "prqWhatIsItHint": "ex. télé, valise, carton de vêtements",
+  "prqBarrelInside": "Contenu (facultatif)",
+  "prqAddPhoto": "Ajouter une photo",
+  "prqPhotosCount": "Photos : {count} sur {max}",
+  "@prqPhotosCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "prqTakePhoto": "Prendre une photo",
+  "prqChoosePhoto": "Choisir dans les photos",
+  "prqPhotoFailed": "Échec de l’envoi. Touchez pour réessayer.",
+  "prqPhotoTooLarge": "Cette photo est trop lourde. Essayez-en une autre.",
+  "prqPhotoNotImage": "Seules les photos peuvent être ajoutées (JPEG, PNG ou WebP).",
+  "prqRemovePhoto": "Retirer la photo",
+  "prqRemovePiece": "Retirer ce colis",
+  "prqAddPiece": "+ Ajouter un autre colis",
+  "prqEstimateNoteBring": "L’entreprise vous envoie une estimation sur WhatsApp avant toute décision. Vous payez au dépôt.",
+  "prqEstimateNoteCollect": "L’entreprise vous envoie une estimation sur WhatsApp avant toute décision. Vous payez au ramassage.",
+  "prqSendRequest": "Envoyer la demande",
+  "prqSending": "Envoi…",
+  "prqWaitPhotos": "Attendez la fin de l’envoi des photos.",
+  "prqFixErrors": "Vérifiez les champs signalés.",
+  "prqSentTitle": "Demande envoyée",
+  "prqSentCode": "Votre code de demande",
+  "prqSentTo": "Envoyée à {business}",
+  "@prqSentTo": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "prqNextSteps": "La suite",
+  "prqNext1": "{business} examine vos colis et vous envoie une estimation sur WhatsApp.",
+  "@prqNext1": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "prqNext1Ready": "Votre estimation est déjà prête : ouvrez-la pour voir les prix.",
+  "prqNext2": "Ouvrez l’estimation et touchez Confirmer si elle vous convient.",
+  "prqNext3Bring": "Apportez vos colis le jour prévu et payez sur place.",
+  "prqNext3Collect": "L’entreprise récupère vos colis et vous payez à ce moment-là.",
+  "prqSeeRequest": "Voir ma demande",
+  "prqMineEmptyTitle": "Aucune demande pour l’instant",
+  "prqMineEmptyHint": "Envoyez un colis pour obtenir une estimation d’une entreprise.",
+  "prqNewRequest": "Nouvelle demande",
+  "prqStatusNew": "Estimation en attente",
+  "prqStatusEstimateSent": "Estimation prête",
+  "prqStatusConfirmed": "Confirmée",
+  "prqStatusReceived": "Reçue",
+  "prqStatusDeclined": "Refusée",
+  "prqStatusYouDeclined": "Vous avez refusé",
+  "prqStatusCustomerDeclined": "Le client a refusé",
+  "prqStatusCancelled": "Annulée",
+  "prqStatusExpired": "Expirée",
+  "prqDetailTitle": "Demande {code}",
+  "@prqDetailTitle": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "prqStateWaiting": "{business} prépare votre estimation.",
+  "@prqStateWaiting": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "prqStateWaitingHint": "Vous la recevrez sur WhatsApp et ici.",
+  "prqStateAwaiting": "Votre estimation est prête",
+  "prqStateAwaitingHint": "Confirmez-la si elle vous convient. Rien n’est payé maintenant.",
+  "prqStateConfirmed": "Vous avez confirmé cette estimation",
+  "prqStateConfirmedByPhone": "Confirmée par téléphone avec {business}",
+  "@prqStateConfirmedByPhone": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "prqPriceDropped": "Le prix a baissé depuis votre confirmation. Rien d’autre à faire.",
+  "prqStateReceived": "{business} a reçu vos colis",
+  "@prqStateReceived": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "prqTrackingCode": "Code de suivi {code}",
+  "@prqTrackingCode": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "prqTrack": "Suivre",
+  "prqStateDeclined": "{business} a refusé cette demande",
+  "@prqStateDeclined": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "prqStateCancelled": "{business} a annulé cette demande",
+  "@prqStateCancelled": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "prqReason": "Motif : {reason}",
+  "@prqReason": {
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "prqStateCustomerDeclined": "Vous avez refusé cette estimation",
+  "prqStateExpired": "Cette demande a expiré",
+  "prqStateExpiredHint": "Envoyez une nouvelle demande si vous avez encore besoin d’expédier.",
+  "prqChangedBanner": "Cette estimation a changé — voyez la nouvelle ci-dessous.",
+  "prqAnswerBy": "Répondez avant le {date}",
+  "@prqAnswerBy": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "prqConfirm": "Confirmer",
+  "prqNoThanks": "Non merci",
+  "prqNoThanksTitle": "Refuser cette estimation ?",
+  "prqNoThanksMessage": "L’entreprise en est informée. Vous pouvez dire pourquoi (facultatif).",
+  "prqReasonOptional": "Motif (facultatif)",
+  "prqConfirmedDone": "Estimation confirmée.",
+  "prqAlreadyConfirmed": "Vous aviez déjà confirmé cette estimation.",
+  "prqDeclinedDone": "C’est fait. L’entreprise est informée.",
+  "prqTotal": "Total",
+  "prqPickupFee": "Frais de ramassage",
+  "prqPriceToCome": "Prix à venir",
+  "prqWhereWhen": "Où et quand",
+  "prqBringTo": "À déposer à",
+  "prqPlannedFor": "Prévu le {day}",
+  "@prqPlannedFor": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "prqPickupAt": "Ramassage à",
+  "prqDayWindow": "{day}, {window}",
+  "@prqDayWindow": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      },
+      "window": {
+        "type": "String"
+      }
+    }
+  },
+  "prqCallBusiness": "Appeler {business}",
+  "@prqCallBusiness": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "prqBusinessNote": "Note de l’entreprise",
+  "prqPayAtDropOff": "Vous payez au dépôt.",
+  "prqPayAtPickup": "Vous payez au ramassage.",
+  "prqNotBinding": "Le prix final est fixé quand l’entreprise voit vos colis.",
+  "prqToReceiver": "Pour {name} · {country}",
+  "@prqToReceiver": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "country": {
+        "type": "String"
+      }
+    }
+  },
+  "prqBarrelsCount": "{count, plural, =1{1 baril} other{{count} barils}}",
+  "@prqBarrelsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "prqBoxesCount": "{count, plural, =1{1 carton} other{{count} cartons}}",
+  "@prqBoxesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "prqOthersCount": "{count, plural, =1{1 autre article} other{{count} autres articles}}",
+  "@prqOthersCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "prqPiecesCount": "{count, plural, =1{1 colis} other{{count} colis}}",
+  "@prqPiecesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "prqRequestsTitle": "Demandes",
+  "prqEntryCount": "{count, plural, =0{Aucune demande ouverte} =1{1 demande ouverte} other{{count} demandes ouvertes}}",
+  "@prqEntryCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "prqEntryHint": "Les clients demandent, vous envoyez l’estimation",
+  "prqChipNeedsEstimate": "À estimer · {count}",
+  "@prqChipNeedsEstimate": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "prqChipWaitingCustomer": "En attente du client · {count}",
+  "@prqChipWaitingCustomer": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "prqEmptyNeedsEstimate": "Rien à estimer",
+  "prqEmptyWaiting": "Aucune estimation en attente de réponse",
+  "prqEmptyHint": "Les demandes de vos clients apparaissent ici.",
+  "prqBringsItOn": "L’apporte le {day}",
+  "@prqBringsItOn": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "prqCollectOn": "Ramassage {day}, {window}",
+  "@prqCollectOn": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      },
+      "window": {
+        "type": "String"
+      }
+    }
+  },
+  "prqNoDay": "Aucun jour indiqué",
+  "prqLockedBy": "{name} rédige l’estimation",
+  "@prqLockedBy": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "prqAgreedByPhone": "Le client a accepté par téléphone",
+  "prqAgreedByPhoneTitle": "Le client a accepté par téléphone ?",
+  "prqAgreedByPhoneMessage": "Cela confirme la version {version} de l’estimation ({total}) pour le client. L’historique indique que c’est vous.",
+  "@prqAgreedByPhoneMessage": {
+    "placeholders": {
+      "version": {
+        "type": "int"
+      },
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "prqAgreedDone": "Confirmée pour le client.",
+  "prqNotReachable": "Client injoignable sur WhatsApp",
+  "prqSentOn": "Envoyée le {date}",
+  "@prqSentOn": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "prqEstimateTotal": "Estimation {total}",
+  "@prqEstimateTotal": {
+    "placeholders": {
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "prqSettings": "Réglages des demandes",
+  "prqCustomer": "Client",
+  "prqEstimateTitle": "Estimation",
+  "prqLockMine": "Vous rédigez cette estimation. Les autres la voient verrouillée.",
+  "prqLockOther": "{name} rédige l’estimation jusqu’à {time}. Vous pouvez la lire.",
+  "@prqLockOther": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "prqLockLapsed": "{name} a cessé d’écrire. Vous pouvez reprendre.",
+  "@prqLockLapsed": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "prqTakeOver": "Reprendre",
+  "prqLockLost": "Quelqu’un d’autre a repris cette estimation.",
+  "prqStaleBanner": "Cette demande a changé pendant votre saisie.",
+  "prqRefresh": "Actualiser",
+  "prqPriceField": "Prix ($)",
+  "prqPriceRequired": "Indiquez un prix.",
+  "prqPriceInvalid": "Indiquez un montant comme 45 ou 45,50.",
+  "prqPickupFeeField": "Frais de ramassage ($, facultatif)",
+  "prqPickupScheduleDay": "Jour de ramassage prévu",
+  "prqNoteToCustomer": "Note au client (facultatif)",
+  "prqSendEstimate": "Envoyer l’estimation sur WhatsApp",
+  "prqEstimateSentDone": "Estimation envoyée.",
+  "prqEstimateReconfirm": "Estimation envoyée. Le total a augmenté : le client doit confirmer à nouveau.",
+  "prqEstimatePriceDropped": "Estimation envoyée. Le total a baissé ; la demande reste confirmée.",
+  "prqDecline": "Refuser la demande",
+  "prqDeclineTitle": "Refuser cette demande ?",
+  "prqDeclineMessage": "Le client voit votre motif sur sa demande.",
+  "prqReasonLabel": "Motif",
+  "prqDeclined": "Demande refusée.",
+  "prqPhotoOf": "Photo {n} sur {count}",
+  "@prqPhotoOf": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "prqAutoEstimate": "Prix des barils envoyé automatiquement",
+  "prqVersionBy": "Version {version} · {name}",
+  "@prqVersionBy": {
+    "placeholders": {
+      "version": {
+        "type": "int"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "prqClosed": "Cette demande est close.",
+  "prqActSubmitted": "Envoyée par le client",
+  "prqActEstimateSent": "Estimation v{version} envoyée · {total}",
+  "@prqActEstimateSent": {
+    "placeholders": {
+      "version": {
+        "type": "int"
+      },
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "prqActConfirmedLink": "Le client a confirmé",
+  "prqActConfirmedPhone": "Confirmée par téléphone",
+  "prqActConfirmedCard": "Payée en ligne par carte",
+  "prqActCustomerDeclined": "Le client a refusé",
+  "prqActDeclined": "Refusée",
+  "prqActCancelled": "Annulée",
+  "prqActExpired": "Expirée",
+  "prqActReceived": "Reçue",
+  "prqActLockTakenOver": "A repris l’estimation",
+  "prqActReminderSent": "Rappel envoyé",
+  "prqActOther": "Mise à jour",
+  "prqExpectedTitle": "Attendus · {count}",
+  "@prqExpectedTitle": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "prqInShopTitle": "En boutique · {count}",
+  "@prqInShopTitle": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "prqReceived": "Reçu",
+  "prqPickedUpReceived": "Ramassé · Reçu",
+  "prqCancelRequest": "Annuler la demande",
+  "prqCancelTitle": "Annuler cette demande ?",
+  "prqCancelMessage": "Le client voit votre motif sur sa demande.",
+  "prqCancelledDone": "Demande annulée.",
+  "prqPaidOnline": "Payé en ligne",
+  "prqPlannedDayShort": "Prévu le {day}",
+  "@prqPlannedDayShort": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "prqReceiveTitle": "Colis reçus",
+  "prqReceiveSubtitle": "{code} · confirmez le prix final de chaque colis",
+  "@prqReceiveSubtitle": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "prqFinalPrice": "Prix final ($)",
+  "prqPriceAllOrNone": "Indiquez le prix de chaque colis, ou d’aucun.",
+  "prqLineTotal": "Total {total}",
+  "@prqLineTotal": {
+    "placeholders": {
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "prqReceiveAndPrint": "Reçu · imprimer les étiquettes",
+  "prqSaving": "Enregistrement…",
+  "prqReceivedDone": "Reçu. Code de suivi {code}.",
+  "@prqReceivedDone": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "prqAlreadyReceived": "Déjà reçu sous {code}.",
+  "@prqAlreadyReceived": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "prqPaidOnlineNote": "Payé en ligne par carte : {amount}. Aucun paiement à encaisser.",
+  "@prqPaidOnlineNote": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "prqDescriptionField": "Description",
+  "prqPayOnArrivalSwitch": "Le destinataire paie à l’arrivée",
+  "prqSettingsTitle": "Demandes d’envoi",
+  "prqAccept": "Accepter les demandes d’envoi",
+  "prqAcceptNote": "Les clients peuvent vous envoyer des demandes depuis le site et l’appli.",
+  "prqLinkTitle": "Votre lien de demande",
+  "prqLinkNone": "Enregistrez une fois pour obtenir votre lien.",
+  "prqCopy": "Copier",
+  "prqCopied": "Lien copié.",
+  "prqShare": "Partager",
+  "prqShowQr": "Code QR",
+  "prqQrHint": "Imprimez-le pour votre comptoir. Il ouvre votre formulaire de demande.",
+  "prqSlugField": "Nom du lien",
+  "prqSlugHint": "Lettres minuscules, chiffres et tirets. Modifiable une seule fois.",
+  "prqSlugLocked": "Le nom du lien a déjà été modifié une fois.",
+  "prqHoursTitle": "Heures d’ouverture",
+  "prqHoursHint": "Les clients apportent leurs colis pendant ces heures. Un lieu sans jour ouvert n’est pas proposé pour le dépôt.",
+  "prqHeadquarters": "Adresse principale",
+  "prqDayClosed": "Fermé",
+  "prqHoursRange": "{from} – {to}",
+  "@prqHoursRange": {
+    "placeholders": {
+      "from": {
+        "type": "String"
+      },
+      "to": {
+        "type": "String"
+      }
+    }
+  },
+  "prqPickupSettingsTitle": "Nous ramassons",
+  "prqPickupSettingsNote": "Proposez « Venez le chercher » aux clients des zones que vous couvrez.",
+  "prqAreas": "Zones couvertes",
+  "prqAreasHint": "ex. Bronx, Harlem, Newark",
+  "prqCardBarrels": "Paiement par carte pour les barils",
+  "prqCardBarrelsNote": "Les clients peuvent payer les barils en ligne ; ces commandes apparaissent comme attendues et payées en ligne.",
+  "prqSaved": "Réglages enregistrés.",
+  "prqOwnerOnly": "Seul le propriétaire peut modifier ces réglages.",
+  "prqErrBusinessNotFound": "Ce lien de demande ne correspond à aucune entreprise.",
+  "prqErrBusinessUnavailable": "Cette entreprise ne peut pas prendre de demandes pour le moment.",
+  "prqErrRequestsOff": "Cette entreprise ne prend plus de demandes.",
+  "prqErrDestinationUnavailable": "Cette entreprise n’expédie plus vers ce pays.",
+  "prqErrBringInUnavailable": "Cette entreprise ne propose plus le dépôt.",
+  "prqErrCollectUnavailable": "Cette entreprise ne propose plus le ramassage.",
+  "prqErrHandoff": "Choisissez Je l’apporte ou Venez le chercher.",
+  "prqErrLocation": "Choisissez un lieu de dépôt.",
+  "prqErrPlannedDate": "Choisissez un jour entre aujourd’hui et dans 60 jours.",
+  "prqErrPlannedDayClosed": "L’entreprise est fermée ce jour-là.",
+  "prqErrPickupAddress": "Indiquez l’adresse de ramassage.",
+  "prqErrPickupDate": "Choisissez un jour de ramassage entre aujourd’hui et dans 60 jours.",
+  "prqErrPickupWindow": "Choisissez matin, après-midi ou soir.",
+  "prqErrSenderName": "Indiquez votre nom.",
+  "prqErrSenderPhone": "Indiquez votre numéro WhatsApp avec l’indicatif du pays.",
+  "prqErrReceiverName": "Indiquez le nom du destinataire.",
+  "prqErrReceiverPhone": "Indiquez le téléphone du destinataire avec l’indicatif du pays.",
+  "prqErrPiecesRequired": "Ajoutez au moins un colis.",
+  "prqErrTooManyPieces": "20 colis au maximum par demande.",
+  "prqErrPieceKind": "Choisissez baril, carton ou autre pour chaque colis.",
+  "prqErrPieceDescription": "Dites ce que c’est.",
+  "prqErrTextTooLong": "Un texte est trop long. Raccourcissez-le.",
+  "prqErrTooManyPhotos": "5 photos au maximum par colis.",
+  "prqErrPhotoInvalid": "Une photo n’a pas pu être utilisée. Retirez-la et ajoutez-la de nouveau.",
+  "prqErrRateLimited": "Trop de demandes en peu de temps. Réessayez dans une heure.",
+  "prqErrNotFound": "Cette demande est introuvable.",
+  "prqErrEstimateMissing": "Il n’y a pas encore d’estimation à confirmer.",
+  "prqErrCardOrder": "Cette commande a été payée par carte. Annulez-la ou remboursez-la depuis sa commande de baril.",
+  "prqErrSlugInvalid": "Utilisez 3 à 40 lettres minuscules, chiffres ou tirets.",
+  "prqErrSlugTaken": "Ce nom de lien est déjà pris. Essayez-en un autre.",
+  "prqErrHoursInvalid": "Chaque jour ouvert doit avoir une heure de début avant l’heure de fin.",
+  "prqErrLocationUnknown": "Un des lieux n’existe plus. Rechargez et réessayez.",
+  "prqErrPickupAreas": "Indiquez les zones que vous couvrez.",
+  "prqErrLocked": "Quelqu’un d’autre rédige cette estimation.",
+  "prqErrPieceMissing": "Chaque colis doit avoir un prix.",
+  "prqErrPieceUnknown": "Les colis ont changé. Actualisez et réessayez.",
+  "prqErrPickupFee": "Indiquez des frais de ramassage valides.",
+  "prqErrPickupSchedule": "Choisissez un jour de ramassage valide.",
+  "prqErrReasonRequired": "Indiquez un motif.",
+  "prqErrOffline": "Vous êtes hors ligne. Vérifiez votre connexion et réessayez.",
+  "prqErrAppCheck": "L’appli n’a pas pu être vérifiée. Réessayez dans un instant.",
+  "prqErrPermission": "Vous n’avez pas accès à cela.",
+  "prqErrGeneric": "Cela n’a pas fonctionné. Réessayez."
 }
