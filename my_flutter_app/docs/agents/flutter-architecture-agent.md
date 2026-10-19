@@ -343,3 +343,9 @@ Add future project conventions and repeated architectural decisions here.
   daylight time the Duration lands on the evening before and a day-picker's
   `day()` drops the last day.
 
+- French money on screen is `formatLotCents` ("190,00 $"), following the
+  app language set by the shell (`setMoneyDisplayLanguage` in main.dart);
+  freight keeps its deliberate en_US `freightMoney`. Piece words in French:
+  baril / carton / autre, a piece in general "colis" (all clients and the
+  server's WhatsApp words). Nobody is shown by uid: `personDisplayName`
+  (fullName, displayName, name, email), then "Team member" / "Business owner".

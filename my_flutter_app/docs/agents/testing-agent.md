@@ -570,3 +570,16 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   Firestore triggers (volume rollups) fire there on their own, unlike the
   exec'd suites. Any dialog fed a stand-in row after a write (labels after
   Received) must get the fields it counts from, not just id and code.
+- Flutter web build against the emulators (`--dart-define=USE_FIREBASE_EMULATORS=true`
+  plus the private ports): a page RELOAD while an emulator session is persisted
+  in IndexedDB sent `signInWithPassword` to production identitytoolkit (seen
+  1.0.17; `performance.getEntriesByType('resource')` shows it). Before
+  reloading, delete IndexedDB (`indexedDB.databases()` -> deleteDatabase) and
+  check the auth requests hit 127.0.0.1. In a hidden browser pane Flutter
+  renders late: wait 2-4 s between taps and before typing, or keystrokes land
+  in the wrong field. A seeded business user needs `businessServices` on the
+  profile for the app's Containers entry (`hasContainersAccess`).
+- A list that draws the same card in two branches (the Waiting list with and
+  without Expected above it) must pass the same inputs in both: make the
+  input `required` so the compiler finds the branch that forgot it
+  (`WaitingPackageCard.group`, test/click_through_1_0_17_test.dart).
