@@ -619,3 +619,9 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   back empty with "Load more": the server reads Auth pages until full
   (bounded) and the console's `collectPeoplePages` keeps calling until a
   full page or no token.
+- Linking a phone number another Auth user holds fails differently per
+  SDK: the web SDK (console and Flutter web) throws
+  `auth/account-exists-with-different-credential` with the proof in
+  `customData`, native SDKs throw `credential-already-in-use`. Check both
+  (`phoneHeldByAnotherAccount`); only a real link against the Auth emulator
+  shows it - unit tests with a hand-made error code cannot.
