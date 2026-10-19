@@ -91,7 +91,13 @@ test("shared-barrel acknowledgements keep compact checkboxes inside the form", (
 
 test("narrow parking layouts keep headings and fields in one readable column", () => {
   const tabletBreakpoint = styles.lastIndexOf("@media (max-width: 820px)");
-  const narrowBreakpoint = styles.lastIndexOf("@media (max-width: 560px)");
+  // The phone block that holds the parking rules (other features add their
+  // own 560px blocks later in the file); it must still follow the tablet one.
+  let narrowBreakpoint = styles.lastIndexOf("@media (max-width: 560px)");
+  while (narrowBreakpoint >= 0 &&
+    !styles.slice(narrowBreakpoint, styles.indexOf("\n}\n", narrowBreakpoint)).includes(".customer-parking-search-grid")) {
+    narrowBreakpoint = styles.lastIndexOf("@media (max-width: 560px)", narrowBreakpoint - 1);
+  }
   assert.ok(narrowBreakpoint > tabletBreakpoint);
   const narrowStyles = styles.slice(narrowBreakpoint);
   assert.match(
