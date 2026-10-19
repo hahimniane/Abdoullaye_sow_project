@@ -5,10 +5,12 @@
  * §2). Pure - no Firestore, no network.
  *
  * Staff still type local numbers (phone_number.js accepts them, and old app
- * versions saved them). A local number is turned into E.164 only when it
- * clearly fits the business's own country's numbering plan; anything else is
- * reported as `needs_country_code` and left for staff to fix - never guessed,
- * because a guessed number signs a stranger into someone's packages.
+ * versions saved them). A local number is turned into E.164 only for a
+ * NANP business (US, Canada and the other +1 countries) and only when it is
+ * exactly ten valid NANP digits (or 1 + those ten). For every other business
+ * country it is reported as `needs_country_code` and left for staff to fix -
+ * never guessed, because a guessed number signs a stranger into someone's
+ * packages. The curated plans below only CHECK international numbers.
  */
 
 const {
@@ -150,8 +152,10 @@ function toE164(raw, options = {}) {
   if (digits.length < 6 || digits.length > 15) {
     return {status: STATUS.INVALID, e164: ""};
   }
+  // Only NANP is ever guessed (docs/PHONE_ACCOUNTS.md §2).
   const plan = planFor(options.regionIso);
-  const national = plan ? nationalFit(digits, plan, false) : "";
+  const national = plan && plan.callingCode === "1" ?
+    nationalFit(digits, plan, false) : "";
   return national ?
     {status: STATUS.OK, e164: `+${plan.callingCode}${national}`} :
     {status: STATUS.NEEDS_COUNTRY_CODE, e164: ""};

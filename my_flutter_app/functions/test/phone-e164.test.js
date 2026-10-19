@@ -88,28 +88,22 @@ describe("toE164 - local numbers", () => {
     // A country with no curated plan.
     assert.deepEqual(toE164("030 1234567", {regionIso: "DE"}), needs);
   });
-  it("knows the West African plans", () => {
-    assert.deepEqual(toE164("622 12 34 56", {regionIso: "GN"}),
-        ok("+224622123456"));
-    assert.deepEqual(toE164("77 123 45 67", {regionIso: "SN"}),
-        ok("+221771234567"));
-    assert.deepEqual(toE164("76 12 34 56", {regionIso: "ML"}),
-        ok("+22376123456"));
-    assert.deepEqual(toE164("07 12 34 56 78", {regionIso: "CI"}),
-        ok("+2250712345678"));
-    assert.deepEqual(toE164("701 2345", {regionIso: "GM"}),
-        ok("+2207012345"));
-    assert.deepEqual(toE164("076 123456", {regionIso: "SL"}),
-        ok("+23276123456"));
+  it("never guesses outside NANP, even a number that fits the country", () => {
+    // Owner decision: only US/Canada (NANP) businesses get a code added.
+    for (const [raw, regionIso] of [["622 12 34 56", "GN"],
+      ["77 123 45 67", "SN"], ["76 12 34 56", "ML"],
+      ["07 12 34 56 78", "CI"], ["701 2345", "GM"], ["076 123456", "SL"],
+      ["06 12 34 56 78", "FR"], ["024 412 3456", "GH"],
+      ["0803 123 4567", "NG"], ["07700 900123", "GB"]]) {
+      assert.deepEqual(toE164(raw, {regionIso}), needs, `${regionIso} ${raw}`);
+    }
   });
-  it("requires the trunk 0 where bare digits are not clearly local", () => {
-    assert.deepEqual(toE164("06 12 34 56 78", {regionIso: "FR"}),
-        ok("+33612345678"));
-    assert.deepEqual(toE164("612345678", {regionIso: "FR"}), needs);
-    assert.deepEqual(toE164("024 412 3456", {regionIso: "GH"}),
-        ok("+233244123456"));
-    assert.deepEqual(toE164("0803 123 4567", {regionIso: "NG"}),
-        ok("+2348031234567"));
+  it("still checks international numbers against the curated plans", () => {
+    assert.deepEqual(toE164("+224 622 12 34 56", {regionIso: "GN"}),
+        ok("+224622123456"));
+    assert.deepEqual(toE164("+221 77 123 45 67"), ok("+221771234567"));
+    assert.deepEqual(toE164("+234 0803 123 4567"), ok("+2348031234567"));
+    assert.deepEqual(toE164("+224 522 12 34 56"), invalid);
   });
 });
 

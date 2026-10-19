@@ -4,7 +4,12 @@ const assert = require("node:assert/strict");
 const {describe, it} = require("node:test");
 
 const {
+  COUNTRY_SENDS_PER_DAY,
+  GLOBAL_SENDS_PER_DAY,
   MAX_CODE_ATTEMPTS,
+  phoneSignInAllowed,
+  proofAcceptable,
+  trackingLimitKey,
   PHONE_RECORD_SOURCES,
   codeAttempt,
   codeHash,
@@ -25,6 +30,7 @@ const {
   shipmentQueries,
 } = require("../phone_accounts");
 const {signInHints} = require("../guest_tracking");
+const {addressBucket} = require("../request_guard");
 
 describe("record phones", () => {
   it("knows sender and receiver fields of every source", () => {
@@ -175,9 +181,12 @@ describe("login codes", () => {
     assert.deepEqual([soon.allowed, soon.retryAfterMs], [false, 25000]);
     assert.equal(day.limit, 10);
     assert.deepEqual(loginSendLimits({phone: "+1", ip: "1.2.3.4",
-      trackingCode: "CL-1"}).map((l) => [l.kind, l.limit]), [
-      ["phone_hour", 5], ["phone_day", 10], ["ip_hour", 20],
-      ["tracking_hour", 5]]);
+      trackingCode: "CL-1", callingCode: "224"}).map((l) =>
+      [l.kind, l.key, l.limit]), [
+      ["phone_hour", "+1", 5], ["phone_day", "+1", 10],
+      ["ip_hour", "1.2.3.4", 20], ["tracking_hour", "CL1", 5],
+      ["country_day", "224", COUNTRY_SENDS_PER_DAY],
+      ["global_day", "all", GLOBAL_SENDS_PER_DAY]]);
   });
 });
 
@@ -316,5 +325,84 @@ describe("tracking page sign-in hints", () => {
     assert.deepEqual(signInHints({customerPhone: "2025550135"}), []);
     assert.deepEqual(signInHints({customerPhone: "+12025550135",
       receiverPhone: "+1 202 555 0135"}), [{role: "sender", lastTwo: "35"}]);
+  });
+});
+
+// Review fixes (2026-10): cost abuse, customer-only, merge proof.
+describe("send limits cannot be dodged", () => {
+  it("counts every spelling of a tracking code as one", () => {
+    for (const spelling of ["CL-K7M4P2", "cl-k7m4p2", " cl k7m 4p2 ",
+      "CL/K7M4P2"]) {
+      assert.equal(trackingLimitKey(spelling), "CLK7M4P2", spelling);
+    }
+    assert.equal(trackingLimitKey(""), "");
+  });
+  it("counts an IPv6 caller by its /64, an IPv4 caller by its address",
+      () => {
+        assert.equal(addressBucket("2001:db8:1:2:aaaa:bbbb:cccc:dddd"),
+            "2001:db8:1:2::/64");
+        assert.equal(addressBucket("2001:db8:1:2::ffff"),
+            "2001:db8:1:2::/64");
+        assert.equal(addressBucket("[2001:0db8:0001:0002::5]:443"),
+            "2001:db8:1:2::/64");
+        assert.notEqual(addressBucket("2001:db8:1:3::1"),
+            addressBucket("2001:db8:1:2::1"));
+        assert.equal(addressBucket("203.0.113.9"), "203.0.113.9");
+        assert.equal(addressBucket("::ffff:203.0.113.9"), "203.0.113.9");
+        assert.equal(addressBucket("unknown"), "");
+        assert.equal(addressBucket(""), "");
+      });
+  it("caps the platform and each calling code per day", () => {
+    const limits = loginSendLimits({phone: "+224622123456", ip: "",
+      trackingCode: "", callingCode: "224"});
+    const global = limits.find((l) => l.kind === "global_day");
+    const country = limits.find((l) => l.kind === "country_day");
+    assert.equal(global.windowMs, 24 * 60 * 60 * 1000);
+    assert.equal(country.key, "224");
+    const full = {count: GLOBAL_SENDS_PER_DAY, windowStartMs: 1000,
+      lastAtMs: 1000};
+    assert.equal(limitDecision(full, global, 2000).allowed, false);
+  });
+});
+
+describe("phone sign-in is for customers only", () => {
+  it("lets customers and new numbers in, nobody with business or " +
+      "platform access", () => {
+    assert.equal(phoneSignInAllowed(null), true);
+    assert.equal(phoneSignInAllowed({role: "customer"}), true);
+    assert.equal(phoneSignInAllowed({}), true);
+    for (const profile of [{role: "staff", businessId: "b"},
+      {role: "businessOwner"}, {role: "admin"},
+      {role: "customer", platformAdmin: true},
+      {role: "customer", adminRole: "supportAdmin"},
+      {role: "customer", businessId: "b"},
+      {role: "customer", businessPermissions: ["containers"]}]) {
+      assert.equal(phoneSignInAllowed(profile), false,
+          JSON.stringify(profile));
+    }
+  });
+});
+
+describe("merge proof", () => {
+  const now = 1700000000000;
+  const good = {uid: "holder", phone_number: "+12025550123",
+    auth_time: now / 1000 - 60, firebase: {sign_in_provider: "phone"}};
+  const expected = {e164: "+12025550123", holderUid: "holder", nowMs: now};
+  it("accepts a fresh phone sign-in of that number by its holder", () => {
+    assert.equal(proofAcceptable(good, expected), true);
+  });
+  it("refuses a stale, foreign or different-number proof", () => {
+    assert.equal(proofAcceptable({...good, auth_time: now / 1000 - 301},
+        expected), false);
+    assert.equal(proofAcceptable({...good, uid: "someone"}, expected),
+        false);
+    assert.equal(proofAcceptable(good, {...expected, holderUid: ""}), false);
+    assert.equal(proofAcceptable({...good, phone_number: "+12025550199"},
+        expected), false);
+    assert.equal(proofAcceptable({...good,
+      firebase: {sign_in_provider: "password"}}, expected), false);
+    assert.equal(proofAcceptable({...good, auth_time: undefined}, expected),
+        false);
+    assert.equal(proofAcceptable(null, expected), false);
   });
 });

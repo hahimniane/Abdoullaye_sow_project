@@ -25,18 +25,18 @@ mirrored for display only by the clients - the server is the authority):
     `lib/data/calling_code_catalog.dart`, drift-tested), 8-15 digits in all,
     and when the country is in the curated numbering-plan table, the exact
     national length and leading digits of that plan.
-  - `"needs_country_code"` - no country code and the number does NOT clearly
-    fit the business's country. Nothing is guessed.
+  - `"needs_country_code"` - no country code, and not a NANP business's
+    ten-digit number. Nothing is guessed.
   - `"empty"` / `"invalid"`.
-  - A local number becomes E.164 only when the business country is in the
-    curated plan table and the digits fit it exactly: a US/Canada (NANP)
-    business and exactly 10 digits `NXX NXX XXXX` (N = 2-9) or `1` + those 10
-    -> `+1...`; Guinea 9 digits starting 6 or 3; Senegal 9 digits starting 7
-    or 3; Mali 8; Côte d'Ivoire 10 starting 01/05/07/21/25/27; France `0` +
-    9 digits (trunk 0 dropped); UK `0` + 10; Ghana `0` + 9; Nigeria `0` + 10;
-    Cameroon 9 starting 6 or 2; Burkina Faso, Niger, Togo 8; Benin 10 starting
-    01; Gambia 7; Sierra Leone `0` + 8; Liberia `0` + 7-8. Any other country:
-    `needs_country_code`.
+  - A local number becomes E.164 ONLY for a NANP business (US, Canada and
+    the other +1 countries) and only when it is exactly 10 digits
+    `NXX NXX XXXX` (N = 2-9) or `1` + those 10 -> `+1...`. For every other
+    business country - even a number that fits that country's plan - the
+    answer is `needs_country_code` and staff see "Add the country code"
+    (owner decision after review). The curated plans (Guinea, Senegal, Mali,
+    Côte d'Ivoire, Cameroon, Burkina Faso, Niger, Togo, Benin, Gambia,
+    France, UK, Ghana, Nigeria, Sierra Leone) only CHECK international
+    numbers: length and leading digits after the calling code.
 - `sameNumber(raw, e164)` - read-time check that a record's raw field still
   is the account's number (digits of raw, leading zeros dropped, are the tail
   of the E.164 digits, at least 7 of them).
@@ -104,9 +104,18 @@ A stamp-only write changes no status, payment or count, so the triggers it
 re-fires are no-ops (volume rollups compare signatures; notify triggers check
 status/payment transitions).
 
-Known gap, accepted: the legacy direct client create of a `transportRequests`
-document (old staff app path, `isLegacyTransportRecord`) is stamped on its
-first update or by the backfill, not at create.
+Records a client creates directly fire no trigger (the barrel, freight and
+transport triggers fire on update only, and a deployed trigger's event type
+cannot be changed in place). Two covers, no new function:
+
+- the app's legacy staff transport form asks right after saving:
+  `phoneAccount({action: "syncRecord", key: "transportRequests/<id>"})`
+  (the record's customer or someone with that section of its business);
+- every hour `sweepPackageRequests` (existing, maxInstances 1) first runs
+  `sweepRecentRecordPhones`: `barrelShipments`, `freightShipments` and
+  `transportRequests` created in the last 3 hours, 200 each, 40-second
+  budget, stamping what old app versions left and retrying numbers whose
+  account failed. It never fails the package sweep.
 
 ## 4. Accounts made from a record
 
@@ -133,8 +142,10 @@ notificationPreferences: defaults, createdAt, updatedAt
 ```
 
 Never for an empty, invalid or `needs_country_code` number. Best-effort: any
-failure is logged and swallowed - a staff save never fails because of it -
-and the next write or the backfill retries.
+failure is logged and swallowed - a staff save never fails because of it.
+Accounts are made BEFORE the number is stamped: a number whose account
+failed stays unstamped, so the next write of the record, the hourly sweep
+(§3.1) or the backfill tries again (`syncRecordPhones`).
 
 A profile is "not signed in yet" while `accountOrigin == "shipment"` and
 `firstSignInAt == null`. Such an account is a placeholder for merging (§7).
@@ -178,7 +189,9 @@ resendAfterMs}`. Refusals carry `details.reason`:
 `phone_invalid`, `needs_country_code`, `tracking_not_found`,
 `no_phone_on_record`, `rate_limited` (with `retryAfterMs`),
 `whatsapp_unavailable` (secrets unset / Meta refused: offer SMS),
-`sign_in_required` (link without a real account).
+`sign_in_required` (link without a real account),
+`phone_sign_in_unavailable` (link by an account with business or platform
+access).
 
 `verifyPhoneLoginCode({challengeId, code})`:
 - sign-in purpose -> `{customToken, uid, isNewAccount}`; the client calls
@@ -198,14 +211,32 @@ createdAtMs, source: phone|tracking}`. The code is 6 random digits
 (`crypto.randomInt`), never stored or logged in clear. 5 wrong attempts lock
 the challenge. A used challenge cannot be reused.
 
+Who is actually sent a code (cost): a sign-in code goes out only to a number
+that has an account a phone may open (a customer), or that some record
+carries (a deleted account comes back that way). Any other number - and a
+staff/owner/admin number - gets the very same answer, its limits are
+counted the same, and its challenge holds the hash of a code nobody sees,
+so every attempt is `code_wrong`. Nothing tells a caller whether a number is
+known. A link code (signed-in customer adding a number) is always sent.
+
+Customers only: phone-code sign-in and linking refuse any account with
+business or platform access (role not `customer`, `businessId`,
+`businessPermissions`, `platformAdmin`, `adminRole`) with
+`phone_sign_in_unavailable` ("Use your email and password"). Linking also
+needs an existing customer profile, as `syncVerifiedCustomerPhone` does. A
+text sign-in to such an account reaches Firebase, but `completePhoneSignIn`
+refuses it and both clients sign straight out.
+
 Rate limits (`phoneLoginLimits/{sha256(kind:key)}`, server only; enforced in
 the emulator too):
 
 | Key | Limit |
 | --- | --- |
 | per number | 5 sends / hour, 10 / day |
-| per client address (`clientAddressFromRequest`; skipped when "unknown") | 20 sends / hour |
-| per tracking code (masked flow) | 5 sends / hour |
+| per client address (`clientAddressFromRequest`; IPv6 by its /64 - `request_guard.addressBucket`; skipped when "unknown") | 20 sends / hour |
+| per tracking code (masked flow; every spelling one key - `trackingLimitKey`) | 5 sends / hour |
+| per calling code (+224, +1, ...) | 600 sends / day; hitting it logs an ERROR (alert) |
+| the whole platform | 3,000 sends / day; hitting it logs an ERROR (alert) |
 | resend | 30 s after the previous send to the same number |
 
 ### 5.2 SMS fallback ("Send it by text instead")
@@ -277,8 +308,10 @@ nobody writes from a client.
 
 ### 6.1 This isn't mine
 
-`reportShipmentNotMine({key, role})` - the record must currently carry the
-caller's number in that role. Writes `users/{uid}/hiddenShipments/{key}`,
+`reportShipmentNotMine({key, role})` - the record's STORED E.164 field (for a
+package request, its stored E.164 number) must equal the caller's number
+exactly, and the raw field must still be it; no last-digits matching. Every
+field holding the caller's number is reported (`role` is informational). Writes `users/{uid}/hiddenShipments/{key}`,
 adds the raw field name to the record's `phoneReportedNotMine`, and - once
 per record and field - notifies the business owner through
 `safeSendPreferenceNotification` (`businessActivity`), `data.type =
@@ -300,6 +333,12 @@ number on {code} says it isn't theirs. Check the number." Idempotent.
     Firebase app instance, takes that ID token, signs the secondary app out,
     and calls `completePhoneSignIn({placeholderIdToken})` as the email
     account.
+- The SMS proof is checked with `verifyIdToken(token, true)` (revocation),
+  and must be a phone sign-in less than 5 minutes old (`auth_time`), by the
+  account that holds the number at that moment, of exactly the number being
+  merged (`proofAcceptable`); otherwise `proof_invalid`. A retry after a
+  partial merge needs a new proof (the old holder is gone) - and then the
+  number is free, so a plain verification succeeds.
 - Server (`linkPhoneToAccount`): the holder must be a placeholder (profile
   `accountOrigin == "shipment"`, `firstSignInAt == null`, Auth user without
   email or other providers) - otherwise `phone_in_use`. It copies the hidden
@@ -321,7 +360,10 @@ and removes the opt-out.
 
 - `listMarketplacePeople` / `getMarketplacePerson` DTOs gain
   `accountOrigin` and `notSignedInYet`; the list accepts `signInState:
-  "all" | "signed_in" | "not_signed_in"`. The console shows a "Not signed in
+  "all" | "signed_in" | "not_signed_in"`. With a filter the server reads up
+  to 10 Auth pages per call until the page is full, and the console's
+  `collectPeoplePages` keeps calling (up to 5 times) until it has a full page
+  or the token runs out: never an empty page with "Load more" under it. The console shows a "Not signed in
   yet" label and a filter (default: hide them from the main list).
 - Email-dependent paths tolerate `email: ""`: notification email delivery
   already checks `isValidEmail` (no email row is queued), and the admin
@@ -380,7 +422,8 @@ Changed: `rollupVolumeOnLineWrite`, `syncParkedCarOccupancy`,
 `notifyTransportRequestStatus`, `createBarrelShipmentPaymentIntent`,
 `createBarrelOrderPaymentIntent`, `sealBarrelPool`,
 `createFreightShipmentPaymentIntent`, `createTransportRequest`,
-`createFreightQuoteRequest`, `submitPackageRequest`, `lookupGuestTracking`,
+`createFreightQuoteRequest`, `submitPackageRequest`, `sweepPackageRequests`,
+`lookupGuestTracking`,
 `finalizeAccountDeletion`, `deleteUser`, `listMarketplacePeople`,
 `listPlatformUsers`, `getMarketplacePerson`. Rules and indexes deploy too
 (`firestore:rules`, `firestore:indexes`, incl. TTL on `phoneLoginChallenges`

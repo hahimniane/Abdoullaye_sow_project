@@ -45,6 +45,7 @@ const {
 } = require("./guest_tracking");
 const {createPhoneAccounts, notSignedInYet} = require("./phone_accounts");
 const {
+  addressBucket,
   appCheckTokenFromHeaders,
   clientAddressFromRequest,
   rateLimitIdentity,
@@ -677,6 +678,29 @@ const phoneAccounts = createPhoneAccounts({
   findTrackingDocument: (db, code) => findTrackingDocument(db, code),
   publicRecord: (db, row) => phoneShipmentPublicRecord(db, row),
   clientAddress: (request) => callableClientAddress(request),
+  addressBucket: (address) => addressBucket(address),
+  // syncRecord: the record's own customer, or someone who may manage its
+  // section of its business.
+  requireRecordAccess: async (uid, collection, data) => {
+    if (String(data?.customerUid || "") === uid) return;
+    const section = PHONE_RECORD_SECTIONS[collection];
+    const businessId = String(data?.businessId || "").trim();
+    if (!section || !businessId) {
+      throw new HttpsError("permission-denied", "Not allowed",
+          {reason: "record_invalid"});
+    }
+    await requireBusinessPermission(uid, businessId, section);
+  },
+});
+// The business section that manages each phone record (syncRecord).
+const PHONE_RECORD_SECTIONS = Object.freeze({
+  containerLines: "containers",
+  barrelShipments: "barrels",
+  freightShipments: "freight",
+  transportRequests: "transport",
+  parkedCars: "parking",
+  freightQuoteRequests: "freight",
+  packageRequests: "containers",
 });
 
 /**
@@ -806,6 +830,9 @@ const BLOCKED_ACCOUNT_STATUSES = new Set([
   "deleted",
 ]);
 const USER_DIRECTORY_PAGE_SIZE = 100;
+// Auth pages one filtered directory call may read before it returns what it
+// has (a full page, or fewer with a token to continue).
+const DIRECTORY_FILTER_MAX_AUTH_PAGES = 10;
 // What a business that never chose its services is given. "inventory" is the
 // exception: it is switched on per business by an admin, never by default
 // (docs/INVENTORY.md), so a business with no stored list does not have it.
@@ -24478,11 +24505,27 @@ async function listMarketplacePeopleHandler(request) {
   );
   const pageToken =
     cleanText(request.data?.pageToken, 2000) || undefined;
-  const authPage = await admin.auth().listUsers(pageSize, pageToken);
-  const profiles = await profileSnapshotsForAuthUsers(db, authPage.users);
-  const people = filterDirectoryBySignIn(authPage.users.map((record, index) =>
-    userDirectoryDto(record, profiles[index]),
-  ), cleanText(request.data?.signInState, 20));
+  // A sign-in filter drops rows from each Auth page, so keep reading pages
+  // until this one is full or Auth runs out - never an empty page with a
+  // "Load more" under it - bounded to DIRECTORY_FILTER_MAX_AUTH_PAGES
+  // reads per call (docs/PHONE_ACCOUNTS.md §9).
+  const signInState = cleanText(request.data?.signInState, 20);
+  const filtered = signInState === "signed_in" ||
+    signInState === "not_signed_in";
+  const people = [];
+  let authPage = {users: [], pageToken: pageToken};
+  let nextToken = pageToken;
+  for (let read = 0; read < (filtered ?
+    DIRECTORY_FILTER_MAX_AUTH_PAGES : 1); read += 1) {
+    authPage = await admin.auth().listUsers(pageSize, nextToken);
+    const profiles = await profileSnapshotsForAuthUsers(db, authPage.users);
+    people.push(...filterDirectoryBySignIn(authPage.users.map(
+        (record, index) => userDirectoryDto(record, profiles[index])),
+    signInState));
+    nextToken = authPage.pageToken || undefined;
+    if (!nextToken || people.length >= pageSize) break;
+  }
+  authPage = {...authPage, pageToken: nextToken || ""};
   if (!pageToken && request.data?.includeInvitations !== false) {
     const invitations = await db.collection("accessInvitations")
         .where("status", "==", "pending")
@@ -42455,6 +42498,18 @@ exports.sweepPackageRequests = onSchedule(
     async () => {
       const db = admin.firestore();
       const startedMs = Date.now();
+      // Phone fields and accounts for records a staff client created
+      // directly (their triggers fire on update only) and numbers whose
+      // account failed (docs/PHONE_ACCOUNTS.md §3.1). Bounded to 40 s;
+      // never fails the package sweep.
+      try {
+        const phones = await phoneAccounts.sweepRecentRecordPhones({
+          deadlineMs: startedMs + 40 * 1000});
+        logger.info("Recent record phones swept", phones);
+      } catch (error) {
+        logger.warn("Recent record phone sweep failed",
+            {error: String(error?.message || error)});
+      }
       const deadlineMs = startedMs + 240 * 1000;
       const tally = {};
       let cursor = null;

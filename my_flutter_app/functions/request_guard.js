@@ -129,8 +129,35 @@ function appCheckTokenFromHeaders(headers) {
   return token.length > 0 && token.length <= 4096 ? token : "";
 }
 
+/**
+ * The rate-limit bucket for an address: an IPv4 address as it is, an IPv6
+ * address by its /64 - one subscriber is routinely handed a whole /64, so a
+ * per-address IPv6 bucket would let one caller rotate through 2^64 of them.
+ *
+ * @param {string} address An address (normalizeAddress output) or "".
+ * @return {string} "203.0.113.9", "2001:db8:1:2::/64", or "" when there is
+ *   no usable address ("unknown" included).
+ */
+function addressBucket(address) {
+  const value = normalizeAddress(address);
+  if (!value) return "";
+  if (net.isIPv4(value)) return value;
+  // Expand "::" so the first four groups are always present.
+  const [head, tail = ""] = value.split("::");
+  const left = head ? head.split(":") : [];
+  const right = value.includes("::") && tail ? tail.split(":") : [];
+  const groups = value.includes("::") ?
+    [...left, ...Array(8 - left.length - right.length).fill("0"),
+      ...right] :
+    left;
+  if (groups.length !== 8) return "";
+  return `${groups.slice(0, 4).map((group) =>
+    group.replace(/^0+(?=.)/, "")).join(":")}::/64`;
+}
+
 module.exports = {
   DEFAULT_TRUSTED_PROXY_HOPS,
+  addressBucket,
   appCheckTokenFromHeaders,
   clientAddressFromRequest,
   normalizeAddress,

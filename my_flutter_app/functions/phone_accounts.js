@@ -17,6 +17,7 @@ const crypto = require("crypto");
 const {HttpsError} = require("firebase-functions/v2/https");
 const {
   STATUS: PHONE_STATUS,
+  callingCodeOf,
   digitsOf,
   lastTwo,
   loginLanguage,
@@ -78,6 +79,13 @@ const PHONE_RECORD_SOURCES = Object.freeze({
 });
 
 const PHONE_COLLECTIONS = Object.freeze(Object.keys(PHONE_RECORD_SOURCES));
+// Collections a client may create directly while their trigger fires on
+// update only: the hourly sweep stamps what those creates missed (§3.1).
+// (containerLines and parkedCars have write triggers; quote and package
+// requests are created by callables only.)
+const SWEPT_COLLECTIONS = Object.freeze([
+  "barrelShipments", "freightShipments", "transportRequests",
+]);
 
 // Derived fields: server-written only.
 const DERIVED = Object.freeze({
@@ -227,23 +235,51 @@ const MAX_CODE_ATTEMPTS = 5;
 const RESEND_AFTER_MS = 30 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
+/**
+ * Every WhatsApp code costs money, so beyond the per-number, per-address and
+ * per-tracking-code limits the whole platform and each calling code have a
+ * daily ceiling. Hitting one is logged as an error (an alert): it means
+ * abuse, or real growth that needs a higher cap.
+ */
+const GLOBAL_SENDS_PER_DAY = 3000;
+const COUNTRY_SENDS_PER_DAY = 600;
+// Limits whose exhaustion is an alert, not one caller being refused.
+const ALERT_LIMIT_KINDS = Object.freeze(["global_day", "country_day"]);
+
+/**
+ * @param {*} value A tracking code as typed ("cl-k7m 4p2").
+ * @return {string} The one key every spelling of it shares ("CLK7M4P2").
+ */
+function trackingLimitKey(value) {
+  return String(value ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "")
+      .slice(0, 40);
+}
 
 /**
  * Send limits (docs/PHONE_ACCOUNTS.md §5.1).
  *
- * @param {{phone: string, ip: string, trackingCode: string}} keys Who.
+ * @param {{phone: string, ip: string, trackingCode: string,
+ *   callingCode: string}} keys Who. ip is already a bucket
+ *   (request_guard.addressBucket: IPv6 by its /64).
  * @return {Array<{kind, key, limit, windowMs}>} The buckets to consume.
  */
-function loginSendLimits({phone, ip, trackingCode}) {
+function loginSendLimits({phone, ip, trackingCode, callingCode}) {
   const limits = [
     {kind: "phone_hour", key: phone, limit: 5, windowMs: HOUR_MS},
     {kind: "phone_day", key: phone, limit: 10, windowMs: DAY_MS},
   ];
   if (ip) limits.push({kind: "ip_hour", key: ip, limit: 20, windowMs: HOUR_MS});
-  if (trackingCode) {
-    limits.push({kind: "tracking_hour", key: trackingCode, limit: 5,
+  const tracking = trackingLimitKey(trackingCode);
+  if (tracking) {
+    limits.push({kind: "tracking_hour", key: tracking, limit: 5,
       windowMs: HOUR_MS});
   }
+  if (callingCode) {
+    limits.push({kind: "country_day", key: callingCode,
+      limit: COUNTRY_SENDS_PER_DAY, windowMs: DAY_MS});
+  }
+  limits.push({kind: "global_day", key: "all", limit: GLOBAL_SENDS_PER_DAY,
+    windowMs: DAY_MS});
   return limits;
 }
 
@@ -561,6 +597,54 @@ function isPlaceholderAccount(profile, authUser) {
 }
 
 /**
+ * Phone-code sign-in and linking are for customers only (the rule
+ * syncVerifiedCustomerPhone already applies): anyone with business or
+ * platform access signs in with their email and password.
+ *
+ * @param {object|null} profile users/{uid}, or null when there is none yet
+ *   (a new customer).
+ * @return {boolean} True when a phone code may sign in to / link this
+ *   account.
+ */
+function phoneSignInAllowed(profile) {
+  if (!profile) return true;
+  const role = cleanText(profile.role, 40);
+  if (role && role !== "customer") return false;
+  if (profile.platformAdmin === true || cleanText(profile.adminRole, 40)) {
+    return false;
+  }
+  if (cleanText(profile.businessId, 128)) return false;
+  if (Array.isArray(profile.businessPermissions) &&
+      profile.businessPermissions.length > 0) {
+    return false;
+  }
+  return true;
+}
+
+const PROOF_MAX_AGE_SECONDS = 5 * 60;
+
+/**
+ * Whether a placeholder's phone ID token proves the number now (§7).
+ *
+ * @param {object} decoded verifyIdToken output (revocation checked).
+ * @param {{e164: string, holderUid: string, nowMs: number}} expected The
+ *   number being merged and who holds it now.
+ * @return {boolean} True when the token is a fresh phone sign-in of that
+ *   number by its current holder.
+ */
+function proofAcceptable(decoded, {e164, holderUid, nowMs}) {
+  if (!decoded || decoded.firebase?.sign_in_provider !== "phone") {
+    return false;
+  }
+  if (strictE164(decoded.phone_number) !== e164 || !e164) return false;
+  if (!holderUid || decoded.uid !== holderUid) return false;
+  const authTime = Number(decoded.auth_time);
+  if (!Number.isFinite(authTime)) return false;
+  const age = nowMs / 1000 - authTime;
+  return age >= -60 && age < PROOF_MAX_AGE_SECONDS;
+}
+
+/**
  * @param {object|null} profile users/{uid}.
  * @return {boolean} Not signed in yet (admin lists label these).
  */
@@ -737,23 +821,36 @@ function createPhoneAccounts(deps) {
       const first = await ref.get();
       if (!first.exists) return {written: false, accounts: []};
       const region = await regionFor(collection, first.data());
-      let newNumbers = [];
+      // Accounts FIRST (docs §4): a number is stamped only once its account
+      // exists (or is deliberately absent - opted out). A number whose
+      // account failed stays unstamped, so the next write of the record or
+      // the hourly sweep (sweepPackageRequests) tries again.
+      const planned = recordPhonePatch(collection, first.data(), region);
+      const accounts = await ensureAccountsFor(collection, id,
+          planned.newNumbers);
+      const settled = new Set(planned.newNumbers
+          .filter((phone, index) => accounts[index]?.status !== "failed")
+          .map((phone) => phone.e164));
       const written = await db().runTransaction(async (tx) => {
         const snap = await tx.get(ref);
         if (!snap.exists) return false;
         const data = snap.data() || {};
         const patch = recordPhonePatch(collection, data,
             needsRegion(collection, data) ? region : "");
-        newNumbers = patch.newNumbers;
-        if (!Object.keys(patch.changes).length) return false;
-        const update = {[DERIVED.SYNCED_AT]: FieldValue.serverTimestamp()};
+        const update = {};
         for (const [field, value] of Object.entries(patch.changes)) {
+          const isNumber = (PHONE_RECORD_SOURCES[collection] || [])
+              .some((source) => source.e164 === field);
+          // A number that changed again since the accounts were made, or
+          // whose account failed, waits for the next sync.
+          if (isNumber && value !== null && !settled.has(value)) continue;
           update[field] = value === null ? FieldValue.delete() : value;
         }
+        if (!Object.keys(update).length) return false;
+        update[DERIVED.SYNCED_AT] = FieldValue.serverTimestamp();
         tx.update(ref, update);
         return true;
       });
-      const accounts = await ensureAccountsFor(collection, id, newNumbers);
       return {written, accounts};
     } catch (error) {
       log.warn("Record phones not synced", {collection, id,
@@ -862,6 +959,29 @@ function createPhoneAccounts(deps) {
     return result;
   }
 
+  async function profileOf(uid) {
+    const snap = await db().collection("users").doc(uid).get();
+    return snap.exists ? snap.data() || {} : null;
+  }
+
+  /**
+   * Refuses phone-code sign-in / linking for anyone with business or
+   * platform access (phoneSignInAllowed), in words that reveal nothing.
+   *
+   * @param {string} uid The account.
+   * @param {{requireProfile: boolean}} options requireProfile: linking needs
+   *   an existing customer profile (as syncVerifiedCustomerPhone does).
+   * @return {Promise<object|null>} The profile.
+   */
+  async function requirePhoneSignInAllowed(uid, options = {}) {
+    const profile = await profileOf(uid);
+    if ((options.requireProfile && !profile) || !phoneSignInAllowed(profile)) {
+      throw refusal("permission-denied", "phone_sign_in_unavailable",
+          "Use your email and password to sign in to this account");
+    }
+    return profile;
+  }
+
   /**
    * The account a proven number signs into, made when there is none (a
    * deleted account comes back: signing in again is asking for it).
@@ -871,7 +991,10 @@ function createPhoneAccounts(deps) {
    */
   async function accountForSignIn(e164) {
     const existing = await userByPhone(e164);
-    if (existing) return {uid: existing.uid, created: false};
+    if (existing) {
+      await requirePhoneSignInAllowed(existing.uid);
+      return {uid: existing.uid, created: false};
+    }
     try {
       const made = await auth().createUser({phoneNumber: e164});
       return {uid: made.uid, created: true};
@@ -889,15 +1012,25 @@ function createPhoneAccounts(deps) {
    *
    * @param {string} uid The account.
    * @param {string} e164 The proven number.
+   * @param {{proofHolderUid: (string|undefined)}} options For an SMS proof:
+   *   the account that held the number when the proof was checked.
    * @return {Promise<{linked: boolean, merged: boolean}>} What happened.
    */
-  async function linkPhoneToAccount(uid, e164) {
+  async function linkPhoneToAccount(uid, e164, options = {}) {
+    await requirePhoneSignInAllowed(uid, {requireProfile: true});
     const caller = await auth().getUser(uid);
     if (caller.phoneNumber === e164) {
       await signInBookkeeping(uid, e164, {replacePhone: true});
       return {linked: true, merged: false};
     }
     const holder = await userByPhone(e164);
+    // An SMS proof is a sign-in of the account holding the number when it
+    // was checked; if the number has moved since, the proof is stale.
+    if (options.proofHolderUid !== undefined &&
+        (holder?.uid || "") !== options.proofHolderUid) {
+      throw refusal("invalid-argument", "proof_invalid",
+          "Verify the number again");
+    }
     let merged = false;
     if (holder && holder.uid !== uid) {
       const holderRef = db().collection("users").doc(holder.uid);
@@ -963,7 +1096,9 @@ function createPhoneAccounts(deps) {
       const blocked = decisions.filter((decision) => !decision.allowed);
       if (blocked.length) {
         return {allowed: false, retryAfterMs: Math.max(
-            ...blocked.map((decision) => decision.retryAfterMs))};
+            ...blocked.map((decision) => decision.retryAfterMs)),
+        blockedKinds: limits.filter((limit, index) =>
+          !decisions[index].allowed).map((limit) => limit.kind)};
       }
       decisions.forEach((decision, index) => tx.set(refs[index], {
         ...decision.next,
@@ -971,7 +1106,7 @@ function createPhoneAccounts(deps) {
         expiresAt: deps.Timestamp.fromMillis(nowMs +
           limits[index].windowMs * 2),
       }));
-      return {allowed: true, retryAfterMs: 0};
+      return {allowed: true, retryAfterMs: 0, blockedKinds: []};
     });
   }
 
@@ -1004,9 +1139,14 @@ function createPhoneAccounts(deps) {
   async function requestPhoneLoginCode(request) {
     const data = request.data || {};
     const purpose = data.purpose === "link" ? "link" : "sign_in";
-    if (purpose === "link" && (!request.auth || isAnonymous(request))) {
-      throw refusal("unauthenticated", "sign_in_required",
-          "Sign in to add a phone number to your account");
+    if (purpose === "link") {
+      if (!request.auth || isAnonymous(request)) {
+        throw refusal("unauthenticated", "sign_in_required",
+            "Sign in to add a phone number to your account");
+      }
+      // Customers only, checked before anything is sent.
+      await requirePhoneSignInAllowed(request.auth.uid,
+          {requireProfile: true});
     }
     let e164 = "";
     let trackingCode = "";
@@ -1030,22 +1170,40 @@ function createPhoneAccounts(deps) {
       throw refusal("failed-precondition", "whatsapp_unavailable",
           "WhatsApp codes are not available. Send a text instead.");
     }
-    // An address the front end could not determine is everyone's: never
-    // a bucket of its own (it would let one caller block every sign-in).
-    const address = cleanText(deps.clientAddress(request), 80);
-    const limit = await consumeSendLimits(loginSendLimits({
-      phone: e164, ip: address && address !== "unknown" ? address : "",
-      trackingCode}));
+    // An address the front end could not determine is everyone's: never a
+    // bucket of its own (it would let one caller block every sign-in). IPv6
+    // counts by its /64 (addressBucket).
+    const limits = loginSendLimits({
+      phone: e164,
+      ip: deps.addressBucket(deps.clientAddress(request)),
+      trackingCode,
+      callingCode: callingCodeOf(digitsOf(e164)),
+    });
+    const limit = await consumeSendLimits(limits);
     if (!limit.allowed) {
+      for (const kind of limit.blockedKinds) {
+        if (ALERT_LIMIT_KINDS.includes(kind)) {
+          // An alert: abuse, or growth that needs a higher cap.
+          log.error("Phone login send cap reached", {kind,
+            callingCode: kind === "country_day" ?
+              callingCodeOf(digitsOf(e164)) : ""});
+        }
+      }
       throw refusal("resource-exhausted", "rate_limited",
           "Too many codes. Please wait and try again.",
           {retryAfterMs: Math.max(0, Math.round(limit.retryAfterMs))});
     }
+    // Who the code would sign in to. A WhatsApp message costs money, so a
+    // sign-in code is only really sent to a number that has an account a
+    // phone may open, or a record (a deleted account comes back that way).
+    // Every other number gets the very same answer and a challenge no code
+    // can open - nothing tells a caller whether a number is known.
     const holder = await userByPhone(e164);
-    let preferredLanguage = "";
-    if (holder) {
-      const profile = await db().collection("users").doc(holder.uid).get();
-      preferredLanguage = cleanText(profile.data()?.preferredLanguage, 5);
+    const holderProfile = holder ? await profileOf(holder.uid) : null;
+    let send = true;
+    if (purpose === "sign_in") {
+      send = holder ? phoneSignInAllowed(holderProfile) :
+        Boolean(trackingCode) || await numberHasRecord(e164);
     }
     const challengeRef = db().collection("phoneLoginChallenges").doc(
         crypto.randomBytes(16).toString("hex"));
@@ -1054,23 +1212,29 @@ function createPhoneAccounts(deps) {
     const expiresAtMs = nowMs + CODE_TTL_MS;
     await challengeRef.set({
       phoneE164: e164,
-      codeHash: codeHash(challengeRef.id, code),
+      // Unsent: the hash of a code nobody ever sees.
+      codeHash: codeHash(challengeRef.id, send ? code : newLoginCode() +
+        crypto.randomBytes(8).toString("hex")),
       purpose,
       linkUid: purpose === "link" ? request.auth.uid : "",
       expiresAtMs,
       attempts: 0,
       status: "open",
+      delivered: send,
       source: trackingCode ? "tracking" : "phone",
       createdAtMs: nowMs,
       expiresAt: deps.Timestamp.fromMillis(expiresAtMs + DAY_MS),
     });
-    const sent = await deps.sendWhatsApp(deps.loginMessage({phone: e164, code,
-      language: loginLanguage(e164, preferredLanguage)}));
-    if (!sent?.ok) {
-      await challengeRef.update({status: "unsent",
-        error: cleanText(sent?.error, 300)});
-      throw refusal("failed-precondition", "whatsapp_unavailable",
-          "The WhatsApp code could not be sent. Send a text instead.");
+    if (send) {
+      const sent = await deps.sendWhatsApp(deps.loginMessage({phone: e164,
+        code, language: loginLanguage(e164,
+            cleanText(holderProfile?.preferredLanguage, 5))}));
+      if (!sent?.ok) {
+        await challengeRef.update({status: "unsent",
+          error: cleanText(sent?.error, 300)});
+        throw refusal("failed-precondition", "whatsapp_unavailable",
+            "The WhatsApp code could not be sent. Send a text instead.");
+      }
     }
     return {
       challengeId: challengeRef.id,
@@ -1079,6 +1243,22 @@ function createPhoneAccounts(deps) {
       expiresAtMs,
       resendAfterMs: RESEND_AFTER_MS,
     };
+  }
+
+  /**
+   * Whether any record carries this number (one bounded read per source,
+   * stopping at the first hit).
+   *
+   * @param {string} e164 The number.
+   * @return {Promise<boolean>} True when some record has it.
+   */
+  async function numberHasRecord(e164) {
+    for (const source of shipmentQueries()) {
+      const snap = await db().collection(source.collection)
+          .where(source.field, "==", e164).limit(1).get();
+      if (!snap.empty) return true;
+    }
+    return false;
   }
 
   const ATTEMPT_MESSAGES = Object.freeze({
@@ -1152,17 +1332,23 @@ function createPhoneAccounts(deps) {
     if (proof) {
       let decoded;
       try {
-        decoded = await auth().verifyIdToken(proof);
+        // Revocation checked: a token of a deleted or signed-out-everywhere
+        // account proves nothing.
+        decoded = await auth().verifyIdToken(proof, true);
       } catch (_) {
         throw refusal("invalid-argument", "proof_invalid",
             "Verify the number again");
       }
       const e164 = strictE164(decoded.phone_number);
-      if (!e164 || decoded.firebase?.sign_in_provider !== "phone") {
+      const holder = e164 ? await userByPhone(e164) : null;
+      // A fresh (< 5 min) phone sign-in, by the account that holds that
+      // number right now, of exactly that number (proofAcceptable).
+      if (!proofAcceptable(decoded,
+          {e164, holderUid: holder?.uid || "", nowMs: now()})) {
         throw refusal("invalid-argument", "proof_invalid",
             "Verify the number again");
       }
-      return linkPhoneToAccount(uid, e164);
+      return linkPhoneToAccount(uid, e164, {proofHolderUid: holder.uid});
     }
     const userRecord = await auth().getUser(uid);
     const e164 = strictE164(userRecord.phoneNumber);
@@ -1170,6 +1356,9 @@ function createPhoneAccounts(deps) {
       throw refusal("failed-precondition", "no_verified_phone",
           "Sign in with your phone first");
     }
+    // A text sign-in to an account with business or platform access is
+    // refused like a code would be (the client signs out on this answer).
+    await requirePhoneSignInAllowed(uid);
     const booked = await signInBookkeeping(uid, e164);
     return {uid, profileCreated: booked.profileCreated,
       isNewAccount: booked.firstSignIn};
@@ -1275,9 +1464,15 @@ function createPhoneAccounts(deps) {
     const outcome = await db().runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       const data = snap.exists ? snap.data() || {} : null;
+      // Exactly the caller's number: the stored E.164 field (package
+      // requests store E.164 in the raw field) equals it, and the raw field
+      // still is it - never a match on the last digits alone.
       const fields = (PHONE_RECORD_SOURCES[target.collection] || [])
-          .filter((source) => data && candidateShows({
-            collection: target.collection, raw: source.raw, data}, e164))
+          .filter((source) => data &&
+            (source.e164 ? data[source.e164] === e164 :
+              strictE164(pathValue(data, source.raw)) === e164) &&
+            candidateShows({collection: target.collection, raw: source.raw,
+              data}, e164))
           .map((source) => source.raw);
       if (!data || !fields.length) return null;
       const reported = Array.isArray(data[DERIVED.REPORTED]) ?
@@ -1340,7 +1535,80 @@ function createPhoneAccounts(deps) {
     }
   }
 
+  /**
+   * syncRecord: a staff app that created a record directly (the legacy
+   * transport form) asks for its phone fields and accounts at once. Only
+   * someone allowed to manage that record's section may ask
+   * (deps.requireRecordAccess throws otherwise).
+   *
+   * @param {object} request The callable request: data.key.
+   * @return {Promise<{synced: boolean}>} Whether anything was written.
+   */
+  async function syncRecord(request) {
+    if (!request.auth || isAnonymous(request)) {
+      throw refusal("unauthenticated", "sign_in_required", "Sign in first");
+    }
+    const target = parseRecordKey(request.data?.key);
+    const data = target ? await db().collection(target.collection)
+        .doc(target.id).get().then((snap) => snap.exists ? snap.data() :
+          null) : null;
+    if (!target || !data) {
+      throw refusal("not-found", "record_invalid",
+          "That record could not be found");
+    }
+    await deps.requireRecordAccess(request.auth.uid, target.collection,
+        data);
+    if ((PHONE_RECORD_SOURCES[target.collection] || [])
+        .some((source) => source.e164)) {
+      const result = await syncRecordPhones(target.collection, target.id);
+      return {synced: result.written};
+    }
+    await ensureRecordAccounts(target.collection, target.id);
+    return {synced: false};
+  }
+
+  /**
+   * Stamps recent records that no trigger saw being created - a staff
+   * client writing barrelShipments / freightShipments / transportRequests
+   * directly (their triggers fire on update only) - and retries numbers
+   * whose account failed. Bounded: the last `windowMs` of each collection,
+   * `pageSize` records each, under a deadline. Run by an existing hourly
+   * job (sweepPackageRequests), so no new function.
+   *
+   * @param {{windowMs: number, pageSize: number, deadlineMs: number}} options
+   *   Bounds.
+   * @return {Promise<object>} Counts per collection.
+   */
+  async function sweepRecentRecordPhones(options = {}) {
+    const windowMs = Number(options.windowMs) || 3 * HOUR_MS;
+    const pageSize = Number(options.pageSize) || 200;
+    const deadlineMs = Number(options.deadlineMs) || now() + 40 * 1000;
+    const since = deps.Timestamp.fromMillis(now() - windowMs);
+    const tally = {};
+    for (const collection of SWEPT_COLLECTIONS) {
+      const counts = tally[collection] = {scanned: 0, synced: 0};
+      if (now() >= deadlineMs) break;
+      const snap = await db().collection(collection)
+          .where("createdAt", ">=", since).orderBy("createdAt", "desc")
+          .limit(pageSize).get();
+      for (const doc of snap.docs) {
+        if (now() >= deadlineMs) break;
+        counts.scanned += 1;
+        const data = doc.data() || {};
+        const region = await regionFor(collection, data);
+        if (!Object.keys(recordPhonePatch(collection, data, region).changes)
+            .length) {
+          continue;
+        }
+        const result = await syncRecordPhones(collection, doc.id);
+        if (result.written) counts.synced += 1;
+      }
+    }
+    return tally;
+  }
+
   const ACTIONS = Object.freeze({
+    syncRecord,
     requestPhoneLoginCode,
     verifyPhoneLoginCode,
     completePhoneSignIn,
@@ -1370,6 +1638,7 @@ function createPhoneAccounts(deps) {
     afterRecordWrite,
     businessRegion,
     dispatch,
+    sweepRecentRecordPhones,
     completePhoneSignIn,
     ensurePhoneAccount,
     ensureRecordAccounts,
@@ -1385,6 +1654,14 @@ function createPhoneAccounts(deps) {
 }
 
 module.exports = {
+  ALERT_LIMIT_KINDS,
+  COUNTRY_SENDS_PER_DAY,
+  GLOBAL_SENDS_PER_DAY,
+  PROOF_MAX_AGE_SECONDS,
+  SWEPT_COLLECTIONS,
+  phoneSignInAllowed,
+  proofAcceptable,
+  trackingLimitKey,
   CODE_TTL_MS,
   DERIVED,
   MAX_CODE_ATTEMPTS,

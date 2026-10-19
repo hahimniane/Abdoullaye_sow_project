@@ -110,8 +110,12 @@ async function smsSignIn(e164) {
 }
 
 async function signInWithCustomToken(token) {
-  return authRest("accounts:signInWithCustomToken",
+  const session = await authRest("accounts:signInWithCustomToken",
       {token, returnSecureToken: true});
+  // This endpoint answers without localId: read the uid from the ID token.
+  const claims = JSON.parse(Buffer.from(session.idToken.split(".")[1],
+      "base64url").toString("utf8"));
+  return {...session, localId: claims.user_id};
 }
 
 // --- records ---------------------------------------------------------------
@@ -314,6 +318,7 @@ describe("WhatsApp sign-in codes", () => {
 
   it("locks the code after five wrong tries", async () => {
     const phone = freshUs();
+    await parkedCar({customerPhone: phone}); // a known number gets codes
     const asked = await call("requestPhoneLoginCode", {phone});
     const right = lastCodeTo(phone);
     const wrong = right === "000000" ? "111111" : "000000";
@@ -376,10 +381,12 @@ describe("WhatsApp sign-in codes", () => {
       });
 
   it("says WhatsApp is unavailable so the client offers a text", async () => {
+    const phone = freshUs();
+    await parkedCar({customerPhone: phone});
     metaFails = true;
     try {
       assert.equal(await reasonOf(call("requestPhoneLoginCode",
-          {phone: freshUs()})), "whatsapp_unavailable");
+          {phone})), "whatsapp_unavailable");
     } finally {
       metaFails = false;
     }
@@ -468,6 +475,8 @@ describe("SMS sign-in and merging", () => {
     assert.equal(proof.localId, placeholder.uid);
     const email = await admin.auth().createUser({email: `s${seq}@ex.com`,
       password: "secret123"});
+    await db.collection("users").doc(email.uid).set({role: "customer",
+      email: `s${seq}@ex.com`});
     const result = await call("completePhoneSignIn",
         {placeholderIdToken: proof.idToken},
         {uid: email.uid, token: {firebase: {sign_in_provider: "password"}}});
@@ -481,6 +490,8 @@ describe("SMS sign-in and merging", () => {
     await call("completePhoneSignIn", {}, asUser(session.localId));
     const email = await admin.auth().createUser({email: `n${seq}@ex.com`,
       password: "secret123"});
+    await db.collection("users").doc(email.uid).set({role: "customer",
+      email: `n${seq}@ex.com`});
     const proof = await smsSignIn(phone);
     assert.equal(await reasonOf(call("completePhoneSignIn",
         {placeholderIdToken: proof.idToken},
@@ -683,5 +694,188 @@ describe("launch backfill", () => {
     assert.deepEqual(parseArgs(["--project", "p", "--confirm", "p",
       "--business", "b"]), {projectId: "p", commit: false, businessId: "b",
       limit: 500, cursor: ""});
+  });
+});
+
+// Review fixes (2026-10).
+describe("cost, role and proof guards", () => {
+  const {createPhoneAccounts} = require("../phone_accounts");
+
+  it("answers an unknown number exactly like a known one, sending nothing",
+      async () => {
+        const known = freshUs();
+        await parkedCar({customerPhone: known});
+        const unknown = freshUs();
+        const before = sent.length;
+        const a = await call("requestPhoneLoginCode", {phone: known});
+        assert.equal(sent.length, before + 1);
+        const b = await call("requestPhoneLoginCode", {phone: unknown});
+        assert.equal(sent.length, before + 1, "nothing sent to an unknown");
+        assert.deepEqual(Object.keys(a).sort(), Object.keys(b).sort());
+        assert.equal(b.channel, "whatsapp");
+        assert.equal(b.lastTwo, unknown.slice(-2));
+        // Nothing opens that challenge, and it says so like any wrong code.
+        assert.equal(await reasonOf(call("verifyPhoneLoginCode",
+            {challengeId: b.challengeId, code: "123456"})), "code_wrong");
+        // Its limits still count: the resend gap applies the same.
+        assert.equal(await reasonOf(call("requestPhoneLoginCode",
+            {phone: unknown})), "rate_limited");
+      });
+
+  it("never signs staff or owners in with a phone code", async () => {
+    const phone = freshUs();
+    const staff = await admin.auth().createUser({phoneNumber: phone,
+      email: `staff${seq}@ex.com`, password: "secret123"});
+    await db.collection("users").doc(staff.uid).set({role: "staff",
+      businessId: US_BIZ, businessPermissions: ["containers"]});
+    await parkedCar({customerPhone: phone});
+    const before = sent.length;
+    await call("requestPhoneLoginCode", {phone});
+    assert.equal(sent.length, before, "no code sent to a staff number");
+    // A text sign-in still works at Firebase; the bookkeeping refuses it.
+    const session = await smsSignIn(phone);
+    assert.equal(session.localId, staff.uid);
+    assert.equal(await reasonOf(call("completePhoneSignIn", {},
+        asUser(staff.uid))), "phone_sign_in_unavailable");
+    // Nor may staff link a number by code.
+    assert.equal(await reasonOf(call("requestPhoneLoginCode",
+        {phone: freshUs(), purpose: "link"}, {uid: staff.uid,
+          token: {firebase: {sign_in_provider: "password"}}})),
+    "phone_sign_in_unavailable");
+    // And a code that was sent before the account became staff is refused.
+    const customerPhone = freshUs();
+    await parkedCar({customerPhone});
+    const asked = await call("requestPhoneLoginCode",
+        {phone: customerPhone});
+    const holder = await userByPhone(customerPhone);
+    await db.collection("users").doc(holder.uid).set({role: "admin",
+      platformAdmin: true}, {merge: true});
+    assert.equal(await reasonOf(call("verifyPhoneLoginCode",
+        {challengeId: asked.challengeId, code: lastCodeTo(customerPhone)})),
+    "phone_sign_in_unavailable");
+  });
+
+  it("refuses a merge proof whose holder no longer holds the number",
+      async () => {
+        const phone = freshUs();
+        await parkedCar({customerPhone: phone});
+        const proof = await smsSignIn(phone);
+        // The number moves to another account before the proof arrives.
+        const placeholder = await userByPhone(phone);
+        await admin.auth().updateUser(placeholder.uid, {phoneNumber: null});
+        const other = await admin.auth().createUser({phoneNumber: phone});
+        await db.collection("users").doc(other.uid).set({role: "customer",
+          accountOrigin: "shipment", firstSignInAt: null});
+        const email = await admin.auth().createUser({
+          email: `p${seq}@ex.com`, password: "secret123"});
+        await db.collection("users").doc(email.uid).set({role: "customer"});
+        assert.equal(await reasonOf(call("completePhoneSignIn",
+            {placeholderIdToken: proof.idToken}, {uid: email.uid,
+              token: {firebase: {sign_in_provider: "password"}}})),
+        "proof_invalid");
+        assert.equal((await admin.auth().getUser(email.uid)).phoneNumber,
+            undefined);
+      });
+
+  it("a failed account creation leaves the number unstamped, and the " +
+      "next sync makes it", async () => {
+    let failNext = true;
+    const flakyAuth = new Proxy(admin.auth(), {get(target, name) {
+      if (name === "createUser") {
+        return async (...args) => {
+          if (failNext) {
+            failNext = false;
+            throw Object.assign(new Error("Auth is down"),
+                {code: "auth/internal-error"});
+          }
+          return target.createUser(...args);
+        };
+      }
+      const value = target[name];
+      return typeof value === "function" ? value.bind(target) : value;
+    }});
+    const accounts = createPhoneAccounts({db: () => db,
+      auth: () => flakyAuth,
+      FieldValue: admin.firestore.FieldValue,
+      Timestamp: admin.firestore.Timestamp,
+      logger: {warn() {}, error() {}, info() {}},
+      countries: require("../country_catalog").ALL_COUNTRIES,
+      defaultNotificationPreferences: () => ({})});
+    const phone = freshUs();
+    const id = nextId("flaky");
+    await db.collection("parkedCars").doc(id).set({businessId: US_BIZ,
+      customerPhone: phone, createdAt: admin.firestore.Timestamp.now()});
+    const first = await accounts.syncRecordPhones("parkedCars", id);
+    assert.equal(first.accounts[0].status, "failed");
+    assert.equal((await record("parkedCars", id)).customerPhoneE164,
+        undefined, "not stamped while it has no account");
+    const second = await accounts.syncRecordPhones("parkedCars", id);
+    assert.equal(second.accounts[0].status, "created");
+    assert.equal((await record("parkedCars", id)).customerPhoneE164, phone);
+  });
+
+  it("This isn't mine needs the stored number to be the caller's exactly",
+      async () => {
+        const phone = freshUs();
+        // A local number at a non-NANP business: never stamped, though its
+        // digits are the tail of the caller's number.
+        const id = nextId("gn");
+        await db.collection("parkedCars").doc(id).set({businessId: GN_BIZ,
+          customerPhone: phone.slice(2),
+          createdAt: admin.firestore.Timestamp.now()});
+        await runParkedTrigger(id);
+        assert.deepEqual((await record("parkedCars", id))
+            .phoneCountryCodeMissing, ["customerPhone"]);
+        assert.equal(await reasonOf(call("reportShipmentNotMine",
+            {key: `parkedCars/${id}`}, asUser("x", {phone_number: phone}))),
+        "record_invalid");
+      });
+
+  it("stamps records a staff client created directly", async () => {
+    const phone = freshUs();
+    const id = nextId("tr");
+    // The legacy staff transport form writes the record itself: no trigger.
+    await db.collection("transportRequests").doc(id).set({
+      businessId: US_BIZ, customerPhone: phone, status: "pending",
+      createdAt: admin.firestore.Timestamp.now()});
+    // A customer who may not manage transport cannot ask.
+    assert.match(await reasonOf(call("syncRecord",
+        {key: `transportRequests/${id}`}, asUser("stranger"))),
+    /permission-denied|not-found/);
+    // The new app asks right after saving...
+    const result = await call("syncRecord",
+        {key: `transportRequests/${id}`}, asUser(OWNER));
+    assert.equal(result.synced, true);
+    assert.equal((await record("transportRequests", id)).customerPhoneE164,
+        phone);
+    // ...and the hourly sweep catches what old apps left.
+    const oldId = nextId("bs");
+    const oldPhone = freshUs();
+    await db.collection("barrelShipments").doc(oldId).set({
+      businessId: US_BIZ, receiverPhone: oldPhone, status: "pending",
+      createdAt: admin.firestore.Timestamp.now()});
+    await functions.sweepPackageRequests.run({});
+    assert.equal((await record("barrelShipments", oldId)).receiverPhoneE164,
+        oldPhone);
+    assert.ok(await userByPhone(oldPhone));
+  });
+
+  it("stops every send at the platform's daily cap", async () => {
+    const {limitDocId: docId, GLOBAL_SENDS_PER_DAY} =
+      require("../phone_accounts");
+    const ref = db.collection("phoneLoginLimits")
+        .doc(docId("global_day", "all"));
+    const saved = (await ref.get()).data() || null;
+    await ref.set({count: GLOBAL_SENDS_PER_DAY,
+      windowStartMs: Date.now() - 1000, lastAtMs: Date.now() - 1000});
+    try {
+      const phone = freshUs();
+      await parkedCar({customerPhone: phone});
+      assert.equal(await reasonOf(call("requestPhoneLoginCode", {phone})),
+          "rate_limited");
+    } finally {
+      if (saved) await ref.set(saved);
+      else await ref.delete();
+    }
   });
 });
