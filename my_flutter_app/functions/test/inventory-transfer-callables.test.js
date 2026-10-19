@@ -256,6 +256,14 @@ describe("transfers: drafts", () => {
         assert.equal(await stockAt(shoes, bronx), 8);
         assert.equal((await historyOf(saved.transferId))[0].action,
             "draft_discarded");
+        // Sending the discarded draft (a second device still showing it)
+        // is refused, never answered as sent.
+        await assert.rejects(call("sendInventoryTransfer", {
+          clientRequestId: saved.clientRequestId || stored.clientRequestId,
+          fromStoreId: bronx, toStoreId: harlem,
+          lines: [{itemId: shoes, quantity: 1}]}, BRONX),
+        refusal("transfer_not_draft"));
+        assert.equal(await stockAt(shoes, bronx), 8);
       });
 });
 

@@ -22715,7 +22715,7 @@ async function inventoryTransferCode(db, pre) {
 }
 
 exports.saveInventoryTransferDraft = onCall(
-    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true,
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public",
       maxInstances: INVENTORY_TRANSFER_MAX_INSTANCES},
     async (request) => {
       const uid = requireAuth(request);
@@ -22775,7 +22775,7 @@ exports.saveInventoryTransferDraft = onCall(
 );
 
 exports.sendInventoryTransfer = onCall(
-    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true,
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public",
       maxInstances: INVENTORY_TRANSFER_MAX_INSTANCES},
     async (request) => {
       const uid = requireAuth(request);
@@ -22797,7 +22797,13 @@ exports.sendInventoryTransfer = onCall(
         }
         // Sent already (a retry, or a second device with the same draft):
         // the stored transfer is the answer, nothing is written again.
+        // A draft discarded before it was ever sent moved nothing, so
+        // sending it is refused rather than answered as "sent".
         if (before && before.status !== "draft") {
+          if (!before.sentAt) {
+            throw inventoryRefusal("transfer_not_draft",
+                {status: String(before.status || "")});
+          }
           return {replayed: true, transfer: before};
         }
         if (before && !inventoryTransfers.canSendFrom(access,
@@ -22863,7 +22869,7 @@ exports.sendInventoryTransfer = onCall(
 );
 
 exports.cancelInventoryTransfer = onCall(
-    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true,
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public",
       maxInstances: INVENTORY_TRANSFER_MAX_INSTANCES},
     async (request) => {
       const uid = requireAuth(request);
@@ -22942,7 +22948,7 @@ exports.cancelInventoryTransfer = onCall(
 );
 
 exports.receiveInventoryTransfer = onCall(
-    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true,
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public",
       maxInstances: INVENTORY_TRANSFER_MAX_INSTANCES},
     async (request) => {
       const uid = requireAuth(request);
@@ -23020,7 +23026,7 @@ exports.receiveInventoryTransfer = onCall(
 );
 
 exports.resolveInventoryTransferLine = onCall(
-    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true,
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public",
       maxInstances: INVENTORY_TRANSFER_MAX_INSTANCES},
     async (request) => {
       const uid = requireAuth(request);
