@@ -442,6 +442,8 @@ describe("the volume functions are wired with a small budget", () => {
     assert.ok(hasIndex("containerLines", ["businessId", "receivedAt"]));
     assert.ok(hasIndex("containerLines", ["businessId", "createdAt"]));
     assert.ok(hasIndex("containers", ["businessId", "sailedAt"]));
+    // The admin page sums pieces per month (getPlatformVolume trend).
+    assert.ok(hasIndex("volumeMonthly", ["month", "pieces"]));
   });
 
   it("keeps the rollups server-only", () => {

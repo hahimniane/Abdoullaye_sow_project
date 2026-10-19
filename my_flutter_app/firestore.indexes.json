@@ -1885,6 +1885,20 @@
           "order": "DESCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "volumeMonthly",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "month",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "pieces",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": [
