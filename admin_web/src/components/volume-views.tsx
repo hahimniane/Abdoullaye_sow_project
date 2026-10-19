@@ -49,12 +49,13 @@ function useLanguage(): VolumeLanguage {
 }
 
 /** A month as text, formatted for the page's language and never re-translated. */
-function MonthText({ month }: { month: string }) {
+export function MonthText({ month }: { month: string }) {
   const language = useLanguage();
   return <span data-no-translate>{formatVolumeMonth(month, language)}</span>;
 }
 
-function MonthPicker({ month, onChange }: { month: string; onChange: (month: string) => void }) {
+/** The month picker the Volume and Bills pages share: arrows and the last 24 months. */
+export function MonthPicker({ month, onChange }: { month: string; onChange: (month: string) => void }) {
   const language = useLanguage();
   const current = currentVolumeMonth();
   const months = volumeMonthOptions(month, current);

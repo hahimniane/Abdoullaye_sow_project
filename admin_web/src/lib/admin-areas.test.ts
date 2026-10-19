@@ -86,7 +86,7 @@ test("areas outside the role editor are deliberate, not forgotten", () => {
 });
 
 test("an area that follows another follows a real role area", () => {
-  assert.deepEqual(followingAreas.map((area) => area.id), ["volume"]);
+  assert.deepEqual(followingAreas.map((area) => area.id), ["volume", "bills"]);
   for (const area of followingAreas) {
     assert.ok(
       roleEditableAreas.some((other) => other.id === area.follows),
@@ -96,8 +96,8 @@ test("an area that follows another follows a real role area", () => {
   }
 });
 
-test("Volume opens for whoever can open Finance, and only them", () => {
-  assert.deepEqual(withFollowingTabs(["today", "finance"]), ["today", "finance", "volume"]);
+test("Volume and Bills open for whoever can open Finance, and only them", () => {
+  assert.deepEqual(withFollowingTabs(["today", "finance"]), ["today", "finance", "volume", "bills"]);
   assert.deepEqual(withFollowingTabs(["today", "operations"]), ["today", "operations"]);
   assert.match(consoleSource, /tabs: withFollowingTabs\(allowedTabs\)/);
 });

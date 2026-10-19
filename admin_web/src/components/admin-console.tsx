@@ -55,6 +55,7 @@ import {
   LogOut,
   Menu,
   Package,
+  Receipt,
   RefreshCw,
   Search,
   Send,
@@ -151,6 +152,7 @@ import {
   type AdminCapability,
 } from "@/lib/admin-areas";
 import { AdminVolumeView } from "@/components/volume-views";
+import { AdminBillsView } from "@/components/billing-views";
 import type { FirestoreRow, Role, UserProfile } from "@/types/admin";
 import {
   PEOPLE_SIGN_IN_STATES,
@@ -204,7 +206,7 @@ const navGroups: Array<{ label: string; tabs: Tab[] }> = [
   { label: "Network", tabs: ["businesses", "people"] },
   {
     label: "Queues",
-    tabs: ["marketplace", "operations", "finance", "volume", "support"],
+    tabs: ["marketplace", "operations", "finance", "volume", "bills", "support"],
   },
   { label: "System", tabs: ["website", "tools", "settings"] },
 ];
@@ -2723,6 +2725,7 @@ export function AdminConsole() {
               previewMode={previewMode}
             />
           )}
+          {activeTab === "bills" && <AdminBillsView previewMode={previewMode} />}
           {activeTab === "support" && (
             <SupportCasesPanel
               scope="admin"
@@ -13681,6 +13684,7 @@ function tabLabel(tab: Tab) {
     marketplace: "Marketplace",
     finance: "Finance",
     volume: "Volume",
+    bills: "Bills",
     support: "Support",
     website: "Website",
     tools: "Tools",
@@ -13697,6 +13701,7 @@ function tabHint(tab: Tab) {
     marketplace: "Listings by business",
     finance: "Commission & returns",
     volume: "Pieces and containers by month",
+    bills: "What businesses owe Laawol",
     support: "Escalated cases",
     website: "Site content",
     tools: "Setup utilities",
@@ -13714,6 +13719,7 @@ function tabIcon(tab: Tab) {
     marketplace: <Car {...props} />,
     finance: <BadgeDollarSign {...props} />,
     volume: <BarChart3 {...props} />,
+    bills: <Receipt {...props} />,
     support: <LifeBuoy {...props} />,
     website: <Store {...props} />,
     tools: <DatabaseZap {...props} />,

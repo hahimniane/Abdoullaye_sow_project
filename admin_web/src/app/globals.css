@@ -15531,3 +15531,527 @@ button.pkq-card:hover { border-color: var(--brand); }
 .people-not-signed-in { color: #92400e; }
 .status-pill.people-not-signed-in { background: rgba(245, 158, 11, 0.1); border-color: rgba(180, 83, 9, 0.22); }
 .people-action-note { color: var(--muted); flex-basis: 100%; font-size: 12px; line-height: 1.45; margin: 0; }
+
+/* ---- Laawol bills (billing-views.tsx) ------------------------------------
+   Built on the Volume page's pieces (vol-topbar, the month picker, the
+   table in .vol-table-scroll): the table scrolls inside its card, never the
+   page, and every grid column can shrink (minmax(0, 1fr)). */
+.bl-page {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.metric-grid.bl-tiles {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.bl-tiles .metric strong.bl-figure {
+  font-size: 26px;
+  overflow-wrap: anywhere;
+}
+
+.bl-tiles .metric small span {
+  color: inherit;
+  display: inline;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.bl-grid {
+  align-items: start;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.bl-col {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+}
+
+.bl-panel {
+  min-width: 0;
+}
+
+.bl-panel .panel-header {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.bl-panel-body {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px 18px 18px;
+}
+
+.bl-panel-body > p,
+.bl-panel-body .lst-hint {
+  margin: 0;
+}
+
+.bl-muted {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.bl-title-pills {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.bl-lines {
+  display: grid;
+  gap: 0;
+}
+
+.bl-line {
+  align-items: baseline;
+  border-bottom: 1px solid var(--rule);
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 9px 0;
+}
+
+.bl-line > :last-child {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.bl-line-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.bl-line-text > span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.bl-line-note {
+  color: var(--warning) !important;
+}
+
+.bl-adjust .bl-line-text strong {
+  color: var(--brand-strong);
+  font-weight: 700;
+}
+
+.bl-total {
+  border-bottom: 2px solid var(--rule-strong);
+  font-size: 16px;
+}
+
+.bl-commission .bl-line-text strong {
+  font-weight: 600;
+}
+
+.bl-earned {
+  border-bottom: 0;
+  color: var(--money);
+}
+
+.bl-no-deal {
+  margin: 0 0 6px;
+}
+
+.bl-paid-summary,
+.bl-compare {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+
+.bl-paid-summary > div,
+.bl-compare > div {
+  background: var(--paper-soft);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+}
+
+.bl-paid-summary > div > span:first-child,
+.bl-compare > div > span:first-child {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.bl-compare > div.up b {
+  color: var(--money);
+}
+
+.bl-compare > div.down b {
+  color: var(--danger);
+}
+
+.bl-compare-wide {
+  padding: 14px 18px 0;
+}
+
+.bl-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.bl-actions > button {
+  max-width: 100%;
+}
+
+.bl-more {
+  justify-content: space-between;
+  padding: 12px 18px 16px;
+}
+
+.bl-flash {
+  color: var(--money);
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.bl-warning {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 8px;
+  color: #7a4b00;
+  font-size: 13px;
+  margin: 0;
+  padding: 10px 12px;
+}
+
+.bl-drift {
+  align-items: flex-start;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.34);
+  border-radius: 8px;
+  color: #7a4b00;
+  display: flex;
+  font-size: 14px;
+  gap: 10px;
+  padding: 12px 14px;
+}
+
+.bl-drift ul {
+  margin: 6px 0;
+  padding-left: 18px;
+}
+
+.bl-drift p {
+  margin: 0;
+}
+
+.bl-link {
+  background: none;
+  border: 0;
+  color: var(--brand-strong);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.bl-deal-summary {
+  display: grid;
+  gap: 2px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.bl-deal-label {
+  font-weight: 700;
+}
+
+.bl-table thead th.bl-deal-head {
+  text-align: left;
+}
+
+.bl-field-pair + .bl-deal-form {
+  margin-top: 14px;
+}
+
+.bl-table .bl-deal-cell {
+  font-size: 13px;
+  min-width: 190px;
+  text-align: left;
+}
+
+.bl-table .bl-status-cell {
+  white-space: normal;
+}
+
+.bl-status-stack {
+  align-items: flex-end;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bl-status-stack .status-pill {
+  align-items: center;
+  display: inline-flex;
+  gap: 3px;
+}
+
+.bl-table td,
+.bl-table tbody th {
+  vertical-align: top;
+}
+
+.bl-cell-note {
+  display: block;
+  font-weight: 400;
+}
+
+.bl-payments,
+.bl-months,
+.bl-history-list {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.bl-payments li {
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  position: relative;
+}
+
+.bl-payments li.voided .bl-payment-main {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.bl-payment-main {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  padding-right: 72px;
+}
+
+.bl-payment-note {
+  color: var(--ink);
+  font-size: 13px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.bl-payment-meta,
+.bl-history-list li {
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.bl-void {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+}
+
+.bl-months li {
+  align-items: center;
+  border-bottom: 1px solid var(--rule);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  padding-bottom: 8px;
+}
+
+.bl-months-figures {
+  color: var(--muted);
+  font-size: 13px;
+  margin-left: auto;
+}
+
+.bl-commission-mode h3 {
+  font-size: 14px;
+  margin: 4px 0;
+}
+
+.bl-segmented {
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  margin-top: 8px;
+  overflow: hidden;
+}
+
+.bl-segmented button {
+  background: var(--paper);
+  border: 0;
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  min-height: 40px;
+  padding: 8px 10px;
+}
+
+.bl-segmented button + button {
+  border-left: 1px solid var(--rule);
+}
+
+.bl-segmented button.active {
+  background: var(--brand);
+  color: #fff;
+}
+
+.bl-segmented button:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.bl-versions summary {
+  align-items: center;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 700;
+  gap: 6px;
+}
+
+.bl-versions ol {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+}
+
+.bl-versions li {
+  border-left: 3px solid var(--rule-strong);
+  display: grid;
+  font-size: 13px;
+  gap: 4px;
+  padding-left: 10px;
+}
+
+.bl-version-head {
+  font-weight: 700;
+}
+
+.bl-deal-form {
+  display: grid;
+  gap: 0;
+}
+
+.bl-deal-form .lst-fieldset:first-child {
+  margin-top: 0;
+}
+
+.bl-field-pair,
+.bl-field-trio {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.bl-field-trio {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.bl-affix {
+  align-items: center;
+  display: flex;
+  gap: 0;
+  min-width: 0;
+  position: relative;
+}
+
+.bl-affix i {
+  color: var(--muted);
+  font-style: normal;
+  font-weight: 700;
+  pointer-events: none;
+  position: absolute;
+}
+
+.bl-affix:not(.suffix) i {
+  left: 12px;
+}
+
+.bl-affix.suffix i {
+  right: 12px;
+}
+
+.lst-field .bl-affix input {
+  flex: 1 1 auto;
+  width: 100%;
+}
+
+.lst-field .bl-affix:not(.suffix) input {
+  padding-left: 26px;
+}
+
+.lst-field .bl-affix.suffix input {
+  padding-right: 30px;
+}
+
+.lst-field small.bl-field-error {
+  color: var(--danger);
+}
+
+.secondary-button.compact {
+  font-size: 13px;
+  padding: 7px 12px;
+}
+
+@media (max-width: 1100px) {
+  .bl-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .metric-grid.bl-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .bl-field-pair,
+  .bl-field-trio {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .bl-tiles .metric strong.bl-figure {
+    font-size: 20px;
+  }
+
+  .bl-panel-body {
+    padding: 12px 14px 16px;
+  }
+
+  .bl-actions > button {
+    flex: 1 1 100%;
+  }
+
+  .bl-months-figures {
+    margin-left: 0;
+    width: 100%;
+  }
+}

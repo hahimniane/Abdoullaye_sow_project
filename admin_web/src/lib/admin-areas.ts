@@ -58,6 +58,9 @@ export const adminAreas: AdminArea[] = [
   {id: "operations", label: "Operations", governance: "role", cap: "operations"},
   {id: "finance", label: "Finance", governance: "role", cap: "finance"},
   {id: "volume", label: "Volume", governance: "follows", follows: "finance"},
+  // Laawol bills: read by whoever reads Finance; changing a deal, a payment
+  // or a closed month is checked on the server (super admins only).
+  {id: "bills", label: "Bills", governance: "follows", follows: "finance"},
   {id: "support", label: "Reply to support requests", governance: "capability", cap: "support"},
   {id: "website", label: "Website", governance: "role", cap: "website"},
   {id: "tools", label: "Tools", governance: "superAdmin"},
