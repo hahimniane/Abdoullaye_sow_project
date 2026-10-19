@@ -46,6 +46,8 @@
     "Share a barrel": "Partager un baril",
     "Shared barrels": "Barils partagés",
     "Ship a barrel": "Expédier un baril",
+    "Send a package": "Envoyer un colis",
+    "Barrels, boxes and more. The business sends you an estimate on WhatsApp before you hand anything over.": "Barils, cartons et plus. L’entreprise vous envoie un devis sur WhatsApp avant que vous ne remettiez quoi que ce soit.",
     "Start a freight request": "Commencer une demande de fret",
     "Privacy": "Confidentialité",
     "Terms of Service": "Conditions d’utilisation",
