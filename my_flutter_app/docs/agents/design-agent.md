@@ -187,3 +187,11 @@ Return:
   Invitations are email-based and never collect an admin-created password;
   self-access, last-owner, last-super-admin, and irreversible deletion actions
   stay capability-gated and explicitly confirmed.
+- Phone sign-in reads WhatsApp first, text second: "Send the code on
+  WhatsApp" is the primary action and "Send it by text instead" a quiet
+  text button beside it (also taken automatically when WhatsApp is
+  unavailable). From a tracking link only the last two digits ever show
+  ("Sign in as the number ending in ••35"; with two numbers the buttons name
+  sender/receiver). Staff phone warnings sit right under the number as
+  compact one-line notes: amber "Add the country code", red "The person
+  says this number isn't theirs - check it".

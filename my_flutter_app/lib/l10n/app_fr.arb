@@ -7786,5 +7786,156 @@
   "inventoryFailResolutionInvalid": "Choisissez Rendre ou Passer en perte.",
   "inventoryFailNoteTooLong": "La note est trop longue (300 caractères au plus).",
   "inventoryFailTransferLinesRequired": "Ajoutez au moins un produit.",
-  "inventoryFailTransferLinesTooMany": "Un transfert contient au plus 100 produits."
+  "inventoryFailTransferLinesTooMany": "Un transfert contient au plus 100 produits.",
+  "phaSignInWithPhone": "Se connecter avec son téléphone",
+  "phaSignInTitle": "Connexion par téléphone",
+  "phaSignInIntro": "Nous enverrons un code à 6 chiffres à ce numéro sur WhatsApp.",
+  "phaSendWhatsAppCode": "Envoyer le code sur WhatsApp",
+  "phaSendByText": "Recevoir le code par SMS",
+  "phaSendTextCode": "Envoyer le code par SMS",
+  "phaCodeSentWhatsApp": "Saisissez le code à 6 chiffres envoyé sur WhatsApp au numéro se terminant par ••{lastTwo}.",
+  "@phaCodeSentWhatsApp": {
+    "placeholders": {
+      "lastTwo": {
+        "type": "String"
+      }
+    }
+  },
+  "phaCodeSentWhatsAppPlain": "Saisissez le code à 6 chiffres envoyé sur WhatsApp.",
+  "phaTextFullNumberIntro": "Pour recevoir le code par SMS, saisissez votre numéro complet avec l'indicatif pays.",
+  "phaWhatsAppUnavailableNote": "Les codes WhatsApp ne sont pas disponibles pour le moment : nous l'enverrons par SMS.",
+  "phaErrPhoneInvalid": "Saisissez un numéro de téléphone valide.",
+  "phaErrNeedsCountryCode": "Ajoutez l'indicatif pays au numéro (par exemple +1 ou +224).",
+  "phaErrTrackingNotFound": "Nous n'avons pas trouvé ce code de suivi.",
+  "phaErrNoPhoneOnRecord": "Ce colis n'a pas de numéro auquel envoyer un code.",
+  "phaErrRateLimited": "Trop de codes ont été envoyés. Patientez puis réessayez.",
+  "phaErrRateLimitedSeconds": "Trop de codes ont été envoyés. Réessayez dans {seconds} s.",
+  "@phaErrRateLimitedSeconds": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "phaErrRateLimitedMinutes": "{minutes, plural, =1{Trop de codes ont été envoyés. Réessayez dans 1 minute.} other{Trop de codes ont été envoyés. Réessayez dans {minutes} minutes.}}",
+  "@phaErrRateLimitedMinutes": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "phaErrWhatsAppUnavailable": "Les codes WhatsApp ne sont pas disponibles pour le moment. Recevez-le par SMS.",
+  "phaErrSignInRequired": "Connectez-vous d'abord à votre compte.",
+  "phaErrCodeWrong": "Ce code n'est pas le bon.",
+  "phaErrCodeWrongTries": "{count, plural, =1{Ce code n'est pas le bon. Encore 1 essai.} other{Ce code n'est pas le bon. Encore {count} essais.}}",
+  "@phaErrCodeWrongTries": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "phaErrCodeExpired": "Ce code a expiré. Demandez-en un nouveau.",
+  "phaErrTooManyAttempts": "Trop de codes erronés. Demandez-en un nouveau.",
+  "phaErrChallengeNotFound": "Demandez un nouveau code.",
+  "phaErrPhoneInUse": "Ce numéro appartient déjà à un autre compte Laawol déjà utilisé. Connectez-vous avec ce numéro, ou vérifiez un autre numéro.",
+  "phaErrWrongAccount": "Ce code a été demandé par un autre compte. Demandez-en un nouveau.",
+  "phaErrProofInvalid": "Vérifiez le numéro à nouveau.",
+  "phaErrNoVerifiedPhone": "Ajoutez et vérifiez votre numéro dans votre profil pour voir vos colis.",
+  "phaErrRecordInvalid": "Ce colis est introuvable.",
+  "phaErrOffline": "Vérifiez votre connexion et réessayez.",
+  "phaErrAppCheck": "Cet appareil n'a pas pu être vérifié. Mettez l'application à jour et réessayez.",
+  "phaErrGeneric": "Une erreur est survenue. Veuillez réessayer.",
+  "phaHintTitle": "Ce colis est à vous ?",
+  "phaHintBody": "Connectez-vous avec le numéro indiqué pour voir tous vos colis, de toutes les entreprises.",
+  "phaHintSignInAs": "Se connecter avec le numéro se terminant par ••{lastTwo}",
+  "@phaHintSignInAs": {
+    "placeholders": {
+      "lastTwo": {
+        "type": "String"
+      }
+    }
+  },
+  "phaHintSignInAsSender": "Se connecter en tant qu'expéditeur (••{lastTwo})",
+  "@phaHintSignInAsSender": {
+    "placeholders": {
+      "lastTwo": {
+        "type": "String"
+      }
+    }
+  },
+  "phaHintSignInAsReceiver": "Se connecter en tant que destinataire (••{lastTwo})",
+  "@phaHintSignInAsReceiver": {
+    "placeholders": {
+      "lastTwo": {
+        "type": "String"
+      }
+    }
+  },
+  "phaMyPackagesTitle": "Mes colis",
+  "phaMyPackagesSubtitle": "Tous les colis enregistrés avec votre numéro",
+  "phaSectionMine": "Mes colis",
+  "phaSectionComingToYou": "En route vers vous",
+  "phaEmptyTitle": "Aucun colis pour le moment",
+  "phaEmptyBody": "Les colis qu'une entreprise enregistre avec votre numéro se terminant par ••{lastTwo} apparaîtront ici.",
+  "@phaEmptyBody": {
+    "placeholders": {
+      "lastTwo": {
+        "type": "String"
+      }
+    }
+  },
+  "phaEmptyBodyPlain": "Les colis qu'une entreprise enregistre avec votre numéro apparaîtront ici.",
+  "phaLoadFailed": "Vos colis n'ont pas pu être chargés.",
+  "phaSignInToSee": "Connectez-vous avec votre téléphone pour voir tous les colis enregistrés avec votre numéro.",
+  "phaShowMore": "Afficher plus",
+  "phaLoadingMore": "Chargement...",
+  "phaBusinessUnknown": "Une entreprise",
+  "phaServicePackageRequest": "Demande d'envoi de colis",
+  "phaSentToSelf": "Vous êtes l'expéditeur et le destinataire",
+  "phaRecordedOn": "Enregistré le {date}",
+  "@phaRecordedOn": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "phaUpdatedOn": "Mis à jour le {date}",
+  "@phaUpdatedOn": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "phaNotMine": "Ce n'est pas à moi",
+  "phaNotMineTitle": "Ce n'est pas votre colis ?",
+  "phaNotMineBody": "Il sera retiré de votre liste, et {business} sera invitée à vérifier le numéro.",
+  "@phaNotMineBody": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "phaNotMineBodyPlain": "Il sera retiré de votre liste, et l'entreprise sera invitée à vérifier le numéro.",
+  "phaNotMineConfirm": "Le retirer",
+  "phaNotMineDone": "Retiré. L'entreprise va vérifier le numéro.",
+  "phaFlagAddCountryCode": "Ajoutez l'indicatif pays",
+  "phaFlagReportedNotMine": "La personne dit que ce numéro n'est pas le sien - vérifiez-le",
+  "phaNotSignedInYet": "Pas encore connecté",
+  "phaSignInFilterSignedIn": "Connectés",
+  "phaSignInFilterNotSignedIn": "Pas encore connectés",
+  "phaSignInFilterAll": "Tout le monde",
+  "phaNoEmailActions": "Ce compte n'a pas d'adresse e-mail : il se connecte avec son numéro de téléphone, les actions par e-mail ne sont donc pas disponibles.",
+  "phaAccountOrigin": "Compte créé depuis",
+  "phaAccountOriginShipment": "Le numéro d'un envoi",
+  "phaAccountOriginPhoneSignIn": "Une connexion par téléphone",
+  "phaVerifyWithWhatsApp": "Recevoir le code sur WhatsApp",
+  "phaLinkMerged": "Votre numéro est vérifié. Les colis enregistrés avec ce numéro apparaissent maintenant dans votre compte.",
+  "phaDeletePhoneOnlyNote": "Pour confirmer, vous devez vous être connecté au cours des 15 dernières minutes. Si cela ne fonctionne pas, déconnectez-vous puis reconnectez-vous avec votre téléphone.",
+  "phaDeleteRecentSignIn": "Déconnectez-vous, reconnectez-vous avec votre téléphone, puis supprimez votre compte dans les 15 minutes.",
+  "phaPhoneOnlyNoPassword": "Pas d'e-mail sur votre compte ? Revenez en arrière et choisissez « Se connecter avec son téléphone » : il n'y a pas de mot de passe à réinitialiser."
 }

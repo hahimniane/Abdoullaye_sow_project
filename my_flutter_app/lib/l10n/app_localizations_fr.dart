@@ -15370,4 +15370,285 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get inventoryFailTransferLinesTooMany =>
       'Un transfert contient au plus 100 produits.';
+
+  @override
+  String get phaSignInWithPhone => 'Se connecter avec son téléphone';
+
+  @override
+  String get phaSignInTitle => 'Connexion par téléphone';
+
+  @override
+  String get phaSignInIntro =>
+      'Nous enverrons un code à 6 chiffres à ce numéro sur WhatsApp.';
+
+  @override
+  String get phaSendWhatsAppCode => 'Envoyer le code sur WhatsApp';
+
+  @override
+  String get phaSendByText => 'Recevoir le code par SMS';
+
+  @override
+  String get phaSendTextCode => 'Envoyer le code par SMS';
+
+  @override
+  String phaCodeSentWhatsApp(String lastTwo) {
+    return 'Saisissez le code à 6 chiffres envoyé sur WhatsApp au numéro se terminant par ••$lastTwo.';
+  }
+
+  @override
+  String get phaCodeSentWhatsAppPlain =>
+      'Saisissez le code à 6 chiffres envoyé sur WhatsApp.';
+
+  @override
+  String get phaTextFullNumberIntro =>
+      'Pour recevoir le code par SMS, saisissez votre numéro complet avec l\'indicatif pays.';
+
+  @override
+  String get phaWhatsAppUnavailableNote =>
+      'Les codes WhatsApp ne sont pas disponibles pour le moment : nous l\'enverrons par SMS.';
+
+  @override
+  String get phaErrPhoneInvalid => 'Saisissez un numéro de téléphone valide.';
+
+  @override
+  String get phaErrNeedsCountryCode =>
+      'Ajoutez l\'indicatif pays au numéro (par exemple +1 ou +224).';
+
+  @override
+  String get phaErrTrackingNotFound =>
+      'Nous n\'avons pas trouvé ce code de suivi.';
+
+  @override
+  String get phaErrNoPhoneOnRecord =>
+      'Ce colis n\'a pas de numéro auquel envoyer un code.';
+
+  @override
+  String get phaErrRateLimited =>
+      'Trop de codes ont été envoyés. Patientez puis réessayez.';
+
+  @override
+  String phaErrRateLimitedSeconds(int seconds) {
+    return 'Trop de codes ont été envoyés. Réessayez dans $seconds s.';
+  }
+
+  @override
+  String phaErrRateLimitedMinutes(int minutes) {
+    String _temp0 = intl.Intl.pluralLogic(
+      minutes,
+      locale: localeName,
+      other: 'Trop de codes ont été envoyés. Réessayez dans $minutes minutes.',
+      one: 'Trop de codes ont été envoyés. Réessayez dans 1 minute.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get phaErrWhatsAppUnavailable =>
+      'Les codes WhatsApp ne sont pas disponibles pour le moment. Recevez-le par SMS.';
+
+  @override
+  String get phaErrSignInRequired => 'Connectez-vous d\'abord à votre compte.';
+
+  @override
+  String get phaErrCodeWrong => 'Ce code n\'est pas le bon.';
+
+  @override
+  String phaErrCodeWrongTries(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Ce code n\'est pas le bon. Encore $count essais.',
+      one: 'Ce code n\'est pas le bon. Encore 1 essai.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get phaErrCodeExpired => 'Ce code a expiré. Demandez-en un nouveau.';
+
+  @override
+  String get phaErrTooManyAttempts =>
+      'Trop de codes erronés. Demandez-en un nouveau.';
+
+  @override
+  String get phaErrChallengeNotFound => 'Demandez un nouveau code.';
+
+  @override
+  String get phaErrPhoneInUse =>
+      'Ce numéro appartient déjà à un autre compte Laawol déjà utilisé. Connectez-vous avec ce numéro, ou vérifiez un autre numéro.';
+
+  @override
+  String get phaErrWrongAccount =>
+      'Ce code a été demandé par un autre compte. Demandez-en un nouveau.';
+
+  @override
+  String get phaErrProofInvalid => 'Vérifiez le numéro à nouveau.';
+
+  @override
+  String get phaErrNoVerifiedPhone =>
+      'Ajoutez et vérifiez votre numéro dans votre profil pour voir vos colis.';
+
+  @override
+  String get phaErrRecordInvalid => 'Ce colis est introuvable.';
+
+  @override
+  String get phaErrOffline => 'Vérifiez votre connexion et réessayez.';
+
+  @override
+  String get phaErrAppCheck =>
+      'Cet appareil n\'a pas pu être vérifié. Mettez l\'application à jour et réessayez.';
+
+  @override
+  String get phaErrGeneric => 'Une erreur est survenue. Veuillez réessayer.';
+
+  @override
+  String get phaHintTitle => 'Ce colis est à vous ?';
+
+  @override
+  String get phaHintBody =>
+      'Connectez-vous avec le numéro indiqué pour voir tous vos colis, de toutes les entreprises.';
+
+  @override
+  String phaHintSignInAs(String lastTwo) {
+    return 'Se connecter avec le numéro se terminant par ••$lastTwo';
+  }
+
+  @override
+  String phaHintSignInAsSender(String lastTwo) {
+    return 'Se connecter en tant qu\'expéditeur (••$lastTwo)';
+  }
+
+  @override
+  String phaHintSignInAsReceiver(String lastTwo) {
+    return 'Se connecter en tant que destinataire (••$lastTwo)';
+  }
+
+  @override
+  String get phaMyPackagesTitle => 'Mes colis';
+
+  @override
+  String get phaMyPackagesSubtitle =>
+      'Tous les colis enregistrés avec votre numéro';
+
+  @override
+  String get phaSectionMine => 'Mes colis';
+
+  @override
+  String get phaSectionComingToYou => 'En route vers vous';
+
+  @override
+  String get phaEmptyTitle => 'Aucun colis pour le moment';
+
+  @override
+  String phaEmptyBody(String lastTwo) {
+    return 'Les colis qu\'une entreprise enregistre avec votre numéro se terminant par ••$lastTwo apparaîtront ici.';
+  }
+
+  @override
+  String get phaEmptyBodyPlain =>
+      'Les colis qu\'une entreprise enregistre avec votre numéro apparaîtront ici.';
+
+  @override
+  String get phaLoadFailed => 'Vos colis n\'ont pas pu être chargés.';
+
+  @override
+  String get phaSignInToSee =>
+      'Connectez-vous avec votre téléphone pour voir tous les colis enregistrés avec votre numéro.';
+
+  @override
+  String get phaShowMore => 'Afficher plus';
+
+  @override
+  String get phaLoadingMore => 'Chargement...';
+
+  @override
+  String get phaBusinessUnknown => 'Une entreprise';
+
+  @override
+  String get phaServicePackageRequest => 'Demande d\'envoi de colis';
+
+  @override
+  String get phaSentToSelf => 'Vous êtes l\'expéditeur et le destinataire';
+
+  @override
+  String phaRecordedOn(String date) {
+    return 'Enregistré le $date';
+  }
+
+  @override
+  String phaUpdatedOn(String date) {
+    return 'Mis à jour le $date';
+  }
+
+  @override
+  String get phaNotMine => 'Ce n\'est pas à moi';
+
+  @override
+  String get phaNotMineTitle => 'Ce n\'est pas votre colis ?';
+
+  @override
+  String phaNotMineBody(String business) {
+    return 'Il sera retiré de votre liste, et $business sera invitée à vérifier le numéro.';
+  }
+
+  @override
+  String get phaNotMineBodyPlain =>
+      'Il sera retiré de votre liste, et l\'entreprise sera invitée à vérifier le numéro.';
+
+  @override
+  String get phaNotMineConfirm => 'Le retirer';
+
+  @override
+  String get phaNotMineDone => 'Retiré. L\'entreprise va vérifier le numéro.';
+
+  @override
+  String get phaFlagAddCountryCode => 'Ajoutez l\'indicatif pays';
+
+  @override
+  String get phaFlagReportedNotMine =>
+      'La personne dit que ce numéro n\'est pas le sien - vérifiez-le';
+
+  @override
+  String get phaNotSignedInYet => 'Pas encore connecté';
+
+  @override
+  String get phaSignInFilterSignedIn => 'Connectés';
+
+  @override
+  String get phaSignInFilterNotSignedIn => 'Pas encore connectés';
+
+  @override
+  String get phaSignInFilterAll => 'Tout le monde';
+
+  @override
+  String get phaNoEmailActions =>
+      'Ce compte n\'a pas d\'adresse e-mail : il se connecte avec son numéro de téléphone, les actions par e-mail ne sont donc pas disponibles.';
+
+  @override
+  String get phaAccountOrigin => 'Compte créé depuis';
+
+  @override
+  String get phaAccountOriginShipment => 'Le numéro d\'un envoi';
+
+  @override
+  String get phaAccountOriginPhoneSignIn => 'Une connexion par téléphone';
+
+  @override
+  String get phaVerifyWithWhatsApp => 'Recevoir le code sur WhatsApp';
+
+  @override
+  String get phaLinkMerged =>
+      'Votre numéro est vérifié. Les colis enregistrés avec ce numéro apparaissent maintenant dans votre compte.';
+
+  @override
+  String get phaDeletePhoneOnlyNote =>
+      'Pour confirmer, vous devez vous être connecté au cours des 15 dernières minutes. Si cela ne fonctionne pas, déconnectez-vous puis reconnectez-vous avec votre téléphone.';
+
+  @override
+  String get phaDeleteRecentSignIn =>
+      'Déconnectez-vous, reconnectez-vous avec votre téléphone, puis supprimez votre compte dans les 15 minutes.';
+
+  @override
+  String get phaPhoneOnlyNoPassword =>
+      'Pas d\'e-mail sur votre compte ? Revenez en arrière et choisissez « Se connecter avec son téléphone » : il n\'y a pas de mot de passe à réinitialiser.';
 }

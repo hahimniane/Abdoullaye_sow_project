@@ -359,3 +359,28 @@ Add future project conventions and repeated architectural decisions here.
   `toStoreId ==` and merge (`mergeLiveById` in `firestore_query_spec.dart`);
   the rules refuse an unscoped list. A new read surface for a new collection
   gets its own source interface the same way.
+- Phone accounts (docs/PHONE_ACCOUNTS.md): pure rules in
+  `lib/services/phone_accounts.dart` (refusals, challenge/verify answers,
+  My packages model + `groupMyShipments`, tracking `TrackingSignInHint`,
+  `RecordPhoneFlags`, `ResendCountdown`); every call goes through ONE
+  callable `phoneAccount` with `{action: ...}` in `PhoneAccountService`
+  (`callContainerCallable`, injectable caller). Refusals map by
+  `details.reason` in `phoneAccountRefusalText`
+  (`lib/widgets/phone_account_widgets.dart`). The code screen is
+  `PhoneSignInScreen` behind `PhoneSignInClient` (AuthProvider-backed
+  `AuthPhoneSignInClient`; fake `test/fixtures/fake_phone_sign_in.dart`);
+  it pops a `PhoneSignInOutcome` and the caller navigates. Every phone
+  sign-in ends in `AuthProvider._afterPhoneSignIn` (waits for the auth-event
+  role lookup, then reads the profile again) so a brand-new SMS account's
+  profile, written by `completePhoneSignIn`, lands. The SMS merge proves the
+  number on a SECONDARY app named `phone-proof` built from
+  `Firebase.app().options` (staging/emulator safe), deleted afterwards.
+- An account may have no email (phone sign-in, or made from a shipment's
+  number): use `AuthProvider.isPhoneOnlyAccount`; never require an email
+  field, password, or email action for it (profile hides the email field,
+  deletion uses the server's 15-minute recent sign-in, admin email actions
+  are disabled with an explanation). Staff phone warnings come from the
+  server-written `phoneCountryCodeMissing` / `phoneReportedNotMine` lists
+  (`ContainerLine.phoneFlags`, `recordPhoneFlagsOf` for raw maps) through
+  `RecordPhoneFlagNotes`; they replace the client-side "no country code"
+  check for the same number rather than doubling it.

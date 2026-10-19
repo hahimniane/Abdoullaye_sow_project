@@ -21,6 +21,7 @@ import 'tracking_screen.dart';
 import 'my_purchases_screen.dart';
 import 'orders_screen.dart';
 import 'my_package_requests_screen.dart';
+import 'my_packages_screen.dart';
 import 'package_request_detail_screen.dart';
 import 'package_request_form_screen.dart';
 import 'freight_quote_details_screen.dart';
@@ -183,6 +184,10 @@ Route<dynamic>? _customerTabRoute(RouteSettings settings) {
       break;
     case '/my-requests':
       page = const MyPackageRequestsScreen();
+      break;
+    // Every package recorded with the account's phone (Activity).
+    case '/my-packages':
+      page = const MyPackagesScreen();
       break;
     case '/package-request-detail':
       final detailArgs = settings.arguments;

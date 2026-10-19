@@ -7786,5 +7786,156 @@
   "inventoryFailResolutionInvalid": "Choose Return or Write off.",
   "inventoryFailNoteTooLong": "The note is too long (300 characters at most).",
   "inventoryFailTransferLinesRequired": "Add at least one product.",
-  "inventoryFailTransferLinesTooMany": "A transfer holds at most 100 products."
+  "inventoryFailTransferLinesTooMany": "A transfer holds at most 100 products.",
+  "phaSignInWithPhone": "Sign in with your phone",
+  "phaSignInTitle": "Sign in with your phone",
+  "phaSignInIntro": "We'll send a 6-digit code to this number on WhatsApp.",
+  "phaSendWhatsAppCode": "Send the code on WhatsApp",
+  "phaSendByText": "Send it by text instead",
+  "phaSendTextCode": "Send the code by text",
+  "phaCodeSentWhatsApp": "Enter the 6-digit code we sent on WhatsApp to the number ending in ••{lastTwo}.",
+  "@phaCodeSentWhatsApp": {
+    "placeholders": {
+      "lastTwo": {
+        "type": "String"
+      }
+    }
+  },
+  "phaCodeSentWhatsAppPlain": "Enter the 6-digit code we sent you on WhatsApp.",
+  "phaTextFullNumberIntro": "To get the code by text, enter your full phone number with its country code.",
+  "phaWhatsAppUnavailableNote": "WhatsApp codes aren't available right now, so we'll send it by text.",
+  "phaErrPhoneInvalid": "Enter a valid phone number.",
+  "phaErrNeedsCountryCode": "Add your country code to the number (for example +1 or +224).",
+  "phaErrTrackingNotFound": "We couldn't find that tracking code.",
+  "phaErrNoPhoneOnRecord": "This package has no number we can send a code to.",
+  "phaErrRateLimited": "Too many codes were sent. Please wait and try again.",
+  "phaErrRateLimitedSeconds": "Too many codes were sent. Try again in {seconds} s.",
+  "@phaErrRateLimitedSeconds": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "phaErrRateLimitedMinutes": "{minutes, plural, =1{Too many codes were sent. Try again in 1 minute.} other{Too many codes were sent. Try again in {minutes} minutes.}}",
+  "@phaErrRateLimitedMinutes": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "phaErrWhatsAppUnavailable": "WhatsApp codes aren't available right now. Send it by text instead.",
+  "phaErrSignInRequired": "Sign in to your account first.",
+  "phaErrCodeWrong": "That code isn't right.",
+  "phaErrCodeWrongTries": "{count, plural, =1{That code isn't right. 1 try left.} other{That code isn't right. {count} tries left.}}",
+  "@phaErrCodeWrongTries": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "phaErrCodeExpired": "That code has expired. Ask for a new one.",
+  "phaErrTooManyAttempts": "Too many wrong codes. Ask for a new one.",
+  "phaErrChallengeNotFound": "Ask for a new code.",
+  "phaErrPhoneInUse": "This number already belongs to another Laawol account that has been used. Sign in with that number instead, or verify a different number.",
+  "phaErrWrongAccount": "Another account asked for this code. Ask for a new one.",
+  "phaErrProofInvalid": "Verify the number again.",
+  "phaErrNoVerifiedPhone": "Add and verify your phone number in your profile to see your packages.",
+  "phaErrRecordInvalid": "That package could not be found.",
+  "phaErrOffline": "Check your connection and try again.",
+  "phaErrAppCheck": "This device couldn't be verified. Update the app and try again.",
+  "phaErrGeneric": "Something went wrong. Please try again.",
+  "phaHintTitle": "Is this package yours?",
+  "phaHintBody": "Sign in with the number on it to see all your packages, from every business.",
+  "phaHintSignInAs": "Sign in as the number ending in ••{lastTwo}",
+  "@phaHintSignInAs": {
+    "placeholders": {
+      "lastTwo": {
+        "type": "String"
+      }
+    }
+  },
+  "phaHintSignInAsSender": "Sign in as the sender (••{lastTwo})",
+  "@phaHintSignInAsSender": {
+    "placeholders": {
+      "lastTwo": {
+        "type": "String"
+      }
+    }
+  },
+  "phaHintSignInAsReceiver": "Sign in as the receiver (••{lastTwo})",
+  "@phaHintSignInAsReceiver": {
+    "placeholders": {
+      "lastTwo": {
+        "type": "String"
+      }
+    }
+  },
+  "phaMyPackagesTitle": "My packages",
+  "phaMyPackagesSubtitle": "Every package recorded with your phone number",
+  "phaSectionMine": "My packages",
+  "phaSectionComingToYou": "Coming to you",
+  "phaEmptyTitle": "No packages yet",
+  "phaEmptyBody": "Packages a business records with your number ending in ••{lastTwo} will show up here.",
+  "@phaEmptyBody": {
+    "placeholders": {
+      "lastTwo": {
+        "type": "String"
+      }
+    }
+  },
+  "phaEmptyBodyPlain": "Packages a business records with your phone number will show up here.",
+  "phaLoadFailed": "Your packages couldn't be loaded.",
+  "phaSignInToSee": "Sign in with your phone to see every package recorded with your number.",
+  "phaShowMore": "Show more",
+  "phaLoadingMore": "Loading...",
+  "phaBusinessUnknown": "A business",
+  "phaServicePackageRequest": "Package request",
+  "phaSentToSelf": "You're the sender and the receiver",
+  "phaRecordedOn": "Recorded {date}",
+  "@phaRecordedOn": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "phaUpdatedOn": "Updated {date}",
+  "@phaUpdatedOn": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "phaNotMine": "This isn't mine",
+  "phaNotMineTitle": "Not your package?",
+  "phaNotMineBody": "It will be removed from your list, and {business} will be asked to check the number.",
+  "@phaNotMineBody": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "phaNotMineBodyPlain": "It will be removed from your list, and the business will be asked to check the number.",
+  "phaNotMineConfirm": "Remove it",
+  "phaNotMineDone": "Removed. The business will check the number.",
+  "phaFlagAddCountryCode": "Add the country code",
+  "phaFlagReportedNotMine": "The person says this number isn't theirs - check it",
+  "phaNotSignedInYet": "Not signed in yet",
+  "phaSignInFilterSignedIn": "Signed in",
+  "phaSignInFilterNotSignedIn": "Not signed in yet",
+  "phaSignInFilterAll": "Everyone",
+  "phaNoEmailActions": "This account has no email address: it signs in with its phone number, so email actions are not available.",
+  "phaAccountOrigin": "Account made from",
+  "phaAccountOriginShipment": "A shipment's phone number",
+  "phaAccountOriginPhoneSignIn": "A phone sign-in",
+  "phaVerifyWithWhatsApp": "Get the code on WhatsApp instead",
+  "phaLinkMerged": "Your number is verified. Packages recorded with it now show in your account.",
+  "phaDeletePhoneOnlyNote": "To confirm, you must have signed in within the last 15 minutes. If it doesn't work, sign out and sign in again with your phone.",
+  "phaDeleteRecentSignIn": "Sign out, sign in again with your phone, then delete your account within 15 minutes.",
+  "phaPhoneOnlyNoPassword": "No email on your account? Go back and choose “Sign in with your phone” - there is no password to reset."
 }

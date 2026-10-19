@@ -32,6 +32,9 @@ import '../widgets/app_snackbars.dart';
 import '../widgets/async_action_button.dart';
 import '../widgets/business_parking_payment_badge.dart';
 import '../widgets/container_link_chip.dart';
+import '../widgets/phone_account_widgets.dart' show RecordPhoneFlagNotes;
+import '../services/phone_accounts.dart'
+    show RecordPhoneField, recordPhoneFlagsOf;
 
 class ParkedCarDetailsScreen extends StatefulWidget {
   final ParkedCar parkedCar;
@@ -1307,6 +1310,15 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                     ? l10n.parkingErrorCustomerPhone
                     : null;
               },
+            ),
+            // The server's reading of the saved number
+            // (docs/PHONE_ACCOUNTS.md §3).
+            RecordPhoneFlagNotes(
+              flags: recordPhoneFlagsOf(
+                _paymentFields,
+                RecordPhoneField.customer,
+              ),
+              field: RecordPhoneField.customer,
             ),
             const SizedBox(height: 16),
             TextFormField(

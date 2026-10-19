@@ -68,6 +68,8 @@ import 'screens/transport_request_details_screen.dart';
 import 'screens/freight_quote_details_screen.dart';
 import 'screens/business_requests_screen.dart';
 import 'screens/my_package_requests_screen.dart';
+import 'screens/my_packages_screen.dart';
+import 'screens/package_result_screen.dart';
 import 'screens/package_request_detail_screen.dart';
 import 'screens/package_request_form_screen.dart';
 import 'services/notification_routing.dart';
@@ -430,6 +432,23 @@ class MyApp extends StatelessWidget {
                 );
               },
               '/my-requests': (context) => const MyPackageRequestsScreen(),
+              // Phone accounts (docs/PHONE_ACCOUNTS.md §6): opened after a
+              // tracking-link sign-in, on the root navigator.
+              '/my-packages': (context) => const MyPackagesScreen(),
+              // A "number isn't theirs" notification on a package.
+              '/business-package': (context) {
+                final args = ModalRoute.of(context)?.settings.arguments;
+                final package = args is BusinessPackageArguments ? args : null;
+                if (package == null ||
+                    (package.trackingCode.isEmpty && package.lineId.isEmpty)) {
+                  return const HomeMenu(showBackButton: true);
+                }
+                return PackageResultScreen(
+                  businessId: context.read<AuthProvider>().businessId ?? '',
+                  code: package.trackingCode,
+                  lineId: package.lineId,
+                );
+              },
               '/package-request-detail': (context) {
                 final args = ModalRoute.of(context)?.settings.arguments;
                 return PackageRequestDetailScreen(

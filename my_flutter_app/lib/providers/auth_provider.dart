@@ -2,8 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+
+import '../firebase_emulator_config.dart' show connectAuthEmulatorIfRequested;
 
 import '../models/business_service.dart'
     show containersAvailable, defaultBusinessServiceValues;
@@ -11,6 +14,8 @@ import '../models/notification_preferences.dart';
 import '../models/platform_access.dart';
 import '../services/inventory_stores.dart' show InventoryAccess;
 import '../services/notification_routing.dart';
+import '../services/phone_account_service.dart';
+import '../services/phone_accounts.dart';
 import '../services/push_notification_service.dart';
 import '../utils/phone_number_validator.dart';
 import '../utils/business_permissions.dart';
@@ -96,6 +101,9 @@ class AuthProvider extends ChangeNotifier {
   final FirebaseFunctions _functions = FirebaseFunctions.instance;
   final PushNotificationService _pushNotifications =
       PushNotificationService.instance;
+
+  /// The `phoneAccount` callable (docs/PHONE_ACCOUNTS.md).
+  final PhoneAccountService _phoneAccounts = const PhoneAccountService();
 
   User? _user;
   bool _isStaff = false;
@@ -551,21 +559,43 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> requestOwnAccountDeletion({required String password}) async {
+  /// Signed in, with no email on the account: it signs in with its phone
+  /// (docs/PHONE_ACCOUNTS.md). Password and email actions do not apply.
+  bool get isPhoneOnlyAccount {
+    final current = _auth.currentUser ?? _user;
+    if (current == null || current.isAnonymous) return false;
+    return (current.email ?? '').trim().isEmpty &&
+        (current.phoneNumber ?? '').trim().isNotEmpty;
+  }
+
+  /// Asks for this account's deletion. An email account proves itself with
+  /// its password first; a phone-only account has none, so the server's
+  /// own recent-sign-in check (15 minutes) is the proof - an older session
+  /// is refused with `recent-login-required` and the screen says to sign in
+  /// again with the phone.
+  Future<void> requestOwnAccountDeletion({String password = ''}) async {
     final currentUser = _auth.currentUser;
     final email = currentUser?.email?.trim();
-    if (currentUser == null || email == null || email.isEmpty) {
+    if (currentUser == null) {
       throw FirebaseAuthException(
         code: 'user-not-found',
-        message: 'No signed-in email account is available.',
+        message: 'No signed-in account is available.',
       );
     }
-
-    final credential = EmailAuthProvider.credential(
-      email: email,
-      password: password,
-    );
-    await currentUser.reauthenticateWithCredential(credential);
+    if (email == null || email.isEmpty) {
+      if (!isPhoneOnlyAccount) {
+        throw FirebaseAuthException(
+          code: 'user-not-found',
+          message: 'No signed-in email account is available.',
+        );
+      }
+    } else {
+      final credential = EmailAuthProvider.credential(
+        email: email,
+        password: password,
+      );
+      await currentUser.reauthenticateWithCredential(credential);
+    }
     await currentUser.getIdToken(true);
 
     final callable = _functions.httpsCallable('requestOwnAccountDeletion');
@@ -807,12 +837,221 @@ class AuthProvider extends ChangeNotifier {
       );
     }
 
-    if ((currentUser.phoneNumber ?? '').isEmpty) {
-      await currentUser.linkWithCredential(credential);
-    } else {
-      await currentUser.updatePhoneNumber(credential);
+    try {
+      if ((currentUser.phoneNumber ?? '').isEmpty) {
+        await currentUser.linkWithCredential(credential);
+      } else {
+        await currentUser.updatePhoneNumber(credential);
+      }
+    } on FirebaseAuthException catch (error) {
+      // The number already has its own Auth user - usually an account made
+      // from a shipment that nobody has signed in to yet (§7). Prove the
+      // number with that sign-in and let the server merge it into this
+      // account; a number whose account HAS been used is refused there
+      // (phone_in_use) and reads as "already linked to another account".
+      if (error.code != 'credential-already-in-use') rethrow;
+      await _mergePhoneHolder(error.credential ?? credential);
     }
     await syncLinkedPhoneVerification();
+  }
+
+  static const _phoneProofAppName = 'phone-proof';
+
+  /// The SMS merge of docs/PHONE_ACCOUNTS.md §7: sign in with the number's
+  /// credential on a SECONDARY Firebase app (this session stays as it is),
+  /// take that account's ID token, sign the secondary app out and delete
+  /// it, then hand the token to `completePhoneSignIn` as this account.
+  Future<void> _mergePhoneHolder(AuthCredential credential) async {
+    FirebaseApp app;
+    try {
+      app = await Firebase.initializeApp(
+        name: _phoneProofAppName,
+        // The running app's options, so staging and emulator builds prove
+        // against the same project the session is in.
+        options: Firebase.app().options,
+      );
+    } on FirebaseException catch (error) {
+      if (error.code != 'duplicate-app') rethrow;
+      app = Firebase.app(_phoneProofAppName);
+    }
+    final proofAuth = FirebaseAuth.instanceFor(app: app);
+    var proof = '';
+    try {
+      await connectAuthEmulatorIfRequested(proofAuth);
+      final signedIn = await proofAuth.signInWithCredential(credential);
+      proof = await signedIn.user?.getIdToken() ?? '';
+    } finally {
+      try {
+        await proofAuth.signOut();
+      } catch (error) {
+        debugPrint('Phone proof sign-out skipped: $error');
+      }
+      try {
+        await app.delete();
+      } catch (error) {
+        debugPrint('Phone proof app not deleted: $error');
+      }
+    }
+    if (proof.isEmpty) {
+      throw FirebaseAuthException(code: 'session-expired');
+    }
+    try {
+      await _phoneAccounts.completeSignIn(placeholderIdToken: proof);
+    } on PhoneAccountFailure catch (failure) {
+      // The verification screen reads Firebase codes; speak its language.
+      throw FirebaseAuthException(
+        code: switch (failure.reason) {
+          PhoneRefusalReason.phoneInUse => 'credential-already-in-use',
+          PhoneRefusalReason.proofInvalid => 'session-expired',
+          _ when failure.refusal.offline => 'network-request-failed',
+          _ => 'internal-error',
+        },
+      );
+    }
+  }
+
+  // ---- Phone sign-in (docs/PHONE_ACCOUNTS.md §5) -------------------------
+
+  /// Sends a code on WhatsApp: to a typed number, to a tracking record's
+  /// number (the app never learns it), or - signed in - to a number to add.
+  Future<PhoneLoginChallenge> requestPhoneLoginCode(PhoneCodeRequest request) =>
+      _phoneAccounts.requestCode(request);
+
+  /// The WhatsApp path: checks the code, then signs in with the token the
+  /// server minted. The server did the sign-in bookkeeping already.
+  Future<PhoneCodeVerified> signInWithPhoneLoginCode({
+    required String challengeId,
+    required String code,
+  }) async {
+    final verified = await _phoneAccounts.verifyCode(
+      challengeId: challengeId,
+      code: code,
+    );
+    if (!verified.signsIn) {
+      throw const PhoneAccountFailure(PhoneAccountRefusal(code: 'unknown'));
+    }
+    try {
+      final result = await _auth.signInWithCustomToken(verified.customToken);
+      await _afterPhoneSignIn(result.user);
+    } on FirebaseAuthException catch (error) {
+      throw AuthFailure(authErrorCodeFor(error.code));
+    }
+    return verified;
+  }
+
+  /// The WhatsApp proof of a number for the signed-in account (§7): the
+  /// server sets the number and merges a never-used account holding it.
+  /// The verification screen then syncs the profile as it does after SMS.
+  Future<PhoneCodeVerified> linkPhoneWithLoginCode({
+    required String challengeId,
+    required String code,
+  }) async {
+    final verified = await _phoneAccounts.verifyCode(
+      challengeId: challengeId,
+      code: code,
+    );
+    try {
+      await _auth.currentUser?.reload();
+      _user = _auth.currentUser;
+    } catch (error) {
+      debugPrint('Reload after linking a phone skipped: $error');
+    }
+    return verified;
+  }
+
+  /// The SMS fallback ("Send it by text instead"): Firebase phone auth signs
+  /// into the account that owns the number, then `completePhoneSignIn`.
+  Future<void> startPhoneSmsSignIn({
+    required String phoneNumber,
+    required String languageCode,
+    required ValueChanged<PhoneVerificationSession> onCodeSent,
+    required Future<void> Function() onSignedIn,
+    required ValueChanged<Object> onFailed,
+    required bool Function() shouldCompleteAutomaticSignIn,
+    int? resendToken,
+  }) async {
+    if (!PhoneNumberValidator.isValidE164(phoneNumber)) {
+      throw FirebaseAuthException(code: 'invalid-phone-number');
+    }
+    await _auth.setLanguageCode(languageCode);
+    await _auth.verifyPhoneNumber(
+      phoneNumber: PhoneNumberValidator.normalized(phoneNumber),
+      forceResendingToken: resendToken,
+      timeout: const Duration(seconds: 60),
+      verificationCompleted: (credential) async {
+        if (!shouldCompleteAutomaticSignIn()) return;
+        try {
+          await _signInWithPhoneCredential(credential);
+          if (!shouldCompleteAutomaticSignIn()) return;
+          await onSignedIn();
+        } catch (error) {
+          if (!shouldCompleteAutomaticSignIn()) return;
+          onFailed(error);
+        }
+      },
+      verificationFailed: onFailed,
+      codeSent: (verificationId, forceResendingToken) {
+        onCodeSent(
+          PhoneVerificationSession(
+            verificationId: verificationId,
+            resendToken: forceResendingToken,
+          ),
+        );
+      },
+      codeAutoRetrievalTimeout: (_) {},
+    );
+  }
+
+  Future<void> completePhoneSmsSignIn({
+    required String verificationId,
+    required String smsCode,
+  }) => _signInWithPhoneCredential(
+    PhoneAuthProvider.credential(
+      verificationId: verificationId,
+      smsCode: smsCode,
+    ),
+  );
+
+  Future<void> _signInWithPhoneCredential(AuthCredential credential) async {
+    final result = await _auth.signInWithCredential(credential);
+    final user = result.user;
+    if (user == null) throw const AuthFailure(AuthErrorCode.unknown);
+    Object? bookkeepingError;
+    try {
+      // Creates the profile for a number nobody had, marks the first
+      // sign-in, and keeps the sign-in alias (§5.3).
+      await _phoneAccounts.completeSignIn();
+    } catch (error) {
+      bookkeepingError = error;
+      debugPrint('completePhoneSignIn failed: $error');
+    }
+    await _afterPhoneSignIn(user);
+    // An account with no profile cannot be used: sign out so the person can
+    // simply try again instead of landing on a half-made account.
+    if (bookkeepingError != null && _profileUid != user.uid) {
+      await logout();
+      throw bookkeepingError;
+    }
+  }
+
+  /// What every sign-in does once Firebase has the session: the profile and
+  /// role loaded the way email sign-in loads them, then push registration.
+  Future<void> _afterPhoneSignIn(User? user) async {
+    if (user == null) throw const AuthFailure(AuthErrorCode.unknown);
+    _user = user;
+    _userEmail = user.email;
+    // The auth-state event may have started a lookup before the profile
+    // existed; let it finish, then read again so the new profile lands.
+    final inFlight = _roleCheckInFlight;
+    if (inFlight != null) {
+      try {
+        await inFlight;
+      } catch (_) {}
+    }
+    await _checkUserRole();
+    if (_profileUid == user.uid) _initializationIssue = null;
+    unawaited(_registerPushNotificationsIfPossible());
+    notifyListeners();
   }
 
   Future<void> syncLinkedPhoneVerification() async {
@@ -1092,12 +1331,15 @@ class AuthProvider extends ChangeNotifier {
     int pageSize = 100,
     String pageToken = '',
     bool includeInvitations = true,
+    String signInState = '',
   }) {
     return _callMarketplacePeople('listMarketplacePeople', {
       if (search.trim().isNotEmpty) 'search': search.trim(),
       'pageSize': pageSize,
       if (pageToken.isNotEmpty) 'pageToken': pageToken,
       'includeInvitations': includeInvitations,
+      // "all" | "signed_in" | "not_signed_in" (docs/PHONE_ACCOUNTS.md §9).
+      if (signInState.isNotEmpty) 'signInState': signInState,
     });
   }
 

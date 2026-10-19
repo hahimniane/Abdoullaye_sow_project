@@ -10,6 +10,8 @@ import '../services/container_packages.dart';
 import '../services/line_pieces.dart' show LineGroupSummary;
 import '../services/lot_ledger.dart' show LotStaff;
 import '../services/package_codes.dart';
+import '../services/phone_accounts.dart'
+    show RecordPhoneField, RecordPhoneFlags;
 import '../services/waiting_packages.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_motion.dart';
@@ -20,6 +22,7 @@ import '../widgets/app_snackbars.dart';
 import '../widgets/guest_tracking_lookup.dart';
 import '../widgets/lot_sheets.dart';
 import '../widgets/package_money.dart';
+import '../widgets/phone_account_widgets.dart' show RecordPhoneFlagNotes;
 import 'containers_screen.dart';
 import 'package_payment_sheet.dart';
 
@@ -531,6 +534,7 @@ class PackageResultView extends StatelessWidget {
                   phone: line.customerPhone,
                   lacksCountryCode:
                       containerPhoneLacksCountryCode(line.customerPhone),
+                  flags: line.phoneFlags(RecordPhoneField.customer),
                   onCall: onCall,
                   onWhatsApp: onWhatsApp,
                 ),
@@ -550,6 +554,7 @@ class PackageResultView extends StatelessWidget {
                   phone: line.receiverPhone,
                   lacksCountryCode:
                       containerPhoneLacksCountryCode(line.receiverPhone),
+                  flags: line.phoneFlags(RecordPhoneField.receiver),
                   onCall: onCall,
                   onWhatsApp: onWhatsApp,
                 ),
@@ -915,6 +920,7 @@ class _Person extends StatelessWidget {
     required this.lacksCountryCode,
     required this.onCall,
     required this.onWhatsApp,
+    this.flags = RecordPhoneFlags.none,
   });
 
   /// 'customer' or 'receiver': names the keys.
@@ -922,6 +928,9 @@ class _Person extends StatelessWidget {
   final String name;
   final String phone;
   final bool lacksCountryCode;
+
+  /// The server's reading of the number (docs/PHONE_ACCOUNTS.md §3).
+  final RecordPhoneFlags flags;
   final ValueChanged<String> onCall;
   final ValueChanged<String> onWhatsApp;
 
@@ -948,12 +957,16 @@ class _Person extends StatelessWidget {
           key: Key('pkg-$role-phone'),
           style: const TextStyle(fontSize: 13.5, color: AppColors.muted),
         ),
-        if (phone.isNotEmpty && lacksCountryCode)
+        // The server's "Add the country code" stands in for this check of
+        // the same number; "isn't theirs" is its own warning.
+        if (phone.isNotEmpty && lacksCountryCode && !flags.needsCountryCode)
           _Fact(
             icon: Icons.warning_amber_rounded,
             text: l10n.ctrPhoneNeedsCountryCode,
             color: AppColors.warn,
           ),
+        if (phone.isNotEmpty)
+          RecordPhoneFlagNotes(flags: flags, field: '${role}Phone'),
         if (phone.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.sm),
           Row(

@@ -83,6 +83,15 @@ class HomeTab extends StatelessWidget {
                     AppColors.cobaltMid,
                     '/tracking',
                   ),
+                  // Everything any business recorded with this phone
+                  // number, sent or coming (docs/PHONE_ACCOUNTS.md §6).
+                  _HubItem(
+                    l10n.phaMyPackagesTitle,
+                    l10n.phaMyPackagesSubtitle,
+                    Icons.inventory_2_outlined,
+                    AppColors.sage,
+                    '/my-packages',
+                  ),
                   _HubItem(
                     l10n.myOrders,
                     l10n.hubOrdersSubtitle,

@@ -9,6 +9,7 @@ import '../utils/auth_error_text.dart';
 import '../utils/auth_navigation.dart';
 import '../utils/business_registration_navigation.dart';
 import '../widgets/app_snackbars.dart';
+import 'phone_sign_in_screen.dart';
 
 @visibleForTesting
 bool isValidLoginEmail(String value) {
@@ -82,24 +83,7 @@ class _LoginScreenState extends State<LoginScreen>
       debugPrint('🔵 LoginScreen: isAdmin: ${authProvider.isAdmin}');
 
       if (success && mounted) {
-        await AppFeedback.success();
-        if (!mounted) return;
-        final routeArgs = ModalRoute.of(context)?.settings.arguments;
-        final shouldReturn =
-            routeArgs is Map && routeArgs['returnToPrevious'] == true;
-        if (shouldReturn) {
-          Navigator.pop(context, true);
-          return;
-        }
-
-        if (authProvider.hasBusinessDashboardAccess) {
-          debugPrint('🔵 LoginScreen: Navigating to business dashboard');
-          navigateAfterLogin(context, hasBusinessDashboardAccess: true);
-        } else {
-          debugPrint('🔵 LoginScreen: Navigating to customer home');
-          // Regular customer - go to customer home
-          navigateAfterLogin(context, hasBusinessDashboardAccess: false);
-        }
+        await _afterSignedIn(authProvider);
       }
     } catch (error) {
       debugPrint('🔴 LoginScreen: Login error: $error');
@@ -112,6 +96,35 @@ class _LoginScreenState extends State<LoginScreen>
         );
       }
     }
+  }
+
+  /// Where a sign-in lands - email or phone alike: back to the screen that
+  /// asked for it, else the business dashboard or the customer home.
+  Future<void> _afterSignedIn(AuthProvider authProvider) async {
+    await AppFeedback.success();
+    if (!mounted) return;
+    final routeArgs = ModalRoute.of(context)?.settings.arguments;
+    final shouldReturn =
+        routeArgs is Map && routeArgs['returnToPrevious'] == true;
+    if (shouldReturn) {
+      Navigator.pop(context, true);
+      return;
+    }
+    navigateAfterLogin(
+      context,
+      hasBusinessDashboardAccess: authProvider.hasBusinessDashboardAccess,
+    );
+  }
+
+  /// "Sign in with your phone": a WhatsApp code (or a text) instead of a
+  /// password (docs/PHONE_ACCOUNTS.md §5).
+  Future<void> _signInWithPhone() async {
+    final authProvider = context.read<AuthProvider>();
+    final outcome = await Navigator.of(context).push<PhoneSignInOutcome>(
+      MaterialPageRoute(builder: (_) => const PhoneSignInScreen()),
+    );
+    if (!mounted || outcome == null || !outcome.signedIn) return;
+    await _afterSignedIn(authProvider);
   }
 
   @override
@@ -369,7 +382,34 @@ class _LoginScreenState extends State<LoginScreen>
                                         );
                                       },
                                     ),
-                                    const SizedBox(height: 16),
+                                    const SizedBox(height: 12),
+
+                                    // Phone sign-in, next to email/password.
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: OutlinedButton.icon(
+                                        key: const Key('login-with-phone'),
+                                        onPressed: _signInWithPhone,
+                                        icon: const Icon(
+                                          Icons.phone_iphone_outlined,
+                                        ),
+                                        label: Text(
+                                          AppLocalizations.of(
+                                            context,
+                                          )!.phaSignInWithPhone,
+                                        ),
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: AppColors.brandRed,
+                                          side: const BorderSide(
+                                            color: AppColors.brandRed,
+                                          ),
+                                          minimumSize: const Size.fromHeight(
+                                            48,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
 
                                     // Forgot Password
                                     TextButton(

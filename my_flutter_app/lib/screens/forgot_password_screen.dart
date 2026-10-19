@@ -262,7 +262,15 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
               );
             },
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
+          // A phone account has no password (docs/PHONE_ACCOUNTS.md §5).
+          Text(
+            AppLocalizations.of(context)!.phaPhoneOnlyNoPassword,
+            key: const Key('forgot-password-phone-note'),
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+          ),
+          const SizedBox(height: 8),
 
           // Back to Login
           TextButton(

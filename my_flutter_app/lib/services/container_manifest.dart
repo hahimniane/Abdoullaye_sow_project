@@ -11,6 +11,8 @@ library;
 
 import 'line_pieces.dart';
 import 'lot_ledger.dart' show lotDateOf;
+import 'phone_accounts.dart'
+    show RecordPhoneFlags, recordPhoneFieldList, recordPhoneFlags;
 
 // ---------------------------------------------------------------------------
 // Vocabulary shared with the server.
@@ -868,11 +870,27 @@ class ContainerLine {
     this.rootLineId = '',
     this.partIndex = 1,
     this.lastPartIndex = 0,
+    this.phoneCountryCodeMissing = const [],
+    this.phoneReportedNotMine = const [],
   });
 
   final String id;
   final String businessId;
   final String containerId;
+
+  /// Server-written (docs/PHONE_ACCOUNTS.md §3): the raw phone fields
+  /// (`customerPhone` / `receiverPhone`) staff must give a country code, and
+  /// those someone signed in with that number said are not theirs. Empty
+  /// when absent.
+  final List<String> phoneCountryCodeMissing;
+  final List<String> phoneReportedNotMine;
+
+  /// What staff are told beside [field]'s number.
+  RecordPhoneFlags phoneFlags(String field) => recordPhoneFlags(
+    field: field,
+    countryCodeMissing: phoneCountryCodeMissing,
+    reportedNotMine: phoneReportedNotMine,
+  );
 
   /// The latest WhatsApp update the server sent about this line, and who it
   /// reached. Null until the container's first update goes out.
@@ -1025,6 +1043,10 @@ class ContainerLine {
       rootLineId: groupRootId(d, id),
       partIndex: partIndexOf(d),
       lastPartIndex: _positiveInt(d['lastPartIndex']),
+      phoneCountryCodeMissing: recordPhoneFieldList(
+        d['phoneCountryCodeMissing'],
+      ),
+      phoneReportedNotMine: recordPhoneFieldList(d['phoneReportedNotMine']),
     );
   }
 

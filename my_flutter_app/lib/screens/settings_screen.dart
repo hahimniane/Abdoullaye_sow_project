@@ -68,15 +68,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
         return l10n.accountDeletionAdminBlocked;
       }
       if (error.message == 'recent-login-required') {
-        return l10n.accountDeletionRecentLoginRequired;
+        return context.read<AuthProvider>().isPhoneOnlyAccount
+            ? l10n.phaDeleteRecentSignIn
+            : l10n.accountDeletionRecentLoginRequired;
       }
     }
     return l10n.accountDeletionFailed;
   }
 
+  /// The email, else the phone number the account signs in with.
+  String _accountContact(AuthProvider auth, String fallback) {
+    final email = auth.userEmail?.trim() ?? '';
+    if (email.isNotEmpty) return email;
+    final phone = auth.linkedPhoneNumber?.trim() ?? '';
+    return phone.isNotEmpty ? phone : fallback;
+  }
+
   Future<void> _handleDeleteAccount() async {
     if (_deletingAccount) return;
     final l10n = AppLocalizations.of(context)!;
+    // A phone account has no password to confirm with: a recent sign-in
+    // with the phone is the proof the server asks for.
+    final phoneOnly = context.read<AuthProvider>().isPhoneOnlyAccount;
     final passwordController = TextEditingController();
     final password = await showDialog<String>(
       context: context,
@@ -95,22 +108,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 style: Theme.of(dialogContext).textTheme.bodySmall,
               ),
               const SizedBox(height: 16),
-              TextField(
-                controller: passwordController,
-                autofocus: true,
-                obscureText: true,
-                textInputAction: TextInputAction.done,
-                autofillHints: const [AutofillHints.password],
-                decoration: InputDecoration(
-                  labelText: l10n.enterPasswordToDelete,
-                  prefixIcon: const Icon(Icons.lock_outline),
+              if (phoneOnly)
+                Text(
+                  l10n.phaDeletePhoneOnlyNote,
+                  key: const Key('delete-account-phone-note'),
+                  style: Theme.of(dialogContext).textTheme.bodySmall,
+                )
+              else
+                TextField(
+                  controller: passwordController,
+                  autofocus: true,
+                  obscureText: true,
+                  textInputAction: TextInputAction.done,
+                  autofillHints: const [AutofillHints.password],
+                  decoration: InputDecoration(
+                    labelText: l10n.enterPasswordToDelete,
+                    prefixIcon: const Icon(Icons.lock_outline),
+                  ),
+                  onSubmitted: (value) {
+                    if (value.trim().isNotEmpty) {
+                      Navigator.of(dialogContext).pop(value);
+                    }
+                  },
                 ),
-                onSubmitted: (value) {
-                  if (value.trim().isNotEmpty) {
-                    Navigator.of(dialogContext).pop(value);
-                  }
-                },
-              ),
             ],
           ),
         ),
@@ -123,7 +143,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () {
               final value = passwordController.text;
-              if (value.trim().isNotEmpty) {
+              if (phoneOnly || value.trim().isNotEmpty) {
                 Navigator.of(dialogContext).pop(value);
               }
             },
@@ -133,7 +153,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
     passwordController.dispose();
-    if (password == null || password.isEmpty || !mounted) return;
+    if (password == null || (!phoneOnly && password.isEmpty) || !mounted) {
+      return;
+    }
 
     setState(() => _deletingAccount = true);
     try {
@@ -236,8 +258,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     _AccountPanel(
                       title: authProvider.customerName?.isNotEmpty == true
                           ? authProvider.customerName!
-                          : authProvider.userEmail ?? l10n.account,
-                      subtitle: authProvider.userEmail ?? '',
+                          : _accountContact(authProvider, l10n.account),
+                      // A phone account has no email: its number names it.
+                      subtitle: _accountContact(authProvider, ''),
                       role: roleLabel,
                       onTap:
                           widget.onOpenAccountProfile ??

@@ -65,7 +65,11 @@ class _AccountProfileScreenState extends State<AccountProfileScreen> {
     if (_hydrated) return;
     final auth = context.read<AuthProvider>();
     _hydrated = true;
-    _nameController.text = auth.customerName ?? auth.buyerName;
+    // A phone account may have no name yet; its field starts empty rather
+    // than with a stand-in word to delete.
+    _nameController.text =
+        auth.customerName ??
+        (auth.isPhoneOnlyAccount ? (auth.user?.displayName ?? '') : auth.buyerName);
     _phoneController.text = auth.customerPhone ?? '';
     _preferences = auth.notificationPreferences;
   }
@@ -312,12 +316,16 @@ class _AccountProfileScreenState extends State<AccountProfileScreen> {
                         ? l10n.requiredField
                         : null,
                   ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    initialValue: auth.userEmail ?? '',
-                    readOnly: true,
-                    decoration: InputDecoration(labelText: l10n.email),
-                  ),
+                  // An account made from a phone number has no email; the
+                  // read-only field would only show an empty box.
+                  if ((auth.userEmail ?? '').trim().isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      initialValue: auth.userEmail ?? '',
+                      readOnly: true,
+                      decoration: InputDecoration(labelText: l10n.email),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   CountryPhoneField(
                     controller: _phoneController,

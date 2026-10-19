@@ -25725,6 +25725,450 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'A transfer holds at most 100 products.'**
   String get inventoryFailTransferLinesTooMany;
+
+  /// No description provided for @phaSignInWithPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in with your phone'**
+  String get phaSignInWithPhone;
+
+  /// No description provided for @phaSignInTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in with your phone'**
+  String get phaSignInTitle;
+
+  /// No description provided for @phaSignInIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'We\'ll send a 6-digit code to this number on WhatsApp.'**
+  String get phaSignInIntro;
+
+  /// No description provided for @phaSendWhatsAppCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Send the code on WhatsApp'**
+  String get phaSendWhatsAppCode;
+
+  /// No description provided for @phaSendByText.
+  ///
+  /// In en, this message translates to:
+  /// **'Send it by text instead'**
+  String get phaSendByText;
+
+  /// No description provided for @phaSendTextCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Send the code by text'**
+  String get phaSendTextCode;
+
+  /// No description provided for @phaCodeSentWhatsApp.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the 6-digit code we sent on WhatsApp to the number ending in ••{lastTwo}.'**
+  String phaCodeSentWhatsApp(String lastTwo);
+
+  /// No description provided for @phaCodeSentWhatsAppPlain.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the 6-digit code we sent you on WhatsApp.'**
+  String get phaCodeSentWhatsAppPlain;
+
+  /// No description provided for @phaTextFullNumberIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'To get the code by text, enter your full phone number with its country code.'**
+  String get phaTextFullNumberIntro;
+
+  /// No description provided for @phaWhatsAppUnavailableNote.
+  ///
+  /// In en, this message translates to:
+  /// **'WhatsApp codes aren\'t available right now, so we\'ll send it by text.'**
+  String get phaWhatsAppUnavailableNote;
+
+  /// No description provided for @phaErrPhoneInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid phone number.'**
+  String get phaErrPhoneInvalid;
+
+  /// No description provided for @phaErrNeedsCountryCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Add your country code to the number (for example +1 or +224).'**
+  String get phaErrNeedsCountryCode;
+
+  /// No description provided for @phaErrTrackingNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'We couldn\'t find that tracking code.'**
+  String get phaErrTrackingNotFound;
+
+  /// No description provided for @phaErrNoPhoneOnRecord.
+  ///
+  /// In en, this message translates to:
+  /// **'This package has no number we can send a code to.'**
+  String get phaErrNoPhoneOnRecord;
+
+  /// No description provided for @phaErrRateLimited.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many codes were sent. Please wait and try again.'**
+  String get phaErrRateLimited;
+
+  /// No description provided for @phaErrRateLimitedSeconds.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many codes were sent. Try again in {seconds} s.'**
+  String phaErrRateLimitedSeconds(int seconds);
+
+  /// No description provided for @phaErrRateLimitedMinutes.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes, plural, =1{Too many codes were sent. Try again in 1 minute.} other{Too many codes were sent. Try again in {minutes} minutes.}}'**
+  String phaErrRateLimitedMinutes(int minutes);
+
+  /// No description provided for @phaErrWhatsAppUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'WhatsApp codes aren\'t available right now. Send it by text instead.'**
+  String get phaErrWhatsAppUnavailable;
+
+  /// No description provided for @phaErrSignInRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to your account first.'**
+  String get phaErrSignInRequired;
+
+  /// No description provided for @phaErrCodeWrong.
+  ///
+  /// In en, this message translates to:
+  /// **'That code isn\'t right.'**
+  String get phaErrCodeWrong;
+
+  /// No description provided for @phaErrCodeWrongTries.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{That code isn\'t right. 1 try left.} other{That code isn\'t right. {count} tries left.}}'**
+  String phaErrCodeWrongTries(int count);
+
+  /// No description provided for @phaErrCodeExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'That code has expired. Ask for a new one.'**
+  String get phaErrCodeExpired;
+
+  /// No description provided for @phaErrTooManyAttempts.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many wrong codes. Ask for a new one.'**
+  String get phaErrTooManyAttempts;
+
+  /// No description provided for @phaErrChallengeNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask for a new code.'**
+  String get phaErrChallengeNotFound;
+
+  /// No description provided for @phaErrPhoneInUse.
+  ///
+  /// In en, this message translates to:
+  /// **'This number already belongs to another Laawol account that has been used. Sign in with that number instead, or verify a different number.'**
+  String get phaErrPhoneInUse;
+
+  /// No description provided for @phaErrWrongAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Another account asked for this code. Ask for a new one.'**
+  String get phaErrWrongAccount;
+
+  /// No description provided for @phaErrProofInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify the number again.'**
+  String get phaErrProofInvalid;
+
+  /// No description provided for @phaErrNoVerifiedPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Add and verify your phone number in your profile to see your packages.'**
+  String get phaErrNoVerifiedPhone;
+
+  /// No description provided for @phaErrRecordInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'That package could not be found.'**
+  String get phaErrRecordInvalid;
+
+  /// No description provided for @phaErrOffline.
+  ///
+  /// In en, this message translates to:
+  /// **'Check your connection and try again.'**
+  String get phaErrOffline;
+
+  /// No description provided for @phaErrAppCheck.
+  ///
+  /// In en, this message translates to:
+  /// **'This device couldn\'t be verified. Update the app and try again.'**
+  String get phaErrAppCheck;
+
+  /// No description provided for @phaErrGeneric.
+  ///
+  /// In en, this message translates to:
+  /// **'Something went wrong. Please try again.'**
+  String get phaErrGeneric;
+
+  /// No description provided for @phaHintTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Is this package yours?'**
+  String get phaHintTitle;
+
+  /// No description provided for @phaHintBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in with the number on it to see all your packages, from every business.'**
+  String get phaHintBody;
+
+  /// No description provided for @phaHintSignInAs.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in as the number ending in ••{lastTwo}'**
+  String phaHintSignInAs(String lastTwo);
+
+  /// No description provided for @phaHintSignInAsSender.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in as the sender (••{lastTwo})'**
+  String phaHintSignInAsSender(String lastTwo);
+
+  /// No description provided for @phaHintSignInAsReceiver.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in as the receiver (••{lastTwo})'**
+  String phaHintSignInAsReceiver(String lastTwo);
+
+  /// No description provided for @phaMyPackagesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'My packages'**
+  String get phaMyPackagesTitle;
+
+  /// No description provided for @phaMyPackagesSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Every package recorded with your phone number'**
+  String get phaMyPackagesSubtitle;
+
+  /// No description provided for @phaSectionMine.
+  ///
+  /// In en, this message translates to:
+  /// **'My packages'**
+  String get phaSectionMine;
+
+  /// No description provided for @phaSectionComingToYou.
+  ///
+  /// In en, this message translates to:
+  /// **'Coming to you'**
+  String get phaSectionComingToYou;
+
+  /// No description provided for @phaEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No packages yet'**
+  String get phaEmptyTitle;
+
+  /// No description provided for @phaEmptyBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Packages a business records with your number ending in ••{lastTwo} will show up here.'**
+  String phaEmptyBody(String lastTwo);
+
+  /// No description provided for @phaEmptyBodyPlain.
+  ///
+  /// In en, this message translates to:
+  /// **'Packages a business records with your phone number will show up here.'**
+  String get phaEmptyBodyPlain;
+
+  /// No description provided for @phaLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Your packages couldn\'t be loaded.'**
+  String get phaLoadFailed;
+
+  /// No description provided for @phaSignInToSee.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in with your phone to see every package recorded with your number.'**
+  String get phaSignInToSee;
+
+  /// No description provided for @phaShowMore.
+  ///
+  /// In en, this message translates to:
+  /// **'Show more'**
+  String get phaShowMore;
+
+  /// No description provided for @phaLoadingMore.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading...'**
+  String get phaLoadingMore;
+
+  /// No description provided for @phaBusinessUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'A business'**
+  String get phaBusinessUnknown;
+
+  /// No description provided for @phaServicePackageRequest.
+  ///
+  /// In en, this message translates to:
+  /// **'Package request'**
+  String get phaServicePackageRequest;
+
+  /// No description provided for @phaSentToSelf.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re the sender and the receiver'**
+  String get phaSentToSelf;
+
+  /// No description provided for @phaRecordedOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Recorded {date}'**
+  String phaRecordedOn(String date);
+
+  /// No description provided for @phaUpdatedOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Updated {date}'**
+  String phaUpdatedOn(String date);
+
+  /// No description provided for @phaNotMine.
+  ///
+  /// In en, this message translates to:
+  /// **'This isn\'t mine'**
+  String get phaNotMine;
+
+  /// No description provided for @phaNotMineTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Not your package?'**
+  String get phaNotMineTitle;
+
+  /// No description provided for @phaNotMineBody.
+  ///
+  /// In en, this message translates to:
+  /// **'It will be removed from your list, and {business} will be asked to check the number.'**
+  String phaNotMineBody(String business);
+
+  /// No description provided for @phaNotMineBodyPlain.
+  ///
+  /// In en, this message translates to:
+  /// **'It will be removed from your list, and the business will be asked to check the number.'**
+  String get phaNotMineBodyPlain;
+
+  /// No description provided for @phaNotMineConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove it'**
+  String get phaNotMineConfirm;
+
+  /// No description provided for @phaNotMineDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Removed. The business will check the number.'**
+  String get phaNotMineDone;
+
+  /// No description provided for @phaFlagAddCountryCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Add the country code'**
+  String get phaFlagAddCountryCode;
+
+  /// No description provided for @phaFlagReportedNotMine.
+  ///
+  /// In en, this message translates to:
+  /// **'The person says this number isn\'t theirs - check it'**
+  String get phaFlagReportedNotMine;
+
+  /// No description provided for @phaNotSignedInYet.
+  ///
+  /// In en, this message translates to:
+  /// **'Not signed in yet'**
+  String get phaNotSignedInYet;
+
+  /// No description provided for @phaSignInFilterSignedIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Signed in'**
+  String get phaSignInFilterSignedIn;
+
+  /// No description provided for @phaSignInFilterNotSignedIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Not signed in yet'**
+  String get phaSignInFilterNotSignedIn;
+
+  /// No description provided for @phaSignInFilterAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Everyone'**
+  String get phaSignInFilterAll;
+
+  /// No description provided for @phaNoEmailActions.
+  ///
+  /// In en, this message translates to:
+  /// **'This account has no email address: it signs in with its phone number, so email actions are not available.'**
+  String get phaNoEmailActions;
+
+  /// No description provided for @phaAccountOrigin.
+  ///
+  /// In en, this message translates to:
+  /// **'Account made from'**
+  String get phaAccountOrigin;
+
+  /// No description provided for @phaAccountOriginShipment.
+  ///
+  /// In en, this message translates to:
+  /// **'A shipment\'s phone number'**
+  String get phaAccountOriginShipment;
+
+  /// No description provided for @phaAccountOriginPhoneSignIn.
+  ///
+  /// In en, this message translates to:
+  /// **'A phone sign-in'**
+  String get phaAccountOriginPhoneSignIn;
+
+  /// No description provided for @phaVerifyWithWhatsApp.
+  ///
+  /// In en, this message translates to:
+  /// **'Get the code on WhatsApp instead'**
+  String get phaVerifyWithWhatsApp;
+
+  /// No description provided for @phaLinkMerged.
+  ///
+  /// In en, this message translates to:
+  /// **'Your number is verified. Packages recorded with it now show in your account.'**
+  String get phaLinkMerged;
+
+  /// No description provided for @phaDeletePhoneOnlyNote.
+  ///
+  /// In en, this message translates to:
+  /// **'To confirm, you must have signed in within the last 15 minutes. If it doesn\'t work, sign out and sign in again with your phone.'**
+  String get phaDeletePhoneOnlyNote;
+
+  /// No description provided for @phaDeleteRecentSignIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign out, sign in again with your phone, then delete your account within 15 minutes.'**
+  String get phaDeleteRecentSignIn;
+
+  /// No description provided for @phaPhoneOnlyNoPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'No email on your account? Go back and choose “Sign in with your phone” - there is no password to reset.'**
+  String get phaPhoneOnlyNoPassword;
 }
 
 class _AppLocalizationsDelegate

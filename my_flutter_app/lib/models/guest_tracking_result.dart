@@ -1,3 +1,5 @@
+import '../services/phone_accounts.dart' show TrackingSignInHint;
+
 enum GuestTrackingServiceType {
   barrel,
   freight,
@@ -129,6 +131,7 @@ class GuestTrackingRecord {
     this.pieceCount = 0,
     this.parts = const [],
     this.payment,
+    this.signIn = const [],
   });
 
   final String trackingCode;
@@ -152,6 +155,11 @@ class GuestTrackingRecord {
 
   /// Container lines: the whole package's price, paid and balance.
   final GuestTrackingPayment? payment;
+
+  /// Who may sign in from this page (docs/PHONE_ACCOUNTS.md §10): a role
+  /// and the last two digits of each valid number on the record - never
+  /// more. Empty on an older server or a record with no valid number.
+  final List<TrackingSignInHint> signIn;
 
   /// Some of the package travels under another code.
   bool get isSplit => parts.length > 1;
@@ -204,6 +212,7 @@ class GuestTrackingRecord {
       quoteCount: rawCount is num && rawCount.isFinite && rawCount > 0
           ? rawCount.truncate()
           : 0,
+      signIn: TrackingSignInHint.listFrom(data['signIn']),
     );
   }
 }
@@ -252,6 +261,21 @@ GuestTrackingStage? _stageOrNull(Object? value) {
     return null;
   }
 }
+
+/// The service a wire word names, or null for one this app does not know
+/// (My packages also lists package requests, which are not a guest-tracking
+/// service).
+GuestTrackingServiceType? guestTrackingServiceOrNull(Object? value) {
+  try {
+    return _serviceFromWire(value);
+  } on FormatException {
+    return null;
+  }
+}
+
+/// The stage a wire word names, or null for one this app does not know.
+GuestTrackingStage? guestTrackingStageOrNull(Object? value) =>
+    _stageOrNull(value);
 
 GuestTrackingStage _stageFromWire(Object? value) {
   return switch (value) {

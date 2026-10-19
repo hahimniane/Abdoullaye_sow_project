@@ -24,6 +24,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   final _searchController = TextEditingController();
   final List<_MarketplacePerson> _people = [];
   String _category = 'all';
+
+  /// Accounts made from a shipment's number nobody has used yet are hidden
+  /// by default (docs/PHONE_ACCOUNTS.md §9): there can be many of them.
+  String _signInState = _signedIn;
   String _pageToken = '';
   bool _hasMore = false;
   bool _loading = true;
@@ -55,6 +59,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       final response = await context.read<AuthProvider>().listMarketplacePeople(
         search: _searchController.text,
         pageSize: _pageSize,
+        signInState: _signInState,
       );
       final rawPeople = response['people'];
       final people = rawPeople is Iterable
@@ -94,6 +99,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         pageSize: _pageSize,
         pageToken: _pageToken,
         includeInvitations: false,
+        signInState: _signInState,
       );
       final rawPeople = response['people'];
       final people = rawPeople is Iterable
@@ -118,6 +124,12 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     } finally {
       if (mounted) setState(() => _loadingMore = false);
     }
+  }
+
+  void _setSignInState(String state) {
+    if (state == _signInState) return;
+    setState(() => _signInState = state);
+    _reload();
   }
 
   void _searchChanged(String _) {
@@ -367,6 +379,35 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 ),
               ),
             ),
+            // Signed in / not signed in yet / everyone: the server filters.
+            SliverToBoxAdapter(
+              child: SizedBox(
+                height: 48,
+                child: ListView(
+                  key: const Key('people-sign-in-filter'),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  scrollDirection: Axis.horizontal,
+                  children: [
+                    for (final option in [
+                      (_signedIn, l10n.phaSignInFilterSignedIn),
+                      (_notSignedIn, l10n.phaSignInFilterNotSignedIn),
+                      (_everyone, l10n.phaSignInFilterAll),
+                    ])
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ChoiceChip(
+                          key: ValueKey('people-sign-in:${option.$1}'),
+                          selected: _signInState == option.$1,
+                          label: Text(option.$2),
+                          onSelected: _loading
+                              ? null
+                              : (_) => _setSignInState(option.$1),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
             if (_loading)
               const SliverFillRemaining(
                 hasScrollBody: false,
@@ -440,6 +481,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   }
 }
 
+const _signedIn = 'signed_in';
+const _notSignedIn = 'not_signed_in';
+const _everyone = 'all';
+
 class _MarketplacePerson {
   const _MarketplacePerson({
     required this.id,
@@ -459,6 +504,8 @@ class _MarketplacePerson {
     required this.hasAuth,
     required this.invitationId,
     required this.invitationKind,
+    this.accountOrigin = '',
+    this.notSignedInYet = false,
   });
 
   factory _MarketplacePerson.fromMap(Map<String, dynamic> data) {
@@ -484,6 +531,8 @@ class _MarketplacePerson {
       hasAuth: data['hasAuth'] == true,
       invitationId: (data['invitationId'] ?? '').toString(),
       invitationKind: (data['invitationKind'] ?? '').toString(),
+      accountOrigin: (data['accountOrigin'] ?? '').toString(),
+      notSignedInYet: data['notSignedInYet'] == true,
     );
   }
 
@@ -504,6 +553,15 @@ class _MarketplacePerson {
   final bool hasAuth;
   final String invitationId;
   final String invitationKind;
+
+  /// `shipment` (made from a record's number), `phone_sign_in`, or ''.
+  final String accountOrigin;
+
+  /// Made from a shipment's number and never signed in to.
+  final bool notSignedInYet;
+
+  /// No email: password resets and verification emails cannot reach them.
+  bool get hasEmail => email.trim().isNotEmpty;
 
   String get displayName {
     if (fullName.trim().isNotEmpty) return fullName.trim();
@@ -718,6 +776,12 @@ class _PersonCard extends StatelessWidget {
                           label: _statusLabel(person, l10n),
                           color: statusColor,
                         ),
+                        if (person.notSignedInYet)
+                          _Badge(
+                            key: const Key('person-not-signed-in'),
+                            label: l10n.phaNotSignedInYet,
+                            color: AppColors.muted,
+                          ),
                       ],
                     ),
                   ],
@@ -861,14 +925,26 @@ class _PersonDetailSheetState extends State<_PersonDetailSheet> {
               children: [
                 _Fact(label: l10n.role, value: _roleLabel(person, l10n)),
                 _Fact(label: l10n.status, value: _statusLabel(person, l10n)),
-                _Fact(label: l10n.email, value: person.email),
+                if (person.hasEmail)
+                  _Fact(label: l10n.email, value: person.email),
                 _Fact(label: l10n.phone, value: person.phone),
-                _Fact(
-                  label: l10n.emailVerification,
-                  value: person.emailVerified
-                      ? l10n.verified
-                      : l10n.notVerified,
-                ),
+                if (person.hasEmail)
+                  _Fact(
+                    label: l10n.emailVerification,
+                    value: person.emailVerified
+                        ? l10n.verified
+                        : l10n.notVerified,
+                  ),
+                if (person.accountOrigin == 'shipment' ||
+                    person.accountOrigin == 'phone_sign_in')
+                  _Fact(
+                    label: l10n.phaAccountOrigin,
+                    value: person.accountOrigin == 'shipment'
+                        ? l10n.phaAccountOriginShipment
+                        : l10n.phaAccountOriginPhoneSignIn,
+                  ),
+                if (person.notSignedInYet)
+                  _Fact(label: l10n.status, value: l10n.phaNotSignedInYet),
               ],
             ),
             if (person.category == 'business') ...[
@@ -992,10 +1068,17 @@ class _PersonDetailSheetState extends State<_PersonDetailSheet> {
                         }, l10n.sessionsRevoked)
                       : null,
                 ),
+                // A phone account has no email to send these to.
+                if (!person.hasEmail)
+                  _InfoNotice(
+                    key: const Key('person-no-email-actions'),
+                    icon: Icons.phone_iphone_outlined,
+                    text: l10n.phaNoEmailActions,
+                  ),
                 _ActionTile(
                   icon: Icons.password_outlined,
                   title: l10n.sendPasswordReset,
-                  onTap: canAct
+                  onTap: canAct && person.hasEmail
                       ? () => _run((auth) async {
                           await auth.sendUserRecoveryEmail(
                             userId: person.uid,
@@ -1009,7 +1092,7 @@ class _PersonDetailSheetState extends State<_PersonDetailSheet> {
                   _ActionTile(
                     icon: Icons.mark_email_unread_outlined,
                     title: l10n.sendVerificationEmail,
-                    onTap: canAct
+                    onTap: canAct && person.hasEmail
                         ? () => _run((auth) async {
                             await auth.sendUserRecoveryEmail(
                               userId: person.uid,
@@ -1487,7 +1570,11 @@ class _ActionIcon extends StatelessWidget {
 }
 
 class _Badge extends StatelessWidget {
-  const _Badge({required this.label, this.color = AppColors.cobaltDeep});
+  const _Badge({
+    super.key,
+    required this.label,
+    this.color = AppColors.cobaltDeep,
+  });
 
   final String label;
   final Color color;
@@ -1513,7 +1600,7 @@ class _Badge extends StatelessWidget {
 }
 
 class _InfoNotice extends StatelessWidget {
-  const _InfoNotice({required this.icon, required this.text});
+  const _InfoNotice({super.key, required this.icon, required this.text});
 
   final IconData icon;
   final String text;
@@ -1656,7 +1743,10 @@ String _initials(String value) {
 
 String _personSubtitle(_MarketplacePerson person, AppLocalizations l10n) {
   if (person.businessName.isNotEmpty) {
-    return '${person.businessName} · ${person.email}';
+    final contact = person.email.isNotEmpty ? person.email : person.phone;
+    return contact.isEmpty
+        ? person.businessName
+        : '${person.businessName} · $contact';
   }
   if (person.email.isNotEmpty && person.phone.isNotEmpty) {
     return '${person.email} · ${person.phone}';

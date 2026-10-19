@@ -11,6 +11,7 @@ import '../services/lot_ledger.dart' show LotKnownCar, LotStaff;
 import '../services/package_request_feed.dart';
 import '../services/package_request_service.dart';
 import '../services/package_requests.dart';
+import '../services/phone_accounts.dart' show RecordPhoneField;
 import '../services/waiting_package_service.dart';
 import '../services/waiting_packages.dart';
 import '../theme/app_colors.dart';
@@ -23,6 +24,7 @@ import '../widgets/app_snackbars.dart';
 import '../widgets/lot_sheets.dart';
 import '../widgets/package_money.dart';
 import '../widgets/package_request_widgets.dart';
+import '../widgets/phone_account_widgets.dart' show RecordPhoneFlagNotes;
 import 'containers_screen.dart';
 import 'package_estimate_screen.dart';
 import 'package_payment_sheet.dart';
@@ -1028,8 +1030,22 @@ class WaitingPackageCard extends StatelessWidget {
                       line.vehicleLabel != line.vinNumber)
                     Text(line.vinNumber, style: muted(12.5)),
                   if (owner.isNotEmpty) Text(owner, style: muted(13)),
+                  if (line.customerPhone.isNotEmpty)
+                    RecordPhoneFlagNotes(
+                      flags: line.phoneFlags(RecordPhoneField.customer),
+                      field: RecordPhoneField.customer,
+                      who: l10n.lotCustomer,
+                      dense: true,
+                    ),
                   if (receiver.isNotEmpty)
                     Text('→ $receiver', style: muted(13)),
+                  if (line.receiverPhone.isNotEmpty)
+                    RecordPhoneFlagNotes(
+                      flags: line.phoneFlags(RecordPhoneField.receiver),
+                      field: RecordPhoneField.receiver,
+                      who: l10n.ctrReceiverShort,
+                      dense: true,
+                    ),
                   if (where.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 3),

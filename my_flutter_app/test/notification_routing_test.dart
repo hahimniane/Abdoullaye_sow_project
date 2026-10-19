@@ -7,6 +7,7 @@ import 'package:my_flutter_app/services/notification_routing.dart';
 
 void main() {
   businessRoutingTests();
+  phoneReportedRoutingTests();
   group('routeForNotificationData', () {
     test('routes a car purchase update to My purchases', () {
       final route = routeForNotificationData({
@@ -488,6 +489,105 @@ void businessRoutingTests() {
         })?.name,
         '/orders',
       );
+    });
+  });
+}
+
+/// "A customer says a number isn't theirs" (docs/PHONE_ACCOUNTS.md §6.1):
+/// the business opens the record whose number to check.
+void phoneReportedRoutingTests() {
+  group('phone_number_reported', () {
+    const business = NotificationAudience.business;
+
+    test('a package opens on the business side by line and code', () {
+      final route = routeForNotificationData({
+        'type': 'phone_number_reported',
+        'relatedCollection': 'containerLines',
+        'relatedId': 'line-1',
+        'field': 'receiverPhone',
+        'trackingCode': 'CL-K7M4P2',
+      }, audience: business);
+      expect(route?.name, '/business-package');
+      final args = route?.arguments as BusinessPackageArguments;
+      expect(args.lineId, 'line-1');
+      expect(args.trackingCode, 'CL-K7M4P2');
+    });
+
+    test('a parked car, barrel or transport record opens that record', () {
+      for (final (collection, category) in [
+        ('parkedCars', 'parking'),
+        ('barrelShipments', 'barrels'),
+        ('transportRequests', 'transport'),
+      ]) {
+        final route = routeForNotificationData({
+          'type': 'phone_number_reported',
+          'relatedCollection': collection,
+          'relatedId': 'rec-1',
+          'field': 'customerPhone',
+        }, audience: business);
+        expect(route?.name, '/business-record', reason: collection);
+        final args = route?.arguments as BusinessRecordArguments;
+        expect(args.collection, collection);
+        expect(args.id, 'rec-1');
+        expect(args.fallbackCategory, category);
+      }
+    });
+
+    test('freight and package requests open their lists', () {
+      final freight = routeForNotificationData({
+        'type': 'phone_number_reported',
+        'relatedCollection': 'freightShipments',
+        'relatedId': 'f-1',
+      }, audience: business);
+      expect(freight?.name, '/business-home');
+      expect(
+        (freight?.arguments as BusinessHomeArguments).category,
+        'freight',
+      );
+      final request = routeForNotificationData({
+        'type': 'phone_number_reported',
+        'relatedCollection': 'packageRequests',
+        'relatedId': 'r-1',
+      }, audience: business);
+      expect(request?.name, '/business-requests');
+    });
+
+    test('a package with neither id nor code lands on the business home', () {
+      final route = routeForNotificationData({
+        'type': 'phone_number_reported',
+        'relatedCollection': 'containerLines',
+      }, audience: business);
+      expect(route?.name, '/business-home');
+    });
+
+    test('a customer tap is not routed (it is a business notice)', () {
+      final decision = decideNotificationTap(
+        {
+          'type': 'phone_number_reported',
+          'relatedCollection': 'containerLines',
+          'relatedId': 'line-1',
+        },
+        appReady: true,
+        audience: NotificationAudience.customer,
+      );
+      expect(decision.action, NotificationTapAction.ignore);
+      final open = decideNotificationTap(
+        {
+          'type': 'phone_number_reported',
+          'relatedCollection': 'containerLines',
+          'relatedId': 'line-1',
+        },
+        appReady: true,
+        audience: business,
+      );
+      expect(open.action, NotificationTapAction.open);
+      expect(open.route?.name, '/business-package');
+    });
+
+    test('the package route is registered in the app', () {
+      final main = File('lib/main.dart').readAsStringSync();
+      expect(main, contains("'/business-package': (context)"));
+      expect(main, contains("'/my-packages': (context)"));
     });
   });
 }

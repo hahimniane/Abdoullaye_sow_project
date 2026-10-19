@@ -588,3 +588,10 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   stale quantity), so the count goes up once. Pump between taps. Intl's `jm`
   time puts a narrow no-break space before "PM": match it with
   `RegExp(r'2:40\sPM')`, not a typed space.
+- Code-entry screens with a resend countdown (`PhoneSignInScreen`, 30 s
+  `ResendCountdown` on a periodic Timer): `pumpAndSettle` after a code is
+  sent advances fake time until the countdown ends, so assert
+  "Resend code in 30s" with `pump()`, and drive the wait with
+  `pump(Duration(seconds: n))`. Fakes two test files share live in
+  `test/fixtures/` (`fake_phone_sign_in.dart`) - never import one
+  `_test.dart` from another.

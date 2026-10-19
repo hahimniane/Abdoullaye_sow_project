@@ -25,6 +25,8 @@ import '../services/lot_ledger.dart';
 import '../services/package_labels.dart' show PackageLabelsTarget;
 import '../services/package_request_feed.dart';
 import '../services/package_request_service.dart';
+import '../services/phone_accounts.dart'
+    show RecordPhoneField, RecordPhoneFlags;
 import '../services/vin_decoder_service.dart';
 import '../services/invoice_ledger.dart'
     show invoiceCentsToInput, invoicePaymentMethods;
@@ -42,6 +44,7 @@ import '../widgets/country_phone_field.dart';
 import '../widgets/label_print_sheet.dart';
 import '../widgets/lot_sheets.dart';
 import '../widgets/package_money.dart';
+import '../widgets/phone_account_widgets.dart' show RecordPhoneFlagNotes;
 import '../widgets/pieces_editor.dart';
 import '../widgets/waiting_package_fields.dart';
 import 'add_waiting_packages_sheet.dart';
@@ -2260,9 +2263,19 @@ class _LineCard extends StatelessWidget {
       if (line.updatesReceiver)
         line.receiverName.isNotEmpty ? line.receiverName : l10n.ctrReceiverShort,
     ];
+    // The server's own reading of the numbers (docs/PHONE_ACCOUNTS.md §3):
+    // a number it could not make international, and one the person it
+    // reached says is not theirs. Its "add the country code" stands in for
+    // the tile's own check of the same number.
+    final customerFlags = line.isStock
+        ? RecordPhoneFlags.none
+        : line.phoneFlags(RecordPhoneField.customer);
+    final receiverFlags = line.phoneFlags(RecordPhoneField.receiver);
     final unreachable = [
-      if (line.customerPhoneLacksCountryCode) l10n.ctrCustomerPhoneNoCountryCode,
-      if (line.receiverPhoneLacksCountryCode) l10n.ctrReceiverPhoneNoCountryCode,
+      if (line.customerPhoneLacksCountryCode && !customerFlags.needsCountryCode)
+        l10n.ctrCustomerPhoneNoCountryCode,
+      if (line.receiverPhoneLacksCountryCode && !receiverFlags.needsCountryCode)
+        l10n.ctrReceiverPhoneNoCountryCode,
     ];
     final anyPhone = (!line.isStock && line.customerPhone.isNotEmpty) ||
         line.receiverPhone.isNotEmpty;
@@ -2372,6 +2385,18 @@ class _LineCard extends StatelessWidget {
                       text: warning,
                       color: AppColors.warn,
                     ),
+                  RecordPhoneFlagNotes(
+                    flags: customerFlags,
+                    field: RecordPhoneField.customer,
+                    who: l10n.lotCustomer,
+                    dense: true,
+                  ),
+                  RecordPhoneFlagNotes(
+                    flags: receiverFlags,
+                    field: RecordPhoneField.receiver,
+                    who: l10n.ctrReceiverShort,
+                    dense: true,
+                  ),
                   if (addedBy.isNotEmpty) ...[
                     const SizedBox(height: 4),
                     Text(

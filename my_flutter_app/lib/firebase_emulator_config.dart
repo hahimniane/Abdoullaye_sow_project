@@ -84,3 +84,18 @@ Future<void> connectFirebaseEmulatorsIfRequested() async {
 
   debugPrint('Using Firebase emulators on $host.');
 }
+
+/// Points a second Auth instance (the phone-proof app of the SMS merge,
+/// docs/PHONE_ACCOUNTS.md §7) at the same Auth emulator as the default one.
+Future<void> connectAuthEmulatorIfRequested(FirebaseAuth auth) async {
+  if (!useFirebaseEmulators) return;
+  const host = String.fromEnvironment(
+    'FIREBASE_EMULATOR_HOST',
+    defaultValue: 'localhost',
+  );
+  const authPort = int.fromEnvironment(
+    'FIREBASE_AUTH_EMULATOR_PORT',
+    defaultValue: 9099,
+  );
+  await auth.useAuthEmulator(host, authPort);
+}

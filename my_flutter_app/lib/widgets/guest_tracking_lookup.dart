@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/guest_tracking_result.dart';
+import '../providers/auth_provider.dart';
 import '../screens/freight_quote_details_screen.dart';
+import '../screens/phone_sign_in_screen.dart';
 import '../services/guest_tracking_service.dart';
+import '../services/phone_accounts.dart';
+import '../utils/auth_navigation.dart';
 import '../services/lot_ledger.dart' show formatLotCents;
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
@@ -13,6 +18,7 @@ import 'app_back_button.dart';
 import 'app_card.dart';
 import 'async_action_button.dart';
 import 'language_toggle.dart';
+import 'phone_account_widgets.dart';
 
 enum _GuestLookupMessage { rateLimited, unavailable }
 
@@ -25,6 +31,7 @@ class GuestTrackingLookupPage extends StatelessWidget {
     this.service,
     this.initialCode,
     this.onSignIn,
+    this.phoneSignInClient,
   });
 
   final GuestTrackingLookupService? service;
@@ -32,6 +39,9 @@ class GuestTrackingLookupPage extends StatelessWidget {
 
   /// Null when the person is already signed in.
   final VoidCallback? onSignIn;
+
+  /// For tests: the phone sign-in the "Sign in as ••35" buttons open.
+  final PhoneSignInClient? phoneSignInClient;
 
   @override
   Widget build(BuildContext context) {
@@ -43,6 +53,7 @@ class GuestTrackingLookupPage extends StatelessWidget {
           showBackButton: true,
           initialCode: initialCode,
           onSignIn: onSignIn,
+          phoneSignInClient: phoneSignInClient,
         ),
       ),
     );
@@ -56,9 +67,18 @@ class GuestTrackingLookup extends StatefulWidget {
     this.service,
     this.showBackButton = false,
     this.initialCode,
+    this.phoneSignInClient,
+    this.onPhoneSignedIn,
   });
 
   final GuestTrackingLookupService? service;
+
+  /// For tests: the phone sign-in the "Sign in as ••35" buttons open.
+  final PhoneSignInClient? phoneSignInClient;
+
+  /// After a phone sign-in from this page. Null: business accounts go to
+  /// their dashboard, everyone else to My packages.
+  final VoidCallback? onPhoneSignedIn;
 
   /// Null when the caller is already signed in - the sign-in upsell would
   /// only ask for what they already have.
@@ -135,6 +155,38 @@ class _GuestTrackingLookupState extends State<GuestTrackingLookup> {
     } catch (_) {
       return l10n.guestQuoteClaimFailed;
     }
+  }
+
+  /// "Sign in as the number ending in ••35": a code to the record's own
+  /// number (the app never sees it), then My packages.
+  Future<void> _signInWithHint(
+    GuestTrackingRecord record,
+    TrackingSignInHint hint,
+  ) async {
+    final outcome = await Navigator.of(context).push<PhoneSignInOutcome>(
+      MaterialPageRoute(
+        builder: (_) => PhoneSignInScreen(
+          request: TrackingPhoneCodeRequest(
+            trackingCode: record.trackingCode,
+            role: hint.role,
+            lastTwo: hint.lastTwo,
+          ),
+          client: widget.phoneSignInClient,
+        ),
+      ),
+    );
+    if (!mounted || outcome == null || !outcome.signedIn) return;
+    final after = widget.onPhoneSignedIn;
+    if (after != null) {
+      after();
+      return;
+    }
+    await openAfterTrackingSignIn<void>(
+      context,
+      hasBusinessDashboardAccess: context
+          .read<AuthProvider>()
+          .hasBusinessDashboardAccess,
+    );
   }
 
   Future<void> _submit() async {
@@ -303,6 +355,11 @@ class _GuestTrackingLookupState extends State<GuestTrackingLookup> {
                       onSignIn: widget.onSignIn,
                       onTrackAnother: _trackAnother,
                       onClaim: _claimQuoteRequest,
+                      // Only for someone not signed in: the person holding
+                      // the phone may be the sender or the receiver.
+                      onPhoneHint: widget.onSignIn == null
+                          ? null
+                          : (hint) => _signInWithHint(_result!.record!, hint),
                     )
                   else
                     _GuestTrackingNotFound(onTrackAnother: _trackAnother),
@@ -322,12 +379,16 @@ class _GuestTrackingSuccess extends StatelessWidget {
     required this.onSignIn,
     required this.onTrackAnother,
     required this.onClaim,
+    this.onPhoneHint,
   });
 
   final GuestTrackingRecord record;
   final VoidCallback? onSignIn;
   final VoidCallback onTrackAnother;
   final Future<String?> Function(String trackingCode, String email) onClaim;
+
+  /// Null when signed in (or no number on the record is offered).
+  final Future<void> Function(TrackingSignInHint hint)? onPhoneHint;
 
   @override
   Widget build(BuildContext context) {
@@ -448,12 +509,71 @@ class _GuestTrackingSuccess extends StatelessWidget {
             label: l10n.guestTrackingTrackAnother,
             icon: Icons.search,
           ),
+          if (onPhoneHint != null && record.signIn.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.md),
+            _GuestPhoneSignIn(hints: record.signIn, onHint: onPhoneHint!),
+          ],
           if (onSignIn != null) ...[
             const SizedBox(height: AppSpacing.sm),
             AsyncActionButton.filled(
               onPressed: onSignIn,
               label: l10n.guestTrackingSignInUpsell,
               icon: Icons.login,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// "Is this package yours?": one button per number on the record, named by
+/// its last two digits (and its role when there are two).
+class _GuestPhoneSignIn extends StatelessWidget {
+  const _GuestPhoneSignIn({required this.hints, required this.onHint});
+
+  final List<TrackingSignInHint> hints;
+  final Future<void> Function(TrackingSignInHint hint) onHint;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final nameTheRole = hintsNameTheRole(hints);
+    return Container(
+      key: const Key('guest-phone-sign-in'),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.mist.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            l10n.phaHintTitle,
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            l10n.phaHintBody,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppColors.lightMuted,
+              height: 1.4,
+            ),
+          ),
+          for (final hint in hints) ...[
+            const SizedBox(height: AppSpacing.sm),
+            AsyncActionButton.outlined(
+              key: ValueKey('guest-phone-sign-in:${hint.role}'),
+              onPressed: () => onHint(hint),
+              label: trackingSignInHintLabel(
+                l10n,
+                hint,
+                nameTheRole: nameTheRole,
+              ),
+              icon: Icons.chat_outlined,
             ),
           ],
         ],
@@ -824,7 +944,14 @@ bool _looksLikeTrackingIdentifier(String value) {
       RegExp(r'^[A-Z0-9\s-]+$').hasMatch(value);
 }
 
-String _serviceLabel(AppLocalizations l10n, GuestTrackingServiceType service) {
+String _serviceLabel(AppLocalizations l10n, GuestTrackingServiceType service) =>
+    guestTrackingServiceLabel(l10n, service);
+
+/// A tracking service's words - the tracking page's and My packages'.
+String guestTrackingServiceLabel(
+  AppLocalizations l10n,
+  GuestTrackingServiceType service,
+) {
   return switch (service) {
     GuestTrackingServiceType.barrel => l10n.guestTrackingServiceBarrel,
     GuestTrackingServiceType.freight => l10n.guestTrackingServiceFreight,

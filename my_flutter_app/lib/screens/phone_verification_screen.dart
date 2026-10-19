@@ -9,11 +9,14 @@ import 'package:provider/provider.dart';
 
 import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
+import '../services/phone_accounts.dart' show LinkPhoneCodeRequest;
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../utils/phone_number_validator.dart';
 import '../widgets/app_back_button.dart';
+import '../widgets/app_snackbars.dart';
 import '../widgets/country_phone_field.dart';
+import 'phone_sign_in_screen.dart';
 
 class PhoneVerificationArguments {
   const PhoneVerificationArguments({this.returnToSharedBarrels = false});
@@ -161,6 +164,26 @@ PhoneVerificationErrorType classifyPhoneVerificationError(Object error) {
   };
 }
 
+/// A phone verification or phone sign-in error in our words - one mapping
+/// for the profile's verification and the login screen's text fallback.
+String phoneVerificationErrorText(AppLocalizations l10n, Object error) {
+  return switch (classifyPhoneVerificationError(error)) {
+    PhoneVerificationErrorType.invalidPhone =>
+      l10n.phoneVerificationInvalidPhone,
+    PhoneVerificationErrorType.incompleteCode =>
+      l10n.phoneVerificationEnterCode,
+    PhoneVerificationErrorType.invalidCode => l10n.phoneVerificationInvalidCode,
+    PhoneVerificationErrorType.expiredCode => l10n.phoneVerificationExpiredCode,
+    PhoneVerificationErrorType.tooManyAttempts =>
+      l10n.phoneVerificationTooManyAttempts,
+    PhoneVerificationErrorType.network => l10n.phoneVerificationNetworkError,
+    PhoneVerificationErrorType.phoneInUse => l10n.phoneVerificationPhoneInUse,
+    PhoneVerificationErrorType.recentLogin => l10n.phoneVerificationRecentLogin,
+    PhoneVerificationErrorType.appCheck => l10n.phoneVerificationAppCheck,
+    PhoneVerificationErrorType.generic => l10n.phoneVerificationGenericError,
+  };
+}
+
 class PhoneVerificationPromptDialog extends StatelessWidget {
   const PhoneVerificationPromptDialog({super.key});
 
@@ -190,10 +213,15 @@ class PhoneVerificationScreen extends StatefulWidget {
     super.key,
     this.returnToSharedBarrels = false,
     this.client,
+    this.whatsAppClient,
   });
 
   final bool returnToSharedBarrels;
   final PhoneVerificationClient? client;
+
+  /// The WhatsApp alternative (docs/PHONE_ACCOUNTS.md §7). Without one, the
+  /// screen offers it only when it runs on the real AuthProvider.
+  final PhoneSignInClient? whatsAppClient;
 
   @override
   State<PhoneVerificationScreen> createState() =>
@@ -258,26 +286,56 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
     super.dispose();
   }
 
-  String _messageFor(Object error) {
+  String _messageFor(Object error) =>
+      phoneVerificationErrorText(AppLocalizations.of(context)!, error);
+
+  PhoneSignInClient? _providerWhatsApp;
+
+  /// The code on WhatsApp instead of a text: offered with the real account,
+  /// or with a test's own client.
+  PhoneSignInClient? get _whatsApp =>
+      widget.whatsAppClient ??
+      (widget.client == null
+          ? (_providerWhatsApp ??= AuthPhoneSignInClient(
+              context.read<AuthProvider>(),
+            ))
+          : null);
+
+  /// Read in build without touching the provider.
+  bool get _offersWhatsApp =>
+      widget.whatsAppClient != null || widget.client == null;
+
+  Future<void> _verifyWithWhatsApp() async {
+    if (_busy) return;
     final l10n = AppLocalizations.of(context)!;
-    return switch (classifyPhoneVerificationError(error)) {
-      PhoneVerificationErrorType.invalidPhone =>
-        l10n.phoneVerificationInvalidPhone,
-      PhoneVerificationErrorType.incompleteCode =>
-        l10n.phoneVerificationEnterCode,
-      PhoneVerificationErrorType.invalidCode =>
-        l10n.phoneVerificationInvalidCode,
-      PhoneVerificationErrorType.expiredCode =>
-        l10n.phoneVerificationExpiredCode,
-      PhoneVerificationErrorType.tooManyAttempts =>
-        l10n.phoneVerificationTooManyAttempts,
-      PhoneVerificationErrorType.network => l10n.phoneVerificationNetworkError,
-      PhoneVerificationErrorType.phoneInUse => l10n.phoneVerificationPhoneInUse,
-      PhoneVerificationErrorType.recentLogin =>
-        l10n.phoneVerificationRecentLogin,
-      PhoneVerificationErrorType.appCheck => l10n.phoneVerificationAppCheck,
-      PhoneVerificationErrorType.generic => l10n.phoneVerificationGenericError,
-    };
+    final client = _whatsApp;
+    final phone = PhoneNumberValidator.normalized(_phoneController.text);
+    if (client == null) return;
+    if (!PhoneNumberValidator.isValidE164(phone)) {
+      setState(() => _error = l10n.phoneVerificationInvalidPhone);
+      return;
+    }
+    setState(() {
+      _error = null;
+      _announcement = null;
+    });
+    final outcome = await Navigator.of(context).push<PhoneSignInOutcome>(
+      MaterialPageRoute(
+        builder: (_) => PhoneSignInScreen(
+          request: LinkPhoneCodeRequest(phone),
+          client: client,
+        ),
+      ),
+    );
+    if (!mounted || outcome == null || !outcome.linked) return;
+    // The server set the number (and merged an unused account holding it);
+    // the profile sync is the same as after a text code.
+    setState(() => _syncPending = true);
+    await _syncLinkedPhone();
+    // Packages recorded with the number came along with it: say so.
+    if (mounted && _verified && outcome.merged) {
+      showSuccessSnackBar(context, l10n.phaLinkMerged);
+    }
   }
 
   // TEMP DEBUG: append the raw Firebase/Functions code to the on-screen error
@@ -784,6 +842,15 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
                         ),
                       ),
                     ),
+                    if (!codeSent && !_syncPending && _offersWhatsApp) ...[
+                      const SizedBox(height: 8),
+                      TextButton.icon(
+                        key: const Key('phone-verification-whatsapp'),
+                        onPressed: _busy ? null : _verifyWithWhatsApp,
+                        icon: const Icon(Icons.chat_outlined),
+                        label: Text(l10n.phaVerifyWithWhatsApp),
+                      ),
+                    ],
                     if (codeSent) ...[
                       const SizedBox(height: 8),
                       TextButton(

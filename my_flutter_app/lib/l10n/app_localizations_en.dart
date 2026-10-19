@@ -15121,4 +15121,284 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get inventoryFailTransferLinesTooMany =>
       'A transfer holds at most 100 products.';
+
+  @override
+  String get phaSignInWithPhone => 'Sign in with your phone';
+
+  @override
+  String get phaSignInTitle => 'Sign in with your phone';
+
+  @override
+  String get phaSignInIntro =>
+      'We\'ll send a 6-digit code to this number on WhatsApp.';
+
+  @override
+  String get phaSendWhatsAppCode => 'Send the code on WhatsApp';
+
+  @override
+  String get phaSendByText => 'Send it by text instead';
+
+  @override
+  String get phaSendTextCode => 'Send the code by text';
+
+  @override
+  String phaCodeSentWhatsApp(String lastTwo) {
+    return 'Enter the 6-digit code we sent on WhatsApp to the number ending in ••$lastTwo.';
+  }
+
+  @override
+  String get phaCodeSentWhatsAppPlain =>
+      'Enter the 6-digit code we sent you on WhatsApp.';
+
+  @override
+  String get phaTextFullNumberIntro =>
+      'To get the code by text, enter your full phone number with its country code.';
+
+  @override
+  String get phaWhatsAppUnavailableNote =>
+      'WhatsApp codes aren\'t available right now, so we\'ll send it by text.';
+
+  @override
+  String get phaErrPhoneInvalid => 'Enter a valid phone number.';
+
+  @override
+  String get phaErrNeedsCountryCode =>
+      'Add your country code to the number (for example +1 or +224).';
+
+  @override
+  String get phaErrTrackingNotFound => 'We couldn\'t find that tracking code.';
+
+  @override
+  String get phaErrNoPhoneOnRecord =>
+      'This package has no number we can send a code to.';
+
+  @override
+  String get phaErrRateLimited =>
+      'Too many codes were sent. Please wait and try again.';
+
+  @override
+  String phaErrRateLimitedSeconds(int seconds) {
+    return 'Too many codes were sent. Try again in $seconds s.';
+  }
+
+  @override
+  String phaErrRateLimitedMinutes(int minutes) {
+    String _temp0 = intl.Intl.pluralLogic(
+      minutes,
+      locale: localeName,
+      other: 'Too many codes were sent. Try again in $minutes minutes.',
+      one: 'Too many codes were sent. Try again in 1 minute.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get phaErrWhatsAppUnavailable =>
+      'WhatsApp codes aren\'t available right now. Send it by text instead.';
+
+  @override
+  String get phaErrSignInRequired => 'Sign in to your account first.';
+
+  @override
+  String get phaErrCodeWrong => 'That code isn\'t right.';
+
+  @override
+  String phaErrCodeWrongTries(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'That code isn\'t right. $count tries left.',
+      one: 'That code isn\'t right. 1 try left.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get phaErrCodeExpired => 'That code has expired. Ask for a new one.';
+
+  @override
+  String get phaErrTooManyAttempts =>
+      'Too many wrong codes. Ask for a new one.';
+
+  @override
+  String get phaErrChallengeNotFound => 'Ask for a new code.';
+
+  @override
+  String get phaErrPhoneInUse =>
+      'This number already belongs to another Laawol account that has been used. Sign in with that number instead, or verify a different number.';
+
+  @override
+  String get phaErrWrongAccount =>
+      'Another account asked for this code. Ask for a new one.';
+
+  @override
+  String get phaErrProofInvalid => 'Verify the number again.';
+
+  @override
+  String get phaErrNoVerifiedPhone =>
+      'Add and verify your phone number in your profile to see your packages.';
+
+  @override
+  String get phaErrRecordInvalid => 'That package could not be found.';
+
+  @override
+  String get phaErrOffline => 'Check your connection and try again.';
+
+  @override
+  String get phaErrAppCheck =>
+      'This device couldn\'t be verified. Update the app and try again.';
+
+  @override
+  String get phaErrGeneric => 'Something went wrong. Please try again.';
+
+  @override
+  String get phaHintTitle => 'Is this package yours?';
+
+  @override
+  String get phaHintBody =>
+      'Sign in with the number on it to see all your packages, from every business.';
+
+  @override
+  String phaHintSignInAs(String lastTwo) {
+    return 'Sign in as the number ending in ••$lastTwo';
+  }
+
+  @override
+  String phaHintSignInAsSender(String lastTwo) {
+    return 'Sign in as the sender (••$lastTwo)';
+  }
+
+  @override
+  String phaHintSignInAsReceiver(String lastTwo) {
+    return 'Sign in as the receiver (••$lastTwo)';
+  }
+
+  @override
+  String get phaMyPackagesTitle => 'My packages';
+
+  @override
+  String get phaMyPackagesSubtitle =>
+      'Every package recorded with your phone number';
+
+  @override
+  String get phaSectionMine => 'My packages';
+
+  @override
+  String get phaSectionComingToYou => 'Coming to you';
+
+  @override
+  String get phaEmptyTitle => 'No packages yet';
+
+  @override
+  String phaEmptyBody(String lastTwo) {
+    return 'Packages a business records with your number ending in ••$lastTwo will show up here.';
+  }
+
+  @override
+  String get phaEmptyBodyPlain =>
+      'Packages a business records with your phone number will show up here.';
+
+  @override
+  String get phaLoadFailed => 'Your packages couldn\'t be loaded.';
+
+  @override
+  String get phaSignInToSee =>
+      'Sign in with your phone to see every package recorded with your number.';
+
+  @override
+  String get phaShowMore => 'Show more';
+
+  @override
+  String get phaLoadingMore => 'Loading...';
+
+  @override
+  String get phaBusinessUnknown => 'A business';
+
+  @override
+  String get phaServicePackageRequest => 'Package request';
+
+  @override
+  String get phaSentToSelf => 'You\'re the sender and the receiver';
+
+  @override
+  String phaRecordedOn(String date) {
+    return 'Recorded $date';
+  }
+
+  @override
+  String phaUpdatedOn(String date) {
+    return 'Updated $date';
+  }
+
+  @override
+  String get phaNotMine => 'This isn\'t mine';
+
+  @override
+  String get phaNotMineTitle => 'Not your package?';
+
+  @override
+  String phaNotMineBody(String business) {
+    return 'It will be removed from your list, and $business will be asked to check the number.';
+  }
+
+  @override
+  String get phaNotMineBodyPlain =>
+      'It will be removed from your list, and the business will be asked to check the number.';
+
+  @override
+  String get phaNotMineConfirm => 'Remove it';
+
+  @override
+  String get phaNotMineDone => 'Removed. The business will check the number.';
+
+  @override
+  String get phaFlagAddCountryCode => 'Add the country code';
+
+  @override
+  String get phaFlagReportedNotMine =>
+      'The person says this number isn\'t theirs - check it';
+
+  @override
+  String get phaNotSignedInYet => 'Not signed in yet';
+
+  @override
+  String get phaSignInFilterSignedIn => 'Signed in';
+
+  @override
+  String get phaSignInFilterNotSignedIn => 'Not signed in yet';
+
+  @override
+  String get phaSignInFilterAll => 'Everyone';
+
+  @override
+  String get phaNoEmailActions =>
+      'This account has no email address: it signs in with its phone number, so email actions are not available.';
+
+  @override
+  String get phaAccountOrigin => 'Account made from';
+
+  @override
+  String get phaAccountOriginShipment => 'A shipment\'s phone number';
+
+  @override
+  String get phaAccountOriginPhoneSignIn => 'A phone sign-in';
+
+  @override
+  String get phaVerifyWithWhatsApp => 'Get the code on WhatsApp instead';
+
+  @override
+  String get phaLinkMerged =>
+      'Your number is verified. Packages recorded with it now show in your account.';
+
+  @override
+  String get phaDeletePhoneOnlyNote =>
+      'To confirm, you must have signed in within the last 15 minutes. If it doesn\'t work, sign out and sign in again with your phone.';
+
+  @override
+  String get phaDeleteRecentSignIn =>
+      'Sign out, sign in again with your phone, then delete your account within 15 minutes.';
+
+  @override
+  String get phaPhoneOnlyNoPassword =>
+      'No email on your account? Go back and choose “Sign in with your phone” - there is no password to reset.';
 }

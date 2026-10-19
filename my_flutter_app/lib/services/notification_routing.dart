@@ -65,6 +65,16 @@ class InventoryTransfersArguments {
   final String? kind;
 }
 
+/// One package (container line) on the business side, opened by its code or
+/// its line id - a "number isn't theirs" notification
+/// (docs/PHONE_ACCOUNTS.md §6.1) names both.
+class BusinessPackageArguments {
+  const BusinessPackageArguments({this.lineId = '', this.trackingCode = ''});
+
+  final String lineId;
+  final String trackingCode;
+}
+
 /// Where to navigate for a given push notification's `data` payload.
 class NotificationRoute {
   const NotificationRoute(this.name, {this.arguments});
@@ -366,6 +376,10 @@ NotificationRoute? _businessRouteForNotificationData(
       return const NotificationRoute('/purchase-management');
     case 'business_support_request':
       return const NotificationRoute('/business-support');
+    // "A customer says a number isn't theirs": the record whose number to
+    // check, in the view staff fix it from.
+    case 'phone_number_reported':
+      return _phoneReportedRoute(data);
     // "New request from Fatou: 2 pieces", "... confirmed", "... said no":
     // the Requests view, opened on that request (§8.7).
     case 'package_request':
@@ -418,6 +432,41 @@ NotificationRoute? _businessRouteForNotificationData(
       );
     default:
       return null; // support_* types share the customer routes below.
+  }
+}
+
+NotificationRoute _phoneReportedRoute(Map<String, dynamic> data) {
+  final collection = data['relatedCollection']?.toString().trim() ?? '';
+  final id = data['relatedId']?.toString().trim() ?? '';
+  final code = data['trackingCode']?.toString().trim() ?? '';
+  switch (collection) {
+    case 'containerLines':
+      if (id.isEmpty && code.isEmpty) {
+        return const NotificationRoute('/business-home');
+      }
+      return NotificationRoute(
+        '/business-package',
+        arguments: BusinessPackageArguments(lineId: id, trackingCode: code),
+      );
+    case 'parkedCars':
+      return _businessRecord('parkedCars', id, 'parking');
+    case 'barrelShipments':
+      return _businessRecord('barrelShipments', id, 'barrels');
+    case 'transportRequests':
+      return _businessRecord('transportRequests', id, 'transport');
+    case 'freightShipments':
+    case 'freightQuoteRequests':
+      return const NotificationRoute(
+        '/business-home',
+        arguments: BusinessHomeArguments(category: 'freight'),
+      );
+    case 'packageRequests':
+      return NotificationRoute(
+        '/business-requests',
+        arguments: BusinessRequestsArguments(requestId: id),
+      );
+    default:
+      return const NotificationRoute('/business-home');
   }
 }
 

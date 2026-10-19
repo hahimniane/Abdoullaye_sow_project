@@ -185,6 +185,9 @@ class _InitializationIssueCard extends StatelessWidget {
         authProvider.initializationIssue ==
             AuthInitializationIssue.profileMissing &&
         authProvider.isAuthenticated &&
+        // A phone account has no email to verify: an invitation is not
+        // what it is waiting on.
+        !authProvider.isPhoneOnlyAccount &&
         !authProvider.emailVerified;
     final email = authProvider.userEmail?.trim();
 
