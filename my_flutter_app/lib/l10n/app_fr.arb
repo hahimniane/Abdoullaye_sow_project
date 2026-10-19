@@ -5845,6 +5845,13 @@
   "invCreditOnCreditNote": "Le client paie une partie maintenant (ou rien) et doit le reste.",
   "invCreditPaidNow": "Payé maintenant (dollars US)",
   "invCreditPaidNowReceivedBy": "Qui a reçu les {amount} payés maintenant",
+  "@invCreditPaidNowReceivedBy": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "invCreditCustomerName": "Nom du client",
   "invCreditCustomerPhone": "Téléphone du client (facultatif)",
   "invCreditCollector": "Qui encaisse le reste",

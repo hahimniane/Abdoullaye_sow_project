@@ -3169,7 +3169,6 @@ describe("credit sales and who received the money", () => {
         [{paidNowCents: 6000}, "paid_now_invalid"],
         [{paidNowCents: -1}, "paid_now_invalid"],
         [{customerName: ""}, "credit_customer_required"],
-        [{customerPhone: ""}, "credit_customer_required"],
         [{customerPhone: "207 555 0100"}, "customer_phone_invalid"],
         [{collectorStaffId: ""}, "collector_invalid"],
         [{collectorStaffId: OUTSIDER}, "collector_invalid"],
@@ -3183,6 +3182,17 @@ describe("credit sales and who received the money", () => {
       // Paying something now still needs the method.
       await assert.rejects(sellIn({paymentMethod: "", credit: creditOf()}),
           refusal("payment_method_invalid"));
+    });
+
+    it("sells on credit without the customer's phone", async () => {
+      // No phone, or the "+1" the app's phone field starts with: optional.
+      for (const none of ["", "+1"]) {
+        const sold = await sellIn({credit: creditOf({customerPhone: none})});
+        const stored = (await db.collection("inventorySales")
+            .doc(sold.saleId).get()).data();
+        assert.equal(stored.credit.customerPhone, "", JSON.stringify(none));
+        assert.equal(stored.credit.customerName.length > 0, true);
+      }
     });
 
     it("answers a retried credit sale as the same sale", async () => {
