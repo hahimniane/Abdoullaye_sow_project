@@ -55,9 +55,10 @@ test("Volume tiles render their figure in the strong, never in a label-styled sp
   // (a span) inside `.metric strong` took that look: tiny main numbers.
   assert.match(rule(".metric span"), /font-size:\s*12px/);
   const source = readFileSync(new URL("../components/volume-views.tsx", import.meta.url), "utf8");
-  const tiles = source.slice(source.indexOf("function VolumeTiles"), source.indexOf("function ContainerList"));
+  const tiles = source.slice(source.indexOf("function VolumeTileCard"), source.indexOf("function ContainerList"));
   assert.doesNotMatch(tiles, /<strong[^>]*>\s*<Count/);
-  assert.equal((tiles.match(/<strong className="vol-figure[^"]*" data-no-translate>/g) ?? []).length, 4);
+  // One tile card draws every tile (lib/volume.ts volumeTiles), figure in the strong.
+  assert.equal((tiles.match(/<strong className="vol-figure[^"]*" data-no-translate>/g) ?? []).length, 1);
   assert.match(rule(".vol-tiles .metric strong.vol-figure"), /font-size:\s*32px/);
   const note = rule(".vol-tiles .metric small span");
   assert.match(note, /text-transform:\s*none/);
@@ -96,4 +97,17 @@ test("the public tracking card fits a 375 px phone", () => {
   assert.match(phone, /repeat\(2, minmax\(0, 1fr\)\)/);
   assert.match(phone, /\.trk-step-text \{ white-space: normal; \}/);
   assert.ok(styles.indexOf(phone) > base, "the phone journey rules come after the base rules");
+});
+
+test("the Volume tiles keep two columns on a phone and never scroll the page sideways", () => {
+  // Seven tiles in ".metric-grid"'s one-column phone layout was a long
+  // scroll; the rows outrank it and set their own columns.
+  assert.match(rule(".metric-grid.vol-tile-row.received"), /repeat\(4, minmax\(0, 1fr\)\)/);
+  const tablet = mediaBlock("max-width: 900px", ".vol-tile-row.received");
+  assert.match(tablet, /\.metric-grid\.vol-tile-row\.received \{\s*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/);
+  const phone = mediaBlock("max-width: 720px", ".vol-tile-row.shipped.count-3");
+  assert.match(phone, /\.metric-grid\.vol-tile-row\.shipped\.count-3 \{\s*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/);
+  // The business picker fills the row on a phone instead of its 190 px minimum.
+  assert.match(phone, /\.vol-business-picker select \{[^}]*min-width: 0;[^}]*width: 100%;/);
+  assert.ok(styles.indexOf(tablet) > styles.indexOf(".metric-grid.vol-tile-row.received {"), "phone rules come after the base rules");
 });

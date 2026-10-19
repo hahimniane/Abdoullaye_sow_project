@@ -176,6 +176,124 @@ export function emptyVolumeTotals(): VolumeTotals {
   };
 }
 
+/** The months the picker lists, newest first: `current` and the `count - 1` before it. */
+export function recentVolumeMonths(current: string = currentVolumeMonth(), count = 24): string[] {
+  if (!isVolumeMonth(current)) return [];
+  const months: string[] = [];
+  for (let back = 0; back < Math.max(1, Math.trunc(count)); back += 1) {
+    months.push(shiftVolumeMonth(current, -back));
+  }
+  return months;
+}
+
+/**
+ * The picker's months: the recent ones, plus `selected` (at the bottom) when
+ * the arrows stepped back further than the list reaches.
+ */
+export function volumeMonthOptions(
+  selected: string,
+  current: string = currentVolumeMonth(),
+  count = 24,
+): string[] {
+  const months = recentVolumeMonths(current, count);
+  if (isVolumeMonth(selected) && !months.includes(selected)) months.push(selected);
+  return months;
+}
+
+export type VolumeTileKey =
+  | "pieces"
+  | "barrels"
+  | "packages"
+  | "cars"
+  | "containersShipped"
+  | "avgPerContainer"
+  | "customerLines";
+
+export type VolumeTile = {
+  key: VolumeTileKey;
+  /** English; the page's French comes from french-dom.ts. */
+  label: string;
+  /** A whole count, or the average (null when nothing shipped). */
+  value: number | null;
+  kind: "count" | "average";
+};
+
+/**
+ * The Volume tiles, in two rows: what came in (pieces, then each kind on its
+ * own tile) and what went out (containers, the average per container, and the
+ * customer lines where the page shows them).
+ */
+export function volumeTiles(
+  totals: VolumeNumbers,
+  { showCustomerLines }: { showCustomerLines: boolean },
+): { received: VolumeTile[]; shipped: VolumeTile[] } {
+  const count = (value: unknown) => Math.max(0, Math.round(Number(value) || 0));
+  const average = totals.avgPerContainer;
+  const shipped: VolumeTile[] = [
+    { key: "containersShipped", label: "Containers shipped", value: count(totals.containersShipped), kind: "count" },
+    {
+      key: "avgPerContainer",
+      label: "Avg pieces per container",
+      value: average === null || average === undefined || !Number.isFinite(average) ? null : average,
+      kind: "average",
+    },
+  ];
+  if (showCustomerLines) {
+    shipped.push({ key: "customerLines", label: "Customer lines", value: count(totals.customerLines), kind: "count" });
+  }
+  return {
+    received: [
+      { key: "pieces", label: "Pieces received", value: count(totals.pieces), kind: "count" },
+      { key: "barrels", label: "Barrels", value: count(totals.barrels), kind: "count" },
+      { key: "packages", label: "Packages", value: count(totals.packages), kind: "count" },
+      { key: "cars", label: "Cars", value: count(totals.cars), kind: "count" },
+    ],
+    shipped,
+  };
+}
+
+/** Whether a month has nothing to show: no piece received, no container shipped. */
+export function isEmptyVolume(totals: Pick<VolumeNumbers, "pieces" | "containersShipped"> | null | undefined): boolean {
+  if (!totals) return false;
+  return (Number(totals.pieces) || 0) <= 0 && (Number(totals.containersShipped) || 0) <= 0;
+}
+
+export type VolumeBusinessOption = { id: string; name: string };
+
+function businessIdOf(value: unknown): string {
+  const id = String(value ?? "").trim();
+  return id && !id.includes("/") ? id : "";
+}
+
+/**
+ * The business picker's list: every business the console loaded, every
+ * business in the month's table (a business past the loaded page still has
+ * its rollup), and the selected one - each once, sorted by name. A row the
+ * directory only inferred from other records is not a business to pick.
+ */
+export function volumeBusinessOptions(
+  businesses: ReadonlyArray<{ id?: unknown; name?: unknown; _inferred?: unknown }>,
+  rows: ReadonlyArray<{ businessId: string; name: string }> = [],
+  selected: VolumeBusinessOption | null = null,
+): VolumeBusinessOption[] {
+  const byId = new Map<string, string>();
+  const add = (rawId: unknown, rawName: unknown) => {
+    const id = businessIdOf(rawId);
+    if (!id) return;
+    const name = String(rawName ?? "").trim();
+    if (!byId.has(id) || (!byId.get(id) && name)) byId.set(id, name);
+  };
+  for (const business of businesses) {
+    if (business._inferred === true) continue;
+    add(business.id, business.name);
+  }
+  for (const row of rows) add(row.businessId, row.name);
+  if (selected) add(selected.id, selected.name);
+  return [...byId.entries()]
+    .map(([id, name]) => ({ id, name: name || id }))
+    .sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }) || a.id.localeCompare(b.id));
+}
+
 /** The bars of the 12-month chart, scaled to the tallest month. */
 export function volumeTrendBars(trend: ReadonlyArray<{ month: string; pieces: number }>) {
   const max = Math.max(1, ...trend.map((point) => Math.max(0, Number(point.pieces) || 0)));

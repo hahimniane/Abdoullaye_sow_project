@@ -2013,6 +2013,7 @@ export function AdminConsole() {
       "finance",
       "website",
       "settings",
+      "volume",
     ) ||
       (enabled && activeTab === "people" && adminEmailVerified),
     { pageSize: 500 },
@@ -2717,6 +2718,7 @@ export function AdminConsole() {
           )}
           {activeTab === "volume" && (
             <AdminVolumeView
+              businesses={businessRows}
               canRebuild={perms.can("finance")}
               previewMode={previewMode}
             />

@@ -3686,6 +3686,13 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Pieces count in the month they were received; containers in the month they sailed (New York time).":
     "Les colis comptent le mois de leur réception ; les conteneurs, le mois de leur départ (heure de New York).",
   "Pieces by month": "Colis par mois",
+  // The separate tiles, the business picker and the month list.
+  "Avg pieces per container": "Moyenne de colis par conteneur",
+  "No containers to average": "Aucun conteneur pour la moyenne",
+  "Choose a month": "Choisir un mois",
+  "Choose a business to see its own tiles and containers.":
+    "Choisissez une entreprise pour voir ses propres chiffres et conteneurs.",
+  "See this business only": "Voir seulement cette entreprise",
 });
 
 // Business assistant chat panel (assistant-panel.tsx). "Assistant" is spelled

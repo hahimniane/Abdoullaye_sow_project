@@ -1370,6 +1370,12 @@ button[data-loading="true"]::before {
 /* Volume pages (volume-views.tsx): a month picker in the top bar, the tiles,
    a By business table that scrolls inside its box on a phone, a container
    list and the 12-month bars (shared with the commission chart). */
+/* One shrinkable column: a wide child (the month list's longest name) must
+   never widen the page past the phone's screen. */
+.vol-page {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .vol-topbar {
   align-items: center;
   background:
@@ -1414,11 +1420,77 @@ button[data-loading="true"]::before {
   padding: 2px 4px;
 }
 
-.vol-month-label {
+.vol-month-select {
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: var(--ink);
+  cursor: pointer;
   font-size: 15px;
-  min-width: 132px;
+  font-weight: 800;
+  min-height: 36px;
+  min-width: 0;
+  padding: 0 4px;
   text-align: center;
-  white-space: nowrap;
+}
+
+.vol-month-select:focus-visible {
+  outline: 2px solid var(--brand);
+}
+
+/* "All businesses" or one: the page's first control, with its label. */
+.vol-business-picker {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.vol-business-picker > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.vol-business-picker select {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 700;
+  max-width: 280px;
+  min-height: 40px;
+  min-width: 190px;
+  padding: 0 10px;
+}
+
+.vol-topbar-title {
+  min-width: 0;
+}
+
+.vol-topbar-title h2 {
+  overflow-wrap: anywhere;
+}
+
+.vol-back {
+  align-items: center;
+  background: none;
+  border: 0;
+  color: var(--brand-strong);
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 800;
+  gap: 4px;
+  margin: 0 0 6px;
+  padding: 0;
+}
+
+.vol-back:hover,
+.vol-back:focus-visible {
+  text-decoration: underline;
 }
 
 .vol-month-picker .icon-button:disabled {
@@ -1426,8 +1498,25 @@ button[data-loading="true"]::before {
   opacity: 0.35;
 }
 
-.vol-tiles.three {
+/* Two rows of tiles: what came in (pieces, barrels, packages, cars) and
+   what went out (containers, avg per container, customer lines). The row
+   selectors outrank ".metric-grid" so its one-column phone rule never
+   stacks seven tiles; the rows use their own breakpoints below. */
+.vol-tiles {
+  display: grid;
+  gap: 14px;
+}
+
+.metric-grid.vol-tile-row.received {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.metric-grid.vol-tile-row.shipped.count-3 {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.metric-grid.vol-tile-row.shipped.count-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 /* A tile's figure is the strong itself (never a span inside it), and the
@@ -1446,9 +1535,17 @@ button[data-loading="true"]::before {
   text-transform: none;
 }
 
-.vol-tiles .metric strong.vol-split {
-  font-size: 26px;
-  white-space: nowrap;
+.vol-panel-body {
+  min-width: 0;
+  padding: 14px 18px 18px;
+}
+
+.vol-panel-body > .empty-state {
+  margin: 0;
+}
+
+.vol-table-hint {
+  padding: 12px 18px 0;
 }
 
 .vol-change {
@@ -1570,19 +1667,6 @@ button[data-loading="true"]::before {
   font-weight: 800;
 }
 
-.vol-drawer-body {
-  display: grid;
-  gap: 14px;
-  padding: 18px 22px 24px;
-}
-
-.vol-drawer h2 {
-  font-size: 18px;
-  line-height: 1.25;
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-
 .vol-note,
 .vol-footer {
   color: var(--muted);
@@ -1597,17 +1681,48 @@ button[data-loading="true"]::before {
   gap: 10px;
 }
 
+@media (max-width: 900px) {
+  .metric-grid.vol-tile-row.received {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 720px) {
   .vol-topbar {
     padding: 14px 16px;
   }
 
-  .vol-tiles.three {
-    grid-template-columns: 1fr;
+  .vol-topbar-actions {
+    width: 100%;
   }
 
-  .vol-month-label {
-    min-width: 110px;
+  .vol-business-picker,
+  .vol-month-picker {
+    flex: 1 1 100%;
+  }
+
+  .vol-month-select {
+    flex: 1 1 auto;
+    width: 100%;
+  }
+
+  .vol-business-picker select {
+    flex: 1 1 auto;
+    max-width: none;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .metric-grid.vol-tile-row.shipped.count-3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .metric-grid.vol-tile-row.shipped.count-3 > :last-child {
+    grid-column: 1 / -1;
+  }
+
+  .vol-tiles .metric strong.vol-figure {
+    font-size: 28px;
   }
 }
 

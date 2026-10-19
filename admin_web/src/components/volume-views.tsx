@@ -5,9 +5,9 @@
 // on the server (volume_counts.js); read here through getPlatformVolume and
 // getBusinessVolume. Pure logic - months, labels, CSV - is lib/volume.ts.
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { httpsCallable } from "firebase/functions";
-import { BarChart3, ChevronLeft, ChevronRight, Container, Download, RefreshCw, X } from "lucide-react";
+import { BarChart3, ChevronLeft, ChevronRight, Container, Download, RefreshCw } from "lucide-react";
 
 import { TotalsStatus } from "@/components/totals-status";
 import { UserText } from "@/components/user-text";
@@ -24,16 +24,23 @@ import {
   formatVolumeCount,
   formatVolumeMonth,
   formatVolumeMonthShort,
+  isEmptyVolume,
   shiftVolumeMonth,
   stepVolumeMonth,
+  volumeBusinessOptions,
   volumeChangeTone,
+  volumeMonthOptions,
+  volumeTiles,
   volumeTrendBars,
   type BusinessVolumeResponse,
   type PlatformVolumeResponse,
+  type VolumeBusinessOption,
   type VolumeContainer,
   type VolumeLanguage,
+  type VolumeTile,
   type VolumeTotals,
 } from "@/lib/volume";
+import { previewBusinessVolume, previewPlatformVolume } from "@/lib/volume-preview";
 
 const REBUILD_MAX_CALLS = 20;
 
@@ -48,7 +55,9 @@ function MonthText({ month }: { month: string }) {
 }
 
 function MonthPicker({ month, onChange }: { month: string; onChange: (month: string) => void }) {
+  const language = useLanguage();
   const current = currentVolumeMonth();
+  const months = volumeMonthOptions(month, current);
   return (
     <div className="vol-month-picker" role="group">
       <button
@@ -60,9 +69,19 @@ function MonthPicker({ month, onChange }: { month: string; onChange: (month: str
       >
         <ChevronLeft size={18} />
       </button>
-      <strong className="vol-month-label" aria-live="polite">
-        <MonthText month={month} />
-      </strong>
+      <select
+        aria-label="Choose a month"
+        className="vol-month-select"
+        onChange={(event) => onChange(event.target.value)}
+        title="Choose a month"
+        value={month}
+      >
+        {months.map((value) => (
+          <option data-no-translate key={value} value={value}>
+            {formatVolumeMonth(value, language)}
+          </option>
+        ))}
+      </select>
       <button
         aria-label="Next month"
         className="icon-button subtle"
@@ -77,28 +96,57 @@ function MonthPicker({ month, onChange }: { month: string; onChange: (month: str
   );
 }
 
+/** "All businesses" or one business; the names are typed by businesses, so never translated. */
+function BusinessPicker({
+  options,
+  value,
+  onChange,
+}: {
+  options: VolumeBusinessOption[];
+  value: string;
+  onChange: (businessId: string) => void;
+}) {
+  return (
+    <label className="vol-business-picker">
+      <span>Business</span>
+      <select onChange={(event) => onChange(event.target.value)} value={value}>
+        <option value="">All businesses</option>
+        {options.map((option) => (
+          <option data-no-translate key={option.id} value={option.id}>
+            {option.name}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 function Count({ value }: { value: unknown }) {
   const language = useLanguage();
   return <span data-no-translate>{formatVolumeCount(value, language)}</span>;
 }
 
-function VolumeTiles({ totals, showCustomerLines }: { totals: VolumeTotals; showCustomerLines: boolean }) {
+function VolumeTileCard({ tile, totals }: { tile: VolumeTile; totals: VolumeTotals | null }) {
   const language = useLanguage();
-  const change = formatVolumeChange(totals.piecesChangePct, language);
-  const tone = volumeChangeTone(totals.piecesChangePct);
+  const figure = !totals
+    ? "—"
+    : tile.kind === "average"
+      ? formatVolumeAverage(tile.value, language)
+      : formatVolumeCount(tile.value, language);
+  const change = tile.key === "pieces" && totals ? formatVolumeChange(totals.piecesChangePct, language) : "";
   return (
-    <div className={`metric-grid vol-tiles ${showCustomerLines ? "" : "three"}`}>
-      <article className="metric">
-        <span>Pieces received</span>
-        {/* The figure sits in the strong itself: a <span> here takes the
-            label's ".metric span" look (12px, uppercase, muted). */}
-        <strong className="vol-figure" data-no-translate>
-          {formatVolumeCount(totals.pieces, language)}
-        </strong>
+    <article className={`metric ${tile.key === "pieces" ? "" : "neutral"} vol-tile-${tile.key}`}>
+      <span>{tile.label}</span>
+      {/* The figure sits in the strong itself: a <span> here takes the
+          label's ".metric span" look (12px, uppercase, muted). */}
+      <strong className="vol-figure" data-no-translate>
+        {figure}
+      </strong>
+      {totals && tile.key === "pieces" && (
         <small>
           {change ? (
             <>
-              <b className={`vol-change ${tone}`} data-no-translate>
+              <b className={`vol-change ${volumeChangeTone(totals.piecesChangePct)}`} data-no-translate>
                 {change}
               </b>{" "}
               <span>vs previous month</span>
@@ -107,35 +155,41 @@ function VolumeTiles({ totals, showCustomerLines }: { totals: VolumeTotals; show
             <span>No earlier month to compare</span>
           )}
         </small>
-      </article>
-      <article className="metric neutral">
-        <span>Barrels · Packages · Cars</span>
-        <strong className="vol-figure vol-split" data-no-translate>
-          {formatVolumeCount(totals.barrels, language)} · {formatVolumeCount(totals.packages, language)} ·{" "}
-          {formatVolumeCount(totals.cars, language)}
-        </strong>
-      </article>
-      <article className="metric neutral">
-        <span>Containers shipped</span>
-        <strong className="vol-figure" data-no-translate>
-          {formatVolumeCount(totals.containersShipped, language)}
-        </strong>
-        <small>
-          <b data-no-translate>{formatVolumeAverage(totals.avgPerContainer, language)}</b>{" "}
-          <span>avg pieces per container</span>
-        </small>
-      </article>
-      {showCustomerLines && (
-        <article className="metric neutral">
-          <span>Customer lines</span>
-          <strong className="vol-figure" data-no-translate>
-            {formatVolumeCount(totals.customerLines, language)}
-          </strong>
-          <small>
-            <span>customer loads received</span>
-          </small>
-        </article>
       )}
+      {totals && tile.key === "avgPerContainer" && tile.value === null && (
+        <small>
+          <span>No containers to average</span>
+        </small>
+      )}
+      {totals && tile.key === "customerLines" && (
+        <small>
+          <span>customer loads received</span>
+        </small>
+      )}
+    </article>
+  );
+}
+
+/**
+ * The month's tiles in two rows: what came in (pieces, then barrels, packages
+ * and cars each on its own tile) and what went out (containers, the average
+ * per container, and customer lines where the page shows them). `totals:
+ * null` (nothing loaded yet, or it failed) shows dashes, never false zeros.
+ */
+function VolumeTiles({ totals, showCustomerLines }: { totals: VolumeTotals | null; showCustomerLines: boolean }) {
+  const tiles = volumeTiles(totals ?? emptyVolumeTotals(), { showCustomerLines });
+  return (
+    <div className="vol-tiles">
+      <div className="metric-grid vol-tile-row received">
+        {tiles.received.map((tile) => (
+          <VolumeTileCard key={tile.key} tile={tile} totals={totals} />
+        ))}
+      </div>
+      <div className={`metric-grid vol-tile-row shipped count-${tiles.shipped.length}`}>
+        {tiles.shipped.map((tile) => (
+          <VolumeTileCard key={tile.key} tile={tile} totals={totals} />
+        ))}
+      </div>
     </div>
   );
 }
@@ -291,237 +345,50 @@ function RecountButton({ month, onDone }: { month: string; onDone: () => void })
   );
 }
 
-function BusinessContainersDrawer({
+/**
+ * One business's month: its status line, tiles and the containers it
+ * shipped (getBusinessVolume). The business console's Volume page and the
+ * admin page's one-business view are both this.
+ */
+function BusinessMonth({
   businessId,
-  businessName,
   month,
-  onClose,
+  previewMode,
+  showCustomerLines,
 }: {
   businessId: string;
-  businessName: string;
   month: string;
-  onClose: () => void;
+  previewMode: boolean;
+  showCustomerLines: boolean;
 }) {
-  const answer = useServerTotals<BusinessVolumeResponse>("getBusinessVolume", { businessId, month });
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-  return (
-    <div className="account-overlay" role="presentation">
-      <button aria-label="Close" className="account-backdrop" onClick={onClose} type="button" />
-      <aside aria-modal="true" className="account-drawer vol-drawer" role="dialog">
-        <div className="account-drawer-head">
-          <h2>
-            <span data-no-translate>{businessName || businessId}</span> · <span>containers in</span>{" "}
-            <MonthText month={month} />
-          </h2>
-          <button aria-label="Close" className="icon-button subtle" onClick={onClose} title="Close" type="button">
-            <X size={18} />
-          </button>
-        </div>
-        <div className="vol-drawer-body">
-          <TotalsStatus
-            complete={answer.data?.complete !== false}
-            computedAtMs={answer.data?.computedAtMs ?? null}
-            error={answer.error}
-            loading={answer.loading}
-            onRefresh={() => answer.refresh()}
-          />
-          {answer.data && (
-            <ContainerList containers={answer.data.containers} month={month} truncated={answer.data.containersTruncated} />
-          )}
-        </div>
-      </aside>
-    </div>
-  );
-}
-
-/** Admin console → Volume: every business's month (artboard 11). */
-export function AdminVolumeView({ previewMode, canRebuild }: { previewMode: boolean; canRebuild: boolean }) {
-  const language = useLanguage();
-  const [month, setMonth] = useState(() => currentVolumeMonth());
-  const [reload, setReload] = useState(0);
-  const [selected, setSelected] = useState<{ id: string; name: string } | null>(null);
-  const answer = useServerTotals<PlatformVolumeResponse>("getPlatformVolume", previewMode ? null : { month }, reload);
-  const data = answer.data && answer.data.month === month ? answer.data : null;
-  const totals = data?.totals ?? { ...emptyVolumeTotals(), businesses: 0 };
-  const rows = data?.businesses ?? [];
-  const nothing = Boolean(data) && totals.pieces === 0 && totals.containersShipped === 0;
-  return (
-    <div className="stack vol-page">
-      <section className="vol-topbar">
-        <div>
-          <h2>Volume</h2>
-          <p>Pieces count in the month they were received; containers in the month they sailed (New York time).</p>
-        </div>
-        <div className="vol-topbar-actions">
-          <MonthPicker month={month} onChange={setMonth} />
-          <button
-            className="secondary-button"
-            disabled={!data}
-            onClick={() => data && downloadVolumeCsv(data, language)}
-            type="button"
-          >
-            <Download size={15} /> Download CSV
-          </button>
-        </div>
-      </section>
-      {!previewMode && (
-        <TotalsStatus
-          computedAtMs={answer.data?.computedAtMs ?? null}
-          error={answer.error}
-          loading={answer.loading}
-          onRefresh={() => answer.refresh()}
-        />
-      )}
-      <VolumeTiles showCustomerLines totals={totals} />
-      <section className="panel">
-        <div className="panel-header">
-          <div>
-            <BarChart3 size={18} />
-            <h2>By business</h2>
-          </div>
-        </div>
-        {nothing || (!data && !answer.loading) ? (
-          <div className="empty-state">
-            <span>Nothing was received or shipped in</span> <MonthText month={month} />
-          </div>
-        ) : (
-          <div className="vol-table-scroll">
-            <table className="commission-table vol-table">
-              <thead>
-                <tr>
-                  <th scope="col">Business</th>
-                  <th scope="col">Barrels</th>
-                  <th scope="col">Packages</th>
-                  <th scope="col">Cars</th>
-                  <th scope="col">Pieces</th>
-                  <th scope="col">Containers</th>
-                  <th scope="col">Avg / container</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr
-                    className={selected?.id === row.businessId ? "selected" : ""}
-                    key={row.businessId}
-                    onClick={() => setSelected({ id: row.businessId, name: row.name })}
-                  >
-                    <th scope="row">
-                      <button
-                        className="vol-row-button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setSelected({ id: row.businessId, name: row.name });
-                        }}
-                        type="button"
-                      >
-                        <span data-no-translate>{row.name || row.businessId}</span>
-                      </button>
-                    </th>
-                    <td>
-                      <Count value={row.barrels} />
-                    </td>
-                    <td>
-                      <Count value={row.packages} />
-                    </td>
-                    <td>
-                      <Count value={row.cars} />
-                    </td>
-                    <td>
-                      <b>
-                        <Count value={row.pieces} />
-                      </b>
-                    </td>
-                    <td>
-                      <Count value={row.containersShipped} />
-                    </td>
-                    <td data-no-translate>{formatVolumeAverage(row.avgPerContainer, language)}</td>
-                  </tr>
-                ))}
-              </tbody>
-              {rows.length > 1 && (
-                <tfoot>
-                  <tr>
-                    <th scope="row">Total</th>
-                    <td>
-                      <Count value={totals.barrels} />
-                    </td>
-                    <td>
-                      <Count value={totals.packages} />
-                    </td>
-                    <td>
-                      <Count value={totals.cars} />
-                    </td>
-                    <td>
-                      <b>
-                        <Count value={totals.pieces} />
-                      </b>
-                    </td>
-                    <td>
-                      <Count value={totals.containersShipped} />
-                    </td>
-                    <td data-no-translate>{formatVolumeAverage(totals.avgPerContainer, language)}</td>
-                  </tr>
-                </tfoot>
-              )}
-            </table>
-          </div>
-        )}
-      </section>
-      <TrendChart trend={data?.trend ?? []} />
-      {canRebuild && !previewMode && (
-        <div className="vol-footer">
-          <RecountButton month={month} onDone={() => setReload((value) => value + 1)} />
-        </div>
-      )}
-      {selected && (
-        <BusinessContainersDrawer
-          businessId={selected.id}
-          businessName={selected.name}
-          month={month}
-          onClose={() => setSelected(null)}
-        />
-      )}
-    </div>
-  );
-}
-
-/** Business console → Volume: the business's own month (artboard 12). */
-export function BusinessVolumePanel({ businessId, previewMode }: { businessId: string; previewMode: boolean }) {
-  const [month, setMonth] = useState(() => currentVolumeMonth());
   const answer = useServerTotals<BusinessVolumeResponse>(
     "getBusinessVolume",
     previewMode || !businessId ? null : { businessId, month },
   );
-  const data = answer.data && answer.data.month === month ? answer.data : null;
-  const totals = useMemo(() => data?.totals ?? emptyVolumeTotals(), [data]);
-  const thisMonth = month === currentVolumeMonth();
+  const preview = useMemo(
+    () => (previewMode && businessId ? previewBusinessVolume(businessId, month) : null),
+    [previewMode, businessId, month],
+  );
+  // An answer for another business or month (the picker just moved) is never shown.
+  const live = answer.data && answer.data.month === month && answer.data.businessId === businessId ? answer.data : null;
+  const data = preview ?? live;
   return (
-    <div className="stack vol-page">
-      <section className="vol-topbar">
-        <div>
-          <h2>Volume</h2>
-          <p>{thisMonth ? <span>Your volume this month</span> : <MonthText month={month} />}</p>
-        </div>
-        <div className="vol-topbar-actions">
-          <MonthPicker month={month} onChange={setMonth} />
-        </div>
-      </section>
+    <>
       {!previewMode && (
         <TotalsStatus
-          complete={answer.data?.complete !== false}
-          computedAtMs={answer.data?.computedAtMs ?? null}
+          complete={data?.complete !== false}
+          computedAtMs={data?.computedAtMs ?? null}
           error={answer.error}
           loading={answer.loading}
           onRefresh={() => answer.refresh()}
         />
       )}
-      <VolumeTiles showCustomerLines={false} totals={totals} />
+      {data && isEmptyVolume(data.totals) && (
+        <div className="empty-state vol-empty">
+          <span>Nothing was received or shipped in</span> <MonthText month={month} />
+        </div>
+      )}
+      <VolumeTiles showCustomerLines={showCustomerLines} totals={data?.totals ?? null} />
       <section className="panel">
         <div className="panel-header">
           <div>
@@ -531,16 +398,232 @@ export function BusinessVolumePanel({ businessId, previewMode }: { businessId: s
             </h2>
           </div>
         </div>
-        {data ? (
-          <ContainerList containers={data.containers} month={month} truncated={data.containersTruncated} />
-        ) : (
-          !answer.loading && (
-            <div className="empty-state">
-              <span>No containers shipped in</span> <MonthText month={month} />
-            </div>
-          )
-        )}
+        <div className="vol-panel-body">
+          {data ? (
+            <ContainerList containers={data.containers} month={month} truncated={data.containersTruncated} />
+          ) : (
+            !answer.loading && (
+              <div className="empty-state">
+                <span>No containers shipped in</span> <MonthText month={month} />
+              </div>
+            )
+          )}
+        </div>
       </section>
+    </>
+  );
+}
+
+/**
+ * Admin console → Volume: every business's month (artboard 11), or one
+ * business's month picked from the top of the page or from the table.
+ * The pick is the page's own state: the admin console keeps its tab in
+ * memory, not in the address, so a reload starts on Today either way.
+ */
+export function AdminVolumeView({
+  previewMode,
+  canRebuild,
+  businesses = [],
+}: {
+  previewMode: boolean;
+  canRebuild: boolean;
+  /** The console's business directory, for the picker. */
+  businesses?: ReadonlyArray<{ id?: unknown; name?: unknown; _inferred?: unknown }>;
+}) {
+  const language = useLanguage();
+  const [month, setMonth] = useState(() => currentVolumeMonth());
+  const [reload, setReload] = useState(0);
+  const [businessId, setBusinessId] = useState("");
+  const answer = useServerTotals<PlatformVolumeResponse>(
+    "getPlatformVolume",
+    previewMode || businessId ? null : { month },
+    reload,
+  );
+  const preview = useMemo(() => (previewMode ? previewPlatformVolume(month) : null), [previewMode, month]);
+  const data = preview ?? (answer.data && answer.data.month === month ? answer.data : null);
+  // Names for the picker: the directory, plus whatever the last table held.
+  const tableRows = preview?.businesses ?? answer.data?.businesses;
+  const options = useMemo(() => volumeBusinessOptions(businesses, tableRows ?? []), [businesses, tableRows]);
+  const totals = data?.totals ?? null;
+  const rows = data?.businesses ?? [];
+  const nothing = isEmptyVolume(totals);
+  const selectedName = options.find((option) => option.id === businessId)?.name || businessId;
+
+  function pick(id: string, fromTable = false) {
+    setBusinessId(id);
+    // From the table the top of the page is out of view; bring it back.
+    if (fromTable && typeof window !== "undefined") window.scrollTo({ top: 0 });
+  }
+
+  return (
+    <div className="stack vol-page">
+      <section className="vol-topbar">
+        <div className="vol-topbar-title">
+          {businessId ? (
+            <>
+              <button className="vol-back" onClick={() => pick("")} type="button">
+                <ChevronLeft size={15} /> <span>All businesses</span>
+              </button>
+              <h2 data-no-translate>{selectedName}</h2>
+              <p>Pieces received and containers shipped</p>
+            </>
+          ) : (
+            <>
+              <h2 data-no-translate>Volume</h2>
+              <p>Pieces count in the month they were received; containers in the month they sailed (New York time).</p>
+            </>
+          )}
+        </div>
+        <div className="vol-topbar-actions">
+          <BusinessPicker onChange={(id) => pick(id)} options={options} value={businessId} />
+          <MonthPicker month={month} onChange={setMonth} />
+          {!businessId && (
+            <button
+              className="secondary-button"
+              disabled={!data}
+              onClick={() => data && downloadVolumeCsv(data, language)}
+              type="button"
+            >
+              <Download size={15} /> Download CSV
+            </button>
+          )}
+        </div>
+      </section>
+      {businessId ? (
+        <BusinessMonth businessId={businessId} month={month} previewMode={previewMode} showCustomerLines />
+      ) : (
+        <>
+          {!previewMode && (
+            <TotalsStatus
+              computedAtMs={answer.data?.computedAtMs ?? null}
+              error={answer.error}
+              loading={answer.loading}
+              onRefresh={() => answer.refresh()}
+            />
+          )}
+          <VolumeTiles showCustomerLines totals={totals} />
+          <section className="panel">
+            <div className="panel-header">
+              <div>
+                <BarChart3 size={18} />
+                <h2>By business</h2>
+              </div>
+            </div>
+            {nothing || (!data && !answer.loading) ? (
+              <div className="empty-state">
+                <span>Nothing was received or shipped in</span> <MonthText month={month} />
+              </div>
+            ) : (
+              <>
+                {rows.length > 0 && <p className="vol-note vol-table-hint">Choose a business to see its own tiles and containers.</p>}
+                <div className="vol-table-scroll">
+                  <table className="commission-table vol-table">
+                    <thead>
+                      <tr>
+                        <th scope="col">Business</th>
+                        <th scope="col">Barrels</th>
+                        <th scope="col">Packages</th>
+                        <th scope="col">Cars</th>
+                        <th scope="col">Pieces</th>
+                        <th scope="col">Containers</th>
+                        <th scope="col">Avg / container</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((row) => (
+                        <tr key={row.businessId} onClick={() => pick(row.businessId, true)}>
+                          <th scope="row">
+                            <button
+                              className="vol-row-button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                pick(row.businessId, true);
+                              }}
+                              title="See this business only"
+                              type="button"
+                            >
+                              <span data-no-translate>{row.name || row.businessId}</span>
+                            </button>
+                          </th>
+                          <td>
+                            <Count value={row.barrels} />
+                          </td>
+                          <td>
+                            <Count value={row.packages} />
+                          </td>
+                          <td>
+                            <Count value={row.cars} />
+                          </td>
+                          <td>
+                            <b>
+                              <Count value={row.pieces} />
+                            </b>
+                          </td>
+                          <td>
+                            <Count value={row.containersShipped} />
+                          </td>
+                          <td data-no-translate>{formatVolumeAverage(row.avgPerContainer, language)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    {rows.length > 1 && totals && (
+                      <tfoot>
+                        <tr>
+                          <th scope="row">Total</th>
+                          <td>
+                            <Count value={totals.barrels} />
+                          </td>
+                          <td>
+                            <Count value={totals.packages} />
+                          </td>
+                          <td>
+                            <Count value={totals.cars} />
+                          </td>
+                          <td>
+                            <b>
+                              <Count value={totals.pieces} />
+                            </b>
+                          </td>
+                          <td>
+                            <Count value={totals.containersShipped} />
+                          </td>
+                          <td data-no-translate>{formatVolumeAverage(totals.avgPerContainer, language)}</td>
+                        </tr>
+                      </tfoot>
+                    )}
+                  </table>
+                </div>
+              </>
+            )}
+          </section>
+          <TrendChart trend={data?.trend ?? []} />
+          {canRebuild && !previewMode && (
+            <div className="vol-footer">
+              <RecountButton month={month} onDone={() => setReload((value) => value + 1)} />
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Business console → Volume: the business's own month (artboard 12). */
+export function BusinessVolumePanel({ businessId, previewMode }: { businessId: string; previewMode: boolean }) {
+  const [month, setMonth] = useState(() => currentVolumeMonth());
+  const thisMonth = month === currentVolumeMonth();
+  return (
+    <div className="stack vol-page">
+      <section className="vol-topbar">
+        <div className="vol-topbar-title">
+          <h2 data-no-translate>Volume</h2>
+          <p>{thisMonth ? <span>Your volume this month</span> : <MonthText month={month} />}</p>
+        </div>
+        <div className="vol-topbar-actions">
+          <MonthPicker month={month} onChange={setMonth} />
+        </div>
+      </section>
+      <BusinessMonth businessId={businessId} month={month} previewMode={previewMode} showCustomerLines={false} />
     </div>
   );
 }

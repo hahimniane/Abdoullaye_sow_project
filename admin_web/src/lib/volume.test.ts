@@ -18,8 +18,16 @@ import {
   volumeCsvCell,
   volumeCsvFilename,
   volumeTrendBars,
+  isEmptyVolume,
+  recentVolumeMonths,
+  volumeBusinessOptions,
+  volumeMonthOptions,
+  volumeTiles,
   type PlatformVolumeResponse,
 } from "./volume.ts";
+import { ATTRIBUTE_TRANSLATIONS, TEXT_TRANSLATIONS, translateValue } from "./french-dom.ts";
+import { previewBusinessVolume, previewPlatformVolume } from "./volume-preview.ts";
+import { screenStrings } from "./screen-strings.ts";
 
 test("the default month is New York's, not the viewer's UTC day", () => {
   // 11:30 PM on Oct 31 in New York is already Nov 1 in UTC.
@@ -145,55 +153,108 @@ test("the CSV speaks French on a French page and starts with a BOM", () => {
   assert.equal(volumeCsvCell(12), '"12"');
 });
 
-test("every Volume screen string has a French translation", async () => {
-  const { TEXT_TRANSLATIONS, ATTRIBUTE_TRANSLATIONS } = await import("./french-dom.ts");
+function missingFrench(strings: readonly string[]): string[] {
+  return strings.filter((english) => !(english in TEXT_TRANSLATIONS) && !(english in ATTRIBUTE_TRANSLATIONS));
+}
+
+test("every sentence on the Volume pages has its French, tiles included", () => {
   const source = readFileSync("src/components/volume-views.tsx", "utf8");
-  // The plain copy the component renders between tags or as quoted props.
-  const copy = [
-    "Pieces received",
-    "Barrels · Packages · Cars",
-    "Containers shipped",
-    "Customer lines",
-    "By business",
-    "Business",
-    "Barrels",
-    "Packages",
-    "Cars",
-    "Pieces",
-    "Containers",
-    "Avg / container",
-    "Download CSV",
-    "Pieces received, last 12 months",
-    "Your volume this month",
-    "Containers shipped in",
-    "No containers shipped in",
-    "Nothing was received or shipped in",
-    "vs previous month",
-    "No earlier month to compare",
-    "avg pieces per container",
-    "customer loads received",
-    "containers in",
-    "Recount the last 12 months",
-    "Recounting…",
-    "Recounted.",
-    "Could not recount. Try again.",
-    "Show these numbers as a table",
-    "Previous month",
-    "Next month",
-    "Close",
-    "Showing the first 200 containers.",
-    "Pieces count in the month they were received; containers in the month they sailed (New York time).",
-    "Pieces by month",
-    "Month",
-    "Total",
-    "Shipped",
-    "Arrived",
-  ];
-  for (const english of copy) {
-    assert.ok(
-      TEXT_TRANSLATIONS[english] || ATTRIBUTE_TRANSLATIONS[english],
-      `"${english}" has no French translation`,
-    );
-    assert.ok(source.includes(english), `"${english}" is no longer on the Volume screens - drop it from this list`);
+  const strings = screenStrings(source, "volume-views.tsx");
+  assert.ok(strings.includes("All businesses"), "the scan reads the page");
+  assert.ok(strings.includes("Choose a month"), "the scan reads aria-labels");
+  // The tile labels live in volumeTiles (lib/volume.ts), not in the JSX.
+  const tiles = volumeTiles(answer.totals, { showCustomerLines: true });
+  const labels = [...tiles.received, ...tiles.shipped].map((tile) => tile.label);
+  assert.deepEqual(missingFrench([...strings, ...labels]), []);
+  for (const english of labels) {
+    const french = translateValue(english, "fr");
+    assert.notEqual(french, english, english);
+    assert.equal(translateValue(french, "fr"), french, `${english} converges`);
   }
+});
+
+test("each kind of piece has its own tile, and containers and the average have theirs", () => {
+  const tiles = volumeTiles(answer.totals, { showCustomerLines: true });
+  assert.deepEqual(
+    tiles.received.map((tile) => [tile.key, tile.value]),
+    [["pieces", 40], ["barrels", 36], ["packages", 3], ["cars", 1]],
+  );
+  assert.deepEqual(
+    tiles.shipped.map((tile) => [tile.key, tile.value, tile.kind]),
+    [["containersShipped", 3, "count"], ["avgPerContainer", 13, "average"], ["customerLines", 13, "count"]],
+  );
+  // The business console has no customer-lines tile.
+  const business = volumeTiles(answer.totals, { showCustomerLines: false });
+  assert.deepEqual(business.shipped.map((tile) => tile.key), ["containersShipped", "avgPerContainer"]);
+  // Nothing shipped: no average (a dash, not 0 or NaN); bad numbers count as 0.
+  const empty = volumeTiles(
+    { ...answer.totals, containersShipped: 0, avgPerContainer: null, barrels: Number.NaN, cars: -2 },
+    { showCustomerLines: false },
+  );
+  assert.equal(empty.shipped[1].value, null);
+  assert.equal(empty.received[1].value, 0);
+  assert.equal(empty.received[3].value, 0);
+  assert.equal(isEmptyVolume({ pieces: 0, containersShipped: 0 }), true);
+  assert.equal(isEmptyVolume({ pieces: 0, containersShipped: 1 }), false);
+  assert.equal(isEmptyVolume(null), false, "not loaded is not empty");
+});
+
+test("the month picker lists this month and the 23 before it, newest first", () => {
+  const months = recentVolumeMonths("2026-10");
+  assert.equal(months.length, 24);
+  assert.equal(months[0], "2026-10");
+  assert.equal(months[1], "2026-09");
+  assert.equal(months[10], "2025-12");
+  assert.equal(months[23], "2024-11");
+  assert.deepEqual(recentVolumeMonths("bad"), []);
+  // Stepped back further with the arrows: the month joins the list at the end.
+  assert.deepEqual(volumeMonthOptions("2023-01", "2026-10", 3), ["2026-10", "2026-09", "2026-08", "2023-01"]);
+  assert.deepEqual(volumeMonthOptions("2026-09", "2026-10", 3), ["2026-10", "2026-09", "2026-08"]);
+});
+
+test("the business picker lists each business once, by name, whatever it was loaded from", () => {
+  const options = volumeBusinessOptions(
+    [
+      { id: "b2", name: "Zeta Cargo" },
+      { id: "b1", name: "" },
+      { id: "inferred", name: "From an order", _inferred: true },
+      { id: "bad/id", name: "Slash" },
+      { id: "", name: "Blank" },
+    ],
+    [
+      { businessId: "b1", name: "Alpha Shipping" },
+      { businessId: "b3", name: "beta freight" },
+      { businessId: "b2", name: "Old name" },
+    ],
+    { id: "b4", name: "" },
+  );
+  assert.deepEqual(options, [
+    { id: "b1", name: "Alpha Shipping" },
+    { id: "b4", name: "b4" },
+    { id: "b3", name: "beta freight" },
+    { id: "b2", name: "Zeta Cargo" },
+  ]);
+  assert.deepEqual(volumeBusinessOptions([]), []);
+});
+
+test("the preview's numbers add up the way the server's do", () => {
+  const platform = previewPlatformVolume("2026-10", "2026-10");
+  const sum = (key: "pieces" | "barrels" | "packages" | "cars" | "containersShipped") =>
+    platform.businesses.reduce((acc, row) => acc + row[key], 0);
+  assert.equal(platform.totals.pieces, sum("pieces"));
+  assert.equal(platform.totals.pieces, platform.totals.barrels + platform.totals.packages + platform.totals.cars);
+  assert.equal(platform.totals.containersShipped, sum("containersShipped"));
+  assert.equal(platform.trend.length, 12);
+  assert.equal(platform.trend[11].month, "2026-10");
+  assert.equal(platform.trend[11].pieces, platform.totals.pieces);
+  // One business has an empty month, and a month older than a year is empty.
+  const quiet = previewBusinessVolume("keren_auto_sales", "2026-08", "2026-10");
+  assert.equal(isEmptyVolume(quiet.totals), true);
+  assert.deepEqual(quiet.containers, []);
+  assert.equal(previewPlatformVolume("2025-01", "2026-10").businesses.length, 0);
+  // A business's containers hold exactly its month's pieces.
+  const busy = previewBusinessVolume("atlantic_exports", "2026-10", "2026-10");
+  assert.equal(busy.containers.length, busy.totals.containersShipped);
+  assert.equal(busy.containers.reduce((acc, box) => acc + box.pieces, 0), busy.totals.pieces);
+  assert.equal(busy.businessName, "Atlantic Exports");
 });
