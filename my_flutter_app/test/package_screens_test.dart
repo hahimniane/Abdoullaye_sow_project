@@ -563,6 +563,27 @@ void main() {
       expect(service.pendingCode, 'CL-BBBBBB');
     });
 
+    test('the same link twice at once is one scan; later it counts again',
+        () {
+      final service = PackageLinkService.instance;
+      var now = DateTime(2026, 10, 19, 12);
+      service.clock = () => now;
+      final tag = Uri.parse('https://customer.laawoldigital.com/i/ABC123');
+      service.handleLink(tag);
+      // The phone hands the opening link over again as the app resumes.
+      now = now.add(const Duration(milliseconds: 400));
+      service.handleLink(tag);
+      expect(service.acceptedLinks, 1);
+      // Another link is never swallowed.
+      service.handleLink(
+          Uri.parse('https://customer.laawoldigital.com/t/CL-K7M4P2'));
+      expect(service.acceptedLinks, 2);
+      // The same tag scanned again a few seconds later is a second scan.
+      now = now.add(const Duration(seconds: 4));
+      service.handleLink(tag);
+      expect(service.acceptedLinks, 3);
+    });
+
     test('start listens to the link stream it is given', () async {
       final links = StreamController<Uri>();
       PackageLinkService.instance.start(links: links.stream);

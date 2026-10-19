@@ -114,7 +114,10 @@ class _InventorySellScreenState extends State<InventorySellScreen> {
   /// Whether the camera is open. It closes after every tag it reads, so a
   /// camera drifting over the shelf cannot keep adding things; the person
   /// opens it again for the next product.
-  late bool _scanning = !widget.startWithSearch;
+  late bool _scanning = inventorySellStartsScanning(
+    startWithSearch: widget.startWithSearch,
+    initialCode: widget.initialCode,
+  );
 
   late final InventoryContextWatcher _watcher = InventoryContextWatcher(
     source: _source,
@@ -1647,3 +1650,15 @@ class _BasketLineTileState extends State<_BasketLineTile> {
     );
   }
 }
+
+/// Whether the Sell screen opens with the camera live. Not when it opens on
+/// search, and not when a tag's link opened it: the phone's own camera read
+/// that tag, it is already in the basket, and it is still in front of the
+/// phone - a live camera would read it a second time. It waits on "Scan
+/// another" instead.
+@visibleForTesting
+bool inventorySellStartsScanning({
+  required bool startWithSearch,
+  required String initialCode,
+}) =>
+    !startWithSearch && initialCode.trim().isEmpty;

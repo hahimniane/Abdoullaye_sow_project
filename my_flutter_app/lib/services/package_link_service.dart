@@ -51,6 +51,22 @@ class PackageLinkService {
   PackageRequestLink? _pendingRequestLink;
   bool _appReady = false;
   bool _routing = false;
+  Uri? _lastLink;
+  DateTime? _lastLinkAt;
+  int _acceptedLinks = 0;
+
+  /// The phone delivers the link that opened the app more than once (iOS and
+  /// Android both hand it over at launch and again as the app resumes). Read
+  /// twice, a product tag scanned with the camera went into the basket twice.
+  /// The same link again within this window is the same scan.
+  static const Duration duplicateLinkWindow = Duration(seconds: 3);
+
+  @visibleForTesting
+  DateTime Function() clock = DateTime.now;
+
+  /// Links taken (not dropped as a repeat); for tests.
+  @visibleForTesting
+  int get acceptedLinks => _acceptedLinks;
 
   /// Starts listening. Called once from `main`, before `runApp`, so the link
   /// that cold-started the app is not missed. [links] is for tests.
@@ -72,6 +88,16 @@ class PackageLinkService {
   /// Takes one incoming link. Anything that is not a package tracking link
   /// is ignored.
   void handleLink(Uri uri) {
+    final now = clock();
+    final last = _lastLinkAt;
+    if (_lastLink == uri &&
+        last != null &&
+        now.difference(last) < duplicateLinkWindow) {
+      return;
+    }
+    _lastLink = uri;
+    _lastLinkAt = now;
+    _acceptedLinks++;
     // Package requests (§8.8): the estimate page (`/e/<token>`, the
     // WhatsApp button) and a business's request form (`/r/<slug>`).
     final request = packageRequestLinkFromUri(uri);
@@ -149,6 +175,10 @@ class PackageLinkService {
     _pendingRequestLink = null;
     _appReady = false;
     _routing = false;
+    _lastLink = null;
+    _lastLinkAt = null;
+    _acceptedLinks = 0;
+    clock = DateTime.now;
   }
 
   Future<void> _route(String code) async {

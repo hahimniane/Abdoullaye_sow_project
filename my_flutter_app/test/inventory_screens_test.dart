@@ -472,6 +472,21 @@ void main() {
       expect(_qtyText(tester, 'i1'), '1');
     });
 
+    test('a link-opened Sell screen waits on Scan another (no double read)',
+        () {
+      // The phone camera that opened the link is still on the tag.
+      expect(
+          inventorySellStartsScanning(
+              startWithSearch: false, initialCode: 'IT-K7M4P2'),
+          isFalse);
+      expect(
+          inventorySellStartsScanning(startWithSearch: false, initialCode: ''),
+          isTrue);
+      expect(
+          inventorySellStartsScanning(startWithSearch: true, initialCode: ''),
+          isFalse);
+    });
+
     testWidgets('quantity and price are editable per line; the list price '
         'stays visible and the total follows', (tester) async {
       final source = _FakeSource(items: [_soap]);
