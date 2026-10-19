@@ -88,6 +88,7 @@ import {
 } from "@/components/phone-sign-in";
 import {
   customerTabFromSearch,
+  phoneHeldByAnotherAccount,
   phoneRefusalOf,
   phoneRefusalText,
   withTimeout,
@@ -1466,10 +1467,9 @@ function ProfileView({ firebaseUser, profile }: { firebaseUser: User; profile: U
       // just typed proves the number: sign that credential in on a separate
       // app, and the server moves the number (and its packages) here when
       // the holder never signed in. Any other holder is phone_in_use.
-      const held =
-        authErrorCode(caught) === "auth/credential-already-in-use"
-          ? phoneCredentialFromError(caught)
-          : null;
+      const held = phoneHeldByAnotherAccount(authErrorCode(caught))
+        ? phoneCredentialFromError(caught)
+        : null;
       if (held) {
         try {
           setPhoneNotice("This number is on packages a business recorded. Adding it to your account...");

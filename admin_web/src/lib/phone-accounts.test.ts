@@ -27,6 +27,7 @@ import {
   phoneRefusalText,
   recordPhoneFlags,
   recordPhoneWarnings,
+  phoneHeldByAnotherAccount,
   sanitizeLoginCode,
   secondsUntil,
   unflaggedLineWarnings,
@@ -422,7 +423,7 @@ test("the merge proof signs in on a secondary app that is always signed out and 
   assert.match(firebase, /finally \{\s*await signOut\(secondary\)/);
   assert.match(firebase, /finally \{\s*await deleteApp\(secondaryApp\)/);
   const profile = read("../components/customer-console.tsx");
-  assert.match(profile, /authErrorCode\(caught\) === "auth\/credential-already-in-use"\s*\? phoneCredentialFromError\(caught\)/);
+  assert.match(profile, /phoneHeldByAnotherAccount\(authErrorCode\(caught\)\)\s*\? phoneCredentialFromError\(caught\)/);
   assert.match(profile, /await linkPhoneFromCredential\(held\)/);
   assert.match(read("./phone-accounts-client.ts"), /callPhoneAccount\("completePhoneSignIn", \{ placeholderIdToken \}\)/);
 });
@@ -432,4 +433,16 @@ test("the tracking page is app-first for everyone but staff, whose page is uncha
   assert.match(guest, /\{offerApp \? \(\s*<>[\s\S]*?<GetAppBanner variant=\{arrivedWithCode \? "track" : "follow"\} \/>\s*\{resultSection\}\s*\{lookupSection\}\s*<\/>\s*\) : \(\s*<>\s*\{lookupSection\}\s*\{resultSection\}\s*<\/>\s*\)\}/);
   assert.match(guest, /onSignedIn=\{\(\) => window\.location\.assign\(MY_PACKAGES_PATH\)\}/);
   assert.match(guest, /\{!authenticated && record\.signIn && record\.signIn\.length > 0 && \(/);
+});
+
+// Regression (browser check against the Auth emulator): the web SDK's
+// linkWithCredential reports a number held by a placeholder as
+// auth/account-exists-with-different-credential, not
+// auth/credential-already-in-use, so the merge never started and the
+// profile said the code could not be sent.
+test("a number held by another account is recognised under both codes", () => {
+  assert.equal(phoneHeldByAnotherAccount("auth/account-exists-with-different-credential"), true);
+  assert.equal(phoneHeldByAnotherAccount("auth/credential-already-in-use"), true);
+  assert.equal(phoneHeldByAnotherAccount("auth/invalid-verification-code"), false);
+  assert.equal(phoneHeldByAnotherAccount(undefined), false);
 });

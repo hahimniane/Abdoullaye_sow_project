@@ -849,7 +849,13 @@ class AuthProvider extends ChangeNotifier {
       // number with that sign-in and let the server merge it into this
       // account; a number whose account HAS been used is refused there
       // (phone_in_use) and reads as "already linked to another account".
-      if (error.code != 'credential-already-in-use') rethrow;
+      // Native SDKs say credential-already-in-use; the web SDK (Flutter
+      // web) says account-exists-with-different-credential for the same
+      // thing, the proof in the error's credential.
+      if (error.code != 'credential-already-in-use' &&
+          error.code != 'account-exists-with-different-credential') {
+        rethrow;
+      }
       await _mergePhoneHolder(error.credential ?? credential);
     }
     await syncLinkedPhoneVerification();

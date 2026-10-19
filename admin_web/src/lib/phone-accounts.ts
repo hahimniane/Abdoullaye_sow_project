@@ -483,3 +483,16 @@ export function unflaggedLineWarnings(row: unknown, warnings: readonly string[])
   return warnings.filter((warning) => !fields.some((field) =>
     LINE_COUNTRY_CODE_WARNINGS[field] === warning && recordPhoneFlags(row, field).countryCodeMissing));
 }
+
+/**
+ * Whether a link failed because the number already belongs to another
+ * account (docs/PHONE_ACCOUNTS.md §7). The web SDK's linkWithCredential
+ * reports it as auth/account-exists-with-different-credential (the server
+ * answers with a temporary proof, carried in the error's customData);
+ * updatePhoneNumber and the native SDKs say auth/credential-already-in-use.
+ * Either way PhoneAuthProvider.credentialFromError gives the proof back.
+ */
+export function phoneHeldByAnotherAccount(code: unknown): boolean {
+  return code === "auth/credential-already-in-use" ||
+    code === "auth/account-exists-with-different-credential";
+}
