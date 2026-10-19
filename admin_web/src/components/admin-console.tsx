@@ -161,6 +161,8 @@ import {
   personDisplayName,
   personHasEmail,
   personNotSignedInYet,
+  collectPeoplePages,
+  type PeoplePage,
   type PeopleSignInState,
 } from "@/lib/admin-directory";
 import { FieldInfo } from "@/components/field-info";
@@ -1660,6 +1662,21 @@ function useFlaggedReviews(enabled: boolean, pageSize = 50): PagedRows {
   });
 }
 
+/** One call of listMarketplacePeople, as a PeoplePage. */
+async function fetchPeoplePage(data: Record<string, unknown>): Promise<PeoplePage> {
+  const result = await httpsCallable(functions, "listMarketplacePeople")(data);
+  const answer = result.data as {
+    people?: FirestoreRow[];
+    users?: FirestoreRow[];
+    nextPageToken?: string;
+    pageToken?: string;
+  };
+  return {
+    rows: answer.people ?? answer.users ?? [],
+    nextPageToken: answer.nextPageToken ?? answer.pageToken ?? "",
+  };
+}
+
 /**
  * The People directory's pages of listMarketplacePeople. `signInState`
  * keeps accounts a shipment made and nobody signed in to yet out of the
@@ -1697,21 +1714,19 @@ function useAdminAuthUsers(
         "People are taking too long to load. Refresh and try again.",
       );
     }, 12000);
-    httpsCallable(functions, "listMarketplacePeople")({
-      pageSize: 100,
-      pageToken: "",
-      signInState,
-    })
-      .then((result) => {
+    collectPeoplePages(
+      (token) => fetchPeoplePage({
+        pageSize: 100,
+        pageToken: token,
+        signInState,
+        ...(token ? {includeInvitations: false} : {}),
+      }),
+      "",
+    )
+      .then((page) => {
         if (!active) return;
-        const data = result.data as {
-          people?: FirestoreRow[];
-          users?: FirestoreRow[];
-          nextPageToken?: string;
-          pageToken?: string;
-        };
-        setRows(data.people ?? data.users ?? []);
-        setPageToken(data.nextPageToken ?? data.pageToken ?? "");
+        setRows(page.rows);
+        setPageToken(page.nextPageToken);
       })
         .catch((listError) => {
           if (!active) return;
@@ -1740,22 +1755,16 @@ function useAdminAuthUsers(
     setLoadingMore(true);
     setError("");
     try {
-      const result = await httpsCallable(
-        functions,
-        "listMarketplacePeople",
-      )({
-        pageSize: 100,
+      const page = await collectPeoplePages(
+        (token) => fetchPeoplePage({
+          pageSize: 100,
+          pageToken: token,
+          includeInvitations: false,
+          signInState,
+        }),
         pageToken,
-        includeInvitations: false,
-        signInState,
-      });
-      const data = result.data as {
-        people?: FirestoreRow[];
-        users?: FirestoreRow[];
-        nextPageToken?: string;
-        pageToken?: string;
-      };
-      const nextRows = data.people ?? data.users ?? [];
+      );
+      const nextRows = page.rows;
       setRows((current) => {
         const seen = new Set(current.map((row) => peoplePersonId(row)));
         return [
@@ -1763,7 +1772,7 @@ function useAdminAuthUsers(
           ...nextRows.filter((row) => !seen.has(peoplePersonId(row))),
         ];
       });
-      setPageToken(data.nextPageToken ?? data.pageToken ?? "");
+      setPageToken(page.nextPageToken);
     } catch {
       setError("More people could not be loaded. Try again.");
     } finally {

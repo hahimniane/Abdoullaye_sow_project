@@ -296,8 +296,17 @@ export function PhoneSignIn({
           code: "auth/verification-timeout",
         });
         // The sign-in bookkeeping (§5.3). Signed in either way: when it
-        // fails, the console router asks again before opening the account.
-        await completePhoneSignInOnce(credential.user.uid).catch(() => undefined);
+        // fails, the console router asks again before opening the account -
+        // except for an account phone sign-in is not for, which
+        // completePhoneSignInOnce has already signed out.
+        const refused = await completePhoneSignInOnce(credential.user.uid).then(
+          () => null,
+          (failure) => phoneRefusalOf(failure),
+        );
+        if (refused?.reason === "phone_sign_in_unavailable") {
+          setError(phoneRefusalText(refused));
+          return;
+        }
         setStep("done");
         onSignedIn?.();
       } catch (caught) {

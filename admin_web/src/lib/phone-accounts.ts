@@ -21,7 +21,8 @@ export type PhoneAccountAction =
   | "verifyPhoneLoginCode"
   | "completePhoneSignIn"
   | "getMyShipments"
-  | "reportShipmentNotMine";
+  | "reportShipmentNotMine"
+  | "syncRecord";
 
 export type PhoneRole = "sender" | "receiver";
 
@@ -118,6 +119,7 @@ export const PHONE_REFUSAL_REASONS = [
   "proof_invalid",
   "no_verified_phone",
   "record_invalid",
+  "phone_sign_in_unavailable",
 ] as const;
 
 export type PhoneRefusalReason = (typeof PHONE_REFUSAL_REASONS)[number] | "unknown";
@@ -171,6 +173,7 @@ export const PHONE_REFUSAL_COPY: Record<PhoneRefusalReason, string> = {
   proof_invalid: "We could not confirm the number. Verify it again.",
   no_verified_phone: "Add and verify your phone number to see your packages.",
   record_invalid: "That package could not be found. Refresh and try again.",
+  phone_sign_in_unavailable: "Use your email and password to sign in to this account.",
   unknown: "Something went wrong. Check your connection and try again.",
 };
 

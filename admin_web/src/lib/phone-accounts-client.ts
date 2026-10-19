@@ -11,6 +11,7 @@ import {
   signInWithCredential,
   signInWithCustomToken,
   signInWithPhoneNumber,
+  signOut,
   type AuthCredential,
   type ConfirmationResult,
 } from "firebase/auth";
@@ -23,6 +24,7 @@ import {
   parsePhoneCodeChallenge,
   parsePhoneLinkResult,
   parsePhoneSignInToken,
+  phoneRefusalOf,
   withTimeout,
   type MyShipmentsCursor,
   type MyShipmentsPage,
@@ -80,8 +82,13 @@ const completedSignIns = new Map<string, Promise<unknown>>();
 export function completePhoneSignInOnce(uid: string): Promise<unknown> {
   const existing = completedSignIns.get(uid);
   if (existing) return existing;
-  const pending = callPhoneAccount("completePhoneSignIn", {}).catch((error) => {
+  const pending = callPhoneAccount("completePhoneSignIn", {}).catch(async (error) => {
     completedSignIns.delete(uid);
+    // Phone sign-in is for customers only: an account with business or
+    // platform access that got in by text is signed straight out again.
+    if (phoneRefusalOf(error).reason === "phone_sign_in_unavailable") {
+      await signOut(auth).catch(() => undefined);
+    }
     throw error;
   });
   completedSignIns.set(uid, pending);

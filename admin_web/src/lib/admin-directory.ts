@@ -308,3 +308,28 @@ export function filterPeopleBySignIn(
   const wanted = state === "not_signed_in";
   return rows.filter((row) => personNotSignedInYet(row) === wanted);
 }
+
+/** One listMarketplacePeople answer, as the directory reads it. */
+export type PeoplePage = { rows: FirestoreRow[]; nextPageToken: string };
+
+/**
+ * Reads directory pages until it has a full page or there is nothing more
+ * (bounded to `maxCalls`). A sign-in filter can leave a page short - even
+ * empty - while more pages remain; this never hands the screen an empty
+ * page with "Load more" under it unless the bound was reached.
+ */
+export async function collectPeoplePages(
+  fetchPage: (pageToken: string) => Promise<PeoplePage>,
+  startToken: string,
+  { pageSize = 100, maxCalls = 5 }: { pageSize?: number; maxCalls?: number } = {},
+): Promise<PeoplePage> {
+  const rows: FirestoreRow[] = [];
+  let token = startToken;
+  for (let call = 0; call < maxCalls; call += 1) {
+    const page = await fetchPage(token);
+    rows.push(...page.rows);
+    token = page.nextPageToken;
+    if (!token || rows.length >= pageSize) break;
+  }
+  return { rows, nextPageToken: token };
+}

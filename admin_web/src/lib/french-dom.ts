@@ -6133,6 +6133,8 @@ Object.assign(TEXT_TRANSLATIONS, {
     "Ce numéro appartient déjà à un autre compte Laawol. Connectez-vous plutôt avec ce numéro, ou utilisez un autre numéro.",
   "This code was asked for by another account. Ask for a new one.":
     "Ce code a été demandé par un autre compte. Demandez-en un nouveau.",
+  "Use your email and password to sign in to this account.":
+    "Utilisez votre e-mail et votre mot de passe pour vous connecter à ce compte.",
   "We could not confirm the number. Verify it again.":
     "Nous n’avons pas pu confirmer le numéro. Vérifiez-le à nouveau.",
   "Add and verify your phone number to see your packages.":

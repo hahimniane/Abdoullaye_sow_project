@@ -5,6 +5,7 @@ import test from "node:test";
 import {
   buildBusinessDirectory,
   buildUserDirectory,
+  collectPeoplePages,
   filterPeopleBySignIn,
   personContact,
   personDisplayName,
@@ -212,10 +213,44 @@ test("a row with no email shows its phone, and email-only actions know it has no
 test("the People view asks the server for the sign-in state and labels the rows", () => {
   const source = readFileSync("src/components/admin-console.tsx", "utf8");
   assert.match(source, /useState<PeopleSignInState>\("signed_in"\)/);
-  assert.match(source, /pageToken: "",\s*signInState,/);
+  // Both the first page and Load more go through collectPeoplePages, so a
+  // filtered page is never handed over empty while more pages remain.
+  assert.match(source, /pageToken: token,\s*signInState,/);
   assert.match(source, /includeInvitations: false,\s*signInState,/);
+  assert.equal((source.match(/collectPeoplePages\(/g) || []).length, 2);
   assert.match(source, /filterPeopleBySignIn\(users, signInState, needle\.length > 0\)/);
   assert.match(source, /<UserText value=\{personContact\(user\)\} fallback="No contact information" \/>/);
   assert.match(source, /disabled=\{!personHasEmail\(user\)\}/);
   assert.match(source, /personNotSignedInYet\(user\) && \(/);
+});
+
+// Regression (review, phone accounts): with the "Not signed in yet" filter a
+// page could come back empty while more pages remained, showing nothing but
+// "Load more".
+test("collectPeoplePages keeps reading until a page is full or none remain", async () => {
+  const pages: Record<string, { rows: { id: string }[]; nextPageToken: string }> = {
+    "": { rows: [], nextPageToken: "t1" },
+    t1: { rows: [{ id: "a" }], nextPageToken: "t2" },
+    t2: { rows: [{ id: "b" }, { id: "c" }], nextPageToken: "t3" },
+    t3: { rows: [{ id: "d" }], nextPageToken: "" },
+  };
+  const asked: string[] = [];
+  const fetchPage = async (token: string) => {
+    asked.push(token);
+    return pages[token];
+  };
+  const full = await collectPeoplePages(fetchPage, "", { pageSize: 2 });
+  assert.deepEqual(full.rows.map((row) => row.id), ["a", "b", "c"]);
+  assert.equal(full.nextPageToken, "t3");
+  assert.deepEqual(asked, ["", "t1", "t2"]);
+  const rest = await collectPeoplePages(fetchPage, "t3", { pageSize: 2 });
+  assert.deepEqual(rest, { rows: [{ id: "d" }], nextPageToken: "" });
+  // Bounded: an all-empty directory stops after maxCalls.
+  let calls = 0;
+  const empty = await collectPeoplePages(async () => {
+    calls += 1;
+    return { rows: [], nextPageToken: "more" };
+  }, "", { pageSize: 2, maxCalls: 3 });
+  assert.equal(calls, 3);
+  assert.deepEqual(empty, { rows: [], nextPageToken: "more" });
 });
