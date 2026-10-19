@@ -57,6 +57,25 @@ String inventoryFailureText(AppLocalizations l10n, InventoryFailure failure) =>
       InventoryFailure.paidNowInvalid => l10n.invCreditErrPaidNowInvalid,
       InventoryFailure.customerPhoneInvalid => l10n.invCreditFailPhoneInvalid,
       InventoryFailure.amountInvalid => l10n.invCreditFailAmountInvalid,
+      InventoryFailure.transferNotFound => l10n.inventoryFailTransferNotFound,
+      InventoryFailure.transferNotDraft => l10n.inventoryFailTransferNotDraft,
+      InventoryFailure.transferNotInTransit =>
+        l10n.inventoryFailTransferNotInTransit,
+      InventoryFailure.lineNotDisputed => l10n.inventoryFailLineNotDisputed,
+      InventoryFailure.lineAlreadyResolved =>
+        l10n.inventoryFailLineAlreadyResolved,
+      InventoryFailure.storeHasTransfers => l10n.inventoryFailStoreHasTransfers,
+      InventoryFailure.itemInTransfer => l10n.inventoryFailItemInTransfer,
+      InventoryFailure.itemNotInTransfer => l10n.inventoryFailItemNotInTransfer,
+      InventoryFailure.receivedTooMany => l10n.inventoryFailReceivedTooMany,
+      InventoryFailure.writeOffReasonInvalid =>
+        l10n.inventoryFailWriteOffReasonInvalid,
+      InventoryFailure.resolutionInvalid => l10n.inventoryFailResolutionInvalid,
+      InventoryFailure.noteTooLong => l10n.inventoryFailNoteTooLong,
+      InventoryFailure.transferLinesRequired =>
+        l10n.inventoryFailTransferLinesRequired,
+      InventoryFailure.transferLinesTooMany =>
+        l10n.inventoryFailTransferLinesTooMany,
     };
 
 /// The checkout's and a credit payment's refusal codes
@@ -131,6 +150,10 @@ String inventoryFieldErrorText(AppLocalizations l10n, String code) =>
       _ => l10n.inventoryFailInvalid,
     };
 
+/// A stock movement's kind in words. The old one-step move between stores
+/// (`transfer_out` / `transfer_in`, still written by old app versions) reads
+/// "Instant transfer"; a store transfer's movements say which step moved
+/// the count.
 String inventoryMovementLabel(AppLocalizations l10n, String type) =>
     switch (type) {
       'initial' => l10n.inventoryMoveInitial,
@@ -138,13 +161,25 @@ String inventoryMovementLabel(AppLocalizations l10n, String type) =>
       'set' => l10n.inventoryMoveSet,
       'sale' => l10n.inventoryMoveSale,
       'void' => l10n.inventoryMoveVoid,
+      'transfer_sent' => l10n.invTrMoveSent,
+      'transfer_received' => l10n.invTrMoveReceived,
+      'transfer_cancelled' => l10n.invTrMoveCancelled,
+      'transfer_returned' => l10n.invTrMoveReturned,
+      'transfer_written_off' => l10n.invTrMoveWrittenOff,
       'transfer' ||
       'transfer_in' ||
       'transfer_out' ||
       'transferIn' ||
-      'transferOut' => l10n.inventoryMoveTransfer,
+      'transferOut' => l10n.invTrMoveInstant,
       _ => type,
     };
+
+/// A movement's label: [inventoryMovementLabel] of its type, and "Instant
+/// transfer" for any other move between stores that has no transfer code.
+String inventoryMovementTitle(AppLocalizations l10n, InventoryMovement m) {
+  if (m.isInstantTransfer) return l10n.invTrMoveInstant;
+  return inventoryMovementLabel(l10n, m.type);
+}
 
 /// A person's name from the team list; blank when unknown.
 String inventoryStaffName(List<LotStaff> staff, String id) {

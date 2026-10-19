@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// A Firestore query written down as data before it is run.
@@ -198,4 +200,39 @@ List<T> mergeById<T>(Iterable<Iterable<T>> lists, String Function(T) idOf) {
     }
   }
   return seen.values.toList();
+}
+
+/// Several live lists (narrow queries) as one, each document once - the first
+/// list's copy wins, as in [mergeById]. It answers once every list has
+/// answered, then on every change; an error on any list is passed on.
+Stream<List<T>> mergeLiveById<T>(
+  List<Stream<List<T>>> streams,
+  String Function(T) idOf,
+) {
+  late final StreamController<List<T>> controller;
+  final latest = List<List<T>?>.filled(streams.length, null);
+  final subs = <StreamSubscription<List<T>>>[];
+  void emit() {
+    if (latest.any((rows) => rows == null)) return;
+    controller.add(mergeById<T>([for (final rows in latest) rows!], idOf));
+  }
+
+  controller = StreamController<List<T>>(
+    onListen: () {
+      for (var i = 0; i < streams.length; i++) {
+        subs.add(
+          streams[i].listen((rows) {
+            latest[i] = rows;
+            emit();
+          }, onError: controller.addError),
+        );
+      }
+    },
+    onCancel: () async {
+      for (final sub in subs) {
+        await sub.cancel();
+      }
+    },
+  );
+  return controller.stream;
 }

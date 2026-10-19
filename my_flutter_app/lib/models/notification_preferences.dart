@@ -13,6 +13,7 @@ class NotificationPreferences {
     this.supportCaseUpdates = true,
     this.inventorySales = true,
     this.inventoryCredit = true,
+    this.inventoryTransfers = true,
   });
 
   final bool pushNotifications;
@@ -35,6 +36,11 @@ class NotificationPreferences {
   /// credit sale, and when one they collect is overdue. On unless switched
   /// off.
   final bool inventoryCredit;
+
+  /// Inventory "Store transfers": a push when stock is sent to this
+  /// person's store (or cancelled), when items of a transfer did not arrive,
+  /// and the reminders while one waits. On unless switched off.
+  final bool inventoryTransfers;
 
   static const defaults = NotificationPreferences();
 
@@ -59,6 +65,7 @@ class NotificationPreferences {
           data['supportActivity'] != false,
       inventorySales: data['inventorySales'] != false,
       inventoryCredit: data['inventoryCredit'] != false,
+      inventoryTransfers: data['inventoryTransfers'] != false,
     );
   }
 
@@ -77,6 +84,7 @@ class NotificationPreferences {
       'supportCaseUpdates': supportCaseUpdates,
       'inventorySales': inventorySales,
       'inventoryCredit': inventoryCredit,
+      'inventoryTransfers': inventoryTransfers,
     };
   }
 
@@ -94,6 +102,7 @@ class NotificationPreferences {
     bool? supportCaseUpdates,
     bool? inventorySales,
     bool? inventoryCredit,
+    bool? inventoryTransfers,
   }) {
     return NotificationPreferences(
       pushNotifications: pushNotifications ?? this.pushNotifications,
@@ -109,6 +118,7 @@ class NotificationPreferences {
       supportCaseUpdates: supportCaseUpdates ?? this.supportCaseUpdates,
       inventorySales: inventorySales ?? this.inventorySales,
       inventoryCredit: inventoryCredit ?? this.inventoryCredit,
+      inventoryTransfers: inventoryTransfers ?? this.inventoryTransfers,
     );
   }
 }

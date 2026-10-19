@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -9,6 +10,8 @@ import 'package:my_flutter_app/services/business_parking_entry.dart';
 import 'package:my_flutter_app/services/business_service_overview.dart';
 import 'package:my_flutter_app/services/business_transport_jobs.dart';
 import 'package:my_flutter_app/services/firestore_query_spec.dart';
+import 'package:my_flutter_app/services/inventory_service.dart'
+    show inventoryTransfersOpenSpecs, inventoryTransfersRecentSpecs;
 import 'package:my_flutter_app/services/invoice_ledger.dart';
 import 'package:my_flutter_app/services/known_car_lookup.dart';
 import 'package:my_flutter_app/services/parking_month_statement.dart';
@@ -141,6 +144,38 @@ void main() {
       );
     });
 
+    test('merges live queries: waits for every one, then each row once',
+        () async {
+      final from = StreamController<List<Map<String, Object>>>();
+      final to = StreamController<List<Map<String, Object>>>();
+      final got = <List<Map<String, Object>>>[];
+      final errors = <Object>[];
+      final sub = mergeLiveById<Map<String, Object>>(
+        [from.stream, to.stream],
+        (row) => '${row['id']}',
+      ).listen(got.add, onError: errors.add);
+      from.add([
+        {'id': 'a', 'n': 1},
+      ]);
+      await Future<void>.delayed(Duration.zero);
+      expect(got, isEmpty, reason: 'the second query has not answered');
+      to.add([
+        {'id': 'a', 'n': 2},
+        {'id': 'b', 'n': 3},
+      ]);
+      await Future<void>.delayed(Duration.zero);
+      expect(got.single, [
+        {'id': 'a', 'n': 1},
+        {'id': 'b', 'n': 3},
+      ]);
+      to.addError(StateError('denied'));
+      await Future<void>.delayed(Duration.zero);
+      expect(errors, hasLength(1));
+      await sub.cancel();
+      await from.close();
+      await to.close();
+    });
+
     test('merges rows from several queries, each once, first copy kept', () {
       final merged = mergeById<Map<String, Object>>(
         [
@@ -215,6 +250,17 @@ void main() {
         status: 'reserved',
         pages: 2,
       ),
+      // Store transfers (docs/INVENTORY.md v5): the open ones whole, and the
+      // newest page; staff of one store read from it and to it, merged.
+      'transfers: open, every store':
+          inventoryTransfersOpenSpecs(_business).single,
+      for (final spec in inventoryTransfersOpenSpecs(_business, storeId: 's1'))
+        'transfers: open, ${spec.filters[1].field}': spec,
+      'transfers: newest, every store':
+          inventoryTransfersRecentSpecs(_business).single,
+      for (final spec
+          in inventoryTransfersRecentSpecs(_business, storeId: 's1'))
+        'transfers: newest, ${spec.filters[1].field}': spec,
     };
 
     bool hasIndex(FirestoreQuerySpec spec, List<IndexFieldSpec> fields) {
@@ -298,6 +344,26 @@ void main() {
         isEmpty,
       );
       expect(carPurchasesPageSpec(pages: 0).limit, carPurchasePageSize);
+    });
+
+    test('transfers: the open read by stage has its index too', () {
+      // Equalities and `stage in` merge single-field indexes, but the
+      // contract ships the composite ones; keep the reads on those shapes.
+      for (final spec in [
+        ...inventoryTransfersOpenSpecs(_business),
+        ...inventoryTransfersOpenSpecs(_business, storeId: 's1'),
+      ]) {
+        final fields = [
+          for (final f in spec.filters)
+            if (f.field != 'stage') IndexFieldSpec(f.field),
+          const IndexFieldSpec('stage'),
+        ];
+        expect(hasIndex(spec, fields), isTrue, reason: '$spec');
+      }
+      for (final spec
+          in inventoryTransfersRecentSpecs(_business, storeId: 's1')) {
+        expect(spec.compositeIndex!.length, 3, reason: '$spec');
+      }
     });
 
     test('the index file is valid JSON in the shape the CLI deploys', () {

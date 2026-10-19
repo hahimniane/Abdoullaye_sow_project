@@ -140,7 +140,8 @@ class _AccountProfileScreenState extends State<AccountProfileScreen> {
           _preferences.businessActivity ||
           _preferences.reviewActivity ||
           _preferences.inventorySales ||
-          _preferences.inventoryCredit) {
+          _preferences.inventoryCredit ||
+          _preferences.inventoryTransfers) {
         try {
           await PushNotificationService().requestPermissionAndRegister();
         } catch (error) {
@@ -521,6 +522,21 @@ class _AccountProfileScreenState extends State<AccountProfileScreen> {
                       value: _preferences.inventoryCredit,
                       onChanged: (value) => _updatePreferences(
                         _preferences.copyWith(inventoryCredit: value),
+                      ),
+                    ),
+                  if (inventoryAvailable(
+                    services: auth.businessServices,
+                    hasPermission: auth.hasBusinessPermission(
+                      BusinessPermission.inventory,
+                    ),
+                    businessId: auth.businessId ?? '',
+                  ))
+                    _PreferenceSwitch(
+                      key: const Key('inventory-transfers-notifications'),
+                      title: l10n.invTrNotifications,
+                      value: _preferences.inventoryTransfers,
+                      onChanged: (value) => _updatePreferences(
+                        _preferences.copyWith(inventoryTransfers: value),
                       ),
                     ),
                 ],

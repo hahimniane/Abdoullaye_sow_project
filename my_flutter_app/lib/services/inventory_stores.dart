@@ -220,9 +220,6 @@ class InventoryAccess {
   /// Sees and works in every store (owner, or "works in all stores").
   bool get seesAllStores => isOwner || allStores;
 
-  /// Moves stock between stores: the same people.
-  bool get canTransfer => seesAllStores;
-
   /// Creates, edits and archives stores, and assigns staff to them.
   bool get canManageStores => isOwner;
 }
@@ -720,57 +717,6 @@ Map<String, Object?> setInventoryStaffAccessRequest({
   'homeStoreId': homeStoreId,
   'allStores': allStores,
 };
-
-/// What the transfer sheet holds.
-class InventoryTransferDraft {
-  const InventoryTransferDraft({
-    this.fromStoreId = '',
-    this.toStoreId = '',
-    this.quantity = '',
-    this.note = '',
-  });
-
-  final String fromStoreId;
-  final String toStoreId;
-  final String quantity;
-  final String note;
-}
-
-/// `store_required` (a side is not chosen), `same_store`, `quantity_invalid`
-/// (a whole number of at least 1). The source's own count is the server's to
-/// judge (`insufficient_stock`); the phone's count may be a moment old.
-List<String> validateInventoryTransfer(InventoryTransferDraft draft) {
-  final codes = <String>[];
-  if (draft.fromStoreId.isEmpty || draft.toStoreId.isEmpty) {
-    codes.add('store_required');
-  } else if (draft.fromStoreId == draft.toStoreId) {
-    codes.add('same_store');
-  }
-  final quantity = readWholeNumber(draft.quantity);
-  if (quantity == null || quantity < 1 || quantity > inventoryMaxStock) {
-    codes.add('quantity_invalid');
-  }
-  return codes;
-}
-
-Map<String, Object?> transferInventoryStockRequest(
-  String businessId,
-  String itemId,
-  InventoryTransferDraft draft,
-) {
-  final note = draft.note.trim();
-  return {
-    'businessId': businessId,
-    'itemId': itemId,
-    'fromStoreId': draft.fromStoreId,
-    'toStoreId': draft.toStoreId,
-    'quantity': readWholeNumber(draft.quantity) ?? 0,
-    if (note.isNotEmpty)
-      'note': note.length > inventoryMaxNote
-          ? note.substring(0, inventoryMaxNote)
-          : note,
-  };
-}
 
 /// Whether a failed `createInventoryBrand` means the server has no such
 /// callable (a server from before brands): the product is then saved without

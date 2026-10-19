@@ -5553,7 +5553,6 @@
       }
     }
   },
-  "inventoryMoveTransfer": "Transfert",
   "inventoryMoveAtStore": "à {store}",
   "@inventoryMoveAtStore": {
     "placeholders": {
@@ -5570,12 +5569,8 @@
       }
     }
   },
-  "inventoryTransfer": "Transférer du stock",
-  "inventoryTransferHelp": "Déplacez des unités d’un magasin à un autre. Le total reste le même.",
   "inventoryTransferFrom": "De",
   "inventoryTransferTo": "Vers",
-  "inventoryTransferGo": "Déplacer le stock",
-  "inventoryTransferDone": "Stock déplacé.",
   "inventoryStaffAccessTitle": "Magasins de l’inventaire",
   "inventoryStaffAccessHelp": "Choisissez où cette personne vend et compte le stock.",
   "inventoryHomeStore": "Magasin d’attache",
@@ -7200,5 +7195,596 @@
         "type": "String"
       }
     }
-  }
+  },
+  "invTrTitle": "Transferts",
+  "invTrNew": "Nouveau transfert",
+  "invTrNotifications": "Transferts entre magasins",
+  "invTrSendToStore": "Envoyer à un autre magasin",
+  "invTrNeedsStores": "Les transferts demandent au moins deux magasins.",
+  "invTrEntryHint": "Envoyer du stock à un autre magasin",
+  "invTrEntryCounts": "Entrants {incoming} · À revoir {review}",
+  "@invTrEntryCounts": {
+    "placeholders": {
+      "incoming": {
+        "type": "int"
+      },
+      "review": {
+        "type": "int"
+      }
+    }
+  },
+  "invTrTabOutgoing": "Sortants",
+  "invTrTabIncoming": "Entrants",
+  "invTrTabInTransit": "En route",
+  "invTrTabReview": "À revoir",
+  "invTrEmptyOutgoing": "Rien n’est encore parti d’ici.",
+  "invTrEmptyIncoming": "Rien n’est en route vers ici.",
+  "invTrEmptyInTransit": "Rien en route.",
+  "invTrEmptyReview": "Rien à revoir.",
+  "invTrEmptyHint": "Envoyez du stock à un autre magasin avec Nouveau transfert.",
+  "invTrIncomingHint": "Quelque chose arrive ? C’est dans Entrants. Ouvrez-le et touchez Confirmer la réception.",
+  "invTrLoadFailed": "Impossible de charger les transferts.",
+  "invTrNotAvailable": "Ce transfert n’est pas disponible.",
+  "invTrItems": "{count, plural, =1{1 article} other{{count} articles}}",
+  "@invTrItems": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "invTrProducts": "{count, plural, =1{1 produit} other{{count} produits}}",
+  "@invTrProducts": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "invTrNotSent": "pas envoyé · rien n’est réservé",
+  "invTrSentOnBy": "envoyé le {date} par {name}",
+  "@invTrSentOnBy": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrReceivedOf": "{received} sur {sent} reçus",
+  "@invTrReceivedOf": {
+    "placeholders": {
+      "received": {
+        "type": "int"
+      },
+      "sent": {
+        "type": "int"
+      }
+    }
+  },
+  "invTrMissingN": "{count, plural, =1{1 manquant} other{{count} manquants}}",
+  "@invTrMissingN": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "invTrOnBy": "le {date} par {name}",
+  "@invTrOnBy": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrCancelledOnBy": "annulé le {date} par {name}",
+  "@invTrCancelledOnBy": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrStateDraft": "Brouillon",
+  "invTrStateInTransit": "En route",
+  "invTrStateLate": "En route depuis {days} jours",
+  "@invTrStateLate": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "invTrStateReview": "À revoir",
+  "invTrStateReceived": "Reçu",
+  "invTrStateSettled": "Réglé",
+  "invTrStateCancelled": "Annulé",
+  "invTrResultComplete": "Complet",
+  "invTrResultDisputed": "{count, plural, =1{1 manquant · en litige} other{{count} manquants · en litige}}",
+  "@invTrResultDisputed": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "invTrResultReturned": "{count, plural, =1{1 rendu à {store}} other{{count} rendus à {store}}}",
+  "@invTrResultReturned": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrResultWrittenOff": "{count, plural, =1{1 passé en perte · {reason}} other{{count} passés en perte · {reason}}}",
+  "@invTrResultWrittenOff": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrReasonLost": "Perdu en route",
+  "invTrReasonDamaged": "Abîmé",
+  "invTrReasonStolen": "Volé",
+  "invTrReasonOther": "Autre",
+  "invTrEvDraftCreated": "Brouillon commencé par {name}",
+  "@invTrEvDraftCreated": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrEvSent": "Envoyé par {name} ({items})",
+  "@invTrEvSent": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "items": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrEvCancelled": "Annulé par {name} : {items} de retour à {store}",
+  "@invTrEvCancelled": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "items": {
+        "type": "String"
+      },
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrEvDiscarded": "Brouillon supprimé par {name}",
+  "@invTrEvDiscarded": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrEvReceivedAll": "{name} a confirmé la réception des {count}",
+  "@invTrEvReceivedAll": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "invTrEvReceivedShort": "{name} a confirmé {received} reçus, {missing} manquants",
+  "@invTrEvReceivedShort": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "received": {
+        "type": "int"
+      },
+      "missing": {
+        "type": "int"
+      }
+    }
+  },
+  "invTrEvReturned": "{name} a rendu {count} de {product} à {store}",
+  "@invTrEvReturned": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      },
+      "product": {
+        "type": "String"
+      },
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrEvWrittenOff": "{name} a passé en perte {count} de {product} : {reason}",
+  "@invTrEvWrittenOff": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      },
+      "product": {
+        "type": "String"
+      },
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrNoTimeline": "Rien d’enregistré pour l’instant.",
+  "invTrTrackRecord": "Historique",
+  "invTrSummaryInTransit": "En route {amount}",
+  "@invTrSummaryInTransit": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrSummaryDisputed": "En litige {amount}",
+  "@invTrSummaryDisputed": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrMoveInstant": "Transfert immédiat",
+  "invTrMoveSent": "Envoyé par transfert",
+  "invTrMoveReceived": "Reçu par transfert",
+  "invTrMoveCancelled": "Transfert annulé",
+  "invTrMoveReturned": "Rendu après un transfert",
+  "invTrMoveWrittenOff": "Passé en perte (transfert)",
+  "invTrChooseStore": "Choisir un magasin",
+  "invTrAddProductHint": "Ajouter un produit par son nom",
+  "invTrScanTooltip": "Scanner une étiquette",
+  "invTrScanTitle": "Scanner l’étiquette d’un produit",
+  "invTrInStore": "{count} à {store}",
+  "@invTrInStore": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrOnlyInStore": "Seulement {count} à {store}",
+  "@invTrOnlyInStore": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrNoneInStore": "{product} : aucun à {store}.",
+  "@invTrNoneInStore": {
+    "placeholders": {
+      "product": {
+        "type": "String"
+      },
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrAllOfThem": "C’est tout le stock. Vous ne pouvez pas envoyer plus que ce que le magasin a.",
+  "invTrNoProductsYet": "Aucun produit pour l’instant. Ajoutez-les par leur nom ou scannez leur étiquette.",
+  "invTrRemoveLine": "Retirer",
+  "invTrLess": "Un de moins",
+  "invTrMore": "Un de plus",
+  "invTrOwnerNotified": "Le propriétaire est prévenu à l’envoi.",
+  "invTrSaveDraft": "Enregistrer le brouillon",
+  "invTrSend": "{count, plural, =0{Envoyer} =1{Envoyer 1 article} other{Envoyer {count} articles}}",
+  "@invTrSend": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "invTrSending": "Envoi…",
+  "invTrDraftSaved": "Brouillon enregistré. Rien n’est réservé avant l’envoi.",
+  "invTrErrTo": "Choisissez le magasin de destination.",
+  "invTrErrOverMax": "Un produit dépasse ce que le magasin possède. Baissez-le pour envoyer.",
+  "invTrContinue": "Continuer",
+  "invTrSentTitle": "Transfert envoyé",
+  "invTrSentTo": "Envoyé à {store}",
+  "@invTrSentTo": {
+    "placeholders": {
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrSentBody": "{count, plural, =1{1 article est en route. L’équipe de {store} a reçu une notification et confirmera son arrivée.} other{{count} articles sont en route. L’équipe de {store} a reçu une notification et confirmera leur arrivée.}}",
+  "@invTrSentBody": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrSentNote": "Tant que {store} n’a pas confirmé, ces articles ne peuvent être vendus dans aucun des deux magasins. Une erreur ? Vous pouvez annuler jusqu’à la confirmation de {store}.",
+  "@invTrSentNote": {
+    "placeholders": {
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrDone": "Terminé",
+  "invTrReceiveTitle": "Recevoir le transfert",
+  "invTrIncomingAt": "{store} · entrant",
+  "@invTrIncomingAt": {
+    "placeholders": {
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrItemsFrom": "{count, plural, =1{1 article de {store}} other{{count} articles de {store}}}",
+  "@invTrItemsFrom": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrReceiveHelp": "Vérifiez le carton avec cette liste. Si un nombre est différent, changez-le avant de confirmer.",
+  "invTrSentQty": "Envoyés {count}",
+  "@invTrSentQty": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "invTrFewer": "{count} de moins qu’envoyé",
+  "@invTrFewer": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "invTrReceiveFooter": "Une fois confirmés, ces articles peuvent être vendus à {store}. Besoin d’étiquettes ? Imprimez-les depuis le produit quand vous le mettez en rayon.",
+  "@invTrReceiveFooter": {
+    "placeholders": {
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrArrivedOf": "{arrived} sur {sent} arrivés",
+  "@invTrArrivedOf": {
+    "placeholders": {
+      "arrived": {
+        "type": "int"
+      },
+      "sent": {
+        "type": "int"
+      }
+    }
+  },
+  "invTrConfirmReceived": "Confirmer la réception",
+  "invTrConfirming": "Confirmation…",
+  "invTrReceivedDone": "Reçu. Ces articles peuvent maintenant être vendus à {store}.",
+  "@invTrReceivedDone": {
+    "placeholders": {
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrReceivedDoneMissing": "Reçu. Le propriétaire a été prévenu des articles manquants.",
+  "invTrMissingTitle": "{count, plural, =1{1 article n’est pas arrivé} other{{count} articles ne sont pas arrivés}}",
+  "@invTrMissingTitle": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "invTrMissingBody": "{arrived} sur {sent} sont arrivés. Le propriétaire sera prévenu des manquants.",
+  "@invTrMissingBody": {
+    "placeholders": {
+      "arrived": {
+        "type": "int"
+      },
+      "sent": {
+        "type": "int"
+      }
+    }
+  },
+  "invTrMissingLine": "{product} : envoyés {sent}, comptés {counted}",
+  "@invTrMissingLine": {
+    "placeholders": {
+      "product": {
+        "type": "String"
+      },
+      "sent": {
+        "type": "int"
+      },
+      "counted": {
+        "type": "int"
+      }
+    }
+  },
+  "invTrWhatHappened": "Que s’est-il passé ? (facultatif)",
+  "invTrMissingStayOff": "Ils restent hors des rayons jusqu’à la décision du propriétaire.",
+  "invTrArrivedCanSell": "Tout le reste est arrivé et peut être vendu à {store} dès maintenant.",
+  "@invTrArrivedCanSell": {
+    "placeholders": {
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrGoBack": "Retour",
+  "invTrConfirmCount": "{count, plural, =1{Confirmer 1 reçu} other{Confirmer {count} reçus}}",
+  "@invTrConfirmCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "invTrConfirmedOnBy": "confirmé le {date} par {name}",
+  "@invTrConfirmedOnBy": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrStoreNote": "Note de {store} : « {note} »",
+  "@invTrStoreNote": {
+    "placeholders": {
+      "store": {
+        "type": "String"
+      },
+      "note": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrCantSell": "{count, plural, =1{Cet article ne peut être vendu nulle part avant votre décision.} other{Ces {count} articles ne peuvent être vendus nulle part avant votre décision.}}",
+  "@invTrCantSell": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "invTrReturnTo": "Rendre à {store}",
+  "@invTrReturnTo": {
+    "placeholders": {
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrWriteOff": "Passer en perte",
+  "invTrReasonTitle": "Raison de la perte",
+  "invTrNoteOptional": "Note (facultatif)",
+  "invTrWriteOffCount": "Passer {count} en perte",
+  "@invTrWriteOffCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "invTrReturnedDone": "Rendu à {store}.",
+  "@invTrReturnedDone": {
+    "placeholders": {
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrWrittenOffDone": "Passé en perte.",
+  "invTrAllSettled": "Chaque article manquant est réglé. Ce transfert est clos.",
+  "invTrReviewFooter": "Seuls le propriétaire et le personnel de tous les magasins peuvent régler les écarts. Rappels tous les 2 jours jusqu’au règlement.",
+  "invTrReviewAction": "Revoir les manquants",
+  "invTrColProduct": "Produit",
+  "invTrColSent": "Envoyés",
+  "invTrColReceived": "Reçus",
+  "invTrValueAtCost": "Valeur au coût : {amount}",
+  "@invTrValueAtCost": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrCancel": "Annuler le transfert",
+  "invTrCancelTitle": "Annuler ce transfert ?",
+  "invTrCancelMessage": "{count, plural, =1{1 article retourne à {store}.} other{{count} articles retournent à {store}.}}",
+  "@invTrCancelMessage": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrCancelDone": "Transfert annulé. Les articles sont de retour au magasin.",
+  "invTrDiscard": "Supprimer le brouillon",
+  "invTrDiscardTitle": "Supprimer ce brouillon ?",
+  "invTrDiscardMessage": "Rien n’était réservé : rien ne change dans les magasins.",
+  "invTrDiscardDone": "Brouillon supprimé.",
+  "invTrPrintPick": "Imprimer les étiquettes de quel produit ?",
+  "invTrReceivedQty": "{count, plural, =1{1 reçu} other{{count} reçus}}",
+  "@invTrReceivedQty": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "invTrGoneReceived": "Quelqu’un a déjà confirmé ce transfert.",
+  "invTrGoneCancelled": "Ce transfert a été annulé.",
+  "inventoryFailTransferNotFound": "Ce transfert n’existe plus.",
+  "inventoryFailTransferNotDraft": "Ce brouillon a déjà été envoyé ou annulé.",
+  "inventoryFailTransferNotInTransit": "Ce transfert n’est plus en route.",
+  "inventoryFailLineNotDisputed": "Rien ne manque pour ce produit.",
+  "inventoryFailLineAlreadyResolved": "Quelqu’un a déjà décidé pour ce produit.",
+  "inventoryFailStoreHasTransfers": "Des transferts depuis ou vers ce magasin ne sont pas terminés. Terminez-les d’abord.",
+  "inventoryFailItemInTransfer": "Ce produit fait partie d’un transfert pas encore terminé.",
+  "inventoryFailItemNotInTransfer": "Ce produit ne fait pas partie de ce transfert.",
+  "inventoryFailReceivedTooMany": "Vous ne pouvez pas recevoir plus que ce qui a été envoyé.",
+  "inventoryFailWriteOffReasonInvalid": "Choisissez pourquoi les articles sont passés en perte.",
+  "inventoryFailResolutionInvalid": "Choisissez Rendre ou Passer en perte.",
+  "inventoryFailNoteTooLong": "La note est trop longue (300 caractères au plus).",
+  "inventoryFailTransferLinesRequired": "Ajoutez au moins un produit.",
+  "inventoryFailTransferLinesTooMany": "Un transfert contient au plus 100 produits."
 }

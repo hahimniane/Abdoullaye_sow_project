@@ -583,3 +583,8 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   without Expected above it) must pass the same inputs in both: make the
   input `required` so the compiler finds the branch that forgot it
   (`WaitingPackageCard.group`, test/click_through_1_0_17_test.dart).
+- Two `tester.tap`s on the same stepper button without a `pump()` between
+  them both run the OLD callback (`onQuantity(line.quantity + 1)` with the
+  stale quantity), so the count goes up once. Pump between taps. Intl's `jm`
+  time puts a narrow no-break space before "PM": match it with
+  `RegExp(r'2:40\sPM')`, not a typed space.

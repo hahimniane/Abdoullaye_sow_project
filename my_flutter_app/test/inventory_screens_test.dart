@@ -3073,7 +3073,7 @@ void main() {
       },
     );
 
-    testWidgets('staff see their store\'s count only and cannot transfer; '
+    testWidgets('staff see their store\'s count only and send from it; '
         'only their store\'s history is asked for', (tester) async {
       final src = source();
       await _pump(tester, page(src, _Calls(), access: _staffBk));
@@ -3084,12 +3084,16 @@ void main() {
       expect(find.text('Your store: Brooklyn'), findsOneWidget);
       expect(find.byKey(const Key('inv-store-counts')), findsNothing);
       expect(find.byKey(const Key('inv-store-filter-all')), findsNothing);
+      // The instant move is gone; anyone who may send from a store sends a
+      // transfer.
       expect(find.byKey(const Key('inv-act-transfer')), findsNothing);
+      expect(find.byKey(const Key('inv-act-send-to-store')), findsOneWidget);
       expect(src.movementStores, ['s-bk']);
       expect(find.byKey(const ValueKey('inv-move-m2')), findsOneWidget);
       expect(find.byKey(const ValueKey('inv-move-m1')), findsNothing);
       expect(find.textContaining('at Brooklyn'), findsOneWidget);
-      expect(find.text('Transfer'), findsOneWidget);
+      // The old one-step move (no transfer code) reads "Instant transfer".
+      expect(find.text('Instant transfer'), findsOneWidget);
     });
 
     testWidgets('a single-store shop has none of it', (tester) async {
@@ -3109,116 +3113,39 @@ void main() {
         '10',
       );
       expect(find.byKey(const Key('inv-store-counts')), findsNothing);
-      expect(find.byKey(const Key('inv-act-transfer')), findsNothing);
+      expect(find.byKey(const Key('inv-act-send-to-store')), findsNothing);
       expect(find.byKey(const Key('inv-store-filter-all')), findsNothing);
     });
 
-    testWidgets('transfer: two different stores are required before anything '
-        'is sent', (tester) async {
+    testWidgets('Send to another store opens a new transfer with the product, '
+        'from the store in view, capped at what it holds', (tester) async {
       final calls = _Calls();
       await _pump(tester, page(source(), calls));
-      await tester.tap(find.byKey(const Key('inv-act-transfer')));
+      await tester.ensureVisible(find.byKey(const Key('inv-store-filter-s-bk')));
+      await tester.tap(find.byKey(const Key('inv-store-filter-s-bk')));
       await tester.pumpAndSettle();
-      // From the store that holds the most, to the other.
+      await tester.ensureVisible(find.byKey(const Key('inv-act-send-to-store')));
+      await tester.tap(find.byKey(const Key('inv-act-send-to-store')));
+      await tester.pumpAndSettle();
+      expect(find.text('New transfer'), findsOneWidget);
+      // Soap is on the transfer already, one piece, from Brooklyn (2 there).
+      expect(find.byKey(const ValueKey('inv-tr-line-i1')), findsOneWidget);
       expect(
-        find.descendant(
-          of: find.byKey(const Key('inv-transfer-from')),
-          matching: find.text('Main store'),
-        ),
-        findsOneWidget,
-      );
-      expect(
-        find.descendant(
-          of: find.byKey(const Key('inv-transfer-to')),
-          matching: find.text('Brooklyn'),
-        ),
-        findsOneWidget,
-      );
-      // Point "To" at the same store as "From".
-      await tester.tap(find.byKey(const Key('inv-transfer-to')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Main store').last);
-      await tester.pumpAndSettle();
-      await tester.enterText(
-        find.byKey(const Key('inv-transfer-quantity')),
-        '2',
-      );
-      await tester.tap(find.byKey(const Key('inv-transfer-save')));
-      await tester.pumpAndSettle();
-      expect(find.text('Choose two different stores.'), findsOneWidget);
-      expect(calls.log, isEmpty);
-    });
-
-    testWidgets('transfer: sends the move and says so', (tester) async {
-      final calls = _Calls();
-      await _pump(tester, page(source(), calls));
-      await tester.tap(find.byKey(const Key('inv-act-transfer')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('inv-transfer-save')));
-      await tester.pumpAndSettle();
-      expect(find.text('Enter a whole number of at least 1.'), findsOneWidget);
-      await tester.enterText(
-        find.byKey(const Key('inv-transfer-quantity')),
-        '3',
-      );
-      await tester.enterText(
-        find.byKey(const Key('inv-transfer-note')),
-        'restock',
-      );
-      await tester.tap(find.byKey(const Key('inv-transfer-save')));
-      await tester.pumpAndSettle();
-      expect(calls.named('transferInventoryStock').single.payload, {
-        'businessId': 'b1',
-        'itemId': 'i1',
-        'fromStoreId': 's-main',
-        'toStoreId': 's-bk',
-        'quantity': 3,
-        'note': 'restock',
-      });
-      expect(find.text('Stock moved.'), findsOneWidget);
-    });
-
-    testWidgets('transfer: more than the source holds is refused in words, '
-        'and the sheet stays', (tester) async {
-      final calls = _Calls()
-        ..respond = (n, p) => throw FirebaseFunctionsException(
-          message: 'short',
-          code: 'failed-precondition',
-          details: {'reason': 'insufficient_stock'},
-        );
-      await _pump(tester, page(source(), calls));
-      await tester.tap(find.byKey(const Key('inv-act-transfer')));
-      await tester.pumpAndSettle();
-      await tester.enterText(
-        find.byKey(const Key('inv-transfer-quantity')),
-        '99',
-      );
-      await tester.tap(find.byKey(const Key('inv-transfer-save')));
-      await tester.pumpAndSettle();
-      expect(find.byKey(const Key('inv-transfer-error')), findsOneWidget);
-      expect(find.textContaining('does not have that many'), findsOneWidget);
-      expect(find.byKey(const Key('inv-transfer-save')), findsOneWidget);
-    });
-
-    testWidgets('transfer: the server\'s same-store refusal reads the same', (
-      tester,
-    ) async {
-      final calls = _Calls()
-        ..respond = (n, p) => throw FirebaseFunctionsException(
-          message: 'same',
-          code: 'invalid-argument',
-          details: {'reason': 'same_store'},
-        );
-      await _pump(tester, page(source(), calls));
-      await tester.tap(find.byKey(const Key('inv-act-transfer')));
-      await tester.pumpAndSettle();
-      await tester.enterText(
-        find.byKey(const Key('inv-transfer-quantity')),
+        tester.widget<Text>(find.byKey(const Key('inv-tr-qty-i1-value'))).data,
         '1',
       );
-      await tester.tap(find.byKey(const Key('inv-transfer-save')));
+      expect(find.text('2 in Brooklyn'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('inv-tr-qty-i1-plus')));
       await tester.pumpAndSettle();
-      expect(find.text('Choose two different stores.'), findsOneWidget);
+      expect(find.text('Only 2 in Brooklyn'), findsOneWidget);
+      expect(find.byKey(const Key('inv-tr-all-i1')), findsOneWidget);
+      expect(
+        tester
+            .widget<IconButton>(find.byKey(const Key('inv-tr-qty-i1-plus')))
+            .onPressed,
+        isNull,
+      );
+      expect(calls.log, isEmpty);
     });
 
     testWidgets('add stock: the owner picks the store and it is sent', (
@@ -3315,13 +3242,15 @@ void main() {
       );
       expect(find.text('Stock par magasin'), findsOneWidget);
       await tester.scrollUntilVisible(
-        find.byKey(const Key('inv-act-transfer')),
+        find.byKey(const Key('inv-act-send-to-store')),
         200,
         scrollable: find.byType(Scrollable).first,
       );
-      await tester.tap(find.byKey(const Key('inv-act-transfer')));
+      expect(find.text('Envoyer à un autre magasin'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('inv-act-send-to-store')));
       await tester.pumpAndSettle();
-      expect(find.text('Transférer du stock'), findsWidgets);
+      // The new transfer, in French, with the long store name.
+      expect(find.text('Nouveau transfert'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });

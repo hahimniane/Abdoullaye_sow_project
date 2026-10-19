@@ -20849,12 +20849,6 @@ abstract class AppLocalizations {
   /// **'Starting count in {store}'**
   String inventoryFieldQuantityAt(String store);
 
-  /// No description provided for @inventoryMoveTransfer.
-  ///
-  /// In en, this message translates to:
-  /// **'Transfer'**
-  String get inventoryMoveTransfer;
-
   /// No description provided for @inventoryMoveAtStore.
   ///
   /// In en, this message translates to:
@@ -20867,18 +20861,6 @@ abstract class AppLocalizations {
   /// **'Counting in {store}'**
   String inventoryStockForStore(String store);
 
-  /// No description provided for @inventoryTransfer.
-  ///
-  /// In en, this message translates to:
-  /// **'Transfer stock'**
-  String get inventoryTransfer;
-
-  /// No description provided for @inventoryTransferHelp.
-  ///
-  /// In en, this message translates to:
-  /// **'Move units from one store to another. The total stays the same.'**
-  String get inventoryTransferHelp;
-
   /// No description provided for @inventoryTransferFrom.
   ///
   /// In en, this message translates to:
@@ -20890,18 +20872,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'To'**
   String get inventoryTransferTo;
-
-  /// No description provided for @inventoryTransferGo.
-  ///
-  /// In en, this message translates to:
-  /// **'Move stock'**
-  String get inventoryTransferGo;
-
-  /// No description provided for @inventoryTransferDone.
-  ///
-  /// In en, this message translates to:
-  /// **'Stock moved.'**
-  String get inventoryTransferDone;
 
   /// No description provided for @inventoryStaffAccessTitle.
   ///
@@ -24862,6 +24832,899 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Note: {note}'**
   String prqPickupNoteLine(String note);
+
+  /// No description provided for @invTrTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Transfers'**
+  String get invTrTitle;
+
+  /// No description provided for @invTrNew.
+  ///
+  /// In en, this message translates to:
+  /// **'New transfer'**
+  String get invTrNew;
+
+  /// No description provided for @invTrNotifications.
+  ///
+  /// In en, this message translates to:
+  /// **'Store transfers'**
+  String get invTrNotifications;
+
+  /// No description provided for @invTrSendToStore.
+  ///
+  /// In en, this message translates to:
+  /// **'Send to another store'**
+  String get invTrSendToStore;
+
+  /// No description provided for @invTrNeedsStores.
+  ///
+  /// In en, this message translates to:
+  /// **'Transfers need two or more stores.'**
+  String get invTrNeedsStores;
+
+  /// No description provided for @invTrEntryHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Send stock to another store'**
+  String get invTrEntryHint;
+
+  /// No description provided for @invTrEntryCounts.
+  ///
+  /// In en, this message translates to:
+  /// **'Incoming {incoming} · Review {review}'**
+  String invTrEntryCounts(int incoming, int review);
+
+  /// No description provided for @invTrTabOutgoing.
+  ///
+  /// In en, this message translates to:
+  /// **'Outgoing'**
+  String get invTrTabOutgoing;
+
+  /// No description provided for @invTrTabIncoming.
+  ///
+  /// In en, this message translates to:
+  /// **'Incoming'**
+  String get invTrTabIncoming;
+
+  /// No description provided for @invTrTabInTransit.
+  ///
+  /// In en, this message translates to:
+  /// **'In transit'**
+  String get invTrTabInTransit;
+
+  /// No description provided for @invTrTabReview.
+  ///
+  /// In en, this message translates to:
+  /// **'Review'**
+  String get invTrTabReview;
+
+  /// No description provided for @invTrEmptyOutgoing.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing sent from here yet.'**
+  String get invTrEmptyOutgoing;
+
+  /// No description provided for @invTrEmptyIncoming.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing on its way here.'**
+  String get invTrEmptyIncoming;
+
+  /// No description provided for @invTrEmptyInTransit.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing in transit.'**
+  String get invTrEmptyInTransit;
+
+  /// No description provided for @invTrEmptyReview.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing to review.'**
+  String get invTrEmptyReview;
+
+  /// No description provided for @invTrEmptyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Send stock to another store with New transfer.'**
+  String get invTrEmptyHint;
+
+  /// No description provided for @invTrIncomingHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Something arriving? It\'s under Incoming. Open it and tap Confirm received.'**
+  String get invTrIncomingHint;
+
+  /// No description provided for @invTrLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Transfers could not be loaded.'**
+  String get invTrLoadFailed;
+
+  /// No description provided for @invTrNotAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'That transfer is not available.'**
+  String get invTrNotAvailable;
+
+  /// No description provided for @invTrItems.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 item} other{{count} items}}'**
+  String invTrItems(int count);
+
+  /// No description provided for @invTrProducts.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 product} other{{count} products}}'**
+  String invTrProducts(int count);
+
+  /// No description provided for @invTrNotSent.
+  ///
+  /// In en, this message translates to:
+  /// **'not sent · nothing reserved yet'**
+  String get invTrNotSent;
+
+  /// No description provided for @invTrSentOnBy.
+  ///
+  /// In en, this message translates to:
+  /// **'sent {date} by {name}'**
+  String invTrSentOnBy(String date, String name);
+
+  /// No description provided for @invTrReceivedOf.
+  ///
+  /// In en, this message translates to:
+  /// **'{received} of {sent} received'**
+  String invTrReceivedOf(int received, int sent);
+
+  /// No description provided for @invTrMissingN.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} missing'**
+  String invTrMissingN(int count);
+
+  /// No description provided for @invTrOnBy.
+  ///
+  /// In en, this message translates to:
+  /// **'{date} by {name}'**
+  String invTrOnBy(String date, String name);
+
+  /// No description provided for @invTrCancelledOnBy.
+  ///
+  /// In en, this message translates to:
+  /// **'cancelled {date} by {name}'**
+  String invTrCancelledOnBy(String date, String name);
+
+  /// No description provided for @invTrStateDraft.
+  ///
+  /// In en, this message translates to:
+  /// **'Draft'**
+  String get invTrStateDraft;
+
+  /// No description provided for @invTrStateInTransit.
+  ///
+  /// In en, this message translates to:
+  /// **'In transit'**
+  String get invTrStateInTransit;
+
+  /// No description provided for @invTrStateLate.
+  ///
+  /// In en, this message translates to:
+  /// **'In transit {days} days'**
+  String invTrStateLate(int days);
+
+  /// No description provided for @invTrStateReview.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs review'**
+  String get invTrStateReview;
+
+  /// No description provided for @invTrStateReceived.
+  ///
+  /// In en, this message translates to:
+  /// **'Received'**
+  String get invTrStateReceived;
+
+  /// No description provided for @invTrStateSettled.
+  ///
+  /// In en, this message translates to:
+  /// **'Settled'**
+  String get invTrStateSettled;
+
+  /// No description provided for @invTrStateCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get invTrStateCancelled;
+
+  /// No description provided for @invTrResultComplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Complete'**
+  String get invTrResultComplete;
+
+  /// No description provided for @invTrResultDisputed.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} missing · disputed'**
+  String invTrResultDisputed(int count);
+
+  /// No description provided for @invTrResultReturned.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} returned to {store}'**
+  String invTrResultReturned(int count, String store);
+
+  /// No description provided for @invTrResultWrittenOff.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} written off · {reason}'**
+  String invTrResultWrittenOff(int count, String reason);
+
+  /// No description provided for @invTrReasonLost.
+  ///
+  /// In en, this message translates to:
+  /// **'Lost in transit'**
+  String get invTrReasonLost;
+
+  /// No description provided for @invTrReasonDamaged.
+  ///
+  /// In en, this message translates to:
+  /// **'Damaged'**
+  String get invTrReasonDamaged;
+
+  /// No description provided for @invTrReasonStolen.
+  ///
+  /// In en, this message translates to:
+  /// **'Stolen'**
+  String get invTrReasonStolen;
+
+  /// No description provided for @invTrReasonOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get invTrReasonOther;
+
+  /// No description provided for @invTrEvDraftCreated.
+  ///
+  /// In en, this message translates to:
+  /// **'Draft started by {name}'**
+  String invTrEvDraftCreated(String name);
+
+  /// No description provided for @invTrEvSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent by {name} ({items})'**
+  String invTrEvSent(String name, String items);
+
+  /// No description provided for @invTrEvCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled by {name}: {items} back in {store}'**
+  String invTrEvCancelled(String name, String items, String store);
+
+  /// No description provided for @invTrEvDiscarded.
+  ///
+  /// In en, this message translates to:
+  /// **'Draft discarded by {name}'**
+  String invTrEvDiscarded(String name);
+
+  /// No description provided for @invTrEvReceivedAll.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} confirmed all {count} received'**
+  String invTrEvReceivedAll(String name, int count);
+
+  /// No description provided for @invTrEvReceivedShort.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} confirmed {received} received, {missing} missing'**
+  String invTrEvReceivedShort(String name, int received, int missing);
+
+  /// No description provided for @invTrEvReturned.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} returned {count} of {product} to {store}'**
+  String invTrEvReturned(String name, int count, String product, String store);
+
+  /// No description provided for @invTrEvWrittenOff.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} wrote off {count} of {product}: {reason}'**
+  String invTrEvWrittenOff(
+    String name,
+    int count,
+    String product,
+    String reason,
+  );
+
+  /// No description provided for @invTrNoTimeline.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing recorded yet.'**
+  String get invTrNoTimeline;
+
+  /// No description provided for @invTrTrackRecord.
+  ///
+  /// In en, this message translates to:
+  /// **'Track record'**
+  String get invTrTrackRecord;
+
+  /// No description provided for @invTrSummaryInTransit.
+  ///
+  /// In en, this message translates to:
+  /// **'In transit {amount}'**
+  String invTrSummaryInTransit(String amount);
+
+  /// No description provided for @invTrSummaryDisputed.
+  ///
+  /// In en, this message translates to:
+  /// **'Disputed {amount}'**
+  String invTrSummaryDisputed(String amount);
+
+  /// No description provided for @invTrMoveInstant.
+  ///
+  /// In en, this message translates to:
+  /// **'Instant transfer'**
+  String get invTrMoveInstant;
+
+  /// No description provided for @invTrMoveSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent in a transfer'**
+  String get invTrMoveSent;
+
+  /// No description provided for @invTrMoveReceived.
+  ///
+  /// In en, this message translates to:
+  /// **'Received from a transfer'**
+  String get invTrMoveReceived;
+
+  /// No description provided for @invTrMoveCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Transfer cancelled'**
+  String get invTrMoveCancelled;
+
+  /// No description provided for @invTrMoveReturned.
+  ///
+  /// In en, this message translates to:
+  /// **'Returned from a transfer'**
+  String get invTrMoveReturned;
+
+  /// No description provided for @invTrMoveWrittenOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Written off in a transfer'**
+  String get invTrMoveWrittenOff;
+
+  /// No description provided for @invTrChooseStore.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a store'**
+  String get invTrChooseStore;
+
+  /// No description provided for @invTrAddProductHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a product by name'**
+  String get invTrAddProductHint;
+
+  /// No description provided for @invTrScanTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan a tag'**
+  String get invTrScanTooltip;
+
+  /// No description provided for @invTrScanTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan a product tag'**
+  String get invTrScanTitle;
+
+  /// No description provided for @invTrInStore.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} in {store}'**
+  String invTrInStore(int count, String store);
+
+  /// No description provided for @invTrOnlyInStore.
+  ///
+  /// In en, this message translates to:
+  /// **'Only {count} in {store}'**
+  String invTrOnlyInStore(int count, String store);
+
+  /// No description provided for @invTrNoneInStore.
+  ///
+  /// In en, this message translates to:
+  /// **'{product}: none in {store}.'**
+  String invTrNoneInStore(String product, String store);
+
+  /// No description provided for @invTrAllOfThem.
+  ///
+  /// In en, this message translates to:
+  /// **'That\'s all of them. You can\'t send more than the store has.'**
+  String get invTrAllOfThem;
+
+  /// No description provided for @invTrNoProductsYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No products yet. Add them by name, or scan their tag.'**
+  String get invTrNoProductsYet;
+
+  /// No description provided for @invTrRemoveLine.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get invTrRemoveLine;
+
+  /// No description provided for @invTrLess.
+  ///
+  /// In en, this message translates to:
+  /// **'One less'**
+  String get invTrLess;
+
+  /// No description provided for @invTrMore.
+  ///
+  /// In en, this message translates to:
+  /// **'One more'**
+  String get invTrMore;
+
+  /// No description provided for @invTrOwnerNotified.
+  ///
+  /// In en, this message translates to:
+  /// **'The owner is notified when you send.'**
+  String get invTrOwnerNotified;
+
+  /// No description provided for @invTrSaveDraft.
+  ///
+  /// In en, this message translates to:
+  /// **'Save draft'**
+  String get invTrSaveDraft;
+
+  /// No description provided for @invTrSend.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{Send} =1{Send 1 item} other{Send {count} items}}'**
+  String invTrSend(int count);
+
+  /// No description provided for @invTrSending.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending…'**
+  String get invTrSending;
+
+  /// No description provided for @invTrDraftSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Draft saved. Nothing is reserved until you send.'**
+  String get invTrDraftSaved;
+
+  /// No description provided for @invTrErrTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the store to send to.'**
+  String get invTrErrTo;
+
+  /// No description provided for @invTrErrOverMax.
+  ///
+  /// In en, this message translates to:
+  /// **'A product is above what the store holds. Lower it to send.'**
+  String get invTrErrOverMax;
+
+  /// No description provided for @invTrContinue.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get invTrContinue;
+
+  /// No description provided for @invTrSentTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Transfer sent'**
+  String get invTrSentTitle;
+
+  /// No description provided for @invTrSentTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent to {store}'**
+  String invTrSentTo(String store);
+
+  /// No description provided for @invTrSentBody.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 item is on its way. {store}\'s team got a notification and will confirm when it arrives.} other{{count} items are on their way. {store}\'s team got a notification and will confirm when they arrive.}}'**
+  String invTrSentBody(int count, String store);
+
+  /// No description provided for @invTrSentNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Until {store} confirms, these items can\'t be sold in either store. Made a mistake? You can cancel until {store} confirms.'**
+  String invTrSentNote(String store);
+
+  /// No description provided for @invTrDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get invTrDone;
+
+  /// No description provided for @invTrReceiveTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Receive transfer'**
+  String get invTrReceiveTitle;
+
+  /// No description provided for @invTrIncomingAt.
+  ///
+  /// In en, this message translates to:
+  /// **'{store} · incoming'**
+  String invTrIncomingAt(String store);
+
+  /// No description provided for @invTrItemsFrom.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 item from {store}} other{{count} items from {store}}}'**
+  String invTrItemsFrom(int count, String store);
+
+  /// No description provided for @invTrReceiveHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Check the box against this list. If a number is different, change it before you confirm.'**
+  String get invTrReceiveHelp;
+
+  /// No description provided for @invTrSentQty.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent {count}'**
+  String invTrSentQty(int count);
+
+  /// No description provided for @invTrFewer.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} fewer than sent'**
+  String invTrFewer(int count);
+
+  /// No description provided for @invTrReceiveFooter.
+  ///
+  /// In en, this message translates to:
+  /// **'Once confirmed, these items can be sold in {store}. Need tags? Print them from the product when you put it on the shelf.'**
+  String invTrReceiveFooter(String store);
+
+  /// No description provided for @invTrArrivedOf.
+  ///
+  /// In en, this message translates to:
+  /// **'{arrived} of {sent} arrived'**
+  String invTrArrivedOf(int arrived, int sent);
+
+  /// No description provided for @invTrConfirmReceived.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm received'**
+  String get invTrConfirmReceived;
+
+  /// No description provided for @invTrConfirming.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirming…'**
+  String get invTrConfirming;
+
+  /// No description provided for @invTrReceivedDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Received. These items can be sold in {store} now.'**
+  String invTrReceivedDone(String store);
+
+  /// No description provided for @invTrReceivedDoneMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'Received. The owner was told about the missing items.'**
+  String get invTrReceivedDoneMissing;
+
+  /// No description provided for @invTrMissingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 item didn\'t arrive} other{{count} items didn\'t arrive}}'**
+  String invTrMissingTitle(int count);
+
+  /// No description provided for @invTrMissingBody.
+  ///
+  /// In en, this message translates to:
+  /// **'{arrived} of {sent} arrived. The owner will be told about the missing ones.'**
+  String invTrMissingBody(int arrived, int sent);
+
+  /// No description provided for @invTrMissingLine.
+  ///
+  /// In en, this message translates to:
+  /// **'{product}: sent {sent}, counted {counted}'**
+  String invTrMissingLine(String product, int sent, int counted);
+
+  /// No description provided for @invTrWhatHappened.
+  ///
+  /// In en, this message translates to:
+  /// **'What happened? (optional)'**
+  String get invTrWhatHappened;
+
+  /// No description provided for @invTrMissingStayOff.
+  ///
+  /// In en, this message translates to:
+  /// **'They stay off the shelves until the owner decides what happened.'**
+  String get invTrMissingStayOff;
+
+  /// No description provided for @invTrArrivedCanSell.
+  ///
+  /// In en, this message translates to:
+  /// **'Everything else arrived and can be sold in {store} now.'**
+  String invTrArrivedCanSell(String store);
+
+  /// No description provided for @invTrGoBack.
+  ///
+  /// In en, this message translates to:
+  /// **'Go back'**
+  String get invTrGoBack;
+
+  /// No description provided for @invTrConfirmCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm {count} received'**
+  String invTrConfirmCount(int count);
+
+  /// No description provided for @invTrConfirmedOnBy.
+  ///
+  /// In en, this message translates to:
+  /// **'confirmed {date} by {name}'**
+  String invTrConfirmedOnBy(String date, String name);
+
+  /// No description provided for @invTrStoreNote.
+  ///
+  /// In en, this message translates to:
+  /// **'{store}\'s note: \"{note}\"'**
+  String invTrStoreNote(String store, String note);
+
+  /// No description provided for @invTrCantSell.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{This item can\'t be sold anywhere until you decide.} other{These {count} can\'t be sold anywhere until you decide.}}'**
+  String invTrCantSell(int count);
+
+  /// No description provided for @invTrReturnTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Return to {store}'**
+  String invTrReturnTo(String store);
+
+  /// No description provided for @invTrWriteOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Write off'**
+  String get invTrWriteOff;
+
+  /// No description provided for @invTrReasonTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason for write-off'**
+  String get invTrReasonTitle;
+
+  /// No description provided for @invTrNoteOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'Note (optional)'**
+  String get invTrNoteOptional;
+
+  /// No description provided for @invTrWriteOffCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Write off {count}'**
+  String invTrWriteOffCount(int count);
+
+  /// No description provided for @invTrReturnedDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Returned to {store}.'**
+  String invTrReturnedDone(String store);
+
+  /// No description provided for @invTrWrittenOffDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Written off.'**
+  String get invTrWrittenOffDone;
+
+  /// No description provided for @invTrAllSettled.
+  ///
+  /// In en, this message translates to:
+  /// **'Every missing item is decided. This transfer is settled.'**
+  String get invTrAllSettled;
+
+  /// No description provided for @invTrReviewFooter.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the owner and all-stores staff can settle differences. Reminders every 2 days until settled.'**
+  String get invTrReviewFooter;
+
+  /// No description provided for @invTrReviewAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Review missing items'**
+  String get invTrReviewAction;
+
+  /// No description provided for @invTrColProduct.
+  ///
+  /// In en, this message translates to:
+  /// **'Product'**
+  String get invTrColProduct;
+
+  /// No description provided for @invTrColSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent'**
+  String get invTrColSent;
+
+  /// No description provided for @invTrColReceived.
+  ///
+  /// In en, this message translates to:
+  /// **'Received'**
+  String get invTrColReceived;
+
+  /// No description provided for @invTrValueAtCost.
+  ///
+  /// In en, this message translates to:
+  /// **'Value at cost: {amount}'**
+  String invTrValueAtCost(String amount);
+
+  /// No description provided for @invTrCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel transfer'**
+  String get invTrCancel;
+
+  /// No description provided for @invTrCancelTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel this transfer?'**
+  String get invTrCancelTitle;
+
+  /// No description provided for @invTrCancelMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 item goes back to {store}.} other{{count} items go back to {store}.}}'**
+  String invTrCancelMessage(int count, String store);
+
+  /// No description provided for @invTrCancelDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Transfer cancelled. The items are back in the store.'**
+  String get invTrCancelDone;
+
+  /// No description provided for @invTrDiscard.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard draft'**
+  String get invTrDiscard;
+
+  /// No description provided for @invTrDiscardTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard this draft?'**
+  String get invTrDiscardTitle;
+
+  /// No description provided for @invTrDiscardMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing was reserved, so nothing changes in the stores.'**
+  String get invTrDiscardMessage;
+
+  /// No description provided for @invTrDiscardDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Draft discarded.'**
+  String get invTrDiscardDone;
+
+  /// No description provided for @invTrPrintPick.
+  ///
+  /// In en, this message translates to:
+  /// **'Print tags for which product?'**
+  String get invTrPrintPick;
+
+  /// No description provided for @invTrReceivedQty.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} received'**
+  String invTrReceivedQty(int count);
+
+  /// No description provided for @invTrGoneReceived.
+  ///
+  /// In en, this message translates to:
+  /// **'Someone already confirmed this transfer.'**
+  String get invTrGoneReceived;
+
+  /// No description provided for @invTrGoneCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'This transfer was cancelled.'**
+  String get invTrGoneCancelled;
+
+  /// No description provided for @inventoryFailTransferNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'This transfer no longer exists.'**
+  String get inventoryFailTransferNotFound;
+
+  /// No description provided for @inventoryFailTransferNotDraft.
+  ///
+  /// In en, this message translates to:
+  /// **'This draft was already sent or cancelled.'**
+  String get inventoryFailTransferNotDraft;
+
+  /// No description provided for @inventoryFailTransferNotInTransit.
+  ///
+  /// In en, this message translates to:
+  /// **'This transfer is no longer in transit.'**
+  String get inventoryFailTransferNotInTransit;
+
+  /// No description provided for @inventoryFailLineNotDisputed.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing is missing for this product.'**
+  String get inventoryFailLineNotDisputed;
+
+  /// No description provided for @inventoryFailLineAlreadyResolved.
+  ///
+  /// In en, this message translates to:
+  /// **'Someone already decided on this product.'**
+  String get inventoryFailLineAlreadyResolved;
+
+  /// No description provided for @inventoryFailStoreHasTransfers.
+  ///
+  /// In en, this message translates to:
+  /// **'Transfers from or to this store are not finished yet. Finish them first.'**
+  String get inventoryFailStoreHasTransfers;
+
+  /// No description provided for @inventoryFailItemInTransfer.
+  ///
+  /// In en, this message translates to:
+  /// **'This product is in a transfer that is not finished yet.'**
+  String get inventoryFailItemInTransfer;
+
+  /// No description provided for @inventoryFailItemNotInTransfer.
+  ///
+  /// In en, this message translates to:
+  /// **'That product is not in this transfer.'**
+  String get inventoryFailItemNotInTransfer;
+
+  /// No description provided for @inventoryFailReceivedTooMany.
+  ///
+  /// In en, this message translates to:
+  /// **'You can\'t receive more than was sent.'**
+  String get inventoryFailReceivedTooMany;
+
+  /// No description provided for @inventoryFailWriteOffReasonInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose why the items are written off.'**
+  String get inventoryFailWriteOffReasonInvalid;
+
+  /// No description provided for @inventoryFailResolutionInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose Return or Write off.'**
+  String get inventoryFailResolutionInvalid;
+
+  /// No description provided for @inventoryFailNoteTooLong.
+  ///
+  /// In en, this message translates to:
+  /// **'The note is too long (300 characters at most).'**
+  String get inventoryFailNoteTooLong;
+
+  /// No description provided for @inventoryFailTransferLinesRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Add at least one product.'**
+  String get inventoryFailTransferLinesRequired;
+
+  /// No description provided for @inventoryFailTransferLinesTooMany.
+  ///
+  /// In en, this message translates to:
+  /// **'A transfer holds at most 100 products.'**
+  String get inventoryFailTransferLinesTooMany;
 }
 
 class _AppLocalizationsDelegate

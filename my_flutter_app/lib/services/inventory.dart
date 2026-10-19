@@ -527,8 +527,19 @@ class InventorySaleCredit {
   final String dueDate;
 }
 
-/// The kinds of stock movement the server records.
+/// The kinds of stock movement the server records. Stores add the instant
+/// `transfer_out` / `transfer_in` pair (old app versions; it reads "Instant
+/// transfer"), and store transfers (v5) add [inventoryTransferMovementTypes].
 const inventoryMovementTypes = ['initial', 'add', 'set', 'sale', 'void'];
+
+/// Movement types written by a store transfer (they carry `transferCode`).
+const inventoryTransferMovementTypes = [
+  'transfer_sent',
+  'transfer_received',
+  'transfer_cancelled',
+  'transfer_returned',
+  'transfer_written_off',
+];
 
 class InventoryMovement {
   const InventoryMovement({
@@ -543,6 +554,8 @@ class InventoryMovement {
     this.createdAt,
     this.storeId = '',
     this.transferId = '',
+    this.transferCode = '',
+    this.counterpartStoreId = '',
   });
 
   factory InventoryMovement.fromMap(String id, Map<String, dynamic> data) =>
@@ -558,6 +571,8 @@ class InventoryMovement {
         createdAt: lotDateOf(data['createdAt']),
         storeId: _text(data['storeId'], 128),
         transferId: _text(data['transferId'], 128),
+        transferCode: _text(data['transferCode'], 20).toUpperCase(),
+        counterpartStoreId: _text(data['counterpartStoreId'], 128),
       );
 
   final String id;
@@ -575,7 +590,19 @@ class InventoryMovement {
   final String storeId;
   final String transferId;
 
+  /// A store transfer's code (`TR-...`) and the other store; both blank on
+  /// the instant transfer and every other movement.
+  final String transferCode;
+  final String counterpartStoreId;
+
   bool get isTransfer => transferId.isNotEmpty || type.startsWith('transfer');
+
+  /// The old one-step move between stores (`transferInventoryStock`): no
+  /// transfer code. It reads "Instant transfer".
+  bool get isInstantTransfer =>
+      isTransfer &&
+      transferCode.isEmpty &&
+      !inventoryTransferMovementTypes.contains(type);
 }
 
 /// Newest first; movements with no time sink to the end.
@@ -1501,6 +1528,7 @@ class InventorySummary {
     this.byCategory = const [],
     this.byBrand = const [],
     this.byStore = const [],
+    this.transfers,
   });
 
   /// Reads `getInventorySummary`'s answer; an unreadable answer is an empty
@@ -1588,6 +1616,10 @@ class InventorySummary {
             profitCents: _int(row['profitCents']),
           ),
       ],
+      // Absent from a server before store transfers: nothing shows.
+      transfers: map['transfers'] is Map
+          ? InventoryTransferTotals.fromMap(callableMap(map['transfers']))
+          : null,
     );
   }
 
@@ -1615,6 +1647,61 @@ class InventorySummary {
   /// What each brand sold, biggest first; the "No brand" line has a blank id.
   final List<InventoryBrandSummary> byBrand;
   final List<InventoryStoreSummary> byStore;
+
+  /// Store transfers now (in transit, disputed) and received in the range;
+  /// null from a server before transfers.
+  final InventoryTransferTotals? transfers;
+}
+
+/// `getInventorySummary`'s `transfers`: what is open now (value at cost,
+/// known costs only) and what was received in the summary's range.
+class InventoryTransferTotals {
+  const InventoryTransferTotals({
+    this.inTransitCount = 0,
+    this.inTransitItems = 0,
+    this.inTransitValueCents = 0,
+    this.disputedCount = 0,
+    this.disputedItems = 0,
+    this.disputedValueCents = 0,
+    this.receivedCount = 0,
+    this.receivedItems = 0,
+    this.receivedWithDifferences = 0,
+    this.linesWithoutCost = 0,
+  });
+
+  factory InventoryTransferTotals.fromMap(Map<String, dynamic> map) {
+    int n(String key) => _int(map[key]) < 0 ? 0 : _int(map[key]);
+    return InventoryTransferTotals(
+      inTransitCount: n('inTransitCount'),
+      inTransitItems: n('inTransitItems'),
+      inTransitValueCents: n('inTransitValueCents'),
+      disputedCount: n('disputedCount'),
+      disputedItems: n('disputedItems'),
+      disputedValueCents: n('disputedValueCents'),
+      receivedCount: n('receivedCount'),
+      receivedItems: n('receivedItems'),
+      receivedWithDifferences: n('receivedWithDifferences'),
+      linesWithoutCost: n('linesWithoutCost'),
+    );
+  }
+
+  final int inTransitCount;
+  final int inTransitItems;
+  final int inTransitValueCents;
+  final int disputedCount;
+  final int disputedItems;
+  final int disputedValueCents;
+  final int receivedCount;
+  final int receivedItems;
+  final int receivedWithDifferences;
+  final int linesWithoutCost;
+
+  bool get showsInTransit => inTransitCount > 0 || inTransitItems > 0;
+  bool get showsDisputed => disputedCount > 0 || disputedItems > 0;
+
+  /// The summary card's line "In transit $X · Disputed $Y": only when
+  /// either has anything.
+  bool get any => showsInTransit || showsDisputed;
 }
 
 // ---------------------------------------------------------------------------
@@ -1671,6 +1758,22 @@ enum InventoryFailure {
   paidNowInvalid,
   customerPhoneInvalid,
   amountInvalid,
+
+  // Store transfers (v5).
+  transferNotFound,
+  transferNotDraft,
+  transferNotInTransit,
+  lineNotDisputed,
+  lineAlreadyResolved,
+  storeHasTransfers,
+  itemInTransfer,
+  itemNotInTransfer,
+  receivedTooMany,
+  writeOffReasonInvalid,
+  resolutionInvalid,
+  noteTooLong,
+  transferLinesRequired,
+  transferLinesTooMany,
 }
 
 /// The v2 and v3 refusal codes (`details.reason`) and the failure each one is.
@@ -1704,6 +1807,20 @@ const inventoryFailureReasons = <String, InventoryFailure>{
   'paid_now_invalid': InventoryFailure.paidNowInvalid,
   'customer_phone_invalid': InventoryFailure.customerPhoneInvalid,
   'amount_invalid': InventoryFailure.amountInvalid,
+  'transfer_not_found': InventoryFailure.transferNotFound,
+  'transfer_not_draft': InventoryFailure.transferNotDraft,
+  'transfer_not_in_transit': InventoryFailure.transferNotInTransit,
+  'line_not_disputed': InventoryFailure.lineNotDisputed,
+  'line_already_resolved': InventoryFailure.lineAlreadyResolved,
+  'store_has_transfers': InventoryFailure.storeHasTransfers,
+  'item_in_transfer': InventoryFailure.itemInTransfer,
+  'item_not_in_transfer': InventoryFailure.itemNotInTransfer,
+  'received_too_many': InventoryFailure.receivedTooMany,
+  'write_off_reason_invalid': InventoryFailure.writeOffReasonInvalid,
+  'resolution_invalid': InventoryFailure.resolutionInvalid,
+  'note_too_long': InventoryFailure.noteTooLong,
+  'transfer_lines_required': InventoryFailure.transferLinesRequired,
+  'transfer_lines_too_many': InventoryFailure.transferLinesTooMany,
 };
 
 /// Reads a failure from the parts of a `FirebaseFunctionsException`: its

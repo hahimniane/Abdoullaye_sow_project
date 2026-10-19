@@ -93,18 +93,15 @@ void main() {
       expect(owner.viewerSeesAll, isTrue);
       expect(owner.ownStoreId, '');
       expect(owner.access.canManageStores, isTrue);
-      expect(owner.access.canTransfer, isTrue);
 
       final all = _ctx(stores, access: const InventoryAccess(allStores: true));
       expect(all.viewerSeesAll, isTrue);
       expect(all.access.canManageStores, isFalse);
-      expect(all.access.canTransfer, isTrue);
 
       final staff = _ctx(stores, access: _staffAtBrooklyn);
       expect(staff.viewerSeesAll, isFalse);
       expect(staff.ownStoreId, 's-bk');
       expect(staff.homeStoreMissing, isFalse);
-      expect(staff.access.canTransfer, isFalse);
       expect(staff.storeName('s-bk'), 'Brooklyn');
       expect(staff.storeName('s-old'), '');
 
@@ -847,70 +844,6 @@ void main() {
         'store_name_too_long',
       ]);
     });
-
-    test('a transfer needs two different stores and a whole number', () {
-      List<String> check(InventoryTransferDraft d) =>
-          validateInventoryTransfer(d);
-      const ok = InventoryTransferDraft(
-        fromStoreId: 's-main',
-        toStoreId: 's-bk',
-        quantity: '3',
-      );
-      expect(check(ok), isEmpty);
-      expect(
-        check(
-          const InventoryTransferDraft(
-            fromStoreId: 's-main',
-            toStoreId: 's-main',
-            quantity: '3',
-          ),
-        ),
-        ['same_store'],
-      );
-      expect(check(const InventoryTransferDraft(quantity: '3')), [
-        'store_required',
-      ]);
-      expect(
-        check(
-          const InventoryTransferDraft(
-            fromStoreId: 'a',
-            toStoreId: 'b',
-            quantity: '0',
-          ),
-        ),
-        ['quantity_invalid'],
-      );
-      expect(
-        check(
-          const InventoryTransferDraft(
-            fromStoreId: 'a',
-            toStoreId: 'b',
-            quantity: '1.5',
-          ),
-        ),
-        ['quantity_invalid'],
-      );
-      expect(transferInventoryStockRequest('b1', 'i1', ok), {
-        'businessId': 'b1',
-        'itemId': 'i1',
-        'fromStoreId': 's-main',
-        'toStoreId': 's-bk',
-        'quantity': 3,
-      });
-      expect(
-        transferInventoryStockRequest(
-          'b1',
-          'i1',
-          const InventoryTransferDraft(
-            fromStoreId: 'a',
-            toStoreId: 'b',
-            quantity: '2',
-            note: ' box ',
-          ),
-        )['note'],
-        'box',
-      );
-    });
   });
 
   group('the service sends the contract names', () {
@@ -951,15 +884,6 @@ void main() {
         homeStoreId: 's9',
         allStores: false,
       );
-      await service.transfer(
-        'b1',
-        'i1',
-        const InventoryTransferDraft(
-          fromStoreId: 'a',
-          toStoreId: 'b',
-          quantity: '2',
-        ),
-      );
       expect(log.map((c) => c.$1), [
         'createInventoryCategory',
         'renameInventoryCategory',
@@ -968,7 +892,6 @@ void main() {
         'updateInventoryStore',
         'archiveInventoryStore',
         'setInventoryStaffAccess',
-        'transferInventoryStock',
       ]);
       expect(log[4].$2, {
         'businessId': 'b1',
@@ -1024,9 +947,10 @@ void main() {
         failure('owner_only', code: 'permission-denied'),
         InventoryFailure.ownerOnly,
       );
-      // The twelve of v2, the four brand codes of v3, and the thirteen of
-      // "received by" and credit sales (inventory_credit_test.dart).
-      expect(inventoryFailureReasons.keys, hasLength(29));
+      // The twelve of v2, the four brand codes of v3, the thirteen of
+      // "received by" and credit sales (inventory_credit_test.dart), and the
+      // fourteen of store transfers (inventory_transfers_test.dart).
+      expect(inventoryFailureReasons.keys, hasLength(43));
     });
 
     test('a refusal carrying several codes is read by any of ours', () {

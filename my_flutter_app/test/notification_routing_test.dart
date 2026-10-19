@@ -410,6 +410,74 @@ void businessRoutingTests() {
       );
     });
 
+    test('a store transfer opens the transfers list on that transfer', () {
+      for (final kind in [
+        'sent',
+        'cancelled',
+        'differences',
+        'transit_reminder',
+        'dispute_reminder',
+      ]) {
+        final route = routeForNotificationData({
+          'type': 'inventory_transfer',
+          'kind': kind,
+          'businessId': 'biz-1',
+          'transferId': 'tr-1',
+          'code': 'TR-4K8Q2A',
+          'fromStoreId': 's-bx',
+          'toStoreId': 's-hl',
+          'relatedCollection': 'inventoryTransfers',
+          'relatedId': 'tr-1',
+        }, audience: business);
+        expect(route?.name, '/inventory-transfers', reason: kind);
+        final args = route?.arguments as InventoryTransfersArguments;
+        expect(args.transferId, 'tr-1');
+        expect(args.kind, kind);
+      }
+      // relatedId alone is enough.
+      final related = routeForNotificationData(
+        {'type': 'inventory_transfer', 'relatedId': 'tr-2'},
+        audience: business,
+      );
+      expect((related?.arguments as InventoryTransfersArguments).transferId,
+          'tr-2');
+      // No id: the list, with nothing to open.
+      final bare = routeForNotificationData(
+        {'type': 'inventory_transfer'},
+        audience: business,
+      );
+      expect(bare?.name, '/inventory-transfers');
+      expect((bare?.arguments as InventoryTransfersArguments).transferId,
+          isNull);
+      // A customer has no transfers.
+      expect(
+        routeForNotificationData(
+          {'type': 'inventory_transfer', 'transferId': 'tr-1'},
+        ),
+        isNull,
+      );
+      // The tap waits for the role, then opens it.
+      expect(
+        decideNotificationTap(
+          {'type': 'inventory_transfer', 'transferId': 'tr-1'},
+          appReady: true,
+          audience: null,
+        ).action,
+        NotificationTapAction.wait,
+      );
+      final decision = decideNotificationTap(
+        {'type': 'inventory_transfer', 'transferId': 'tr-1'},
+        appReady: true,
+        audience: business,
+      );
+      expect(decision.action, NotificationTapAction.open);
+      expect(decision.route?.name, '/inventory-transfers');
+      // Pushed by name on the root navigator: it must be a MaterialApp route.
+      final main = File('lib/main.dart').readAsStringSync();
+      expect(main, contains("'/inventory-transfers': (context)"));
+      expect(main, contains('args is InventoryTransfersArguments'));
+    });
+
     test('a customer still gets the customer screens for shared types', () {
       expect(routeForNotificationData({'type': 'car_viewing_status'})?.name,
           '/my-viewings');

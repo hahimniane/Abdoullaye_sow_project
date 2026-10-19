@@ -18,6 +18,7 @@ import '../widgets/inventory_widgets.dart';
 import '../widgets/lot_sheets.dart';
 import 'containers_screen.dart' show ContainerSheetAction;
 import 'inventory_item_sheets.dart';
+import 'inventory_transfer_compose_screen.dart';
 
 /// One product: its price, cost and count, the actions on it (add stock, set
 /// the count, edit, print tags, archive, delete) and its stock history - who
@@ -29,8 +30,9 @@ import 'inventory_item_sheets.dart';
 ///
 /// In a business with several stores the count is per store: staff see their
 /// own store's count; the owner and "works in all stores" staff see the total
-/// with each store's count, a store filter, and can transfer stock. A
-/// single-store business sees none of that.
+/// with each store's count and a store filter. Anyone who may send from a
+/// store gets "Send to another store", which opens a new transfer with this
+/// product. A single-store business sees none of that.
 class InventoryItemScreen extends StatefulWidget {
   const InventoryItemScreen({
     super.key,
@@ -175,21 +177,22 @@ class _InventoryItemScreenState extends State<InventoryItemScreen> {
     }
   }
 
-  Future<void> _transfer(InventoryItem item) async {
-    final l10n = AppLocalizations.of(context)!;
-    final moved = await showInventoryTransferSheet(
-      context,
-      businessId: widget.businessId,
-      item: item,
-      stores: _watcher.context,
-      stock: _watcher.stock,
-      service: widget.service,
-      initialFromStoreId: _storeFilter,
-    );
-    if (moved == true && mounted) {
-      showSuccessSnackBar(context, l10n.inventoryTransferDone);
-    }
-  }
+  /// A new store transfer that starts with this product, from the store in
+  /// view (staff: their own store).
+  Future<void> _sendToStore(InventoryItem item) => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => InventoryTransferComposeScreen(
+            businessId: widget.businessId,
+            source: _source,
+            service: widget.service,
+            access: widget.access,
+            initialItem: item,
+            initialFromStoreId: _storeFilter.isNotEmpty
+                ? _storeFilter
+                : _watcher.context.homeStoreId,
+          ),
+        ),
+      );
 
   Future<void> _edit(InventoryItem item) async {
     final l10n = AppLocalizations.of(context)!;
@@ -444,12 +447,12 @@ class _InventoryItemScreenState extends State<InventoryItemScreen> {
           label: l10n.inventorySetCount,
           onTap: busy ? () {} : () => _addStock(item, add: false),
         ),
-        if (stores.viewerSeesAll && widget.access.canTransfer)
+        if (stores.multi && !stores.homeStoreMissing)
           ContainerSheetAction(
-            key: const Key('inv-act-transfer'),
-            icon: Icons.swap_horiz,
-            label: l10n.inventoryTransfer,
-            onTap: busy ? () {} : () => _transfer(item),
+            key: const Key('inv-act-send-to-store'),
+            icon: Icons.local_shipping_outlined,
+            label: l10n.invTrSendToStore,
+            onTap: busy ? () {} : () => _sendToStore(item),
           ),
         ContainerSheetAction(
           key: const Key('inv-act-tags'),
@@ -510,6 +513,7 @@ class _InventoryItemScreenState extends State<InventoryItemScreen> {
                   by: inventoryStaffName(_staff, move.byStaffId),
                   locale: locale,
                   store: stores.multi ? stores.storeName(move.storeId) : '',
+                  counterpart: stores.storeName(move.counterpartStoreId),
                 ),
             ],
           ),
@@ -586,6 +590,7 @@ class _MovementRow extends StatelessWidget {
     required this.by,
     required this.locale,
     this.store = '',
+    this.counterpart = '',
   });
 
   final InventoryMovement movement;
@@ -595,6 +600,9 @@ class _MovementRow extends StatelessWidget {
   /// The store whose count moved, named only in a multi-store business.
   final String store;
 
+  /// A store transfer's other store.
+  final String counterpart;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -602,6 +610,9 @@ class _MovementRow extends StatelessWidget {
         ? ''
         : displayDateTime(movement.createdAt!, locale);
     final detail = [
+      if (movement.transferCode.isNotEmpty)
+        [movement.transferCode, if (counterpart.isNotEmpty) counterpart]
+            .join(' · '),
       l10n.inventoryMoveNow(movement.quantityAfter),
       if (store.isNotEmpty) l10n.inventoryMoveAtStore(store),
       if (by.isNotEmpty) l10n.inventoryByName(by),
@@ -631,11 +642,9 @@ class _MovementRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  // Both sides of a transfer read "Transfer", whatever type the
-                  // server gave the rows.
-                  movement.isTransfer
-                      ? l10n.inventoryMoveTransfer
-                      : inventoryMovementLabel(l10n, movement.type),
+                  // The old one-step move reads "Instant transfer"; a store
+                  // transfer says which step moved the count.
+                  inventoryMovementTitle(l10n, movement),
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,

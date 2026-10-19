@@ -38,6 +38,22 @@ void main() {
       isFalse,
     );
     expect(creditOff.inventorySales, isTrue);
+    // Store transfers: on by default, its own switch.
+    expect(prefs.inventoryTransfers, isTrue);
+    expect(
+      NotificationPreferences.fromMap({'inventoryCredit': false})
+          .inventoryTransfers,
+      isTrue,
+    );
+    final transfersOff =
+        NotificationPreferences.defaults.copyWith(inventoryTransfers: false);
+    expect(transfersOff.toMap()['inventoryTransfers'], isFalse);
+    expect(
+      NotificationPreferences.fromMap(transfersOff.toMap()).inventoryTransfers,
+      isFalse,
+    );
+    expect(transfersOff.inventorySales, isTrue);
+    expect(transfersOff.inventoryCredit, isTrue);
   });
 
   test('notification preferences serialize and preserve disabled values', () {
@@ -60,6 +76,7 @@ void main() {
       'supportCaseUpdates': true,
       'inventorySales': true,
       'inventoryCredit': true,
+      'inventoryTransfers': true,
     });
     expect(
       NotificationPreferences.fromMap(prefs.toMap()).shipmentActivity,

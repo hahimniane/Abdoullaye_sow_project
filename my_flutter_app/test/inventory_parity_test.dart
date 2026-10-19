@@ -49,6 +49,8 @@ void main() {
       'setBusinessInventoryService',
       // A one-off server clean-up of legacy typed categories; no screen calls it.
       'syncInventoryCategories',
+      // kept on the server for old app versions; new builds send transfers
+      'transferInventoryStock',
     };
     final contracted = RegExp(r'`(\w+Inventory\w*|\w*Inventory\w+)\s*[\{\(]')
         .allMatches(doc)
@@ -73,12 +75,19 @@ void main() {
       'updateInventoryStore',
       'archiveInventoryStore',
       'setInventoryStaffAccess',
-      'transferInventoryStock',
       // Brands (v3).
       'createInventoryBrand',
       'renameInventoryBrand',
       'archiveInventoryBrand',
+      // Store transfers (v5).
+      'saveInventoryTransferDraft',
+      'sendInventoryTransfer',
+      'cancelInventoryTransfer',
+      'receiveInventoryTransfer',
+      'resolveInventoryTransferLine',
     ]));
+    // The instant move is no longer offered: new builds send transfers.
+    expect(service, isNot(contains("'transferInventoryStock'")));
     final callers = '$service\n$pure';
     for (final name in contracted) {
       expect(callers, contains("'$name'"),
@@ -267,7 +276,34 @@ void main() {
           credit,
         );
       }
-      expect(inventoryFailureReasons.keys.toSet(), {...all, ...credit});
+      // Store transfers (v5): every new refusal code of its "Refusal kinds"
+      // line, plus `transfer_lines_*` that the line lists too.
+      const transfers = {
+        'transfer_not_found',
+        'transfer_not_draft',
+        'transfer_not_in_transit',
+        'line_not_disputed',
+        'line_already_resolved',
+        'store_has_transfers',
+        'item_in_transfer',
+        'item_not_in_transfer',
+        'received_too_many',
+        'write_off_reason_invalid',
+        'resolution_invalid',
+        'note_too_long',
+        'transfer_lines_required',
+        'transfer_lines_too_many',
+      };
+      final v5 = doc.substring(doc.indexOf('# Store transfers (v5)'));
+      final kinds = v5.substring(v5.indexOf('Refusal kinds:'));
+      for (final code in transfers) {
+        expect(kinds.substring(0, kinds.indexOf('\n')), contains('`$code`'),
+            reason: '$code is a v5 refusal');
+      }
+      expect(
+        inventoryFailureReasons.keys.toSet(),
+        {...all, ...credit, ...transfers},
+      );
       final widgets = read('lib/widgets/inventory_widgets.dart');
       final en = jsonDecode(read('lib/l10n/app_en.arb')) as Map<String, dynamic>;
       final fr = jsonDecode(read('lib/l10n/app_fr.arb')) as Map<String, dynamic>;
@@ -308,6 +344,73 @@ void main() {
       expect(sheets, contains('inventorySaveAndAddAnother'));
       // No new callable for it: the same createInventoryItem.
       expect(v3, contains('Client-only'));
+    });
+  });
+
+  group('store transfers (v5)', () {
+    final v5 = doc.substring(doc.indexOf('# Store transfers (v5)'));
+    final transfers = read('lib/services/inventory_transfers.dart');
+    final main = read('lib/main.dart');
+    final routing = read('lib/services/notification_routing.dart');
+
+    test('the five callables, the collection and the reads', () {
+      for (final name in [
+        'saveInventoryTransferDraft',
+        'sendInventoryTransfer',
+        'cancelInventoryTransfer',
+        'receiveInventoryTransfer',
+        'resolveInventoryTransferLine',
+      ]) {
+        expect(v5, contains('`$name {'), reason: '$name is in the contract');
+        expect(service, contains("'$name'"), reason: '$name is called');
+      }
+      expect(v5, contains('`inventoryTransfers/{transferId}`'));
+      expect(service, contains("collection: 'inventoryTransfers'"));
+      // Staff of one store: from it and to it, two queries merged.
+      expect(service, contains("const ['fromStoreId', 'toStoreId']"));
+      expect(service, contains("'stage',"));
+      // The lists are computed by the pure module the contract names.
+      expect(v5, contains('app `lib/services/inventory_transfers.dart`'));
+      expect(transfers, contains('class InventoryTransferLists'));
+    });
+
+    test('the push opens the route the contract names, with its arguments',
+        () {
+      expect(v5, contains('`/inventory-transfers`'));
+      expect(v5, contains('type: "inventory_transfer"'));
+      expect(routing, contains("case 'inventory_transfer':"));
+      expect(routing, contains('class InventoryTransfersArguments'));
+      expect(main, contains("'/inventory-transfers': (context)"));
+    });
+
+    test('the preference, its words, and the movement types', () {
+      expect(v5, contains('`inventoryTransfers` ("Store transfers"'));
+      expect(
+        read('lib/models/notification_preferences.dart'),
+        contains("'inventoryTransfers'"),
+      );
+      expect(
+        read('lib/screens/account_profile_screen.dart'),
+        contains('_preferences.copyWith(inventoryTransfers: value)'),
+      );
+      final en = jsonDecode(read('lib/l10n/app_en.arb')) as Map<String, dynamic>;
+      final fr = jsonDecode(read('lib/l10n/app_fr.arb')) as Map<String, dynamic>;
+      expect(en['invTrNotifications'], 'Store transfers');
+      expect(fr['invTrNotifications'], 'Transferts entre magasins');
+      expect(en['invTrNotAvailable'], 'That transfer is not available.');
+      expect(fr['invTrNotAvailable'], 'Ce transfert n’est pas disponible.');
+      expect(en['invTrMoveInstant'], 'Instant transfer');
+      final widgets = read('lib/widgets/inventory_widgets.dart');
+      for (final type in [
+        'transfer_sent',
+        'transfer_received',
+        'transfer_cancelled',
+        'transfer_returned',
+        'transfer_written_off',
+      ]) {
+        expect(v5, contains('`$type`'), reason: type);
+        expect(widgets, contains("'$type' =>"), reason: '$type has words');
+      }
     });
   });
 

@@ -11,6 +11,7 @@ import 'firestore_query_spec.dart';
 import 'inventory.dart';
 import 'inventory_credit.dart';
 import 'inventory_stores.dart';
+import 'inventory_transfers.dart';
 import 'lot_ledger.dart' show LotStaff, personDisplayName;
 import 'waiting_package_service.dart';
 
@@ -188,6 +189,156 @@ FirestoreQuerySpec inventoryCreditPaymentsSpec(
       QueryFilterSpec('storeId', QueryFilterOp.equal, storeId),
   ],
 );
+
+/// Transfers between stores (docs/INVENTORY.md, store transfers v5): the
+/// stages a list still has to act on.
+const inventoryTransferOpenStages = ['draft', 'in_transit', 'review'];
+
+/// The newest transfers a list shows besides the open ones: 100 for someone
+/// who sees every store, 50 from and 50 to a one-store staff member's store.
+const inventoryTransfersRecentLimit = 100;
+const inventoryTransfersRecentStoreLimit = 50;
+
+/// The open transfers (draft, in transit, in review), whole. A staff member
+/// tied to one store [storeId] reads two queries - from it and to it - and
+/// merges them: the rules refuse an unscoped list. Equalities plus
+/// `stage in`, served by `inventoryTransfers (businessId, stage)` and the
+/// store-field variants.
+List<FirestoreQuerySpec> inventoryTransfersOpenSpecs(
+  String businessId, {
+  String storeId = '',
+}) => [
+  for (final field in storeId.isEmpty
+      ? const ['']
+      : const ['fromStoreId', 'toStoreId'])
+    FirestoreQuerySpec(
+      collection: 'inventoryTransfers',
+      filters: [
+        QueryFilterSpec('businessId', QueryFilterOp.equal, businessId),
+        if (field.isNotEmpty)
+          QueryFilterSpec(field, QueryFilterOp.equal, storeId),
+        const QueryFilterSpec(
+          'stage',
+          QueryFilterOp.whereIn,
+          inventoryTransferOpenStages,
+        ),
+      ],
+    ),
+];
+
+/// The newest transfers, newest first: one page of 100, or 50 from and 50 to
+/// a one-store staff member's store. Needs `inventoryTransfers (businessId,
+/// createdAt desc)` and the `fromStoreId` / `toStoreId` variants.
+List<FirestoreQuerySpec> inventoryTransfersRecentSpecs(
+  String businessId, {
+  String storeId = '',
+}) => [
+  for (final field in storeId.isEmpty
+      ? const ['']
+      : const ['fromStoreId', 'toStoreId'])
+    FirestoreQuerySpec(
+      collection: 'inventoryTransfers',
+      filters: [
+        QueryFilterSpec('businessId', QueryFilterOp.equal, businessId),
+        if (field.isNotEmpty)
+          QueryFilterSpec(field, QueryFilterOp.equal, storeId),
+      ],
+      orderBy: 'createdAt',
+      descending: true,
+      limit: field.isEmpty
+          ? inventoryTransfersRecentLimit
+          : inventoryTransfersRecentStoreLimit,
+    ),
+];
+
+/// What the transfer screens read, behind its own interface (like
+/// [InventoryCreditSource]) so a screen without transfers needs none of it
+/// and a widget test serves its own rows. Every write is a callable through
+/// [InventoryService].
+abstract interface class InventoryTransferSource {
+  /// Draft, in transit and in review ([storeId]: from or to that store only,
+  /// merged).
+  Stream<List<InventoryTransfer>> watchOpenTransfers(
+    String businessId, {
+    String storeId = '',
+  });
+
+  /// The newest transfers, whatever their stage ([storeId] as above).
+  Stream<List<InventoryTransfer>> watchRecentTransfers(
+    String businessId, {
+    String storeId = '',
+  });
+
+  /// One transfer by id, live: null when there is none. Fails when the rules
+  /// do not let this person read it; the caller still checks
+  /// `inventoryTransferVisible`.
+  Stream<InventoryTransfer?> watchTransfer(String businessId, String transferId);
+}
+
+class FirestoreInventoryTransferSource implements InventoryTransferSource {
+  FirestoreInventoryTransferSource({FirebaseFirestore? firestore})
+    : _override = firestore;
+
+  final FirebaseFirestore? _override;
+  FirebaseFirestore get _db => _override ?? FirebaseFirestore.instance;
+
+  Stream<List<InventoryTransfer>> _merged(List<FirestoreQuerySpec> specs) {
+    try {
+      final streams = [
+        for (final spec in specs)
+          spec
+              .build(_db)
+              .snapshots()
+              .map(
+                (snap) => [
+                  for (final d in snap.docs)
+                    InventoryTransfer.fromMap(d.id, d.data()),
+                ],
+              ),
+      ];
+      return streams.length == 1
+          ? streams.single
+          : mergeLiveById<InventoryTransfer>(streams, (t) => t.id);
+    } catch (error) {
+      // No Firebase (a widget test that did not hand a source in): the
+      // screens treat it as nothing to show.
+      return Stream.error(error);
+    }
+  }
+
+  @override
+  Stream<List<InventoryTransfer>> watchOpenTransfers(
+    String businessId, {
+    String storeId = '',
+  }) => _merged(inventoryTransfersOpenSpecs(businessId, storeId: storeId));
+
+  @override
+  Stream<List<InventoryTransfer>> watchRecentTransfers(
+    String businessId, {
+    String storeId = '',
+  }) => _merged(inventoryTransfersRecentSpecs(businessId, storeId: storeId));
+
+  @override
+  Stream<InventoryTransfer?> watchTransfer(
+    String businessId,
+    String transferId,
+  ) {
+    try {
+      return _db
+          .collection('inventoryTransfers')
+          .doc(transferId)
+          .snapshots()
+          .map((doc) {
+            final data = doc.data();
+            return doc.exists && data != null
+                ? InventoryTransfer.fromMap(doc.id, data)
+                : null;
+          });
+    } catch (error) {
+      return Stream.error(error);
+    }
+  }
+}
 
 /// The signed-in person's id, '' when there is none (or no Firebase, as in
 /// a widget test). Screens take it as a parameter and fall back to this.
@@ -785,14 +936,81 @@ class InventoryService {
     ),
   );
 
-  /// Moves [InventoryTransferDraft.quantity] of a product between two stores
-  /// (owner and all-stores staff). Totals do not change.
-  Future<void> transfer(
+  // ----- store transfers (v5) -----------------------------------------------
+
+  /// Saves the composer as a draft (the same key updates the same draft). A
+  /// draft reserves nothing.
+  Future<InventoryTransferSendResult> saveTransferDraft(
     String businessId,
-    String itemId,
-    InventoryTransferDraft draft,
-  ) => caller(
-    'transferInventoryStock',
-    transferInventoryStockRequest(businessId, itemId, draft),
+    InventoryTransferComposer composer,
+  ) async => InventoryTransferSendResult.fromCallable(
+    await caller('saveInventoryTransferDraft', composer.request(businessId)),
+  );
+
+  /// Sends it: the pieces leave the source store and are in transit. The
+  /// same key answers the stored transfer (`replayed`), never a second one.
+  Future<InventoryTransferSendResult> sendTransfer(
+    String businessId,
+    InventoryTransferComposer composer,
+  ) async => InventoryTransferSendResult.fromCallable(
+    await caller('sendInventoryTransfer', composer.request(businessId)),
+  );
+
+  /// Cancels a transfer in transit (its pieces go back to the source) or
+  /// discards a draft.
+  Future<void> cancelTransfer({
+    required String businessId,
+    required String transferId,
+    required String requestId,
+  }) => caller(
+    'cancelInventoryTransfer',
+    cancelInventoryTransferRequest(
+      businessId: businessId,
+      transferId: transferId,
+      requestId: requestId,
+    ),
+  );
+
+  /// Confirms what arrived ([counted]: pieces per product).
+  Future<InventoryTransferReceiveResult> receiveTransfer({
+    required String businessId,
+    required InventoryTransfer transfer,
+    required Map<String, int> counted,
+    required String requestId,
+    String note = '',
+  }) async => InventoryTransferReceiveResult.fromCallable(
+    await caller(
+      'receiveInventoryTransfer',
+      receiveInventoryTransferRequest(
+        businessId: businessId,
+        transfer: transfer,
+        counted: counted,
+        requestId: requestId,
+        note: note,
+      ),
+    ),
+  );
+
+  /// The owner's decision on one missing line: return it to the source
+  /// store, or write it off with a reason.
+  Future<void> resolveTransferLine({
+    required String businessId,
+    required String transferId,
+    required String itemId,
+    required bool writeOff,
+    required String requestId,
+    String reason = '',
+    String note = '',
+  }) => caller(
+    'resolveInventoryTransferLine',
+    resolveInventoryTransferLineRequest(
+      businessId: businessId,
+      transferId: transferId,
+      itemId: itemId,
+      writeOff: writeOff,
+      requestId: requestId,
+      reason: reason,
+      note: note,
+    ),
   );
 }

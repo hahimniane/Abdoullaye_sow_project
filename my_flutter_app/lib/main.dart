@@ -30,6 +30,7 @@ import 'screens/business_record_screen.dart';
 import 'screens/business_reviews_screen.dart';
 import 'screens/business_transport_screen.dart';
 import 'screens/inventory_sales_screen.dart';
+import 'screens/inventory_transfers_screen.dart';
 import 'services/business_service_overview.dart';
 import 'screens/park_car_screen.dart';
 import 'screens/send_barrel_screen.dart';
@@ -392,6 +393,20 @@ class MyApp extends StatelessWidget {
                   businessId: auth.businessId ?? '',
                   access: auth.inventoryAccess,
                   saleId: args is InventorySalesArguments ? args.saleId : null,
+                );
+              },
+              // A store transfer notification: the transfers list, as the
+              // person would see it from Inventory, opened on that transfer
+              // when they may see it.
+              '/inventory-transfers': (context) {
+                final auth = context.read<AuthProvider>();
+                final args = ModalRoute.of(context)?.settings.arguments;
+                return InventoryTransfersScreen(
+                  businessId: auth.businessId ?? '',
+                  access: auth.inventoryAccess,
+                  transferId: args is InventoryTransfersArguments
+                      ? args.transferId
+                      : null,
                 );
               },
               '/business-reviews': (context) {

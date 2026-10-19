@@ -349,3 +349,13 @@ Add future project conventions and repeated architectural decisions here.
   baril / carton / autre, a piece in general "colis" (all clients and the
   server's WhatsApp words). Nobody is shown by uid: `personDisplayName`
   (fullName, displayName, name, email), then "Team member" / "Business owner".
+- Store transfers (docs/INVENTORY.md v5): pure rules in
+  `lib/services/inventory_transfers.dart` (model, tabs and counts, card
+  state, permissions mirroring the callables, requests, refusals), reads
+  behind their own `InventoryTransferSource` (not `InventorySource`: seven
+  test fakes implement that), subscriptions owned by `InventoryTransferFeed`,
+  which reads nothing until the stores are known and nothing in a
+  single-store business. Staff of one store read `fromStoreId ==` and
+  `toStoreId ==` and merge (`mergeLiveById` in `firestore_query_spec.dart`);
+  the rules refuse an unscoped list. A new read surface for a new collection
+  gets its own source interface the same way.

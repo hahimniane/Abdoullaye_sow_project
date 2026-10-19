@@ -5553,7 +5553,6 @@
       }
     }
   },
-  "inventoryMoveTransfer": "Transfer",
   "inventoryMoveAtStore": "at {store}",
   "@inventoryMoveAtStore": {
     "placeholders": {
@@ -5570,12 +5569,8 @@
       }
     }
   },
-  "inventoryTransfer": "Transfer stock",
-  "inventoryTransferHelp": "Move units from one store to another. The total stays the same.",
   "inventoryTransferFrom": "From",
   "inventoryTransferTo": "To",
-  "inventoryTransferGo": "Move stock",
-  "inventoryTransferDone": "Stock moved.",
   "inventoryStaffAccessTitle": "Inventory stores",
   "inventoryStaffAccessHelp": "Choose where this person sells and counts stock.",
   "inventoryHomeStore": "Home store",
@@ -7200,5 +7195,596 @@
         "type": "String"
       }
     }
-  }
+  },
+  "invTrTitle": "Transfers",
+  "invTrNew": "New transfer",
+  "invTrNotifications": "Store transfers",
+  "invTrSendToStore": "Send to another store",
+  "invTrNeedsStores": "Transfers need two or more stores.",
+  "invTrEntryHint": "Send stock to another store",
+  "invTrEntryCounts": "Incoming {incoming} · Review {review}",
+  "@invTrEntryCounts": {
+    "placeholders": {
+      "incoming": {
+        "type": "int"
+      },
+      "review": {
+        "type": "int"
+      }
+    }
+  },
+  "invTrTabOutgoing": "Outgoing",
+  "invTrTabIncoming": "Incoming",
+  "invTrTabInTransit": "In transit",
+  "invTrTabReview": "Review",
+  "invTrEmptyOutgoing": "Nothing sent from here yet.",
+  "invTrEmptyIncoming": "Nothing on its way here.",
+  "invTrEmptyInTransit": "Nothing in transit.",
+  "invTrEmptyReview": "Nothing to review.",
+  "invTrEmptyHint": "Send stock to another store with New transfer.",
+  "invTrIncomingHint": "Something arriving? It's under Incoming. Open it and tap Confirm received.",
+  "invTrLoadFailed": "Transfers could not be loaded.",
+  "invTrNotAvailable": "That transfer is not available.",
+  "invTrItems": "{count, plural, =1{1 item} other{{count} items}}",
+  "@invTrItems": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "invTrProducts": "{count, plural, =1{1 product} other{{count} products}}",
+  "@invTrProducts": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "invTrNotSent": "not sent · nothing reserved yet",
+  "invTrSentOnBy": "sent {date} by {name}",
+  "@invTrSentOnBy": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrReceivedOf": "{received} of {sent} received",
+  "@invTrReceivedOf": {
+    "placeholders": {
+      "received": {
+        "type": "int"
+      },
+      "sent": {
+        "type": "int"
+      }
+    }
+  },
+  "invTrMissingN": "{count} missing",
+  "@invTrMissingN": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "invTrOnBy": "{date} by {name}",
+  "@invTrOnBy": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrCancelledOnBy": "cancelled {date} by {name}",
+  "@invTrCancelledOnBy": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrStateDraft": "Draft",
+  "invTrStateInTransit": "In transit",
+  "invTrStateLate": "In transit {days} days",
+  "@invTrStateLate": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "invTrStateReview": "Needs review",
+  "invTrStateReceived": "Received",
+  "invTrStateSettled": "Settled",
+  "invTrStateCancelled": "Cancelled",
+  "invTrResultComplete": "Complete",
+  "invTrResultDisputed": "{count} missing · disputed",
+  "@invTrResultDisputed": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "invTrResultReturned": "{count} returned to {store}",
+  "@invTrResultReturned": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrResultWrittenOff": "{count} written off · {reason}",
+  "@invTrResultWrittenOff": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrReasonLost": "Lost in transit",
+  "invTrReasonDamaged": "Damaged",
+  "invTrReasonStolen": "Stolen",
+  "invTrReasonOther": "Other",
+  "invTrEvDraftCreated": "Draft started by {name}",
+  "@invTrEvDraftCreated": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrEvSent": "Sent by {name} ({items})",
+  "@invTrEvSent": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "items": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrEvCancelled": "Cancelled by {name}: {items} back in {store}",
+  "@invTrEvCancelled": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "items": {
+        "type": "String"
+      },
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrEvDiscarded": "Draft discarded by {name}",
+  "@invTrEvDiscarded": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrEvReceivedAll": "{name} confirmed all {count} received",
+  "@invTrEvReceivedAll": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "invTrEvReceivedShort": "{name} confirmed {received} received, {missing} missing",
+  "@invTrEvReceivedShort": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "received": {
+        "type": "int"
+      },
+      "missing": {
+        "type": "int"
+      }
+    }
+  },
+  "invTrEvReturned": "{name} returned {count} of {product} to {store}",
+  "@invTrEvReturned": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      },
+      "product": {
+        "type": "String"
+      },
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrEvWrittenOff": "{name} wrote off {count} of {product}: {reason}",
+  "@invTrEvWrittenOff": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      },
+      "product": {
+        "type": "String"
+      },
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrNoTimeline": "Nothing recorded yet.",
+  "invTrTrackRecord": "Track record",
+  "invTrSummaryInTransit": "In transit {amount}",
+  "@invTrSummaryInTransit": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrSummaryDisputed": "Disputed {amount}",
+  "@invTrSummaryDisputed": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrMoveInstant": "Instant transfer",
+  "invTrMoveSent": "Sent in a transfer",
+  "invTrMoveReceived": "Received from a transfer",
+  "invTrMoveCancelled": "Transfer cancelled",
+  "invTrMoveReturned": "Returned from a transfer",
+  "invTrMoveWrittenOff": "Written off in a transfer",
+  "invTrChooseStore": "Choose a store",
+  "invTrAddProductHint": "Add a product by name",
+  "invTrScanTooltip": "Scan a tag",
+  "invTrScanTitle": "Scan a product tag",
+  "invTrInStore": "{count} in {store}",
+  "@invTrInStore": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrOnlyInStore": "Only {count} in {store}",
+  "@invTrOnlyInStore": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrNoneInStore": "{product}: none in {store}.",
+  "@invTrNoneInStore": {
+    "placeholders": {
+      "product": {
+        "type": "String"
+      },
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrAllOfThem": "That's all of them. You can't send more than the store has.",
+  "invTrNoProductsYet": "No products yet. Add them by name, or scan their tag.",
+  "invTrRemoveLine": "Remove",
+  "invTrLess": "One less",
+  "invTrMore": "One more",
+  "invTrOwnerNotified": "The owner is notified when you send.",
+  "invTrSaveDraft": "Save draft",
+  "invTrSend": "{count, plural, =0{Send} =1{Send 1 item} other{Send {count} items}}",
+  "@invTrSend": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "invTrSending": "Sending…",
+  "invTrDraftSaved": "Draft saved. Nothing is reserved until you send.",
+  "invTrErrTo": "Choose the store to send to.",
+  "invTrErrOverMax": "A product is above what the store holds. Lower it to send.",
+  "invTrContinue": "Continue",
+  "invTrSentTitle": "Transfer sent",
+  "invTrSentTo": "Sent to {store}",
+  "@invTrSentTo": {
+    "placeholders": {
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrSentBody": "{count, plural, =1{1 item is on its way. {store}'s team got a notification and will confirm when it arrives.} other{{count} items are on their way. {store}'s team got a notification and will confirm when they arrive.}}",
+  "@invTrSentBody": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrSentNote": "Until {store} confirms, these items can't be sold in either store. Made a mistake? You can cancel until {store} confirms.",
+  "@invTrSentNote": {
+    "placeholders": {
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrDone": "Done",
+  "invTrReceiveTitle": "Receive transfer",
+  "invTrIncomingAt": "{store} · incoming",
+  "@invTrIncomingAt": {
+    "placeholders": {
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrItemsFrom": "{count, plural, =1{1 item from {store}} other{{count} items from {store}}}",
+  "@invTrItemsFrom": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrReceiveHelp": "Check the box against this list. If a number is different, change it before you confirm.",
+  "invTrSentQty": "Sent {count}",
+  "@invTrSentQty": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "invTrFewer": "{count} fewer than sent",
+  "@invTrFewer": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "invTrReceiveFooter": "Once confirmed, these items can be sold in {store}. Need tags? Print them from the product when you put it on the shelf.",
+  "@invTrReceiveFooter": {
+    "placeholders": {
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrArrivedOf": "{arrived} of {sent} arrived",
+  "@invTrArrivedOf": {
+    "placeholders": {
+      "arrived": {
+        "type": "int"
+      },
+      "sent": {
+        "type": "int"
+      }
+    }
+  },
+  "invTrConfirmReceived": "Confirm received",
+  "invTrConfirming": "Confirming…",
+  "invTrReceivedDone": "Received. These items can be sold in {store} now.",
+  "@invTrReceivedDone": {
+    "placeholders": {
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrReceivedDoneMissing": "Received. The owner was told about the missing items.",
+  "invTrMissingTitle": "{count, plural, =1{1 item didn't arrive} other{{count} items didn't arrive}}",
+  "@invTrMissingTitle": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "invTrMissingBody": "{arrived} of {sent} arrived. The owner will be told about the missing ones.",
+  "@invTrMissingBody": {
+    "placeholders": {
+      "arrived": {
+        "type": "int"
+      },
+      "sent": {
+        "type": "int"
+      }
+    }
+  },
+  "invTrMissingLine": "{product}: sent {sent}, counted {counted}",
+  "@invTrMissingLine": {
+    "placeholders": {
+      "product": {
+        "type": "String"
+      },
+      "sent": {
+        "type": "int"
+      },
+      "counted": {
+        "type": "int"
+      }
+    }
+  },
+  "invTrWhatHappened": "What happened? (optional)",
+  "invTrMissingStayOff": "They stay off the shelves until the owner decides what happened.",
+  "invTrArrivedCanSell": "Everything else arrived and can be sold in {store} now.",
+  "@invTrArrivedCanSell": {
+    "placeholders": {
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrGoBack": "Go back",
+  "invTrConfirmCount": "Confirm {count} received",
+  "@invTrConfirmCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "invTrConfirmedOnBy": "confirmed {date} by {name}",
+  "@invTrConfirmedOnBy": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrStoreNote": "{store}'s note: \"{note}\"",
+  "@invTrStoreNote": {
+    "placeholders": {
+      "store": {
+        "type": "String"
+      },
+      "note": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrCantSell": "{count, plural, =1{This item can't be sold anywhere until you decide.} other{These {count} can't be sold anywhere until you decide.}}",
+  "@invTrCantSell": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "invTrReturnTo": "Return to {store}",
+  "@invTrReturnTo": {
+    "placeholders": {
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrWriteOff": "Write off",
+  "invTrReasonTitle": "Reason for write-off",
+  "invTrNoteOptional": "Note (optional)",
+  "invTrWriteOffCount": "Write off {count}",
+  "@invTrWriteOffCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "invTrReturnedDone": "Returned to {store}.",
+  "@invTrReturnedDone": {
+    "placeholders": {
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrWrittenOffDone": "Written off.",
+  "invTrAllSettled": "Every missing item is decided. This transfer is settled.",
+  "invTrReviewFooter": "Only the owner and all-stores staff can settle differences. Reminders every 2 days until settled.",
+  "invTrReviewAction": "Review missing items",
+  "invTrColProduct": "Product",
+  "invTrColSent": "Sent",
+  "invTrColReceived": "Received",
+  "invTrValueAtCost": "Value at cost: {amount}",
+  "@invTrValueAtCost": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrCancel": "Cancel transfer",
+  "invTrCancelTitle": "Cancel this transfer?",
+  "invTrCancelMessage": "{count, plural, =1{1 item goes back to {store}.} other{{count} items go back to {store}.}}",
+  "@invTrCancelMessage": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "store": {
+        "type": "String"
+      }
+    }
+  },
+  "invTrCancelDone": "Transfer cancelled. The items are back in the store.",
+  "invTrDiscard": "Discard draft",
+  "invTrDiscardTitle": "Discard this draft?",
+  "invTrDiscardMessage": "Nothing was reserved, so nothing changes in the stores.",
+  "invTrDiscardDone": "Draft discarded.",
+  "invTrPrintPick": "Print tags for which product?",
+  "invTrReceivedQty": "{count} received",
+  "@invTrReceivedQty": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "invTrGoneReceived": "Someone already confirmed this transfer.",
+  "invTrGoneCancelled": "This transfer was cancelled.",
+  "inventoryFailTransferNotFound": "This transfer no longer exists.",
+  "inventoryFailTransferNotDraft": "This draft was already sent or cancelled.",
+  "inventoryFailTransferNotInTransit": "This transfer is no longer in transit.",
+  "inventoryFailLineNotDisputed": "Nothing is missing for this product.",
+  "inventoryFailLineAlreadyResolved": "Someone already decided on this product.",
+  "inventoryFailStoreHasTransfers": "Transfers from or to this store are not finished yet. Finish them first.",
+  "inventoryFailItemInTransfer": "This product is in a transfer that is not finished yet.",
+  "inventoryFailItemNotInTransfer": "That product is not in this transfer.",
+  "inventoryFailReceivedTooMany": "You can't receive more than was sent.",
+  "inventoryFailWriteOffReasonInvalid": "Choose why the items are written off.",
+  "inventoryFailResolutionInvalid": "Choose Return or Write off.",
+  "inventoryFailNoteTooLong": "The note is too long (300 characters at most).",
+  "inventoryFailTransferLinesRequired": "Add at least one product.",
+  "inventoryFailTransferLinesTooMany": "A transfer holds at most 100 products."
 }

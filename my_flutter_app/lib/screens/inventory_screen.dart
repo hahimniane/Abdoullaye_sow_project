@@ -7,11 +7,14 @@ import '../services/inventory.dart';
 import '../services/inventory_context.dart';
 import '../services/inventory_service.dart';
 import '../services/inventory_stores.dart';
+import '../services/inventory_transfer_feed.dart';
+import '../services/inventory_transfers.dart';
 import '../services/lot_ledger.dart' show formatLotCents;
 import '../theme/app_colors.dart';
 import '../theme/app_motion.dart';
 import '../theme/app_spacing.dart';
 import '../widgets/app_snackbars.dart';
+import '../widgets/inventory_transfer_widgets.dart';
 import '../widgets/inventory_widgets.dart';
 import '../widgets/lot_sheets.dart';
 import 'containers_screen.dart' show ContainerActionButton;
@@ -24,6 +27,7 @@ import 'sales_history_screen.dart';
 import 'inventory_sales_screen.dart';
 import 'inventory_sell_screen.dart';
 import 'inventory_stores_screen.dart';
+import 'inventory_transfers_screen.dart';
 import 'label_printer_settings_screen.dart';
 import 'print_tags_sheet.dart';
 
@@ -46,6 +50,7 @@ class InventoryScreen extends StatefulWidget {
     this.tagOpener = openInventoryTags,
     this.cameraEnabled = true,
     this.access = const InventoryAccess.owner(),
+    this.transferSource,
   });
 
   final String businessId;
@@ -54,6 +59,10 @@ class InventoryScreen extends StatefulWidget {
   /// which is what a single-store business always sees).
   final InventoryAccess access;
   final InventorySource? source;
+
+  /// Store transfers (read only in a business with two or more stores);
+  /// null reads Firestore.
+  final InventoryTransferSource? transferSource;
   final InventoryService service;
   final InventoryTagOpener tagOpener;
 
@@ -75,6 +84,17 @@ class _InventoryScreenState extends State<InventoryScreen> {
     source: _source,
     businessId: widget.businessId,
     access: widget.access,
+    onChange: () {
+      if (!mounted) return;
+      setState(() {});
+      _transfers.sync(_watcher.context, storesLoaded: _watcher.storesLoaded);
+    },
+  );
+
+  /// The open transfers, for the Transfers button's counts.
+  late final InventoryTransferFeed _transfers = InventoryTransferFeed(
+    source: widget.transferSource ?? FirestoreInventoryTransferSource(),
+    businessId: widget.businessId,
     onChange: () {
       if (mounted) setState(() {});
     },
@@ -136,6 +156,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
   void dispose() {
     _safety?.cancel();
     _watcher.dispose();
+    _transfers.dispose();
     for (final s in _subs) {
       s.cancel();
     }
@@ -416,6 +437,25 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     ),
                   ],
                 ),
+                if (stores.multi && !stores.homeStoreMissing) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  ContainerActionButton(
+                    key: const Key('inv-open-transfers'),
+                    icon: Icons.local_shipping_outlined,
+                    label: _transfersLabel(l10n, stores),
+                    onTap: () => _push(
+                      InventoryTransfersScreen(
+                        businessId: widget.businessId,
+                        source: _source,
+                        transferSource: _transfers.source,
+                        service: widget.service,
+                        access: widget.access,
+                        tagOpener: widget.tagOpener,
+                        cameraEnabled: widget.cameraEnabled,
+                      ),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: AppSpacing.lg),
                 if (stores.viewerSeesAll) ...[
                   InventoryChoiceChips(
@@ -557,6 +597,18 @@ class _InventoryScreenState extends State<InventoryScreen> {
     );
   }
 
+  /// "Transfers", with what is coming in and what waits for a review.
+  String _transfersLabel(AppLocalizations l10n, InventoryStoreContext stores) {
+    final counts = inventoryTransferEntryCounts(
+      _transfers.open,
+      viewer: InventoryTransferViewer(stores: stores),
+      businessId: widget.businessId,
+    );
+    if (counts.incoming == 0 && counts.review == 0) return l10n.invTrTitle;
+    return '${l10n.invTrTitle} · '
+        '${l10n.invTrEntryCounts(counts.incoming, counts.review)}';
+  }
+
   Widget _summaryCard(AppLocalizations l10n, InventoryStoreContext stores) {
     final summary = _summary;
     return Container(
@@ -642,6 +694,15 @@ class _InventoryScreenState extends State<InventoryScreen> {
               key: const Key('inv-summary-detail'),
               style: const TextStyle(fontSize: 12.5, color: AppColors.muted),
             ),
+            if (inventoryTransferSummaryLine(l10n, summary.transfers)
+                .isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                inventoryTransferSummaryLine(l10n, summary.transfers),
+                key: const Key('inv-summary-transfers'),
+                style: const TextStyle(fontSize: 12.5, color: AppColors.muted),
+              ),
+            ],
             if (summary.byCategory.isNotEmpty) ...[
               const SizedBox(height: AppSpacing.md),
               _sectionLabel(l10n.inventoryByCategoryTitle),

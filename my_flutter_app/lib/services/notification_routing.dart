@@ -51,6 +51,20 @@ class InventorySalesArguments {
   final String? storeId;
 }
 
+/// Store transfers, opened from a transfer notification ("Bronx store sent
+/// you 14 items", "2 items didn't arrive", a reminder): the transfers list,
+/// opened on that transfer.
+class InventoryTransfersArguments {
+  const InventoryTransfersArguments({this.transferId, this.kind});
+
+  /// The transfer the notification was about.
+  final String? transferId;
+
+  /// `sent` | `cancelled` | `differences` | `transit_reminder` |
+  /// `dispute_reminder` (null when the payload has none).
+  final String? kind;
+}
+
 /// Where to navigate for a given push notification's `data` payload.
 class NotificationRoute {
   const NotificationRoute(this.name, {this.arguments});
@@ -388,6 +402,18 @@ NotificationRoute? _businessRouteForNotificationData(
           saleId: saleId.isEmpty ? null : saleId,
           storeId: storeId.isEmpty ? null : storeId,
           kind: credit ? 'credit' : null,
+        ),
+      );
+    // A store transfer was sent, cancelled, came up short, or is waiting:
+    // the transfers list, opened on that transfer.
+    case 'inventory_transfer':
+      final transferId = _firstNonEmpty(data, ['transferId', 'relatedId']);
+      final kind = data['kind']?.toString().trim() ?? '';
+      return NotificationRoute(
+        '/inventory-transfers',
+        arguments: InventoryTransfersArguments(
+          transferId: transferId.isEmpty ? null : transferId,
+          kind: kind.isEmpty ? null : kind,
         ),
       );
     default:

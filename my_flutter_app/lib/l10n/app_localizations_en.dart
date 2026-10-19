@@ -11938,9 +11938,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get inventoryMoveTransfer => 'Transfer';
-
-  @override
   String inventoryMoveAtStore(String store) {
     return 'at $store';
   }
@@ -11951,23 +11948,10 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get inventoryTransfer => 'Transfer stock';
-
-  @override
-  String get inventoryTransferHelp =>
-      'Move units from one store to another. The total stays the same.';
-
-  @override
   String get inventoryTransferFrom => 'From';
 
   @override
   String get inventoryTransferTo => 'To';
-
-  @override
-  String get inventoryTransferGo => 'Move stock';
-
-  @override
-  String get inventoryTransferDone => 'Stock moved.';
 
   @override
   String get inventoryStaffAccessTitle => 'Inventory stores';
@@ -14514,4 +14498,627 @@ class AppLocalizationsEn extends AppLocalizations {
   String prqPickupNoteLine(String note) {
     return 'Note: $note';
   }
+
+  @override
+  String get invTrTitle => 'Transfers';
+
+  @override
+  String get invTrNew => 'New transfer';
+
+  @override
+  String get invTrNotifications => 'Store transfers';
+
+  @override
+  String get invTrSendToStore => 'Send to another store';
+
+  @override
+  String get invTrNeedsStores => 'Transfers need two or more stores.';
+
+  @override
+  String get invTrEntryHint => 'Send stock to another store';
+
+  @override
+  String invTrEntryCounts(int incoming, int review) {
+    return 'Incoming $incoming · Review $review';
+  }
+
+  @override
+  String get invTrTabOutgoing => 'Outgoing';
+
+  @override
+  String get invTrTabIncoming => 'Incoming';
+
+  @override
+  String get invTrTabInTransit => 'In transit';
+
+  @override
+  String get invTrTabReview => 'Review';
+
+  @override
+  String get invTrEmptyOutgoing => 'Nothing sent from here yet.';
+
+  @override
+  String get invTrEmptyIncoming => 'Nothing on its way here.';
+
+  @override
+  String get invTrEmptyInTransit => 'Nothing in transit.';
+
+  @override
+  String get invTrEmptyReview => 'Nothing to review.';
+
+  @override
+  String get invTrEmptyHint => 'Send stock to another store with New transfer.';
+
+  @override
+  String get invTrIncomingHint =>
+      'Something arriving? It\'s under Incoming. Open it and tap Confirm received.';
+
+  @override
+  String get invTrLoadFailed => 'Transfers could not be loaded.';
+
+  @override
+  String get invTrNotAvailable => 'That transfer is not available.';
+
+  @override
+  String invTrItems(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count items',
+      one: '1 item',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String invTrProducts(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count products',
+      one: '1 product',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get invTrNotSent => 'not sent · nothing reserved yet';
+
+  @override
+  String invTrSentOnBy(String date, String name) {
+    return 'sent $date by $name';
+  }
+
+  @override
+  String invTrReceivedOf(int received, int sent) {
+    return '$received of $sent received';
+  }
+
+  @override
+  String invTrMissingN(int count) {
+    return '$count missing';
+  }
+
+  @override
+  String invTrOnBy(String date, String name) {
+    return '$date by $name';
+  }
+
+  @override
+  String invTrCancelledOnBy(String date, String name) {
+    return 'cancelled $date by $name';
+  }
+
+  @override
+  String get invTrStateDraft => 'Draft';
+
+  @override
+  String get invTrStateInTransit => 'In transit';
+
+  @override
+  String invTrStateLate(int days) {
+    return 'In transit $days days';
+  }
+
+  @override
+  String get invTrStateReview => 'Needs review';
+
+  @override
+  String get invTrStateReceived => 'Received';
+
+  @override
+  String get invTrStateSettled => 'Settled';
+
+  @override
+  String get invTrStateCancelled => 'Cancelled';
+
+  @override
+  String get invTrResultComplete => 'Complete';
+
+  @override
+  String invTrResultDisputed(int count) {
+    return '$count missing · disputed';
+  }
+
+  @override
+  String invTrResultReturned(int count, String store) {
+    return '$count returned to $store';
+  }
+
+  @override
+  String invTrResultWrittenOff(int count, String reason) {
+    return '$count written off · $reason';
+  }
+
+  @override
+  String get invTrReasonLost => 'Lost in transit';
+
+  @override
+  String get invTrReasonDamaged => 'Damaged';
+
+  @override
+  String get invTrReasonStolen => 'Stolen';
+
+  @override
+  String get invTrReasonOther => 'Other';
+
+  @override
+  String invTrEvDraftCreated(String name) {
+    return 'Draft started by $name';
+  }
+
+  @override
+  String invTrEvSent(String name, String items) {
+    return 'Sent by $name ($items)';
+  }
+
+  @override
+  String invTrEvCancelled(String name, String items, String store) {
+    return 'Cancelled by $name: $items back in $store';
+  }
+
+  @override
+  String invTrEvDiscarded(String name) {
+    return 'Draft discarded by $name';
+  }
+
+  @override
+  String invTrEvReceivedAll(String name, int count) {
+    return '$name confirmed all $count received';
+  }
+
+  @override
+  String invTrEvReceivedShort(String name, int received, int missing) {
+    return '$name confirmed $received received, $missing missing';
+  }
+
+  @override
+  String invTrEvReturned(String name, int count, String product, String store) {
+    return '$name returned $count of $product to $store';
+  }
+
+  @override
+  String invTrEvWrittenOff(
+    String name,
+    int count,
+    String product,
+    String reason,
+  ) {
+    return '$name wrote off $count of $product: $reason';
+  }
+
+  @override
+  String get invTrNoTimeline => 'Nothing recorded yet.';
+
+  @override
+  String get invTrTrackRecord => 'Track record';
+
+  @override
+  String invTrSummaryInTransit(String amount) {
+    return 'In transit $amount';
+  }
+
+  @override
+  String invTrSummaryDisputed(String amount) {
+    return 'Disputed $amount';
+  }
+
+  @override
+  String get invTrMoveInstant => 'Instant transfer';
+
+  @override
+  String get invTrMoveSent => 'Sent in a transfer';
+
+  @override
+  String get invTrMoveReceived => 'Received from a transfer';
+
+  @override
+  String get invTrMoveCancelled => 'Transfer cancelled';
+
+  @override
+  String get invTrMoveReturned => 'Returned from a transfer';
+
+  @override
+  String get invTrMoveWrittenOff => 'Written off in a transfer';
+
+  @override
+  String get invTrChooseStore => 'Choose a store';
+
+  @override
+  String get invTrAddProductHint => 'Add a product by name';
+
+  @override
+  String get invTrScanTooltip => 'Scan a tag';
+
+  @override
+  String get invTrScanTitle => 'Scan a product tag';
+
+  @override
+  String invTrInStore(int count, String store) {
+    return '$count in $store';
+  }
+
+  @override
+  String invTrOnlyInStore(int count, String store) {
+    return 'Only $count in $store';
+  }
+
+  @override
+  String invTrNoneInStore(String product, String store) {
+    return '$product: none in $store.';
+  }
+
+  @override
+  String get invTrAllOfThem =>
+      'That\'s all of them. You can\'t send more than the store has.';
+
+  @override
+  String get invTrNoProductsYet =>
+      'No products yet. Add them by name, or scan their tag.';
+
+  @override
+  String get invTrRemoveLine => 'Remove';
+
+  @override
+  String get invTrLess => 'One less';
+
+  @override
+  String get invTrMore => 'One more';
+
+  @override
+  String get invTrOwnerNotified => 'The owner is notified when you send.';
+
+  @override
+  String get invTrSaveDraft => 'Save draft';
+
+  @override
+  String invTrSend(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Send $count items',
+      one: 'Send 1 item',
+      zero: 'Send',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get invTrSending => 'Sending…';
+
+  @override
+  String get invTrDraftSaved =>
+      'Draft saved. Nothing is reserved until you send.';
+
+  @override
+  String get invTrErrTo => 'Choose the store to send to.';
+
+  @override
+  String get invTrErrOverMax =>
+      'A product is above what the store holds. Lower it to send.';
+
+  @override
+  String get invTrContinue => 'Continue';
+
+  @override
+  String get invTrSentTitle => 'Transfer sent';
+
+  @override
+  String invTrSentTo(String store) {
+    return 'Sent to $store';
+  }
+
+  @override
+  String invTrSentBody(int count, String store) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count items are on their way. $store\'s team got a notification and will confirm when they arrive.',
+      one:
+          '1 item is on its way. $store\'s team got a notification and will confirm when it arrives.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String invTrSentNote(String store) {
+    return 'Until $store confirms, these items can\'t be sold in either store. Made a mistake? You can cancel until $store confirms.';
+  }
+
+  @override
+  String get invTrDone => 'Done';
+
+  @override
+  String get invTrReceiveTitle => 'Receive transfer';
+
+  @override
+  String invTrIncomingAt(String store) {
+    return '$store · incoming';
+  }
+
+  @override
+  String invTrItemsFrom(int count, String store) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count items from $store',
+      one: '1 item from $store',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get invTrReceiveHelp =>
+      'Check the box against this list. If a number is different, change it before you confirm.';
+
+  @override
+  String invTrSentQty(int count) {
+    return 'Sent $count';
+  }
+
+  @override
+  String invTrFewer(int count) {
+    return '$count fewer than sent';
+  }
+
+  @override
+  String invTrReceiveFooter(String store) {
+    return 'Once confirmed, these items can be sold in $store. Need tags? Print them from the product when you put it on the shelf.';
+  }
+
+  @override
+  String invTrArrivedOf(int arrived, int sent) {
+    return '$arrived of $sent arrived';
+  }
+
+  @override
+  String get invTrConfirmReceived => 'Confirm received';
+
+  @override
+  String get invTrConfirming => 'Confirming…';
+
+  @override
+  String invTrReceivedDone(String store) {
+    return 'Received. These items can be sold in $store now.';
+  }
+
+  @override
+  String get invTrReceivedDoneMissing =>
+      'Received. The owner was told about the missing items.';
+
+  @override
+  String invTrMissingTitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count items didn\'t arrive',
+      one: '1 item didn\'t arrive',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String invTrMissingBody(int arrived, int sent) {
+    return '$arrived of $sent arrived. The owner will be told about the missing ones.';
+  }
+
+  @override
+  String invTrMissingLine(String product, int sent, int counted) {
+    return '$product: sent $sent, counted $counted';
+  }
+
+  @override
+  String get invTrWhatHappened => 'What happened? (optional)';
+
+  @override
+  String get invTrMissingStayOff =>
+      'They stay off the shelves until the owner decides what happened.';
+
+  @override
+  String invTrArrivedCanSell(String store) {
+    return 'Everything else arrived and can be sold in $store now.';
+  }
+
+  @override
+  String get invTrGoBack => 'Go back';
+
+  @override
+  String invTrConfirmCount(int count) {
+    return 'Confirm $count received';
+  }
+
+  @override
+  String invTrConfirmedOnBy(String date, String name) {
+    return 'confirmed $date by $name';
+  }
+
+  @override
+  String invTrStoreNote(String store, String note) {
+    return '$store\'s note: \"$note\"';
+  }
+
+  @override
+  String invTrCantSell(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'These $count can\'t be sold anywhere until you decide.',
+      one: 'This item can\'t be sold anywhere until you decide.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String invTrReturnTo(String store) {
+    return 'Return to $store';
+  }
+
+  @override
+  String get invTrWriteOff => 'Write off';
+
+  @override
+  String get invTrReasonTitle => 'Reason for write-off';
+
+  @override
+  String get invTrNoteOptional => 'Note (optional)';
+
+  @override
+  String invTrWriteOffCount(int count) {
+    return 'Write off $count';
+  }
+
+  @override
+  String invTrReturnedDone(String store) {
+    return 'Returned to $store.';
+  }
+
+  @override
+  String get invTrWrittenOffDone => 'Written off.';
+
+  @override
+  String get invTrAllSettled =>
+      'Every missing item is decided. This transfer is settled.';
+
+  @override
+  String get invTrReviewFooter =>
+      'Only the owner and all-stores staff can settle differences. Reminders every 2 days until settled.';
+
+  @override
+  String get invTrReviewAction => 'Review missing items';
+
+  @override
+  String get invTrColProduct => 'Product';
+
+  @override
+  String get invTrColSent => 'Sent';
+
+  @override
+  String get invTrColReceived => 'Received';
+
+  @override
+  String invTrValueAtCost(String amount) {
+    return 'Value at cost: $amount';
+  }
+
+  @override
+  String get invTrCancel => 'Cancel transfer';
+
+  @override
+  String get invTrCancelTitle => 'Cancel this transfer?';
+
+  @override
+  String invTrCancelMessage(int count, String store) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count items go back to $store.',
+      one: '1 item goes back to $store.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get invTrCancelDone =>
+      'Transfer cancelled. The items are back in the store.';
+
+  @override
+  String get invTrDiscard => 'Discard draft';
+
+  @override
+  String get invTrDiscardTitle => 'Discard this draft?';
+
+  @override
+  String get invTrDiscardMessage =>
+      'Nothing was reserved, so nothing changes in the stores.';
+
+  @override
+  String get invTrDiscardDone => 'Draft discarded.';
+
+  @override
+  String get invTrPrintPick => 'Print tags for which product?';
+
+  @override
+  String invTrReceivedQty(int count) {
+    return '$count received';
+  }
+
+  @override
+  String get invTrGoneReceived => 'Someone already confirmed this transfer.';
+
+  @override
+  String get invTrGoneCancelled => 'This transfer was cancelled.';
+
+  @override
+  String get inventoryFailTransferNotFound => 'This transfer no longer exists.';
+
+  @override
+  String get inventoryFailTransferNotDraft =>
+      'This draft was already sent or cancelled.';
+
+  @override
+  String get inventoryFailTransferNotInTransit =>
+      'This transfer is no longer in transit.';
+
+  @override
+  String get inventoryFailLineNotDisputed =>
+      'Nothing is missing for this product.';
+
+  @override
+  String get inventoryFailLineAlreadyResolved =>
+      'Someone already decided on this product.';
+
+  @override
+  String get inventoryFailStoreHasTransfers =>
+      'Transfers from or to this store are not finished yet. Finish them first.';
+
+  @override
+  String get inventoryFailItemInTransfer =>
+      'This product is in a transfer that is not finished yet.';
+
+  @override
+  String get inventoryFailItemNotInTransfer =>
+      'That product is not in this transfer.';
+
+  @override
+  String get inventoryFailReceivedTooMany =>
+      'You can\'t receive more than was sent.';
+
+  @override
+  String get inventoryFailWriteOffReasonInvalid =>
+      'Choose why the items are written off.';
+
+  @override
+  String get inventoryFailResolutionInvalid => 'Choose Return or Write off.';
+
+  @override
+  String get inventoryFailNoteTooLong =>
+      'The note is too long (300 characters at most).';
+
+  @override
+  String get inventoryFailTransferLinesRequired => 'Add at least one product.';
+
+  @override
+  String get inventoryFailTransferLinesTooMany =>
+      'A transfer holds at most 100 products.';
 }

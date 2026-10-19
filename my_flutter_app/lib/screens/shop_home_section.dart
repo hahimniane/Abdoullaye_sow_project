@@ -7,6 +7,8 @@ import '../services/inventory.dart';
 import '../services/inventory_context.dart';
 import '../services/inventory_service.dart';
 import '../services/inventory_stores.dart';
+import '../services/inventory_transfer_feed.dart';
+import '../services/inventory_transfers.dart';
 import '../services/lot_ledger.dart' show LotStaff, formatLotCents;
 import '../services/shop_home.dart';
 import '../theme/app_colors.dart';
@@ -14,6 +16,7 @@ import '../theme/app_motion.dart';
 import '../theme/app_spacing.dart';
 import '../utils/date_display.dart';
 import '../widgets/app_snackbars.dart';
+import '../widgets/inventory_transfer_widgets.dart';
 import '../widgets/inventory_widgets.dart';
 import '../widgets/lot_sheets.dart';
 import 'inventory_credit_screen.dart';
@@ -23,6 +26,7 @@ import 'inventory_item_sheets.dart';
 import 'inventory_sales_screen.dart';
 import 'inventory_screen.dart';
 import 'inventory_sell_screen.dart';
+import 'inventory_transfers_screen.dart';
 import 'print_tags_sheet.dart';
 
 /// The top of the business home for someone who sells at a counter.
@@ -52,6 +56,7 @@ class ShopHomeSection extends StatefulWidget {
     this.tagOpener = openInventoryTags,
     this.cameraEnabled = true,
     this.clock = DateTime.now,
+    this.transferSource,
   });
 
   final String businessId;
@@ -81,6 +86,10 @@ class ShopHomeSection extends StatefulWidget {
   final InventoryService service;
   final InventoryTagOpener tagOpener;
 
+  /// Store transfers (read only in a business with two or more stores);
+  /// null reads Firestore.
+  final InventoryTransferSource? transferSource;
+
   /// Off in widget tests, where there is no camera plugin.
   @visibleForTesting
   final bool cameraEnabled;
@@ -93,8 +102,13 @@ class ShopHomeSection extends StatefulWidget {
 class _ShopHomeSectionState extends State<ShopHomeSection> {
   late final InventorySource _source =
       widget.source ?? FirestoreInventorySource();
+  late final InventoryTransferSource _transferSource =
+      widget.transferSource ?? FirestoreInventoryTransferSource();
 
   InventoryContextWatcher? _watcher;
+
+  /// The open transfers, for the Transfers tile's counts.
+  InventoryTransferFeed? _transfers;
   StreamSubscription<Object?>? _salesSub;
   StreamSubscription<Object?>? _staffSub;
   Timer? _salesSafety;
@@ -160,8 +174,23 @@ class _ShopHomeSectionState extends State<ShopHomeSection> {
         if (!mounted) return;
         setState(() {});
         _listenSales();
+        final watcher = _watcher;
+        if (watcher != null) {
+          _transfers?.sync(
+            watcher.context,
+            storesLoaded: watcher.storesLoaded,
+          );
+        }
       },
-    )..start();
+    );
+    _transfers = InventoryTransferFeed(
+      source: _transferSource,
+      businessId: widget.businessId,
+      onChange: () {
+        if (mounted) setState(() {});
+      },
+    );
+    _watcher!.start();
     _staffSub = _source.watchStaff(widget.businessId).listen(
       (staff) {
         if (mounted) setState(() => _staff = staff);
@@ -181,6 +210,8 @@ class _ShopHomeSectionState extends State<ShopHomeSection> {
     _staffSub = null;
     _watcher?.dispose();
     _watcher = null;
+    _transfers?.dispose();
+    _transfers = null;
     _summaryTicket++;
   }
 
@@ -318,6 +349,36 @@ class _ShopHomeSectionState extends State<ShopHomeSection> {
     ),
   );
 
+  void _openTransfers() => _push(
+    InventoryTransfersScreen(
+      businessId: widget.businessId,
+      source: _source,
+      transferSource: _transferSource,
+      service: widget.service,
+      access: widget.access,
+      tagOpener: widget.tagOpener,
+      cameraEnabled: widget.cameraEnabled,
+      clock: widget.clock,
+    ),
+  );
+
+  /// The Transfers tile's caption and badge: what is coming in and what
+  /// waits for a review.
+  ({String caption, String? badge}) _transfersTile(AppLocalizations l10n) {
+    final counts = inventoryTransferEntryCounts(
+      _transfers?.open ?? const [],
+      viewer: InventoryTransferViewer(stores: _stores),
+      businessId: widget.businessId,
+    );
+    final total = counts.incoming + counts.review;
+    return (
+      caption: total == 0
+          ? l10n.invTrEntryHint
+          : l10n.invTrEntryCounts(counts.incoming, counts.review),
+      badge: total > 0 ? '$total' : null,
+    );
+  }
+
   void _openHistory() => _push(
     SalesHistoryScreen(
       businessId: widget.businessId,
@@ -448,6 +509,10 @@ class _ShopHomeSectionState extends State<ShopHomeSection> {
     final status = widget.approvalStatus;
     final summary = _summary;
     final lowCount = summary?.low.length;
+    final stores = _stores;
+    final transfers = stores.multi && !stores.homeStoreMissing
+        ? _transfersTile(l10n)
+        : null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -528,6 +593,15 @@ class _ShopHomeSectionState extends State<ShopHomeSection> {
               caption: l10n.salesHistHint,
               onTap: _openHistory,
             ),
+            if (transfers != null)
+              _QuickLink(
+                tileKey: const Key('shop-open-transfers'),
+                icon: Icons.local_shipping_outlined,
+                title: l10n.invTrTitle,
+                caption: transfers.caption,
+                badge: transfers.badge,
+                onTap: _openTransfers,
+              ),
           ],
         ),
         if (widget.showTodaySales) ...[
@@ -939,6 +1013,15 @@ class _TodayCard extends StatelessWidget {
                 formatLotCents(s.creditOutstandingCents),
               ),
               key: const Key('shop-today-credit'),
+              style: const TextStyle(fontSize: 12.5, color: AppColors.muted),
+            ),
+          ],
+          if (s != null &&
+              inventoryTransferSummaryLine(l10n, s.transfers).isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              inventoryTransferSummaryLine(l10n, s.transfers),
+              key: const Key('shop-today-transfers'),
               style: const TextStyle(fontSize: 12.5, color: AppColors.muted),
             ),
           ],
