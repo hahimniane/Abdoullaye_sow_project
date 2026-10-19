@@ -31,6 +31,7 @@ import {
   type ContainerStatus,
 } from "./container-manifest.ts";
 import { destinationCountryOptionForRow } from "./destination-countries.ts";
+import { recordPhoneFlags, type RecordPhoneField } from "./phone-accounts.ts";
 import { packagePayment, packageSize, type PackagePayment, type PackageSize } from "./waiting-packages.ts";
 
 type Row = Record<string, unknown>;
@@ -276,8 +277,13 @@ export type PackagePerson = {
   phone: string;
   callHref: string | null;
   whatsAppHref: string | null;
-  /** A local number: callable, but WhatsApp cannot reach it until it has its country code. */
+  /**
+   * A local number, or one the server flags (phoneCountryCodeMissing):
+   * callable, but WhatsApp cannot reach it until it has its country code.
+   */
   needsCountryCode: boolean;
+  /** Someone signed in with this number said the package isn't theirs (phoneReportedNotMine). */
+  reportedNotMine: boolean;
 };
 
 export type PackageContainer = {
@@ -329,14 +335,16 @@ export type PackageStaffViewModel = {
   consoleLink: string;
 };
 
-function person(name: unknown, phone: unknown): PackagePerson {
+function person(name: unknown, phone: unknown, line: unknown, field: RecordPhoneField): PackagePerson {
   const stored = text(phone, 40);
+  const flags = recordPhoneFlags(line, field);
   return {
     name: text(name, 120),
     phone: stored,
     callHref: packageCallHref(stored),
     whatsAppHref: packageWhatsAppHref(stored),
-    needsCountryCode: contactPhoneReach(stored) === "local",
+    needsCountryCode: contactPhoneReach(stored) === "local" || (Boolean(stored) && flags.countryCodeMissing),
+    reportedNotMine: Boolean(stored) && flags.reportedNotMine,
   };
 }
 
@@ -392,8 +400,8 @@ export function packageStaffViewModel(line: unknown, container: unknown, lang: "
     vin: kind === "car" ? cleanVin(row.vinNumber) : "",
     description: text(row.description, 120),
     stock,
-    owner: stock ? null : person(row.customerName, row.customerPhone),
-    receiver: receiverName || receiverPhone ? person(receiverName, receiverPhone) : null,
+    owner: stock ? null : person(row.customerName, row.customerPhone, row, "customerPhone"),
+    receiver: receiverName || receiverPhone ? person(receiverName, receiverPhone, row, "receiverPhone") : null,
     // Only the line's own container: a stale snapshot of another one (the
     // line was just moved) is not shown under it.
     container: ownContainer && ownContainer.id === containerId ? ownContainer : null,

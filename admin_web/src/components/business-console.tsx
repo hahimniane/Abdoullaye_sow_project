@@ -722,8 +722,16 @@ export function BusinessConsole({
               businessId={businessId}
               business={business}
               previewMode={previewMode}
-              focusContainerId={containerLink?.containerId ?? ""}
-              focusLineId={containerLink?.lineId ?? ""}
+              // A deep link names the container; a "number isn't mine"
+              // notification names only the line, and the panel finds it.
+              focusContainerId={
+                notificationFocusView === "line" ? "" : containerLink?.containerId ?? ""
+              }
+              focusLineId={
+                notificationFocusView === "line"
+                  ? notificationFocusId
+                  : containerLink?.lineId ?? ""
+              }
               focusView={notificationFocusView === "requests" ? "requests" : ""}
               focusRequestId={notificationFocusView === "requests" ? notificationFocusId : ""}
             />

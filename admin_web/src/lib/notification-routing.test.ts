@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+import { containerLineFocus } from "./container-manifest.ts";
 import {
   adminTargetForNotification,
   businessTargetForNotification,
@@ -402,4 +403,51 @@ test("the consoles call the shared router instead of a local switch", () => {
   assert.match(admin, /adminTargetForNotification/);
   assert.match(admin, /caseId=\{notificationCaseId\}/);
   assert.match(cases, /caseId = ""/);
+});
+
+test("a reported phone number opens its record, wherever the business works on it", () => {
+  // The payload reportShipmentNotMine sends (docs/PHONE_ACCOUNTS.md §6.1).
+  const base = {type: "phone_number_reported", field: "customerPhone", trackingCode: "CL-K7M4P2"};
+  const cases: Array<[string, Record<string, unknown>]> = [
+    ["containerLines", {tab: "containers", focusId: "rec-1", panelView: "line"}],
+    ["packageRequests", {tab: "containers", focusId: "rec-1", panelView: "requests"}],
+    ["barrelShipments", {tab: "barrels", focusId: "rec-1"}],
+    ["freightShipments", {tab: "freight", focusId: "rec-1", panelView: "shipments"}],
+    ["freightQuoteRequests", {tab: "freight", focusId: "rec-1", panelView: "requests"}],
+    ["transportRequests", {tab: "transport", focusId: "rec-1", panelView: "jobs"}],
+    ["parkedCars", {tab: "parking", focusId: "rec-1"}],
+  ];
+  for (const [relatedCollection, expected] of cases) {
+    assert.deepEqual(
+      businessTargetForNotification({...base, relatedCollection, relatedId: "rec-1"}),
+      expected,
+      relatedCollection,
+    );
+  }
+  // An unknown collection is not a crash: it lands on Today.
+  assert.deepEqual(
+    businessTargetForNotification({...base, relatedCollection: "somethingNew", relatedId: "x"}),
+    {tab: "today"},
+  );
+});
+
+test("a line opened by id alone lands on its container or the waiting list, this business's only", () => {
+  assert.deepEqual(
+    containerLineFocus({businessId: "biz", containerId: "box-1", containerStatus: "loading"}, "biz"),
+    {view: "container", containerId: "box-1"},
+  );
+  assert.deepEqual(containerLineFocus({businessId: "biz", containerId: "", containerStatus: "waiting"}, "biz"), {view: "waiting"});
+  assert.deepEqual(containerLineFocus({businessId: "biz", containerStatus: "waiting"}, "biz"), {view: "waiting"});
+  assert.equal(containerLineFocus({businessId: "other", containerId: "box-1"}, "biz"), null);
+  assert.equal(containerLineFocus(null, "biz"), null);
+  assert.equal(containerLineFocus({businessId: "biz", containerId: "box-1"}, ""), null);
+});
+
+test("the business console hands a reported line to the Containers panel, which finds it", () => {
+  const consoleSource = readFileSync("src/components/business-console.tsx", "utf8");
+  assert.match(consoleSource, /notificationFocusView === "line"\s*\? notificationFocusId/);
+  const panel = readFileSync("src/components/business/containers-panel.tsx", "utf8");
+  assert.match(panel, /containerLineFocus\(focusedLineRow, businessId\)/);
+  const waiting = readFileSync("src/components/business/waiting-packages-panel.tsx", "utf8");
+  assert.match(waiting, /document\.getElementById\(`wpk-line-\$\{focusLineId\}`\)/);
 });

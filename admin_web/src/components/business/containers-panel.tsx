@@ -57,6 +57,7 @@ import {
   containerIsOpen,
   containerLineContactsDraftFromRow,
   containerLineDraftFromRow,
+  containerLineFocus,
   containerLineIsStock,
   containerLinePayload,
   containerLineTitle,
@@ -133,6 +134,8 @@ import {
   vinDecodeHint,
 } from "@/lib/vin-lookup";
 import { statusPillClass } from "@/lib/status-pill";
+import { RecordPhoneFlags } from "@/components/phone-flags";
+import { unflaggedLineWarnings } from "@/lib/phone-accounts";
 import type { FirestoreRow } from "@/types/admin";
 
 type Row = Record<string, unknown>;
@@ -179,7 +182,9 @@ function LineTrackingCode({ code }: { code: string }) {
 
 /** Who hears about this line on WhatsApp, and which number cannot be reached yet. */
 function LineWhatsApp({ line }: { line: Row }) {
-  const { summary, warnings } = containerLineWhatsAppText(containerLineWhatsApp(line));
+  const { summary, warnings: lineWarnings } = containerLineWhatsAppText(containerLineWhatsApp(line));
+  // A number the server flags shows "Add the country code" next to itself.
+  const warnings = unflaggedLineWarnings(line, lineWarnings);
   return (
     <>
       <small className="ctn-wa">{summary}</small>
@@ -222,7 +227,13 @@ export function ContainersPanel({
   // A container opened from a link may be an arrival older than the page
   // loaded above: read that one document so it opens all the same. Only this
   // business's own; another business's id opens nothing.
-  const linkedContainer = useLiveDoc("containers", focusContainerId, enabled && Boolean(focusContainerId));
+  // A line named by id alone (a "this number isn't mine" notification):
+  // read it to learn where it is - on a container, or still waiting.
+  const lineOnlyFocus = Boolean(focusLineId) && !focusContainerId;
+  const focusedLineRow = useLiveDoc("containerLines", lineOnlyFocus ? focusLineId : "", enabled && lineOnlyFocus);
+  const lineFocus = lineOnlyFocus ? containerLineFocus(focusedLineRow, businessId) : null;
+  const targetContainerId = focusContainerId || (lineFocus?.view === "container" ? lineFocus.containerId : "");
+  const linkedContainer = useLiveDoc("containers", targetContainerId, enabled && Boolean(targetContainerId));
   const linkedRow = linkedContainer && text(linkedContainer.businessId, "") === businessId ? linkedContainer : null;
   const containerRows = useMemo(() => {
     const rows = [...openContainers.rows, ...arrivedContainers.rows];
@@ -419,22 +430,38 @@ export function ContainersPanel({
     : customerPhoneCountry;
 
   // A link opens its container once, as soon as the container is known; a
-  // container that never turns up leaves the list as it is.
+  // container that never turns up leaves the list as it is. A new target
+  // (another notification while the panel is open) opens again.
   const focusOpened = useRef(false);
-  useEffect(() => {
-    if (focusOpened.current || !focusContainerId || !containerById.has(focusContainerId)) return;
-    focusOpened.current = true;
-    setSelectedId(focusContainerId);
-  }, [focusContainerId, containerById]);
-  // Then its line is scrolled into view once it has rendered.
   const focusScrolled = useRef(false);
+  const waitingOpened = useRef(false);
   useEffect(() => {
-    if (focusScrolled.current || !focusLineId || selectedId !== focusContainerId) return;
+    focusOpened.current = false;
+    focusScrolled.current = false;
+    waitingOpened.current = false;
+  }, [focusLineId, focusContainerId]);
+  useEffect(() => {
+    if (focusOpened.current || !targetContainerId || !containerById.has(targetContainerId)) return;
+    focusOpened.current = true;
+    setView("containers");
+    setSelectedId(targetContainerId);
+  }, [targetContainerId, containerById]);
+  // Then its line is scrolled into view once it has rendered.
+  useEffect(() => {
+    if (focusScrolled.current || !focusLineId || !targetContainerId || selectedId !== targetContainerId) return;
     const row = document.getElementById(`ctn-line-${focusLineId}`);
     if (!row) return;
     focusScrolled.current = true;
     row.scrollIntoView({ block: "center", behavior: "smooth" });
-  }, [focusLineId, focusContainerId, selectedId, lines.rows]);
+  }, [focusLineId, targetContainerId, selectedId, lines.rows]);
+  // A waiting line opens the waiting list, which marks and scrolls to it.
+  const lineFocusView = lineFocus?.view ?? "";
+  useEffect(() => {
+    if (waitingOpened.current || lineFocusView !== "waiting") return;
+    waitingOpened.current = true;
+    setSelectedId("");
+    setView("waiting");
+  }, [lineFocusView]);
 
   // A container deleted or lost from the list closes its detail view.
   useEffect(() => {
@@ -1090,7 +1117,9 @@ export function ContainersPanel({
                       <span>
                         {stock ? <strong>Business stock</strong> : <strong data-no-translate>{text(row.customerName, "")}</strong>}
                         {!stock && <small data-no-translate>{text(row.customerPhone, "")}</small>}
+                        {!stock && <RecordPhoneFlags row={row} field="customerPhone" />}
                         {text(row.receiverName, "") && <small data-no-translate>→ {text(row.receiverName, "")}{text(row.receiverPhone, "") ? ` · ${text(row.receiverPhone, "")}` : ""}</small>}
+                        <RecordPhoneFlags row={row} field="receiverPhone" />
                         <LineWhatsApp line={row} />
                       </span>
                       <span><strong>{formatDate(row.createdAt)}</strong>{by && <small data-no-translate>{by}</small>}</span>
@@ -1152,6 +1181,7 @@ export function ContainersPanel({
           groups={lineGroups}
           onFlash={setFlash}
           enabled={enabled}
+          focusLineId={lineFocusView === "waiting" ? focusLineId : ""}
         />
       ) : (
         <article className="panel">
@@ -1207,6 +1237,8 @@ export function ContainersPanel({
                         <span>
                           {stock ? <strong>Business stock</strong> : <strong data-no-translate>{text(hit.line.customerName, "")}</strong>}
                           {!stock && <small data-no-translate>{text(hit.line.customerPhone, "")}</small>}
+                          {!stock && <RecordPhoneFlags row={hit.line} field="customerPhone" />}
+                          <RecordPhoneFlags row={hit.line} field="receiverPhone" />
                           <LineWhatsApp line={hit.line} />
                         </span>
                         <span>

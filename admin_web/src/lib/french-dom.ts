@@ -6075,7 +6075,137 @@ Object.assign(TEXT_TRANSLATIONS, {
   "A line asks for more than the store has. Lower it to send.": "Une ligne demande plus que ce que le magasin a. Baissez-la pour envoyer.",
 });
 
+// Phone accounts (docs/PHONE_ACCOUNTS.md): phone sign-in, the tracking
+// page's app-first section and sign-in hints, My packages, the profile's
+// WhatsApp verification, staff phone flags and the People sign-in filter.
+Object.assign(TEXT_TRANSLATIONS, {
+  // Sign in with your phone (console-router.tsx, phone-sign-in.tsx).
+  "Sign in with your phone": "Se connecter avec son téléphone",
+  "Use email instead": "Se connecter avec un courriel",
+  "We’ll send a 6-digit code to your phone on WhatsApp.":
+    "Nous enverrons un code à 6 chiffres sur WhatsApp à votre téléphone.",
+  "Send code on WhatsApp": "Recevoir le code sur WhatsApp",
+  "Sending code...": "Envoi du code...",
+  "Send it by text instead": "Recevoir plutôt un SMS",
+  "Sending text...": "Envoi du SMS...",
+  "Text me a code": "M’envoyer un code par SMS",
+  "We sent a code on WhatsApp to the number ending in":
+    "Nous avons envoyé un code sur WhatsApp au numéro se terminant par",
+  "Sending a code on WhatsApp to the number ending in":
+    "Envoi d’un code sur WhatsApp au numéro se terminant par",
+  "We’ll send a code on WhatsApp to the number ending in":
+    "Nous enverrons un code sur WhatsApp au numéro se terminant par",
+  "We sent a code by text to": "Nous avons envoyé un code par SMS au",
+  "A text needs your full number. Type the number that ends in":
+    "Un SMS a besoin de votre numéro complet. Saisissez le numéro qui se termine par",
+  "Back to the WhatsApp code": "Revenir au code WhatsApp",
+  "Use another number": "Utiliser un autre numéro",
+  "6-digit code": "Code à 6 chiffres",
+  "Verify and sign in": "Vérifier et se connecter",
+  "Signing you in...": "Connexion à votre compte...",
+  "Send a new code in": "Nouveau code possible dans",
+  "Send a new code": "Envoyer un nouveau code",
+  "You’re signed in. Opening your account...":
+    "Vous êtes connecté. Ouverture de votre compte...",
+  "WhatsApp codes are not available right now, so we use a text message.":
+    "Les codes WhatsApp ne sont pas disponibles pour le moment : nous utilisons un SMS.",
+  "Enter your full number with its country code.":
+    "Saisissez votre numéro complet avec l’indicatif du pays.",
+  "Ask for a new code.": "Demandez un nouveau code.",
+  // Refusals of the phoneAccount callable (phone-accounts.ts).
+  "Enter a valid phone number.": "Saisissez un numéro de téléphone valide.",
+  "Add your country code: choose the country, then type the number.":
+    "Ajoutez l’indicatif du pays : choisissez le pays, puis saisissez le numéro.",
+  "We couldn’t find that package. Check the code and try again.":
+    "Nous n’avons pas trouvé ce colis. Vérifiez le code et réessayez.",
+  "This package has no number we can send a code to.":
+    "Ce colis n’a aucun numéro auquel envoyer un code.",
+  "Too many codes were asked for.": "Trop de codes ont été demandés.",
+  "WhatsApp codes are not available right now. We can send a text instead.":
+    "Les codes WhatsApp ne sont pas disponibles pour le moment. Nous pouvons envoyer un SMS à la place.",
+  "Sign in first, then try again.": "Connectez-vous d’abord, puis réessayez.",
+  "That code is not right.": "Ce code n’est pas le bon.",
+  "That code has expired. Ask for a new one.": "Ce code a expiré. Demandez-en un nouveau.",
+  "Too many wrong codes. Ask for a new one.": "Trop de codes erronés. Demandez-en un nouveau.",
+  "That code is no longer valid. Ask for a new one.":
+    "Ce code n’est plus valide. Demandez-en un nouveau.",
+  "This number already belongs to another Laawol account. Sign in with that number instead, or use a different number.":
+    "Ce numéro appartient déjà à un autre compte Laawol. Connectez-vous plutôt avec ce numéro, ou utilisez un autre numéro.",
+  "This code was asked for by another account. Ask for a new one.":
+    "Ce code a été demandé par un autre compte. Demandez-en un nouveau.",
+  "We could not confirm the number. Verify it again.":
+    "Nous n’avons pas pu confirmer le numéro. Vérifiez-le à nouveau.",
+  "Add and verify your phone number to see your packages.":
+    "Ajoutez et vérifiez votre numéro de téléphone pour voir vos colis.",
+  "That package could not be found. Refresh and try again.":
+    "Ce colis est introuvable. Actualisez et réessayez.",
+  "Something went wrong. Check your connection and try again.":
+    "Une erreur s’est produite. Vérifiez votre connexion et réessayez.",
+  "You can ask again in": "Vous pourrez redemander dans",
+  "Attempts left:": "Essais restants :",
+  "Wait a few minutes and try again.": "Patientez quelques minutes et réessayez.",
+  // The tracking page (get-app-banner.tsx, guest-tracking.tsx).
+  "Track it in the Laawol app": "Suivez-le dans l’application Laawol",
+  "After installing, tap Track in WhatsApp again.":
+    "Après l’installation, touchez de nouveau Suivre dans WhatsApp.",
+  "Is this your package?": "Ce colis est-il le vôtre ?",
+  "Sign in with a code to see every package sent with your number.":
+    "Connectez-vous avec un code pour voir tous les colis envoyés avec votre numéro.",
+  "Sign in as the number ending in": "Se connecter avec le numéro se terminant par",
+  "Package request": "Demande d’envoi de colis",
+  // My packages (my-packages.tsx, customer-console.tsx).
+  "My packages": "Mes colis",
+  "Packages sent with your number": "Colis envoyés avec votre numéro",
+  "Packages businesses recorded with your number ending in":
+    "Colis enregistrés par des entreprises avec votre numéro se terminant par",
+  "Packages businesses recorded with your phone number.":
+    "Colis enregistrés par des entreprises avec votre numéro de téléphone.",
+  "Loading your packages...": "Chargement de vos colis...",
+  "Businesses record packages with your phone number. Verify it once in your profile.":
+    "Les entreprises enregistrent les colis avec votre numéro de téléphone. Vérifiez-le une fois dans votre profil.",
+  "Open profile": "Ouvrir le profil",
+  "No packages yet. When a business records a package with your number, it shows here.":
+    "Aucun colis pour l’instant. Quand une entreprise enregistre un colis avec votre numéro, il apparaît ici.",
+  "Nothing you sent yet.": "Aucun envoi de votre part pour l’instant.",
+  "Coming to you": "En route vers vous",
+  "Packages someone is sending to your number.":
+    "Colis que quelqu’un envoie à votre numéro.",
+  "A Laawol business": "Une entreprise Laawol",
+  "You are the sender and the receiver.": "Vous êtes l’expéditeur et le destinataire.",
+  "This isn't mine": "Ce n’est pas à moi",
+  "Thanks. We removed it from your list and asked the business to check the number.":
+    "Merci. Nous l’avons retiré de votre liste et avons demandé à l’entreprise de vérifier le numéro.",
+  // The profile's phone verification (customer-console.tsx).
+  "Verify on WhatsApp instead": "Vérifier plutôt sur WhatsApp",
+  "Code sent on WhatsApp. Enter the 6-digit code below.":
+    "Code envoyé sur WhatsApp. Saisissez le code à 6 chiffres ci-dessous.",
+  "Phone number verified. Packages recorded with it are now in My packages.":
+    "Numéro de téléphone vérifié. Les colis enregistrés avec ce numéro sont maintenant dans Mes colis.",
+  "This number is on packages a business recorded. Adding it to your account...":
+    "Ce numéro figure sur des colis enregistrés par une entreprise. Ajout à votre compte...",
+  "For your security, sign out, sign in again with your phone, then request deletion.":
+    "Pour votre sécurité, déconnectez-vous, reconnectez-vous avec votre téléphone, puis demandez la suppression.",
+  "You signed in with your phone, so no password is needed. Required transaction records may be retained for legal and accounting obligations.":
+    "Vous vous êtes connecté avec votre téléphone : aucun mot de passe n’est nécessaire. Les dossiers de transaction requis peuvent être conservés pour des obligations légales et comptables.",
+  // Staff: the server's flags next to a phone (phone-flags.tsx, package-staff-view.tsx).
+  "Add the country code": "Ajoutez l’indicatif du pays",
+  "The person says this number isn't theirs - check it":
+    "La personne dit que ce numéro n’est pas le sien - vérifiez-le",
+  // The business notification reportShipmentNotMine sends (its body has the
+  // tracking code between the two halves).
+  "A customer says a number isn't theirs": "Un client dit qu’un numéro n’est pas le sien",
+  "Someone who signed in with the number on": "Une personne connectée avec le numéro de",
+  "says it isn't theirs. Check the number.": "dit qu’il n’est pas le sien. Vérifiez le numéro.",
+  // Admin People: the sign-in filter and email-less accounts.
+  "Sign-in": "État de connexion",
+  "Not signed in yet": "Pas encore connecté",
+  "No email on this account: the person signs in with a code sent to their phone, so there is no password to reset.":
+    "Aucun courriel sur ce compte : la personne se connecte avec un code envoyé sur son téléphone, il n’y a donc pas de mot de passe à réinitialiser.",
+});
+
 export const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {
+  // People: the sign-in filter's label.
+  "Filter by sign-in": "Filtrer par état de connexion",
   "Inventory service": "Service d’inventaire",
   "17 characters": "17 caractères",
   "VIN, owner, make": "VIN, propriétaire, marque",

@@ -1,3 +1,5 @@
+import { parseSignInHints, type GuestSignInHint } from "./phone-accounts.ts";
+
 export type GuestTrackingService =
   | "barrel"
   | "freight"
@@ -6,7 +8,10 @@ export type GuestTrackingService =
   | "shared_barrel"
   | "freight_quote"
   // Goods a business loaded into its own container for a customer (CL- codes).
-  | "container";
+  | "container"
+  // A customer's package request, listed in My packages only (never looked
+  // up on the public page): docs/PHONE_ACCOUNTS.md §6.
+  | "package_request";
 
 export type GuestTrackingStage =
   | "awaiting_payment"
@@ -40,6 +45,11 @@ export type GuestTrackingRecord = {
   parts?: GuestTrackingPart[];
   /** Container lines only, once priced: the whole group's money (payments live on the root). */
   payment?: GuestTrackingPayment;
+  /**
+   * Who may sign in from this page (docs/PHONE_ACCOUNTS.md §10): each valid
+   * number's role and its LAST TWO digits - never more.
+   */
+  signIn?: GuestSignInHint[];
 };
 
 export type GuestTrackingPart = {
@@ -216,6 +226,7 @@ export function parseGuestTrackingResponse(value: unknown): GuestTrackingRespons
     throw new Error("guest-tracking-response-invalid");
   }
   const shipping = parseGuestShipping(service, row.shipping);
+  const signIn = parseSignInHints(row.signIn);
   return {
     version: 1,
     found: true,
@@ -227,6 +238,7 @@ export function parseGuestTrackingResponse(value: unknown): GuestTrackingRespons
       ...(quoteCount !== undefined ? {quoteCount} : {}),
       ...(shipping ? {shipping} : {}),
       ...parseGuestContainerGroup(service, row),
+      ...(signIn.length ? {signIn} : {}),
     },
   };
 }
@@ -252,6 +264,7 @@ export const GUEST_SERVICE_LABEL: Record<GuestTrackingService, string> = {
   shared_barrel: "Shared barrel",
   freight_quote: "Freight quote request",
   container: "Container shipment",
+  package_request: "Package request",
 };
 
 /**
@@ -310,4 +323,18 @@ export function guestJourneyStages(service: string): readonly GuestJourneyStage[
 export function guestStageLabel(service: string, stage: GuestTrackingStage): string {
   const own = guestJourneyStages(service).find((item) => item.id === stage);
   return own?.label ?? GUEST_STAGE_LABEL[stage] ?? stage;
+}
+
+/** A package request not confirmed yet: the one stage only My packages shows. */
+export const PACKAGE_REQUEST_REQUESTED_LABEL = "Requested";
+
+/**
+ * The stage words on a My packages card (docs/PHONE_ACCOUNTS.md §6): the
+ * guest-tracking copy above, plus a package request's "requested". A stage
+ * this build does not know reads as the server's default, "booked".
+ */
+export function shipmentStageLabel(service: string, stage: string): string {
+  if (stage === "requested") return PACKAGE_REQUEST_REQUESTED_LABEL;
+  const known = STAGES.has(stage as GuestTrackingStage) ? (stage as GuestTrackingStage) : "booked";
+  return guestStageLabel(service, known);
 }

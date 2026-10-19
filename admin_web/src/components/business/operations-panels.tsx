@@ -300,6 +300,7 @@ import { US_STATE_OPTIONS, citiesForState, withSelected } from "@/lib/us-locatio
 import { overlayDismiss } from "@/lib/overlay-dismiss";
 import { mainDestinationChanges } from "@/lib/waiting-packages";
 import { destinationIsInUse } from "@/lib/destination-visibility";
+import { RecordPhoneFlags } from "@/components/phone-flags";
 import type { FirestoreRow } from "@/types/admin";
 
 type PanelProps = {
@@ -3519,7 +3520,7 @@ export function BarrelsPanel({
               <div className="pur-info">
                 <div><span>Sender</span><b data-no-translate>{text(row.senderName, "—")}</b></div>
                 <div><span>Receiver</span><b data-no-translate>{text(row.receiverName, "—")}</b></div>
-                <div><span>Receiver phone</span><b data-no-translate>{text(row.receiverPhone, "—")}</b></div>
+                <div><span>Receiver phone</span><b data-no-translate>{text(row.receiverPhone, "—")}</b><RecordPhoneFlags row={row} field="receiverPhone" /></div>
                 <div><span>Destination</span><b>{text(row.destinationCountryName, "—")}</b></div>
                 <div><span>Payment</span><b>{statusLabel(text(row.paymentStatus, "not_required"))}</b></div>
                 <div><span>Total</span><b>{formatMoney(row.price)}</b></div>
@@ -3967,7 +3968,7 @@ export function FreightPanel({
               <div className="pur-head"><div className="pur-title"><strong data-no-translate>{text(row.trackingCode, row.id)}</strong><span className="pur-kind">{statusLabel(text(row.mode ?? row.freightMode, "freight"))}</span></div><span className={`lst-badge ${barrelTone(status)}`}>{statusLabel(status)}</span></div>
               <div className="pur-info">
                 <div><span>Sender</span><b data-no-translate>{text(row.senderName, "—")}</b></div><div><span>Receiver</span><b data-no-translate>{text(row.receiverName, "—")}</b></div>
-                <div><span>Receiver phone</span><b data-no-translate>{text(row.receiverPhone, "—")}</b></div><div><span>Destination</span><b>{text(row.destinationCountryName, "—")}</b></div>
+                <div><span>Receiver phone</span><b data-no-translate>{text(row.receiverPhone, "—")}</b><RecordPhoneFlags row={row} field="receiverPhone" /></div><div><span>Destination</span><b>{text(row.destinationCountryName, "—")}</b></div>
                 {weighs
                   ? (<><div><span>Estimated weight</span><b>{estimatedWeight.toLocaleString()} kg</b></div><div><span>Verified weight</span><b>{verifiedWeight > 0 ? `${verifiedWeight.toLocaleString()} kg` : "—"}</b></div></>)
                   : (<><div><span>Pricing</span><b>Set price</b></div><div><span>Set price</span><b>{formatMoney(row.itemFlatPrice)}</b></div></>)}
@@ -4830,7 +4831,7 @@ export function TransportPanel({
                   </div>
                   <div className="pur-info">
                     <div><span>Owner</span><b data-no-translate>{text(row.ownerName ?? row.customerName, "—")}</b></div>
-                    <div><span>Contact phone</span><b data-no-translate>{text(row.customerPhone, "—")}</b></div>
+                    <div><span>Contact phone</span><b data-no-translate>{text(row.customerPhone, "—")}</b><RecordPhoneFlags row={row} field="customerPhone" /></div>
                     <div><span>Pickup</span><b data-no-translate>{text(row.pickupAddress, "—")}</b></div>
                     <div><span>Destination</span><b>{text(row.destinationCountryName, "—")}</b></div>
                     <div><span>Accepted quote</span><b>{selectedAmountCents > 0 ? formatMoney(selectedAmountCents / 100) : formatMoney(row.price)}</b></div>
@@ -5974,7 +5975,7 @@ export function ParkingPanel({
                       <small className="ctn-placement">{vinPlacementText(vinPlacements.get(text(row.vinNumber, "").toUpperCase()), placementLang)}</small>
                     )}
                   </span>
-                  <span><b><span data-no-translate>{text(row.customerName ?? row.ownerName, "—")}</span><CopyValue value={text(row.customerName ?? row.ownerName, "")} label="Copy name" /></b><small data-no-translate>{text(row.customerPhone, "")}</small></span>
+                  <span><b><span data-no-translate>{text(row.customerName ?? row.ownerName, "—")}</span><CopyValue value={text(row.customerName ?? row.ownerName, "")} label="Copy name" /></b><small data-no-translate>{text(row.customerPhone, "")}</small><RecordPhoneFlags row={row} field="customerPhone" /></span>
                   <span>{formatDate(row.parkingDate) || "—"}</span>
                   <span className={openEnded ? "muted" : undefined}>{openEnded ? "Open" : formatDate(row.parkingEndDate)}</span>
                   <span className="num">{businessParkingStayDays(row)}</span>

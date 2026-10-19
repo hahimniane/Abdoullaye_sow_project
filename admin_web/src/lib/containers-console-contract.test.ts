@@ -45,7 +45,9 @@ test("the console routes the tab to ContainersPanel like every other panel", () 
   // The business record rides along so the phone pickers open on its country.
   // A package's "Open in business console" link rides along as the container
   // and line to open.
-  assert.match(consoleSource, /\{activeTab === "containers" && \(\s*<ContainersPanel\s+businessId=\{businessId\}\s+business=\{business\}\s+previewMode=\{previewMode\}\s+focusContainerId=\{containerLink\?\.containerId \?\? ""\}\s+focusLineId=\{containerLink\?\.lineId \?\? ""\}\s+focusView=\{notificationFocusView === "requests" \? "requests" : ""\}\s+focusRequestId=\{notificationFocusView === "requests" \? notificationFocusId : ""\}\s+\/>\s*\)\}/);
+  // A "this number isn't mine" notification names only a line: it wins over
+  // an earlier deep link, and the panel finds the line's container itself.
+  assert.match(consoleSource, /\{activeTab === "containers" && \(\s*<ContainersPanel\s+businessId=\{businessId\}\s+business=\{business\}\s+previewMode=\{previewMode\}\s+(?:\/\/[^\n]*\n\s*)*focusContainerId=\{\s*notificationFocusView === "line" \? "" : containerLink\?\.containerId \?\? ""\s*\}\s+focusLineId=\{\s*notificationFocusView === "line"\s*\? notificationFocusId\s*: containerLink\?\.lineId \?\? ""\s*\}\s+focusView=\{notificationFocusView === "requests" \? "requests" : ""\}\s+focusRequestId=\{notificationFocusView === "requests" \? notificationFocusId : ""\}\s+\/>\s*\)\}/);
   assert.match(consoleSource, /containers: <Container \{\.\.\.props\} \/>,/, "the sidebar icon map must cover the tab");
 });
 
@@ -58,9 +60,15 @@ test("?container=&line= opens the Containers tab on that container with the line
   assert.match(consoleSource, /if \(!visibleTabs\.some\(\(tab\) => tab\.id === activeTab\)\) \{\s*setActiveTab\("today"\);/);
   // The panel opens the container once it is known - an old arrival past the
   // loaded page is read on its own, and only when it is this business's.
-  assert.match(panelSource, /const linkedContainer = useLiveDoc\("containers", focusContainerId, enabled && Boolean\(focusContainerId\)\);/);
+  // The container is the link's, or - for a line named alone - the line's own.
+  assert.match(panelSource, /const targetContainerId = focusContainerId \|\| \(lineFocus\?\.view === "container" \? lineFocus\.containerId : ""\);/);
+  assert.match(panelSource, /const linkedContainer = useLiveDoc\("containers", targetContainerId, enabled && Boolean\(targetContainerId\)\);/);
   assert.match(panelSource, /text\(linkedContainer\.businessId, ""\) === businessId/);
-  assert.match(panelSource, /if \(focusOpened\.current \|\| !focusContainerId \|\| !containerById\.has\(focusContainerId\)\) return;\s*focusOpened\.current = true;\s*setSelectedId\(focusContainerId\);/);
+  assert.match(panelSource, /if \(focusOpened\.current \|\| !targetContainerId \|\| !containerById\.has\(targetContainerId\)\) return;\s*focusOpened\.current = true;\s*setView\("containers"\);\s*setSelectedId\(targetContainerId\);/);
+  // A line named alone is read for where it is; a waiting one opens the
+  // waiting list, marked there.
+  assert.match(panelSource, /useLiveDoc\("containerLines", lineOnlyFocus \? focusLineId : "", enabled && lineOnlyFocus\)/);
+  assert.match(panelSource, /focusLineId=\{lineFocusView === "waiting" \? focusLineId : ""\}/);
   // The line is anchored, marked, and scrolled to once.
   assert.match(panelSource, /id=\{`ctn-line-\$\{String\(row\.id\)\}`\}/);
   assert.match(panelSource, /focusLineId && String\(row\.id\) === focusLineId \? " ctn-line-focus" : ""/);

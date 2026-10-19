@@ -1249,6 +1249,22 @@ export function containerLineIsWaiting(line: unknown): boolean {
   return text(r.containerStatus, 20) === WAITING_STATUS || !text(r.containerId, MAX_LABEL);
 }
 
+/**
+ * Where a container line opened by id alone (a phone_number_reported
+ * notification) lands in the Containers panel:
+ * its container, or the waiting list. Null until the line is read, and for
+ * another business's line (nothing opens).
+ */
+export function containerLineFocus(
+  line: unknown,
+  businessId: string,
+): { view: "container"; containerId: string } | { view: "waiting" } | null {
+  const r = asRow(line);
+  if (!line || !businessId || text(r.businessId, MAX_LABEL) !== businessId) return null;
+  if (containerLineIsWaiting(r)) return { view: "waiting" };
+  return { view: "container", containerId: text(r.containerId, MAX_LABEL) };
+}
+
 /** A positive finite number (an inch measurement), or null. */
 function positiveNumber(value: unknown): number | null {
   if (value === null || value === undefined || value === "") return null;

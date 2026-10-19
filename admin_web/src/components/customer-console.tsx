@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   EmailAuthProvider,
   PhoneAuthProvider,
-  RecaptchaVerifier,
+  type RecaptchaVerifier,
   linkWithCredential,
   reauthenticateWithCredential,
   sendEmailVerification,
@@ -32,7 +32,7 @@ import {
 } from "@/lib/car-catalog";
 import { useCarCatalog } from "@/lib/use-car-catalog";
 import { DESTINATION_COUNTRIES } from "@/lib/destination-countries";
-import { CalendarClock, Car, CircleAlert, CircleDollarSign, ClipboardList, Headphones, Home, LogOut, Menu, PackageSearch, Pencil, ReceiptText, Settings, ShieldCheck, Ship, Star, Truck, UserRound } from "lucide-react";
+import { CalendarClock, Car, CircleAlert, CircleDollarSign, ClipboardList, Headphones, Home, LogOut, Menu, MessageCircle, Package, PackageSearch, Pencil, ReceiptText, Settings, ShieldCheck, Ship, Star, Truck, UserRound } from "lucide-react";
 
 import { auth, db, functions } from "@/lib/firebase";
 import { formatDate, formatMoney, text } from "@/lib/format";
@@ -80,6 +80,27 @@ import { isValidE164, isValidPhone, normalizePhone } from "@/lib/phone";
 import { phoneVerificationErrorMessage } from "@/lib/phone-verification";
 import { currentWebLanguage } from "@/lib/language";
 import { UserText } from "@/components/user-text";
+import { MyPackages } from "@/components/my-packages";
+import {
+  LoginCodeEntry,
+  PhoneRefusalBox,
+  useResendSeconds,
+} from "@/components/phone-sign-in";
+import {
+  customerTabFromSearch,
+  phoneRefusalOf,
+  phoneRefusalText,
+  withTimeout,
+  type PhoneRefusalText,
+} from "@/lib/phone-accounts";
+import {
+  PHONE_AUTH_TIMEOUT_MS,
+  invisibleRecaptcha,
+  linkPhoneFromCredential,
+  phoneCredentialFromError,
+  requestPhoneLoginCode,
+  verifyPhoneLinkCode,
+} from "@/lib/phone-accounts-client";
 import {
   customerOrdersInnerTab,
   customerTargetForNotification,
@@ -87,6 +108,7 @@ import {
 
 type CustomerTab =
   | "home"
+  | "packages"
   | "services"
   | "parkingPools"
   | "cars"
@@ -101,23 +123,14 @@ type CustomerConsoleProps = {
   onSignOut: () => Promise<void> | void;
 };
 
-const PHONE_VERIFICATION_TIMEOUT_MS = 60_000;
-
 async function withPhoneVerificationTimeout<T>(request: Promise<T>) {
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await Promise.race([
-      request,
-      new Promise<never>((_, reject) => {
-        timeoutId = setTimeout(
-          () => reject({ code: "auth/verification-timeout" }),
-          PHONE_VERIFICATION_TIMEOUT_MS,
-        );
-      }),
-    ]);
-  } finally {
-    if (timeoutId) clearTimeout(timeoutId);
-  }
+  return withTimeout(request, PHONE_AUTH_TIMEOUT_MS, { code: "auth/verification-timeout" });
+}
+
+function authErrorCode(error: unknown) {
+  return typeof error === "object" && error !== null && "code" in error
+    ? String((error as { code?: unknown }).code ?? "")
+    : "";
 }
 
 export type { CustomerCollection } from "@/lib/public-cars";
@@ -134,6 +147,7 @@ const tabs: Array<{
   { id: "cars", label: "Browse cars", description: "Listings from approved businesses", icon: Car },
   { id: "viewings", label: "Car viewings", description: "Appointments to see a car", icon: CalendarClock },
   { id: "orders", label: "Orders & tracking", description: "Shipping and vehicle services", icon: ClipboardList },
+  { id: "packages", label: "My packages", description: "Packages sent with your number", icon: Package },
   { id: "support", label: "Support", description: "Messages about your orders", icon: Headphones },
   { id: "profile", label: "Profile", description: "Account and security", icon: UserRound },
 ];
@@ -150,7 +164,12 @@ export function CustomerConsole({
   // the customer on an account form. A verified phone is a precondition for
   // shared barrels, and that feature asks for it where it is needed; it is
   // not a reason to withhold the rest of the console.
-  const [activeTab, setActiveTab] = useState<CustomerTab>("home");
+  // ...except a phone sign-in from a tracking link, which lands on My
+  // packages (`/?open=packages`): read once, an arrival.
+  const [activeTab, setActiveTab] = useState<CustomerTab>(() =>
+    (typeof window !== "undefined" &&
+      customerTabFromSearch(window.location.search)) || "home",
+  );
   useConsoleDocumentTitle(
     "customer",
     tabs.find((item) => item.id === activeTab)?.label,
@@ -337,7 +356,8 @@ export function CustomerConsole({
         </nav>
 
         <section className="content">
-          {!firebaseUser.emailVerified && (
+          {/* A phone account has no email to verify. */}
+          {Boolean(firebaseUser.email) && !firebaseUser.emailVerified && (
             <div className="info-band customer-verification-banner">
               <span>Verify your email to keep your account secure.</span>
               <button
@@ -439,6 +459,9 @@ export function CustomerConsole({
               }))}
               uid={firebaseUser.uid}
             />
+          )}
+          {activeTab === "packages" && (
+            <MyPackages onOpenProfile={() => setActiveTab("profile")} />
           )}
           {activeTab === "profile" && (
             <ProfileView firebaseUser={firebaseUser} profile={profile} />
@@ -1242,6 +1265,16 @@ function ProfileView({ firebaseUser, profile }: { firebaseUser: User; profile: U
   const [error, setError] = useState("");
   const [phoneNotice, setPhoneNotice] = useState("");
   const [phoneError, setPhoneError] = useState("");
+  // A refusal of the phone-account callable, in the console's own words.
+  const [phoneRefusal, setPhoneRefusal] = useState<PhoneRefusalText | null>(null);
+  // "Verify on WhatsApp instead" (docs/PHONE_ACCOUNTS.md §7): a link code.
+  const [whatsAppChallengeId, setWhatsAppChallengeId] = useState("");
+  const [whatsAppCode, setWhatsAppCode] = useState("");
+  const [whatsAppResendAt, setWhatsAppResendAt] = useState(0);
+  const [whatsAppAction, setWhatsAppAction] = useState<"" | "send" | "verify">("");
+  const whatsAppResendSeconds = useResendSeconds(whatsAppResendAt);
+  // A phone-only account has no password to re-enter before deletion.
+  const passwordAccount = Boolean(firebaseUser.email);
   const recaptcha = useRef<RecaptchaVerifier | null>(null);
   const normalizedDraft = normalizePhone(phone);
   // Require the backend's own record of verification (profile.phoneVerified),
@@ -1257,14 +1290,82 @@ function ProfileView({ firebaseUser, profile }: { firebaseUser: User; profile: U
   function changePhone(value: string) {
     setPhone(value);
     if (
-      verificationId &&
+      (verificationId || whatsAppChallengeId) &&
       normalizePhone(value) !== verificationPhone
     ) {
       setVerificationId("");
       setVerificationPhone("");
       setVerificationCode("");
+      setWhatsAppChallengeId("");
+      setWhatsAppCode("");
       setPhoneNotice("");
       setPhoneError("");
+      setPhoneRefusal(null);
+    }
+  }
+
+  /** After the number reached this account by a merge or a WhatsApp code. */
+  async function finishLinked(merged: boolean) {
+    await firebaseUser.reload().catch(() => undefined);
+    await firebaseUser.getIdToken(true).catch(() => undefined);
+    setVerificationCode("");
+    setVerificationId("");
+    setVerificationPhone("");
+    setWhatsAppChallengeId("");
+    setWhatsAppCode("");
+    setPhoneNotice("");
+    setNotice(
+      merged
+        ? "Phone number verified. Packages recorded with it are now in My packages."
+        : "Phone number verified.",
+    );
+  }
+
+  async function sendWhatsAppLinkCode() {
+    if (!isValidE164(phone) || verifying) return;
+    setVerifying(true);
+    setWhatsAppAction("send");
+    setPhoneError("");
+    setPhoneRefusal(null);
+    setPhoneNotice("");
+    try {
+      const challenge = await requestPhoneLoginCode({ phone: normalizedDraft, purpose: "link" });
+      setWhatsAppChallengeId(challenge.challengeId);
+      setVerificationPhone(normalizedDraft);
+      setWhatsAppCode("");
+      setWhatsAppResendAt(Date.now() + challenge.resendAfterMs);
+      setPhoneNotice("Code sent on WhatsApp. Enter the 6-digit code below.");
+    } catch (caught) {
+      setPhoneRefusal(phoneRefusalText(phoneRefusalOf(caught)));
+    } finally {
+      setVerifying(false);
+      setWhatsAppAction("");
+    }
+  }
+
+  async function confirmWhatsAppLinkCode() {
+    if (!whatsAppChallengeId || whatsAppCode.length !== 6 || verifying) return;
+    if (normalizedDraft !== verificationPhone) {
+      setPhoneError("The phone number changed. Send a new verification code.");
+      return;
+    }
+    setVerifying(true);
+    setWhatsAppAction("verify");
+    setPhoneError("");
+    setPhoneRefusal(null);
+    try {
+      const result = await verifyPhoneLinkCode(whatsAppChallengeId, whatsAppCode);
+      await finishLinked(result.merged);
+    } catch (caught) {
+      const refusal = phoneRefusalOf(caught);
+      if (["code_expired", "too_many_attempts", "challenge_not_found"].includes(refusal.reason)) {
+        setWhatsAppCode("");
+        setWhatsAppResendAt(0);
+      }
+      setPhoneRefusal(phoneRefusalText(refusal));
+    } finally {
+      setVerifying(false);
+      setWhatsAppAction("");
     }
   }
 
@@ -1302,14 +1403,11 @@ function ProfileView({ firebaseUser, profile }: { firebaseUser: User; profile: U
     }
     setVerifying(true);
     setPhoneError("");
+    setPhoneRefusal(null);
     setPhoneNotice("");
     try {
       if (!recaptcha.current) {
-        recaptcha.current = new RecaptchaVerifier(
-          auth,
-          "customer-phone-recaptcha",
-          { size: "invisible" },
-        );
+        recaptcha.current = invisibleRecaptcha("customer-phone-recaptcha");
       }
       auth.languageCode = currentWebLanguage();
       const provider = new PhoneAuthProvider(auth);
@@ -1344,6 +1442,7 @@ function ProfileView({ firebaseUser, profile }: { firebaseUser: User; profile: U
     }
     setVerifying(true);
     setPhoneError("");
+    setPhoneRefusal(null);
     setPhoneNotice("");
     try {
       const credential = PhoneAuthProvider.credential(
@@ -1362,6 +1461,26 @@ function ProfileView({ firebaseUser, profile }: { firebaseUser: User; profile: U
       setVerificationPhone("");
       setNotice("Phone number verified.");
     } catch (caught) {
+      // The number is held by another Auth user - most often the account a
+      // business's shipment made for it (docs/PHONE_ACCOUNTS.md §7). The code
+      // just typed proves the number: sign that credential in on a separate
+      // app, and the server moves the number (and its packages) here when
+      // the holder never signed in. Any other holder is phone_in_use.
+      const held =
+        authErrorCode(caught) === "auth/credential-already-in-use"
+          ? phoneCredentialFromError(caught)
+          : null;
+      if (held) {
+        try {
+          setPhoneNotice("This number is on packages a business recorded. Adding it to your account...");
+          const result = await linkPhoneFromCredential(held);
+          await finishLinked(result.merged);
+        } catch (mergeError) {
+          setPhoneNotice("");
+          setPhoneRefusal(phoneRefusalText(phoneRefusalOf(mergeError)));
+        }
+        return;
+      }
       setPhoneError(
         phoneVerificationErrorMessage(caught, window.location.hostname),
       );
@@ -1371,16 +1490,21 @@ function ProfileView({ firebaseUser, profile }: { firebaseUser: User; profile: U
   }
 
   async function requestDeletion() {
-    if (!firebaseUser.email || !deletePassword || deleting) return;
+    if (deleting || (passwordAccount && !deletePassword)) return;
     setDeleting(true);
     setError("");
     setNotice("");
     try {
-      const credential = EmailAuthProvider.credential(
-        firebaseUser.email,
-        deletePassword,
-      );
-      await reauthenticateWithCredential(firebaseUser, credential);
+      // A phone account proves itself by its recent sign-in (the server
+      // asks for one within 15 minutes); an email account re-enters its
+      // password.
+      if (firebaseUser.email) {
+        const credential = EmailAuthProvider.credential(
+          firebaseUser.email,
+          deletePassword,
+        );
+        await reauthenticateWithCredential(firebaseUser, credential);
+      }
       await firebaseUser.getIdToken(true);
       await httpsCallable(functions, "requestOwnAccountDeletion")({});
       setDeletePassword("");
@@ -1388,7 +1512,11 @@ function ProfileView({ firebaseUser, profile }: { firebaseUser: User; profile: U
         "Account deletion requested. Laawol will complete it within 30 days.",
       );
     } catch {
-      setError("The deletion request could not be submitted. Check your password.");
+      setError(
+        passwordAccount
+          ? "The deletion request could not be submitted. Check your password."
+          : "For your security, sign out, sign in again with your phone, then request deletion.",
+      );
     } finally {
       setDeleting(false);
     }
@@ -1467,17 +1595,48 @@ function ProfileView({ firebaseUser, profile }: { firebaseUser: User; profile: U
             <div aria-live="polite">
               {phoneNotice && <div className="info-band">{phoneNotice}</div>}
               {phoneError && <div className="error-box">{phoneError}</div>}
+              {phoneRefusal && <PhoneRefusalBox refusal={phoneRefusal} />}
             </div>
-            {!verificationId && (
-              <button
-                className="primary-button customer-phone-send-code"
-                data-loading={verifying}
-                disabled={verifying || !isValidE164(phone)}
-                onClick={() => void sendPhoneCode()}
-                type="button"
-              >
-                {verifying ? "Sending verification code..." : "Send verification code"}
-              </button>
+            {!verificationId && !whatsAppChallengeId && (
+              <>
+                <button
+                  className="primary-button customer-phone-send-code"
+                  data-loading={verifying && whatsAppAction === ""}
+                  disabled={verifying || !isValidE164(phone)}
+                  onClick={() => void sendPhoneCode()}
+                  type="button"
+                >
+                  {verifying && whatsAppAction === "" ? "Sending verification code..." : "Send verification code"}
+                </button>
+                <button
+                  className="secondary-button customer-phone-send-code"
+                  data-loading={whatsAppAction === "send"}
+                  disabled={verifying || !isValidE164(phone)}
+                  onClick={() => void sendWhatsAppLinkCode()}
+                  type="button"
+                >
+                  <MessageCircle aria-hidden="true" size={16} />
+                  {whatsAppAction === "send" ? "Sending code..." : "Verify on WhatsApp instead"}
+                </button>
+              </>
+            )}
+            {whatsAppChallengeId && (
+              <LoginCodeEntry
+                code={whatsAppCode}
+                disabled={verifying}
+                id="customer-phone-whatsapp-code"
+                onCodeChange={(value) => {
+                  setWhatsAppCode(value);
+                  setPhoneRefusal(null);
+                }}
+                onResend={() => void sendWhatsAppLinkCode()}
+                onVerify={() => void confirmWhatsAppLinkCode()}
+                resendSeconds={whatsAppResendSeconds}
+                resending={whatsAppAction === "send"}
+                verifyLabel="Verify phone"
+                verifying={whatsAppAction === "verify"}
+                verifyingLabel="Verifying phone..."
+              />
             )}
             {verificationId && (
               <div className="customer-phone-code-step">
@@ -1556,24 +1715,34 @@ function ProfileView({ firebaseUser, profile }: { firebaseUser: User; profile: U
       </section>
       <section className="panel customer-danger-zone">
         <div className="panel-header"><div><h2>Delete account</h2></div></div>
-        <p>
-          Enter your password to request deletion. Required transaction records
-          may be retained for legal and accounting obligations.
-        </p>
+        {passwordAccount ? (
+          <p>
+            Enter your password to request deletion. Required transaction records
+            may be retained for legal and accounting obligations.
+          </p>
+        ) : (
+          <p>
+            You signed in with your phone, so no password is needed. Required
+            transaction records may be retained for legal and accounting
+            obligations.
+          </p>
+        )}
         <div className="customer-delete-row">
-          <label>
-            Current password
-            <input
-              autoComplete="current-password"
-              onChange={(event) => setDeletePassword(event.target.value)}
-              type="password"
-              value={deletePassword}
-            />
-          </label>
+          {passwordAccount && (
+            <label>
+              Current password
+              <input
+                autoComplete="current-password"
+                onChange={(event) => setDeletePassword(event.target.value)}
+                type="password"
+                value={deletePassword}
+              />
+            </label>
+          )}
           <button
             className="danger-button"
             data-loading={deleting}
-            disabled={deleting || !deletePassword}
+            disabled={deleting || (passwordAccount && !deletePassword)}
             onClick={() => void requestDeletion()}
             type="button"
           >

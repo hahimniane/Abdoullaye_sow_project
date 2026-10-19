@@ -13,7 +13,9 @@ test("phone verification is discoverable without hijacking navigation", () => {
   // Stripe, so paying for a barrel landed the customer on an account form.
   // The goal (make verification findable) is kept; the mechanism is a prompt
   // on Home, which the customer can act on or ignore.
-  assert.match(source, /useState<CustomerTab>\("home"\)/);
+  // Home, unless the address names My packages (`?open=packages`, where a
+  // phone sign-in from a tracking link lands): an explicit arrival only.
+  assert.match(source, /useState<CustomerTab>\(\(\) =>\s*\(typeof window !== "undefined" &&\s*customerTabFromSearch\(window\.location\.search\)\) \|\| "home",?\s*\)/);
   assert.doesNotMatch(source, /firebaseUser\.phoneNumber \? "home" : "profile"/);
   assert.match(source, /needsPhoneVerification=\{profile\?\.phoneVerified !== true\}/);
   assert.match(source, /needsPhoneVerification && \(/);
@@ -21,7 +23,7 @@ test("phone verification is discoverable without hijacking navigation", () => {
 });
 
 test("a valid international phone exposes the send-code action", () => {
-  const start = source.indexOf("{!verificationId && (");
+  const start = source.indexOf("{!verificationId && !whatsAppChallengeId && (");
   const end = source.indexOf("{verificationId && (", start);
   assert.notEqual(start, -1, "missing initial phone-verification state");
   assert.notEqual(end, -1, "missing transition to the OTP state");

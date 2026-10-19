@@ -404,6 +404,9 @@ function PackagePersonCard({ person }: { person: PackagePerson | null }) {
       {person.needsCountryCode && (
         <small className="pkg-staff-warn">Add the country code so WhatsApp updates can reach this number.</small>
       )}
+      {person.reportedNotMine && (
+        <small className="pkg-staff-warn">The person says this number isn&apos;t theirs - check it</small>
+      )}
       {person.phone && (
         <div className="pkg-staff-contact">
           {person.callHref ? (

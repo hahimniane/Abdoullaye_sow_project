@@ -12,7 +12,7 @@ import {
 } from "firebase/auth";
 import { httpsCallable } from "firebase/functions";
 import { doc, getDoc, onSnapshot } from "firebase/firestore";
-import { MailCheck, RefreshCw, Send, ShieldCheck } from "lucide-react";
+import { MailCheck, RefreshCw, Send, ShieldCheck, Smartphone } from "lucide-react";
 
 import {
   type ConsoleHost,
@@ -20,6 +20,8 @@ import {
 } from "@/lib/console-host";
 import { DisclosureCheckbox } from "@/components/disclosure-checkbox";
 import { CustomerPhoneField } from "@/components/customer-phone-field";
+import { PhoneSignIn } from "@/components/phone-sign-in";
+import { completePhoneSignInOnce } from "@/lib/phone-accounts-client";
 import { resolveConsoleKind, serviceEntryApplies } from "@/lib/console-routing";
 import { customerServiceFromLocation } from "@/lib/customer-service-intent";
 import { ItemTagPage } from "@/components/item-tag-page";
@@ -199,6 +201,11 @@ const previewBusiness: FirestoreRow = {
 
 const PROFILE_LOAD_TIMEOUT_MS = 15_000;
 
+/** Signed in with a phone (a code or a text) and no email on the account. */
+function phoneOnlyAccount(user: User) {
+  return !user.isAnonymous && Boolean(user.phoneNumber) && !user.email;
+}
+
 async function loadProfile(uid: string) {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   try {
@@ -327,8 +334,19 @@ export function ConsoleRouter() {
         // pick that up until it naturally expires (~1hr). Force a refresh on
         // every session load so a stale token never causes storage/unauthorized.
         await user.getIdToken(true);
-        const snap = await loadProfile(user.uid);
+        let snap = await loadProfile(user.uid);
         if (!active || !isCurrent()) return;
+        // A first sign-in by text: the profile is written by
+        // completePhoneSignIn (docs/PHONE_ACCOUNTS.md §5.3), which the
+        // sign-in form may still be waiting on. Wait for the same call -
+        // one request either way - then read the profile again, instead of
+        // showing a phone account the invitation setup.
+        if (!snap.exists() && phoneOnlyAccount(user)) {
+          await completePhoneSignInOnce(user.uid).catch(() => undefined);
+          if (!active || !isCurrent()) return;
+          snap = await loadProfile(user.uid);
+          if (!active || !isCurrent()) return;
+        }
         if (!snap.exists()) {
           setProfileMissing(true);
           return;
@@ -770,6 +788,9 @@ function RoleSignInCard({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  // "Sign in with your phone" (customer host only): a WhatsApp or text code
+  // instead of the email and password. Its own panel, not a nested form.
+  const [phoneMode, setPhoneMode] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -833,6 +854,15 @@ function RoleSignInCard({
             </p>
           </div>
         </div>
+        {phoneMode && customerSignUp ? (
+          <div className="login-card">
+            <h2>Sign in with your phone</h2>
+            <PhoneSignIn
+              idPrefix={embedded ? "embedded-phone-sign-in" : "phone-sign-in"}
+              onBack={() => setPhoneMode(false)}
+            />
+          </div>
+        ) : (
         <form className="login-card" onSubmit={submit}>
           <div className="auth-mode-tabs" aria-label="Account access">
             <button
@@ -945,6 +975,26 @@ function RoleSignInCard({
               Forgot password?
             </button>
           )}
+          {mode === "sign-in" && customerSignUp && (
+            <>
+              <div className="customer-auth-divider login-or">
+                <span>or</span>
+              </div>
+              <button
+                className="secondary-button"
+                disabled={submitting}
+                onClick={() => {
+                  setPhoneMode(true);
+                  setError("");
+                  setNotice("");
+                }}
+                type="button"
+              >
+                <Smartphone aria-hidden="true" size={16} />
+                Sign in with your phone
+              </button>
+            </>
+          )}
           {(mode === "sign-up" ||
             (consoleHost === "business" && mode === "sign-in")) && (
             <p className="card-sub" style={{margin: "6px 0 0", textAlign: "center"}}>
@@ -968,6 +1018,7 @@ function RoleSignInCard({
             </button>
           )}
         </form>
+        )}
       </div>
   );
   return embedded ? screen : <div className="app-shell">{screen}</div>;

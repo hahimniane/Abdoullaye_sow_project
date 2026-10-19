@@ -152,7 +152,17 @@ import {
 } from "@/lib/admin-areas";
 import { AdminVolumeView } from "@/components/volume-views";
 import type { FirestoreRow, Role, UserProfile } from "@/types/admin";
-import { buildBusinessDirectory, buildUserDirectory } from "@/lib/admin-directory";
+import {
+  PEOPLE_SIGN_IN_STATES,
+  buildBusinessDirectory,
+  buildUserDirectory,
+  filterPeopleBySignIn,
+  personContact,
+  personDisplayName,
+  personHasEmail,
+  personNotSignedInYet,
+  type PeopleSignInState,
+} from "@/lib/admin-directory";
 import { FieldInfo } from "@/components/field-info";
 import { SupportCasesPanel } from "@/components/support/support-cases-panel";
 import { UserText } from "@/components/user-text";
@@ -1288,7 +1298,8 @@ function belongsToBusiness(row: FirestoreRow, business: FirestoreRow) {
 }
 
 function userDisplayName(user: FirestoreRow) {
-  return text(user.fullName ?? user.email ?? user.phone, user.id);
+  // An account made from a shipment has a name and a phone, and no email.
+  return personDisplayName(user);
 }
 
 function userMeta(user: FirestoreRow) {
@@ -1432,7 +1443,8 @@ function peoplePersonStatus(user: FirestoreRow): PeoplePersonStatus {
   ) {
     return "suspended";
   }
-  if (user.hasAuth !== false && user.emailVerified === false) {
+  // Only an email can be unverified: a phone account has none to verify.
+  if (user.hasAuth !== false && user.emailVerified === false && personHasEmail(user)) {
     return "unverified";
   }
   return "active";
@@ -1648,7 +1660,15 @@ function useFlaggedReviews(enabled: boolean, pageSize = 50): PagedRows {
   });
 }
 
-function useAdminAuthUsers(enabled: boolean) {
+/**
+ * The People directory's pages of listMarketplacePeople. `signInState`
+ * keeps accounts a shipment made and nobody signed in to yet out of the
+ * main list by default (docs/PHONE_ACCOUNTS.md §9); changing it reloads.
+ */
+function useAdminAuthUsers(
+  enabled: boolean,
+  signInState: PeopleSignInState = "signed_in",
+) {
   const [rows, setRows] = useState<FirestoreRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -1680,6 +1700,7 @@ function useAdminAuthUsers(enabled: boolean) {
     httpsCallable(functions, "listMarketplacePeople")({
       pageSize: 100,
       pageToken: "",
+      signInState,
     })
       .then((result) => {
         if (!active) return;
@@ -1708,7 +1729,7 @@ function useAdminAuthUsers(enabled: boolean) {
       active = false;
       window.clearTimeout(safetyTimeout);
     };
-  }, [enabled, refreshToken]);
+  }, [enabled, refreshToken, signInState]);
 
   const refresh = useCallback(() => {
     setRefreshToken((value) => value + 1);
@@ -1726,6 +1747,7 @@ function useAdminAuthUsers(enabled: boolean) {
         pageSize: 100,
         pageToken,
         includeInvitations: false,
+        signInState,
       });
       const data = result.data as {
         people?: FirestoreRow[];
@@ -1747,7 +1769,7 @@ function useAdminAuthUsers(enabled: boolean) {
     } finally {
       setLoadingMore(false);
     }
-  }, [enabled, loadingMore, pageToken]);
+  }, [enabled, loadingMore, pageToken, signInState]);
 
   const searchAll = useCallback(
     async (search: string) => {
@@ -2086,8 +2108,13 @@ export function AdminConsole() {
     olderRecordLists.forEach((list) => {
       if (list.hasMore) list.loadMore();
     });
+  // Accounts a shipment made, not signed in to yet, stay out of the main
+  // list unless asked for.
+  const [peopleSignInState, setPeopleSignInState] =
+    useState<PeopleSignInState>("signed_in");
   const authUsers = useAdminAuthUsers(
     tabNeeds("people") && adminEmailVerified,
+    peopleSignInState,
   );
   const carRows = previewMode ? previewData.cars : cars.rows;
   const shipmentRows = previewMode
@@ -2599,6 +2626,8 @@ export function AdminConsole() {
               refreshUsers={authUsers.refresh}
               loadMoreUsers={authUsers.loadMore}
               searchAllUsers={authUsers.searchAll}
+              signInState={peopleSignInState}
+              onSignInStateChange={setPeopleSignInState}
               runAction={runAction}
               canManage={perms.can("users")}
               canManageBusinesses={perms.can("businesses")}
@@ -3519,6 +3548,8 @@ function UsersView({
   refreshUsers,
   loadMoreUsers,
   searchAllUsers,
+  signInState,
+  onSignInStateChange,
   runAction,
   canManage,
   canManageBusinesses,
@@ -3539,6 +3570,8 @@ function UsersView({
   refreshUsers: () => void;
   loadMoreUsers: () => void;
   searchAllUsers: (search: string) => void;
+  signInState: PeopleSignInState;
+  onSignInStateChange: (state: PeopleSignInState) => void;
   runAction: ActionRunner;
   canManage: boolean;
   canManageBusinesses: boolean;
@@ -3564,7 +3597,7 @@ function UsersView({
   } | null>(null);
   const filtered = useMemo(() => {
     const needle = search.trim().toLowerCase();
-    return users.filter((item) => {
+    return filterPeopleBySignIn(users, signInState, needle.length > 0).filter((item) => {
       const kind = peoplePersonKind(item);
       const status = peoplePersonStatus(item);
       if (
@@ -3594,7 +3627,7 @@ function UsersView({
         .join(" ")
         .includes(needle);
     });
-  }, [personStatus, personType, search, users]);
+  }, [personStatus, personType, search, signInState, users]);
   const selectedPerson =
     filtered.find((item) => peoplePersonId(item) === selectedPersonId) ??
     filtered[0] ??
@@ -3893,6 +3926,22 @@ function UsersView({
           </select>
         </label>
         <label>
+          <span>Sign-in</span>
+          <select
+            aria-label="Filter by sign-in"
+            value={signInState}
+            onChange={(event) =>
+              onSignInStateChange(event.target.value as PeopleSignInState)
+            }
+          >
+            {PEOPLE_SIGN_IN_STATES.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
           <span>Account status</span>
           <select
             aria-label="Filter by account status"
@@ -4003,8 +4052,16 @@ function UsersView({
                   </span>
                   <span className="people-list-copy">
                     <strong data-no-translate>{userDisplayName(user)}</strong>
-                    <span><UserText value={user.email ?? user.phone} fallback="No contact information" /></span>
-                    <small>{peoplePersonKindLabel(user)}</small>
+                    <span><UserText value={personContact(user)} fallback="No contact information" /></span>
+                    <small>
+                      {peoplePersonKindLabel(user)}
+                      {personNotSignedInYet(user) && (
+                        <>
+                          {" · "}
+                          <span className="people-not-signed-in">Not signed in yet</span>
+                        </>
+                      )}
+                    </small>
                   </span>
                   <span
                     className={`people-state people-state-${status}`}
@@ -4150,11 +4207,16 @@ function PersonDetailWorkspace({
                 <span className="status-pill compact">Signed in</span>
               )}
             </div>
-            <p><UserText value={user.email ?? user.phone} fallback="No contact information" /></p>
+            <p><UserText value={personContact(user)} fallback="No contact information" /></p>
             <div className="people-detail-badges">
               <span className="status-pill compact">
                 {peoplePersonKindLabel(user)}
               </span>
+              {personNotSignedInYet(user) && (
+                <span className="status-pill compact people-not-signed-in">
+                  Not signed in yet
+                </span>
+              )}
               <span className={`people-state people-state-${status}`}>
                 {peoplePersonStatusLabel(user)}
               </span>
@@ -4250,7 +4312,13 @@ function PersonDetailWorkspace({
             </div>
             <div>
               <dt>Email verification</dt>
-              <dd>{user.emailVerified === false ? "Not verified" : "Verified"}</dd>
+              <dd>
+                {!personHasEmail(user)
+                  ? "No email"
+                  : user.emailVerified === false
+                    ? "Not verified"
+                    : "Verified"}
+              </dd>
             </div>
             <div>
               <dt>Authentication</dt>
@@ -4280,8 +4348,15 @@ function PersonDetailWorkspace({
             kind !== "invitation" &&
             (kind !== "admin" || isSuperAdmin) && (
             <div className="people-action-row">
+              {!personHasEmail(user) && (
+                <p className="people-action-note">
+                  No email on this account: the person signs in with a code
+                  sent to their phone, so there is no password to reset.
+                </p>
+              )}
               <button
                 className="secondary-button"
+                disabled={!personHasEmail(user)}
                 onClick={() =>
                   runAction(
                     "Password reset sent",

@@ -39,7 +39,7 @@ test("unverified administrators get a bilingual recovery gate before people data
   assert.match(source, /getIdToken\(true\)/);
   assert.match(
     source,
-    /useAdminAuthUsers\(\s*tabNeeds\("people"\) && adminEmailVerified,\s*\)/,
+    /useAdminAuthUsers\(\s*tabNeeds\("people"\) && adminEmailVerified,\s*peopleSignInState,\s*\)/,
   );
   assert.match(source, /if \(!adminEmailVerified\)/);
   assert.match(source, /verificationBusy === "sending"/);

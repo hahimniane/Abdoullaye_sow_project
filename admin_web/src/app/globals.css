@@ -15353,3 +15353,57 @@ button.pkq-card:hover { border-color: var(--brand); }
   .pkq-piece { flex-direction: column; }
   .pkq-price { max-width: none; width: 100%; }
 }
+
+/* Phone accounts (docs/PHONE_ACCOUNTS.md). Sign in with your phone: the
+   code step reuses the profile's .customer-phone-code-step. */
+.phone-sign-in { display: grid; gap: 12px; min-width: 0; }
+.phone-sign-in-lede { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0; }
+.phone-sign-in > .primary-button,
+.phone-sign-in > .secondary-button { justify-content: center; width: 100%; }
+.phone-sign-in > .text-button { align-items: center; display: inline-flex; gap: 6px; justify-content: center; }
+.login-card .customer-auth-divider.login-or { padding: 0; }
+.login-card > .secondary-button { justify-content: center; }
+/* The tracking page: who may sign in from it, by the number's last digits. */
+.guest-phone-sign-in {
+  background: var(--paper-soft);
+  border: 1px solid var(--rule);
+  border-radius: 9px;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+.guest-phone-sign-in h3 { font-size: 15px; margin: 0; }
+.guest-phone-sign-in p { color: var(--muted); font-size: 13px; line-height: 1.45; margin: 4px 0 0; }
+.guest-phone-sign-in-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.guest-phone-sign-in-actions > .secondary-button { flex-wrap: wrap; max-width: 100%; white-space: normal; }
+.guest-phone-role { color: var(--brand-strong); font-size: 11px; font-weight: 850; letter-spacing: .04em; text-transform: uppercase; }
+/* My packages. */
+.my-packages-state { align-items: center; color: var(--muted); display: flex; flex-wrap: wrap; font-size: 13px; gap: 10px; padding: 14px 0; }
+.my-packages-state p { margin: 0; }
+.my-packages-needs-phone { background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(180, 83, 9, 0.2); border-radius: 8px; color: var(--ink); padding: 12px 14px; }
+.my-packages-needs-phone > div { flex: 1 1 220px; min-width: 0; }
+.my-packages-needs-phone p { color: var(--muted); font-size: 12px; margin: 3px 0 0; }
+.my-packages-error { display: grid; gap: 8px; justify-items: start; }
+.my-packages-none { color: var(--muted); font-size: 13px; margin: 8px 0 0; }
+.my-packages-groups { display: grid; gap: 18px; margin-top: 8px; }
+.my-packages-business h3 { font-size: 14px; margin: 0 0 8px; }
+.my-packages-cards { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); }
+.my-package-card { background: var(--paper); border: 1px solid var(--rule); border-radius: 8px; display: grid; gap: 10px; min-width: 0; padding: 12px; }
+.my-package-head { align-items: flex-start; display: flex; gap: 8px; justify-content: space-between; }
+.my-package-head > div { display: grid; gap: 4px; justify-items: start; min-width: 0; }
+.my-package-facts { display: grid; gap: 8px 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; }
+.my-package-facts dt { color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; }
+.my-package-facts dd { font-size: 13px; margin: 2px 0 0; overflow-wrap: anywhere; }
+.my-package-parts { display: grid; gap: 6px; list-style: none; margin: 0; padding: 0; }
+.my-package-parts li { align-items: center; display: flex; flex-wrap: wrap; gap: 6px; }
+.my-package-parts small { color: var(--muted); }
+.my-package-note { color: var(--muted); font-size: 12px; margin: 0; }
+.my-package-actions { border-top: 1px solid var(--rule); display: flex; justify-content: flex-end; padding-top: 6px; }
+.my-package-actions > .text-button { font-size: 13px; }
+.my-packages-more { justify-self: center; }
+/* Staff: the server's flags next to a phone. */
+.phone-flag { color: #92400e; display: block; font-size: 12px; font-weight: 600; line-height: 1.35; }
+/* People: accounts a shipment made, not signed in to yet. */
+.people-not-signed-in { color: #92400e; }
+.status-pill.people-not-signed-in { background: rgba(245, 158, 11, 0.1); border-color: rgba(180, 83, 9, 0.22); }
+.people-action-note { color: var(--muted); flex-basis: 100%; font-size: 12px; line-height: 1.45; margin: 0; }

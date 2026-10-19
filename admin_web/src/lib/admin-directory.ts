@@ -255,3 +255,56 @@ export function buildBusinessDirectory(
     return (str(a.name) || str(a.id)).localeCompare(str(b.name) || str(b.id));
   });
 }
+
+// ---------------------------------------------------------------------------
+// Phone accounts in the People directory (docs/PHONE_ACCOUNTS.md §9).
+// ---------------------------------------------------------------------------
+
+/** What the directory asks listMarketplacePeople for, and filters the page by. */
+export type PeopleSignInState = "all" | "signed_in" | "not_signed_in";
+
+export const PEOPLE_SIGN_IN_STATES: ReadonlyArray<{ value: PeopleSignInState; label: string }> = [
+  { value: "signed_in", label: "Signed in" },
+  { value: "not_signed_in", label: "Not signed in yet" },
+  { value: "all", label: "Everyone" },
+];
+
+/**
+ * An account a business's shipment made for its number, nobody signed in to
+ * yet: the server's `notSignedInYet`, or - for a raw profile row - its
+ * `accountOrigin == "shipment"` with no `firstSignInAt`.
+ */
+export function personNotSignedInYet(row: FirestoreRow): boolean {
+  if (row.notSignedInYet === true) return true;
+  if (row.notSignedInYet === false) return false;
+  return str(row.accountOrigin) === "shipment" && !row.firstSignInAt;
+}
+
+/** Whether the person has an email anything can be sent to. */
+export function personHasEmail(row: FirestoreRow): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str(row.email));
+}
+
+/** The contact line a row shows: the email, else the phone ("" when neither). */
+export function personContact(row: FirestoreRow): string {
+  return personHasEmail(row) ? str(row.email) : str(row.phone);
+}
+
+/** The name a row shows: the first of name, email, phone that is set, else its id. */
+export function personDisplayName(row: FirestoreRow): string {
+  return str(row.fullName) || str(row.email) || str(row.phone) || str(row.id);
+}
+
+/**
+ * The directory list by sign-in state. A search shows everyone it finds:
+ * an admin looking up a number wants that person, signed in or not.
+ */
+export function filterPeopleBySignIn(
+  rows: readonly FirestoreRow[],
+  state: PeopleSignInState,
+  searching = false,
+): FirestoreRow[] {
+  if (searching || state === "all") return [...rows];
+  const wanted = state === "not_signed_in";
+  return rows.filter((row) => personNotSignedInYet(row) === wanted);
+}

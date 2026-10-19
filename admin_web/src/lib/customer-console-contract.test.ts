@@ -109,7 +109,9 @@ test("the console opens on Home, never on the profile form", () => {
   // true for every customer who signed up by email and never did SMS
   // verification. It fired on every reload AND on the return from Stripe, so
   // paying for a barrel landed the customer on an account form.
-  assert.match(source, /useState<CustomerTab>\("home"\)/);
+  // Home, unless the address names My packages (`?open=packages`, where a
+  // phone sign-in from a tracking link lands): an explicit arrival only.
+  assert.match(source, /useState<CustomerTab>\(\(\) =>\s*\(typeof window !== "undefined" &&\s*customerTabFromSearch\(window\.location\.search\)\) \|\| "home",?\s*\)/);
   assert.doesNotMatch(source, /firebaseUser\.phoneNumber \? "home" : "profile"/);
 });
 

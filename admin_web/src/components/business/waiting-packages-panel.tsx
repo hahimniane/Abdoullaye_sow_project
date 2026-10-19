@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { httpsCallable } from "firebase/functions";
 import { Banknote, Pencil, Plus, Printer, RefreshCw, Tag, X } from "lucide-react";
 
@@ -70,6 +70,8 @@ import {
   decodeVinWithCatalog,
   vinDecodeHint,
 } from "@/lib/vin-lookup";
+import { RecordPhoneFlags } from "@/components/phone-flags";
+import { unflaggedLineWarnings } from "@/lib/phone-accounts";
 import type { FirestoreRow } from "@/types/admin";
 
 type Row = Record<string, unknown>;
@@ -135,6 +137,8 @@ type WaitingPackagesPanelProps = {
   enabled: boolean;
   /** Confirmed package requests, shown as Expected above the packages in the shop. */
   expected?: ReactNode;
+  /** A line a notification points at: marked and scrolled to once it renders. */
+  focusLineId?: string;
 };
 
 type Modal = "" | "form" | "payment" | "labels";
@@ -163,6 +167,7 @@ export function WaitingPackagesPanel({
   onFlash,
   enabled,
   expected = null,
+  focusLineId = "",
 }: WaitingPackagesPanelProps) {
   const lang = currentLanguage() === "fr" ? "fr" : "en";
   // A decimal comma in French; readMoneyInput reads "45,50" and "45.50" alike.
@@ -185,6 +190,15 @@ export function WaitingPackagesPanel({
   const [labelLines, setLabelLines] = useState<Row[]>([]);
 
   const sorted = useMemo(() => sortWaitingNewestFirst(rows), [rows]);
+  // A notification's line: scrolled into view once, as soon as it renders.
+  const focusScrolled = useRef("");
+  useEffect(() => {
+    if (!focusLineId || focusScrolled.current === focusLineId) return;
+    const row = document.getElementById(`wpk-line-${focusLineId}`);
+    if (!row) return;
+    focusScrolled.current = focusLineId;
+    row.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [focusLineId, rows]);
   const shown = useMemo(() => filterWaitingPackages(sorted, filter), [sorted, filter]);
   const searching = text(filter, "").length >= 2;
   const paymentLine = paymentLineId ? sorted.find((row) => text(row.id, "") === paymentLineId) : undefined;
@@ -420,9 +434,11 @@ export function WaitingPackagesPanel({
               const pickupFee = linePickupFeeCents(row);
               const id = text(row.id, "");
               const title = containerLineTitle(row, lang);
-              const { summary, warnings } = containerLineWhatsAppText(containerLineWhatsApp(row));
+              const { summary, warnings: lineWarnings } = containerLineWhatsAppText(containerLineWhatsApp(row));
+              // A number the server flags shows "Add the country code" next to itself.
+              const warnings = unflaggedLineWarnings(row, lineWarnings);
               return (
-                <div className="mini-table-row" id={`wpk-line-${id}`} key={id}>
+                <div className={`mini-table-row${focusLineId && id === focusLineId ? " ctn-line-focus" : ""}`} id={`wpk-line-${id}`} key={id}>
                   <span>
                     {/* "2 barrels" is copy and reads in French; a make, VIN or description is typed. */}
                     <strong data-no-translate={containerLineTitleIsCopy(row) ? undefined : true}>{title}</strong>
@@ -438,7 +454,9 @@ export function WaitingPackagesPanel({
                   <span>
                     <strong data-no-translate>{line.customerName}</strong>
                     <small data-no-translate>{line.customerPhone}</small>
+                    <RecordPhoneFlags row={row} field="customerPhone" />
                     {line.receiverName && <small data-no-translate>→ {line.receiverName}{line.receiverPhone ? ` · ${line.receiverPhone}` : ""}</small>}
+                    <RecordPhoneFlags row={row} field="receiverPhone" />
                     <small className="ctn-wa">{summary}</small>
                     {warnings.map((warning) => (<small className="ctn-wa-warn" key={warning}>{warning}</small>))}
                   </span>

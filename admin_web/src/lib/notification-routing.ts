@@ -44,6 +44,9 @@ export type BusinessPanelView =
   | "sales"
   // Inventory: the Transfers view, with one transfer open.
   | "transfers"
+  // Containers: one container line, found wherever it is (on a container,
+  // or still in the waiting list).
+  | "line"
   // Parking's month-end bills for one month, e.g. "month_end:2026-09".
   | `month_end:${string}`;
 
@@ -289,6 +292,10 @@ export function businessTargetForNotification(
     // A store transfer (sent, cancelled, differences, reminders): Inventory → Transfers with it open.
     case "inventory_transfer":
       return {tab: "inventory", panelView: "transfers", focusId};
+    // "This isn't mine" on a record (docs/PHONE_ACCOUNTS.md §6.1): the
+    // record itself, so staff can check the number.
+    case "phone_number_reported":
+      return phoneReportTarget(firstText(data.relatedCollection), focusId);
     case "transport_opportunity":
     case "transport_quote_lost":
       return {tab: "transport", focusId, panelView: "opportunities"};
@@ -296,6 +303,31 @@ export function businessTargetForNotification(
     case "transport_quote_won":
     case "transport_job_paid":
       return {tab: "transport", focusId, panelView: "jobs"};
+    default:
+      return {tab: "today"};
+  }
+}
+
+/** Where a reported number's record is worked on, per collection. */
+function phoneReportTarget(
+  collection: string,
+  focusId: string,
+): BusinessNotificationTarget {
+  switch (collection) {
+    case "containerLines":
+      return {tab: "containers", focusId, panelView: "line"};
+    case "packageRequests":
+      return {tab: "containers", focusId, panelView: "requests"};
+    case "barrelShipments":
+      return {tab: "barrels", focusId};
+    case "freightShipments":
+      return {tab: "freight", focusId, panelView: "shipments"};
+    case "freightQuoteRequests":
+      return {tab: "freight", focusId, panelView: "requests"};
+    case "transportRequests":
+      return {tab: "transport", focusId, panelView: "jobs"};
+    case "parkedCars":
+      return {tab: "parking", focusId};
     default:
       return {tab: "today"};
   }

@@ -28,11 +28,15 @@ function StoreGlyph({ store }: { store: StoreLink["store"] }) {
 }
 
 /**
- * Offers the app under a public tracking result. Rendered only on the
- * client (the tracking view is a client-only dynamic import), so the device
- * is known on first paint and the buttons never swap.
+ * Offers the app on a public tracking page. Rendered only on the client (the
+ * tracking view is a client-only dynamic import), so the device is known on
+ * first paint and the buttons never swap.
+ *
+ * `variant="track"` is the app-first section at the top of a tracking link
+ * (docs/PHONE_ACCOUNTS.md §10): the app is offered first, the status stays
+ * right below it, and nobody is made to install anything.
  */
-export function GetAppBanner() {
+export function GetAppBanner({ variant = "follow" }: { variant?: "follow" | "track" } = {}) {
   const [links] = useState(() =>
     storeLinksFor(
       typeof navigator === "undefined"
@@ -44,11 +48,21 @@ export function GetAppBanner() {
     ),
   );
   return (
-    <aside aria-labelledby="get-app-banner-title" className="guest-tracking-upsell get-app-banner">
-      <div>
-        <strong id="get-app-banner-title">Follow every shipment in the Laawol app</strong>
-        <p>Get a notification at each step and keep all your orders in one place.</p>
-      </div>
+    <aside
+      aria-labelledby={`get-app-banner-title-${variant}`}
+      className={`guest-tracking-upsell get-app-banner${variant === "track" ? " get-app-banner-track" : ""}`}
+    >
+      {variant === "track" ? (
+        <div>
+          <strong id="get-app-banner-title-track">Track it in the Laawol app</strong>
+          <p>After installing, tap Track in WhatsApp again.</p>
+        </div>
+      ) : (
+        <div>
+          <strong id="get-app-banner-title-follow">Follow every shipment in the Laawol app</strong>
+          <p>Get a notification at each step and keep all your orders in one place.</p>
+        </div>
+      )}
       <div className="guest-tracking-upsell-actions">
         {links.map((link) => (
           <a

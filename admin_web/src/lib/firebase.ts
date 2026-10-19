@@ -1,10 +1,17 @@
-import { initializeApp, getApps } from "firebase/app";
+import { deleteApp, initializeApp, getApps } from "firebase/app";
 import {
   initializeAppCheck,
   ReCaptchaEnterpriseProvider,
   type AppCheck,
 } from "firebase/app-check";
-import { connectAuthEmulator, getAuth } from "firebase/auth";
+import {
+  connectAuthEmulator,
+  getAuth,
+  inMemoryPersistence,
+  initializeAuth,
+  signOut,
+  type Auth,
+} from "firebase/auth";
 import {
   connectFirestoreEmulator,
   getFirestore,
@@ -126,15 +133,48 @@ if (
   !(globalThis as { __laawolEmulatorsConnected?: boolean }).__laawolEmulatorsConnected
 ) {
   (globalThis as { __laawolEmulatorsConnected?: boolean }).__laawolEmulatorsConnected = true;
-  const host = process.env.NEXT_PUBLIC_FIREBASE_EMULATOR_HOST ?? "127.0.0.1";
-  // The ports default to firebase.json's; a second emulator suite on one
-  // machine (parallel work in another checkout) runs on its own ports.
-  const port = (value: string | undefined, fallback: number) => {
-    const parsed = Number(value);
-    return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
-  };
-  connectAuthEmulator(auth, `http://${host}:${port(process.env.NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_PORT, 9099)}`, { disableWarnings: true });
-  connectFirestoreEmulator(db, host, port(process.env.NEXT_PUBLIC_FIREBASE_FIRESTORE_EMULATOR_PORT, 8080));
-  connectFunctionsEmulator(functions, host, port(process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_EMULATOR_PORT, 5001));
-  connectStorageEmulator(storage, host, port(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_EMULATOR_PORT, 9199));
+  const host = emulatorHost();
+  connectAuthEmulator(auth, authEmulatorUrl(), { disableWarnings: true });
+  connectFirestoreEmulator(db, host, emulatorPort(process.env.NEXT_PUBLIC_FIREBASE_FIRESTORE_EMULATOR_PORT, 8080));
+  connectFunctionsEmulator(functions, host, emulatorPort(process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_EMULATOR_PORT, 5001));
+  connectStorageEmulator(storage, host, emulatorPort(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_EMULATOR_PORT, 9199));
+}
+
+function emulatorHost() {
+  return process.env.NEXT_PUBLIC_FIREBASE_EMULATOR_HOST ?? "127.0.0.1";
+}
+
+// The ports default to firebase.json's; a second emulator suite on one
+// machine (parallel work in another checkout) runs on its own ports.
+function emulatorPort(value: string | undefined, fallback: number) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function authEmulatorUrl() {
+  return `http://${emulatorHost()}:${emulatorPort(process.env.NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_PORT, 9099)}`;
+}
+
+/**
+ * Runs `work` with a throwaway Auth instance on a SECONDARY app, so a sign-in
+ * there never replaces the person's own session (docs/PHONE_ACCOUNTS.md §7:
+ * proving a number a placeholder holds). The instance keeps nothing on disk,
+ * is signed out and its app deleted afterwards, whatever happens.
+ */
+export async function withSecondaryAuth<T>(work: (secondary: Auth) => Promise<T>): Promise<T> {
+  const name = `phone-proof-${Date.now().toString(36)}`;
+  const secondaryApp = initializeApp(firebaseConfig, name);
+  try {
+    const secondary = initializeAuth(secondaryApp, { persistence: inMemoryPersistence });
+    if (useFirebaseEmulators) {
+      connectAuthEmulator(secondary, authEmulatorUrl(), { disableWarnings: true });
+    }
+    try {
+      return await work(secondary);
+    } finally {
+      await signOut(secondary).catch(() => undefined);
+    }
+  } finally {
+    await deleteApp(secondaryApp).catch(() => undefined);
+  }
 }

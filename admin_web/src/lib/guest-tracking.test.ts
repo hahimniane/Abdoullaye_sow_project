@@ -16,6 +16,7 @@ import {
   guestStageLabel,
   guestTrackingErrorKind,
   parseGuestTrackingResponse,
+  shipmentStageLabel,
   validGuestTrackingIdentifier,
 } from "./guest-tracking.ts";
 
@@ -277,4 +278,31 @@ test("every container tracking string has French", () => {
     assert.notEqual(french, english, `no French for "${english}"`);
     assert.equal(translateValue(french, "en"), english, `"${english}" does not round-trip`);
   }
+});
+
+test("the answer's sign-in hints are kept to a role and two digits", () => {
+  const parsed = parseGuestTrackingResponse({
+    version: 1, found: true,
+    record: {
+      trackingCode: "CL-K7M4P2", service: "container", stage: "booked", updatedAtMs: 1,
+      signIn: [{ role: "sender", lastTwo: "35" }, { role: "receiver", lastTwo: "+224620123456" }],
+    },
+  });
+  assert.ok(parsed.found);
+  if (parsed.found) assert.deepEqual(parsed.record.signIn, [{ role: "sender", lastTwo: "35" }]);
+  const none = parseGuestTrackingResponse({
+    version: 1, found: true,
+    record: { trackingCode: "BS-K7M4P2", service: "barrel", stage: "booked", updatedAtMs: 1 },
+  });
+  assert.ok(none.found);
+  if (none.found) assert.equal("signIn" in none.record, false);
+});
+
+test("My packages reuses the tracking stage words, plus a package request's own", () => {
+  assert.equal(shipmentStageLabel("container", "in_transit"), "At sea");
+  assert.equal(shipmentStageLabel("barrel", "in_transit"), "In progress");
+  assert.equal(shipmentStageLabel("package_request", "requested"), "Requested");
+  assert.equal(shipmentStageLabel("package_request", "booked"), "Booked");
+  assert.equal(shipmentStageLabel("barrel", "something_new"), "Booked");
+  assert.equal(guestServiceLabel("package_request"), "Package request");
 });

@@ -257,6 +257,7 @@ test("a car line becomes the app's package view", () => {
     callHref: "tel:+12075550100",
     whatsAppHref: "https://wa.me/12075550100",
     needsCountryCode: false,
+    reportedNotMine: false,
   });
   // The receiver's number has no country code: callable, not on WhatsApp.
   assert.equal(view.receiver?.callHref, "tel:620123456");
@@ -347,4 +348,18 @@ test("a line on a container is not waiting, and an old line has no size or price
   assert.equal(view.size, null);
   assert.equal(view.payment.status, "no_price");
   assert.equal(view.payment.balanceCents, null);
+});
+
+test("the server's phone flags reach the staff view's people", () => {
+  const view = packageStaffViewModel({
+    ...carLine,
+    customerPhone: "6201234567",
+    phoneCountryCodeMissing: ["customerPhone"],
+    phoneReportedNotMine: ["receiverPhone"],
+  }, box);
+  assert.equal(view.owner?.needsCountryCode, true);
+  assert.equal(view.owner?.reportedNotMine, false);
+  assert.equal(view.receiver?.reportedNotMine, true);
+  // A clean line carries neither.
+  assert.equal(packageStaffViewModel(carLine, box).owner?.reportedNotMine, false);
 });

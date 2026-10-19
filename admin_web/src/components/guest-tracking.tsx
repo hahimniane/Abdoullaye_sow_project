@@ -7,6 +7,7 @@ import { signInAnonymously } from "firebase/auth";
 
 import { GuestJourneyProgress } from "@/components/customer-tracking-journey";
 import { GetAppBanner } from "@/components/get-app-banner";
+import { PhoneSignIn } from "@/components/phone-sign-in";
 import {
   CustomerFreightQuotes,
   type FreightQuoteRequestRow,
@@ -21,7 +22,6 @@ import {
 import { currentLanguage, currentLocale } from "@/lib/format";
 import { moneyText } from "@/lib/invoice-ledger";
 import {
-  GET_APP_URL,
   GUEST_SHIPPING_FIELDS,
   guestJourneyStages,
   guestPiecesText,
@@ -33,6 +33,11 @@ import {
   type GuestTrackingRecord,
 } from "@/lib/guest-tracking";
 import { auth, db, functions } from "@/lib/firebase";
+import {
+  MY_PACKAGES_PATH,
+  PHONE_ROLE_LABELS,
+  type GuestSignInHint,
+} from "@/lib/phone-accounts";
 
 type GuestTrackingProps = {
   authenticated: boolean;
@@ -40,8 +45,9 @@ type GuestTrackingProps = {
   /** Told the code of every record found, so a staff view above can follow it. */
   onFound?: (trackingCode: string) => void;
   /**
-   * Offer the app under the answer. Off for staff on their own device, who
-   * work in the business flow rather than follow a shipment.
+   * App first: offer the app at the top, the status right below it. Off for
+   * staff on their own device, who work in the business flow rather than
+   * follow a shipment (their page is unchanged).
    */
   offerApp?: boolean;
 };
@@ -85,6 +91,15 @@ export function GuestTracking({
   const [claimedCode, setClaimedCode] = useState("");
   const [claimedRequest, setClaimedRequest] =
     useState<FreightQuoteRequestRow | null>(null);
+  // "Sign in as the number ending in ••35": the number on this record the
+  // visitor chose. The page never has more of it than its last two digits.
+  const [signingInAs, setSigningInAs] = useState<GuestSignInHint | null>(null);
+  // Arrived from a link (WhatsApp, a label): the app section says to tap
+  // Track in WhatsApp again once installed.
+  const [arrivedWithCode] = useState(
+    () => typeof window !== "undefined" &&
+      Boolean(new URLSearchParams(window.location.search).get("code")?.trim()),
+  );
   useEffect(() => {
     if (!claimedCode) return;
     const uid = auth.currentUser?.uid ?? "";
@@ -144,6 +159,7 @@ export function GuestTracking({
     setLoading(true);
     setError("");
     setRecord(null);
+    setSigningInAs(null);
     setCopied(false);
     try {
       const response = await httpsCallable(functions, "lookupGuestTracking")({
@@ -180,6 +196,7 @@ export function GuestTracking({
   function trackAnother() {
     setIdentifier("");
     setRecord(null);
+    setSigningInAs(null);
     setError("");
     setCopied(false);
     inputRef.current?.focus();
@@ -223,8 +240,8 @@ export function GuestTracking({
     }
   }
 
-  return (
-    <section className="guest-tracking-layout" aria-labelledby="guest-tracking-title">
+  const lookupSection = (
+    <>
       <div className="customer-service-hero guest-tracking-hero">
         <div>
           <span className="customer-eyebrow">No sign-in required</span>
@@ -274,8 +291,10 @@ export function GuestTracking({
           )}
         </form>
       </section>
+    </>
+  );
 
-      {record && (
+  const resultSection = record && (
         <section
           aria-labelledby="guest-tracking-result-title"
           className="phase5-tracking-card guest-tracking-result"
@@ -354,13 +373,6 @@ export function GuestTracking({
                 <div><dt>Balance</dt><dd data-no-translate>{moneyText(record.payment.balanceCents, lang)}</dd></div>
               </dl>
             </section>
-          )}
-          {offerApp && record.service === "container" && (
-            <p className="guest-tracking-get-app">
-              <a href={GET_APP_URL} rel="noopener noreferrer" target="_blank">
-                Get the Laawol app
-              </a>
-            </p>
           )}
           {record.service === "freight_quote" && claimedRequest && (
             <div className="guest-quote-state guest-quote-open">
@@ -454,6 +466,52 @@ export function GuestTracking({
               Track another
             </button>
           </div>
+          {!authenticated && record.signIn && record.signIn.length > 0 && (
+            <section
+              aria-labelledby="guest-phone-sign-in-title"
+              className="guest-phone-sign-in"
+            >
+              <div>
+                <h3 id="guest-phone-sign-in-title">Is this your package?</h3>
+                <p>Sign in with a code to see every package sent with your number.</p>
+              </div>
+              {signingInAs ? (
+                <PhoneSignIn
+                  autoStart
+                  backLabel="Cancel"
+                  hint={{
+                    trackingCode: record.trackingCode,
+                    role: signingInAs.role,
+                    lastTwo: signingInAs.lastTwo,
+                  }}
+                  idPrefix="guest-phone-sign-in"
+                  key={`${record.trackingCode}-${signingInAs.role}`}
+                  onBack={() => setSigningInAs(null)}
+                  onSignedIn={() => window.location.assign(MY_PACKAGES_PATH)}
+                />
+              ) : (
+                <div className="guest-phone-sign-in-actions">
+                  {record.signIn.map((hint) => (
+                    <button
+                      className="secondary-button"
+                      key={hint.role}
+                      onClick={() => setSigningInAs(hint)}
+                      type="button"
+                    >
+                      <LogIn aria-hidden="true" size={16} />
+                      {(record.signIn?.length ?? 0) > 1 && (
+                        <span className="guest-phone-role">{PHONE_ROLE_LABELS[hint.role]}</span>
+                      )}
+                      <span>
+                        Sign in as the number ending in{" "}
+                        <span data-no-translate>••{hint.lastTwo}</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
           {!authenticated && (
             <aside className="guest-tracking-upsell">
               <div>
@@ -471,13 +529,24 @@ export function GuestTracking({
             </aside>
           )}
         </section>
-      )}
+  );
 
-      {/* After an answer - found or not - never while it is being looked
-          up. A link from a label or WhatsApp lands here when the app is not
-          installed, so this is where it is worth offering. */}
-      {offerApp && !loading && (record || error === "not_found") && (
-        <GetAppBanner />
+  return (
+    <section className="guest-tracking-layout" aria-labelledby="guest-tracking-title">
+      {offerApp ? (
+        <>
+          {/* App first: a link from WhatsApp or a label lands here when the
+              app is not installed. The app is offered first and the status
+              sits right below it - nobody has to install anything. */}
+          <GetAppBanner variant={arrivedWithCode ? "track" : "follow"} />
+          {resultSection}
+          {lookupSection}
+        </>
+      ) : (
+        <>
+          {lookupSection}
+          {resultSection}
+        </>
       )}
     </section>
   );

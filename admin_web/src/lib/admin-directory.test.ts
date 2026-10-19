@@ -5,6 +5,11 @@ import test from "node:test";
 import {
   buildBusinessDirectory,
   buildUserDirectory,
+  filterPeopleBySignIn,
+  personContact,
+  personDisplayName,
+  personHasEmail,
+  personNotSignedInYet,
   userContactsFromRow,
 } from "./admin-directory.ts";
 
@@ -170,4 +175,47 @@ test("the admin console builds its directories once per data change", () => {
   assert.match(source, /const userRows = useMemo\(/);
   assert.match(source, /const businessRows = useMemo\(/);
   assert.doesNotMatch(source, /`name:\$\{slugify/);
+});
+
+test("an account a shipment made is 'not signed in yet' until its first sign-in", () => {
+  assert.equal(personNotSignedInYet({ id: "a", notSignedInYet: true }), true);
+  assert.equal(personNotSignedInYet({ id: "a", notSignedInYet: false, accountOrigin: "shipment" }), false);
+  // A raw profile row (no DTO flag): its origin and first sign-in decide.
+  assert.equal(personNotSignedInYet({ id: "a", accountOrigin: "shipment", firstSignInAt: null }), true);
+  assert.equal(personNotSignedInYet({ id: "a", accountOrigin: "shipment", firstSignInAt: { seconds: 1 } }), false);
+  assert.equal(personNotSignedInYet({ id: "a", accountOrigin: "phone_sign_in" }), false);
+  assert.equal(personNotSignedInYet({ id: "a" }), false);
+});
+
+test("the directory hides not-signed-in accounts by default, shows only them on request, and a search finds all", () => {
+  const rows = [
+    { id: "real", fullName: "Real" },
+    { id: "ghost", fullName: "Ghost", notSignedInYet: true },
+  ];
+  assert.deepEqual(filterPeopleBySignIn(rows, "signed_in").map((row) => row.id), ["real"]);
+  assert.deepEqual(filterPeopleBySignIn(rows, "not_signed_in").map((row) => row.id), ["ghost"]);
+  assert.deepEqual(filterPeopleBySignIn(rows, "all").map((row) => row.id), ["real", "ghost"]);
+  assert.deepEqual(filterPeopleBySignIn(rows, "signed_in", true).map((row) => row.id), ["real", "ghost"]);
+});
+
+test("a row with no email shows its phone, and email-only actions know it has none", () => {
+  const phoneOnly = { id: "u1", fullName: "", email: "", phone: "+224620123456" };
+  assert.equal(personHasEmail(phoneOnly), false);
+  assert.equal(personContact(phoneOnly), "+224620123456");
+  assert.equal(personDisplayName(phoneOnly), "+224620123456");
+  assert.equal(personDisplayName({ id: "u2", fullName: "Aissatou", email: "" }), "Aissatou");
+  assert.equal(personDisplayName({ id: "u3" }), "u3");
+  assert.equal(personHasEmail({ id: "u4", email: "a@b.co" }), true);
+  assert.equal(personContact({ id: "u4", email: "a@b.co", phone: "+1" }), "a@b.co");
+});
+
+test("the People view asks the server for the sign-in state and labels the rows", () => {
+  const source = readFileSync("src/components/admin-console.tsx", "utf8");
+  assert.match(source, /useState<PeopleSignInState>\("signed_in"\)/);
+  assert.match(source, /pageToken: "",\s*signInState,/);
+  assert.match(source, /includeInvitations: false,\s*signInState,/);
+  assert.match(source, /filterPeopleBySignIn\(users, signInState, needle\.length > 0\)/);
+  assert.match(source, /<UserText value=\{personContact\(user\)\} fallback="No contact information" \/>/);
+  assert.match(source, /disabled=\{!personHasEmail\(user\)\}/);
+  assert.match(source, /personNotSignedInYet\(user\) && \(/);
 });
