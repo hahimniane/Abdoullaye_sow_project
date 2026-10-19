@@ -5850,7 +5850,7 @@
     "placeholders": {"amount": {"type": "String"}}
   },
   "invCreditCustomerName": "Customer name",
-  "invCreditCustomerPhone": "Customer phone",
+  "invCreditCustomerPhone": "Customer phone (optional)",
   "invCreditCollector": "Who collects the rest",
   "invCreditCollectorPick": "Choose who collects",
   "invCreditDueDate": "Due date (optional)",

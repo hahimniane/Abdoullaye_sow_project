@@ -272,7 +272,8 @@ void main() {
       await _tapKey(tester, 'inv-sold');
       expect(calls.named('recordInventorySale'), isEmpty);
       expect(find.text("Enter the customer's name."), findsOneWidget);
-      expect(find.text("Enter the customer's phone number."), findsOneWidget);
+      // The phone is optional: never asked for.
+      expect(find.text("Enter the customer's phone number."), findsNothing);
       expect(find.text('Choose who collects the rest.'), findsOneWidget);
       expect(find.byKey(const Key('inv-checkout-problem')), findsOneWidget);
 
@@ -421,10 +422,11 @@ void main() {
       await _tapKey(tester, 'inv-sold');
       expect(tester.takeException(), isNull);
       expect(find.text('À crédit'), findsOneWidget);
-      expect(find.text('Téléphone du client'), findsWidgets);
+      expect(find.text('Téléphone du client (facultatif)'), findsWidgets);
+      // The phone is optional: no "enter the phone" error.
       expect(
         find.text('Saisissez le numéro de téléphone du client.'),
-        findsOneWidget,
+        findsNothing,
       );
       expect(find.text('Choisissez qui encaisse le reste.'), findsOneWidget);
       expect(find.text(r'Payé maintenant $0.00 · À crédit $60.00'),

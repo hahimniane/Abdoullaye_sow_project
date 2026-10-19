@@ -21746,7 +21746,7 @@ abstract class AppLocalizations {
   /// No description provided for @invCreditCustomerPhone.
   ///
   /// In en, this message translates to:
-  /// **'Customer phone'**
+  /// **'Customer phone (optional)'**
   String get invCreditCustomerPhone;
 
   /// No description provided for @invCreditCollector.

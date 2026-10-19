@@ -127,8 +127,7 @@ const INVENTORY_MESSAGES = Object.freeze({
   credit_invalid: "The credit part of the sale could not be read.",
   paid_now_invalid: "The amount paid now must be a whole number of cents, " +
     "from zero up to less than the sale total.",
-  credit_customer_required: "A sale on credit needs the customer's name " +
-    "and phone number.",
+  credit_customer_required: "A sale on credit needs the customer's name.",
   customer_phone_invalid: "The customer's phone number must include the " +
     "country code (for example +1 207 555 0100).",
   collector_invalid: "Pick who collects the rest: someone of this business.",
@@ -1979,10 +1978,16 @@ function cleanCreditInput(raw, totalCents, todayKey = "") {
     errors.push("paid_now_invalid");
   }
   const customerName = text(raw.customerName, MAX_CUSTOMER_NAME);
+  // The phone is optional; a country code alone ("+1", what the phone field
+  // holds while nothing is typed) counts as no phone at all.
   const phoneTyped = text(raw.customerPhone, 40);
-  const customerPhone = cleanCustomerPhone(phoneTyped);
-  if (!customerName || !phoneTyped) errors.push("credit_customer_required");
-  else if (!customerPhone) errors.push("customer_phone_invalid");
+  const phoneGiven = Boolean(phoneTyped) &&
+    !/^\+?\d{0,3}$/.test(phoneTyped.replace(/[\s().-]/g, ""));
+  const customerPhone = phoneGiven ? cleanCustomerPhone(phoneTyped) : "";
+  if (!customerName) errors.push("credit_customer_required");
+  else if (phoneGiven && !customerPhone) {
+    errors.push("customer_phone_invalid");
+  }
   const collectorStaffId = cleanStaffId(raw.collectorStaffId);
   if (!collectorStaffId) errors.push("collector_invalid");
   const due = cleanDueDate(raw.dueDate, todayKey);

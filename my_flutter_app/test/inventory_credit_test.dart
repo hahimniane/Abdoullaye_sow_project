@@ -199,11 +199,26 @@ void main() {
         totalCents: 6000,
         today: _today,
       );
+      // The phone is optional: the "+1" the field starts with is no phone.
       expect(codes, [
         'customer_name_required',
-        'customer_phone_required',
         'collector_required',
       ]);
+    });
+
+    test('the customer phone is optional, but a typed one must be whole', () {
+      List<String> phone(String typed) => validateInventoryCheckout(
+            _credit.copyWith(customerPhone: typed),
+            totalCents: 6000,
+            today: _today,
+          );
+      expect(phone(''), isEmpty);
+      expect(phone('+1'), isEmpty);
+      expect(phone('+224'), isEmpty);
+      expect(phone('+1207555'), ['customer_phone_invalid']);
+      expect(phone('+12075550100'), isEmpty);
+      expect(inventoryCreditPhoneGiven('+1'), isFalse);
+      expect(inventoryCreditPhoneGiven('+12075550100'), isTrue);
     });
 
     test('paid now: blank is nothing, never the whole total, never unreadable',

@@ -12686,7 +12686,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get invCreditCustomerName => 'Nom du client';
 
   @override
-  String get invCreditCustomerPhone => 'Téléphone du client';
+  String get invCreditCustomerPhone => 'Téléphone du client (facultatif)';
 
   @override
   String get invCreditCollector => 'Qui encaisse le reste';

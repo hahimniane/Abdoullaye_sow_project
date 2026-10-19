@@ -5846,7 +5846,7 @@
   "invCreditPaidNow": "Payé maintenant (dollars US)",
   "invCreditPaidNowReceivedBy": "Qui a reçu les {amount} payés maintenant",
   "invCreditCustomerName": "Nom du client",
-  "invCreditCustomerPhone": "Téléphone du client",
+  "invCreditCustomerPhone": "Téléphone du client (facultatif)",
   "invCreditCollector": "Qui encaisse le reste",
   "invCreditCollectorPick": "Choisir qui encaisse",
   "invCreditDueDate": "Échéance (facultatif)",

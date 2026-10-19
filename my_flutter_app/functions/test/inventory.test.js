@@ -1760,16 +1760,22 @@ describe("inventory: credit sale input", () => {
         []);
   });
 
-  it("needs the customer's name and a phone with its country code", () => {
-    assert.deepEqual(clean({credit: credit({customerName: " "})}).errors,
-        ["credit_customer_required"]);
-    assert.deepEqual(clean({credit: credit({customerPhone: ""})}).errors,
-        ["credit_customer_required"]);
-    assert.deepEqual(clean({credit: credit({customerPhone: "207 555 0100"})})
-        .errors, ["customer_phone_invalid"]);
-    assert.deepEqual(clean({credit: credit({customerPhone: "+1 call me"})})
-        .errors, ["customer_phone_invalid"]);
-  });
+  it("needs the customer's name; a phone is optional but must be whole",
+      () => {
+        assert.deepEqual(clean({credit: credit({customerName: " "})}).errors,
+            ["credit_customer_required"]);
+        // No phone, or the country code the field holds while empty: fine,
+        // and stored as no phone.
+        for (const none of ["", "  ", "+1", "+224", " + 1 "]) {
+          const out = clean({credit: credit({customerPhone: none})});
+          assert.deepEqual(out.errors, [], JSON.stringify(none));
+          assert.equal(out.credit.customerPhone, "", JSON.stringify(none));
+        }
+        assert.deepEqual(clean({credit: credit({customerPhone:
+          "207 555 0100"})}).errors, ["customer_phone_invalid"]);
+        assert.deepEqual(clean({credit: credit({customerPhone: "+1 call me"})})
+            .errors, ["customer_phone_invalid"]);
+      });
 
   it("needs a collector id", () => {
     for (const bad of ["", "  ", "a/b", 7, null]) {

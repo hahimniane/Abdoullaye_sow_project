@@ -169,12 +169,11 @@ List<String> validateInventoryCheckout(
   }
   final name = draft.customerName.trim();
   if (name.isEmpty) codes.add('customer_name_required');
+  // The phone is optional. The field writes "+1" alone while nothing is
+  // typed, which counts as no phone; anything longer must be a real number.
   final phone = draft.customerPhone.trim();
-  // The phone field writes "+1" alone while nothing is typed.
-  if (PhoneNumberValidator.digitsOnly(phone).length <= 3 &&
+  if (inventoryCreditPhoneGiven(phone) &&
       !PhoneNumberValidator.isValidE164(phone)) {
-    codes.add('customer_phone_required');
-  } else if (!PhoneNumberValidator.isValidE164(phone)) {
     codes.add('customer_phone_invalid');
   }
   final collector = draft.collectorStaffId.trim();
@@ -214,7 +213,9 @@ Map<String, Object?>? inventoryCreditRequest(
     'customerName': name.length > inventoryMaxCustomerName
         ? name.substring(0, inventoryMaxCustomerName)
         : name,
-    'customerPhone': PhoneNumberValidator.normalized(draft.customerPhone),
+    'customerPhone': inventoryCreditPhoneGiven(draft.customerPhone)
+        ? PhoneNumberValidator.normalized(draft.customerPhone)
+        : '',
     'collectorStaffId': draft.collectorStaffId.trim(),
     'dueDate': draft.dueDate.trim(),
   };
@@ -543,3 +544,9 @@ class InventoryCreditPaymentResult {
   final int? creditPaidCents;
   final String creditStatus;
 }
+
+/// Whether a credit customer's phone was really typed: more than a country
+/// code alone (the phone field's starting "+1").
+bool inventoryCreditPhoneGiven(String phone) =>
+    PhoneNumberValidator.digitsOnly(phone.trim()).length > 3 ||
+    PhoneNumberValidator.isValidE164(phone.trim());

@@ -12498,7 +12498,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get invCreditCustomerName => 'Customer name';
 
   @override
-  String get invCreditCustomerPhone => 'Customer phone';
+  String get invCreditCustomerPhone => 'Customer phone (optional)';
 
   @override
   String get invCreditCollector => 'Who collects the rest';
