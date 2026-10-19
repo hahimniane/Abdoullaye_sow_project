@@ -21,7 +21,7 @@ test("piece kinds and the generic piece read one way in French", () => {
   assert.equal(translateValue("Piece", "fr"), "Colis");
   assert.equal(pieceSummaryText([{ kind: "barrel" }, { kind: "barrel" }, { kind: "box" }], "fr"), "2 barils, 1 carton");
   assert.equal(pieceSummaryText([{ kind: "box" }, { kind: "box" }], "fr"), "2 cartons");
-  assert.equal(translateAuditSummary("Removed 2 barrels, 1 box", "fr"), "Retrait de 2 barils, 1 carton");
+  assert.equal(translateAuditSummary("Removed 2 barrels, 1 box"), "Retrait de 2 barils, 1 carton");
 });
 
 test("no French copy says fût or pièce for a piece", () => {
