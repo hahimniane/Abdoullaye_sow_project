@@ -506,6 +506,14 @@ service cloud.firestore {
         allow create, update, delete: if false;
       }
 
+      // Records this account said "This isn't mine" about
+      // (docs/PHONE_ACCOUNTS.md §6.1). Written only by the phoneAccount
+      // callable; the owner may read them.
+      match /hiddenShipments/{recordKey} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow create, update, delete: if false;
+      }
+
       match /fcmTokens/{tokenId} {
         allow read, create, update, delete: if request.auth != null &&
           request.auth.uid == userId;
@@ -524,6 +532,19 @@ service cloud.firestore {
     }
 
     match /phoneSignInAliases/{alias} {
+      allow read, write: if false;
+    }
+
+    // Phone sign-in (docs/PHONE_ACCOUNTS.md §5, §8): code challenges (only
+    // a hash of the code), send limits, and the numbers of deleted accounts
+    // that must not be recreated from later shipments. Server only.
+    match /phoneLoginChallenges/{challengeId} {
+      allow read, write: if false;
+    }
+    match /phoneLoginLimits/{limitId} {
+      allow read, write: if false;
+    }
+    match /phoneAccountOptOuts/{phone} {
       allow read, write: if false;
     }
 

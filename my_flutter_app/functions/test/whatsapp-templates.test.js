@@ -359,3 +359,38 @@ describe("the documented templates", () => {
     }
   });
 });
+
+describe("the sign-in code template", () => {
+  const {
+    LOGIN_TEMPLATE,
+    loginCodeTemplateMessage,
+  } = require("../whatsapp_templates");
+
+  it("puts the code in the body and on the copy-code button", () => {
+    const body = loginCodeTemplateMessage({phone: "+224 622 12 34 56",
+      code: "042917", language: "fr"});
+    assert.equal(body.to, "224622123456");
+    assert.equal(body.template.name, LOGIN_TEMPLATE);
+    assert.equal(body.template.name, "laawol_login_code");
+    assert.deepEqual(body.template.language, {code: "fr"});
+    assert.deepEqual(body.template.components, [
+      {type: "body", parameters: [{type: "text", text: "042917"}]},
+      {type: "button", sub_type: "url", index: "0",
+        parameters: [{type: "text", text: "042917"}]},
+    ]);
+  });
+
+  it("falls back to English for any other language", () => {
+    for (const language of ["en", "de", undefined]) {
+      assert.equal(loginCodeTemplateMessage({phone: "+12025550123",
+        code: "1", language}).template.language.code, "en");
+    }
+  });
+
+  it("is documented with the script that creates it", () => {
+    const doc = readFileSync(path.join(__dirname, "..", "..", "..", "docs",
+        "PHONE_ACCOUNTS.md"), "utf8");
+    assert.match(doc, /`laawol_login_code`, category AUTHENTICATION/);
+    assert.match(doc, /create_login_template\.py/);
+  });
+});

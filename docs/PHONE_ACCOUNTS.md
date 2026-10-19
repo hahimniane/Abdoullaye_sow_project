@@ -158,8 +158,13 @@ Created by the owner with `~/laawol-deploy-logs/create_login_template.py`
 (reads `WHATSAPP_ACCESS_TOKEN` from Secret Manager at run time). The message
 body is built only by `loginCodeTemplateMessage` in `whatsapp_templates.js`.
 
-Callables (all `enforceAppCheck`, `cors`, `invoker: "public"`,
-`maxInstances: 2`):
+All of it goes through ONE callable, `phoneAccount` (`enforceAppCheck`,
+`cors`, `invoker: "public"`, `maxInstances: 1`, the WhatsApp secrets bound):
+the project's reserved-CPU budget (`test/scaling-contract.test.js`, 1,000)
+stood at 999, so five functions could not fit. `data.action` names the
+handler; an unknown action is refused with `action_invalid`. Below,
+"`requestPhoneLoginCode(data)`" means `phoneAccount({action:
+"requestPhoneLoginCode", ...data})`.
 
 `requestPhoneLoginCode(data)` - one of:
 - `{phone}` - a number typed by the person (must be `ok` E.164);
@@ -183,7 +188,8 @@ resendAfterMs}`. Refusals carry `details.reason`:
   merged: boolean}` (§7).
 Refusals: `code_wrong` (with `attemptsLeft`), `code_expired`,
 `too_many_attempts`, `challenge_not_found`, `phone_in_use` (link: the number
-belongs to an account that has signed in), `wrong_account`.
+belongs to an account that has signed in), `wrong_account` (a link code tried by another account: neither counted nor
+used).
 
 Storage: `phoneLoginChallenges/{challengeId}` (server only):
 `{phoneE164, codeHash: sha256(challengeId:code), purpose, linkUid,
@@ -198,7 +204,7 @@ the emulator too):
 | Key | Limit |
 | --- | --- |
 | per number | 5 sends / hour, 10 / day |
-| per client address (`clientAddressFromRequest`) | 20 sends / hour |
+| per client address (`clientAddressFromRequest`; skipped when "unknown") | 20 sends / hour |
 | per tracking code (masked flow) | 5 sends / hour |
 | resend | 30 s after the previous send to the same number |
 
@@ -241,10 +247,12 @@ records hidden by "This isn't mine", and package requests already received
 (the container line stands for them). Returns:
 
 ```
-{items: [{key: "<collection>/<id>", role: "sender" | "receiver",
+{phoneLastTwo, items: [{key: "<collection>/<id>", collection,
+  role: "sender" | "receiver", roles: [...both when sent to oneself],
   businessId, businessName, service, trackingCode, stage, pieceCount,
   parts?: [{trackingCode, stage, pieceCount}], shipping?: {shippingLine,
-  containerNumber, bookingNumber}, quoteCount?, createdAtMs, updatedAtMs}],
+  containerNumber, bookingNumber}, quoteCount?, requestStatus? (package
+  requests), createdAtMs, updatedAtMs}],
  nextCursor: {beforeMs, skipKeys} | null}
 ```
 
@@ -315,9 +323,10 @@ and removes the opt-out.
   `accountOrigin` and `notSignedInYet`; the list accepts `signInState:
   "all" | "signed_in" | "not_signed_in"`. The console shows a "Not signed in
   yet" label and a filter (default: hide them from the main list).
-- Email-dependent paths must tolerate `email: ""`: notification email
-  delivery already checks `isValidEmail`; password-reset/invite/verify-email
-  actions refuse a person without an email with `reason: "no_email"`.
+- Email-dependent paths tolerate `email: ""`: notification email delivery
+  already checks `isValidEmail` (no email row is queued), and the admin
+  recovery-email action already refuses a person without a valid email
+  (`user-email-required`). Invitations are email-only by design.
 
 ## 10. Tracking page and app (clients)
 
@@ -344,10 +353,12 @@ and removes the opt-out.
 ## 11. Backfill (one time, owner runs it)
 
 `functions/phone_backfill.js` + `functions/scripts/backfill-phone-accounts.js`
-(`npm run backfill:phone-accounts -- ...`):
+(`npm run backfill:phone-accounts -- ...`, run from `my_flutter_app/functions`
+with Application Default Credentials):
 
 ```
 --project <id>          required (refuses to guess)
+--confirm <id>          must repeat --project
 --business <businessId> only that business (start with throwaway_test_business)
 --dry-run               default; prints what would change, writes nothing
 --commit                write fields and create accounts
@@ -363,14 +374,17 @@ cursor to resume. Idempotent: a second run changes nothing.
 
 ## 12. New functions (targeted deploy)
 
-New: `requestPhoneLoginCode`, `verifyPhoneLoginCode`, `completePhoneSignIn`,
-`getMyShipments`, `reportShipmentNotMine` (each `maxInstances: 2`).
+New: `phoneAccount` (one function, `maxInstances: 1`).
 Changed: `rollupVolumeOnLineWrite`, `syncParkedCarOccupancy`,
 `notifyBarrelShipmentStatus`, `notifyFreightShipmentStatus`,
-`notifyTransportRequestStatus`, the create callables in §3.1, the package
-request callables, `lookupGuestTracking`, `finalizeAccountDeletion`,
-`deleteUser`, `listMarketplacePeople`, `listPlatformUsers`,
-`getMarketplacePerson`.
+`notifyTransportRequestStatus`, `createBarrelShipmentPaymentIntent`,
+`createBarrelOrderPaymentIntent`, `sealBarrelPool`,
+`createFreightShipmentPaymentIntent`, `createTransportRequest`,
+`createFreightQuoteRequest`, `submitPackageRequest`, `lookupGuestTracking`,
+`finalizeAccountDeletion`, `deleteUser`, `listMarketplacePeople`,
+`listPlatformUsers`, `getMarketplacePerson`. Rules and indexes deploy too
+(`firestore:rules`, `firestore:indexes`, incl. TTL on `phoneLoginChallenges`
+and `phoneLoginLimits` `expiresAt`).
 
 Deploy prerequisite: `verifyPhoneLoginCode` mints custom tokens, so the
 functions' runtime service account needs `iam.serviceAccounts.signBlob` on

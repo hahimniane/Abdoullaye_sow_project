@@ -75,8 +75,12 @@ test("public barrel result is a strict PII-free projection", () => {
     trackingCode: "BS-K7M4P2",
     service: "barrel",
     stage: "arrived",
+    // docs/PHONE_ACCOUNTS.md §10: the last two digits of each number, for
+    // "Sign in as the number ending in ••23" - never the number.
+    signIn: [{role: "receiver", lastTwo: "23"}],
     updatedAtMs: 1725000000000,
   });
+  assert.doesNotMatch(JSON.stringify(result), /2015550123|5550123/);
   for (const privateField of [
     "id",
     "receiverName",
@@ -139,8 +143,11 @@ test("a container line follows its box, and shows nothing personal", () => {
   // Its pieces, its parts and what is owed (docs/PACKAGE_REQUESTS.md §2:
   // the page shows the final price, paid and balance) - no people.
   assert.deepEqual(Object.keys(record("shipped")).sort(),
-      ["parts", "payment", "pieceCount", "service", "stage", "trackingCode",
-        "updatedAtMs"]);
+      ["parts", "payment", "pieceCount", "service", "signIn", "stage",
+        "trackingCode", "updatedAtMs"]);
+  // Only the last two digits of each number (docs/PHONE_ACCOUNTS.md §10).
+  assert.deepEqual(record("shipped").signIn, [
+    {role: "sender", lastTwo: "00"}, {role: "receiver", lastTwo: "00"}]);
   const text = JSON.stringify(record("shipped"));
   for (const secret of ["Fatou", "+1646", "+224", "line1"]) {
     assert.ok(!text.includes(secret), `leaks ${secret}`);
@@ -226,9 +233,11 @@ test("a package waiting for a container has a public stage of its own", () => {
   assert.equal(result.stage, "waiting_container");
   assert.equal(WAITING_STAGE_LABEL, "Received, waiting for a container");
   assert.deepEqual(Object.keys(result).sort(),
-      ["parts", "payment", "pieceCount", "service", "stage", "trackingCode",
-        "updatedAtMs"]);
+      ["parts", "payment", "pieceCount", "service", "signIn", "stage",
+        "trackingCode", "updatedAtMs"]);
+  assert.deepEqual(result.signIn, [{role: "sender", lastTwo: "00"}]);
   assert.ok(!JSON.stringify(result).includes("Fatou"));
+  assert.ok(!JSON.stringify(result).includes("5550100"));
   assert.equal(CONTAINER_STAGE_BY_STATUS.waiting, WAITING_STAGE);
 });
 
@@ -261,7 +270,7 @@ test("a sailed container line shows its shipping details, nothing more",
         }, status);
         assert.deepEqual(Object.keys(result).sort(),
             ["parts", "payment", "pieceCount", "service", "shipping",
-              "stage", "trackingCode", "updatedAtMs"]);
+              "signIn", "stage", "trackingCode", "updatedAtMs"]);
         // The line's own price is the page's to show; the box's is not.
         assert.equal(result.payment.priceCents, 15000);
         const text = JSON.stringify(result);

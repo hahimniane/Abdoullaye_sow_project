@@ -450,6 +450,42 @@ function requestTemplateMessage(args) {
   };
 }
 
+/**
+ * The sign-in code (docs/PHONE_ACCOUNTS.md §5.1): an AUTHENTICATION
+ * template, one per language, whose wording Meta fixes ("{{1}} is your
+ * verification code...") with a copy-code button. The code fills both the
+ * body variable and the button.
+ */
+const LOGIN_TEMPLATE = "laawol_login_code";
+const LOGIN_TEMPLATE_LANGUAGES = Object.freeze(["en", "fr"]);
+
+/**
+ * The /messages body for one sign-in code.
+ *
+ * @param {{phone: string, code: string, language: string}} args Who, what
+ *   and in which language ("fr" or anything else for English).
+ * @return {object} The request body.
+ */
+function loginCodeTemplateMessage(args) {
+  const code = String(args?.code ?? "").replace(/\D/g, "").slice(0, 8);
+  const parameter = {type: "text", text: code};
+  return {
+    messaging_product: "whatsapp",
+    to: String(args?.phone ?? "").replace(/\D/g, ""),
+    type: "template",
+    template: {
+      name: LOGIN_TEMPLATE,
+      language: {code: args?.language === "fr" ? "fr" : "en"},
+      components: [
+        {type: "body", parameters: [parameter]},
+        // The copy-code button carries the code as its one parameter.
+        {type: "button", sub_type: "url", index: "0",
+          parameters: [parameter]},
+      ],
+    },
+  };
+}
+
 module.exports = {
   TEMPLATE,
   TEMPLATE_SET,
@@ -474,4 +510,7 @@ module.exports = {
   REQUEST_TEMPLATE_VARIABLES,
   requestTemplateForUpdate,
   requestTemplateMessage,
+  LOGIN_TEMPLATE,
+  LOGIN_TEMPLATE_LANGUAGES,
+  loginCodeTemplateMessage,
 };

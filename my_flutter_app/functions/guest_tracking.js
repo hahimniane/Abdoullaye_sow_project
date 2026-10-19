@@ -2,6 +2,7 @@
 
 const {normalizeTrackingCode} = require("./tracking_code");
 const {oceanCarrierName} = require("./ocean_carrier_catalog");
+const {lastTwo, strictE164} = require("./phone_e164");
 const {
   groupRootId,
   lineCounts,
@@ -179,6 +180,28 @@ function publicContainerGroup(line, group, id) {
   };
 }
 
+/**
+ * Who may sign in from this record's page (docs/PHONE_ACCOUNTS.md §10): the
+ * role and the LAST TWO digits of each valid number on it - never more. The
+ * page offers "Sign in as the number ending in ••35" and the server, not the
+ * page, sends the code to the number.
+ *
+ * @param {object} row The stored record.
+ * @return {Array<{role: string, lastTwo: string}>} One per number.
+ */
+function signInHints(row) {
+  const hints = [];
+  const sender = strictE164(row.customerPhoneE164) ||
+    strictE164(row.customerPhone);
+  const receiver = strictE164(row.receiverPhoneE164) ||
+    strictE164(row.receiverPhone);
+  if (sender) hints.push({role: "sender", lastTwo: lastTwo(sender)});
+  if (receiver && receiver !== sender) {
+    hints.push({role: "receiver", lastTwo: lastTwo(receiver)});
+  }
+  return hints;
+}
+
 function publicGuestTrackingRecord({id, service, data, container = null,
   group = null}) {
   const row = data || {};
@@ -208,6 +231,7 @@ function publicGuestTrackingRecord({id, service, data, container = null,
     ...(shipping ? {shipping} : {}),
     ...(service === "container" ?
       publicContainerGroup(row, group, id) : {}),
+    ...(signInHints(row).length ? {signIn: signInHints(row)} : {}),
     updatedAtMs: Math.max(
         timestampMillis(row.updatedAt),
         timestampMillis(row.createdAt),
@@ -287,6 +311,32 @@ async function containerLineGroup(db, id, line) {
  * @return {!Promise<?Object>} Sanitized public record, or null.
  */
 async function findGuestTrackingRecord(db, candidates) {
+  const found = await findTrackingDocument(db, candidates);
+  if (!found) return null;
+  const container = found.service === "container";
+  return publicGuestTrackingRecord({
+    id: found.id,
+    service: found.service,
+    data: found.data,
+    container: container ? await shippedContainerOf(db, found.data) : null,
+    group: container ? await containerLineGroup(db, found.id, found.data) :
+      null,
+  });
+}
+
+/**
+ * The one stored record a tracking reference names, as the server reads
+ * it (never returned to a client): {collection, service, id, data}, or
+ * null when nothing or more than one record matches.
+ *
+ * @param {!FirebaseFirestore.Firestore} db Admin Firestore instance.
+ * @param {string[]|string} input Candidates, or a raw code.
+ * @return {!Promise<?Object>} The record.
+ */
+async function findTrackingDocument(db, input) {
+  const candidates = Array.isArray(input) ? input :
+    guestTrackingCandidates(input);
+  if (!candidates.length) return null;
   const prefix = candidates[0]?.replace(/[^A-Z0-9]/g, "").slice(0, 2) || "";
   const routed = GUEST_TRACKING_COLLECTIONS.filter(
       (config) => config.prefix === prefix,
@@ -301,16 +351,8 @@ async function findGuestTrackingRecord(db, candidates) {
     if (snapshot.empty) continue;
     if (snapshot.docs.length !== 1 || match !== null) return null;
     const document = snapshot.docs[0];
-    const data = document.data() || {};
-    const container = config.service === "container";
-    match = publicGuestTrackingRecord({
-      id: document.id,
-      service: config.service,
-      data,
-      container: container ? await shippedContainerOf(db, data) : null,
-      group: container ? await containerLineGroup(db, document.id, data) :
-        null,
-    });
+    match = {collection: config.name, service: config.service,
+      id: document.id, data: document.data() || {}};
   }
   return match;
 }
@@ -327,6 +369,8 @@ module.exports = {
   WAITING_STAGE,
   WAITING_STAGE_LABEL,
   findGuestTrackingRecord,
+  findTrackingDocument,
+  signInHints,
   guestTrackingCandidates,
   publicGuestTrackingRecord,
   timestampMillis,

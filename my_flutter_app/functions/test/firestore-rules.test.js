@@ -4006,3 +4006,59 @@ describe("package request rules", () => {
     await assertFails(anonymous("anon-1").ref(path).delete());
   });
 });
+
+// Phone accounts (docs/PHONE_ACCOUNTS.md §6): customers still cannot read
+// the records their number is on - only the phoneAccount callable projects
+// them - and the sign-in state is server-only.
+describe("phone account rules", () => {
+  async function seedPhoneAccounts() {
+    const {doc, setDoc} = require("firebase/firestore");
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, "users/phone-customer"), {role: "customer",
+        phone: "+12025550123", accountOrigin: "shipment",
+        firstSignInAt: null});
+      await setDoc(doc(db,
+          "users/phone-customer/hiddenShipments/containerLines__l1"),
+      {key: "containerLines/l1"});
+      await setDoc(doc(db, "containerLines/phone-line"), {
+        businessId: "biz_a", customerPhone: "+12025550123",
+        customerPhoneE164: "+12025550123"});
+      await setDoc(doc(db, "phoneLoginChallenges/c1"),
+          {phoneE164: "+12025550123", codeHash: "x"});
+      await setDoc(doc(db, "phoneLoginLimits/l1"), {count: 1});
+      await setDoc(doc(db, "phoneAccountOptOuts/+12025550123"), {uid: "x"});
+    });
+  }
+
+  it("keeps the record itself and the sign-in state from the customer",
+      async () => {
+        await seedPhoneAccounts();
+        const {doc, getDoc, setDoc, updateDoc, getDocs, query, collection,
+          where} = require("firebase/firestore");
+        const customer = firestoreFor("phone-customer");
+        await assertFails(getDoc(doc(customer, "containerLines/phone-line")));
+        await assertFails(getDocs(query(collection(customer,
+            "containerLines"),
+        where("customerPhoneE164", "==", "+12025550123"))));
+        for (const path of ["phoneLoginChallenges/c1",
+          "phoneLoginLimits/l1", "phoneAccountOptOuts/+12025550123"]) {
+          await assertFails(getDoc(doc(customer, path)));
+          await assertFails(setDoc(doc(customer, path), {x: 1}));
+        }
+        // The profile's sign-in state is not the customer's to change.
+        await assertFails(updateDoc(doc(customer, "users/phone-customer"),
+            {firstSignInAt: new Date(), accountOrigin: "phone_sign_in"}));
+      });
+
+  it("lets the owner read, never write, what they hid", async () => {
+    await seedPhoneAccounts();
+    const {doc, getDoc, setDoc, deleteDoc} = require("firebase/firestore");
+    const path = "users/phone-customer/hiddenShipments/containerLines__l1";
+    await assertSucceeds(getDoc(doc(firestoreFor("phone-customer"), path)));
+    await assertFails(getDoc(doc(firestoreFor("customer-owner"), path)));
+    await assertFails(setDoc(doc(firestoreFor("phone-customer"),
+        "users/phone-customer/hiddenShipments/x"), {key: "x"}));
+    await assertFails(deleteDoc(doc(firestoreFor("phone-customer"), path)));
+  });
+});

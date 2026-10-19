@@ -35,10 +35,15 @@ const {
   storedGuestIdentity,
 } = require("./guest_contact");
 const {
+  GUEST_TRACKING_COLLECTIONS,
   containerLineGroup,
   findGuestTrackingRecord,
+  findTrackingDocument,
   guestTrackingCandidates,
+  publicGuestTrackingRecord,
+  shippedContainerOf,
 } = require("./guest_tracking");
+const {createPhoneAccounts, notSignedInYet} = require("./phone_accounts");
 const {
   appCheckTokenFromHeaders,
   clientAddressFromRequest,
@@ -219,6 +224,7 @@ const {
 const packageRequests = require("./package_requests");
 const requestReceive = require("./request_receive");
 const {
+  loginCodeTemplateMessage,
   requestTemplateMessage,
 } = require("./whatsapp_templates");
 const {
@@ -650,6 +656,50 @@ const GUEST_TRACKING_CALLABLE_OPTIONS = Object.freeze({
   cors: true,
   invoker: "public",
 });
+// Phone accounts (docs/PHONE_ACCOUNTS.md): the handlers live in
+// phone_accounts.js; everything Firebase-specific is handed over here. The
+// helpers named below are function declarations further down this file, so
+// they are hoisted; the secrets are read only when a code is sent.
+const phoneAccounts = createPhoneAccounts({
+  db: () => admin.firestore(),
+  auth: () => admin.auth(),
+  FieldValue: FirestoreFieldValue,
+  Timestamp: FirestoreTimestamp,
+  logger,
+  countries: ALL_COUNTRIES,
+  defaultNotificationPreferences,
+  sendWhatsApp: (body) => sendWhatsAppMessage(body),
+  whatsappConfigured: () => containerWhatsAppConfigured(),
+  loginMessage: (args) => loginCodeTemplateMessage(args),
+  // The owner hears it in their console/app feed and by push.
+  notifyBusiness: (payload) => notifyBusinessOfPaidOrder(payload),
+  findTrackingDocument: (db, code) => findTrackingDocument(db, code),
+  publicRecord: (db, row) => phoneShipmentPublicRecord(db, row),
+  clientAddress: (request) => callableClientAddress(request),
+});
+
+/**
+ * The guest-tracking projection of a record, for "My packages" (which then
+ * removes every money field - phone_accounts.privateShipmentItem).
+ *
+ * @param {object} db Firestore.
+ * @param {{collection: string, id: string, data: object}} row The record.
+ * @return {Promise<object>} publicGuestTrackingRecord output.
+ */
+async function phoneShipmentPublicRecord(db, row) {
+  const config = GUEST_TRACKING_COLLECTIONS.find((entry) =>
+    entry.name === row.collection);
+  const service = config ? config.service : row.collection;
+  const container = service === "container";
+  return publicGuestTrackingRecord({
+    id: row.id,
+    service,
+    data: row.data,
+    container: container ? await shippedContainerOf(db, row.data) : null,
+    group: container ? await containerLineGroup(db, row.id, row.data) : null,
+  });
+}
+
 const DEFAULT_BUSINESS_ID = "keren_auto_sales";
 const DEFAULT_BUSINESS_NAME = "Keren";
 const MAX_BARREL_QUANTITY = 20;
@@ -1319,6 +1369,28 @@ exports.syncVerifiedCustomerPhone = onCall(
     },
 );
 
+// ---------------------------------------------------------------------------
+// Phone accounts (docs/PHONE_ACCOUNTS.md §12). ONE callable, one instance:
+// the project's reserved-CPU budget (test/scaling-contract.test.js) had a
+// single CPU left, and sign-ins and "My packages" are a small fraction of
+// traffic (one instance serves 80 concurrent requests). `data.action` picks:
+//   requestPhoneLoginCode - a six-digit code by WhatsApp to a typed number,
+//     to the number on a tracking code's record (the caller never learns
+//     it), or to a number a signed-in account is adding;
+//   verifyPhoneLoginCode  - a custom token for the number's account, or
+//     (link) the number added to the caller's account;
+//   completePhoneSignIn   - after a Firebase SMS sign-in; with a
+//     placeholder's phone ID token, merges it into the caller;
+//   getMyShipments        - every record with the caller's verified number,
+//     from every business, without prices or contents;
+//   reportShipmentNotMine - "This isn't mine".
+// ---------------------------------------------------------------------------
+exports.phoneAccount = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public",
+      maxInstances: 1, secrets: [whatsappAccessToken, whatsappPhoneNumberId]},
+    async (request) => phoneAccounts.dispatch(request),
+);
+
 // Standalone from updateCustomerProfile: business staff/owners and admins
 // have no full-name/phone editing flow of their own on the web consoles, so
 // this lets any authenticated user update just their notification
@@ -1387,6 +1459,11 @@ exports.notifyCarPurchaseStatus = onDocumentUpdated(
 exports.notifyBarrelShipmentStatus = onDocumentUpdated(
     "barrelShipments/{shipmentId}",
     async (event) => {
+      // Derived phone fields + accounts (docs/PHONE_ACCOUNTS.md §3.1): this
+      // trigger sees every update, including the customer's own edit of the
+      // receiver's phone. A stamp-only write changes no status or payment.
+      await phoneAccounts.syncRecordPhones("barrelShipments",
+          event.params.shipmentId, {after: event.data.after.data() || null});
       const paidAfter = event.data.after.data() || {};
       if (paymentJustSucceeded(event)) {
         const amount = paidOrderAmountLabel(paidAfter);
@@ -1575,6 +1652,9 @@ exports.notifyParkingReservationStatus = onDocumentUpdated(
 exports.notifyTransportRequestStatus = onDocumentUpdated(
     "transportRequests/{requestId}",
     async (event) => {
+      // Derived phone fields + accounts (docs/PHONE_ACCOUNTS.md §3.1).
+      await phoneAccounts.syncRecordPhones("transportRequests",
+          event.params.requestId, {after: event.data.after.data() || null});
       const paidAfter = event.data.after.data() || {};
       if (paymentJustSucceeded(event)) {
         const amount = paidOrderAmountLabel(paidAfter);
@@ -4251,6 +4331,7 @@ exports.createTransportRequest = onCall(
         });
       });
       await batch.commit();
+      await phoneAccounts.afterRecordWrite("transportRequests", requestRef.id);
 
       // Until now a business only discovered a request by happening to open
       // the console, and the opportunity expires at quoteDeadlineAt - so a
@@ -12441,18 +12522,25 @@ async function availabilityQueryFor(db, businessId, start, end) {
 // and any status/date change elsewhere lands here too. Converges: its own
 // write re-fires it, finds nothing to change, and stops. The updateTime guard
 // means a stale event can never overwrite a newer row.
+//
+// The same write also derives the record's phone fields and the accounts of
+// its numbers (docs/PHONE_ACCOUNTS.md §3.1) - after the occupancy update, so
+// that update's updateTime guard never sees this one's write first.
 exports.syncParkedCarOccupancy = onDocumentWritten(
     "parkedCars/{parkedCarId}",
     async (event) => {
       const after = event.data?.after;
       if (!after?.exists) return;
       const patch = occupancyPatch(after.data() || {});
-      if (!patch) return;
-      try {
-        await after.ref.update(patch, {lastUpdateTime: after.updateTime});
-      } catch (error) {
-        if (!isBenignRace(error)) throw error;
+      if (patch) {
+        try {
+          await after.ref.update(patch, {lastUpdateTime: after.updateTime});
+        } catch (error) {
+          if (!isBenignRace(error)) throw error;
+        }
       }
+      await phoneAccounts.syncRecordPhones("parkedCars",
+          event.params.parkedCarId, {after: after.data() || null});
     },
 );
 
@@ -24210,9 +24298,31 @@ function userDirectoryDto(userRecord, profileSnapshot = null) {
       profile.createdAt || null,
     lastSignInAt: hasAuth ?
       String(userRecord.metadata?.lastSignInTime || "") : "",
+    // An account made from a shipment's number that nobody has signed in
+    // to yet (docs/PHONE_ACCOUNTS.md §9). The console labels and filters
+    // these so they do not flood the directory.
+    accountOrigin: hasProfile ? String(profile.accountOrigin || "") : "",
+    notSignedInYet: hasProfile && notSignedInYet(profile),
     hasProfile,
     hasAuth,
   };
+}
+
+/**
+ * Keeps the directory page to the sign-in state asked for.
+ *
+ * @param {Array<object>} people userDirectoryDto rows.
+ * @param {*} signInState "all" | "signed_in" | "not_signed_in".
+ * @return {Array<object>} The rows to return.
+ */
+function filterDirectoryBySignIn(people, signInState) {
+  if (signInState === "not_signed_in") {
+    return people.filter((person) => person.notSignedInYet === true);
+  }
+  if (signInState === "signed_in") {
+    return people.filter((person) => person.notSignedInYet !== true);
+  }
+  return people;
 }
 
 function invitationDirectoryDto(snapshot) {
@@ -24343,9 +24453,9 @@ async function listMarketplacePeopleHandler(request) {
     cleanText(request.data?.pageToken, 2000) || undefined;
   const authPage = await admin.auth().listUsers(pageSize, pageToken);
   const profiles = await profileSnapshotsForAuthUsers(db, authPage.users);
-  const people = authPage.users.map((record, index) =>
+  const people = filterDirectoryBySignIn(authPage.users.map((record, index) =>
     userDirectoryDto(record, profiles[index]),
-  );
+  ), cleanText(request.data?.signInState, 20));
   if (!pageToken && request.data?.includeInvitations !== false) {
     const invitations = await db.collection("accessInvitations")
         .where("status", "==", "pending")
@@ -26405,6 +26515,10 @@ async function finalizeAccountDeletionHandler(request, compatibility = false) {
   await startBatch.commit();
 
   try {
+    // A deleted account's number must not come back as a new account from
+    // the next shipment that carries it (docs/PHONE_ACCOUNTS.md §8).
+    const deletedAuthUser = await admin.auth().getUser(userId);
+    await phoneAccounts.recordOptOut(deletedAuthUser.phoneNumber, userId);
     await admin.auth().updateUser(userId, {disabled: true});
     await admin.auth().revokeRefreshTokens(userId);
     await admin.auth().deleteUser(userId);
@@ -29905,6 +30019,7 @@ exports.sealBarrelPool = onCall(
       });
       batch.update(poolRef, poolSealUpdate);
       await batch.commit();
+      await phoneAccounts.afterRecordWrite("barrelShipments", shipmentRef.id);
       return {
         success: true,
         poolId,
@@ -31282,6 +31397,8 @@ exports.createBarrelShipmentPaymentIntent = onCall(
           updatedAt: now,
         });
       });
+      // Accounts for the numbers on it (docs/PHONE_ACCOUNTS.md §3.1).
+      await phoneAccounts.afterRecordWrite("barrelShipments", shipmentRef.id);
 
       const chargeCents = totalCents;
       if (chargeCents === 0) {
@@ -31728,6 +31845,10 @@ exports.createBarrelOrderPaymentIntent = onCall(
           });
         });
       });
+
+      for (const ref of shipmentRefs) {
+        await phoneAccounts.afterRecordWrite("barrelShipments", ref.id);
+      }
 
       const chargeCents = orderTotalCents;
       if (chargeCents === 0) {
@@ -32798,6 +32919,7 @@ exports.createFreightShipmentPaymentIntent = onCall(
           updatedAt: now,
         });
       });
+      await phoneAccounts.afterRecordWrite("freightShipments", shipmentRef.id);
 
       if (payOnArrival) {
         if (SIMULATE_PAYMENTS) {
@@ -33904,6 +34026,8 @@ exports.createFreightQuoteRequest = onCall(
         updatedAt: now,
       });
       await batch.commit();
+      await phoneAccounts.afterRecordWrite("freightQuoteRequests",
+          requestRef.id);
 
       // Each business hears about it in its own console feed.
       await Promise.all(providers.map((provider) =>
@@ -35486,6 +35610,9 @@ const FREIGHT_STATUS_NOTIFIED_ELSEWHERE = new Set([
 exports.notifyFreightShipmentStatus = onDocumentUpdated(
     "freightShipments/{shipmentId}",
     async (event) => {
+      // Derived phone fields + accounts (docs/PHONE_ACCOUNTS.md §3.1).
+      await phoneAccounts.syncRecordPhones("freightShipments",
+          event.params.shipmentId, {after: event.data.after.data() || null});
       if (!statusChanged(event)) return;
       const after = event.data.after.data() || {};
       if (FREIGHT_STATUS_NOTIFIED_ELSEWHERE.has(String(after.status || ""))) {
@@ -40764,10 +40891,19 @@ const volume = require("./volume_rollup").createVolumeHandlers({
   hasAdminSectionAccess,
   requireBusinessPermission,
 });
+// Every container line write also derives the line's phone fields and the
+// accounts of its numbers (docs/PHONE_ACCOUNTS.md §3.1). That stamp re-fires
+// this trigger; the rollup compares count signatures, so it recounts nothing.
 exports.rollupVolumeOnLineWrite = onDocumentWritten(
     {document: "containerLines/{lineId}", maxInstances: 2,
       timeoutSeconds: 120},
-    volume.rollupVolumeOnLineWrite);
+    async (event) => {
+      const after = event.data?.after?.exists === false ? null :
+        event.data?.after?.data?.() || null;
+      await phoneAccounts.syncRecordPhones("containerLines",
+          String(event.params?.lineId || ""), {after});
+      return volume.rollupVolumeOnLineWrite(event);
+    });
 exports.rollupVolumeOnContainerWrite = onDocumentWritten(
     {document: "containers/{containerId}", maxInstances: 2,
       timeoutSeconds: 120},
@@ -41477,6 +41613,8 @@ exports.submitPackageRequest = onCall(
       const stored = (await requestRef.get()).data() || {};
       await notifyPackageRequestStaff(db, {businessId,
         requestId: requestRef.id, request: stored, event: "new"});
+      // The sender's and receiver's accounts (docs/PHONE_ACCOUNTS.md §3.1).
+      await phoneAccounts.afterRecordWrite(PACKAGE_REQUESTS, requestRef.id);
       return {success: true, requestId: requestRef.id, code, token,
         status: stored.status, totalCents: estimate ? estimate.totalCents :
           null, replayed: false};
