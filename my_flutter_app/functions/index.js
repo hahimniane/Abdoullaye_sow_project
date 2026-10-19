@@ -468,6 +468,7 @@ const {
   renderContainerLabels,
 } = require("./container_labels");
 const inventory = require("./inventory");
+const inventoryTransfers = require("./inventory_transfers");
 const {renderInventoryTags} = require("./inventory_tags");
 const {
   occupancyEndMs,
@@ -21344,6 +21345,14 @@ exports.deleteInventoryItem = onCall(
           await tx.get(db.collection("inventoryStock")
               .where("businessId", "==", businessId)
               .where("itemId", "==", itemId)) : null;
+        // A product on its way between stores, or with pieces waiting for
+        // the owner's decision, cannot go: the transfer would lose it (v5).
+        const busy = sctx.converted ?
+          await inventoryOpenTransferCodesIn(tx, db, businessId, {itemId}) :
+          [];
+        if (busy.length > 0) {
+          throw inventoryRefusal("item_in_transfer", {transferCodes: busy});
+        }
         tx.delete(ref);
         if (rows) rows.docs.forEach((d) => tx.delete(d.ref));
         return row;
@@ -22120,6 +22129,9 @@ exports.remindOverdueInventoryCredit = onSchedule(
       schedule: "0 8 * * *",
       timeZone: inventory.CREDIT_ZONE,
       timeoutSeconds: INVENTORY_CREDIT_REMINDER_TIMEOUT_S,
+      // Fired once a morning by the scheduler: one instance is all it uses
+      // (and the instance budget needs the two it would reserve).
+      maxInstances: 1,
     },
     async () => {
       const db = admin.firestore();
@@ -22368,6 +22380,14 @@ exports.archiveInventoryStore = onCall(
               .where("storeId", "==", storeId)
               .where("quantity", ">", 0).limit(1));
           if (!held.empty) throw inventoryRefusal("store_has_stock");
+          // Stock on its way to or from the store, or waiting for the
+          // owner's decision, still belongs to it (v5).
+          const busy = await inventoryOpenTransferCodesIn(tx, db, businessId,
+              {storeId});
+          if (busy.length > 0) {
+            throw inventoryRefusal("store_has_transfers",
+                {transferCodes: busy});
+          }
         }
         tx.update(db.collection("inventoryStores").doc(storeId), {
           archived, updatedAt: now});
@@ -22496,6 +22516,723 @@ exports.transferInventoryStock = onCall(
     },
 );
 
+// ---------------------------------------------------------------------------
+// Store transfers (v5, docs/INVENTORY.md "Store transfers"). The source store
+// sends (its count and the product's total go down: in transit, sellable
+// nowhere), the destination confirms what arrived (its count goes up), and
+// what did not arrive waits for the owner: back to the source, or written off.
+// The rules are in inventory_transfers.js; every stock change below is one
+// transaction that first reads the store context, like every other one.
+// ---------------------------------------------------------------------------
+
+const INVENTORY_TRANSFERS = "inventoryTransfers";
+// A shop's owner moving stock between a few stores is low traffic, and the
+// project-wide instance budget (test/scaling-contract.test.js) has no room
+// for more: one instance (80 concurrent requests) each.
+const INVENTORY_TRANSFER_MAX_INSTANCES = 1;
+const INVENTORY_TRANSFER_REMINDER_TIMEOUT_S = 540;
+const INVENTORY_TRANSFER_REMINDER_PAGE = 200;
+
+const inventoryTransferRef = (db, transferId) =>
+  db.collection(INVENTORY_TRANSFERS).doc(transferId);
+
+/**
+ * A transfer refusal, with the transfer's status when it is about the state.
+ *
+ * @param {object} tx The transaction.
+ * @param {object} ref The transfer's document.
+ * @param {string} businessId The business.
+ * @return {Promise<object>} The stored transfer.
+ */
+async function inventoryTransferIn(tx, ref, businessId) {
+  const doc = await tx.get(ref);
+  const row = doc.exists ? doc.data() || {} : null;
+  if (!row || String(row.businessId) !== businessId) {
+    throw inventoryRefusal("transfer_not_found");
+  }
+  return row;
+}
+
+/**
+ * @param {object} data A callable's data.
+ * @return {string} The transfer id it names ("" when unusable).
+ */
+function inventoryTransferId(data) {
+  const id = inventoryDocId(data?.transferId);
+  return /^[A-Za-z0-9_-]{1,80}$/.test(id) ? id : "";
+}
+
+/**
+ * The products of a transfer, read inside the transaction (only this
+ * business's; the others read as missing).
+ *
+ * @param {object} tx The transaction.
+ * @param {object} db Firestore.
+ * @param {string} businessId The business.
+ * @param {string[]} itemIds The products.
+ * @return {Promise<Map<string, object>>} Product id -> product.
+ */
+async function inventoryItemsIn(tx, db, businessId, itemIds) {
+  const items = new Map();
+  if (itemIds.length === 0) return items;
+  const docs = await tx.getAll(...itemIds.map((id) =>
+    db.collection("inventoryItems").doc(id)));
+  docs.forEach((doc) => {
+    if (doc.exists && String(doc.data()?.businessId) === businessId) {
+      items.set(doc.id, doc.data() || {});
+    }
+  });
+  return items;
+}
+
+/**
+ * Writes one product's stock change of a transfer and its movement.
+ *
+ * @param {object} tx The transaction.
+ * @param {object} db Firestore.
+ * @param {object} args {businessId, storeId, write, uid, now, type, delta,
+ *   transferId, code, counterpartStoreId, note}.
+ */
+function writeInventoryTransferStock(tx, db, {businessId, storeId, write, uid,
+  now, type, delta, transferId, code, counterpartStoreId, note = ""}) {
+  writeInventoryStoreStock(tx, db, {businessId, itemId: write.itemId, storeId,
+    write, now, itemExtra: {updatedByStaffId: uid}});
+  tx.set(db.collection("inventoryMovements").doc(),
+      {...inventory.movementRecord({
+        businessId, itemId: write.itemId, type, delta,
+        quantityAfter: write.rowQuantity, uid, note, storeId, transferId,
+        transferCode: code, counterpartStoreId}), createdAt: now});
+}
+
+/**
+ * Pushes one transfer event to the people it concerns. Never throws: a failed
+ * push never fails the transfer (or the morning job's other transfers).
+ *
+ * @param {object} db Firestore.
+ * @param {object} args {transfer (with id), kind, actorUid, context (the
+ *   reminder context: users, ownerUids; read when absent), nowMs}.
+ * @return {Promise<number>} How many people were told.
+ */
+async function notifyInventoryTransfer(db, {transfer, kind, actorUid = "",
+  context = null, nowMs = Date.now()}) {
+  try {
+    const ctx = context ||
+      await inventoryCreditReminderContext(db, String(transfer.businessId));
+    if (!ctx) return 0;
+    const plan = inventoryTransfers.planTransferNotification({
+      transfer, kind, actorUid, nowMs, ownerUids: ctx.ownerUids,
+      users: ctx.users.filter((user) => !accountAccessBlocked(user))});
+    await Promise.all(plan.recipients.map((recipient) =>
+      safeSendPreferenceNotification({
+        uid: recipient.uid,
+        preferenceKey: inventoryTransfers.TRANSFER_NOTIFICATION_PREFERENCE,
+        title: recipient.title,
+        body: recipient.body,
+        data: plan.data,
+        pushOnly: true,
+      })));
+    return plan.recipients.length;
+  } catch (error) {
+    logger.warn("Transfer notification failed", {
+      transferId: transfer?.id, kind, error: error?.message || String(error)});
+    return 0;
+  }
+}
+
+/**
+ * A transfer's History row. Acknowledged (out of "Needs attention") except a
+ * receipt with missing pieces.
+ *
+ * @param {string} businessId The business.
+ * @param {string} transferId The transfer.
+ * @param {string} action The History action.
+ * @param {string} uid Who did it.
+ * @param {object} facts What the sentence names.
+ * @return {Promise<void>} Written.
+ */
+function inventoryTransferAudit(businessId, transferId, action, uid, facts) {
+  return writeLotLedgerAudit({
+    businessId, entityType: "inventory_transfer", entityId: transferId,
+    action, byStaffId: uid,
+    summary: inventoryTransfers.transferAuditSummary(action, facts),
+    changes: [], acknowledged: action !== "received_with_differences",
+  });
+}
+
+/**
+ * The fields every stored transfer carries, from its lines.
+ *
+ * @param {string} status The status.
+ * @param {object[]} lines The lines.
+ * @return {object} status, stage, itemIds and every count.
+ */
+function inventoryTransferState(status, lines) {
+  return {
+    status,
+    stage: inventoryTransfers.stageOf(status, lines),
+    lines,
+    itemIds: lines.map((line) => line.itemId),
+    ...inventoryTransfers.transferTotals(lines),
+  };
+}
+
+/**
+ * Draft saving and sending share their checks: the key, the stores, the
+ * caller, the products. Read inside the transaction.
+ *
+ * @param {object} tx The transaction.
+ * @param {object} db Firestore.
+ * @param {object} args {businessId, input, access}.
+ * @return {Promise<object>} {sctx, from, to, items}.
+ */
+async function inventoryTransferPrecheckIn(tx, db, {businessId, input,
+  access}) {
+  const sctx = await readInventoryStoreContext(tx, db, businessId);
+  const stores = inventoryTransfers.checkTransferStores({
+    converted: sctx.converted, stores: sctx.stores,
+    fromStoreId: input.fromStoreId, toStoreId: input.toStoreId, access});
+  if (stores.code) throw inventoryRefusal(stores.code);
+  const items = await inventoryItemsIn(tx, db, businessId,
+      input.lines.map((line) => line.itemId));
+  const missing = inventoryTransfers.missingItemIds(input.lines, items);
+  if (missing.length > 0) {
+    throw inventoryRefusal("item_not_found", {itemIds: missing});
+  }
+  return {sctx, from: stores.from, to: stores.to, items};
+}
+
+/**
+ * The transfer's code: the one it has, or a new one minted outside the
+ * transaction (so a retried transaction keeps the same one).
+ *
+ * @param {object} db Firestore.
+ * @param {object} pre The transfer's snapshot read before the transaction.
+ * @return {Promise<string>} The code to store.
+ */
+async function inventoryTransferCode(db, pre) {
+  const code = pre?.exists ? String(pre.data()?.code || "") : "";
+  return code || generateTrackingCode("TR", INVENTORY_TRANSFERS, "code");
+}
+
+exports.saveInventoryTransferDraft = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true,
+      maxInstances: INVENTORY_TRANSFER_MAX_INSTANCES},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const {businessId} = inventoryIds(data);
+      const {db, user, access} = await requireInventoryContext(uid, businessId);
+      const input = inventoryTransfers.cleanTransferInput(data);
+      if (input.errors.length > 0) throw inventoryRefusal(input.errors);
+      const transferId = inventoryTransfers.transferDocId(businessId,
+          input.clientRequestId);
+      const ref = inventoryTransferRef(db, transferId);
+      const code = await inventoryTransferCode(db, await ref.get());
+      const byName = inventoryPersonName(user, uid);
+      const storedCode = await db.runTransaction(async (tx) => {
+        const doc = await tx.get(ref);
+        const {from, to, items} = await inventoryTransferPrecheckIn(tx, db,
+            {businessId, input, access});
+        const before = doc.exists ? doc.data() || {} : null;
+        if (before && String(before.businessId) !== businessId) {
+          throw inventoryRefusal("transfer_not_found");
+        }
+        if (before && before.status !== "draft") {
+          throw inventoryRefusal("transfer_not_draft",
+              {status: String(before.status || "")});
+        }
+        if (before && !inventoryTransfers.canSendFrom(access,
+            String(before.fromStoreId || ""))) {
+          throw inventoryRefusal("store_not_allowed");
+        }
+        const lines = input.lines.map((line) => inventoryTransfers
+            .transferLine(line.itemId, items.get(line.itemId), line.quantity));
+        const now = FirestoreFieldValue.serverTimestamp();
+        tx.set(ref, {
+          businessId, clientRequestId: input.clientRequestId,
+          code: before?.code || code,
+          fromStoreId: from.id, fromStoreName: String(from.name || ""),
+          toStoreId: to.id, toStoreName: String(to.name || ""),
+          ...inventoryTransferState("draft", lines),
+          createdByStaffId: before?.createdByStaffId || uid,
+          createdByName: before?.createdByName || byName,
+          createdAt: before?.createdAt || now,
+          updatedAt: now,
+          sentByStaffId: "", sentByName: "", sentAt: null,
+          receivedByStaffId: "", receivedByName: "", receivedAt: null,
+          receiveNote: "",
+          cancelledByStaffId: "", cancelledByName: "", cancelledAt: null,
+          settledAt: null,
+          lastTransitReminderAt: null, lastDisputeReminderAt: null,
+          timeline: Array.isArray(before?.timeline) ? before.timeline :
+            [{event: "draft_created", byStaffId: uid, byName,
+              at: FirestoreTimestamp.now()}],
+        });
+        return before?.code || code;
+      });
+      return {success: true, transferId, code: storedCode, status: "draft"};
+    },
+);
+
+exports.sendInventoryTransfer = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true,
+      maxInstances: INVENTORY_TRANSFER_MAX_INSTANCES},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const {businessId} = inventoryIds(data);
+      const {db, user, access} = await requireInventoryContext(uid, businessId);
+      const input = inventoryTransfers.cleanTransferInput(data);
+      if (input.errors.length > 0) throw inventoryRefusal(input.errors);
+      const transferId = inventoryTransfers.transferDocId(businessId,
+          input.clientRequestId);
+      const ref = inventoryTransferRef(db, transferId);
+      const code = await inventoryTransferCode(db, await ref.get());
+      const byName = inventoryPersonName(user, uid);
+      const done = await db.runTransaction(async (tx) => {
+        const doc = await tx.get(ref);
+        const before = doc.exists ? doc.data() || {} : null;
+        if (before && String(before.businessId) !== businessId) {
+          throw inventoryRefusal("transfer_not_found");
+        }
+        // Sent already (a retry, or a second device with the same draft):
+        // the stored transfer is the answer, nothing is written again.
+        if (before && before.status !== "draft") {
+          return {replayed: true, transfer: before};
+        }
+        if (before && !inventoryTransfers.canSendFrom(access,
+            String(before.fromStoreId || ""))) {
+          throw inventoryRefusal("store_not_allowed");
+        }
+        const {sctx, from, to, items} = await inventoryTransferPrecheckIn(tx,
+            db, {businessId, input, access});
+        const rows = await inventoryRowsAtStoreIn(tx, db,
+            input.lines.map((line) => line.itemId), from.id);
+        const plan = inventoryTransfers.planSend({lines: input.lines, items,
+          rows, fromStoreId: from.id, mainStoreId: sctx.mainStoreId});
+        if (plan.errors.length > 0) {
+          throw inventoryRefusal(plan.errors, plan.details);
+        }
+        const now = FirestoreFieldValue.serverTimestamp();
+        const storedCode = before?.code || code;
+        for (const write of plan.writes) {
+          writeInventoryTransferStock(tx, db, {businessId, storeId: from.id,
+            write, uid, now, type: "transfer_sent", delta: -write.amount,
+            transferId, code: storedCode, counterpartStoreId: to.id});
+        }
+        const lines = input.lines.map((line) => inventoryTransfers
+            .transferLine(line.itemId, items.get(line.itemId), line.quantity));
+        const state = inventoryTransferState("in_transit", lines);
+        const at = FirestoreTimestamp.now();
+        const timeline = [
+          ...(Array.isArray(before?.timeline) ? before.timeline :
+            [{event: "draft_created", byStaffId: uid, byName, at}]),
+          {event: "sent", byStaffId: uid, byName, at,
+            itemsCount: state.itemsCount},
+        ];
+        const transfer = {
+          businessId, clientRequestId: input.clientRequestId, code: storedCode,
+          fromStoreId: from.id, fromStoreName: String(from.name || ""),
+          toStoreId: to.id, toStoreName: String(to.name || ""),
+          ...state,
+          createdByStaffId: before?.createdByStaffId || uid,
+          createdByName: before?.createdByName || byName,
+          createdAt: before?.createdAt || now,
+          updatedAt: now,
+          sentByStaffId: uid, sentByName: byName, sentAt: now,
+          receivedByStaffId: "", receivedByName: "", receivedAt: null,
+          receiveNote: "",
+          cancelledByStaffId: "", cancelledByName: "", cancelledAt: null,
+          settledAt: null,
+          lastTransitReminderAt: null, lastDisputeReminderAt: null,
+          timeline,
+        };
+        tx.set(ref, transfer);
+        return {replayed: false, transfer: {...transfer, sentAt: at}};
+      });
+      const t = done.transfer;
+      if (!done.replayed) {
+        await inventoryTransferAudit(businessId, transferId, "sent", uid, t);
+        await notifyInventoryTransfer(db, {transfer: {...t, id: transferId},
+          kind: "sent", actorUid: uid});
+      }
+      return {success: true, transferId, code: String(t.code || ""),
+        status: String(t.status || ""), itemsCount: Number(t.itemsCount) || 0,
+        productsCount: Number(t.productsCount) || 0, replayed: done.replayed};
+    },
+);
+
+exports.cancelInventoryTransfer = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true,
+      maxInstances: INVENTORY_TRANSFER_MAX_INSTANCES},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const {businessId} = inventoryIds(data);
+      const {db, user, access} = await requireInventoryContext(uid, businessId);
+      const transferId = inventoryTransferId(data);
+      if (!transferId) throw inventoryRefusal("transfer_not_found");
+      const requestId = inventoryTransfers.cleanRequestKey(data.requestId);
+      const ref = inventoryTransferRef(db, transferId);
+      const byName = inventoryPersonName(user, uid);
+      const done = await db.runTransaction(async (tx) => {
+        const sctx = await readInventoryStoreContext(tx, db, businessId);
+        const t = await inventoryTransferIn(tx, ref, businessId);
+        if (t.status === "cancelled" && requestId &&
+            t.cancelRequestId === requestId) {
+          return {replayed: true, transfer: t, itemsReturned: 0};
+        }
+        const at = FirestoreTimestamp.now();
+        const now = FirestoreFieldValue.serverTimestamp();
+        const closing = {
+          status: "cancelled", stage: "done", updatedAt: now,
+          cancelledByStaffId: uid, cancelledByName: byName, cancelledAt: now,
+          cancelRequestId: requestId,
+        };
+        if (t.status === "draft") {
+          if (!inventoryTransfers.canDiscardDraft(access, uid, t)) {
+            throw inventoryRefusal("store_not_allowed");
+          }
+          tx.update(ref, {...closing, timeline: [...(t.timeline || []),
+            {event: "draft_discarded", byStaffId: uid, byName, at}]});
+          return {replayed: false, draft: true, transfer: t, itemsReturned: 0};
+        }
+        if (t.status !== "in_transit") {
+          throw inventoryRefusal("transfer_not_in_transit",
+              {status: String(t.status || "")});
+        }
+        if (!inventoryTransfers.canCancel(access, uid, t)) {
+          throw inventoryRefusal("store_not_allowed");
+        }
+        const source = sctx.stores.find((s) => s.id === t.fromStoreId);
+        if (!source) throw inventoryRefusal("store_not_found");
+        if (source.archived === true) throw inventoryRefusal("store_archived");
+        const lines = Array.isArray(t.lines) ? t.lines : [];
+        const itemIds = lines.map((line) => line.itemId);
+        const items = await inventoryItemsIn(tx, db, businessId, itemIds);
+        const rows = await inventoryRowsAtStoreIn(tx, db, [...items.keys()],
+            source.id);
+        const plan = inventoryTransfers.planCancel({lines, items, rows,
+          fromStoreId: source.id, mainStoreId: sctx.mainStoreId});
+        if (plan.errors.length > 0) throw inventoryRefusal(plan.errors);
+        for (const write of plan.writes) {
+          writeInventoryTransferStock(tx, db, {businessId, storeId: source.id,
+            write, uid, now, type: "transfer_cancelled", delta: write.amount,
+            transferId, code: t.code, counterpartStoreId: t.toStoreId});
+        }
+        tx.update(ref, {...closing, timeline: [...(t.timeline || []),
+          {event: "cancelled", byStaffId: uid, byName, at,
+            itemsCount: plan.itemsReturned}]});
+        return {replayed: false, draft: false, transfer: t,
+          itemsReturned: plan.itemsReturned};
+      });
+      if (!done.replayed) {
+        const t = done.transfer;
+        await inventoryTransferAudit(businessId, transferId,
+            done.draft ? "draft_discarded" : "cancelled", uid,
+            {...t, itemsCount: done.itemsReturned});
+        if (!done.draft) {
+          await notifyInventoryTransfer(db, {transfer: {...t, id: transferId},
+            kind: "cancelled", actorUid: uid});
+        }
+      }
+      return {success: true, transferId, status: "cancelled",
+        itemsReturned: done.itemsReturned, replayed: done.replayed};
+    },
+);
+
+exports.receiveInventoryTransfer = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true,
+      maxInstances: INVENTORY_TRANSFER_MAX_INSTANCES},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const {businessId} = inventoryIds(data);
+      const {db, user, access} = await requireInventoryContext(uid, businessId);
+      const transferId = inventoryTransferId(data);
+      if (!transferId) throw inventoryRefusal("transfer_not_found");
+      const requestId = inventoryTransfers.cleanRequestKey(data.requestId);
+      const ref = inventoryTransferRef(db, transferId);
+      const byName = inventoryPersonName(user, uid);
+      const done = await db.runTransaction(async (tx) => {
+        const sctx = await readInventoryStoreContext(tx, db, businessId);
+        const t = await inventoryTransferIn(tx, ref, businessId);
+        if ((t.status === "received" ||
+            t.status === "received_with_differences") && requestId &&
+            t.receiveRequestId === requestId) {
+          return {replayed: true, transfer: t};
+        }
+        if (t.status !== "in_transit") {
+          throw inventoryRefusal("transfer_not_in_transit",
+              {status: String(t.status || "")});
+        }
+        if (!inventoryTransfers.canReceive(access, t)) {
+          throw inventoryRefusal("store_not_allowed");
+        }
+        const dest = sctx.stores.find((s) => s.id === t.toStoreId);
+        if (!dest) throw inventoryRefusal("store_not_found");
+        if (dest.archived === true) throw inventoryRefusal("store_archived");
+        const lines = Array.isArray(t.lines) ? t.lines : [];
+        const input = inventoryTransfers.cleanReceiveInput(data, lines);
+        if (input.errors.length > 0) {
+          throw inventoryRefusal(input.errors, input.details);
+        }
+        const items = await inventoryItemsIn(tx, db, businessId,
+            lines.map((line) => line.itemId));
+        const rows = await inventoryRowsAtStoreIn(tx, db, [...items.keys()],
+            dest.id);
+        const plan = inventoryTransfers.planReceive({lines,
+          received: input.received, items, rows, toStoreId: dest.id,
+          mainStoreId: sctx.mainStoreId});
+        if (plan.errors.length > 0) throw inventoryRefusal(plan.errors);
+        const now = FirestoreFieldValue.serverTimestamp();
+        for (const write of plan.writes) {
+          writeInventoryTransferStock(tx, db, {businessId, storeId: dest.id,
+            write, uid, now, type: "transfer_received", delta: write.amount,
+            transferId, code: t.code, counterpartStoreId: t.fromStoreId});
+        }
+        const at = FirestoreTimestamp.now();
+        const next = {
+          ...inventoryTransferState(plan.status, plan.lines),
+          updatedAt: now,
+          receivedByStaffId: uid, receivedByName: byName, receivedAt: now,
+          receiveNote: input.note, receiveRequestId: requestId,
+          timeline: [...(t.timeline || []), {event: "received",
+            byStaffId: uid, byName, at,
+            receivedCount: plan.totals.receivedCount || 0,
+            missingCount: plan.totals.missingCount, note: input.note}],
+        };
+        tx.update(ref, next);
+        return {replayed: false, transfer: {...t, ...next, receivedAt: at}};
+      });
+      const t = done.transfer;
+      if (!done.replayed) {
+        await inventoryTransferAudit(businessId, transferId, t.status, uid, t);
+        if (t.status === "received_with_differences") {
+          await notifyInventoryTransfer(db, {transfer: {...t, id: transferId},
+            kind: "differences", actorUid: uid});
+        }
+      }
+      return {success: true, transferId, status: String(t.status || ""),
+        receivedCount: Number(t.receivedCount) || 0,
+        missingCount: Number(t.missingCount) || 0, replayed: done.replayed};
+    },
+);
+
+exports.resolveInventoryTransferLine = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true,
+      maxInstances: INVENTORY_TRANSFER_MAX_INSTANCES},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const {businessId} = inventoryIds(data);
+      const {db, user, access} = await requireInventoryContext(uid, businessId);
+      const transferId = inventoryTransferId(data);
+      if (!transferId) throw inventoryRefusal("transfer_not_found");
+      if (!inventoryTransfers.canResolve(access)) {
+        throw inventoryRefusal("store_not_allowed");
+      }
+      const input = inventoryTransfers.cleanResolveInput(data);
+      if (input.errors.length > 0) throw inventoryRefusal(input.errors);
+      const ref = inventoryTransferRef(db, transferId);
+      const byName = inventoryPersonName(user, uid);
+      const done = await db.runTransaction(async (tx) => {
+        const sctx = await readInventoryStoreContext(tx, db, businessId);
+        const t = await inventoryTransferIn(tx, ref, businessId);
+        const check = inventoryTransfers.checkResolve(t, input);
+        if (check.code) throw inventoryRefusal(check.code, check.details);
+        if (check.replayed) {
+          return {replayed: true, transfer: t, line: check.line};
+        }
+        const line = check.line;
+        const amount = Number(line.missing) || 0;
+        const source = sctx.stores.find((s) => s.id === t.fromStoreId);
+        if (!source) throw inventoryRefusal("store_not_found");
+        const now = FirestoreFieldValue.serverTimestamp();
+        if (input.action === "return") {
+          if (source.archived === true) {
+            throw inventoryRefusal("store_archived");
+          }
+          const items = await inventoryItemsIn(tx, db, businessId,
+              [line.itemId]);
+          const item = items.get(line.itemId);
+          if (!item) {
+            throw inventoryRefusal("item_not_found", {itemIds: [line.itemId]});
+          }
+          const rows = await inventoryRowsAtStoreIn(tx, db, [line.itemId],
+              source.id);
+          const plan = inventoryTransfers.planStockIn({itemId: line.itemId,
+            item, row: rows.get(line.itemId), storeId: source.id,
+            mainStoreId: sctx.mainStoreId, amount});
+          if (plan.errors.length > 0) throw inventoryRefusal(plan.errors);
+          writeInventoryTransferStock(tx, db, {businessId, storeId: source.id,
+            write: plan.write, uid, now, type: "transfer_returned",
+            delta: amount, transferId, code: t.code,
+            counterpartStoreId: t.toStoreId, note: input.note});
+        } else {
+          // Written off: nothing comes back (the pieces left the source at
+          // Send); the movement records the loss against the source store.
+          const rows = await inventoryRowsAtStoreIn(tx, db, [line.itemId],
+              source.id);
+          const items = await inventoryItemsIn(tx, db, businessId,
+              [line.itemId]);
+          const eff = inventory.effectiveRow(items.get(line.itemId),
+              rows.get(line.itemId), source.id, sctx.mainStoreId);
+          tx.set(db.collection("inventoryMovements").doc(),
+              {...inventory.movementRecord({
+                businessId, itemId: line.itemId, type: "transfer_written_off",
+                delta: 0, quantityAfter: eff.quantity, uid,
+                note: input.note, storeId: source.id, transferId,
+                transferCode: t.code, counterpartStoreId: t.toStoreId}),
+              createdAt: now});
+        }
+        const at = FirestoreTimestamp.now();
+        const lines = [...t.lines];
+        lines[check.index] = inventoryTransfers.resolvedLine(line, {
+          action: input.action, reason: input.reason, note: input.note, uid,
+          name: byName, at, requestId: input.requestId});
+        const state = inventoryTransferState(t.status, lines);
+        const itemName = inventoryTransfers.lineDisplayName(line);
+        tx.update(ref, {
+          ...state, updatedAt: now,
+          settledAt: state.stage === "done" ? now : null,
+          timeline: [...(t.timeline || []), {
+            event: input.action === "return" ? "returned" : "written_off",
+            byStaffId: uid, byName, at, itemId: line.itemId, itemName,
+            quantity: amount,
+            ...(input.action === "write_off" ?
+              {reason: input.reason, note: input.note} : {note: input.note}),
+          }],
+        });
+        return {replayed: false, transfer: {...t, ...state}, line,
+          itemName, amount};
+      });
+      if (!done.replayed) {
+        await inventoryTransferAudit(businessId, transferId,
+            input.action === "return" ? "returned" : "written_off", uid,
+            {...done.transfer, itemName: done.itemName,
+              quantity: done.amount, reason: input.reason});
+      }
+      const t = done.transfer;
+      return {success: true, transferId, itemId: input.itemId,
+        action: input.action, stage: String(t.stage || ""),
+        openMissingCount: Number(t.openMissingCount) || 0,
+        replayed: done.replayed};
+    },
+);
+
+/**
+ * Claims one transfer reminder (re-read in a transaction, so two runs never
+ * both send it) and then sends it.
+ *
+ * @param {object} db Firestore.
+ * @param {object} doc The transfer's snapshot from the query.
+ * @param {object} run {nowMs, contexts (businessId -> promise)}.
+ * @return {Promise<number>} People told (0 when not claimed).
+ */
+async function remindInventoryTransfer(db, doc, {nowMs, contexts}) {
+  const claimed = await db.runTransaction(async (tx) => {
+    const fresh = await tx.get(doc.ref);
+    const transfer = fresh.exists ? fresh.data() || {} : null;
+    const kind = inventoryTransfers.reminderDue(transfer, nowMs);
+    if (!kind) return null;
+    tx.update(doc.ref, kind === "transit_reminder" ?
+      {lastTransitReminderAt: FirestoreTimestamp.fromMillis(nowMs)} :
+      {lastDisputeReminderAt: FirestoreTimestamp.fromMillis(nowMs)});
+    return {transfer, kind};
+  });
+  if (!claimed) return 0;
+  const businessId = String(claimed.transfer.businessId || "");
+  if (!contexts.has(businessId)) {
+    contexts.set(businessId, inventoryCreditReminderContext(db, businessId));
+  }
+  const context = await contexts.get(businessId);
+  if (!context) return 0;
+  return notifyInventoryTransfer(db, {
+    transfer: {...claimed.transfer, id: doc.id}, kind: claimed.kind, context,
+    nowMs});
+}
+
+// Every morning: a transfer on its way for 2 days or more reminds the
+// destination's team and the owner, an open dispute reminds the owner, then
+// every 2 days. One query across every business (transfers in transit or in
+// review, by id), paged until done or the deadline.
+exports.remindInventoryTransfers = onSchedule(
+    {
+      schedule: "0 9 * * *",
+      timeZone: inventoryTransfers.TRANSFER_ZONE,
+      timeoutSeconds: INVENTORY_TRANSFER_REMINDER_TIMEOUT_S,
+      maxInstances: INVENTORY_TRANSFER_MAX_INSTANCES,
+    },
+    async () => {
+      const db = admin.firestore();
+      const nowMs = Date.now();
+      const contexts = new Map();
+      let told = 0;
+      let failed = 0;
+      const run = await drainPages({
+        pageSize: INVENTORY_TRANSFER_REMINDER_PAGE,
+        deadlineMs: sweepDeadline({startMs: nowMs,
+          timeoutSeconds: INVENTORY_TRANSFER_REMINDER_TIMEOUT_S}),
+        fetchPage: async (cursor) => {
+          let query = db.collection(INVENTORY_TRANSFERS)
+              .where("stage", "in", inventoryTransfers.HOLDING_STAGES)
+              .orderBy(admin.firestore.FieldPath.documentId())
+              .limit(INVENTORY_TRANSFER_REMINDER_PAGE);
+          if (cursor) query = query.startAfter(cursor);
+          return (await query.get()).docs;
+        },
+        processPage: async (docs) => {
+          const due = docs.filter((doc) =>
+            inventoryTransfers.reminderDue(doc.data(), nowMs));
+          const results = await mapWithConcurrency(due, 5, (doc) =>
+            remindInventoryTransfer(db, doc, {nowMs, contexts}));
+          results.forEach((result, index) => {
+            if (result.status === "fulfilled") {
+              told += result.value;
+              return;
+            }
+            failed += 1;
+            logger.warn("Transfer reminder failed", {
+              transferId: due[index].id,
+              error: String(result.reason?.message || result.reason)});
+          });
+        },
+      });
+      logger.info("Transfer reminders", {told, failed,
+        deadlineReached: run.deadlineReached});
+      return {told, failed};
+    },
+);
+
+/**
+ * The open transfers (in transit or in review) that touch a store or a
+ * product, read inside a transaction: what blocks archiving the store or
+ * deleting the product.
+ *
+ * @param {object} tx The transaction.
+ * @param {object} db Firestore.
+ * @param {string} businessId The business.
+ * @param {object} filter {storeId} or {itemId}.
+ * @return {Promise<string[]>} Their codes (at most 20).
+ */
+async function inventoryOpenTransferCodesIn(tx, db, businessId, filter) {
+  const base = db.collection(INVENTORY_TRANSFERS)
+      .where("businessId", "==", businessId);
+  const queries = filter.itemId ?
+    [base.where("itemIds", "array-contains", filter.itemId)
+        .where("stage", "in", inventoryTransfers.HOLDING_STAGES).limit(20)] :
+    ["fromStoreId", "toStoreId"].map((field) => base
+        .where(field, "==", filter.storeId)
+        .where("stage", "in", inventoryTransfers.HOLDING_STAGES).limit(20));
+  const codes = new Set();
+  for (const query of queries) {
+    const snap = await tx.get(query);
+    snap.docs.forEach((doc) => codes.add(String(doc.data()?.code || doc.id)));
+  }
+  return [...codes].slice(0, 20);
+}
+
 /**
  * The page of tags for a product's token, or null when no product has it.
  * The page shows the QR and nothing else.
@@ -22594,7 +23331,9 @@ exports.getInventorySummary = onCall(
         });
         return {rows, complete: result.exhausted};
       };
-      const [sales, items, cats, brands, stock] = await Promise.all([
+      const noTransfers = Promise.resolve({rows: [], complete: true});
+      const [sales, items, cats, brands, stock, openTransfers,
+        receivedTransfers] = await Promise.all([
         readAll(db.collection("inventorySales")
             .where("businessId", "==", businessId)
             .where("createdAt", ">=",
@@ -22609,6 +23348,17 @@ exports.getInventorySummary = onCall(
         scope.multi ? readAll(db.collection("inventoryStock")
             .where("businessId", "==", businessId)) :
           Promise.resolve({rows: [], complete: true}),
+        // Store transfers (v5): what is on its way or disputed now, and what
+        // was received in the range.
+        sctx.converted ? readAll(db.collection("inventoryTransfers")
+            .where("businessId", "==", businessId)
+            .where("stage", "in", inventoryTransfers.HOLDING_STAGES)) :
+          noTransfers,
+        sctx.converted ? readAll(db.collection("inventoryTransfers")
+            .where("businessId", "==", businessId)
+            .where("receivedAt", ">=",
+                FirestoreTimestamp.fromMillis(bounds.startMs))
+            .orderBy("receivedAt", "desc")) : noTransfers,
       ]);
       // Products from before the category list are matched into it as they
       // are seen (a little at a time, idempotent).
@@ -22648,8 +23398,12 @@ exports.getInventorySummary = onCall(
         byStore,
         multiStore: scope.multi,
         storeId: scope.filterStoreId,
+        transfers: inventoryTransfers.summarizeTransfers({
+          open: openTransfers.rows, received: receivedTransfers.rows,
+          storeId: scope.filterStoreId}),
         truncated: !sales.complete || !items.complete || !cats.complete ||
-          !brands.complete || !stock.complete,
+          !brands.complete || !stock.complete || !openTransfers.complete ||
+          !receivedTransfers.complete,
       };
     },
 );

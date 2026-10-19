@@ -144,6 +144,16 @@ before(async () => {
           amountCents: 1000, method: "cash", reverted: false,
           createdAt: ts("2026-09-05")});
       }
+      // Store transfers (v5): one on its way Main -> Annex, one received
+      // Annex -> Main.
+      put(`inventoryTransfers/${biz}-tr-out`, {businessId: biz,
+        fromStoreId: `${biz}-main`, toStoreId: `${biz}-annex`,
+        status: "in_transit", stage: "in_transit", lines: [],
+        createdAt: ts("2026-09-06"), receivedAt: null});
+      put(`inventoryTransfers/${biz}-tr-back`, {businessId: biz,
+        fromStoreId: `${biz}-annex`, toStoreId: `${biz}-main`,
+        status: "received", stage: "done", lines: [],
+        createdAt: ts("2026-09-06"), receivedAt: ts("2026-09-07")});
       put(`inventoryMovements/${biz}-transfer`, {businessId: biz,
         itemId: `${biz}-item`, type: "transfer_out", transferId: "t1",
         createdAt: ts("2026-09-03"), storeId: `${biz}-main`});
@@ -283,6 +293,17 @@ const SHAPES = [
   ["inventory: the two sides of a transfer", (db, b) =>
     db.collection("inventoryMovements").where("businessId", "==", b)
         .where("transferId", "==", "t1")],
+  // Store transfers (v5), as owners and all-stores staff read them.
+  ["inventory: open transfers", (db, b) =>
+    db.collection("inventoryTransfers").where("businessId", "==", b)
+        .where("stage", "in", ["draft", "in_transit", "review"])],
+  ["inventory: recent transfers", (db, b) =>
+    db.collection("inventoryTransfers").where("businessId", "==", b)
+        .orderBy("createdAt", "desc").limit(100)],
+  ["inventory: transfers received this month", (db, b) =>
+    db.collection("inventoryTransfers").where("businessId", "==", b)
+        .where("receivedAt", ">=", ts("2026-09-01"))
+        .orderBy("receivedAt", "desc")],
   // Credit sales (v4) and the sales history.
   ["inventory: open credit", (db, b) =>
     db.collection("inventorySales").where("businessId", "==", b)
@@ -450,6 +471,52 @@ describe("console query shapes pass the rules for their own business", () => {
             if (all.size < 2 || owner.size < 2 || admin.size < 2) {
               throw new Error("all stores load for the all-store roles");
             }
+            await assertFails(build(dbFor("owner-b"), "biz_a", null).get());
+          });
+    }
+
+    // Store transfers (v5): a store's staff read the transfers from or to
+    // their store, one query per side, never the whole list.
+    const TRANSFERS = [
+      ["open transfers", (db, b, field, store) => {
+        const q = db.collection("inventoryTransfers")
+            .where("businessId", "==", b);
+        return (field ? q.where(field, "==", store) : q)
+            .where("stage", "in", ["draft", "in_transit", "review"]);
+      }],
+      ["recent transfers", (db, b, field, store) => {
+        const q = db.collection("inventoryTransfers")
+            .where("businessId", "==", b);
+        return (field ? q.where(field, "==", store) : q)
+            .orderBy("createdAt", "desc").limit(50);
+      }],
+      ["transfers received this month", (db, b, field, store) => {
+        const q = db.collection("inventoryTransfers")
+            .where("businessId", "==", b);
+        return (field ? q.where(field, "==", store) : q)
+            .where("receivedAt", ">=", ts("2026-09-01"))
+            .orderBy("receivedAt", "desc");
+      }],
+    ];
+    for (const [label, build] of TRANSFERS) {
+      it(`${label}: from or to the home store, refused otherwise`,
+          async () => {
+            const annex = "biz_a-annex";
+            const staff = dbFor("staff-inv-annex");
+            let seen = 0;
+            for (const field of ["fromStoreId", "toStoreId"]) {
+              const mine = await assertSucceeds(build(staff, "biz_a", field,
+                  annex).get());
+              seen += mine.size;
+              await assertFails(build(staff, "biz_a", field, "biz_a-main")
+                  .get());
+            }
+            if (seen < 1) throw new Error(`${label}: no rows for the store`);
+            await assertFails(build(staff, "biz_a", null).get());
+            await assertFails(build(dbFor("staff-inv-none"), "biz_a",
+                "toStoreId", annex).get());
+            await assertSucceeds(build(dbFor("staff-inv-all"), "biz_a", null)
+                .get());
             await assertFails(build(dbFor("owner-b"), "biz_a", null).get());
           });
     }

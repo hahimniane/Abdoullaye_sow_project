@@ -45,8 +45,13 @@ const MAIN_STORE_NAME = "Main store";
 const UNCATEGORIZED = "Uncategorized";
 const NO_BRAND = "No brand";
 
+// `transfer_out` / `transfer_in` are the instant transfer (v2); the
+// `transfer_*` types after them are the store transfers (v5): sent, received,
+// cancelled back, returned from a dispute, written off (delta 0).
 const MOVEMENT_TYPES = Object.freeze(
-    ["initial", "add", "set", "sale", "void", "transfer_out", "transfer_in"]);
+    ["initial", "add", "set", "sale", "void", "transfer_out", "transfer_in",
+      "transfer_sent", "transfer_received", "transfer_cancelled",
+      "transfer_returned", "transfer_written_off"]);
 const SUMMARY_RANGES = Object.freeze(["today", "month"]);
 
 /** How many products the "best sellers" list names. */
@@ -135,18 +140,42 @@ const INVENTORY_MESSAGES = Object.freeze({
     "those payments first.",
   payment_not_found: "That payment was not found.",
   payment_already_reverted: "That payment was already reverted.",
+  // Store transfers (v5).
+  transfer_not_found: "That transfer was not found.",
+  transfer_not_draft: "That transfer was already sent, so it can no " +
+    "longer be changed as a draft.",
+  transfer_not_in_transit: "That transfer is no longer on its way: it was " +
+    "already received or cancelled.",
+  transfer_lines_required: "Add at least one product to the transfer.",
+  transfer_lines_too_many: "A transfer can carry at most 100 products.",
+  item_not_in_transfer: "That product is not in this transfer.",
+  received_too_many: "More pieces cannot arrive than were sent.",
+  line_not_disputed: "Nothing is missing on that line.",
+  line_already_resolved: "The missing pieces on that line were already " +
+    "decided.",
+  resolution_invalid: "Return the missing pieces (return) or write them " +
+    "off (write_off).",
+  write_off_reason_invalid: "Pick why they are written off: lost, damaged, " +
+    "stolen or other.",
+  note_too_long: "A note can be at most 300 characters.",
+  store_has_transfers: "Stock is on its way to or from that store, or " +
+    "waiting for a decision. Finish those transfers first.",
+  item_in_transfer: "That product is in a transfer that is not finished. " +
+    "Finish the transfer first.",
 });
 
 /** Codes answered as `not-found`; the rest of the state refusals below. */
 const NOT_FOUND_CODES = Object.freeze(
     ["business_not_found", "item_not_found", "sale_not_found",
       "category_not_found", "brand_not_found", "store_not_found",
-      "user_not_found", "payment_not_found"]);
+      "user_not_found", "payment_not_found", "transfer_not_found"]);
 const PRECONDITION_CODES = Object.freeze(
     ["service_disabled", "item_archived", "sale_voided", "store_archived",
       "store_has_stock", "last_store_active", "home_store_required",
       "insufficient_stock", "no_credit", "credit_has_payments",
-      "payment_already_reverted"]);
+      "payment_already_reverted", "transfer_not_draft",
+      "transfer_not_in_transit", "line_not_disputed", "line_already_resolved",
+      "store_has_transfers", "item_in_transfer"]);
 const PERMISSION_CODES = Object.freeze(["store_not_allowed", "owner_only"]);
 const ALREADY_EXISTS_CODES = Object.freeze(
     ["category_name_taken", "brand_name_taken"]);
@@ -489,7 +518,8 @@ function planStockAdjust(item, input) {
  * @return {object} The stored fields (the caller adds `createdAt`).
  */
 function movementRecord({businessId, itemId, type, delta, quantityAfter, uid,
-  note = "", saleId = "", storeId = "", transferId = ""}) {
+  note = "", saleId = "", storeId = "", transferId = "", transferCode = "",
+  counterpartStoreId = ""}) {
   return {
     businessId,
     itemId,
@@ -503,6 +533,10 @@ function movementRecord({businessId, itemId, type, delta, quantityAfter, uid,
     // rows keep the shape they always had.
     ...(text(storeId, 200) ? {storeId: text(storeId, 200)} : {}),
     ...(text(transferId, 128) ? {transferId: text(transferId, 128)} : {}),
+    // A store transfer (v5) names its code and the store at the other end.
+    ...(text(transferCode, 40) ? {transferCode: text(transferCode, 40)} : {}),
+    ...(text(counterpartStoreId, 200) ?
+      {counterpartStoreId: text(counterpartStoreId, 200)} : {}),
   };
 }
 

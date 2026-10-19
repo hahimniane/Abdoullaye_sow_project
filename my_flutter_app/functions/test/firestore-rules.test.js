@@ -1196,8 +1196,8 @@ describe("business dashboard Firestore rules", () => {
   // all-stores access read everything; and a business that is not
   // multi-store reads exactly as before. Nothing here is client-writable.
   describe("inventory categories and stores", () => {
-    const {query, collection, where, orderBy, getDocs, getDoc, doc, setDoc,
-      updateDoc, deleteDoc} = require("firebase/firestore");
+    const {query, collection, where, orderBy, limit, getDocs, getDoc, doc,
+      setDoc, updateDoc, deleteDoc} = require("firebase/firestore");
 
     async function seedStores({multiStore}) {
       await testEnv.withSecurityRulesDisabled(async (context) => {
@@ -1418,6 +1418,70 @@ describe("business dashboard Firestore rules", () => {
               "inventoryCreditPayments/pay_main"), {reverted: true}));
           await assertFails(deleteDoc(doc(owner,
               "inventoryCreditPayments/pay_main")));
+        });
+
+    // Store transfers (v5): read by whoever may see either end, written
+    // only by the transfer callables.
+    it("reads a transfer from either of its stores, and never writes one",
+        async () => {
+          await seedStores({multiStore: true});
+          await testEnv.withSecurityRulesDisabled(async (context) => {
+            const db = context.firestore();
+            const put = (p, data) => setDoc(doc(db, p), data);
+            const t = (from, to, stage) => ({businessId: "biz_a",
+              fromStoreId: from, toStoreId: to, stage, status: stage,
+              createdAt: new Date("2026-10-18"), lines: []});
+            await Promise.all([
+              put("inventoryTransfers/tr_out", t("store_annex", "store_main",
+                  "in_transit")),
+              put("inventoryTransfers/tr_in", t("store_main", "store_annex",
+                  "review")),
+              put("inventoryTransfers/tr_other", t("store_main", "store_depot",
+                  "in_transit")),
+            ]);
+          });
+          const open = (db, field, storeId) => query(
+              collection(db, "inventoryTransfers"),
+              where("businessId", "==", "biz_a"),
+              ...(field ? [where(field, "==", storeId)] : []),
+              where("stage", "in", ["draft", "in_transit", "review"]));
+          const recent = (db, field, storeId) => query(
+              collection(db, "inventoryTransfers"),
+              where("businessId", "==", "biz_a"),
+              ...(field ? [where(field, "==", storeId)] : []),
+              orderBy("createdAt", "desc"), limit(50));
+          const annex = firestoreFor("inv-clerk-annex");
+          assert.equal((await assertSucceeds(getDocs(open(annex,
+              "fromStoreId", "store_annex")))).size, 1);
+          assert.equal((await assertSucceeds(getDocs(open(annex,
+              "toStoreId", "store_annex")))).size, 1);
+          await assertSucceeds(getDocs(recent(annex, "toStoreId",
+              "store_annex")));
+          await assertFails(getDocs(open(annex, null)));
+          await assertFails(getDocs(recent(annex, "fromStoreId",
+              "store_main")));
+          await assertSucceeds(getDoc(doc(annex, "inventoryTransfers/tr_in")));
+          await assertSucceeds(getDoc(doc(annex,
+              "inventoryTransfers/tr_out")));
+          await assertFails(getDoc(doc(annex, "inventoryTransfers/tr_other")));
+          // No home store: nothing of a multi-store business.
+          await assertFails(getDoc(doc(firestoreFor("inv-clerk-none"),
+              "inventoryTransfers/tr_in")));
+          for (const uid of ["owner-a", "inv-rover"]) {
+            assert.equal((await assertSucceeds(getDocs(open(
+                firestoreFor(uid), null)))).size, 3, uid);
+          }
+          for (const uid of ["owner-b", "inv-clerk-b", null]) {
+            await assertFails(getDocs(open(firestoreFor(uid), null)));
+          }
+          const owner = firestoreFor("owner-a");
+          await assertFails(setDoc(doc(owner, "inventoryTransfers/forged"),
+              {businessId: "biz_a", fromStoreId: "store_main",
+                toStoreId: "store_annex", stage: "in_transit"}));
+          await assertFails(updateDoc(doc(owner, "inventoryTransfers/tr_in"),
+              {stage: "done"}));
+          await assertFails(deleteDoc(doc(owner,
+              "inventoryTransfers/tr_out")));
         });
 
     it("lets managers list categories, brands and stores, nobody write",

@@ -17,6 +17,10 @@ function defaultNotificationPreferences() {
     // Inventory credit: "Credit I collect" - a push when a credit sale is
     // put on someone to collect, and when it is overdue. On unless off.
     inventoryCredit: true,
+    // Inventory store transfers: "Store transfers" - a push when stock is
+    // sent to my store (or cancelled), when pieces did not arrive, and the
+    // reminders. On unless switched off.
+    inventoryTransfers: true,
   };
 }
 
@@ -51,6 +55,8 @@ function normalizeNotificationPreferences(raw) {
       prefs.inventorySales !== false && defaults.inventorySales,
     inventoryCredit:
       prefs.inventoryCredit !== false && defaults.inventoryCredit,
+    inventoryTransfers:
+      prefs.inventoryTransfers !== false && defaults.inventoryTransfers,
   };
 }
 

@@ -818,6 +818,17 @@ service cloud.firestore {
         resource.data.businessId, resource.data.get('storeId', ''));
       allow write: if false;
     }
+    // Store transfers (v5): read by whoever may see either end - the source
+    // or the destination store - so a staff member tied to one store must
+    // query with `fromStoreId == <home>` or `toStoreId == <home>`. Written
+    // only by the transfer callables.
+    match /inventoryTransfers/{transferId} {
+      allow read: if inventoryStoreRead(
+          resource.data.businessId, resource.data.get('fromStoreId', '')) ||
+        inventoryStoreRead(
+          resource.data.businessId, resource.data.get('toStoreId', ''));
+      allow write: if false;
+    }
     // Invoices and receipts the business writes by hand: read by the
     // business's managers, written only through the invoice callables.
     match /invoices/{invoiceId} {

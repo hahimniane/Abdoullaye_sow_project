@@ -38,7 +38,29 @@ describe("notification settings helpers", () => {
           supportCaseUpdates: false,
           inventorySales: true,
           inventoryCredit: true,
+          inventoryTransfers: true,
         },
+    );
+  });
+
+  it("keeps Store transfers on unless it is switched off", () => {
+    assert.equal(
+        normalizeNotificationPreferences(undefined).inventoryTransfers, true);
+    assert.equal(
+        normalizeNotificationPreferences({inventoryTransfers: false})
+            .inventoryTransfers,
+        false,
+    );
+    // Its own switch: the sale and credit switches leave it on.
+    assert.equal(
+        normalizeNotificationPreferences({inventorySales: false,
+          inventoryCredit: false}).inventoryTransfers,
+        true,
+    );
+    assert.equal(
+        normalizeNotificationPreferences({inventoryTransfers: false})
+            .inventorySales,
+        true,
     );
   });
 
