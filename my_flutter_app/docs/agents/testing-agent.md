@@ -615,6 +615,17 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   message. Browser checks: `whatsapp_unavailable` switching to text, the
   30 s resend countdown, `rate_limited` showing the wait, French on `/t/`
   and My packages, a phone-only profile save.
+- Auth's phone-number uniqueness is NOT a lock in production (2026-10: two
+  trigger runs at once made two Auth users + two profiles for one number),
+  but the Auth emulator enforces it, so an emulator race test with real Auth
+  passes even without a lock. Race tests for "one X per key" give
+  `createPhoneAccounts` a fake Auth that accepts duplicates and whose phone
+  lookup lags (`racyAuth` in `phone-accounts-callables.test.js`), and assert
+  one user AND one profile; check it fails on the old code. The lock is a
+  Firestore `create()` (`phoneAccountClaims`), not a transaction (emulator
+  transactions under contention flake, see above). Trigger cost checks: a
+  pure pre-check (`stampIsCurrent`) is unit-tested with a `db`/`auth` that
+  throw on any touch.
 - A filtered directory page (People "Not signed in yet") must never come
   back empty with "Load more": the server reads Auth pages until full
   (bounded) and the console's `collectPeoplePages` keeps calling until a

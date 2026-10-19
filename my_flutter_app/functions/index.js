@@ -692,6 +692,23 @@ const phoneAccounts = createPhoneAccounts({
     await requireBusinessPermission(uid, businessId, section);
   },
 });
+/**
+ * What a Firestore trigger hands syncRecordPhones: the record after the
+ * write, before it (null: created), and the write's updateTime, so the stamp
+ * is one guarded update with no re-read (docs/PHONE_ACCOUNTS.md §3.2).
+ *
+ * @param {object} event The trigger event.
+ * @param {object|null} after The record after the write (null: deleted).
+ * @return {{after: ?Object, before: ?Object, updateTime: *}} The options.
+ */
+function phoneEventOptions(event, after) {
+  const before = event.data?.before;
+  return {
+    after,
+    before: before?.exists ? before.data() || {} : null,
+    updateTime: event.data?.after?.updateTime || null,
+  };
+}
 // The business section that manages each phone record (syncRecord).
 const PHONE_RECORD_SECTIONS = Object.freeze({
   containerLines: "containers",
@@ -1491,7 +1508,8 @@ exports.notifyBarrelShipmentStatus = onDocumentUpdated(
       // trigger sees every update, including the customer's own edit of the
       // receiver's phone. A stamp-only write changes no status or payment.
       await phoneAccounts.syncRecordPhones("barrelShipments",
-          event.params.shipmentId, {after: event.data.after.data() || null});
+          event.params.shipmentId,
+          phoneEventOptions(event, event.data.after.data() || null));
       const paidAfter = event.data.after.data() || {};
       if (paymentJustSucceeded(event)) {
         const amount = paidOrderAmountLabel(paidAfter);
@@ -1682,7 +1700,8 @@ exports.notifyTransportRequestStatus = onDocumentUpdated(
     async (event) => {
       // Derived phone fields + accounts (docs/PHONE_ACCOUNTS.md §3.1).
       await phoneAccounts.syncRecordPhones("transportRequests",
-          event.params.requestId, {after: event.data.after.data() || null});
+          event.params.requestId,
+          phoneEventOptions(event, event.data.after.data() || null));
       const paidAfter = event.data.after.data() || {};
       if (paymentJustSucceeded(event)) {
         const amount = paidOrderAmountLabel(paidAfter);
@@ -12577,24 +12596,31 @@ async function availabilityQueryFor(db, businessId, start, end) {
 // write re-fires it, finds nothing to change, and stops. The updateTime guard
 // means a stale event can never overwrite a newer row.
 //
-// The same write also derives the record's phone fields and the accounts of
-// its numbers (docs/PHONE_ACCOUNTS.md §3.1) - after the occupancy update, so
-// that update's updateTime guard never sees this one's write first.
+// The same event also derives the record's phone fields and the accounts of
+// its numbers (docs/PHONE_ACCOUNTS.md §3.1), and both go in ONE write: one
+// event = at most one write, so the occupancy patch never re-fires this
+// trigger just to find the phone stamp still missing (2026-10 incident: two
+// runs at once made two accounts for one number, and bursts on old rows
+// doubled their writes).
 exports.syncParkedCarOccupancy = onDocumentWritten(
     "parkedCars/{parkedCarId}",
     async (event) => {
       const after = event.data?.after;
       if (!after?.exists) return;
-      const patch = occupancyPatch(after.data() || {});
-      if (patch) {
-        try {
-          await after.ref.update(patch, {lastUpdateTime: after.updateTime});
-        } catch (error) {
-          if (!isBenignRace(error)) throw error;
-        }
+      const data = after.data() || {};
+      const before = event.data?.before?.exists ?
+        event.data.before.data() || {} : null;
+      const phones = await phoneAccounts.phoneStampForEvent("parkedCars",
+          event.params.parkedCarId, {after: data, before});
+      const update = {...(occupancyPatch(data) || {}),
+        ...(phones.update || {})};
+      if (!Object.keys(update).length) return;
+      try {
+        await after.ref.update(update, {lastUpdateTime: after.updateTime});
+      } catch (error) {
+        // A newer write landed: its own event redoes both.
+        if (!isBenignRace(error)) throw error;
       }
-      await phoneAccounts.syncRecordPhones("parkedCars",
-          event.params.parkedCarId, {after: after.data() || null});
     },
 );
 
@@ -26007,6 +26033,15 @@ function userClaimsFromProfile(data) {
   };
 }
 
+/**
+ * @param {object} claims userClaimsFromProfile output.
+ * @return {boolean} A plain customer's claims: equivalent to none at all.
+ */
+function claimsAreCustomerDefault(claims) {
+  return claims.role === "customer" && !claims.businessId &&
+    !claims.adminRole && claims.businessPermissions.length === 0;
+}
+
 exports.syncUserCustomClaims = onDocumentWritten(
     "users/{userId}",
     async (event) => {
@@ -26025,6 +26060,11 @@ exports.syncUserCustomClaims = onDocumentWritten(
       }
       const nextClaims = userClaimsFromProfile(after.data() || {});
       const before = event.data?.before;
+      // A new customer profile (a sign-up, an account made from a shipment's
+      // number): a new Auth user has no claims, and no rule tells "no claims"
+      // from a customer's (role "customer", nothing else), so there is
+      // nothing to write - no Auth call per account in a burst of shipments.
+      if (!before?.exists && claimsAreCustomerDefault(nextClaims)) return;
       if (before?.exists) {
         const previousClaims = userClaimsFromProfile(before.data() || {});
         if (JSON.stringify(previousClaims) === JSON.stringify(nextClaims)) {
@@ -35682,7 +35722,8 @@ exports.notifyFreightShipmentStatus = onDocumentUpdated(
     async (event) => {
       // Derived phone fields + accounts (docs/PHONE_ACCOUNTS.md §3.1).
       await phoneAccounts.syncRecordPhones("freightShipments",
-          event.params.shipmentId, {after: event.data.after.data() || null});
+          event.params.shipmentId,
+          phoneEventOptions(event, event.data.after.data() || null));
       if (!statusChanged(event)) return;
       const after = event.data.after.data() || {};
       if (FREIGHT_STATUS_NOTIFIED_ELSEWHERE.has(String(after.status || ""))) {
@@ -40971,7 +41012,7 @@ exports.rollupVolumeOnLineWrite = onDocumentWritten(
       const after = event.data?.after?.exists === false ? null :
         event.data?.after?.data?.() || null;
       await phoneAccounts.syncRecordPhones("containerLines",
-          String(event.params?.lineId || ""), {after});
+          String(event.params?.lineId || ""), phoneEventOptions(event, after));
       return volume.rollupVolumeOnLineWrite(event);
     });
 exports.rollupVolumeOnContainerWrite = onDocumentWritten(

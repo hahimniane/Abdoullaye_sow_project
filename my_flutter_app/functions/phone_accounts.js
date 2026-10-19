@@ -94,6 +94,18 @@ const DERIVED = Object.freeze({
   SYNCED_AT: "phoneSyncedAt",
 });
 
+// One phone = one account, under concurrency (docs §4.1). Firebase Auth's
+// phone uniqueness is NOT a lock: in production two trigger runs of one
+// parked car made two Auth users and two profiles for one number at the
+// same moment. `phoneAccountClaims/{e164}` (server only) is: whoever
+// creates it makes the account; everyone else waits for its uid.
+const CLAIMS_COLLECTION = "phoneAccountClaims";
+// A claim still without a uid after this is a run that died: taken over.
+const CLAIM_STALE_MS = 60 * 1000;
+// How long a run waits for another run's claim (about 5 s in all) before
+// leaving the number unstamped for the next write or the sweep.
+const CLAIM_WAITS_MS = Object.freeze([150, 300, 500, 800, 1200, 2000]);
+
 /**
  * @param {object} data A record.
  * @param {string} dotted "a.b".
@@ -224,6 +236,96 @@ function recordPhonePatch(collection, data, regionIso = "") {
 function accountNumbers(collection, data, regionIso = "") {
   return recordPhones(collection, data, regionIso)
       .filter((phone) => phone.e164);
+}
+
+/**
+ * The trigger's free first question: do the record's derived fields already
+ * describe its raw numbers? Pure - no read of any kind - so the events that
+ * a stamp re-fires, and every write that leaves the numbers alone, stop here.
+ *
+ * A number without a country code can only be judged with the business's
+ * country (a read). It counts as current only when it did not change in
+ * this write (`before` given, same raw) and the record carries what that
+ * country can give: the NANP form of it, or the "Add the country code" flag.
+ * Anything else answers false and goes the full way (recordPhonePatch).
+ *
+ * @param {string} collection The collection.
+ * @param {object} after The record as written.
+ * @param {object|null|undefined} before The record before this write (null:
+ *   created; undefined: unknown).
+ * @return {boolean} True when there is nothing to stamp.
+ */
+function stampIsCurrent(collection, after, before) {
+  const row = after && typeof after === "object" ? after : {};
+  const prior = before && typeof before === "object" ? before : null;
+  const sources = (PHONE_RECORD_SOURCES[collection] || [])
+      .filter((source) => source.e164);
+  if (!sources.length) return true;
+  const expectedMissing = [];
+  for (const source of sources) {
+    const raw = pathValue(row, source.raw);
+    const stored = cleanText(row[source.e164], 20);
+    const parsed = toE164(raw);
+    if (parsed.status === PHONE_STATUS.OK) {
+      if (stored !== parsed.e164) return false;
+      continue;
+    }
+    if (parsed.status !== PHONE_STATUS.NEEDS_COUNTRY_CODE) {
+      if (stored) return false;
+      continue;
+    }
+    if (!prior || pathValue(prior, source.raw) !== raw) return false;
+    if (stored) {
+      if (toE164(raw, {regionIso: "US"}).e164 !== stored) return false;
+    } else {
+      expectedMissing.push(source.raw);
+    }
+  }
+  const storedMissing = Array.isArray(row[DERIVED.MISSING]) ?
+    row[DERIVED.MISSING] : [];
+  return sameList(storedMissing, expectedMissing);
+}
+
+// A record younger than this is synced on any write: what a client created
+// directly (no create trigger) and numbers whose account failed get another
+// try. Older records are synced when a number changes (docs §3.2).
+const RECENT_RECORD_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Whether a trigger event should do phone work at all (after
+ * stampIsCurrent said the stamp is stale). Pure.
+ *
+ * Yes for: a new record, a number changed by this write, a record already
+ * synced once (its stamp went stale: a failed account, a country fix), a
+ * record created in the last RECENT_RECORD_MS, or an event without its
+ * `before` (unknown). No for an OLD record never synced whose numbers this
+ * write did not touch: a burst of status updates on old parked cars or
+ * barrels must not make accounts, users/ profiles and a second write per
+ * event (2026-10 incident: the 20-vCPU quota ran out). The backfill (§11)
+ * covers those records.
+ *
+ * @param {string} collection The collection.
+ * @param {object} after The record as written.
+ * @param {object|null|undefined} before The record before (null: created;
+ *   undefined: unknown).
+ * @param {number} nowMs Now.
+ * @return {boolean} True when the event should sync the record's phones.
+ */
+function phoneEventNeedsSync(collection, after, before, nowMs) {
+  if (before === undefined || before === null) return true;
+  const row = after && typeof after === "object" ? after : {};
+  const sources = PHONE_RECORD_SOURCES[collection] || [];
+  if (sources.some((source) =>
+    String(pathValue(row, source.raw) ?? "") !==
+      String(pathValue(before, source.raw) ?? ""))) {
+    return true;
+  }
+  const synced = Boolean(row[DERIVED.SYNCED_AT]) ||
+    Array.isArray(row[DERIVED.MISSING]) ||
+    sources.some((source) => source.e164 && cleanText(row[source.e164]));
+  if (synced) return true;
+  const createdMs = millisOf(row.createdAt);
+  return createdMs > 0 && nowMs - createdMs < RECENT_RECORD_MS;
 }
 
 // ---------------------------------------------------------------------------
@@ -705,48 +807,216 @@ function createPhoneAccounts(deps) {
 
   // ---- accounts ----------------------------------------------------------
 
+  const sleep = deps.sleep ||
+    ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+  const claimRef = (phone) => db().collection(CLAIMS_COLLECTION).doc(phone);
+  const alreadyExists = (error) => error?.code === 6 ||
+    /already exists/i.test(String(error?.message));
+  // The document changed or went since we read it (a precondition failed).
+  const preconditionRace = (error) => error?.code === 9 ||
+    error?.code === 5 || error?.code === "failed-precondition" ||
+    error?.code === "not-found";
+
+  async function userById(uid) {
+    try {
+      return await auth().getUser(uid);
+    } catch (error) {
+      if (error?.code === "auth/user-not-found") return null;
+      throw error;
+    }
+  }
+
+  /**
+   * Tries to take a number's claim (docs §4.1). `create()` is the lock: of
+   * any number of runs at once exactly one creates the document.
+   *
+   * @param {string} phone The E.164 number.
+   * @return {Promise<object>} {state: "mine", token} | {state: "owned",
+   *   uid, profileReady} | {state: "busy"}.
+   */
+  async function takeClaim(phone) {
+    const ref = claimRef(phone);
+    const token = crypto.randomBytes(12).toString("hex");
+    const fresh = {phone, uid: "", token, profileReady: false,
+      claimedAtMs: now()};
+    try {
+      await ref.create(fresh);
+      return {state: "mine", token};
+    } catch (error) {
+      if (!alreadyExists(error)) throw error;
+    }
+    const snap = await ref.get();
+    if (!snap.exists) return {state: "busy"}; // released meanwhile: retry
+    const claim = snap.data() || {};
+    if (cleanText(claim.uid, 128)) {
+      return {state: "owned", uid: claim.uid,
+        profileReady: claim.profileReady === true};
+    }
+    if (now() - Number(claim.claimedAtMs || 0) < CLAIM_STALE_MS) {
+      return {state: "busy"};
+    }
+    // A run that died while making the account: take its place - unless
+    // someone else did since we read it.
+    try {
+      await ref.update(fresh, {lastUpdateTime: snap.updateTime});
+      return {state: "mine", token};
+    } catch (error) {
+      if (preconditionRace(error)) return {state: "busy"};
+      throw error;
+    }
+  }
+
+  /**
+   * Records the number's account: later runs read it and stop.
+   *
+   * @param {string} phone The number.
+   * @param {string} uid Its account.
+   * @param {boolean} profileReady users/{uid} exists (or is deliberately
+   *   absent: an email account's own profile is never written here).
+   * @return {Promise<void>}
+   */
+  async function settleClaim(phone, uid, profileReady) {
+    await claimRef(phone).set({phone, uid, token: "", profileReady,
+      claimedAtMs: now(), settledAt: FieldValue.serverTimestamp()});
+  }
+
+  /**
+   * Gives up a claim this run holds (it failed), so the next run makes the
+   * account instead of waiting a minute. Never throws.
+   *
+   * @param {string} phone The number.
+   * @param {object} match {token} or {uid}: only that claim is removed.
+   * @return {Promise<void>}
+   */
+  async function dropClaim(phone, match) {
+    try {
+      const snap = await claimRef(phone).get();
+      const claim = snap.exists ? snap.data() || {} : null;
+      if (!claim) return;
+      if (match.token && claim.token !== match.token) return;
+      if (match.uid && claim.uid !== match.uid) return;
+      await claimRef(phone).delete({lastUpdateTime: snap.updateTime});
+    } catch (error) {
+      if (!preconditionRace(error)) {
+        log.warn("Phone claim not released", {
+          error: error?.message || String(error)});
+      }
+    }
+  }
+
+  /**
+   * The one Auth user of a number, made under its claim when there is none.
+   *
+   * @param {string} phone The E.164 number.
+   * @param {{displayName: string, verify: boolean}} options verify: never
+   *   trust a claim's uid without reading that Auth user (a sign-in mints a
+   *   token for it).
+   * @return {Promise<object>} {state: "ready", user, uid, status,
+   *   profileReady, token} | {state: "busy"}. user is null when the claim
+   *   answered alone (profileReady, not verify).
+   */
+  async function lockedAuthUser(phone, options = {}) {
+    for (let attempt = 0; attempt <= CLAIM_WAITS_MS.length; attempt += 1) {
+      let claim;
+      try {
+        claim = await takeClaim(phone);
+      } catch (error) {
+        log.warn("Phone claim not taken", {
+          error: error?.message || String(error)});
+        claim = {state: "busy"};
+      }
+      if (claim.state === "owned") {
+        if (claim.profileReady && !options.verify) {
+          return {state: "ready", user: null, uid: claim.uid,
+            status: "reused", profileReady: true, token: ""};
+        }
+        // By uid first: the claim's account is the answer while it still
+        // holds the number.
+        const owner = await userById(claim.uid);
+        if (owner && owner.phoneNumber === phone) {
+          return {state: "ready", user: owner, uid: owner.uid,
+            status: "reused", profileReady: claim.profileReady, token: ""};
+        }
+        // The number moved (merged into an email account) or the account
+        // was deleted: whoever holds it now, else nobody.
+        const holder = await userByPhone(phone);
+        if (holder) {
+          return {state: "ready", user: holder, uid: holder.uid,
+            status: "reused", profileReady: false, token: ""};
+        }
+        await dropClaim(phone, {uid: claim.uid});
+        continue;
+      }
+      if (claim.state === "mine") {
+        try {
+          let user = await userByPhone(phone);
+          let status = "reused";
+          if (!user) {
+            try {
+              user = await auth().createUser({
+                phoneNumber: phone,
+                ...(cleanText(options.displayName) ?
+                  {displayName: cleanText(options.displayName)} : {}),
+              });
+              status = "created";
+            } catch (error) {
+              // Somebody outside the claim (a client's SMS sign-in) made it.
+              if (error?.code !== "auth/phone-number-already-exists") {
+                throw error;
+              }
+              user = await userByPhone(phone);
+              if (!user) throw error;
+            }
+          }
+          return {state: "ready", user, uid: user.uid, status,
+            profileReady: false, token: claim.token};
+        } catch (error) {
+          await dropClaim(phone, {token: claim.token});
+          throw error;
+        }
+      }
+      if (attempt < CLAIM_WAITS_MS.length) {
+        await sleep(CLAIM_WAITS_MS[attempt]);
+      }
+    }
+    return {state: "busy"};
+  }
+
   /**
    * The account for a number on a record (docs §4). Never throws.
    *
    * @param {{e164: string, displayName: string, source: object}} args Who.
    * @return {Promise<{status: string, uid: string}>} created | reused |
-   *   opted_out | invalid | failed.
+   *   opted_out | invalid | pending (another run is making it) | failed.
    */
   async function ensurePhoneAccount({e164, displayName = "", source = {}}) {
     const phone = strictE164(e164);
     if (!phone) return {status: "invalid", uid: ""};
+    let held = "";
     try {
-      const optOut = await db().collection("phoneAccountOptOuts").doc(phone)
-          .get();
+      // One read for the common case: an opted-out number, or one whose
+      // account is already known.
+      const [optOut, known] = await db().getAll(
+          db().collection("phoneAccountOptOuts").doc(phone), claimRef(phone));
       if (optOut.exists) return {status: "opted_out", uid: ""};
-      let user = await userByPhone(phone);
-      let status = "reused";
-      if (!user) {
-        try {
-          user = await auth().createUser({
-            phoneNumber: phone,
-            ...(cleanText(displayName) ?
-              {displayName: cleanText(displayName)} : {}),
-          });
-          status = "created";
-        } catch (error) {
-          // A concurrent save made it first: Auth's phone uniqueness is the
-          // lock, so both saves end on one account.
-          if (error?.code !== "auth/phone-number-already-exists") throw error;
-          user = await userByPhone(phone);
-          if (!user) throw error;
-        }
+      const claim = known.exists ? known.data() || {} : {};
+      if (cleanText(claim.uid, 128) && claim.profileReady === true) {
+        return {status: "reused", uid: claim.uid};
       }
+      const found = await lockedAuthUser(phone, {displayName});
+      if (found.state === "busy") return {status: "pending", uid: ""};
+      if (found.profileReady) return {status: found.status, uid: found.uid};
+      held = found.token;
+      const user = found.user;
       const hasOtherSignIn = cleanText(user.email) ||
         (user.providerData || []).some((entry) =>
           entry?.providerId && entry.providerId !== "phone");
-      const profileRef = db().collection("users").doc(user.uid);
       if (!hasOtherSignIn) {
         const signedInBefore = Boolean(user.metadata?.lastSignInTime) &&
-          status === "reused";
+          found.status === "reused";
         const nowTs = FieldValue.serverTimestamp();
         try {
-          await profileRef.create({
+          await db().collection("users").doc(user.uid).create({
             role: "customer",
             fullName: cleanText(displayName),
             email: "",
@@ -767,14 +1037,13 @@ function createPhoneAccounts(deps) {
           });
         } catch (error) {
           // ALREADY_EXISTS: the profile is someone's; never touch it.
-          if (error?.code !== 6 && !/already exists/i.test(
-              String(error?.message))) {
-            throw error;
-          }
+          if (!alreadyExists(error)) throw error;
         }
       }
-      return {status, uid: user.uid};
+      await settleClaim(phone, user.uid, true);
+      return {status: found.status, uid: user.uid};
     } catch (error) {
+      if (held) await dropClaim(phone, {token: held});
       log.warn("Phone account not ensured", {
         collection: source.collection || "", recordId: source.recordId || "",
         error: error?.message || String(error),
@@ -793,14 +1062,104 @@ function createPhoneAccounts(deps) {
     return results;
   }
 
+  // A number is stamped only once its account exists, or is deliberately
+  // absent (opted out). failed / pending numbers wait for the next sync.
+  const SETTLED_STATUSES = new Set(["created", "reused", "opted_out"]);
+
   /**
-   * Re-derives a record's phone fields in a transaction (so a stale event
-   * never writes an old number over a newer one) and ensures the accounts
-   * of numbers that appeared. Never throws: a staff save must not fail.
+   * The derived-field update a change set allows, given which numbers have
+   * their account; null when nothing is left to write.
+   *
+   * @param {string} collection The collection.
+   * @param {object} changes recordPhonePatch(...).changes.
+   * @param {Set<string>} settled Numbers whose account is settled.
+   * @return {object|null} Firestore update (FieldValue.delete for null).
+   */
+  function stampUpdate(collection, changes, settled) {
+    const update = {};
+    for (const [field, value] of Object.entries(changes)) {
+      const isNumber = (PHONE_RECORD_SOURCES[collection] || [])
+          .some((source) => source.e164 === field);
+      // A number that changed again since the accounts were made, or whose
+      // account is not settled, waits for the next sync.
+      if (isNumber && value !== null && !settled.has(value)) continue;
+      update[field] = value === null ? FieldValue.delete() : value;
+    }
+    if (!Object.keys(update).length) return null;
+    update[DERIVED.SYNCED_AT] = FieldValue.serverTimestamp();
+    return update;
+  }
+
+  /**
+   * Accounts first, then the update that stamps them (docs §4): what a
+   * record's derived fields should become, computed from `data` as given.
    *
    * @param {string} collection The collection.
    * @param {string} id The record.
-   * @param {object} options {after: event data, for the cheap pre-check}.
+   * @param {object} data The record.
+   * @return {Promise<{update: ?Object, accounts: Array<object>,
+   *   region: string}>} update null: nothing to write.
+   */
+  async function planRecordPhones(collection, id, data) {
+    const region = await regionFor(collection, data);
+    const planned = recordPhonePatch(collection, data, region);
+    if (!Object.keys(planned.changes).length) {
+      return {update: null, accounts: [], settled: new Set(), region};
+    }
+    const accounts = await ensureAccountsFor(collection, id,
+        planned.newNumbers);
+    const settled = new Set(planned.newNumbers
+        .filter((phone, index) =>
+          SETTLED_STATUSES.has(accounts[index]?.status))
+        .map((phone) => phone.e164));
+    return {update: stampUpdate(collection, planned.changes, settled),
+      accounts, settled, region};
+  }
+
+  /**
+   * For a trigger that writes the record itself anyway (parkedCars'
+   * occupancy patch): the phone fields to put in THAT write, so one event
+   * makes at most one write. The caller writes with its own updateTime
+   * guard. Never throws.
+   *
+   * @param {string} collection The collection.
+   * @param {string} id The record.
+   * @param {{after: object, before: (object|null|undefined)}} event The
+   *   record after the write, and before it (null: created).
+   * @return {Promise<{update: ?Object, accounts: Array<object>}>} update
+   *   null: nothing to add.
+   */
+  async function phoneStampForEvent(collection, id, {after, before} = {}) {
+    try {
+      if (!PHONE_RECORD_SOURCES[collection] || !cleanText(id) || !after ||
+          stampIsCurrent(collection, after, before) ||
+          !phoneEventNeedsSync(collection, after, before, now())) {
+        return {update: null, accounts: []};
+      }
+      const plan = await planRecordPhones(collection, id, after);
+      return {update: plan.update, accounts: plan.accounts};
+    } catch (error) {
+      log.warn("Record phones not planned", {collection, id,
+        error: error?.message || String(error)});
+      return {update: null, accounts: []};
+    }
+  }
+
+  /**
+   * Re-derives a record's phone fields and ensures the accounts of numbers
+   * that appeared. Never throws: a staff save must not fail.
+   *
+   * From a trigger (`options.after` given) it first asks, without any read,
+   * whether there is anything to do (stampIsCurrent, phoneEventNeedsSync);
+   * with the event's `updateTime` it then writes ONE update guarded by it
+   * (a newer write's own event redoes the work) instead of re-reading the
+   * record in a transaction. Without options (callables, the sweep, the
+   * backfill) it re-reads the record and stamps in a transaction, so a
+   * stale read never writes an old number over a newer one.
+   *
+   * @param {string} collection The collection.
+   * @param {string} id The record.
+   * @param {object} options {after, before, updateTime}: the event's data.
    * @return {Promise<{written: boolean, accounts: Array<object>}>} What
    *   happened.
    */
@@ -810,48 +1169,47 @@ function createPhoneAccounts(deps) {
     }
     try {
       if (options.after !== undefined) {
-        if (!options.after) return {written: false, accounts: []};
-        const region = await regionFor(collection, options.after);
-        const quick = recordPhonePatch(collection, options.after, region);
-        if (!Object.keys(quick.changes).length) {
+        if (!options.after ||
+            stampIsCurrent(collection, options.after, options.before) ||
+            !phoneEventNeedsSync(collection, options.after, options.before,
+                now())) {
           return {written: false, accounts: []};
         }
       }
       const ref = db().collection(collection).doc(id);
+      if (options.after !== undefined) {
+        if (options.updateTime) {
+          const plan = await planRecordPhones(collection, id, options.after);
+          if (!plan.update) return {written: false, accounts: plan.accounts};
+          try {
+            await ref.update(plan.update,
+                {lastUpdateTime: options.updateTime});
+            return {written: true, accounts: plan.accounts};
+          } catch (error) {
+            // A newer write landed: its own event stamps the record.
+            if (preconditionRace(error)) {
+              return {written: false, accounts: plan.accounts};
+            }
+            throw error;
+          }
+        }
+      }
       const first = await ref.get();
       if (!first.exists) return {written: false, accounts: []};
-      const region = await regionFor(collection, first.data());
-      // Accounts FIRST (docs §4): a number is stamped only once its account
-      // exists (or is deliberately absent - opted out). A number whose
-      // account failed stays unstamped, so the next write of the record or
-      // the hourly sweep (sweepPackageRequests) tries again.
-      const planned = recordPhonePatch(collection, first.data(), region);
-      const accounts = await ensureAccountsFor(collection, id,
-          planned.newNumbers);
-      const settled = new Set(planned.newNumbers
-          .filter((phone, index) => accounts[index]?.status !== "failed")
-          .map((phone) => phone.e164));
+      const plan = await planRecordPhones(collection, id, first.data() || {});
+      if (!plan.update) return {written: false, accounts: plan.accounts};
       const written = await db().runTransaction(async (tx) => {
         const snap = await tx.get(ref);
         if (!snap.exists) return false;
         const data = snap.data() || {};
         const patch = recordPhonePatch(collection, data,
-            needsRegion(collection, data) ? region : "");
-        const update = {};
-        for (const [field, value] of Object.entries(patch.changes)) {
-          const isNumber = (PHONE_RECORD_SOURCES[collection] || [])
-              .some((source) => source.e164 === field);
-          // A number that changed again since the accounts were made, or
-          // whose account failed, waits for the next sync.
-          if (isNumber && value !== null && !settled.has(value)) continue;
-          update[field] = value === null ? FieldValue.delete() : value;
-        }
-        if (!Object.keys(update).length) return false;
-        update[DERIVED.SYNCED_AT] = FieldValue.serverTimestamp();
+            needsRegion(collection, data) ? plan.region : "");
+        const update = stampUpdate(collection, patch.changes, plan.settled);
+        if (!update) return false;
         tx.update(ref, update);
         return true;
       });
-      return {written, accounts};
+      return {written, accounts: plan.accounts};
     } catch (error) {
       log.warn("Record phones not synced", {collection, id,
         error: error?.message || String(error)});
@@ -922,6 +1280,10 @@ function createPhoneAccounts(deps) {
       tx.set(aliasRef, {uid, email: cleanText(userRecord.email, 320)
           .toLowerCase(), phone: e164, updatedAt: nowTs}, {merge: true});
       tx.delete(db().collection("phoneAccountOptOuts").doc(e164));
+      // The number's account is this one now (a sign-in, a merge): records
+      // saved later reuse it without asking Auth (§4.1).
+      tx.set(claimRef(e164), {phone: e164, uid, token: "",
+        profileReady: true, claimedAtMs: now(), settledAt: nowTs});
       if (!snap.exists) {
         tx.set(ref, {
           role: "customer",
@@ -995,6 +1357,24 @@ function createPhoneAccounts(deps) {
       await requirePhoneSignInAllowed(existing.uid);
       return {uid: existing.uid, created: false};
     }
+    // Made under the number's claim, like a record's account (§4.1), so a
+    // shipment saved at this moment cannot make a second one. verify: the
+    // token is minted for this uid, so a claim is never trusted unread.
+    const found = await lockedAuthUser(e164, {verify: true});
+    if (found.state === "ready") {
+      try {
+        if (found.status === "reused") {
+          await requirePhoneSignInAllowed(found.uid);
+        }
+        // signInBookkeeping, next, settles the claim with the profile.
+        return {uid: found.uid, created: found.status === "created"};
+      } catch (error) {
+        if (found.token) await dropClaim(e164, {token: found.token});
+        throw error;
+      }
+    }
+    // Another run held the claim for seconds: fall back to Auth's own
+    // phone uniqueness rather than refuse a proven sign-in.
     try {
       const made = await auth().createUser({phoneNumber: e164});
       return {uid: made.uid, created: true};
@@ -1002,6 +1382,7 @@ function createPhoneAccounts(deps) {
       if (error?.code !== "auth/phone-number-already-exists") throw error;
       const raced = await userByPhone(e164);
       if (!raced) throw error;
+      await requirePhoneSignInAllowed(raced.uid);
       return {uid: raced.uid, created: false};
     }
   }
@@ -1525,10 +1906,14 @@ function createPhoneAccounts(deps) {
     const phone = strictE164(e164);
     if (!phone) return;
     try {
-      await db().collection("phoneAccountOptOuts").doc(phone).set({
+      const batch = db().batch();
+      batch.set(db().collection("phoneAccountOptOuts").doc(phone), {
         uid: cleanText(uid, 128),
         deletedAt: FieldValue.serverTimestamp(),
       });
+      // The deleted account's claim goes with it (a sign-in makes a new one).
+      batch.delete(claimRef(phone));
+      await batch.commit();
     } catch (error) {
       log.warn("Phone opt-out not recorded", {
         error: error?.message || String(error)});
@@ -1644,6 +2029,7 @@ function createPhoneAccounts(deps) {
     ensureRecordAccounts,
     getMyShipments,
     linkPhoneToAccount,
+    phoneStampForEvent,
     recordOptOut,
     reportShipmentNotMine,
     requestPhoneLoginCode,
@@ -1689,8 +2075,13 @@ module.exports = {
   parseCursor,
   parseRecordKey,
   pathValue,
+  phoneEventNeedsSync,
   privateShipmentItem,
   recordPhonePatch,
   recordPhones,
   shipmentQueries,
+  stampIsCurrent,
+  CLAIM_STALE_MS,
+  CLAIMS_COLLECTION,
+  RECENT_RECORD_MS,
 };

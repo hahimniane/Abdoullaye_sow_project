@@ -84,8 +84,9 @@ read time by its current number.
 
 ### 3.1 Where the fields are written (no new triggers)
 
-`syncRecordPhones(collection, id)` (re-reads the record, writes the derived
-fields only when they differ - convergent - then ensures the accounts) runs:
+`syncRecordPhones(collection, id)` (ensures the accounts of the numbers
+that appeared, then writes the derived fields only when they differ -
+convergent; from a trigger see §3.2 for what it skips) runs:
 
 - in the existing Firestore triggers, which already see every write:
   `rollupVolumeOnLineWrite` (containerLines), `syncParkedCarOccupancy`
@@ -102,7 +103,9 @@ fields only when they differ - convergent - then ensures the accounts) runs:
 
 A stamp-only write changes no status, payment or count, so the triggers it
 re-fires are no-ops (volume rollups compare signatures; notify triggers check
-status/payment transitions).
+status/payment transitions). `syncParkedCarOccupancy` puts the stamp in the
+SAME write as its occupancy patch (`phoneStampForEvent`): one event, at most
+one write.
 
 Records a client creates directly fire no trigger (the barrel, freight and
 transport triggers fire on update only, and a deployed trigger's event type
@@ -117,19 +120,58 @@ cannot be changed in place). Two covers, no new function:
   budget, stamping what old app versions left and retrying numbers whose
   account failed. It never fails the package sweep.
 
+### 3.2 What a trigger event costs (2026-10 incident)
+
+Production has a hard 20-vCPU Cloud Run quota. A burst of updates to OLD
+records (never stamped: parked cars, barrels) made every event stamp the
+record (a second write that re-fired the trigger), make an account and a
+`users/` profile (which woke `syncUserCustomClaims`), and the burst ran the
+quota out (503s on label printing). Since then, from a trigger:
+
+1. **Free check first** (`stampIsCurrent`, pure): when the derived fields
+   already describe the raw numbers, the event stops before any Firestore
+   or Auth call. A number without a country code is judged without the
+   business's country only when this write did not change it (`before`).
+2. **Which events do phone work** (`phoneEventNeedsSync`, pure): a new
+   record, a number changed by this write, a record synced before (its stamp
+   went stale: a failed account, a country-code fix), a record created in
+   the last 24 hours (`RECENT_RECORD_MS`: a client's direct create, a
+   retry), or a call without `before`. **Not** an old record never synced
+   whose numbers this write left alone.
+3. **One guarded write**: with the event's `updateTime` the stamp is a
+   single `update(..., {lastUpdateTime})` - no re-read, no transaction. A
+   newer write makes it fail harmlessly; that write's own event redoes it.
+4. `syncUserCustomClaims` returns at once for a NEW profile whose claims
+   would be a plain customer's (role `customer`, no business, admin role or
+   permissions): a new Auth user has no claims, and no rule tells "none"
+   from a customer's. Staff, owners and admins, and every later change,
+   still sync.
+
+Trade-off (owner-accepted): "at once" still holds for new records and for
+number changes. An old record whose numbers nobody touches gets its stamp
+and account from the backfill (§11), not from an unrelated status update;
+the hourly sweep (§3.1) still covers the last 3 hours of client-created
+barrels, freight and transport. A rare lost race on an old record (its stamp
+write beaten by a newer write that did not change the number) is also left
+to the backfill.
+
 ## 4. Accounts made from a record
 
 `ensurePhoneAccount({e164, displayName, source})` in `phone_accounts.js`:
 
 1. `phoneAccountOptOuts/{e164}` exists -> do nothing (the person deleted
    their account; see §8).
-2. `auth.getUserByPhoneNumber(e164)` -> reuse that uid (a placeholder, a
-   phone sign-up, or an email account that VERIFIED this number).
-3. else `auth.createUser({phoneNumber: e164, displayName})`; on
-   `auth/phone-number-already-exists` (a concurrent save won) read it back.
-   Firebase Auth's phone uniqueness is the lock: two shipments with the same
-   new number at once make one account.
-4. `users/{uid}` is created with `create()` (an existing profile is never
+2. `phoneAccountClaims/{e164}` has a `uid` with `profileReady` -> reuse it
+   (read in the same `getAll` as the opt-out: no Auth call).
+3. otherwise take the number's claim (§4.1), then
+   `auth.getUserByPhoneNumber(e164)` -> reuse that uid (a placeholder, a
+   phone sign-up, or an email account that VERIFIED this number - such an
+   account's `phoneSignInAliases` entry exists only for a number Auth holds,
+   so Auth is the one place to look);
+4. else `auth.createUser({phoneNumber: e164, displayName})`; on
+   `auth/phone-number-already-exists` (a client's SMS sign-in made it
+   meanwhile) read it back.
+5. `users/{uid}` is created with `create()` (an existing profile is never
    touched):
 
 ```
@@ -141,11 +183,50 @@ preferredLanguage: "fr" | "en" (from loginLanguage),
 notificationPreferences: defaults, createdAt, updatedAt
 ```
 
+6. the claim is settled: `{uid, profileReady: true}`.
+
 Never for an empty, invalid or `needs_country_code` number. Best-effort: any
 failure is logged and swallowed - a staff save never fails because of it.
 Accounts are made BEFORE the number is stamped: a number whose account
-failed stays unstamped, so the next write of the record, the hourly sweep
-(§3.1) or the backfill tries again (`syncRecordPhones`).
+failed (`failed`) or is still being made by another run (`pending`) stays
+unstamped, so the next write of the record (§3.2), the hourly sweep (§3.1)
+or the backfill tries again (`syncRecordPhones`).
+
+### 4.1 One phone = one account, under concurrency
+
+Firebase Auth's phone uniqueness is NOT a lock: in production (2026-10) two
+trigger runs of one parked car at the same moment made two Auth users and
+two profiles for one number. `phoneAccountClaims/{e164}` (server only,
+rules deny every client) is:
+
+```
+{phone, uid: "" | <uid>, token: <random> | "", profileReady: boolean,
+ claimedAtMs, settledAt}
+```
+
+- Taking it is `create()`: of any number of runs at once exactly one
+  succeeds and makes the account; the others read the claim.
+- A claim with a `uid` answers (by uid first: `getUser(uid)` must still hold
+  the number; else whoever holds it now; else the claim is dropped and
+  taken again - a merged or deleted account).
+- A claim without a `uid` younger than 60 s (`CLAIM_STALE_MS`): another run
+  is making the account; wait (150 ms .. 2 s, about 5 s in all), then give
+  up as `pending` (the number stays unstamped; the next write or sweep
+  links it). Older: a run that died - taken over with an `updateTime`
+  precondition, so only one run takes it over.
+- A run that fails releases its own claim (matched by `token`).
+- A sign-in that makes the account (`accountForSignIn`) uses the same claim
+  but never trusts a claim's uid unread (it mints a token for it); every
+  sign-in and merge (`signInBookkeeping`) writes the claim with its uid, so
+  a merged number's later shipments reuse the email account at once.
+  Deleting an account removes its claim with the opt-out (§8).
+- No index: claims are read by id only. Retry-safe: every step either
+  converges on the same uid or leaves the claim for the next run.
+
+Cleanup of what the race already made: `~/laawol-deploy-logs/phone_dupes.py`
+(owner, ADC; dry run by default, `--apply` deletes) keeps one account per
+number and deletes only extras that are `shipment` customer profiles never
+signed in, with phone-only Auth users that never signed in.
 
 A profile is "not signed in yet" while `accountOrigin == "shipment"` and
 `firstSignInAt == null`. Such an account is a placeholder for merging (§7).
@@ -303,7 +384,7 @@ createdAt DESC)` on packageRequests.
 
 Rules: customers still cannot read any of these collections. New
 server-only collections: `phoneLoginChallenges`, `phoneLoginLimits`,
-`phoneAccountOptOuts`. `users/{uid}/hiddenShipments/{key}` - owner may read,
+`phoneAccountOptOuts`, `phoneAccountClaims` (§4.1). `users/{uid}/hiddenShipments/{key}` - owner may read,
 nobody writes from a client.
 
 ### 6.1 This isn't mine
@@ -352,8 +433,8 @@ number on {code} says it isn't theirs. Check the number." Idempotent.
 
 `finalizeAccountDeletion` (and the `deleteUser` compatibility path) writes
 `phoneAccountOptOuts/{e164}` `{deletedAt, uid}` for the deleted user's Auth
-number before deleting it. `ensurePhoneAccount` never recreates an opted-out
-number. Signing in again with a code (WhatsApp or SMS) recreates the account
+number before deleting it, and removes its `phoneAccountClaims/{e164}`.
+`ensurePhoneAccount` never recreates an opted-out number. Signing in again with a code (WhatsApp or SMS) recreates the account
 and removes the opt-out.
 
 ## 9. Admin lists and email-less accounts
@@ -428,6 +509,18 @@ Changed: `rollupVolumeOnLineWrite`, `syncParkedCarOccupancy`,
 `listPlatformUsers`, `getMarketplacePerson`. Rules and indexes deploy too
 (`firestore:rules`, `firestore:indexes`, incl. TTL on `phoneLoginChallenges`
 and `phoneLoginLimits` `expiresAt`).
+
+2026-10 fix (one phone = one account §4.1, trigger cost §3.2): every
+function that runs `phone_accounts.js` account code must run the claim
+version, or an old instance can still race a new one: `phoneAccount`,
+`syncParkedCarOccupancy`, `rollupVolumeOnLineWrite`,
+`notifyBarrelShipmentStatus`, `notifyFreightShipmentStatus`,
+`notifyTransportRequestStatus`, `createTransportRequest`, `sealBarrelPool`,
+`createBarrelShipmentPaymentIntent`, `createBarrelOrderPaymentIntent`,
+`createFreightShipmentPaymentIntent`, `createFreightQuoteRequest`,
+`submitPackageRequest`, `sweepPackageRequests`, `finalizeAccountDeletion`,
+`deleteUser`, plus `syncUserCustomClaims` (early return) and
+`firestore:rules` (`phoneAccountClaims`). No new function, trigger or index.
 
 Deploy prerequisite: `verifyPhoneLoginCode` mints custom tokens, so the
 functions' runtime service account needs `iam.serviceAccounts.signBlob` on
