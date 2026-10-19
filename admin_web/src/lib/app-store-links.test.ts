@@ -81,3 +81,12 @@ test("the banner's copy is translated to French", () => {
     assert.equal(translateValue(french, "fr"), french);
   }
 });
+
+test("a business's request link (the printed QR) offers the app above the form", () => {
+  const entry = readFileSync(new URL("../components/customer-service-entry.tsx", import.meta.url), "utf8");
+  assert.match(entry, /\{requestSlug && !staffCandidate && <GetAppBanner \/>\}/);
+  assert.ok(
+    entry.indexOf("<GetAppBanner />") < entry.indexOf("<CustomerShippingServices"),
+    "the app offer comes before the request form",
+  );
+});
