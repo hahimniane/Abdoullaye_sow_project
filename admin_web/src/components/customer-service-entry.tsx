@@ -40,6 +40,7 @@ const PackageStaffView = dynamic(
 );
 import { recallGuestContact } from "@/lib/guest-contact";
 import { packageCodeFrom, packageStaffCandidate } from "@/lib/package-staff";
+import { GetAppBanner } from "@/components/get-app-banner";
 import { estimateTokenFromLocation, requestSlugFromLocation } from "@/lib/package-requests";
 import type { CustomerService } from "@/lib/customer-service-intent";
 import type { UserProfile } from "@/types/admin";
@@ -229,6 +230,10 @@ export function CustomerServiceEntry({
             Your request is ready to continue.
           </div>
         )}
+        {/* A business's request link (/r/<slug>, the printed QR) lands here
+            when the app is not installed: offer the app first, the form stays
+            right below. */}
+        {requestSlug && !staffCandidate && <GetAppBanner />}
         {shippingService && (
           <CustomerShippingServices
             authenticated={authenticated}
