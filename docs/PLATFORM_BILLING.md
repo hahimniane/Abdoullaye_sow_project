@@ -280,7 +280,27 @@ Volume), `components/billing-views.tsx`, pure helpers in
 - Every string in English and French (`french-dom.ts`); business names and
   notes are `data-no-translate`. Works from 375 px to desktop.
 
-## 10. Edge cases
+## 10. As built
+
+- One new function, `platformBilling` (maxInstances 1, 1 GiB, 120 s). The
+  project's reserved-CPU budget (`test/scaling-contract.test.js`, 1000)
+  was exactly full, so `backfillBusinessCarListings` (a super admin's
+  one-off repair tool) went from the default 3 instances to 1.
+- `volume_rollup.js` now also returns `monthLines` (Volume's month query)
+  so the package-price read is the same query and rule as Volume.
+- "Try a different deal" and "Try other rates" compare against the deal in
+  effect worked out live ("With the current deal"), also for a closed
+  month, so the comparison is like for like; the closed amount stays on the
+  bill itself.
+- Tests: `functions/test/platform-billing.test.js` (pure),
+  `test/platform-billing-callables.test.js` (`npm run test:billing`,
+  Auth + Firestore emulators), the rules case in
+  `test/firestore-rules.test.js`; console `src/lib/platform-billing.test.ts`
+  (shared fixture, field-for-field against the server module, preview) and
+  `src/lib/billing-console-contract.test.ts` (callable, translation,
+  progress, phone layout).
+
+## 11. Edge cases
 
 - A business deleted since: its rows show its id.
 - A version saved for a month already passed (but not closed) re-prices that

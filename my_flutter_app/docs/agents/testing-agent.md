@@ -625,3 +625,10 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   `customData`, native SDKs throw `credential-already-in-use`. Check both
   (`phoneHeldByAnotherAccount`); only a real link against the Auth emulator
   shows it - unit tests with a hand-made error code cannot.
+- A git worktree that symlinks `admin_web/node_modules` to the main
+  checkout to save disk cannot run Turbopack (`next dev` / `next build`
+  panic: "Symlink [project]/node_modules is invalid, it points out of the
+  filesystem root"). Use `next dev --webpack` / `next build --webpack` for
+  local verification there, and say so; a deploy build still runs from a
+  real install. `next dev` also rewrites `next-env.d.ts` - restore it
+  before committing.
