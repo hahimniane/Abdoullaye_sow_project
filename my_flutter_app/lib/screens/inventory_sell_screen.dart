@@ -807,6 +807,15 @@ class _InventorySellScreenState extends State<InventorySellScreen> {
     final locale = dateLocaleOf(context);
     final due = parseDayKey(_checkout.dueDate);
     final collector = _checkout.collectorStaffId;
+    final split = inventoryCheckoutSplit(_basket.totalCents, _checkoutNow);
+    Widget receivedByField(String label) => LotPickerField(
+          key: const Key('inv-received-by'),
+          label: label,
+          value: _receivedByLabel(l10n),
+          placeholder: label,
+          onTap: _busy ? () {} : _pickReceivedBy,
+          error: errorFor(['received_by_invalid']),
+        );
     return [
       const SizedBox(height: AppSpacing.md),
       Container(
@@ -825,14 +834,9 @@ class _InventorySellScreenState extends State<InventorySellScreen> {
             child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            LotPickerField(
-              key: const Key('inv-received-by'),
-              label: l10n.lotReceivedBy,
-              value: _receivedByLabel(l10n),
-              placeholder: l10n.lotReceivedBy,
-              onTap: _busy ? () {} : _pickReceivedBy,
-              error: errorFor(['received_by_invalid']),
-            ),
+            // On credit, who took the money is asked under "Paid now", next
+            // to the amount it is about; with nothing paid now, nobody did.
+            if (!credit) receivedByField(l10n.lotReceivedBy),
             SwitchListTile.adaptive(
               key: const Key('inv-on-credit'),
               contentPadding: EdgeInsets.zero,
@@ -869,6 +873,11 @@ class _InventorySellScreenState extends State<InventorySellScreen> {
                   errorMaxLines: 3,
                 ),
               ),
+              if (split.paidNowCents > 0) ...[
+                const SizedBox(height: AppSpacing.md),
+                receivedByField(l10n.invCreditPaidNowReceivedBy(
+                    formatLotCents(split.paidNowCents))),
+              ],
               const SizedBox(height: AppSpacing.md),
               TextField(
                 key: const Key('inv-credit-name'),

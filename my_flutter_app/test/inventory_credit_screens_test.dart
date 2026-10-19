@@ -345,6 +345,46 @@ void main() {
       expect(find.text(r'Fatou Diallo owes $40.00'), findsOneWidget);
     });
 
+    testWidgets('on credit, who took the part paid now is asked under it',
+        (tester) async {
+      final calls = _Calls()
+        ..respond = (name, _) => {
+          'saleId': 's1',
+          'totalCents': 6000,
+          'creditCents': 4000,
+        };
+      await _pump(tester, _sell(calls));
+      expect(find.text('Received by'), findsWidgets);
+      await _tapKey(tester, 'inv-on-credit');
+      // Nothing paid now: nobody received anything, so nobody is asked.
+      expect(find.byKey(const Key('inv-received-by')), findsNothing);
+      await tester.enterText(
+        find.byKey(const Key('inv-credit-paid-now')),
+        '20',
+      );
+      await tester.pumpAndSettle();
+      expect(find.text(r'Who received the $20.00 paid now'), findsWidgets);
+      await _tapKey(tester, 'inv-received-by');
+      await _tapText(tester, 'Mariama');
+      await tester.enterText(
+        find.byKey(const Key('inv-credit-name')),
+        'Fatou Diallo',
+      );
+      await tester.enterText(
+        find.byKey(const Key('inv-credit-phone')),
+        '2125550100',
+      );
+      await tester.pumpAndSettle();
+      await _tapKey(tester, 'inv-credit-collector');
+      await _tapText(tester, 'Kofi');
+      await _tapKey(tester, 'inv-sold');
+
+      final sent = calls.named('recordInventorySale').single;
+      expect(sent['receivedByStaffId'], 'u-owner');
+      expect((sent['credit'] as Map)['paidNowCents'], 2000);
+      expect((sent['credit'] as Map)['collectorStaffId'], 'u-kofi');
+    });
+
     testWidgets('a refused collector reads in words', (tester) async {
       final calls = _Calls()
         ..respond = (name, _) => throw FirebaseFunctionsException(

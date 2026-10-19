@@ -5844,6 +5844,7 @@
   "invCreditOnCredit": "À crédit",
   "invCreditOnCreditNote": "Le client paie une partie maintenant (ou rien) et doit le reste.",
   "invCreditPaidNow": "Payé maintenant (dollars US)",
+  "invCreditPaidNowReceivedBy": "Qui a reçu les {amount} payés maintenant",
   "invCreditCustomerName": "Nom du client",
   "invCreditCustomerPhone": "Téléphone du client",
   "invCreditCollector": "Qui encaisse le reste",

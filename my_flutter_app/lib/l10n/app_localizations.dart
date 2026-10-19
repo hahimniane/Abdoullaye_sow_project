@@ -21731,6 +21731,12 @@ abstract class AppLocalizations {
   /// **'Paid now (US dollars)'**
   String get invCreditPaidNow;
 
+  /// Credit sale: picker for the person who took the part paid now.
+  ///
+  /// In en, this message translates to:
+  /// **'Who received the {amount} paid now'**
+  String invCreditPaidNowReceivedBy(String amount);
+
   /// No description provided for @invCreditCustomerName.
   ///
   /// In en, this message translates to:

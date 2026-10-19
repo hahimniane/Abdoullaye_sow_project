@@ -12490,6 +12490,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get invCreditPaidNow => 'Paid now (US dollars)';
 
   @override
+  String invCreditPaidNowReceivedBy(String amount) {
+    return 'Who received the $amount paid now';
+  }
+
+  @override
   String get invCreditCustomerName => 'Customer name';
 
   @override

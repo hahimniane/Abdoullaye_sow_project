@@ -5844,6 +5844,11 @@
   "invCreditOnCredit": "On credit",
   "invCreditOnCreditNote": "The customer pays part now (or nothing) and owes the rest.",
   "invCreditPaidNow": "Paid now (US dollars)",
+  "invCreditPaidNowReceivedBy": "Who received the {amount} paid now",
+  "@invCreditPaidNowReceivedBy": {
+    "description": "Credit sale: picker for the person who took the part paid now.",
+    "placeholders": {"amount": {"type": "String"}}
+  },
   "invCreditCustomerName": "Customer name",
   "invCreditCustomerPhone": "Customer phone",
   "invCreditCollector": "Who collects the rest",
