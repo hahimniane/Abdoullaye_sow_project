@@ -671,8 +671,9 @@ const phoneAccounts = createPhoneAccounts({
   sendWhatsApp: (body) => sendWhatsAppMessage(body),
   whatsappConfigured: () => containerWhatsAppConfigured(),
   loginMessage: (args) => loginCodeTemplateMessage(args),
-  // The owner hears it in their console/app feed and by push.
-  notifyBusiness: (payload) => notifyBusinessOfPaidOrder(payload),
+  // The owner hears it in their console/app feed and by push, in the
+  // language of their profile.
+  notifyBusiness: (payload) => notifyBusinessOwnerInLanguage(payload),
   findTrackingDocument: (db, code) => findTrackingDocument(db, code),
   publicRecord: (db, row) => phoneShipmentPublicRecord(db, row),
   clientAddress: (request) => callableClientAddress(request),
@@ -6995,6 +6996,32 @@ async function notifyBusinessOfPaidOrder({businessId, title, body, data}) {
     title,
     body,
     data: {...data, businessId: id},
+  });
+}
+
+/**
+ * notifyBusinessOfPaidOrder, worded in the owner's language: a payload may
+ * carry titleFr / bodyFr beside its English title / body.
+ *
+ * @param {object} payload {businessId, title, body, titleFr, bodyFr, data}.
+ * @return {Promise<void>} Never rejects (safeSendPreferenceNotification).
+ */
+async function notifyBusinessOwnerInLanguage(payload) {
+  const id = String(payload?.businessId || "").trim();
+  if (!id) return;
+  const db = admin.firestore();
+  const businessDoc = await db.collection("businesses").doc(id).get();
+  const ownerUid = String(businessDoc.data()?.ownerUid || "").trim();
+  if (!ownerUid) return;
+  const owner = (await db.collection("users").doc(ownerUid).get()).data();
+  const french = recipientLanguage(owner) === "fr" &&
+    payload.titleFr && payload.bodyFr;
+  await safeSendPreferenceNotification({
+    uid: ownerUid,
+    preferenceKey: "businessActivity",
+    title: french ? payload.titleFr : payload.title,
+    body: french ? payload.bodyFr : payload.body,
+    data: {...payload.data, businessId: id},
   });
 }
 

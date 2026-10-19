@@ -809,9 +809,12 @@ function createPhoneAccounts(deps) {
    *
    * @param {string} uid The account.
    * @param {string} e164 Its number.
+   * @param {{replacePhone: boolean}} options replacePhone: the number was
+   *   just proven for this account (linking), so it becomes the profile's
+   *   number whatever was saved before.
    * @return {Promise<{profileCreated: boolean, firstSignIn: boolean}>}
    */
-  async function signInBookkeeping(uid, e164) {
+  async function signInBookkeeping(uid, e164, options = {}) {
     const userRecord = await auth().getUser(uid);
     const ref = db().collection("users").doc(uid);
     const nowTs = FieldValue.serverTimestamp();
@@ -847,7 +850,8 @@ function createPhoneAccounts(deps) {
         updatedAt: nowTs,
       };
       if (!current.phoneVerifiedAt) update.phoneVerifiedAt = nowTs;
-      if (!cleanText(current.phone) || sameNumber(current.phone, e164)) {
+      if (options.replacePhone || !cleanText(current.phone) ||
+          sameNumber(current.phone, e164)) {
         update.phone = e164;
       }
       const firstSignIn = !current.firstSignInAt;
@@ -890,7 +894,7 @@ function createPhoneAccounts(deps) {
   async function linkPhoneToAccount(uid, e164) {
     const caller = await auth().getUser(uid);
     if (caller.phoneNumber === e164) {
-      await signInBookkeeping(uid, e164);
+      await signInBookkeeping(uid, e164, {replacePhone: true});
       return {linked: true, merged: false};
     }
     const holder = await userByPhone(e164);
@@ -936,7 +940,7 @@ function createPhoneAccounts(deps) {
       const aliasSnap = await oldAlias.get();
       if (aliasSnap.data()?.uid === uid) await oldAlias.delete();
     }
-    await signInBookkeeping(uid, e164);
+    await signInBookkeeping(uid, e164, {replacePhone: true});
     return {linked: true, merged};
   }
 
@@ -1299,6 +1303,10 @@ function createPhoneAccounts(deps) {
         title: "A customer says a number isn't theirs",
         body: `Someone who signed in with the number on ${code} says it ` +
           "isn't theirs. Check the number.",
+        // The owner reads it in their own language (recipientLanguage).
+        titleFr: "Un client dit qu'un numéro n'est pas le sien",
+        bodyFr: `Une personne connectée avec le numéro de ${code} dit ` +
+          "qu'il n'est pas le sien. Vérifiez le numéro.",
         data: {type: "phone_number_reported",
           relatedCollection: target.collection, relatedId: target.id,
           field: outcome.fresh.join(","), trackingCode: code},

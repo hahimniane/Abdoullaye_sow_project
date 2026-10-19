@@ -424,7 +424,9 @@ describe("SMS sign-in and merging", () => {
         const email = await admin.auth().createUser({
           email: `m${seq}@ex.com`, password: "secret123"});
         await db.collection("users").doc(email.uid).set({role: "customer",
-          email: `m${seq}@ex.com`, fullName: "Mariama"});
+          email: `m${seq}@ex.com`, fullName: "Mariama",
+          // An older, unverified number: the proven one replaces it.
+          phone: "+12025559999"});
         const emailAuth = {uid: email.uid, token: {
           firebase: {sign_in_provider: "password"}}};
         // Not signed in: no linking.
@@ -442,6 +444,9 @@ describe("SMS sign-in and merging", () => {
         assert.deepEqual(result, {linked: true, merged: true});
         assert.equal((await admin.auth().getUser(email.uid)).phoneNumber,
             phone);
+        const linked = await profile(email.uid);
+        assert.equal(linked.phone, phone);
+        assert.equal(linked.phoneVerified, true);
         assert.equal(await admin.auth().getUser(placeholder.uid)
             .catch((error) => error.code), "auth/user-not-found");
         assert.equal(await profile(placeholder.uid), undefined);
