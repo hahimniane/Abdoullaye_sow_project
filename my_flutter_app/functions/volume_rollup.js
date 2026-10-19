@@ -548,6 +548,9 @@ function createVolumeHandlers(deps) {
   return {
     getBusinessVolume,
     getPlatformVolume,
+    // Laawol bills reads a month's lines with this same query and month
+    // rule to see package prices (platform_billing_handlers.js).
+    monthLines,
     rebuildVolumeMonths,
     recountMonth,
     rollupVolumeOnContainerWrite,

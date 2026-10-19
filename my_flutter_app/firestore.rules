@@ -736,6 +736,20 @@ service cloud.firestore {
     match /volumeMonthly/{rollupId} {
       allow read, write: if false;
     }
+    // Laawol bills (docs/PLATFORM_BILLING.md): each business's deal and its
+    // history, the months (paid, closed snapshots) and the payments it made
+    // to the platform. Read and written only through the platformBilling
+    // callable, which lets finance readers see and super admins change them.
+    // Businesses never see their bills; no client reads or writes these.
+    match /billingDeals/{businessId} {
+      allow read, write: if false;
+    }
+    match /billingMonths/{monthId} {
+      allow read, write: if false;
+    }
+    match /billingPayments/{paymentId} {
+      allow read, write: if false;
+    }
     // Inventory (docs/INVENTORY.md): products a shop sells, the sales staff
     // ring up, and every stock change. Read by the business's managers (the
     // same read as containers); every write goes through the inventory

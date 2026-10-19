@@ -1,0 +1,110 @@
+{
+  "_comment": "Laawol bills (docs/PLATFORM_BILLING.md §3). Run by functions/test/platform-billing.test.js and admin_web/src/lib/platform-billing.test.ts so the server and the console's mirror bill the same. Money in whole cents, rates in basis points.",
+  "cases": [
+    {
+      "name": "no deal bills nothing; commission is still the month's",
+      "deal": null,
+      "usage": {"barrels": 40, "packages": 12, "cars": 2},
+      "commissionCents": 4321,
+      "expect": {"lines": {}, "chargesCents": 0, "amountCents": 0, "minimumAdjustmentCents": 0, "capAdjustmentCents": 0, "earnedCents": 4321}
+    },
+    {
+      "name": "an empty deal bills nothing",
+      "deal": {},
+      "usage": {"barrels": 40},
+      "commissionCents": 0,
+      "expect": {"lines": {}, "chargesCents": 0, "amountCents": 0, "minimumAdjustmentCents": 0, "capAdjustmentCents": 0, "earnedCents": 0}
+    },
+    {
+      "name": "per barrel received",
+      "deal": {"barrel": {"centsEach": 500}},
+      "usage": {"barrels": 12, "packages": 9},
+      "commissionCents": 0,
+      "expect": {"lines": {"barrels": 6000}, "chargesCents": 6000, "amountCents": 6000, "minimumAdjustmentCents": 0, "capAdjustmentCents": 0, "earnedCents": 6000}
+    },
+    {
+      "name": "per package, fixed: 87 x $1.00",
+      "deal": {"package": {"mode": "fixed", "centsEach": 100}},
+      "usage": {"packages": 87},
+      "commissionCents": 0,
+      "expect": {"lines": {"packages": 8700}, "chargesCents": 8700, "amountCents": 8700, "minimumAdjustmentCents": 0, "capAdjustmentCents": 0, "earnedCents": 8700}
+    },
+    {
+      "name": "per package, 5% with a $1.00 minimum: no price and $0 pay the minimum, 100.5 cents rounds up",
+      "deal": {"package": {"mode": "percent", "bps": 500, "minCents": 100}},
+      "usage": {"packagePrices": [10000, 1000, null, 0, 2010]},
+      "commissionCents": 0,
+      "expect": {"lines": {"packages": 901}, "chargesCents": 901, "amountCents": 901, "minimumAdjustmentCents": 0, "capAdjustmentCents": 0, "earnedCents": 901, "packageNoPrice": 1, "packageAtMinimum": 3, "packageQuantity": 5}
+    },
+    {
+      "name": "per package, 2.5% with no minimum: no price pays $0, half a cent rounds up",
+      "deal": {"package": {"mode": "percent", "bps": 250}},
+      "usage": {"packagePrices": [999, null]},
+      "commissionCents": 0,
+      "expect": {"lines": {"packages": 25}, "chargesCents": 25, "amountCents": 25, "minimumAdjustmentCents": 0, "capAdjustmentCents": 0, "earnedCents": 25, "packageNoPrice": 1, "packageAtMinimum": 0, "packageQuantity": 2}
+    },
+    {
+      "name": "50% of one cent rounds half up to one cent",
+      "deal": {"package": {"mode": "percent", "bps": 5000}},
+      "usage": {"packagePrices": [1]},
+      "commissionCents": 0,
+      "expect": {"lines": {"packages": 1}, "chargesCents": 1, "amountCents": 1, "minimumAdjustmentCents": 0, "capAdjustmentCents": 0, "earnedCents": 1}
+    },
+    {
+      "name": "per shipped car",
+      "deal": {"shippedCar": {"centsEach": 5000}},
+      "usage": {"cars": 3},
+      "commissionCents": 0,
+      "expect": {"lines": {"shippedCars": 15000}, "chargesCents": 15000, "amountCents": 15000, "minimumAdjustmentCents": 0, "capAdjustmentCents": 0, "earnedCents": 15000}
+    },
+    {
+      "name": "parking per car on the lot",
+      "deal": {"parking": {"mode": "perCar", "centsEach": 1000}},
+      "usage": {"parkingCars": 14, "parkingBilledCents": 420000},
+      "commissionCents": 0,
+      "expect": {"lines": {"parking": 14000}, "chargesCents": 14000, "amountCents": 14000, "minimumAdjustmentCents": 0, "capAdjustmentCents": 0, "earnedCents": 14000}
+    },
+    {
+      "name": "parking, 10% of billed, rounded once on the month",
+      "deal": {"parking": {"mode": "percent", "bps": 1000}},
+      "usage": {"parkingCars": 9, "parkingBilledCents": 123455},
+      "commissionCents": 0,
+      "expect": {"lines": {"parking": 12346}, "chargesCents": 12346, "amountCents": 12346, "minimumAdjustmentCents": 0, "capAdjustmentCents": 0, "earnedCents": 12346}
+    },
+    {
+      "name": "per item sold",
+      "deal": {"itemSold": {"centsEach": 25}},
+      "usage": {"itemsSold": 250},
+      "commissionCents": 0,
+      "expect": {"lines": {"itemsSold": 6250}, "chargesCents": 6250, "amountCents": 6250, "minimumAdjustmentCents": 0, "capAdjustmentCents": 0, "earnedCents": 6250}
+    },
+    {
+      "name": "flat fee is added before the minimum; commission is outside the minimum",
+      "deal": {"barrel": {"centsEach": 200}, "flatCents": 5000, "minimumCents": 10000},
+      "usage": {"barrels": 10},
+      "commissionCents": 4321,
+      "expect": {"lines": {"barrels": 2000}, "chargesCents": 2000, "amountCents": 10000, "minimumAdjustmentCents": 3000, "capAdjustmentCents": 0, "earnedCents": 14321}
+    },
+    {
+      "name": "the cap reduces a busy month",
+      "deal": {"package": {"mode": "fixed", "centsEach": 500}, "capCents": 30000},
+      "usage": {"packages": 100},
+      "commissionCents": 0,
+      "expect": {"lines": {"packages": 50000}, "chargesCents": 50000, "amountCents": 30000, "minimumAdjustmentCents": 0, "capAdjustmentCents": -20000, "earnedCents": 30000}
+    },
+    {
+      "name": "a month with nothing still owes the minimum",
+      "deal": {"barrel": {"centsEach": 300}, "minimumCents": 2500, "capCents": 10000},
+      "usage": {},
+      "commissionCents": 0,
+      "expect": {"lines": {"barrels": 0}, "chargesCents": 0, "amountCents": 2500, "minimumAdjustmentCents": 2500, "capAdjustmentCents": 0, "earnedCents": 2500}
+    },
+    {
+      "name": "every charge at once, flat, inside min and cap",
+      "deal": {"barrel": {"centsEach": 300}, "package": {"mode": "fixed", "centsEach": 100}, "shippedCar": {"centsEach": 2500}, "parking": {"mode": "perCar", "centsEach": 500}, "itemSold": {"centsEach": 10}, "flatCents": 2000, "minimumCents": 5000, "capCents": 100000},
+      "usage": {"barrels": 20, "packages": 30, "cars": 2, "parkingCars": 6, "parkingBilledCents": 90000, "itemsSold": 400},
+      "commissionCents": 1500,
+      "expect": {"lines": {"barrels": 6000, "packages": 3000, "shippedCars": 5000, "parking": 3000, "itemsSold": 4000}, "chargesCents": 21000, "amountCents": 23000, "minimumAdjustmentCents": 0, "capAdjustmentCents": 0, "earnedCents": 24500}
+    }
+  ]
+}

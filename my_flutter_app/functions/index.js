@@ -27014,10 +27014,14 @@ exports.updateDestinationCoverage = onCall(
     },
 );
 
+// A super admin's one-off repair tool: one instance is plenty, and the CPUs
+// it no longer reserves keep the project inside its budget
+// (test/scaling-contract.test.js) as platformBilling joined.
 exports.backfillBusinessCarListings = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
+      maxInstances: 1,
     },
     async (request) => {
       const callerUid = requireAuth(request);
@@ -40991,6 +40995,30 @@ exports.rebuildVolumeMonths = onCall(
     {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public",
       maxInstances: 1, timeoutSeconds: 300, memory: "512MiB"},
     volume.rebuildVolumeMonths);
+
+// ---- Laawol bills (docs/PLATFORM_BILLING.md) ------------------------------
+// What each business owes the platform per month under its own deal. One
+// callable routes every action (data.action), so the whole feature costs one
+// Cloud Run service and one CPU of the regional quota. Admin only: finance
+// readers see bills, super admins change them. Math in platform_billing.js,
+// reads in platform_billing_handlers.js; no trigger.
+const platformBillingHandlers = require("./platform_billing_handlers")
+    .createPlatformBillingHandlers({
+      admin,
+      HttpsError,
+      logger,
+      requireAuth,
+      getUserProfile,
+      hasAdminCapability,
+      hasAdminSectionAccess,
+      setAdminAuditLog,
+      ensureParkingOccupancyIndexed,
+      monthLines: volume.monthLines,
+    });
+exports.platformBilling = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public",
+      maxInstances: 1, timeoutSeconds: 120, memory: "1GiB"},
+    platformBillingHandlers.platformBilling);
 // ===========================================================================
 // Customer package requests (docs/PACKAGE_REQUESTS.md §2-§4, §7, §8).
 // A customer asks one business to take a load; the business estimates it,

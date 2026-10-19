@@ -1126,6 +1126,42 @@ describe("business dashboard Firestore rules", () => {
     }
   });
 
+  // Laawol bills (docs/PLATFORM_BILLING.md): deals, months and payments are
+  // read and written only through platformBilling. A business must never
+  // see or touch its own bill, and even a super admin goes through the
+  // callable (which audits every change).
+  it("keeps Laawol bills server-only", async () => {
+    const {doc, setDoc, getDoc, deleteDoc, getDocs, collection, query,
+      where} = require("firebase/firestore");
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const fs = context.firestore();
+      await setDoc(doc(fs, "billingDeals/biz_a"), {businessId: "biz_a",
+        commissionMode: "keep", versions: []});
+      await setDoc(doc(fs, "billingMonths/biz_a_2026-09"), {
+        businessId: "biz_a", month: "2026-09", status: "closed",
+        amountCents: 5000, paidCents: 0, unpaidCents: 5000});
+      await setDoc(doc(fs, "billingPayments/pay_1"), {businessId: "biz_a",
+        month: "2026-09", amountCents: 100, voided: false});
+    });
+    for (const uid of ["owner-a", "super-admin", "owner-b", null]) {
+      const db = firestoreFor(uid);
+      await assertFails(getDoc(doc(db, "billingDeals/biz_a")));
+      await assertFails(getDoc(doc(db, "billingMonths/biz_a_2026-09")));
+      await assertFails(getDoc(doc(db, "billingPayments/pay_1")));
+      await assertFails(getDocs(query(collection(db, "billingMonths"),
+          where("businessId", "==", "biz_a"))));
+      await assertFails(getDocs(query(collection(db, "billingPayments"),
+          where("businessId", "==", "biz_a"))));
+      await assertFails(setDoc(doc(db, "billingDeals/biz_a"),
+          {businessId: "biz_a", versions: []}));
+      await assertFails(setDoc(doc(db, "billingMonths/biz_a_2026-09"),
+          {businessId: "biz_a", status: "open", amountCents: 0}));
+      await assertFails(setDoc(doc(db, "billingPayments/pay_2"),
+          {businessId: "biz_a", month: "2026-09", amountCents: 999999}));
+      await assertFails(deleteDoc(doc(db, "billingPayments/pay_1")));
+    }
+  });
+
   // Inventory (docs/INVENTORY.md): products, sales and stock movements are
   // read by the business's own managers as `where businessId == mine`
   // queries (a product also by code, a sale newest first, a product's
