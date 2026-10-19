@@ -13,6 +13,7 @@ import {
   clampQuantity,
   confirmReceivedText,
   didNotArriveText,
+  receiveNotePlaceholder,
   fewerThanSentText,
   itemsFromText,
   newTransferRequestId,
@@ -183,7 +184,7 @@ export function InventoryTransferReceiveDialog({
                   value={note}
                   maxLength={MAX_TRANSFER_NOTE}
                   onChange={(e) => setNote(e.target.value)}
-                  placeholder="e.g. The box arrived opened"
+                  placeholder={receiveNotePlaceholder(lang)}
                   disabled={busy}
                 />
               </label>

@@ -22824,9 +22824,9 @@ exports.sendInventoryTransfer = onCall(
             .transferLine(line.itemId, items.get(line.itemId), line.quantity));
         const state = inventoryTransferState("in_transit", lines);
         const at = FirestoreTimestamp.now();
+        // A transfer sent without a draft first starts its record at "sent".
         const timeline = [
-          ...(Array.isArray(before?.timeline) ? before.timeline :
-            [{event: "draft_created", byStaffId: uid, byName, at}]),
+          ...(Array.isArray(before?.timeline) ? before.timeline : []),
           {event: "sent", byStaffId: uid, byName, at,
             itemsCount: state.itemsCount},
         ];

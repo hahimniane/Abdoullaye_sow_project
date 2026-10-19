@@ -6012,7 +6012,7 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Draft saved. Nothing is reserved until you send it.": "Brouillon enregistré. Rien n’est réservé tant que vous ne l’envoyez pas.",
   "Transfer sent.": "Transfert envoyé.",
   "Check the box against this list. If a number is different, change it before you confirm.": "Vérifiez le carton avec cette liste. Si un nombre est différent, changez-le avant de confirmer.",
-  "Once confirmed, these items can be sold in this store. Need tags? Print them from the product when you put it on the shelf.": "Une fois confirmés, ces articles peuvent être vendus dans ce magasin. Besoin d’étiquettes ? Imprimez-les depuis le produit au moment de le mettre en rayon.",
+  "Once confirmed, these items can be sold in this store. Need tags? Print them from the product when you put it on the shelf.": "Une fois confirmés, ces articles peuvent être vendus dans ce magasin. Besoin d’étiquettes ? Imprimez-les depuis le produit au moment de les mettre en rayon.",
   "What happened? (optional)": "Que s’est-il passé ? (facultatif)",
   "e.g. The box arrived opened": "ex. Le carton est arrivé ouvert",
   "They stay off the shelves until the owner decides what happened. What arrived can be sold now.": "Ils restent hors des rayons jusqu’à la décision du propriétaire. Ce qui est arrivé peut être vendu dès maintenant.",

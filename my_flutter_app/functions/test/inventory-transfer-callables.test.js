@@ -354,6 +354,9 @@ describe("transfers: sending", () => {
       lines: [{itemId: legacy.id, quantity: 2}]});
     assert.equal(await stockAt(legacy.id, MAIN), 3);
     assert.equal((await item(legacy.id)).storeStock, true);
+    // Sent straight away (no draft): the record starts at "sent".
+    assert.deepEqual((await transferOf(sent.transferId)).timeline
+        .map((e) => e.event), ["sent"]);
     await assertInvariant(legacy.id);
     await call("receiveInventoryTransfer", {transferId: sent.transferId});
     assert.equal(await stockAt(legacy.id, harlem), 2);

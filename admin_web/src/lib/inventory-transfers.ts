@@ -847,6 +847,15 @@ export function inStoreText(n: number, storeName: string, lang: Lang = "en"): st
   return lang === "fr" ? `${n} dans ${storeName}` : `${n} in ${storeName}`;
 }
 
+/**
+ * The receive note's placeholder. A <textarea> is never walked by the French
+ * DOM translator (it would rewrite what was typed), so its placeholder is
+ * chosen here by language.
+ */
+export function receiveNotePlaceholder(lang: Lang = "en"): string {
+  return lang === "fr" ? "ex. Le carton est arrivé ouvert" : "e.g. The box arrived opened";
+}
+
 /** "2 items didn't arrive" / "2 articles ne sont pas arrivés". */
 export function didNotArriveText(missing: number, lang: Lang = "en"): string {
   if (lang === "fr") return `${itemCountText(missing, lang)} ${missing === 1 ? "n’est pas arrivé" : "ne sont pas arrivés"}`;
