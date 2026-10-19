@@ -84,3 +84,16 @@ test("the notification dropdown stays inside a phone's screen", () => {
   assert.match(bell, /dropdownPlacement\(/);
   assert.match(bell, /addEventListener\("resize", place\)/);
 });
+
+test("the public tracking card fits a 375 px phone", () => {
+  // /t/<code> on a phone measured 415 px: the four journey columns (1fr with
+  // nowrap stage names) set the minimum, and the phone two-by-two block sat
+  // earlier in the file than the base rules, so it never applied.
+  assert.match(rule(".guest-tracking-layout"), /grid-template-columns: minmax\(0, 1fr\)/);
+  const base = styles.indexOf(".trk-journey {");
+  assert.match(rule(".trk-journey"), /repeat\(4, minmax\(0, 1fr\)\)/);
+  const phone = mediaBlock("max-width: 560px", ".trk-journey");
+  assert.match(phone, /repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(phone, /\.trk-step-text \{ white-space: normal; \}/);
+  assert.ok(styles.indexOf(phone) > base, "the phone journey rules come after the base rules");
+});

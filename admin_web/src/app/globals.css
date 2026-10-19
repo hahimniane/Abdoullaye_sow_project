@@ -6347,6 +6347,9 @@ html[data-lang-pending] body {
 .guest-tracking-layout {
   display: grid;
   gap: 16px;
+  /* One column that may shrink below its content, so no card can widen the
+     page past a phone screen. */
+  grid-template-columns: minmax(0, 1fr);
   margin: 0 auto;
   max-width: 780px;
   width: 100%;
@@ -12484,15 +12487,6 @@ html[data-lang-pending] body {
     flex-direction: column;
     width: 100%;
   }
-  /* Tracking journey: two rows of two on a phone. Each row's track has to
-     stop at its own last dot rather than appear to jump the gap. */
-  .trk-journey { grid-template-columns: repeat(2, 1fr); gap: 14px 6px; }
-  .trk-step:nth-child(2)::before {
-    border-radius: 3px;
-    right: auto;
-    width: 8px;
-  }
-  .trk-step:nth-child(3)::before { border-radius: 3px 0 0 3px; }
 
 }
 
@@ -13461,7 +13455,7 @@ html[data-lang-pending] body {
 
 .trk-journey {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 6px;
   list-style: none;
   margin: 1px 0 2px;
@@ -13536,6 +13530,21 @@ html[data-lang-pending] body {
 }
 .trk-step.done .trk-step-text,
 .trk-step.current .trk-step-text { color: var(--ink); }
+
+/* Tracking journey on a phone: two rows of two. Each row's track has to stop
+   at its own last dot rather than appear to jump the gap. This block must
+   come after the base rules above - placed earlier in the file, it lost to
+   them and the four columns pushed the tracking card past a 375px screen. */
+@media (max-width: 560px) {
+  .trk-journey { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 6px; }
+  .trk-step:nth-child(2)::before {
+    border-radius: 3px;
+    right: auto;
+    width: 8px;
+  }
+  .trk-step:nth-child(3)::before { border-radius: 3px 0 0 3px; }
+  .trk-step-text { white-space: normal; }
+}
 
 .trk-journey-cancelled {
   background: rgba(220, 38, 38, 0.06);
