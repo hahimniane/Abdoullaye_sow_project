@@ -16,11 +16,11 @@
       id: "barrels",
       keywords: ["baril", "barrel", "tonneau", "drum", "fut", "ship a barrel",
         "expedier un baril", "envoyer un baril"],
-      fr: "Avec l’expédition de barils, vous envoyez un baril complet vers un pays desservi. Chaque entreprise affiche son prix par baril et un délai estimé — vous comparez, puis préparez votre expédition en ligne.",
-      en: "With barrel shipping you send a full barrel to a served country. Each business lists its price per barrel and an estimated delivery window — compare, then prepare your shipment online.",
+      fr: "Avec « Envoyer un colis », vous envoyez des barils, des cartons ou autre chose avec l’entreprise de votre choix. Elle vous envoie un devis sur WhatsApp, vous confirmez, puis vous payez au dépôt ou quand elle vient chercher vos colis.",
+      en: "With Send a package you send barrels, boxes or anything else with the business you choose. It sends you an estimate on WhatsApp, you confirm, then you pay at drop-off or when they collect it.",
       actions: [
         {fr: "Voir le service", en: "See the service", href: "services.html"},
-        {fr: "Expédier un baril", en: "Ship a barrel", href: CUSTOMER + "/?service=barrels"},
+        {fr: "Envoyer un colis", en: "Send a package", href: CUSTOMER + "/?service=barrel"},
       ],
     },
     {
@@ -149,7 +149,7 @@
       open: "Ouvrir l’assistant",
       close: "Fermer l’assistant",
       chips: [
-        ["Expédier un baril", "baril"],
+        ["Envoyer un colis", "baril"],
         ["Fret au kilo", "fret"],
         ["Suivre ma commande", "suivi"],
         ["Acheter une voiture", "acheter voiture"],
@@ -166,7 +166,7 @@
       open: "Open the assistant",
       close: "Close the assistant",
       chips: [
-        ["Ship a barrel", "barrel"],
+        ["Send a package", "barrel"],
         ["Freight by kilo", "freight"],
         ["Track my order", "track"],
         ["Buy a car", "buy car"],
