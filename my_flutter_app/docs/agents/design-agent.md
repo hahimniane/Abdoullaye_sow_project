@@ -195,3 +195,10 @@ Return:
   sender/receiver). Staff phone warnings sit right under the number as
   compact one-line notes: amber "Add the country code", red "The person
   says this number isn't theirs - check it".
+- Phone sign-in on the web reuses `CustomerPhoneField` and the profile's
+  code-entry classes so code entry looks the same everywhere. The tracking
+  page is app-first for non-staff: "Track it in the Laawol app" with the
+  device's store button first, the status right below, never a forced
+  install. An account with no email shows its phone wherever an email would
+  be; email-only actions are disabled with a reason, never hidden or left to
+  fail. "Not signed in yet" accounts stay out of People by default (filter).

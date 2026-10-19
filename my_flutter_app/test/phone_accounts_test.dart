@@ -85,6 +85,7 @@ void main() {
         PhoneRefusalReason.proofInvalid,
         PhoneRefusalReason.noVerifiedPhone,
         PhoneRefusalReason.recordInvalid,
+        PhoneRefusalReason.phoneSignInUnavailable,
       ];
       for (final locale in const [Locale('en'), Locale('fr')]) {
         final l10n = lookupAppLocalizations(locale);
@@ -173,6 +174,10 @@ void main() {
         'action': 'completePhoneSignIn',
         'placeholderIdToken': 'tok',
       });
+      expect(
+        syncRecordPayload(collection: 'transportRequests', id: 't1'),
+        {'action': 'syncRecord', 'key': 'transportRequests/t1'},
+      );
       expect(reportNotMinePayload(key: 'containerLines/l1', role: 'x'), {
         'action': 'reportShipmentNotMine',
         'key': 'containerLines/l1',

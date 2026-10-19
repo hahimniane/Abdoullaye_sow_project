@@ -25900,6 +25900,12 @@ abstract class AppLocalizations {
   /// **'That package could not be found.'**
   String get phaErrRecordInvalid;
 
+  /// No description provided for @phaErrPhoneSignInUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Use your email and password to sign in to this account.'**
+  String get phaErrPhoneSignInUnavailable;
+
   /// No description provided for @phaErrOffline.
   ///
   /// In en, this message translates to:

@@ -73,6 +73,17 @@ class PhoneAccountService {
         await _call(myShipmentsPayload(cursor: cursor)),
       );
 
+  /// Best effort: a failure is the hourly sweep's to repair, never the
+  /// save's.
+  Future<void> syncRecord({
+    required String collection,
+    required String id,
+  }) async {
+    try {
+      await _call(syncRecordPayload(collection: collection, id: id));
+    } catch (_) {}
+  }
+
   Future<void> reportNotMine({
     required String key,
     required String role,

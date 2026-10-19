@@ -18,6 +18,7 @@ abstract final class PhoneAccountAction {
   static const completeSignIn = 'completePhoneSignIn';
   static const myShipments = 'getMyShipments';
   static const reportNotMine = 'reportShipmentNotMine';
+  static const syncRecord = 'syncRecord';
 }
 
 /// The two people a record names.
@@ -46,6 +47,10 @@ abstract final class PhoneRefusalReason {
   static const proofInvalid = 'proof_invalid';
   static const noVerifiedPhone = 'no_verified_phone';
   static const recordInvalid = 'record_invalid';
+
+  /// Phone-code sign-in is for customers only: an account with business or
+  /// platform access signs in with its email and password.
+  static const phoneSignInUnavailable = 'phone_sign_in_unavailable';
 }
 
 /// A refused call, or one that never got through.
@@ -320,6 +325,13 @@ Map<String, Object?> myShipmentsPayload({MyShipmentsCursor? cursor}) => {
   if (cursor != null) 'cursor': cursor.toMap(),
 };
 
+/// A record the app created directly (the legacy transport form): its phone
+/// fields and accounts now, not at its first update (§3.1).
+Map<String, Object?> syncRecordPayload({
+  required String collection,
+  required String id,
+}) => {'action': PhoneAccountAction.syncRecord, 'key': '$collection/$id'};
+
 Map<String, Object?> reportNotMinePayload({
   required String key,
   required String role,
@@ -368,7 +380,7 @@ class MyShipmentItem {
     this.updatedAtMs = 0,
   });
 
-  /// "<collection>/<id>": what "This isn't mine" names.
+  /// `<collection>/<id>`: what "This isn't mine" names.
   final String key;
   final String collection;
 
@@ -487,7 +499,7 @@ class MyShipmentsPage {
     return MyShipmentsPage(
       items: [
         for (final row in rows)
-          if (MyShipmentItem.fromCallable(row) case final item?) item,
+          ?MyShipmentItem.fromCallable(row),
       ],
       nextCursor: MyShipmentsCursor.fromCallable(d['nextCursor']),
       phoneLastTwo: callableString(d['phoneLastTwo']),

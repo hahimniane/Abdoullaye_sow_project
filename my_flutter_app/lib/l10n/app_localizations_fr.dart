@@ -15492,6 +15492,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get phaErrRecordInvalid => 'Ce colis est introuvable.';
 
   @override
+  String get phaErrPhoneSignInUnavailable =>
+      'Utilisez votre e-mail et votre mot de passe pour vous connecter à ce compte.';
+
+  @override
   String get phaErrOffline => 'Vérifiez votre connexion et réessayez.';
 
   @override

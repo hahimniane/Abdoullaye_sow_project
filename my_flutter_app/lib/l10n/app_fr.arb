@@ -7844,6 +7844,7 @@
   "phaErrProofInvalid": "Vérifiez le numéro à nouveau.",
   "phaErrNoVerifiedPhone": "Ajoutez et vérifiez votre numéro dans votre profil pour voir vos colis.",
   "phaErrRecordInvalid": "Ce colis est introuvable.",
+  "phaErrPhoneSignInUnavailable": "Utilisez votre e-mail et votre mot de passe pour vous connecter à ce compte.",
   "phaErrOffline": "Vérifiez votre connexion et réessayez.",
   "phaErrAppCheck": "Cet appareil n'a pas pu être vérifié. Mettez l'application à jour et réessayez.",
   "phaErrGeneric": "Une erreur est survenue. Veuillez réessayer.",

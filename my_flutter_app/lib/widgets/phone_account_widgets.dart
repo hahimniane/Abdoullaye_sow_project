@@ -49,6 +49,8 @@ String phoneAccountRefusalText(
       return l10n.phaErrNoVerifiedPhone;
     case PhoneRefusalReason.recordInvalid:
       return l10n.phaErrRecordInvalid;
+    case PhoneRefusalReason.phoneSignInUnavailable:
+      return l10n.phaErrPhoneSignInUnavailable;
   }
   if (refusal.offline) return l10n.phaErrOffline;
   return switch (refusal.code) {

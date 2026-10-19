@@ -595,3 +595,27 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   `pump(Duration(seconds: n))`. Fakes two test files share live in
   `test/fixtures/` (`fake_phone_sign_in.dart`) - never import one
   `_test.dart` from another.
+- Phone accounts (docs/PHONE_ACCOUNTS.md): refusal copy comes from
+  `details.reason` only (web `phone-accounts.ts`, app
+  `phoneAccountRefusalText`), never the server's message; a new reason is
+  added to the server, both maps and both reason-list tests together. A
+  first SMS sign-in writes the profile late (`completePhoneSignIn`): the web
+  router waits on `completePhoneSignInOnce` before deciding there is no
+  profile, and both clients sign out on `phone_sign_in_unavailable`. The
+  merge proof signs in on a SECONDARY Auth instance (web `withSecondaryAuth`:
+  in-memory, connects to the emulator, always deleted). New console screens
+  get a JSX French-scan test (copy the one in `phone-accounts.test.ts`).
+  The server suite is `npm run test:phone-accounts` (auth + firestore); its
+  helpers drive Firebase SMS through the Auth emulator's REST
+  (`accounts:sendVerificationCode`, `/emulator/v1/projects/<p>/
+  verificationCodes`, `accounts:signInWithPhoneNumber`), and
+  `accounts:signInWithCustomToken` answers without `localId` (read
+  `user_id` from the ID token). A typed number with no account or record is
+  deliberately NOT sent a code: seed a record before reading the fake Meta
+  message. Browser checks: `whatsapp_unavailable` switching to text, the
+  30 s resend countdown, `rate_limited` showing the wait, French on `/t/`
+  and My packages, a phone-only profile save.
+- A filtered directory page (People "Not signed in yet") must never come
+  back empty with "Load more": the server reads Auth pages until full
+  (bounded) and the console's `collectPeoplePages` keeps calling until a
+  full page or no token.

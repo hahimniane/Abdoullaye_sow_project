@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -12,6 +14,7 @@ import '../providers/auth_provider.dart';
 import '../utils/tracking_code_generator.dart';
 import '../utils/action_confirmation.dart';
 import '../services/payment_flow_safety.dart';
+import '../services/phone_account_service.dart';
 import '../utils/money_input.dart';
 import '../utils/transport_receipt_generator.dart';
 import '../widgets/app_back_button.dart';
@@ -163,6 +166,14 @@ class _TransportCarScreenState extends State<TransportCarScreen> {
           });
 
       savedRequest = request.copyWith(id: docRef.id);
+      // A direct create fires no trigger: ask for the phone fields and
+      // accounts now (docs/PHONE_ACCOUNTS.md §3.1). Never awaited.
+      unawaited(
+        const PhoneAccountService().syncRecord(
+          collection: 'transportRequests',
+          id: docRef.id,
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       showErrorSnackBar(context, l10n.failedToSaveTransport(e.toString()));

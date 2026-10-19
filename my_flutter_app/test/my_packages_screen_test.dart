@@ -357,6 +357,11 @@ void main() {
 
     testWidgets('two numbers name their roles; tapping signs in by the '
         'record\'s number', (tester) async {
+      // The whole tracking result fits: the default 800x600 test surface
+      // leaves the second button below the fold, where a tap misses.
+      tester.view.physicalSize = const Size(800, 1800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
       final signIn = FakePhoneSignIn()
         ..challenge = const PhoneLoginChallenge(
           challengeId: 'c7',

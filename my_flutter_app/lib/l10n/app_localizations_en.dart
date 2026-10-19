@@ -15242,6 +15242,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get phaErrRecordInvalid => 'That package could not be found.';
 
   @override
+  String get phaErrPhoneSignInUnavailable =>
+      'Use your email and password to sign in to this account.';
+
+  @override
   String get phaErrOffline => 'Check your connection and try again.';
 
   @override

@@ -1025,6 +1025,13 @@ class AuthProvider extends ChangeNotifier {
       bookkeepingError = error;
       debugPrint('completePhoneSignIn failed: $error');
     }
+    // Phone sign-in is for customers only: an account with business or
+    // platform access that got in by text is signed straight out again.
+    if (bookkeepingError is PhoneAccountFailure &&
+        bookkeepingError.reason == PhoneRefusalReason.phoneSignInUnavailable) {
+      await logout();
+      throw bookkeepingError;
+    }
     await _afterPhoneSignIn(user);
     // An account with no profile cannot be used: sign out so the person can
     // simply try again instead of landing on a half-made account.

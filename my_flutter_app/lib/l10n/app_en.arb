@@ -7844,6 +7844,7 @@
   "phaErrProofInvalid": "Verify the number again.",
   "phaErrNoVerifiedPhone": "Add and verify your phone number in your profile to see your packages.",
   "phaErrRecordInvalid": "That package could not be found.",
+  "phaErrPhoneSignInUnavailable": "Use your email and password to sign in to this account.",
   "phaErrOffline": "Check your connection and try again.",
   "phaErrAppCheck": "This device couldn't be verified. Update the app and try again.",
   "phaErrGeneric": "Something went wrong. Please try again.",
