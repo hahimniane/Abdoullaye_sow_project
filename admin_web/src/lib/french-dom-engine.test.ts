@@ -291,6 +291,31 @@ test("ledger and invoice History sentences translate", () => {
   }
 });
 
+test("store transfer History sentences translate around the store, product and transfer names", () => {
+  const cases: Array<[string, string]> = [
+    ["Sent 14 items from Bronx store to Harlem store (TR-4K8Q2A)", "Envoi de 14 articles de Bronx store vers Harlem store (TR-4K8Q2A)"],
+    ["Sent 1 item from Bronx to Harlem (TR-4K8Q2A)", "Envoi de 1 article de Bronx vers Harlem (TR-4K8Q2A)"],
+    ["Cancelled TR-4K8Q2A: 14 items back in Bronx store", "Annulation de TR-4K8Q2A : 14 articles de retour à Bronx store"],
+    ["Discarded the draft TR-4K8Q2A", "Brouillon TR-4K8Q2A supprimé"],
+    ["Harlem store received all 14 items of TR-4K8Q2A", "Harlem store a reçu les 14 articles de TR-4K8Q2A"],
+    ["Harlem store received all 1 item of TR-4K8Q2A", "Harlem store a reçu l’article de TR-4K8Q2A"],
+    ["Harlem store received 12 of 14 items of TR-4K8Q2A: 2 missing", "Harlem store a reçu 12 articles sur 14 de TR-4K8Q2A : 2 manquants"],
+    ["Harlem store received 0 of 1 item of TR-4K8Q2A: 1 missing", "Harlem store a reçu 0 article sur 1 de TR-4K8Q2A : 1 manquant"],
+    ["Returned 2 of Jordan 11 to Bronx store (TR-4K8Q2A)", "Retour de 2 × Jordan 11 à Bronx store (TR-4K8Q2A)"],
+    ["Wrote off 2 of Jordan 11 from TR-4K8Q2A: Lost in transit", "Perte de 2 × Jordan 11 sur TR-4K8Q2A : Perdu en route"],
+    ["Wrote off 1 of Air Force 1 from TR-4K8Q2A: Damaged", "Perte de 1 × Air Force 1 sur TR-4K8Q2A : Endommagé"],
+    ["Wrote off 1 of Cap from TR-4K8Q2A: Stolen", "Perte de 1 × Cap sur TR-4K8Q2A : Volé"],
+    ["Wrote off 3 of Cap from TR-4K8Q2A: Other", "Perte de 3 × Cap sur TR-4K8Q2A : Autre"],
+    // A store named like a word in the dictionary is carried across as typed.
+    ["Pickup received all 2 items of TR-AB12CD", "Pickup a reçu les 2 articles de TR-AB12CD"],
+  ];
+  for (const [english, french] of cases) {
+    assert.equal(translateAuditSummary(english), french, english);
+  }
+  // A reason the table does not know leaves the sentence whole.
+  assert.equal(translateAuditSummary("Wrote off 2 of Cap from TR-4K8Q2A: Eaten"), null);
+});
+
 test("an unknown History sentence is left exactly as the server wrote it", () => {
   assert.equal(translateAuditSummary("Changed the weather for Pickup"), null);
   // An edit naming a field the table does not know is left whole too.

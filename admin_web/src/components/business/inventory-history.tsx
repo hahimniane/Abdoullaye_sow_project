@@ -8,7 +8,8 @@ import { LoadMoreButton } from "@/components/show-more";
 import { useInventoryPeriodRows } from "@/lib/business-data";
 import { currentLanguage } from "@/lib/format";
 import { moneyText } from "@/lib/invoice-ledger";
-import { INVENTORY_MOVEMENT_LABELS, inventoryMethodLabel, legacyStoreId, type InventoryMovementType, type StoreAccess } from "@/lib/inventory";
+import { INVENTORY_MOVEMENT_LABELS, inventoryMethodLabel, legacyStoreId, storeNameIndex, type InventoryMovementType, type StoreAccess } from "@/lib/inventory";
+import { movementDirection, movementTransferText } from "@/lib/inventory-transfers";
 import {
   HISTORY_KINDS,
   HISTORY_KIND_LABELS,
@@ -112,6 +113,7 @@ export function InventoryHistory({
   const paymentRows = useMemo(() => inStore(payments.rows), [inStore, payments.rows]);
   const movementRows = useMemo(() => inStore(movements.rows), [inStore, movements.rows]);
   const stores = access.multi ? access.stores : [];
+  const storeNames = useMemo(() => storeNameIndex(access.stores), [access.stores]);
 
   const now = useMemo(() => aggregateHistory({ rows: saleRows, period, zone, stores }), [saleRows, period, zone, stores]);
   const then = useMemo(() => aggregateHistory({ rows: beforeRows, period: previous, zone, stores }), [beforeRows, previous, zone, stores]);
@@ -274,7 +276,7 @@ export function InventoryHistory({
                   <h4 data-no-translate>{timelineDayTitle(day.dateKey, todayKey, lang)}</h4>
                   <ul>
                     {day.events.map((event) => (
-                      <TimelineRow key={event.id} event={event} zone={zone} lang={lang} staffName={staffName} onOpenSale={onOpenSale} />
+                      <TimelineRow key={event.id} event={event} zone={zone} lang={lang} staffName={staffName} storeNames={storeNames} onOpenSale={onOpenSale} />
                     ))}
                   </ul>
                 </li>
@@ -448,11 +450,12 @@ function movementLabel(type: string): string {
   return type in INVENTORY_MOVEMENT_LABELS ? INVENTORY_MOVEMENT_LABELS[type as InventoryMovementType] : type;
 }
 
-function TimelineRow({ event, zone, lang, staffName, onOpenSale }: {
+function TimelineRow({ event, zone, lang, staffName, storeNames, onOpenSale }: {
   event: TimelineEvent;
   zone: string;
   lang: "en" | "fr";
   staffName: (id: string) => string;
+  storeNames: ReadonlyMap<string, string>;
   onOpenSale: (saleId: string, storeId: string) => void;
 }) {
   const who = staffName(event.staffId);
@@ -504,6 +507,10 @@ function TimelineRow({ event, zone, lang, staffName, onOpenSale }: {
           <>
             <strong><span>{movementLabel(event.movementType)}</span> <span data-no-translate>{signedDelta(event.delta)}</span></strong>
             <small data-no-translate>{[event.title, who, event.note].filter(Boolean).join(" · ")}</small>
+            {event.transferCode && (() => {
+              const way = movementDirection(event.movementType, event.storeId, event.counterpartStoreId);
+              return <small data-no-translate>{movementTransferText(event.transferCode, storeNames.get(way.fromStoreId) ?? "", storeNames.get(way.toStoreId) ?? "")}</small>;
+            })()}
           </>
         )}
       </span>

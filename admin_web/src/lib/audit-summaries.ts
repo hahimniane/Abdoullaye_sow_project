@@ -141,7 +141,43 @@ function via(value: string, lookup: Lookup) {
 
 type Rule = [RegExp, (match: RegExpExecArray, lookup: Lookup) => string | null];
 
+// Store transfers (docs/INVENTORY.md "Store transfers (v5)", History): the
+// write-off reasons the server names.
+const WRITE_OFF_REASONS_FR: Record<string, string> = {
+  "Lost in transit": "Perdu en route",
+  Damaged: "Endommagé",
+  Stolen: "Volé",
+  Other: "Autre",
+};
+
+const TRANSFER_CODE = String.raw`TR-[A-Z0-9]+`;
+
+/** French reads 0 and 1 as singular. */
+function frPlural(count: string, one: string, many: string) {
+  return Number(count) <= 1 ? one : many;
+}
+
+/** "14 items" -> "14 articles"; "1 item" -> "1 article". */
+function itemsFr(count: string) {
+  return `${count} ${frPlural(count, "article", "articles")}`;
+}
+
 const rules: Rule[] = [
+  // --- Store transfers (entityType inventory_transfer) ---
+  [new RegExp(`^Sent (\\d+) items? from (.+?) to (.+) \\((${TRANSFER_CODE})\\)$`), (m) =>
+    `Envoi de ${itemsFr(m[1])} de ${m[2]} vers ${m[3]} (${m[4]})`],
+  [new RegExp(`^Cancelled (${TRANSFER_CODE}): (\\d+) items? back in (.+)$`), (m) =>
+    `Annulation de ${m[1]} : ${itemsFr(m[2])} de retour à ${m[3]}`],
+  [new RegExp(`^Discarded the draft (${TRANSFER_CODE})$`), (m) => `Brouillon ${m[1]} supprimé`],
+  [new RegExp(`^(.+) received all (\\d+) items? of (${TRANSFER_CODE})$`), (m) =>
+    Number(m[2]) === 1 ? `${m[1]} a reçu l’article de ${m[3]}` : `${m[1]} a reçu les ${m[2]} articles de ${m[3]}`],
+  [new RegExp(`^(.+) received (\\d+) of (\\d+) items? of (${TRANSFER_CODE}): (\\d+) missing$`), (m) =>
+    `${m[1]} a reçu ${itemsFr(m[2])} sur ${m[3]} de ${m[4]} : ${m[5]} ${frPlural(m[5], "manquant", "manquants")}`],
+  [new RegExp(`^Returned (\\d+) of (.+) to (.+) \\((${TRANSFER_CODE})\\)$`), (m) =>
+    `Retour de ${m[1]} × ${m[2]} à ${m[3]} (${m[4]})`],
+  [new RegExp(`^Wrote off (\\d+) of (.+) from (${TRANSFER_CODE}): (Lost in transit|Damaged|Stolen|Other)$`), (m) =>
+    `Perte de ${m[1]} × ${m[2]} sur ${m[3]} : ${WRITE_OFF_REASONS_FR[m[4]]}`],
+
   // --- Containers (containerAudit) ---
   [/^Shipped with (\d+) lines?$/, (m) => `Expédié avec ${m[1]} ${plural(m[1], "ligne", "lignes")}`],
   [/^Marked arrived$/, () => "Marqué comme arrivé"],

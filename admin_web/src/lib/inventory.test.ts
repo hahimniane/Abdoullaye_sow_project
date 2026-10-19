@@ -1139,11 +1139,31 @@ test("stock history reads the store and tells a transfer's two sides", () => {
     { id: "m4", type: "add", delta: 3, quantityAfter: 3, createdAt: { seconds: 5 } },
   ]);
   const by = Object.fromEntries(entries.map((e) => [e.id, e]));
-  assert.deepEqual([by.m1.label, by.m1.storeId, by.m1.transferId, by.m1.deltaText], ["Moved out to another store", "s-main", "t1", "-2"]);
-  assert.equal(by.m2.label, "Moved in from another store");
+  // v5: the old one-step move reads "Instant transfer" on both sides.
+  assert.deepEqual([by.m1.label, by.m1.storeId, by.m1.transferId, by.m1.deltaText], ["Instant transfer", "s-main", "t1", "-2"]);
+  assert.equal(by.m2.label, "Instant transfer");
+  assert.equal(by.m1.transferCode, "");
   // An unknown type that carries a transfer id is still a transfer, in words.
   assert.equal(by.m3.label, "Stock moved");
   assert.deepEqual([by.m4.label, by.m4.storeId, by.m4.transferId], ["Stock added", "", ""]);
+});
+
+test("stock history labels the two-step transfer movements and keeps their code and other store", () => {
+  const entries = inventoryMovementEntries([
+    { id: "s", type: "transfer_sent", delta: -3, storeId: "bronx", transferId: "t9", transferCode: "TR-4K8Q2A", counterpartStoreId: "harlem", createdAt: { seconds: 50 } },
+    { id: "r", type: "transfer_received", delta: 2, storeId: "harlem", transferId: "t9", transferCode: "TR-4K8Q2A", counterpartStoreId: "bronx", createdAt: { seconds: 40 } },
+    { id: "c", type: "transfer_cancelled", delta: 3, storeId: "bronx", transferId: "t8", transferCode: "TR-ZZZZZZ", counterpartStoreId: "harlem", createdAt: { seconds: 30 } },
+    { id: "b", type: "transfer_returned", delta: 1, storeId: "bronx", transferId: "t9", transferCode: "TR-4K8Q2A", counterpartStoreId: "harlem", createdAt: { seconds: 20 } },
+    { id: "w", type: "transfer_written_off", delta: 0, storeId: "bronx", transferId: "t9", transferCode: "TR-4K8Q2A", counterpartStoreId: "harlem", createdAt: { seconds: 10 } },
+  ]);
+  assert.deepEqual(entries.map((e) => e.label), [
+    "Sent to another store",
+    "Received from another store",
+    "Transfer cancelled: back in stock",
+    "Returned after a transfer",
+    "Written off after a transfer",
+  ]);
+  assert.deepEqual([entries[0].transferCode, entries[0].counterpartStoreId, entries[4].deltaText], ["TR-4K8Q2A", "harlem", "0"]);
 });
 
 // ---------------------------------------------------------------------------

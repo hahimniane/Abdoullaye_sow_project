@@ -24,6 +24,7 @@ import {
   type StockIndex,
   type StoreAccess,
 } from "@/lib/inventory";
+import { movementDirection, movementTransferText } from "@/lib/inventory-transfers";
 import { statusPillClass } from "@/lib/status-pill";
 
 /**
@@ -42,6 +43,7 @@ export function InventoryItemDetail({
   categories,
   access,
   stock,
+  canSend,
   onBack,
   onEdit,
   onStock,
@@ -58,6 +60,8 @@ export function InventoryItemDetail({
   categories: readonly InventoryCategory[];
   access: StoreAccess;
   stock: StockIndex;
+  /** Two or more stores and this person may send from one: "Send to another store" (a new transfer with this product). */
+  canSend: boolean;
   onBack: () => void;
   onEdit: () => void;
   onStock: () => void;
@@ -98,8 +102,8 @@ export function InventoryItemDetail({
           <div className="ctn-detail-actions">
             <button className="lst-btn ghost" type="button" disabled={busy} onClick={onEdit}><Pencil size={14} /> Edit</button>
             <button className="lst-btn" type="button" disabled={busy || item.archived} onClick={onStock}><Boxes size={14} /> Add stock / set count</button>
-            {access.canTransfer && (
-              <button className="lst-btn ghost" type="button" disabled={busy || item.archived} onClick={onTransfer}><ArrowRightLeft size={14} /> Move stock</button>
+            {canSend && (
+              <button className="lst-btn ghost" type="button" disabled={busy || item.archived} onClick={onTransfer}><ArrowRightLeft size={14} /> Send to another store</button>
             )}
             <button className="lst-btn ghost" type="button" disabled={busy} onClick={onTags}><Tag size={14} /> Print tags</button>
             <button className="lst-btn ghost" type="button" disabled={busy} onClick={onArchive}>
@@ -176,6 +180,11 @@ export function InventoryItemDetail({
                     <strong>{entry.label}</strong>
                     <small data-no-translate>{formatDateTime(entry.at)}</small>
                     {access.multi && entry.storeId && storeNames.get(entry.storeId) && <small data-no-translate>{storeNames.get(entry.storeId)}</small>}
+                    {entry.transferCode && (() => {
+                      // A v5 transfer: its code and which way it went (the store names read the same in both languages).
+                      const way = movementDirection(entry.type, entry.storeId, entry.counterpartStoreId);
+                      return <small data-no-translate>{movementTransferText(entry.transferCode, storeNames.get(way.fromStoreId) ?? "", storeNames.get(way.toStoreId) ?? "")}</small>;
+                    })()}
                     {entry.note && <small data-no-translate>{entry.note}</small>}
                   </span>
                   <span><strong data-no-translate className={entry.delta < 0 ? "ivt-neg" : entry.delta > 0 ? "ivt-pos" : undefined}>{entry.deltaText}</strong></span>

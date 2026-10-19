@@ -17,7 +17,8 @@ const itemDialog = read(B + "inventory-item-dialog.tsx");
 const stockDialog = read(B + "inventory-stock-dialog.tsx");
 const categoriesDialog = read(B + "inventory-categories-dialog.tsx");
 const storesDialog = read(B + "inventory-stores-dialog.tsx");
-const transferDialog = read(B + "inventory-transfer-dialog.tsx");
+// v5: the instant "Move stock" dialog is gone; the two-step transfer's New transfer dialog took its place.
+const transferDialog = read(B + "inventory-transfer-compose-dialog.tsx");
 const salesList = read(B + "inventory-sales-list.tsx");
 const summaryCard = read(B + "inventory-summary-card.tsx");
 const detail = read(B + "inventory-item-detail.tsx");
@@ -39,12 +40,13 @@ test("every v2 callable is called through httpsCallable by the screen that owns 
     ["createInventoryStore", "the stores manager", storesDialog],
     ["updateInventoryStore", "the stores manager", storesDialog],
     ["archiveInventoryStore", "the stores manager", storesDialog],
-    ["transferInventoryStock", "the transfer dialog", transferDialog],
     ["setInventoryStaffAccess", "the People panel", people],
   ];
   for (const [callable, owner, source] of calls) {
     assert.match(source, new RegExp(`httpsCallable\\(\\s*functions,\\s*"${callable}"\\s*\\)`), `${callable} is not called by ${owner}`);
   }
+  // v5: the console no longer moves stock in one step (transferInventoryStock stays for older apps only).
+  assert.doesNotMatch([panel, transferDialog, detail].join("\n"), /transferInventoryStock/);
   // Nothing is written from the browser, and the console still never sells.
   const all = [panel, itemDialog, stockDialog, categoriesDialog, storesDialog, transferDialog, salesList, summaryCard, detail].join("\n");
   assert.doesNotMatch(all, /\b(setDoc|updateDoc|addDoc|deleteDoc|writeBatch|runTransaction)\(/);
@@ -64,18 +66,20 @@ test("the requests are built by the tested pure helpers, never by hand in a scre
   assert.match(storesDialog, /createInventoryStoreRequest\(businessId, draft\)/);
   assert.match(storesDialog, /updateInventoryStoreRequest\(businessId, form, draft\)/);
   assert.match(storesDialog, /archiveInventoryStoreRequest\(businessId, store\.id, next\)/);
-  assert.match(transferDialog, /transferInventoryStockRequest\(businessId, draft\)/);
-  assert.match(transferDialog, /validateTransferDraft\(draft, known\)/);
+  assert.match(transferDialog, /composeRequest\(businessId, clientRequestId, fromStoreId, toStoreId, lines\)/);
+  assert.match(transferDialog, /composeProblems\(\{ fromStoreId, toStoreId, lines \}, available, kind === "send"\)/);
   assert.match(stockDialog, /adjustInventoryStockRequest\(businessId, item\.id, draft, access\.multi \? storeId : ""\)/);
   assert.match(people, /setInventoryStaffAccessRequest\(businessId, row\.id, access\)/);
   assert.match(summaryCard, /inventorySummaryRequest\(businessId, range, timeZone, storeId\)/);
 });
 
 test("a failure from any of them reaches the person in friendly words", () => {
-  for (const [name, source] of [["the categories manager", categoriesDialog], ["the stores manager", storesDialog], ["the transfer dialog", transferDialog]] as const) {
+  for (const [name, source] of [["the categories manager", categoriesDialog], ["the stores manager", storesDialog]] as const) {
     assert.match(source, /runInventoryCall\(setBusy/, name);
     assert.match(source, /\(failure\) => setError\(failure\.message\)/, name);
   }
+  // The New transfer dialog reads the details too (what the store holds now), through transferFailure.
+  assert.match(transferDialog, /const read = transferFailure\(failure\);\s*setError\(read\.message\);/);
   // People raises the mapped sentence through its own feedback, not the transport's.
   assert.match(people, /throw new Error\(inventoryCallableFailure\(failure\)\.message\)/);
   assert.match(people, /throw new Error\(inventoryMessage\(problems\)\)/);
@@ -118,10 +122,11 @@ test("every store control is gated on the business having two stores, and on who
   assert.match(itemDialog, /\{!editing && access\.multi && \(\s*<fieldset/);
   // Add stock asks which store only with several.
   assert.match(stockDialog, /\{access\.multi && \(\s*<label className="lst-field"><span>Store<\/span>/);
-  // Moving stock: only for those who may (owner, all-stores staff) and only with several stores.
-  assert.match(panel, /\{access\.canTransfer && \(\s*<button[\s\S]*?<ArrowRightLeft size=\{16\} \/> Move stock/);
-  assert.match(panel, /\{modal === "transfer" && access\.canTransfer && \(/);
-  assert.match(detail, /\{access\.canTransfer && \(\s*<button[^>]*onClick=\{onTransfer\}/);
+  // Sending stock (v5 transfers): only with several stores, and only for someone who may send from one of them.
+  assert.match(panel, /const canSendTransfers = access\.multi && sendableStores\(transferViewer, access\.stores\)\.length > 0;/);
+  assert.match(panel, /\{canSendTransfers && \(\s*<button[\s\S]*?<ArrowRightLeft size=\{16\} \/> New transfer/);
+  assert.match(panel, /\{modal === "compose" && canSendTransfers && \(/);
+  assert.match(detail, /\{canSend && \(\s*<button[^>]*onClick=\{onTransfer\}><ArrowRightLeft size=\{14\} \/> Send to another store/);
   // The stores manager: the owner's alone.
   assert.match(panel, /\{access\.canManageStores && \(\s*<button[^>]*onClick=\{\(\) => setModal\("stores"\)\}/);
   assert.match(panel, /\{modal === "stores" && access\.canManageStores && \(/);

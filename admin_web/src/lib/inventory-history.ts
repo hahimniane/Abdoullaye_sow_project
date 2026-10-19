@@ -502,16 +502,23 @@ export type TimelineEvent = {
   itemId: string;
   method: string;
   note: string;
+  /** A stock change from a store transfer (v5): its code, and the other store. "" otherwise. */
+  transferCode: string;
+  counterpartStoreId: string;
 };
 
 export type TimelineDay = { dateKey: string; events: TimelineEvent[] };
 
-const STOCK_TYPES = new Set(["initial", "add", "set", "transfer_in", "transfer_out"]);
+const STOCK_TYPES = new Set([
+  "initial", "add", "set", "transfer_in", "transfer_out",
+  // v5 store transfers: sent, received, cancelled (back in stock), returned, written off.
+  "transfer_sent", "transfer_received", "transfer_cancelled", "transfer_returned", "transfer_written_off",
+]);
 
 function blankEvent(partial: Partial<TimelineEvent> & Pick<TimelineEvent, "id" | "kind" | "atMs">): TimelineEvent {
   return {
     saleId: "", storeId: "", amountCents: 0, staffId: "", voided: false, creditCents: 0, customerName: "",
-    title: "", movementType: "", delta: 0, itemId: "", method: "", note: "", ...partial,
+    title: "", movementType: "", delta: 0, itemId: "", method: "", note: "", transferCode: "", counterpartStoreId: "", ...partial,
   };
 }
 
@@ -592,6 +599,7 @@ export function historyTimeline({ sales = [], payments = [], movements = [], per
     events.push(blankEvent({
       id: `move:${id}`, kind: "stock", atMs: at, storeId: text(row.storeId), staffId: text(row.byStaffId),
       movementType: type, delta: Math.round(Number(row.delta) || 0), itemId, title: itemName(itemId), note: text(row.note),
+      transferCode: text(row.transferCode, 40), counterpartStoreId: text(row.counterpartStoreId),
     }));
   }
   events.sort((a, b) => b.atMs - a.atMs || a.id.localeCompare(b.id));

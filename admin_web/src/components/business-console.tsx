@@ -93,6 +93,7 @@ import { buildBusinessVerificationChecklist } from "@/lib/business-verification"
 import { db, functions } from "@/lib/firebase";
 import { formatDate, formatMoney, text } from "@/lib/format";
 import { inventoryViewerFromProfile, saleFocusFrom, type SaleFocus } from "@/lib/inventory";
+import { transferFocusFrom, type TransferFocus } from "@/lib/inventory-transfers";
 import {
   resolveBusinessPayoutStatus,
   type BusinessPayoutStatus,
@@ -223,9 +224,14 @@ export function BusinessConsole({
   const [notificationCaseId, setNotificationCaseId] = useState("");
   // An inventory sale alert: a new object per click, so tapping the same alert again re-opens its sale.
   const [notificationSale, setNotificationSale] = useState<SaleFocus | null>(null);
+  // A store transfer alert: same idea, Inventory opens on Transfers with that transfer.
+  const [notificationTransfer, setNotificationTransfer] = useState<TransferFocus | null>(null);
   // Leaving Inventory forgets the alert, so coming back by the sidebar opens the Products tab as usual.
   useEffect(() => {
-    if (activeTab !== "inventory") setNotificationSale(null);
+    if (activeTab !== "inventory") {
+      setNotificationSale(null);
+      setNotificationTransfer(null);
+    }
   }, [activeTab]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarFilter, setSidebarFilter] = useState("");
@@ -525,6 +531,11 @@ export function BusinessConsole({
                   ? saleFocusFrom(target.focusId, target.storeId, Date.now())
                   : null,
               );
+              setNotificationTransfer(
+                target.panelView === "transfers"
+                  ? transferFocusFrom(target.focusId, Date.now())
+                  : null,
+              );
             }}
             uid={firebaseUser.uid}
           />
@@ -736,6 +747,7 @@ export function BusinessConsole({
               viewer={inventoryViewerFromProfile(profile)}
               viewerUid={firebaseUser.uid}
               focusSale={notificationSale}
+              focusTransfer={notificationTransfer}
             />
           )}
           {activeTab === "destinations" && (

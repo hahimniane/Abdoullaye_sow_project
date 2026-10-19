@@ -328,6 +328,50 @@ test("the business console hands an inventory sale alert to the Inventory panel"
   assert.match(list, /That sale is not available\./);
 });
 
+test("a store transfer alert opens Inventory on Transfers with that transfer", () => {
+  const data = {
+    type: "inventory_transfer",
+    kind: "sent",
+    businessId: "biz-1",
+    transferId: "tr-7",
+    code: "TR-4K8Q2A",
+    fromStoreId: "s-bronx",
+    toStoreId: "s-harlem",
+    relatedCollection: "inventoryTransfers",
+    relatedId: "tr-7",
+  };
+  assert.deepEqual(businessTargetForNotification(data), {
+    tab: "inventory",
+    panelView: "transfers",
+    focusId: "tr-7",
+  });
+  // Every kind routes the same way; a payload with only transferId still opens it.
+  for (const kind of ["cancelled", "differences", "transit_reminder", "dispute_reminder"]) {
+    assert.equal(businessTargetForNotification({...data, kind}).panelView, "transfers", kind);
+  }
+  assert.equal(businessTargetForNotification({type: "inventory_transfer", transferId: "tr-2"}).focusId, "tr-2");
+  assert.deepEqual(focusFromNotification(data), {collection: "inventoryTransfers", id: "tr-7"});
+  assert.equal(collectionFromNotification({type: "inventory_transfer", transferId: "x"}), "inventoryTransfers");
+  // No id: Transfers still opens, with nothing to focus.
+  assert.equal(businessTargetForNotification({type: "inventory_transfer"}).focusId, "");
+  // The customer and admin consoles ignore it.
+  assert.deepEqual(customerTargetForNotification(data), {tab: "home"});
+  assert.deepEqual(adminTargetForNotification(data), {tab: "today"});
+});
+
+test("the business console hands a transfer alert to the Inventory panel", () => {
+  const business = readFileSync("src/components/business-console.tsx", "utf8");
+  const panel = readFileSync("src/components/business/inventory-panel.tsx", "utf8");
+  const view = readFileSync("src/components/business/inventory-transfers-view.tsx", "utf8");
+  assert.match(business, /transferFocusFrom\(target\.focusId, Date\.now\(\)\)/);
+  assert.match(business, /focusTransfer=\{notificationTransfer\}/);
+  assert.match(panel, /setView\("transfers"\)/);
+  assert.match(panel, /focus=\{transferFocus\}/);
+  assert.match(view, /useLiveDocRead\("inventoryTransfers"/);
+  assert.match(view, /That transfer is not available\./);
+  assert.match(view, /FOCUS_READ_TIMEOUT_MS = 15_000/);
+});
+
 test("the consoles call the shared router instead of a local switch", () => {
   const customer = readFileSync("src/components/customer-console.tsx", "utf8");
   const business = readFileSync("src/components/business-console.tsx", "utf8");

@@ -213,6 +213,24 @@ test("the timeline: newest day first, sales with void markers, credit payments, 
   assert.deepEqual(days[3].events.map((e) => [e.kind, e.title]), [["sale", "CAP, HAT +1"]]);
 });
 
+test("the timeline shows store-transfer movements with their code and the other store", () => {
+  const day = periodFor("week", "2026-10-15");
+  const days = historyTimeline({
+    period: day,
+    zone: NY,
+    movements: [
+      { id: "t1", itemId: "cap", type: "transfer_sent", delta: -3, storeId: "bronx", counterpartStoreId: "harlem", transferCode: "TR-4K8Q2A", createdAt: new Date("2026-10-15T13:00:00Z") },
+      { id: "t2", itemId: "cap", type: "transfer_received", delta: 2, storeId: "harlem", counterpartStoreId: "bronx", transferCode: "TR-4K8Q2A", createdAt: new Date("2026-10-15T14:00:00Z") },
+      { id: "t3", itemId: "cap", type: "transfer_written_off", delta: 0, storeId: "bronx", counterpartStoreId: "harlem", transferCode: "TR-4K8Q2A", createdAt: new Date("2026-10-15T15:00:00Z") },
+      { id: "t4", itemId: "cap", type: "transfer_out", delta: -1, storeId: "bronx", createdAt: new Date("2026-10-15T16:00:00Z") },
+    ],
+  });
+  const events = days[0].events;
+  assert.deepEqual(events.map((e) => e.movementType), ["transfer_out", "transfer_written_off", "transfer_received", "transfer_sent"]);
+  assert.deepEqual([events[3].transferCode, events[3].counterpartStoreId], ["TR-4K8Q2A", "harlem"]);
+  assert.equal(events[0].transferCode, "", "an instant transfer has no code");
+});
+
 test("titles in both languages", () => {
   assert.equal(periodTitle(periodFor("day", "2026-10-16"), "en"), "Fri, Oct 16, 2026");
   assert.equal(periodTitle(periodFor("week", "2026-10-16"), "en"), "Oct 11 – Oct 17, 2026");

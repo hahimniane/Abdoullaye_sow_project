@@ -14816,6 +14816,81 @@ html[data-lang-pending] body {
   .ivt-history-bar .service-segments { width: 100%; }
 }
 
+/* Store transfers (docs/INVENTORY.md "Store transfers (v5)"): tiles, a list
+   of cards beside the open transfer, and the New transfer / Receive / Settle
+   dialogs' product lines. Same tokens as the rest of Inventory. */
+.ivt-tr { display: flex; flex-direction: column; gap: 12px; padding: 0 16px 16px; }
+.ivt-tr-tiles { margin-top: 12px; }
+.ivt-tr-tiles .pk-stat small { display: block; }
+.ivt-tr-tile-alert { box-shadow: inset 3px 0 0 #d92d20; }
+.ivt-tr-tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 0; }
+.ivt-tr-tools .lst-add { margin-left: auto; }
+.ivt-tr-layout { display: grid; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); gap: 14px; align-items: start; }
+.ivt-tr-list { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.ivt-tr-cards { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.ivt-tr-card {
+  width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer;
+  display: flex; flex-direction: column; gap: 4px; padding: 10px 12px;
+  border: 1px solid var(--rule, #e5e7eb); border-radius: 12px; background: var(--paper, #fff);
+}
+.ivt-tr-card:hover, .ivt-tr-card:focus-visible { border-color: var(--brand-strong, #0f766e); }
+.ivt-tr-card.active { border-color: var(--brand-strong, #0f766e); box-shadow: 0 0 0 1px var(--brand-strong, #0f766e); }
+.ivt-tr-card-alert { box-shadow: inset 3px 0 0 #d92d20; }
+.ivt-tr-card.active.ivt-tr-card-alert { box-shadow: inset 3px 0 0 #d92d20, 0 0 0 1px var(--brand-strong, #0f766e); }
+.ivt-tr-card small { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.ivt-tr-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ivt-tr-route { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; font-weight: 650; overflow-wrap: anywhere; margin: 0; }
+.ivt-tr-detail { min-width: 0; }
+.ivt-tr-pane { border: 1px solid var(--rule, #e5e7eb); border-radius: 12px; background: var(--paper, #fff); padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.ivt-tr-pane-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.ivt-tr-pane-head h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; font-size: 16px; }
+.ivt-tr-pane-head small { color: var(--muted); font-size: 12px; }
+.ivt-tr-lines-table .mini-table-head,
+.ivt-tr-lines-table .mini-table-row { grid-template-columns: minmax(160px, 2fr) minmax(56px, 0.5fr) minmax(64px, 0.5fr) minmax(150px, 1.4fr); }
+.ivt-tr-result-cell { flex-direction: row !important; align-items: center; gap: 6px !important; }
+.ivt-tr-record-title { margin: 6px 0 0; font-size: 13px; }
+.ivt-tr-record { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.ivt-tr-record li { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 2px 10px; font-size: 13px; }
+.ivt-tr-record time { color: var(--muted); font-size: 12px; }
+.ivt-tr-record small { grid-column: 2; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.ivt-tr-summary-line { margin: 4px 0 0; font-weight: 650; }
+.ivt-tr-lead { margin: 0 0 10px; }
+.ivt-tr-fixed { display: block; padding: 9px 0; }
+.ivt-tr-sent-lines { list-style: none; margin: 0 0 10px; padding: 0; }
+.ivt-tr-sent-lines li { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--rule, #e5e7eb); overflow-wrap: anywhere; }
+.ivt-tr-results { list-style: none; margin: 4px 0 10px; padding: 0; border: 1px solid var(--rule, #e5e7eb); border-radius: 10px; overflow: hidden; }
+.ivt-tr-result { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 10px; background: none; border: 0; border-bottom: 1px solid var(--rule, #e5e7eb); font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.ivt-tr-results li:last-child .ivt-tr-result { border-bottom: 0; }
+.ivt-tr-result:hover:not(:disabled) { background: var(--bg, #f6f8f8); }
+.ivt-tr-result:disabled { cursor: not-allowed; opacity: 0.55; }
+.ivt-tr-result small { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.ivt-tr-lines { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; }
+.ivt-tr-lines > li { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 9px 0; border-bottom: 1px solid var(--rule, #e5e7eb); }
+.ivt-tr-line-bad { box-shadow: inset 3px 0 0 #d92d20; padding-left: 8px !important; }
+.ivt-tr-line-main { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1 1 200px; overflow-wrap: anywhere; }
+.ivt-tr-line-main small { color: var(--muted); font-size: 12px; }
+.ivt-tr-line-main small.ivt-overdue { color: #b42318; }
+.ivt-tr-cap { color: #92400e !important; }
+.ivt-tr-qty { width: 64px; text-align: center; }
+.ivt-tr-foot-note { display: flex; flex-direction: column; gap: 1px; margin-right: auto; font-size: 13px; }
+.ivt-tr-foot-note small { color: var(--muted); font-size: 12px; }
+.ivt-tr-review-line { align-items: flex-start !important; }
+.ivt-tr-review-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.ivt-tr-writeoff { flex: 1 1 100%; display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 10px; background: var(--bg, #f6f8f8); }
+.ivt-tr-writeoff .lst-add { align-self: flex-end; }
+.ivt-tr-reasons { border: 0; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.ivt-tr-reasons legend { font-size: 12px; font-weight: 700; color: var(--muted); margin-bottom: 4px; }
+.ivt-tr-reason { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; cursor: pointer; }
+@media (max-width: 860px) {
+  .ivt-tr-layout { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .ivt-tr { padding: 0 12px 12px; }
+  .ivt-tr-tools .lst-add { margin-left: 0; }
+  .ivt-tr-record li { grid-template-columns: minmax(0, 1fr); }
+  .ivt-tr-record small { grid-column: 1; }
+}
+
 /* Zelle bank check (docs/ZELLE_BANK_CHECK.md): the Check Zelle button on payment rows and the owner's bank card. */
 .lst-form-ok {
   background: var(--mist);

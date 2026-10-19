@@ -11,6 +11,7 @@ import {
   mergePages,
   type BusinessCollectionOptions,
 } from "@/lib/paged-query";
+import { transferReadOptions, type TransferRead } from "@/lib/inventory-transfers";
 import { parkingMonthQueryPlan } from "@/lib/parking-month-statement";
 import { useDocsWhereIn, usePagedQuery, type PagedRows } from "@/lib/use-paged-query";
 import type { FirestoreRow } from "@/types/admin";
@@ -354,6 +355,49 @@ export function useInventoryPeriodRows(
     direction: "desc",
     sort: "query",
   });
+}
+
+/**
+ * Store transfers (v5): the open ones (draft, in transit, in review; whole),
+ * the recent ones (newest first, capped), or the ones received since the
+ * month began. Staff tied to one store may only read transfers from or to it,
+ * and the rules refuse an unscoped list, so for them the read is two queries
+ * (`fromStoreId ==` and `toStoreId ==`) merged; everyone else reads one. The
+ * shapes come from `transferReadOptions`, which the index test checks.
+ */
+export function useInventoryTransfers(
+  read: TransferRead,
+  businessId: string,
+  enabled: boolean,
+  storeId = "",
+  monthStart = 0,
+): BusinessRowsResult {
+  const store = storeId.trim();
+  const fromRead = useBusinessCollection("inventoryTransfers", businessId, enabled,
+    transferReadOptions(read, store ? "from" : "", store, monthStart));
+  const toRead = useBusinessCollection("inventoryTransfers", businessId, enabled && Boolean(store),
+    transferReadOptions(read, "to", store, monthStart));
+  const rows = useMemo(
+    () => (store ? mergePages([fromRead.rows, toRead.rows]) : fromRead.rows),
+    [store, fromRead.rows, toRead.rows],
+  );
+  const { loadMore: loadMoreFrom, refresh: refreshFrom, hasMore: moreFrom } = fromRead;
+  const { loadMore: loadMoreTo, refresh: refreshTo, hasMore: moreTo } = toRead;
+  return {
+    rows,
+    loading: fromRead.loading || (Boolean(store) && toRead.loading),
+    loadingMore: fromRead.loadingMore || toRead.loadingMore,
+    error: fromRead.error || (store ? toRead.error : ""),
+    hasMore: moreFrom || (Boolean(store) && moreTo),
+    loadMore: () => {
+      if (moreFrom) loadMoreFrom();
+      if (store && moreTo) loadMoreTo();
+    },
+    refresh: () => {
+      refreshFrom();
+      if (store) refreshTo();
+    },
+  };
 }
 
 /** One product's stock history, newest first, a page at a time. */

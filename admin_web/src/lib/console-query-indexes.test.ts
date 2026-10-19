@@ -18,6 +18,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { invoiceListQuery } from "./invoice-ledger.ts";
+import { transferReadOptions } from "./inventory-transfers.ts";
 import { lotActivityListQuery, lotExpenseEntryQueries } from "./lot-ledger.ts";
 import { businessCollectionPlan, statusFilterSpec, type BusinessCollectionOptions, type QueryFilterSpec } from "./paged-query.ts";
 import { parkingMonthQueryPlan } from "./parking-month-statement.ts";
@@ -209,6 +210,17 @@ const SITES: Site[] = [
         orderBy: "createdAt",
         direction: "desc",
       }))),
+  },
+  // Store transfers (v5): open / recent / received this month, unscoped for whoever sees every store,
+  // and for a store's staff once by fromStoreId and once by toStoreId (two call sites, merged).
+  {
+    file: L("business-data.ts"), kind: "useBusinessCollection", what: "useInventoryTransfers, unscoped or from one store",
+    shapes: (["open", "recent", "month"] as const).flatMap((read) =>
+      [transferReadOptions(read, "", "", 1), transferReadOptions(read, "from", "s1", 1)].map((options) => bc("inventoryTransfers", options))),
+  },
+  {
+    file: L("business-data.ts"), kind: "useBusinessCollection", what: "useInventoryTransfers, to one store",
+    shapes: (["open", "recent", "month"] as const).map((read) => bc("inventoryTransfers", transferReadOptions(read, "to", "s1", 1))),
   },
   { file: L("business-data.ts"), kind: "useDocsWhereIn", what: "open container lines", shapes: [raw("containerLines", [eq("businessId"), ["containerId", "in", ["a"]]])] },
   // --- lib/use-paged-query.ts: the generic hooks themselves -----------------

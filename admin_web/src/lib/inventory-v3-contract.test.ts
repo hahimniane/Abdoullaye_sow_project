@@ -22,7 +22,8 @@ const detail = read(B + "inventory-item-detail.tsx");
 const salesList = read(B + "inventory-sales-list.tsx");
 const voidDialog = read(B + "inventory-void-dialog.tsx");
 const stockDialog = read(B + "inventory-stock-dialog.tsx");
-const transferDialog = read(B + "inventory-transfer-dialog.tsx");
+// v5: the New transfer dialog replaced the instant "Move stock" one.
+const transferDialog = read(B + "inventory-transfer-compose-dialog.tsx");
 const deleteDialog = read(B + "inventory-delete-dialog.tsx");
 const businessData = read("./business-data.ts");
 const inventorySource = read("./inventory.ts");
@@ -124,7 +125,7 @@ test("brand in front, everywhere a product's name shows", () => {
   assert.match(detail, /<h2 data-no-translate>\{productDisplayName\(item\)\}<\/h2>/);
   assert.match(stockDialog, /\{productDisplayName\(item\)\}/);
   assert.match(deleteDialog, /\{productDisplayName\(item\)\}/);
-  assert.match(transferDialog, /\{productDisplayName\(item\)\} · \{item\.code\}/);
+  assert.match(transferDialog, /<strong data-no-translate>\{productDisplayName\(item\)\}<\/strong> <small><code className="ctn-code" data-no-translate>\{item\.code\}<\/code><\/small>/);
   assert.match(salesList, /\{productDisplayName\(line\)\}/);
   assert.match(voidDialog, /\{line\.quantity\} × \{productDisplayName\(line\)\}/);
   assert.match(summaryCard, /productDisplayName\(\{ name: row\.name, brand: row\.brand \|\| brandByItem\?\.get\(row\.itemId\) \|\| "" \}\)/);

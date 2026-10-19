@@ -42,6 +42,8 @@ export type BusinessPanelView =
   | "shipments"
   // Inventory: the Sales tab, with one sale focused.
   | "sales"
+  // Inventory: the Transfers view, with one transfer open.
+  | "transfers"
   // Parking's month-end bills for one month, e.g. "month_end:2026-09".
   | `month_end:${string}`;
 
@@ -103,6 +105,7 @@ const TYPE_COLLECTIONS: Record<string, string> = {
   barrel_pool_balance_due: "barrelPools",
   deposit_refund_due: "barrelPools",
   inventory_sale: "inventorySales",
+  inventory_transfer: "inventoryTransfers",
 };
 
 function firstText(...values: Array<string | undefined>): string {
@@ -125,6 +128,7 @@ export function recordIdFromNotification(data: NotificationData): string {
   return firstText(
     data.relatedId,
     data.saleId,
+    data.transferId,
     data.shipmentId,
     data.requestId,
     data.reservationId,
@@ -282,6 +286,9 @@ export function businessTargetForNotification(
         panelView: "sales",
         storeId: firstText(data.storeId),
       };
+    // A store transfer (sent, cancelled, differences, reminders): Inventory → Transfers with it open.
+    case "inventory_transfer":
+      return {tab: "inventory", panelView: "transfers", focusId};
     case "transport_opportunity":
     case "transport_quote_lost":
       return {tab: "transport", focusId, panelView: "opportunities"};

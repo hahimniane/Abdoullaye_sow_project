@@ -41,7 +41,12 @@ const screens = {
   "the product detail": B + "inventory-item-detail.tsx",
   "the categories manager": B + "inventory-categories-dialog.tsx",
   "the stores manager": B + "inventory-stores-dialog.tsx",
-  "the transfer dialog": B + "inventory-transfer-dialog.tsx",
+  // v5: store transfers (the instant "Move stock" dialog is gone).
+  "the New transfer dialog": B + "inventory-transfer-compose-dialog.tsx",
+  "the receive dialog": B + "inventory-transfer-receive-dialog.tsx",
+  "the review dialog": B + "inventory-transfer-review-dialog.tsx",
+  "the cancel dialog": B + "inventory-transfer-cancel-dialog.tsx",
+  "the Transfers view": B + "inventory-transfers-view.tsx",
   "the store filter": B + "inventory-store-filter.tsx",
   "the public tag page": "../components/item-tag-page.tsx",
   // v4: credit sales and the sales history.

@@ -17,6 +17,7 @@ import {
   type StoreAccess,
 } from "@/lib/inventory";
 import { ofWhichOnCreditText, stillOwedText } from "@/lib/inventory-credit";
+import { readTransferTotals, transferTotalsText } from "@/lib/inventory-transfers";
 import { useServerTotals, viewerTimeZone } from "@/lib/use-server-totals";
 
 type SummaryResponse = Record<string, unknown> & { computedAtMs?: number };
@@ -63,6 +64,7 @@ export function InventorySummaryCard({
     reloadKey,
   );
   const summary = readInventorySummary(totals.data);
+  const transfersLine = transferTotalsText(readTransferTotals(totals.data), lang);
   const showByStore = access.multi && access.canSeeAll && !storeFilter && summary !== null && summary.byStore.length > 0;
   const showByCategory = summary !== null && summary.byCategory.length > 0;
   const showByBrand = summary !== null && summary.byBrand.length > 0;
@@ -107,6 +109,8 @@ export function InventorySummaryCard({
         </div>
         <div className="pk-stat"><span>Profit</span><b data-no-translate className={summary && summary.profitCents < 0 ? "owed" : ""}>{summary ? moneyText(summary.profitCents) : "—"}</b><small>from the costs you entered</small></div>
       </div>
+      {/* v5: what is on the road between stores and what did not arrive (absent on an older server). */}
+      {transfersLine && <p className="lst-hint ivt-tr-summary-line" data-no-translate>{transfersLine}</p>}
       <TotalsStatus
         computedAtMs={totals.data?.computedAtMs ?? null}
         error={totals.error}

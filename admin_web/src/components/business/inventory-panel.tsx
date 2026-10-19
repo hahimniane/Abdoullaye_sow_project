@@ -18,7 +18,8 @@ import { InventoryStoreFilter } from "@/components/business/inventory-store-filt
 import { InventoryStoresDialog } from "@/components/business/inventory-stores-dialog";
 import { InventorySummaryCard } from "@/components/business/inventory-summary-card";
 import { InventoryTagsDialog } from "@/components/business/inventory-tags-dialog";
-import { InventoryTransferDialog } from "@/components/business/inventory-transfer-dialog";
+import { InventoryTransferComposeDialog } from "@/components/business/inventory-transfer-compose-dialog";
+import { InventoryTransfersView } from "@/components/business/inventory-transfers-view";
 import { InventoryVoidDialog } from "@/components/business/inventory-void-dialog";
 import {
   useBusinessStaff,
@@ -27,6 +28,7 @@ import {
   useInventoryItems,
   useInventoryStock,
   useInventoryStores,
+  useInventoryTransfers,
   useLiveDoc,
 } from "@/lib/business-data";
 import { functions } from "@/lib/firebase";
@@ -67,13 +69,21 @@ import {
   type SaleFocus,
 } from "@/lib/inventory";
 import { dateKeyInZone } from "@/lib/inventory-credit";
+import {
+  mergeTransferRows,
+  sendableStores,
+  transferAttentionCount,
+  type InventoryTransfer,
+  type TransferFocus,
+  type TransferViewer,
+} from "@/lib/inventory-transfers";
 import { historyZone } from "@/lib/inventory-history";
 import { staffNameFrom, staffNameIndex, staffOptionsFrom } from "@/lib/staff-names";
 import { statusPillClass } from "@/lib/status-pill";
 import type { FirestoreRow } from "@/types/admin";
 
-type Modal = "" | "item" | "stock" | "tags" | "delete" | "void" | "categories" | "brands" | "stores" | "transfer";
-type View = "products" | "sales" | "credit" | "history";
+type Modal = "" | "item" | "stock" | "tags" | "delete" | "void" | "categories" | "brands" | "stores" | "compose";
+type View = "products" | "sales" | "credit" | "history" | "transfers";
 
 const FILTERS: InventoryFilter[] = ["all", "low", "countOff", "archived"];
 
@@ -88,6 +98,8 @@ type InventoryPanelProps = {
   focusSale?: SaleFocus | null;
   /** The signed-in person: who received a later credit payment unless someone else is picked. */
   viewerUid?: string;
+  /** A store transfer alert was opened: show Transfers with this transfer open. A new object per alert. */
+  focusTransfer?: TransferFocus | null;
 };
 
 /**
@@ -103,12 +115,16 @@ type InventoryPanelProps = {
  * stores) can move stock between stores. Staff who work in one store see only
  * that store everywhere, with no filter. The owner alone manages the stores.
  */
-export function InventoryPanel({ businessId, business = null, previewMode, viewer, focusSale = null, viewerUid = "" }: InventoryPanelProps) {
+export function InventoryPanel({ businessId, business = null, previewMode, viewer, focusSale = null, viewerUid = "", focusTransfer = null }: InventoryPanelProps) {
   const lang = currentLanguage() === "fr" ? "fr" : "en";
   const enabled = Boolean(businessId && !previewMode);
 
-  const [view, setView] = useState<View>(focusSale ? "sales" : "products");
+  const [view, setView] = useState<View>(focusTransfer ? "transfers" : focusSale ? "sales" : "products");
   const [saleFocus, setSaleFocus] = useState<SaleFocus | null>(focusSale);
+  const [transferFocus, setTransferFocus] = useState<TransferFocus | null>(focusTransfer);
+  // New transfer: the product it starts with ("Send to another store"), or the draft being continued.
+  const [composeItemId, setComposeItemId] = useState("");
+  const [composeDraft, setComposeDraft] = useState<InventoryTransfer | null>(null);
   const [filter, setFilter] = useState<InventoryFilter>("all");
   const [categoryFilterRaw, setCategoryFilter] = useState("");
   const [brandFilterRaw, setBrandFilter] = useState("");
@@ -117,7 +133,6 @@ export function InventoryPanel({ businessId, business = null, previewMode, viewe
   const [selectedId, setSelectedId] = useState("");
   const [modal, setModal] = useState<Modal>("");
   const [editing, setEditing] = useState<InventoryItem | null>(null);
-  const [transferItemId, setTransferItemId] = useState("");
   const [tagsFor, setTagsFor] = useState<{ id: string; name: string; code: string } | null>(null);
   const [voidSale, setVoidSale] = useState<InventorySale | null>(null);
   const [busy, setBusy] = useState(false);
@@ -152,6 +167,16 @@ export function InventoryPanel({ businessId, business = null, previewMode, viewe
     if (focusSale) {
       setSaleFocus(focusSale);
       setView("sales");
+      setSelectedId("");
+    }
+  }
+  // A transfer alert opens Transfers on that transfer (the view reads it by id).
+  const [prevTransferFocus, setPrevTransferFocus] = useState<TransferFocus | null>(focusTransfer);
+  if (focusTransfer !== prevTransferFocus) {
+    setPrevTransferFocus(focusTransfer);
+    if (focusTransfer) {
+      setTransferFocus(focusTransfer);
+      setView("transfers");
       setSelectedId("");
     }
   }
@@ -219,12 +244,27 @@ export function InventoryPanel({ businessId, business = null, previewMode, viewe
   const searching = search.trim().length > 0;
   const blocked = busy || !enabled || access.needsHomeStore;
 
+  // Store transfers (v5): only with two or more active stores, and never for staff still waiting for a home store.
+  const transfersOn = enabled && access.multi && !access.needsHomeStore;
+  const transferViewer = useMemo<TransferViewer>(
+    () => ({ isOwner, homeStoreId, allStores, uid: viewerUid }),
+    [isOwner, homeStoreId, allStores, viewerUid],
+  );
+  // The open transfers (drafts, in transit, in review): the tab's number and the Transfers view's live list.
+  const openTransfers = useInventoryTransfers("open", businessId, transfersOn, access.scopedStoreId);
+  const transferBadge = useMemo(
+    () => transferAttentionCount(mergeTransferRows([openTransfers.rows], businessId, transferViewer), transferViewer),
+    [openTransfers.rows, businessId, transferViewer],
+  );
+  const canSendTransfers = access.multi && sendableStores(transferViewer, access.stores).length > 0;
+
   function closeModal() {
     setModal("");
     setEditing(null);
     setTagsFor(null);
     setVoidSale(null);
-    setTransferItemId("");
+    setComposeItemId("");
+    setComposeDraft(null);
   }
 
   function say(message: string) {
@@ -249,9 +289,18 @@ export function InventoryPanel({ businessId, business = null, previewMode, viewe
     setModal("stock");
   }
 
-  function openTransfer(itemId: string) {
-    setTransferItemId(itemId);
-    setModal("transfer");
+  /** New transfer (optionally starting with one product), or a draft continued. Replaces the instant "Move stock". */
+  function openCompose(itemId: string, draft: InventoryTransfer | null = null) {
+    setComposeItemId(itemId);
+    setComposeDraft(draft);
+    setModal("compose");
+  }
+
+  function openTransferInList(transferId: string) {
+    if (!transferId) return;
+    setTransferFocus({ transferId, key: Date.now() });
+    setView("transfers");
+    setSelectedId("");
   }
 
   function openTags(item: { id: string; name: string; brand?: string; code: string }) {
@@ -293,15 +342,22 @@ export function InventoryPanel({ businessId, business = null, previewMode, viewe
 
   const tabs = (
     <div className="service-segments" role="tablist" aria-label="Inventory lists">
-      {([["products", "Products", counts.onSale], ["sales", "Sales", null], ["history", "History", null], ["credit", "Credit owed", null]] as [View, string, number | null][]).map(([id, label, count]) => (
+      {([
+        ["products", "Products", counts.onSale],
+        ["sales", "Sales", null],
+        ["history", "History", null],
+        ["credit", "Credit owed", null],
+        // Transfers: what waits for this person (to receive, or to decide) as the badge.
+        ...(transfersOn ? [["transfers", "Transfers", transferBadge > 0 ? transferBadge : null] as [View, string, number | null]] : []),
+      ] as [View, string, number | null][]).map(([id, label, count]) => (
         <span
           key={id}
           role="button"
           tabIndex={0}
           className={`segment ${view === id ? "active" : ""}`}
           aria-pressed={view === id}
-          onClick={() => { setView(id); setSelectedId(""); setSaleFocus(null); }}
-          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setView(id); setSelectedId(""); setSaleFocus(null); } }}
+          onClick={() => { setView(id); setSelectedId(""); setSaleFocus(null); setTransferFocus(null); }}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setView(id); setSelectedId(""); setSaleFocus(null); setTransferFocus(null); } }}
         >
           {label}{count !== null && <b data-no-translate>{count}</b>}
         </span>
@@ -339,7 +395,8 @@ export function InventoryPanel({ businessId, business = null, previewMode, viewe
           onBack={() => setSelectedId("")}
           onEdit={() => openEdit(selected)}
           onStock={() => openStock(selected)}
-          onTransfer={() => openTransfer(selected.id)}
+          canSend={canSendTransfers}
+          onTransfer={() => openCompose(selected.id)}
           onTags={() => openTags(selected)}
           onArchive={() => void toggleArchive(selected)}
           onDelete={() => { setEditing(selected); setModal("delete"); }}
@@ -366,8 +423,8 @@ export function InventoryPanel({ businessId, business = null, previewMode, viewe
                 {access.canManageStores && (
                   <button className="lst-btn ghost" type="button" disabled={busy || !enabled} onClick={() => setModal("stores")}><Store size={16} /> Stores</button>
                 )}
-                {access.canTransfer && (
-                  <button className="lst-btn ghost" type="button" disabled={blocked} onClick={() => openTransfer("")}><ArrowRightLeft size={16} /> Move stock</button>
+                {canSendTransfers && (
+                  <button className="lst-btn ghost" type="button" disabled={blocked} onClick={() => openCompose("")}><ArrowRightLeft size={16} /> New transfer</button>
                 )}
                 <button className="lst-add" type="button" disabled={blocked} onClick={openNew}><Plus size={16} /> New product</button>
               </span>
@@ -393,7 +450,25 @@ export function InventoryPanel({ businessId, business = null, previewMode, viewe
           ) : (
             <article className="panel">
               {tabs}
-              {view === "credit" ? (
+              {view === "transfers" && transfersOn ? (
+                <InventoryTransfersView
+                  businessId={businessId}
+                  enabled={transfersOn}
+                  viewer={transferViewer}
+                  access={access}
+                  zone={zone}
+                  todayKey={todayKey}
+                  storeFilter={storeFilter}
+                  onStoreFilter={setStoreFilter}
+                  openRows={openTransfers.rows}
+                  openLoading={openTransfers.loading}
+                  openError={openTransfers.error}
+                  focus={transferFocus}
+                  onCompose={(draft) => openCompose("", draft)}
+                  onTags={openTags}
+                  onFlash={say}
+                />
+              ) : view === "credit" ? (
                 <InventoryCreditList
                   businessId={businessId}
                   enabled={enabled}
@@ -532,8 +607,8 @@ export function InventoryPanel({ businessId, business = null, previewMode, viewe
                                 {!item.archived && (
                                   <button className="ghost-button" type="button" disabled={busy} onClick={(e) => { e.stopPropagation(); openStock(item); }} title="Add stock or set the count" aria-label="Add stock or set the count"><Boxes size={14} /></button>
                                 )}
-                                {!item.archived && access.canTransfer && (
-                                  <button className="ghost-button" type="button" disabled={busy} onClick={(e) => { e.stopPropagation(); openTransfer(item.id); }} title="Move stock between stores" aria-label="Move stock between stores"><ArrowRightLeft size={14} /></button>
+                                {!item.archived && canSendTransfers && (
+                                  <button className="ghost-button" type="button" disabled={busy} onClick={(e) => { e.stopPropagation(); openCompose(item.id); }} title="Send to another store" aria-label="Send to another store"><ArrowRightLeft size={14} /></button>
                                 )}
                                 <button className="ghost-button" type="button" disabled={busy} onClick={(e) => { e.stopPropagation(); openEdit(item); }} title="Edit product" aria-label="Edit product"><Pencil size={14} /></button>
                                 <button className="ghost-button" type="button" disabled={busy} onClick={(e) => { e.stopPropagation(); void toggleArchive(item); }} title={item.archived ? "Unarchive" : "Archive"} aria-label={item.archived ? "Unarchive" : "Archive"}>
@@ -579,17 +654,23 @@ export function InventoryPanel({ businessId, business = null, previewMode, viewe
           onFlash={say}
         />
       )}
-      {modal === "transfer" && access.canTransfer && (
-        <InventoryTransferDialog
+      {modal === "compose" && canSendTransfers && (
+        <InventoryTransferComposeDialog
           businessId={businessId}
-          items={onSaleItems}
+          viewer={transferViewer}
           access={access}
+          productRows={onSale.rows}
+          items={onSaleItems}
+          categories={categories}
+          brands={brands}
           stock={stockIndex}
           stockReady={!stockRead.loading}
-          startItemId={transferItemId}
+          draft={composeDraft}
+          startItemId={composeItemId}
           startFromStoreId={scopeStoreId}
           onClose={closeModal}
           onFlash={say}
+          onOpenTransfer={openTransferInList}
         />
       )}
       {modal === "categories" && (

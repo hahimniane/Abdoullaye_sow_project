@@ -13,6 +13,8 @@ export type NotificationPreferences = {
   inventorySales: boolean;
   /** Inventory: "Credit I collect" (push when a credit is put on me, and when it is overdue). */
   inventoryCredit: boolean;
+  /** Inventory: "Store transfers" (sent to my store, cancelled, didn't arrive, reminders). */
+  inventoryTransfers: boolean;
 };
 
 export function defaultNotificationPreferences(): NotificationPreferences {
@@ -26,6 +28,7 @@ export function defaultNotificationPreferences(): NotificationPreferences {
     businessActivity: true,
     inventorySales: true,
     inventoryCredit: true,
+    inventoryTransfers: true,
   };
 }
 
@@ -87,5 +90,10 @@ export const inventoryNotificationPreferenceFields: Array<{
     key: "inventoryCredit",
     label: "Credit I collect",
     hint: "When a sale on credit is given to you to collect, and when it is overdue",
+  },
+  {
+    key: "inventoryTransfers",
+    label: "Store transfers",
+    hint: "When stock is sent to your store, and when items of a transfer didn't arrive",
   },
 ];

@@ -361,6 +361,21 @@ export type InventoryRefusal =
   | "credit_has_payments"
   | "payment_not_found"
   | "payment_already_reverted"
+  // The server's v5 codes (store transfers).
+  | "transfer_not_found"
+  | "transfer_not_draft"
+  | "transfer_not_in_transit"
+  | "line_not_disputed"
+  | "line_already_resolved"
+  | "store_has_transfers"
+  | "item_in_transfer"
+  | "item_not_in_transfer"
+  | "received_too_many"
+  | "write_off_reason_invalid"
+  | "resolution_invalid"
+  | "transfer_lines_required"
+  | "transfer_lines_too_many"
+  | "client_request_id_invalid"
   | "service_not_enabled"
   | "permission_denied"
   | "sign_in_required"
@@ -427,6 +442,20 @@ export const INVENTORY_MESSAGES: Record<InventoryRefusal, string> = {
   credit_has_payments: "Money was already collected on this credit. Revert those payments before voiding the sale.",
   payment_not_found: "That payment no longer exists.",
   payment_already_reverted: "That payment was already reverted.",
+  transfer_not_found: "That transfer is not available.",
+  transfer_not_draft: "This transfer was already sent. Open it from the list.",
+  transfer_not_in_transit: "This transfer is no longer in transit.",
+  line_not_disputed: "Nothing is missing on that line.",
+  line_already_resolved: "That line was already decided.",
+  store_has_transfers: "A transfer in transit or waiting for review comes from or goes to this store. Settle it first.",
+  item_in_transfer: "This product is in a transfer that is in transit or waiting for review. Settle it first.",
+  item_not_in_transfer: "That product is not in this transfer.",
+  received_too_many: "You can't receive more than was sent.",
+  write_off_reason_invalid: "Choose why the items are written off.",
+  resolution_invalid: "Choose to return the items or write them off.",
+  transfer_lines_required: "Add at least one product.",
+  transfer_lines_too_many: "A transfer holds at most 100 products.",
+  client_request_id_invalid: "The request could not be sent. Close this window and try again.",
   service_not_enabled: "Inventory is not switched on for this business.",
   permission_denied: "You do not have access to Inventory. Ask the owner to add it to your permissions.",
   sign_in_required: "Sign in again to continue.",
@@ -465,7 +494,12 @@ export function inventoryCallableFailure(error: unknown): InventoryCallableFailu
   const details = asRow(e.details);
   const reason = text(details.reason, 60);
   if (reason && reason in INVENTORY_MESSAGES) {
-    return { message: INVENTORY_MESSAGES[reason as InventoryRefusal], reason };
+    // v5: a store or product held by open transfers names them (codes read the same in both languages).
+    const codes = Array.isArray(details.transferCodes)
+      ? details.transferCodes.map((code) => text(code, 40)).filter(Boolean).slice(0, 5)
+      : [];
+    const message = INVENTORY_MESSAGES[reason as InventoryRefusal];
+    return { message: codes.length ? `${message} (${codes.join(", ")})` : message, reason };
   }
   const code = text(e.code, 60).replace(/^functions\//, "");
   const byCode: Record<string, InventoryRefusal> = {
@@ -1261,7 +1295,10 @@ export function validateVoidReason(reason: unknown): InventoryRefusal[] {
 // Stock history.
 // ---------------------------------------------------------------------------
 
-export type InventoryMovementType = "initial" | "add" | "set" | "sale" | "void" | "transfer" | "transfer_in" | "transfer_out";
+export type InventoryMovementType =
+  | "initial" | "add" | "set" | "sale" | "void" | "transfer" | "transfer_in" | "transfer_out"
+  // v5: the two-step store transfers (docs/INVENTORY.md, "Store transfers (v5)").
+  | "transfer_sent" | "transfer_received" | "transfer_cancelled" | "transfer_returned" | "transfer_written_off";
 
 export const INVENTORY_MOVEMENT_LABELS: Record<InventoryMovementType, string> = {
   initial: "Starting count",
@@ -1270,8 +1307,14 @@ export const INVENTORY_MOVEMENT_LABELS: Record<InventoryMovementType, string> = 
   sale: "Sold",
   void: "Sale voided",
   transfer: "Stock moved",
-  transfer_in: "Moved in from another store",
-  transfer_out: "Moved out to another store",
+  // The old one-step move (transferInventoryStock, still used by older apps) reads "Instant transfer".
+  transfer_in: "Instant transfer",
+  transfer_out: "Instant transfer",
+  transfer_sent: "Sent to another store",
+  transfer_received: "Received from another store",
+  transfer_cancelled: "Transfer cancelled: back in stock",
+  transfer_returned: "Returned after a transfer",
+  transfer_written_off: "Written off after a transfer",
 };
 
 export type InventoryMovement = {
@@ -1289,6 +1332,10 @@ export type InventoryMovement = {
   storeId: string;
   /** Both sides of a transfer share this. */
   transferId: string;
+  /** v5 transfers: the transfer's code ("TR-XXXXXX"); "" on an instant transfer. */
+  transferCode: string;
+  /** v5 transfers: the other store of the transfer. */
+  counterpartStoreId: string;
   at: unknown;
 };
 
@@ -1321,6 +1368,8 @@ export function inventoryMovementEntries(rows: readonly unknown[]): InventoryMov
         saleId: text(row.saleId),
         storeId: text(row.storeId),
         transferId,
+        transferCode: text(row.transferCode, 40),
+        counterpartStoreId: text(row.counterpartStoreId),
         at: row.createdAt ?? null,
       };
     })
