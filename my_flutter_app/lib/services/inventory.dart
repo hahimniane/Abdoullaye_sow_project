@@ -382,6 +382,7 @@ class InventorySale {
     this.creditStatus = 'none',
     this.voidReason = '',
     this.bankCheck,
+    this.paymentSwitches = const [],
   });
 
   factory InventorySale.fromMap(String id, Map<String, dynamic> data) {
@@ -421,6 +422,12 @@ class InventorySale {
       },
       voidReason: _text(data['voidReason'], 300),
       bankCheck: BankCheck.fromMap(data['bankCheck'], date: lotDateOf),
+      paymentSwitches: [
+        if (data['paymentSwitches'] is Iterable)
+          for (final entry in data['paymentSwitches'] as Iterable)
+            if (entry is Map)
+              InventorySaleSwitch.fromMap(callableMap(entry)),
+      ],
     );
   }
 
@@ -465,6 +472,10 @@ class InventorySale {
   /// someone checked (null: never checked).
   final BankCheck? bankCheck;
 
+  /// Every time the sale was switched between paid and credit, oldest first
+  /// (server-written; nothing is ever removed).
+  final List<InventorySaleSwitch> paymentSwitches;
+
   int get itemCount => lines.fold(0, (sum, line) => sum + line.quantity);
   int get discountCents =>
       lines.fold(0, (sum, line) => sum + line.discountCents);
@@ -499,6 +510,73 @@ class InventorySale {
   /// Money is still to be collected on it (a voided sale is owed nothing).
   bool get creditOpen =>
       isOnCredit && !voided && creditStatus == 'open' && creditBalanceCents > 0;
+}
+
+/// One switch of a recorded sale between paid and credit: who, when, and
+/// the money before and after (`switchInventorySalePayment`).
+class InventorySaleSwitch {
+  const InventorySaleSwitch({
+    this.requestId = '',
+    required this.from,
+    required this.to,
+    this.byStaffId = '',
+    this.at,
+    this.totalCents = 0,
+    this.fromPaidNowCents = 0,
+    this.fromCreditCents = 0,
+    this.toPaidNowCents = 0,
+    this.toCreditCents = 0,
+    this.fromPaymentMethod = '',
+    this.toPaymentMethod = '',
+    this.fromReceivedByStaffId = '',
+    this.toReceivedByStaffId = '',
+    this.customerName = '',
+    this.collectorStaffId = '',
+  });
+
+  factory InventorySaleSwitch.fromMap(Map<String, dynamic> data) {
+    String kind(Object? v) => _text(v, 10) == 'credit' ? 'credit' : 'paid';
+    int cents(Object? v) => _int(v) < 0 ? 0 : _int(v);
+    return InventorySaleSwitch(
+      requestId: _text(data['requestId'], 101),
+      from: kind(data['from']),
+      to: kind(data['to']),
+      byStaffId: _text(data['byStaffId'], 128),
+      at: lotDateOf(data['at']),
+      totalCents: cents(data['totalCents']),
+      fromPaidNowCents: cents(data['fromPaidNowCents']),
+      fromCreditCents: cents(data['fromCreditCents']),
+      toPaidNowCents: cents(data['toPaidNowCents']),
+      toCreditCents: cents(data['toCreditCents']),
+      fromPaymentMethod: _text(data['fromPaymentMethod'], 40),
+      toPaymentMethod: _text(data['toPaymentMethod'], 40),
+      fromReceivedByStaffId: _text(data['fromReceivedByStaffId'], 128),
+      toReceivedByStaffId: _text(data['toReceivedByStaffId'], 128),
+      customerName: _text(data['customerName'], 120),
+      collectorStaffId: _text(data['collectorStaffId'], 128),
+    );
+  }
+
+  final String requestId;
+
+  /// `paid` or `credit`.
+  final String from;
+  final String to;
+  final String byStaffId;
+  final DateTime? at;
+  final int totalCents;
+  final int fromPaidNowCents;
+  final int fromCreditCents;
+  final int toPaidNowCents;
+  final int toCreditCents;
+  final String fromPaymentMethod;
+  final String toPaymentMethod;
+  final String fromReceivedByStaffId;
+  final String toReceivedByStaffId;
+  final String customerName;
+  final String collectorStaffId;
+
+  bool get toCredit => to == 'credit';
 }
 
 /// The credit side of a sale: who owes, how to reach them, who collects and
@@ -1759,6 +1837,12 @@ enum InventoryFailure {
   customerPhoneInvalid,
   amountInvalid,
 
+  // Switching a recorded sale between paid and credit (v6).
+  saleAlreadyCredit,
+  saleAlreadyPaid,
+  creditPaymentsRecorded,
+  tooManySwitches,
+
   // Store transfers (v5).
   transferNotFound,
   transferNotDraft,
@@ -1807,6 +1891,10 @@ const inventoryFailureReasons = <String, InventoryFailure>{
   'paid_now_invalid': InventoryFailure.paidNowInvalid,
   'customer_phone_invalid': InventoryFailure.customerPhoneInvalid,
   'amount_invalid': InventoryFailure.amountInvalid,
+  'sale_already_credit': InventoryFailure.saleAlreadyCredit,
+  'sale_already_paid': InventoryFailure.saleAlreadyPaid,
+  'credit_payments_recorded': InventoryFailure.creditPaymentsRecorded,
+  'too_many_switches': InventoryFailure.tooManySwitches,
   'transfer_not_found': InventoryFailure.transferNotFound,
   'transfer_not_draft': InventoryFailure.transferNotDraft,
   'transfer_not_in_transit': InventoryFailure.transferNotInTransit,

@@ -550,3 +550,117 @@ class InventoryCreditPaymentResult {
 bool inventoryCreditPhoneGiven(String phone) =>
     PhoneNumberValidator.digitsOnly(phone.trim()).length > 3 ||
     PhoneNumberValidator.isValidE164(phone.trim());
+
+// ---------------------------------------------------------------------------
+// Switching a recorded sale between paid and credit (docs/INVENTORY.md v6).
+// ---------------------------------------------------------------------------
+
+/// "Switch to credit" is offered on a sale paid in full that is not voided
+/// (and sold for something: a giveaway has nothing to owe).
+bool inventorySaleCanSwitchToCredit(InventorySale sale) =>
+    !sale.voided && !sale.hadCredit && sale.totalCents > 0;
+
+/// "Switch to paid" ("it was never credit") is offered on a credit sale with
+/// nothing collected on it since; once money came in, the rest is collected
+/// with Record payment.
+bool inventorySaleCanSwitchToPaid(InventorySale sale) =>
+    !sale.voided && sale.hadCredit && sale.creditPaidCents == 0;
+
+/// How the whole total was paid, as Switch to paid starts: the sale's own
+/// method, else the one it had before it last went to credit (a sale put on
+/// credit with nothing paid stores none), else cash.
+String inventorySwitchDefaultMethod(InventorySale sale) {
+  if (inventoryPaymentMethods.contains(sale.paymentMethod)) {
+    return sale.paymentMethod;
+  }
+  for (final entry in sale.paymentSwitches.reversed) {
+    if (inventoryPaymentMethods.contains(entry.fromPaymentMethod)) {
+      return entry.fromPaymentMethod;
+    }
+  }
+  return 'cash';
+}
+
+/// Who received the money, as Switch to paid starts: who received what was
+/// paid at the time, else the seller.
+String inventorySwitchDefaultReceiver(InventorySale sale) =>
+    sale.moneyReceivedBy;
+
+/// Switch to credit's draft starts empty, like the Sell screen's: nothing
+/// paid at the time, no customer, no collector, no due date. The method is
+/// not asked (the paid part keeps the sale's), so the validator is given a
+/// valid one.
+const inventorySwitchCreditDraft = InventoryCheckoutDraft(onCredit: true);
+
+/// Why Switch to paid cannot be sent yet: `payment_method_invalid`,
+/// `received_by_required`, `received_by_invalid` (not in [staffIds]; an
+/// empty list checks nothing about people).
+List<String> validateInventorySwitchToPaid({
+  required String method,
+  required String receivedByStaffId,
+  Iterable<String> staffIds = const [],
+}) {
+  final codes = <String>[];
+  if (!inventoryPaymentMethods.contains(method)) {
+    codes.add('payment_method_invalid');
+  }
+  final receiver = receivedByStaffId.trim();
+  final known = {for (final id in staffIds) id.trim()}..remove('');
+  if (receiver.isEmpty) {
+    codes.add('received_by_required');
+  } else if (known.isNotEmpty && !known.contains(receiver)) {
+    codes.add('received_by_invalid');
+  }
+  return codes;
+}
+
+/// The `switchInventorySalePayment` request. To credit carries `credit`
+/// ([inventoryCreditRequest]); to paid carries the method and who received
+/// it.
+Map<String, Object?> switchInventorySalePaymentRequest({
+  required String businessId,
+  required String saleId,
+  required String clientRequestId,
+  required String to,
+  Map<String, Object?>? credit,
+  String paymentMethod = '',
+  String receivedByStaffId = '',
+}) => {
+  'businessId': businessId.trim(),
+  'saleId': saleId.trim(),
+  'clientRequestId': clientRequestId.trim(),
+  'to': to,
+  if (to == 'credit') 'credit': credit ?? const <String, Object?>{},
+  if (to == 'paid') 'paymentMethod': paymentMethod.trim(),
+  if (to == 'paid' && receivedByStaffId.trim().isNotEmpty)
+    'receivedByStaffId': receivedByStaffId.trim(),
+};
+
+/// What `switchInventorySalePayment` answers.
+class InventorySaleSwitchResult {
+  const InventorySaleSwitchResult({
+    this.to = '',
+    this.replayed = false,
+    this.paidNowCents,
+    this.creditCents,
+    this.creditStatus = '',
+  });
+
+  factory InventorySaleSwitchResult.fromCallable(Object? data) {
+    final map = callableMap(data);
+    int? cents(Object? v) => v is num && v.isFinite ? v.round() : null;
+    return InventorySaleSwitchResult(
+      to: callableString(map['to']),
+      replayed: map['replayed'] == true,
+      paidNowCents: cents(map['paidNowCents']),
+      creditCents: cents(map['creditCents']),
+      creditStatus: callableString(map['creditStatus']),
+    );
+  }
+
+  final String to;
+  final bool replayed;
+  final int? paidNowCents;
+  final int? creditCents;
+  final String creditStatus;
+}

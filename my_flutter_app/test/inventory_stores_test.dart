@@ -949,8 +949,10 @@ void main() {
       );
       // The twelve of v2, the four brand codes of v3, the thirteen of
       // "received by" and credit sales (inventory_credit_test.dart), and the
-      // fourteen of store transfers (inventory_transfers_test.dart).
-      expect(inventoryFailureReasons.keys, hasLength(43));
+      // fourteen of store transfers (inventory_transfers_test.dart), and the
+      // four of switching a sale between paid and credit
+      // (inventory_sale_switch_test.dart).
+      expect(inventoryFailureReasons.keys, hasLength(47));
     });
 
     test('a refusal carrying several codes is read by any of ours', () {

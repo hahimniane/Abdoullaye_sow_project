@@ -15410,4 +15410,89 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get phaPhoneOnlyNoPassword =>
       'No email on your account? Go back and choose “Sign in with your phone” - there is no password to reset.';
+
+  @override
+  String get invSwitchToCredit => 'Switch to credit';
+
+  @override
+  String get invSwitchToPaid => 'Switch to paid';
+
+  @override
+  String get invSwitchToCreditTitle => 'Put this sale on credit';
+
+  @override
+  String get invSwitchToCreditNote =>
+      'The customer did not pay it all. Say who owes the rest. What was paid at the time keeps how it was paid and who received it.';
+
+  @override
+  String get invSwitchPaidAtTime =>
+      'How much did they pay at the time? (US dollars)';
+
+  @override
+  String get invSwitchToPaidTitle => 'Mark this sale as paid';
+
+  @override
+  String invSwitchToPaidNote(Object total) {
+    return 'It was never credit: the whole $total was paid at the time of the sale.';
+  }
+
+  @override
+  String get invSwitchHowPaid => 'How it was paid';
+
+  @override
+  String get invSwitchConfirmCreditTitle => 'Put this sale on credit?';
+
+  @override
+  String invSwitchConfirmCreditMessage(String name, String owed, String paid) {
+    return '$name will owe $owed. $paid stays paid at the time. The collector is told.';
+  }
+
+  @override
+  String get invSwitchConfirmPaidTitle => 'Mark this sale as paid?';
+
+  @override
+  String invSwitchConfirmPaidMessage(Object total) {
+    return 'The whole $total was paid at the time of the sale. Nobody owes anything on it any more.';
+  }
+
+  @override
+  String invSwitchedToCredit(Object owed) {
+    return 'Switched to credit: $owed owed';
+  }
+
+  @override
+  String get invSwitchedToPaid => 'Switched to paid';
+
+  @override
+  String invSwitchLineCredit(
+    String who,
+    String when,
+    String paid,
+    String owed,
+  ) {
+    return 'Switched to credit by $who · $when · $paid paid, $owed owed';
+  }
+
+  @override
+  String invSwitchLinePaid(
+    String who,
+    String when,
+    String total,
+    String method,
+  ) {
+    return 'Switched to paid by $who · $when · $total paid ($method)';
+  }
+
+  @override
+  String get invSwitchFailAlreadyCredit => 'This sale is already on credit.';
+
+  @override
+  String get invSwitchFailAlreadyPaid => 'This sale is already paid in full.';
+
+  @override
+  String get invSwitchFailPaymentsRecorded =>
+      'Money was already collected on this credit, so it can\'t become a paid sale. Use Record a payment for what is still owed.';
+
+  @override
+  String get invSwitchFailTooMany => 'This sale was switched too many times.';
 }

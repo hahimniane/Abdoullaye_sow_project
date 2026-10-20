@@ -57,6 +57,11 @@ String inventoryFailureText(AppLocalizations l10n, InventoryFailure failure) =>
       InventoryFailure.paidNowInvalid => l10n.invCreditErrPaidNowInvalid,
       InventoryFailure.customerPhoneInvalid => l10n.invCreditFailPhoneInvalid,
       InventoryFailure.amountInvalid => l10n.invCreditFailAmountInvalid,
+      InventoryFailure.saleAlreadyCredit => l10n.invSwitchFailAlreadyCredit,
+      InventoryFailure.saleAlreadyPaid => l10n.invSwitchFailAlreadyPaid,
+      InventoryFailure.creditPaymentsRecorded =>
+        l10n.invSwitchFailPaymentsRecorded,
+      InventoryFailure.tooManySwitches => l10n.invSwitchFailTooMany,
       InventoryFailure.transferNotFound => l10n.inventoryFailTransferNotFound,
       InventoryFailure.transferNotDraft => l10n.inventoryFailTransferNotDraft,
       InventoryFailure.transferNotInTransit =>

@@ -19,9 +19,7 @@ import '../services/zelle_check_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_motion.dart';
 import '../theme/app_spacing.dart';
-import '../utils/date_display.dart';
-import '../widgets/country_phone_field.dart';
-import '../widgets/day_picker.dart';
+import '../widgets/inventory_credit_fields.dart';
 import '../widgets/inventory_widgets.dart';
 import '../widgets/lot_sheets.dart';
 import '../widgets/scanner_camera_view.dart';
@@ -393,7 +391,7 @@ class _InventorySellScreenState extends State<InventorySellScreen> {
   String _personName(String id) => inventoryStaffName(_team.people, id);
 
   String _optionLabel(AppLocalizations l10n, String id, String name) =>
-      id == _me ? l10n.invCreditMe(name) : name;
+      inventoryPersonOptionLabel(l10n, id, name, _me);
 
   /// "Ama (me)" for the signed-in person, else their name.
   String _receivedByLabel(AppLocalizations l10n) {
@@ -427,31 +425,25 @@ class _InventorySellScreenState extends State<InventorySellScreen> {
 
   Future<void> _pickCollector() async {
     final l10n = AppLocalizations.of(context)!;
-    final picked = await pickLotOption<String>(
+    final picked = await pickInventoryPerson(
       context,
       title: l10n.invCreditCollectorPick,
+      people: _team.people,
+      me: _me,
       selected: _checkout.collectorStaffId,
-      options: [
-        for (final p in _team.people)
-          LotOption(p.id, _optionLabel(l10n, p.id, p.name)),
-      ],
     );
     if (picked == null || !mounted) return;
     setState(() => _checkout = _checkout.copyWith(collectorStaffId: picked));
   }
 
   Future<void> _pickDueDate() async {
-    final today = shopToday(widget.clock());
-    final current = parseDayKey(_checkout.dueDate);
-    final picked = await pickCalendarDay(
+    final picked = await pickInventoryDueDay(
       context,
-      initial: current ?? today.add(const Duration(days: 7)),
-      first: today,
-      last: today.add(const Duration(days: 730)),
+      today: shopToday(widget.clock()),
+      current: _checkout.dueDate,
     );
     if (picked == null || !mounted) return;
-    setState(() =>
-        _checkout = _checkout.copyWith(dueDate: inventoryDayKey(picked)));
+    setState(() => _checkout = _checkout.copyWith(dueDate: picked));
   }
 
   void _setOnCredit(bool on) => setState(() {
@@ -807,8 +799,6 @@ class _InventorySellScreenState extends State<InventorySellScreen> {
     }
 
     final credit = _checkout.onCredit;
-    final locale = dateLocaleOf(context);
-    final due = parseDayKey(_checkout.dueDate);
     final collector = _checkout.collectorStaffId;
     final split = inventoryCheckoutSplit(_basket.totalCents, _checkoutNow);
     Widget receivedByField(String label) => LotPickerField(
@@ -858,58 +848,16 @@ class _InventorySellScreenState extends State<InventorySellScreen> {
                 style: const TextStyle(fontSize: 12, color: AppColors.muted),
               ),
             ),
-            if (credit) ...[
-              TextField(
-                key: const Key('inv-credit-paid-now'),
-                controller: _paidNow,
-                enabled: !_busy,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                onChanged: (v) =>
-                    setState(() => _checkout = _checkout.copyWith(paidNow: v)),
-                decoration: InputDecoration(
-                  labelText: l10n.invCreditPaidNow,
-                  hintText: '0.00',
-                  prefixText: r'$ ',
-                  errorText:
-                      errorFor(['paid_now_invalid', 'paid_now_too_large']),
-                  errorMaxLines: 3,
-                ),
-              ),
-              if (split.paidNowCents > 0) ...[
-                const SizedBox(height: AppSpacing.md),
-                receivedByField(l10n.invCreditPaidNowReceivedBy(
-                    formatLotCents(split.paidNowCents))),
-              ],
-              const SizedBox(height: AppSpacing.md),
-              TextField(
-                key: const Key('inv-credit-name'),
-                controller: _customerName,
-                enabled: !_busy,
-                textCapitalization: TextCapitalization.words,
-                onChanged: (v) => setState(
-                    () => _checkout = _checkout.copyWith(customerName: v)),
-                decoration: InputDecoration(
-                  labelText: l10n.invCreditCustomerName,
-                  errorText: errorFor(['customer_name_required']),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              CountryPhoneField(
-                fieldKey: const Key('inv-credit-phone'),
-                controller: _customerPhone,
-                labelText: l10n.invCreditCustomerPhone,
-                enabled: !_busy,
-                errorText: errorFor(
-                    ['customer_phone_required', 'customer_phone_invalid']),
-                onChanged: (v) => setState(
-                    () => _checkout = _checkout.copyWith(customerPhone: v)),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              LotPickerField(
-                key: const Key('inv-credit-collector'),
-                label: l10n.invCreditCollector,
-                value: collector.isEmpty
+            if (credit)
+              InventoryCreditTermsFields(
+                draft: _checkout,
+                paidNow: _paidNow,
+                customerName: _customerName,
+                customerPhone: _customerPhone,
+                paidNowLabel: l10n.invCreditPaidNow,
+                busy: _busy,
+                errorFor: errorFor,
+                collectorLabel: collector.isEmpty
                     ? null
                     : _optionLabel(
                         l10n,
@@ -918,36 +866,15 @@ class _InventorySellScreenState extends State<InventorySellScreen> {
                             ? collector
                             : _personName(collector),
                       ),
-                placeholder: l10n.invCreditCollectorPick,
-                onTap: _busy ? () {} : _pickCollector,
-                error: errorFor(['collector_required', 'collector_invalid']),
+                onEdit: (edit) =>
+                    setState(() => _checkout = edit(_checkout)),
+                onPickCollector: _pickCollector,
+                onPickDueDate: _pickDueDate,
+                underPaidNow: split.paidNowCents > 0
+                    ? receivedByField(l10n.invCreditPaidNowReceivedBy(
+                        formatLotCents(split.paidNowCents)))
+                    : null,
               ),
-              const SizedBox(height: AppSpacing.md),
-              Row(
-                children: [
-                  Expanded(
-                    child: LotPickerField(
-                      key: const Key('inv-credit-due'),
-                      label: l10n.invCreditDueDate,
-                      value: due == null ? null : displayDate(due, locale),
-                      placeholder: l10n.invCreditNoDueDate,
-                      onTap: _busy ? () {} : _pickDueDate,
-                      error: errorFor(['due_date_invalid']),
-                    ),
-                  ),
-                  if (due != null)
-                    IconButton(
-                      key: const Key('inv-credit-due-clear'),
-                      tooltip: l10n.invCreditClearDueDate,
-                      onPressed: _busy
-                          ? null
-                          : () => setState(() =>
-                              _checkout = _checkout.copyWith(dueDate: '')),
-                      icon: const Icon(Icons.close, size: 20),
-                    ),
-                ],
-              ),
-            ],
           ],
             ),
           ),

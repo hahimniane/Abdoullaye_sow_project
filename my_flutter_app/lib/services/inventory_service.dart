@@ -796,6 +796,33 @@ class InventoryService {
     ),
   );
 
+  /// Switches a recorded sale between paid and credit ([to] `credit` with
+  /// [credit] from [inventoryCreditRequest], or `paid` with the method and
+  /// who received it). The same [clientRequestId] answers the same switch,
+  /// so a retry after a lost answer never switches twice.
+  Future<InventorySaleSwitchResult> switchSalePayment({
+    required String businessId,
+    required String saleId,
+    required String clientRequestId,
+    required String to,
+    Map<String, Object?>? credit,
+    String paymentMethod = '',
+    String receivedByStaffId = '',
+  }) async => InventorySaleSwitchResult.fromCallable(
+    await caller(
+      'switchInventorySalePayment',
+      switchInventorySalePaymentRequest(
+        businessId: businessId,
+        saleId: saleId,
+        clientRequestId: clientRequestId,
+        to: to,
+        credit: credit,
+        paymentMethod: paymentMethod,
+        receivedByStaffId: receivedByStaffId,
+      ),
+    ),
+  );
+
   Future<void> voidSale(
     String businessId,
     String saleId, {

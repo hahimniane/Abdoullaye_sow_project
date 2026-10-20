@@ -26181,6 +26181,131 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No email on your account? Go back and choose “Sign in with your phone” - there is no password to reset.'**
   String get phaPhoneOnlyNoPassword;
+
+  /// No description provided for @invSwitchToCredit.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch to credit'**
+  String get invSwitchToCredit;
+
+  /// No description provided for @invSwitchToPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch to paid'**
+  String get invSwitchToPaid;
+
+  /// No description provided for @invSwitchToCreditTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Put this sale on credit'**
+  String get invSwitchToCreditTitle;
+
+  /// No description provided for @invSwitchToCreditNote.
+  ///
+  /// In en, this message translates to:
+  /// **'The customer did not pay it all. Say who owes the rest. What was paid at the time keeps how it was paid and who received it.'**
+  String get invSwitchToCreditNote;
+
+  /// No description provided for @invSwitchPaidAtTime.
+  ///
+  /// In en, this message translates to:
+  /// **'How much did they pay at the time? (US dollars)'**
+  String get invSwitchPaidAtTime;
+
+  /// No description provided for @invSwitchToPaidTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark this sale as paid'**
+  String get invSwitchToPaidTitle;
+
+  /// No description provided for @invSwitchToPaidNote.
+  ///
+  /// In en, this message translates to:
+  /// **'It was never credit: the whole {total} was paid at the time of the sale.'**
+  String invSwitchToPaidNote(Object total);
+
+  /// No description provided for @invSwitchHowPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'How it was paid'**
+  String get invSwitchHowPaid;
+
+  /// No description provided for @invSwitchConfirmCreditTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Put this sale on credit?'**
+  String get invSwitchConfirmCreditTitle;
+
+  /// No description provided for @invSwitchConfirmCreditMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} will owe {owed}. {paid} stays paid at the time. The collector is told.'**
+  String invSwitchConfirmCreditMessage(String name, String owed, String paid);
+
+  /// No description provided for @invSwitchConfirmPaidTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark this sale as paid?'**
+  String get invSwitchConfirmPaidTitle;
+
+  /// No description provided for @invSwitchConfirmPaidMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The whole {total} was paid at the time of the sale. Nobody owes anything on it any more.'**
+  String invSwitchConfirmPaidMessage(Object total);
+
+  /// No description provided for @invSwitchedToCredit.
+  ///
+  /// In en, this message translates to:
+  /// **'Switched to credit: {owed} owed'**
+  String invSwitchedToCredit(Object owed);
+
+  /// No description provided for @invSwitchedToPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Switched to paid'**
+  String get invSwitchedToPaid;
+
+  /// No description provided for @invSwitchLineCredit.
+  ///
+  /// In en, this message translates to:
+  /// **'Switched to credit by {who} · {when} · {paid} paid, {owed} owed'**
+  String invSwitchLineCredit(String who, String when, String paid, String owed);
+
+  /// No description provided for @invSwitchLinePaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Switched to paid by {who} · {when} · {total} paid ({method})'**
+  String invSwitchLinePaid(
+    String who,
+    String when,
+    String total,
+    String method,
+  );
+
+  /// No description provided for @invSwitchFailAlreadyCredit.
+  ///
+  /// In en, this message translates to:
+  /// **'This sale is already on credit.'**
+  String get invSwitchFailAlreadyCredit;
+
+  /// No description provided for @invSwitchFailAlreadyPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'This sale is already paid in full.'**
+  String get invSwitchFailAlreadyPaid;
+
+  /// No description provided for @invSwitchFailPaymentsRecorded.
+  ///
+  /// In en, this message translates to:
+  /// **'Money was already collected on this credit, so it can\'t become a paid sale. Use Record a payment for what is still owed.'**
+  String get invSwitchFailPaymentsRecorded;
+
+  /// No description provided for @invSwitchFailTooMany.
+  ///
+  /// In en, this message translates to:
+  /// **'This sale was switched too many times.'**
+  String get invSwitchFailTooMany;
 }
 
 class _AppLocalizationsDelegate

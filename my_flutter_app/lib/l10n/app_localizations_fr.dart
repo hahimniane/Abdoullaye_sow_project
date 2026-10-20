@@ -15660,4 +15660,90 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get phaPhoneOnlyNoPassword =>
       'Pas d\'e-mail sur votre compte ? Revenez en arrière et choisissez « Se connecter avec son téléphone » : il n\'y a pas de mot de passe à réinitialiser.';
+
+  @override
+  String get invSwitchToCredit => 'Passer à crédit';
+
+  @override
+  String get invSwitchToPaid => 'Passer en payée';
+
+  @override
+  String get invSwitchToCreditTitle => 'Passer cette vente à crédit';
+
+  @override
+  String get invSwitchToCreditNote =>
+      'Le client n’a pas tout payé. Indiquez qui doit le reste. Ce qui a été payé au moment de la vente garde son mode de paiement et la personne qui l’a reçu.';
+
+  @override
+  String get invSwitchPaidAtTime =>
+      'Combien a-t-il payé au moment de la vente ? (dollars US)';
+
+  @override
+  String get invSwitchToPaidTitle => 'Marquer cette vente comme payée';
+
+  @override
+  String invSwitchToPaidNote(Object total) {
+    return 'Ce n’était pas un crédit : la totalité de $total a été payée au moment de la vente.';
+  }
+
+  @override
+  String get invSwitchHowPaid => 'Mode de paiement';
+
+  @override
+  String get invSwitchConfirmCreditTitle => 'Passer cette vente à crédit ?';
+
+  @override
+  String invSwitchConfirmCreditMessage(String name, String owed, String paid) {
+    return '$name devra $owed. $paid reste payé au moment de la vente. La personne qui encaisse est prévenue.';
+  }
+
+  @override
+  String get invSwitchConfirmPaidTitle => 'Marquer cette vente comme payée ?';
+
+  @override
+  String invSwitchConfirmPaidMessage(Object total) {
+    return 'La totalité de $total a été payée au moment de la vente. Plus personne ne doit rien dessus.';
+  }
+
+  @override
+  String invSwitchedToCredit(Object owed) {
+    return 'Passée à crédit : $owed dus';
+  }
+
+  @override
+  String get invSwitchedToPaid => 'Passée en payée';
+
+  @override
+  String invSwitchLineCredit(
+    String who,
+    String when,
+    String paid,
+    String owed,
+  ) {
+    return 'Passée à crédit par $who · $when · $paid payés, $owed dus';
+  }
+
+  @override
+  String invSwitchLinePaid(
+    String who,
+    String when,
+    String total,
+    String method,
+  ) {
+    return 'Passée en payée par $who · $when · $total payés ($method)';
+  }
+
+  @override
+  String get invSwitchFailAlreadyCredit => 'Cette vente est déjà à crédit.';
+
+  @override
+  String get invSwitchFailAlreadyPaid =>
+      'Cette vente est déjà entièrement payée.';
+
+  @override
+  String get invSwitchFailPaymentsRecorded =>
+      'De l’argent a déjà été encaissé sur ce crédit, elle ne peut donc pas devenir une vente payée. Utilisez Enregistrer un paiement pour ce qui reste dû.';
+
+  @override
+  String get invSwitchFailTooMany => 'Cette vente a été modifiée trop de fois.';
 }

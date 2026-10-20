@@ -23,6 +23,7 @@ import '../widgets/inventory_widgets.dart';
 import '../widgets/lot_sheets.dart';
 import '../widgets/zelle_check_widgets.dart';
 import 'inventory_credit_sheet.dart';
+import 'inventory_sale_switch_sheet.dart';
 import 'zelle_check_sheet.dart';
 
 /// The sales recorded at the counter, newest first, one page at a time. Each
@@ -53,10 +54,14 @@ class InventorySalesScreen extends StatefulWidget {
     this.creditSource,
     this.currentUserId,
     this.clock = DateTime.now,
+    this.newRequestId = newInventoryRequestId,
   });
 
   final String businessId;
   final InventorySource? source;
+
+  /// A fresh retry key for a switch between paid and credit.
+  final String Function() newRequestId;
   final InventoryService service;
   final InventoryAccess access;
 
@@ -327,6 +332,30 @@ class _InventorySalesScreenState extends State<InventorySalesScreen> {
     }
   }
 
+  /// Switch to credit / Switch to paid, then says how it ended. The list
+  /// shows the new state (and the history line) as the sale's stream
+  /// brings it.
+  Future<void> _switch(InventorySale sale) async {
+    final l10n = AppLocalizations.of(context)!;
+    final result = await showInventorySaleSwitchSheet(
+      context,
+      businessId: widget.businessId,
+      sale: sale,
+      staff: _staff,
+      service: widget.service,
+      currentUserId: _me,
+      clock: widget.clock,
+      newRequestId: widget.newRequestId,
+    );
+    if (result == null || !mounted) return;
+    showSuccessSnackBar(
+      context,
+      result.to == 'credit'
+          ? l10n.invSwitchedToCredit(formatLotCents(result.creditCents ?? 0))
+          : l10n.invSwitchedToPaid,
+    );
+  }
+
   /// The credit sheet of [sale]: payments, collector, due date.
   Future<void> _openCredit(InventorySale sale) {
     final scope = inventorySalesScope(
@@ -389,6 +418,11 @@ class _InventorySalesScreenState extends State<InventorySalesScreen> {
     highlighted: highlighted,
     today: shopToday(widget.clock()),
     onCredit: sale.hadCredit ? () => _openCredit(sale) : null,
+    onSwitch:
+        inventorySaleCanSwitchToCredit(sale) ||
+            inventorySaleCanSwitchToPaid(sale)
+        ? () => _switch(sale)
+        : null,
     bankCheck: sale.bankCheck ?? _bankConfirmed[sale.id],
     onCheckZelle:
         !sale.voided &&
@@ -599,11 +633,16 @@ class InventorySaleCard extends StatelessWidget {
     this.highlighted = false,
     this.today,
     this.onCredit,
+    this.onSwitch,
     this.onCheckZelle,
     this.bankCheck,
   });
 
   final InventorySale sale;
+
+  /// Switch to credit (a paid sale) or Switch to paid (a credit sale nothing
+  /// was collected on); null where neither is offered.
+  final VoidCallback? onSwitch;
 
   /// Opens "Check Zelle" for the money taken at the counter; null where it
   /// is not offered (not Zelle, nothing paid now, voided, confirmed).
@@ -773,6 +812,20 @@ class InventorySaleCard extends StatelessWidget {
               ),
             ),
           ],
+          for (final (i, entry) in sale.paymentSwitches.indexed)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                inventorySaleSwitchLine(
+                  l10n,
+                  entry,
+                  who: inventoryStaffName(staff, entry.byStaffId),
+                  locale: locale,
+                ),
+                key: Key('inv-sale-switch-${sale.id}-$i'),
+                style: const TextStyle(fontSize: 12, color: AppColors.muted),
+              ),
+            ),
           if (sale.voided)
             Padding(
               padding: const EdgeInsets.only(top: 4),
@@ -804,6 +857,16 @@ class InventorySaleCard extends StatelessWidget {
                       key: Key('inv-credit-open-${sale.id}'),
                       onPressed: onCredit,
                       child: Text(l10n.invCreditDetails),
+                    ),
+                  if (onSwitch != null)
+                    TextButton(
+                      key: Key('inv-switch-${sale.id}'),
+                      onPressed: canVoid ? onSwitch : null,
+                      child: Text(
+                        sale.hadCredit
+                            ? l10n.invSwitchToPaid
+                            : l10n.invSwitchToCredit,
+                      ),
                     ),
                   TextButton(
                     key: Key('inv-void-${sale.id}'),

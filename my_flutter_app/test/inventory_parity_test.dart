@@ -300,9 +300,23 @@ void main() {
         expect(kinds.substring(0, kinds.indexOf('\n')), contains('`$code`'),
             reason: '$code is a v5 refusal');
       }
+      // Switching a sale between paid and credit (v6): the state refusals a
+      // person can meet (the argument ones the app's own checks prevent).
+      const switches = {
+        'sale_already_credit',
+        'sale_already_paid',
+        'credit_payments_recorded',
+        'too_many_switches',
+      };
+      final v6List = RegExp(r'Refusal codes added by v6: ([^\n]+)')
+          .firstMatch(doc)!
+          .group(1)!;
+      for (final code in switches) {
+        expect(v6List, contains(code), reason: '$code is a v6 refusal');
+      }
       expect(
         inventoryFailureReasons.keys.toSet(),
-        {...all, ...credit, ...transfers},
+        {...all, ...credit, ...transfers, ...switches},
       );
       final widgets = read('lib/widgets/inventory_widgets.dart');
       final en = jsonDecode(read('lib/l10n/app_en.arb')) as Map<String, dynamic>;
