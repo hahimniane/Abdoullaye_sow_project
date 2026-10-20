@@ -232,7 +232,7 @@ Changed: `inviteBusinessMember`, `resendAccessInvitation`,
 `cancelAccessInvitation`, `listBusinessInvitations`, `acceptAccessInvitation`,
 `phoneAccount`, `updateBusinessMembership`, `transferBusinessOwnership`
 (shares the membership handler), `updateUserRole`, `listMarketplacePeople`,
-`listPlatformUsers`, `getMarketplacePerson` (invitation rows show the masked
-number), `invitePlatformAdmin` (shares `createAccessInvitation`; behaviour
+`listPlatformUsers` (invitation rows show the masked number),
+`invitePlatformAdmin` (shares `createAccessInvitation`; behaviour
 unchanged). No new function, trigger, rule or index. The WhatsApp template
 must be approved before messages go out; until then owners share the link.
