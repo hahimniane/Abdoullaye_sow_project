@@ -1616,6 +1616,31 @@ describe("business dashboard Firestore rules", () => {
           }
         });
 
+    it("keeps Check bank usage server-only (owner reads it by callable)",
+        async () => {
+          await testEnv.withSecurityRulesDisabled(async (context) => {
+            await setDoc(doc(context.firestore(),
+                "businessBankUsage/biz_a_2026-10"), {businessId: "biz_a",
+              month: "2026-10", checks: 3, refreshes: 1,
+              byUid: {"inv-clerk-none": {checks: 3, refreshes: 1}}});
+          });
+          for (const uid of ["owner-a", "super-admin", "inv-clerk-none",
+            "owner-b", null]) {
+            const db = firestoreFor(uid);
+            await assertFails(getDoc(doc(db,
+                "businessBankUsage/biz_a_2026-10")));
+            await assertFails(getDocs(query(collection(db,
+                "businessBankUsage"), where("businessId", "==", "biz_a"))));
+            await assertFails(setDoc(doc(db,
+                "businessBankUsage/biz_a_2026-10"), {businessId: "biz_a",
+              refreshes: 0}));
+            await assertFails(updateDoc(doc(db,
+                "businessBankUsage/biz_a_2026-10"), {refreshes: 0}));
+            await assertFails(deleteDoc(doc(db,
+                "businessBankUsage/biz_a_2026-10")));
+          }
+        });
+
     it("does not let a client write a payment's bankCheck", async () => {
       await testEnv.withSecurityRulesDisabled(async (context) => {
         await setDoc(doc(context.firestore(), "inventorySales/bank_sale"), {

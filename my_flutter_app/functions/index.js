@@ -40421,6 +40421,7 @@ exports.getPlatformEarnings = onCall(CONSOLE_TOTALS_CALLABLE_OPTIONS,
 const plaidClient = require("./plaid_client");
 const bankSync = require("./bank_sync");
 const zelleCheck = require("./zelle_check");
+const bankCheck = require("./bank_check");
 const bankTokenCrypto = require("./bank_token_crypto");
 
 const plaidClientIdSecret = defineSecret("PLAID_CLIENT_ID");
@@ -40550,6 +40551,212 @@ async function requireBankOwner(uid, businessId) {
   const caller = await bankCaller(uid, businessId);
   if (caller.role !== "owner") throw bankRefusal("bank_owner_required");
   return caller;
+}
+
+/**
+ * @param {object} db Firestore.
+ * @param {string} businessId The business.
+ * @param {number} nowMs A moment.
+ * @return {object} {month, ref} of that moment's businessBankUsage doc.
+ */
+function bankUsageRef(db, businessId, nowMs = Date.now()) {
+  const month = bankCheck.usageMonthKey(nowMs);
+  return {month, ref: db.collection(bankCheck.BANK_USAGE)
+      .doc(bankCheck.usageDocId(businessId, month))};
+}
+
+/**
+ * Notes that the business's bank link was active this month (the "Bank
+ * connection" bill line). Best effort: never throws.
+ *
+ * @param {object} db Firestore.
+ * @param {string} businessId The business.
+ * @return {Promise<void>}
+ */
+async function markBankLinkActive(db, businessId) {
+  const {month, ref} = bankUsageRef(db, businessId);
+  await ref.set({businessId, month, linkActive: true,
+    updatedAt: FirestoreFieldValue.serverTimestamp()}, {merge: true})
+      .catch((error) => logger.warn("bank usage not marked", {businessId,
+        error: String(error?.message || error)}));
+}
+
+/**
+ * The month's usage as the owner sees it (names resolved, never a uid on
+ * screen).
+ *
+ * @param {object} db Firestore.
+ * @param {string} businessId The business.
+ * @param {?object} link The stored link (for the limit).
+ * @param {string} [month] "yyyy-mm" (default: this month in New York).
+ * @return {Promise<object>} bank_check.usageView's answer.
+ */
+async function bankUsageFor(db, businessId, link, month) {
+  const key = month || bankCheck.usageMonthKey(Date.now());
+  const doc = await db.collection(bankCheck.BANK_USAGE)
+      .doc(bankCheck.usageDocId(businessId, key)).get();
+  const usage = doc.exists ? doc.data() || {} : null;
+  const uids = Object.keys(usage?.byUid || {})
+      .filter((uid) => uid && !uid.includes("/")).slice(0, 100);
+  const names = new Map();
+  if (uids.length) {
+    const snaps = await db.getAll(...uids.map((uid) =>
+      db.collection("users").doc(uid)),
+    {fieldMask: ["fullName", "displayName", "name", "email"]});
+    for (const snap of snaps) {
+      if (snap.exists) names.set(snap.id, bankCheck.personName(snap.data()));
+    }
+  }
+  return bankCheck.usageView({month: key, usage,
+    limit: bankCheck.refreshLimitOf(link), names});
+}
+
+/**
+ * Tells the owner, once a month, that paid refreshes reached the limit.
+ *
+ * @param {string} businessId The business.
+ * @param {number} limit The limit.
+ * @return {Promise<void>} Never rejects.
+ */
+async function notifyBankLimitReached(businessId, limit) {
+  await notifyBusinessOwnerInLanguage({
+    businessId,
+    title: "Bank checks hit this month's limit",
+    body: `All ${limit} bank refreshes for this month are used. Checks ` +
+      "still work, but new deposits can take longer to show until next " +
+      "month. You can raise the limit in Settings.",
+    titleFr: "Vérifications bancaires : limite du mois atteinte",
+    bodyFr: `Les ${limit} actualisations bancaires du mois sont ` +
+      "utilisées. Les vérifications fonctionnent toujours, mais les " +
+      "nouveaux dépôts peuvent mettre plus de temps à apparaître jusqu'au " +
+      "mois prochain. Vous pouvez augmenter la limite dans les Paramètres.",
+    data: {type: "bank_check_limit"},
+  }).catch(() => undefined);
+}
+
+/**
+ * Who may run "Check bank": staff who can sell (the inventory gate) or take
+ * package payments (the containers section), and the owner.
+ *
+ * @param {string} uid The caller.
+ * @param {string} businessId The business.
+ * @return {Promise<object>} bankCaller's answer plus {inventoryAccess (store
+ *   access, or null when the caller cannot sell), containers}.
+ */
+async function bankCheckerFor(uid, businessId) {
+  const caller = await bankCaller(uid, businessId);
+  if (caller.role === "none") throw bankRefusal("bank_access_denied");
+  let inventoryAccess = null;
+  try {
+    inventoryAccess = (await requireInventoryContext(uid, businessId)).access;
+  } catch (_) {
+    inventoryAccess = null;
+  }
+  const containers = canManageBusiness(caller.user, businessId) &&
+    hasBusinessPermission(caller.user, CONTAINER_SECTION);
+  if (!inventoryAccess && !containers) {
+    throw bankRefusal("bank_access_denied");
+  }
+  return {...caller, inventoryAccess, containers};
+}
+
+/**
+ * The link a check reads, once it is usable, with its opened token.
+ *
+ * @param {object} db Firestore.
+ * @param {string} businessId The business.
+ * @return {Promise<object>} {link, accessToken}.
+ */
+async function usableBankLink(db, businessId) {
+  const doc = await bankLinkRef(db, businessId).get();
+  const link = doc.exists ? doc.data() || {} : null;
+  const problem = zelleCheck.linkRefusal(link);
+  if (problem) throw bankRefusal(problem);
+  return {link, accessToken: openBankToken(link, businessId)};
+}
+
+/**
+ * Asks the bank for anything new, then syncs. The refresh is billed
+ * ($0.12), so it happens only when zelle_check.refreshPlan allows it: once
+ * per record (or per amount, for "Check bank") in 5 minutes, once a minute
+ * per business, and while the month's paid refreshes are under the owner's
+ * limit. The decision and the count are one transaction on the link and
+ * the month's usage, so concurrent checks cannot overshoot the limit; the
+ * check that finds the limit reached first claims the month's one notice.
+ * A refresh Plaid refuses is given back (not billed). The sync is free.
+ *
+ * @param {object} input {db, businessId, link, accessToken, recordKey,
+ *   uid, counted (false for an automatic re-check)}.
+ * @return {Promise<object>} {limitReached}.
+ */
+async function refreshAndSyncBank(input) {
+  const {db, businessId, link, accessToken, recordKey, uid} = input;
+  const linkRef = bankLinkRef(db, businessId);
+  const nowMs = Date.now();
+  const {month, ref: usageRef} = bankUsageRef(db, businessId, nowMs);
+  const now = FirestoreFieldValue.serverTimestamp();
+  const increment = FirestoreFieldValue.increment;
+  if (input.counted) {
+    await usageRef.set({businessId, month, linkActive: true,
+      checks: increment(1), byUid: {[uid]: {checks: increment(1)}},
+      updatedAt: now}, {merge: true})
+        .catch((error) => logger.warn("bank check not counted", {businessId,
+          error: String(error?.message || error)}));
+  }
+  const decision = await db.runTransaction(async (tx) => {
+    const [doc, usageDoc] = await tx.getAll(linkRef, usageRef);
+    const current = doc.data() || {};
+    const usage = usageDoc.exists ? usageDoc.data() || {} : {};
+    const limit = bankCheck.refreshLimitOf(current);
+    const used = bankCheck.countOf(usage.refreshes);
+    const plan = zelleCheck.refreshPlan({
+      lastRefreshAt: current.lastRefreshAt,
+      marks: current.lastRefreshAtByRecord,
+      recordKey, nowMs, monthRefreshes: used, monthlyLimit: limit});
+    const state = bankCheck.limitState({plan, usedBefore: used, limit,
+      noticeSent: Boolean(usage.limitNoticeAt)});
+    if (plan.refresh) {
+      tx.update(linkRef, {lastRefreshAt: now,
+        lastRefreshAtByRecord: plan.marks});
+    }
+    if (plan.refresh || state.notify) {
+      const patch = {businessId, month, linkActive: true, updatedAt: now};
+      if (plan.refresh) {
+        patch.refreshes = state.refreshesAfter;
+        patch.byUid = {[uid]: {refreshes:
+          bankCheck.countOf(usage.byUid?.[uid]?.refreshes) + 1}};
+      }
+      if (state.notify) patch.limitNoticeAt = now;
+      tx.set(usageRef, patch, {merge: true});
+    }
+    return {refresh: plan.refresh, limit, ...state};
+  }).catch((error) => {
+    logger.warn("bank refresh plan failed", {businessId,
+      error: String(error?.message || error)});
+    return {refresh: false, limitReached: false, notify: false};
+  });
+  if (decision.notify) await notifyBankLimitReached(businessId, decision.limit);
+  if (decision.refresh) {
+    const ok = await bankPlaidClient().refreshTransactions(accessToken)
+        .then(() => true)
+        .catch((error) => {
+          logger.info("bank refresh unavailable", {businessId,
+            plaidCode: error?.code || null});
+          return false;
+        });
+    if (!ok) {
+      // Not billed: the count is given back (the 5-minute mark stays).
+      await usageRef.set({refreshes: increment(-1),
+        refreshesFailed: increment(1),
+        byUid: {[uid]: {refreshes: increment(-1)}}, updatedAt: now},
+      {merge: true}).catch(() => undefined);
+    }
+  }
+  const sync = await syncBankLink(db, businessId, link, accessToken);
+  if (!sync.ok && sync.info?.needsReauth) {
+    throw bankRefusal("bank_needs_reauth");
+  }
+  return {limitReached: decision.limitReached === true};
 }
 
 /**
@@ -40711,6 +40918,7 @@ exports.connectBusinessBank = onCall(
           connectedAt: now,
           connectedByUid: uid,
           windowMinutes: zelleCheck.windowMinutesOf(old),
+          refreshLimit: bankCheck.refreshLimitOf(old),
           lastSyncAt: sameFeed ? old.lastSyncAt || null : null,
           lastRefreshAt: null,
           lastRefreshAtByRecord: {},
@@ -40735,6 +40943,7 @@ exports.connectBusinessBank = onCall(
       }
       logger.info("bank connected", {businessId, byUid: uid,
         repaired: Boolean(previous && previous.itemId === itemId)});
+      await markBankLinkActive(db, businessId);
       const link = (await ref.get()).data() || {};
       const sync = await syncBankLink(db, businessId, link, accessToken);
       return {status: "active", institutionName,
@@ -40752,8 +40961,13 @@ exports.getBusinessBankStatus = onCall(
       const {db, role} = await bankCaller(uid, businessId);
       if (role === "none") throw bankRefusal("bank_access_denied");
       const doc = await bankLinkRef(db, businessId).get();
-      return zelleCheck.bankStatusView(doc.exists ? doc.data() || {} : null,
-          role);
+      const link = doc.exists ? doc.data() || {} : null;
+      const view = zelleCheck.bankStatusView(link, role);
+      if (role !== "owner") return view;
+      // The owner also sees this month's checks, paid refreshes, estimated
+      // cost (by staff member) and the monthly limit.
+      return {...view, refreshLimit: bankCheck.refreshLimitOf(link),
+        usage: await bankUsageFor(db, businessId, link)};
     },
 );
 
@@ -40764,12 +40978,41 @@ exports.setBankCheckWindow = onCall(
       const data = request.data || {};
       const businessId = String(data.businessId || "").trim();
       const {db} = await requireBankOwner(uid, businessId);
-      const minutes = zelleCheck.cleanWindowMinutes(data.minutes);
-      if (minutes === null) throw bankRefusal("window_invalid");
-      await bankLinkRef(db, businessId).set({businessId,
-        windowMinutes: minutes, windowUpdatedByUid: uid,
-        updatedAt: FirestoreFieldValue.serverTimestamp()}, {merge: true});
-      return {success: true, windowMinutes: minutes};
+      // The window (2..60 minutes) and/or the monthly limit of paid
+      // refreshes (0..1000). With neither, the window is what is missing.
+      const given = (key) => data[key] !== undefined && data[key] !== null;
+      const patch = {businessId,
+        updatedAt: FirestoreFieldValue.serverTimestamp()};
+      if (given("minutes") || !given("refreshLimit")) {
+        const minutes = zelleCheck.cleanWindowMinutes(data.minutes);
+        if (minutes === null) throw bankRefusal("window_invalid");
+        patch.windowMinutes = minutes;
+        patch.windowUpdatedByUid = uid;
+      }
+      if (given("refreshLimit")) {
+        const limit = bankCheck.cleanRefreshLimit(data.refreshLimit);
+        if (limit === null) throw bankRefusal("limit_invalid");
+        patch.refreshLimit = limit;
+        patch.refreshLimitUpdatedByUid = uid;
+      }
+      const ref = bankLinkRef(db, businessId);
+      await ref.set(patch, {merge: true});
+      const link = (await ref.get()).data() || {};
+      if (patch.refreshLimit !== undefined) {
+        // A limit raised above this month's count lets the month's notice
+        // be sent again if the new limit is reached too.
+        const {ref: usageRef} = bankUsageRef(db, businessId);
+        await db.runTransaction(async (tx) => {
+          const doc = await tx.get(usageRef);
+          const usage = doc.exists ? doc.data() || {} : null;
+          if (usage && usage.limitNoticeAt &&
+              bankCheck.countOf(usage.refreshes) < patch.refreshLimit) {
+            tx.update(usageRef, {limitNoticeAt: FirestoreFieldValue.delete()});
+          }
+        });
+      }
+      return {success: true, windowMinutes: zelleCheck.windowMinutesOf(link),
+        refreshLimit: bankCheck.refreshLimitOf(link)};
     },
 );
 
@@ -40856,7 +41099,7 @@ async function zelleRecordFor(uid, businessId, kind, id) {
  *
  * @param {object} db Firestore.
  * @param {object} input {businessId, kind, id, recordRef, creditId, uid,
- *   timeZone}.
+ *   timeZone, rule? ("use": Check bank's "Use for a sale")}.
  * @return {Promise<object>} {result: "confirmed" | "already_confirmed",
  *   confirmation} or {result: null, why} when the deposit is not usable.
  */
@@ -40882,10 +41125,16 @@ async function consumeZelleCredit(db, input) {
     if (!credit || String(credit.businessId || "") !== input.businessId) {
       return {result: null, why: "missing"};
     }
-    const why = zelleCheck.creditIneligibility(credit, {
-      amountCents: payment.amountCents, atMs: payment.atMs,
-      windowMinutes: zelleCheck.windowMinutesOf(link),
-      accountId: link.accountId, timeZone: input.timeZone});
+    // "use": a deposit picked by hand from Check bank for a record of the
+    // same amount (no minutes window; received today or yesterday).
+    const why = input.rule === "use" ?
+      bankCheck.useIneligibility(credit, {amountCents: payment.amountCents,
+        accountId: link.accountId, nowMs: Date.now(),
+        timeZone: input.timeZone}) :
+      zelleCheck.creditIneligibility(credit, {
+        amountCents: payment.amountCents, atMs: payment.atMs,
+        windowMinutes: zelleCheck.windowMinutesOf(link),
+        accountId: link.accountId, timeZone: input.timeZone});
     if (why) return {result: null, why};
     const now = FirestoreFieldValue.serverTimestamp();
     tx.update(creditRef, {consumedBy: {kind: input.kind, id: input.id},
@@ -40899,6 +41148,168 @@ async function consumeZelleCredit(db, input) {
   });
 }
 
+/**
+ * "Check bank": deposits of exactly `amountCents` received in the chosen
+ * window ("15m" | "1h" | "today") that no record consumed and the bank did
+ * not remove. Looking consumes nothing.
+ *
+ * @param {string} uid The caller.
+ * @param {string} businessId The business.
+ * @param {object} data {amountCents, since, auto?}.
+ * @return {Promise<object>} {result: "received" | "several" | "not_found",
+ *   deposits, since, fromMs, limitReached}.
+ */
+async function standaloneBankCheck(uid, businessId, data) {
+  const {db, business} = await bankCheckerFor(uid, businessId);
+  const amountCents = bankCheck.cleanCheckCents(data.amountCents);
+  if (amountCents === null) throw bankRefusal("check_amount_invalid");
+  const since = bankCheck.cleanSince(data.since);
+  if (since === null) throw bankRefusal("since_invalid");
+  const {link, accessToken} = await usableBankLink(db, businessId);
+  const {limitReached} = await refreshAndSyncBank({db, businessId, link,
+    accessToken, uid, recordKey: `amount:${amountCents}`,
+    counted: data.auto !== true});
+  const window = bankCheck.standaloneWindow({since, nowMs: Date.now(),
+    timeZone: business.timeZone});
+  const snap = await db.collection(bankSync.BANK_CREDITS)
+      .where("businessId", "==", businessId)
+      .where("amountCents", "==", amountCents)
+      .orderBy("createdAt", "desc")
+      .limit(zelleCheck.MAX_CANDIDATE_READ)
+      .get();
+  const outcome = bankCheck.standaloneOutcome({amountCents,
+    accountId: link.accountId, window},
+  snap.docs.map((doc) => ({id: doc.id, ...doc.data()})));
+  return {...outcome, since, fromMs: window.fromMs, limitReached};
+}
+
+/**
+ * A deposit picked from Check bank, read and judged for "Use for a sale".
+ *
+ * @param {object} db Firestore.
+ * @param {string} businessId The business.
+ * @param {*} rawCreditId What the client sent.
+ * @param {string} timeZone The business's zone.
+ * @return {Promise<object>} The credit ({id, ...}).
+ */
+async function usableDeposit(db, businessId, rawCreditId, timeZone) {
+  const creditId = zelleCheck.cleanDocId(rawCreditId);
+  if (!creditId || !creditId.startsWith(`${businessId}_`)) {
+    throw bankRefusal("candidate_invalid");
+  }
+  const [creditDoc, linkDoc] = await Promise.all([
+    db.collection(bankSync.BANK_CREDITS).doc(creditId).get(),
+    bankLinkRef(db, businessId).get()]);
+  const link = linkDoc.exists ? linkDoc.data() || {} : null;
+  if (!link || link.status === "disconnected" || !link.accountId) {
+    throw bankRefusal("bank_not_connected");
+  }
+  const credit = creditDoc.exists ? {id: creditDoc.id, ...creditDoc.data()} :
+    null;
+  if (!credit || String(credit.businessId || "") !== businessId) {
+    throw bankRefusal("candidate_invalid");
+  }
+  const why = bankCheck.useIneligibility(credit, {
+    amountCents: credit.amountCents, accountId: link.accountId,
+    nowMs: Date.now(), timeZone});
+  if (why) {
+    throw bankRefusal(why === "consumed" ? "candidate_taken" :
+      "candidate_invalid");
+  }
+  return credit;
+}
+
+/**
+ * The records "Use for a sale" offers for a deposit: live Zelle payments of
+ * exactly its amount, not yet confirmed, that the caller may view (sales
+ * and credit payments with the inventory gate and store scoping, package
+ * payments with the containers section). Recent ones first (14 days); with
+ * a search, 120 days matched on customer, items, tracking code or id.
+ *
+ * @param {string} uid The caller.
+ * @param {string} businessId The business.
+ * @param {object} data {creditId, query?}.
+ * @return {Promise<object>} {records: [{kind, id, amountCents, atMs, who,
+ *   what}], searched}.
+ */
+async function bankUseRecords(uid, businessId, data) {
+  const {db, business, inventoryAccess, containers} =
+    await bankCheckerFor(uid, businessId);
+  const timeZone = zelleCheck.safeTimeZone(business.timeZone);
+  const credit = await usableDeposit(db, businessId, data.creditId, timeZone);
+  const amountCents = credit.amountCents;
+  const query = bankCheck.cleanQuery(data.query);
+  const days = query ? bankCheck.USE_SEARCH_DAYS : bankCheck.USE_RECENT_DAYS;
+  const read = query ? bankCheck.USE_SEARCH_READ : bankCheck.USE_RECENT_READ;
+  const since = FirestoreTimestamp.fromMillis(
+      Date.now() - days * bankCheck.DAY_MS);
+  const recent = (collection, amountField) => db.collection(collection)
+      .where("businessId", "==", businessId)
+      .where(amountField, "==", amountCents)
+      .where("createdAt", ">=", since)
+      .orderBy("createdAt", "desc")
+      .limit(read)
+      .get();
+  const [sales, creditPayments, linePayments, sctx] = await Promise.all([
+    inventoryAccess ? recent("inventorySales", "paidNowCents") : null,
+    inventoryAccess ? recent("inventoryCreditPayments", "amountCents") : null,
+    containers ? recent("containerLinePayments", "amountCents") : null,
+    inventoryAccess ? loadInventoryStoreContext(db, businessId) : null,
+  ]);
+  const scoped = Boolean(sctx && sctx.converted &&
+    inventory.isMultiStore(sctx.stores) && !inventoryAccess.all);
+  const rows = (snap, kind) => (snap ? snap.docs : [])
+      .map((doc) => ({kind, id: doc.id, record: doc.data() || {}}))
+      .filter((row) => bankCheck.recordOffered(kind, row.record, businessId,
+          amountCents))
+      .filter((row) => kind === "container_line_payment" || !scoped ||
+        inventory.saleStoreId(row.record, sctx.mainStoreId) ===
+          inventoryAccess.homeStoreId);
+  const saleRows = rows(sales, "inventory_sale");
+  const creditRows = rows(creditPayments, "inventory_credit_payment");
+  const lineRows = rows(linePayments, "container_line_payment");
+  // The words beside each record: the business's own data (customer,
+  // items, tracking code), read in bounded batches.
+  const readAll = async (collection, ids) => {
+    const out = new Map();
+    const unique = [...new Set(ids.filter((id) => id && !id.includes("/")))];
+    for (let i = 0; i < unique.length; i += 100) {
+      const snaps = await db.getAll(...unique.slice(i, i + 100).map((id) =>
+        db.collection(collection).doc(id)));
+      for (const snap of snaps) {
+        if (snap.exists) out.set(snap.id, snap.data() || {});
+      }
+    }
+    return out;
+  };
+  const [creditSales, lines] = await Promise.all([
+    readAll("inventorySales", creditRows.map((row) =>
+      String(row.record.saleId || ""))),
+    readAll("containerLines", lineRows.map((row) =>
+      String(row.record.lineId || ""))),
+  ]);
+  const views = [
+    ...saleRows.map((row) => bankCheck.useRecordView({...row,
+      who: row.record.credit?.customerName,
+      what: bankCheck.saleItemsSummary(row.record.lines)})),
+    ...creditRows.map((row) => {
+      const sale = creditSales.get(String(row.record.saleId || "")) || {};
+      return bankCheck.useRecordView({...row,
+        who: sale.credit?.customerName,
+        what: bankCheck.saleItemsSummary(sale.lines)});
+    }),
+    ...lineRows.map((row) => {
+      const line = lines.get(String(row.record.lineId || "")) || {};
+      return bankCheck.useRecordView({...row,
+        who: line.customerName || line.receiverName,
+        what: line.trackingCode});
+    }),
+  ];
+  return {records: bankCheck.pickRecords(views, query, query ?
+    bankCheck.USE_SEARCH_SHOWN : bankCheck.USE_RECENT_SHOWN),
+  searched: Boolean(query)};
+}
+
 exports.checkZellePayment = onCall(
     {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public",
       secrets: BANK_SECRETS},
@@ -40906,6 +41317,10 @@ exports.checkZellePayment = onCall(
       const uid = requireAuth(request);
       const data = request.data || {};
       const businessId = String(data.businessId || "").trim();
+      if (data.mode !== undefined && data.mode !== null && data.mode !== "") {
+        if (data.mode !== "standalone") throw bankRefusal("mode_invalid");
+        return standaloneBankCheck(uid, businessId, data);
+      }
       const kind = zelleCheck.cleanKind(data.kind);
       if (!kind) throw bankRefusal("kind_invalid");
       const id = zelleCheck.cleanDocId(data.id);
@@ -40915,41 +41330,16 @@ exports.checkZellePayment = onCall(
           zelleCheck.paymentOfRecord(kind, record).bankCheck);
       if (held) return {result: "already_confirmed", confirmation: held};
 
-      const linkRef = bankLinkRef(db, businessId);
-      const linkDoc = await linkRef.get();
-      const link = linkDoc.exists ? linkDoc.data() || {} : null;
-      const linkProblem = zelleCheck.linkRefusal(link);
-      if (linkProblem) throw bankRefusal(linkProblem);
-      const accessToken = openBankToken(link, businessId);
-
+      const {link, accessToken} = await usableBankLink(db, businessId);
       // Ask the bank for anything new: billed ($0.12), so at most once per
-      // record in 5 minutes and once a minute per business
-      // (zelleCheck.refreshPlan), and best effort (a refusal falls back to
-      // what was read). Re-checks in between only sync, which is free; a
-      // deposit the refresh turns up also arrives by the plaidWebhook sync.
-      const refresh = await db.runTransaction(async (tx) => {
-        const doc = await tx.get(linkRef);
-        const current = doc.data() || {};
-        const plan = zelleCheck.refreshPlan({
-          lastRefreshAt: current.lastRefreshAt,
-          marks: current.lastRefreshAtByRecord,
-          recordKey: zelleCheck.refreshRecordKey(kind, id),
-          nowMs: Date.now()});
-        if (!plan.refresh) return false;
-        tx.update(linkRef, {
-          lastRefreshAt: FirestoreFieldValue.serverTimestamp(),
-          lastRefreshAtByRecord: plan.marks});
-        return true;
-      }).catch(() => false);
-      if (refresh) {
-        await bankPlaidClient().refreshTransactions(accessToken)
-            .catch((error) => logger.info("bank refresh unavailable", {
-              businessId, plaidCode: error?.code || null}));
-      }
-      const sync = await syncBankLink(db, businessId, link, accessToken);
-      if (!sync.ok && sync.info?.needsReauth) {
-        throw bankRefusal("bank_needs_reauth");
-      }
+      // record in 5 minutes, once a minute per business and under the
+      // owner's monthly limit (refreshAndSyncBank), and best effort (a
+      // refusal falls back to what was read). Re-checks in between only
+      // sync, which is free; a deposit the refresh turns up also arrives by
+      // the plaidWebhook sync.
+      await refreshAndSyncBank({db, businessId, link, accessToken, uid,
+        recordKey: zelleCheck.refreshRecordKey(kind, id),
+        counted: data.auto !== true});
 
       const payment = zelleCheck.paymentOfRecord(kind, record);
       const matchCtx = {amountCents: payment.amountCents, atMs: payment.atMs,
@@ -41001,6 +41391,12 @@ exports.confirmZelleCandidate = onCall(
       const uid = requireAuth(request);
       const data = request.data || {};
       const businessId = String(data.businessId || "").trim();
+      // Check bank (docs/ZELLE_BANK_CHECK.md "Check bank any time"):
+      // "records" lists what a deposit can pay, "use" spends it on one.
+      const mode = data.mode === undefined || data.mode === null ? "" :
+        String(data.mode);
+      if (mode === "records") return bankUseRecords(uid, businessId, data);
+      if (mode && mode !== "use") throw bankRefusal("mode_invalid");
       const kind = zelleCheck.cleanKind(data.kind);
       if (!kind) throw bankRefusal("kind_invalid");
       const id = zelleCheck.cleanDocId(data.id);
@@ -41011,8 +41407,12 @@ exports.confirmZelleCandidate = onCall(
         throw bankRefusal("candidate_invalid");
       }
       const done = await consumeZelleCredit(db, {businessId, kind, id,
-        recordRef, creditId, uid, timeZone});
+        recordRef, creditId, uid, timeZone, rule: mode === "use" ? "use" :
+          "window"});
       if (done.result) return done;
+      if (done.why === "amount" && mode === "use") {
+        throw bankRefusal("amount_mismatch");
+      }
       throw bankRefusal(done.why === "consumed" ? "candidate_taken" :
         "candidate_invalid");
     },
@@ -41089,6 +41489,7 @@ exports.plaidWebhook = onRequest(
         } else {
           const outcome = await syncBankLink(db, doc.id, link,
               openBankToken(link, doc.id));
+          if (outcome.ok === true) await markBankLinkActive(db, doc.id);
           logger.info("bank sync from webhook", {businessId: doc.id, code,
             ok: outcome.ok === true});
         }

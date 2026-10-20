@@ -44,6 +44,7 @@ const CASHIER = "bank-test-cashier";
 const PACKER = "bank-test-packer";
 const ANNEX_CLERK = "bank-test-annex";
 const NOBODY = "bank-test-no-permissions";
+const PLATFORM_ADMIN = "bank-test-platform-admin";
 const OUTSIDER = "bank-test-outsider";
 
 const call = (name, data, uid = OWNER) =>
@@ -100,6 +101,10 @@ function installPlaid() {
       case "/institutions/get_by_id":
         return json(200, {institution: {name: plaid.institution}});
       case "/transactions/refresh":
+        if (plaid.refreshError) {
+          return json(400, {error_code: plaid.refreshError,
+            error_type: "INVALID_REQUEST"});
+        }
         return json(200, {request_id: "r"});
       case "/item/remove":
         return json(200, {removed: true});
@@ -140,10 +145,14 @@ const page = (added, extra = {}) => ({added, modified: [], removed: [],
 
 // ---- Fixtures --------------------------------------------------------------
 async function wipeBank() {
-  for (const name of ["businessBankLinks", "businessBankCredits"]) {
+  for (const name of ["businessBankLinks", "businessBankCredits",
+    "businessBankUsage"]) {
     const snap = await db.collection(name).get();
     await Promise.all(snap.docs.map((d) => d.ref.delete()));
   }
+  const inbox = await db.collection("users").doc(OWNER)
+      .collection("notifications").get();
+  await Promise.all(inbox.docs.map((d) => d.ref.delete()));
 }
 
 let serial = 0;
@@ -179,6 +188,12 @@ async function connect(added = []) {
 }
 
 before(async () => {
+  // A platform admin must have a verified email in Auth (getUserProfile).
+  await admin.auth().createUser({uid: PLATFORM_ADMIN,
+    email: "admin@example.test", emailVerified: true})
+      .catch((error) => {
+        if (error?.code !== "auth/uid-already-exists") throw error;
+      });
   await Promise.all([
     db.collection("businesses").doc(BIZ).set({name: "Dala Shop",
       status: "approved", enabledServices: ["inventory"], ownerUid: OWNER,
@@ -198,6 +213,8 @@ before(async () => {
       businessPermissions: [], email: "nobody@example.test"}),
     db.collection("users").doc(OUTSIDER).set({role: "businessOwner",
       businessId: OTHER_BIZ, email: "outsider@example.test"}),
+    db.collection("users").doc(PLATFORM_ADMIN).set({role: "admin",
+      email: "admin@example.test"}),
   ]);
 });
 
@@ -364,7 +381,7 @@ describe("what each person sees and sets", () => {
     assert.equal(await reasonOf(call("setBankCheckWindow", {minutes: 61})),
         "window_invalid");
     assert.deepEqual(await call("setBankCheckWindow", {minutes: 30}),
-        {success: true, windowMinutes: 30});
+        {success: true, windowMinutes: 30, refreshLimit: 100});
     assert.equal((await call("getBusinessBankStatus", {}, CASHIER))
         .windowMinutes, 30);
     await connect();
@@ -657,6 +674,385 @@ describe("checking a Zelle payment", () => {
         assert.equal(pend.removed, true);
         assert.equal(pend.replacedByTransactionId, "posted");
       });
+});
+
+
+// ---- Check bank any time (docs/ZELLE_BANK_CHECK.md) ----------------------
+const check = (data, uid = CASHIER) => call("checkZellePayment",
+    {mode: "standalone", since: "15m", ...data}, uid);
+const usageNow = async () => {
+  const snap = await db.collection("businessBankUsage")
+      .where("businessId", "==", BIZ).get();
+  return snap.docs[0]?.data() || null;
+};
+const limitNotices = async () => (await db.collection("users").doc(OWNER)
+    .collection("notifications").get()).docs
+    .filter((d) => d.data().data?.type === "bank_check_limit");
+const creditOf = async (id) => (await db.collection("businessBankCredits")
+    .doc(`${BIZ}_${id}`).get()).data();
+// Lets the business-wide 60 s throttle pass without waiting a minute.
+const pastThrottle = () => db.collection("businessBankLinks").doc(BIZ)
+    .update({lastRefreshAt: Timestamp.fromMillis(Date.now() - 61000)});
+
+describe("check bank any time", () => {
+  it("finds the deposit of that exact amount, and consumes nothing",
+      async () => {
+        const at = Date.now() - 5 * 60000;
+        await connect([deposit("cb1", 4200, at,
+            {counterparties: [{name: "Awa Diallo"}]}),
+        deposit("cb-other", 4201, at)]);
+        const answer = await check({amountCents: 4200});
+        assert.equal(answer.result, "received");
+        assert.equal(answer.since, "15m");
+        assert.equal(answer.limitReached, false);
+        assert.deepEqual(answer.deposits, [{creditId: `${BIZ}_cb1`,
+          amountCents: 4200, atMs: at, timeKnown: true,
+          senderName: "Awa Diallo", pending: false}]);
+        assert.equal((await creditOf("cb1")).consumedBy, undefined,
+            "looking consumes nothing");
+        // Package staff may check too (they take payments).
+        assert.equal((await check({amountCents: 4200}, PACKER)).result,
+            "received");
+      });
+
+  it("keeps to the window: 15 minutes, the hour, today", async () => {
+    const now = Date.now();
+    await connect([deposit("forty", 1500, now - 40 * 60000),
+      deposit("old", 1600, now - 30 * 60 * 60000)]);
+    assert.equal((await check({amountCents: 1500})).result, "not_found");
+    assert.equal((await check({amountCents: 1500, since: "1h"})).result,
+        "received");
+    assert.equal((await check({amountCents: 1600, since: "today"})).result,
+        "not_found", "yesterday is not today");
+    const edge = await check({amountCents: 1500, since: "1h"});
+    assert.ok(edge.fromMs <= now - 60 * 60000 + 5000 &&
+      edge.fromMs >= now - 60 * 60000 - 60000);
+  });
+
+  it("lists several by sender and time, newest first", async () => {
+    const now = Date.now();
+    await connect([deposit("s-a", 2500, now - 10 * 60000),
+      deposit("s-b", 2500, now - 60000, {pending: true})]);
+    const answer = await check({amountCents: 2500});
+    assert.equal(answer.result, "several");
+    assert.deepEqual(answer.deposits.map((d) => [d.senderName, d.pending]),
+        [["SENDER s-b", true], ["SENDER s-a", false]]);
+  });
+
+  it("leaves out deposits already used or removed", async () => {
+    await connect([deposit("used", 5100, NOW)]);
+    const saleId = await sale(5100);
+    assert.equal((await call("checkZellePayment", {kind: "inventory_sale",
+      id: saleId}, CASHIER)).result, "confirmed");
+    assert.equal((await check({amountCents: 5100, since: "today"})).result,
+        "not_found");
+    plaid.pages = [page([deposit("gone", 5200, Date.now())])];
+    await pastThrottle();
+    assert.equal((await check({amountCents: 5200})).result, "received");
+    await db.collection("businessBankCredits").doc(`${BIZ}_gone`)
+        .update({removed: true});
+    assert.equal((await check({amountCents: 5200, auto: true})).result,
+        "not_found");
+  });
+
+  it("who may check, and what is refused", async () => {
+    assert.equal(await reasonOf(check({amountCents: 100})),
+        "bank_not_connected");
+    await connect();
+    assert.equal(await reasonOf(check({amountCents: 100}, NOBODY)),
+        "bank_access_denied");
+    assert.equal(await reasonOf(check({amountCents: 100}, OUTSIDER)),
+        "bank_access_denied");
+    assert.equal((await check({amountCents: 100}, OWNER)).result,
+        "not_found");
+    assert.equal((await check({amountCents: 100}, PLATFORM_ADMIN)).result,
+        "not_found");
+    assert.equal(await reasonOf(check({amountCents: "42.00"})),
+        "check_amount_invalid");
+    assert.equal(await reasonOf(check({amountCents: 0})),
+        "check_amount_invalid");
+    assert.equal(await reasonOf(check({amountCents: 100, since: "week"})),
+        "since_invalid");
+    assert.equal(await reasonOf(call("checkZellePayment", {mode: "peek",
+      amountCents: 100}, CASHIER)), "mode_invalid");
+  });
+
+  it("counts checks and paid refreshes; automatic re-checks are free",
+      async () => {
+        await connect();
+        await check({amountCents: 700});
+        for (let i = 0; i < 3; i += 1) {
+          await check({amountCents: 700, auto: true});
+        }
+        // One paid refresh per amount in 5 minutes, whoever presses.
+        await check({amountCents: 700}, PACKER);
+        assert.equal(callsTo("/transactions/refresh").length, 1);
+        const usage = await usageNow();
+        assert.equal(usage.checks, 2);
+        assert.equal(usage.refreshes, 1);
+        assert.equal(usage.linkActive, true);
+        assert.deepEqual(usage.byUid[CASHIER], {checks: 1, refreshes: 1});
+        assert.deepEqual(usage.byUid[PACKER], {checks: 1});
+        // A record check counts too; its automatic re-checks do not.
+        const id = await sale(710);
+        await pastThrottle();
+        await call("checkZellePayment", {kind: "inventory_sale", id},
+            CASHIER);
+        await call("checkZellePayment", {kind: "inventory_sale", id,
+          auto: true}, CASHIER);
+        const after = await usageNow();
+        assert.deepEqual([after.checks, after.refreshes], [3, 2]);
+        // The owner sees it, with names and the estimated cost; staff not.
+        const owner = await call("getBusinessBankStatus", {});
+        assert.equal(owner.refreshLimit, 100);
+        assert.deepEqual({...owner.usage, byStaff: undefined}, {
+          month: owner.usage.month, checks: 3, refreshes: 2,
+          refreshesFailed: 0, estimatedCostCents: 24, refreshLimit: 100,
+          limitReached: false, byStaff: undefined});
+        assert.deepEqual(owner.usage.byStaff, [
+          {uid: CASHIER, name: "cashier@example.test", checks: 2,
+            refreshes: 2},
+          {uid: PACKER, name: "packer@example.test", checks: 1,
+            refreshes: 0}]);
+        const staff = await call("getBusinessBankStatus", {}, CASHIER);
+        assert.equal("usage" in staff, false);
+        assert.equal("refreshLimit" in staff, false);
+      });
+
+  it("a refresh the bank refuses is not billed", async () => {
+    await connect();
+    plaid.refreshError = "PRODUCTS_NOT_SUPPORTED";
+    assert.equal((await check({amountCents: 720})).result, "not_found");
+    assert.equal(callsTo("/transactions/refresh").length, 1);
+    const usage = await usageNow();
+    assert.deepEqual([usage.checks, usage.refreshes, usage.refreshesFailed,
+      usage.byUid[CASHIER].refreshes], [1, 0, 1, 0]);
+  });
+
+  it("only the owner sets the monthly limit, 0 to 1000", async () => {
+    await connect();
+    assert.equal(await reasonOf(call("setBankCheckWindow",
+        {refreshLimit: 5}, CASHIER)), "bank_owner_required");
+    assert.equal(await reasonOf(call("setBankCheckWindow",
+        {refreshLimit: 1001})), "limit_invalid");
+    assert.equal(await reasonOf(call("setBankCheckWindow",
+        {refreshLimit: -1})), "limit_invalid");
+    assert.deepEqual(await call("setBankCheckWindow", {refreshLimit: 0}),
+        {success: true, windowMinutes: 15, refreshLimit: 0});
+    assert.deepEqual(await call("setBankCheckWindow", {refreshLimit: 250,
+      minutes: 20}), {success: true, windowMinutes: 20, refreshLimit: 250});
+    // Reconnecting keeps the owner's limit.
+    await connect();
+    assert.equal((await call("getBusinessBankStatus", {})).refreshLimit,
+        250);
+  });
+
+  it("at the limit: checks still answer, never refresh, one notice",
+      async () => {
+        await connect();
+        await call("setBankCheckWindow", {refreshLimit: 2});
+        await check({amountCents: 801});
+        assert.equal((await limitNotices()).length, 0);
+        await pastThrottle();
+        const second = await check({amountCents: 802});
+        assert.equal(second.limitReached, true, "the second reached it");
+        assert.equal(callsTo("/transactions/refresh").length, 2);
+        const notices = await limitNotices();
+        assert.equal(notices.length, 1);
+        assert.equal(notices[0].data().title,
+            "Bank checks hit this month's limit");
+        // Beyond it: still answers (from a free sync), no refresh, no
+        // second notice.
+        plaid.pages = [page([deposit("late", 803, Date.now())])];
+        await pastThrottle();
+        const third = await check({amountCents: 803});
+        assert.equal(third.result, "received");
+        assert.equal(third.limitReached, true);
+        assert.equal(callsTo("/transactions/refresh").length, 2);
+        assert.ok(callsTo("/transactions/sync").length >= 4);
+        await pastThrottle();
+        await call("checkZellePayment", {kind: "inventory_sale",
+          id: await sale(804)}, CASHIER);
+        assert.equal(callsTo("/transactions/refresh").length, 2,
+            "the limit holds for record checks too");
+        assert.equal((await limitNotices()).length, 1);
+        assert.equal((await usageNow()).refreshes, 2);
+        // Raising the limit lets refreshes (and, later, a notice) resume.
+        await call("setBankCheckWindow", {refreshLimit: 3});
+        assert.equal((await usageNow()).limitNoticeAt, undefined);
+        await pastThrottle();
+        await check({amountCents: 805});
+        assert.equal(callsTo("/transactions/refresh").length, 3);
+        assert.equal((await limitNotices()).length, 2);
+      });
+
+  it("concurrent checks cannot overshoot the limit", async () => {
+    await connect();
+    await call("setBankCheckWindow", {refreshLimit: 2});
+    const {month} = (await call("getBusinessBankStatus", {})).usage;
+    await db.collection("businessBankUsage").doc(`${BIZ}_${month}`).set({
+      businessId: BIZ, month, refreshes: 1, checks: 1});
+    const amounts = [901, 902, 903, 904, 905, 906];
+    const answers = await Promise.all(amounts.map((amountCents, i) =>
+      check({amountCents}, i % 2 ? PACKER : CASHIER)));
+    assert.ok(answers.every((a) => a.result === "not_found"));
+    assert.equal(callsTo("/transactions/refresh").length, 1);
+    const usage = await usageNow();
+    assert.equal(usage.refreshes, 2);
+    assert.equal(usage.checks, 7);
+    assert.equal((await limitNotices()).length, 1);
+  });
+});
+
+describe("check bank: use for a sale", () => {
+  it("lists what the deposit can pay, then spends it once", async () => {
+    const at = Date.now() - 3 * 60000;
+    await connect([deposit("use1", 3300, at,
+        {counterparties: [{name: "Awa Diallo"}]})]);
+    // Rung up two hours ago: outside any record window, but standing.
+    const saleId = await sale(3300, {atMs: Date.now() - 2 * 3600000});
+    await db.collection("inventorySales").doc(saleId).update({
+      lines: [{name: "Rice 25kg", quantity: 2}],
+      credit: {customerName: "Awa"}});
+    const cashSale = await sale(3300, {method: "cash"});
+    const otherAmount = await sale(3400);
+    const pkg = await packagePayment(3300);
+    const found = await check({amountCents: 3300});
+    assert.equal(found.result, "received");
+    const creditId = found.deposits[0].creditId;
+
+    const forCashier = await call("confirmZelleCandidate", {mode: "records",
+      creditId}, CASHIER);
+    assert.equal(forCashier.searched, false);
+    assert.deepEqual(forCashier.records.map((r) => [r.kind, r.id]),
+        [["inventory_sale", saleId]], "no package payment without " +
+        "containers; no cash sale; no other amount");
+    assert.deepEqual([forCashier.records[0].who,
+      forCashier.records[0].what, forCashier.records[0].amountCents],
+    ["Awa", "2 x Rice 25kg", 3300]);
+    const forPacker = await call("confirmZelleCandidate", {mode: "records",
+      creditId}, PACKER);
+    assert.deepEqual(forPacker.records.map((r) => r.id), [pkg]);
+    const forOwner = await call("confirmZelleCandidate", {mode: "records",
+      creditId}, OWNER);
+    assert.deepEqual(forOwner.records.map((r) => r.id).sort(),
+        [saleId, pkg].sort());
+    const searched = await call("confirmZelleCandidate", {mode: "records",
+      creditId, query: "rice"}, OWNER);
+    assert.deepEqual([searched.searched, searched.records.map((r) => r.id)],
+        [true, [saleId]]);
+    assert.deepEqual((await call("confirmZelleCandidate", {mode: "records",
+      creditId, query: "nobody"}, OWNER)).records, []);
+
+    assert.equal(await reasonOf(call("confirmZelleCandidate", {mode: "use",
+      creditId, kind: "inventory_sale", id: otherAmount}, CASHIER)),
+    "amount_mismatch");
+    assert.equal(await reasonOf(call("confirmZelleCandidate", {mode: "use",
+      creditId, kind: "inventory_sale", id: cashSale}, CASHIER)),
+    "not_zelle");
+    assert.equal(await reasonOf(call("confirmZelleCandidate", {mode: "use",
+      creditId, kind: "container_line_payment", id: pkg}, CASHIER)),
+    "This staff account is not allowed to manage this section");
+
+    const used = await call("confirmZelleCandidate", {mode: "use",
+      creditId, kind: "inventory_sale", id: saleId}, CASHIER);
+    assert.equal(used.result, "confirmed");
+    assert.equal(used.confirmation.senderName, "Awa Diallo");
+    const stored = (await db.collection("inventorySales").doc(saleId).get())
+        .data().bankCheck;
+    assert.deepEqual([stored.status, stored.creditId, stored.checkedByUid],
+        ["confirmed", creditId, CASHIER]);
+    assert.deepEqual((await creditOf("use1")).consumedBy,
+        {kind: "inventory_sale", id: saleId});
+    // Once: not for the package payment, not listed, not found again.
+    assert.equal(await reasonOf(call("confirmZelleCandidate", {mode: "use",
+      creditId, kind: "container_line_payment", id: pkg}, PACKER)),
+    "candidate_taken");
+    assert.equal(await reasonOf(call("confirmZelleCandidate", {
+      mode: "records", creditId}, OWNER)), "candidate_taken");
+    assert.equal((await call("confirmZelleCandidate", {mode: "use",
+      creditId, kind: "inventory_sale", id: saleId}, CASHIER)).result,
+    "already_confirmed");
+    assert.equal((await check({amountCents: 3300, auto: true})).result,
+        "not_found");
+    assert.equal(await reasonOf(call("confirmZelleCandidate", {mode: "swap",
+      creditId}, CASHIER)), "mode_invalid");
+  });
+
+  it("two people using one deposit at once: exactly one wins", async () => {
+    await connect([deposit("race", 3500, Date.now())]);
+    const a = await sale(3500);
+    const b = await packagePayment(3500);
+    const outcome = async (promise) => {
+      for (let i = 0; i < 5; i += 1) {
+        const reason = await reasonOf(promise());
+        // The emulator may give up on a contended transaction (see
+        // testing-agent.md): retry only that, never a refusal.
+        if (typeof reason === "string" && /invalid or closed|ABORTED|10 /
+            .test(reason)) continue;
+        return reason;
+      }
+      return "gave up";
+    };
+    const results = await Promise.all([
+      outcome(() => call("confirmZelleCandidate", {mode: "use",
+        creditId: `${BIZ}_race`, kind: "inventory_sale", id: a}, OWNER)),
+      outcome(() => call("confirmZelleCandidate", {mode: "use",
+        creditId: `${BIZ}_race`, kind: "container_line_payment", id: b},
+      OWNER)),
+    ]);
+    assert.deepEqual(results.sort(), ["candidate_taken", "ok"]);
+    const confirmed = await Promise.all([
+      db.collection("inventorySales").doc(a).get(),
+      db.collection("containerLinePayments").doc(b).get()]);
+    assert.equal(confirmed.filter((d) => d.data().bankCheck?.status ===
+      "confirmed").length, 1);
+  });
+
+  it("a deposit from before yesterday cannot be used", async () => {
+    await connect([deposit("stale", 3600, Date.now() - 3 * 86400000)]);
+    const id = await sale(3600);
+    assert.equal(await reasonOf(call("confirmZelleCandidate", {mode: "use",
+      creditId: `${BIZ}_stale`, kind: "inventory_sale", id}, OWNER)),
+    "candidate_invalid");
+    assert.equal(await reasonOf(call("confirmZelleCandidate", {
+      mode: "records", creditId: `${BIZ}_stale`}, OWNER)),
+    "candidate_invalid");
+    assert.equal(await reasonOf(call("confirmZelleCandidate", {
+      mode: "records", creditId: `${OTHER_BIZ}_x`}, OWNER)),
+    "candidate_invalid");
+  });
+
+  it("staff of one store see only that store's records", async () => {
+    await Promise.all([
+      db.collection("inventoryConfig").doc(BIZ).set({businessId: BIZ,
+        storesConverted: true, multiStore: true, mainStoreId: "store_main"}),
+      db.collection("inventoryStores").doc("store_main").set({
+        businessId: BIZ, name: "Main", archived: false}),
+      db.collection("inventoryStores").doc("store_annex").set({
+        businessId: BIZ, name: "Annex", archived: false}),
+    ]);
+    try {
+      await connect([deposit("st", 3700, Date.now())]);
+      const main = await sale(3700, {storeId: "store_main"});
+      const annex = await sale(3700, {storeId: "store_annex"});
+      const list = async (uid) => (await call("confirmZelleCandidate", {
+        mode: "records", creditId: `${BIZ}_st`}, uid)).records
+          .map((r) => r.id).sort();
+      assert.deepEqual(await list(ANNEX_CLERK), [annex]);
+      assert.deepEqual(await list(CASHIER), []);
+      assert.deepEqual(await list(OWNER), [main, annex].sort());
+      assert.equal(await reasonOf(call("confirmZelleCandidate", {
+        mode: "use", creditId: `${BIZ}_st`, kind: "inventory_sale",
+        id: main}, ANNEX_CLERK)), "store_not_allowed");
+    } finally {
+      await Promise.all([
+        db.collection("inventoryConfig").doc(BIZ).delete(),
+        db.collection("inventoryStores").doc("store_main").delete(),
+        db.collection("inventoryStores").doc("store_annex").delete(),
+      ]);
+    }
+  });
 });
 
 describe("the Plaid webhook", () => {

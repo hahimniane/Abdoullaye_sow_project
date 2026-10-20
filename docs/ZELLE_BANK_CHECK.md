@@ -204,6 +204,133 @@ the same transaction that records it on the link):
 The mark is taken before Plaid is asked, so a refresh that fails is not
 retried within the 5 minutes either (a failed refresh is not billed).
 
+## Check bank any time (owner-approved 2026-10-20)
+
+At the counter a customer says "I sent it by Zelle" before anything is
+recorded. **Check bank** answers without a payment record: staff type the
+**exact amount** and when it was sent, and see whether it arrived. Pure logic
+in `functions/bank_check.js` (tests `test/bank-check.test.js`); it rides the
+existing callables (no new function).
+
+**The standalone rule.** A deposit answers when it is exactly the amount
+(whole cents), reached the connected account, is not consumed and not
+removed, and was received in the window staff picked:
+
+| `since` | window |
+| --- | --- |
+| `15m` (default) | the last 15 minutes |
+| `1h` | the last hour |
+| `today` | since midnight in the business's zone (`businesses.timeZone`, else New York) |
+
+Edges included; a bank time up to 5 minutes past now counts
+(`FUTURE_GRACE_MS`, bank clocks). A date-only deposit counts when its date is
+one of the window's dates. Answers: `received` (one), `several` (listed by
+sender and time, newest first, date-only ones last) or `not_found` ("Not
+yet", Check again with the same 20 s / 3 min automatic re-checks as Check
+Zelle). Staff never see a balance, another amount or the bank line: a
+deposit is `{creditId, amountCents, atMs, timeKnown, senderName, pending}`.
+**Looking consumes nothing.**
+
+**Use for a sale.** From a received deposit, staff pick the record it pays:
+a Zelle inventory sale paid now (`paidNowCents`), a standing Zelle credit
+payment or a standing Zelle package payment of **exactly that amount**, live
+(not voided / reverted) and not yet confirmed. The picker first shows the
+recent ones (14 days, the 8 newest), then a search (120 days, 20 matches on
+customer name, items, tracking code or id). Records are filtered as viewing
+them is: sales and credit payments need the inventory gate and store scoping,
+package payments the containers section. Picking spends the deposit exactly
+like `confirmZelleCandidate`: one transaction re-reads the deposit, the
+record and the link, writes the deposit's `consumedBy` and the record's
+`bankCheck` (confirmed). The record may be older than the deposit (a standing
+payment), so there is no minutes window; instead the deposit must have been
+received **today or yesterday** in the business's zone (so a check made just
+before midnight can still be used after it). Pre-v4 sales (no
+`paidNowCents`) are not offered.
+
+**Who.** Checking: staff who can sell (inventory permission + the inventory
+service) or take package payments (containers permission), the owner and
+platform admins (`bank_access_denied` otherwise). Usage and the limit: the
+owner (and platform admins) only; setting the limit: the owner only
+(`bank_owner_required`).
+
+**Where.** "Check bank" on the app's Inventory home and Shipping/Containers
+home and in the business console header, shown only when the business's bank
+is connected and `active` and the person can check. Not connected: the owner
+sees a hint to connect a bank (Settings -> Bank for Zelle checks); staff see
+nothing.
+
+### Usage and the monthly limit
+
+`businessBankUsage/{businessId}_{yyyy-mm}` (server-only; month in **New
+York**, like Bills): `businessId, month, checks, refreshes, refreshesFailed,
+byUid {<uid>: {checks, refreshes}}, linkActive, limitNoticeAt, updatedAt`.
+
+- `checks`: every check a person started (standalone or on a record); the
+  screens' automatic re-checks send `auto: true` and are not counted.
+- `refreshes`: paid `/transactions/refresh` calls. Counted in the **same
+  transaction** that decides the refresh (`refreshAndSyncBank`: it reads the
+  link and the month's usage, runs `zelle_check.refreshPlan` with the
+  month's count and the limit, and writes both), so concurrent checks cannot
+  overshoot the limit. A refresh Plaid refuses is given back
+  (`refreshes - 1`, `refreshesFailed + 1`): it is not billed.
+- Estimated cost = `refreshes x $0.12` (`REFRESH_COST_CENTS`).
+- **Monthly limit** of paid refreshes: `businessBankLinks.refreshLimit`,
+  owner-set 0..1000, default 100 (kept across a reconnect). Once the month's
+  refreshes reach it, checks still work but only sync (free; results may
+  lag) - `refreshPlan` answers `monthly_limit`. The check that first finds
+  the limit reached claims `limitNoticeAt` in that transaction and the owner
+  gets **one** notice for the month (push + inbox / console bell,
+  `notifyBusinessOwnerInLanguage`, `data.type: "bank_check_limit"`, English
+  or French): "Bank checks hit this month's limit". No notice for a limit of
+  0 (the owner chose it). Raising the limit above the month's count clears
+  `limitNoticeAt`, so reaching the new limit notifies again.
+- `linkActive`: written by a check, a webhook sync and a connect; with the
+  link's `connectedAt` / `disconnectedAt` it says whether the business had an
+  active bank link in a month (`bank_check.linkActiveInMonth`) for the
+  "Bank connection" bill line.
+
+The owner sees the month's checks, paid refreshes, estimated cost and the
+same by staff member, and sets the limit, on the "Bank for Zelle checks"
+card (app and console). Platform admins see each business's usage in the
+admin console's **Bills -> business** view (`getBusinessBill.bankUsage`),
+beside the two optional deal lines (docs/PLATFORM_BILLING.md).
+
+### Callables (changes; no new function)
+
+- `checkZellePayment {businessId, mode: "standalone", amountCents, since?,
+  auto?}` -> `{result: "received" | "several" | "not_found", deposits:
+  [{creditId, amountCents, atMs, timeKnown, senderName, pending}], since,
+  fromMs, limitReached}`. `amountCents` is a whole number (1..100,000,000);
+  text is refused. The refresh key is `amount:<cents>`: one paid refresh per
+  amount in 5 minutes, plus the business's 60 s throttle and the monthly
+  limit. `limitReached` lets the screens say new deposits may take longer.
+  The record mode (`{kind, id}`) also takes `auto: true`.
+- `confirmZelleCandidate {businessId, mode: "records", creditId, query?}` ->
+  `{records: [{kind, id, amountCents, atMs, who, what}], searched}`; `who` /
+  `what` are the business's own words (customer name; items or tracking
+  code) - never translated.
+- `confirmZelleCandidate {businessId, mode: "use", creditId, kind, id}` ->
+  `{result: "confirmed" | "already_confirmed", confirmation}` (the record's
+  own permission checks; `candidate_taken`, `candidate_invalid`,
+  `amount_mismatch`).
+- `getBusinessBankStatus`: the owner's answer adds `refreshLimit` and
+  `usage: {month, checks, refreshes, refreshesFailed, estimatedCostCents,
+  refreshLimit, limitReached, byStaff: [{uid, name, checks, refreshes}]}`
+  (`name` "" when the profile has none: screens say "Team member").
+  Staff's answer is unchanged.
+- `setBankCheckWindow {businessId, minutes?, refreshLimit?}` -> `{success,
+  windowMinutes, refreshLimit}` (owner; with neither, `window_invalid` as
+  before).
+
+New refusal codes: `mode_invalid`, `check_amount_invalid`, `since_invalid`,
+`limit_invalid`, `amount_mismatch`.
+
+Indexes added (the "Use for a sale" reads, exact amount, newest first):
+`inventorySales (businessId, paidNowCents, createdAt DESC)`,
+`inventoryCreditPayments (businessId, amountCents, createdAt DESC)`,
+`containerLinePayments (businessId, amountCents, createdAt DESC)`. Rules:
+`businessBankUsage` denies every client read and write.
+
 ## Hardening over Wouri
 
 - The access token is sealed with AES-256-GCM under `BANK_TOKEN_KEY`, with
@@ -249,7 +376,7 @@ retried within the 5 minutes either (a failed refresh is not billed).
 
 ## Not in this version
 
-- No notifications.
+- No notifications, except the owner's monthly-limit notice (Check bank).
 - A deposit the bank removes after it confirmed a payment keeps the payment
   confirmed (the credit shows `removed`); nothing flags the record yet.
 - No History (`lotLedgerAudit`) rows: `bankCheck` carries who and when.

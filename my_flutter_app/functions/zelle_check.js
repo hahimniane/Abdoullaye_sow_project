@@ -75,6 +75,16 @@ const BANK_REFUSALS = Object.freeze({
   candidate_taken: ["failed-precondition",
     "That deposit already confirmed another payment."],
   bank_error: ["unavailable", "The bank could not be reached. Try again."],
+  // Check bank any time (bank_check.js).
+  mode_invalid: ["invalid-argument", "That kind of bank check is not known."],
+  check_amount_invalid: ["invalid-argument",
+    "Enter the exact amount that was sent."],
+  since_invalid: ["invalid-argument",
+    "Choose when it was sent: last 15 minutes, last hour or today."],
+  limit_invalid: ["invalid-argument",
+    "The monthly limit must be a whole number from 0 to 1000."],
+  amount_mismatch: ["failed-precondition",
+    "That payment is not for the same amount as the deposit."],
 });
 
 /**
@@ -468,14 +478,18 @@ function refreshRecordKey(kind, id) {
  *
  * A record refreshed less than RECORD_REFRESH_WINDOW_MS ago is not
  * refreshed again; otherwise the business-wide throttle (refreshDue)
- * decides. `marks` comes back without the expired entries (and with this
- * record's mark when it refreshes), so the stored map stays a handful of
- * keys: write it back only when `refresh` is true.
+ * decides; then the owner's monthly limit of paid refreshes (when given):
+ * once the month's refreshes reach it, checks only sync. `marks` comes back
+ * without the expired entries (and with this record's mark when it
+ * refreshes), so the stored map stays a handful of keys: write it back only
+ * when `refresh` is true.
  *
  * @param {object} input {lastRefreshAt (the link's), marks (the link's
- *   lastRefreshAtByRecord), recordKey, nowMs}.
+ *   lastRefreshAtByRecord), recordKey, nowMs, monthRefreshes? (this
+ *   month's paid refreshes), monthlyLimit? (the owner's limit; absent: no
+ *   limit)}.
  * @return {object} {refresh, reason: "due" | "record_recent" |
- *   "business_throttle", marks}.
+ *   "business_throttle" | "monthly_limit", marks}.
  */
 function refreshPlan(input) {
   const nowMs = Number(input.nowMs);
@@ -492,6 +506,10 @@ function refreshPlan(input) {
   }
   if (!refreshDue(input.lastRefreshAt, nowMs)) {
     return {refresh: false, reason: "business_throttle", marks};
+  }
+  if (Number.isInteger(input.monthlyLimit) &&
+      Math.max(0, Number(input.monthRefreshes) || 0) >= input.monthlyLimit) {
+    return {refresh: false, reason: "monthly_limit", marks};
   }
   marks[key] = nowMs;
   return {refresh: true, reason: "due", marks};
@@ -575,6 +593,7 @@ module.exports = {
   refreshPlan,
   refreshRecordKey,
   safeTimeZone,
+  shownTime,
   windowDateKeys,
   windowMinutesOf,
   zelleCandidates,
