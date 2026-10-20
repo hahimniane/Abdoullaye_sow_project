@@ -227,3 +227,28 @@ describe("small helpers", () => {
     assert.equal(zonedDayKey(lateEvening, ""), "2026-10-06");
   });
 });
+
+describe("invoice board totals have their indexes", () => {
+  // getInvoiceBoardTotals failed in production with FAILED_PRECONDITION: the
+  // owed and collected sums had no composite index. Every aggregate the board
+  // runs (businessId + its filters + the summed field) must have one.
+  const indexes = JSON.parse(require("fs").readFileSync(
+      require("path").join(__dirname, "..", "..", "firestore.indexes.json"),
+      "utf8")).indexes.filter((i) => i.collectionGroup === "invoices");
+  const has = (fields) => indexes.some((i) =>
+    JSON.stringify(i.fields.map((f) => f.fieldPath)) ===
+      JSON.stringify(fields));
+  it("covers every filtered or summed aggregate", () => {
+    const {invoiceBoardAggregates} = require("../console_summaries");
+    for (const spec of invoiceBoardAggregates("2026-10-20")) {
+      const filterFields = [...new Set(spec.filters.map(([f]) => f))];
+      const fields = ["businessId", ...filterFields,
+        ...(spec.sum ? [spec.sum] : [])];
+      if (fields.length < 2) continue;
+      // Equality-only on one extra field is served by single-field indexes.
+      if (!spec.sum && filterFields.length === 1 &&
+        spec.filters.every(([, op]) => op === "==")) continue;
+      assert.ok(has(fields), `${spec.key}: ${fields.join(", ")}`);
+    }
+  });
+});
