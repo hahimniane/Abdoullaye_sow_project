@@ -9,7 +9,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolveProjectId } from "./project-config.mjs";
+import { resolveCpuLimitMilli, resolveProjectId } from "./project-config.mjs";
 import {
   batchFunctionNames,
   remainingFunctions,
@@ -105,7 +105,10 @@ const functionNames = Array.from(new Set(
 // The CPU quota is measured over a rolling one-minute window, so consecutive
 // batches' startups overlap in it; a smaller batch with a longer gap trades
 // wall-clock for certainty.
-const computedBatch = safeDeployBatchSize();
+// The ceiling is per project (20 vCPU in the old one, 200 in laawol-a855a).
+const computedBatch = safeDeployBatchSize({
+  cpuLimitMilli: resolveCpuLimitMilli({projectId: PROJECT_ID}),
+});
 const batchSize = Math.max(1, Math.min(
     Number(process.env.DEPLOY_BATCH_SIZE) || computedBatch,
     computedBatch,

@@ -230,3 +230,33 @@ test("the installed apps' project (`apps`) matches the Flutter default", () => {
   assert.ok(PROJECTS[config.apps], "`apps` must name a registered project");
   assert.match(read("deploy/store/gate.py"), /config\.get\("apps", config\["active"\]\)/);
 });
+
+test("per-project CPU ceiling and App Check key come from project-config.json", async () => {
+  const {resolveCpuLimitMilli, appCheckSiteKeyFor, projectIdForTarget} =
+    await import("../project-config.mjs");
+  const {safeDeployBatchSize} = await import("../cloud-run-capacity-lib.mjs");
+  const {appCheckKeyMatchesProject} = await import("../preflight-lib.mjs");
+  assert.equal(resolveCpuLimitMilli({projectId: "laawol-a855a"}), 200000);
+  assert.equal(resolveCpuLimitMilli({projectId: PROJECTS.current.projectId}), 20000);
+  assert.equal(resolveCpuLimitMilli({projectId: "someone-else"}), undefined);
+  // The old project keeps its 6-at-a-time batches; the new one may go wider
+  // (DEPLOY_BATCH_SIZE still only lowers it).
+  assert.equal(safeDeployBatchSize({cpuLimitMilli: resolveCpuLimitMilli({projectId: PROJECTS.current.projectId})}), 6);
+  assert.equal(safeDeployBatchSize({cpuLimitMilli: resolveCpuLimitMilli({projectId: "laawol-a855a"})}), 60);
+  assert.match(read("deploy/backend-deploy.mjs"), /resolveCpuLimitMilli\(\{projectId: PROJECT_ID\}\)/);
+
+  assert.equal(projectIdForTarget("new"), "laawol-a855a");
+  assert.equal(projectIdForTarget(""), "");
+  const newKey = appCheckSiteKeyFor("laawol-a855a");
+  const oldKey = appCheckSiteKeyFor(PROJECTS.current.projectId);
+  assert.ok(newKey && oldKey && newKey !== oldKey);
+  // The site uses the same key per project.
+  const site = read("public_site/assets/site-config.js");
+  assert.ok(site.includes(newKey) && site.includes(oldKey));
+  const verdict = (siteKey, buildProjectId = "") => appCheckKeyMatchesProject({
+    siteKey, buildProjectId, deployProjectId: "laawol-a855a", registeredKey: newKey,
+  }).ok;
+  assert.equal(verdict(newKey), true);
+  assert.equal(verdict(oldKey), false, "the old project's key must not ship to the new project");
+  assert.equal(verdict(newKey, PROJECTS.current.projectId), false, "build target must match the deploy");
+});

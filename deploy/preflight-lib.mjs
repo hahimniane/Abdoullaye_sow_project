@@ -410,6 +410,32 @@ export function stripeKeyMode(value) {
   return "invalid";
 }
 
+/**
+ * The console bundle's App Check key must belong to the project the bundle
+ * talks to: a key from another project mints tokens the functions reject
+ * (every callable fails). `buildProjectId` is what the build targets
+ * (NEXT_PUBLIC_FIREBASE_PROJECT_ID / _TARGET, else the deploy project).
+ */
+export function appCheckKeyMatchesProject({siteKey, buildProjectId, deployProjectId, registeredKey}) {
+  const key = String(siteKey || "").trim();
+  if (buildProjectId && deployProjectId && buildProjectId !== deployProjectId) {
+    return {
+      ok: false,
+      detail: `the console build targets ${buildProjectId} but this deploy is for ${deployProjectId}`,
+    };
+  }
+  if (!registeredKey) {
+    return {ok: true, detail: `no App Check key registered for ${deployProjectId} in project-config.json; not checked`};
+  }
+  return key === registeredKey ?
+    {ok: true, detail: `site key is the one registered in ${deployProjectId}`} :
+    {
+      ok: false,
+      detail: `NEXT_PUBLIC_FIREBASE_APP_CHECK_RECAPTCHA_SITE_KEY is not ${deployProjectId}'s key ` +
+        "(deploy/project-config.json appCheckSiteKey)",
+    };
+}
+
 export function appCheckWebConfig({siteKey, debugToken, production}) {
   const key = String(siteKey || "").trim();
   const debug = String(debugToken || "").trim();

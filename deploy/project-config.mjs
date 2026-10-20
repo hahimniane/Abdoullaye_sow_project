@@ -73,3 +73,29 @@ export function resolveRegion({
   const known = Object.values(projects).find((p) => p.projectId === projectId);
   return known ? known.region : DEFAULT_REGION;
 }
+
+/**
+ * Cloud Run "Total CPU allocation" (milli vCPU) in the project's region, or
+ * undefined for an unregistered project (callers then use their default).
+ */
+export function resolveCpuLimitMilli({
+  projectId = resolveProjectId(),
+  projects = PROJECTS,
+} = {}) {
+  const known = Object.values(projects).find((p) => p.projectId === projectId);
+  const value = Number(known?.cpuLimitMilli);
+  return value > 0 ? value : undefined;
+}
+
+/** The public App Check (reCAPTCHA Enterprise) site key registered in a project. */
+export function appCheckSiteKeyFor(projectId, projects = PROJECTS) {
+  const known = Object.values(projects).find((p) => p.projectId === projectId);
+  return String(known?.appCheckSiteKey || "");
+}
+
+/** Project id for a console build target ("current"/"new"/an id), or "". */
+export function projectIdForTarget(target, projects = PROJECTS) {
+  const value = String(target || "").trim();
+  if (!value) return "";
+  return projects[value] ? projects[value].projectId : value;
+}

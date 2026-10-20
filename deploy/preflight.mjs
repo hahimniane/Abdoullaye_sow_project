@@ -6,7 +6,13 @@ import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolveProjectId, resolveRegion } from "./project-config.mjs";
+import {
+  appCheckSiteKeyFor,
+  projectIdForTarget,
+  resolveCpuLimitMilli,
+  resolveProjectId,
+  resolveRegion,
+} from "./project-config.mjs";
 import {
   CI_VERIFICATION_SKIP_WINDOW_END,
   DEFAULT_PRODUCTION_PROJECT,
@@ -16,6 +22,7 @@ import {
   TRUSTED_DNS_OVER_HTTPS_PROVIDERS,
   assessStorageRulesFirestoreIam,
   assessStaticDnsHost,
+  appCheckKeyMatchesProject,
   appCheckWebConfig,
   deploymentChildEnvironment,
   deploymentJavaEnvironment,
@@ -245,6 +252,15 @@ if (checksStatic) {
   });
   addCheck("Admin/business App Check configuration", appCheck.ok, appCheck.detail);
 
+  const keyProject = appCheckKeyMatchesProject({
+    siteKey: buildEnv.NEXT_PUBLIC_FIREBASE_APP_CHECK_RECAPTCHA_SITE_KEY,
+    buildProjectId: String(buildEnv.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "").trim() ||
+      projectIdForTarget(buildEnv.NEXT_PUBLIC_FIREBASE_PROJECT_TARGET),
+    deployProjectId: PROJECT_ID,
+    registeredKey: appCheckSiteKeyFor(PROJECT_ID),
+  });
+  addCheck("Admin/business App Check key belongs to the project", keyProject.ok, keyProject.detail);
+
   const devSettings = devFirebaseBuildSettings(buildEnv);
   addCheck(
       "Admin/business build has no dev-only Firebase settings",
@@ -285,7 +301,7 @@ if (checksStatic) {
   // Build from source so the deployed bundle always matches the committed
   // source — never a stale or hand-edited admin_web/out. `next build` also runs
   // the TypeScript compiler, so a type error fails the deploy here.
-  const adminBuildOk = adminTestsOk && appCheck.ok && devSettings.ok &&
+  const adminBuildOk = adminTestsOk && appCheck.ok && keyProject.ok && devSettings.ok &&
     runInherit("npm", ["--prefix", adminDir, "run", "build"]);
   addCheck("Admin/business build from source", adminBuildOk);
 
@@ -607,8 +623,9 @@ if (checksBackend) {
   addCheck(
       "Functions deploy in batches that fit concurrent CPU",
       true,
-      `${safeDeployBatchSize()} functions per batch ` +
-        "(20 vCPU region ceiling; each rollout starts a container)",
+      `${safeDeployBatchSize({cpuLimitMilli: resolveCpuLimitMilli({projectId: PROJECT_ID})})} ` +
+        `functions per batch (${(resolveCpuLimitMilli({projectId: PROJECT_ID}) || 20000) / 1000} ` +
+        "vCPU region ceiling; each rollout starts a container)",
   );
 }
 
