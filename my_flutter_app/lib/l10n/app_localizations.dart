@@ -26306,6 +26306,378 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This sale was switched too many times.'**
   String get invSwitchFailTooMany;
+
+  /// No description provided for @phaErrInviteNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'This invitation is no longer active. Ask the business for a new invitation.'**
+  String get phaErrInviteNotFound;
+
+  /// No description provided for @stiMethodLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Invite by'**
+  String get stiMethodLabel;
+
+  /// No description provided for @stiMethodPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Phone (WhatsApp)'**
+  String get stiMethodPhone;
+
+  /// No description provided for @stiMethodEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'Email'**
+  String get stiMethodEmail;
+
+  /// No description provided for @stiPhoneLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'WhatsApp number'**
+  String get stiPhoneLabel;
+
+  /// No description provided for @stiPhoneHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'They get a WhatsApp message with a link to join. They sign in with a code, no password.'**
+  String get stiPhoneHelp;
+
+  /// No description provided for @stiNameRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the person’s name.'**
+  String get stiNameRequired;
+
+  /// No description provided for @stiPhoneRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid number with the country code.'**
+  String get stiPhoneRequired;
+
+  /// No description provided for @stiStoreLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Which store?'**
+  String get stiStoreLabel;
+
+  /// No description provided for @stiStoreHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Where this person works in Inventory.'**
+  String get stiStoreHelp;
+
+  /// No description provided for @stiStoreAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All stores'**
+  String get stiStoreAll;
+
+  /// No description provided for @stiStoreRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a store, or All stores.'**
+  String get stiStoreRequired;
+
+  /// No description provided for @stiSentOnWhatsApp.
+  ///
+  /// In en, this message translates to:
+  /// **'Invitation sent on WhatsApp'**
+  String get stiSentOnWhatsApp;
+
+  /// No description provided for @stiNotSentTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'WhatsApp message not sent yet - share this link'**
+  String get stiNotSentTitle;
+
+  /// No description provided for @stiNotSentHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'The invitation is ready. Send this link to the person yourself. It works for 7 days.'**
+  String get stiNotSentHelp;
+
+  /// No description provided for @stiCopyLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy link'**
+  String get stiCopyLink;
+
+  /// No description provided for @stiLinkCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Link copied'**
+  String get stiLinkCopied;
+
+  /// No description provided for @stiStatusPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending'**
+  String get stiStatusPending;
+
+  /// No description provided for @stiStatusExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'Expired'**
+  String get stiStatusExpired;
+
+  /// No description provided for @stiStatusCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get stiStatusCancelled;
+
+  /// No description provided for @stiStatusAccepted.
+  ///
+  /// In en, this message translates to:
+  /// **'Accepted'**
+  String get stiStatusAccepted;
+
+  /// No description provided for @stiExpiresOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Expires {date}'**
+  String stiExpiresOn(Object date);
+
+  /// No description provided for @stiInvitationsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No pending invitations.'**
+  String get stiInvitationsEmpty;
+
+  /// No description provided for @stiInvitationsFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t load the invitations.'**
+  String get stiInvitationsFailed;
+
+  /// No description provided for @stiScreenTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Staff invitation'**
+  String get stiScreenTitle;
+
+  /// No description provided for @stiInvitedYou.
+  ///
+  /// In en, this message translates to:
+  /// **'{inviter} invited you to join {business} on Laawol as staff.'**
+  String stiInvitedYou(String inviter, String business);
+
+  /// No description provided for @stiInvitedYouNoInviter.
+  ///
+  /// In en, this message translates to:
+  /// **'You are invited to join {business} on Laawol as staff.'**
+  String stiInvitedYouNoInviter(Object business);
+
+  /// No description provided for @stiAcceptWithNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'Accept with the number ending in ••{lastTwo}'**
+  String stiAcceptWithNumber(Object lastTwo);
+
+  /// No description provided for @stiAcceptWithNumberHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'We send a code to that number on WhatsApp.'**
+  String get stiAcceptWithNumberHelp;
+
+  /// No description provided for @stiAccept.
+  ///
+  /// In en, this message translates to:
+  /// **'Accept invitation'**
+  String get stiAccept;
+
+  /// No description provided for @stiAccepting.
+  ///
+  /// In en, this message translates to:
+  /// **'Accepting…'**
+  String get stiAccepting;
+
+  /// No description provided for @stiOtherAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'You’re signed in with another account. This invitation is for the number ending in ••{lastTwo}: sign out, then accept with that number.'**
+  String stiOtherAccount(Object lastTwo);
+
+  /// No description provided for @stiSignOutToContinue.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign out to continue'**
+  String get stiSignOutToContinue;
+
+  /// No description provided for @stiSigningOut.
+  ///
+  /// In en, this message translates to:
+  /// **'Signing out…'**
+  String get stiSigningOut;
+
+  /// No description provided for @stiClosedExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'This invitation has expired. Ask the business for a new invitation.'**
+  String get stiClosedExpired;
+
+  /// No description provided for @stiClosedCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'This invitation was cancelled. Ask the business for a new invitation.'**
+  String get stiClosedCancelled;
+
+  /// No description provided for @stiClosedAccepted.
+  ///
+  /// In en, this message translates to:
+  /// **'This invitation was already accepted. If you need access, ask the business for a new invitation.'**
+  String get stiClosedAccepted;
+
+  /// No description provided for @stiLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t open this invitation.'**
+  String get stiLoadFailed;
+
+  /// No description provided for @stiWelcome.
+  ///
+  /// In en, this message translates to:
+  /// **'Welcome to {business}'**
+  String stiWelcome(Object business);
+
+  /// No description provided for @stiErrFullName.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the person’s full name.'**
+  String get stiErrFullName;
+
+  /// No description provided for @stiErrPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid phone number.'**
+  String get stiErrPhone;
+
+  /// No description provided for @stiErrCountryCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Add the country code to the number.'**
+  String get stiErrCountryCode;
+
+  /// No description provided for @stiErrEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid email address.'**
+  String get stiErrEmail;
+
+  /// No description provided for @stiErrStoreAccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a store, or All stores.'**
+  String get stiErrStoreAccess;
+
+  /// No description provided for @stiErrStoreNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'That store no longer exists. Choose another one.'**
+  String get stiErrStoreNotFound;
+
+  /// No description provided for @stiErrExistingAuthority.
+  ///
+  /// In en, this message translates to:
+  /// **'That account already has business or admin access, so it can’t join as staff.'**
+  String get stiErrExistingAuthority;
+
+  /// No description provided for @stiErrAlreadyPending.
+  ///
+  /// In en, this message translates to:
+  /// **'An invitation to this person is already pending. Resend it from the list.'**
+  String get stiErrAlreadyPending;
+
+  /// No description provided for @stiErrOwnerRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the business owner can invite staff.'**
+  String get stiErrOwnerRequired;
+
+  /// No description provided for @stiErrBusiness.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the business first.'**
+  String get stiErrBusiness;
+
+  /// No description provided for @stiErrNotActive.
+  ///
+  /// In en, this message translates to:
+  /// **'This invitation is no longer active. Ask the business for a new invitation.'**
+  String get stiErrNotActive;
+
+  /// No description provided for @stiErrSelection.
+  ///
+  /// In en, this message translates to:
+  /// **'More than one invitation is waiting. Open the link from the message you received.'**
+  String get stiErrSelection;
+
+  /// No description provided for @stiErrExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'This invitation has expired. Ask the business for a new invitation.'**
+  String get stiErrExpired;
+
+  /// No description provided for @stiErrNotPending.
+  ///
+  /// In en, this message translates to:
+  /// **'This invitation was already used or cancelled.'**
+  String get stiErrNotPending;
+
+  /// No description provided for @stiErrIdentity.
+  ///
+  /// In en, this message translates to:
+  /// **'This invitation is for another number. Sign in with the number it was sent to.'**
+  String get stiErrIdentity;
+
+  /// No description provided for @stiErrVerifiedContact.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in with the number the invitation was sent to.'**
+  String get stiErrVerifiedContact;
+
+  /// No description provided for @stiErrNotAllowed.
+  ///
+  /// In en, this message translates to:
+  /// **'You don’t have access to do that.'**
+  String get stiErrNotAllowed;
+
+  /// No description provided for @stiPendingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'You have an invitation'**
+  String get stiPendingTitle;
+
+  /// No description provided for @stiPendingInvited.
+  ///
+  /// In en, this message translates to:
+  /// **'{inviter} invited you to join {business} as staff.'**
+  String stiPendingInvited(String inviter, String business);
+
+  /// No description provided for @stiPendingInvitedNoInviter.
+  ///
+  /// In en, this message translates to:
+  /// **'You are invited to join {business} as staff.'**
+  String stiPendingInvitedNoInviter(Object business);
+
+  /// No description provided for @stiPlatformName.
+  ///
+  /// In en, this message translates to:
+  /// **'Laawol Digital administration'**
+  String get stiPlatformName;
+
+  /// No description provided for @stiJoin.
+  ///
+  /// In en, this message translates to:
+  /// **'Join {business}'**
+  String stiJoin(Object business);
+
+  /// No description provided for @stiNotNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Not now'**
+  String get stiNotNow;
 }
 
 class _AppLocalizationsDelegate

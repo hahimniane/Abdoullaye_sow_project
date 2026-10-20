@@ -649,3 +649,12 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   the values (a widget test caught "Switched to credit by $40.00 · $20.00").
   Any message with two or more placeholders gets an `@key` block with the
   placeholders in call order, in BOTH ARB files.
+- Source-reading tests slice files with `indexOf` of the FIRST match:
+  `auth_first_login_role_test.dart` takes `} finally {` after the role
+  check's catch, so a new `try/finally` placed earlier in
+  `auth_provider.dart` broke it (use `whenComplete` there). Widget tests at
+  320 px: a long form needs a tall logical viewport (e.g. 640x6000 at dpr 2)
+  - `ensureVisible` + tap can miss once a text field holds focus; a route
+  under a pushed screen stays built, so find text by the pushed screen's
+  key. Adding an Android verified link filter updates the count in
+  `inventory_parity_test.dart` (now 5 with `/j/`).

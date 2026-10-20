@@ -17,6 +17,8 @@ import '../services/notification_routing.dart';
 import '../services/phone_account_service.dart';
 import '../services/phone_accounts.dart';
 import '../services/push_notification_service.dart';
+import '../services/staff_invites.dart'
+    show ProfileAuthority, profileAccessLost;
 import '../utils/phone_number_validator.dart';
 import '../utils/business_permissions.dart';
 import '../models/marketplace_disclosure_acceptance.dart';
@@ -246,19 +248,56 @@ class AuthProvider extends ChangeNotifier {
     _auth.authStateChanges().listen(_onAuthStateChanged);
   }
 
-  /// The signed-in person's own profile, watched for the Inventory store
-  /// access the owner can change at any time (home store, all stores). Read
-  /// once at sign-in, a staff member kept seeing 0 of everything until they
-  /// restarted the app after being assigned a store.
+  /// The signed-in person's own profile, followed live for staff, owners
+  /// and admins: the Inventory store access the owner can change at any time
+  /// (home store, all stores) - read once at sign-in, a staff member kept
+  /// seeing 0 of everything until they restarted the app after being
+  /// assigned a store - and removal (docs/STAFF_PHONE_INVITES.md §5): when
+  /// the profile loses its business or platform access the session is cut at
+  /// once ([_onAccessLost]). Customers are not followed.
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _profileWatch;
+  String? _profileWatchUid;
 
-  void _watchInventoryAccess(String uid) {
+  /// Bumped whenever the watch stops (sign-out, another account), so an
+  /// access check still running for the old session drops its answer.
+  int _profileWatchGeneration = 0;
+  bool _accessCheckRunning = false;
+  Timer? _accessRecheck;
+
+  void _stopProfileWatch() {
     _profileWatch?.cancel();
+    _profileWatch = null;
+    _profileWatchUid = null;
+    _profileWatchGeneration++;
+    _accessRecheck?.cancel();
+    _accessRecheck = null;
+  }
+
+  /// Starts following [uid]'s profile when this session has business or
+  /// platform access; idempotent for the same account.
+  void _ensureProfileWatch(String uid) {
+    if (!hasBusinessDashboardAccess) return;
+    if (_profileWatch != null && _profileWatchUid == uid) return;
+    _stopProfileWatch();
+    _profileWatchUid = uid;
     _profileWatch = _firestore.collection('users').doc(uid).snapshots().listen((
       snapshot,
     ) {
-      if (_user?.uid != uid) return;
-      final data = snapshot.data();
+      if (_user?.uid != uid || _profileUid != uid) return;
+      final data = snapshot.exists ? snapshot.data() : null;
+      final after = data == null
+          ? null
+          : ProfileAuthority(
+              role: (data['role'] ?? '').toString(),
+              businessId: (data['businessId'] ?? '').toString(),
+            );
+      if (profileAccessLost(
+        ProfileAuthority(role: _role ?? '', businessId: _businessId ?? ''),
+        after,
+      )) {
+        unawaited(_onAccessLost(uid));
+        return;
+      }
       final homeStoreId = (data?['inventoryHomeStoreId'] ?? '')
           .toString()
           .trim();
@@ -273,12 +312,84 @@ class AuthProvider extends ChangeNotifier {
     }, onError: (Object _) {});
   }
 
+  /// The profile lost its business or platform access. The server revoked
+  /// the refresh tokens, so a forced refresh fails: sign out at once instead
+  /// of within the hour. When the refresh still works (the revocation lands
+  /// a moment after the profile write) the profile is reloaded - the screens
+  /// drop the business access - and the refresh is tried once more shortly.
+  Future<void> _onAccessLost(String uid) async {
+    if (_accessCheckRunning) return;
+    _accessCheckRunning = true;
+    await _cutLostAccess(uid).whenComplete(() => _accessCheckRunning = false);
+  }
+
+  Future<void> _cutLostAccess(String uid) async {
+    final generation = _profileWatchGeneration;
+    bool current() =>
+        generation == _profileWatchGeneration && _auth.currentUser?.uid == uid;
+    final user = _auth.currentUser;
+    if (user == null || user.uid != uid) return;
+    try {
+      await user.getIdToken(true);
+    } catch (error) {
+      debugPrint('Access removed; signing out: $error');
+      if (current()) await logout();
+      return;
+    }
+    if (!current()) return;
+    _stopProfileWatch();
+    await _reloadProfileFresh();
+    if (_auth.currentUser?.uid != uid) return;
+    final recheck = _profileWatchGeneration;
+    _accessRecheck = Timer(const Duration(seconds: 5), () async {
+      if (recheck != _profileWatchGeneration || _auth.currentUser?.uid != uid) {
+        return;
+      }
+      try {
+        await _auth.currentUser?.getIdToken(true);
+      } catch (error) {
+        debugPrint('Access removed; signing out: $error');
+        if (recheck == _profileWatchGeneration &&
+            _auth.currentUser?.uid == uid) {
+          await logout();
+        }
+      }
+    });
+  }
+
+  /// Reads the profile again even when a lookup is already running: that one
+  /// may have started before the change (an accepted invitation, a removal).
+  Future<void> _reloadProfileFresh() async {
+    final inFlight = _roleCheckInFlight;
+    if (inFlight != null) {
+      try {
+        await inFlight;
+      } catch (_) {}
+    }
+    await _checkUserRole();
+    final uid = _auth.currentUser?.uid;
+    if (uid != null && _profileUid == uid) {
+      _initializationIssue = null;
+      _ensureProfileWatch(uid);
+    }
+    notifyListeners();
+  }
+
+  /// After `acceptAccessInvitation`: fresh claims (they follow the profile
+  /// through `syncUserCustomClaims`), then the profile, so the person lands
+  /// on the staff screens.
+  Future<void> reloadAfterInvitationAccepted() async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+    await user.getIdToken(true);
+    await _reloadProfileFresh();
+  }
+
   Future<void> _onAuthStateChanged(User? user) async {
     final event = ++_authEventGeneration;
     _user = user;
     _initializationIssue = null;
-    _profileWatch?.cancel();
-    _profileWatch = null;
+    _stopProfileWatch();
     if (user != null) {
       // authenticate() may already have loaded this account's profile by the
       // time Firebase announces the sign-in. Keep it visible while it is
@@ -295,7 +406,7 @@ class AuthProvider extends ChangeNotifier {
       // Signed out, or another account signed in, while the role loaded: the
       // newer event owns the state now.
       if (event != _authEventGeneration) return;
-      if (_isStaff || _isBusinessOwner) _watchInventoryAccess(user.uid);
+      _ensureProfileWatch(user.uid);
       // Covers the restored-session cold start, which never runs authenticate()
       // and so never re-registered a rotated FCM token. Does not prompt.
       unawaited(_refreshPushRegistrationIfPossible());
@@ -556,6 +667,8 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> refreshUserProfile() async {
     await _checkUserRole();
+    final uid = _auth.currentUser?.uid;
+    if (uid != null && _profileUid == uid) _ensureProfileWatch(uid);
     notifyListeners();
   }
 
@@ -696,6 +809,7 @@ class AuthProvider extends ChangeNotifier {
     }
     // A role lookup still running for this account must not land afterwards.
     _roleLookups.invalidate();
+    _stopProfileWatch();
     _user = null;
     _userEmail = null;
     // The whole profile, admin role and platform access included - the
@@ -1062,7 +1176,12 @@ class AuthProvider extends ChangeNotifier {
       } catch (_) {}
     }
     await _checkUserRole();
-    if (_profileUid == user.uid) _initializationIssue = null;
+    if (_profileUid == user.uid) {
+      _initializationIssue = null;
+      // A phone-invited staff member (docs/STAFF_PHONE_INVITES.md) is
+      // followed like any staff session.
+      _ensureProfileWatch(user.uid);
+    }
     unawaited(_registerPushNotificationsIfPossible());
     notifyListeners();
   }

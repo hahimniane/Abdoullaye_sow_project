@@ -9,7 +9,9 @@ import '../models/platform_access.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
 import '../utils/business_permissions.dart';
+import '../services/staff_invites.dart' show StaffInviteResult;
 import '../widgets/app_snackbars.dart';
+import '../widgets/staff_invite_widgets.dart' show showStaffInviteResult;
 
 class UserManagementScreen extends StatefulWidget {
   const UserManagementScreen({super.key});
@@ -990,11 +992,26 @@ class _PersonDetailSheetState extends State<_PersonDetailSheet> {
                   icon: Icons.forward_to_inbox,
                   title: l10n.resendInvitation,
                   onTap: canAct
-                      ? () => _run((auth) async {
-                          await auth.resendAccessInvitation(
-                            person.invitationId,
-                          );
-                        }, l10n.invitationResent)
+                      ? () async {
+                          StaffInviteResult? resent;
+                          await _run((auth) async {
+                            resent = StaffInviteResult.fromCallable(
+                              await auth.resendAccessInvitation(
+                                person.invitationId,
+                              ),
+                            );
+                          }, l10n.invitationResent);
+                          // A phone invitation WhatsApp did not carry:
+                          // "not sent yet - share this link".
+                          final result = resent;
+                          if (mounted && result != null && result.needsShare) {
+                            await showStaffInviteResult(
+                              this.context,
+                              result,
+                              sentMessage: l10n.invitationResent,
+                            );
+                          }
+                        }
                       : null,
                 ),
                 _ActionTile(

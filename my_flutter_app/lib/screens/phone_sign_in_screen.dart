@@ -116,7 +116,9 @@ enum _Channel { whatsapp, sms }
 ///
 /// Without [request] the person types their number (the login screen's
 /// "Sign in with your phone"). A [TrackingPhoneCodeRequest] (the tracking
-/// page's "Sign in as the number ending in ••35") and a
+/// page's "Sign in as the number ending in ••35"), an
+/// [InvitePhoneCodeRequest] (a staff invitation's "Accept with the number
+/// ending in ••35") and a
 /// [LinkPhoneCodeRequest] (phone verification's WhatsApp alternative) send
 /// at once and open on the code.
 class PhoneSignInScreen extends StatefulWidget {
@@ -159,7 +161,12 @@ class _PhoneSignInScreenState extends State<PhoneSignInScreen> {
 
   bool get _busy => _sending || _verifying || _done;
   bool get _isLink => widget.request is LinkPhoneCodeRequest;
-  bool get _isTracking => widget.request is TrackingPhoneCodeRequest;
+
+  /// The masked flows: a tracking link's or a staff invitation's number,
+  /// which the app never sees. The text fallback asks for the full number.
+  bool get _isMasked =>
+      widget.request is TrackingPhoneCodeRequest ||
+      widget.request is InvitePhoneCodeRequest;
 
   /// The number the person typed (or the link's), for the SMS fallback.
   String get _typedPhone => switch (widget.request) {
@@ -174,6 +181,7 @@ class _PhoneSignInScreenState extends State<PhoneSignInScreen> {
     final request = widget.request;
     if (request is TypedPhoneCodeRequest) _phoneController.text = request.phone;
     if (request is TrackingPhoneCodeRequest ||
+        request is InvitePhoneCodeRequest ||
         request is LinkPhoneCodeRequest) {
       _step = _Step.code;
       _sending = true;
@@ -303,7 +311,7 @@ class _PhoneSignInScreenState extends State<PhoneSignInScreen> {
   /// "Send it by text instead". A typed number is texted at once; the masked
   /// flow first asks for the person's full number.
   void _switchToText({bool keepNote = false}) {
-    if (_isTracking && !_textOnly) {
+    if (_isMasked && !_textOnly) {
       _attempt += 1;
       _stopCountdown();
       setState(() {
@@ -316,7 +324,7 @@ class _PhoneSignInScreenState extends State<PhoneSignInScreen> {
       });
       return;
     }
-    if (_isTracking) {
+    if (_isMasked) {
       setState(() => _step = _Step.number);
       return;
     }
@@ -335,7 +343,7 @@ class _PhoneSignInScreenState extends State<PhoneSignInScreen> {
       return;
     }
     final attempt = ++_attempt;
-    _textOnly = _isTracking ? true : _textOnly;
+    _textOnly = _isMasked ? true : _textOnly;
     setState(() {
       _sending = true;
       _error = null;
@@ -524,6 +532,7 @@ class _PhoneSignInScreenState extends State<PhoneSignInScreen> {
         ? _challenge!.lastTwo
         : switch (widget.request) {
             TrackingPhoneCodeRequest(:final lastTwo) => lastTwo,
+            InvitePhoneCodeRequest(:final lastTwo) => lastTwo,
             _ => '',
           };
     return lastTwo.isEmpty
