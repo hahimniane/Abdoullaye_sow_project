@@ -6,7 +6,30 @@
 | Project number | `577373430777` | `127318353394` |
 | Functions region | `us-central1` | `us-central1` (assumed - confirm) |
 
-**Status of this branch:** the CODE side is prepared. Production behavior is
+**Cutover 2026-10-20 (branch `release/cutover-new-project`):** the server
+and the web (consoles + marketing site) switched to `laawol-a855a`:
+`deploy/project-config.json` `active: "new"`, `.firebaserc` default/production,
+consoles `DEFAULT_PROJECT_TARGET = "new"`, site `ACTIVE_TARGET = "new"` with
+the new App Check key, `.htaccess` `/p` `/d` on the new project. The MOBILE
+APPS deliberately stay on the old project until a new app build is approved:
+`firebase_environment_options.dart` stays `'production'`, the native files are
+untouched, and `project-config.json` `apps: "current"` makes `store/gate.py`
+move the old project's force-update gate. While that lasts:
+- the old project keeps ALL non-scheduled functions (the apps' callables,
+  triggers, its Stripe webhook endpoints); its 13 scheduled jobs are PAUSED
+  (they now run in the new project only - running both would double-charge
+  subscriptions and send WhatsApp twice);
+- data written from the apps lands in the old project, data written on the
+  web in the new one; nothing syncs them. Moving the apps later needs a
+  targeted merge of app-written docs, NOT a blind import (an import would
+  overwrite newer web edits);
+- `functions/.env.<project id>` must stay identical for both projects
+  (guard test).
+The owner's scripts live in `~/laawol-deploy-logs/` (`cutover-final.sh`
+prints the ordered checklist). The scheduled set is now 13 functions (re-derive
+with `grep -E '^exports\.[A-Za-z0-9_]+ = onSchedule' functions/index.js`).
+
+**Status before the cutover:** the CODE side is prepared. Production behavior is
 unchanged: every single-source config below still points at the current
 project. Moving to the new project is now a small, explicit change to those
 files plus the external steps in the cutover checklist (Section 3).
