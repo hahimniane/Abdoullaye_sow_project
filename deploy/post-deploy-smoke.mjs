@@ -1,4 +1,5 @@
 import {spawnSync} from "node:child_process";
+import {resolveProjectId, resolveRegion} from "./project-config.mjs";
 import path from "node:path";
 import {fileURLToPath} from "node:url";
 import {
@@ -18,8 +19,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const scope = process.env.SMOKE_SCOPE || "all";
 const validScopes = new Set(["all", "backend", "static"]);
-const projectId = process.env.FIREBASE_PROJECT || "car-selling-flutter-app";
-const region = process.env.FUNCTIONS_REGION || "us-central1";
+const projectId = resolveProjectId();
+const region = resolveRegion({projectId});
 const timeoutMs = Number(process.env.SMOKE_TIMEOUT_MS || 15000);
 const staticSmokeIPv4 = process.env.STATIC_SMOKE_IPV4 ||
   HOSTINGER_PRODUCTION_IPV4;

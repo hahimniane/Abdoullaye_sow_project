@@ -174,12 +174,17 @@ describe("assistantChat requires App Check and is rate limited", () => {
   it("is called by the marketing widget with an App Check token", () => {
     const chat = read(repoRoot, "public_site", "assets", "chat.js");
     const partner = read(repoRoot, "public_site", "partner.html");
-    assert.match(chat, /cloudfunctions\.net\/assistantChat/);
+    // The project host and the reCAPTCHA site key live in ONE file now
+    // (public_site/assets/site-config.js); both pages must read it from there.
+    assert.match(chat, /SITE\.functionsBaseUrl \+ "\/assistantChat"/);
     assert.match(chat, /"X-Firebase-AppCheck"/);
     assert.match(chat, /ReCaptchaEnterpriseProvider\(APP_CHECK_SITE_KEY\)/);
-    const siteKey = chat.match(/APP_CHECK_SITE_KEY = "([^"]+)"/)[1];
-    assert.ok(partner.includes(`ReCaptchaEnterpriseProvider("${siteKey}")`),
-        "chat.js must use the site key already registered for this domain");
+    assert.match(chat, /APP_CHECK_SITE_KEY = SITE\.appCheckSiteKey/);
+    assert.match(partner,
+        /ReCaptchaEnterpriseProvider\(window\.LAAWOL_CONFIG\.appCheckSiteKey\)/,
+        "partner.html must use the same site key as chat.js (site-config.js)");
+    assert.ok(partner.includes("assets/site-config.js"),
+        "partner.html must load the shared site config");
     // Same SDK version as partner.html, so both share one App Check instance.
     const sdk = chat.match(/firebasejs\/([0-9.]+)\//)[1];
     assert.ok(partner.includes(`firebasejs/${sdk}/firebase-app-check.js`));

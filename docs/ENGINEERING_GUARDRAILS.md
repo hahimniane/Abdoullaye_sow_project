@@ -228,7 +228,7 @@ rollout, not permission to bypass the deployment gate:
    This changes only local CLI telemetry. It does not disable App Check,
    authentication, tests, CI, IAM checks, or any deployed monitoring.
 4. Inspect the live state before retrying. Use
-   `firebase functions:list --project car-selling-flutter-app --json` and
+   `firebase functions:list --project "$FIREBASE_PROJECT" --json` and
    compare the intended endpoints with their `ACTIVE`/`FAILED` state. Never
    redeploy healthy unrelated functions merely because the original aggregate
    command returned non-zero.
@@ -237,17 +237,17 @@ rollout, not permission to bypass the deployment gate:
    command and its normal predeploy hooks. Use one function at a time or a pair:
 
    ```bash
-   DEPLOY_ENV=development FIREBASE_PROJECT=car-selling-flutter-app \
+   DEPLOY_ENV=development FIREBASE_PROJECT=<project-id> \
      firebase deploy \
      --only functions:firstIncompleteFunction,functions:secondIncompleteFunction \
-     --project car-selling-flutter-app
+     --project "$FIREBASE_PROJECT"
    ```
 
    Do not strip or skip the configured lint/tests to make these retries faster.
    If Cloud Run reports `Quota exceeded for total allowable CPU per project per
    region`, reduce the batch to one function and wait for it to become `ACTIVE`
    before starting the next.
-6. Run `cd deploy && FIREBASE_PROJECT=car-selling-flutter-app npm run
+6. Run `cd deploy && FIREBASE_PROJECT=<project-id> npm run
    smoke:backend` after every recovery rollout. A function is not recovered
    until the deployed endpoint is `ACTIVE` and smoke checks pass.
 
@@ -362,6 +362,7 @@ Rules:
 | **Ocean carriers** (CURATED, SCAC → name) | n/a | `src/lib/ocean-carrier-catalog.ts` (source of truth); functions port `ocean_carrier_catalog.js` (`oceanCarrierName`) | Not exhaustive; an unknown SCAC shows as its code. `test/ocean-carrier-catalog.test.js` fails when the port drifts. |
 | **WhatsApp templates** (names + variable order) | n/a | functions `whatsapp_templates.js` (`templateMessage`, `TEMPLATE_VARIABLES`) | The only place a template name or `{{n}}` order lives; approved text in `docs/WHATSAPP_CONTAINER_UPDATES.md`. |
 | **Pieces on a line** (kinds, legacy read, counts, groups, split) | `lib/services/line_pieces.dart` | `src/lib/line-pieces.ts` | Mirrors of functions `line_pieces.js`; all three run `functions/test/fixtures/line-pieces-cases.json`. Every reader of a line's contents goes through `linePieces` (a legacy `{kind, quantity}` line reads as pieces) - never re-derive counts from `quantity`. |
+| **Firebase/GCP project** (id, number, keys, `cloudfunctions.net` hosts) | `lib/firebase_environment_options.dart` + `lib/firebase_options*.dart` | `src/lib/project-config.ts`; functions `project_config.js`; `public_site/assets/site-config.js`; `deploy/project-config.json` | One source per component. Never hardcode a project id/URL anywhere else - `deploy/test/project-migration-guard.test.mjs` fails the build. Cutover steps: `docs/PROJECT_MIGRATION.md`. |
 | **Displayed dates** | `lib/utils/date_display.dart` (`displayDate`, `displayDateTime`, … with `dateLocaleOf(context)`) | `src/lib/format.ts` | US month-first 12-hour in English, French form in French. A `DateFormat` with no locale fails `test/date_display_test.dart`. |
 
 If the thing you need is not in this table and is reference data or a reusable

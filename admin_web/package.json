@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "firebase emulators:start --only hosting --project car-selling-flutter-app",
+    "start": "firebase emulators:start --only hosting",
     "deploy": "npm run build && firebase deploy --only hosting",
     "typecheck": "tsc --noEmit",
     "lint": "npm run typecheck",

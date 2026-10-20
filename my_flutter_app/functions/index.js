@@ -11,6 +11,7 @@ const {defineSecret} = require("firebase-functions/params");
 const crypto = require("crypto");
 const QRCode = require("qrcode");
 const {buildTrackingCode} = require("./tracking_code");
+const {firebaseWebApiKey, storageBucketName} = require("./project_config");
 const {
   composeHeadquartersAddress,
   defaultOfficeLocationFromBusiness,
@@ -650,11 +651,6 @@ const SIMULATE_PAYMENTS = runtimePaymentSimulationEnabled(process.env);
 // callable requires an attested first-party client; local emulator suites keep
 // enforcement off so they can exercise the same handlers deterministically.
 const ENFORCE_APP_CHECK = process.env.FUNCTIONS_EMULATOR !== "true";
-// Public Firebase web API keys identify a Firebase project; they are not
-// secrets. Keep this fallback aligned with admin_web/src/lib/firebase.ts.
-const FIREBASE_WEB_API_KEY =
-  process.env.FIREBASE_WEB_API_KEY ||
-  "AIzaSyBrRDTd5w2iWxTIfvsn7ra0xjW7M-iuPN8";
 // Firebase callable endpoints must accept an unauthenticated HTTP/CORS
 // transport request so the Firebase SDK can deliver App Check and Auth tokens
 // to the callable handler. `public` does not bypass application security:
@@ -11760,14 +11756,7 @@ exports.uploadBusinessVerificationDocument = onCall(
         throw new HttpsError("not-found", "Business not found");
       }
 
-      const bucketName =
-        process.env.FIREBASE_STORAGE_BUCKET ||
-        process.env.STORAGE_BUCKET ||
-        (
-          process.env.GCLOUD_PROJECT ?
-            `${process.env.GCLOUD_PROJECT}.firebasestorage.app` :
-            undefined
-        );
+      const bucketName = storageBucketName();
       const bucket = bucketName ?
         admin.storage().bucket(bucketName) :
         admin.storage().bucket();
@@ -25143,7 +25132,7 @@ async function queueAccessEmail({
   if (plan.useFirebaseFallback) {
     try {
       await sendFirebasePasswordSetupEmail({
-        apiKey: FIREBASE_WEB_API_KEY,
+        apiKey: firebaseWebApiKey(),
         email,
         locale,
       });

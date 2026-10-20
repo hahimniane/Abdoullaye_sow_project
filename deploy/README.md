@@ -4,6 +4,11 @@ For the full production runbook, use
 [HOSTINGER_DEPLOY.md](./HOSTINGER_DEPLOY.md). This file is only the short
 static-site deploy reference.
 
+**Which Firebase project the tooling targets** is set in one place,
+`project-config.json` (`active`), and can be overridden per run with
+`FIREBASE_PROJECT=<id|current|new>` or `--project <id>`. See
+[docs/PROJECT_MIGRATION.md](../docs/PROJECT_MIGRATION.md).
+
 Three static targets are deployed:
 
 | Site            | Source folder         | Goes to                       |
@@ -65,7 +70,7 @@ same project has a time-boxed test-payment authorization through August 31,
 development label and a Stripe test key:
 
 ```bash
-DEPLOY_ENV=development FIREBASE_PROJECT=car-selling-flutter-app \
+DEPLOY_ENV=development FIREBASE_PROJECT=<project-id> \
   npm run preflight:backend
 ```
 

@@ -1,12 +1,14 @@
 const apiKey = process.env.FIREBASE_API_KEY;
 const email = process.env.SEED_EMAIL;
 const password = process.env.SEED_PASSWORD;
-const projectId = 'car-selling-flutter-app';
+const projectId = process.env.FIREBASE_PROJECT_ID;
 const defaultBusinessId = 'keren_auto_sales';
 const defaultBusinessName = 'Keren';
 
-if (!apiKey || !email || !password) {
-  console.error('Missing FIREBASE_API_KEY, SEED_EMAIL, or SEED_PASSWORD.');
+if (!apiKey || !email || !password || !projectId) {
+  console.error(
+    'Missing FIREBASE_API_KEY, FIREBASE_PROJECT_ID, SEED_EMAIL, or SEED_PASSWORD.',
+  );
   process.exit(1);
 }
 

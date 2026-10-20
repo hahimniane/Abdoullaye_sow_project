@@ -6,6 +6,7 @@ import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveProjectId, resolveRegion } from "./project-config.mjs";
 import {
   CI_VERIFICATION_SKIP_WINDOW_END,
   DEFAULT_PRODUCTION_PROJECT,
@@ -46,7 +47,7 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
-const PROJECT_ID = process.env.FIREBASE_PROJECT || "car-selling-flutter-app";
+const PROJECT_ID = resolveProjectId();
 const PRODUCTION_PROJECT_ID = process.env.PRODUCTION_FIREBASE_PROJECT ||
   DEFAULT_PRODUCTION_PROJECT;
 const SCOPE = process.env.PREFLIGHT_SCOPE || "full";
@@ -574,7 +575,7 @@ if (checksBackend) {
   const revisions = run("gcloud", [
     "run", "revisions", "list",
     "--project", PROJECT_ID,
-    "--region", "us-central1",
+    "--region", resolveRegion({projectId: PROJECT_ID}),
     "--format", "value(metadata.name)",
   ]);
   if (!revisions.ok) {

@@ -38,7 +38,7 @@ run, and deploys Functions plus rules/indexes/storage as one release command:
 ```bash
 cd deploy
 DEPLOY_ENV=production \
-FIREBASE_PROJECT=car-selling-flutter-app \
+FIREBASE_PROJECT=<project-id> \
 npm run deploy:backend
 ```
 
@@ -130,7 +130,7 @@ Monitor function execution in the Firebase Console:
 Use Firebase Functions secrets for confidential values:
 
 ```bash
-firebase functions:secrets:set SECRET_NAME --project car-selling-flutter-app
+firebase functions:secrets:set SECRET_NAME --project "$FIREBASE_PROJECT"
 ```
 
 Then use the guarded backend release command above.

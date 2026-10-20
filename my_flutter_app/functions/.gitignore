@@ -6,3 +6,4 @@ node_modules/
 !.env.example
 # Per-project, non-secret function config (see the file's header).
 !.env.car-selling-flutter-app
+!.env.laawol-a855a

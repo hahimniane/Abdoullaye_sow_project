@@ -4,6 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import {afterEach, describe, test} from "node:test";
 
+import {ACTIVE_PROJECT} from "../project-config.mjs";
+
 import {
   HOSTINGER_PRODUCTION_IPV6,
   PRODUCTION_STATIC_HOSTS,
@@ -33,19 +35,19 @@ describe("deployment mode", () => {
 
   test("keeps the production project production by default", () => {
     assert.deepEqual(deploymentMode({
-      projectId: "car-selling-flutter-app",
+      projectId: ACTIVE_PROJECT.projectId,
       now: beforeDevelopmentCutoff,
     }), {
       ok: true,
       mode: "production",
       allowsTestPayments: false,
-      detail: "production project car-selling-flutter-app",
+      detail: `production project ${ACTIVE_PROJECT.projectId}`,
     });
   });
 
   test("temporarily permits explicit development test payments in production", () => {
     assert.deepEqual(deploymentMode({
-      projectId: "car-selling-flutter-app",
+      projectId: ACTIVE_PROJECT.projectId,
       deployEnvironment: "development",
       now: beforeDevelopmentCutoff,
     }), {
@@ -53,14 +55,14 @@ describe("deployment mode", () => {
       mode: "production",
       allowsTestPayments: true,
       detail:
-        "production project car-selling-flutter-app; " +
+        `production project ${ACTIVE_PROJECT.projectId}; ` +
         "test payments authorized through September 10, 2026",
     });
   });
 
   test("fails closed at the development cutoff", () => {
     assert.deepEqual(deploymentMode({
-      projectId: "car-selling-flutter-app",
+      projectId: ACTIVE_PROJECT.projectId,
       deployEnvironment: "development",
       now: atDevelopmentCutoff,
     }), {
@@ -74,7 +76,7 @@ describe("deployment mode", () => {
   test("rejects other non-production labels for the production project", () => {
     for (const deployEnvironment of ["test", "staging", "nonproduction"]) {
       const result = deploymentMode({
-        projectId: "car-selling-flutter-app",
+        projectId: ACTIVE_PROJECT.projectId,
         deployEnvironment,
         now: beforeDevelopmentCutoff,
       });
@@ -86,14 +88,14 @@ describe("deployment mode", () => {
 
   test("accepts an explicit production label without test payments", () => {
     assert.deepEqual(deploymentMode({
-      projectId: "car-selling-flutter-app",
+      projectId: ACTIVE_PROJECT.projectId,
       deployEnvironment: "production",
       now: beforeDevelopmentCutoff,
     }), {
       ok: true,
       mode: "production",
       allowsTestPayments: false,
-      detail: "production project car-selling-flutter-app",
+      detail: `production project ${ACTIVE_PROJECT.projectId}`,
     });
   });
 
@@ -316,9 +318,9 @@ test("Storage rules Firestore IAM gate requires the cross-service role", () => {
       }
     }
   `;
-  const projectNumber = "577373430777";
+  const projectNumber = ACTIVE_PROJECT.projectNumber;
   const expectedMember =
-    "serviceAccount:service-577373430777" +
+    `serviceAccount:service-${ACTIVE_PROJECT.projectNumber}` +
     "@gcp-sa-firebasestorage.iam.gserviceaccount.com";
 
   assert.equal(assessStorageRulesFirestoreIam({
@@ -370,7 +372,7 @@ test("deployment child processes never inherit application secrets", () => {
   const result = deploymentChildEnvironment({
     PATH: "/usr/bin",
     DEPLOY_ENV: "development",
-    FIREBASE_PROJECT: "car-selling-flutter-app",
+    FIREBASE_PROJECT: ACTIVE_PROJECT.projectId,
     STRIPE_SECRET_KEY: "sk_test_redacted",
     STRIPE_WEBHOOK_SECRET: "whsec_redacted",
     ANTHROPIC_API_KEY: "anthropic-redacted",
@@ -382,7 +384,7 @@ test("deployment child processes never inherit application secrets", () => {
   assert.deepEqual(result, {
     PATH: "/usr/bin",
     DEPLOY_ENV: "development",
-    FIREBASE_PROJECT: "car-selling-flutter-app",
+    FIREBASE_PROJECT: ACTIVE_PROJECT.projectId,
   });
 });
 

@@ -19,6 +19,13 @@ const {
   plaidWebhookUrl,
   verifyPlaidWebhook,
 } = require("../plaid_client");
+const {CURRENT_PROJECT_CONFIG, NEW_PROJECT_CONFIG} =
+  require("../project_config");
+
+// Both production projects (the old one keeps serving the mobile apps until
+// the new app build ships), named through the single-source config.
+const OLD_PROJECT = CURRENT_PROJECT_CONFIG.projectId;
+const NEW_PROJECT = NEW_PROJECT_CONFIG.projectId;
 
 describe("Plaid errors in words", () => {
   it("maps codes to a status, a reason and a sentence", () => {
@@ -122,13 +129,13 @@ describe("Plaid environment and webhook URL", () => {
     assert.equal(plaidEnvironment({}), "sandbox");
     assert.equal(plaidEnvironment({PLAID_ENV: "production"}), "production");
     assert.equal(plaidEnvironment({PLAID_ENV: "production",
-      GCLOUD_PROJECT: "car-selling-flutter-app"}), "production");
+      GCLOUD_PROJECT: OLD_PROJECT}), "production");
     assert.equal(plaidEnvironment({PLAID_ENV: "prod"}), "sandbox");
   });
 
   it("is always sandbox in an emulator or a test run", () => {
     const prod = {PLAID_ENV: "production",
-      GCLOUD_PROJECT: "car-selling-flutter-app"};
+      GCLOUD_PROJECT: OLD_PROJECT};
     assert.equal(plaidEnvironment({...prod, FUNCTIONS_EMULATOR: "true"}),
         "sandbox");
     assert.equal(plaidEnvironment({...prod,
@@ -150,13 +157,17 @@ describe("Plaid environment and webhook URL", () => {
       }
       return out;
     };
-    const prod = read(".env.car-selling-flutter-app");
-    assert.equal(prod.PLAID_ENV, "production");
-    // No customization in production (see DEFAULT_LINK_CUSTOMIZATION).
-    assert.equal("PLAID_LINK_CUSTOMIZATION" in prod, false);
-    // Secrets stay in Secret Manager, never in a committed file.
-    for (const key of ["PLAID_CLIENT_ID", "PLAID_SECRET", "BANK_TOKEN_KEY"]) {
-      assert.equal(key in prod, false, `${key} is not in the env file`);
+    // Both production projects: a project without its env file would
+    // silently fall back to sandbox and fail every Check bank.
+    for (const projectId of [OLD_PROJECT, NEW_PROJECT]) {
+      const prod = read(`.env.${projectId}`);
+      assert.equal(prod.PLAID_ENV, "production", projectId);
+      // No customization in production (see DEFAULT_LINK_CUSTOMIZATION).
+      assert.equal("PLAID_LINK_CUSTOMIZATION" in prod, false, projectId);
+      // Secrets stay in Secret Manager, never in a committed file.
+      for (const key of ["PLAID_CLIENT_ID", "PLAID_SECRET", "BANK_TOKEN_KEY"]) {
+        assert.equal(key in prod, false, `${key} is not in .env.${projectId}`);
+      }
     }
     // No env file every project (and the emulators) would load says
     // production.
@@ -171,12 +182,11 @@ describe("Plaid environment and webhook URL", () => {
   });
 
   it("derives the webhook from the running project", () => {
-    assert.equal(plaidWebhookUrl({GCLOUD_PROJECT: "laawol-a855a"}),
-        "https://us-central1-laawol-a855a.cloudfunctions.net/plaidWebhook");
+    assert.equal(plaidWebhookUrl({GCLOUD_PROJECT: NEW_PROJECT}),
+        `https://us-central1-${NEW_PROJECT}.cloudfunctions.net/plaidWebhook`);
     assert.equal(plaidWebhookUrl({FIREBASE_CONFIG:
-      JSON.stringify({projectId: "car-selling-flutter-app"})}),
-    "https://us-central1-car-selling-flutter-app.cloudfunctions.net/" +
-      "plaidWebhook");
+      JSON.stringify({projectId: OLD_PROJECT})}),
+    `https://us-central1-${OLD_PROJECT}.cloudfunctions.net/plaidWebhook`);
     assert.equal(plaidWebhookUrl({PLAID_WEBHOOK_URL: "https://x/y",
       GCLOUD_PROJECT: "p"}), "https://x/y");
     assert.equal(plaidWebhookUrl({}), "");

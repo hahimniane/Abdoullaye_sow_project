@@ -1,5 +1,6 @@
 (function () {
-  var projectId = "car-selling-flutter-app";
+  // Project values come from assets/site-config.js (the single source).
+  var projectId = window.LAAWOL_CONFIG.firebase.projectId;
   var firestoreRoot =
     "https://firestore.googleapis.com/v1/projects/" +
     projectId +

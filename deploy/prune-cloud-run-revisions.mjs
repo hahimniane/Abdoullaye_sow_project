@@ -18,9 +18,10 @@
 // Usage: node prune-cloud-run-revisions.mjs [--dry-run]
 
 import { spawnSync } from "node:child_process";
+import { resolveProjectId, resolveRegion } from "./project-config.mjs";
 
-const PROJECT = process.env.FIREBASE_PROJECT || "car-selling-flutter-app";
-const REGION = process.env.CLOUD_RUN_REGION || "us-central1";
+const PROJECT = resolveProjectId();
+const REGION = resolveRegion({projectId: PROJECT, envName: "CLOUD_RUN_REGION"});
 const DRY_RUN = process.argv.includes("--dry-run");
 const CONCURRENCY = Number(process.env.PRUNE_CONCURRENCY || 6);
 

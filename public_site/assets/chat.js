@@ -206,7 +206,9 @@
     return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
 
-  var API = "https://us-central1-car-selling-flutter-app.cloudfunctions.net/assistantChat";
+  // Project values come from assets/site-config.js (the single source).
+  var SITE = window.LAAWOL_CONFIG;
+  var API = SITE.functionsBaseUrl + "/assistantChat";
   var history = []; // rolling {role, content} turns sent to the backend
 
   // assistantChat refuses a call without a valid App Check token (otherwise
@@ -217,15 +219,8 @@
   // the request goes without the header, the server says fallback, and the
   // built-in answers take over - the bubble never breaks.
   var FIREBASE_SDK = "https://www.gstatic.com/firebasejs/10.12.2/";
-  var FIREBASE_CONFIG = {
-    apiKey: "AIzaSyBrRDTd5w2iWxTIfvsn7ra0xjW7M-iuPN8",
-    authDomain: "car-selling-flutter-app.firebaseapp.com",
-    projectId: "car-selling-flutter-app",
-    storageBucket: "car-selling-flutter-app.firebasestorage.app",
-    messagingSenderId: "577373430777",
-    appId: "1:577373430777:web:5af70db59c5d49a8125328",
-  };
-  var APP_CHECK_SITE_KEY = "6Lcs5FUtAAAAAA_XmvDg0rDqUE4noHLjFCLqofHX";
+  var FIREBASE_CONFIG = SITE.firebase;
+  var APP_CHECK_SITE_KEY = SITE.appCheckSiteKey;
   var appCheckReady = null;
 
   function appCheckInstance() {

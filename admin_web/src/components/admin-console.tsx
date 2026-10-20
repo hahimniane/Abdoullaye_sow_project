@@ -94,6 +94,7 @@ import { ToggleRow } from "@/components/toggle-row";
 import { COUNTRY_CATALOG } from "@/lib/country-catalog";
 import { CITIES_BY_STATE, US_STATE_NAMES } from "@/lib/us-locations";
 import { auth, db, functions, storage } from "@/lib/firebase";
+import { firebaseConsoleUrl } from "@/lib/project-config";
 import { ensureBrowserDisplayableImage } from "@/lib/heic-convert";
 import {
   mergedAdminRoles as mergedRoles,
@@ -6567,7 +6568,7 @@ function MoreSettings({
             <div className="provider-setup-actions">
               <a
                 className="secondary-button compact"
-                href="https://console.firebase.google.com/project/car-selling-flutter-app/extensions"
+                href={firebaseConsoleUrl("extensions")}
                 rel="noreferrer"
                 target="_blank"
               >
