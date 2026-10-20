@@ -134,6 +134,8 @@ export function CheckBankDialog({ businessId, previewMode, onClose }: { business
     setAnswer(null);
     setPicking("");
     setError("");
+    // A changed amount or window is a new question: the last refusal goes.
+    setAmountError("");
   }
 
   return (
@@ -341,7 +343,7 @@ function UseForSale({
         <input
           aria-label="Search by customer, items or tracking code"
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search by customer, items or tracking code"
+          placeholder="Customer, items or tracking code"
           value={query}
         />
         <button aria-busy={loading} className="lst-btn ghost" disabled={busy} type="submit">

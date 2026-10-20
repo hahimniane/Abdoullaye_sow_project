@@ -2146,6 +2146,15 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Open shipments": "Expéditions ouvertes",
   "Operational statuses": "Statuts opérationnels",
   "Owners and staff": "Propriétaires et personnel",
+  "Owners and staff linked to": "Propriétaires et personnel liés à",
+  "Invite staff": "Inviter du personnel",
+  "Invite staff and choose what each person can manage.":
+    "Invitez du personnel et choisissez ce que chaque personne peut gérer.",
+  "No team members yet": "Aucun membre de l’équipe pour l’instant",
+  "Permissions — what this staff member can manage":
+    "Permissions : ce que ce membre du personnel peut gérer",
+  "team members": "membres de l’équipe",
+  "team member": "membre de l’équipe",
   "Payment session started.": "Session de paiement démarrée.",
   "Plan and AI advisor": "Forfait et conseiller IA",
   "Plan and advisor": "Forfait et conseiller",
@@ -6698,6 +6707,7 @@ export const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {
   "One piece fewer": "Un colis de moins",
   "One piece more": "Un colis de plus",
   // Check bank: the search under "Use for a sale" (placeholder and aria-label).
+  "Customer, items or tracking code": "Client, articles ou code de suivi",
   "Search by customer, items or tracking code": "Rechercher par client, articles ou code de suivi",
 };
 

@@ -2737,7 +2737,7 @@ export function BusinessPeoplePanel({
       <header className="lst-head">
         <div className="lst-head-text">
           <h2>People</h2>
-          <p>{rows.length === 0 ? `Owners and staff linked to ${businessName}.` : `${rows.length} team member${rows.length === 1 ? "" : "s"}`}</p>
+          <p>{rows.length === 0 ? <>Owners and staff linked to <span data-no-translate>{businessName}</span>.</> : <><span data-no-translate>{rows.length}</span> {rows.length === 1 ? "team member" : "team members"}</>}</p>
         </div>
         <div className="lst-head-actions">
           {busy && <span className="pur-kind">{busyLabel || "Working..."}</span>}
