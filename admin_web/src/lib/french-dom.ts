@@ -5858,6 +5858,24 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Who collects it": "Qui l’encaisse",
   "everything sold": "tout ce qui a été vendu",
   "Choose who received the money": "Choisissez qui a reçu l’argent",
+  // Switching a sale between paid and credit (v6).
+  "Switch to credit": "Passer à crédit",
+  "Switch to paid": "Passer en payée",
+  "Put this sale on credit": "Passer cette vente à crédit",
+  "Mark this sale as paid": "Marquer cette vente comme payée",
+  "The customer did not pay it all. Say who owes the rest. What was paid at the time keeps how it was paid and who received it.":
+    "Le client n’a pas tout payé. Indiquez qui doit le reste. Ce qui a été payé au moment de la vente garde son mode de paiement et la personne qui l’a reçu.",
+  "How much did they pay at the time? ($)": "Combien a-t-il payé au moment de la vente ? ($)",
+  "Customer phone (optional)": "Téléphone du client (facultatif)",
+  "The collector gets a notification. Past the due date, the collector and the owner are reminded every three days until it is paid.":
+    "La personne qui encaisse reçoit une notification. Après l’échéance, elle et le propriétaire reçoivent un rappel tous les trois jours jusqu’au paiement.",
+  "Switches between paid and credit": "Passages entre payée et crédit",
+  "Choose whether the sale becomes a credit sale or a paid sale.": "Choisissez si la vente devient une vente à crédit ou une vente payée.",
+  "This sale is already on credit.": "Cette vente est déjà à crédit.",
+  "This sale is already paid in full.": "Cette vente est déjà entièrement payée.",
+  "Money was already collected on this credit, so it can't become a paid sale. Use Record a payment for what is still owed.":
+    "De l’argent a déjà été encaissé sur ce crédit, elle ne peut donc pas devenir une vente payée. Utilisez Enregistrer un paiement pour ce qui reste dû.",
+  "This sale was switched too many times.": "Cette vente a été modifiée trop de fois.",
 });
 
 // Zelle bank check (docs/ZELLE_BANK_CHECK.md): the owner's bank card, the

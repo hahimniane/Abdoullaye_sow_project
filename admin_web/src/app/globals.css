@@ -14796,6 +14796,10 @@ html[data-lang-pending] body {
 .ivt-sales-table .mini-table-row.ivt-voided > span > strong { color: var(--muted); text-decoration: line-through; }
 .ivt-sale-detail { padding: 8px 16px 14px 34px; background: var(--bg, #f6f8f8); border-bottom: 1px solid var(--rule, #e5e7eb); overflow-x: auto; }
 .ivt-void-note { margin: 0 0 8px; color: #92400e; font-size: 12.5px; font-weight: 600; }
+/* Switches between paid and credit (v6): one muted line each, then the action. */
+.ivt-switch-history { margin: 0 0 8px; padding: 0; list-style: none; color: var(--muted, #64748b); font-size: 12.5px; line-height: 1.4; }
+.ivt-switch-history li + li { margin-top: 2px; }
+.ivt-switch-actions { margin: 0 0 8px; }
 .ivt-lines { width: 100%; border-collapse: collapse; font-size: 13px; }
 .ivt-lines th { text-align: left; color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; padding: 4px 10px 6px 0; white-space: nowrap; }
 .ivt-lines td { padding: 6px 10px 6px 0; border-top: 1px solid var(--rule, #e5e7eb); vertical-align: top; font-variant-numeric: tabular-nums; }

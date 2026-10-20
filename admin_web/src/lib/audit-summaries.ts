@@ -163,6 +163,13 @@ function itemsFr(count: string) {
 }
 
 const rules: Rule[] = [
+  // --- A sale switched between paid and credit (inventory_sale, v6) ---
+  [new RegExp(`^Switched to credit: (?:(${MONEY}) paid at the sale \\((\\w+)\\), )?(${MONEY}) owed(?: by (.+))?$`), (m, lookup) =>
+    "Passée à crédit : " + (m[1] ? `${m[1]} payés à la vente (${via(m[2], lookup)}), ` : "") +
+    `${m[3]} dus` + (m[4] ? ` par ${m[4]}` : "")],
+  [new RegExp(`^Switched to paid: (${MONEY}) paid at the sale \\((\\w+)\\)$`), (m, lookup) =>
+    `Passée en payée : ${m[1]} payés à la vente (${via(m[2], lookup)})`],
+
   // --- Store transfers (entityType inventory_transfer) ---
   [new RegExp(`^Sent (\\d+) items? from (.+?) to (.+) \\((${TRANSFER_CODE})\\)$`), (m) =>
     `Envoi de ${itemsFr(m[1])} de ${m[2]} vers ${m[3]} (${m[4]})`],

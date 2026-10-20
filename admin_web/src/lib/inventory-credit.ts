@@ -19,11 +19,13 @@
 import { INVOICE_PAYMENT_METHODS, MAX_INVOICE_CENTS, centsToInput, moneyText } from "./invoice-ledger.ts";
 import { readMoneyInput } from "./money-input.ts";
 import {
+  inventoryMethodLabel,
   inventorySaleFromRow,
   saleStoreId,
   storeNameIndex,
   type InventoryRefusal,
   type InventorySale,
+  type InventorySaleSwitch,
   type InventoryStore,
 } from "./inventory.ts";
 import { packagePaymentEntries, type PackagePaymentDraft, type PackagePaymentEntry } from "./waiting-packages.ts";
@@ -32,6 +34,7 @@ type Lang = "en" | "fr";
 
 const MAX_ID = 200;
 const MAX_NOTE = 200;
+const MAX_NAME = 120;
 const DATE_KEY = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/;
 
 function text(value: unknown, max = MAX_ID): string {
@@ -479,3 +482,181 @@ export function ofWhichOnCreditText(creditCents: number, lang: Lang = "en"): str
 export function stillOwedText(cents: number, lang: Lang = "en"): string {
   return lang === "fr" ? `${moneyText(cents)} encore dus` : `${moneyText(cents)} still owed`;
 }
+
+// ---------------------------------------------------------------------------
+// Switching a recorded sale between paid and credit (v6, docs/INVENTORY.md).
+// The callable `switchInventorySalePayment` is the authority; these are the
+// forms checked before the call and the history line.
+// ---------------------------------------------------------------------------
+
+/** "Switch to credit" is offered on a sale paid in full, not voided, sold for something. */
+export function canSwitchToCredit(sale: Pick<InventorySale, "voided" | "creditCents" | "totalCents">): boolean {
+  return !sale.voided && sale.creditCents <= 0 && sale.totalCents > 0;
+}
+
+/** "Switch to paid" ("it was never credit") only while nothing was collected on the credit. */
+export function canSwitchToPaid(sale: Pick<InventorySale, "voided" | "creditCents" | "creditPaidCents">): boolean {
+  return !sale.voided && sale.creditCents > 0 && sale.creditPaidCents === 0;
+}
+
+/** The same questions as a credit sale at the counter, plus what was paid at the time. */
+export type SwitchToCreditDraft = {
+  /** Dollars as typed; blank is nothing paid at the time. */
+  paidNow: string;
+  customerName: string;
+  /** As the country phone field writes it. */
+  customerPhone: string;
+  collectorStaffId: string;
+  /** "YYYY-MM-DD" or "" for none. */
+  dueDate: string;
+};
+
+export function emptySwitchToCreditDraft(): SwitchToCreditDraft {
+  return { paidNow: "", customerName: "", customerPhone: "", collectorStaffId: "", dueDate: "" };
+}
+
+/** "+<digits>" from what the phone field holds; "" when it holds no more than a country code. */
+export function creditPhoneOf(value: unknown): string {
+  const raw = text(value, 40);
+  const digits = raw.replace(/[^0-9]/g, "");
+  return digits.length > 3 ? `+${digits}` : "";
+}
+
+/** What was paid at the time, in cents: 0 when blank, null when it cannot be read. */
+export function switchPaidNowCents(draft: Pick<SwitchToCreditDraft, "paidNow">): number | null {
+  if (!text(draft.paidNow)) return 0;
+  const cents = readMoneyInput(draft.paidNow).cents;
+  return cents === null || cents < 0 ? null : cents;
+}
+
+/** Every problem before the switch is sent, as the server's codes. */
+export function validateSwitchToCreditDraft(draft: SwitchToCreditDraft, totalCents: number, todayKey: string): InventoryRefusal[] {
+  const errors: InventoryRefusal[] = [];
+  const paid = switchPaidNowCents(draft);
+  if (paid === null || paid >= totalCents) errors.push("paid_now_invalid");
+  if (!text(draft.customerName, MAX_NAME)) errors.push("credit_customer_required");
+  const phone = creditPhoneOf(draft.customerPhone);
+  if (phone && !/^\+[0-9]{7,15}$/.test(phone)) errors.push("customer_phone_invalid");
+  if (!text(draft.collectorStaffId)) errors.push("collector_invalid");
+  const due = text(draft.dueDate, 10);
+  if (due && (!isDateKey(due) || (isDateKey(todayKey) && due < todayKey))) errors.push("due_date_invalid");
+  return errors;
+}
+
+/** How the total splits once switched: paid at the time, and owed. */
+export function switchSplit(draft: Pick<SwitchToCreditDraft, "paidNow">, totalCents: number): { paidNowCents: number; creditCents: number } {
+  const paid = Math.min(Math.max(0, switchPaidNowCents(draft) ?? 0), totalCents);
+  return { paidNowCents: paid, creditCents: totalCents - paid };
+}
+
+/** The `switchInventorySalePayment` request to credit. */
+export function switchToCreditRequest(businessId: string, saleId: string, clientRequestId: string, draft: SwitchToCreditDraft) {
+  return {
+    businessId: text(businessId),
+    saleId: text(saleId),
+    clientRequestId: text(clientRequestId, 100),
+    to: "credit" as const,
+    credit: {
+      paidNowCents: switchPaidNowCents(draft) ?? 0,
+      customerName: text(draft.customerName, MAX_NAME),
+      customerPhone: creditPhoneOf(draft.customerPhone),
+      collectorStaffId: text(draft.collectorStaffId),
+      dueDate: text(draft.dueDate, 10),
+    },
+  };
+}
+
+export type SwitchToPaidDraft = { method: string; receivedByStaffId: string };
+
+/**
+ * Switch to paid starts on the sale: its method (or, when it went to credit
+ * with nothing paid, the one it had before), else cash; and who received
+ * what was paid at the time.
+ */
+export function switchToPaidDraftFrom(sale: Pick<InventorySale, "paymentMethod" | "receivedByStaffId" | "paymentSwitches">): SwitchToPaidDraft {
+  const methods = INVOICE_PAYMENT_METHODS as readonly string[];
+  const before = [...sale.paymentSwitches].reverse().find((entry) => methods.includes(entry.fromPaymentMethod));
+  const method = methods.includes(sale.paymentMethod) ? sale.paymentMethod : before?.fromPaymentMethod ?? "cash";
+  return { method, receivedByStaffId: text(sale.receivedByStaffId) };
+}
+
+export function validateSwitchToPaidDraft(draft: SwitchToPaidDraft): InventoryRefusal[] {
+  const errors: InventoryRefusal[] = [];
+  if (!(INVOICE_PAYMENT_METHODS as readonly string[]).includes(text(draft.method, 40))) errors.push("payment_method_invalid");
+  if (!text(draft.receivedByStaffId)) errors.push("received_by_invalid");
+  return errors;
+}
+
+/** The `switchInventorySalePayment` request to paid. */
+export function switchToPaidRequest(businessId: string, saleId: string, clientRequestId: string, draft: SwitchToPaidDraft) {
+  return {
+    businessId: text(businessId),
+    saleId: text(saleId),
+    clientRequestId: text(clientRequestId, 100),
+    to: "paid" as const,
+    paymentMethod: text(draft.method, 40),
+    receivedByStaffId: text(draft.receivedByStaffId),
+  };
+}
+
+/** What the answers are, so the same answers sent again reuse their request id (a retry). */
+export function switchDraftKey(to: "credit" | "paid", draft: SwitchToCreditDraft | SwitchToPaidDraft): string {
+  return `${to}|${JSON.stringify(draft)}`;
+}
+
+/**
+ * One switch as the sale's history shows it (the words around a typed name,
+ * so the screen renders it as is, in the reader's language):
+ * "Switched to credit by Ama · Oct 20, 2026, 3:15 PM · $10.00 paid, $30.00 owed" /
+ * "Passée à crédit par Ama · ... · $10.00 payés, $30.00 dus";
+ * "Switched to paid by Ama · ... · $40.00 paid" (the screen adds the method,
+ * `methodLabel`, which the dictionary translates).
+ */
+export function saleSwitchLineText(entry: InventorySaleSwitch, who: string, when: string, lang: Lang = "en"): { text: string; methodLabel: string } {
+  const name = who || (lang === "fr" ? "Un membre de l’équipe" : "A team member");
+  const at = when ? ` · ${when}` : "";
+  if (entry.to === "credit") {
+    return {
+      text: lang === "fr"
+        ? `Passée à crédit par ${name}${at} · ${moneyText(entry.toPaidNowCents)} payés, ${moneyText(entry.toCreditCents)} dus`
+        : `Switched to credit by ${name}${at} · ${moneyText(entry.toPaidNowCents)} paid, ${moneyText(entry.toCreditCents)} owed`,
+      methodLabel: "",
+    };
+  }
+  return {
+    text: lang === "fr"
+      ? `Passée en payée par ${name}${at} · ${moneyText(entry.totalCents)} payés`
+      : `Switched to paid by ${name}${at} · ${moneyText(entry.totalCents)} paid`,
+    methodLabel: inventoryMethodLabel(entry.toPaymentMethod),
+  };
+}
+
+/** The confirmation of Switch to credit, both languages. */
+export function switchToCreditConfirmText(name: string, split: { paidNowCents: number; creditCents: number }, lang: Lang = "en"): string {
+  return lang === "fr"
+    ? `Passer cette vente à crédit ? ${name} devra ${moneyText(split.creditCents)}. ${moneyText(split.paidNowCents)} reste payé au moment de la vente. La personne qui encaisse est prévenue.`
+    : `Put this sale on credit? ${name} will owe ${moneyText(split.creditCents)}. ${moneyText(split.paidNowCents)} stays paid at the time. The collector is told.`;
+}
+
+/** The confirmation of Switch to paid, both languages. */
+export function switchToPaidConfirmText(totalCents: number, lang: Lang = "en"): string {
+  return lang === "fr"
+    ? `Marquer cette vente comme payée ? La totalité de ${moneyText(totalCents)} a été payée au moment de la vente. Plus personne ne doit rien dessus.`
+    : `Mark this sale as paid? The whole ${moneyText(totalCents)} was paid at the time of the sale. Nobody owes anything on it any more.`;
+}
+
+/** "It was never credit: the whole $60.00 was paid at the time of the sale." */
+export function neverCreditText(totalCents: number, lang: Lang = "en"): string {
+  return lang === "fr"
+    ? `Ce n’était pas un crédit : la totalité de ${moneyText(totalCents)} a été payée au moment de la vente.`
+    : `It was never credit: the whole ${moneyText(totalCents)} was paid at the time of the sale.`;
+}
+
+/** The flash once switched: "Switched to credit: $40.00 owed." / "Switched to paid." */
+export function switchedText(to: "credit" | "paid", creditCents: number, lang: Lang = "en"): string {
+  if (to === "credit") {
+    return lang === "fr" ? `Passée à crédit : ${moneyText(creditCents)} dus.` : `Switched to credit: ${moneyText(creditCents)} owed.`;
+  }
+  return lang === "fr" ? "Passée en payée." : "Switched to paid.";
+}
+

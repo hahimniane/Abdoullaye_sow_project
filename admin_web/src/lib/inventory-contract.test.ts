@@ -53,6 +53,8 @@ const screens = {
   "the credit block": B + "inventory-credit-block.tsx",
   "the credit payment dialog": B + "inventory-credit-payment-dialog.tsx",
   "the collector dialog": B + "inventory-collector-dialog.tsx",
+  // v6: switching a sale between paid and credit.
+  "the switch dialog": B + "inventory-sale-switch-dialog.tsx",
   "Credit owed": B + "inventory-credit-list.tsx",
   "the sales history": B + "inventory-history.tsx",
 } as const;

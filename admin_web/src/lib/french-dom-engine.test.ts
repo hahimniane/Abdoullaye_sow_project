@@ -316,6 +316,21 @@ test("store transfer History sentences translate around the store, product and t
   assert.equal(translateAuditSummary("Wrote off 2 of Cap from TR-4K8Q2A: Eaten"), null);
 });
 
+test("a sale switched between paid and credit reads in French around the customer's name", () => {
+  // inventory.js saleSwitchSummary.
+  const cases: Array<[string, string]> = [
+    ["Switched to credit: $10.00 paid at the sale (zelle), $30.00 owed by Fatou Bah",
+      "Passée à crédit : $10.00 payés à la vente (Zelle), $30.00 dus par Fatou Bah"],
+    ["Switched to credit: $40.00 owed by Pickup", "Passée à crédit : $40.00 dus par Pickup"],
+    ["Switched to credit: $40.00 owed", "Passée à crédit : $40.00 dus"],
+    ["Switched to paid: $40.00 paid at the sale (cash)", "Passée en payée : $40.00 payés à la vente (espèces)"],
+    ["Switched to paid: $1,240.50 paid at the sale (card_in_person)", "Passée en payée : $1,240.50 payés à la vente (carte en personne)"],
+  ];
+  for (const [english, french] of cases) {
+    assert.equal(translateAuditSummary(english), french, english);
+  }
+});
+
 test("an unknown History sentence is left exactly as the server wrote it", () => {
   assert.equal(translateAuditSummary("Changed the weather for Pickup"), null);
   // An edit naming a field the table does not know is left whole too.

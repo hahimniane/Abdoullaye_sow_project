@@ -361,6 +361,12 @@ export type InventoryRefusal =
   | "credit_has_payments"
   | "payment_not_found"
   | "payment_already_reverted"
+  // The server's v6 codes (switching a sale between paid and credit).
+  | "switch_target_invalid"
+  | "sale_already_credit"
+  | "sale_already_paid"
+  | "credit_payments_recorded"
+  | "too_many_switches"
   // The server's v5 codes (store transfers).
   | "transfer_not_found"
   | "transfer_not_draft"
@@ -432,7 +438,7 @@ export const INVENTORY_MESSAGES: Record<InventoryRefusal, string> = {
   received_by_invalid: "Choose who received the money: someone of this business.",
   credit_invalid: "The credit details could not be read.",
   paid_now_invalid: "The amount paid now must be less than the sale total.",
-  credit_customer_required: "Enter the customer's name and phone number.",
+  credit_customer_required: "Enter the customer's name.",
   customer_phone_invalid: "Enter the customer's phone number with its country code.",
   collector_invalid: "Choose who collects the rest: someone of this business.",
   due_date_invalid: "The due date must be today or later.",
@@ -442,6 +448,11 @@ export const INVENTORY_MESSAGES: Record<InventoryRefusal, string> = {
   credit_has_payments: "Money was already collected on this credit. Revert those payments before voiding the sale.",
   payment_not_found: "That payment no longer exists.",
   payment_already_reverted: "That payment was already reverted.",
+  switch_target_invalid: "Choose whether the sale becomes a credit sale or a paid sale.",
+  sale_already_credit: "This sale is already on credit.",
+  sale_already_paid: "This sale is already paid in full.",
+  credit_payments_recorded: "Money was already collected on this credit, so it can't become a paid sale. Use Record a payment for what is still owed.",
+  too_many_switches: "This sale was switched too many times.",
   transfer_not_found: "That transfer is not available.",
   transfer_not_draft: "This transfer was already sent. Open it from the list.",
   transfer_not_in_transit: "This transfer is no longer in transit.",
@@ -1184,7 +1195,53 @@ export type InventorySale = {
   credit: InventorySaleCredit | null;
   /** The Zelle bank check of the paid-now part (server-written); null when never checked. */
   bankCheck: BankCheck | null;
+  /** Every switch between paid and credit, oldest first (server-written, v6). */
+  paymentSwitches: InventorySaleSwitch[];
 };
+
+/** One switch of a recorded sale between paid and credit: who, when, the money before and after. */
+export type InventorySaleSwitch = {
+  requestId: string;
+  from: "paid" | "credit";
+  to: "paid" | "credit";
+  byStaffId: string;
+  at: unknown;
+  totalCents: number;
+  fromPaidNowCents: number;
+  fromCreditCents: number;
+  toPaidNowCents: number;
+  toCreditCents: number;
+  fromPaymentMethod: string;
+  toPaymentMethod: string;
+  fromReceivedByStaffId: string;
+  toReceivedByStaffId: string;
+  customerName: string;
+  collectorStaffId: string;
+};
+
+/** A stored switch entry, read safely (anything odd reads as a switch to paid of nothing). */
+export function inventorySaleSwitchFromRow(raw: unknown): InventorySaleSwitch {
+  const r = asRow(raw);
+  const kind = (value: unknown): "paid" | "credit" => (text(value, 10) === "credit" ? "credit" : "paid");
+  return {
+    requestId: text(r.requestId, 101),
+    from: kind(r.from),
+    to: kind(r.to),
+    byStaffId: text(r.byStaffId),
+    at: r.at ?? null,
+    totalCents: nonNegativeInt(r.totalCents),
+    fromPaidNowCents: nonNegativeInt(r.fromPaidNowCents),
+    fromCreditCents: nonNegativeInt(r.fromCreditCents),
+    toPaidNowCents: nonNegativeInt(r.toPaidNowCents),
+    toCreditCents: nonNegativeInt(r.toCreditCents),
+    fromPaymentMethod: text(r.fromPaymentMethod, 40),
+    toPaymentMethod: text(r.toPaymentMethod, 40),
+    fromReceivedByStaffId: text(r.fromReceivedByStaffId),
+    toReceivedByStaffId: text(r.toReceivedByStaffId),
+    customerName: text(r.customerName, MAX_NAME),
+    collectorStaffId: text(r.collectorStaffId),
+  };
+}
 
 export type InventoryCreditStatus = "none" | "open" | "paid";
 
@@ -1272,6 +1329,9 @@ export function inventorySaleFromRow(row: unknown): InventorySale {
     creditStatus: voided || creditCents <= 0 ? "none" : creditPaidCents >= creditCents ? "paid" : "open",
     credit,
     bankCheck: bankCheckFrom(r.bankCheck),
+    paymentSwitches: (Array.isArray(r.paymentSwitches) ? r.paymentSwitches : [])
+      .filter((entry) => entry !== null && typeof entry === "object")
+      .map(inventorySaleSwitchFromRow),
   };
 }
 

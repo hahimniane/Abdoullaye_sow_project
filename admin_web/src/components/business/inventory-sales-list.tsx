@@ -1,9 +1,10 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronRight, RefreshCw, Undo2 } from "lucide-react";
+import { ArrowLeftRight, ChevronDown, ChevronRight, RefreshCw, Undo2 } from "lucide-react";
 
 import { InventoryCreditBlock } from "@/components/business/inventory-credit-block";
+import { InventorySaleSwitchDialog } from "@/components/business/inventory-sale-switch-dialog";
 import { InventoryStoreFilter } from "@/components/business/inventory-store-filter";
 import { ZelleCheckButton } from "@/components/business/zelle-check-button";
 import { LoadMoreButton } from "@/components/show-more";
@@ -29,10 +30,13 @@ import {
   CREDIT_CHIP_TONES,
   SALE_CREDIT_FILTERS,
   SALE_CREDIT_FILTER_LABELS,
+  canSwitchToCredit,
+  canSwitchToPaid,
   creditChip,
   creditChipText,
   receivedByText,
   saleMatchesCreditFilter,
+  saleSwitchLineText,
   type SaleCreditFilter,
 } from "@/lib/inventory-credit";
 import { statusPillClass } from "@/lib/status-pill";
@@ -101,6 +105,8 @@ export function InventorySalesList({
   const storeNames = useMemo(() => storeNameIndex(access.stores), [access.stores]);
   const narrowed = access.multi && access.canSeeAll && storeFilter !== "";
   const [creditFilter, setCreditFilter] = useState<SaleCreditFilter>("all");
+  // The sale being switched between paid and credit (its dialog is open).
+  const [switching, setSwitching] = useState<InventorySale | null>(null);
   const list = useMemo(() => {
     const inStore = narrowed ? salesInStore(all, storeFilter, access.stores) : all;
     return creditFilter === "all" ? inStore : inStore.filter((sale) => saleMatchesCreditFilter(sale, creditFilter));
@@ -233,6 +239,26 @@ export function InventorySalesList({
                           {voidedByText(voider, lang)} · {formatDateTime(sale.voidedAt)}{sale.voidReason ? ` · ${sale.voidReason}` : ""}
                         </p>
                       )}
+                      {sale.paymentSwitches.length > 0 && (
+                        <ul className="ivt-switch-history" aria-label="Switches between paid and credit">
+                          {sale.paymentSwitches.map((entry, index) => {
+                            const line = saleSwitchLineText(entry, staffName(entry.byStaffId), formatDateTime(entry.at), lang);
+                            return (
+                              <li key={`${entry.requestId}-${index}`}>
+                                <span data-no-translate>{line.text}</span>
+                                {line.methodLabel && <> (<span>{line.methodLabel}</span>)</>}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                      {(canSwitchToCredit(sale) || canSwitchToPaid(sale)) && (
+                        <div className="wpk-inline-actions ivt-switch-actions">
+                          <button className="lst-btn ghost" type="button" disabled={busy || !enabled} onClick={() => setSwitching(sale)}>
+                            <ArrowLeftRight size={16} /> {canSwitchToCredit(sale) ? "Switch to credit" : "Switch to paid"}
+                          </button>
+                        </div>
+                      )}
                       {zelleCheckable({ method: sale.paymentMethod, amountCents: sale.paidNowCents, voided: sale.voided }) && (
                         <div className="ivt-zelle-paid-now">
                           <ZelleCheckButton businessId={businessId} kind="inventory_sale" id={sale.id} bankCheck={sale.bankCheck} enabled={enabled} />
@@ -280,6 +306,16 @@ export function InventorySalesList({
           </div>
           <LoadMoreButton hasMore={sales.hasMore} loading={sales.loadingMore} onLoadMore={sales.loadMore} />
         </div>
+      )}
+      {switching && (
+        <InventorySaleSwitchDialog
+          businessId={businessId}
+          sale={switching}
+          staffOptions={staffOptions}
+          todayKey={todayKey}
+          onClose={() => setSwitching(null)}
+          onFlash={onFlash}
+        />
       )}
     </>
   );
