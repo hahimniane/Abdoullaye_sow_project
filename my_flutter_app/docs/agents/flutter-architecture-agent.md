@@ -384,3 +384,10 @@ Add future project conventions and repeated architectural decisions here.
   (`ContainerLine.phoneFlags`, `recordPhoneFlagsOf` for raw maps) through
   `RecordPhoneFlagNotes`; they replace the client-side "no country code"
   check for the same number rather than doubling it.
+- Credit terms (paid now, customer name, optional phone, collector, due
+  date) are one widget, `InventoryCreditTermsFields`
+  (`lib/widgets/inventory_credit_fields.dart`, with `pickInventoryPerson` /
+  `pickInventoryDueDay`), used by the Sell checkout and by Switch to credit
+  (`inventory_sale_switch_sheet.dart`, docs/INVENTORY.md v6). A new place
+  that asks for credit terms reuses it; the draft and its validator stay
+  `InventoryCheckoutDraft` / `validateInventoryCheckout`.

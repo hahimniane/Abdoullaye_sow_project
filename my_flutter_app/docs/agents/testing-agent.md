@@ -643,3 +643,9 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   local verification there, and say so; a deploy build still runs from a
   real install. `next dev` also rewrites `next-env.d.ts` - restore it
   before committing.
+- `flutter gen-l10n` orders a message's parameters ALPHABETICALLY when the
+  ARB key has no `@key` placeholders block: `"{who} · {when} · {paid}"`
+  generates `(owed, paid, when, who)` and a positional call silently swaps
+  the values (a widget test caught "Switched to credit by $40.00 · $20.00").
+  Any message with two or more placeholders gets an `@key` block with the
+  placeholders in call order, in BOTH ARB files.
