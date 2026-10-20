@@ -49,6 +49,8 @@ console's preview and the deal editor's hint by
 | Parking billed | `parkingMonthSummary(...).billedCents`: cars' days in the month + lot activities dated in the month | same |
 | Items sold | `inventory.js` `summarizeSales(...).itemsSold`: sum of `quantity` over non-voided `inventorySales` created in the month | `createdAt` in the month, America/New_York |
 | Commission taken | `console_summaries.js` `platformEarningsLines` (the `getPlatformEarnings` lines): `feeCents` of lines in state `earned` for the business whose date is in the month | America/New_York |
+| Bank connected | `bank_check.js` `linkActiveInMonth`: the month's `businessBankUsage` saw the link active (a check, a webhook sync or a connect), or the link was connected before the month ended and not disconnected before it began | America/New_York (the usage month) |
+| Paid bank refreshes | `businessBankUsage/{businessId}_{yyyy-mm}.refreshes`: successful `/transactions/refresh` calls of Check Zelle / Check bank (a refusal is given back) - docs/ZELLE_BANK_CHECK.md "Usage and the monthly limit" | America/New_York |
 
 **Zone note.** The brief says "business's time zone (same as Volume)".
 Volume counts every business in America/New_York (`VOLUME_TIME_ZONE`), so
@@ -74,6 +76,8 @@ deal = {
   parking:    {mode: "perCar", centsEach}
             | {mode: "percent", bps} | null             // parked cars
   itemSold:   {centsEach} | null                        // shops, per item
+  bankConnection: {centsEach} | null                    // per month with an active bank link
+  bankCheck:  {centsEach} | null                        // per paid bank refresh
   flatCents:  int >= 0                                  // monthly flat fee
   minimumCents: int > 0 | null                          // monthly minimum
   capCents:   int > 0 | null                            // monthly cap
@@ -93,6 +97,8 @@ amount uses integer math and **rounds half up to the cent**:
 | Parking, per car | `carsOnLot × centsEach` |
 | Parking, percent | `pct(billedCents, bps)` (one rounding on the month's total) |
 | Items sold | `itemsSold × centsEach` |
+| Bank connection | `(bankConnected ? 1 : 0) × centsEach` (line key `bankConnection`) |
+| Bank checks | `bankRefreshes × centsEach` (line key `bankChecks`) |
 
 **Order (exact):**
 1. `charges = Σ` of the lines above.
@@ -292,6 +298,23 @@ Volume), `components/billing-views.tsx`, pure helpers in
   effect worked out live ("With the current deal"), also for a closed
   month, so the comparison is like for like; the closed amount stays on the
   bill itself.
+- **Check bank lines (2026-10-20).** Two optional charges, `bankConnection`
+  (a monthly price when the business had an active bank link) and
+  `bankCheck` (a price per paid bank refresh, from the month's count), both
+  `{centsEach}` validated like every unit charge. Deals saved before have
+  neither key and bill exactly as before; a month closed before has no bank
+  usage in its snapshot, so bank figures never show as drift there
+  (`bankConnected` / `bankRefreshes` are drift keys only when both sides
+  read them). The bank usage is read (two documents: the month's
+  `businessBankUsage` and the link's dates, never its token) only when the
+  deal in effect or the rate card tried has a bank charge (`dealNeeds.bank`);
+  "Try other rates" for every business adds the businesses with a
+  `businessBankUsage` document for the month. `getBusinessBill` always adds
+  `bankUsage` (`bank_check.usageView` + `connected`): the month's checks,
+  paid refreshes, estimated Plaid cost ($0.12 each) and the same by staff
+  member, shown on the business's bill view - this is where platform admins
+  see each business's Check bank usage. The table row's `counts` carries
+  `bankRefreshes`.
 - Tests: `functions/test/platform-billing.test.js` (pure),
   `test/platform-billing-callables.test.js` (`npm run test:billing`,
   Auth + Firestore emulators), the rules case in

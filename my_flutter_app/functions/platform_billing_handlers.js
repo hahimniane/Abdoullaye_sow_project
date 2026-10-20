@@ -41,6 +41,7 @@ const {
   zonedDayKey,
 } = require("./console_summaries");
 const {drainPages, mapWithConcurrency} = require("./scheduled_sweep");
+const bankCheck = require("./bank_check");
 
 const PAGE_SIZE = 500;
 /** Rows one getMonthBills / whatIf call computes. */
@@ -267,6 +268,35 @@ function createPlatformBillingHandlers(deps) {
   }
 
   /**
+   * A business's bank for a month (docs/ZELLE_BANK_CHECK.md): whether it had
+   * an active link (bank_check.linkActiveInMonth) and its paid refreshes,
+   * from businessBankUsage and the link. Two document reads.
+   *
+   * @param {string} businessId The business.
+   * @param {string} month "yyyy-mm".
+   * @param {{startMs: number, endMs: number}} window The month.
+   * @return {Promise<object>} {bankConnected, bankRefreshes, usage, link}.
+   */
+  async function bankUsage(businessId, month, window) {
+    // Never the sealed token: only the fields the month needs.
+    const [usageSnap, [linkSnap]] = await Promise.all([
+      db().collection(bankCheck.BANK_USAGE)
+          .doc(bankCheck.usageDocId(businessId, month)).get(),
+      db().getAll(db().collection("businessBankLinks").doc(businessId), {
+        fieldMask: ["itemId", "status", "connectedAt", "disconnectedAt",
+          "refreshLimit"]}),
+    ]);
+    const usage = usageSnap.exists ? usageSnap.data() || {} : null;
+    const link = linkSnap.exists ? linkSnap.data() || {} : null;
+    return {
+      bankConnected: bankCheck.linkActiveInMonth({link, usage, window}),
+      bankRefreshes: bankCheck.countOf(usage?.refreshes),
+      usage,
+      link,
+    };
+  }
+
+  /**
    * One business's usage for a month: Volume's counts always, the rest only
    * when `needs` asks.
    *
@@ -276,11 +306,12 @@ function createPlatformBillingHandlers(deps) {
   async function usageFor({businessId, month, needs, volume, deadlineMs}) {
     const window = monthWindow(month, timeZone);
     const row = volume || {};
-    const [prices, parking, items] = await Promise.all([
+    const [prices, parking, items, bank] = await Promise.all([
       needs.packagePrices ?
         packagePrices(businessId, month, window, deadlineMs) : null,
       needs.parking ? parkingUsage(businessId, month, deadlineMs) : null,
       needs.items ? itemsSold(businessId, window, deadlineMs) : null,
+      needs.bank ? bankUsage(businessId, month, window) : null,
     ]);
     const usage = billing.normalizeUsage({
       barrels: row.barrels,
@@ -290,6 +321,8 @@ function createPlatformBillingHandlers(deps) {
       parkingCars: parking ? parking.carsOnLot : null,
       parkingBilledCents: parking ? parking.billedCents : null,
       itemsSold: items ? items.itemsSold : null,
+      bankConnected: bank ? bank.bankConnected : null,
+      bankRefreshes: bank ? bank.bankRefreshes : null,
     });
     usage.complete = row.complete !== false &&
       (!prices || prices.complete) && (!parking || parking.complete) &&
@@ -491,6 +524,7 @@ function createPlatformBillingHandlers(deps) {
         cars: Number(row.usage?.cars) || 0,
         parkingCars: row.usage?.parkingCars ?? null,
         itemsSold: row.usage?.itemsSold ?? null,
+        bankRefreshes: row.usage?.bankRefreshes ?? null,
       },
       amountCents: row.amountCents,
       paidCents: row.paidCents,
@@ -650,6 +684,13 @@ function createPlatformBillingHandlers(deps) {
       refuse("business_not_found");
     }
     const monthDoc = months.find((m) => m.month === month) || null;
+    // Check bank usage for the month, whatever the deal: platform admins
+    // see each business's checks, paid refreshes and estimated cost here.
+    const bank = await bankUsage(businessId, month, monthWindow(month,
+        timeZone));
+    const bankStaff = await namesOf("users",
+        Object.keys(bank.usage?.byUid || {}).slice(0, 100),
+        ["fullName", "displayName", "name", "email"]);
     const row = await businessBill({businessId, month, deal, monthDoc,
       volume: volume.get(businessId) || null,
       commission: commission.byBusiness.get(businessId) || 0,
@@ -715,6 +756,9 @@ function createPlatformBillingHandlers(deps) {
       pastOpenMonths: billing.pastOpenMonths({versions: deal.versions,
         closedMonths, currentMonth: thisMonth()}),
       people: Object.fromEntries(names),
+      bankUsage: {...bankCheck.usageView({month, usage: bank.usage,
+        limit: bankCheck.refreshLimitOf(bank.link), names: bankStaff}),
+      connected: bank.bankConnected},
       canManage: ctx.canManage,
       complete: row.complete,
       computedAtMs: now().getTime(),
@@ -758,6 +802,17 @@ function createPlatformBillingHandlers(deps) {
           .where("enabledServices", "array-contains", service)
           .select().limit(1000).get();
       for (const doc of snap.docs) extra.push(doc.id);
+    }
+    if (altNeeds.bank) {
+      // Businesses whose bank was in use that month (a check, a sync or a
+      // connect wrote the month's usage).
+      const snap = await db().collection(bankCheck.BANK_USAGE)
+          .where("month", "==", month).select("businessId").limit(1000)
+          .get();
+      for (const doc of snap.docs) {
+        const id = String(doc.data()?.businessId || "");
+        if (id) extra.push(id);
+      }
     }
     const c = await monthCandidates(month, deadlineMs, false, extra);
     const page = c.ordered.slice(cursor, cursor + MAX_ROWS);

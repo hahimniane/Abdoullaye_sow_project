@@ -442,6 +442,72 @@ describe("Laawol bills", () => {
         assert.ok(actions.includes("billing_commission_restored"));
       });
 
+  it("bills the bank lines from the month's Check bank usage", async () => {
+    // A business with a bank linked before the month, five paid refreshes
+    // and nine checks in it (businessBankUsage, docs/ZELLE_BANK_CHECK.md).
+    const BANK_BIZ = "bill-test-bank";
+    const CLERK = "bill-test-clerk";
+    await Promise.all([
+      db.collection("businesses").doc(BANK_BIZ).set({name: "Bamako Shop",
+        status: "approved", enabledServices: ["inventory"]}),
+      db.collection("users").doc(CLERK).set({role: "staff",
+        businessId: BANK_BIZ, fullName: "Kadi Clerk"}),
+      db.collection("businessBankLinks").doc(BANK_BIZ).set({
+        businessId: BANK_BIZ, itemId: "item-x", status: "active",
+        accessTokenEnc: "sealed-never-read", refreshLimit: 40,
+        connectedAt: at(`${PREV2}-03T12:00:00Z`)}),
+      db.collection("businessBankUsage").doc(`${BANK_BIZ}_${PREV}`).set({
+        businessId: BANK_BIZ, month: PREV, checks: 9, refreshes: 5,
+        refreshesFailed: 1, linkActive: true,
+        byUid: {[CLERK]: {checks: 9, refreshes: 5}}}),
+    ]);
+    await assert.rejects(call({action: "saveDeal", businessId: BANK_BIZ,
+      effectiveFrom: PREV, deal: {bankCheck: {centsEach: 0}}}),
+    refusedWith("amount_invalid"));
+    await call({action: "saveDeal", businessId: BANK_BIZ,
+      effectiveFrom: PREV, deal: {bankConnection: {centsEach: 300},
+        bankCheck: {centsEach: 20}}});
+    const bill = await call({action: "getBusinessBill", businessId: BANK_BIZ,
+      month: PREV}, FINANCE);
+    const lines = Object.fromEntries(bill.bill.lines.map((l) =>
+      [l.key, [l.quantity, l.centsEach, l.cents]]));
+    assert.deepEqual(lines, {bankConnection: [1, 300, 300],
+      bankChecks: [5, 20, 100]});
+    assert.equal(bill.amountCents, 400);
+    assert.deepEqual([bill.usage.bankConnected, bill.usage.bankRefreshes],
+        [true, 5]);
+    assert.deepEqual(bill.bankUsage, {month: PREV, checks: 9, refreshes: 5,
+      refreshesFailed: 1, estimatedCostCents: 60, refreshLimit: 40,
+      limitReached: false, connected: true, byStaff: [{uid: CLERK,
+        name: "Kadi Clerk", checks: 9, refreshes: 5}]});
+    assert.ok(!JSON.stringify(bill).includes("sealed-never-read"),
+        "the sealed token never leaves the server");
+    // This month: the link is still on (connection billed), no refresh
+    // counted yet.
+    const now = await call({action: "getBusinessBill", businessId: BANK_BIZ,
+      month: CUR}, FINANCE);
+    assert.deepEqual(now.bill.lines.map((l) => [l.key, l.cents]),
+        [["bankConnection", 300], ["bankChecks", 0]]);
+    // A deal saved before Check bank existed bills as it always did, and
+    // still shows the business's (empty) bank usage.
+    const old = await call({action: "getBusinessBill", businessId: BIZ,
+      month: PREV}, FINANCE);
+    assert.ok(old.bill.lines.every((l) => !l.key.startsWith("bank")));
+    assert.deepEqual([old.bankUsage.checks, old.bankUsage.connected],
+        [0, false]);
+    // The month's table carries the refreshes; the what-if for everybody
+    // finds businesses whose bank was in use.
+    const month = await call({action: "getMonthBills", month: PREV},
+        FINANCE);
+    const row = month.rows.find((r) => r.businessId === BANK_BIZ);
+    assert.equal(row.counts.bankRefreshes, 5);
+    assert.equal(row.amountCents, 400);
+    const all = await call({action: "whatIf", month: PREV,
+      deal: {bankCheck: {centsEach: 50}}}, FINANCE);
+    const alt = all.rows.find((r) => r.businessId === BANK_BIZ);
+    assert.deepEqual([alt.nowCents, alt.altCents], [400, 250]);
+  });
+
   it("a month with nothing open is not listed", async () => {
     const month = await call({action: "getMonthBills", month: CUR},
         FINANCE);

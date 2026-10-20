@@ -40,7 +40,7 @@ const COMMISSION_MODES = Object.freeze(["keep", "replace"]);
 const PAYMENT_METHODS = Object.freeze(["zelle", "cash", "card",
   "bank_transfer", "check", "other"]);
 const CHARGE_KEYS = Object.freeze(["barrels", "packages", "shippedCars",
-  "parking", "itemsSold"]);
+  "parking", "itemsSold", "bankConnection", "bankChecks"]);
 
 const MONTH_RE = /^(\d{4})-(0[1-9]|1[0-2])$/;
 const DAY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -223,7 +223,8 @@ function monthIsOver(month, currentMonth) {
  */
 function emptyDeal() {
   return {barrel: null, package: null, shippedCar: null, parking: null,
-    itemSold: null, flatCents: 0, minimumCents: null, capCents: null};
+    itemSold: null, bankConnection: null, bankCheck: null, flatCents: 0,
+    minimumCents: null, capCents: null};
 }
 
 /**
@@ -297,6 +298,16 @@ function normalizeDeal(raw) {
   const item = charge(raw.itemSold);
   if (item) deal.itemSold = {centsEach: unit(item.centsEach)};
 
+  // Check bank (docs/ZELLE_BANK_CHECK.md): a monthly price for a connected
+  // bank, and a price per paid bank refresh. Deals saved before have
+  // neither: they read as no charge.
+  const bankConnection = charge(raw.bankConnection);
+  if (bankConnection) {
+    deal.bankConnection = {centsEach: unit(bankConnection.centsEach)};
+  }
+  const bankCheck = charge(raw.bankCheck);
+  if (bankCheck) deal.bankCheck = {centsEach: unit(bankCheck.centsEach)};
+
   const flat = raw.flatCents === undefined || raw.flatCents === null ?
     0 : raw.flatCents;
   if (!wholeIn(flat, 0, MAX_MONTH_CENTS)) errors.add("amount_invalid");
@@ -343,21 +354,23 @@ function storedDeal(raw) {
 function isEmptyDeal(deal) {
   if (!deal) return true;
   return !deal.barrel && !deal.package && !deal.shippedCar &&
-    !deal.parking && !deal.itemSold && !(deal.flatCents > 0) &&
-    !(deal.minimumCents > 0);
+    !deal.parking && !deal.itemSold && !deal.bankConnection &&
+    !deal.bankCheck && !(deal.flatCents > 0) && !(deal.minimumCents > 0);
 }
 
 /**
  * Which records a deal needs read beyond the Volume rollup.
  *
  * @param {object|null} deal A deal.
- * @return {{packagePrices: boolean, parking: boolean, items: boolean}}
+ * @return {{packagePrices: boolean, parking: boolean, items: boolean,
+ *   bank: boolean}}
  */
 function dealNeeds(deal) {
   return {
     packagePrices: deal?.package?.mode === "percent",
     parking: Boolean(deal?.parking),
     items: Boolean(deal?.itemSold),
+    bank: Boolean(deal?.bankConnection || deal?.bankCheck),
   };
 }
 
@@ -370,6 +383,7 @@ function mergeNeeds(...needs) {
     packagePrices: needs.some((n) => n?.packagePrices),
     parking: needs.some((n) => n?.parking),
     items: needs.some((n) => n?.items),
+    bank: needs.some((n) => n?.bank),
   };
 }
 
@@ -455,7 +469,9 @@ function addVersion(versions, version) {
  * Usage cleaned: counts whole and non-negative; what was not read is null.
  *
  * @param {object} raw {barrels, packages, cars, packagePrices,
- *   parkingCars, parkingBilledCents, itemsSold, complete}.
+ *   parkingCars, parkingBilledCents, itemsSold, bankConnected,
+ *   bankRefreshes, complete}. bankConnected: whether the business had an
+ *   active bank link in the month; bankRefreshes: its paid bank refreshes.
  * @return {object} The usage.
  */
 function normalizeUsage(raw) {
@@ -473,6 +489,9 @@ function normalizeUsage(raw) {
     parkingCars: maybe(row.parkingCars),
     parkingBilledCents: maybe(row.parkingBilledCents),
     itemsSold: maybe(row.itemsSold),
+    bankConnected: row.bankConnected === null ||
+      row.bankConnected === undefined ? null : row.bankConnected === true,
+    bankRefreshes: maybe(row.bankRefreshes),
     complete: row.complete !== false,
   };
 }
@@ -587,6 +606,19 @@ function computeBill({deal, usage, commissionCents = 0}) {
         centsEach: deal.itemSold.centsEach,
         cents: items * deal.itemSold.centsEach});
     }
+    if (deal.bankConnection) {
+      // Charged for the month when the business had an active bank link.
+      const months = u.bankConnected ? 1 : 0;
+      lines.push({key: "bankConnection", mode: "fixed", quantity: months,
+        centsEach: deal.bankConnection.centsEach,
+        cents: months * deal.bankConnection.centsEach});
+    }
+    if (deal.bankCheck) {
+      const refreshes = u.bankRefreshes || 0;
+      lines.push({key: "bankChecks", mode: "fixed", quantity: refreshes,
+        centsEach: deal.bankCheck.centsEach,
+        cents: refreshes * deal.bankCheck.centsEach});
+    }
   }
   const chargesCents = lines.reduce((sum, line) => sum + line.cents, 0);
   const flatCents = deal ? deal.flatCents || 0 : 0;
@@ -633,6 +665,8 @@ const DRIFT_KEYS = Object.freeze([
   ["parkingCars", "count"],
   ["parkingBilledCents", "cents"],
   ["itemsSold", "count"],
+  ["bankConnected", "count"],
+  ["bankRefreshes", "count"],
   ["commissionCents", "cents"],
 ]);
 
@@ -656,6 +690,8 @@ function driftFigures(usage, commissionCents) {
     parkingCars: u.parkingCars,
     parkingBilledCents: u.parkingBilledCents,
     itemsSold: u.itemsSold,
+    bankConnected: u.bankConnected === null ? null : Number(u.bankConnected),
+    bankRefreshes: u.bankRefreshes,
     commissionCents: count(commissionCents),
   };
 }

@@ -105,6 +105,27 @@
       "usage": {"barrels": 20, "packages": 30, "cars": 2, "parkingCars": 6, "parkingBilledCents": 90000, "itemsSold": 400},
       "commissionCents": 1500,
       "expect": {"lines": {"barrels": 6000, "packages": 3000, "shippedCars": 5000, "parking": 3000, "itemsSold": 4000}, "chargesCents": 21000, "amountCents": 23000, "minimumAdjustmentCents": 0, "capAdjustmentCents": 0, "earnedCents": 24500}
+    },
+    {
+      "name": "bank connection: one month's price when the business had an active bank link",
+      "deal": {"bankConnection": {"centsEach": 500}},
+      "usage": {"barrels": 3, "bankConnected": true, "bankRefreshes": 4},
+      "commissionCents": 0,
+      "expect": {"lines": {"bankConnection": 500}, "chargesCents": 500, "amountCents": 500, "minimumAdjustmentCents": 0, "capAdjustmentCents": 0, "earnedCents": 500}
+    },
+    {
+      "name": "no active bank link: no connection charge; 37 paid refreshes x $0.20",
+      "deal": {"bankConnection": {"centsEach": 500}, "bankCheck": {"centsEach": 20}},
+      "usage": {"bankConnected": false, "bankRefreshes": 37},
+      "commissionCents": 100,
+      "expect": {"lines": {"bankConnection": 0, "bankChecks": 740}, "chargesCents": 740, "amountCents": 740, "minimumAdjustmentCents": 0, "capAdjustmentCents": 0, "earnedCents": 840}
+    },
+    {
+      "name": "bank lines count toward the minimum like any charge",
+      "deal": {"bankCheck": {"centsEach": 25}, "minimumCents": 1000},
+      "usage": {"bankRefreshes": 10},
+      "commissionCents": 0,
+      "expect": {"lines": {"bankChecks": 250}, "chargesCents": 250, "amountCents": 1000, "minimumAdjustmentCents": 750, "capAdjustmentCents": 0, "earnedCents": 1000}
     }
   ]
 }

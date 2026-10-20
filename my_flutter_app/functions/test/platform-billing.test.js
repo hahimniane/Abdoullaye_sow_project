@@ -124,15 +124,59 @@ describe("a deal is validated, never clamped", () => {
 
   it("names the extra reads a deal needs", () => {
     assert.deepEqual(billing.dealNeeds(null),
-        {packagePrices: false, parking: false, items: false});
+        {packagePrices: false, parking: false, items: false, bank: false});
     assert.deepEqual(billing.dealNeeds(billing.normalizeDeal({
       package: {mode: "percent", bps: 100}, parking: {mode: "perCar",
         centsEach: 1}, itemSold: {centsEach: 1}}).deal),
-    {packagePrices: true, parking: true, items: true});
+    {packagePrices: true, parking: true, items: true, bank: false});
     assert.equal(billing.dealNeeds(billing.normalizeDeal({
       package: {mode: "fixed", centsEach: 1}}).deal).packagePrices, false);
+    assert.equal(billing.dealNeeds(billing.normalizeDeal({
+      bankCheck: {centsEach: 15}}).deal).bank, true);
+    assert.equal(billing.dealNeeds(billing.normalizeDeal({
+      bankConnection: {centsEach: 300}}).deal).bank, true);
     assert.deepEqual(billing.mergeNeeds({parking: true}, {items: true}),
-        {packagePrices: false, parking: true, items: true});
+        {packagePrices: false, parking: true, items: true, bank: false});
+  });
+
+  it("bank lines are optional: deals saved before read as no bank charge",
+      () => {
+        // A deal stored before Check bank existed has neither key.
+        const old = billing.storedDeal({barrel: {centsEach: 100}});
+        assert.equal(old.bankConnection, null);
+        assert.equal(old.bankCheck, null);
+        assert.deepEqual(billing.computeBill({deal: old,
+          usage: {barrels: 2, bankConnected: true, bankRefreshes: 50}})
+            .lines.map((l) => l.key), ["barrels"]);
+        const deal = billing.normalizeDeal({bankConnection: {centsEach: 300},
+          bankCheck: {centsEach: 15}}).deal;
+        assert.deepEqual([deal.bankConnection, deal.bankCheck],
+            [{centsEach: 300}, {centsEach: 15}]);
+        assert.equal(billing.isEmptyDeal(deal), false);
+        assert.deepEqual(billing.normalizeDeal({bankCheck: {centsEach: 0}})
+            .errors, ["amount_invalid"]);
+        assert.deepEqual(billing.normalizeDeal({bankConnection: 5}).errors,
+            ["deal_invalid"]);
+        assert.ok(billing.CHARGE_KEYS.includes("bankConnection"));
+        assert.ok(billing.CHARGE_KEYS.includes("bankChecks"));
+      });
+
+  it("bank lines show what they were worked out from", () => {
+    const bill = billing.computeBill({deal: billing.normalizeDeal({
+      bankConnection: {centsEach: 300}, bankCheck: {centsEach: 15}}).deal,
+    usage: {bankConnected: true, bankRefreshes: 7}});
+    assert.deepEqual(bill.lines, [
+      {key: "bankConnection", mode: "fixed", quantity: 1, centsEach: 300,
+        cents: 300},
+      {key: "bankChecks", mode: "fixed", quantity: 7, centsEach: 15,
+        cents: 105},
+    ]);
+    // Usage that was not read (null) bills nothing rather than guessing.
+    const unread = billing.computeBill({deal: billing.normalizeDeal({
+      bankConnection: {centsEach: 300}}).deal, usage: {}});
+    assert.equal(unread.amountCents, 0);
+    assert.equal(billing.normalizeUsage({}).bankConnected, null);
+    assert.equal(billing.normalizeUsage({}).bankRefreshes, null);
   });
 
   it("an unreadable stored deal reads as no charge", () => {
@@ -255,6 +299,23 @@ describe("drift after a month is closed", () => {
     const drift = billing.billDrift(snapshot, {...usage, parkingCars: 4,
       itemsSold: 7}, 900);
     assert.equal(drift.changed, false);
+  });
+
+  it("bank refreshes counted after the close show as drift", () => {
+    const bankDeal = billing.normalizeDeal({bankCheck: {centsEach: 20}})
+        .deal;
+    const before = {bankConnected: true, bankRefreshes: 10};
+    const closed = {deal: bankDeal, usage: billing.normalizeUsage(before),
+      bill: billing.computeBill({deal: bankDeal, usage: before})};
+    const drift = billing.billDrift(closed, {bankConnected: true,
+      bankRefreshes: 12}, 0);
+    assert.deepEqual(drift.items.map((i) => [i.key, i.delta]),
+        [["bankRefreshes", 2]]);
+    assert.equal(drift.closedAmountCents, 200);
+    assert.equal(drift.amountNowCents, 240);
+    // A month closed before Check bank existed never reads as drift.
+    assert.equal(billing.billDrift(snapshot, {...usage, bankConnected: true,
+      bankRefreshes: 3}, 900).changed, false);
   });
 
   it("package prices drift in percent deals", () => {
