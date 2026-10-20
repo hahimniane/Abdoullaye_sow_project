@@ -180,6 +180,24 @@ After it answers, the client refreshes the ID token (claims follow the
 profile through `syncUserCustomClaims`) and reloads the profile: the person
 lands on the staff screens.
 
+### 4.1 The "Join <business>" prompt after a normal sign-in
+
+Someone who signs in without tapping the link (app or console) is shown
+what waits for them: `acceptAccessInvitation({action: "pending"})` lists
+the live invitations of the caller's verified email or verified phone
+(none for an account that already has business or platform access):
+
+```
+{invitations: [{invitationId, kind: "business" | "platform",
+  channel: "phone" | "email", businessId, businessName, invitedByName,
+  expiresAtMs}]}
+```
+
+Nothing is accepted by listing. The prompt shows "Join <business>" (a
+platform invitation: Laawol Digital administration) and "Not now" (hidden
+for that invitation until the next sign-in); Join is
+`acceptAccessInvitation({invitationId})`, the same acceptance path.
+
 ## 5. Removal cuts access at once (owner decision 2)
 
 `updateBusinessMembership` (role customer, or another business) and

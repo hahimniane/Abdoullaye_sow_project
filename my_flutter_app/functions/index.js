@@ -25728,6 +25728,55 @@ async function invitationRefForAcceptance({
   return active[0];
 }
 
+/**
+ * The live invitations waiting for the signed-in person (their verified
+ * email or verified phone), for the "Join <business>" prompt after a normal
+ * sign-in (docs/STAFF_PHONE_INVITES.md §6.1). Nothing for an account that
+ * already has business or platform access: accepting would be refused.
+ *
+ * @param {string} uid The caller.
+ * @param {string} email Their verified email, or "".
+ * @param {string} phone Their verified phone, or "".
+ * @return {Promise<Array<object>>} Newest first.
+ */
+async function pendingInvitationsFor(uid, email, phone) {
+  const db = admin.firestore();
+  const profile = await db.collection("users").doc(uid).get();
+  if (profile.exists &&
+      !["customer", ""].includes(String(profile.get("role") || ""))) {
+    return [];
+  }
+  const entries = new Map();
+  if (email) {
+    const pending = await db.collection("accessInvitations")
+        .where("targetUid", "==", uid)
+        .where("email", "==", email)
+        .where("status", "==", "pending")
+        .orderBy("expiresAt", "desc")
+        .limit(10)
+        .get();
+    for (const doc of pending.docs) entries.set(doc.id, doc.data() || {});
+  }
+  if (phone) {
+    for (const entry of await staffPhoneInvites.livePhoneInvitations(phone)) {
+      entries.set(entry.id, entry.data);
+    }
+  }
+  const nowMs = Date.now();
+  return [...entries.entries()]
+      .filter(([, data]) => accessInvitationStatus(data, nowMs) === "pending")
+      .map(([id, data]) => ({
+        invitationId: id,
+        kind: data.kind === "platform" ? "platform" : "business",
+        channel: invitationChannel(data),
+        businessId: String(data.businessId || ""),
+        businessName: String(data.businessName || ""),
+        invitedByName: String(data.invitedByName || ""),
+        expiresAtMs: data.expiresAt?.toMillis?.() || 0,
+      }))
+      .sort((a, b) => b.expiresAtMs - a.expiresAtMs);
+}
+
 async function acceptAccessInvitationHandler(request) {
   const uid = requireAuth(request);
   const requestedInvitationId =
@@ -25740,6 +25789,12 @@ async function acceptAccessInvitationHandler(request) {
   // Phone invitations (docs/STAFF_PHONE_INVITES.md) are accepted by the
   // account that signed in with the invited number.
   const verifiedPhone = strictE164(authUser.phoneNumber);
+  // {action: "pending"}: only list what waits for this person; accepting
+  // one is a second call with its invitationId.
+  if (cleanText(request.data?.action, 20) === "pending") {
+    return {invitations: await pendingInvitationsFor(uid, verifiedEmail,
+        verifiedPhone)};
+  }
   if (!verifiedEmail && !verifiedPhone) {
     throw userManagementError(
         "failed-precondition",

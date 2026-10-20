@@ -436,6 +436,44 @@ describe("accepting after a phone sign-in", () => {
   });
 });
 
+describe("the Join prompt after a normal sign-in", () => {
+  it("lists what waits for the verified phone or email, and nothing for " +
+      "staff", async () => {
+    const phone = freshUs();
+    const made = await invite({method: "phone", phone, fullName: "Prompt"});
+    // A normal sign-in with the number (no link).
+    const holder = await admin.auth().createUser({phoneNumber: phone});
+    await db.collection("users").doc(holder.uid).set({role: "customer"});
+    const listed = await accept(holder.uid, {action: "pending"});
+    assert.deepEqual(listed.invitations.map((row) => [row.invitationId,
+      row.kind, row.channel, row.businessName, row.invitedByName]),
+    [[made.invitationId, "business", "phone", "Dala Shipping",
+      "Fatou Diallo"]]);
+    assert.equal((await invitation(made.invitationId)).status, "pending");
+    // "Join" is the same acceptance.
+    await accept(holder.uid, {invitationId: made.invitationId});
+    assert.equal((await profile(holder.uid)).role, "staff");
+    assert.deepEqual((await accept(holder.uid, {action: "pending"}))
+        .invitations, []);
+
+    // A verified email customer invited by email.
+    const email = `si-prompt-${Date.now()}@example.test`;
+    await admin.auth().createUser({email, emailVerified: true});
+    const user = await admin.auth().getUserByEmail(email);
+    await db.collection("users").doc(user.uid).set({role: "customer"});
+    const byEmail = await invite({method: "email", email,
+      fullName: "Email Prompt"});
+    const rows = (await accept(user.uid, {action: "pending"})).invitations;
+    assert.deepEqual(rows.map((row) => [row.invitationId, row.channel]),
+        [[byEmail.invitationId, "email"]]);
+    // No verified email and no phone: nothing, and no error.
+    const bare = await admin.auth().createUser(
+        {email: `bare-${Date.now()}@x.test`});
+    assert.deepEqual((await accept(bare.uid, {action: "pending"}))
+        .invitations, []);
+  });
+});
+
 describe("who phone codes still refuse", () => {
   it("owners and email-invited staff get no code and no text sign-in",
       async () => {
