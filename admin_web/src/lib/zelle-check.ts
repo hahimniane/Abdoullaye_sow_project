@@ -12,20 +12,21 @@
 
 type Row = Record<string, unknown>;
 
-function asRow(value: unknown): Row {
+/** Shared readers (bank-check.ts uses them too). */
+export function asRow(value: unknown): Row {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Row) : {};
 }
 
-function str(value: unknown, max = 200): string {
+export function str(value: unknown, max = 200): string {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
 }
 
-function cents(value: unknown): number {
+export function cents(value: unknown): number {
   const n = Number(value);
   return Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0;
 }
 
-function msOrNull(value: unknown): number | null {
+export function msOrNull(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   const row = asRow(value);
   if (typeof row.toMillis === "function") return (row.toMillis as () => number)();
@@ -97,12 +98,35 @@ export function zelleCheckable(payment: { method: string; amountCents: number; v
   return payment.method === "zelle" && payment.amountCents > 0 && !payment.voided;
 }
 
-export function checkZelleRequest(businessId: string, kind: ZelleKind, id: string) {
-  return { businessId: str(businessId), kind, id: str(id, 300) };
+/**
+ * `checkZellePayment` for a record. `auto` marks the screen's automatic
+ * re-checks (every 20 s for 3 minutes after "not found yet"): the server
+ * does not count them as a check a person started. A click sends none.
+ */
+export function checkZelleRequest(businessId: string, kind: ZelleKind, id: string, auto = false) {
+  return { businessId: str(businessId), kind, id: str(id, 300), ...(auto ? { auto: true as const } : {}) };
 }
 
 export function confirmZelleCandidateRequest(businessId: string, kind: ZelleKind, id: string, creditId: string) {
-  return { ...checkZelleRequest(businessId, kind, id), creditId: str(creditId, 300) };
+  return { businessId: str(businessId), kind, id: str(id, 300), creditId: str(creditId, 300) };
+}
+
+/** After "not found yet", the screens check again on their own every 20 s for 3 minutes (free syncs, `auto: true`). */
+export const RECHECK_INTERVAL_MS = 20_000;
+export const RECHECK_WINDOW_MS = 3 * 60_000;
+export const AUTO_RECHECK_TEXT = "Checking again on its own every 20 seconds for 3 minutes.";
+
+/**
+ * How long until the next automatic re-check of a run that started at
+ * `startedAtMs` (re-checks fall at 20 s, 40 s, … 180 s after it), or null
+ * once the 3 minutes are over.
+ */
+export function nextRecheckInMs(startedAtMs: number, nowMs: number): number | null {
+  if (!Number.isFinite(startedAtMs) || !Number.isFinite(nowMs)) return null;
+  const elapsed = Math.max(0, nowMs - startedAtMs);
+  const step = Math.floor(elapsed / RECHECK_INTERVAL_MS) + 1;
+  const at = step * RECHECK_INTERVAL_MS;
+  return at > RECHECK_WINDOW_MS ? null : at - elapsed;
 }
 
 export type ZelleCheckResult = "confirmed" | "already_confirmed" | "not_found" | "choose";
@@ -159,6 +183,19 @@ export const ZELLE_MESSAGES: Record<string, string> = {
   permission_denied: "You do not have access to this payment.",
   offline: "The check did not reach Laawol. Check the connection and try again.",
   link_not_loaded: "The bank sign-in window could not open. Try again.",
+  // Check bank any time (bank-check.ts).
+  mode_invalid: "That kind of bank check is not known.",
+  check_amount_invalid: "Enter the exact amount that was sent.",
+  since_invalid: "Choose when it was sent: last 15 minutes, last hour or today.",
+  limit_invalid: "The monthly limit must be a whole number from 0 to 1000.",
+  amount_mismatch: "That payment is not for the same amount as the deposit.",
+};
+
+/** `bank_error` says more in `details.bankError`; the ones a person can act on. */
+export const BANK_ERROR_MESSAGES: Record<string, string> = {
+  rate_limited: "The bank is busy right now. Try again in a minute.",
+  not_ready: "The bank's history is still being prepared. Try again in a few minutes.",
+  link_expired: ZELLE_MESSAGES.bank_needs_reauth,
 };
 
 const GENERIC = "The bank check did not finish. Try again.";
@@ -166,7 +203,12 @@ const GENERIC = "The bank check did not finish. Try again.";
 /** A callable's rejection as the sentence the card or button shows. */
 export function zelleFailureMessage(error: unknown): string {
   const e = asRow(error);
-  const reason = str(asRow(e.details).reason, 60);
+  const details = asRow(e.details);
+  const reason = str(details.reason, 60);
+  if (reason === "bank_error") {
+    const bankError = str(details.bankError, 60);
+    if (bankError in BANK_ERROR_MESSAGES) return BANK_ERROR_MESSAGES[bankError];
+  }
   if (reason && reason in ZELLE_MESSAGES) return ZELLE_MESSAGES[reason];
   const code = str(e.code, 60).replace(/^functions\//, "");
   if (code === "permission-denied") return ZELLE_MESSAGES.permission_denied;
@@ -211,9 +253,10 @@ export const BANK_STATUS_LABELS: Record<BankLinkStatus, string> = {
   disconnected: "Not connected",
 };
 
-export const BANK_STATUS_TONES: Record<BankLinkStatus, "success" | "warning" | "muted"> = {
-  active: "success",
-  needs_reauth: "warning",
+/** status-pill.ts tones (ok / warn / muted). */
+export const BANK_STATUS_TONES: Record<BankLinkStatus, "ok" | "warn" | "muted"> = {
+  active: "ok",
+  needs_reauth: "warn",
   disconnected: "muted",
 };
 

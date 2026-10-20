@@ -18,6 +18,7 @@ import {
   Calculator,
   ChevronLeft,
   History,
+  Landmark,
   Lock,
   LockOpen,
   Pencil,
@@ -28,6 +29,7 @@ import {
   X,
 } from "lucide-react";
 
+import { BankUsageSummary } from "@/components/business/bank-usage-summary";
 import { MonthPicker, MonthText } from "@/components/volume-views";
 import { confirmImportantAction } from "@/lib/action-confirmation";
 import { functions } from "@/lib/firebase";
@@ -67,6 +69,7 @@ import {
   type WhatIfOneResponse,
 } from "@/lib/platform-billing";
 import { previewPlatformBilling } from "@/lib/platform-billing-preview";
+import { readBankUsage } from "@/lib/bank-check";
 import { readMoneyInput } from "@/lib/money-input";
 import { currentVolumeMonth, formatVolumeCount, formatVolumeMonth } from "@/lib/volume";
 
@@ -272,6 +275,19 @@ function LineDetail({ line }: { line: BillLine }) {
       </span>
     );
   }
+  if (line.key === "bankConnection" || line.key === "bankChecks") {
+    return (
+      <>
+        <span>
+          <span data-no-translate>
+            <Count value={line.quantity} /> ×{" "}
+          </span>
+          <Money cents={line.centsEach ?? 0} /> <span>{line.key === "bankConnection" ? "a month with a connected bank" : "per paid refresh"}</span>
+        </span>
+        {line.key === "bankConnection" && line.quantity === 0 && <span className="bl-line-note">No bank was connected this month.</span>}
+      </>
+    );
+  }
   return (
     <span>
       <span data-no-translate>
@@ -279,6 +295,32 @@ function LineDetail({ line }: { line: BillLine }) {
       </span>
       <Money cents={line.centsEach ?? 0} />
     </span>
+  );
+}
+
+/**
+ * Check bank in the bill's month (`getBusinessBill.bankUsage`), whatever the
+ * deal: whether a bank was connected, checks, paid refreshes, the estimated
+ * Plaid cost and the same by team member.
+ */
+function BankUsageBlock({ raw }: { raw: unknown }) {
+  const usage = readBankUsage(raw);
+  if (!usage) return null;
+  const connected = (raw as { connected?: unknown } | null)?.connected === true;
+  return (
+    <section className="panel bl-panel">
+      <div className="panel-header">
+        <div>
+          <Landmark size={18} />
+          <h2>Bank checks this month</h2>
+        </div>
+        <span className={`status-pill compact ${connected ? "ok" : "muted"}`}>{connected ? "Bank connected" : "No bank connected"}</span>
+      </div>
+      <div className="bl-panel-body">
+        <BankUsageSummary showLimit usage={usage} />
+        <p className="bl-muted">Estimated cost is what Plaid bills for the paid refreshes ($0.12 each). Checks themselves are free.</p>
+      </div>
+    </section>
   );
 }
 
@@ -521,6 +563,50 @@ function DealForm({
         </label>
         {draft.itemMode === "fixed" && (
           <MoneyField disabled={disabled} error={errors.item} label="Per item" onChange={(v) => set("item", v)} value={draft.item} />
+        )}
+      </fieldset>
+      <fieldset className="lst-fieldset">
+        <legend>Bank connection</legend>
+        <label className="lst-field">
+          <span>How it is charged</span>
+          <select
+            disabled={disabled}
+            onChange={(e) => set("bankConnectionMode", e.target.value as DealDraft["bankConnectionMode"])}
+            value={draft.bankConnectionMode}
+          >
+            <option value="none">No charge</option>
+            <option value="fixed">Per month with a connected bank</option>
+          </select>
+        </label>
+        {draft.bankConnectionMode === "fixed" && (
+          <MoneyField
+            disabled={disabled}
+            error={errors.bankConnection}
+            hint="Charged for a month in which the business had its bank connected for Zelle checks."
+            label="Per month"
+            onChange={(v) => set("bankConnection", v)}
+            value={draft.bankConnection}
+          />
+        )}
+      </fieldset>
+      <fieldset className="lst-fieldset">
+        <legend>Bank checks</legend>
+        <label className="lst-field">
+          <span>How it is charged</span>
+          <select disabled={disabled} onChange={(e) => set("bankCheckMode", e.target.value as DealDraft["bankCheckMode"])} value={draft.bankCheckMode}>
+            <option value="none">No charge</option>
+            <option value="fixed">Per paid bank refresh</option>
+          </select>
+        </label>
+        {draft.bankCheckMode === "fixed" && (
+          <MoneyField
+            disabled={disabled}
+            error={errors.bankCheck}
+            hint="A check that asks the bank for new deposits is a paid refresh. Re-checks that only read are free."
+            label="Per paid refresh"
+            onChange={(v) => set("bankCheck", v)}
+            value={draft.bankCheck}
+          />
         )}
       </fieldset>
       <fieldset className="lst-fieldset">
@@ -1292,6 +1378,8 @@ function BusinessBill({
             </section>
 
             <TryDeal bill={bill} key={`${bill.business.id}-${bill.month}-${bill.dealVersionId}`} previewMode={previewMode} />
+
+            {bill.bankUsage && <BankUsageBlock raw={bill.bankUsage} />}
 
             <section className="panel bl-panel">
               <div className="panel-header">

@@ -451,3 +451,13 @@ test("the business console hands a reported line to the Containers panel, which 
   const waiting = readFileSync("src/components/business/waiting-packages-panel.tsx", "utf8");
   assert.match(waiting, /document\.getElementById\(`wpk-line-\$\{focusLineId\}`\)/);
 });
+
+test("the owner's Check bank limit notice opens Settings on the bank card", () => {
+  const data = {type: "bank_check_limit", businessId: "biz-1"};
+  assert.deepEqual(businessTargetForNotification(data), {tab: "profile", panelView: "bank"});
+  // Only the business console acts on it.
+  assert.deepEqual(customerTargetForNotification(data), {tab: "home"});
+  assert.deepEqual(adminTargetForNotification(data), {tab: "today"});
+  const consoleSource = readFileSync(new URL("../components/business-console.tsx", import.meta.url), "utf8");
+  assert.match(consoleSource, /target\.panelView === "bank"/);
+});

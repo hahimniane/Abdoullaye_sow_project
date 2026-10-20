@@ -5952,6 +5952,91 @@ Object.assign(TEXT_TRANSLATIONS, {
     "La fenêtre de connexion à la banque n’a pas pu s’ouvrir. Réessayez.",
 });
 
+// Check bank any time (docs/ZELLE_BANK_CHECK.md): the header button, the
+// dialog, "Use for a sale", the owner's usage and monthly limit, the admin's
+// bill (deal lines and the month's bank usage) and the new refusals.
+Object.assign(TEXT_TRANSLATIONS, {
+  "Check bank": "Vérifier la banque",
+  "Connect a bank for Zelle checks": "Connecter une banque pour vérifier les Zelle",
+  "The bank needs you to sign in again": "La banque vous demande de vous reconnecter",
+  "Connect a bank": "Connecter une banque",
+  "Reconnect the bank": "Reconnecter la banque",
+  "See whether a Zelle payment reached the business's bank before you record it.":
+    "Voyez si un paiement Zelle est arrivé à la banque de l’entreprise avant de l’enregistrer.",
+  "Exact amount": "Montant exact",
+  "When was it sent?": "Quand a-t-il été envoyé ?",
+  "Last 15 minutes": "15 dernières minutes",
+  "Last hour": "Dernière heure",
+  "Check now": "Vérifier maintenant",
+  "Deposit received": "Dépôt reçu",
+  "Several deposits of this amount arrived. Ask the customer which one is theirs:":
+    "Plusieurs dépôts de ce montant sont arrivés. Demandez au client lequel est le sien :",
+  "Not yet": "Pas encore",
+  "No deposit of this amount has arrived in that time yet. Ask the customer to wait a minute, then check again.":
+    "Aucun dépôt de ce montant n’est encore arrivé sur cette période. Demandez au client de patienter une minute, puis vérifiez à nouveau.",
+  "This month's limit of paid bank refreshes is reached, so new deposits may take longer to show.":
+    "La limite mensuelle d’actualisations bancaires payantes est atteinte : les nouveaux dépôts peuvent mettre plus de temps à apparaître.",
+  "Checking again on its own every 20 seconds for 3 minutes.":
+    "Nouvelle vérification automatique toutes les 20 secondes pendant 3 minutes.",
+  "Use for a sale": "Utiliser pour une vente",
+  "Enter the exact amount that was sent.": "Saisissez le montant exact qui a été envoyé.",
+  "Searching…": "Recherche…",
+  "Use this one": "Utiliser celui-ci",
+  "Not now": "Pas maintenant",
+  "Package payment": "Paiement de colis",
+  "Recent payments of this amount": "Paiements récents de ce montant",
+  "Search results": "Résultats de la recherche",
+  "No sale or payment of exactly this amount is waiting. Record the sale as Zelle first, or search for it.":
+    "Aucune vente ni aucun paiement de ce montant exact n’est en attente. Enregistrez d’abord la vente en Zelle, ou recherchez-la.",
+  "Nothing of this amount matches that search.": "Rien de ce montant ne correspond à cette recherche.",
+  "Used for this payment. It now shows as Zelle confirmed.":
+    "Utilisé pour ce paiement. Il apparaît maintenant comme Zelle confirmé.",
+  "That payment was already confirmed by the bank.": "Ce paiement a déjà été confirmé par la banque.",
+  // The month's usage and the owner's monthly limit (bank-usage-summary.tsx, bank-zelle-card.tsx).
+  Checks: "Vérifications",
+  "Paid refreshes": "Actualisations payantes",
+  "Estimated cost": "Coût estimé",
+  "By team member": "Par membre de l’équipe",
+  "Team member": "Membre de l’équipe",
+  "No bank checks this month yet.": "Aucune vérification bancaire ce mois-ci pour l’instant.",
+  "This month's limit is reached: checks still work, but new deposits can take longer to show.":
+    "La limite du mois est atteinte : les vérifications fonctionnent toujours, mais les nouveaux dépôts peuvent mettre plus de temps à apparaître.",
+  "Monthly limit of paid refreshes": "Limite mensuelle d’actualisations payantes",
+  "Each check may ask the bank for new deposits, which costs about $0.12. Past this many a month, checks still work but only read what the bank already sent, so new deposits can take longer to show. 0 means never pay for a refresh.":
+    "Chaque vérification peut demander les nouveaux dépôts à la banque, ce qui coûte environ 0,12 $. Au-delà de ce nombre par mois, les vérifications fonctionnent toujours mais lisent seulement ce que la banque a déjà envoyé : les nouveaux dépôts peuvent donc mettre plus de temps à apparaître. 0 signifie ne jamais payer d’actualisation.",
+  "Monthly limit saved.": "Limite mensuelle enregistrée.",
+  "Enter a whole number from 0 to 1000.": "Saisissez un nombre entier de 0 à 1000.",
+  // The new refusals (zelle-check.ts ZELLE_MESSAGES, BANK_ERROR_MESSAGES).
+  "That kind of bank check is not known.": "Ce type de vérification bancaire est inconnu.",
+  "Choose when it was sent: last 15 minutes, last hour or today.":
+    "Choisissez quand il a été envoyé : 15 dernières minutes, dernière heure ou aujourd’hui.",
+  "The monthly limit must be a whole number from 0 to 1000.":
+    "La limite mensuelle doit être un nombre entier de 0 à 1000.",
+  "That payment is not for the same amount as the deposit.": "Ce paiement n’est pas du même montant que le dépôt.",
+  "The bank is busy right now. Try again in a minute.": "La banque est occupée pour le moment. Réessayez dans une minute.",
+  "The bank's history is still being prepared. Try again in a few minutes.":
+    "L’historique de la banque est encore en préparation. Réessayez dans quelques minutes.",
+  // Platform billing: the two bank deal lines and the bill's bank usage (billing-views.tsx).
+  "a month with a connected bank": "par mois avec une banque connectée",
+  "per paid refresh": "par actualisation payante",
+  "No bank was connected this month.": "Aucune banque n’était connectée ce mois-ci.",
+  "Bank checks this month": "Vérifications bancaires ce mois-ci",
+  "Bank connected": "Banque connectée",
+  "No bank connected": "Aucune banque connectée",
+  "Estimated cost is what Plaid bills for the paid refreshes ($0.12 each). Checks themselves are free.":
+    "Le coût estimé correspond à ce que Plaid facture pour les actualisations payantes (0,12 $ chacune). Les vérifications elles-mêmes sont gratuites.",
+  "Bank connection": "Connexion bancaire",
+  "Per month with a connected bank": "Par mois avec une banque connectée",
+  "Charged for a month in which the business had its bank connected for Zelle checks.":
+    "Facturé pour un mois où la banque de l’entreprise était connectée pour vérifier les Zelle.",
+  "Bank checks": "Vérifications bancaires",
+  "Per paid bank refresh": "Par actualisation bancaire payante",
+  "A check that asks the bank for new deposits is a paid refresh. Re-checks that only read are free.":
+    "Une vérification qui demande les nouveaux dépôts à la banque est une actualisation payante. Les vérifications qui ne font que relire sont gratuites.",
+  "Per paid refresh": "Par actualisation payante",
+  "Paid bank refreshes": "Actualisations bancaires payantes",
+});
+
 // Package requests (docs/PACKAGE_REQUESTS.md): the customer's request form
 // and estimate page, and the console's Requests view, Expected list and
 // request settings.
@@ -6521,6 +6606,8 @@ export const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {
   "e.g. clothes, shoes": "p. ex. vêtements, chaussures",
   "One piece fewer": "Un colis de moins",
   "One piece more": "Un colis de plus",
+  // Check bank: the search under "Use for a sale" (placeholder and aria-label).
+  "Search by customer, items or tracking code": "Rechercher par client, articles ou code de suivi",
 };
 
 // Several English strings share one French translation ("Annulé" is the

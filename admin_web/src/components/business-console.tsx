@@ -34,7 +34,10 @@ import {
 
 import {AssistantWidget} from "@/components/business/assistant-widget";
 import {BankZelleCard} from "@/components/business/bank-zelle-card";
-import {canManageBank} from "@/lib/zelle-check";
+import {callBank} from "@/components/business/bank-call";
+import {CheckBankDialog, CheckBankHeaderEntry} from "@/components/business/check-bank-dialog";
+import {canCheckBank, checkBankEntry} from "@/lib/bank-check";
+import {canManageBank, readBankStatus, type BankStatus} from "@/lib/zelle-check";
 import {ContainersPanel} from "@/components/business/containers-panel";
 import {BusinessVolumePanel} from "@/components/volume-views";
 import {containerDeepLinkFromSearch, type ContainerDeepLink} from "@/lib/package-staff";
@@ -295,6 +298,42 @@ export function BusinessConsole({
     );
   }, [business?.enabledServices, profile.businessServices]);
 
+  // Check bank (docs/ZELLE_BANK_CHECK.md): the server's rule - the owner, or
+  // staff who can sell (inventory permission + service) or take package
+  // payments (containers). The bank's status is read once, for them only;
+  // the owner's bank card keeps it current after a connect or disconnect.
+  const isBankOwner = canManageBank(profile, businessId);
+  const canCheck = canCheckBank({
+    isOwner: isBankOwner,
+    inventoryPermission: hasBusinessPermission(profile, "inventory"),
+    inventoryService: services.has("inventory"),
+    containersPermission: hasBusinessPermission(profile, "containers"),
+  });
+  const [bankStatus, setBankStatus] = useState<BankStatus | null>(null);
+  const [checkBankOpen, setCheckBankOpen] = useState(false);
+  const [bankFocus, setBankFocus] = useState(0);
+  useEffect(() => {
+    if (!businessId || !canCheck) {
+      setBankStatus(null);
+      return undefined;
+    }
+    let live = true;
+    callBank("getBusinessBankStatus", {businessId}, previewMode)
+      .then((data) => {
+        if (live) setBankStatus(readBankStatus(data));
+      })
+      .catch(() => {
+        if (live) setBankStatus(null);
+      });
+    return () => {
+      live = false;
+    };
+  }, [businessId, canCheck, previewMode]);
+  const openBankCard = useCallback(() => {
+    setActiveTab("profile");
+    setBankFocus((value) => value + 1);
+  }, []);
+
   const canManageListings = hasBusinessPermission(profile, "listings");
   // A business that no longer offers car sales keeps its Listings tab while
   // it still has listings. That only needs to know whether one exists: a
@@ -509,6 +548,11 @@ export function BusinessConsole({
           </div>
         </div>
         <div className="topbar-actions">
+          <CheckBankHeaderEntry
+            entry={checkBankEntry(bankStatus, canCheck, isBankOwner)}
+            onOpen={() => setCheckBankOpen(true)}
+            onOpenSettings={openBankCard}
+          />
           <div className="admin-chip" title="Signed-in account">
             <UserCog size={18} />
             <span className="admin-chip-name">
@@ -536,6 +580,7 @@ export function BusinessConsole({
                   ? transferFocusFrom(target.focusId, Date.now())
                   : null,
               );
+              if (target.panelView === "bank") setBankFocus((value) => value + 1);
             }}
             uid={firebaseUser.uid}
           />
@@ -644,8 +689,14 @@ export function BusinessConsole({
           {activeTab === "profile" && (
             <>
               <BusinessProfilePanel businessId={businessId} business={business} />
-              {canManageBank(profile, businessId) && !previewMode && (
-                <BankZelleCard businessId={businessId} enabled={enabled} />
+              {isBankOwner && (
+                <BankZelleCard
+                  businessId={businessId}
+                  enabled={enabled || previewMode}
+                  previewMode={previewMode}
+                  onStatus={setBankStatus}
+                  focusRequest={bankFocus}
+                />
               )}
               <NotificationPreferencesPanel profile={profile} showInventory={visibleTabs.some((tab) => tab.id === "inventory")} />
             </>
@@ -840,6 +891,9 @@ export function BusinessConsole({
       {/* Mounted once for the whole console so the assistant floats over every
           tab and keeps its conversation while the business navigates. */}
       <AssistantWidget businessId={businessId} previewMode={previewMode} />
+      {checkBankOpen && (
+        <CheckBankDialog businessId={businessId} previewMode={previewMode} onClose={() => setCheckBankOpen(false)} />
+      )}
     </div>
   );
 }

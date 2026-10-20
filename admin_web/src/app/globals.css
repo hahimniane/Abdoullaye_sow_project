@@ -15041,6 +15041,124 @@ html[data-lang-pending] body {
 .bank-zelle-account { display: flex; flex-direction: column; gap: 2px; margin: 0 0 12px; }
 .bank-zelle-window { margin-top: 14px; max-width: 420px; }
 .bank-zelle-window small { color: var(--muted); }
+.zelle-auto { align-items: center; color: var(--muted); display: inline-flex; gap: 4px; }
+
+/* Check bank any time (docs/ZELLE_BANK_CHECK.md): the header button, the
+   dialog and "Use for a sale", the owner's usage and limit, and the bill's
+   bank usage. Light only, like the rest of the release. */
+.check-bank-button {
+  align-items: center;
+  appearance: none;
+  background: rgba(204, 251, 241, 0.16);
+  border: 1px solid rgba(204, 251, 241, 0.42);
+  border-radius: 8px;
+  color: #ffffff;
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font: inherit;
+  font-weight: 700;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 12px;
+}
+.check-bank-button:hover { background: rgba(204, 251, 241, 0.24); }
+.check-bank-button:focus-visible { outline: 3px solid rgba(245, 158, 11, 0.45); outline-offset: 2px; }
+.check-bank-button.check-bank-hint { border-style: dashed; font-weight: 600; }
+.check-bank-form { display: grid; gap: 14px; }
+.check-bank-form .primary-button { justify-self: start; }
+.check-bank-since.bl-segmented { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.check-bank-since.bl-segmented button { min-height: 40px; padding: 6px 8px; }
+.check-bank-result { border-top: 1px solid var(--rule); display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr); justify-items: start; margin-top: 16px; padding-top: 14px; }
+.check-bank-result > * { max-width: 100%; min-width: 0; }
+.check-bank-result p { line-height: 1.5; margin: 0; }
+.check-bank-deposits { display: grid; gap: 10px; list-style: none; margin: 0; padding: 0; width: 100%; }
+.check-bank-deposits > li {
+  background: var(--paper-soft);
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  padding: 10px 12px;
+}
+.check-bank-deposit { align-items: center; display: flex; flex-wrap: wrap; gap: 6px 10px; min-width: 0; }
+.check-bank-deposit > span { overflow-wrap: anywhere; }
+.check-bank-use { display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr); min-width: 0; width: 100%; }
+.check-bank-use > .lst-btn { justify-self: start; }
+.check-bank-use .lst-form-error { margin-bottom: 0; padding: 6px 10px; }
+.check-bank-search { display: flex; gap: 8px; }
+.check-bank-search input {
+  border: 1.5px solid var(--rule);
+  border-radius: 8px;
+  flex: 1 1 0;
+  font: inherit;
+  min-height: 40px;
+  min-width: 0;
+  padding: 0 10px;
+  width: 0;
+}
+.check-bank-search .lst-btn { flex: 0 0 auto; }
+.check-bank-use-head { color: var(--muted); font-weight: 700; }
+.check-bank-records { display: grid; gap: 6px; grid-template-columns: minmax(0, 1fr); list-style: none; margin: 0; padding: 0; }
+/* The kind and "Use this one" on one row, the customer and items under them:
+   the customer's words get the full width, even at 375px. */
+.check-bank-records button {
+  align-items: center;
+  background: var(--paper);
+  border: 1.5px solid var(--rule);
+  border-radius: 8px;
+  color: var(--ink);
+  cursor: pointer;
+  display: grid;
+  font: inherit;
+  gap: 4px 10px;
+  grid-template-areas: "kind use" "text text";
+  grid-template-columns: minmax(0, 1fr) auto;
+  justify-items: start;
+  min-height: 44px;
+  padding: 8px 10px;
+  text-align: left;
+  width: 100%;
+}
+.check-bank-records button:hover:not(:disabled) { border-color: var(--brand); }
+.check-bank-records button:disabled { cursor: not-allowed; opacity: 0.6; }
+.check-bank-records button > .status-pill { grid-area: kind; }
+.check-bank-records button > .spin { grid-area: use; }
+.check-bank-record-text { display: grid; gap: 1px; grid-area: text; min-width: 0; width: 100%; }
+.check-bank-record-text > * { overflow-wrap: anywhere; }
+.check-bank-record-text small { color: var(--muted); }
+.check-bank-use-label { color: var(--brand-strong); font-size: 13px; font-weight: 700; grid-area: use; white-space: nowrap; }
+/* The card's body sits inside the same 18px inset as its header. */
+.bank-zelle-card { padding-bottom: 18px; }
+.bank-zelle-card > :not(.panel-header) { margin-left: 18px; margin-right: 18px; }
+.bank-zelle-usage { border-top: 1px solid var(--rule); margin-top: 16px; padding-top: 14px; }
+.bank-zelle-usage h3 { font-size: 15px; margin: 0 0 10px; }
+.bank-zelle-limit { margin-top: 14px; max-width: 520px; }
+.bank-zelle-limit small { color: var(--muted); }
+.bank-zelle-limit-row { align-items: center; display: flex; gap: 8px; }
+.bank-zelle-limit-row input { max-width: 140px; min-height: 40px; }
+.bank-usage { display: grid; gap: 10px; }
+.bank-usage-figures { display: grid; gap: 8px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; }
+.bank-usage-figures > div { background: var(--paper-soft); border: 1px solid var(--rule); border-radius: 8px; min-width: 0; padding: 8px 10px; }
+.bank-usage-figures dt { color: var(--muted); font-size: 12px; font-weight: 700; }
+.bank-usage-figures dd { font-size: 18px; font-variant-numeric: tabular-nums; font-weight: 800; margin: 2px 0 0; }
+.bank-usage-none { color: var(--muted); margin: 0; }
+.bank-usage-staff h4 { font-size: 13px; margin: 0 0 6px; }
+.bank-usage-staff ul { display: grid; gap: 4px; list-style: none; margin: 0; padding: 0; }
+.bank-usage-staff li { border-bottom: 1px solid var(--rule); display: flex; flex-wrap: wrap; gap: 2px 12px; justify-content: space-between; padding: 6px 0; }
+.bank-usage-staff li > span:first-child { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.bank-usage-staff-figures { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.bank-usage-staff-figures b { color: var(--ink); }
+
+@media (max-width: 560px) {
+  .check-bank-label { display: none; }
+  .check-bank-button { justify-content: center; min-width: 42px; padding: 0 10px; }
+  .check-bank-form .primary-button { justify-self: stretch; justify-content: center; }
+  .bank-usage-figures { grid-template-columns: minmax(0, 1fr); }
+}
 
 /* ------------------------------------------------------------------------
    Package requests: the customer's form and estimate page (pkr-*), and the

@@ -19,6 +19,7 @@ import {
   normalizeUsage,
   paymentDraftErrors,
   todayInNewYork,
+  type BillBankUsage,
   type BusinessBillResponse,
   type Deal,
   type DealVersion,
@@ -36,14 +37,15 @@ import {
 import { currentVolumeMonth, shiftVolumeMonth, VOLUME_TIME_ZONE } from "./volume.ts";
 import { previewPlatformVolume } from "./volume-preview.ts";
 
-type Business = { id: string; name: string; parking: boolean; shop: boolean; feePct: number | null };
+/** `bank`: the business connected its bank for Zelle checks (Check bank, docs/ZELLE_BANK_CHECK.md). */
+type Business = { id: string; name: string; parking: boolean; shop: boolean; bank: boolean; feePct: number | null };
 
 const BUSINESSES: Business[] = [
-  { id: "atlantic_exports", name: "Atlantic Exports", parking: false, shop: false, feePct: 0.08 },
-  { id: "keren_auto_sales", name: "Keren Auto Sales", parking: true, shop: false, feePct: null },
-  { id: "sahel_freight", name: "Sahel Freight", parking: false, shop: false, feePct: null },
-  { id: "dakar_parking", name: "Dakar Parking Lot", parking: true, shop: false, feePct: 0.05 },
-  { id: "teranga_shop", name: "Teranga Shop", parking: false, shop: true, feePct: null },
+  { id: "atlantic_exports", name: "Atlantic Exports", parking: false, shop: false, bank: true, feePct: 0.08 },
+  { id: "keren_auto_sales", name: "Keren Auto Sales", parking: true, shop: false, bank: false, feePct: null },
+  { id: "sahel_freight", name: "Sahel Freight", parking: false, shop: false, bank: false, feePct: null },
+  { id: "dakar_parking", name: "Dakar Parking Lot", parking: true, shop: false, bank: false, feePct: 0.05 },
+  { id: "teranga_shop", name: "Teranga Shop", parking: false, shop: true, bank: true, feePct: null },
 ];
 
 type MonthDoc = {
@@ -84,6 +86,7 @@ function usageOf(state: State, id: string, month: string, current: string): Usag
   const business = BUSINESSES.find((b) => b.id === id);
   const parkingCars = business?.parking && back >= 0 && back <= 11 ? 6 + ((back * 5 + id.length) % 9) : 0;
   const itemsSold = business?.shop && back >= 0 && back <= 11 ? 180 + ((back * 37) % 140) : 0;
+  const bank = bankOf(id, month, current);
   return normalizeUsage({
     barrels,
     packages: count,
@@ -92,7 +95,40 @@ function usageOf(state: State, id: string, month: string, current: string): Usag
     parkingCars: business?.parking ? parkingCars : null,
     parkingBilledCents: business?.parking ? parkingCars * 31500 : null,
     itemsSold: business?.shop ? itemsSold : null,
+    bankConnected: business?.bank ? bank.connected : null,
+    bankRefreshes: business?.bank ? bank.refreshes : null,
   });
+}
+
+/** A month of Check bank for a sample business: connected from 3 months back, 37 paid refreshes this month. */
+function bankOf(id: string, month: string, current: string): { connected: boolean; checks: number; refreshes: number } {
+  const back = monthsBack(month, current);
+  const business = BUSINESSES.find((b) => b.id === id);
+  if (!business?.bank || back < 0 || back > 3) return { connected: false, checks: 0, refreshes: 0 };
+  const refreshes = id === "teranga_shop" ? 37 - back * 6 : 12 - back * 2;
+  return { connected: true, checks: refreshes + 9, refreshes };
+}
+
+function bankUsageOf(id: string, month: string, current: string): BillBankUsage {
+  const bank = bankOf(id, month, current);
+  const split = (n: number, part: number) => Math.round((n * part) / 10);
+  const byStaff = bank.checks > 0
+    ? [
+        { uid: "preview-staff-1", name: "Aminata Diallo", checks: split(bank.checks, 6), refreshes: split(bank.refreshes, 6) },
+        { uid: "preview-staff-2", name: "", checks: bank.checks - split(bank.checks, 6), refreshes: bank.refreshes - split(bank.refreshes, 6) },
+      ]
+    : [];
+  return {
+    month,
+    checks: bank.checks,
+    refreshes: bank.refreshes,
+    refreshesFailed: bank.refreshes > 0 ? 1 : 0,
+    estimatedCostCents: bank.refreshes * 12,
+    refreshLimit: 100,
+    limitReached: bank.refreshes >= 100,
+    byStaff,
+    connected: bank.connected,
+  };
 }
 
 function commissionOf(id: string, month: string, current: string): number {
@@ -135,7 +171,10 @@ function initial(current: string): State {
   });
   s.deals.set("teranga_shop", {
     commissionMode: "keep",
-    versions: [version(shiftVolumeMonth(current, -1), { itemSold: { centsEach: 15 }, capCents: 20000 }, "", at + 4)],
+    versions: [
+      version(shiftVolumeMonth(current, -1), { itemSold: { centsEach: 15 }, capCents: 20000 }, "", at + 4),
+      version(current, { itemSold: { centsEach: 15 }, bankConnection: { centsEach: 300 }, bankCheck: { centsEach: 20 }, capCents: 20000 }, "Check bank added", at + 5),
+    ],
   });
   // Last month: Atlantic closed and part paid, then 3 packages came in.
   const prev = shiftVolumeMonth(current, -1);
@@ -223,6 +262,8 @@ function driftOf(snapshot: NonNullable<MonthDoc["snapshot"]>, usage: Usage, comm
     cars: u.cars,
     parkingCars: u.parkingCars,
     itemsSold: u.itemsSold,
+    bankConnected: u.bankConnected === null ? null : Number(u.bankConnected),
+    bankRefreshes: u.bankRefreshes,
     commissionCents: c,
   });
   const before = fig(snapshot.usage, snapshot.bill.commissionCents);
@@ -307,6 +348,7 @@ function monthBills(s: State, month: string, current: string): MonthBillsRespons
         cars: row.usage.cars,
         parkingCars: row.usage.parkingCars,
         itemsSold: row.usage.itemsSold,
+        bankRefreshes: row.usage.bankRefreshes,
       },
       amountCents: row.amountCents,
       paidCents: row.paidCents,
@@ -403,6 +445,7 @@ function businessBill(s: State, id: string, month: string, current: string): Bus
     unpaidToDateCents: unpaidToDate(s, id),
     pastOpenMonths,
     people: PEOPLE,
+    bankUsage: bankUsageOf(id, month, current),
     canManage: true,
     complete: true,
     computedAtMs: Date.now(),
@@ -432,7 +475,7 @@ function whatIf(s: State, data: Record<string, unknown>, current: string): WhatI
   }
   const ids = new Set(candidates(s, month, current));
   for (const b of BUSINESSES) {
-    if ((alt.parking && b.parking) || (alt.itemSold && b.shop)) ids.add(b.id);
+    if ((alt.parking && b.parking) || (alt.itemSold && b.shop) || ((alt.bankConnection || alt.bankCheck) && b.bank)) ids.add(b.id);
   }
   const rows: WhatIfRow[] = [...ids].map((id) => {
     const r = compute(id);

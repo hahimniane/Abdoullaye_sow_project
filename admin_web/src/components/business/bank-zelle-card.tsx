@@ -1,11 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { httpsCallable } from "firebase/functions";
-import { Landmark, Link2, RefreshCw, Unlink } from "lucide-react";
+import { Landmark, Link2, RefreshCw, Save, Unlink } from "lucide-react";
 
+import { callBank } from "@/components/business/bank-call";
+import { BankUsageSummary } from "@/components/business/bank-usage-summary";
 import { confirmImportantAction } from "@/lib/action-confirmation";
-import { functions } from "@/lib/firebase";
+import {
+  DEFAULT_REFRESH_LIMIT,
+  USAGE_TEXT,
+  readOwnerBankExtras,
+  readRefreshLimit,
+  setRefreshLimitRequest,
+  type BankUsage,
+} from "@/lib/bank-check";
 import { currentLanguage, formatDateTime } from "@/lib/format";
 import { statusPillClass } from "@/lib/status-pill";
 import {
@@ -77,10 +85,39 @@ function loadPlaidLink(): Promise<PlaidFactory> {
  * "Bank for Zelle checks", for the owner: connect the business's bank through
  * Plaid Link (read-only), see which bank and account, set the check window,
  * reconnect when the bank asks the owner to sign in again, or disconnect.
- * Staff never see this card; they only see Check Zelle on payments.
+ * It also shows this month's Check bank usage (checks, paid refreshes,
+ * estimated cost, by team member) and sets the monthly limit of paid
+ * refreshes. Staff never see this card; they only see Check Zelle on
+ * payments and Check bank in the header.
  */
-export function BankZelleCard({ businessId, enabled }: { businessId: string; enabled: boolean }) {
+export function BankZelleCard({
+  businessId,
+  enabled,
+  previewMode = false,
+  onStatus,
+  focusRequest = 0,
+}: {
+  businessId: string;
+  enabled: boolean;
+  /** The console's local preview: sample answers (lib/bank-check-preview.ts). */
+  previewMode?: boolean;
+  /** Every status read, so the header's Check bank follows a connect or disconnect. */
+  onStatus?: (status: BankStatus) => void;
+  /** Bumped to bring the card into view (the header hint, the limit notification). */
+  focusRequest?: number;
+}) {
   const [status, setStatus] = useState<BankStatus | null>(null);
+  const [usage, setUsage] = useState<BankUsage | null>(null);
+  const [refreshLimit, setRefreshLimit] = useState(DEFAULT_REFRESH_LIMIT);
+  const [limitText, setLimitText] = useState(String(DEFAULT_REFRESH_LIMIT));
+  const [limitError, setLimitError] = useState("");
+  const [savingLimit, setSavingLimit] = useState(false);
+  const card = useRef<HTMLElement | null>(null);
+  // Read through a ref so a new callback from the parent never re-runs the status read.
+  const statusListener = useRef(onStatus);
+  useEffect(() => {
+    statusListener.current = onStatus;
+  }, [onStatus]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -95,8 +132,14 @@ export function BankZelleCard({ businessId, enabled }: { businessId: string; ena
     setLoading(true);
     const timer = window.setTimeout(() => setLoading(false), STATUS_TIMEOUT_MS);
     try {
-      const result = await httpsCallable(functions, "getBusinessBankStatus")({ businessId });
-      setStatus(readBankStatus(result.data));
+      const data = await callBank("getBusinessBankStatus", { businessId }, previewMode);
+      const next = readBankStatus(data);
+      const extras = readOwnerBankExtras(data);
+      setStatus(next);
+      setUsage(extras.usage);
+      setRefreshLimit(extras.refreshLimit);
+      setLimitText(String(extras.refreshLimit));
+      statusListener.current?.(next);
       setError("");
     } catch (failure) {
       setError(zelleFailureMessage(failure));
@@ -104,11 +147,15 @@ export function BankZelleCard({ businessId, enabled }: { businessId: string; ena
       window.clearTimeout(timer);
       setLoading(false);
     }
-  }, [businessId, enabled]);
+  }, [businessId, enabled, previewMode]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (focusRequest > 0) card.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [focusRequest]);
 
   useEffect(() => () => {
     if (safety.current !== null) window.clearTimeout(safety.current);
@@ -127,8 +174,8 @@ export function BankZelleCard({ businessId, enabled }: { businessId: string; ena
     safety.current = window.setTimeout(release, LINK_SAFETY_MS);
     try {
       const lang = currentLanguage() === "fr" ? "fr" : "en";
-      const token = await httpsCallable(functions, "createBankLinkToken")(bankLinkTokenRequest(businessId, lang));
-      const linkToken = String((token.data as { linkToken?: unknown })?.linkToken ?? "");
+      const token = await callBank("createBankLinkToken", bankLinkTokenRequest(businessId, lang), previewMode);
+      const linkToken = String((token as { linkToken?: unknown } | null)?.linkToken ?? "");
       if (!linkToken) throw new Error("link_not_loaded");
       const plaid = await loadPlaidLink();
       const handler = plaid.create({
@@ -136,9 +183,8 @@ export function BankZelleCard({ businessId, enabled }: { businessId: string; ena
         onSuccess: (publicToken, metadata) => {
           void (async () => {
             try {
-              const answer = await httpsCallable(functions, "connectBusinessBank")(
-                connectBankRequest(businessId, publicToken, metadata));
-              const synced = (answer.data as { synced?: unknown })?.synced === true;
+              const answer = await callBank("connectBusinessBank", connectBankRequest(businessId, publicToken, metadata), previewMode);
+              const synced = (answer as { synced?: unknown } | null)?.synced === true;
               setFlash(synced ? "Bank connected." : "The bank connected, but its history is still being prepared. Checks work in a few minutes.");
               await load();
             } catch (failure) {
@@ -167,7 +213,7 @@ export function BankZelleCard({ businessId, enabled }: { businessId: string; ena
     setError("");
     setFlash("");
     try {
-      await httpsCallable(functions, "disconnectBusinessBank")({ businessId });
+      await callBank("disconnectBusinessBank", { businessId }, previewMode);
       setFlash("Bank disconnected.");
       await load();
     } catch (failure) {
@@ -182,7 +228,7 @@ export function BankZelleCard({ businessId, enabled }: { businessId: string; ena
     setError("");
     setFlash("");
     try {
-      await httpsCallable(functions, "setBankCheckWindow")(setBankWindowRequest(businessId, minutes));
+      await callBank("setBankCheckWindow", setBankWindowRequest(businessId, minutes), previewMode);
       setStatus((current) => (current ? { ...current, windowMinutes: minutes } : current));
       setFlash("Check window saved.");
     } catch (failure) {
@@ -192,9 +238,31 @@ export function BankZelleCard({ businessId, enabled }: { businessId: string; ena
     }
   }
 
+  async function saveLimit() {
+    if (savingLimit || busy) return;
+    const read = readRefreshLimit(limitText);
+    setLimitError(read.error);
+    if (read.limit === null) return;
+    setSavingLimit(true);
+    setError("");
+    setFlash("");
+    try {
+      const answer = await callBank("setBankCheckWindow", setRefreshLimitRequest(businessId, read.limit), previewMode);
+      const saved = readOwnerBankExtras(answer).refreshLimit;
+      setRefreshLimit(saved);
+      setLimitText(String(saved));
+      setUsage((current) => (current ? { ...current, refreshLimit: saved, limitReached: current.refreshes >= saved } : current));
+      setFlash(USAGE_TEXT.limitSaved);
+    } catch (failure) {
+      setError(zelleFailureMessage(failure));
+    } finally {
+      setSavingLimit(false);
+    }
+  }
+
   const state = status?.status ?? "disconnected";
   return (
-    <article className="panel bank-zelle-card">
+    <article className="panel bank-zelle-card" id="bank-zelle-card" ref={card}>
       <div className="panel-header">
         <div>
           <Landmark size={18} />
@@ -253,6 +321,45 @@ export function BankZelleCard({ businessId, enabled }: { businessId: string; ena
             </select>
             <small>Staff look for a deposit of exactly the payment's amount, this many minutes before or after it was recorded.</small>
           </label>
+          <section className="bank-zelle-usage">
+            <h3>{USAGE_TEXT.title}</h3>
+            {usage ? <BankUsageSummary usage={usage} /> : <p className="bank-usage-none">{USAGE_TEXT.none}</p>}
+            <form
+              className="bank-zelle-limit"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void saveLimit();
+              }}
+            >
+              <label className="lst-field">
+                <span>{USAGE_TEXT.limitLabel}</span>
+                <div className="bank-zelle-limit-row">
+                  <input
+                    aria-invalid={limitError ? true : undefined}
+                    disabled={savingLimit || !enabled}
+                    inputMode="numeric"
+                    max={1000}
+                    min={0}
+                    onChange={(event) => {
+                      setLimitText(event.target.value);
+                      setLimitError("");
+                    }}
+                    type="number"
+                    value={limitText}
+                  />
+                  <button
+                    aria-busy={savingLimit}
+                    className="lst-btn ghost"
+                    disabled={savingLimit || busy || !enabled || limitText.trim() === String(refreshLimit)}
+                    type="submit"
+                  >
+                    {savingLimit ? <RefreshCw className="spin" size={14} /> : <Save size={14} />} {savingLimit ? "Saving…" : "Save"}
+                  </button>
+                </div>
+                {limitError ? <small className="bl-field-error">{limitError}</small> : <small>{USAGE_TEXT.limitHelp}</small>}
+              </label>
+            </form>
+          </section>
         </>
       )}
     </article>

@@ -26,6 +26,11 @@ const server = require("../../../my_flutter_app/functions/platform_billing.js") 
   REFUSAL_MESSAGES: Record<string, string>;
   normalizeDeal: (raw: unknown) => { deal: unknown; errors: string[] };
   computeBill: (args: unknown) => unknown;
+  normalizeUsage: (raw: unknown) => unknown;
+  dealNeeds: (deal: unknown) => unknown;
+  mergeNeeds: (...needs: unknown[]) => unknown;
+  billDrift: (snapshot: unknown, liveUsage: unknown, liveCommissionCents: number) => { items: Array<{ key: string }> };
+  CHARGE_KEYS: readonly string[];
 };
 
 test("the shared bill cases bill the same in the console", () => {
@@ -45,6 +50,74 @@ test("the shared bill cases bill the same in the console", () => {
   }
 });
 
+test("Check bank's three shared cases bill field for field as the server bills them", () => {
+  const bank = cases.filter((c) => Object.keys(c.expect.lines).some((key) => key === "bankConnection" || key === "bankChecks"));
+  assert.deepEqual(
+    bank.map((c) => c.name),
+    [
+      "bank connection: one month's price when the business had an active bank link",
+      "no active bank link: no connection charge; 37 paid refreshes x $0.20",
+      "bank lines count toward the minimum like any charge",
+    ],
+  );
+  for (const c of bank) {
+    const mine = billing.normalizeDeal(c.deal);
+    const theirs = server.normalizeDeal(c.deal);
+    assert.deepEqual(mine.errors, [], c.name);
+    assert.deepEqual(mine.deal, theirs.deal, c.name);
+    assert.deepEqual(billing.normalizeUsage(c.usage), server.normalizeUsage(c.usage), c.name);
+    const bill = billing.computeBill({ deal: mine.deal, usage: c.usage, commissionCents: c.commissionCents });
+    assert.deepEqual(bill, server.computeBill({ deal: theirs.deal, usage: c.usage, commissionCents: c.commissionCents }), c.name);
+    for (const [key, cents] of Object.entries(c.expect.lines)) {
+      assert.equal(bill.lines.find((line) => line.key === key)?.cents, cents, `${c.name}: ${key}`);
+    }
+    for (const field of ["chargesCents", "amountCents", "minimumAdjustmentCents", "capAdjustmentCents", "earnedCents"] as const) {
+      assert.equal(bill[field], c.expect[field], `${c.name}: ${field}`);
+    }
+  }
+});
+
+test("bank charge keys, drift figures and deal needs follow the server", () => {
+  assert.deepEqual([...billing.CHARGE_KEYS], [...server.CHARGE_KEYS]);
+  for (const key of billing.CHARGE_KEYS) assert.ok(billing.CHARGE_LABELS[key], key);
+  // Every drift figure differs, so the server lists them all, in its order.
+  const before = { barrels: 1, packages: 1, packagePrices: [100], cars: 1, parkingCars: 1, parkingBilledCents: 1, itemsSold: 1, bankConnected: false, bankRefreshes: 1 };
+  const after = { barrels: 2, packages: 2, packagePrices: [null, 300], cars: 2, parkingCars: 2, parkingBilledCents: 2, itemsSold: 2, bankConnected: true, bankRefreshes: 3 };
+  const drift = server.billDrift({ usage: before, deal: null, bill: { commissionCents: 1, amountCents: 0 } }, after, 2);
+  assert.deepEqual(drift.items.map((item) => item.key), billing.DRIFT_KEYS.map(([key]) => key));
+  for (const [key] of billing.DRIFT_KEYS) assert.ok(billing.DRIFT_LABELS[key], key);
+  for (const raw of [null, { bankConnection: { centsEach: 300 } }, { bankCheck: { centsEach: 20 } }, { itemSold: { centsEach: 5 }, parking: { mode: "perCar", centsEach: 100 } }]) {
+    const deal = raw === null ? null : billing.normalizeDeal(raw).deal;
+    assert.deepEqual(billing.dealNeeds(deal), server.dealNeeds(raw === null ? null : server.normalizeDeal(raw).deal), JSON.stringify(raw));
+  }
+  const a = billing.dealNeeds(billing.normalizeDeal({ bankCheck: { centsEach: 20 } }).deal);
+  const b = billing.dealNeeds(null);
+  assert.deepEqual(billing.mergeNeeds(a, b, null), server.mergeNeeds(a, b, null));
+});
+
+test("the bank deal lines round-trip the form and read as segments", () => {
+  const deal = billing.normalizeDeal({ bankConnection: { centsEach: 300 }, bankCheck: { centsEach: 20 } }).deal;
+  assert.ok(deal);
+  assert.equal(billing.isEmptyDeal(deal), false);
+  assert.deepEqual(billing.dealFromDraft(billing.draftFromDeal(deal)).deal, deal);
+  const draft = { ...billing.emptyDealDraft(), bankCheckMode: "fixed" as const, bankCheck: "0,20" };
+  assert.deepEqual(billing.dealFromDraft(draft).deal?.bankCheck, { centsEach: 20 });
+  const bad = billing.dealFromDraft({ ...billing.emptyDealDraft(), bankConnectionMode: "fixed", bankConnection: "0" });
+  assert.equal(bad.deal, null);
+  assert.equal(bad.errors.bankConnection, billing.DRAFT_MESSAGES.amount);
+  assert.deepEqual(
+    billing.dealSegments(deal).map((s) => [s.key, s.label, s.cents, s.unit]),
+    [
+      ["bankConnection", "Bank connection", 300, "a month with a connected bank"],
+      ["bankChecks", "Bank checks", 20, "per paid refresh"],
+    ],
+  );
+  // A deal saved before Check bank has neither line.
+  const old = billing.normalizeDeal({ barrel: { centsEach: 500 } }).deal;
+  assert.equal(old?.bankConnection, null);
+  assert.equal(old?.bankCheck, null);
+});
+
 test("the console refuses a deal exactly as the server does", () => {
   const samples: unknown[] = [
     null,
@@ -61,6 +134,10 @@ test("the console refuses a deal exactly as the server does", () => {
     { minimumCents: 500, capCents: 100 },
     { flatCents: -2 },
     { itemSold: { centsEach: 25 }, capCents: 900 },
+    { bankConnection: { centsEach: 0 } },
+    { bankCheck: { centsEach: 2.5 } },
+    { bankCheck: 20 },
+    { bankConnection: { centsEach: 300 }, bankCheck: { centsEach: 20 }, minimumCents: 1000 },
   ];
   for (const raw of samples) {
     const mine = billing.normalizeDeal(raw);

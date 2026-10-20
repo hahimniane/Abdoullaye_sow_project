@@ -48,7 +48,9 @@ export type BusinessPanelView =
   // or still in the waiting list).
   | "line"
   // Parking's month-end bills for one month, e.g. "month_end:2026-09".
-  | `month_end:${string}`;
+  | `month_end:${string}`
+  // Settings: the "Bank for Zelle checks" card (the owner's Check bank limit notice).
+  | "bank";
 
 export type BusinessNotificationTarget = {
   tab: BusinessTab;
@@ -259,6 +261,10 @@ export function businessTargetForNotification(
     case "business_verification_document":
     case "business_application_status":
       return {tab: "profile"};
+    // This month's limit of paid bank refreshes is reached
+    // (docs/ZELLE_BANK_CHECK.md): the bank card, where the owner raises it.
+    case "bank_check_limit":
+      return {tab: "profile", panelView: "bank"};
     case "barrel_shipment_status":
       return {tab: "barrels", focusId};
     // A customer's package request: Containers, the Requests list, that one.
