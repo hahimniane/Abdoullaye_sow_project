@@ -486,6 +486,63 @@ function loginCodeTemplateMessage(args) {
   };
 }
 
+/**
+ * The staff invitation (docs/STAFF_PHONE_INVITES.md): a UTILITY template,
+ * registered once under language "en", whose body holds the English text
+ * then the French one, like the *_2lang shipment templates. One URL button,
+ * https://customer.laawoldigital.com/j/{{1}}, whose parameter is the
+ * invitation's link token. Created by the owner with
+ * ~/laawol-deploy-logs/create_staff_invite_template.py.
+ */
+const STAFF_INVITE_TEMPLATE = "staff_invite_2lang";
+// {{1}} invitee, {{2}} inviter, {{3}} business, {{4}} inviter, {{5}}
+// business.
+const STAFF_INVITE_VARIABLES = Object.freeze([
+  "name", "inviter", "business", "inviter", "business",
+]);
+const STAFF_INVITE_FALLBACK = Object.freeze({
+  name: "👋",
+  inviter: "Laawol",
+  business: "Laawol",
+});
+
+/**
+ * The /messages body for one staff invitation.
+ *
+ * @param {{phone: string, name: string, inviter: string, business: string,
+ *   token: string}} args Who is invited, by whom, to what, and the link
+ *   token for the button.
+ * @return {object} The request body.
+ */
+function staffInviteTemplateMessage(args) {
+  const values = args || {};
+  const parameter = (text) => ({type: "text", text});
+  return {
+    messaging_product: "whatsapp",
+    to: String(values.phone ?? "").replace(/\D/g, ""),
+    type: "template",
+    template: {
+      name: STAFF_INVITE_TEMPLATE,
+      language: {code: BILINGUAL_TEMPLATE_LANGUAGE},
+      components: [
+        {
+          type: "body",
+          parameters: STAFF_INVITE_VARIABLES.map((variable) => parameter(
+              clean(values[variable], 60) || STAFF_INVITE_FALLBACK[variable])),
+        },
+        {
+          // https://customer.laawoldigital.com/j/{{1}}
+          type: "button",
+          sub_type: "url",
+          index: "0",
+          parameters: [parameter(String(values.token ?? "")
+              .replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64))],
+        },
+      ],
+    },
+  };
+}
+
 module.exports = {
   TEMPLATE,
   TEMPLATE_SET,
@@ -513,4 +570,7 @@ module.exports = {
   LOGIN_TEMPLATE,
   LOGIN_TEMPLATE_LANGUAGES,
   loginCodeTemplateMessage,
+  STAFF_INVITE_TEMPLATE,
+  STAFF_INVITE_VARIABLES,
+  staffInviteTemplateMessage,
 };

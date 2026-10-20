@@ -303,7 +303,11 @@ known. A link code (signed-in customer adding a number) is always sent.
 Customers only: phone-code sign-in and linking refuse any account with
 business or platform access (role not `customer`, `businessId`,
 `businessPermissions`, `platformAdmin`, `adminRole`) with
-`phone_sign_in_unavailable` ("Use your email and password"). Linking also
+`phone_sign_in_unavailable` ("Use your email and password"). One explicit
+exception (2026-10, docs/STAFF_PHONE_INVITES.md §2): staff who joined
+through a phone invitation sign in (never link) with the code of the
+invited number (`staffPhoneSignInAllowed`); a number with a live phone
+invitation is sent a real code. Linking also
 needs an existing customer profile, as `syncVerifiedCustomerPhone` does. A
 text sign-in to such an account reaches Firebase, but `completePhoneSignIn`
 refuses it and both clients sign straight out.
@@ -449,7 +453,8 @@ and removes the opt-out.
 - Email-dependent paths tolerate `email: ""`: notification email delivery
   already checks `isValidEmail` (no email row is queued), and the admin
   recovery-email action already refuses a person without a valid email
-  (`user-email-required`). Invitations are email-only by design.
+  (`user-email-required`). Business staff can also be invited by WhatsApp
+  number (docs/STAFF_PHONE_INVITES.md); platform invitations stay email.
 
 ## 10. Tracking page and app (clients)
 

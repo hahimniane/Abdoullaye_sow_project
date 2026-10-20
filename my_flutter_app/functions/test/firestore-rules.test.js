@@ -4088,6 +4088,16 @@ describe("phone account rules", () => {
         // The profile's sign-in state is not the customer's to change.
         await assertFails(updateDoc(doc(customer, "users/phone-customer"),
             {firstSignInAt: new Date(), accountOrigin: "phone_sign_in"}));
+        // Nor the phone-invited staff marker (docs/STAFF_PHONE_INVITES.md),
+        // nor an invitation.
+        await assertFails(updateDoc(doc(customer, "users/phone-customer"),
+            {signInMethod: "phone"}));
+        await assertFails(updateDoc(doc(customer, "users/phone-customer"),
+            {phoneInvite: {phoneE164: "+12025550123"}}));
+        await assertFails(setDoc(doc(customer, "accessInvitations/x"),
+            {channel: "phone", phoneE164: "+12025550123"}));
+        await assertFails(getDocs(query(collection(customer,
+            "accessInvitations"), where("phoneE164", "==", "+12025550123"))));
       });
 
   it("lets the owner read, never write, what they hid", async () => {

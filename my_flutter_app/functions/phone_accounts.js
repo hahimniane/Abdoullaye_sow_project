@@ -26,6 +26,13 @@ const {
   strictE164,
   toE164,
 } = require("./phone_e164");
+const {
+  invitationChannel,
+  isInviteToken,
+  liveInvitesForPhone,
+  phoneInvitePreview,
+  staffPhoneSignInAllowed,
+} = require("./staff_phone_invite");
 
 // ---------------------------------------------------------------------------
 // Records
@@ -361,11 +368,13 @@ function trackingLimitKey(value) {
  * Send limits (docs/PHONE_ACCOUNTS.md §5.1).
  *
  * @param {{phone: string, ip: string, trackingCode: string,
- *   callingCode: string}} keys Who. ip is already a bucket
+ *   callingCode: string, inviteToken: (string|undefined)}} keys Who. ip is
+ *   already a bucket
  *   (request_guard.addressBucket: IPv6 by its /64).
  * @return {Array<{kind, key, limit, windowMs}>} The buckets to consume.
  */
-function loginSendLimits({phone, ip, trackingCode, callingCode}) {
+function loginSendLimits({phone, ip, trackingCode, callingCode,
+  inviteToken}) {
   const limits = [
     {kind: "phone_hour", key: phone, limit: 5, windowMs: HOUR_MS},
     {kind: "phone_day", key: phone, limit: 10, windowMs: DAY_MS},
@@ -374,6 +383,13 @@ function loginSendLimits({phone, ip, trackingCode, callingCode}) {
   const tracking = trackingLimitKey(trackingCode);
   if (tracking) {
     limits.push({kind: "tracking_hour", key: tracking, limit: 5,
+      windowMs: HOUR_MS});
+  }
+  // A staff invitation link (docs/STAFF_PHONE_INVITES.md) is a masked flow
+  // like a tracking code: its own bucket.
+  const invite = String(inviteToken ?? "").slice(0, 64);
+  if (invite) {
+    limits.push({kind: "invite_hour", key: invite, limit: 5,
       windowMs: HOUR_MS});
   }
   if (callingCode) {
@@ -699,17 +715,25 @@ function isPlaceholderAccount(profile, authUser) {
 }
 
 /**
- * Phone-code sign-in and linking are for customers only (the rule
+ * Phone-code sign-in and linking are for customers (the rule
  * syncVerifiedCustomerPhone already applies): anyone with business or
- * platform access signs in with their email and password.
+ * platform access signs in with their email and password - except staff who
+ * joined through a phone invitation, who sign in with the code of the
+ * invited number (staffPhoneSignInAllowed, docs/STAFF_PHONE_INVITES.md).
+ * Linking a number never gets that exception (no `phone` is passed).
  *
  * @param {object|null} profile users/{uid}, or null when there is none yet
  *   (a new customer).
+ * @param {{phone: (string|undefined)}} options phone: the number signing
+ *   in.
  * @return {boolean} True when a phone code may sign in to / link this
  *   account.
  */
-function phoneSignInAllowed(profile) {
+function phoneSignInAllowed(profile, options = {}) {
   if (!profile) return true;
+  if (options.phone && staffPhoneSignInAllowed(profile, options.phone)) {
+    return true;
+  }
   const role = cleanText(profile.role, 40);
   if (role && role !== "customer") return false;
   if (profile.platformAdmin === true || cleanText(profile.adminRole, 40)) {
@@ -1331,13 +1355,16 @@ function createPhoneAccounts(deps) {
    * platform access (phoneSignInAllowed), in words that reveal nothing.
    *
    * @param {string} uid The account.
-   * @param {{requireProfile: boolean}} options requireProfile: linking needs
-   *   an existing customer profile (as syncVerifiedCustomerPhone does).
+   * @param {{requireProfile: boolean, phone: (string|undefined)}} options
+   *   requireProfile: linking needs an existing customer profile (as
+   *   syncVerifiedCustomerPhone does); phone: the number signing in (a
+   *   phone-invited staff member's own number opens their account).
    * @return {Promise<object|null>} The profile.
    */
   async function requirePhoneSignInAllowed(uid, options = {}) {
     const profile = await profileOf(uid);
-    if ((options.requireProfile && !profile) || !phoneSignInAllowed(profile)) {
+    if ((options.requireProfile && !profile) ||
+        !phoneSignInAllowed(profile, {phone: options.phone})) {
       throw refusal("permission-denied", "phone_sign_in_unavailable",
           "Use your email and password to sign in to this account");
     }
@@ -1354,7 +1381,7 @@ function createPhoneAccounts(deps) {
   async function accountForSignIn(e164) {
     const existing = await userByPhone(e164);
     if (existing) {
-      await requirePhoneSignInAllowed(existing.uid);
+      await requirePhoneSignInAllowed(existing.uid, {phone: e164});
       return {uid: existing.uid, created: false};
     }
     // Made under the number's claim, like a record's account (§4.1), so a
@@ -1364,7 +1391,7 @@ function createPhoneAccounts(deps) {
     if (found.state === "ready") {
       try {
         if (found.status === "reused") {
-          await requirePhoneSignInAllowed(found.uid);
+          await requirePhoneSignInAllowed(found.uid, {phone: e164});
         }
         // signInBookkeeping, next, settles the claim with the profile.
         return {uid: found.uid, created: found.status === "created"};
@@ -1382,7 +1409,7 @@ function createPhoneAccounts(deps) {
       if (error?.code !== "auth/phone-number-already-exists") throw error;
       const raced = await userByPhone(e164);
       if (!raced) throw error;
-      await requirePhoneSignInAllowed(raced.uid);
+      await requirePhoneSignInAllowed(raced.uid, {phone: e164});
       return {uid: raced.uid, created: false};
     }
   }
@@ -1531,7 +1558,13 @@ function createPhoneAccounts(deps) {
     }
     let e164 = "";
     let trackingCode = "";
-    if (purpose === "sign_in" && cleanText(data.trackingCode)) {
+    let inviteToken = "";
+    if (purpose === "sign_in" && cleanText(data.inviteToken)) {
+      // A staff invitation link (/j/<token>): the server reads the invited
+      // number; the client never gets it (docs/STAFF_PHONE_INVITES.md).
+      inviteToken = cleanText(data.inviteToken, 64);
+      e164 = await numberFromInvite(inviteToken);
+    } else if (purpose === "sign_in" && cleanText(data.trackingCode)) {
       const role = data.role === ROLE.RECEIVER ? ROLE.RECEIVER : ROLE.SENDER;
       trackingCode = cleanText(data.trackingCode, 60).toUpperCase();
       e164 = await numberFromTracking(trackingCode, role);
@@ -1558,6 +1591,7 @@ function createPhoneAccounts(deps) {
       phone: e164,
       ip: deps.addressBucket(deps.clientAddress(request)),
       trackingCode,
+      inviteToken,
       callingCode: callingCodeOf(digitsOf(e164)),
     });
     const limit = await consumeSendLimits(limits);
@@ -1576,15 +1610,17 @@ function createPhoneAccounts(deps) {
     }
     // Who the code would sign in to. A WhatsApp message costs money, so a
     // sign-in code is only really sent to a number that has an account a
-    // phone may open, or a record (a deleted account comes back that way).
-    // Every other number gets the very same answer and a challenge no code
-    // can open - nothing tells a caller whether a number is known.
+    // phone may open, a record (a deleted account comes back that way), or
+    // a live staff invitation. Every other number gets the very same answer
+    // and a challenge no code can open - nothing tells a caller whether a
+    // number is known.
     const holder = await userByPhone(e164);
     const holderProfile = holder ? await profileOf(holder.uid) : null;
     let send = true;
     if (purpose === "sign_in") {
-      send = holder ? phoneSignInAllowed(holderProfile) :
-        Boolean(trackingCode) || await numberHasRecord(e164);
+      send = holder ? phoneSignInAllowed(holderProfile, {phone: e164}) :
+        Boolean(trackingCode) || Boolean(inviteToken) ||
+        await numberHasRecord(e164) || await numberHasLiveInvite(e164);
     }
     const challengeRef = db().collection("phoneLoginChallenges").doc(
         crypto.randomBytes(16).toString("hex"));
@@ -1602,7 +1638,7 @@ function createPhoneAccounts(deps) {
       attempts: 0,
       status: "open",
       delivered: send,
-      source: trackingCode ? "tracking" : "phone",
+      source: trackingCode ? "tracking" : (inviteToken ? "invite" : "phone"),
       createdAtMs: nowMs,
       expiresAt: deps.Timestamp.fromMillis(expiresAtMs + DAY_MS),
     });
@@ -1640,6 +1676,64 @@ function createPhoneAccounts(deps) {
       if (!snap.empty) return true;
     }
     return false;
+  }
+
+  /**
+   * The live phone invitation a link token opens (docs/STAFF_PHONE_INVITES.md).
+   *
+   * @param {*} token The /j/ token.
+   * @return {Promise<?{id: string, data: object}>} It, or null.
+   */
+  async function inviteFromToken(token) {
+    if (!isInviteToken(token)) return null;
+    const snap = await db().collection("accessInvitations")
+        .where("linkToken", "==", String(token)).limit(2).get();
+    const docs = snap.docs.filter((doc) =>
+      invitationChannel(doc.data()) === "phone");
+    return docs.length === 1 ?
+      {id: docs[0].id, data: docs[0].data() || {}} : null;
+  }
+
+  async function numberFromInvite(token) {
+    const invite = await inviteFromToken(token);
+    const preview = invite ? phoneInvitePreview(invite.id, invite.data, now()) :
+      null;
+    const e164 = strictE164(invite?.data?.phoneE164);
+    if (!invite || preview.status !== "pending" || !e164) {
+      throw refusal("not-found", "invite_not_found",
+          "This invitation is no longer active");
+    }
+    return e164;
+  }
+
+  /**
+   * Whether a live staff invitation was sent to this number (one equality
+   * filter, no index; the rest is decided in memory).
+   *
+   * @param {string} e164 The number.
+   * @return {Promise<boolean>} True when one is live.
+   */
+  async function numberHasLiveInvite(e164) {
+    const snap = await db().collection("accessInvitations")
+        .where("phoneE164", "==", e164).limit(20).get();
+    return liveInvitesForPhone(snap.docs.map((doc) =>
+      ({id: doc.id, data: doc.data() || {}})), e164, now()).length > 0;
+  }
+
+  /**
+   * staffInvite: what the invitation page (/j/<token>) shows before anyone
+   * signs in - the business, who invited, the last two digits of the number.
+   *
+   * @param {object} request The callable request ({token}).
+   * @return {Promise<object>} phoneInvitePreview output.
+   */
+  async function staffInvite(request) {
+    const invite = await inviteFromToken(cleanText(request.data?.token, 64));
+    if (!invite) {
+      throw refusal("not-found", "invite_not_found",
+          "This invitation is no longer active");
+    }
+    return phoneInvitePreview(invite.id, invite.data, now());
   }
 
   const ATTEMPT_MESSAGES = Object.freeze({
@@ -1738,8 +1832,9 @@ function createPhoneAccounts(deps) {
           "Sign in with your phone first");
     }
     // A text sign-in to an account with business or platform access is
-    // refused like a code would be (the client signs out on this answer).
-    await requirePhoneSignInAllowed(uid);
+    // refused like a code would be (the client signs out on this answer) -
+    // unless it is a phone-invited staff member's own number.
+    await requirePhoneSignInAllowed(uid, {phone: e164});
     const booked = await signInBookkeeping(uid, e164);
     return {uid, profileCreated: booked.profileCreated,
       isNewAccount: booked.firstSignIn};
@@ -1999,6 +2094,7 @@ function createPhoneAccounts(deps) {
     completePhoneSignIn,
     getMyShipments,
     reportShipmentNotMine,
+    staffInvite,
   });
 
   /**
