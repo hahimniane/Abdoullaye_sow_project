@@ -15,6 +15,8 @@ import 'package:my_flutter_app/services/inventory_service.dart';
 import 'package:my_flutter_app/services/inventory_stores.dart';
 import 'package:my_flutter_app/services/lot_ledger.dart' show LotStaff;
 import 'package:my_flutter_app/services/shop_home.dart';
+import 'package:my_flutter_app/services/bank_check.dart' show BankStatusCache;
+import 'package:my_flutter_app/services/zelle_check_service.dart';
 import 'package:my_flutter_app/theme/app_theme.dart';
 import 'package:my_flutter_app/widgets/app_bottom_nav.dart';
 
@@ -207,7 +209,18 @@ Widget _section({
   String businessName = 'Mariama Boutique',
   String? approvalStatus,
   bool showTodaySales = true,
+  Map<String, Object?>? bankStatus,
 }) => ShopHomeSection(
+  // The business's bank: unreadable (nothing shows) unless a test says.
+  bankService: ZelleCheckService(
+    caller: (name, payload) async {
+      if (name == 'getBusinessBankStatus' && bankStatus != null) {
+        return bankStatus;
+      }
+      throw StateError('no bank in this test');
+    },
+  ),
+  bankCache: BankStatusCache(),
   businessId: 'b1',
   access: access,
   businessName: businessName,
@@ -536,6 +549,65 @@ void main() {
       expect(screen.businessId, 'b1');
       expect(screen.access.isOwner, isTrue);
       expect(screen.startWithSearch, isFalse);
+    });
+
+    testWidgets('Check bank: under Sell with an active bank, else not', (
+      tester,
+    ) async {
+      const staff = InventoryAccess(homeStoreId: 's-main');
+      for (final (access, status, entry, hint) in [
+        (
+          staff,
+          <String, Object?>{'connected': true, 'status': 'active'},
+          true,
+          false,
+        ),
+        // No bank link: staff see nothing at all.
+        (staff, <String, Object?>{'connected': false}, false, false),
+        (
+          staff,
+          <String, Object?>{'connected': true, 'status': 'needs_reauth'},
+          false,
+          false,
+        ),
+        // The owner gets a hint to connect it.
+        (
+          const InventoryAccess.owner(),
+          <String, Object?>{'connected': false},
+          false,
+          true,
+        ),
+      ]) {
+        await tester.pumpWidget(const SizedBox());
+        await _pumpSection(
+          tester,
+          _section(
+            source: _FakeSource(sales: _todaySales()),
+            calls: _Calls(summary: _summary),
+            access: access,
+            bankStatus: status,
+          ),
+        );
+        expect(
+          find.byKey(const Key('bank-check-entry')),
+          entry ? findsOneWidget : findsNothing,
+          reason: '$status',
+        );
+        expect(
+          find.byKey(const Key('bank-check-connect-hint')),
+          hint ? findsOneWidget : findsNothing,
+          reason: '$status',
+        );
+        if (entry || hint) {
+          // Sell stays first.
+          expect(
+            tester.getTopLeft(find.byKey(const Key('shop-sell'))).dy,
+            lessThan(
+              tester.getTopLeft(find.byKey(const Key('shop-bank-check'))).dy,
+            ),
+          );
+        }
+      }
     });
 
     testWidgets('the store a staff member sells from goes with them', (

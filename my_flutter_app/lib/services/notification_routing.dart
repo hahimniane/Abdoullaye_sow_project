@@ -65,6 +65,15 @@ class InventoryTransfersArguments {
   final String? kind;
 }
 
+/// The owner's "Bank for Zelle checks", opened from the monthly-limit
+/// notice. [businessId] is '' when the payload has none (the signed-in
+/// owner's business is used).
+class BusinessBankArguments {
+  const BusinessBankArguments({this.businessId = ''});
+
+  final String businessId;
+}
+
 /// One package (container line) on the business side, opened by its code or
 /// its line id - a "number isn't theirs" notification
 /// (docs/PHONE_ACCOUNTS.md §6.1) names both.
@@ -417,6 +426,14 @@ NotificationRoute? _businessRouteForNotificationData(
           storeId: storeId.isEmpty ? null : storeId,
           kind: credit ? 'credit' : null,
         ),
+      );
+    // "Bank checks hit this month's limit" (to the owner): the bank
+    // settings, where the month's usage and the limit are.
+    case 'bank_check_limit':
+      final businessId = data['businessId']?.toString().trim() ?? '';
+      return NotificationRoute(
+        '/business-bank',
+        arguments: BusinessBankArguments(businessId: businessId),
       );
     // A store transfer was sent, cancelled, came up short, or is waiting:
     // the transfers list, opened on that transfer.

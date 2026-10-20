@@ -26306,6 +26306,312 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This sale was switched too many times.'**
   String get invSwitchFailTooMany;
+
+  /// No description provided for @bankCheckEntryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Check bank'**
+  String get bankCheckEntryTitle;
+
+  /// No description provided for @bankCheckEntryHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Did a Zelle arrive? Check the amount.'**
+  String get bankCheckEntryHint;
+
+  /// No description provided for @bankCheckConnectHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect your bank to check Zelle payments from here.'**
+  String get bankCheckConnectHint;
+
+  /// No description provided for @bankCheckReconnectHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Your bank asks you to sign in again before Zelle can be checked.'**
+  String get bankCheckReconnectHint;
+
+  /// No description provided for @bankCheckSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'See if a Zelle of exactly this amount reached the business bank. Nothing is recorded.'**
+  String get bankCheckSubtitle;
+
+  /// No description provided for @bankCheckAmountLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Exact amount'**
+  String get bankCheckAmountLabel;
+
+  /// No description provided for @bankCheckAmountInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Type the amount, like 60 or 60.50.'**
+  String get bankCheckAmountInvalid;
+
+  /// No description provided for @bankCheckAmountTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'That amount is too large to check.'**
+  String get bankCheckAmountTooLarge;
+
+  /// No description provided for @bankCheckSinceLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'When was it sent?'**
+  String get bankCheckSinceLabel;
+
+  /// No description provided for @bankCheckSince15m.
+  ///
+  /// In en, this message translates to:
+  /// **'Last 15 minutes'**
+  String get bankCheckSince15m;
+
+  /// No description provided for @bankCheckSince1h.
+  ///
+  /// In en, this message translates to:
+  /// **'Last hour'**
+  String get bankCheckSince1h;
+
+  /// No description provided for @bankCheckSinceToday.
+  ///
+  /// In en, this message translates to:
+  /// **'Today'**
+  String get bankCheckSinceToday;
+
+  /// No description provided for @bankCheckButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Check'**
+  String get bankCheckButton;
+
+  /// No description provided for @bankCheckSeveralHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Find the customer\'s by the sender\'s name.'**
+  String get bankCheckSeveralHint;
+
+  /// No description provided for @bankCheckPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending'**
+  String get bankCheckPending;
+
+  /// No description provided for @bankCheckLimitNote.
+  ///
+  /// In en, this message translates to:
+  /// **'This month\'s bank refresh limit is reached, so new deposits can take longer to show.'**
+  String get bankCheckLimitNote;
+
+  /// No description provided for @bankCheckUseForSale.
+  ///
+  /// In en, this message translates to:
+  /// **'Use for a sale'**
+  String get bankCheckUseForSale;
+
+  /// No description provided for @bankCheckUsed.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirmed for a sale'**
+  String get bankCheckUsed;
+
+  /// No description provided for @bankUseSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick the Zelle payment of {amount} this deposit pays.'**
+  String bankUseSubtitle(String amount);
+
+  /// No description provided for @bankUseRecent.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent Zelle payments of this amount'**
+  String get bankUseRecent;
+
+  /// No description provided for @bankUseResults.
+  ///
+  /// In en, this message translates to:
+  /// **'Payments that match'**
+  String get bankUseResults;
+
+  /// No description provided for @bankUseSearchLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer, items or tracking code'**
+  String get bankUseSearchLabel;
+
+  /// No description provided for @bankUseSearchButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get bankUseSearchButton;
+
+  /// No description provided for @bankUseEmptyRecent.
+  ///
+  /// In en, this message translates to:
+  /// **'No recent Zelle payment of {amount} is waiting for the bank. Search older ones above.'**
+  String bankUseEmptyRecent(String amount);
+
+  /// No description provided for @bankUseEmptySearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing matches “{query}”.'**
+  String bankUseEmptySearch(String query);
+
+  /// No description provided for @bankUseLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load the payments. Check the connection and try again.'**
+  String get bankUseLoadFailed;
+
+  /// No description provided for @bankUseKindSale.
+  ///
+  /// In en, this message translates to:
+  /// **'Sale'**
+  String get bankUseKindSale;
+
+  /// No description provided for @bankUseKindCreditPayment.
+  ///
+  /// In en, this message translates to:
+  /// **'Credit payment'**
+  String get bankUseKindCreditPayment;
+
+  /// No description provided for @bankUseKindPackagePayment.
+  ///
+  /// In en, this message translates to:
+  /// **'Package payment'**
+  String get bankUseKindPackagePayment;
+
+  /// No description provided for @bankUseNoName.
+  ///
+  /// In en, this message translates to:
+  /// **'No customer name'**
+  String get bankUseNoName;
+
+  /// No description provided for @bankUseConfirmButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Use for this sale'**
+  String get bankUseConfirmButton;
+
+  /// No description provided for @bankUseConfirming.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirming…'**
+  String get bankUseConfirming;
+
+  /// No description provided for @bankUseConfirmed.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirmed for this sale'**
+  String get bankUseConfirmed;
+
+  /// No description provided for @zelleFailAmountMismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'That payment is not for the same amount as the deposit.'**
+  String get zelleFailAmountMismatch;
+
+  /// No description provided for @zelleFailCheckAmountInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Type an amount above zero, with at most two decimals.'**
+  String get zelleFailCheckAmountInvalid;
+
+  /// No description provided for @zelleFailSinceInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick when it was sent.'**
+  String get zelleFailSinceInvalid;
+
+  /// No description provided for @zelleFailModeInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'This check needs an update of the app.'**
+  String get zelleFailModeInvalid;
+
+  /// No description provided for @zelleFailLimitInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a limit from 0 to 1000.'**
+  String get zelleFailLimitInvalid;
+
+  /// No description provided for @bankUsageTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'This month · {month}'**
+  String bankUsageTitle(String month);
+
+  /// No description provided for @bankUsageChecks.
+  ///
+  /// In en, this message translates to:
+  /// **'Checks'**
+  String get bankUsageChecks;
+
+  /// No description provided for @bankUsageRefreshes.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid refreshes'**
+  String get bankUsageRefreshes;
+
+  /// No description provided for @bankUsageRefreshesOf.
+  ///
+  /// In en, this message translates to:
+  /// **'{used} of {limit}'**
+  String bankUsageRefreshesOf(int used, int limit);
+
+  /// No description provided for @bankUsageCost.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimated cost'**
+  String get bankUsageCost;
+
+  /// No description provided for @bankUsageByStaff.
+  ///
+  /// In en, this message translates to:
+  /// **'By team member'**
+  String get bankUsageByStaff;
+
+  /// No description provided for @bankUsageStaffLine.
+  ///
+  /// In en, this message translates to:
+  /// **'Checks: {checks} · Refreshes: {refreshes}'**
+  String bankUsageStaffLine(int checks, int refreshes);
+
+  /// No description provided for @bankUsageNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No checks yet this month.'**
+  String get bankUsageNone;
+
+  /// No description provided for @bankUsageLimitReached.
+  ///
+  /// In en, this message translates to:
+  /// **'Limit reached: checks still work, but new deposits can take longer to show.'**
+  String get bankUsageLimitReached;
+
+  /// No description provided for @bankLimitLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Monthly limit of paid refreshes'**
+  String get bankLimitLabel;
+
+  /// No description provided for @bankLimitHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Each refresh asks the bank for new deposits and costs about {cost}. When the limit is reached, checks still work but stop asking the bank to refresh until next month.'**
+  String bankLimitHint(String cost);
+
+  /// No description provided for @bankLimitInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Type a whole number from 0 to 1000.'**
+  String get bankLimitInvalid;
+
+  /// No description provided for @bankLimitSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Limit saved'**
+  String get bankLimitSaved;
 }
 
 class _AppLocalizationsDelegate

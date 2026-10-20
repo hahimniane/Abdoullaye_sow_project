@@ -15495,4 +15495,180 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get invSwitchFailTooMany => 'This sale was switched too many times.';
+
+  @override
+  String get bankCheckEntryTitle => 'Check bank';
+
+  @override
+  String get bankCheckEntryHint => 'Did a Zelle arrive? Check the amount.';
+
+  @override
+  String get bankCheckConnectHint =>
+      'Connect your bank to check Zelle payments from here.';
+
+  @override
+  String get bankCheckReconnectHint =>
+      'Your bank asks you to sign in again before Zelle can be checked.';
+
+  @override
+  String get bankCheckSubtitle =>
+      'See if a Zelle of exactly this amount reached the business bank. Nothing is recorded.';
+
+  @override
+  String get bankCheckAmountLabel => 'Exact amount';
+
+  @override
+  String get bankCheckAmountInvalid => 'Type the amount, like 60 or 60.50.';
+
+  @override
+  String get bankCheckAmountTooLarge => 'That amount is too large to check.';
+
+  @override
+  String get bankCheckSinceLabel => 'When was it sent?';
+
+  @override
+  String get bankCheckSince15m => 'Last 15 minutes';
+
+  @override
+  String get bankCheckSince1h => 'Last hour';
+
+  @override
+  String get bankCheckSinceToday => 'Today';
+
+  @override
+  String get bankCheckButton => 'Check';
+
+  @override
+  String get bankCheckSeveralHint =>
+      'Find the customer\'s by the sender\'s name.';
+
+  @override
+  String get bankCheckPending => 'Pending';
+
+  @override
+  String get bankCheckLimitNote =>
+      'This month\'s bank refresh limit is reached, so new deposits can take longer to show.';
+
+  @override
+  String get bankCheckUseForSale => 'Use for a sale';
+
+  @override
+  String get bankCheckUsed => 'Confirmed for a sale';
+
+  @override
+  String bankUseSubtitle(String amount) {
+    return 'Pick the Zelle payment of $amount this deposit pays.';
+  }
+
+  @override
+  String get bankUseRecent => 'Recent Zelle payments of this amount';
+
+  @override
+  String get bankUseResults => 'Payments that match';
+
+  @override
+  String get bankUseSearchLabel => 'Customer, items or tracking code';
+
+  @override
+  String get bankUseSearchButton => 'Search';
+
+  @override
+  String bankUseEmptyRecent(String amount) {
+    return 'No recent Zelle payment of $amount is waiting for the bank. Search older ones above.';
+  }
+
+  @override
+  String bankUseEmptySearch(String query) {
+    return 'Nothing matches “$query”.';
+  }
+
+  @override
+  String get bankUseLoadFailed =>
+      'Couldn\'t load the payments. Check the connection and try again.';
+
+  @override
+  String get bankUseKindSale => 'Sale';
+
+  @override
+  String get bankUseKindCreditPayment => 'Credit payment';
+
+  @override
+  String get bankUseKindPackagePayment => 'Package payment';
+
+  @override
+  String get bankUseNoName => 'No customer name';
+
+  @override
+  String get bankUseConfirmButton => 'Use for this sale';
+
+  @override
+  String get bankUseConfirming => 'Confirming…';
+
+  @override
+  String get bankUseConfirmed => 'Confirmed for this sale';
+
+  @override
+  String get zelleFailAmountMismatch =>
+      'That payment is not for the same amount as the deposit.';
+
+  @override
+  String get zelleFailCheckAmountInvalid =>
+      'Type an amount above zero, with at most two decimals.';
+
+  @override
+  String get zelleFailSinceInvalid => 'Pick when it was sent.';
+
+  @override
+  String get zelleFailModeInvalid => 'This check needs an update of the app.';
+
+  @override
+  String get zelleFailLimitInvalid => 'Pick a limit from 0 to 1000.';
+
+  @override
+  String bankUsageTitle(String month) {
+    return 'This month · $month';
+  }
+
+  @override
+  String get bankUsageChecks => 'Checks';
+
+  @override
+  String get bankUsageRefreshes => 'Paid refreshes';
+
+  @override
+  String bankUsageRefreshesOf(int used, int limit) {
+    return '$used of $limit';
+  }
+
+  @override
+  String get bankUsageCost => 'Estimated cost';
+
+  @override
+  String get bankUsageByStaff => 'By team member';
+
+  @override
+  String bankUsageStaffLine(int checks, int refreshes) {
+    return 'Checks: $checks · Refreshes: $refreshes';
+  }
+
+  @override
+  String get bankUsageNone => 'No checks yet this month.';
+
+  @override
+  String get bankUsageLimitReached =>
+      'Limit reached: checks still work, but new deposits can take longer to show.';
+
+  @override
+  String get bankLimitLabel => 'Monthly limit of paid refreshes';
+
+  @override
+  String bankLimitHint(String cost) {
+    return 'Each refresh asks the bank for new deposits and costs about $cost. When the limit is reached, checks still work but stop asking the bank to refresh until next month.';
+  }
+
+  @override
+  String get bankLimitInvalid => 'Type a whole number from 0 to 1000.';
+
+  @override
+  String get bankLimitSaved => 'Limit saved';
 }

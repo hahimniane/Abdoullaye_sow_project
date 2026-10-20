@@ -26,6 +26,7 @@ import 'screens/splash_screen.dart';
 import 'screens/customer_home_screen.dart';
 import 'screens/staff_home_screen.dart';
 import 'screens/home_menu.dart';
+import 'screens/bank_zelle_settings_screen.dart';
 import 'screens/business_record_screen.dart';
 import 'screens/business_reviews_screen.dart';
 import 'screens/business_transport_screen.dart';
@@ -410,6 +411,23 @@ class MyApp extends StatelessWidget {
                       ? args.transferId
                       : null,
                 );
+              },
+              // "Bank checks hit this month's limit": the owner's bank
+              // settings (usage and the limit). Anyone else: the business
+              // home - only the owner manages the bank.
+              '/business-bank': (context) {
+                final auth = context.read<AuthProvider>();
+                final args = ModalRoute.of(context)?.settings.arguments;
+                final own = auth.businessId ?? '';
+                final named =
+                    args is BusinessBankArguments ? args.businessId : '';
+                final businessId = named.isNotEmpty ? named : own;
+                if (!auth.isBusinessOwner ||
+                    businessId.isEmpty ||
+                    (own.isNotEmpty && own != businessId)) {
+                  return const HomeMenu(showBackButton: true);
+                }
+                return BankZelleSettingsScreen(businessId: businessId);
               },
               '/business-reviews': (context) {
                 final businessId =

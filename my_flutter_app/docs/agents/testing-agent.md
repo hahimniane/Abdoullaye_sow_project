@@ -649,3 +649,11 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   the values (a widget test caught "Switched to credit by $40.00 · $20.00").
   Any message with two or more placeholders gets an `@key` block with the
   placeholders in call order, in BOTH ARB files.
+- `AppTheme`'s `FilledButton` is full width (`minimumSize: Size(double.infinity, 52)`):
+  one placed beside a field in a `Row` throws "BoxConstraints forces an
+  infinite width" and blanks the rest of the `ListView` (the bank limit's
+  Save did, caught by `bank_check_screens_test.dart`). Give such a button its
+  own `FilledButton.styleFrom(minimumSize: ...)`, and render every new screen
+  in a widget test, scrolled to its bottom. When copying a test's `_plain`
+  helper, write the no-break spaces as `'[  ]'` escapes: pasted
+  literally they can arrive as plain spaces and every time match fails.

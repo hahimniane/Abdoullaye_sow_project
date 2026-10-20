@@ -7969,5 +7969,111 @@
   "invSwitchFailAlreadyCredit": "Cette vente est déjà à crédit.",
   "invSwitchFailAlreadyPaid": "Cette vente est déjà entièrement payée.",
   "invSwitchFailPaymentsRecorded": "De l’argent a déjà été encaissé sur ce crédit, elle ne peut donc pas devenir une vente payée. Utilisez Enregistrer un paiement pour ce qui reste dû.",
-  "invSwitchFailTooMany": "Cette vente a été modifiée trop de fois."
+  "invSwitchFailTooMany": "Cette vente a été modifiée trop de fois.",
+  "bankCheckEntryTitle": "Vérifier la banque",
+  "bankCheckEntryHint": "Un Zelle est-il arrivé ? Vérifiez le montant.",
+  "bankCheckConnectHint": "Connectez votre banque pour vérifier les paiements Zelle d'ici.",
+  "bankCheckReconnectHint": "Votre banque vous demande de vous reconnecter avant de pouvoir vérifier les Zelle.",
+  "bankCheckSubtitle": "Voyez si un Zelle de ce montant exact est arrivé sur le compte de l'entreprise. Rien n'est enregistré.",
+  "bankCheckAmountLabel": "Montant exact",
+  "bankCheckAmountInvalid": "Saisissez le montant, par exemple 60 ou 60,50.",
+  "bankCheckAmountTooLarge": "Ce montant est trop élevé pour être vérifié.",
+  "bankCheckSinceLabel": "Quand a-t-il été envoyé ?",
+  "bankCheckSince15m": "15 dernières minutes",
+  "bankCheckSince1h": "Dernière heure",
+  "bankCheckSinceToday": "Aujourd'hui",
+  "bankCheckButton": "Vérifier",
+  "bankCheckSeveralHint": "Trouvez celui du client grâce au nom de l'expéditeur.",
+  "bankCheckPending": "En attente",
+  "bankCheckLimitNote": "La limite mensuelle d'actualisations bancaires est atteinte : les nouveaux dépôts peuvent mettre plus de temps à apparaître.",
+  "bankCheckUseForSale": "Utiliser pour une vente",
+  "bankCheckUsed": "Confirmé pour une vente",
+  "bankUseSubtitle": "Choisissez le paiement Zelle de {amount} que ce dépôt règle.",
+  "@bankUseSubtitle": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "bankUseRecent": "Paiements Zelle récents de ce montant",
+  "bankUseResults": "Paiements correspondants",
+  "bankUseSearchLabel": "Client, articles ou code de suivi",
+  "bankUseSearchButton": "Rechercher",
+  "bankUseEmptyRecent": "Aucun paiement Zelle récent de {amount} n'attend la banque. Recherchez les plus anciens ci-dessus.",
+  "@bankUseEmptyRecent": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "bankUseEmptySearch": "Aucun résultat pour « {query} ».",
+  "@bankUseEmptySearch": {
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
+  "bankUseLoadFailed": "Impossible de charger les paiements. Vérifiez la connexion et réessayez.",
+  "bankUseKindSale": "Vente",
+  "bankUseKindCreditPayment": "Paiement de crédit",
+  "bankUseKindPackagePayment": "Paiement de colis",
+  "bankUseNoName": "Client sans nom",
+  "bankUseConfirmButton": "Utiliser pour cette vente",
+  "bankUseConfirming": "Confirmation…",
+  "bankUseConfirmed": "Confirmé pour cette vente",
+  "zelleFailAmountMismatch": "Ce paiement n'a pas le même montant que le dépôt.",
+  "zelleFailCheckAmountInvalid": "Saisissez un montant supérieur à zéro, avec deux décimales au plus.",
+  "zelleFailSinceInvalid": "Choisissez quand il a été envoyé.",
+  "zelleFailModeInvalid": "Cette vérification demande une mise à jour de l'application.",
+  "zelleFailLimitInvalid": "Choisissez une limite de 0 à 1000.",
+  "bankUsageTitle": "Ce mois-ci · {month}",
+  "@bankUsageTitle": {
+    "placeholders": {
+      "month": {
+        "type": "String"
+      }
+    }
+  },
+  "bankUsageChecks": "Vérifications",
+  "bankUsageRefreshes": "Actualisations payantes",
+  "bankUsageRefreshesOf": "{used} sur {limit}",
+  "@bankUsageRefreshesOf": {
+    "placeholders": {
+      "used": {
+        "type": "int"
+      },
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
+  "bankUsageCost": "Coût estimé",
+  "bankUsageByStaff": "Par membre de l'équipe",
+  "bankUsageStaffLine": "Vérifications : {checks} · Actualisations : {refreshes}",
+  "@bankUsageStaffLine": {
+    "placeholders": {
+      "checks": {
+        "type": "int"
+      },
+      "refreshes": {
+        "type": "int"
+      }
+    }
+  },
+  "bankUsageNone": "Aucune vérification ce mois-ci.",
+  "bankUsageLimitReached": "Limite atteinte : les vérifications fonctionnent toujours, mais les nouveaux dépôts peuvent mettre plus de temps à apparaître.",
+  "bankLimitLabel": "Limite mensuelle d'actualisations payantes",
+  "bankLimitHint": "Chaque actualisation demande les nouveaux dépôts à la banque et coûte environ {cost}. Une fois la limite atteinte, les vérifications fonctionnent toujours mais ne demandent plus d'actualisation à la banque jusqu'au mois prochain.",
+  "@bankLimitHint": {
+    "placeholders": {
+      "cost": {
+        "type": "String"
+      }
+    }
+  },
+  "bankLimitInvalid": "Saisissez un nombre entier de 0 à 1000.",
+  "bankLimitSaved": "Limite enregistrée"
 }

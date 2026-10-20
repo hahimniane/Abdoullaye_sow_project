@@ -142,7 +142,7 @@ class _ZelleCheckSheetState extends State<ZelleCheckSheet> {
       if (!mounted) return;
       if (_countdown.tick()) {
         _stopTicker();
-        unawaited(_check(manual: false));
+        unawaited(_check(manual: false, auto: true));
       } else {
         setState(() {});
       }
@@ -186,7 +186,9 @@ class _ZelleCheckSheetState extends State<ZelleCheckSheet> {
 
   /// One check. By hand it starts a fresh 3-minute window; by itself (the
   /// countdown reached zero) it keeps the "not there yet" panel on screen.
-  Future<void> _check({required bool manual}) async {
+  /// [auto] (every check the sheet starts by itself) is not counted by the
+  /// server as a check someone made.
+  Future<void> _check({required bool manual, bool auto = false}) async {
     if (_inFlight) return;
     if (manual) _countdown.reset();
     _stopTicker();
@@ -195,14 +197,14 @@ class _ZelleCheckSheetState extends State<ZelleCheckSheet> {
       _note = '';
       if (manual) _phase = _Phase.checking;
     });
-    await _request();
+    await _request(auto: auto);
   }
 
   /// The call itself; [_inFlight] is already set.
-  Future<void> _request() async {
+  Future<void> _request({bool auto = false}) async {
     try {
       final result = await widget.service
-          .check(widget.businessId, widget.kind, widget.id)
+          .check(widget.businessId, widget.kind, widget.id, auto: auto)
           .timeout(const Duration(seconds: 30));
       if (!mounted) return;
       if (result == null) {
@@ -288,7 +290,8 @@ class _ZelleCheckSheetState extends State<ZelleCheckSheet> {
       }
     }
     if (recheck && mounted) {
-      await _check(manual: true);
+      // The list went stale under the person: asked again by the sheet.
+      await _check(manual: true, auto: true);
       if (mounted) {
         setState(
           () =>

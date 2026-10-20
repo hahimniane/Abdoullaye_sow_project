@@ -99,12 +99,35 @@ Map<String, Object?> setBankCheckWindowRequest(
   int minutes,
 ) => {'businessId': businessId, 'minutes': minutes};
 
-/// `checkZellePayment`.
+/// `setBankCheckWindow` with the monthly limit of paid refreshes only.
+Map<String, Object?> setBankRefreshLimitRequest(
+  String businessId,
+  int refreshLimit,
+) => {'businessId': businessId, 'refreshLimit': refreshLimit};
+
+/// `checkZellePayment`. [auto] marks the sheet's own timed re-checks, which
+/// the server does not count as a check someone made; a press of Check (or
+/// opening the sheet) sends nothing.
 Map<String, Object?> checkZellePaymentRequest(
   String businessId,
   ZelleCheckKind kind,
-  String id,
-) => {'businessId': businessId, 'kind': kind.wire, 'id': id};
+  String id, {
+  bool auto = false,
+}) => {
+  'businessId': businessId,
+  'kind': kind.wire,
+  'id': id,
+  if (auto) 'auto': true,
+};
+
+/// The kind a callable names, or null for one this app does not know.
+ZelleCheckKind? zelleCheckKindOfWire(Object? wire) {
+  final text = (wire ?? '').toString().trim();
+  for (final kind in ZelleCheckKind.values) {
+    if (kind.wire == text) return kind;
+  }
+  return null;
+}
 
 /// `confirmZelleCandidate`: the deposit the person picked by sender name.
 Map<String, Object?> confirmZelleCandidateRequest(
@@ -393,6 +416,8 @@ class BusinessBankStatus {
     this.lastSyncAt,
     this.accountName = '',
     this.lastErrorCode = '',
+    this.refreshLimit = defaultBankRefreshLimit,
+    this.usage,
   });
 
   static const none = BusinessBankStatus(
@@ -422,10 +447,19 @@ class BusinessBankStatus {
       lastSyncAt: _instantOfMs(map['lastSyncAt']),
       accountName: _text(map['accountName'], 80),
       lastErrorCode: _text(map['lastErrorCode'], 80),
+      refreshLimit: bankRefreshLimitOf(map['refreshLimit']),
+      usage: BankUsage.fromMap(map['usage']),
     );
   }
 
   final bool connected;
+
+  /// The owner's monthly limit of paid bank refreshes (owner answer only;
+  /// staff get the default, never shown to them).
+  final int refreshLimit;
+
+  /// This month's checks and refreshes (owner answer only; null for staff).
+  final BankUsage? usage;
 
   /// The account's own name ("Business Checking"), owner only.
   final String accountName;
@@ -443,16 +477,166 @@ class BusinessBankStatus {
   bool get needsReauth => connected && status == BankLinkStatus.needsReauth;
   bool get active => connected && status == BankLinkStatus.active;
 
-  BusinessBankStatus copyWith({int? windowMinutes}) => BusinessBankStatus(
-    connected: connected,
-    status: status,
-    institutionName: institutionName,
-    accountMask: accountMask,
-    windowMinutes: windowMinutes ?? this.windowMinutes,
-    lastSyncAt: lastSyncAt,
-    accountName: accountName,
-    lastErrorCode: lastErrorCode,
+  BusinessBankStatus copyWith({int? windowMinutes, int? refreshLimit}) =>
+      BusinessBankStatus(
+        connected: connected,
+        status: status,
+        institutionName: institutionName,
+        accountMask: accountMask,
+        windowMinutes: windowMinutes ?? this.windowMinutes,
+        lastSyncAt: lastSyncAt,
+        accountName: accountName,
+        lastErrorCode: lastErrorCode,
+        refreshLimit: refreshLimit ?? this.refreshLimit,
+        usage: refreshLimit == null
+            ? usage
+            : usage?.withRefreshLimit(refreshLimit),
+      );
+}
+
+// ---------------------------------------------------------------------------
+// This month's usage and the owner's limit of paid refreshes.
+// ---------------------------------------------------------------------------
+
+/// The owner's monthly limit of paid bank refreshes (the server takes
+/// 0..1000; 100 until the owner changes it).
+const defaultBankRefreshLimit = 100;
+const minBankRefreshLimit = 0;
+const maxBankRefreshLimit = 1000;
+
+bool bankRefreshLimitValid(int limit) =>
+    limit >= minBankRefreshLimit && limit <= maxBankRefreshLimit;
+
+/// A limit read from an answer; the default when absent or out of range.
+int bankRefreshLimitOf(Object? value) {
+  final limit = value is num && value.isFinite && value == value.roundToDouble()
+      ? value.toInt()
+      : null;
+  return limit != null && bankRefreshLimitValid(limit)
+      ? limit
+      : defaultBankRefreshLimit;
+}
+
+/// A limit the owner typed: digits only, 0..1000; null otherwise (never
+/// guessed: "1,000", "12.5" and "-1" are refused).
+int? readBankRefreshLimit(String text) {
+  final t = text.trim();
+  if (t.isEmpty || t.length > 4 || !RegExp(r'^[0-9]+$').hasMatch(t)) {
+    return null;
+  }
+  final limit = int.parse(t);
+  return bankRefreshLimitValid(limit) ? limit : null;
+}
+
+int _count(Object? value) {
+  final n = _optionalInt(value);
+  return n == null || n < 0 ? 0 : n;
+}
+
+/// One person's share of the month. [name] is "" when the profile has none:
+/// screens then say "Team member" - a uid is never shown.
+class BankUsageStaff {
+  const BankUsageStaff({
+    required this.uid,
+    this.name = '',
+    this.checks = 0,
+    this.refreshes = 0,
+  });
+
+  final String uid;
+  final String name;
+  final int checks;
+  final int refreshes;
+}
+
+/// `usage` in the owner's `getBusinessBankStatus` answer: `{month, checks,
+/// refreshes, refreshesFailed, estimatedCostCents, refreshLimit,
+/// limitReached, byStaff}`.
+class BankUsage {
+  const BankUsage({
+    this.month = '',
+    this.checks = 0,
+    this.refreshes = 0,
+    this.refreshesFailed = 0,
+    this.estimatedCostCents = 0,
+    this.refreshLimit = defaultBankRefreshLimit,
+    this.limitReached = false,
+    this.byStaff = const [],
+  });
+
+  /// Null when [data] is not a map (staff answers carry no usage).
+  static BankUsage? fromMap(Object? data) {
+    if (data is! Map) return null;
+    final map = callableMap(data);
+    final raw = map['byStaff'];
+    final seen = <String>{};
+    final limit = bankRefreshLimitOf(map['refreshLimit']);
+    final refreshes = _count(map['refreshes']);
+    return BankUsage(
+      month: _text(map['month'], 7),
+      checks: _count(map['checks']),
+      refreshes: refreshes,
+      refreshesFailed: _count(map['refreshesFailed']),
+      estimatedCostCents: _count(map['estimatedCostCents']),
+      refreshLimit: limit,
+      limitReached: map['limitReached'] == true,
+      byStaff: [
+        if (raw is Iterable)
+          for (final row in raw)
+            if (row is Map)
+              if (_text(row['uid'], 128) case final uid
+                  when uid.isNotEmpty && seen.add(uid))
+                BankUsageStaff(
+                  uid: uid,
+                  name: _text(row['name'], 80),
+                  checks: _count(row['checks']),
+                  refreshes: _count(row['refreshes']),
+                ),
+      ],
+    );
+  }
+
+  /// `yyyy-mm`, the month in New York.
+  final String month;
+  final int checks;
+  final int refreshes;
+  final int refreshesFailed;
+  final int estimatedCostCents;
+  final int refreshLimit;
+  final bool limitReached;
+  final List<BankUsageStaff> byStaff;
+
+  /// The first day of [month], or null when it cannot be read.
+  DateTime? get monthStart {
+    final m = RegExp(r'^(\d{4})-(\d{2})$').firstMatch(month);
+    if (m == null) return null;
+    final month0 = int.parse(m.group(2)!);
+    if (month0 < 1 || month0 > 12) return null;
+    return DateTime(int.parse(m.group(1)!), month0);
+  }
+
+  /// The same month under a new limit (the server says the limit is reached
+  /// once the month's refreshes reach it).
+  BankUsage withRefreshLimit(int limit) => BankUsage(
+    month: month,
+    checks: checks,
+    refreshes: refreshes,
+    refreshesFailed: refreshesFailed,
+    estimatedCostCents: estimatedCostCents,
+    refreshLimit: limit,
+    limitReached: refreshes >= limit,
+    byStaff: byStaff,
   );
+}
+
+/// `setBankCheckWindow {refreshLimit}`: the limit the server kept, or null
+/// when the answer does not say.
+int? bankRefreshLimitFromAnswer(Object? data) {
+  final value = callableMap(data)['refreshLimit'];
+  final limit = value is num && value == value.roundToDouble()
+      ? value.toInt()
+      : null;
+  return limit != null && bankRefreshLimitValid(limit) ? limit : null;
 }
 
 /// "Business Checking •••• 1234", whichever parts there are.
@@ -546,6 +730,24 @@ enum ZelleCheckFailure {
 
   /// The bank (Plaid) did not answer; `details.bankError` may name why.
   bankError,
+
+  /// Check bank: the deposit and the picked payment differ in amount.
+  amountMismatch,
+
+  /// Check bank: the typed amount was refused (not whole cents, 0, huge).
+  checkAmountInvalid,
+
+  /// Check bank: "when was it sent" was not one the server knows.
+  sinceInvalid,
+
+  /// An older server, or a request this app should not send.
+  modeInvalid,
+
+  /// The monthly limit of paid refreshes is not 0..1000.
+  limitInvalid,
+
+  /// Staff tied to one store asked about another store's money.
+  storeNotAllowed,
   network,
   noPermission,
   deviceNotVerified,
@@ -568,6 +770,12 @@ const _zelleFailureReasons = <String, ZelleCheckFailure>{
   'candidate_invalid': ZelleCheckFailure.candidateInvalid,
   'candidate_taken': ZelleCheckFailure.candidateTaken,
   'bank_error': ZelleCheckFailure.bankError,
+  'amount_mismatch': ZelleCheckFailure.amountMismatch,
+  'check_amount_invalid': ZelleCheckFailure.checkAmountInvalid,
+  'since_invalid': ZelleCheckFailure.sinceInvalid,
+  'mode_invalid': ZelleCheckFailure.modeInvalid,
+  'limit_invalid': ZelleCheckFailure.limitInvalid,
+  'store_not_allowed': ZelleCheckFailure.storeNotAllowed,
 };
 
 /// The failure a refusal names: `details.reason` (or `details.code`, or one

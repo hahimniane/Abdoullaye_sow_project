@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:plaid_flutter/plaid_flutter.dart';
 
+import 'bank_check.dart';
 import 'waiting_package_service.dart'
     show ContainerCallableCaller, callContainerCallable;
 import 'zelle_check.dart';
@@ -58,19 +59,75 @@ class ZelleCheckService {
     );
   }
 
+  /// The owner's monthly limit of paid refreshes; answers the limit the
+  /// server kept (null when it did not say).
+  Future<int?> setRefreshLimit(String businessId, int refreshLimit) async =>
+      bankRefreshLimitFromAnswer(
+        await caller(
+          'setBankCheckWindow',
+          setBankRefreshLimitRequest(businessId, refreshLimit),
+        ),
+      );
+
   Future<void> disconnect(String businessId) async {
     await caller('disconnectBusinessBank', businessBankRequest(businessId));
   }
 
-  /// Null when the answer could not be read.
+  /// Null when the answer could not be read. [auto] for the sheet's own
+  /// timed re-checks (not counted as a check someone made).
   Future<ZelleCheckResult?> check(
     String businessId,
     ZelleCheckKind kind,
-    String id,
-  ) async => ZelleCheckResult.fromCallable(
+    String id, {
+    bool auto = false,
+  }) async => ZelleCheckResult.fromCallable(
     await caller(
       'checkZellePayment',
-      checkZellePaymentRequest(businessId, kind, id),
+      checkZellePaymentRequest(businessId, kind, id, auto: auto),
+    ),
+  );
+
+  /// "Check bank": deposits of exactly [amountCents] sent [since]. Null when
+  /// the answer could not be read.
+  Future<BankCheckAnswer?> checkStandalone(
+    String businessId, {
+    required int amountCents,
+    BankCheckSince since = defaultBankCheckSince,
+    bool auto = false,
+  }) async => BankCheckAnswer.fromCallable(
+    await caller(
+      'checkZellePayment',
+      standaloneBankCheckRequest(
+        businessId,
+        amountCents: amountCents,
+        since: since,
+        auto: auto,
+      ),
+    ),
+  );
+
+  /// "Use for a sale": the payments a deposit can confirm (recent ones, or
+  /// those matching [query]). Null when the answer could not be read.
+  Future<BankUseRecords?> useRecords(
+    String businessId,
+    String creditId, {
+    String query = '',
+  }) async => BankUseRecords.fromCallable(
+    await caller(
+      'confirmZelleCandidate',
+      bankUseRecordsRequest(businessId, creditId, query: query),
+    ),
+  );
+
+  /// Spends the deposit on the picked payment.
+  Future<ZelleCheckResult?> useDeposit(
+    String businessId,
+    String creditId,
+    BankUseRecord record,
+  ) async => ZelleCheckResult.fromCallable(
+    await caller(
+      'confirmZelleCandidate',
+      bankUseDepositRequest(businessId, creditId, record.kind, record.id),
     ),
   );
 

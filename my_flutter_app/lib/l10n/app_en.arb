@@ -7966,5 +7966,111 @@
   "invSwitchFailAlreadyCredit": "This sale is already on credit.",
   "invSwitchFailAlreadyPaid": "This sale is already paid in full.",
   "invSwitchFailPaymentsRecorded": "Money was already collected on this credit, so it can't become a paid sale. Use Record a payment for what is still owed.",
-  "invSwitchFailTooMany": "This sale was switched too many times."
+  "invSwitchFailTooMany": "This sale was switched too many times.",
+  "bankCheckEntryTitle": "Check bank",
+  "bankCheckEntryHint": "Did a Zelle arrive? Check the amount.",
+  "bankCheckConnectHint": "Connect your bank to check Zelle payments from here.",
+  "bankCheckReconnectHint": "Your bank asks you to sign in again before Zelle can be checked.",
+  "bankCheckSubtitle": "See if a Zelle of exactly this amount reached the business bank. Nothing is recorded.",
+  "bankCheckAmountLabel": "Exact amount",
+  "bankCheckAmountInvalid": "Type the amount, like 60 or 60.50.",
+  "bankCheckAmountTooLarge": "That amount is too large to check.",
+  "bankCheckSinceLabel": "When was it sent?",
+  "bankCheckSince15m": "Last 15 minutes",
+  "bankCheckSince1h": "Last hour",
+  "bankCheckSinceToday": "Today",
+  "bankCheckButton": "Check",
+  "bankCheckSeveralHint": "Find the customer's by the sender's name.",
+  "bankCheckPending": "Pending",
+  "bankCheckLimitNote": "This month's bank refresh limit is reached, so new deposits can take longer to show.",
+  "bankCheckUseForSale": "Use for a sale",
+  "bankCheckUsed": "Confirmed for a sale",
+  "bankUseSubtitle": "Pick the Zelle payment of {amount} this deposit pays.",
+  "@bankUseSubtitle": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "bankUseRecent": "Recent Zelle payments of this amount",
+  "bankUseResults": "Payments that match",
+  "bankUseSearchLabel": "Customer, items or tracking code",
+  "bankUseSearchButton": "Search",
+  "bankUseEmptyRecent": "No recent Zelle payment of {amount} is waiting for the bank. Search older ones above.",
+  "@bankUseEmptyRecent": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "bankUseEmptySearch": "Nothing matches “{query}”.",
+  "@bankUseEmptySearch": {
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
+  "bankUseLoadFailed": "Couldn't load the payments. Check the connection and try again.",
+  "bankUseKindSale": "Sale",
+  "bankUseKindCreditPayment": "Credit payment",
+  "bankUseKindPackagePayment": "Package payment",
+  "bankUseNoName": "No customer name",
+  "bankUseConfirmButton": "Use for this sale",
+  "bankUseConfirming": "Confirming…",
+  "bankUseConfirmed": "Confirmed for this sale",
+  "zelleFailAmountMismatch": "That payment is not for the same amount as the deposit.",
+  "zelleFailCheckAmountInvalid": "Type an amount above zero, with at most two decimals.",
+  "zelleFailSinceInvalid": "Pick when it was sent.",
+  "zelleFailModeInvalid": "This check needs an update of the app.",
+  "zelleFailLimitInvalid": "Pick a limit from 0 to 1000.",
+  "bankUsageTitle": "This month · {month}",
+  "@bankUsageTitle": {
+    "placeholders": {
+      "month": {
+        "type": "String"
+      }
+    }
+  },
+  "bankUsageChecks": "Checks",
+  "bankUsageRefreshes": "Paid refreshes",
+  "bankUsageRefreshesOf": "{used} of {limit}",
+  "@bankUsageRefreshesOf": {
+    "placeholders": {
+      "used": {
+        "type": "int"
+      },
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
+  "bankUsageCost": "Estimated cost",
+  "bankUsageByStaff": "By team member",
+  "bankUsageStaffLine": "Checks: {checks} · Refreshes: {refreshes}",
+  "@bankUsageStaffLine": {
+    "placeholders": {
+      "checks": {
+        "type": "int"
+      },
+      "refreshes": {
+        "type": "int"
+      }
+    }
+  },
+  "bankUsageNone": "No checks yet this month.",
+  "bankUsageLimitReached": "Limit reached: checks still work, but new deposits can take longer to show.",
+  "bankLimitLabel": "Monthly limit of paid refreshes",
+  "bankLimitHint": "Each refresh asks the bank for new deposits and costs about {cost}. When the limit is reached, checks still work but stop asking the bank to refresh until next month.",
+  "@bankLimitHint": {
+    "placeholders": {
+      "cost": {
+        "type": "String"
+      }
+    }
+  },
+  "bankLimitInvalid": "Type a whole number from 0 to 1000.",
+  "bankLimitSaved": "Limit saved"
 }

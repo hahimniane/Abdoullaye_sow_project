@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../l10n/app_localizations.dart';
+import '../services/bank_check.dart' show BankStatusCache;
 import '../services/inventory.dart';
 import '../services/inventory_context.dart';
 import '../services/inventory_service.dart';
@@ -11,6 +12,7 @@ import '../services/inventory_transfer_feed.dart';
 import '../services/inventory_transfers.dart';
 import '../services/lot_ledger.dart' show LotStaff, formatLotCents;
 import '../services/shop_home.dart';
+import '../services/zelle_check_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_motion.dart';
 import '../theme/app_spacing.dart';
@@ -19,6 +21,7 @@ import '../widgets/app_snackbars.dart';
 import '../widgets/inventory_transfer_widgets.dart';
 import '../widgets/inventory_widgets.dart';
 import '../widgets/lot_sheets.dart';
+import 'bank_check_sheet.dart';
 import 'inventory_credit_screen.dart';
 import 'sales_history_screen.dart';
 import 'inventory_item_screen.dart';
@@ -57,6 +60,8 @@ class ShopHomeSection extends StatefulWidget {
     this.cameraEnabled = true,
     this.clock = DateTime.now,
     this.transferSource,
+    this.bankService = const ZelleCheckService(),
+    this.bankCache,
   });
 
   final String businessId;
@@ -89,6 +94,13 @@ class ShopHomeSection extends StatefulWidget {
   /// Store transfers (read only in a business with two or more stores);
   /// null reads Firestore.
   final InventoryTransferSource? transferSource;
+
+  /// "Check bank" (shown when the business's bank is connected; the owner
+  /// gets a hint to connect it otherwise). A fake in tests.
+  final ZelleCheckService bankService;
+
+  /// Null shares the app's one short-lived bank status cache.
+  final BankStatusCache? bankCache;
 
   /// Off in widget tests, where there is no camera plugin.
   @visibleForTesting
@@ -537,6 +549,16 @@ class _ShopHomeSectionState extends State<ShopHomeSection> {
           icon: Icons.keyboard_outlined,
           label: l10n.shopHomeEnterCode,
           onTap: () => _openSell(search: true),
+        ),
+        // Whoever sells can check a Zelle the customer says they sent.
+        BankCheckEntry(
+          key: const Key('shop-bank-check'),
+          businessId: widget.businessId,
+          isOwner: widget.access.isOwner,
+          canCheck: true,
+          service: widget.bankService,
+          cache: widget.bankCache,
+          padding: const EdgeInsets.only(top: AppSpacing.sm),
         ),
         const SizedBox(height: AppSpacing.lg),
         _TodayCard(

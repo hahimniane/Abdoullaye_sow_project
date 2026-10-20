@@ -48,6 +48,7 @@ import '../widgets/phone_account_widgets.dart' show RecordPhoneFlagNotes;
 import '../widgets/pieces_editor.dart';
 import '../widgets/waiting_package_fields.dart';
 import 'add_waiting_packages_sheet.dart';
+import 'bank_check_sheet.dart';
 import 'business_requests_screen.dart';
 import 'label_printer_settings_screen.dart';
 import 'package_payment_sheet.dart';
@@ -55,6 +56,7 @@ import 'package_result_screen.dart';
 import 'package_scan_screen.dart';
 import 'vin_scanner_screen.dart';
 import 'waiting_packages_screen.dart';
+import 'zelle_check_sheet.dart' show zelleViewerIsOwner;
 
 /// Containers, yard-side.
 ///
@@ -513,10 +515,25 @@ class _ContainersScreenState extends State<ContainersScreen> {
             child: Padding(
               padding: const EdgeInsets.fromLTRB(
                   AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, 0),
-              child: ContainerVolumeCard(
-                businessId: widget.businessId,
-                // Live: reloads after a write it is counted from.
-                refreshKey: _feed.volumeSignature,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Whoever takes package payments can check a Zelle the
+                  // customer says they sent (only with an active bank; the
+                  // owner gets a hint to connect one otherwise).
+                  BankCheckEntry(
+                    key: const Key('containers-bank-check'),
+                    businessId: widget.businessId,
+                    isOwner: zelleViewerIsOwner(context, widget.businessId),
+                    canCheck: true,
+                    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                  ),
+                  ContainerVolumeCard(
+                    businessId: widget.businessId,
+                    // Live: reloads after a write it is counted from.
+                    refreshKey: _feed.volumeSignature,
+                  ),
+                ],
               ),
             ),
           ),
