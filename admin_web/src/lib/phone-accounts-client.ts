@@ -34,6 +34,12 @@ import {
   type PhoneRole,
   type PhoneSignInToken,
 } from "@/lib/phone-accounts";
+import {
+  parsePendingInvitations,
+  parseStaffInvitePreview,
+  type PendingInvitation,
+  type StaffInvitePreview,
+} from "@/lib/staff-phone-invite";
 
 /** A callable never keeps a button spinning longer than this. */
 const CALL_TIMEOUT_MS = 30_000;
@@ -48,7 +54,9 @@ async function callPhoneAccount(action: PhoneAccountAction, data: Record<string,
 
 export type PhoneCodeRequest =
   | { phone: string; purpose?: "link" }
-  | { trackingCode: string; role: PhoneRole };
+  | { trackingCode: string; role: PhoneRole }
+  // A staff invitation link (/j/<token>): the server reads the invited number.
+  | { inviteToken: string };
 
 export async function requestPhoneLoginCode(request: PhoneCodeRequest): Promise<PhoneCodeChallenge> {
   return parsePhoneCodeChallenge(await callPhoneAccount("requestPhoneLoginCode", request));
@@ -123,6 +131,36 @@ export function phoneCredentialFromError(error: unknown): AuthCredential | null 
 
 export async function getMyShipments(cursor: MyShipmentsCursor | null): Promise<MyShipmentsPage> {
   return parseMyShipmentsPage(await callPhoneAccount("getMyShipments", cursor ? { cursor } : {}));
+}
+
+/** What /j/<token> shows before anyone signs in (no sign-in needed). */
+export async function getStaffInvitePreview(token: string): Promise<StaffInvitePreview> {
+  return parseStaffInvitePreview(await callPhoneAccount("staffInvite", { token }));
+}
+
+/**
+ * Accepts the staff invitation of a /j/<token> link for the signed-in
+ * account (docs/STAFF_PHONE_INVITES.md §4). The server checks that the
+ * account's number is the invited one.
+ */
+export async function acceptStaffInvitation(inviteToken: string): Promise<void> {
+  const call = httpsCallable(functions, "acceptAccessInvitation", { timeout: CALL_TIMEOUT_MS });
+  await call({ inviteToken });
+}
+
+/**
+ * The live invitations waiting for the signed-in person (contract §4.1).
+ * Listing accepts nothing.
+ */
+export async function listPendingInvitations(): Promise<PendingInvitation[]> {
+  const call = httpsCallable(functions, "acceptAccessInvitation", { timeout: CALL_TIMEOUT_MS });
+  return parsePendingInvitations((await call({ action: "pending" })).data);
+}
+
+/** "Join <business>": the same acceptance as the link, by invitation id. */
+export async function acceptInvitationById(invitationId: string): Promise<void> {
+  const call = httpsCallable(functions, "acceptAccessInvitation", { timeout: CALL_TIMEOUT_MS });
+  await call({ invitationId });
 }
 
 export async function reportShipmentNotMine(key: string, role: PhoneRole) {

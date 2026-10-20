@@ -22,9 +22,10 @@ import { DisclosureCheckbox } from "@/components/disclosure-checkbox";
 import { CustomerPhoneField } from "@/components/customer-phone-field";
 import { PhoneSignIn } from "@/components/phone-sign-in";
 import { completePhoneSignInOnce } from "@/lib/phone-accounts-client";
-import { resolveConsoleKind, serviceEntryApplies } from "@/lib/console-routing";
+import { consoleAccessLost, resolveConsoleKind, serviceEntryApplies } from "@/lib/console-routing";
 import { customerServiceFromLocation } from "@/lib/customer-service-intent";
 import { ItemTagPage } from "@/components/item-tag-page";
+import { StaffInvitePage } from "@/components/staff-invite-page";
 import { legalAcceptance } from "@/lib/disclosures";
 import { auth, db, functions } from "@/lib/firebase";
 import { useFrenchDomTranslation } from "@/lib/french-dom-runtime";
@@ -353,6 +354,25 @@ export function ConsoleRouter() {
         }
         setProfileMissing(false);
         setProfile({id: snap.id, ...snap.data()} as UserProfile);
+        // The access the session opened with, for noticing its removal.
+        let lastLive: UserProfile | null = {id: snap.id, ...snap.data()} as UserProfile;
+        let cutting = false;
+        // Removal cuts access at once (docs/STAFF_PHONE_INVITES.md §5): the
+        // server revoked the refresh tokens when it removed the access, so a
+        // forced refresh fails and the session ends now instead of within
+        // the hour. A refresh that still works (no revocation) just keeps
+        // the session on the console its new profile opens.
+        const cutIfAccessLost = (next: UserProfile | null) => {
+          const lost = consoleAccessLost(lastLive, next);
+          lastLive = next;
+          if (!lost || cutting) return;
+          cutting = true;
+          user.getIdToken(true)
+            .catch(() => signOut(auth).catch(() => undefined))
+            .finally(() => {
+              cutting = false;
+            });
+        };
         // The one-time load above decides the ROLE quickly (with a timeout),
         // but a session-long copy goes stale the moment the profile changes
         // server-side: verify a phone and the console kept saying "Not
@@ -362,8 +382,14 @@ export function ConsoleRouter() {
         const follow = onSnapshot(
           doc(db, "users", user.uid),
           (live) => {
-            if (!active || !isCurrent() || !live.exists()) return;
-            setProfile({id: live.id, ...live.data()} as UserProfile);
+            if (!active || !isCurrent()) return;
+            if (!live.exists()) {
+              cutIfAccessLost(null);
+              return;
+            }
+            const next = {id: live.id, ...live.data()} as UserProfile;
+            setProfile(next);
+            cutIfAccessLost(next);
           },
           // Losing read access (e.g. right after sign-out) just ends the
           // follow; the one-time load already decided the console.
@@ -412,6 +438,11 @@ export function ConsoleRouter() {
     // A shop's inventory tag scanned with a phone camera: a plain notice, no
     // sign-in and nothing read about the product (see item-tag-page.tsx).
     if (serviceIntent === "item-tag") return <ItemTagPage />;
+    // A staff invitation's Accept button (/j/<token>): the page handles the
+    // signed-out, matching-number and other-account states itself.
+    if (serviceIntent === "staff-invite") {
+      return <StaffInvitePage firebaseUser={firebaseUser} />;
+    }
     return (
       <CustomerServiceEntry
         authenticated={Boolean(firebaseUser && profile)}

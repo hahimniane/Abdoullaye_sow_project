@@ -22,7 +22,8 @@ export type PhoneAccountAction =
   | "completePhoneSignIn"
   | "getMyShipments"
   | "reportShipmentNotMine"
-  | "syncRecord";
+  | "syncRecord"
+  | "staffInvite";
 
 export type PhoneRole = "sender" | "receiver";
 
@@ -120,6 +121,9 @@ export const PHONE_REFUSAL_REASONS = [
   "no_verified_phone",
   "record_invalid",
   "phone_sign_in_unavailable",
+  // A staff invitation link (docs/STAFF_PHONE_INVITES.md §4): unknown,
+  // cancelled, expired or already accepted.
+  "invite_not_found",
 ] as const;
 
 export type PhoneRefusalReason = (typeof PHONE_REFUSAL_REASONS)[number] | "unknown";
@@ -174,6 +178,7 @@ export const PHONE_REFUSAL_COPY: Record<PhoneRefusalReason, string> = {
   no_verified_phone: "Add and verify your phone number to see your packages.",
   record_invalid: "That package could not be found. Refresh and try again.",
   phone_sign_in_unavailable: "Use your email and password to sign in to this account.",
+  invite_not_found: "This invitation is no longer active. Ask the business for a new invitation.",
   unknown: "Something went wrong. Check your connection and try again.",
 };
 

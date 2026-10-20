@@ -36,11 +36,21 @@ import {
   X,
 } from "lucide-react";
 
+import { CustomerPhoneField } from "@/components/customer-phone-field";
 import { FieldInfo } from "@/components/field-info";
+import {
+  CopyLinkButton,
+  InviteLinkShare,
+  InviteMethodSwitch,
+} from "@/components/staff-invite-fields";
 import { SearchableSelect } from "@/components/searchable-select";
 import {
+  accessInvitationConfirmations,
+  accessInvitationContact,
   accessInvitationDeliveryNote,
   accessInvitationExpiryLine,
+  accessInvitationNeedsSharing,
+  accessInvitationTitle,
   accessInvitationRowsFrom,
   accessInvitationSentLine,
   accessInvitationStatusLabel,
@@ -81,6 +91,7 @@ import {
   type PickupServiceChoice,
 } from "@/lib/business-service-settings";
 import { COUNTRY_CATALOG } from "@/lib/country-catalog";
+import { phoneCountryForBusiness } from "@/lib/container-manifest";
 import {
   MAX_CUSTOM_FREIGHT_CATEGORIES,
   STANDARD_FREIGHT_CATEGORIES,
@@ -118,6 +129,19 @@ import {
   type StaffStoreAccess,
 } from "@/lib/inventory";
 import { currentWebLanguage } from "@/lib/language";
+import {
+  ALL_STORES,
+  STAFF_INVITE_COPY,
+  asksWhichStore,
+  emptyStaffInviteDraft,
+  inviteNeedsSharing,
+  inviteRefusalMessage,
+  staffInvitePayload,
+  staffInviteProblem,
+  staffInviteResultFrom,
+  type StaffInviteDraft,
+  type StaffInviteResult,
+} from "@/lib/staff-phone-invite";
 import { CITIES_BY_STATE, US_STATE_NAMES } from "@/lib/us-locations";
 import type { FirestoreRow } from "@/types/admin";
 
@@ -187,11 +211,9 @@ type SupportDraft = {
   customerPhone: string;
 };
 
-type StaffDraft = {
-  fullName: string;
-  email: string;
-  businessPermissions: string[];
-};
+// The invite form's draft: phone (WhatsApp) by default, or email
+// (docs/STAFF_PHONE_INVITES.md). Shared with the admin console's forms.
+type StaffDraft = StaffInviteDraft;
 
 const businessPermissionOptions = [
   {id: "profile", label: "Business"},
@@ -301,11 +323,7 @@ const emptySupportDraft: SupportDraft = {
   customerPhone: "",
 };
 
-const emptyStaffDraft: StaffDraft = {
-  fullName: "",
-  email: "",
-  businessPermissions: ["profile", "people"],
-};
+const emptyStaffDraft: StaffDraft = emptyStaffInviteDraft("phone");
 
 export function BusinessProfilePanel({
   businessId,
@@ -2591,6 +2609,12 @@ export function BusinessPeoplePanel({
   const storesRead = useInventoryStores(businessId, canManageStaff && businessHasInventory(business));
   const inventoryStoreList = useMemo(() => activeInventoryStores(storesRead.rows), [storesRead.rows]);
   const storeAccessStores = inventoryStoreList.length >= 2 ? inventoryStoreList : [];
+  const storeAccessIds = useMemo(() => storeAccessStores.map((store) => store.id), [storeAccessStores]);
+  const askStore = asksWhichStore(storeAccessIds, draft.businessPermissions);
+  const phoneCountry = useMemo(() => phoneCountryForBusiness(business), [business]);
+  // What the last invite or resend answered: the WhatsApp outcome, or the
+  // link to share when the message could not go out. Not an error either way.
+  const [inviteOutcome, setInviteOutcome] = useState<StaffInviteResult | null>(null);
 
   function update(patch: Partial<StaffDraft>) {
     setDraft((current) => ({...current, ...patch}));
@@ -2598,23 +2622,26 @@ export function BusinessPeoplePanel({
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    // Filled inside the action, read after it: the callable's answer.
+    const answer: {result?: StaffInviteResult} = {};
+    setInviteOutcome(null);
     await run(
-      "Business staff invitation sent",
+      STAFF_INVITE_COPY.sentByEmail,
       async () => {
         if (!businessId) throw new Error("Business account is not configured.");
-        if (!draft.fullName.trim()) throw new Error("Enter a staff name.");
-        if (!draft.email.trim()) throw new Error("Enter a staff email.");
-
+        const problem = staffInviteProblem(draft, storeAccessIds);
+        if (problem) throw new Error(problem);
         try {
-          await httpsCallable(functions, "inviteBusinessMember")({
-            businessId,
-            fullName: draft.fullName.trim(),
-            email: draft.email.trim().toLowerCase(),
-            businessPermissions: draft.businessPermissions,
-            locale: document.documentElement.lang.startsWith("fr") ? "fr" : "en",
-          });
+          const result = await httpsCallable(functions, "inviteBusinessMember")(
+            staffInvitePayload(draft, {
+              businessId,
+              locale: currentWebLanguage() === "fr" ? "fr" : "en",
+              storeIds: storeAccessIds,
+            }),
+          );
+          answer.result = staffInviteResultFrom(result.data);
         } catch (submitError) {
-          throw new Error(inviteStaffErrorMessage(submitError));
+          throw new Error(inviteRefusalMessage(submitError));
         }
         setDraft(emptyStaffDraft);
         setFormOpen(false);
@@ -2623,27 +2650,30 @@ export function BusinessPeoplePanel({
         confirm:
           "Send this staff invitation with the selected permissions?",
         confirmFr:
-          "Envoyer cette invitation d’employé avec les autorisations sélectionnées ?",
+          "Envoyer cette invitation de membre de l’équipe avec les autorisations sélectionnées ?",
       },
     );
+    if (answer.result) setInviteOutcome(answer.result);
     // Whether it went out or not, the pending list is now stale: a sent
     // invitation must appear, and a refused one must not linger.
     invitations.refresh();
   }
 
   async function resendInvitation(row: AccessInvitationRow) {
+    const answer: {result?: StaffInviteResult} = {};
+    setInviteOutcome(null);
     await run(
-      "Invitation resent",
+      STAFF_INVITE_COPY.resent,
       async () => {
-        await httpsCallable(functions, "resendAccessInvitation")({
+        const result = await httpsCallable(functions, "resendAccessInvitation")({
           invitationId: row.invitationId,
         });
+        answer.result = staffInviteResultFrom(result.data);
       },
-      {
-        confirm: `Send ${row.email} a new invitation link?`,
-        confirmFr: `Envoyer à ${row.email} un nouveau lien d’invitation ?`,
-      },
+      accessInvitationConfirmations(row).resend,
     );
+    // A phone row: say whether WhatsApp carried it, or hand the link back.
+    if (answer.result?.channel === "phone") setInviteOutcome(answer.result);
     invitations.refresh();
   }
 
@@ -2655,10 +2685,7 @@ export function BusinessPeoplePanel({
           invitationId: row.invitationId,
         });
       },
-      {
-        confirm: `Cancel the invitation for ${row.email}? Their link stops working.`,
-        confirmFr: `Annuler l’invitation de ${row.email} ? Son lien cessera de fonctionner.`,
-      },
+      accessInvitationConfirmations(row).cancel,
     );
     invitations.refresh();
   }
@@ -2715,7 +2742,7 @@ export function BusinessPeoplePanel({
         <div className="lst-head-actions">
           {busy && <span className="pur-kind">{busyLabel || "Working..."}</span>}
           {canManageStaff && (
-            <button className="lst-add" type="button" disabled={!businessId} onClick={() => { setDraft(emptyStaffDraft); setFormOpen(true); }}>
+            <button className="lst-add" type="button" disabled={!businessId} onClick={() => { setDraft(emptyStaffDraft); setInviteOutcome(null); setFormOpen(true); }}>
               <UserPlus size={16} /> Invite staff
             </button>
           )}
@@ -2724,6 +2751,20 @@ export function BusinessPeoplePanel({
 
       {(error || rowsError) && <div className="error-box">{error || rowsError}</div>}
       {invitations.error && <div className="error-box">{invitations.error}</div>}
+      {inviteOutcome && (
+        <div className="invite-sent-note">
+          {inviteNeedsSharing(inviteOutcome) ? (
+            <InviteLinkShare id="business-invite-link" link={inviteOutcome.inviteLink} />
+          ) : inviteOutcome.channel === "phone" ? (
+            <div className="info-band" role="status">
+              {STAFF_INVITE_COPY.sentOnWhatsApp}{" "}
+              <span data-no-translate>{inviteOutcome.phoneMasked}</span>
+            </div>
+          ) : (
+            <div className="info-band" role="status">{STAFF_INVITE_COPY.sentByEmail}</div>
+          )}
+        </div>
+      )}
 
       {loading && <div className="lst-empty"><p>Loading…</p></div>}
       {!loading && rows.length === 0 && invitations.rows.length === 0 && (
@@ -2738,7 +2779,7 @@ export function BusinessPeoplePanel({
       {invitations.rows.length > 0 && (
         <>
           <div className="lst-form-section">
-            Invitations sent — waiting for the person to set a password
+            Invitations sent — waiting for the person to accept
           </div>
           <div className="pur-grid">
             {invitations.rows.map((invitation) => (
@@ -2749,6 +2790,7 @@ export function BusinessPeoplePanel({
                 cancelInvitation={cancelInvitation}
                 resendInvitation={resendInvitation}
                 row={invitation}
+                stores={inventoryStoreList}
               />
             ))}
           </div>
@@ -2782,14 +2824,33 @@ export function BusinessPeoplePanel({
             <form id="business-people-form" onSubmit={submit}>
               <div className="lst-modal-body">
                 {error && <div className="error-box" style={{ marginBottom: 14 }}>{error}</div>}
-                <div className="info-band" style={{ marginBottom: 14 }}>This person will set their own password from an expiring email invitation for {businessName}.</div>
-                <div className="lst-form-grid">
-                  <label className="lst-field"><span>Full name</span>
+                <div className="info-band" style={{ marginBottom: 14 }}>By phone, the person gets a WhatsApp message with an Accept button and signs in with a code sent to that number - no password. By email, they set their own password from an expiring email invitation.</div>
+                <InviteMethodSwitch
+                  disabled={busy}
+                  method={draft.method}
+                  onChange={(method) => update({ method })}
+                />
+                <div className="lst-form-grid" style={{ marginTop: 12 }}>
+                  <label className={`lst-field${draft.method === "phone" ? " wide" : ""}`}><span>Full name</span>
                     <input autoComplete="name" required value={draft.fullName} onChange={(event) => update({ fullName: event.target.value })} />
                   </label>
-                  <label className="lst-field"><span>Email</span>
-                    <input autoComplete="username" inputMode="email" required type="email" value={draft.email} onChange={(event) => update({ email: event.target.value })} />
-                  </label>
+                  {draft.method === "phone" ? (
+                    <div style={{ gridColumn: "1 / -1", minWidth: 0 }}>
+                      <CustomerPhoneField
+                        disabled={busy}
+                        id="business-invite-phone"
+                        initialCountryCode={phoneCountry}
+                        label="WhatsApp number"
+                        onChange={(phone) => update({ phone })}
+                        required
+                        value={draft.phone}
+                      />
+                    </div>
+                  ) : (
+                    <label className="lst-field"><span>Email</span>
+                      <input autoComplete="username" inputMode="email" required type="email" value={draft.email} onChange={(event) => update({ email: event.target.value })} />
+                    </label>
+                  )}
                   <div className="lst-form-section">Permissions — what this staff member can manage</div>
                   <div className="lst-chips wide">
                     {businessPermissionOptions.map((permission) => {
@@ -2810,6 +2871,20 @@ export function BusinessPeoplePanel({
                       );
                     })}
                   </div>
+                  {askStore && (
+                    <label className="lst-field wide"><span>Which store?</span>
+                      <select
+                        disabled={busy}
+                        onChange={(event) => update({ storeChoice: event.target.value })}
+                        value={draft.storeChoice}
+                      >
+                        <option value={ALL_STORES}>All stores</option>
+                        {storeAccessStores.map((store) => (
+                          <option data-no-translate key={store.id} value={store.id}>{store.name}</option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
                 </div>
               </div>
               <footer className="lst-modal-foot">
@@ -2886,20 +2961,30 @@ function PendingInvitationRow({
   canManageStaff,
   resendInvitation,
   cancelInvitation,
+  stores = [],
 }: {
   row: AccessInvitationRow;
   busy: boolean;
   canManageStaff: boolean;
   resendInvitation: (row: AccessInvitationRow) => Promise<void>;
   cancelInvitation: (row: AccessInvitationRow) => Promise<void>;
+  /** The business's active stores, to name an invitation's store. */
+  stores?: InventoryStore[];
 }) {
   const deliveryNote = accessInvitationDeliveryNote(row);
+  const contact = accessInvitationContact(row);
+  const share = canManageStaff && accessInvitationNeedsSharing(row);
+  const storeAccess = row.inventoryStoreAccess;
+  const homeStore = storeAccess && !storeAccess.allStores
+    ? stores.find((store) => store.id === storeAccess.homeStoreId)
+    : undefined;
   return (
     <article className="pur-card">
       <div className="pur-head">
         <div className="pur-title">
-          <strong>{row.fullName || row.email}</strong>
-          <span className="pur-kind">{row.email}</span>
+          <strong data-no-translate>{accessInvitationTitle(row)}</strong>
+          {contact && row.fullName && <span className="pur-kind" data-no-translate>{contact}</span>}
+          {row.channel === "phone" && <span className="pur-kind">By WhatsApp</span>}
         </div>
         <span className={`lst-badge ${accessInvitationStatusTone(row)}`}>
           {accessInvitationStatusLabel(row)}
@@ -2913,6 +2998,20 @@ function PendingInvitationRow({
         <InvitationLine line={accessInvitationExpiryLine(row, formatDate)} />
       </div>
       {deliveryNote && <div className="pur-reliability">{deliveryNote}</div>}
+      {storeAccess && (
+        <div className="pur-reliability">
+          <span>Store</span>
+          <span> · </span>
+          {storeAccess.allStores || !homeStore ? (
+            <span>All stores</span>
+          ) : (
+            <span data-no-translate>{homeStore.name}</span>
+          )}
+        </div>
+      )}
+      {share && (
+        <InviteLinkShare compact id={`invite-link-${row.invitationId}`} link={row.inviteLink} />
+      )}
       <div className="lst-form-section" style={{ marginTop: 0 }}>Invited to manage</div>
       <div className="lst-chips">
         {row.businessPermissions.length === 0 ? (
@@ -2933,8 +3032,11 @@ function PendingInvitationRow({
             onClick={() => resendInvitation(row)}
             type="button"
           >
-            <Send size={14} /> Resend invitation
+            {busy ? <RefreshCw className="spin" size={14} /> : <Send size={14} />} Resend invitation
           </button>
+          {row.channel === "phone" && row.inviteLink && !share && (
+            <CopyLinkButton className="lst-btn" link={row.inviteLink} />
+          )}
           <button
             className="lst-btn ghost danger"
             disabled={busy}
@@ -3100,27 +3202,6 @@ function StaffRow({
       )}
     </article>
   );
-}
-
-function inviteStaffErrorMessage(error: unknown) {
-  const reason =
-    error && typeof error === "object" && "details" in error ?
-      String(
-          (error as {details?: {reason?: unknown}}).details?.reason ?? "",
-      ) :
-      "";
-  if (reason === "existing-authority-conflict") {
-    return "This person already has staff or admin access somewhere in " +
-      "the system. Remove their existing access first, then invite them " +
-      "again.";
-  }
-  if (reason === "invitation-already-pending") {
-    return "There's already a pending invitation for this person. " +
-      "Resend or cancel it instead of sending a new one.";
-  }
-  return error instanceof Error && error.message ?
-    error.message :
-    "The invitation could not be sent. Try again.";
 }
 
 function useActionFeedback(runAction?: ActionRunner, toast?: ToastCallback) {

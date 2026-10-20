@@ -3,6 +3,8 @@
 // this decides how a row reads and which buttons it earns, so the panel stays
 // a template and the rules stay testable.
 
+import { inviteLinkOrEmpty } from "./staff-phone-invite.ts";
+
 export type AccessInvitationStatus =
   | "pending"
   | "expired"
@@ -25,6 +27,16 @@ export type AccessInvitationRow = {
   sendCount: number;
   emailProvider: string;
   emailBranded: boolean;
+  /** "phone" for a WhatsApp invitation (docs/STAFF_PHONE_INVITES.md). */
+  channel: "phone" | "email";
+  /** "+224 ••••56": the only part of the number a list ever shows. */
+  phoneMasked: string;
+  phoneLastTwo: string;
+  /** The /j/<token> link to share (phone only). */
+  inviteLink: string;
+  /** sent | not_configured | template_pending | failed, "" before a try. */
+  whatsappStatus: string;
+  inventoryStoreAccess: {allStores: boolean; homeStoreId: string} | null;
 };
 
 function text(value: unknown, max = 320) {
@@ -60,6 +72,8 @@ export function accessInvitationRowFrom(
   const permissions = Array.isArray(record.businessPermissions)
     ? record.businessPermissions.map((item) => text(item, 60)).filter(Boolean)
     : [];
+  const phone = record.channel === "phone";
+  const lastTwo = text(record.phoneLastTwo, 4);
   return {
     invitationId,
     kind: text(record.kind, 40) || "business",
@@ -76,6 +90,21 @@ export function accessInvitationRowFrom(
     sendCount: Number(record.sendCount) || 0,
     emailProvider: text(record.emailProvider, 60),
     emailBranded: record.emailBranded === true,
+    channel: phone ? "phone" : "email",
+    phoneMasked: phone ? text(record.phoneMasked, 40) : "",
+    phoneLastTwo: phone && /^\d{2}$/.test(lastTwo) ? lastTwo : "",
+    inviteLink: phone ? inviteLinkOrEmpty(record.inviteLink) : "",
+    whatsappStatus: phone ? text(record.whatsappStatus, 40) : "",
+    inventoryStoreAccess: storeAccessFrom(record.inventoryStoreAccess),
+  };
+}
+
+function storeAccessFrom(value: unknown) {
+  if (!value || typeof value !== "object") return null;
+  const access = value as Record<string, unknown>;
+  return {
+    allStores: access.allStores === true,
+    homeStoreId: text(access.homeStoreId, 128),
   };
 }
 
@@ -141,6 +170,8 @@ export function accessInvitationSentLine(
  * delivery that failed outright is never silent.
  */
 export function accessInvitationDeliveryNote(row: AccessInvitationRow) {
+  // A phone invitation's delivery is WhatsApp's: see accessInvitationShareNote.
+  if (row.channel === "phone") return "";
   if (row.emailBranded) return "";
   if (row.emailProvider === "firebaseAuth") {
     return "Sent with the plain Firebase template — connect an email sender " +
@@ -156,4 +187,60 @@ export function accessInvitationDeliveryNote(row: AccessInvitationRow) {
  */
 export function canActOnAccessInvitation(row: AccessInvitationRow) {
   return row.status === "pending" || row.status === "expired";
+}
+
+/**
+ * Who a row is for, as the list shows it under the name: the masked number
+ * of a phone invitation (never an empty email), the email otherwise.
+ */
+export function accessInvitationContact(row: AccessInvitationRow) {
+  if (row.channel === "phone") return row.phoneMasked || (row.phoneLastTwo ? `••${row.phoneLastTwo}` : "");
+  return row.email;
+}
+
+/** The row's title: the name, else its contact. */
+export function accessInvitationTitle(row: AccessInvitationRow) {
+  return row.fullName || accessInvitationContact(row);
+}
+
+/**
+ * A phone invitation whose WhatsApp message has not gone out (or not yet
+ * been tried) carries "not sent yet - share this link". Until Meta approves
+ * the template this is every phone invitation, and that is not an error.
+ */
+export function accessInvitationNeedsSharing(row: AccessInvitationRow) {
+  return row.channel === "phone" && row.whatsappStatus !== "sent" &&
+    Boolean(row.inviteLink) && canActOnAccessInvitation(row);
+}
+
+export type InvitationConfirm = {confirm: string; confirmFr: string};
+
+/** The confirmations of a row's Resend and Cancel, naming whom (masked). */
+export function accessInvitationConfirmations(row: AccessInvitationRow): {
+  resend: InvitationConfirm;
+  cancel: InvitationConfirm;
+} {
+  const who = accessInvitationContact(row) || accessInvitationTitle(row);
+  if (row.channel === "phone") {
+    return {
+      resend: {
+        confirm: `Send the WhatsApp invitation to ${who} again? The link stays the same.`,
+        confirmFr: `Renvoyer l’invitation WhatsApp au ${who} ? Le lien reste le même.`,
+      },
+      cancel: {
+        confirm: `Cancel the invitation for ${who}? Its link stops working.`,
+        confirmFr: `Annuler l’invitation du ${who} ? Son lien cessera de fonctionner.`,
+      },
+    };
+  }
+  return {
+    resend: {
+      confirm: `Send ${who} a new invitation link?`,
+      confirmFr: `Envoyer à ${who} un nouveau lien d’invitation ?`,
+    },
+    cancel: {
+      confirm: `Cancel the invitation for ${who}? Their link stops working.`,
+      confirmFr: `Annuler l’invitation de ${who} ? Son lien cessera de fonctionner.`,
+    },
+  };
 }

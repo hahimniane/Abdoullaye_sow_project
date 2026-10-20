@@ -71,7 +71,23 @@ import {
   X,
 } from "lucide-react";
 
+import { CustomerPhoneField } from "@/components/customer-phone-field";
 import { NotificationBell } from "@/components/notification-bell";
+import {
+  InviteLinkShare,
+  InviteMethodSwitch,
+} from "@/components/staff-invite-fields";
+import { phoneCountryForBusiness } from "@/lib/container-manifest";
+import {
+  STAFF_INVITE_COPY,
+  STAFF_INVITE_FALLBACK,
+  STAFF_INVITE_REFUSAL_COPY,
+  inviteNeedsSharing,
+  staffInviteResultFrom,
+  type InviteMethod,
+  type StaffInviteResult,
+} from "@/lib/staff-phone-invite";
+import { isValidE164, normalizePhone } from "@/lib/phone";
 import { ReviewsPanel } from "@/components/business/reviews-panel";
 import { SearchableSelect } from "@/components/searchable-select";
 import { ToggleRow } from "@/components/toggle-row";
@@ -1872,18 +1888,13 @@ function inviteErrorMessage(error: unknown) {
           "",
         )
       : "";
-  if (reason === "existing-authority-conflict") {
-    return "This person already has staff or admin access somewhere in " +
-      "the system. Remove their existing access first, then invite them " +
-      "again.";
-  }
-  if (reason === "invitation-already-pending") {
-    return "There's already a pending invitation for this person. " +
-      "Resend or cancel it instead of sending a new one.";
-  }
+  // The same refusal copy as the business People panel
+  // (docs/STAFF_PHONE_INVITES.md §4), phone and email alike.
+  const shared = STAFF_INVITE_REFUSAL_COPY[reason];
+  if (shared) return shared;
   return error instanceof Error && error.message ?
     error.message :
-    "The invitation could not be sent. Try again.";
+    STAFF_INVITE_FALLBACK;
 }
 
 function adminVerificationErrorMessage(error: unknown) {
@@ -4169,6 +4180,10 @@ function PersonDetailWorkspace({
 }) {
   const userId = text(user.uid ?? user.id, "");
   const invitationId = text(user.invitationId ?? user.id, "");
+  const phoneInvitation = text(user.invitationChannel, "") === "phone";
+  // A resent phone invitation answers with its WhatsApp outcome and link.
+  const [resendOutcome, setResendOutcome] = useState<StaffInviteResult | null>(null);
+  useEffect(() => setResendOutcome(null), [invitationId]);
   const isCurrentUser = userId === currentUserId;
   const status = peoplePersonStatus(user);
   const kind = peoplePersonKind(user);
@@ -4594,6 +4609,17 @@ function PersonDetailWorkspace({
                   ? "The link no longer works. Resend it to issue a new one."
                   : "Access starts only after the recipient accepts the invitation."}
               </span>
+              {phoneInvitation && (
+                <span>Invited by WhatsApp: the person signs in with a code sent to their number.</span>
+              )}
+              {resendOutcome && (inviteNeedsSharing(resendOutcome) ? (
+                <InviteLinkShare id={`people-resend-link-${invitationId}`} link={resendOutcome.inviteLink} />
+              ) : (
+                <span>
+                  {STAFF_INVITE_COPY.sentOnWhatsApp}{" "}
+                  <span data-no-translate>{resendOutcome.phoneMasked}</span>
+                </span>
+              ))}
               {/* An operator chasing an unanswered invitation needs to know
                   when it went out and when the link dies, not just that one
                   exists. */}
@@ -4694,8 +4720,18 @@ function PersonDetailWorkspace({
                 onClick={() =>
                   runAction(
                     "Invitation resent",
-                    () =>
-                      resendMarketplaceInvitation({invitationId}),
+                    async () => {
+                      setResendOutcome(null);
+                      const answer = await resendMarketplaceInvitation({invitationId});
+                      const result = staffInviteResultFrom(answer.data);
+                      if (result.channel === "phone") setResendOutcome(result);
+                    },
+                    phoneInvitation
+                      ? {
+                          confirm: `Send the WhatsApp invitation to ${userDisplayName(user)} again? The link stays the same.`,
+                          confirmFr: `Renvoyer l’invitation WhatsApp à ${userDisplayName(user)} ? Le lien reste le même.`,
+                        }
+                      : undefined,
                   )
                 }
                 type="button"
@@ -8075,6 +8111,11 @@ function CreatePersonForms({
   );
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  // Business staff may be invited by phone (WhatsApp, the default) or email;
+  // platform admins stay email-only (docs/STAFF_PHONE_INVITES.md).
+  const [method, setMethod] = useState<InviteMethod>("phone");
+  const [phone, setPhone] = useState("");
+  const [inviteOutcome, setInviteOutcome] = useState<StaffInviteResult | null>(null);
   const [platformAdminRole, setPlatformAdminRole] =
     useState<string>("operationsManager");
   const [businessId, setBusinessId] = useState("");
@@ -8089,16 +8130,27 @@ function CreatePersonForms({
     setPersonType("platformAdmin");
     setFullName("");
     setEmail("");
+    setMethod("phone");
+    setPhone("");
     setPlatformAdminRole("operationsManager");
     setBusinessId("");
     setBusinessPermissions(["profile", "people"]);
     setError("");
   }
 
+  const byPhone = personType === "businessPerson" && method === "phone";
+
   async function submit() {
+    if (byPhone && !isValidE164(phone)) {
+      const problem = "Enter the person's WhatsApp number with its country code.";
+      setError(problem);
+      throw new Error(problem);
+    }
     const payload = {
       fullName: fullName.trim(),
-      email: email.trim().toLowerCase(),
+      ...(byPhone
+        ? { method: "phone", phone: normalizePhone(phone) }
+        : { method: "email", email: email.trim().toLowerCase() }),
       personType,
       adminRole:
         personType === "platformAdmin" ? platformAdminRole : undefined,
@@ -8111,11 +8163,13 @@ function CreatePersonForms({
     };
     setSubmitting(true);
     setError("");
+    let outcome: StaffInviteResult | null = null;
     try {
       if (personType === "platformAdmin") {
         await inviteMarketplaceAdmin(payload);
       } else {
-        await inviteMarketplaceBusinessMember(payload);
+        const answer = await inviteMarketplaceBusinessMember(payload);
+        outcome = staffInviteResultFrom(answer.data);
       }
     } catch (submitError) {
       const friendly = inviteErrorMessage(submitError);
@@ -8130,6 +8184,11 @@ function CreatePersonForms({
     }
     await refreshPeople();
     reset();
+    // WhatsApp could not carry it: keep the drawer open on the link to share.
+    if (outcome && inviteNeedsSharing(outcome)) {
+      setInviteOutcome(outcome);
+      return;
+    }
     setOpen(false);
   }
 
@@ -8142,6 +8201,7 @@ function CreatePersonForms({
             canInviteAdmins ? "platformAdmin" : "businessPerson",
           );
           setError("");
+          setInviteOutcome(null);
           setOpen(true);
         }}
         type="button"
@@ -8171,8 +8231,8 @@ function CreatePersonForms({
                 <div>
                   <h2>Invite a person</h2>
                   <p>
-                    They will create their own password after accepting the
-                    email invitation.
+                    Business staff accept by phone with a WhatsApp code, or by
+                    email with their own password. Platform admins use email.
                   </p>
                 </div>
               </div>
@@ -8185,6 +8245,23 @@ function CreatePersonForms({
                 <X size={18} />
               </button>
             </header>
+            {inviteOutcome ? (
+              <div className="people-invite-form">
+                <InviteLinkShare id="people-invite-link" link={inviteOutcome.inviteLink} />
+                <div className="account-drawer-actions">
+                  <button
+                    className="primary-button"
+                    onClick={() => {
+                      setInviteOutcome(null);
+                      setOpen(false);
+                    }}
+                    type="button"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            ) : (
             <form
               className="people-invite-form"
               onSubmit={(event) => {
@@ -8228,6 +8305,13 @@ function CreatePersonForms({
                 )}
               </fieldset>
               <div className="people-invite-fields">
+                {personType === "businessPerson" && (
+                  <InviteMethodSwitch
+                    disabled={submitting}
+                    method={method}
+                    onChange={setMethod}
+                  />
+                )}
                 <label>
                   <span>Full name</span>
                   <input
@@ -8239,6 +8323,19 @@ function CreatePersonForms({
                     value={fullName}
                   />
                 </label>
+                {byPhone ? (
+                  <CustomerPhoneField
+                    disabled={submitting}
+                    id="people-invite-phone"
+                    initialCountryCode={phoneCountryForBusiness(
+                      businesses.find((candidate) => candidate.id === businessId),
+                    )}
+                    label="WhatsApp number"
+                    onChange={setPhone}
+                    required
+                    value={phone}
+                  />
+                ) : (
                 <label>
                   <span>Email address</span>
                   <input
@@ -8251,6 +8348,7 @@ function CreatePersonForms({
                     value={email}
                   />
                 </label>
+                )}
                 {personType === "platformAdmin" ? (
                   <label>
                     <span>Platform admin role</span>
@@ -8347,8 +8445,9 @@ function CreatePersonForms({
               <div className="people-invite-note">
                 <Shield size={17} />
                 <span>
-                  No password is collected here. The invitation expires and
-                  access remains inactive until it is accepted.
+                  {byPhone
+                    ? "No password is needed. The person gets a WhatsApp message with an Accept button and signs in with a code sent to that number. The invitation expires and access remains inactive until it is accepted."
+                    : "No password is collected here. The invitation expires and access remains inactive until it is accepted."}
                 </span>
               </div>
               <div className="account-drawer-actions">
@@ -8372,6 +8471,7 @@ function CreatePersonForms({
                 </button>
               </div>
             </form>
+            )}
           </aside>
         </div>
       )}
@@ -8915,6 +9015,9 @@ function CreateBusinessStaffForm({
 }) {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [method, setMethod] = useState<InviteMethod>("phone");
+  const [phone, setPhone] = useState("");
+  const [inviteOutcome, setInviteOutcome] = useState<StaffInviteResult | null>(null);
   const [businessPermissions, setBusinessPermissions] = useState<string[]>([
     "profile",
     "people",
@@ -8925,22 +9028,34 @@ function CreateBusinessStaffForm({
   function reset() {
     setFullName("");
     setEmail("");
+    setPhone("");
     setBusinessPermissions(["profile", "people"]);
     setError("");
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (submitting) return;
+    if (method === "phone" && !isValidE164(phone)) {
+      const problem = "Enter the person's WhatsApp number with its country code.";
+      setError(problem);
+      throw new Error(problem);
+    }
     setSubmitting(true);
     setError("");
+    setInviteOutcome(null);
+    let outcome: StaffInviteResult | null = null;
     try {
-      await inviteMarketplaceBusinessMember({
+      const answer = await inviteMarketplaceBusinessMember({
         fullName: fullName.trim(),
-        email: email.trim().toLowerCase(),
+        ...(method === "phone"
+          ? { method: "phone", phone: normalizePhone(phone) }
+          : { method: "email", email: email.trim().toLowerCase() }),
         businessId: business.id,
         businessPermissions,
         locale: currentInterfaceLocale(),
       });
+      outcome = staffInviteResultFrom(answer.data);
     } catch (submitError) {
       const friendly = inviteErrorMessage(submitError);
       setError(friendly);
@@ -8949,22 +9064,35 @@ function CreateBusinessStaffForm({
       setSubmitting(false);
     }
     reset();
+    if (outcome?.channel === "phone") setInviteOutcome(outcome);
   }
 
   return (
     <form
       className="membership-form staff-create-form"
-      onSubmit={(event) =>
-        runAction("Business staff invitation sent", () => submit(event), {
+      onSubmit={(event) => {
+        // Before the confirmation: the browser must not submit the form
+        // natively while the dialog is open.
+        event.preventDefault();
+        void runAction("Business staff invitation sent", () => submit(event), {
           confirm: `Send this staff invitation for ${text(business.name, business.id)}?`,
-          confirmFr: `Envoyer cette invitation d’employé pour ${text(business.name, business.id)} ?`,
-        })
-      }
+          confirmFr: `Envoyer cette invitation de membre de l’équipe pour ${text(business.name, business.id)} ?`,
+        });
+      }}
     >
       <span className="form-note strong">
         Invite staff to {text(business.name, business.id)}
       </span>
       {error && <div className="error-box">{error}</div>}
+      {inviteOutcome && (inviteNeedsSharing(inviteOutcome) ? (
+        <InviteLinkShare id={`staff-invite-link-${business.id}`} link={inviteOutcome.inviteLink} />
+      ) : (
+        <div className="info-band" role="status">
+          {STAFF_INVITE_COPY.sentOnWhatsApp}{" "}
+          <span data-no-translate>{inviteOutcome.phoneMasked}</span>
+        </div>
+      ))}
+      <InviteMethodSwitch disabled={submitting} method={method} onChange={setMethod} />
       <input
         required
         autoComplete="name"
@@ -8973,6 +9101,17 @@ function CreateBusinessStaffForm({
         value={fullName}
         onChange={(event) => setFullName(event.target.value)}
       />
+      {method === "phone" ? (
+        <CustomerPhoneField
+          disabled={submitting}
+          id={`staff-phone-${business.id}`}
+          initialCountryCode={phoneCountryForBusiness(business)}
+          label="WhatsApp number"
+          onChange={setPhone}
+          required
+          value={phone}
+        />
+      ) : (
       <input
         required
         autoComplete="username"
@@ -8982,6 +9121,7 @@ function CreateBusinessStaffForm({
         value={email}
         onChange={(event) => setEmail(event.target.value)}
       />
+      )}
       <fieldset className="people-permission-picker compact">
         <legend>Business permissions</legend>
         <div>
@@ -9017,8 +9157,9 @@ function CreateBusinessStaffForm({
         </div>
       </fieldset>
       <p className="form-note">
-        No password is collected. The person will set one from the expiring
-        email invitation.
+        {method === "phone"
+          ? "No password is needed. The person gets a WhatsApp message with an Accept button and signs in with a code sent to that number."
+          : "No password is collected. The person will set one from the expiring email invitation."}
       </p>
       <button
         aria-busy={submitting}

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { resolveConsoleKind, serviceEntryApplies } from "./console-routing.ts";
+import { consoleAccessLost, resolveConsoleKind, serviceEntryApplies } from "./console-routing.ts";
 
 test("routes every supported account role to its own console", () => {
   assert.equal(resolveConsoleKind("admin"), "admin");
@@ -44,4 +44,29 @@ test("a package label's tracking link opens the tracking page for business and a
   }
   // An unsupported role still fails closed to the router's own handling.
   assert.equal(serviceEntryApplies("tracking", "unsupported"), false);
+});
+
+test("a staff invitation's page opens for guests, customers, staff and admins alike", () => {
+  for (const kind of [null, "customer", "business", "admin"] as const) {
+    assert.equal(serviceEntryApplies("staff-invite", kind), true, `staff-invite for ${kind}`);
+  }
+  assert.equal(serviceEntryApplies("staff-invite", "unsupported"), false);
+});
+
+test("losing business or platform access is noticed from the live profile; gaining it is not", () => {
+  const staff = { role: "staff", businessId: "biz1" };
+  // Removed: role customer, moved to another business, or the profile gone.
+  assert.equal(consoleAccessLost(staff, { role: "customer", businessId: "" }), true);
+  assert.equal(consoleAccessLost(staff, { role: "staff", businessId: "biz2" }), true);
+  assert.equal(consoleAccessLost(staff, null), true);
+  assert.equal(consoleAccessLost({ role: "admin" }, { role: "customer" }), true);
+  assert.equal(consoleAccessLost({ role: "businessOwner", businessId: "biz1" }, { role: "suspended" }), true);
+  // Unchanged access, an owner handing ownership over within the business.
+  assert.equal(consoleAccessLost(staff, { ...staff, fullName: "New name" } as never), false);
+  assert.equal(consoleAccessLost({ role: "businessOwner", businessId: "biz1" }, staff), false);
+  assert.equal(consoleAccessLost({ role: "admin" }, { role: "admin" }), false);
+  // A customer accepting an invitation gains access: nothing to cut.
+  assert.equal(consoleAccessLost({ role: "customer" }, staff), false);
+  assert.equal(consoleAccessLost(null, staff), false);
+  assert.equal(consoleAccessLost({ role: "customer" }, null), false);
 });

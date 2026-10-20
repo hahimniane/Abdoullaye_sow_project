@@ -13,6 +13,9 @@ export const customerServices = [
   // one business by /r/<slug>, and the estimate page /e/<token>.
   "package-request",
   "package-estimate",
+  // A staff invitation sent on WhatsApp (docs/STAFF_PHONE_INVITES.md §6):
+  // the Accept button's /j/<token>.
+  "staff-invite",
 ] as const;
 
 export type CustomerService = (typeof customerServices)[number];
@@ -32,6 +35,8 @@ const ITEM_TAG_PATH = /^\/i\/[A-Za-z0-9-]{1,60}\/?$/;
 const REQUEST_PATH = /^\/r\/[A-Za-z0-9-]{3,40}\/?$/;
 /** `/e/<token>`: the WhatsApp estimate button. */
 const ESTIMATE_PATH = /^\/e\/[A-Za-z0-9_-]{43}\/?$/;
+/** `/j/<token>`: the WhatsApp staff invitation's Accept button. */
+const JOIN_PATH = /^\/j\/[A-Za-z0-9_-]{43}\/?$/;
 
 /**
  * The customer service a page address asks for: the `?service=` link, or an
@@ -48,7 +53,8 @@ export function customerServiceFromLocation(
     customerServiceFromSearch(search) ??
     (ITEM_TAG_PATH.test(path) ? "item-tag" :
       REQUEST_PATH.test(path) ? "package-request" :
-        ESTIMATE_PATH.test(path) ? "package-estimate" : null)
+        ESTIMATE_PATH.test(path) ? "package-estimate" :
+          JOIN_PATH.test(path) ? "staff-invite" : null)
   );
 }
 

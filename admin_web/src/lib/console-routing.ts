@@ -29,6 +29,45 @@ export function serviceEntryApplies(
   // The estimate page is the customer's (the token is the capability); a
   // staff member opening a customer's link sees the customer's page too.
   if (service === "package-estimate") return kind !== "unsupported";
+  // A staff invitation's page (/j/<token>) handles every state itself:
+  // signed out, a customer accepting, or someone signed in with another
+  // account who must sign out first (docs/STAFF_PHONE_INVITES.md §6).
+  if (service === "staff-invite") return kind !== "unsupported";
   if (kind === null || kind === "customer") return true;
   return service === "tracking" && (kind === "business" || kind === "admin");
+}
+
+/** The fields of a live profile that decide which console it may open. */
+export type ConsoleAccessProfile = {
+  role?: unknown;
+  businessId?: unknown;
+} | null | undefined;
+
+function accessKey(profile: ConsoleAccessProfile) {
+  if (!profile) return null;
+  const kind = resolveConsoleKind(String(profile.role ?? ""));
+  if (kind === "admin") return "admin";
+  if (kind === "business") return `business:${String(profile.businessId ?? "").trim()}`;
+  return null;
+}
+
+/**
+ * Whether the live profile just lost the business or platform access the
+ * session opened with (docs/STAFF_PHONE_INVITES.md §5): the role became
+ * customer (or anything without a console), the business changed, or the
+ * document disappeared. The server revokes the refresh tokens at that
+ * moment, so the router forces a token refresh and signs out when it fails,
+ * instead of leaving the person in the console for up to an hour.
+ *
+ * Gaining access (a customer accepting an invitation) is not a loss, and
+ * neither is an owner becoming staff of the same business.
+ */
+export function consoleAccessLost(
+  previous: ConsoleAccessProfile,
+  next: ConsoleAccessProfile,
+): boolean {
+  const before = accessKey(previous);
+  if (!before) return false;
+  const after = accessKey(next);
+  return after !== before;
 }

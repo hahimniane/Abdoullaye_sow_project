@@ -26,8 +26,20 @@ import {
   verifyPhoneSignInCode,
 } from "@/lib/phone-accounts-client";
 
-/** The masked flow of a tracking page: the server knows the number, the page only its last two digits. */
-export type PhoneSignInHint = { trackingCode: string; role: PhoneRole; lastTwo: string };
+/**
+ * The masked flow: the server knows the number, the page only its last two
+ * digits - from a tracking page (the record's sender/receiver) or from a
+ * staff invitation link (the invited number, docs/STAFF_PHONE_INVITES.md).
+ */
+export type PhoneSignInHint =
+  | { trackingCode: string; role: PhoneRole; lastTwo: string }
+  | { inviteToken: string; lastTwo: string };
+
+function maskedCodeRequest(hint: PhoneSignInHint) {
+  return "inviteToken" in hint
+    ? { inviteToken: hint.inviteToken }
+    : { trackingCode: hint.trackingCode, role: hint.role };
+}
 
 type Step = "phone" | "code" | "sms-phone" | "sms-code" | "done";
 type Busy = "" | "send" | "verify" | "sms-send" | "sms-verify";
@@ -219,7 +231,7 @@ export function PhoneSignIn({
     return run("send", async () => {
       try {
         const challenge = await requestPhoneLoginCode(
-          hint ? { trackingCode: hint.trackingCode, role: hint.role } : { phone: typedPhone },
+          hint ? maskedCodeRequest(hint) : { phone: typedPhone },
         );
         setChallengeId(challenge.challengeId);
         if (challenge.lastTwo) setLastTwo(challenge.lastTwo);
