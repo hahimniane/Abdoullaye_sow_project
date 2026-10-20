@@ -11,15 +11,23 @@ import {
   resolveFirebaseConfig,
 } from "./project-config.ts";
 
-test("production stays on the current project until the switch is flipped", () => {
-  assert.equal(DEFAULT_PROJECT_TARGET, "current");
-  assert.equal(CURRENT_PROJECT_CONFIG.projectId, "car-selling-flutter-app");
-  assert.equal(CURRENT_PROJECT_CONFIG.messagingSenderId, "577373430777");
-  assert.deepEqual(resolveFirebaseConfig({}), CURRENT_PROJECT_CONFIG);
+test("the consoles are switched to the new project (cutover 2026-10-20)", () => {
+  assert.equal(DEFAULT_PROJECT_TARGET, "new");
+  assert.deepEqual(resolveFirebaseConfig({}), NEW_PROJECT_CONFIG);
   assert.equal(
     ACTIVE_FIREBASE_CONFIG.projectId,
     process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ||
-      CURRENT_PROJECT_CONFIG.projectId,
+      (process.env.NEXT_PUBLIC_FIREBASE_PROJECT_TARGET === "current" ?
+        CURRENT_PROJECT_CONFIG.projectId : NEW_PROJECT_CONFIG.projectId),
+  );
+});
+
+test("the old project stays selectable for a rollback build", () => {
+  assert.equal(CURRENT_PROJECT_CONFIG.projectId, "car-selling-flutter-app");
+  assert.equal(CURRENT_PROJECT_CONFIG.messagingSenderId, "577373430777");
+  assert.deepEqual(
+    resolveFirebaseConfig({ NEXT_PUBLIC_FIREBASE_PROJECT_TARGET: "current" }),
+    CURRENT_PROJECT_CONFIG,
   );
 });
 
@@ -27,6 +35,10 @@ test("the new project is registered with its project number", () => {
   assert.equal(NEW_PROJECT_CONFIG.projectId, "laawol-a855a");
   assert.equal(NEW_PROJECT_CONFIG.messagingSenderId, "127318353394");
   assert.equal(NEW_PROJECT_CONFIG.authDomain, "laawol-a855a.firebaseapp.com");
+  // Read back from the Firebase Management API (webApps/.../config) on
+  // 2026-10-20; the web app 1:127318353394:web:877e3c653bfcce7ec5776b.
+  assert.equal(NEW_PROJECT_CONFIG.appId, "1:127318353394:web:877e3c653bfcce7ec5776b");
+  assert.equal(NEW_PROJECT_CONFIG.storageBucket, "laawol-a855a.firebasestorage.app");
 });
 
 test("selecting the new target fails closed while its placeholders are empty", () => {

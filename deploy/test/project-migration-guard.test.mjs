@@ -107,11 +107,15 @@ test("every single-source file still exists (the allowlist cannot rot)", () => {
   }
 });
 
-test("production stays on the current project until the switch is flipped", () => {
+test("deploy tooling targets the new project (cutover 2026-10-20)", () => {
   const config = loadProjectConfig();
-  assert.equal(config.active, "current");
-  assert.equal(DEFAULT_PROJECT_ID, "car-selling-flutter-app");
-  assert.equal(ACTIVE_PROJECT.projectNumber, "577373430777");
+  assert.equal(config.active, "new");
+  assert.equal(DEFAULT_PROJECT_ID, "laawol-a855a");
+  assert.equal(ACTIVE_PROJECT.projectNumber, "127318353394");
+  // The old project stays registered: it serves the mobile apps until the
+  // new app build ships, and it is the rollback target.
+  assert.equal(PROJECTS.current.projectId, "car-selling-flutter-app");
+  assert.equal(PROJECTS.current.projectNumber, "577373430777");
   assert.equal(PROJECTS.new.projectId, "laawol-a855a");
   assert.equal(PROJECTS.new.projectNumber, "127318353394");
 });
@@ -129,7 +133,7 @@ test("deploy tooling accepts a project override (env, flag, alias)", () => {
   );
   assert.equal(
       resolveProjectId({env: {FIREBASE_PROJECT: "current"}, argv: []}),
-      DEFAULT_PROJECT_ID,
+      PROJECTS.current.projectId,
   );
   assert.equal(
       resolveProjectId({env: {FIREBASE_PROJECT: "x-1234"}, argv: ["--project", "laawol-a855a"]}),
@@ -167,12 +171,13 @@ test("every deploy script takes its project from project-config.mjs", () => {
   assert.match(read("deploy/store/gate.py"), /project-config\.json/);
 });
 
-test(".firebaserc keeps default on production and adds a `new` alias", () => {
+test(".firebaserc default/production follow the active project; `new` and `old` aliases", () => {
   for (const file of ["my_flutter_app/.firebaserc", "admin_web/.firebaserc"]) {
     const {projects} = JSON.parse(read(file));
     assert.equal(projects.default, ACTIVE_PROJECT.projectId, `${file} default`);
     assert.equal(projects.production, ACTIVE_PROJECT.projectId, `${file} production`);
     assert.equal(projects.new, PROJECTS.new.projectId, `${file} new alias`);
+    assert.equal(projects.old, PROJECTS.current.projectId, `${file} old alias`);
   }
 });
 
@@ -210,4 +215,18 @@ test("both projects deploy the functions with the same per-project env", () => {
   for (const project of Object.values(PROJECTS)) {
     assert.deepEqual(settings(project.projectId), reference, `.env.${project.projectId}`);
   }
+});
+
+test("the installed apps' project (`apps`) matches the Flutter default", () => {
+  // Server/web moved first; the mobile apps follow with a new build. Until
+  // then the force-update gate (store/gate.py) must move the OLD project's
+  // appConfig/client, which is the one installed apps read.
+  const config = loadProjectConfig();
+  const dart = read("my_flutter_app/lib/firebase_environment_options.dart");
+  const flutterDefault = /defaultEnvironment = '([a-z]+)'/.exec(dart)?.[1];
+  const expected = {production: "current", new: "new"}[flutterDefault];
+  assert.ok(expected, `unexpected Flutter defaultEnvironment ${flutterDefault}`);
+  assert.equal(config.apps, expected);
+  assert.ok(PROJECTS[config.apps], "`apps` must name a registered project");
+  assert.match(read("deploy/store/gate.py"), /config\.get\("apps", config\["active"\]\)/);
 });

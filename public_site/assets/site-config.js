@@ -29,10 +29,8 @@
     appCheckSiteKey: "6Lcs5FUtAAAAAA_XmvDg0rDqUE4noHLjFCLqofHX",
   };
 
-  // NEW_PROJECT_CONFIG: laawol-a855a (project number 127318353394). apiKey,
-  // appId and appCheckSiteKey exist only once the web app and a reCAPTCHA
-  // Enterprise key are created in that project - they are empty on purpose,
-  // and ACTIVE_TARGET = "new" throws below until they are filled in.
+  // NEW_PROJECT_CONFIG: laawol-a855a (project number 127318353394), live
+  // since the 2026-10-20 cutover. An empty value makes the target throw below.
   var NEW_PROJECT_CONFIG = {
     firebase: {
       apiKey: "AIzaSyDyz6neM8FSEgO2v01UZECeSGTAuTuFmQg", // new project web app apiKey
@@ -42,11 +40,14 @@
       messagingSenderId: "127318353394",
       appId: "1:127318353394:web:877e3c653bfcce7ec5776b",
     },
-    appCheckSiteKey: "", // TODO(cutover): reCAPTCHA Enterprise key in the new project
+    // reCAPTCHA Enterprise key "Laawol web App Check" created in laawol-a855a
+    // (2026-10-20) for laawoldigital.com, www., admin., business., customer.
+    appCheckSiteKey: "6Ld5t_gtAAAAAKI_1qAssnNIQhpuSiBDMp1MANPE",
   };
 
-  // THE cutover switch for the marketing site.
-  var ACTIVE_TARGET = "current";
+  // THE cutover switch for the marketing site ("new" since 2026-10-20; a
+  // rollback is "current" plus the old /p and /d pair in .htaccess).
+  var ACTIVE_TARGET = "new";
 
   var chosen = ACTIVE_TARGET === "new" ? NEW_PROJECT_CONFIG : CURRENT_PROJECT_CONFIG;
   var missing = [];

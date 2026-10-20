@@ -17,13 +17,13 @@
   #
   # PROJECT-SPECIFIC (the only two lines in this file that are). .htaccess cannot
   # read assets/site-config.js, so the active pair is kept here, with the
-  # NEW_PROJECT_CONFIG pair beside it. Cutover: swap which pair is commented.
-  # Current project:
-  RewriteRule ^p$ https://us-central1-car-selling-flutter-app.cloudfunctions.net/parkingPaymentLink [QSA,R=302,L]
-  RewriteRule ^d$ https://us-central1-car-selling-flutter-app.cloudfunctions.net/parkingDocument [QSA,R=302,L]
-  # NEW_PROJECT_CONFIG (laawol-a855a) - enable at cutover, then delete the pair above:
-  # RewriteRule ^p$ https://us-central1-laawol-a855a.cloudfunctions.net/parkingPaymentLink [QSA,R=302,L]
-  # RewriteRule ^d$ https://us-central1-laawol-a855a.cloudfunctions.net/parkingDocument [QSA,R=302,L]
+  # old project's pair beside it. Rollback: swap which pair is commented.
+  # NEW_PROJECT_CONFIG (laawol-a855a), active since the 2026-10-20 cutover:
+  RewriteRule ^p$ https://us-central1-laawol-a855a.cloudfunctions.net/parkingPaymentLink [QSA,R=302,L]
+  RewriteRule ^d$ https://us-central1-laawol-a855a.cloudfunctions.net/parkingDocument [QSA,R=302,L]
+  # Old project (car-selling-flutter-app) - rollback only; delete once it is decommissioned:
+  # RewriteRule ^p$ https://us-central1-car-selling-flutter-app.cloudfunctions.net/parkingPaymentLink [QSA,R=302,L]
+  # RewriteRule ^d$ https://us-central1-car-selling-flutter-app.cloudfunctions.net/parkingDocument [QSA,R=302,L]
 
   # A business's package request link (docs/PACKAGE_REQUESTS.md §8.8): the
   # printed QR and shared link read laawoldigital.com/r/<slug>; the form

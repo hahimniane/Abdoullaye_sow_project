@@ -304,8 +304,8 @@ for (const key of [
   const site = sandbox.window.LAAWOL_CONFIG;
   assert(site && site.firebase, "site-config.js must define window.LAAWOL_CONFIG.firebase");
   assert(
-    site.target === "current" && site.firebase.projectId === "car-selling-flutter-app",
-    "site-config.js must keep the current project active until the cutover switch is flipped",
+    site.target === "new" && site.firebase.projectId === "laawol-a855a",
+    "site-config.js must keep the new project (laawol-a855a) active since the 2026-10-20 cutover",
   );
   assert(
     site.functionsBaseUrl ===
@@ -351,9 +351,9 @@ for (const key of [
     );
   }
   assert(
-    /#\s*RewriteRule \^p\$ https:\/\/us-central1-laawol-a855a\.cloudfunctions\.net\/parkingPaymentLink/.test(htaccess) &&
-      /#\s*RewriteRule \^d\$ https:\/\/us-central1-laawol-a855a\.cloudfunctions\.net\/parkingDocument/.test(htaccess),
-    ".htaccess must carry the NEW_PROJECT_CONFIG /p and /d rewrites, commented out",
+    /#\s*RewriteRule \^p\$ https:\/\/us-central1-car-selling-flutter-app\.cloudfunctions\.net\/parkingPaymentLink/.test(htaccess) &&
+      /#\s*RewriteRule \^d\$ https:\/\/us-central1-car-selling-flutter-app\.cloudfunctions\.net\/parkingDocument/.test(htaccess),
+    ".htaccess must keep the old project's /p and /d rewrites, commented out, for a rollback",
   );
 }
 

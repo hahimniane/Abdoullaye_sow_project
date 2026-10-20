@@ -1,8 +1,9 @@
 {
   "projects": {
-    "default": "car-selling-flutter-app",
-    "production": "car-selling-flutter-app",
+    "default": "laawol-a855a",
+    "production": "laawol-a855a",
     "staging": "laawol-digital-staging",
-    "new": "laawol-a855a"
+    "new": "laawol-a855a",
+    "old": "car-selling-flutter-app"
   }
 }

@@ -50,8 +50,12 @@ export const NEW_PROJECT_CONFIG: FirebaseWebConfig = {
   appId: "1:127318353394:web:877e3c653bfcce7ec5776b",
 };
 
-/** THE cutover switch for the consoles. */
-export const DEFAULT_PROJECT_TARGET: ProjectTarget = "current";
+/**
+ * THE cutover switch for the consoles. "new" since the 2026-10-20 cutover:
+ * the consoles talk to laawol-a855a. Rollback = "current" (or build with
+ * NEXT_PUBLIC_FIREBASE_PROJECT_TARGET=current) plus the old App Check key.
+ */
+export const DEFAULT_PROJECT_TARGET: ProjectTarget = "new";
 
 type ConfigEnv = Partial<Record<string, string | undefined>>;
 

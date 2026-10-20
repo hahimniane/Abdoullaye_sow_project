@@ -28,6 +28,8 @@ def _project_id():
     """The project to move the gate in (deploy/project-config.json).
 
     `FIREBASE_PROJECT=<id|current|new>` overrides, same as the node tooling.
+    The default is the project the INSTALLED apps read (`apps`), which can lag
+    `active` (the server/web project) until a new app build ships.
     """
     here = os.path.dirname(os.path.abspath(__file__))
     with open(os.path.join(here, "..", "project-config.json")) as handle:
@@ -35,7 +37,7 @@ def _project_id():
     projects = config["projects"]
     requested = os.environ.get("FIREBASE_PROJECT", "").strip()
     if not requested:
-        return projects[config["active"]]["projectId"]
+        return projects[config.get("apps", config["active"])]["projectId"]
     return projects[requested]["projectId"] if requested in projects else requested
 
 
