@@ -3461,6 +3461,309 @@ describe("credit sales and who received the money", () => {
           {paymentId: row.id}, ANNEX_CLERK), refusal("store_not_allowed"));
       await m("revertInventoryCreditPayment", {paymentId: row.id}, MOWN);
     });
+
+    it("keeps another store's staff from switching the sale", async () => {
+      const data = {saleId, to: "paid", paymentMethod: "cash"};
+      await assert.rejects(m("switchInventorySalePayment", {...data,
+        clientRequestId: requestId()}, ANNEX_CLERK),
+      refusal("store_not_allowed", "permission-denied"));
+      assert.equal((await db.collection("inventorySales").doc(saleId).get())
+          .data().creditCents, 4000);
+      const out = await m("switchInventorySalePayment", {...data,
+        clientRequestId: requestId()}, MAIN_CLERK);
+      assert.equal(out.creditStatus, "none");
+      // Back on credit from the Main store: the push names the store.
+      await m("switchInventorySalePayment", {saleId,
+        clientRequestId: requestId(), to: "credit", credit: {
+          paidNowCents: 2000, customerName: "Aminata",
+          collectorStaffId: ANNEX_CLERK}}, MOWN);
+      const bodies = (await pushesFor(saleId)).map((p) => p.body);
+      assert.ok(bodies.includes("Aminata owes $30.00 · Main store"), bodies);
+    });
+  });
+
+  describe("switching a sale between paid and credit", () => {
+    const FR_COLLECTOR = "inv-credit-collector-fr";
+    const NO_INV = "inv-credit-ledger-only";
+    const switchIt = (saleId, extra = {}, uid = CLERK) =>
+      s("switchInventorySalePayment", {saleId,
+        clientRequestId: requestId(), ...extra}, uid);
+    const toCredit = (saleId, credit = {}, uid = CLERK, extra = {}) =>
+      switchIt(saleId, {to: "credit", credit: creditOf({paidNowCents: 1000,
+        ...credit}), ...extra}, uid);
+    const auditOf = async (saleId) => (await db.collection("lotLedgerAudit")
+        .where("businessId", "==", CB).where("entityId", "==", saleId)
+        .where("action", "==", "payment_switched").get()).docs
+        .map((d) => d.data());
+
+    before(async () => {
+      await Promise.all([
+        db.collection("users").doc(FR_COLLECTOR).set({role: "staff",
+          businessId: CB, businessPermissions: ["ledger"],
+          fullName: "Binta Sow", preferredLanguage: "fr"}),
+        db.collection("users").doc(NO_INV).set({role: "staff",
+          businessId: CB, businessPermissions: ["ledger"]}),
+      ]);
+    });
+
+    it("puts a paid sale on credit like a credit sale rung up that way",
+        async () => {
+          const saleId = (await sellIn({paymentMethod: "zelle",
+            receivedByStaffId: OWN})).saleId;
+          const stock = (await itemDoc(itemId)).quantity;
+          const out = await toCredit(saleId, {}, CLERK);
+          assert.deepEqual(out, {success: true, saleId, replayed: false,
+            to: "credit", paidNowCents: 1000, creditCents: 5000,
+            creditStatus: "open", paymentMethod: "zelle",
+            receivedByStaffId: OWN});
+          const sale = await saleOf(saleId);
+          assert.deepEqual([sale.totalCents, sale.paidNowCents,
+            sale.creditCents, sale.creditPaidCents, sale.creditStatus,
+            sale.paymentMethod, sale.receivedByStaffId, sale.soldByStaffId],
+          [6000, 1000, 5000, 0, "open", "zelle", OWN, CLERK]);
+          assert.deepEqual(sale.credit, {customerName: "Fatou Bah",
+            customerPhone: "+12075550100", collectorStaffId: COLLECTOR,
+            dueDate: LATER});
+          assert.equal(sale.lastCreditReminderAt, null);
+          assert.equal(sale.creditUpdatedByStaffId, CLERK);
+          // The goods do not move again.
+          assert.equal((await itemDoc(itemId)).quantity, stock);
+          const [entry, ...more] = sale.paymentSwitches;
+          assert.equal(more.length, 0);
+          assert.deepEqual([entry.from, entry.to, entry.byStaffId,
+            entry.fromPaidNowCents, entry.toPaidNowCents,
+            entry.toCreditCents, entry.fromPaymentMethod,
+            entry.toPaymentMethod, entry.customerName],
+          ["paid", "credit", CLERK, 6000, 1000, 5000, "zelle", "zelle",
+            "Fatou Bah"]);
+          assert.ok(entry.at.toMillis() > 0);
+          const [audit] = await auditOf(saleId);
+          assert.equal(audit.summary, "Switched to credit: $10.00 paid at " +
+            "the sale (zelle), $50.00 owed by Fatou Bah");
+          assert.equal(audit.byStaffId, CLERK);
+          assert.equal(audit.acknowledged, true);
+          // The collector hears about it, like for a new credit sale.
+          const [push, ...others] = await pushesFor(saleId);
+          assert.equal(others.length, 0);
+          assert.deepEqual([push.recipientUid, push.title, push.body],
+              [COLLECTOR, "Credit to collect", "Fatou Bah owes $50.00 · sale"]);
+          assert.equal(push.data.saleId, saleId);
+          // From now on it is a credit sale: payments go on it.
+          const paid = await s("recordInventoryCreditPayment", {saleId,
+            amountCents: 2000, method: "cash"}, OWN);
+          assert.deepEqual([paid.creditPaidCents, paid.creditStatus],
+              [2000, "open"]);
+          // ... and the open-credit query finds it.
+          const open = await db.collection("inventorySales")
+              .where("businessId", "==", CB)
+              .where("creditStatus", "==", "open").get();
+          assert.ok(open.docs.some((d) => d.id === saleId));
+        });
+
+    it("takes nothing paid at the time, pushes in the collector's language",
+        async () => {
+          const saleId = (await sellIn()).saleId;
+          await toCredit(saleId, {paidNowCents: 0, customerPhone: "",
+            dueDate: "", collectorStaffId: FR_COLLECTOR}, OWN);
+          const sale = await saleOf(saleId);
+          assert.deepEqual([sale.paidNowCents, sale.creditCents,
+            sale.paymentMethod], [0, 6000, ""]);
+          assert.equal(sale.paymentSwitches[0].fromPaymentMethod, "cash");
+          const [push] = await pushesFor(saleId);
+          assert.deepEqual([push.recipientUid, push.title, push.body],
+              [FR_COLLECTOR, "Crédit à encaisser",
+                "Fatou Bah doit $60.00 · vente"]);
+          // The collector switching it themselves is not told.
+          const own = (await sellIn()).saleId;
+          await toCredit(own, {collectorStaffId: CLERK}, CLERK);
+          assert.deepEqual(await pushesFor(own), []);
+        });
+
+    it("makes a credit sale with nothing collected a paid sale", async () => {
+      const saleId = (await sellIn({credit: creditOf()})).saleId;
+      const out = await switchIt(saleId, {to: "paid",
+        paymentMethod: "cashapp", receivedByStaffId: COLLECTOR}, OWN);
+      assert.deepEqual([out.to, out.paidNowCents, out.creditCents,
+        out.creditStatus, out.paymentMethod, out.receivedByStaffId],
+      ["paid", 6000, 0, "none", "cashapp", COLLECTOR]);
+      const sale = await saleOf(saleId);
+      assert.deepEqual([sale.paidNowCents, sale.creditCents,
+        sale.creditPaidCents, sale.creditStatus, sale.paymentMethod,
+        sale.receivedByStaffId], [6000, 0, 0, "none", "cashapp", COLLECTOR]);
+      // The credit block stays for the history; nothing is erased.
+      assert.equal(sale.credit.customerName, "Fatou Bah");
+      assert.equal(sale.paymentSwitches[0].fromCreditCents, 4000);
+      assert.equal((await auditOf(saleId))[0].summary,
+          "Switched to paid: $60.00 paid at the sale (cashapp)");
+      // A paid sale takes no credit payment, collector or reminder.
+      await assert.rejects(s("recordInventoryCreditPayment", {saleId,
+        amountCents: 100, method: "cash"}, OWN), refusal("no_credit"));
+      await assert.rejects(s("setInventoryCreditCollector", {saleId,
+        collectorStaffId: COLLECTOR}, OWN), refusal("no_credit"));
+      // Received by left out: whoever switched it.
+      const other = (await sellIn({credit: creditOf()})).saleId;
+      await switchIt(other, {to: "paid", paymentMethod: "cash"}, OWN);
+      assert.equal((await saleOf(other)).receivedByStaffId, OWN);
+    });
+
+    it("refuses to make it paid once money was collected on it, until " +
+        "that payment is reverted", async () => {
+      const saleId = (await sellIn({credit: creditOf()})).saleId;
+      const paid = await s("recordInventoryCreditPayment", {saleId,
+        amountCents: 500, method: "cash"}, OWN);
+      await assert.rejects(switchIt(saleId, {to: "paid",
+        paymentMethod: "cash"}, OWN),
+      refusal("credit_payments_recorded", "failed-precondition"));
+      const before = await saleOf(saleId);
+      assert.equal(before.creditPaidCents, 500);
+      assert.equal(before.paymentSwitches, undefined);
+      await s("revertInventoryCreditPayment", {paymentId: paid.paymentId},
+          OWN);
+      await switchIt(saleId, {to: "paid", paymentMethod: "cash"}, OWN);
+      assert.equal((await saleOf(saleId)).creditStatus, "none");
+      // The reverted payment row is still there, struck through.
+      const rows = await paymentsOf(saleId);
+      assert.deepEqual(rows.map((r) => r.reverted), [true]);
+    });
+
+    it("refuses what a switch cannot be", async () => {
+      const plain = (await sellIn()).saleId;
+      const credit = (await sellIn({credit: creditOf()})).saleId;
+      const cases = [
+        [plain, {to: "credit", credit: creditOf({paidNowCents: 6000})},
+          "paid_now_invalid"],
+        [plain, {to: "credit", credit: creditOf({paidNowCents: 9000})},
+          "paid_now_invalid"],
+        [plain, {to: "credit", credit: creditOf({customerName: ""})},
+          "credit_customer_required"],
+        [plain, {to: "credit", credit: creditOf({collectorStaffId:
+          OUTSIDER})}, "collector_invalid"],
+        [plain, {to: "credit", credit: creditOf({dueDate: "2020-01-01"})},
+          "due_date_invalid"],
+        [plain, {to: "credit"}, "paid_now_invalid"],
+        [plain, {to: "normal"}, "switch_target_invalid"],
+        [credit, {to: "paid", paymentMethod: "gold"},
+          "payment_method_invalid"],
+        [credit, {to: "paid", paymentMethod: "cash",
+          receivedByStaffId: OUTSIDER}, "received_by_invalid"],
+      ];
+      for (const [saleId, data, code] of cases) {
+        await assert.rejects(switchIt(saleId, data, OWN),
+            refusal(code, "invalid-argument"), JSON.stringify(data));
+      }
+      await assert.rejects(switchIt(plain, {to: "paid",
+        paymentMethod: "cash"}, OWN),
+      refusal("sale_already_paid", "failed-precondition"));
+      await assert.rejects(toCredit(credit, {}, OWN),
+          refusal("sale_already_credit", "failed-precondition"));
+      await assert.rejects(toCredit(plain, {}, OWN,
+          {clientRequestId: "short"}),
+      refusal("client_request_id_invalid"));
+      await assert.rejects(toCredit("nope", {}, OWN),
+          refusal("sale_not_found", "not-found"));
+      // A voided sale stays voided, either way.
+      await s("voidInventorySale", {saleId: plain}, OWN);
+      await assert.rejects(toCredit(plain, {}, OWN),
+          refusal("sale_voided", "failed-precondition"));
+      await s("voidInventorySale", {saleId: credit}, OWN);
+      await assert.rejects(switchIt(credit, {to: "paid",
+        paymentMethod: "cash"}, OWN), refusal("sale_voided"));
+      // Nothing was written by any refusal.
+      for (const id of [plain, credit]) {
+        assert.equal((await saleOf(id)).paymentSwitches, undefined);
+        assert.deepEqual(await auditOf(id), []);
+      }
+    });
+
+    it("lets only those who may void a sale switch it", async () => {
+      const saleId = (await sellIn()).saleId;
+      // No Inventory section, or another business: refused at the gate.
+      for (const uid of [NO_INV, OUTSIDER]) {
+        await assert.rejects(toCredit(saleId, {}, uid),
+            (error) => error.code === "permission-denied", uid);
+      }
+      assert.equal((await saleOf(saleId)).creditCents, 0);
+    });
+
+    it("answers a retried switch as the same switch", async () => {
+      const saleId = (await sellIn()).saleId;
+      const clientRequestId = requestId();
+      const data = {clientRequestId, to: "credit", credit: creditOf()};
+      const first = await s("switchInventorySalePayment", {saleId, ...data},
+          CLERK);
+      const again = await s("switchInventorySalePayment", {saleId, ...data},
+          CLERK);
+      assert.equal(first.replayed, false);
+      assert.equal(again.replayed, true);
+      assert.deepEqual({...again, replayed: false}, first);
+      // Still the same answer after the sale moved on, never a refusal.
+      await switchIt(saleId, {to: "paid", paymentMethod: "cash"}, OWN);
+      const later = await s("switchInventorySalePayment", {saleId, ...data,
+        credit: {}}, CLERK);
+      assert.deepEqual([later.replayed, later.to, later.creditCents],
+          [true, "credit", 4000]);
+      const sale = await saleOf(saleId);
+      assert.deepEqual(sale.paymentSwitches.map((e) => e.to),
+          ["credit", "paid"]);
+      assert.equal(sale.creditStatus, "none");
+      assert.equal((await auditOf(saleId)).length, 2);
+      assert.equal((await pushesFor(saleId)).length, 1);
+      // Two sends of one key at once are still one switch.
+      const raced = (await sellIn()).saleId;
+      const key = requestId();
+      const outcomes = await Promise.all([1, 2].map(() => outcomeOf(() =>
+        s("switchInventorySalePayment", {saleId: raced,
+          clientRequestId: key, to: "credit", credit: creditOf()}, CLERK))));
+      assert.deepEqual(outcomes, ["ok", "ok"]);
+      assert.equal((await saleOf(raced)).paymentSwitches.length, 1);
+      assert.equal((await auditOf(raced)).length, 1);
+    });
+
+    it("never lets a payment and a switch to paid both land", async () => {
+      for (let round = 0; round < 3; round++) {
+        const saleId = (await sellIn({credit: creditOf()})).saleId;
+        const key = requestId();
+        const [payment, change] = await Promise.all([
+          outcomeOf(() => s("recordInventoryCreditPayment", {saleId,
+            amountCents: 1000, method: "cash"}, OWN)),
+          outcomeOf(() => s("switchInventorySalePayment", {saleId,
+            clientRequestId: key, to: "paid", paymentMethod: "cash"}, OWN)),
+        ]);
+        const sale = await saleOf(saleId);
+        const live = (await paymentsOf(saleId)).filter((r) => !r.reverted);
+        if (change === "ok") {
+          assert.equal(payment, "no_credit", `round ${round}`);
+          assert.deepEqual([sale.creditCents, sale.creditStatus, live.length],
+              [0, "none", 0]);
+        } else {
+          assert.deepEqual([payment, change],
+              ["ok", "credit_payments_recorded"], `round ${round}`);
+          assert.deepEqual([sale.creditCents, sale.creditPaidCents,
+            live.length], [4000, 1000, 1]);
+        }
+      }
+    });
+
+    it("lets one of two different switches of a sale win", async () => {
+      const saleId = (await sellIn()).saleId;
+      const outcomes = await Promise.all([COLLECTOR, OWN].map((who) =>
+        outcomeOf(() => toCredit(saleId, {collectorStaffId: who}, CLERK))));
+      assert.deepEqual(outcomes.sort(), ["ok", "sale_already_credit"]);
+      assert.equal((await saleOf(saleId)).paymentSwitches.length, 1);
+    });
+
+    it("is reminded when overdue, like any credit sale", async () => {
+      const saleId = (await sellIn()).saleId;
+      await toCredit(saleId, {}, OWN);
+      await db.collection("inventorySales").doc(saleId)
+          .update({"credit.dueDate": "2026-01-02"});
+      await functions.remindOverdueInventoryCredit.run();
+      const overdue = (await db.collection("notificationDeliveries")
+          .where("data.saleId", "==", saleId)
+          .where("title", "==", "Credit overdue").get()).docs
+          .map((d) => d.data().recipientUid).sort();
+      assert.deepEqual(overdue, [COLLECTOR, OWN].sort());
+    });
   });
 
   it("splits the summary into paid now and on credit", async () => {
@@ -3485,5 +3788,17 @@ describe("credit sales and who received the money", () => {
     assert.equal(summary.paidNowCents, 1400);
     assert.equal(summary.creditCents, 600);
     assert.equal(summary.creditOutstandingCents, 500);
+    // A switch moves the split; the summary follows at once.
+    const plain = (await db.collection("inventorySales")
+        .where("businessId", "==", SB).where("creditCents", "==", 0).get())
+        .docs[0].id;
+    await x("switchInventorySalePayment", {saleId: plain,
+      clientRequestId: requestId(), to: "credit", credit: {paidNowCents: 0,
+        customerName: "Moussa", collectorStaffId: SOWN}}, SOWN);
+    const after = await x("getInventorySummary", {range: "today",
+      timeZone: "America/New_York"}, SOWN);
+    assert.deepEqual([after.revenueCents, after.paidNowCents,
+      after.creditCents, after.creditOutstandingCents],
+    [2000, 400, 1600, 1500]);
   });
 });

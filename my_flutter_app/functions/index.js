@@ -15705,6 +15705,32 @@ function lotFieldDiff(before, after) {
 }
 
 /**
+ * The body of one `lotLedgerAudit` row. Shared by writeLotLedgerAudit and by
+ * the callables that write their History row inside their own transaction
+ * (so the row and the change it describes land together, or neither does).
+ *
+ * @param {object} params businessId, entityType, entityId, action, byStaffId,
+ *   summary, changes, acknowledged.
+ * @return {object} The row.
+ */
+function lotLedgerAuditRecord(params) {
+  return {
+    businessId: String(params.businessId || ""),
+    entityType: String(params.entityType || ""),
+    entityId: String(params.entityId || ""),
+    action: String(params.action || ""),
+    byStaffId: String(params.byStaffId || ""),
+    summary: String(params.summary || ""),
+    changes: Array.isArray(params.changes) ? params.changes : [],
+    // Routine events (a sale at the counter) are history, not something
+    // another person needs to look at, so they may be written already
+    // acknowledged and stay out of the "Needs attention" feed.
+    acknowledged: params.acknowledged === true,
+    at: FirestoreFieldValue.serverTimestamp(),
+  };
+}
+
+/**
  * Record a ledger change so other staff can see it (per-entry history) and so
  * it surfaces in the business's "Needs attention" feed. Best-effort: an audit
  * failure must never fail the edit itself.
@@ -15716,20 +15742,7 @@ function lotFieldDiff(before, after) {
 async function writeLotLedgerAudit(params) {
   try {
     const db = admin.firestore();
-    await db.collection("lotLedgerAudit").add({
-      businessId: String(params.businessId || ""),
-      entityType: String(params.entityType || ""),
-      entityId: String(params.entityId || ""),
-      action: String(params.action || ""),
-      byStaffId: String(params.byStaffId || ""),
-      summary: String(params.summary || ""),
-      changes: Array.isArray(params.changes) ? params.changes : [],
-      // Routine events (a sale at the counter) are history, not something
-      // another person needs to look at, so they may be written already
-      // acknowledged and stay out of the "Needs attention" feed.
-      acknowledged: params.acknowledged === true,
-      at: FirestoreFieldValue.serverTimestamp(),
-    });
+    await db.collection("lotLedgerAudit").add(lotLedgerAuditRecord(params));
   } catch (error) {
     logger.warn("Lot ledger audit not written", {
       entityId: params?.entityId || "", error: String(error?.message || error),
@@ -22225,6 +22238,106 @@ exports.setInventoryCreditCollector = onCall(
       return {success: true, saleId, collectorStaffId: change.collectorStaffId,
         dueDate: done.dueDate, changed: done.collectorChanged ||
           done.dueChanged};
+    },
+);
+
+// Switching a recorded sale between paid and credit (v6, docs/INVENTORY.md).
+// Whoever may void the sale may switch it (the same gate and store rule).
+// One transaction reads the sale (and, to go to paid, its credit payments),
+// refuses a voided sale, a sale already in that state or one with money
+// collected on its credit, then writes the new money fields, appends the
+// switch to the sale and writes its History row. The client's retry key is
+// kept on the sale: the same key answers the same switch, never a second.
+// Low traffic (a correction now and then): one instance, like the transfers.
+const INVENTORY_SALE_SWITCH_MAX_INSTANCES = 1;
+
+exports.switchInventorySalePayment = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public",
+      maxInstances: INVENTORY_SALE_SWITCH_MAX_INSTANCES},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const {businessId} = inventoryIds(data);
+      const {db, access} = await requireInventoryContext(uid, businessId);
+      const saleId = inventoryDocId(data.saleId);
+      if (!saleId) throw inventoryRefusal("sale_not_found");
+      const requestId = inventory.cleanClientRequestId(data.clientRequestId);
+      if (!requestId) throw inventoryRefusal("client_request_id_invalid");
+      const saleRef = db.collection("inventorySales").doc(saleId);
+      // The fields are checked against the sale's total (which a switch
+      // never changes) before the transaction, and the people they name are
+      // read there too - unless this key already switched it: a retry is
+      // answered as stored, never refused for a rule that bites later.
+      const pre = await saleRef.get();
+      const preSale = pre.exists ? pre.data() || {} : null;
+      if (!preSale || String(preSale.businessId) !== businessId) {
+        throw inventoryRefusal("sale_not_found");
+      }
+      let input = null;
+      let receivedByStaffId = "";
+      let collector = null;
+      if (!inventory.saleSwitchEntry(preSale, requestId)) {
+        input = inventory.cleanSaleSwitchInput(data, preSale,
+            inventory.todayKeyIn(new Date()));
+        if (input.errors.length > 0) throw inventoryRefusal(input.errors);
+        if (input.to === "credit") {
+          collector = await businessPersonProfile(db, businessId,
+              input.credit.collectorStaffId);
+          if (!collector) throw inventoryRefusal("collector_invalid");
+        } else {
+          receivedByStaffId = await inventoryReceiverOf(db, businessId, uid,
+              data.receivedByStaffId);
+        }
+      }
+      const done = await db.runTransaction(async (tx) => {
+        const sale = await inventorySaleIn(tx, saleRef, businessId);
+        const sctx = await requireInventorySaleStoreIn(tx, db, businessId,
+            sale, access);
+        const multi = inventory.isMultiStore(sctx.stores);
+        const earlier = inventory.saleSwitchEntry(sale, requestId);
+        if (earlier) return {replayed: true, entry: earlier, multi};
+        // Switches are never removed, so a key seen on the first read is
+        // still there; this only guards the input being unchecked.
+        if (!input) throw inventoryRefusal("client_request_id_invalid");
+        let live = 0;
+        if (input.to === "paid") {
+          const payments = await tx.get(
+              inventoryCreditPaymentsOf(db, businessId, saleId));
+          live = payments.docs.filter((d) => d.data()?.reverted !== true)
+              .length;
+        }
+        const state = inventory.saleSwitchRefusal(sale, input.to, live);
+        if (state) throw inventoryRefusal(state);
+        const plan = inventory.planSaleSwitch({sale, to: input.to,
+          credit: input.credit, paymentMethod: input.paymentMethod,
+          receivedByStaffId, byStaffId: uid, requestId});
+        const entry = {...plan.entry, at: FirestoreTimestamp.now()};
+        tx.update(saleRef, {
+          ...plan.patch,
+          creditUpdatedAt: FirestoreFieldValue.serverTimestamp(),
+          paymentSwitches: [...inventory.saleSwitches(sale), entry],
+        });
+        tx.set(db.collection("lotLedgerAudit").doc(
+            inventory.saleSwitchAuditId(saleId, requestId)),
+        lotLedgerAuditRecord({
+          businessId, entityType: "inventory_sale", entityId: saleId,
+          action: "payment_switched", byStaffId: uid,
+          summary: inventory.saleSwitchSummary(entry),
+          changes: [], acknowledged: true,
+        }));
+        return {replayed: false, entry, multi,
+          sale: {...sale, ...plan.patch}};
+      });
+      // The collector hears about it exactly as for a sale rung up on
+      // credit. Only once committed, and a failed push never fails it.
+      if (!done.replayed && done.entry.to === "credit") {
+        await notifyInventoryCredit(db, {
+          saleId, actorUid: uid, kind: "assigned", multiStore: done.multi,
+          sale: done.sale,
+          users: [{id: done.entry.collectorStaffId, ...collector}]});
+      }
+      return {success: true, saleId, replayed: done.replayed,
+        ...inventory.saleSwitchAnswer(done.entry)};
     },
 );
 

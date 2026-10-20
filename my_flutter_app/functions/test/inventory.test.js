@@ -2053,3 +2053,229 @@ describe("inventory: credit sources", () => {
         /credit_has_payments/);
   });
 });
+
+describe("inventory: switching a sale between paid and credit", () => {
+  const paidSale = (extra = {}) => ({
+    businessId: "b", totalCents: 4000, paymentMethod: "zelle",
+    soldByStaffId: "seller", receivedByStaffId: "taker", paidNowCents: 4000,
+    creditCents: 0, creditPaidCents: 0, creditStatus: "none", voided: false,
+    ...extra,
+  });
+  const creditSale = (extra = {}) => paidSale({paidNowCents: 1000,
+    creditCents: 3000, creditStatus: "open", credit: {customerName: "Fatou",
+      customerPhone: "", collectorStaffId: "col", dueDate: ""}, ...extra});
+  const creditIn = (extra = {}) => ({paidNowCents: 1000,
+    customerName: "Fatou Bah", customerPhone: "+1", collectorStaffId: "col",
+    dueDate: "", ...extra});
+
+  it("reads the target and what a sale is now", () => {
+    assert.equal(inv.saleSwitchTarget("credit"), "credit");
+    assert.equal(inv.saleSwitchTarget(" paid "), "paid");
+    for (const bad of ["", "normal", null, 1, {}]) {
+      assert.equal(inv.saleSwitchTarget(bad), "", String(bad));
+    }
+    assert.equal(inv.saleSwitchKind(paidSale()), "paid");
+    // A sale from before v4 has no money fields: paid.
+    assert.equal(inv.saleSwitchKind({totalCents: 500}), "paid");
+    assert.equal(inv.saleSwitchKind(creditSale()), "credit");
+    // Paid off since is still a credit sale.
+    assert.equal(inv.saleSwitchKind(creditSale({creditPaidCents: 3000,
+      creditStatus: "paid"})), "credit");
+  });
+
+  it("checks the credit fields like a new credit sale, against the total",
+      () => {
+        const ok = inv.cleanSaleSwitchInput({to: "credit",
+          credit: creditIn()}, paidSale(), "2026-10-20");
+        assert.deepEqual(ok.errors, []);
+        assert.deepEqual(ok.credit, {paidNowCents: 1000, creditCents: 3000,
+          customerName: "Fatou Bah", customerPhone: "",
+          collectorStaffId: "col", dueDate: ""});
+        const cases = [
+          [{paidNowCents: 4000}, "paid_now_invalid"],
+          [{paidNowCents: 5000}, "paid_now_invalid"],
+          [{paidNowCents: -1}, "paid_now_invalid"],
+          [{customerName: " "}, "credit_customer_required"],
+          [{customerPhone: "207 555 0100"}, "customer_phone_invalid"],
+          [{collectorStaffId: ""}, "collector_invalid"],
+          [{dueDate: "2026-10-19"}, "due_date_invalid"],
+        ];
+        for (const [bad, code] of cases) {
+          assert.deepEqual(inv.cleanSaleSwitchInput({to: "credit",
+            credit: creditIn(bad)}, paidSale(), "2026-10-20").errors,
+          [code], JSON.stringify(bad));
+        }
+        // Nothing sent: the customer and the collector are missing.
+        assert.deepEqual(inv.cleanSaleSwitchInput({to: "credit"},
+            paidSale()).errors.sort(),
+        ["collector_invalid", "credit_customer_required", "paid_now_invalid"]);
+        assert.deepEqual(inv.cleanSaleSwitchInput({to: "credit",
+          credit: "x"}, paidSale()).errors, ["credit_invalid"]);
+        // Paid at the time defaults to nothing only when the client says 0.
+        assert.equal(inv.cleanSaleSwitchInput({to: "credit",
+          credit: creditIn({paidNowCents: 0})}, paidSale()).credit
+            .creditCents, 4000);
+      });
+
+  it("needs a known payment method to go to paid", () => {
+    assert.deepEqual(inv.cleanSaleSwitchInput({to: "paid",
+      paymentMethod: "cash"}, creditSale()).errors, []);
+    for (const bad of ["", "bitcoin", undefined]) {
+      assert.deepEqual(inv.cleanSaleSwitchInput({to: "paid",
+        paymentMethod: bad}, creditSale()).errors,
+      ["payment_method_invalid"], String(bad));
+    }
+    assert.deepEqual(inv.cleanSaleSwitchInput({to: "x"}, paidSale()).errors,
+        ["switch_target_invalid"]);
+  });
+
+  it("refuses a voided sale, a sale already there, collected money and " +
+      "too many switches", () => {
+    assert.equal(inv.saleSwitchRefusal(paidSale({voided: true}), "credit"),
+        "sale_voided");
+    assert.equal(inv.saleSwitchRefusal(creditSale({voided: true}), "paid"),
+        "sale_voided");
+    assert.equal(inv.saleSwitchRefusal(creditSale(), "credit"),
+        "sale_already_credit");
+    assert.equal(inv.saleSwitchRefusal(paidSale(), "paid"),
+        "sale_already_paid");
+    assert.equal(inv.saleSwitchRefusal(creditSale(), "paid", 1),
+        "credit_payments_recorded");
+    assert.equal(inv.saleSwitchRefusal(creditSale({creditPaidCents: 500}),
+        "paid", 0), "credit_payments_recorded");
+    // Reverted payments only: nothing was collected, it may go.
+    assert.equal(inv.saleSwitchRefusal(creditSale(), "paid", 0), null);
+    assert.equal(inv.saleSwitchRefusal(paidSale(), "credit"), null);
+    const many = Array.from({length: inv.MAX_SALE_SWITCHES},
+        (_, i) => ({requestId: `r-${i}-xxxxxx`}));
+    assert.equal(inv.saleSwitchRefusal(paidSale({paymentSwitches: many}),
+        "credit"), "too_many_switches");
+    for (const code of ["sale_already_credit", "sale_already_paid",
+      "credit_payments_recorded", "too_many_switches"]) {
+      assert.equal(inv.refusalKind(code), "failed-precondition", code);
+      assert.ok(inv.INVENTORY_MESSAGES[code], code);
+    }
+    assert.equal(inv.refusalKind("switch_target_invalid"), "invalid-argument");
+    assert.match(inv.INVENTORY_MESSAGES.credit_payments_recorded,
+        /Record a payment/);
+  });
+
+  it("puts a paid sale on credit exactly like a credit sale rung up so",
+      () => {
+        const credit = inv.cleanSaleSwitchInput({to: "credit",
+          credit: creditIn({dueDate: "2099-01-01"})}, paidSale()).credit;
+        const {patch, entry} = inv.planSaleSwitch({sale: paidSale(),
+          to: "credit", credit, byStaffId: "boss", requestId: "req-12345678"});
+        const fresh = inv.saleMoneyFields({totalCents: 4000, credit,
+          receivedByStaffId: "taker"});
+        // The paid part keeps the method and who received it.
+        assert.deepEqual(patch, {...fresh, paymentMethod: "zelle",
+          creditUpdatedByStaffId: "boss"});
+        assert.equal(patch.creditStatus, "open");
+        assert.equal(patch.lastCreditReminderAt, null);
+        assert.deepEqual(entry, {requestId: "req-12345678", from: "paid",
+          to: "credit", byStaffId: "boss", totalCents: 4000,
+          fromPaidNowCents: 4000, fromCreditCents: 0, toPaidNowCents: 1000,
+          toCreditCents: 3000, fromPaymentMethod: "zelle",
+          toPaymentMethod: "zelle", fromReceivedByStaffId: "taker",
+          toReceivedByStaffId: "taker", customerName: "Fatou Bah",
+          collectorStaffId: "col"});
+        assert.equal(inv.saleSwitchSummary(entry), "Switched to credit: " +
+          "$10.00 paid at the sale (zelle), $30.00 owed by Fatou Bah");
+        assert.deepEqual(inv.saleSwitchAnswer(entry), {to: "credit",
+          paidNowCents: 1000, creditCents: 3000, creditStatus: "open",
+          paymentMethod: "zelle", receivedByStaffId: "taker"});
+        // The summary follows: revenue unchanged, split moved to credit.
+        const after = inv.summarizeSales([{...paidSale(), ...patch,
+          lines: [{itemId: "i", quantity: 1, soldPriceCents: 4000}]}]);
+        assert.deepEqual([after.revenueCents, after.paidNowCents,
+          after.creditCents, after.creditOutstandingCents],
+        [4000, 1000, 3000, 3000]);
+      });
+
+  it("takes no method when nothing was paid at the time", () => {
+    const credit = inv.cleanSaleSwitchInput({to: "credit",
+      credit: creditIn({paidNowCents: 0})}, paidSale()).credit;
+    const {patch, entry} = inv.planSaleSwitch({sale: paidSale(),
+      to: "credit", credit, byStaffId: "boss", requestId: "req-12345678"});
+    assert.equal(patch.paymentMethod, "");
+    assert.equal(patch.paidNowCents, 0);
+    assert.equal(entry.fromPaymentMethod, "zelle");
+    assert.equal(inv.saleSwitchSummary(entry),
+        "Switched to credit: $40.00 owed by Fatou Bah");
+    // An old sale (no receivedBy): the seller took the money.
+    const old = inv.planSaleSwitch({sale: {totalCents: 4000,
+      paymentMethod: "cash", soldByStaffId: "seller"}, to: "credit", credit,
+    byStaffId: "boss", requestId: "req-12345678"});
+    assert.equal(old.patch.receivedByStaffId, "seller");
+    assert.equal(old.entry.fromPaidNowCents, 4000);
+  });
+
+  it("makes a credit sale paid in full at the time, keeping its credit " +
+      "for the history", () => {
+    const {patch, entry} = inv.planSaleSwitch({sale: creditSale(),
+      to: "paid", paymentMethod: "cash", receivedByStaffId: "boss",
+      byStaffId: "boss", requestId: "req-12345678"});
+    assert.deepEqual(patch, {receivedByStaffId: "boss", creditPaidCents: 0,
+      paidNowCents: 4000, creditCents: 0, creditStatus: "none",
+      paymentMethod: "cash", lastCreditReminderAt: null,
+      creditUpdatedByStaffId: "boss"});
+    assert.equal("credit" in patch, false);
+    assert.deepEqual([entry.from, entry.to, entry.fromPaidNowCents,
+      entry.fromCreditCents, entry.toPaidNowCents, entry.toCreditCents,
+      entry.customerName, entry.collectorStaffId],
+    ["credit", "paid", 1000, 3000, 4000, 0, "Fatou", ""]);
+    assert.equal(inv.saleSwitchSummary(entry),
+        "Switched to paid: $40.00 paid at the sale (cash)");
+    assert.equal(inv.saleSwitchAnswer(entry).creditStatus, "none");
+    const sale = {...creditSale(), ...patch};
+    assert.equal(inv.saleSwitchKind(sale), "paid");
+    assert.equal(inv.creditStateRefusal(sale), "no_credit");
+    assert.equal(inv.shouldRemindCredit({...sale,
+      credit: {dueDate: "2020-01-01"}}, "2026-10-20", Date.now()), false);
+  });
+
+  it("finds a switch by its retry key and names its History row once", () => {
+    const sale = paidSale({paymentSwitches: [{requestId: "req-aaaaaaaa"},
+      null, "x"]});
+    assert.equal(inv.saleSwitches(sale).length, 1);
+    assert.ok(inv.saleSwitchEntry(sale, "req-aaaaaaaa"));
+    assert.equal(inv.saleSwitchEntry(sale, "req-bbbbbbbb"), null);
+    assert.equal(inv.saleSwitchEntry(sale, ""), null);
+    const id = inv.saleSwitchAuditId("s1", "req-aaaaaaaa");
+    assert.equal(id, inv.saleSwitchAuditId("s1", "req-aaaaaaaa"));
+    assert.notEqual(id, inv.saleSwitchAuditId("s2", "req-aaaaaaaa"));
+    assert.equal(id.length, 40);
+  });
+});
+
+describe("inventory: switch sources", () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "index.js"),
+      "utf8");
+  const fn = source.slice(
+      source.indexOf("exports.switchInventorySalePayment = "),
+      source.indexOf("\n);\n",
+          source.indexOf("exports.switchInventorySalePayment = ")));
+
+  it("is one low-instance callable gated like a void", () => {
+    assert.match(source,
+        /^const INVENTORY_SALE_SWITCH_MAX_INSTANCES = 1;$/m);
+    assert.match(fn, /invoker: "public"/);
+    assert.match(fn, /maxInstances: INVENTORY_SALE_SWITCH_MAX_INSTANCES/);
+    assert.match(fn, /requireInventoryContext\(uid, businessId\)/);
+    assert.match(fn, /requireInventorySaleStoreIn\(/);
+  });
+
+  it("reads, checks and writes in one transaction with its History row",
+      () => {
+        assert.match(fn, /runTransaction/);
+        const tx = fn.slice(fn.indexOf("runTransaction"));
+        assert.ok(tx.indexOf("saleSwitchEntry(") <
+          tx.indexOf("saleSwitchRefusal("));
+        assert.match(tx, /inventoryCreditPaymentsOf\(/);
+        assert.match(tx, /tx\.set\(db\.collection\("lotLedgerAudit"\)/);
+        assert.match(tx, /lotLedgerAuditRecord\(/);
+        assert.doesNotMatch(fn, /\.delete\(/);
+        assert.match(fn, /notifyInventoryCredit\(/);
+      });
+});

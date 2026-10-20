@@ -139,6 +139,15 @@ const INVENTORY_MESSAGES = Object.freeze({
     "those payments first.",
   payment_not_found: "That payment was not found.",
   payment_already_reverted: "That payment was already reverted.",
+  // Switching a recorded sale between paid and credit (v6).
+  switch_target_invalid: "Say whether the sale becomes a credit sale " +
+    "(credit) or a paid sale (paid).",
+  sale_already_credit: "That sale is already on credit.",
+  sale_already_paid: "That sale is already paid in full.",
+  credit_payments_recorded: "Money was already collected on this credit, " +
+    "so it cannot become a paid sale. Record a payment for what is still " +
+    "owed instead.",
+  too_many_switches: "That sale was switched too many times.",
   // Store transfers (v5).
   transfer_not_found: "That transfer was not found.",
   transfer_not_draft: "That transfer was already sent, so it can no " +
@@ -172,7 +181,8 @@ const PRECONDITION_CODES = Object.freeze(
     ["service_disabled", "item_archived", "sale_voided", "store_archived",
       "store_has_stock", "last_store_active", "home_store_required",
       "insufficient_stock", "no_credit", "credit_has_payments",
-      "payment_already_reverted", "transfer_not_draft",
+      "payment_already_reverted", "sale_already_credit", "sale_already_paid",
+      "credit_payments_recorded", "too_many_switches", "transfer_not_draft",
       "transfer_not_in_transit", "line_not_disputed", "line_already_resolved",
       "store_has_transfers", "item_in_transfer"]);
 const PERMISSION_CODES = Object.freeze(["store_not_allowed", "owner_only"]);
@@ -2305,7 +2315,256 @@ function shouldRemindCredit(sale, todayKey, nowMs) {
     nowMs - last >= CREDIT_REMINDER_EVERY_MS - CREDIT_REMINDER_SLACK_MS;
 }
 
+// ---------------------------------------------------------------------------
+// Switching a recorded sale between paid and credit (v6, docs/INVENTORY.md).
+//
+// A sale rung up as paid can be put on credit afterwards (the customer did
+// not really pay it all), and a credit sale with nothing collected on it can
+// become a paid sale ("it was never credit"). The goods, the lines and the
+// total never change; only the money fields do, exactly as if the sale had
+// been rung up that way. Every switch is appended to the sale's
+// `paymentSwitches` (who, when, from, to, the amounts before and after), so
+// nothing is ever erased, and the client's retry key is kept there too: the
+// same key answers the same switch.
+// ---------------------------------------------------------------------------
+
+const SALE_SWITCH_TARGETS = Object.freeze(["credit", "paid"]);
+/** A sale keeps at most this many switches (a guard on the array's size). */
+const MAX_SALE_SWITCHES = 20;
+
+/**
+ * @param {*} value What the client asked for.
+ * @return {string} "credit", "paid", or "" when it is neither.
+ */
+function saleSwitchTarget(value) {
+  const to = text(value, 10);
+  return SALE_SWITCH_TARGETS.includes(to) ? to : "";
+}
+
+/**
+ * @param {object} sale A stored sale.
+ * @return {"credit"|"paid"} What it is now: on credit when part of it was
+ *   left owed (open or paid off since), else paid.
+ */
+function saleSwitchKind(sale) {
+  return creditStanding(sale).creditCents > 0 ? "credit" : "paid";
+}
+
+/**
+ * @param {object} sale A stored sale.
+ * @return {object[]} Its switches, oldest first ([] for none).
+ */
+function saleSwitches(sale) {
+  return (Array.isArray(sale?.paymentSwitches) ? sale.paymentSwitches : [])
+      .filter((entry) => entry && typeof entry === "object");
+}
+
+/**
+ * @param {object} sale A stored sale.
+ * @param {string} requestId A clean retry key.
+ * @return {?object} The switch already made with that key, or null.
+ */
+function saleSwitchEntry(sale, requestId) {
+  if (!requestId) return null;
+  return saleSwitches(sale).find((entry) =>
+    text(entry.requestId, 101) === requestId) || null;
+}
+
+/**
+ * The fields a switch takes, checked against the sale's total (which a
+ * switch never changes). Whether the collector or the receiver really is a
+ * person of the business is the caller's (it needs a read).
+ *
+ * @param {object} data The callable's data: `to`, and `credit` (the same
+ *   object recordInventorySale takes) to go to credit, or `paymentMethod`
+ *   to go to paid.
+ * @param {object} sale The stored sale.
+ * @param {string} [todayKey] Today, for a due date.
+ * @return {{errors: string[], to: string, credit: ?object,
+ *   paymentMethod: string}} The cleaned input.
+ */
+function cleanSaleSwitchInput(data, sale, todayKey = "") {
+  const row = data && typeof data === "object" ? data : {};
+  const to = saleSwitchTarget(row.to);
+  if (!to) {
+    return {errors: ["switch_target_invalid"], to, credit: null,
+      paymentMethod: ""};
+  }
+  const totalCents = Math.max(0, Math.round(Number(sale?.totalCents) || 0));
+  if (to === "credit") {
+    // A missing credit object is the same refusal as a bad one: every
+    // credit needs its customer and collector.
+    const raw = row.credit === undefined || row.credit === null ? {} :
+      row.credit;
+    const credit = cleanCreditInput(raw, totalCents, todayKey);
+    return {errors: credit.errors, to, credit: credit.credit,
+      paymentMethod: ""};
+  }
+  const paymentMethod = text(row.paymentMethod, 40);
+  return {
+    errors: INVENTORY_PAYMENT_METHODS.includes(paymentMethod) ? [] :
+      ["payment_method_invalid"],
+    to, credit: null, paymentMethod,
+  };
+}
+
+/**
+ * Why this sale cannot be switched to `to` now (its state, read in the
+ * switch's transaction), or null.
+ *
+ * @param {object} sale The stored sale.
+ * @param {string} to "credit" or "paid".
+ * @param {number} livePayments How many of its credit payments stand (not
+ *   reverted).
+ * @return {?string} The refusal code.
+ */
+function saleSwitchRefusal(sale, to, livePayments = 0) {
+  if (sale?.voided === true) return "sale_voided";
+  const now = saleSwitchKind(sale);
+  if (to === "credit" && now === "credit") return "sale_already_credit";
+  if (to === "paid" && now === "paid") return "sale_already_paid";
+  // "It was never credit" only while nothing was collected on it; once
+  // money came in, the rest is collected with Record payment.
+  if (to === "paid" && (livePayments > 0 ||
+      creditStanding(sale).creditPaidCents > 0)) {
+    return "credit_payments_recorded";
+  }
+  if (saleSwitches(sale).length >= MAX_SALE_SWITCHES) {
+    return "too_many_switches";
+  }
+  return null;
+}
+
+/**
+ * What a switch writes on the sale, and the history entry it appends.
+ *
+ * To credit: the money fields a credit sale rung up that way stores
+ * (saleMoneyFields); the part paid at the time keeps the sale's payment
+ * method and who received it ("" method when nothing was paid then, like a
+ * sale entirely on credit). To paid: the whole total was paid at the time,
+ * by `paymentMethod`, received by `receivedByStaffId`; the old credit block
+ * stays for the history (creditCents 0 makes it a normal sale everywhere).
+ *
+ * @param {object} args {sale, to, credit (cleanCreditInput's), paymentMethod,
+ *   receivedByStaffId (to paid), byStaffId, requestId}.
+ * @return {{patch: object, entry: object}} The sale's new fields (the caller
+ *   adds the switches array and the times) and the entry (the caller adds
+ *   `at`).
+ */
+function planSaleSwitch({sale, to, credit = null, paymentMethod = "",
+  receivedByStaffId = "", byStaffId, requestId}) {
+  const totalCents = Math.max(0, Math.round(Number(sale?.totalCents) || 0));
+  const before = creditStanding(sale);
+  const fromPaidNow = Number.isInteger(sale?.paidNowCents) ?
+    Math.max(0, sale.paidNowCents) : Math.max(0, totalCents -
+      before.creditCents);
+  const fromMethod = text(sale?.paymentMethod, 40);
+  const fromReceiver = text(sale?.receivedByStaffId, MAX_STAFF_ID) ||
+    text(sale?.soldByStaffId, MAX_STAFF_ID);
+  let patch;
+  if (to === "credit") {
+    const money = saleMoneyFields({totalCents, credit,
+      receivedByStaffId: fromReceiver});
+    patch = {...money,
+      paymentMethod: money.paidNowCents === 0 ? "" : fromMethod,
+      creditUpdatedByStaffId: text(byStaffId, MAX_STAFF_ID)};
+  } else {
+    const money = saleMoneyFields({totalCents, credit: null,
+      receivedByStaffId});
+    patch = {...money, paymentMethod: text(paymentMethod, 40),
+      lastCreditReminderAt: null,
+      creditUpdatedByStaffId: text(byStaffId, MAX_STAFF_ID)};
+  }
+  const entry = {
+    requestId: text(requestId, 101),
+    from: saleSwitchKind(sale),
+    to,
+    byStaffId: text(byStaffId, MAX_STAFF_ID),
+    totalCents,
+    fromPaidNowCents: fromPaidNow,
+    fromCreditCents: before.creditCents,
+    toPaidNowCents: patch.paidNowCents,
+    toCreditCents: patch.creditCents,
+    fromPaymentMethod: fromMethod,
+    toPaymentMethod: patch.paymentMethod,
+    fromReceivedByStaffId: fromReceiver,
+    toReceivedByStaffId: patch.receivedByStaffId,
+    // Who owed it: the new credit's customer, or the one it no longer is.
+    customerName: text(to === "credit" ? credit?.customerName :
+      sale?.credit?.customerName, MAX_CUSTOMER_NAME),
+    collectorStaffId: to === "credit" ?
+      text(credit?.collectorStaffId, MAX_STAFF_ID) : "",
+  };
+  return {patch, entry};
+}
+
+/**
+ * What the callable answers for a switch (made now or replayed).
+ *
+ * @param {object} entry A switch entry.
+ * @return {object} {to, paidNowCents, creditCents, creditStatus,
+ *   paymentMethod, receivedByStaffId}.
+ */
+function saleSwitchAnswer(entry) {
+  const creditCents = Math.max(0, Number(entry?.toCreditCents) || 0);
+  return {
+    to: text(entry?.to, 10),
+    paidNowCents: Math.max(0, Number(entry?.toPaidNowCents) || 0),
+    creditCents,
+    creditStatus: creditCents > 0 ? CREDIT_STATUS.OPEN : CREDIT_STATUS.NONE,
+    paymentMethod: text(entry?.toPaymentMethod, 40),
+    receivedByStaffId: text(entry?.toReceivedByStaffId, MAX_STAFF_ID),
+  };
+}
+
+/**
+ * The History sentence of a switch (English; the console translates its
+ * shape in audit-summaries.ts).
+ *
+ * @param {object} entry A switch entry.
+ * @return {string} e.g. "Switched to credit: $10.00 paid at the sale
+ *   (cash), $30.00 owed by Fatou Bah".
+ */
+function saleSwitchSummary(entry) {
+  const name = text(entry?.customerName, MAX_CUSTOMER_NAME);
+  if (entry?.to === "credit") {
+    const paid = Number(entry.toPaidNowCents) || 0;
+    return "Switched to credit: " + (paid > 0 ?
+      `${moneyText(paid)} paid at the sale (${text(entry.toPaymentMethod,
+          40)}), ` : "") +
+      `${moneyText(entry.toCreditCents)} owed` + (name ? ` by ${name}` : "");
+  }
+  return `Switched to paid: ${moneyText(entry?.totalCents)} paid at the ` +
+    `sale (${text(entry?.toPaymentMethod, 40)})`;
+}
+
+/**
+ * The id of a switch's History row: one per sale and retry key, so the row
+ * is written in the switch's own transaction and a retry cannot write two.
+ *
+ * @param {string} saleId The sale.
+ * @param {string} requestId A clean retry key.
+ * @return {string} A 40-character id.
+ */
+function saleSwitchAuditId(saleId, requestId) {
+  return "sw" + crypto.createHash("sha256")
+      .update(`switch\u0000${saleId}\u0000${requestId}`)
+      .digest("hex").slice(0, 38);
+}
+
 module.exports = {
+  SALE_SWITCH_TARGETS,
+  MAX_SALE_SWITCHES,
+  saleSwitchTarget,
+  saleSwitchKind,
+  saleSwitches,
+  saleSwitchEntry,
+  cleanSaleSwitchInput,
+  saleSwitchRefusal,
+  planSaleSwitch,
+  saleSwitchAnswer,
+  saleSwitchSummary,
+  saleSwitchAuditId,
   CREDIT_STATUS,
   CREDIT_NOTIFICATION_PREFERENCE,
   CREDIT_REMINDER_EVERY_MS,
