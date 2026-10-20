@@ -139,12 +139,13 @@ async function parkedCar(data) {
   return id;
 }
 
-async function runParkedTrigger(id) {
-  const snap = await db.collection("parkedCars").doc(id).get();
+async function runParkedTrigger(id, before = null, snapshot = null) {
+  const snap = snapshot || await db.collection("parkedCars").doc(id).get();
   await functions.syncParkedCarOccupancy.run({params: {parkedCarId: id},
-    data: {before: {exists: false, data: () => null},
-      after: {exists: true, data: () => snap.data(), ref: snap.ref,
-        updateTime: snap.updateTime}}});
+    data: {before: before ? {exists: true, data: () => before} :
+      {exists: false, data: () => null},
+    after: {exists: true, data: () => snap.data(), ref: snap.ref,
+      updateTime: snap.updateTime}}});
 }
 
 async function containerLine(data) {
@@ -167,7 +168,8 @@ async function runLineTrigger(id, before) {
     data: {
       before: before ? {exists: true, data: () => before} :
         {exists: false, data: () => null},
-      after: {exists: true, data: () => snap.data()}}});
+      after: {exists: true, data: () => snap.data(),
+        updateTime: snap.updateTime}}});
 }
 
 const record = async (collection, id) =>
@@ -465,6 +467,16 @@ describe("SMS sign-in and merging", () => {
               firebase: {sign_in_provider: "password"}}});
         assert.ok(mine.items.some((item) =>
           item.key === `containerLines/${lineId}`));
+        // The number's claim follows it: a later shipment reuses the email
+        // account and makes nothing.
+        const claim = (await db.collection("phoneAccountClaims").doc(phone)
+            .get()).data();
+        assert.equal(claim.uid, email.uid);
+        assert.equal(claim.profileReady, true);
+        await parkedCar({customerPhone: phone});
+        assert.deepEqual((await admin.auth().listUsers(1000)).users
+            .filter((user) => user.phoneNumber === phone)
+            .map((user) => user.uid), [email.uid]);
       });
 
   it("merges by SMS proof from a secondary sign-in", async () => {
@@ -877,5 +889,196 @@ describe("cost, role and proof guards", () => {
       if (saved) await ref.set(saved);
       else await ref.delete();
     }
+  });
+});
+
+// 2026-10 production incident: one parked car, two trigger runs at the same
+// moment, two Auth users and two profiles for one number. Auth's phone
+// uniqueness is not a lock; phoneAccountClaims/{e164} is.
+describe("one phone, one account, under concurrency", () => {
+  const {createPhoneAccounts} = require("../phone_accounts");
+  const quiet = {warn() {}, error() {}, info() {}};
+  const profilesWith = async (phone) => (await db.collection("users")
+      .where("phone", "==", phone).get()).docs;
+
+  /**
+   * Auth as production behaved: createUser never refuses a number another
+   * user has, and the phone lookup sees a new user only after a delay.
+   *
+   * @return {object} {auth, users}.
+   */
+  function racyAuth() {
+    const users = [];
+    let next = 0;
+    const visible = (user) => Date.now() - user.createdMs > 300;
+    const notFound = () => Object.assign(new Error("no user"),
+        {code: "auth/user-not-found"});
+    return {users, auth: {
+      async getUserByPhoneNumber(phone) {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        const user = users.find((row) => row.phoneNumber === phone &&
+          visible(row));
+        if (!user) throw notFound();
+        return user;
+      },
+      async getUser(uid) {
+        const user = users.find((row) => row.uid === uid);
+        if (!user) throw notFound();
+        return user;
+      },
+      async createUser({phoneNumber, displayName}) {
+        await new Promise((resolve) => setTimeout(resolve, 60));
+        const user = {uid: `racy-${Date.now()}-${++next}`, phoneNumber,
+          displayName, providerData: [{providerId: "phone"}],
+          metadata: {}, createdMs: Date.now()};
+        users.push(user);
+        return user;
+      },
+    }};
+  }
+
+  const accountsWith = (auth) => createPhoneAccounts({db: () => db,
+    auth: () => auth, FieldValue: admin.firestore.FieldValue,
+    Timestamp: admin.firestore.Timestamp, logger: quiet,
+    countries: require("../country_catalog").ALL_COUNTRIES,
+    defaultNotificationPreferences: () => ({})});
+
+  it("N concurrent ensurePhoneAccount calls make one Auth user and one " +
+      "profile, even when Auth would accept duplicates", async () => {
+    const {auth, users} = racyAuth();
+    const accounts = accountsWith(auth);
+    const phone = freshUs();
+    const results = await Promise.all(Array.from({length: 8}, (_, i) =>
+      accounts.ensurePhoneAccount({e164: phone, displayName: "Awa",
+        source: {collection: "parkedCars", recordId: `race-${i}`,
+          field: "customerPhone"}})));
+    assert.equal(users.filter((u) => u.phoneNumber === phone).length, 1);
+    assert.deepEqual(results.map((r) => r.status).sort(),
+        ["created", ...Array(7).fill("reused")]);
+    assert.equal(new Set(results.map((r) => r.uid)).size, 1);
+    const profiles = await profilesWith(phone);
+    assert.equal(profiles.length, 1);
+    assert.equal(profiles[0].id, users[0].uid);
+    const claim = (await db.collection("phoneAccountClaims").doc(phone)
+        .get()).data();
+    assert.equal(claim.uid, users[0].uid);
+    assert.equal(claim.profileReady, true);
+    // Later records read the claim and stop: no Auth call at all.
+    const lookups = users.length;
+    assert.deepEqual(await accounts.ensurePhoneAccount({e164: phone}),
+        {status: "reused", uid: users[0].uid});
+    assert.equal(users.length, lookups);
+  });
+
+  it("N concurrent syncRecordPhones on records with the same new number " +
+      "stamp them all on one account", async () => {
+    const {auth, users} = racyAuth();
+    const accounts = accountsWith(auth);
+    const phone = freshUs();
+    const ids = [];
+    for (let i = 0; i < 4; i += 1) {
+      const id = nextId("race");
+      await db.collection("parkedCars").doc(id).set({businessId: US_BIZ,
+        customerPhone: phone, customerName: "Awa",
+        createdAt: admin.firestore.Timestamp.now()});
+      ids.push(id);
+    }
+    // Each record twice at once: the trigger and its own re-fire.
+    await Promise.all([...ids, ...ids].map((id) =>
+      accounts.syncRecordPhones("parkedCars", id)));
+    assert.equal(users.filter((u) => u.phoneNumber === phone).length, 1);
+    assert.equal((await profilesWith(phone)).length, 1);
+    for (const id of ids) {
+      assert.equal((await record("parkedCars", id)).customerPhoneE164, phone);
+    }
+  });
+
+  it("two runs of the parked-car trigger at the same moment (real Auth) " +
+      "make one account, in one write", async () => {
+    const phone = freshUs();
+    const id = nextId("pk2");
+    const ref = db.collection("parkedCars").doc(id);
+    await ref.set({businessId: US_BIZ, status: "parked",
+      customerPhone: phone, customerName: "Binta",
+      parkingDate: admin.firestore.Timestamp.now(),
+      createdAt: admin.firestore.Timestamp.now()});
+    const snap = await ref.get();
+    await Promise.all([runParkedTrigger(id, null, snap),
+      runParkedTrigger(id, null, snap), runParkedTrigger(id, null, snap)]);
+    assert.equal((await admin.auth().listUsers(1000)).users
+        .filter((user) => user.phoneNumber === phone).length, 1);
+    assert.equal((await profilesWith(phone)).length, 1);
+    const stamped = await ref.get();
+    assert.equal(stamped.data().customerPhoneE164, phone);
+    assert.equal(typeof stamped.data().occupancyEndMs, "number",
+        "occupancy and phones in the same write");
+    // That write re-fires the trigger: nothing left to write.
+    await runParkedTrigger(id, snap.data());
+    assert.equal((await ref.get()).updateTime.isEqual(stamped.updateTime),
+        true);
+  });
+
+  it("a status burst on old, never-stamped records makes nothing; a number " +
+      "change does", async () => {
+    const phone = freshUs();
+    const id = nextId("old");
+    const ref = db.collection("parkedCars").doc(id);
+    const old = {businessId: US_BIZ, status: "parked", customerPhone: phone,
+      createdAt: admin.firestore.Timestamp.fromMillis(
+          Date.now() - 120 * 24 * 3600 * 1000)};
+    await ref.set(old);
+    await ref.update({status: "picked_up"});
+    await runParkedTrigger(id, old);
+    assert.equal(await userByPhone(phone), null);
+    assert.equal((await record("parkedCars", id)).customerPhoneE164,
+        undefined);
+    // The same for an update-only trigger (barrels).
+    const barrelId = nextId("oldb");
+    const barrelPhone = freshUs();
+    const barrel = {businessId: US_BIZ, status: "pending",
+      receiverPhone: barrelPhone, createdAt: old.createdAt};
+    await db.collection("barrelShipments").doc(barrelId).set(barrel);
+    await db.collection("barrelShipments").doc(barrelId)
+        .update({status: "shipped"});
+    const after = await db.collection("barrelShipments").doc(barrelId).get();
+    await functions.notifyBarrelShipmentStatus.run({
+      params: {shipmentId: barrelId},
+      data: {before: {exists: true, data: () => barrel},
+        after: {exists: true, data: () => after.data(),
+          updateTime: after.updateTime}}});
+    assert.equal(await userByPhone(barrelPhone), null);
+    assert.equal((await record("barrelShipments", barrelId))
+        .receiverPhoneE164, undefined);
+    // Staff change the parked car's number: at once.
+    const newPhone = freshUs();
+    const before = await record("parkedCars", id);
+    await ref.update({customerPhone: newPhone});
+    await runParkedTrigger(id, before);
+    assert.equal((await record("parkedCars", id)).customerPhoneE164,
+        newPhone);
+    assert.ok(await userByPhone(newPhone));
+  });
+
+  it("a new customer profile writes no custom claims; staff still get " +
+      "theirs", async () => {
+    const run = async (uid, data) => {
+      await db.collection("users").doc(uid).set(data);
+      const snap = await db.collection("users").doc(uid).get();
+      await functions.syncUserCustomClaims.run({params: {userId: uid},
+        data: {before: {exists: false, data: () => null},
+          after: {exists: true, data: () => snap.data()}}});
+    };
+    const customer = await admin.auth().createUser({phoneNumber: freshUs()});
+    // A marker: any write by the trigger would replace it.
+    await admin.auth().setCustomUserClaims(customer.uid, {marker: true});
+    await run(customer.uid, {role: "customer", accountOrigin: "shipment"});
+    assert.deepEqual((await admin.auth().getUser(customer.uid)).customClaims,
+        {marker: true});
+    const staff = await admin.auth().createUser({});
+    await run(staff.uid, {role: "staff", businessId: US_BIZ,
+      businessPermissions: ["containers"]});
+    assert.deepEqual((await admin.auth().getUser(staff.uid)).customClaims, {
+      role: "staff", businessId: US_BIZ, adminRole: null,
+      businessPermissions: ["containers"]});
   });
 });

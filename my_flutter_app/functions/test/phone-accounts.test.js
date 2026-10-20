@@ -28,6 +28,10 @@ const {
   recordPhonePatch,
   recordPhones,
   shipmentQueries,
+  RECENT_RECORD_MS,
+  createPhoneAccounts,
+  phoneEventNeedsSync,
+  stampIsCurrent,
 } = require("../phone_accounts");
 const {signInHints} = require("../guest_tracking");
 const {addressBucket} = require("../request_guard");
@@ -405,4 +409,117 @@ describe("merge proof", () => {
         false);
     assert.equal(proofAcceptable(null, expected), false);
   });
+});
+
+// 2026-10 incident: a burst of updates to old, unstamped records exhausted
+// the 20-vCPU quota. The trigger's first question must cost nothing.
+describe("trigger pre-checks (no reads)", () => {
+  const stampedLine = {customerPhone: "+1 202 555 0123",
+    customerPhoneE164: "+12025550123", receiverPhone: "+224622123456",
+    receiverPhoneE164: "+224622123456"};
+
+  it("a stamp that matches the raw numbers is current", () => {
+    assert.equal(stampIsCurrent("containerLines", stampedLine, null), true);
+    assert.equal(stampIsCurrent("containerLines", stampedLine, undefined),
+        true);
+    assert.equal(stampIsCurrent("packageRequests", {}, null), true);
+    assert.equal(stampIsCurrent("parkedCars", {customerPhone: ""}, null),
+        true);
+  });
+
+  it("a changed, missing or stale stamp is not", () => {
+    assert.equal(stampIsCurrent("containerLines",
+        {...stampedLine, receiverPhone: "+224622999999"}, null), false);
+    assert.equal(stampIsCurrent("parkedCars",
+        {customerPhone: "+12025550123"}, null), false);
+    assert.equal(stampIsCurrent("parkedCars",
+        {customerPhone: "", customerPhoneE164: "+12025550123"}, null), false);
+    assert.equal(stampIsCurrent("parkedCars", {customerPhone: "+12025550123",
+      customerPhoneE164: "+12025550123",
+      phoneCountryCodeMissing: ["customerPhone"]}, null), false);
+  });
+
+  it("judges a local number only when this write left it alone", () => {
+    const flagged = {customerPhone: "622 12 34 56",
+      phoneCountryCodeMissing: ["customerPhone"]};
+    // Its own stamp re-fired the trigger: same raw number, flag in place.
+    assert.equal(stampIsCurrent("parkedCars", flagged,
+        {customerPhone: "622 12 34 56"}), true);
+    // Created, or the number was edited: only the business can tell.
+    assert.equal(stampIsCurrent("parkedCars", flagged, null), false);
+    assert.equal(stampIsCurrent("parkedCars", {...flagged,
+      customerPhone: "202 555 0123"}, {customerPhone: "622 12 34 56"}), false);
+    // A US business's ten digits, stamped +1.
+    const nanp = {customerPhone: "(202) 555-0123",
+      customerPhoneE164: "+12025550123"};
+    assert.equal(stampIsCurrent("parkedCars", nanp,
+        {customerPhone: "(202) 555-0123"}), true);
+    assert.equal(stampIsCurrent("parkedCars", {...nanp,
+      customerPhoneE164: "+12025550199"},
+    {customerPhone: "(202) 555-0123"}), false);
+    // Unflagged and unstamped: never synced.
+    assert.equal(stampIsCurrent("parkedCars", {customerPhone: "622123456"},
+        {customerPhone: "622123456"}), false);
+  });
+
+  it("leaves old, never-synced records whose numbers did not change to " +
+      "the backfill", () => {
+    const now = Date.UTC(2026, 9, 19);
+    const old = {customerPhone: "+12025550123", status: "picked_up",
+      createdAt: new Date(now - 90 * 24 * 3600 * 1000)};
+    const prior = {...old, status: "parked"};
+    assert.equal(phoneEventNeedsSync("parkedCars", old, prior, now), false);
+    // ...but a missing createdAt is old too.
+    assert.equal(phoneEventNeedsSync("parkedCars",
+        {customerPhone: "+12025550123"}, {customerPhone: "+12025550123"},
+        now), false);
+    // The contract's "at once": new records and number changes.
+    assert.equal(phoneEventNeedsSync("parkedCars", old, null, now), true);
+    assert.equal(phoneEventNeedsSync("parkedCars", old, undefined, now),
+        true);
+    assert.equal(phoneEventNeedsSync("parkedCars", old,
+        {...prior, customerPhone: "+12025550199"}, now), true);
+    assert.equal(phoneEventNeedsSync("containerLines",
+        {...old, receiverPhone: "+224622123456"}, prior, now), true);
+    // Recent records (a client's direct create, a failed account).
+    const fresh = {...old, createdAt: new Date(now - RECENT_RECORD_MS + 1000)};
+    assert.equal(phoneEventNeedsSync("parkedCars", fresh,
+        {...fresh, status: "parked"}, now), true);
+    // A record synced before whose stamp went stale (account failed).
+    assert.equal(phoneEventNeedsSync("parkedCars",
+        {...old, phoneSyncedAt: new Date(now)}, prior, now), true);
+    assert.equal(phoneEventNeedsSync("parkedCars",
+        {...old, phoneCountryCodeMissing: []}, prior, now), true);
+  });
+
+  it("returns before any Firestore or Auth call when nothing is to do",
+      async () => {
+        const touched = [];
+        const trap = (name) => new Proxy({}, {get(_, key) {
+          touched.push(`${name}.${String(key)}`);
+          throw new Error(`${name} touched`);
+        }});
+        const accounts = createPhoneAccounts({db: () => trap("db"),
+          auth: () => trap("auth"), FieldValue: {}, Timestamp: {},
+          logger: {warn: (message, meta) => touched.push(meta?.error)},
+          defaultNotificationPreferences: () => ({})});
+        const now = Date.now();
+        // A stamp re-fired by its own write.
+        assert.deepEqual(await accounts.syncRecordPhones("containerLines",
+            "l1", {after: stampedLine, before: {}, updateTime: "t"}),
+        {written: false, accounts: []});
+        // An old record's status change.
+        const old = {customerPhone: "+12025550123",
+          createdAt: new Date(now - 90 * 24 * 3600 * 1000)};
+        assert.deepEqual(await accounts.syncRecordPhones("parkedCars", "p1",
+            {after: old, before: {...old, status: "x"}, updateTime: "t"}),
+        {written: false, accounts: []});
+        assert.deepEqual(await accounts.phoneStampForEvent("parkedCars", "p1",
+            {after: old, before: {...old, status: "x"}}),
+        {update: null, accounts: []});
+        // A deleted record.
+        assert.deepEqual(await accounts.syncRecordPhones("parkedCars", "p1",
+            {after: null}), {written: false, accounts: []});
+        assert.deepEqual(touched, []);
+      });
 });

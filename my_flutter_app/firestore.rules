@@ -547,6 +547,11 @@ service cloud.firestore {
     match /phoneAccountOptOuts/{phone} {
       allow read, write: if false;
     }
+    // One phone = one account (docs/PHONE_ACCOUNTS.md §4.1): the lock and
+    // the uid of each number's account. Server only.
+    match /phoneAccountClaims/{phone} {
+      allow read, write: if false;
+    }
 
     // Server-only abuse-prevention state for callable rate limits.
     match /callableRateLimits/{limitId} {

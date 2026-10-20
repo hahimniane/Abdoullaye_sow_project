@@ -4064,6 +4064,8 @@ describe("phone account rules", () => {
           {phoneE164: "+12025550123", codeHash: "x"});
       await setDoc(doc(db, "phoneLoginLimits/l1"), {count: 1});
       await setDoc(doc(db, "phoneAccountOptOuts/+12025550123"), {uid: "x"});
+      await setDoc(doc(db, "phoneAccountClaims/+12025550123"),
+          {uid: "phone-customer", profileReady: true});
     });
   }
 
@@ -4078,7 +4080,8 @@ describe("phone account rules", () => {
             "containerLines"),
         where("customerPhoneE164", "==", "+12025550123"))));
         for (const path of ["phoneLoginChallenges/c1",
-          "phoneLoginLimits/l1", "phoneAccountOptOuts/+12025550123"]) {
+          "phoneLoginLimits/l1", "phoneAccountOptOuts/+12025550123",
+          "phoneAccountClaims/+12025550123"]) {
           await assertFails(getDoc(doc(customer, path)));
           await assertFails(setDoc(doc(customer, path), {x: 1}));
         }
