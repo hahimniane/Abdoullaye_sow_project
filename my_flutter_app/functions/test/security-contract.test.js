@@ -29,9 +29,11 @@ test("deployed callables enforce App Check", () => {
   const appCheckCount = (
     indexSource.match(/enforceAppCheck:\s*ENFORCE_APP_CHECK/g) || []
   ).length;
+  // Also `{...MARKETPLACE_PEOPLE_CALLABLE_OPTIONS, secrets: [...]}`: the
+  // staff invitation callables that send WhatsApp add only their secrets.
   const sharedPeopleOptionUses = (
     indexSource.match(
-        /onCall\(\s*MARKETPLACE_PEOPLE_CALLABLE_OPTIONS,/g,
+        /onCall\(\s*(?:\{\s*\.\.\.)?MARKETPLACE_PEOPLE_CALLABLE_OPTIONS,/g,
     ) || []
   ).length;
   const sharedGuestOptionUses = (

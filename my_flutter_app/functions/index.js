@@ -538,6 +538,19 @@ const {
   renderAccessInvitationEmail,
   renderAccessInvitationText,
 } = require("./access_invitation");
+// Staff invited by phone (docs/STAFF_PHONE_INVITES.md).
+const {
+  CHANNEL: INVITE_CHANNEL,
+  accessRemoved,
+  createStaffPhoneInvites,
+  invitationChannel,
+  inviteMethod,
+  maskedPhone,
+  normalizeInviteStoreAccess,
+  phoneInviteMarker,
+} = require("./staff_phone_invite");
+const {strictE164} = require("./phone_e164");
+const {staffInviteTemplateMessage} = require("./whatsapp_templates");
 const {
   servicePlatformFeePctForBusiness,
   servicePlatformFeePctFromPricing,
@@ -692,6 +705,26 @@ const phoneAccounts = createPhoneAccounts({
     await requireBusinessPermission(uid, businessId, section);
   },
 });
+// Staff invited by phone (docs/STAFF_PHONE_INVITES.md): the handlers live
+// in staff_phone_invite.js; inviteBusinessMember, resendAccessInvitation and
+// acceptAccessInvitation call them.
+const staffPhoneInvites = createStaffPhoneInvites({
+  db: () => admin.firestore(),
+  auth: () => admin.auth(),
+  FieldValue: FirestoreFieldValue,
+  Timestamp: FirestoreTimestamp,
+  logger,
+  countries: ALL_COUNTRIES,
+  sendWhatsApp: (body) => sendWhatsAppMessage(body),
+  whatsappConfigured: () => containerWhatsAppConfigured(),
+  inviteMessage: (args) => staffInviteTemplateMessage(args),
+  refuse: (status, reason, message, details) =>
+    userManagementError(status, reason, message, details),
+  audit: (batch, entry) => setAdminAuditLog(batch, entry),
+});
+// The invitation callables that send the WhatsApp message carry its
+// secrets; everything else about them is the shared people options.
+const STAFF_INVITE_SECRETS = [whatsappAccessToken, whatsappPhoneNumberId];
 /**
  * What a Firestore trigger hands syncRecordPhones: the record after the
  * write, before it (null: created), and the write's updateTime, so the stamp
@@ -24525,11 +24558,13 @@ function invitationDirectoryDto(snapshot) {
     uid: String(invitation.targetUid || ""),
     email: String(invitation.email || "").toLowerCase(),
     fullName: String(invitation.fullName || ""),
-    phone: "",
+    // A phone invitation shows its number masked (STAFF_PHONE_INVITES.md).
+    phone: maskedPhone(invitation.phoneE164),
     profileImageUrl: "",
     role: "invited",
     category: "invitation",
     invitationId: snapshot.id,
+    invitationChannel: invitationChannel(invitation),
     invitationKind: String(invitation.kind || ""),
     adminRole: String(invitation.adminRole || ""),
     businessId: String(invitation.businessId || ""),
@@ -25286,6 +25321,10 @@ async function requireInvitationManager(caller, invitation) {
 async function createAccessInvitation(request, kind) {
   const callerUid = requireAuth(request);
   const caller = await getUserProfile(callerUid);
+  // A business invitation goes by email (the default) or by WhatsApp number
+  // (docs/STAFF_PHONE_INVITES.md); platform invitations are email only.
+  const method = kind === "business" ?
+    inviteMethod(request.data) : INVITE_CHANNEL.EMAIL;
   const email = cleanText(request.data?.email, 320).toLowerCase();
   const fullName = cleanText(request.data?.fullName, 200);
   const locale = cleanText(request.data?.locale, 12) || "en";
@@ -25298,7 +25337,7 @@ async function createAccessInvitation(request, kind) {
   const invitation = {kind, businessId};
   await requireInvitationManager(caller, invitation);
 
-  if (!isValidEmail(email)) {
+  if (method === INVITE_CHANNEL.EMAIL && !isValidEmail(email)) {
     throw userManagementError(
         "invalid-argument",
         "valid-email-required",
@@ -25336,6 +25375,27 @@ async function createAccessInvitation(request, kind) {
     }
     business = businessDoc.data() || {};
   }
+  if (method === INVITE_CHANNEL.PHONE) {
+    return staffPhoneInvites.createInvitation({
+      callerUid,
+      actorRole: platformAdminRole(caller) || caller.role,
+      invitedByName: String(caller.fullName || caller.email || "")
+          .slice(0, 200),
+      businessId,
+      business,
+      fullName,
+      phone: request.data?.phone,
+      locale,
+      businessPermissions,
+      inventoryStoreAccess: request.data?.inventoryStoreAccess,
+    });
+  }
+  // "Which store?" (a business with two or more stores), applied when the
+  // invitation is accepted.
+  const storeAccess = kind === "business" ?
+    await staffPhoneInvites.storeAccessFor(businessId,
+        request.data?.inventoryStoreAccess) :
+    null;
 
   let authUser;
   let createdAuthUser = false;
@@ -25399,9 +25459,11 @@ async function createAccessInvitation(request, kind) {
     const batch = db.batch();
     batch.set(invitationRef, {
       kind,
+      channel: INVITE_CHANNEL.EMAIL,
       email,
       fullName,
       locale,
+      ...(storeAccess ? {inventoryStoreAccess: storeAccess} : {}),
       targetUid: authUser.uid,
       status: "pending",
       adminRole,
@@ -25520,6 +25582,10 @@ async function resendAccessInvitationHandler(request) {
       "resend",
       "Only an outstanding invitation can be resent",
   );
+  if (invitationChannel(invitation) === INVITE_CHANNEL.PHONE) {
+    return staffPhoneInvites.resendInvitation({ref, invitation, invitationId,
+      callerUid, actorRole: platformAdminRole(caller) || caller.role});
+  }
   const authUser = await admin.auth().getUser(invitation.targetUid);
   const links = await authActionLinks(
       invitation.email,
@@ -25593,7 +25659,7 @@ async function cancelAccessInvitationHandler(request) {
     actorRole: platformAdminRole(caller) || caller.role,
     targetCollection: "accessInvitations",
     targetId: invitationId,
-    targetLabel: invitation.email,
+    targetLabel: invitation.email || maskedPhone(invitation.phoneE164),
     previousValue: "pending",
     nextValue: "cancelled",
   });
@@ -25605,21 +25671,45 @@ async function invitationRefForAcceptance({
   db,
   uid,
   email,
+  phone,
   invitationId,
+  inviteToken,
 }) {
   if (invitationId) {
     return db.collection("accessInvitations").doc(invitationId);
   }
-  const pending = await db.collection("accessInvitations")
-      .where("targetUid", "==", uid)
-      .where("email", "==", email)
-      .where("status", "==", "pending")
-      .orderBy("expiresAt", "desc")
-      .limit(2)
-      .get();
-  const active = pending.docs.filter((snapshot) =>
-    (snapshot.get("expiresAt")?.toMillis?.() || 0) > Date.now(),
-  );
+  // A staff invitation link (/j/<token>): the invitation the person opened
+  // and agreed to, whatever else is pending for their number.
+  if (inviteToken) {
+    const found = await staffPhoneInvites.findByToken(inviteToken);
+    if (!found) {
+      throw userManagementError(
+          "not-found",
+          "active-invitation-not-found",
+          "No active invitation was found for this verified account",
+      );
+    }
+    return found.ref;
+  }
+  const active = [];
+  if (email) {
+    const pending = await db.collection("accessInvitations")
+        .where("targetUid", "==", uid)
+        .where("email", "==", email)
+        .where("status", "==", "pending")
+        .orderBy("expiresAt", "desc")
+        .limit(2)
+        .get();
+    active.push(...pending.docs.filter((snapshot) =>
+      (snapshot.get("expiresAt")?.toMillis?.() || 0) > Date.now(),
+    ).map((snapshot) => snapshot.ref));
+  }
+  // Phone invitations match the verified number (Auth only holds a number
+  // that was proven: a phone sign-in, our code, or a merge).
+  if (phone) {
+    const live = await staffPhoneInvites.livePhoneInvitations(phone);
+    active.push(...live.map((entry) => entry.ref));
+  }
   if (active.length === 0) {
     throw userManagementError(
         "not-found",
@@ -25635,15 +25725,77 @@ async function invitationRefForAcceptance({
         {invitationCount: active.length},
     );
   }
-  return active[0].ref;
+  return active[0];
+}
+
+/**
+ * The live invitations waiting for the signed-in person (their verified
+ * email or verified phone), for the "Join <business>" prompt after a normal
+ * sign-in (docs/STAFF_PHONE_INVITES.md §6.1). Nothing for an account that
+ * already has business or platform access: accepting would be refused.
+ *
+ * @param {string} uid The caller.
+ * @param {string} email Their verified email, or "".
+ * @param {string} phone Their verified phone, or "".
+ * @return {Promise<Array<object>>} Newest first.
+ */
+async function pendingInvitationsFor(uid, email, phone) {
+  const db = admin.firestore();
+  const profile = await db.collection("users").doc(uid).get();
+  if (profile.exists &&
+      !["customer", ""].includes(String(profile.get("role") || ""))) {
+    return [];
+  }
+  const entries = new Map();
+  if (email) {
+    const pending = await db.collection("accessInvitations")
+        .where("targetUid", "==", uid)
+        .where("email", "==", email)
+        .where("status", "==", "pending")
+        .orderBy("expiresAt", "desc")
+        .limit(10)
+        .get();
+    for (const doc of pending.docs) entries.set(doc.id, doc.data() || {});
+  }
+  if (phone) {
+    for (const entry of await staffPhoneInvites.livePhoneInvitations(phone)) {
+      entries.set(entry.id, entry.data);
+    }
+  }
+  const nowMs = Date.now();
+  return [...entries.entries()]
+      .filter(([, data]) => accessInvitationStatus(data, nowMs) === "pending")
+      .map(([id, data]) => ({
+        invitationId: id,
+        kind: data.kind === "platform" ? "platform" : "business",
+        channel: invitationChannel(data),
+        businessId: String(data.businessId || ""),
+        businessName: String(data.businessName || ""),
+        invitedByName: String(data.invitedByName || ""),
+        expiresAtMs: data.expiresAt?.toMillis?.() || 0,
+      }))
+      .sort((a, b) => b.expiresAtMs - a.expiresAtMs);
 }
 
 async function acceptAccessInvitationHandler(request) {
   const uid = requireAuth(request);
   const requestedInvitationId =
     cleanText(request.data?.invitationId, 160);
+  const inviteToken = cleanText(request.data?.inviteToken, 64);
   const authUser = await admin.auth().getUser(uid);
-  if (!authUser.emailVerified || !isValidEmail(authUser.email || "")) {
+  const verifiedEmail = authUser.emailVerified &&
+    isValidEmail(authUser.email || "") ?
+    String(authUser.email).toLowerCase() : "";
+  // Phone invitations (docs/STAFF_PHONE_INVITES.md) are accepted by the
+  // account that signed in with the invited number.
+  const verifiedPhone = strictE164(authUser.phoneNumber);
+  // {action: "pending"}: only list what waits for this person; accepting
+  // one is a second call with its invitationId.
+  if (cleanText(request.data?.action, 20) === "pending") {
+    return {invitations: await pendingInvitationsFor(uid, verifiedEmail,
+        verifiedPhone)};
+  }
+  if (!verifiedEmail && !verifiedPhone) {
     throw userManagementError(
         "failed-precondition",
         "verified-email-required",
@@ -25651,16 +25803,17 @@ async function acceptAccessInvitationHandler(request) {
     );
   }
   const db = admin.firestore();
-  const verifiedEmail = String(authUser.email).toLowerCase();
   const invitationRef = await invitationRefForAcceptance({
     db,
     uid,
     email: verifiedEmail,
+    phone: verifiedPhone,
     invitationId: requestedInvitationId,
+    inviteToken,
   });
   const invitationId = invitationRef.id;
   const userRef = db.collection("users").doc(uid);
-  await db.runTransaction(async (transaction) => {
+  const accepted = await db.runTransaction(async (transaction) => {
     const invitationDoc = await transaction.get(invitationRef);
     if (!invitationDoc.exists) {
       throw userManagementError(
@@ -25670,6 +25823,7 @@ async function acceptAccessInvitationHandler(request) {
       );
     }
     const invitation = invitationDoc.data() || {};
+    const channel = invitationChannel(invitation);
     const liveStatus = accessInvitationStatus(invitation);
     if (liveStatus === "expired") {
       throw userManagementError(
@@ -25685,14 +25839,31 @@ async function acceptAccessInvitationHandler(request) {
           "This invitation is no longer active",
       );
     }
-    if (invitation.targetUid !== uid ||
-        String(invitation.email || "").toLowerCase() !==
-        String(authUser.email || "").toLowerCase()) {
-      throw userManagementError(
-          "permission-denied",
-          "invitation-identity-mismatch",
-          "This invitation belongs to another account",
-      );
+    if (channel === INVITE_CHANNEL.PHONE) {
+      if (!verifiedPhone ||
+          strictE164(invitation.phoneE164) !== verifiedPhone) {
+        throw userManagementError(
+            "permission-denied",
+            "invitation-identity-mismatch",
+            "This invitation belongs to another account",
+        );
+      }
+    } else {
+      if (!verifiedEmail) {
+        throw userManagementError(
+            "failed-precondition",
+            "verified-email-required",
+            "Verify your invited email before accepting access",
+        );
+      }
+      if (invitation.targetUid !== uid ||
+          String(invitation.email || "").toLowerCase() !== verifiedEmail) {
+        throw userManagementError(
+            "permission-denied",
+            "invitation-identity-mismatch",
+            "This invitation belongs to another account",
+        );
+      }
     }
     const userDoc = await transaction.get(userRef);
     const current = userDoc.data() || {};
@@ -25706,6 +25877,8 @@ async function acceptAccessInvitationHandler(request) {
     }
     let update;
     let createUpdate;
+    let storeAccess = null;
+    const now = FirestoreFieldValue.serverTimestamp();
     if (invitation.kind === "platform") {
       createUpdate = {
         role: "admin",
@@ -25728,6 +25901,24 @@ async function acceptAccessInvitationHandler(request) {
         );
       }
       const business = businessDoc.data() || {};
+      // "Which store?", with the same effect as setInventoryStaffAccess. A
+      // store archived or gone since the invitation leaves no home store
+      // (the owner sets it again) instead of refusing the person.
+      const chosen = normalizeInviteStoreAccess(
+          invitation.inventoryStoreAccess).access;
+      if (chosen) {
+        let homeStoreId = chosen.homeStoreId;
+        if (homeStoreId) {
+          const storeDoc = await transaction.get(
+              db.collection("inventoryStores").doc(homeStoreId));
+          const store = storeDoc.exists ? storeDoc.data() || {} : null;
+          if (!store || String(store.businessId) !== invitation.businessId ||
+              store.archived === true) {
+            homeStoreId = "";
+          }
+        }
+        storeAccess = {allStores: chosen.allStores, homeStoreId};
+      }
       createUpdate = {
         role: "staff",
         businessId: invitation.businessId,
@@ -25736,17 +25927,30 @@ async function acceptAccessInvitationHandler(request) {
         businessPermissions: normalizeBusinessPermissions(
             invitation.businessPermissions,
         ),
+        ...(storeAccess ? {
+          inventoryHomeStoreId: storeAccess.homeStoreId,
+          inventoryAllStores: storeAccess.allStores,
+        } : {}),
+        // The phone-code sign-in exception is for staff who joined this way
+        // (staff_phone_invite.staffPhoneSignInAllowed).
+        ...(channel === INVITE_CHANNEL.PHONE ? phoneInviteMarker({
+          invitationId,
+          phoneE164: verifiedPhone,
+          businessId: invitation.businessId,
+        }, now) : {}),
       };
       update = {
         ...createUpdate,
         ...nonAdminAuthorityCleanup(),
+        ...(channel === INVITE_CHANNEL.PHONE ? {} : phoneInviteCleanup()),
       };
     }
-    const now = FirestoreFieldValue.serverTimestamp();
+    const accountLabel = authUser.email || maskedPhone(verifiedPhone) || uid;
     if (userDoc.exists) {
       transaction.update(userRef, {
         ...update,
-        email: authUser.email,
+        email: channel === INVITE_CHANNEL.PHONE ?
+          String(current.email || authUser.email || "") : authUser.email,
         fullName: current.fullName || invitation.fullName || "",
         accountStatus: "active",
         updatedAt: now,
@@ -25755,7 +25959,7 @@ async function acceptAccessInvitationHandler(request) {
     } else {
       transaction.create(userRef, {
         ...createUpdate,
-        email: authUser.email,
+        email: authUser.email || "",
         fullName: invitation.fullName || authUser.displayName || "",
         phone: authUser.phoneNumber || "",
         accountStatus: "active",
@@ -25777,14 +25981,44 @@ async function acceptAccessInvitationHandler(request) {
         invitation.adminRole : "staff",
       targetCollection: "users",
       targetId: uid,
-      targetLabel: authUser.email,
+      targetLabel: accountLabel,
       nextValue: invitation.kind === "platform" ?
         `admin:${invitation.adminRole}` :
         `staff:${invitation.businessId}`,
-      metadata: {invitationId},
+      metadata: {invitationId, channel},
     });
+    return {
+      kind: invitation.kind === "platform" ? "platform" : "business",
+      channel,
+      businessId: invitation.kind === "platform" ? "" :
+        String(invitation.businessId || ""),
+      businessName: invitation.kind === "platform" ? "" :
+        String(createUpdate.businessName || ""),
+      storeAccess,
+      fullName: String(current.fullName || invitation.fullName || ""),
+    };
   });
-  return {success: true, invitationId, status: "accepted"};
+  if (accepted.storeAccess) {
+    await inventorySetupAudit(accepted.businessId, "inventory_store",
+        accepted.storeAccess.homeStoreId || uid, "staff_access_set", uid,
+        `Set store access for ${accepted.fullName || uid} on accepting ` +
+        "the invitation: " + (accepted.storeAccess.allStores ? "all stores" :
+          (accepted.storeAccess.homeStoreId ?
+            `home store ${accepted.storeAccess.homeStoreId}` :
+            "no home store"))).catch((error) => {
+      logger.warn("Store access audit failed", {
+        detail: error instanceof Error ? error.message : String(error)});
+    });
+  }
+  return {
+    success: true,
+    invitationId,
+    status: "accepted",
+    kind: accepted.kind,
+    channel: accepted.channel,
+    businessId: accepted.businessId,
+    businessName: accepted.businessName,
+  };
 }
 
 exports.sendUserRecoveryEmail = onCall(
@@ -25798,7 +26032,7 @@ exports.invitePlatformAdmin = onCall(
 );
 
 exports.inviteBusinessMember = onCall(
-    MARKETPLACE_PEOPLE_CALLABLE_OPTIONS,
+    {...MARKETPLACE_PEOPLE_CALLABLE_OPTIONS, secrets: STAFF_INVITE_SECRETS},
     (request) => createAccessInvitation(request, "business"),
 );
 
@@ -25835,7 +26069,7 @@ exports.listBusinessInvitations = onCall(
 );
 
 exports.resendAccessInvitation = onCall(
-    MARKETPLACE_PEOPLE_CALLABLE_OPTIONS,
+    {...MARKETPLACE_PEOPLE_CALLABLE_OPTIONS, secrets: STAFF_INVITE_SECRETS},
     resendAccessInvitationHandler,
 );
 
@@ -25916,6 +26150,16 @@ function nonBusinessAuthorityCleanup() {
     businessPermissions: FirestoreFieldValue.delete(),
     inventoryHomeStoreId: FirestoreFieldValue.delete(),
     inventoryAllStores: FirestoreFieldValue.delete(),
+    ...phoneInviteCleanup(),
+  };
+}
+
+// The phone-code sign-in exception goes with the staff role
+// (docs/STAFF_PHONE_INVITES.md).
+function phoneInviteCleanup() {
+  return {
+    signInMethod: FirestoreFieldValue.delete(),
+    phoneInvite: FirestoreFieldValue.delete(),
   };
 }
 
@@ -25993,7 +26237,7 @@ async function updateBusinessMembershipHandler(request, forcedRole = "") {
     null;
   const now = FirestoreFieldValue.serverTimestamp();
 
-  await db.runTransaction(async (transaction) => {
+  const previous = await db.runTransaction(async (transaction) => {
     const targetDoc = await transaction.get(userRef);
     if (!targetDoc.exists) {
       throw userManagementError(
@@ -26092,6 +26336,9 @@ async function updateBusinessMembershipHandler(request, forcedRole = "") {
             requestedPermissions) :
           FirestoreFieldValue.delete(),
         ...nonAdminAuthorityCleanup(),
+        // Made staff here, not through a phone invitation: no phone-code
+        // sign-in exception (docs/STAFF_PHONE_INVITES.md).
+        ...(current.role === "staff" ? {} : phoneInviteCleanup()),
         updatedAt: now,
         updatedBy: callerUid,
       });
@@ -26114,11 +26361,21 @@ async function updateBusinessMembershipHandler(request, forcedRole = "") {
         {businessId, businessPermissions: requestedPermissions} :
         {businessId},
     });
+    return {role: String(current.role || ""),
+      businessId: String(current.businessId || "")};
   });
+  // Removed from the business (or moved to another one): the sessions end
+  // now, so the next token refresh fails and the app and console sign the
+  // person out; the profile above already makes every callable and rule
+  // refuse.
+  const sessionsRevoked = accessRemoved(previous,
+      {role, businessId: role === "customer" ? "" : businessId});
+  if (sessionsRevoked) await admin.auth().revokeRefreshTokens(userId);
 
   return {
     success: true,
     userId,
+    sessionsRevoked,
     role,
     businessId: role === "customer" ? "" : businessId,
     businessPermissions: role === "staff" ? requestedPermissions : [],
@@ -26413,6 +26670,9 @@ exports.updateUserRole = onCall(
           updatePayload.adminRole = target.adminRole || "supportAdmin";
         }
         batch.update(userRef, updatePayload);
+        const sessionsRevoked = accessRemoved(
+            {role: target.role, businessId: target.businessId},
+            {role: newRole, businessId: ""});
         setAdminAuditLog(batch, {
           action: "user_role_updated",
           actorUid: callerUid,
@@ -26424,6 +26684,9 @@ exports.updateUserRole = onCall(
           nextValue: newRole,
         });
         await batch.commit();
+        // Business or platform access removed: end the sessions now
+        // (docs/STAFF_PHONE_INVITES.md).
+        if (sessionsRevoked) await admin.auth().revokeRefreshTokens(userId);
 
         logger.info("User role updated", {
           userId: userId,
@@ -26435,6 +26698,7 @@ exports.updateUserRole = onCall(
           success: true,
           userId: userId,
           newRole: newRole,
+          sessionsRevoked,
           message: `User role updated to ${newRole}`,
         };
       } catch (error) {

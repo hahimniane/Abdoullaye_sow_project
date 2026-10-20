@@ -3,6 +3,12 @@ import 'package:provider/provider.dart';
 
 import '../l10n/app_localizations.dart';
 import '../providers/app_gate_provider.dart';
+import '../providers/auth_provider.dart';
+import '../services/staff_invites.dart' show PendingInvitation;
+import '../utils/auth_navigation.dart' show navigateAfterLogin;
+import '../widgets/app_snackbars.dart' show showSuccessSnackBar;
+import '../widgets/staff_invite_widgets.dart'
+    show PendingInvitationsHost, pendingInvitationPlace;
 import '../theme/app_colors.dart';
 import '../theme/app_motion.dart';
 import '../widgets/app_bottom_nav.dart';
@@ -342,9 +348,48 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     );
   }
 
+  /// "Join {business}" accepted (docs/STAFF_PHONE_INVITES.md §4.1): fresh
+  /// claims and the profile, then the staff home.
+  Future<void> _onInvitationJoined(PendingInvitation invite) async {
+    final auth = context.read<AuthProvider>();
+    final l10n = AppLocalizations.of(context)!;
+    await auth.reloadAfterInvitationAccepted();
+    if (!mounted) return;
+    showSuccessSnackBar(
+      context,
+      l10n.stiWelcome(pendingInvitationPlace(l10n, invite)),
+    );
+    await navigateAfterLogin<void>(
+      context,
+      hasBusinessDashboardAccess: auth.hasBusinessDashboardAccess,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    // Invitations waiting for a signed-in customer: asked once per sign-in.
+    final (inviteUid, inviteEligible) = context
+        .select<AuthProvider, (String?, bool)>((auth) {
+          final user = auth.user;
+          if (user == null) return (null, false);
+          return (
+            user.uid,
+            !user.isAnonymous &&
+                !auth.isInitializing &&
+                auth.loadedProfileUid == user.uid &&
+                !auth.hasBusinessDashboardAccess,
+          );
+        });
+    return PendingInvitationsHost(
+      uid: inviteUid,
+      eligible: inviteEligible,
+      onJoined: _onInvitationJoined,
+      child: _home(l10n),
+    );
+  }
+
+  Widget _home(AppLocalizations l10n) {
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {

@@ -51,6 +51,8 @@ String phoneAccountRefusalText(
       return l10n.phaErrRecordInvalid;
     case PhoneRefusalReason.phoneSignInUnavailable:
       return l10n.phaErrPhoneSignInUnavailable;
+    case PhoneRefusalReason.inviteNotFound:
+      return l10n.phaErrInviteNotFound;
   }
   if (refusal.offline) return l10n.phaErrOffline;
   return switch (refusal.code) {

@@ -29,6 +29,7 @@ import '../widgets/app_snackbars.dart';
 import '../widgets/country_phone_field.dart';
 import '../widgets/language_toggle.dart';
 import '../widgets/pickup_plan_editor.dart';
+import '../widgets/staff_invite_widgets.dart' show BusinessInvitationsSection;
 import '../services/parking_rates.dart';
 import '../utils/service_catalog_localization.dart';
 
@@ -1242,15 +1243,7 @@ class TeamPanel extends StatelessWidget {
           final users = snapshot.data?.docs ?? [];
           return Column(
             children: [
-              if (canAddStaff)
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: OutlinedButton.icon(
-                    onPressed: () => Navigator.pushNamed(context, '/add-staff'),
-                    icon: const Icon(Icons.person_add_alt_1),
-                    label: Text(l10n.addStaffMemberButton),
-                  ),
-                ),
+              if (canAddStaff) _TeamInvites(businessId: businessId),
               if (users.isEmpty)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 24),
@@ -1319,6 +1312,53 @@ class TeamPanel extends StatelessWidget {
   static String _teamMemberName(Map<String, dynamic> data) {
     final name = (data['fullName'] as String?)?.trim() ?? '';
     return name.isEmpty ? '${data['email'] ?? ''}' : name;
+  }
+}
+
+/// "Add staff member" and the business's pending invitations (by email or
+/// WhatsApp number, docs/STAFF_PHONE_INVITES.md), read again after the
+/// invitation screen closes.
+class _TeamInvites extends StatefulWidget {
+  const _TeamInvites({required this.businessId});
+
+  final String businessId;
+
+  @override
+  State<_TeamInvites> createState() => _TeamInvitesState();
+}
+
+class _TeamInvitesState extends State<_TeamInvites> {
+  final _reload = ValueNotifier<int>(0);
+
+  @override
+  void dispose() {
+    _reload.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            onPressed: () async {
+              await Navigator.pushNamed(context, '/add-staff');
+              if (mounted) _reload.value++;
+            },
+            icon: const Icon(Icons.person_add_alt_1),
+            label: Text(l10n.addStaffMemberButton),
+          ),
+        ),
+        BusinessInvitationsSection(
+          businessId: widget.businessId,
+          reloadSignal: _reload,
+        ),
+      ],
+    );
   }
 }
 

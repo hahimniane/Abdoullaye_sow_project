@@ -90,6 +90,19 @@
                     android:host="customer.laawoldigital.com"
                     android:pathPrefix="/r/"/>
             </intent-filter>
+            <!-- Staff invitations (docs/STAFF_PHONE_INVITES.md §6): the
+                 WhatsApp Accept button (/j/<token>) opens the app's
+                 invitation screen, as iOS does through the
+                 apple-app-site-association /j/* path. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data
+                    android:scheme="https"
+                    android:host="customer.laawoldigital.com"
+                    android:pathPrefix="/j/"/>
+            </intent-filter>
             <!-- The app_links plugin handles those links; Flutter's own deep
                  linking would push the path as a named route. -->
             <meta-data

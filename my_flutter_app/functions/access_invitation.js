@@ -19,6 +19,8 @@
 //
 // Both are pure so they can be unit-tested without an emulator.
 
+const {callingCodeOf} = require("./phone_e164");
+
 const LOGO_URL = "https://laawoldigital.com/assets/logo.png";
 const BRAND_TEAL = "#0D9488";
 
@@ -160,6 +162,19 @@ function accessInvitationExpiryMs(nowMs = Date.now()) {
 }
 
 /**
+ * How an invitations list shows a phone invitation's number.
+ *
+ * @param {*} phone An E.164 number (or its digits).
+ * @return {string} "+224 ••••35" (the calling code from the catalog), or "".
+ */
+function maskedPhoneNumber(phone) {
+  const digits = String(phone ?? "").replace(/\D/g, "");
+  if (digits.length < 8) return "";
+  const code = callingCodeOf(digits);
+  return code ? `+${code} ••••${digits.slice(-2)}` : `••••${digits.slice(-2)}`;
+}
+
+/**
  * One console row for a stored invitation.
  * @param {string} id The invitation document id.
  * @param {Object} invitation The stored document.
@@ -171,9 +186,26 @@ function accessInvitationRow(id, invitation, nowMs = Date.now()) {
   const permissions = Array.isArray(record.businessPermissions) ?
     record.businessPermissions.map((item) => text(item, 60)).filter(Boolean) :
     [];
+  const phone = record.channel === "phone";
+  const phoneDigits = phone ?
+    String(record.phoneE164 || "").replace(/\D/g, "") : "";
+  const storeAccess = record.inventoryStoreAccess &&
+    typeof record.inventoryStoreAccess === "object" ?
+    {allStores: record.inventoryStoreAccess.allStores === true,
+      homeStoreId: text(record.inventoryStoreAccess.homeStoreId, 128)} :
+    null;
   return {
     invitationId: text(id, 160),
     kind: text(record.kind, 40) || "business",
+    // Phone invitations (docs/STAFF_PHONE_INVITES.md) show the number masked
+    // ("+224 ••••35") and carry their link, for "share this link".
+    channel: phone ? "phone" : "email",
+    phoneMasked: phone ? maskedPhoneNumber(phoneDigits) : "",
+    phoneLastTwo: phoneDigits.length >= 8 ? phoneDigits.slice(-2) : "",
+    inviteLink: phone && /^[A-Za-z0-9_-]{43}$/.test(String(record.linkToken)) ?
+      `https://customer.laawoldigital.com/j/${record.linkToken}` : "",
+    whatsappStatus: phone ? text(record.lastWhatsAppStatus, 40) : "",
+    inventoryStoreAccess: storeAccess,
     email: text(record.email, 320).toLowerCase(),
     fullName: text(record.fullName, 200),
     role: text(record.kind, 40) === "platform" ?
@@ -446,6 +478,7 @@ module.exports = {
   accessInvitationIsLive,
   accessInvitationRow,
   accessInvitationStatus,
+  maskedPhoneNumber,
   outstandingAccessInvitations,
   renderAccessInvitationEmail,
   renderAccessInvitationText,

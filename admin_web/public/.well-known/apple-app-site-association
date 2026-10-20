@@ -8,7 +8,8 @@
           {"/": "/i/*", "comment": "Inventory tag links (the QR on a shop's product tags)"},
           {"/": "/plaid/*", "comment": "Plaid Link OAuth return (the owner connecting the bank for Zelle checks)"},
           {"/": "/e/*", "comment": "Package request estimate links (the WhatsApp estimate button)"},
-          {"/": "/r/*", "comment": "A business's package request link and its printed QR"}
+          {"/": "/r/*", "comment": "A business's package request link and its printed QR"},
+          {"/": "/j/*", "comment": "Staff invitation links (the WhatsApp Accept button)"}
         ]
       }
     ]

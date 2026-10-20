@@ -3470,8 +3470,8 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
     "Une invitation est déjà en attente pour cette personne. Renvoyez-la ou annulez-la au lieu d’en envoyer une nouvelle.",
   "The invitation could not be sent. Try again.":
     "L’invitation n’a pas pu être envoyée. Réessayez.",
-  "Invitations sent — waiting for the person to set a password":
-    "Invitations envoyées — en attente de la création du mot de passe",
+  "Invitations sent — waiting for the person to accept":
+    "Invitations envoyées — en attente de l’acceptation de la personne",
   "Team members": "Membres de l’équipe",
   "Awaiting reply": "En attente de réponse",
   // "Expired" is already carried above for listing badges; a second entry
@@ -6513,6 +6513,97 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Not signed in yet": "Pas encore connecté",
   "No email on this account: the person signs in with a code sent to their phone, so there is no password to reset.":
     "Aucun courriel sur ce compte : la personne se connecte avec un code envoyé sur son téléphone, il n’y a donc pas de mot de passe à réinitialiser.",
+});
+
+// Staff invited by phone (docs/STAFF_PHONE_INVITES.md): the invite forms
+// (People panel, admin console), the pending list, and the /j/<token> page.
+// Staff is "membre de l’équipe".
+Object.assign(TEXT_TRANSLATIONS, {
+  "Phone (WhatsApp)": "Téléphone (WhatsApp)",
+  "Send the invitation by": "Envoyer l’invitation par",
+  "WhatsApp number": "Numéro WhatsApp",
+  "Which store?": "Quel magasin ?",
+  "By WhatsApp": "Par WhatsApp",
+  "Enter the person's full name.": "Saisissez le nom complet de la personne.",
+  "Enter the person's WhatsApp number with its country code.":
+    "Saisissez le numéro WhatsApp de la personne avec l’indicatif du pays.",
+  "Enter the person's email address.": "Saisissez l’adresse courriel de la personne.",
+  "Choose which store this person works in.": "Choisissez le magasin où travaille cette personne.",
+  "Choose a business first.": "Choisissez d’abord une entreprise.",
+  "Invitation sent on WhatsApp to": "Invitation envoyée sur WhatsApp au",
+  "WhatsApp message not sent yet - share this link":
+    "Message WhatsApp pas encore envoyé - partagez ce lien",
+  "Send it to the person yourself. It opens the invitation, and they sign in with a code sent to their number.":
+    "Envoyez-le vous-même à la personne. Il ouvre l’invitation, et elle se connecte avec un code envoyé à son numéro.",
+  "Invitation link": "Lien d’invitation",
+  "Copy link": "Copier le lien",
+  "Select the link to copy it": "Sélectionnez le lien pour le copier",
+  "Enter a valid WhatsApp number.": "Saisissez un numéro WhatsApp valide.",
+  "Add the country code: choose the country, then type the number.":
+    "Ajoutez l’indicatif : choisissez le pays, puis saisissez le numéro.",
+  "That store no longer exists. Refresh and choose another.":
+    "Ce magasin n’existe plus. Actualisez et choisissez-en un autre.",
+  "Only the business owner can invite staff.":
+    "Seul le propriétaire de l’entreprise peut inviter des membres de l’équipe.",
+  "That business could not be found. Refresh and try again.":
+    "Cette entreprise est introuvable. Actualisez et réessayez.",
+  "By phone, the person gets a WhatsApp message with an Accept button and signs in with a code sent to that number - no password. By email, they set their own password from an expiring email invitation.":
+    "Par téléphone, la personne reçoit un message WhatsApp avec un bouton Accepter et se connecte avec un code envoyé à ce numéro - sans mot de passe. Par courriel, elle crée son propre mot de passe depuis une invitation qui expire.",
+  "Business staff accept by phone with a WhatsApp code, or by email with their own password. Platform admins use email.":
+    "Les membres de l’équipe d’une entreprise acceptent par téléphone avec un code WhatsApp, ou par courriel avec leur propre mot de passe. Les administrateurs de la plateforme utilisent le courriel.",
+  "No password is needed. The person gets a WhatsApp message with an Accept button and signs in with a code sent to that number. The invitation expires and access remains inactive until it is accepted.":
+    "Aucun mot de passe n’est nécessaire. La personne reçoit un message WhatsApp avec un bouton Accepter et se connecte avec un code envoyé à ce numéro. L’invitation expire et l’accès reste inactif tant qu’elle n’est pas acceptée.",
+  "No password is needed. The person gets a WhatsApp message with an Accept button and signs in with a code sent to that number.":
+    "Aucun mot de passe n’est nécessaire. La personne reçoit un message WhatsApp avec un bouton Accepter et se connecte avec un code envoyé à ce numéro.",
+  "Invited by WhatsApp: the person signs in with a code sent to their number.":
+    "Invitation par WhatsApp : la personne se connecte avec un code envoyé à son numéro.",
+  // The invitation page (staff-invite-page.tsx).
+  "Staff invitation": "Invitation de membre de l’équipe",
+  "invited you to join": "vous invite à rejoindre",
+  "You’re invited to join": "Vous êtes invité à rejoindre",
+  "on Laawol as staff.": "sur Laawol en tant que membre de l’équipe.",
+  "Accept with the number ending in": "Accepter avec le numéro se terminant par",
+  "We’ll send a code on WhatsApp to that number. No password is needed.":
+    "Nous enverrons un code sur WhatsApp à ce numéro. Aucun mot de passe n’est nécessaire.",
+  "Accept invitation": "Accepter l’invitation",
+  "Accepting the invitation...": "Acceptation de l’invitation...",
+  "You are signed in with another account. This invitation is for the number ending in":
+    "Vous êtes connecté avec un autre compte. Cette invitation est pour le numéro se terminant par",
+  "Sign out to continue": "Se déconnecter pour continuer",
+  "Signing out...": "Déconnexion...",
+  "You joined the team. Opening your business console...":
+    "Vous avez rejoint l’équipe. Ouverture de votre console entreprise...",
+  "Opening the invitation...": "Ouverture de l’invitation...",
+  "The invitation could not be loaded. Check your connection and try again.":
+    "L’invitation n’a pas pu être chargée. Vérifiez votre connexion et réessayez.",
+  "This invitation link is not valid. Ask the business for a new invitation.":
+    "Ce lien d’invitation n’est pas valide. Demandez une nouvelle invitation à l’entreprise.",
+  "Open Laawol": "Ouvrir Laawol",
+  "This invitation has expired. Ask the business for a new invitation.":
+    "Cette invitation a expiré. Demandez une nouvelle invitation à l’entreprise.",
+  "This invitation was cancelled. Ask the business for a new invitation.":
+    "Cette invitation a été annulée. Demandez une nouvelle invitation à l’entreprise.",
+  "This invitation was already accepted. If that was not you, ask the business for a new invitation.":
+    "Cette invitation a déjà été acceptée. Si ce n’était pas vous, demandez une nouvelle invitation à l’entreprise.",
+  "This invitation is no longer active. Ask the business for a new invitation.":
+    "Cette invitation n’est plus active. Demandez une nouvelle invitation à l’entreprise.",
+  "This invitation was cancelled or already used. Ask the business for a new invitation.":
+    "Cette invitation a été annulée ou déjà utilisée. Demandez une nouvelle invitation à l’entreprise.",
+  "You are signed in with another number. Sign out, then accept with the invited number.":
+    "Vous êtes connecté avec un autre numéro. Déconnectez-vous, puis acceptez avec le numéro invité.",
+  "This account already has business or admin access. Ask the business to invite another number.":
+    "Ce compte a déjà un accès entreprise ou administrateur. Demandez à l’entreprise d’inviter un autre numéro.",
+  "Sign in with the invited number, then accept again.":
+    "Connectez-vous avec le numéro invité, puis acceptez à nouveau.",
+  "We could not accept this invitation. Try again.":
+    "Nous n’avons pas pu accepter cette invitation. Réessayez.",
+  // "Join <business>" after a normal sign-in (pending-invitations-prompt.tsx).
+  "as staff.": "en tant que membre de l’équipe.",
+  "as an admin.": "en tant qu’administrateur.",
+  "Laawol Digital administration": "l’administration de Laawol Digital",
+  "Join": "Rejoindre",
+  "Joining...": "Adhésion en cours...",
+  "Not now": "Pas maintenant",
 });
 
 export const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {

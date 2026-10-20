@@ -16177,3 +16177,33 @@ button.pkq-card:hover { border-color: var(--brand); }
     width: 100%;
   }
 }
+
+/* Staff invited by phone (docs/STAFF_PHONE_INVITES.md): the method switch,
+   the "share this link" box, and the /j/<token> invitation page. Every row
+   wraps or shrinks so it fits a 320 px phone. */
+.invite-method-switch { margin-bottom: 4px; }
+.invite-method-switch button { min-height: 40px; padding: 0 13px; }
+.invite-link-share { background: var(--panel-soft, #f6f7fb); border: 1px solid var(--rule); border-radius: 12px; display: grid; gap: 8px; min-width: 0; padding: 12px; }
+.invite-link-share strong { font-size: 13.5px; }
+.invite-link-share p { color: var(--muted); font-size: 13px; line-height: 1.45; margin: 0; }
+.invite-link-share.compact { padding: 10px; }
+.invite-link-row { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.invite-link-row input { flex: 1 1 180px; font-size: 13px; min-width: 0; }
+.invite-link-row button { flex: 0 0 auto; justify-content: center; }
+.invite-sent-note { margin-bottom: 14px; }
+.staff-invite-page { width: min(460px, 100%); box-sizing: border-box; margin: 40px auto; padding: 28px 24px; display: grid; gap: 14px; }
+.staff-invite-page h1 { margin: 0; font-size: 20px; }
+.staff-invite-page > p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.45; }
+.staff-invite-page .staff-invite-lede { color: var(--ink, inherit); font-size: 16px; }
+.staff-invite-page > .primary-button,
+.staff-invite-page > .secondary-button { justify-content: center; width: 100%; white-space: normal; }
+@media (max-width: 420px) {
+  .staff-invite-page { margin: 16px auto; padding: 20px 16px; }
+}
+.staff-invite-status { align-items: center; color: var(--muted); display: flex; gap: 8px; margin: 0; }
+/* "Join <business>" after a normal sign-in (pending-invitations-prompt.tsx). */
+.pending-invite-prompt { align-items: center; display: flex; flex-wrap: wrap; gap: 10px 14px; margin-bottom: 14px; }
+.pending-invite-text { flex: 1 1 220px; line-height: 1.45; min-width: 0; overflow-wrap: anywhere; }
+.pending-invite-error { color: var(--danger, #b42318); flex-basis: 100%; }
+.pending-invite-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; max-width: 100%; }
+.pending-invite-actions .primary-button { max-width: 100%; white-space: normal; }

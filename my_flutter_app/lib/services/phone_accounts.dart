@@ -51,6 +51,10 @@ abstract final class PhoneRefusalReason {
   /// Phone-code sign-in is for customers only: an account with business or
   /// platform access signs in with its email and password.
   static const phoneSignInUnavailable = 'phone_sign_in_unavailable';
+
+  /// A staff invitation link that is unknown, cancelled, expired or already
+  /// accepted (docs/STAFF_PHONE_INVITES.md §4).
+  static const inviteNotFound = 'invite_not_found';
 }
 
 /// A refused call, or one that never got through.
@@ -164,6 +168,23 @@ class TrackingPhoneCodeRequest extends PhoneCodeRequest {
     'action': PhoneAccountAction.requestCode,
     'trackingCode': trackingCode.trim().toUpperCase(),
     'role': role == PhoneRole.receiver ? PhoneRole.receiver : PhoneRole.sender,
+  };
+}
+
+/// The masked flow of a staff invitation link (`/j/<token>`): the server
+/// reads the invited number; the app only ever shows its last two digits.
+class InvitePhoneCodeRequest extends PhoneCodeRequest {
+  const InvitePhoneCodeRequest({required this.inviteToken, this.lastTwo = ''});
+
+  final String inviteToken;
+
+  /// What the invitation showed ("••35"), before the server answered.
+  final String lastTwo;
+
+  @override
+  Map<String, Object?> toPayload() => {
+    'action': PhoneAccountAction.requestCode,
+    'inviteToken': inviteToken.trim(),
   };
 }
 

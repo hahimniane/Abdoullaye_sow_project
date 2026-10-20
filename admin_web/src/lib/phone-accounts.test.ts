@@ -80,7 +80,7 @@ test("every documented refusal reason maps to its own console copy, never the se
     "challenge_not_found", "code_expired", "code_wrong", "needs_country_code", "no_phone_on_record",
     "no_verified_phone", "phone_in_use", "phone_invalid", "proof_invalid", "rate_limited",
     "record_invalid", "sign_in_required", "too_many_attempts", "tracking_not_found",
-    "wrong_account", "whatsapp_unavailable", "phone_sign_in_unavailable",
+    "wrong_account", "whatsapp_unavailable", "phone_sign_in_unavailable", "invite_not_found",
   ].sort());
   // A network failure, a timeout or an unknown reason is "unknown".
   for (const error of [new Error("offline"), { code: "deadline-exceeded" }, { details: { reason: "brand_new" } }, null]) {

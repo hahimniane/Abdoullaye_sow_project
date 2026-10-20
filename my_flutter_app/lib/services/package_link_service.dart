@@ -11,12 +11,14 @@ import '../screens/inventory_sell_screen.dart';
 import '../screens/package_request_detail_screen.dart';
 import '../screens/package_request_form_screen.dart';
 import '../screens/package_result_screen.dart';
+import '../screens/staff_invite_screen.dart';
 import '../utils/business_permissions.dart';
 import '../widgets/guest_tracking_lookup.dart';
 import 'container_packages.dart';
 import 'inventory.dart';
 import 'package_codes.dart';
 import 'package_requests.dart';
+import 'staff_invites.dart';
 
 /// The screen a package-request link opens: the estimate page for `/e/`,
 /// the request form (with the business chosen) for `/r/`.
@@ -40,6 +42,10 @@ Widget packageRequestLinkPage(PackageRequestLink link) => switch (link) {
 /// business has Inventory on and who hold the inventory permission land on the
 /// Sell screen with that tag already in the basket; for anyone else the link
 /// does nothing in the app (the website shows its neutral page).
+///
+/// Staff invitation links (`/j/<token>`, docs/STAFF_PHONE_INVITES.md §6)
+/// too: parked the same way, then [StaffInviteScreen] opens over whatever is
+/// showing; it handles a signed-out phone itself.
 class PackageLinkService {
   PackageLinkService._();
 
@@ -49,6 +55,7 @@ class PackageLinkService {
   String? _pendingCode;
   String? _pendingInventoryCode;
   PackageRequestLink? _pendingRequestLink;
+  String? _pendingStaffInvite;
   bool _appReady = false;
   bool _routing = false;
   Uri? _lastLink;
@@ -98,6 +105,15 @@ class PackageLinkService {
     _lastLink = uri;
     _lastLinkAt = now;
     _acceptedLinks++;
+    final invite = staffInviteTokenFromUri(uri);
+    if (invite != null) {
+      if (!_appReady || rootNavigatorKey.currentState == null) {
+        _pendingStaffInvite = invite;
+        return;
+      }
+      _routeStaffInvite(invite);
+      return;
+    }
     // Package requests (§8.8): the estimate page (`/e/<token>`, the
     // WhatsApp button) and a business's request form (`/r/<slug>`).
     final request = packageRequestLinkFromUri(uri);
@@ -132,6 +148,9 @@ class PackageLinkService {
   /// of home.
   void markAppReady() {
     _appReady = true;
+    final invite = _pendingStaffInvite;
+    _pendingStaffInvite = null;
+    if (invite != null) _routeStaffInvite(invite);
     final request = _pendingRequestLink;
     _pendingRequestLink = null;
     if (request != null) _routeRequestLink(request);
@@ -157,8 +176,22 @@ class PackageLinkService {
     );
   }
 
+  void _routeStaffInvite(String token) {
+    final navigator = rootNavigatorKey.currentState;
+    if (navigator == null) {
+      _pendingStaffInvite = token;
+      return;
+    }
+    navigator.push(
+      MaterialPageRoute<void>(builder: (_) => StaffInviteScreen(token: token)),
+    );
+  }
+
   @visibleForTesting
   PackageRequestLink? get pendingRequestLink => _pendingRequestLink;
+
+  @visibleForTesting
+  String? get pendingStaffInvite => _pendingStaffInvite;
 
   @visibleForTesting
   String? get pendingCode => _pendingCode;
@@ -173,6 +206,7 @@ class PackageLinkService {
     _pendingCode = null;
     _pendingInventoryCode = null;
     _pendingRequestLink = null;
+    _pendingStaffInvite = null;
     _appReady = false;
     _routing = false;
     _lastLink = null;

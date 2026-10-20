@@ -391,3 +391,23 @@ Add future project conventions and repeated architectural decisions here.
   (`inventory_sale_switch_sheet.dart`, docs/INVENTORY.md v6). A new place
   that asks for credit terms reuses it; the draft and its validator stay
   `InventoryCheckoutDraft` / `validateInventoryCheckout`.
+- Staff invited by phone (docs/STAFF_PHONE_INVITES.md): pure rules in
+  `lib/services/staff_invites.dart` (`/j/` link parse, invite payload,
+  answers/rows, `staffInviteView`, refusal reasons, `profileAccessLost`,
+  the Join-prompt model + `PendingInvitationsMemory`); calls behind
+  `StaffInviteService` (`callContainerCallable`, injectable caller; fake
+  `test/fixtures/fake_staff_invite.dart`); words + shared UI in
+  `lib/widgets/staff_invite_widgets.dart` (`staffInviteRefusalText` by
+  `details.reason`, share-link note, owner's `BusinessInvitationsSection`
+  in TeamPanel, `PendingInvitationsHost` wrapping the customer home). The
+  form is `StaffInviteForm` in `add_staff_screen.dart` (phone default,
+  "Which store?" from `watchStores` only with 2+ active stores). `/j/`
+  rides `PackageLinkService` (parked until `AppLaunchGate`) into
+  `StaffInviteScreen` (`StaffInviteClient`, AuthProvider-backed
+  `AuthStaffInviteClient`); signing in uses `PhoneSignInScreen` with
+  `InvitePhoneCodeRequest` (masked, like tracking). After any acceptance
+  call `AuthProvider.reloadAfterInvitationAccepted` (token refresh + fresh
+  profile even if a lookup is in flight). AuthProvider follows the live
+  profile for staff/owner/admin sessions only (`_ensureProfileWatch`,
+  stopped on logout/auth change); losing access forces `getIdToken(true)`
+  and signs out when it fails.

@@ -154,7 +154,7 @@ test("a branded delivery says nothing; a fallback explains itself", () => {
 
 test("every pending-invitation label the panels render is bilingual", () => {
   for (const label of [
-    "Invitations sent — waiting for the person to set a password",
+    "Invitations sent — waiting for the person to accept",
     "Team members",
     "Awaiting reply",
     "Expired",

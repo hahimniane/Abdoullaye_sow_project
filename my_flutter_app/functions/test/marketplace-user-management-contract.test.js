@@ -65,9 +65,11 @@ describe("marketplace people backend contract", () => {
       "deleteUser",
     ]) {
       const callable = exportedCallable(name);
+      // The staff invitation senders spread the shared options and add
+      // only the WhatsApp secrets (docs/STAFF_PHONE_INVITES.md).
       assert.match(
           callable.slice(0, 220),
-          /onCall\(\s*MARKETPLACE_PEOPLE_CALLABLE_OPTIONS,/,
+          /onCall\(\s*(?:\{\s*\.\.\.)?MARKETPLACE_PEOPLE_CALLABLE_OPTIONS,/,
           `${name} must allow public HTTP transport through shared options`,
       );
     }

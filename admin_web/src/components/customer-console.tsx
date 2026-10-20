@@ -1,5 +1,6 @@
 "use client";
 
+import { PendingInvitationsPrompt } from "@/components/pending-invitations-prompt";
 import { useConsoleDocumentTitle } from "@/lib/document-title";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -373,6 +374,9 @@ export function CustomerConsole({
               {emailNotice && <small>{emailNotice}</small>}
             </div>
           )}
+          {/* Invitations waiting for this person (docs/STAFF_PHONE_INVITES.md
+              §4.1): "Join <business>" or "Not now". */}
+          <PendingInvitationsPrompt uid={firebaseUser.uid} />
           {dataError && <div className="error-box">We could not load all of your activity. {dataError}</div>}
           {activeTab === "home" && (
             <CustomerHome

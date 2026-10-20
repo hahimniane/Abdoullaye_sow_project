@@ -86,6 +86,7 @@ void main() {
         PhoneRefusalReason.noVerifiedPhone,
         PhoneRefusalReason.recordInvalid,
         PhoneRefusalReason.phoneSignInUnavailable,
+        PhoneRefusalReason.inviteNotFound,
       ];
       for (final locale in const [Locale('en'), Locale('fr')]) {
         final l10n = lookupAppLocalizations(locale);

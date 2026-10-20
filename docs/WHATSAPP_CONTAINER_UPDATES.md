@@ -363,6 +363,38 @@ Client"), business → `Laawol`, what → `goods` / `marchandises`, destination
 fallbacks are in *Pickup details per destination* above, tracking code →
 `-`.
 
+### `staff_invite_2lang`
+
+A business inviting a person as staff by their WhatsApp number
+(docs/STAFF_PHONE_INVITES.md). Not a shipment update: sent once per
+invitation (and again on Resend) by `inviteBusinessMember` /
+`resendAccessInvitation`, built by `staffInviteTemplateMessage`. Category
+**Utility**, language `en`, one body holding both languages. Button: *Visit
+website*, text `Accept · Accepter`, URL type **Dynamic**,
+`https://customer.laawoldigital.com/j/{{1}}`, whose only parameter is the
+invitation's link token. Variables: {{1}} the invited person's name, {{2}}
+who invited (EN), {{3}} business (EN), {{4}} who invited (FR), {{5}}
+business (FR).
+
+```
+Hello / Bonjour {{1}} 👋
+
+*ENGLISH*
+{{2}} invited you to join {{3}} on Laawol as staff. Tap the button below, then sign in with this WhatsApp number to accept. The invitation expires in 7 days.
+
+—————
+*FRANÇAIS*
+{{4}} vous invite à rejoindre {{5}} sur Laawol en tant que membre de l'équipe. Appuyez sur le bouton ci-dessous, puis connectez-vous avec ce numéro WhatsApp pour accepter. L'invitation expire dans 7 jours.
+```
+
+Sample values: `Mamadou`, `Fatou Diallo`, `Dala Shipping`, `Fatou Diallo`,
+`Dala Shipping`. Blanks: the inviter falls back to the business name, then
+`Laawol`. Created with `~/laawol-deploy-logs/create_staff_invite_template.py`
+(dry run by default, `--submit` sends). Until Meta approves it a send answers
+`132001`: the invitation stays pending, nothing is retried by itself, and the
+owner sees "WhatsApp message not sent yet - share this link" (Resend tries
+again).
+
 #### The legacy templates (fallback, `WHATSAPP_TEMPLATE_SET=legacy`)
 
 In WhatsApp Manager → Message templates there are **three templates**, each

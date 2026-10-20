@@ -15926,4 +15926,229 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get bankLimitSaved => 'Limite enregistrée';
+
+  @override
+  String get phaErrInviteNotFound =>
+      'Cette invitation n’est plus active. Demandez une nouvelle invitation à l’entreprise.';
+
+  @override
+  String get stiMethodLabel => 'Inviter par';
+
+  @override
+  String get stiMethodPhone => 'Téléphone (WhatsApp)';
+
+  @override
+  String get stiMethodEmail => 'E-mail';
+
+  @override
+  String get stiPhoneLabel => 'Numéro WhatsApp';
+
+  @override
+  String get stiPhoneHelp =>
+      'La personne reçoit un message WhatsApp avec un lien pour rejoindre l’équipe. Elle se connecte avec un code, sans mot de passe.';
+
+  @override
+  String get stiNameRequired => 'Saisissez le nom de la personne.';
+
+  @override
+  String get stiPhoneRequired =>
+      'Saisissez un numéro valide avec l’indicatif du pays.';
+
+  @override
+  String get stiStoreLabel => 'Quel magasin ?';
+
+  @override
+  String get stiStoreHelp => 'Où cette personne travaille dans l’inventaire.';
+
+  @override
+  String get stiStoreAll => 'Tous les magasins';
+
+  @override
+  String get stiStoreRequired => 'Choisissez un magasin, ou Tous les magasins.';
+
+  @override
+  String get stiSentOnWhatsApp => 'Invitation envoyée sur WhatsApp';
+
+  @override
+  String get stiNotSentTitle =>
+      'Message WhatsApp pas encore envoyé - partagez ce lien';
+
+  @override
+  String get stiNotSentHelp =>
+      'L’invitation est prête. Envoyez vous-même ce lien à la personne. Il est valable 7 jours.';
+
+  @override
+  String get stiCopyLink => 'Copier le lien';
+
+  @override
+  String get stiLinkCopied => 'Lien copié';
+
+  @override
+  String get stiStatusPending => 'En attente';
+
+  @override
+  String get stiStatusExpired => 'Expirée';
+
+  @override
+  String get stiStatusCancelled => 'Annulée';
+
+  @override
+  String get stiStatusAccepted => 'Acceptée';
+
+  @override
+  String stiExpiresOn(Object date) {
+    return 'Expire le $date';
+  }
+
+  @override
+  String get stiInvitationsEmpty => 'Aucune invitation en attente.';
+
+  @override
+  String get stiInvitationsFailed => 'Impossible de charger les invitations.';
+
+  @override
+  String get stiScreenTitle => 'Invitation d’équipe';
+
+  @override
+  String stiInvitedYou(String inviter, String business) {
+    return '$inviter vous invite à rejoindre $business sur Laawol en tant que membre de l’équipe.';
+  }
+
+  @override
+  String stiInvitedYouNoInviter(Object business) {
+    return 'Vous êtes invité à rejoindre $business sur Laawol en tant que membre de l’équipe.';
+  }
+
+  @override
+  String stiAcceptWithNumber(Object lastTwo) {
+    return 'Accepter avec le numéro se terminant par ••$lastTwo';
+  }
+
+  @override
+  String get stiAcceptWithNumberHelp =>
+      'Nous envoyons un code à ce numéro sur WhatsApp.';
+
+  @override
+  String get stiAccept => 'Accepter l’invitation';
+
+  @override
+  String get stiAccepting => 'Acceptation…';
+
+  @override
+  String stiOtherAccount(Object lastTwo) {
+    return 'Vous êtes connecté avec un autre compte. Cette invitation est pour le numéro se terminant par ••$lastTwo : déconnectez-vous, puis acceptez avec ce numéro.';
+  }
+
+  @override
+  String get stiSignOutToContinue => 'Se déconnecter pour continuer';
+
+  @override
+  String get stiSigningOut => 'Déconnexion…';
+
+  @override
+  String get stiClosedExpired =>
+      'Cette invitation a expiré. Demandez une nouvelle invitation à l’entreprise.';
+
+  @override
+  String get stiClosedCancelled =>
+      'Cette invitation a été annulée. Demandez une nouvelle invitation à l’entreprise.';
+
+  @override
+  String get stiClosedAccepted =>
+      'Cette invitation a déjà été acceptée. Si vous avez besoin d’un accès, demandez une nouvelle invitation à l’entreprise.';
+
+  @override
+  String get stiLoadFailed => 'Impossible d’ouvrir cette invitation.';
+
+  @override
+  String stiWelcome(Object business) {
+    return 'Bienvenue chez $business';
+  }
+
+  @override
+  String get stiErrFullName => 'Saisissez le nom complet de la personne.';
+
+  @override
+  String get stiErrPhone => 'Saisissez un numéro de téléphone valide.';
+
+  @override
+  String get stiErrCountryCode => 'Ajoutez l’indicatif du pays au numéro.';
+
+  @override
+  String get stiErrEmail => 'Saisissez une adresse e-mail valide.';
+
+  @override
+  String get stiErrStoreAccess =>
+      'Choisissez un magasin, ou Tous les magasins.';
+
+  @override
+  String get stiErrStoreNotFound =>
+      'Ce magasin n’existe plus. Choisissez-en un autre.';
+
+  @override
+  String get stiErrExistingAuthority =>
+      'Ce compte a déjà un accès entreprise ou administrateur : il ne peut pas rejoindre l’équipe.';
+
+  @override
+  String get stiErrAlreadyPending =>
+      'Une invitation pour cette personne est déjà en attente. Renvoyez-la depuis la liste.';
+
+  @override
+  String get stiErrOwnerRequired =>
+      'Seul le propriétaire de l’entreprise peut inviter des membres de l’équipe.';
+
+  @override
+  String get stiErrBusiness => 'Choisissez d’abord l’entreprise.';
+
+  @override
+  String get stiErrNotActive =>
+      'Cette invitation n’est plus active. Demandez une nouvelle invitation à l’entreprise.';
+
+  @override
+  String get stiErrSelection =>
+      'Plusieurs invitations sont en attente. Ouvrez le lien du message reçu.';
+
+  @override
+  String get stiErrExpired =>
+      'Cette invitation a expiré. Demandez une nouvelle invitation à l’entreprise.';
+
+  @override
+  String get stiErrNotPending =>
+      'Cette invitation a déjà été utilisée ou annulée.';
+
+  @override
+  String get stiErrIdentity =>
+      'Cette invitation est pour un autre numéro. Connectez-vous avec le numéro auquel elle a été envoyée.';
+
+  @override
+  String get stiErrVerifiedContact =>
+      'Connectez-vous avec le numéro auquel l’invitation a été envoyée.';
+
+  @override
+  String get stiErrNotAllowed =>
+      'Vous n’avez pas l’accès nécessaire pour faire cela.';
+
+  @override
+  String get stiPendingTitle => 'Vous avez une invitation';
+
+  @override
+  String stiPendingInvited(String inviter, String business) {
+    return '$inviter vous invite à rejoindre $business en tant que membre de l’équipe.';
+  }
+
+  @override
+  String stiPendingInvitedNoInviter(Object business) {
+    return 'Vous êtes invité à rejoindre $business en tant que membre de l’équipe.';
+  }
+
+  @override
+  String get stiPlatformName => 'l’administration de Laawol Digital';
+
+  @override
+  String stiJoin(Object business) {
+    return 'Rejoindre $business';
+  }
+
+  @override
+  String get stiNotNow => 'Plus tard';
 }
