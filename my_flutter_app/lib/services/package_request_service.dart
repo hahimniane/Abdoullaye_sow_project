@@ -184,11 +184,19 @@ class FirebasePackageRequestService implements PackageRequestService {
         }),
       );
 
+  /// A signed-out phone gets a guest (anonymous) session before its first
+  /// photo or its Send, so asking for an estimate never needs an account.
+  Future<void> _ensureSession() async {
+    if (_auth.currentUser == null) await _auth.signInAnonymously();
+  }
+
   @override
-  Future<RequestSubmitted> submit(Map<String, Object?> payload) async =>
-      RequestSubmitted.fromResponse(
-        await _call('submitPackageRequest', payload),
-      );
+  Future<RequestSubmitted> submit(Map<String, Object?> payload) async {
+    await _ensureSession();
+    return RequestSubmitted.fromResponse(
+      await _call('submitPackageRequest', payload),
+    );
+  }
 
   @override
   Future<PackageRequest> getByToken(String token) async {
@@ -254,6 +262,7 @@ class FirebasePackageRequestService implements PackageRequestService {
     required Uint8List bytes,
     required String contentType,
   }) async {
+    await _ensureSession();
     final uid = _auth.currentUser?.uid ?? '';
     if (uid.isEmpty) {
       throw const RequestFailure(RequestRefusal(code: 'unauthenticated'));

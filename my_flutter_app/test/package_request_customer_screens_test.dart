@@ -151,11 +151,24 @@ Future<void> _pickDay(WidgetTester tester, String key, String day) async {
 
 void main() {
   group('Send a package', () {
-    testWidgets('asks a signed-out phone to sign in', (tester) async {
+    testWidgets('a signed-out phone fills the form and sends, no sign-in',
+        (tester) async {
+      // Scanning a business QR must never start with "Sign in": the form
+      // shows at once and the sender types their own name and WhatsApp.
       final fake = FakePackageRequests()..options = _options();
       await _pump(tester, _form(fake, customer: null));
-      expect(find.byKey(const Key('request-sign-in')), findsOneWidget);
-      expect(find.text('Sign in to send a request'), findsOneWidget);
+      expect(find.byKey(const Key('request-sign-in')), findsNothing);
+      expect(find.text('Sign in to send a request'), findsNothing);
+      await _tap(tester, 'request-bring-in');
+      await _pickDay(tester, 'request-planned-day', '24');
+      await _type(tester, 'request-sender-name', 'Awa Camara');
+      await _type(tester, 'request-sender-phone', '9175550188');
+      await _type(tester, 'request-receiver-name', 'Mariama Bah');
+      await _type(tester, 'request-receiver-phone', '621234567');
+      await _tap(tester, 'request-send');
+      final sent = fake.of('submitPackageRequest').single;
+      expect(sent['sender'], {'name': 'Awa Camara', 'phoneE164': '+19175550188'});
+      expect(find.byKey(const Key('request-sent-code')), findsOneWidget);
     });
 
     testWidgets('a failed load says so and retries', (tester) async {
