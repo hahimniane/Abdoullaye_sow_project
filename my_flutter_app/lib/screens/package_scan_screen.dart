@@ -5,6 +5,8 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/destination_country.dart';
+import '../services/container_delivery.dart';
+import '../services/container_delivery_service.dart';
 import '../services/container_manifest.dart';
 import '../services/container_packages.dart';
 import '../services/lot_ledger.dart' show LotStaff;
@@ -14,6 +16,7 @@ import '../theme/app_motion.dart';
 import '../theme/app_spacing.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/lot_sheets.dart';
+import '../widgets/package_delivery_widgets.dart';
 import '../widgets/scanner_camera_view.dart';
 import 'containers_screen.dart';
 import 'package_result_screen.dart';
@@ -24,6 +27,11 @@ import 'package_result_screen.dart';
 /// code is printed large beside the QR), and a package with no label left
 /// at all is found by its customer's or receiver's name or phone. Each way
 /// lands on the same package view.
+///
+/// Opened from Deliveries ([deliveries]) it is the destination's hand-over
+/// desk: titled Deliveries, and every package opens in the [access] the
+/// person holds (a deliveries-only person: no money, edits or container
+/// page).
 class PackageScanScreen extends StatefulWidget {
   const PackageScanScreen({
     super.key,
@@ -34,6 +42,9 @@ class PackageScanScreen extends StatefulWidget {
     this.repository,
     this.cameraEnabled = true,
     this.staff = const [],
+    this.deliveries = false,
+    this.access,
+    this.deliveryService = const ContainerDeliveryService(),
   });
 
   final String businessId;
@@ -44,6 +55,13 @@ class PackageScanScreen extends StatefulWidget {
 
   /// Names for "recorded by" on a package's payments, when the caller has them.
   final List<LotStaff> staff;
+
+  /// Opened as Deliveries: its own title.
+  final bool deliveries;
+
+  /// Passed to every package page; null reads the signed-in person's.
+  final PackageAccess? access;
+  final ContainerDeliveryService deliveryService;
 
   /// Off in widget tests, where there is no camera plugin.
   @visibleForTesting
@@ -147,6 +165,8 @@ class _PackageScanScreenState extends State<PackageScanScreen> {
           repository: widget.repository,
           staff: widget.staff,
           groupLines: _lines,
+          access: widget.access,
+          deliveryService: widget.deliveryService,
         ),
       ),
     );
@@ -194,7 +214,7 @@ class _PackageScanScreenState extends State<PackageScanScreen> {
                     const AppBackButton(),
                     Expanded(
                       child: Text(
-                        l10n.pkgScanTitle,
+                        widget.deliveries ? l10n.dlvTitle : l10n.pkgScanTitle,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -414,7 +434,10 @@ class _HitRow extends StatelessWidget {
                 ],
               ),
             ),
-            if (container != null) ...[
+            if (line.isDelivered) ...[
+              const SizedBox(width: AppSpacing.sm),
+              DeliveredPill(key: ValueKey('pkg-hit-delivered-${line.id}')),
+            ] else if (container != null) ...[
               const SizedBox(width: AppSpacing.sm),
               ContainerStatusPill(status: container.status),
             ] else if (hit.isWaiting) ...[

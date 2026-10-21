@@ -9,6 +9,10 @@ abstract final class BusinessPermission {
   static const ledger = 'ledger';
   static const invoices = 'invoices';
   static const containers = 'containers';
+
+  /// Destination staff who hand packages over: scan a label, mark it
+  /// delivered. Nothing else of the containers, and never any money.
+  static const deliveries = 'deliveries';
   static const inventory = 'inventory';
   static const destinations = 'destinations';
   static const people = 'people';

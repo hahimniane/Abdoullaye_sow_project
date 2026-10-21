@@ -111,7 +111,8 @@ enum PackageLinkDestination {
 
 /// Whether the person signed in may look the code up in a business's own
 /// lines: a real (not anonymous) account with business access, the
-/// containers permission, and a business to look in. The permission alone
+/// containers or the deliveries permission (`hasDeliveriesAccess`), and a
+/// business to look in. The permission alone
 /// is not enough - `hasBusinessPermission` answers yes for anyone who is not
 /// staff, customers included.
 bool packageLinkStaffEligible({

@@ -16189,4 +16189,134 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get authErrorInvitationWaiting =>
       'Une invitation attend ce compte. Ouvrez le lien d’invitation reçu pour la rejoindre.';
+
+  @override
+  String get dlvTitle => 'Livraisons';
+
+  @override
+  String get dlvSubtitle => 'Scannez l’étiquette d’un colis et remettez-le.';
+
+  @override
+  String get dlvSection => 'Livraison';
+
+  @override
+  String get dlvReadyNote =>
+      'Son conteneur est prêt à récupérer. Remettez le colis et marquez-le comme livré.';
+
+  @override
+  String get dlvMarkDelivered => 'Marquer comme livré';
+
+  @override
+  String get dlvMarking => 'Enregistrement de la livraison…';
+
+  @override
+  String dlvSheetSubtitle(String what, String receiver) {
+    return '$what pour $receiver';
+  }
+
+  @override
+  String get dlvCollectedByLabel => 'Récupéré par';
+
+  @override
+  String get dlvCollectedByHelper =>
+      'Le destinataire, ou la personne qui le récupère pour lui.';
+
+  @override
+  String get dlvCollectedByTooLong =>
+      'Le nom de la personne qui l’a récupéré doit faire 120 caractères au plus.';
+
+  @override
+  String dlvBalanceOwed(Object amount) {
+    return 'Ce colis doit encore $amount.';
+  }
+
+  @override
+  String get dlvBalanceUnpaid =>
+      'Ce colis a encore un solde impayé — vérifiez auprès du bureau.';
+
+  @override
+  String get dlvBalanceConfirm =>
+      'Vous pouvez quand même le remettre : confirmez ci-dessous.';
+
+  @override
+  String get dlvDeliverAnyway => 'Livrer quand même';
+
+  @override
+  String get dlvDone => 'Marqué comme livré.';
+
+  @override
+  String get dlvAlreadyDelivered => 'Ce colis était déjà marqué comme livré.';
+
+  @override
+  String get dlvDeliveredPill => 'Livré';
+
+  @override
+  String dlvDeliveredOn(Object when) {
+    return 'Livré le $when';
+  }
+
+  @override
+  String dlvHandedOverBy(Object name) {
+    return 'Remis par $name';
+  }
+
+  @override
+  String dlvCollectedBy(Object name) {
+    return 'Récupéré par $name';
+  }
+
+  @override
+  String dlvOwedAtDelivery(Object amount) {
+    return '$amount restait dû à la remise';
+  }
+
+  @override
+  String get dlvUndo => 'Annuler la livraison';
+
+  @override
+  String get dlvUndoTitle => 'Annuler cette livraison ?';
+
+  @override
+  String get dlvUndoMessage =>
+      'Le colis redevient prêt à récupérer. Personne n’est prévenu.';
+
+  @override
+  String get dlvUndone => 'Livraison annulée.';
+
+  @override
+  String get dlvNotUndone => 'Ce colis n’était pas marqué comme livré.';
+
+  @override
+  String dlvProgress(int delivered, int total) {
+    return '$delivered sur $total livrés';
+  }
+
+  @override
+  String get dlvErrAction =>
+      'Cette action n’est pas possible pour une livraison.';
+
+  @override
+  String get dlvErrNotArrived =>
+      'Un colis peut être marqué comme livré une fois son conteneur prêt à récupérer.';
+
+  @override
+  String get dlvErrBalanceDue =>
+      'Ce colis a encore un solde impayé. Confirmez pour le marquer comme livré quand même.';
+
+  @override
+  String get dlvErrLineNotFound => 'Ce colis n’existe plus.';
+
+  @override
+  String get dlvErrNotAllowed => 'Vous n’avez pas accès à cette action.';
+
+  @override
+  String get dlvErrOffline =>
+      'Pas de connexion. Vérifiez votre internet et réessayez.';
+
+  @override
+  String get dlvErrGeneric =>
+      'Impossible d’enregistrer la livraison. Réessayez.';
+
+  @override
+  String get pkgMomentDelivered => 'livré';
 }

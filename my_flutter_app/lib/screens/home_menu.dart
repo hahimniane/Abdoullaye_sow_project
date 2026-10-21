@@ -33,6 +33,7 @@ import 'business_assistant_screen.dart';
 import 'business_reviews_screen.dart';
 import 'business_transport_screen.dart';
 import 'containers_screen.dart';
+import 'package_scan_screen.dart';
 import 'inventory_screen.dart';
 import 'invoices_screen.dart';
 import 'parking_month_end_screen.dart';
@@ -1324,6 +1325,13 @@ List<_Destination> _businessDestinations(
   // only to a business that ships (barrels, freight, car transport/parking).
   final canUseContainers =
       auth.hasContainersAccess && ledgerBusinessId.isNotEmpty;
+  // Deliveries - scan a package and hand it over - for destination staff
+  // who hold the deliveries permission without the containers one. Anyone
+  // with containers already scans from Containers.
+  final canUseDeliveries =
+      auth.hasDeliveriesAccess &&
+      !auth.hasContainersAccess &&
+      ledgerBusinessId.isNotEmpty;
   // Inventory needs both gates: the business has the service switched on
   // (it is not in the default list, so a legacy business without a stored
   // list never sees it) and this person holds the inventory permission.
@@ -1371,6 +1379,24 @@ List<_Destination> _businessDestinations(
           Navigator.of(context).push(
             MaterialPageRoute<void>(
               builder: (_) => ContainersScreen(businessId: ledgerBusinessId),
+            ),
+          );
+        },
+      ),
+    if (canUseDeliveries)
+      _Destination(
+        rowKey: const Key('open-deliveries'),
+        icon: Icons.how_to_reg_outlined,
+        title: l10n.dlvTitle,
+        subtitle: l10n.dlvSubtitle,
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => PackageScanScreen(
+                businessId: ledgerBusinessId,
+                deliveries: true,
+                access: auth.packageAccess,
+              ),
             ),
           );
         },

@@ -298,6 +298,7 @@ class ShippingContainer {
     required this.status,
     required this.notes,
     required this.lineCount,
+    this.deliveredCount = 0,
     required this.carCount,
     required this.barrelCount,
     required this.otherCount,
@@ -338,6 +339,11 @@ class ShippingContainer {
   final String trackingProvider;
   final String trackedContainerNumber;
   final int lineCount;
+
+  /// How many of its lines are marked delivered at the destination: kept by
+  /// the delivery transaction beside [lineCount] and repaired by every
+  /// recount (functions `containerLineDelivery`). Absent reads as 0.
+  final int deliveredCount;
   final int carCount;
   final int barrelCount;
   final int otherCount;
@@ -365,6 +371,7 @@ class ShippingContainer {
           : containerStatusLoading,
       notes: _text(d['notes'], containerMaxNote),
       lineCount: _positiveInt(d['lineCount']),
+      deliveredCount: _positiveInt(d['deliveredCount']),
       carCount: _positiveInt(d['carCount']),
       barrelCount: _positiveInt(d['barrelCount']),
       otherCount: _positiveInt(d['otherCount']),
@@ -986,11 +993,34 @@ class ContainerLine {
     this.lastPartIndex = 0,
     this.phoneCountryCodeMissing = const [],
     this.phoneReportedNotMine = const [],
+    this.deliveredAt,
+    this.deliveredByStaffId = '',
+    this.deliveredByName = '',
+    this.collectedBy = '',
+    this.deliveredBalanceCents = 0,
+    this.deliveryUndoneAt,
+    this.deliveryUndoneByStaffId = '',
   });
 
   final String id;
   final String businessId;
   final String containerId;
+
+  /// Handed over at the destination (functions `container_delivery.js`
+  /// DELIVERY_FIELDS): when, by whom (uid and name), who collected it (the
+  /// receiver unless someone collected for them) and what it still owed
+  /// then. All absent until delivered; an undo deletes them and stamps
+  /// [deliveryUndoneAt] / [deliveryUndoneByStaffId].
+  final DateTime? deliveredAt;
+  final String deliveredByStaffId;
+  final String deliveredByName;
+  final String collectedBy;
+  final int deliveredBalanceCents;
+  final DateTime? deliveryUndoneAt;
+  final String deliveryUndoneByStaffId;
+
+  /// Marked delivered. Mirrors `lineIsDelivered`.
+  bool get isDelivered => deliveredAt != null;
 
   /// Server-written (docs/PHONE_ACCOUNTS.md §3): the raw phone fields
   /// (`customerPhone` / `receiverPhone`) staff must give a country code, and
@@ -1167,6 +1197,13 @@ class ContainerLine {
         d['phoneCountryCodeMissing'],
       ),
       phoneReportedNotMine: recordPhoneFieldList(d['phoneReportedNotMine']),
+      deliveredAt: lotDateOf(d['deliveredAt']),
+      deliveredByStaffId: _text(d['deliveredByStaffId'], 128),
+      deliveredByName: _text(d['deliveredByName'], containerMaxLabel),
+      collectedBy: _text(d['collectedBy'], containerMaxLabel),
+      deliveredBalanceCents: _paidCents(d['deliveredBalanceCents']),
+      deliveryUndoneAt: lotDateOf(d['deliveryUndoneAt']),
+      deliveryUndoneByStaffId: _text(d['deliveryUndoneByStaffId'], 128),
     );
   }
 
@@ -1242,6 +1279,9 @@ const containerUpdateReceived = 'received';
 const containerUpdateShipped = 'shipped';
 const containerUpdateAtPort = 'at_port';
 const containerUpdateArrived = 'arrived';
+// Handed over at the destination (functions container_delivery.js): the
+// sender and the receiver each hear once.
+const containerUpdateDelivered = 'delivered';
 const containerUpdateRoleSender = 'sender';
 const containerUpdateRoleReceiver = 'receiver';
 const containerUpdateSent = 'sent';

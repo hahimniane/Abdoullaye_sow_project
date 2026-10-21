@@ -5,6 +5,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/destination_country.dart';
+import '../services/container_delivery.dart';
+import '../services/container_delivery_service.dart';
 import '../services/container_manifest.dart';
 import '../services/container_packages.dart';
 import '../services/line_pieces.dart' show LineGroupSummary;
@@ -21,6 +23,7 @@ import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/guest_tracking_lookup.dart';
 import '../widgets/lot_sheets.dart';
+import '../widgets/package_delivery_widgets.dart';
 import '../widgets/package_money.dart';
 import '../widgets/phone_account_widgets.dart' show RecordPhoneFlagNotes;
 import 'containers_screen.dart';
@@ -29,8 +32,13 @@ import 'package_payment_sheet.dart';
 /// One package, as the yard needs it after scanning its label: whose it is
 /// (with a way to call or message them), who collects it, what it is, which
 /// box it is on and where that box is, whether the WhatsApp updates reached
-/// anyone - and the three things staff do next: fix a contact, reprint a
-/// label, open the container.
+/// anyone - and the things staff do next: hand it over (mark it delivered
+/// once its box is ready for pickup), fix a contact, reprint a label, open
+/// the container.
+///
+/// A deliveries-only person ([PackageAccess.restricted]) sees who it is for,
+/// where it is and whether it was delivered, and can mark it delivered -
+/// never a price, a payment, an edit, a label or the container page.
 ///
 /// Found by tracking code (a scan, a typed code, a tapped link) or by line id
 /// (a search hit on a line that has no code yet). Only the business's own
@@ -49,6 +57,8 @@ class PackageResultScreen extends StatefulWidget {
     this.labelOpener = openContainerLabels,
     this.staff = const [],
     this.groupLines = const [],
+    this.access,
+    this.deliveryService = const ContainerDeliveryService(),
   }) : assert(code != '' || lineId != '');
 
   final String businessId;
@@ -79,6 +89,13 @@ class PackageResultScreen extends StatefulWidget {
   /// the root). Without them the line is read alone.
   final List<ContainerLine> groupLines;
 
+  /// What this person may see and do; null reads it from the signed-in
+  /// person's permissions ([packageAccessOf]).
+  final PackageAccess? access;
+
+  /// Marks it delivered and undoes that; a fake in widget tests.
+  final ContainerDeliveryService deliveryService;
+
   @override
   State<PackageResultScreen> createState() => _PackageResultScreenState();
 }
@@ -101,6 +118,11 @@ class _PackageResultScreenState extends State<PackageResultScreen> {
 
   late String _businessCountryCode = widget.businessCountryCode;
   late List<DestinationCountry> _destinations = widget.destinations;
+
+  /// The undo call is in flight (after its confirm dialog closed).
+  bool _undoing = false;
+
+  PackageAccess get _access => widget.access ?? packageAccessOf(context);
 
   @override
   void initState() {
@@ -271,6 +293,36 @@ class _PackageResultScreenState extends State<PackageResultScreen> {
     );
   }
 
+  Future<void> _markDelivered() async {
+    final line = _line;
+    if (line == null) return;
+    await showMarkDeliveredSheet(
+      context,
+      businessId: widget.businessId,
+      line: line,
+      group: _group,
+      access: _access,
+      service: widget.deliveryService,
+    );
+  }
+
+  Future<void> _undoDelivery() async {
+    final line = _line;
+    if (line == null || _undoing) return;
+    if (!await confirmUndoDelivery(context) || !mounted) return;
+    setState(() => _undoing = true);
+    try {
+      await runUndoDelivery(
+        context,
+        businessId: widget.businessId,
+        lineId: line.id,
+        service: widget.deliveryService,
+      );
+    } finally {
+      if (mounted) setState(() => _undoing = false);
+    }
+  }
+
   void _openContainer() {
     final containerId = _line?.containerId ?? '';
     if (containerId.isEmpty) return;
@@ -322,9 +374,11 @@ class _PackageResultScreenState extends State<PackageResultScreen> {
     } else if (line == null) {
       body = _NotFound(code: widget.code, onLookUpPublicly: _lookUpPublicly);
     } else {
+      final access = _access;
       body = PackageResultView(
         line: line,
         container: _container,
+        access: access,
         onCall: (phone) => _launch(packagePhoneCallUri(phone)),
         onWhatsApp: (phone) => _launch(packageWhatsAppUri(phone)),
         onEditContacts: _editContacts,
@@ -336,6 +390,11 @@ class _PackageResultScreenState extends State<PackageResultScreen> {
             _container == null && !line.isWaiting ? null : _printLabels,
         onOpenContainer: _openContainer,
         onPricePayments: _pricePayments,
+        onMarkDelivered: canMarkDelivered(line, _container, access)
+            ? _markDelivered
+            : null,
+        onUndoDelivery: canUndoDelivery(line, access) ? _undoDelivery : null,
+        undoingDelivery: _undoing,
         group: _group,
       );
     }
@@ -456,9 +515,25 @@ class PackageResultView extends StatelessWidget {
     this.onEditLine,
     this.onPricePayments,
     this.group,
+    this.access = PackageAccess.full,
+    this.onMarkDelivered,
+    this.onUndoDelivery,
+    this.undoingDelivery = false,
   });
 
   final ContainerLine line;
+
+  /// What the person may see and do. Restricted (deliveries only): no
+  /// money, edits, labels or container page.
+  final PackageAccess access;
+
+  /// Opens the Mark delivered sheet; null when the package cannot be handed
+  /// over now (not ready for pickup, already delivered, or not allowed).
+  final VoidCallback? onMarkDelivered;
+
+  /// Undoes a delivery; null unless delivered and the person is a manager.
+  final VoidCallback? onUndoDelivery;
+  final bool undoingDelivery;
 
   /// Its package's group: a part shows the whole package's money.
   final LineGroupSummary? group;
@@ -485,12 +560,47 @@ class PackageResultView extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final locale = dateLocaleOf(context);
     final c = container;
+    final restricted = access.restricted;
     return ListView(
       padding: const EdgeInsets.fromLTRB(
           AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.xl),
       children: [
         _CodeCard(line: line, container: c),
         const SizedBox(height: AppSpacing.md),
+        // Handing it over comes first: it is what the destination scanned
+        // the label for.
+        if (line.isDelivered)
+          _Section(
+            title: l10n.dlvSection,
+            child: PackageDeliveredCard(
+              line: line,
+              canSeeMoney: access.canSeeMoney,
+              onUndo: onUndoDelivery,
+              undoing: undoingDelivery,
+            ),
+          )
+        else if (onMarkDelivered != null)
+          _Section(
+            title: l10n.dlvSection,
+            child: Column(
+              key: const Key('pkg-ready-for-delivery'),
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _Fact(
+                  icon: Icons.flag_outlined,
+                  text: l10n.dlvReadyNote,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                ContainerActionButton(
+                  key: const Key('pkg-mark-delivered'),
+                  icon: Icons.how_to_reg_outlined,
+                  label: l10n.dlvMarkDelivered,
+                  primary: true,
+                  onTap: onMarkDelivered!,
+                ),
+              ],
+            ),
+          ),
         _Section(
           title: l10n.pkgWhatItIs,
           child: Column(
@@ -673,8 +783,8 @@ class PackageResultView extends StatelessWidget {
         ),
         // The price and what has been paid. A package nobody priced on a
         // container shows nothing here (most predate prices); a waiting one
-        // always can be priced.
-        if (line.isWaiting || packageHasMoney(line))
+        // always can be priced. Never for someone who may not see money.
+        if (access.canSeeMoney && (line.isWaiting || packageHasMoney(line)))
           _Section(
             title: l10n.wpkPriceFact,
             child: Column(
@@ -702,57 +812,63 @@ class PackageResultView extends StatelessWidget {
           title: l10n.pkgUpdates,
           child: _Updates(line: line, locale: locale),
         ),
-        const SizedBox(height: AppSpacing.sm),
-        ContainerActionButton(
-          key: const Key('pkg-print-labels'),
-          icon: Icons.qr_code_2,
-          label: l10n.pkgReprintLabels,
-          primary: true,
-          enabled: onPrintLabels != null,
-          onTap: onPrintLabels ?? () {},
-        ),
-        if (onEditLine != null &&
-            (line.isWaiting || (c != null && c.isLoading))) ...[
+        // Everything below changes the package or opens the container page
+        // (which shows every price): a manager's, not a deliveries-only
+        // person's.
+        if (!restricted) ...[
           const SizedBox(height: AppSpacing.sm),
           ContainerActionButton(
-            key: const Key('pkg-edit-line'),
-            icon: Icons.edit_outlined,
-            label: line.isWaiting ? l10n.wpkEditPackage : l10n.ctrEditLine,
-            onTap: onEditLine!,
+            key: const Key('pkg-print-labels'),
+            icon: Icons.qr_code_2,
+            label: l10n.pkgReprintLabels,
+            // Mark delivered is the primary action while it is offered.
+            primary: onMarkDelivered == null,
+            enabled: onPrintLabels != null,
+            onTap: onPrintLabels ?? () {},
           ),
-        ],
-        if (onPricePayments != null) ...[
-          const SizedBox(height: AppSpacing.sm),
-          ContainerActionButton(
-            key: const Key('pkg-price-payments'),
-            icon: Icons.payments_outlined,
-            label: l10n.wpkMoney,
-            onTap: onPricePayments!,
-          ),
-        ],
-        const SizedBox(height: AppSpacing.sm),
-        Row(
-          children: [
-            Expanded(
-              child: ContainerActionButton(
-                key: const Key('pkg-edit-contacts'),
-                icon: Icons.contact_phone_outlined,
-                label: l10n.ctrEditContacts,
-                onTap: onEditContacts,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: ContainerActionButton(
-                key: const Key('pkg-open-container'),
-                icon: Icons.view_in_ar_outlined,
-                label: l10n.pkgOpenContainer,
-                enabled: line.containerId.isNotEmpty,
-                onTap: onOpenContainer,
-              ),
+          if (onEditLine != null &&
+              (line.isWaiting || (c != null && c.isLoading))) ...[
+            const SizedBox(height: AppSpacing.sm),
+            ContainerActionButton(
+              key: const Key('pkg-edit-line'),
+              icon: Icons.edit_outlined,
+              label: line.isWaiting ? l10n.wpkEditPackage : l10n.ctrEditLine,
+              onTap: onEditLine!,
             ),
           ],
-        ),
+          if (onPricePayments != null && access.canSeeMoney) ...[
+            const SizedBox(height: AppSpacing.sm),
+            ContainerActionButton(
+              key: const Key('pkg-price-payments'),
+              icon: Icons.payments_outlined,
+              label: l10n.wpkMoney,
+              onTap: onPricePayments!,
+            ),
+          ],
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            children: [
+              Expanded(
+                child: ContainerActionButton(
+                  key: const Key('pkg-edit-contacts'),
+                  icon: Icons.contact_phone_outlined,
+                  label: l10n.ctrEditContacts,
+                  onTap: onEditContacts,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: ContainerActionButton(
+                  key: const Key('pkg-open-container'),
+                  icon: Icons.view_in_ar_outlined,
+                  label: l10n.pkgOpenContainer,
+                  enabled: line.containerId.isNotEmpty,
+                  onTap: onOpenContainer,
+                ),
+              ),
+            ],
+          ),
+        ],
       ],
     );
   }
@@ -821,7 +937,10 @@ class _CodeCard extends StatelessWidget {
               ],
             ),
           ),
-          if (container != null) ...[
+          if (line.isDelivered) ...[
+            const SizedBox(width: AppSpacing.sm),
+            const DeliveredPill(key: Key('pkg-delivered-pill')),
+          ] else if (container != null) ...[
             const SizedBox(width: AppSpacing.sm),
             ContainerStatusPill(status: container!.status),
           ] else if (line.isWaiting) ...[
@@ -1177,9 +1296,15 @@ Widget packageResultViewForTesting({
   VoidCallback? onOpenContainer,
   VoidCallback? onPricePayments,
   LineGroupSummary? group,
+  PackageAccess access = PackageAccess.full,
+  VoidCallback? onMarkDelivered,
+  VoidCallback? onUndoDelivery,
 }) =>
     PackageResultView(
       group: group,
+      access: access,
+      onMarkDelivered: onMarkDelivered,
+      onUndoDelivery: onUndoDelivery,
       line: line,
       container: container,
       onCall: onCall ?? (_) {},

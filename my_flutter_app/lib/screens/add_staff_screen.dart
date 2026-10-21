@@ -607,6 +607,11 @@ final _permissionOptions = <_PermissionOption>[
     (l10n) => l10n.ctrTitle,
   ),
   _PermissionOption(
+    BusinessPermission.deliveries,
+    Icons.how_to_reg_outlined,
+    (l10n) => l10n.dlvTitle,
+  ),
+  _PermissionOption(
     BusinessPermission.inventory,
     Icons.qr_code_scanner,
     (l10n) => l10n.inventoryTitle,

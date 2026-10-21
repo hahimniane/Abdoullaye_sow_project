@@ -83,9 +83,15 @@ void main() {
       read('lib/screens/parked_car_details_screen.dart'),
       contains('auth.hasContainersAccess'),
     );
+    // A scanned label also opens for deliveries-only staff: the same
+    // shipping-service rule, with the deliveries OR containers permission.
+    expect(
+      read('lib/providers/auth_provider.dart'),
+      contains('bool get hasDeliveriesAccess => containersAvailable('),
+    );
     expect(
       read('lib/services/package_link_service.dart'),
-      contains('hasContainersPermission: auth.hasContainersAccess'),
+      contains('hasContainersPermission: auth.hasDeliveriesAccess'),
     );
   });
 

@@ -15928,4 +15928,132 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get authErrorInvitationWaiting =>
       'An invitation is waiting for this account. Open the invitation link you received to join.';
+
+  @override
+  String get dlvTitle => 'Deliveries';
+
+  @override
+  String get dlvSubtitle => 'Scan a package label and hand it over.';
+
+  @override
+  String get dlvSection => 'Delivery';
+
+  @override
+  String get dlvReadyNote =>
+      'Its container is ready for pickup. Hand it over and mark it delivered.';
+
+  @override
+  String get dlvMarkDelivered => 'Mark delivered';
+
+  @override
+  String get dlvMarking => 'Marking delivered…';
+
+  @override
+  String dlvSheetSubtitle(String what, String receiver) {
+    return '$what for $receiver';
+  }
+
+  @override
+  String get dlvCollectedByLabel => 'Collected by';
+
+  @override
+  String get dlvCollectedByHelper =>
+      'The receiver, or whoever collects it for them.';
+
+  @override
+  String get dlvCollectedByTooLong =>
+      'Keep the name of who collected it to 120 characters.';
+
+  @override
+  String dlvBalanceOwed(Object amount) {
+    return 'This package still owes $amount.';
+  }
+
+  @override
+  String get dlvBalanceUnpaid =>
+      'This package still has an unpaid balance — check with the office.';
+
+  @override
+  String get dlvBalanceConfirm => 'You can still hand it over: confirm below.';
+
+  @override
+  String get dlvDeliverAnyway => 'Deliver anyway';
+
+  @override
+  String get dlvDone => 'Marked delivered.';
+
+  @override
+  String get dlvAlreadyDelivered =>
+      'This package was already marked delivered.';
+
+  @override
+  String get dlvDeliveredPill => 'Delivered';
+
+  @override
+  String dlvDeliveredOn(Object when) {
+    return 'Delivered $when';
+  }
+
+  @override
+  String dlvHandedOverBy(Object name) {
+    return 'Handed over by $name';
+  }
+
+  @override
+  String dlvCollectedBy(Object name) {
+    return 'Collected by $name';
+  }
+
+  @override
+  String dlvOwedAtDelivery(Object amount) {
+    return '$amount was still owed when it was handed over';
+  }
+
+  @override
+  String get dlvUndo => 'Undo delivery';
+
+  @override
+  String get dlvUndoTitle => 'Undo this delivery?';
+
+  @override
+  String get dlvUndoMessage =>
+      'The package goes back to ready for pickup. Nobody is messaged.';
+
+  @override
+  String get dlvUndone => 'Delivery undone.';
+
+  @override
+  String get dlvNotUndone => 'This package was not marked delivered.';
+
+  @override
+  String dlvProgress(int delivered, int total) {
+    return '$delivered of $total delivered';
+  }
+
+  @override
+  String get dlvErrAction => 'That is not something a package delivery can do.';
+
+  @override
+  String get dlvErrNotArrived =>
+      'A package can be marked delivered once its container is ready for pickup.';
+
+  @override
+  String get dlvErrBalanceDue =>
+      'This package still has an unpaid balance. Confirm to mark it delivered anyway.';
+
+  @override
+  String get dlvErrLineNotFound => 'That package no longer exists.';
+
+  @override
+  String get dlvErrNotAllowed => 'You don’t have access to do that.';
+
+  @override
+  String get dlvErrOffline =>
+      'No connection. Check your internet and try again.';
+
+  @override
+  String get dlvErrGeneric => 'Couldn’t save the delivery. Try again.';
+
+  @override
+  String get pkgMomentDelivered => 'delivered';
 }

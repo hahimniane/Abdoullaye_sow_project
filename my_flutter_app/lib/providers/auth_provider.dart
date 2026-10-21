@@ -12,6 +12,8 @@ import '../models/business_service.dart'
     show containersAvailable, defaultBusinessServiceValues;
 import '../models/notification_preferences.dart';
 import '../models/platform_access.dart';
+import '../services/container_delivery.dart'
+    show PackageAccess, canDeliverPackages;
 import '../services/inventory_stores.dart' show InventoryAccess;
 import '../services/notification_routing.dart';
 import '../services/phone_account_service.dart';
@@ -204,6 +206,27 @@ class AuthProvider extends ChangeNotifier {
     hasPermission: hasBusinessPermission(BusinessPermission.containers),
     businessId: _businessId ?? '',
   );
+
+  /// Deliveries (hand a package over at the destination): the business
+  /// ships AND this person holds the deliveries OR the containers
+  /// permission, as `updateContainerLine`'s deliver action accepts.
+  bool get hasDeliveriesAccess => containersAvailable(
+    services: _businessServices,
+    hasPermission: canDeliverPackages(
+      isStaff: _isStaff,
+      permissions: _businessPermissions,
+    ),
+    businessId: _businessId ?? '',
+  );
+
+  /// Prices, payments and balances on packages: not staff, or staff with
+  /// the containers or the ledger permission. A deliveries-only person
+  /// never sees an amount.
+  bool get canSeePackageMoney => packageAccess.canSeeMoney;
+
+  /// What this person may see and do on a package page.
+  PackageAccess get packageAccess =>
+      PackageAccess.of(isStaff: _isStaff, permissions: _businessPermissions);
 
   String? get userEmail => _userEmail;
   String? get customerName => _customerName;

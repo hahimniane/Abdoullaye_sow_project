@@ -27050,6 +27050,216 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'An invitation is waiting for this account. Open the invitation link you received to join.'**
   String get authErrorInvitationWaiting;
+
+  /// No description provided for @dlvTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Deliveries'**
+  String get dlvTitle;
+
+  /// No description provided for @dlvSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan a package label and hand it over.'**
+  String get dlvSubtitle;
+
+  /// No description provided for @dlvSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Delivery'**
+  String get dlvSection;
+
+  /// No description provided for @dlvReadyNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Its container is ready for pickup. Hand it over and mark it delivered.'**
+  String get dlvReadyNote;
+
+  /// No description provided for @dlvMarkDelivered.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark delivered'**
+  String get dlvMarkDelivered;
+
+  /// No description provided for @dlvMarking.
+  ///
+  /// In en, this message translates to:
+  /// **'Marking delivered…'**
+  String get dlvMarking;
+
+  /// No description provided for @dlvSheetSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{what} for {receiver}'**
+  String dlvSheetSubtitle(String what, String receiver);
+
+  /// No description provided for @dlvCollectedByLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Collected by'**
+  String get dlvCollectedByLabel;
+
+  /// No description provided for @dlvCollectedByHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'The receiver, or whoever collects it for them.'**
+  String get dlvCollectedByHelper;
+
+  /// No description provided for @dlvCollectedByTooLong.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep the name of who collected it to 120 characters.'**
+  String get dlvCollectedByTooLong;
+
+  /// No description provided for @dlvBalanceOwed.
+  ///
+  /// In en, this message translates to:
+  /// **'This package still owes {amount}.'**
+  String dlvBalanceOwed(Object amount);
+
+  /// No description provided for @dlvBalanceUnpaid.
+  ///
+  /// In en, this message translates to:
+  /// **'This package still has an unpaid balance — check with the office.'**
+  String get dlvBalanceUnpaid;
+
+  /// No description provided for @dlvBalanceConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'You can still hand it over: confirm below.'**
+  String get dlvBalanceConfirm;
+
+  /// No description provided for @dlvDeliverAnyway.
+  ///
+  /// In en, this message translates to:
+  /// **'Deliver anyway'**
+  String get dlvDeliverAnyway;
+
+  /// No description provided for @dlvDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Marked delivered.'**
+  String get dlvDone;
+
+  /// No description provided for @dlvAlreadyDelivered.
+  ///
+  /// In en, this message translates to:
+  /// **'This package was already marked delivered.'**
+  String get dlvAlreadyDelivered;
+
+  /// No description provided for @dlvDeliveredPill.
+  ///
+  /// In en, this message translates to:
+  /// **'Delivered'**
+  String get dlvDeliveredPill;
+
+  /// No description provided for @dlvDeliveredOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Delivered {when}'**
+  String dlvDeliveredOn(Object when);
+
+  /// No description provided for @dlvHandedOverBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Handed over by {name}'**
+  String dlvHandedOverBy(Object name);
+
+  /// No description provided for @dlvCollectedBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Collected by {name}'**
+  String dlvCollectedBy(Object name);
+
+  /// No description provided for @dlvOwedAtDelivery.
+  ///
+  /// In en, this message translates to:
+  /// **'{amount} was still owed when it was handed over'**
+  String dlvOwedAtDelivery(Object amount);
+
+  /// No description provided for @dlvUndo.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo delivery'**
+  String get dlvUndo;
+
+  /// No description provided for @dlvUndoTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo this delivery?'**
+  String get dlvUndoTitle;
+
+  /// No description provided for @dlvUndoMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The package goes back to ready for pickup. Nobody is messaged.'**
+  String get dlvUndoMessage;
+
+  /// No description provided for @dlvUndone.
+  ///
+  /// In en, this message translates to:
+  /// **'Delivery undone.'**
+  String get dlvUndone;
+
+  /// No description provided for @dlvNotUndone.
+  ///
+  /// In en, this message translates to:
+  /// **'This package was not marked delivered.'**
+  String get dlvNotUndone;
+
+  /// No description provided for @dlvProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'{delivered} of {total} delivered'**
+  String dlvProgress(int delivered, int total);
+
+  /// No description provided for @dlvErrAction.
+  ///
+  /// In en, this message translates to:
+  /// **'That is not something a package delivery can do.'**
+  String get dlvErrAction;
+
+  /// No description provided for @dlvErrNotArrived.
+  ///
+  /// In en, this message translates to:
+  /// **'A package can be marked delivered once its container is ready for pickup.'**
+  String get dlvErrNotArrived;
+
+  /// No description provided for @dlvErrBalanceDue.
+  ///
+  /// In en, this message translates to:
+  /// **'This package still has an unpaid balance. Confirm to mark it delivered anyway.'**
+  String get dlvErrBalanceDue;
+
+  /// No description provided for @dlvErrLineNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'That package no longer exists.'**
+  String get dlvErrLineNotFound;
+
+  /// No description provided for @dlvErrNotAllowed.
+  ///
+  /// In en, this message translates to:
+  /// **'You don’t have access to do that.'**
+  String get dlvErrNotAllowed;
+
+  /// No description provided for @dlvErrOffline.
+  ///
+  /// In en, this message translates to:
+  /// **'No connection. Check your internet and try again.'**
+  String get dlvErrOffline;
+
+  /// No description provided for @dlvErrGeneric.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t save the delivery. Try again.'**
+  String get dlvErrGeneric;
+
+  /// No description provided for @pkgMomentDelivered.
+  ///
+  /// In en, this message translates to:
+  /// **'delivered'**
+  String get pkgMomentDelivered;
 }
 
 class _AppLocalizationsDelegate

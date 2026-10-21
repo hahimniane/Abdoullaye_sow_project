@@ -455,3 +455,19 @@ Add future project conventions and repeated architectural decisions here.
   edit forms pass the stored line (`validateContainerLine(draft, current:)`)
   so an old line with no receiver is only asked for one when its people
   change (`lineContactsEdited`), as the server does.
+- Package delivered at destination (docs/WAITING_PACKAGES.md "Delivered at
+  destination", 2026-10-21): pure rules in `lib/services/container_delivery.dart`
+  (`PackageAccess.of` - deliver = containers OR `deliveries`, undo =
+  containers, money = containers OR ledger, `restricted` = no containers;
+  `deliveryRefusal`, balance notice, requests, `DeliveryReason.all` tested
+  against the server's `DELIVERY_MESSAGES`), calls through
+  `ContainerDeliveryService` (`updateContainerLine` with `action`,
+  injectable caller), shared UI in `lib/widgets/package_delivery_widgets.dart`
+  (Mark delivered sheet, undo confirm, delivered card, pill, "X of Y
+  delivered"). Package screens take `access:` or read it with
+  `packageAccessOf(context)` (the full view when no AuthProvider is above,
+  i.e. widget tests). A deliveries-only person reaches packages only through
+  Deliveries (`PackageScanScreen(deliveries: true)`) and `/t/` links
+  (`hasDeliveriesAccess`); any new package surface must hide prices,
+  payments, edits, labels and the container page when `restricted` /
+  `!canSeeMoney`.

@@ -13,6 +13,8 @@ import '../data/ocean_carrier_catalog.dart';
 import '../l10n/app_localizations.dart';
 import '../models/destination_country.dart';
 import '../services/business_activity_queries.dart';
+import '../services/container_delivery.dart';
+import '../services/container_delivery_service.dart';
 import '../services/container_lot_cars.dart';
 import '../services/business_volume.dart' show volumeFeedSignature;
 import '../services/container_feed_plan.dart';
@@ -44,6 +46,7 @@ import '../widgets/container_volume_card.dart';
 import '../widgets/country_phone_field.dart';
 import '../widgets/label_print_sheet.dart';
 import '../widgets/lot_sheets.dart';
+import '../widgets/package_delivery_widgets.dart';
 import '../widgets/package_money.dart';
 import '../widgets/phone_account_widgets.dart' show RecordPhoneFlagNotes;
 import '../widgets/pieces_editor.dart';
@@ -1372,6 +1375,11 @@ class _ContainerCard extends StatelessWidget {
                 ],
               ],
             ),
+            // "3 of 12 delivered" once the box is ready for pickup.
+            if (showsDeliveryProgress(c)) ...[
+              const SizedBox(height: 4),
+              ContainerDeliveryProgressLabel(container: c),
+            ],
           ],
         ),
       ),
@@ -1544,10 +1552,14 @@ class ContainerDetailScreen extends StatefulWidget {
     this.businessCountryCode = '',
     required this.onCustomerRecorded,
     this.feed,
+    this.deliveryService = const ContainerDeliveryService(),
   });
 
   final String businessId;
   final String containerId;
+
+  /// Marks a package delivered and undoes that.
+  final ContainerDeliveryService deliveryService;
 
   /// The list screen's feed, when opened from it. Absent, the detail makes
   /// its own (and disposes it).
@@ -1857,10 +1869,95 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
     );
   }
 
+  /// The Mark delivered sheet - the package page's own - for a line on this
+  /// box once it is ready for pickup. The sheet shows its own progress.
+  Future<void> _markDelivered(ContainerLine line) async {
+    if (_busy.isNotEmpty) return;
+    await showMarkDeliveredSheet(
+      context,
+      businessId: widget.businessId,
+      line: line,
+      group: lineGroupOf(line, _feed.groups),
+      access: packageAccessOf(context),
+      service: widget.deliveryService,
+    );
+  }
+
+  /// Confirm first, then the undo with this line's progress.
+  Future<void> _undoDelivery(ContainerLine line) async {
+    if (_busy.isNotEmpty) return;
+    if (!await confirmUndoDelivery(context) || !mounted) return;
+    setState(() => _busy = 'undo:${line.id}');
+    try {
+      await runUndoDelivery(
+        context,
+        businessId: widget.businessId,
+        lineId: line.id,
+        service: widget.deliveryService,
+      );
+    } finally {
+      if (mounted) setState(() => _busy = '');
+    }
+  }
+
+  /// Under a line on a box ready for pickup: Delivered (with who collected
+  /// it), or Mark delivered. Nothing on a box still loading or at sea.
+  Widget? _deliveryRow(
+    ContainerLine line,
+    ShippingContainer container,
+    PackageAccess access,
+  ) {
+    final l10n = AppLocalizations.of(context)!;
+    if (line.isDelivered) {
+      return Row(
+        key: ValueKey('line-delivered:${line.id}'),
+        children: [
+          const DeliveredPill(),
+          // The undo in flight for this line (started from its sheet).
+          if (_busy == 'undo:${line.id}') ...[
+            const SizedBox(width: AppSpacing.sm),
+            const SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ],
+          if (line.collectedBy.isNotEmpty) ...[
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(
+                l10n.dlvCollectedBy(line.collectedBy),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12, color: AppColors.muted),
+              ),
+            ),
+          ],
+        ],
+      );
+    }
+    if (!canMarkDelivered(line, container, access)) return null;
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: OutlinedButton.icon(
+        key: ValueKey('line-mark-delivered:${line.id}'),
+        onPressed: _busy.isNotEmpty ? null : () => _markDelivered(line),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.cobaltDeep,
+          minimumSize: const Size(0, 36),
+          visualDensity: VisualDensity.compact,
+        ),
+        icon: const Icon(Icons.how_to_reg_outlined, size: 16),
+        label: Text(l10n.dlvMarkDelivered),
+      ),
+    );
+  }
+
   Future<void> _lineActions(ContainerLine line) async {
     final container = _container;
     if (container == null) return;
     final l10n = AppLocalizations.of(context)!;
+    final access = packageAccessOf(context);
     final others = [
       for (final c in _containers)
         if (c.isLoading && c.id != container.id) c,
@@ -1872,9 +1969,19 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
         staff: widget.staff,
         open: container.isLoading,
         payment: groupPayment(lineGroupOf(line, _feed.groups)),
+        canDeliver: canMarkDelivered(line, container, access),
+        canUndoDelivery: canUndoDelivery(line, access),
       ),
     );
     if (action == null || !mounted) return;
+    if (action == 'deliver') {
+      await _markDelivered(line);
+      return;
+    }
+    if (action == 'undo_delivery') {
+      await _undoDelivery(line);
+      return;
+    }
     if (action == 'contacts') {
       // Open in every state: a wrong number matters most once the box has
       // sailed, which is when the updates start going out.
@@ -2026,6 +2133,7 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
         l10n, counts.carCount, counts.barrelCount, counts.otherCount);
     final busy = _busy.isNotEmpty;
     final waitingCount = _allLines.where((l) => l.isWaiting).length;
+    final access = packageAccessOf(context);
 
     return Scaffold(
       backgroundColor: AppColors.cream,
@@ -2214,6 +2322,7 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
                             staff: widget.staff,
                             payment: groupPayment(
                                 lineGroupOf(lines[i], _feed.groups)),
+                            delivery: _deliveryRow(lines[i], container, access),
                             onTap: busy ? null : () => _lineActions(lines[i]),
                             trailing: IconButton(
                               key: ValueKey('line-print-labels:${lines[i].id}'),
@@ -2299,6 +2408,10 @@ class _DetailFacts extends StatelessWidget {
               ),
             ],
           ),
+          if (showsDeliveryProgress(c)) ...[
+            const SizedBox(height: AppSpacing.sm),
+            ContainerDeliveryProgressLabel(container: c, fontSize: 13),
+          ],
           const SizedBox(height: AppSpacing.md),
           _FactRow(
             icon: Icons.public,
@@ -2620,6 +2733,7 @@ String containerUpdateMomentLabel(AppLocalizations l10n, String update) =>
       containerUpdateShipped => l10n.pkgMomentShipped,
       containerUpdateAtPort => l10n.pkgMomentAtPort,
       containerUpdateArrived => l10n.pkgMomentArrived,
+      containerUpdateDelivered => l10n.pkgMomentDelivered,
       _ => update,
     };
 
@@ -2635,12 +2749,17 @@ class _LineCard extends StatelessWidget {
     this.trailing,
     this.onTap,
     this.payment,
+    this.delivery,
   });
 
   final ContainerLine line;
   final List<LotStaff> staff;
   final Widget? trailing;
   final VoidCallback? onTap;
+
+  /// Under the details on a box that is ready for pickup: the Delivered
+  /// pill, or the Mark delivered action.
+  final Widget? delivery;
 
   /// Where its package stands on money: for a part of a split package, the
   /// whole group's (payments live on the root). The line's own otherwise.
@@ -2814,6 +2933,10 @@ class _LineCard extends StatelessWidget {
                     who: l10n.ctrReceiverShort,
                     dense: true,
                   ),
+                  if (delivery != null) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    delivery!,
+                  ],
                   if (addedBy.isNotEmpty) ...[
                     const SizedBox(height: 4),
                     Text(
@@ -2888,6 +3011,8 @@ class _LineActionsSheet extends StatelessWidget {
     required this.staff,
     required this.open,
     this.payment,
+    this.canDeliver = false,
+    this.canUndoDelivery = false,
   });
 
   final ContainerLine line;
@@ -2895,6 +3020,11 @@ class _LineActionsSheet extends StatelessWidget {
 
   /// The group's standing on money ([_LineCard.payment]).
   final PackagePayment? payment;
+
+  /// Offer Mark delivered (the box is ready for pickup and it is not
+  /// delivered yet) / Undo delivery (it is, and this is a manager).
+  final bool canDeliver;
+  final bool canUndoDelivery;
 
   /// Whether the container is still loading. A shipped list is the record
   /// of what went, so its lines are shown and left alone.
@@ -2911,6 +3041,21 @@ class _LineActionsSheet extends StatelessWidget {
         children: [
           _LineCard(line: line, staff: staff, payment: payment),
           const SizedBox(height: AppSpacing.sm),
+          if (canDeliver)
+            ContainerSheetAction(
+              key: const Key('line-mark-delivered'),
+              icon: Icons.how_to_reg_outlined,
+              label: l10n.dlvMarkDelivered,
+              onTap: () => Navigator.of(context).pop('deliver'),
+            ),
+          if (canUndoDelivery)
+            ContainerSheetAction(
+              key: const Key('line-undo-delivery'),
+              icon: Icons.undo,
+              label: l10n.dlvUndo,
+              destructive: true,
+              onTap: () => Navigator.of(context).pop('undo_delivery'),
+            ),
           // Contacts stay correctable after the box ships; the rest of the
           // line is the record of what went.
           ContainerSheetAction(
@@ -6171,5 +6316,29 @@ Widget containerLineContactsSheetForTesting({
 Widget containerLineActionsSheetForTesting({
   required ContainerLine line,
   required bool open,
+  bool canDeliver = false,
+  bool canUndoDelivery = false,
 }) =>
-    _LineActionsSheet(line: line, staff: const [], open: open);
+    _LineActionsSheet(
+      line: line,
+      staff: const [],
+      open: open,
+      canDeliver: canDeliver,
+      canUndoDelivery: canUndoDelivery,
+    );
+
+/// A container's card on the list, for widget tests.
+@visibleForTesting
+Widget containerCardForTesting({
+  required ShippingContainer container,
+  VoidCallback? onTap,
+}) =>
+    _ContainerCard(container: container, onTap: onTap ?? () {});
+
+/// A line's card as the container page draws it, with its delivery row.
+@visibleForTesting
+Widget containerLineCardForTesting({
+  required ContainerLine line,
+  Widget? delivery,
+}) =>
+    _LineCard(line: line, staff: const [], delivery: delivery);
