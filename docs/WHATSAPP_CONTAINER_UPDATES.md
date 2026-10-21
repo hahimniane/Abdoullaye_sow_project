@@ -378,8 +378,11 @@ invitation's language (the console's language when it was sent) picks the
 version; anything not French is English. Button: URL, *Verify account* /
 *Confirmer le compte*, `https://customer.laawoldigital.com/j/{{1}}`, whose
 only parameter is the invitation's link token. Variables: {{1}} the invited
-person's name, {{2}} `your staff access at <business>` /
-`accès employé chez <business>`.
+person's name, {{2}} `your <business> access` / `accès chez <business>`.
+**Every value is capped at 30 characters by Meta** for library templates
+(longer answers "(#100) Invalid parameter ... exceeds the length limit of 30
+characters"), so when the business name does not fit {{2}} falls back to
+`your staff access` / `accès employé`, and names are cut at 30.
 
 ```
 EN  Hi {{1}}, Your new account has been created successfully.

@@ -514,6 +514,25 @@ const STAFF_INVITE_FALLBACK = Object.freeze({
   fr: {name: "à vous", business: "Laawol"},
 });
 
+// Meta's library templates refuse a text value over 30 characters
+// ("(#100) Invalid parameter ... exceeds the length limit of 30 characters").
+const STAFF_INVITE_MAX_PARAM = 30;
+
+/**
+ * {{2}}, what the person verifies: names the business when that fits in
+ * Meta's 30-character limit, otherwise the generic wording.
+ *
+ * @param {"en"|"fr"} language The invitation's language.
+ * @param {string} business The business name (already cleaned).
+ * @return {string} At most 30 characters.
+ */
+function staffInviteAccessText(language, business) {
+  const named = language === "fr" ?
+    `accès chez ${business}` : `your ${business} access`;
+  if (named.length <= STAFF_INVITE_MAX_PARAM) return named;
+  return language === "fr" ? "accès employé" : "your staff access";
+}
+
 /**
  * The invitation's language: French when the invite was made in French,
  * English otherwise.
@@ -538,9 +557,7 @@ function staffInviteTemplateMessage(args) {
   const language = staffInviteLanguage(values.locale);
   const fallback = STAFF_INVITE_FALLBACK[language];
   const business = clean(values.business, 60) || fallback.business;
-  const access = language === "fr" ?
-    `accès employé chez ${business}` :
-    `your staff access at ${business}`;
+  const access = staffInviteAccessText(language, business);
   const parameter = (text) => ({type: "text", text});
   return {
     messaging_product: "whatsapp",
@@ -553,7 +570,8 @@ function staffInviteTemplateMessage(args) {
         {
           type: "body",
           parameters: [
-            parameter(clean(values.name, 60) || fallback.name),
+            parameter(clean(values.name, STAFF_INVITE_MAX_PARAM) ||
+                fallback.name),
             parameter(access),
           ],
         },
@@ -600,6 +618,8 @@ module.exports = {
   STAFF_INVITE_TEMPLATE,
   STAFF_INVITE_VARIABLES,
   STAFF_INVITE_LANGUAGES,
+  STAFF_INVITE_MAX_PARAM,
   staffInviteLanguage,
+  staffInviteAccessText,
   staffInviteTemplateMessage,
 };

@@ -30,8 +30,10 @@ const {
 const {phoneSignInAllowed} = require("../phone_accounts");
 const {accessInvitationRow} = require("../access_invitation");
 const {
+  STAFF_INVITE_MAX_PARAM,
   STAFF_INVITE_TEMPLATE,
   STAFF_INVITE_VARIABLES,
+  staffInviteAccessText,
   staffInviteTemplateMessage,
 } = require("../whatsapp_templates");
 
@@ -299,7 +301,7 @@ describe("the staff_account_setup template (Meta library)", () => {
     assert.deepEqual(body.template.language, {code: "en_US"});
     assert.deepEqual(body.template.components[0].parameters
         .map((p) => p.text),
-    ["Mamadou", "your staff access at Dala Shipping"]);
+    ["Mamadou", "your Dala Shipping access"]);
     assert.equal(STAFF_INVITE_VARIABLES.length,
         body.template.components[0].parameters.length);
     assert.deepEqual(body.template.components[1], {type: "button",
@@ -312,7 +314,26 @@ describe("the staff_account_setup template (Meta library)", () => {
       business: "Dala Shipping", token: "t", locale: "fr-FR"});
     assert.deepEqual(body.template.language, {code: "fr"});
     assert.equal(body.template.components[0].parameters[1].text,
-        "accès employé chez Dala Shipping");
+        "accès chez Dala Shipping");
+  });
+
+  it("keeps every value within Meta's 30-character limit", () => {
+    const long = "Conakry Express Shipping and Logistics International";
+    for (const locale of ["en", "fr"]) {
+      const body = staffInviteTemplateMessage({phone: GN, token: "t", locale,
+        name: "Mamadou Alpha Oumar Barry Diallo Sow", business: long});
+      for (const parameter of body.template.components[0].parameters) {
+        assert.ok(parameter.text.length <= STAFF_INVITE_MAX_PARAM,
+            `${parameter.text} is ${parameter.text.length} characters`);
+      }
+    }
+    assert.equal(staffInviteAccessText("en", long), "your staff access");
+    assert.equal(staffInviteAccessText("fr", long), "accès employé");
+    // The real failure (2026-10-21): 45 characters were refused.
+    assert.equal(staffInviteAccessText("en", "Conakry Express Shipping"),
+        "your staff access");
+    assert.equal(staffInviteAccessText("en", "Conakry Express"),
+        "your Conakry Express access");
   });
 
   it("falls back to English for a missing or unknown locale", () => {

@@ -198,7 +198,7 @@ describe("inviting by phone", () => {
         assert.equal(message.template.name, "staff_account_setup");
         assert.deepEqual(message.template.components[0].parameters
             .map((p) => p.text), ["Mamadou Barry",
-          "your staff access at Dala Shipping"]);
+          "your Dala Shipping access"]);
         assert.equal(message.template.components[1].parameters[0].text,
             tokenOf(result.inviteLink));
       });

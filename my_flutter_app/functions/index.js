@@ -19091,7 +19091,10 @@ async function sendWhatsAppMessage(body) {
     if (!response.ok) {
       return {ok: false, httpStatus: response.status, messageId: "",
         errorCode: Number(data?.error?.code) || 0,
-        error: String(data?.error?.message || `HTTP ${response.status}`)
+        // Meta's headline ("(#100) Invalid parameter") rarely names the
+        // cause; error_data.details does (e.g. a value over 30 characters).
+        error: [data?.error?.message || `HTTP ${response.status}`,
+          data?.error?.error_data?.details].filter(Boolean).join(" - ")
             .slice(0, 300)};
     }
     return {ok: true, httpStatus: response.status,
