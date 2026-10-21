@@ -411,3 +411,12 @@ Add future project conventions and repeated architectural decisions here.
   profile for staff/owner/admin sessions only (`_ensureProfileWatch`,
   stopped on logout/auth change); losing access forces `getIdToken(true)`
   and signs out when it fails.
+- Safe areas (2026-10-21): Android 15+ enforces edge-to-edge, so the app is
+  laid out under the status bar and the system navigation bar. The bottom
+  (and landscape-cutout) inset is handled ONCE for every route, sheet and
+  dialog by `SystemNavBarSafeArea` in `MaterialApp.builder`
+  (`lib/widgets/system_nav_bar_safe_area.dart`, Android only; iOS unchanged).
+  Do not add a second bottom SafeArea/viewPadding for the Android nav bar.
+  The TOP inset stays per screen: a Scaffold with an AppBar handles it; a
+  screen without one must pad its header with `MediaQuery.paddingOf(context)
+  .top` (gradient headers paint behind the status bar) or use SafeArea.
