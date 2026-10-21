@@ -131,6 +131,7 @@ function containerLabelsModel({container, lines, business, consoleUrl,
     const ownPieces = lineHasPieces(line);
     const packages = pieces.length;
     const stock = text(line.ownerKind, 20) === "stock";
+    const sameAsReceiver = line.senderIsReceiver === true;
     for (let n = 1; n <= packages; n++) {
       const piece = pieces[n - 1];
       for (let copy = 1; copy <= perPackage; copy++) {
@@ -147,8 +148,10 @@ function containerLabelsModel({container, lines, business, consoleUrl,
           // package can call.
           receiver: text(line.receiverName, 120),
           receiverPhone: text(line.receiverPhone, 40),
-          sender: stock ? "" : text(line.customerName, 120),
-          senderPhone: stock ? "" : text(line.customerPhone, 40),
+          // Nobody twice: a sender who is the receiver is printed once.
+          sender: stock || sameAsReceiver ? "" : text(line.customerName, 120),
+          senderPhone: stock || sameAsReceiver ? "" :
+            text(line.customerPhone, 40),
           // The package's own destination, else its container's.
           destination: text(line.destinationCountryName, 120) ||
             text(c.destinationCountryName, 120),

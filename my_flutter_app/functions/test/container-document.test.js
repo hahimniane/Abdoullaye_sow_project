@@ -107,6 +107,17 @@ describe("what the loading list prints", () => {
     assert.match(html, /tyres on top/);
   });
 
+  // No sender: the receiver is the customer (lineCustomer).
+  it("names the receiver as the customer of a line with no sender", () => {
+    const model = containerDocumentModel({container: box(), business,
+      lines: [{kind: "barrels", quantity: 1, ownerKind: "customer",
+        customerName: "", customerPhone: "", receiverName: "Awa Sow",
+        receiverPhone: "+224620000011"}]});
+    assert.equal(model.lines[0].whose, "Awa Sow");
+    assert.equal(model.lines[0].phone, "+224620000011");
+    assert.equal(model.lines[0].receiver, "Awa Sow");
+  });
+
   // The page is a record of what was loaded, never a bill.
   it("carries no money", () => {
     const html = renderContainerDocument(

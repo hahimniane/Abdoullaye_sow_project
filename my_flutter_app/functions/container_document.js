@@ -13,7 +13,11 @@
  * turns them into a model and the model into a page.
  */
 
-const {containerCounts} = require("./container_manifest");
+const {
+  containerCounts,
+  lineCustomerName,
+  lineCustomerPhone,
+} = require("./container_manifest");
 const {
   lineCounts,
   lineHasPieces,
@@ -113,8 +117,9 @@ function containerDocumentModel({container, lines, business}) {
         vin: kind === "car" ? text(r.vinNumber, 17) : "",
         // Pieces on this line (a split part counts only its own).
         quantity: kind === "car" ? 1 : lineCounts(r).pieceCount,
-        whose: stock ? "Business stock" : text(r.customerName, 120),
-        phone: stock ? "" : text(r.customerPhone, 40),
+        // With no sender, the receiver is the customer (lineCustomer).
+        whose: stock ? "Business stock" : lineCustomerName(r),
+        phone: stock ? "" : lineCustomerPhone(r),
         // The name on the barrel: whoever collects it at the port.
         receiver: text(r.receiverName, 120),
         receiverPhone: text(r.receiverPhone, 40),

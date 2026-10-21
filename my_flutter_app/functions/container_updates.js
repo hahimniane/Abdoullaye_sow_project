@@ -204,7 +204,9 @@ function recipientsForLine(line, {businessCountry = ""} = {}) {
   const reach = (value) =>
     phoneWithBusinessCountry(text(value, 40), businessCountry);
   const people = [];
-  if (text(row.ownerKind, 20) === "customer") {
+  // "Sender is the receiver" is one person: they hear once, as the receiver
+  // (their own switch), never twice.
+  if (text(row.ownerKind, 20) === "customer" && row.senderIsReceiver !== true) {
     people.push({
       role: "sender",
       name: text(row.customerName, 120),

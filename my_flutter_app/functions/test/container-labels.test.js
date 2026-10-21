@@ -72,6 +72,17 @@ describe("package labels", () => {
     assert.match(stock, /To \/ Pour<\/span>Agent/);
   });
 
+  it("prints a sender who is the receiver once, as the receiver", () => {
+    const [label] = containerLabelsModel({container, business, copies: 1,
+      lines: [{kind: "barrels", quantity: 1, ownerKind: "customer",
+        customerName: "Mariama", customerPhone: "+224620000000",
+        receiverName: "Mariama", receiverPhone: "+224620000000",
+        senderIsReceiver: true, trackingCode: "CL-K7M4P2"}]}).labels;
+    assert.equal(label.receiver, "Mariama");
+    assert.equal(label.sender, "");
+    assert.equal(label.senderPhone, "");
+  });
+
   it("lays out a letter sheet six to a page, or a 4x6 roll one to a page",
       () => {
         assert.equal(labelFormat("thermal"), "thermal");

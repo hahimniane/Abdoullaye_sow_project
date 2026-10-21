@@ -146,6 +146,36 @@ describe("who is told", () => {
     assert.deepEqual(skipped, []);
   });
 
+  // Owner, 2026-10-21: "Sender is the receiver" is one person - one
+  // message, as the receiver, on the receiver's own switch.
+  it("tells a sender who is the receiver once, as the receiver", () => {
+    const same = line({customerName: "Mariama", customerPhone: "+224620000000",
+      receiverName: "Mariama", receiverPhone: "+224620000000",
+      senderIsReceiver: true});
+    const {send, skipped} = recipientsForLine(same);
+    assert.deepEqual(send.map((who) => [who.role, who.phone]),
+        [["receiver", "+224620000000"]]);
+    assert.deepEqual(skipped, []);
+    // Even if a stale sender switch is on and the receiver's is off: one
+    // person, one switch.
+    const quiet = recipientsForLine({...same, notifyCustomer: true,
+      notifyReceiver: false});
+    assert.deepEqual(quiet.send, []);
+    assert.deepEqual(quiet.skipped.map((who) => [who.role, who.reason]),
+        [["receiver", "switched_off"]]);
+    // Without the box, the same number on both sides is still told once.
+    const twice = recipientsForLine({...same, senderIsReceiver: false});
+    assert.equal(twice.send.length, 1);
+  });
+
+  // No sender: the receiver is the only person to tell.
+  it("tells only the receiver when the line has no sender", () => {
+    const {send, skipped} = recipientsForLine(line({customerName: "",
+      customerPhone: ""}));
+    assert.deepEqual(send.map((who) => who.role), ["receiver"]);
+    assert.deepEqual(skipped, []);
+  });
+
   it("says why anyone was left out", () => {
     const {send, skipped} = recipientsForLine(line({
       customerPhone: "622112233",

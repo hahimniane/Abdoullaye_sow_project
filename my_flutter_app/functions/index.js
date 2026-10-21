@@ -371,6 +371,8 @@ const {
   lineIsWaiting,
   containerLineRecord,
   lineReceiptFields,
+  lineCustomerName,
+  lineLotCustomerSeen,
   openContainerHoldingVin,
   containerCounts,
   containerCountsDelta,
@@ -17417,7 +17419,8 @@ async function containerPaymentSummary(db, businessId, uid,
  * @return {string} The phrase.
  */
 function containerLineTitle(row) {
-  const name = String(row?.customerName || "");
+  // With no sender, the receiver is the customer (lineCustomer).
+  const name = lineCustomerName(row);
   return containerLineWhat(row) + (name ? ` for ${name}` : "");
 }
 
@@ -17756,15 +17759,16 @@ exports.addContainerLine = onCall(
       if (record.ownerKind === "customer") {
         await rememberLotCustomer(db, {
           businessId,
-          seen: {customerName: record.customerName,
-            customerPhone: record.customerPhone, customerEmail: ""},
+          seen: lineLotCustomerSeen(record),
           source: "container",
           staffId: uid,
         });
       }
       await containerAudit(businessId, ref.id, "line_added", uid,
-          `Added ${containerLineWhat(record)}` + (record.customerName ?
-            ` for ${record.customerName}` : " (business stock)") +
+          `Added ${containerLineWhat(record)}` +
+          (record.ownerKind === "stock" ? " (business stock)" :
+            (lineCustomerName(record) ?
+              ` for ${lineCustomerName(record)}` : "")) +
           (record.receiverName ? `, to ${record.receiverName}` : ""));
       return {success: true, lineId: lineRef.id, containerId: ref.id,
         pieceCount: record.pieceCount};
@@ -18155,11 +18159,10 @@ async function editContainerLine(db, args) {
   if (changes.length === 0) {
     return {success: true, lineId, changed: []};
   }
-  if (next.ownerKind === "customer" && next.customerName) {
+  if (next.ownerKind === "customer" && lineCustomerName(next)) {
     await rememberLotCustomer(db, {
       businessId,
-      seen: {customerName: next.customerName,
-        customerPhone: next.customerPhone, customerEmail: ""},
+      seen: lineLotCustomerSeen(next),
       source: "container",
       staffId: uid,
     });
@@ -18329,8 +18332,7 @@ exports.addWaitingPackage = onCall(
       await queuePackageReceived(db, {lineRef, businessId, containerId: ""});
       await rememberLotCustomer(db, {
         businessId,
-        seen: {customerName: record.customerName,
-          customerPhone: record.customerPhone, customerEmail: ""},
+        seen: lineLotCustomerSeen(record),
         source: "container",
         staffId: uid,
       });
@@ -18505,6 +18507,7 @@ exports.assignContainerLines = onCall(
             receiverPhone: String(line.receiverPhone || ""),
             notifyCustomer: line.notifyCustomer !== false,
             notifyReceiver: line.notifyReceiver !== false,
+            senderIsReceiver: line.senderIsReceiver === true,
             destinationCountryId: String(line.destinationCountryId || ""),
             destinationCountryName: String(line.destinationCountryName || ""),
             payOnArrival: line.payOnArrival === true,
@@ -43147,8 +43150,7 @@ exports.receivePackageRequest = onCall(
       await queuePackageReceived(db, {lineRef, businessId, containerId: ""});
       await rememberLotCustomer(db, {
         businessId,
-        seen: {customerName: result.line.customerName,
-          customerPhone: result.line.customerPhone, customerEmail: ""},
+        seen: lineLotCustomerSeen(result.line),
         source: "container",
         staffId: uid,
       });

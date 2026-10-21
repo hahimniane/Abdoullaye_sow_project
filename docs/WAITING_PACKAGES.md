@@ -77,14 +77,33 @@ New codes: `package_destination_required`, `destination_mismatch`,
 
 ### `addWaitingPackage`
 `{businessId, kind: 'car'|'barrels'|'other', vinNumber?, carMake?, carModel?,
-carYear?, quantity, description, ownerKind: 'customer', customerName,
-customerPhone, receiverName, receiverPhone, notifyCustomer, notifyReceiver,
-destinationCountryId, destinationCountryName, lengthIn?, widthIn?, heightIn?,
+carYear?, quantity, description, ownerKind: 'customer', customerName?,
+customerPhone?, receiverName, receiverPhone, notifyCustomer, notifyReceiver,
+senderIsReceiver?: bool, destinationCountryId, destinationCountryName, lengthIn?, widthIn?, heightIn?,
 priceCents?: int|null, payOnArrival?: bool, payment?: {amountCents: int > 0,
 method, receivedByStaffId, note?}}` -> `{success, lineId, trackingCode,
 paidCents, paymentId}`.
 Rules as `validateContainerLine` plus: `ownerKind` must be `customer`,
-destination id required. `description` is stored for `other` only, `quantity`
+destination id required.
+
+**Sender and receiver (owner, 2026-10-21).** On every customer line (a
+container's or a waiting one) the sender (`customerName`/`customerPhone`) is
+optional and the receiver's name is required (`receiver_name_required`,
+"Enter the receiver's name."); business stock keeps the receiver optional.
+`senderIsReceiver: true` ("Sender is the receiver" on both clients' forms,
+off by default) makes the server store the receiver's name and phone as the
+sender's too, write `senderIsReceiver: true`, use the receiver's WhatsApp
+switch for both, send each update once (role `receiver`), and print the
+person once on labels. With no sender the receiver is the line's customer
+wherever one is named: `lineCustomer` / `lineCustomerName` /
+`lineCustomerPhone` (functions `container_manifest.js`, mirrored in
+`container-manifest.ts` and `container_manifest.dart`) - the sender when any
+sender detail was given, else the receiver, name and phone always from the
+same person. Lines saved before the rule keep working: the receiver's name is
+only demanded when a line is created or its people (contacts or owner) are
+edited (`lineContactsEdited`); a price, payment, pieces, destination or move
+edit of an old line with no receiver is not refused. Older app versions that
+send a sender and no receiver are refused with the English message above. `description` is stored for `other` only, `quantity`
 is 1 for cars. `paidCents` in the request is ignored.
 
 **Money received at drop-off** (`payment`, optional). Absent or `null`: nothing

@@ -377,12 +377,104 @@ describe("editing a line", () => {
       receiverName: "Awa Ba", receiverPhone: "+224621000000"}});
     assert.equal((await lineRef(lineId).get()).get("receiverName"), "Awa Ba");
     assert.equal((await audits(box, "line_contacts_edited")).length, 2);
+    // The sender is optional now (owner, 2026-10-21); the receiver is not.
+    await call("updateContainerLineContacts", {lineId,
+      contacts: {customerName: " "}});
+    assert.equal((await lineRef(lineId).get()).get("customerName"), "");
     await assert.rejects(
         call("updateContainerLineContacts", {lineId,
-          contacts: {customerName: " "}}),
+          contacts: {receiverName: " "}}),
         (error) => error.code === "invalid-argument" &&
-          error.details?.reasons?.includes("customer_name_required"));
+          error.details?.reasons?.includes("receiver_name_required") &&
+          error.message === "Enter the receiver's name.");
   });
+
+  // Owner, 2026-10-21: the sender is optional, the receiver required, and
+  // "Sender is the receiver" stores one person on both sides.
+  it("takes a line with no sender and refuses one with no receiver",
+      async () => {
+        const box = await newContainer();
+        const {lineId} = await call("addContainerLine", {containerId: box,
+          line: {...barrelLine(1), customerName: "", customerPhone: "",
+            receiverName: "Awa Receiver", receiverPhone: "+224620000077"}});
+        const line = (await lineRef(lineId).get()).data();
+        assert.equal(line.customerName, "");
+        assert.equal(line.senderIsReceiver, false);
+        // The receiver is the customer the lot remembers and History names.
+        const known = await db.collection("lotCustomers")
+            .where("businessId", "==", BIZ)
+            .where("name", "==", "Awa Receiver").get();
+        assert.equal(known.size, 1);
+        assert.equal(known.docs[0].get("phone"), "+224620000077");
+        assert.ok((await audits(box, "line_added")).some((summary) =>
+          summary.includes("for Awa Receiver")));
+        // An old app: a sender and no receiver. Refused in plain English,
+        // which is what it shows.
+        await assert.rejects(
+            call("addContainerLine", {containerId: box, line: {
+              ...barrelLine(1), receiverName: "", receiverPhone: ""}}),
+            (error) => error.code === "invalid-argument" &&
+              error.message === "Enter the receiver's name." &&
+              error.details?.reasons?.includes("receiver_name_required"));
+        // Stock still names nobody.
+        await call("addContainerLine", {containerId: box, line: {
+          ...barrelLine(1), ownerKind: "stock", receiverName: ""}});
+      });
+
+  it("stores sender is the receiver as copies and the flag", async () => {
+    const box = await newContainer();
+    const {lineId} = await call("addContainerLine", {containerId: box,
+      line: {...barrelLine(2), customerName: "", customerPhone: "",
+        receiverName: "Mariama Bah", receiverPhone: "+224 620 00 00 00",
+        senderIsReceiver: true}});
+    let line = (await lineRef(lineId).get()).data();
+    assert.equal(line.senderIsReceiver, true);
+    assert.equal(line.customerName, "Mariama Bah");
+    assert.equal(line.customerPhone, "+224620000000");
+    // Unticked on an edit: the sender fields empty, the flag off.
+    await call("updateContainerLine", {lineId, line: {...barrelLine(2),
+      customerName: "", customerPhone: "", senderIsReceiver: false}});
+    line = (await lineRef(lineId).get()).data();
+    assert.equal(line.senderIsReceiver, false);
+    assert.equal(line.customerName, "");
+    assert.equal(line.customerPhone, "");
+    // Ticked again through the contacts-only callable.
+    const again = await call("updateContainerLineContacts", {lineId,
+      contacts: {senderIsReceiver: true}});
+    assert.ok(again.changed.includes("senderIsReceiver"));
+    assert.equal((await lineRef(lineId).get()).get("customerName"),
+        "Mariama Bah");
+  });
+
+  // A line saved before the receiver's name was required keeps working.
+  it("lets an old line with no receiver take price, payment and move edits",
+      async () => {
+        const box = await newContainer();
+        const other = await newContainer();
+        const {lineId} = await call("addContainerLine",
+            {containerId: box, line: barrelLine(2)});
+        // As an older version stored it: a sender, no receiver.
+        await lineRef(lineId).update({receiverName: "", receiverPhone: "",
+          notifyReceiver: false});
+        await call("setContainerLinePrice", {lineId, priceCents: 20000});
+        await pay({lineId, amountCents: 5000, method: "cash"});
+        await call("moveContainerLine", {lineId, toContainerId: other});
+        // The whole line sent back as it is (an edit of something else).
+        const stored = (await lineRef(lineId).get()).data();
+        await call("updateContainerLine", {lineId, line: {
+          kind: stored.kind, quantity: stored.quantity,
+          ownerKind: "customer", customerName: stored.customerName,
+          customerPhone: stored.customerPhone, receiverName: "",
+          receiverPhone: "", notifyCustomer: true, notifyReceiver: true,
+          payOnArrival: true}});
+        assert.equal((await lineRef(lineId).get()).get("payOnArrival"), true);
+        // Its people edited: now it has to name the receiver.
+        await assert.rejects(
+            call("updateContainerLineContacts", {lineId,
+              contacts: {customerPhone: "+16465550111"}}),
+            (error) => error.details?.reasons?.includes(
+                "receiver_name_required"));
+      });
 
   it("refuses to change what went once the box has shipped", async () => {
     const box = await newContainer();
@@ -725,6 +817,22 @@ describe("WhatsApp updates", () => {
     assert.equal(current.get("status"), "failed");
     assert.equal(current.get("error"), "HTTP 503");
     assert.equal(whatsappCalls.length, 0);
+  });
+
+  // One person on both sides hears once, as the receiver.
+  it("sends one message to a sender who is the receiver", async () => {
+    connectWhatsApp();
+    const box = await newContainer();
+    const {lineId} = await call("addContainerLine", {containerId: box,
+      line: {...barrelLine(2), customerName: "", customerPhone: "",
+        senderIsReceiver: true}});
+    const rows = await db.collection("containerUpdates")
+        .where("lineId", "==", lineId).get();
+    assert.deepEqual(rows.docs.map((d) => d.get("role")), ["receiver"]);
+    fakeWhatsApp(OK);
+    await deliver(rows.docs[0].id);
+    assert.equal(whatsappCalls.length, 1);
+    assert.equal(whatsappCalls[0].to, "224620000000");
   });
 
   it("records package_received when a line is added to a box", async () => {

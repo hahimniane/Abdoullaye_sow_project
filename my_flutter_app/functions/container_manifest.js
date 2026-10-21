@@ -381,11 +381,11 @@ function validateContainerLine(input, paidCents = 0) {
   if (!CONTAINER_OWNER_KINDS.includes(owner)) {
     errors.push("owner_kind_invalid");
   }
-  // A customer's line has to say who; the business's own stock has no one to
-  // name, and asking for a name there is how fictional customers get typed.
-  if (owner === "customer" && !text(input?.customerName, MAX_LABEL)) {
-    errors.push("customer_name_required");
-  }
+  // A customer's line has to say who collects it: the receiver's name is the
+  // one painted on the barrel. The sender is optional (owner, 2026-10-21) -
+  // with none, the receiver is the customer (lineCustomerName). The
+  // business's own stock names nobody it does not want to.
+  errors.push(...receiverNameErrors(input, owner));
   errors.push(...contactPhoneErrors(input, owner));
   if (pieced) {
     // Sizes are each piece's own; the price is the sum of the pieces plus
@@ -492,13 +492,39 @@ function validateWaitingPackage(input) {
 }
 
 /**
+ * Whether staff ticked "Sender is the receiver": the line then keeps the
+ * receiver's name and phone as the sender's too.
+ *
+ * @param {object} input Raw contact fields.
+ * @return {boolean} The box.
+ */
+function senderIsReceiverOf(input) {
+  const value = input?.senderIsReceiver;
+  return value === true || value === "true";
+}
+
+/**
+ * A customer's line names its receiver; stock may not.
+ *
+ * @param {object} input Raw contact fields.
+ * @param {string} owner The line's owner kind.
+ * @return {string[]} ["receiver_name_required"] or [].
+ */
+function receiverNameErrors(input, owner) {
+  return owner === "customer" && !text(input?.receiverName, MAX_LABEL) ?
+    ["receiver_name_required"] : [];
+}
+
+/**
  * @param {object} input Raw contact fields.
  * @param {string} owner The line's owner kind.
  * @return {string[]} Phone error codes.
  */
 function contactPhoneErrors(input, owner) {
   const errors = [];
-  if (owner === "customer" && !phoneAcceptable(input?.customerPhone)) {
+  // A sender who is the receiver has the receiver's phone, checked below.
+  if (owner === "customer" && !senderIsReceiverOf(input) &&
+      !phoneAcceptable(input?.customerPhone)) {
     errors.push("customer_phone_invalid");
   }
   if (!phoneAcceptable(input?.receiverPhone)) {
@@ -518,27 +544,107 @@ function contactPhoneErrors(input, owner) {
  */
 function containerLineContacts(input, owner) {
   const customer = owner === "customer";
-  const customerPhone = customer ? phone(input.customerPhone) : "";
+  // "Sender is the receiver": one person, written on both sides so every
+  // reader of customerName/customerPhone (older apps too) finds them.
+  const same = customer && senderIsReceiverOf(input);
+  const receiverName = text(input.receiverName, MAX_LABEL);
   const receiverPhone = phone(input.receiverPhone);
+  const customerPhone = !customer ? "" :
+    (same ? receiverPhone : phone(input.customerPhone));
+  const notifyReceiver =
+    Boolean(receiverPhone) && onUnlessOff(input.notifyReceiver);
   return {
-    customerName: customer ? text(input.customerName, MAX_LABEL) : "",
+    customerName: !customer ? "" :
+      (same ? receiverName : text(input.customerName, MAX_LABEL)),
     customerPhone,
     // Who collects it at the other end - the name written on the barrel.
-    // Usually not the customer who handed it in here, sometimes nobody
-    // named yet; either owner kind may have one (stock goes to an agent).
-    receiverName: text(input.receiverName, MAX_LABEL),
+    // Required on a customer's line; either owner kind may have one (stock
+    // goes to an agent).
+    receiverName,
     receiverPhone,
     // Both people hear about the shipment unless staff switch one off.
     // There is nobody to tell without a number, so the switch follows it.
-    notifyCustomer: Boolean(customerPhone) && onUnlessOff(input.notifyCustomer),
-    notifyReceiver: Boolean(receiverPhone) && onUnlessOff(input.notifyReceiver),
+    // One person on both sides has one switch: the receiver's.
+    notifyCustomer: same ? notifyReceiver :
+      Boolean(customerPhone) && onUnlessOff(input.notifyCustomer),
+    notifyReceiver,
+    senderIsReceiver: same,
   };
+}
+
+/**
+ * Who the customer of a line is, for everything that names one (lot
+ * customers, history, documents, search): the sender when one was given,
+ * else the receiver - a line with no sender belongs to whoever collects it.
+ * The name and the phone always come from the same person. Stock has none.
+ *
+ * @param {object} line A stored or requested line.
+ * @return {{name: string, phone: string}} The person ("" when none).
+ */
+function lineCustomer(line) {
+  const row = line && typeof line === "object" ? line : {};
+  if (text(row.ownerKind, 20) === "stock") return {name: "", phone: ""};
+  const name = text(row.customerName, MAX_LABEL);
+  const phoneTyped = text(row.customerPhone, 40);
+  if (name || phoneTyped) return {name, phone: phoneTyped};
+  return {name: text(row.receiverName, MAX_LABEL),
+    phone: text(row.receiverPhone, 40)};
+}
+
+/**
+ * @param {object} line A stored or requested line.
+ * @return {string} The customer's name (lineCustomer).
+ */
+function lineCustomerName(line) {
+  return lineCustomer(line).name;
+}
+
+/**
+ * @param {object} line A stored or requested line.
+ * @return {string} The customer's phone (lineCustomer).
+ */
+function lineCustomerPhone(line) {
+  return lineCustomer(line).phone;
+}
+
+/**
+ * What the lot's customer memory (`rememberLotCustomer`) learns from a
+ * line: its customer as lineCustomer names them.
+ *
+ * @param {object} line A stored or requested line.
+ * @return {{customerName: string, customerPhone: string,
+ *   customerEmail: string}} The `seen` fields.
+ */
+function lineLotCustomerSeen(line) {
+  const {name, phone: number} = lineCustomer(line);
+  return {customerName: name, customerPhone: number, customerEmail: ""};
+}
+
+/**
+ * Whether an edit touches who the line is from or to (or whose it is).
+ * The receiver's name became required on 2026-10-21; a line saved before
+ * then keeps taking price, payment, status and move edits without one, and
+ * only has to name its receiver when its people are edited.
+ *
+ * @param {object} current The stored line.
+ * @param {object} merged The stored line with the request over it.
+ * @return {boolean} True when the contacts or the owner change.
+ */
+function lineContactsEdited(current, merged) {
+  const before = current && typeof current === "object" ? current : {};
+  const after = merged && typeof merged === "object" ? merged : {};
+  const ownerBefore = text(before.ownerKind, 20);
+  const ownerAfter = text(after.ownerKind, 20);
+  if (ownerBefore !== ownerAfter) return true;
+  const a = containerLineContacts(before, ownerBefore);
+  const b = containerLineContacts(after, ownerAfter);
+  return LINE_CONTACT_FIELDS.some((key) => String(a[key]) !== String(b[key]));
 }
 
 /**
  * Checks a contact correction against the line it changes. Names and phones
  * may be corrected at any point - a wrong number is useless after sailing
- * too - but a customer's line keeps a customer name.
+ * too - and a customer's line that has its people edited names its receiver.
  *
  * @param {object} input Raw contact fields.
  * @param {object} current The stored line.
@@ -548,8 +654,8 @@ function validateContainerLineContacts(input, current) {
   const owner = text(current?.ownerKind, 20);
   const merged = {...(current || {}), ...(input || {})};
   const errors = [];
-  if (owner === "customer" && !text(merged.customerName, MAX_LABEL)) {
-    errors.push("customer_name_required");
+  if (lineContactsEdited(current, merged)) {
+    errors.push(...receiverNameErrors(merged, owner));
   }
   errors.push(...contactPhoneErrors(merged, owner));
   return errors;
@@ -819,7 +925,7 @@ function containerLinesCountsDelta(lines, sign = 1) {
 
 const LINE_CONTACT_FIELDS = Object.freeze([
   "customerName", "customerPhone", "receiverName", "receiverPhone",
-  "notifyCustomer", "notifyReceiver",
+  "notifyCustomer", "notifyReceiver", "senderIsReceiver",
 ]);
 // What the line IS, including where it goes and how big it is. Editable while
 // it waits and while its container is loading.
@@ -849,6 +955,7 @@ const CONTACT_FIELD_LABELS = Object.freeze({
   receiverPhone: "receiver's phone",
   notifyCustomer: "customer's WhatsApp updates",
   notifyReceiver: "receiver's WhatsApp updates",
+  senderIsReceiver: "sender is the receiver",
 });
 const LINE_FIELD_LABELS = Object.freeze({
   kind: "kind",
@@ -980,8 +1087,13 @@ function validateContainerLineEdit(current, input, contactsOnly,
   // What was paid is the stored amount, whatever the request claims - or,
   // for a line split into parts, what the server worked out this part must
   // still cover (paidFloorForLine).
-  return validateContainerLine({...row, ...asked},
+  const merged = {...row, ...asked};
+  const errors = validateContainerLine(merged,
       paidFloor === null ? paidCentsOf(row.paidCents) : paidCentsOf(paidFloor));
+  // An old line with no receiver's name still takes an edit that leaves its
+  // people alone (price, pieces, destination...).
+  return lineContactsEdited(row, merged) ? errors :
+    errors.filter((code) => code !== "receiver_name_required");
 }
 
 /**
@@ -1088,7 +1200,8 @@ function containerLineEditLabels(changes) {
   // A piece's price moving moves the total: "piece prices" says both, and
   // new pieces say "pieces" (and "price" when the total moved).
   const priced = list.includes("piecePrices") && !list.includes("pieces");
-  const ownerDependent = ["customerName", "customerPhone", "notifyCustomer"];
+  const ownerDependent = ["customerName", "customerPhone", "notifyCustomer",
+    "senderIsReceiver"];
   const shown = list.filter((key) =>
     !(list.includes("kind") && kindDependent.includes(key)) &&
     !(list.includes("pieces") && pieceDependent.includes(key)) &&
@@ -1112,7 +1225,7 @@ function containerLineEditLabels(changes) {
 function containerLineEditAudit(current, next, changes) {
   const after = next && typeof next === "object" ? next : {};
   const labels = containerLineEditLabels(changes).join(", ");
-  const name = text(after.customerName, MAX_LABEL);
+  const name = lineCustomerName(after);
   if (lineEditIsContactsOnly(changes)) {
     return {
       action: "line_contacts_edited",
@@ -1260,6 +1373,7 @@ const CONTAINER_MESSAGES = Object.freeze({
   description_required: "Say what it is.",
   owner_kind_invalid: "Say whose this is: a customer, or your own stock.",
   customer_name_required: "Enter the customer's name.",
+  receiver_name_required: "Enter the receiver's name.",
   customer_phone_invalid:
     "The customer's phone doesn't look like a phone number.",
   receiver_phone_invalid:
@@ -1352,6 +1466,12 @@ module.exports = {
   lineReceiptFields,
   validateContainerLineContacts,
   containerLineContactsUpdate,
+  lineContactsEdited,
+  lineCustomer,
+  lineCustomerName,
+  lineCustomerPhone,
+  lineLotCustomerSeen,
+  senderIsReceiverOf,
   isInternationalPhone,
   openContainerHoldingVin,
   containerCounts,
