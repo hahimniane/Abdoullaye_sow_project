@@ -559,10 +559,22 @@ function DealForm({
           <select disabled={disabled} onChange={(e) => set("itemMode", e.target.value as DealDraft["itemMode"])} value={draft.itemMode}>
             <option value="none">No charge</option>
             <option value="fixed">Per item sold</option>
+            <option value="percent">Percent of shop sales</option>
           </select>
         </label>
         {draft.itemMode === "fixed" && (
           <MoneyField disabled={disabled} error={errors.item} label="Per item" onChange={(v) => set("item", v)} value={draft.item} />
+        )}
+        {draft.itemMode === "percent" && (
+          <MoneyField
+            disabled={disabled}
+            error={errors.itemPct}
+            hint="Of the month's shop sales, after discounts. Voided sales do not count."
+            label="Percent of shop sales"
+            onChange={(v) => set("itemPct", v)}
+            prefix="%"
+            value={draft.itemPct}
+          />
         )}
       </fieldset>
       <fieldset className="lst-fieldset">

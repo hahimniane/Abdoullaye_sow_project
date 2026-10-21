@@ -295,8 +295,19 @@ function normalizeDeal(raw) {
     }
   }
 
+  // Shop items: a price per item sold, or a percentage of the shop's sales
+  // (owner, 2026-10-21). Deals saved before have no mode: per item.
   const item = charge(raw.itemSold);
-  if (item) deal.itemSold = {centsEach: unit(item.centsEach)};
+  if (item) {
+    if (item.mode === "percent") {
+      deal.itemSold = {mode: "percent", bps: rate(item.bps)};
+    } else if (item.mode === undefined || item.mode === null ||
+        item.mode === "fixed") {
+      deal.itemSold = {mode: "fixed", centsEach: unit(item.centsEach)};
+    } else {
+      errors.add("charge_mode_invalid");
+    }
+  }
 
   // Check bank (docs/ZELLE_BANK_CHECK.md): a monthly price for a connected
   // bank, and a price per paid bank refresh. Deals saved before have
@@ -469,9 +480,10 @@ function addVersion(versions, version) {
  * Usage cleaned: counts whole and non-negative; what was not read is null.
  *
  * @param {object} raw {barrels, packages, cars, packagePrices,
- *   parkingCars, parkingBilledCents, itemsSold, bankConnected,
- *   bankRefreshes, complete}. bankConnected: whether the business had an
- *   active bank link in the month; bankRefreshes: its paid bank refreshes.
+ *   parkingCars, parkingBilledCents, itemsSold, itemsRevenueCents,
+ *   bankConnected, bankRefreshes, complete}. bankConnected: whether the
+ *   business had an active bank link in the month; bankRefreshes: its paid
+ *   bank refreshes; itemsRevenueCents: the shop's sales total.
  * @return {object} The usage.
  */
 function normalizeUsage(raw) {
@@ -489,6 +501,8 @@ function normalizeUsage(raw) {
     parkingCars: maybe(row.parkingCars),
     parkingBilledCents: maybe(row.parkingBilledCents),
     itemsSold: maybe(row.itemsSold),
+    // The shop's sales total (voided sales excluded), for a % deal.
+    itemsRevenueCents: maybe(row.itemsRevenueCents),
     bankConnected: row.bankConnected === null ||
       row.bankConnected === undefined ? null : row.bankConnected === true,
     bankRefreshes: maybe(row.bankRefreshes),
@@ -602,9 +616,16 @@ function computeBill({deal, usage, commissionCents = 0}) {
     }
     if (deal.itemSold) {
       const items = u.itemsSold || 0;
-      lines.push({key: "itemsSold", mode: "fixed", quantity: items,
-        centsEach: deal.itemSold.centsEach,
-        cents: items * deal.itemSold.centsEach});
+      if (deal.itemSold.mode === "percent") {
+        const sales = u.itemsRevenueCents || 0;
+        lines.push({key: "itemsSold", mode: "percent", quantity: items,
+          bps: deal.itemSold.bps, baseCents: sales,
+          cents: percentOfCents(sales, deal.itemSold.bps)});
+      } else {
+        lines.push({key: "itemsSold", mode: "fixed", quantity: items,
+          centsEach: deal.itemSold.centsEach,
+          cents: items * deal.itemSold.centsEach});
+      }
     }
     if (deal.bankConnection) {
       // Charged for the month when the business had an active bank link.
@@ -665,6 +686,7 @@ const DRIFT_KEYS = Object.freeze([
   ["parkingCars", "count"],
   ["parkingBilledCents", "cents"],
   ["itemsSold", "count"],
+  ["itemsRevenueCents", "cents"],
   ["bankConnected", "count"],
   ["bankRefreshes", "count"],
   ["commissionCents", "cents"],
@@ -690,6 +712,7 @@ function driftFigures(usage, commissionCents) {
     parkingCars: u.parkingCars,
     parkingBilledCents: u.parkingBilledCents,
     itemsSold: u.itemsSold,
+    itemsRevenueCents: u.itemsRevenueCents,
     bankConnected: u.bankConnected === null ? null : Number(u.bankConnected),
     bankRefreshes: u.bankRefreshes,
     commissionCents: count(commissionCents),

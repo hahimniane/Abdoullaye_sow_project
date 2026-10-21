@@ -508,3 +508,30 @@ describe("the month's table", () => {
     assert.equal(billing.billingMonthId("a/b", "2026-10"), "a_b_2026-10");
   });
 });
+
+describe("shop items: per item or a percentage of shop sales", () => {
+  it("reads old deals as per item and refuses an unknown mode", () => {
+    assert.deepEqual(billing.normalizeDeal({itemSold: {centsEach: 50}})
+        .deal.itemSold, {mode: "fixed", centsEach: 50});
+    assert.deepEqual(billing.normalizeDeal({itemSold: {mode: "percent",
+      bps: 300}}).deal.itemSold, {mode: "percent", bps: 300});
+    assert.ok(billing.normalizeDeal({itemSold: {mode: "weekly"}}).errors
+        .includes("charge_mode_invalid"));
+    assert.ok(billing.normalizeDeal({itemSold: {mode: "percent", bps: 0}})
+        .errors.length > 0);
+  });
+
+  it("charges the percentage on the month's shop sales", () => {
+    const deal = billing.normalizeDeal({itemSold: {mode: "percent",
+      bps: 300}}).deal;
+    const bill = billing.computeBill({deal, usage: {itemsSold: 29,
+      itemsRevenueCents: 123456}});
+    const line = bill.lines.find((l) => l.key === "itemsSold");
+    assert.deepEqual([line.mode, line.quantity, line.baseCents, line.cents],
+        ["percent", 29, 123456, billing.percentOfCents(123456, 300)]);
+    // Sales not read count as nothing, never as a guess.
+    assert.equal(billing.computeBill({deal, usage: {itemsSold: 3}})
+        .lines.find((l) => l.key === "itemsSold").cents, 0);
+    assert.equal(billing.dealNeeds(deal).items, true);
+  });
+});

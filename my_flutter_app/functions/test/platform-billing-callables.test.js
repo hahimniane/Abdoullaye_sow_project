@@ -231,16 +231,25 @@ describe("Laawol bills", () => {
     assert.equal(bill.canManage, false);
   });
 
-  it("lists only businesses with a deal or activity, deal first",
+  it("lists every business, the ones with a deal first",
       async () => {
         const month = await call({action: "getMonthBills", month: PREV},
             FINANCE);
         const ids = month.rows.map((row) => row.businessId);
-        assert.deepEqual(ids, [BIZ, BIZ_B]);
+        // Owner, 2026-10-21: every business, idle and pending ones too.
+        assert.equal(ids[0], BIZ);
+        assert.deepEqual([...ids].sort(),
+            [BIZ, BIZ_B, BIZ_IDLE, BIZ_NOFEE].sort());
         assert.equal(month.rows[0].amountCents, 9625);
         assert.equal(month.rows[0].hasDeal, true);
-        assert.equal(month.rows[1].amountCents, 0);
-        assert.equal(month.rows[1].counts.barrels, 5);
+        const other = month.rows.find((row) => row.businessId === BIZ_B);
+        assert.equal(other.amountCents, 0);
+        assert.equal(other.counts.barrels, 5);
+        for (const id of [BIZ_IDLE, BIZ_NOFEE]) {
+          const row = month.rows.find((r) => r.businessId === id);
+          assert.equal(row.hasDeal, false, id);
+          assert.equal(row.amountCents, 0, id);
+        }
         assert.equal(month.summary.owedCents, 9625);
         assert.equal(month.summary.commissionCents, 2000);
         assert.equal(month.summary.partial, false);
@@ -258,8 +267,8 @@ describe("Laawol bills", () => {
     const all = await call({action: "whatIf", month: PREV,
       deal: {parking: {mode: "perCar", centsEach: 500}}}, FINANCE);
     const ids = all.rows.map((row) => row.businessId).sort();
-    // The parking card brings in every business offering parking.
-    assert.deepEqual(ids, [BIZ, BIZ_NOFEE, BIZ_B].sort());
+    // Every business is a candidate now, idle ones included.
+    assert.deepEqual(ids, [BIZ, BIZ_NOFEE, BIZ_B, BIZ_IDLE].sort());
     const mine = all.rows.find((row) => row.businessId === BIZ);
     assert.equal(mine.nowCents, 9625);
     assert.equal(mine.altCents, 1000);
@@ -508,13 +517,16 @@ describe("Laawol bills", () => {
     assert.deepEqual([alt.nowCents, alt.altCents], [400, 250]);
   });
 
-  it("a month with nothing open is not listed", async () => {
+  it("every business is listed, idle ones with no deal and $0", async () => {
     const month = await call({action: "getMonthBills", month: CUR},
         FINANCE);
-    // The deal applies this month (v2 from PREV on), so the business with
-    // the deal is listed; the idle shop is not.
+    // Owner, 2026-10-21: Bills lists every business every month (pending
+    // ones too), so a deal can be set before any activity.
     assert.ok(month.rows.some((row) => row.businessId === BIZ));
-    assert.ok(!month.rows.some((row) => row.businessId === BIZ_IDLE));
+    const idle = month.rows.find((row) => row.businessId === BIZ_IDLE);
+    assert.ok(idle, "the idle shop is listed");
+    assert.equal(idle.hasDeal, false);
+    assert.equal(idle.amountCents, 0);
     await db.collection("businesses").doc(BIZ_IDLE)
         .update({updatedAt: FieldValue.serverTimestamp()});
   });

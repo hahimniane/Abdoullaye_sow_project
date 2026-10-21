@@ -263,8 +263,9 @@ function createPlatformBillingHandlers(deps) {
         .where("createdAt", ">=", Timestamp.fromMillis(window.startMs))
         .where("createdAt", "<", Timestamp.fromMillis(window.endMs))
         .orderBy("createdAt", "desc"), deadlineMs);
-    return {itemsSold: summarizeSales(sales.rows).itemsSold,
-      complete: sales.complete};
+    const summary = summarizeSales(sales.rows);
+    return {itemsSold: summary.itemsSold,
+      revenueCents: summary.revenueCents, complete: sales.complete};
   }
 
   /**
@@ -321,6 +322,7 @@ function createPlatformBillingHandlers(deps) {
       parkingCars: parking ? parking.carsOnLot : null,
       parkingBilledCents: parking ? parking.billedCents : null,
       itemsSold: items ? items.itemsSold : null,
+      itemsRevenueCents: items ? items.revenueCents : null,
       bankConnected: bank ? bank.bankConnected : null,
       bankRefreshes: bank ? bank.bankRefreshes : null,
     });
@@ -550,18 +552,22 @@ function createPlatformBillingHandlers(deps) {
   // ---- Candidates for the month's table ---------------------------------
 
   async function monthCandidates(month, deadlineMs, refresh, extra = []) {
-    const [dealsSnap, volumeSnap, monthsSnap, commission, unpaidSnap] =
-      await Promise.all([
-        db().collection(DEALS).get(),
-        db().collection(VOLUME_COLLECTION).where("month", "==", month)
-            .select("businessId", "pieces", "barrels", "packages", "cars",
-                "complete").get(),
-        db().collection(MONTHS).where("month", "==", month).get(),
-        commissionFor(month, refresh, deadlineMs),
-        db().collection(MONTHS).where("status", "==", "closed")
-            .where("unpaidCents", ">", 0)
-            .select("businessId", "unpaidCents").get(),
-      ]);
+    const [dealsSnap, volumeSnap, monthsSnap, commission, unpaidSnap,
+      businessesSnap] = await Promise.all([
+      db().collection(DEALS).get(),
+      db().collection(VOLUME_COLLECTION).where("month", "==", month)
+          .select("businessId", "pieces", "barrels", "packages", "cars",
+              "complete").get(),
+      db().collection(MONTHS).where("month", "==", month).get(),
+      commissionFor(month, refresh, deadlineMs),
+      db().collection(MONTHS).where("status", "==", "closed")
+          .where("unpaidCents", ">", 0)
+          .select("businessId", "unpaidCents").get(),
+      // Every business, ids only: Bills lists them all every month,
+      // pending ones too, so a deal can be set before any activity
+      // (owner, 2026-10-21; AMT sells in its shop but ships nothing).
+      db().collection("businesses").select().get(),
+    ]);
     const deals = new Map(dealsSnap.docs.map((doc) =>
       [doc.id, dealOf(doc.data() || {})]));
     const volume = new Map();
@@ -578,7 +584,7 @@ function createPlatformBillingHandlers(deps) {
       unpaidToDate.set(id, (unpaidToDate.get(id) || 0) +
         (Number(data.unpaidCents) || 0));
     }
-    const ids = new Set();
+    const ids = new Set(businessesSnap.docs.map((doc) => doc.id));
     for (const id of deals.keys()) ids.add(id);
     for (const [id, row] of volume) {
       if ((Number(row.pieces) || 0) > 0) ids.add(id);

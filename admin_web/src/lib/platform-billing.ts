@@ -22,13 +22,15 @@ export type PackageCharge =
 export type ParkingCharge =
   | { mode: "perCar"; centsEach: number }
   | { mode: "percent"; bps: number };
+/** Shop items: per item sold, or a percentage of the shop's sales. Deals saved before have no mode: per item. */
+export type ItemCharge = { mode: "fixed"; centsEach: number } | { mode: "percent"; bps: number };
 
 export type Deal = {
   barrel: { centsEach: number } | null;
   package: PackageCharge | null;
   shippedCar: { centsEach: number } | null;
   parking: ParkingCharge | null;
-  itemSold: { centsEach: number } | null;
+  itemSold: ItemCharge | null;
   /** Check bank (docs/ZELLE_BANK_CHECK.md): a month's price when the business had an active bank link. Deals saved before have none. */
   bankConnection: { centsEach: number } | null;
   /** A price per paid bank refresh. */
@@ -46,6 +48,8 @@ export type Usage = {
   parkingCars: number | null;
   parkingBilledCents: number | null;
   itemsSold: number | null;
+  /** The shop's sales total for the month (voided sales excluded); null when not read. */
+  itemsRevenueCents?: number | null;
   /** Whether the business had an active bank link in the month; null when not read. */
   bankConnected: boolean | null;
   /** Its paid bank refreshes in the month; null when not read. */
@@ -97,6 +101,7 @@ export type DriftKey =
   | "parkingCars"
   | "parkingBilledCents"
   | "itemsSold"
+  | "itemsRevenueCents"
   | "bankConnected"
   | "bankRefreshes"
   | "commissionCents";
@@ -355,7 +360,12 @@ export function normalizeDeal(raw: unknown): { deal: Deal | null; errors: string
     else errors.add("charge_mode_invalid");
   }
   const item = charge(raw.itemSold);
-  if (item) deal.itemSold = { centsEach: unit(item.centsEach) };
+  if (item) {
+    if (item.mode === "percent") deal.itemSold = { mode: "percent", bps: rate(item.bps) };
+    else if (item.mode === undefined || item.mode === null || item.mode === "fixed") {
+      deal.itemSold = { mode: "fixed", centsEach: unit(item.centsEach) };
+    } else errors.add("charge_mode_invalid");
+  }
   // Check bank: a monthly price for a connected bank, and a price per paid
   // bank refresh. Deals saved before have neither: they read as no charge.
   const bankConnection = charge(raw.bankConnection);
@@ -408,6 +418,7 @@ export function normalizeUsage(raw: unknown): Usage {
     parkingCars: maybe(row.parkingCars),
     parkingBilledCents: maybe(row.parkingBilledCents),
     itemsSold: maybe(row.itemsSold),
+    itemsRevenueCents: maybe(row.itemsRevenueCents),
     bankConnected: row.bankConnected === null || row.bankConnected === undefined ? null : row.bankConnected === true,
     bankRefreshes: maybe(row.bankRefreshes),
     complete: row.complete !== false,
@@ -445,6 +456,7 @@ export const DRIFT_KEYS: ReadonlyArray<readonly [DriftKey, "count" | "cents"]> =
   ["parkingCars", "count"],
   ["parkingBilledCents", "cents"],
   ["itemsSold", "count"],
+  ["itemsRevenueCents", "cents"],
   ["bankConnected", "count"],
   ["bankRefreshes", "count"],
   ["commissionCents", "cents"],
@@ -528,7 +540,19 @@ export function computeBill({
     }
     if (deal.itemSold) {
       const items = u.itemsSold ?? 0;
-      lines.push({ key: "itemsSold", mode: "fixed", quantity: items, centsEach: deal.itemSold.centsEach, cents: items * deal.itemSold.centsEach });
+      if (deal.itemSold.mode === "percent") {
+        const sales = u.itemsRevenueCents ?? 0;
+        lines.push({
+          key: "itemsSold",
+          mode: "percent",
+          quantity: items,
+          bps: deal.itemSold.bps,
+          baseCents: sales,
+          cents: percentOfCents(sales, deal.itemSold.bps),
+        });
+      } else {
+        lines.push({ key: "itemsSold", mode: "fixed", quantity: items, centsEach: deal.itemSold.centsEach, cents: items * deal.itemSold.centsEach });
+      }
     }
     if (deal.bankConnection) {
       // Charged for the month when the business had an active bank link.
@@ -616,8 +640,9 @@ export type DealDraft = {
   parkingMode: "none" | "perCar" | "percent";
   parkingCents: string;
   parkingPct: string;
-  itemMode: "none" | "fixed";
+  itemMode: "none" | "fixed" | "percent";
   item: string;
+  itemPct: string;
   bankConnectionMode: "none" | "fixed";
   bankConnection: string;
   bankCheckMode: "none" | "fixed";
@@ -666,6 +691,7 @@ export function emptyDealDraft(): DealDraft {
     parkingPct: "",
     itemMode: "none",
     item: "",
+    itemPct: "",
     bankConnectionMode: "none",
     bankConnection: "",
     bankCheckMode: "none",
@@ -702,7 +728,10 @@ export function draftFromDeal(deal: Deal | null | undefined): DealDraft {
     draft.parkingMode = "percent";
     draft.parkingPct = bpsToInput(deal.parking.bps);
   }
-  if (deal.itemSold) {
+  if (deal.itemSold?.mode === "percent") {
+    draft.itemMode = "percent";
+    draft.itemPct = bpsToInput(deal.itemSold.bps);
+  } else if (deal.itemSold) {
     draft.itemMode = "fixed";
     draft.item = centsToInput(deal.itemSold.centsEach);
   }
@@ -765,7 +794,8 @@ export function dealFromDraft(draft: DealDraft): { deal: Deal | null; errors: Dr
   if (draft.shippedCarMode === "fixed") deal.shippedCar = { centsEach: money("shippedCar") ?? 0 };
   if (draft.parkingMode === "perCar") deal.parking = { mode: "perCar", centsEach: money("parkingCents") ?? 0 };
   if (draft.parkingMode === "percent") deal.parking = { mode: "percent", bps: percent("parkingPct") };
-  if (draft.itemMode === "fixed") deal.itemSold = { centsEach: money("item") ?? 0 };
+  if (draft.itemMode === "fixed") deal.itemSold = { mode: "fixed", centsEach: money("item") ?? 0 };
+  if (draft.itemMode === "percent") deal.itemSold = { mode: "percent", bps: percent("itemPct") };
   if (draft.bankConnectionMode === "fixed") deal.bankConnection = { centsEach: money("bankConnection") ?? 0 };
   if (draft.bankCheckMode === "fixed") deal.bankCheck = { centsEach: money("bankCheck") ?? 0 };
   deal.flatCents = money("flat", { optional: true, zero: true }) ?? 0;
@@ -830,6 +860,7 @@ export const DRIFT_LABELS: Record<DriftKey, string> = {
   parkingCars: "Parked cars",
   parkingBilledCents: "Parking billed",
   itemsSold: "Items sold",
+  itemsRevenueCents: "Shop sales",
   bankConnected: "Bank connected",
   bankRefreshes: "Paid bank refreshes",
   commissionCents: "Commission taken",
@@ -926,7 +957,11 @@ export function dealSegments(deal: Deal | null | undefined): DealSegment[] {
   } else if (deal.parking?.mode === "percent") {
     out.push({ key: "parking", label: DEAL_LABELS.parking, bps: deal.parking.bps, unit: "of parking billed" });
   }
-  if (deal.itemSold) out.push({ key: "itemsSold", label: DEAL_LABELS.itemsSold, cents: deal.itemSold.centsEach, unit: "per item" });
+  if (deal.itemSold?.mode === "percent") {
+    out.push({ key: "itemsSold", label: DEAL_LABELS.itemsSold, bps: deal.itemSold.bps, unit: "of shop sales" });
+  } else if (deal.itemSold) {
+    out.push({ key: "itemsSold", label: DEAL_LABELS.itemsSold, cents: deal.itemSold.centsEach, unit: "per item" });
+  }
   if (deal.bankConnection) {
     out.push({ key: "bankConnection", label: DEAL_LABELS.bankConnection, cents: deal.bankConnection.centsEach, unit: "a month with a connected bank" });
   }

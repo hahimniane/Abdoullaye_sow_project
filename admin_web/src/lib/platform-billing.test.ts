@@ -81,8 +81,8 @@ test("bank charge keys, drift figures and deal needs follow the server", () => {
   assert.deepEqual([...billing.CHARGE_KEYS], [...server.CHARGE_KEYS]);
   for (const key of billing.CHARGE_KEYS) assert.ok(billing.CHARGE_LABELS[key], key);
   // Every drift figure differs, so the server lists them all, in its order.
-  const before = { barrels: 1, packages: 1, packagePrices: [100], cars: 1, parkingCars: 1, parkingBilledCents: 1, itemsSold: 1, bankConnected: false, bankRefreshes: 1 };
-  const after = { barrels: 2, packages: 2, packagePrices: [null, 300], cars: 2, parkingCars: 2, parkingBilledCents: 2, itemsSold: 2, bankConnected: true, bankRefreshes: 3 };
+  const before = { barrels: 1, packages: 1, packagePrices: [100], cars: 1, parkingCars: 1, parkingBilledCents: 1, itemsSold: 1, itemsRevenueCents: 1, bankConnected: false, bankRefreshes: 1 };
+  const after = { barrels: 2, packages: 2, packagePrices: [null, 300], cars: 2, parkingCars: 2, parkingBilledCents: 2, itemsSold: 2, itemsRevenueCents: 2, bankConnected: true, bankRefreshes: 3 };
   const drift = server.billDrift({ usage: before, deal: null, bill: { commissionCents: 1, amountCents: 0 } }, after, 2);
   assert.deepEqual(drift.items.map((item) => item.key), billing.DRIFT_KEYS.map(([key]) => key));
   for (const [key] of billing.DRIFT_KEYS) assert.ok(billing.DRIFT_LABELS[key], key);
@@ -195,7 +195,8 @@ test("the deal form round-trips a deal and names each bad field", () => {
   assert.equal(limits.errors.minimum, billing.DRAFT_MESSAGES.minimumAboveCap);
   // "12,50" is twelve dollars fifty, not 1,250.
   const comma = billing.dealFromDraft({ ...billing.emptyDealDraft(), itemMode: "fixed", item: "0,25", flat: "12,50" });
-  assert.equal(comma.deal?.itemSold?.centsEach, 25);
+  const commaItem = comma.deal?.itemSold;
+  assert.equal(commaItem?.mode === "fixed" ? commaItem.centsEach : null, 25);
   assert.equal(comma.deal?.flatCents, 1250);
 });
 
@@ -269,4 +270,28 @@ test("the preview answers like the server: refuses, records, closes, reopens", a
   assert.ok(what.rows.some((row) => row.businessId === "dakar_parking"));
   assert.equal(what.totals.altCents, what.rows.reduce((sum, row) => sum + row.altCents, 0));
   resetBillingPreview();
+});
+
+test("shop items: per item or a percentage of shop sales", () => {
+  // Deals saved before this change have no mode: they stay per item.
+  const old = billing.normalizeDeal({ itemSold: { centsEach: 50 } });
+  assert.deepEqual(old.errors, []);
+  assert.deepEqual(old.deal?.itemSold, { mode: "fixed", centsEach: 50 });
+  const pct = billing.normalizeDeal({ itemSold: { mode: "percent", bps: 300 } });
+  assert.deepEqual(pct.deal?.itemSold, { mode: "percent", bps: 300 });
+  assert.ok(billing.normalizeDeal({ itemSold: { mode: "weekly" } }).errors.includes("charge_mode_invalid"));
+  // 3% of $1,234.56 of sales = $37.04 (rounded like the other percentages).
+  const bill = billing.computeBill({
+    deal: pct.deal,
+    usage: { barrels: 0, packages: 0, cars: 0, parkingCars: null, parkingBilledCents: null, itemsSold: 29, itemsRevenueCents: 123456, bankConnected: null, bankRefreshes: null },
+  });
+  const line = bill.lines.find((l) => l.key === "itemsSold");
+  assert.equal(line?.mode, "percent");
+  assert.equal(line?.baseCents, 123456);
+  assert.equal(line?.cents, billing.percentOfCents(123456, 300));
+  // The form round-trips both modes.
+  const draft = { ...billing.emptyDealDraft(), itemMode: "percent" as const, itemPct: "3" };
+  assert.deepEqual(billing.dealFromDraft(draft).deal?.itemSold, { mode: "percent", bps: 300 });
+  assert.equal(billing.draftFromDeal(pct.deal).itemPct, "3");
+  assert.deepEqual(billing.dealSegments(pct.deal)[0], { key: "itemsSold", label: "Shop items", bps: 300, unit: "of shop sales" });
 });

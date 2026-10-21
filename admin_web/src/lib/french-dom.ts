@@ -3772,6 +3772,11 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Per shipped car": "Par voiture expédiée",
   "Per car on the lot in the month": "Par voiture sur le parc dans le mois",
   "Percent of parking billed": "Pourcentage du stationnement facturé",
+  "Percent of shop sales": "Pourcentage des ventes de la boutique",
+  "of shop sales": "des ventes de la boutique",
+  "Of the month's shop sales, after discounts. Voided sales do not count.":
+    "Sur les ventes de la boutique du mois, après remises. Les ventes annulées ne comptent pas.",
+  "Shop sales": "Ventes de la boutique",
   "Per item sold": "Par article vendu",
   "Every month": "Chaque mois",
   "Charges and the flat fee are added up, raised to the minimum, then held to the cap. Commission is never counted in them.":
