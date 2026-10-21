@@ -165,9 +165,65 @@ void main() {
         screen,
         contains('widget.feed ?? (_ownFeed = ContainerFeed(widget.businessId))'),
       );
-      // One containers listener and one lines listener in the whole file.
-      expect("scoped('containers')".allMatches(screen).length, 1);
-      expect("scoped('containerLines')".allMatches(screen).length, 1);
+    });
+
+    test('the containers feed is bounded, never the whole history', () {
+      final screen = read('lib/screens/containers_screen.dart');
+      // The old feed listened to every container and line of the business.
+      expect(screen, isNot(contains("scoped('containers')")));
+      expect(screen, isNot(contains("scoped('containerLines')")));
+      expect(screen, isNot(contains(".collection('containerLines').where(")));
+      expect(screen, isNot(contains(".collection('containers').where(")));
+      // Open work whole, arrived history paged, lines by box and by group.
+      for (final spec in [
+        'openContainersSpec(id)',
+        'openContainerLinesSpec(id)',
+        'waitingContainerLinesSpec(id)',
+        'arrivedContainersPageSpec(businessId, pages: _arrivedPages)',
+        'containerLinesOfContainersSpec(businessId, chunk)',
+        'containerLineGroupsSpec(businessId, chunk)',
+        'arrivedContainersCountSpec(businessId)',
+      ]) {
+        expect(screen, contains(spec));
+      }
+      expect(screen, contains("Key('containers-load-older')"));
+      expect(screen, contains('l10n.ctrLoadOlderContainers'));
+      // The chips count the whole history, not the page.
+      expect(screen, contains('final counts = _feed.statusCounts;'));
+      // A detail keeps its own box read, even an old arrival.
+      expect(screen, contains('..focus(widget.containerId)'));
+      expect(screen, contains('..unfocus(widget.containerId)'));
+      expect(screen, contains('_feed.isSettled(widget.containerId)'));
+    });
+
+    test('the admin listings page; a business still sees all of its own', () {
+      final screen = read('lib/screens/staff_car_management_screen.dart');
+      expect(screen, contains('adminCarListingsPageSpec(pages: _adminPages)'));
+      expect(screen, contains("'admin-cars-load-more'"));
+      expect(screen, contains('carListingsCountSpec(status: status)'));
+      expect(screen, contains(".where('businessId', isEqualTo: businessId)"));
+      // The old admin read: every listing on the platform, no limit.
+      expect(
+        screen,
+        isNot(contains(".orderBy('createdAt', descending: true)\n              .snapshots()")),
+      );
+    });
+
+    test('the platform dashboard previews businesses and pages shipments', () {
+      final screen = read('lib/screens/platform_admin_dashboard_screen.dart');
+      expect(screen, isNot(contains("collection('businesses').snapshots()")));
+      expect(screen, contains('adminBusinessPreviewSpec.build('));
+      expect(screen, contains('adminShipmentsByStatusPageSpec('));
+      expect(screen, contains("Key('admin-shipments-load-more')"));
+      expect(screen, isNot(contains(".collection('barrelShipments')")));
+    });
+
+    test('shared barrels keep their tab listeners across rebuilds', () {
+      final screen = read('lib/screens/open_barrels_screen.dart');
+      expect(screen, isNot(contains('stream: _service.openPools()')));
+      expect(screen, isNot(contains('stream: _service.myPools(uid)')));
+      expect(screen, contains('late final Stream<List<BarrelPool>> _openPools'));
+      expect(screen, contains('stream: _myPoolsFor(uid),'));
     });
 
     test('the marketplace pages instead of reading every listing', () {

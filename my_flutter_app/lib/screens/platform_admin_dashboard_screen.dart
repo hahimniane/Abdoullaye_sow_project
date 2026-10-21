@@ -10,6 +10,8 @@ import '../models/business_service.dart';
 import '../models/platform_access.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
+import '../services/business_activity_queries.dart';
+import '../services/firestore_query_spec.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/country_phone_field.dart';
@@ -588,23 +590,62 @@ Future<void> _showShipmentListSheet(
   await _showDashboardSheet(
     context,
     title: AppLocalizations.of(context)!.openShipments,
-    child: StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('barrelShipments')
-          .where('status', isEqualTo: status)
-          .snapshots(),
+    child: _ShipmentsByStatusList(status: status),
+  );
+}
+
+/// The shipments in one state across every business, newest first, a page
+/// at a time ([adminShipmentsByStatusPageSpec]). It used to listen to every
+/// one of them; the tile that opens it counts them with `count()`.
+class _ShipmentsByStatusList extends StatefulWidget {
+  const _ShipmentsByStatusList({required this.status});
+
+  final String status;
+
+  @override
+  State<_ShipmentsByStatusList> createState() => _ShipmentsByStatusListState();
+}
+
+class _ShipmentsByStatusListState extends State<_ShipmentsByStatusList> {
+  int _pages = 1;
+  late FirestoreQuerySpec _spec = _specFor(_pages);
+  late Stream<QuerySnapshot<Map<String, dynamic>>> _rows = _subscribe();
+
+  FirestoreQuerySpec _specFor(int pages) =>
+      adminShipmentsByStatusPageSpec(widget.status, pages: pages);
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> _subscribe() =>
+      _spec.build(FirebaseFirestore.instance).snapshots();
+
+  void _loadMore() {
+    setState(() {
+      _pages++;
+      _spec = _specFor(_pages);
+      _rows = _subscribe();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: _rows,
       builder: (context, snapshot) {
+        if (snapshot.hasError && !snapshot.hasData) {
+          return _EmptyPanelMessage(l10n.adminShipmentsLoadFailed);
+        }
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
-        final shipments =
-            snapshot.data!.docs.map(BarrelShipment.fromFirestore).toList()
-              ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        final docs = snapshot.data!.docs;
+        final shipments = docs.map(BarrelShipment.fromFirestore).toList();
         if (shipments.isEmpty) {
-          return _EmptyPanelMessage(
-            AppLocalizations.of(context)!.noOpenShipments,
-          );
+          return _EmptyPanelMessage(l10n.noOpenShipments);
         }
+        // A larger page is still on its way while the rows equal the old
+        // limit; the button waits for it.
+        final waiting = snapshot.connectionState == ConnectionState.waiting;
+        final full = docs.length >= (_spec.limit ?? 0);
         return Column(
           children: [
             for (final shipment in shipments)
@@ -630,11 +671,27 @@ Future<void> _showShipmentListSheet(
                   );
                 },
               ),
+            if (full || waiting)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: OutlinedButton.icon(
+                  key: const Key('admin-shipments-load-more'),
+                  onPressed: waiting ? null : _loadMore,
+                  icon: waiting
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.expand_more, size: 18),
+                  label: Text(l10n.purchaseLoadMore),
+                ),
+              ),
           ],
         );
       },
-    ),
-  );
+    );
+  }
 }
 
 Future<void> _showRefundRequestsSheet(BuildContext context) async {
@@ -990,8 +1047,19 @@ class _BusinessReviewTile extends StatelessWidget {
   }
 }
 
-class _BusinessControlPanel extends StatelessWidget {
+/// A preview of the platform's businesses: the first ten by status, then
+/// name ([adminBusinessPreviewSpec]); "Open full list" has the rest. It used
+/// to listen to every business to show ten.
+class _BusinessControlPanel extends StatefulWidget {
   const _BusinessControlPanel();
+
+  @override
+  State<_BusinessControlPanel> createState() => _BusinessControlPanelState();
+}
+
+class _BusinessControlPanelState extends State<_BusinessControlPanel> {
+  late final Stream<QuerySnapshot<Map<String, dynamic>>> _rows =
+      adminBusinessPreviewSpec.build(FirebaseFirestore.instance).snapshots();
 
   @override
   Widget build(BuildContext context) {
@@ -1003,9 +1071,14 @@ class _BusinessControlPanel extends StatelessWidget {
         icon: const Icon(Icons.open_in_new, size: 18),
         label: Text(AppLocalizations.of(context)!.openFullList),
       ),
-      child: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance.collection('businesses').snapshots(),
+      child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: _rows,
         builder: (context, snapshot) {
+          if (snapshot.hasError && !snapshot.hasData) {
+            return _EmptyPanelMessage(
+              AppLocalizations.of(context)!.adminBusinessesLoadFailed,
+            );
+          }
           final businesses =
               snapshot.data?.docs.map(BusinessProfile.fromFirestore).toList() ??
               <BusinessProfile>[];
@@ -1023,7 +1096,7 @@ class _BusinessControlPanel extends StatelessWidget {
           }
           return Column(
             children: [
-              for (final business in businesses.take(10))
+              for (final business in businesses.take(adminBusinessPreviewSize))
                 _ListRow(
                   icon: Icons.apartment_outlined,
                   title: business.name,

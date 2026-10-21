@@ -451,6 +451,9 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   counts, a month's parking bills) - add every new query shape there.
   `test/scaling_source_contract_test.dart` forbids raw record-collection
   listeners and streams built inside `build` in the audited widgets.
+  `test/container_feed_plan_test.dart` replays the containers feed's bounded
+  reads over a year of sailings and requires the whole history's chip counts,
+  waiting list, box lines and split-package money.
 - Label printing (Phomemo M221): raster packing is pinned byte for byte to
   the developer's reference tool via `test/fixtures/m221_pack_fixture.json`
   (regenerate only from `laawol-deploy-logs/m221/m221.py`, never from the

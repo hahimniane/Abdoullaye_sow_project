@@ -15,6 +15,7 @@ import '../models/destination_country.dart';
 import '../services/business_activity_queries.dart';
 import '../services/container_lot_cars.dart';
 import '../services/business_volume.dart' show volumeFeedSignature;
+import '../services/container_feed_plan.dart';
 import '../services/container_manifest.dart';
 import '../services/container_packages.dart';
 import '../services/known_car_lookup.dart';
@@ -77,6 +78,13 @@ import 'zelle_check_sheet.dart' show zelleViewerIsOwner;
 /// the same feed - the detail used to open a second listener on both
 /// collections each time a box was tapped. A detail opened from anywhere
 /// else (a scanned package) makes and disposes its own.
+///
+/// Bounded, the way the console's containers panel reads them
+/// (`services/container_feed_plan.dart`): the open boxes and the packages
+/// waiting for one, whole and live; the arrived boxes newest first, a page
+/// at a time ([loadMoreArrived]), with exactly their lines; any box opened
+/// from a link ([focus]); and the rest of every split package on screen.
+/// It used to listen to every container and line the business ever had.
 class ContainerFeed extends ChangeNotifier {
   ContainerFeed(this.businessId, {FirebaseFirestore? db})
     : _db = db ?? FirebaseFirestore.instance {
@@ -90,53 +98,370 @@ class ContainerFeed extends ChangeNotifier {
   List<ShippingContainer> containers = const [];
   List<ContainerLine> lines = const [];
 
+  // Each read's own rows; [containers] and [lines] are merged from them.
+  List<ShippingContainer> _open = const [];
+  List<ShippingContainer> _arrived = const [];
+  final Map<String, ShippingContainer> _focusedRows = {};
+  List<ContainerLine> _openLines = const [];
+  List<ContainerLine> _waitingLines = const [];
+  final Map<String, List<ContainerLine>> _chunkLines = {};
+  final Map<String, List<ContainerLine>> _groupLines = {};
+  final Map<String, ContainerLine> _rootRows = {};
+
+  // The `in` reads, kept by their ids so an unchanged group stays open.
+  List<List<String>> _lineChunks = const [];
+  final Map<String, StreamSubscription<Object?>> _chunkSubs = {};
+  List<List<String>> _groupChunks = const [];
+  final Map<String, StreamSubscription<Object?>> _groupSubs = {};
+  final Map<String, StreamSubscription<Object?>> _rootSubs = {};
+
+  /// Boxes opened from a link, counted per opener, and which of them have
+  /// answered (found or not).
+  final Map<String, int> _focusCount = {};
+  final Map<String, StreamSubscription<Object?>> _focusSubs = {};
+  final Set<String> _focusAnswered = {};
+
+  /// Arrived boxes: how many pages are read, whether the last came back
+  /// full, and the server's count of all of them.
+  int _arrivedPages = 1;
+  bool _arrivedFull = false;
+  bool loadingMoreArrived = false;
+  StreamSubscription<Object?>? _arrivedSub;
+  int? _arrivedServerCount;
+  String _countKey = '';
+  Timer? _countDebounce;
+  Timer? _loadingSafety;
+
+  bool _openLoaded = false;
+  bool _arrivedLoaded = false;
+  bool _openLinesLoaded = false;
+  bool _waitingLoaded = false;
+
   /// Every package's group (a line and the parts split from it), by root
   /// id: worked out once per change of [lines], never per row drawn.
   Map<String, LineGroupSummary> get groups =>
       _groups ??= lineGroupsByRoot(lines);
   Map<String, LineGroupSummary>? _groups;
 
-  /// What this month's volume is counted from ([volumeFeedSignature]):
-  /// worked out once per change, null until both collections answered.
+  /// What this month's volume is counted from ([volumeFeedSignature]): the
+  /// open boxes, their lines and the waiting packages - the work a new
+  /// receipt or a sailing changes. Worked out once per change, null until
+  /// those reads answered.
   String? get volumeSignature => !loaded || !linesLoaded
       ? null
-      : (_volumeSignature ??= volumeFeedSignature(lines, containers));
+      : (_volumeSignature ??= volumeFeedSignature(
+          [..._openLines, ..._waitingLines],
+          _open,
+        ));
   String? _volumeSignature;
-  bool linesLoaded = false;
-  bool loaded = false;
-  bool failed = false;
+  bool get linesLoaded => _openLinesLoaded && _waitingLoaded;
+  bool get loaded => _openLoaded && _arrivedLoaded;
+
+  /// Either container read was refused or dropped; the next answer clears it.
+  bool get failed => _openFailed || _arrivedFailed;
+  bool _openFailed = false;
+  bool _arrivedFailed = false;
   bool _disposed = false;
+
+  /// Containers in each state: loading and at sea exactly, from the whole
+  /// open read; arrived from the server's count of every arrival.
+  Map<String, int> get statusCounts {
+    final out = <String, int>{
+      for (final status in containerStatuses) status: 0,
+    };
+    for (final c in _open) {
+      out[c.status] = (out[c.status] ?? 0) + 1;
+    }
+    out[containerStatusArrived] =
+        arrivedCountShown(_arrivedServerCount, _arrived.length);
+    return out;
+  }
+
+  /// An older page of arrived boxes may exist.
+  bool get hasMoreArrived => _arrivedFull;
+
+  /// Whether [containerId] has been looked for: it is held, or the read that
+  /// looks for it answered (found or not).
+  bool isSettled(String containerId) =>
+      loaded &&
+      (containers.any((c) => c.id == containerId) ||
+          _focusAnswered.contains(containerId));
 
   void _listen() {
     final id = businessId;
-    // No orderBy on either collection: sorted client-side so neither query
-    // needs a composite index.
-    Query<Map<String, dynamic>> scoped(String path) =>
-        _db.collection(path).where('businessId', isEqualTo: id);
-
-    _subs.add(scoped('containers').snapshots().listen((snap) {
-      containers = sortContainers([
-        for (final d in snap.docs) ShippingContainer.fromMap(d.id, d.data()),
-      ]);
-      _volumeSignature = null;
-      loaded = true;
-      failed = false;
+    // The spinner always resolves, even if a read never answers: no open
+    // read is a failure; a late arrived page only leaves the list shorter.
+    _loadingSafety = Timer(const Duration(seconds: 20), () {
+      if (_disposed || loaded) return;
+      if (!_openLoaded) _openFailed = true;
+      _openLoaded = true;
+      _arrivedLoaded = true;
       _changed();
+    });
+    _subs.add(openContainersSpec(id).build(_db).snapshots().listen((snap) {
+      _open = [
+        for (final d in snap.docs) ShippingContainer.fromMap(d.id, d.data()),
+      ];
+      _openLoaded = true;
+      _openFailed = false;
+      _volumeSignature = null;
+      _rebuildContainers();
     }, onError: (_) {
-      loaded = true;
-      failed = true;
+      _openLoaded = true;
+      _openFailed = true;
       _changed();
     }));
 
-    _subs.add(scoped('containerLines').snapshots().listen((snap) {
-      lines = [
+    _subs.add(openContainerLinesSpec(id).build(_db).snapshots().listen((snap) {
+      _openLines = [
         for (final d in snap.docs) ContainerLine.fromMap(d.id, d.data()),
       ];
-      _groups = null;
+      _openLinesLoaded = true;
       _volumeSignature = null;
-      linesLoaded = true;
+      _rebuildLines();
+    }, onError: (_) {
+      _openLinesLoaded = true;
       _changed();
-    }, onError: (_) {}));
+    }));
+
+    _subs.add(waitingContainerLinesSpec(id).build(_db).snapshots().listen((
+      snap,
+    ) {
+      _waitingLines = [
+        for (final d in snap.docs) ContainerLine.fromMap(d.id, d.data()),
+      ];
+      _waitingLoaded = true;
+      _volumeSignature = null;
+      _rebuildLines();
+    }, onError: (_) {
+      _waitingLoaded = true;
+      _changed();
+    }));
+
+    _listenArrived();
+  }
+
+  /// (Re)opens the arrived read at the current page count. A growing limit
+  /// keeps the boxes already on screen live; the SDK serves the overlap
+  /// from its cache.
+  void _listenArrived() {
+    final spec = arrivedContainersPageSpec(businessId, pages: _arrivedPages);
+    _arrivedSub?.cancel();
+    _arrivedSub = spec.build(_db).snapshots().listen((snap) {
+      _arrived = [
+        for (final d in snap.docs) ShippingContainer.fromMap(d.id, d.data()),
+      ];
+      _arrivedFull = arrivedPageFull(snap.docs.length, spec.limit ?? 0);
+      _arrivedLoaded = true;
+      _arrivedFailed = false;
+      loadingMoreArrived = false;
+      _rebuildContainers();
+    }, onError: (_) {
+      _arrivedLoaded = true;
+      _arrivedFailed = true;
+      loadingMoreArrived = false;
+      _changed();
+    });
+  }
+
+  /// The next page of arrived boxes, and their lines.
+  void loadMoreArrived() {
+    if (_disposed || loadingMoreArrived || !_arrivedFull) return;
+    loadingMoreArrived = true;
+    _arrivedPages++;
+    _changed();
+    _listenArrived();
+  }
+
+  /// Keeps [containerId] and its lines read while a detail shows it, even
+  /// when it is an arrival older than the pages loaded. Pair with [unfocus].
+  void focus(String containerId) {
+    final cid = containerId.trim();
+    if (_disposed || cid.isEmpty) return;
+    final n = (_focusCount[cid] ?? 0) + 1;
+    _focusCount[cid] = n;
+    if (n > 1) return;
+    _focusSubs[cid] = _db
+        .collection('containers')
+        .doc(cid)
+        .snapshots()
+        .listen((doc) {
+      final data = doc.data();
+      // Only this business's own box: another business's id opens nothing.
+      if (data != null && '${data['businessId'] ?? ''}' == businessId) {
+        _focusedRows[cid] = ShippingContainer.fromMap(doc.id, data);
+      } else {
+        _focusedRows.remove(cid);
+      }
+      _focusAnswered.add(cid);
+      _rebuildContainers();
+    }, onError: (_) {
+      _focusAnswered.add(cid);
+      _changed();
+    });
+    _planLineChunks();
+  }
+
+  void unfocus(String containerId) {
+    final cid = containerId.trim();
+    final n = (_focusCount[cid] ?? 0) - 1;
+    if (n > 0) {
+      _focusCount[cid] = n;
+      return;
+    }
+    _focusCount.remove(cid);
+    _focusSubs.remove(cid)?.cancel();
+    _focusedRows.remove(cid);
+    _focusAnswered.remove(cid);
+    // Called from a detail's dispose, while the tree is locked: rebuild
+    // after it, never inside it.
+    scheduleMicrotask(() {
+      if (!_disposed) _rebuildContainers();
+    });
+  }
+
+  void _rebuildContainers() {
+    if (_disposed) return;
+    containers = mergeFeedContainers([
+      _open,
+      _arrived,
+      _focusedRows.values,
+    ]);
+    _planLineChunks();
+    _scheduleArrivedCount();
+    _changed();
+  }
+
+  /// Opens a lines read for each group of arrived (or linked) boxes that has
+  /// none yet, and closes the ones no longer on screen.
+  void _planLineChunks() {
+    if (_disposed || !_openLoaded) return;
+    final wanted = containerIdsNeedingLines(
+      arrived: [..._arrived, ..._focusedRows.values],
+      focused: _focusCount.keys,
+      open: _open,
+    );
+    final plan = planIdChunks(_lineChunks, wanted);
+    final keep = {for (final chunk in plan) chunkKey(chunk)};
+    var dropped = false;
+    for (final key in _chunkSubs.keys.toList()) {
+      if (keep.contains(key)) continue;
+      _chunkSubs.remove(key)?.cancel();
+      dropped = _chunkLines.remove(key) != null || dropped;
+    }
+    for (final chunk in plan) {
+      final key = chunkKey(chunk);
+      if (_chunkSubs.containsKey(key)) continue;
+      _chunkSubs[key] = containerLinesOfContainersSpec(businessId, chunk)
+          .build(_db)
+          .snapshots()
+          .listen((snap) {
+        _chunkLines[key] = [
+          for (final d in snap.docs) ContainerLine.fromMap(d.id, d.data()),
+        ];
+        _rebuildLines();
+      }, onError: (_) {});
+    }
+    _lineChunks = plan;
+    if (dropped) _rebuildLines();
+  }
+
+  void _rebuildLines() {
+    if (_disposed) return;
+    lines = mergeFeedLines([
+      _openLines,
+      _waitingLines,
+      ..._chunkLines.values,
+      ..._groupLines.values,
+      _rootRows.values,
+    ]);
+    _groups = null;
+    _planGroups();
+    _changed();
+  }
+
+  /// Reads the rest of every split package on screen: its parts by root id,
+  /// and a root written before groups existed by its own id. Converges -
+  /// what the reads bring back names only roots already asked for.
+  void _planGroups() {
+    final roots = splitGroupRoots(lines);
+    final plan = planIdChunks(_groupChunks, roots.toList()..sort());
+    final keep = {for (final chunk in plan) chunkKey(chunk)};
+    for (final key in _groupSubs.keys.toList()) {
+      if (keep.contains(key)) continue;
+      _groupSubs.remove(key)?.cancel();
+      _groupLines.remove(key);
+    }
+    for (final chunk in plan) {
+      final key = chunkKey(chunk);
+      if (_groupSubs.containsKey(key)) continue;
+      _groupSubs[key] = containerLineGroupsSpec(businessId, chunk)
+          .build(_db)
+          .snapshots()
+          .listen((snap) {
+        _groupLines[key] = [
+          for (final d in snap.docs) ContainerLine.fromMap(d.id, d.data()),
+        ];
+        _rebuildLines();
+      }, onError: (_) {});
+    }
+    _groupChunks = plan;
+
+    for (final rootId in _rootSubs.keys.toList()) {
+      if (roots.contains(rootId)) continue;
+      _rootSubs.remove(rootId)?.cancel();
+      _rootRows.remove(rootId);
+    }
+
+    // Roots still missing once every group read has answered.
+    final groupsAnswered = plan.every(
+      (chunk) => _groupLines.containsKey(chunkKey(chunk)),
+    );
+    if (!groupsAnswered) return;
+    final missing = missingRoots(roots, lines)..removeAll(_rootSubs.keys);
+    for (final rootId in missing) {
+      _rootSubs[rootId] = _db
+          .collection('containerLines')
+          .doc(rootId)
+          .snapshots()
+          .listen((doc) {
+        final data = doc.data();
+        if (data == null || '${data['businessId'] ?? ''}' != businessId) {
+          return;
+        }
+        _rootRows[rootId] = ContainerLine.fromMap(doc.id, data);
+        _rebuildLines();
+      }, onError: (_) {});
+    }
+  }
+
+  /// Asks the server how many boxes have arrived, when the boxes on screen
+  /// changed state - not on every line written into an open box.
+  void _scheduleArrivedCount() {
+    final key = [
+      for (final c in _open) '${c.id}:${c.status}',
+      for (final c in _arrived) c.id,
+    ].join(',');
+    if (key == _countKey) return;
+    _countKey = key;
+    _countDebounce?.cancel();
+    _countDebounce = Timer(const Duration(milliseconds: 600), () {
+      unawaited(_countArrived());
+    });
+  }
+
+  Future<void> _countArrived() async {
+    try {
+      final snap = await arrivedContainersCountSpec(businessId)
+          .build(_db)
+          .count()
+          .get();
+      if (_disposed) return;
+      _arrivedServerCount = snap.count;
+      _changed();
+    } catch (_) {
+      // The chip falls back to the arrivals on screen.
+    }
   }
 
   void _changed() {
@@ -146,7 +471,16 @@ class ContainerFeed extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
-    for (final s in _subs) {
+    _countDebounce?.cancel();
+    _loadingSafety?.cancel();
+    _arrivedSub?.cancel();
+    for (final s in [
+      ..._subs,
+      ..._chunkSubs.values,
+      ..._groupSubs.values,
+      ..._rootSubs.values,
+      ..._focusSubs.values,
+    ]) {
       s.cancel();
     }
     super.dispose();
@@ -480,10 +814,17 @@ class _ContainersScreenState extends State<ContainersScreen> {
     final l10n = AppLocalizations.of(context)!;
     final searching = _search.trim().length >= 2;
     final byId = {for (final c in _containers) c.id: c};
-    final counts = {
-      for (final status in containerStatuses)
-        status: _containers.where((c) => c.status == status).length,
-    };
+    // Loading and at sea from the whole open read; arrived from the
+    // server's count, while the list holds a page of them.
+    final counts = _feed.statusCounts;
+    // Arrived history is paged: offered under the arrived list, and under a
+    // search, which only sees the packages on the boxes loaded.
+    final moreArrived = _feed.hasMoreArrived
+        ? _LoadOlderContainers(
+            loading: _feed.loadingMoreArrived,
+            onTap: _feed.loadMoreArrived,
+          )
+        : null;
 
     return Scaffold(
       backgroundColor: AppColors.cream,
@@ -554,6 +895,7 @@ class _ContainersScreenState extends State<ContainersScreen> {
                     staff: _staff,
                     onOpen: _openDetail,
                     onOpenWaiting: _openWaitingHit,
+                    footer: moreArrived,
                   )
                 else
                   _ContainerList(
@@ -561,6 +903,9 @@ class _ContainersScreenState extends State<ContainersScreen> {
                     filter: _filter,
                     anyAtAll: _containers.isNotEmpty,
                     onOpen: _openDetail,
+                    footer: _filter == containerStatusArrived
+                        ? moreArrived
+                        : null,
                   ),
                 Positioned(
                   left: 0,
@@ -874,12 +1219,17 @@ class _ContainerList extends StatelessWidget {
     required this.filter,
     required this.anyAtAll,
     required this.onOpen,
+    this.footer,
   });
 
   final List<ShippingContainer> containers;
   final String filter;
   final bool anyAtAll;
   final ValueChanged<String> onOpen;
+
+  /// Under the last box: "Load older containers" while arrived history
+  /// has more pages.
+  final Widget? footer;
 
   @override
   Widget build(BuildContext context) {
@@ -900,14 +1250,17 @@ class _ContainerList extends StatelessWidget {
                   },
             hint: anyAtAll ? null : l10n.ctrNoContainersHint,
           ),
+          ?footer,
         ],
       );
     }
+    final more = footer;
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(
           AppSpacing.lg, AppSpacing.md, AppSpacing.lg, 120),
-      itemCount: containers.length,
+      itemCount: containers.length + (more == null ? 0 : 1),
       itemBuilder: (context, i) {
+        if (i == containers.length) return more!;
         final c = containers[i];
         return RiseIn(
           key: ValueKey(c.id),
@@ -1033,10 +1386,15 @@ class _SearchResults extends StatelessWidget {
     required this.onOpen,
     required this.onOpenWaiting,
     this.groups = const {},
+    this.footer,
   });
 
   final List<ContainerSearchHit> hits;
   final List<LotStaff> staff;
+
+  /// Under the hits: "Load older containers", so a package on an arrival
+  /// older than the pages loaded can still be found here.
+  final Widget? footer;
 
   /// The feed's groups, so a part shows its whole package's money.
   final Map<String, LineGroupSummary> groups;
@@ -1132,7 +1490,39 @@ class _SearchResults extends StatelessWidget {
                       : () => onOpen(hit.container!.id),
             ),
         ],
+        ?footer,
       ],
+    );
+  }
+}
+
+/// "Load older containers": the next page of arrived boxes. Disabled with a
+/// spinner while the page is read, so one tap reads one page.
+class _LoadOlderContainers extends StatelessWidget {
+  const _LoadOlderContainers({required this.loading, required this.onTap});
+
+  final bool loading;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+      child: Center(
+        child: OutlinedButton.icon(
+          key: const Key('containers-load-older'),
+          onPressed: loading ? null : onTap,
+          icon: loading
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.expand_more, size: 18),
+          label: Text(l10n.ctrLoadOlderContainers),
+        ),
+      ),
     );
   }
 }
@@ -1186,7 +1576,7 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
 
   List<ShippingContainer> get _containers => _feed.containers;
   List<ContainerLine> get _allLines => _feed.lines;
-  bool get _loaded => _feed.loaded;
+  bool get _loaded => _feed.isSettled(widget.containerId);
 
   void _onFeed() {
     if (mounted) setState(() {});
@@ -1218,12 +1608,18 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _feed.addListener(_onFeed);
+    // Read this box and its lines even when it is an arrival older than the
+    // pages the list has loaded (a scanned label, a notification).
+    _feed
+      ..addListener(_onFeed)
+      ..focus(widget.containerId);
   }
 
   @override
   void dispose() {
-    _feed.removeListener(_onFeed);
+    _feed
+      ..removeListener(_onFeed)
+      ..unfocus(widget.containerId);
     _ownFeed?.dispose();
     super.dispose();
   }

@@ -216,6 +216,16 @@ void main() {
         'home: ${c.path} history page': businessHistoryPageSpec(c, _business),
       'open containers': openContainersSpec(_business),
       'open container lines': openContainerLinesSpec(_business),
+      'containers: waiting packages': waitingContainerLinesSpec(_business),
+      'containers: arrived, first page':
+          arrivedContainersPageSpec(_business, pages: 1),
+      'containers: arrived, third page':
+          arrivedContainersPageSpec(_business, pages: 3),
+      'containers: arrived, counted': arrivedContainersCountSpec(_business),
+      'containers: lines of the arrived boxes on screen':
+          containerLinesOfContainersSpec(_business, const ['c1', 'c2']),
+      'containers: the rest of split packages':
+          containerLineGroupsSpec(_business, const ['r1']),
       'package requests: open': packageRequestsOpenSpec(_business),
       for (final spec in knownCarRecentSpecs(_business))
         'VIN memory: recent ${spec.collection}': spec,
@@ -344,6 +354,56 @@ void main() {
         isEmpty,
       );
       expect(carPurchasesPageSpec(pages: 0).limit, carPurchasePageSize);
+    });
+
+    test('the platform dashboard reads a preview and pages its queue', () {
+      // Ten businesses in the preview's order, not every business sorted on
+      // the phone: status, then name - an index of its own.
+      expect(adminBusinessPreviewSpec.limit, adminBusinessPreviewSize);
+      expect(adminBusinessPreviewSpec.isBounded, isTrue);
+      expect(adminBusinessPreviewSpec.compositeIndex, const [
+        IndexFieldSpec('status'),
+        IndexFieldSpec('name'),
+      ]);
+      expect(
+        hasIndex(
+          adminBusinessPreviewSpec,
+          adminBusinessPreviewSpec.compositeIndex!,
+        ),
+        isTrue,
+        reason: 'firestore.indexes.json needs businesses (status, name)',
+      );
+      // Shipments in one state across businesses: newest first, a page.
+      final shipments = adminShipmentsByStatusPageSpec('pending', pages: 2);
+      expect(shipments.isBounded, isTrue);
+      expect(shipments.limit, adminShipmentPageSize * 2);
+      expect(adminShipmentsByStatusPageSpec('pending', pages: 0).limit,
+          adminShipmentPageSize);
+      expect(hasIndex(shipments, shipments.compositeIndex!), isTrue);
+    });
+
+    test('the admin listings screen pages; its banner is counted', () {
+      final page = adminCarListingsPageSpec(pages: 2);
+      expect(page.isBounded, isTrue);
+      expect(page.limit, adminCarListingsPageSize * 2);
+      expect(adminCarListingsPageSpec(pages: 0).limit, adminCarListingsPageSize);
+      // The built-in single-field index on createdAt serves it.
+      expect(page.compositeIndex, const [
+        IndexFieldSpec('createdAt', descending: true),
+      ]);
+      // Counts are equality-only aggregates: no composite index.
+      expect(carListingsCountSpec().filters, isEmpty);
+      expect(carListingsCountSpec(status: ' ').filters, isEmpty);
+      for (final status in carListingCountStatuses) {
+        final spec = carListingsCountSpec(status: status);
+        expect(spec.compositeIndex, isNull);
+        expect(spec.filters.single.value, status);
+      }
+      // A page that came back short holds every listing: its own counts.
+      expect(
+        carListingCounts(['active', 'sold', 'active', 'reserved', 'draft']),
+        {'total': 5, 'active': 2, 'inactive': 0, 'sold': 1, 'reserved': 1},
+      );
     });
 
     test('transfers: the open read by stage has its index too', () {

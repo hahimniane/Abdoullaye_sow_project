@@ -2646,6 +2646,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get noOpenShipments => 'No open shipments.';
 
   @override
+  String get adminShipmentsLoadFailed => 'Shipments could not be loaded.';
+
+  @override
+  String get adminBusinessesLoadFailed => 'Businesses could not be loaded.';
+
+  @override
   String get noPendingRefundRequests => 'No pending refund requests.';
 
   @override
@@ -9102,6 +9108,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get ctrCouldNotLoad => 'The containers could not be loaded.';
+
+  @override
+  String get ctrLoadOlderContainers => 'Load older containers';
 
   @override
   String get ctrErrLabelRequired =>

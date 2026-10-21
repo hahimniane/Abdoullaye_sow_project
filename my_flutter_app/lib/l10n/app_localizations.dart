@@ -4856,6 +4856,18 @@ abstract class AppLocalizations {
   /// **'No open shipments.'**
   String get noOpenShipments;
 
+  /// No description provided for @adminShipmentsLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Shipments could not be loaded.'**
+  String get adminShipmentsLoadFailed;
+
+  /// No description provided for @adminBusinessesLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Businesses could not be loaded.'**
+  String get adminBusinessesLoadFailed;
+
   /// No description provided for @noPendingRefundRequests.
   ///
   /// In en, this message translates to:
@@ -16049,6 +16061,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The containers could not be loaded.'**
   String get ctrCouldNotLoad;
+
+  /// No description provided for @ctrLoadOlderContainers.
+  ///
+  /// In en, this message translates to:
+  /// **'Load older containers'**
+  String get ctrLoadOlderContainers;
 
   /// No description provided for @ctrErrLabelRequired.
   ///

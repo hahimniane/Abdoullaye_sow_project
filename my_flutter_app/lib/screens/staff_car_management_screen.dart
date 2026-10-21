@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -14,6 +15,7 @@ import '../models/business_profile.dart';
 import '../models/business_service.dart';
 import '../models/car.dart';
 import '../providers/auth_provider.dart';
+import '../services/business_activity_queries.dart';
 import '../services/vin_catalog_matcher.dart';
 import '../services/vin_decoder_service.dart';
 import '../theme/app_colors.dart';
@@ -311,32 +313,124 @@ class _StaffCarManagementScreenState extends State<StaffCarManagementScreen> {
     }
   }
 
-  /// The listings listener, made once per (role, business) rather than on
-  /// every build: AuthProvider notifies on any profile change, and a stream
-  /// built in `build` dropped and re-read every listing each time.
+  /// The listings listener, made once per (role, business, page count)
+  /// rather than on every build: AuthProvider notifies on any profile
+  /// change, and a stream built in `build` dropped and re-read every
+  /// listing each time.
   ///
   /// The business query stays uncapped on purpose - a business must see all
-  /// of its own listings (see flutter-architecture-agent.md).
+  /// of its own listings (see flutter-architecture-agent.md). An admin sees
+  /// every business's, so theirs is an ordered page with "Load more"
+  /// ([adminCarListingsPageSpec]) and the banner counts come from the
+  /// server ([_refreshAdminCounts]); it used to listen to every listing on
+  /// the platform.
   Stream<QuerySnapshot<Map<String, dynamic>>>? _carsStream;
-  (bool, String?)? _carsStreamKey;
+  (bool, String?, int)? _carsStreamKey;
+
+  int _adminPages = 1;
+  bool _adminPageFull = false;
+  bool _adminLoadingMore = false;
+
+  /// The admin banner's numbers ([carListingCounts] keys): from the page
+  /// itself when it holds every listing, else from `count()`. Null until
+  /// known, shown as a dash rather than a page's partial count.
+  Map<String, int>? _adminCounts;
+  StreamSubscription<Object?>? _adminWatch;
+  String _adminCountKey = '';
+  Timer? _adminCountDebounce;
 
   Stream<QuerySnapshot<Map<String, dynamic>>> _carsStreamFor({
     required bool isAdmin,
     required String? businessId,
   }) {
-    final key = (isAdmin, businessId);
+    final key = (isAdmin, businessId, isAdmin ? _adminPages : 0);
     final existing = _carsStream;
     if (existing != null && _carsStreamKey == key) return existing;
     _carsStreamKey = key;
-    return _carsStream = isAdmin
-        ? _firestore
-              .collection('cars')
-              .orderBy('createdAt', descending: true)
-              .snapshots()
-        : _firestore
-              .collection('cars')
-              .where('businessId', isEqualTo: businessId)
-              .snapshots();
+    _adminWatch?.cancel();
+    _adminWatch = null;
+    if (!isAdmin) {
+      return _carsStream = _firestore
+          .collection('cars')
+          .where('businessId', isEqualTo: businessId)
+          .snapshots();
+    }
+    final spec = adminCarListingsPageSpec(pages: _adminPages);
+    final stream = spec.build(_firestore).snapshots();
+    // The page is a broadcast stream: this watch shares its one listener
+    // with the list, and keeps the banner and "Load more" in step with it.
+    _adminWatch = stream.listen(
+      (snap) => _onAdminPage(snap, spec.limit ?? 0),
+      onError: (_) {
+        if (mounted) setState(() => _adminLoadingMore = false);
+      },
+    );
+    return _carsStream = stream;
+  }
+
+  void _onAdminPage(QuerySnapshot<Map<String, dynamic>> snap, int limit) {
+    if (!mounted) return;
+    final full = snap.docs.length >= limit;
+    final statuses = [
+      for (final d in snap.docs) '${d.data()['status'] ?? ''}',
+    ];
+    setState(() {
+      _adminPageFull = full;
+      _adminLoadingMore = false;
+      // A short page is every listing: its own counts are exact.
+      if (!full) _adminCounts = carListingCounts(statuses);
+    });
+    if (!full) return;
+    // Recount when the listings on screen changed state, not on every edit.
+    final key = [
+      for (var i = 0; i < snap.docs.length; i++)
+        '${snap.docs[i].id}:${statuses[i]}',
+    ].join(',');
+    if (key == _adminCountKey) return;
+    _adminCountKey = key;
+    _adminCountDebounce?.cancel();
+    _adminCountDebounce = Timer(
+      const Duration(milliseconds: 600),
+      () => unawaited(_refreshAdminCounts()),
+    );
+  }
+
+  Future<void> _refreshAdminCounts() async {
+    try {
+      final counts = await Future.wait<int>([
+        for (final status in [null, ...carListingCountStatuses])
+          carListingsCountSpec(status: status)
+              .build(_firestore)
+              .count()
+              .get()
+              .then((snap) => snap.count ?? 0),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _adminCounts = {
+          'total': counts[0],
+          for (var i = 0; i < carListingCountStatuses.length; i++)
+            carListingCountStatuses[i]: counts[i + 1],
+        };
+      });
+    } catch (_) {
+      // The banner keeps its dashes; the list itself is unaffected.
+    }
+  }
+
+  void _loadMoreAdminCars() {
+    if (_adminLoadingMore || !_adminPageFull) return;
+    setState(() {
+      _adminLoadingMore = true;
+      _adminPages++;
+    });
+  }
+
+  @override
+  void dispose() {
+    _adminWatch?.cancel();
+    _adminCountDebounce?.cancel();
+    super.dispose();
   }
 
   @override
@@ -412,28 +506,22 @@ class _StaffCarManagementScreenState extends State<StaffCarManagementScreen> {
                             return _EmptyCarsState(onAdd: () => _showCarForm());
                           }
 
-                          final total = cars.length;
-                          final active = cars
-                              .where((car) => car.status == 'active')
-                              .length;
-                          final inactive = cars
-                              .where((car) => car.status == 'inactive')
-                              .length;
-                          final sold = cars
-                              .where((car) => car.status == 'sold')
-                              .length;
-                          final reserved = cars
-                              .where((car) => car.status == 'reserved')
-                              .length;
+                          // A business holds every listing of its own; an
+                          // admin's page holds some, so theirs are counted
+                          // by the server.
+                          final counts = auth.isAdmin
+                              ? _adminCounts
+                              : carListingCounts(cars.map((car) => car.status));
+                          final showMore = auth.isAdmin && _adminPageFull;
 
                           return Column(
                             children: [
                               _StatsBanner(
-                                total: total,
-                                active: active,
-                                inactive: inactive,
-                                sold: sold,
-                                reserved: reserved,
+                                total: counts?['total'],
+                                active: counts?['active'],
+                                inactive: counts?['inactive'],
+                                sold: counts?['sold'],
+                                reserved: counts?['reserved'],
                                 l10n: l10n,
                               ),
                               Expanded(
@@ -441,8 +529,39 @@ class _StaffCarManagementScreenState extends State<StaffCarManagementScreen> {
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 20,
                                   ),
-                                  itemCount: cars.length,
+                                  itemCount: cars.length + (showMore ? 1 : 0),
                                   itemBuilder: (context, index) {
+                                    if (index == cars.length) {
+                                      return Padding(
+                                        padding: const EdgeInsets.only(
+                                          top: 4,
+                                          bottom: 96,
+                                        ),
+                                        child: Center(
+                                          child: OutlinedButton.icon(
+                                            key: const Key(
+                                              'admin-cars-load-more',
+                                            ),
+                                            onPressed: _adminLoadingMore
+                                                ? null
+                                                : _loadMoreAdminCars,
+                                            icon: _adminLoadingMore
+                                                ? const SizedBox(
+                                                    width: 16,
+                                                    height: 16,
+                                                    child:
+                                                        CircularProgressIndicator(
+                                                          strokeWidth: 2,
+                                                        ),
+                                                  )
+                                                : const Icon(Icons.expand_more),
+                                            label: Text(
+                                              l10n.marketplaceLoadMoreCars,
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    }
                                     final car = cars[index];
                                     final isProcessing = _processingCars
                                         .contains(car.id);
@@ -539,12 +658,15 @@ class _StatsBanner extends StatelessWidget {
     required this.l10n,
   });
 
-  final int total;
-  final int active;
-  final int inactive;
-  final int sold;
-  final int reserved;
+  /// Null while not known yet: shown as a dash, never as a partial count.
+  final int? total;
+  final int? active;
+  final int? inactive;
+  final int? sold;
+  final int? reserved;
   final AppLocalizations l10n;
+
+  static String _value(int? n) => n == null ? '–' : n.toString();
 
   @override
   Widget build(BuildContext context) {
@@ -563,27 +685,27 @@ class _StatsBanner extends StatelessWidget {
         children: [
           _StatItem(
             icon: Icons.directions_car,
-            value: total.toString(),
+            value: _value(total),
             label: l10n.totalCars,
           ),
           _StatItem(
             icon: Icons.check_circle,
-            value: active.toString(),
+            value: _value(active),
             label: l10n.activeCars,
           ),
           _StatItem(
             icon: Icons.pause_circle,
-            value: inactive.toString(),
+            value: _value(inactive),
             label: l10n.inactiveCars,
           ),
           _StatItem(
             icon: Icons.sell,
-            value: sold.toString(),
+            value: _value(sold),
             label: l10n.soldCars,
           ),
           _StatItem(
             icon: Icons.lock_clock,
-            value: reserved.toString(),
+            value: _value(reserved),
             label: l10n.reserved,
           ),
         ],

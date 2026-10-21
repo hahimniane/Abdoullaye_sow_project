@@ -286,6 +286,16 @@ Add future project conventions and repeated architectural decisions here.
   cache keyed by their inputs), never in build: a rebuild re-subscribes and
   swaps the content for a spinner. Show a spinner only when there is no data
   yet.
+- Listeners on ever-growing sets are bounded, never whole: open work live
+  and whole, history as an ordered growing page with "Load more", counts from
+  `count()` (never a page's length), a link to an old record read by id. The
+  containers screen's `ContainerFeed` is the reference: open boxes + waiting
+  lines whole, arrived boxes paged by `arrivedAt` with their lines by
+  `containerId in` (`planIdChunks` keeps unchanged groups open), `focus()` for
+  a detail opened from a link, and the rest of every split package read by
+  `rootLineId in` so group money stays exact. Business-owned lists a business
+  must see whole (its own car listings) stay whole; the admin's cross-business
+  copy pages.
 - Records written for a business query by that `businessId`: rules prove
   `canManageBusiness` from the equality filter. An unscoped query works for
   admins only and fails permission-denied for staff.

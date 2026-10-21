@@ -44,6 +44,20 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
   BarrelPickupPricing _pickupPricing = BarrelPickupPricing.defaultPricing;
   bool _pickupPricingLoaded = false;
 
+  /// The two tab listeners, made once and kept across rebuilds: this screen
+  /// calls setState for busy rows and pricing, and building the streams in
+  /// the tab builders re-subscribed (and re-read every open pool) each time.
+  late final Stream<List<BarrelPool>> _openPools = _service.openPools();
+  Stream<List<BarrelPool>>? _myPools;
+  String? _myPoolsUid;
+
+  Stream<List<BarrelPool>> _myPoolsFor(String uid) {
+    final existing = _myPools;
+    if (existing != null && _myPoolsUid == uid) return existing;
+    _myPoolsUid = uid;
+    return _myPools = _service.myPools(uid);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -219,7 +233,7 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
 
   Widget _buildOpenPools() {
     return StreamBuilder<List<BarrelPool>>(
-      stream: _service.openPools(),
+      stream: _openPools,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
@@ -262,7 +276,7 @@ class _OpenBarrelsScreenState extends State<OpenBarrelsScreen> {
       );
     }
     return StreamBuilder<List<BarrelPool>>(
-      stream: _service.myPools(uid),
+      stream: _myPoolsFor(uid),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());

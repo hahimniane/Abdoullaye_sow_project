@@ -2,7 +2,11 @@ import 'business_service_overview.dart'
     show ServiceCategory, businessServiceFinalStatuses;
 import 'business_transport_jobs.dart' show transportJobFinalStatuses;
 import 'container_manifest.dart'
-    show containerStatusLoading, containerStatusShipped;
+    show
+        containerLineStatusWaiting,
+        containerStatusArrived,
+        containerStatusLoading,
+        containerStatusShipped;
 import 'firestore_query_spec.dart';
 import 'package_requests.dart' show requestOpenStatuses;
 
@@ -218,6 +222,104 @@ FirestoreQuerySpec openContainerLinesSpec(String businessId) =>
     );
 
 // ---------------------------------------------------------------------------
+// The containers screen: open boxes whole, arrived history a page at a time.
+// The console's containers panel reads the same shapes.
+// ---------------------------------------------------------------------------
+
+/// One page of arrived containers - history that only grows.
+const int arrivedContainerPageSize = 25;
+
+/// Firestore's cap on the values of one `in` filter.
+const int firestoreWhereInLimit = 30;
+
+/// Packages dropped off and not on a container yet: live and whole, a short
+/// list that empties as containers claim them. Equality only, so the
+/// existing `businessId, containerStatus` index (or merged single-field
+/// indexes) serves it.
+FirestoreQuerySpec waitingContainerLinesSpec(String businessId) =>
+    FirestoreQuerySpec(
+      collection: 'containerLines',
+      filters: [
+        _business(businessId),
+        const QueryFilterSpec(
+          'containerStatus',
+          QueryFilterOp.equal,
+          containerLineStatusWaiting,
+        ),
+      ],
+    );
+
+/// The arrived containers, newest arrival first, one growing page at a time.
+/// `arrivedAt` is stamped by the server on every arrival.
+FirestoreQuerySpec arrivedContainersPageSpec(
+  String businessId, {
+  required int pages,
+}) => FirestoreQuerySpec(
+  collection: 'containers',
+  filters: [
+    _business(businessId),
+    const QueryFilterSpec('status', QueryFilterOp.equal, containerStatusArrived),
+  ],
+  orderBy: 'arrivedAt',
+  descending: true,
+  limit: arrivedContainerPageSize * (pages < 1 ? 1 : pages),
+);
+
+/// Every arrived container, for a `count()` only: the Arrived chip counts
+/// the whole history while the list holds a page of it.
+FirestoreQuerySpec arrivedContainersCountSpec(String businessId) =>
+    FirestoreQuerySpec(
+      collection: 'containers',
+      filters: [
+        _business(businessId),
+        const QueryFilterSpec(
+          'status',
+          QueryFilterOp.equal,
+          containerStatusArrived,
+        ),
+      ],
+    );
+
+/// The lines of up to [firestoreWhereInLimit] named containers: the arrived
+/// boxes on screen, or one opened from a link. Equality only.
+FirestoreQuerySpec containerLinesOfContainersSpec(
+  String businessId,
+  List<String> containerIds,
+) {
+  assert(
+    containerIds.isNotEmpty && containerIds.length <= firestoreWhereInLimit,
+    'an in filter takes 1 to $firestoreWhereInLimit values',
+  );
+  return FirestoreQuerySpec(
+    collection: 'containerLines',
+    filters: [
+      _business(businessId),
+      QueryFilterSpec('containerId', QueryFilterOp.whereIn, containerIds),
+    ],
+  );
+}
+
+/// Every part of up to [firestoreWhereInLimit] split packages, by root id:
+/// a package's money lives on its root, so a part on screen needs the whole
+/// group even when the rest of it sailed long ago. Equality only.
+FirestoreQuerySpec containerLineGroupsSpec(
+  String businessId,
+  List<String> rootIds,
+) {
+  assert(
+    rootIds.isNotEmpty && rootIds.length <= firestoreWhereInLimit,
+    'an in filter takes 1 to $firestoreWhereInLimit values',
+  );
+  return FirestoreQuerySpec(
+    collection: 'containerLines',
+    filters: [
+      _business(businessId),
+      QueryFilterSpec('rootLineId', QueryFilterOp.whereIn, rootIds),
+    ],
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Package requests (docs/PACKAGE_REQUESTS.md §8.3).
 // ---------------------------------------------------------------------------
 
@@ -406,6 +508,89 @@ FirestoreQuerySpec marketplaceCarsSpec({
   orderBy: 'createdAt',
   descending: true,
   limit: marketplacePageSize * (pages < 1 ? 1 : pages),
+);
+
+/// One page of the platform admin's listings screen, every business's.
+const int adminCarListingsPageSize = 30;
+
+/// The listing states the listings screen's banner counts.
+const List<String> carListingCountStatuses = <String>[
+  'active',
+  'inactive',
+  'sold',
+  'reserved',
+];
+
+/// Every business's listings, newest first, one growing page at a time: the
+/// admin's listings screen. The single-field `createdAt` index serves it.
+FirestoreQuerySpec adminCarListingsPageSpec({required int pages}) =>
+    FirestoreQuerySpec(
+      collection: 'cars',
+      orderBy: 'createdAt',
+      descending: true,
+      limit: adminCarListingsPageSize * (pages < 1 ? 1 : pages),
+    );
+
+/// The listings the admin's banner counts with `count()`: all of them, or
+/// one [status]. Never listened to - an aggregate reads one document per
+/// thousand counted.
+FirestoreQuerySpec carListingsCountSpec({String? status}) {
+  final state = (status ?? '').trim();
+  return FirestoreQuerySpec(
+    collection: 'cars',
+    filters: [
+      if (state.isNotEmpty) QueryFilterSpec('status', QueryFilterOp.equal, state),
+    ],
+  );
+}
+
+/// The banner's numbers from listings already in hand: `total` and one entry
+/// per [carListingCountStatuses]. Exact only when the hand holds every
+/// listing - a business's own, or an admin's last page that came back short.
+Map<String, int> carListingCounts(Iterable<String> statuses) {
+  final out = <String, int>{
+    'total': 0,
+    for (final status in carListingCountStatuses) status: 0,
+  };
+  for (final status in statuses) {
+    out['total'] = out['total']! + 1;
+    if (out.containsKey(status)) out[status] = out[status]! + 1;
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// The platform admin dashboard: previews and open queues across businesses.
+// ---------------------------------------------------------------------------
+
+/// How many businesses the dashboard's management preview shows; "Open full
+/// list" has the rest.
+const int adminBusinessPreviewSize = 10;
+
+/// One page of the dashboard's open-shipments sheet.
+const int adminShipmentPageSize = 25;
+
+/// The first [adminBusinessPreviewSize] businesses in the preview's order -
+/// by status, then name - instead of every business on the platform sorted
+/// on the phone. Needs `businesses (status, name)`.
+const FirestoreQuerySpec adminBusinessPreviewSpec = FirestoreQuerySpec(
+  collection: 'businesses',
+  orderBy: 'status',
+  thenOrderBy: 'name',
+  limit: adminBusinessPreviewSize,
+);
+
+/// Shipments in one [status] across every business, newest first, one
+/// growing page at a time. The tile above it counts them with `count()`.
+FirestoreQuerySpec adminShipmentsByStatusPageSpec(
+  String status, {
+  required int pages,
+}) => FirestoreQuerySpec(
+  collection: 'barrelShipments',
+  filters: [QueryFilterSpec('status', QueryFilterOp.equal, status.trim())],
+  orderBy: 'createdAt',
+  descending: true,
+  limit: adminShipmentPageSize * (pages < 1 ? 1 : pages),
 );
 
 // ---------------------------------------------------------------------------

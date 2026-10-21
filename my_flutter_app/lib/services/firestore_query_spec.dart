@@ -74,6 +74,7 @@ class FirestoreQuerySpec {
     this.filters = const <QueryFilterSpec>[],
     this.orderBy,
     this.descending = false,
+    this.thenOrderBy,
     this.limit,
   });
 
@@ -81,6 +82,10 @@ class FirestoreQuerySpec {
   final List<QueryFilterSpec> filters;
   final String? orderBy;
   final bool descending;
+
+  /// A second, ascending sort after [orderBy] (a tie-break, like a name
+  /// after a status). Only meaningful with [orderBy].
+  final String? thenOrderBy;
   final int? limit;
 
   /// The business this query is confined to, or '' when it names none.
@@ -136,10 +141,12 @@ class FirestoreQuerySpec {
       inequality == null || inequality == order,
       'the first orderBy must be the inequality field',
     );
+    final then = orderBy == null ? null : thenOrderBy;
     return <IndexFieldSpec>[
       for (final field in equalities)
-        if (field != order) IndexFieldSpec(field),
+        if (field != order && field != then) IndexFieldSpec(field),
       IndexFieldSpec(order, descending: orderBy != null && descending),
+      if (then != null) IndexFieldSpec(then),
     ];
   }
 
@@ -148,6 +155,7 @@ class FirestoreQuerySpec {
     filters: filters,
     orderBy: orderBy,
     descending: descending,
+    thenOrderBy: thenOrderBy,
     limit: limit ?? this.limit,
   );
 
@@ -175,6 +183,8 @@ class FirestoreQuerySpec {
     }
     final order = orderBy;
     if (order != null) query = query.orderBy(order, descending: descending);
+    final then = thenOrderBy;
+    if (order != null && then != null) query = query.orderBy(then);
     final max = limit;
     if (max != null) query = query.limit(max);
     return query;
@@ -184,6 +194,7 @@ class FirestoreQuerySpec {
   String toString() =>
       '$collection where ${filters.join(', ')}'
       '${orderBy == null ? '' : ' orderBy $orderBy${descending ? ' desc' : ''}'}'
+      '${orderBy == null || thenOrderBy == null ? '' : ', $thenOrderBy'}'
       '${limit == null ? '' : ' limit $limit'}';
 }
 
