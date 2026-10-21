@@ -26,7 +26,7 @@ abstract final class NewProjectFirebaseOptions {
     appId: '1:127318353394:web:877e3c653bfcce7ec5776b',
     messagingSenderId: projectNumber,
     projectId: projectId,
-    authDomain: 'laawol-a855a.firebaseapp.com',
+    authDomain: 'auth.laawoldigital.com',
     storageBucket: 'laawol-a855a.firebasestorage.app',
   );
 

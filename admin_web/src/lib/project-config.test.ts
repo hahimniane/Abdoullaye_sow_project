@@ -34,7 +34,7 @@ test("the old project stays selectable for a rollback build", () => {
 test("the new project is registered with its project number", () => {
   assert.equal(NEW_PROJECT_CONFIG.projectId, "laawol-a855a");
   assert.equal(NEW_PROJECT_CONFIG.messagingSenderId, "127318353394");
-  assert.equal(NEW_PROJECT_CONFIG.authDomain, "laawol-a855a.firebaseapp.com");
+  assert.equal(NEW_PROJECT_CONFIG.authDomain, "auth.laawoldigital.com");
   // Read back from the Firebase Management API (webApps/.../config) on
   // 2026-10-20; the web app 1:127318353394:web:877e3c653bfcce7ec5776b.
   assert.equal(NEW_PROJECT_CONFIG.appId, "1:127318353394:web:877e3c653bfcce7ec5776b");

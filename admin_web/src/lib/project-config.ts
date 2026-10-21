@@ -43,7 +43,10 @@ export const CURRENT_PROJECT_CONFIG: FirebaseWebConfig = {
  */
 export const NEW_PROJECT_CONFIG: FirebaseWebConfig = {
   apiKey: "AIzaSyDyz6neM8FSEgO2v01UZECeSGTAuTuFmQg", // new project web app apiKey
-  authDomain: "laawol-a855a.firebaseapp.com",
+  // Our own address on the Google sign-in screen (2026-10-21):
+  // auth.laawoldigital.com is Firebase Hosting for this project (CNAME at
+  // Hostinger), allowed as an origin and redirect on the web OAuth client.
+  authDomain: "auth.laawoldigital.com",
   projectId: "laawol-a855a",
   storageBucket: "laawol-a855a.firebasestorage.app",
   messagingSenderId: "127318353394",

@@ -34,7 +34,7 @@
   var NEW_PROJECT_CONFIG = {
     firebase: {
       apiKey: "AIzaSyDyz6neM8FSEgO2v01UZECeSGTAuTuFmQg", // new project web app apiKey
-      authDomain: "laawol-a855a.firebaseapp.com",
+      authDomain: "auth.laawoldigital.com",
       projectId: "laawol-a855a",
       storageBucket: "laawol-a855a.firebasestorage.app",
       messagingSenderId: "127318353394",
