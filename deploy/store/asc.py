@@ -187,8 +187,11 @@ def withdraw(version_id):
     for sub in subs:
         if sub["attributes"]["state"] not in open_states:
             continue
+        # Without include=appStoreVersion Apple leaves the item's version
+        # relationship empty, so no submission ever matched and 1.0.19 was
+        # never cancelled (2026-10-21).
         items = call("GET", f"/reviewSubmissions/{sub['id']}"
-                            "/items").get("data", [])
+                            "/items?include=appStoreVersion").get("data", [])
         holds = any(
             ((i.get("relationships", {}).get("appStoreVersion", {}).get("data")
               or {}).get("id") == version_id)
