@@ -6,8 +6,8 @@ import 'package:my_flutter_app/firebase_options.dart';
 import 'package:my_flutter_app/firebase_options_new.dart';
 
 void main() {
-  test('builds default to production while staging remains opt-in', () {
-    expect(FirebaseEnvironmentOptions.environment, 'production');
+  test('builds default to the new project (cutover 1.0.20)', () {
+    expect(FirebaseEnvironmentOptions.environment, 'new');
   });
 
   test('staging selects the isolated project on every supported client', () {
@@ -31,7 +31,7 @@ void main() {
     expect(webOptions.projectId, 'laawol-digital-staging');
   });
 
-  test('production remains the default project', () {
+  test('production still selects the old project explicitly', () {
     final options = FirebaseEnvironmentOptions.forEnvironment(
       'production',
       isWeb: true,
@@ -76,8 +76,19 @@ void main() {
     );
   });
 
-  test('FIREBASE_ENV=new is never the default', () {
-    expect(FirebaseEnvironmentOptions.defaultEnvironment, 'production');
+  test('the apps default to the new project, fully configured', () {
+    expect(FirebaseEnvironmentOptions.defaultEnvironment, 'new');
+    for (final platform in <TargetPlatform>[
+      TargetPlatform.android,
+      TargetPlatform.iOS,
+    ]) {
+      final options = FirebaseEnvironmentOptions.forEnvironment(
+        'new',
+        isWeb: false,
+        platform: platform,
+      );
+      expect(options.projectId, 'laawol-a855a');
+    }
   });
 
   test('unknown environments fail closed', () {

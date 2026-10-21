@@ -592,7 +592,14 @@ class _PeopleHeader extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     return Container(
       decoration: const BoxDecoration(gradient: AppColors.headerGradient),
-      padding: const EdgeInsets.fromLTRB(20, 22, 20, 24),
+      // The gradient paints behind the status bar; the content starts below
+      // it (0 when a banner above already took the inset).
+      padding: EdgeInsets.fromLTRB(
+        20,
+        22 + MediaQuery.paddingOf(context).top,
+        20,
+        24,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

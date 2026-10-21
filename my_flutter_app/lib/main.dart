@@ -76,6 +76,7 @@ import 'screens/package_request_form_screen.dart';
 import 'services/notification_routing.dart';
 import 'services/stripe_config_service.dart';
 import 'widgets/profile_language_sync_host.dart';
+import 'widgets/system_nav_bar_safe_area.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -250,8 +251,10 @@ class MyApp extends StatelessWidget {
             theme: AppTheme.light,
             themeMode: ThemeMode.light,
             builder: (context, child) {
-              return AppGateBoundary(
-                child: BiometricLockGate(child: child ?? const SizedBox()),
+              return SystemNavBarSafeArea(
+                child: AppGateBoundary(
+                  child: BiometricLockGate(child: child ?? const SizedBox()),
+                ),
               );
             },
             initialRoute: '/splash',

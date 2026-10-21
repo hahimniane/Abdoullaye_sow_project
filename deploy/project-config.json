@@ -2,7 +2,7 @@
   "_comment": "SINGLE SOURCE OF TRUTH for the Firebase/GCP project the deploy tooling (and deploy/store/gate.py) targets. `active` names the PRODUCTION project: flipping it from \"current\" to \"new\" is the cutover switch for deploy/. Any single run can still override the target with FIREBASE_PROJECT=<id|current|new> or --project=<id>. See docs/PROJECT_MIGRATION.md.",
   "active": "new",
   "_apps_comment": "`apps` names the project the INSTALLED mobile apps talk to (deploy/store/gate.py moves the force-update gate there). It stays \"current\" until a new app build pointing at the new project ships; it must match my_flutter_app/lib/firebase_environment_options.dart defaultEnvironment (production=current, new=new).",
-  "apps": "current",
+  "apps": "new",
   "_projects_comment": "cpuLimitMilli = Cloud Run 'Total CPU allocation' for us-central1, measured 2026-10-12 (sizes deploy batches). appCheckSiteKey = the public reCAPTCHA Enterprise key registered for App Check in THAT project; the console build must use the deploy target's key (preflight checks it).",
   "projects": {
     "current": {
