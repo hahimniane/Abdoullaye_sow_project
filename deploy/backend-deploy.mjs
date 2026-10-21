@@ -51,8 +51,9 @@ function run(command, args, options = {}) {
 // and Cloud Run kept trying to start them - each attempt drawing boosted
 // startup CPU against the same 20 vCPU the rollout and live traffic needed.
 // Batches that fit on paper failed against pressure the arithmetic could not
-// see. On a clean project the prune finds nothing and costs a few minutes;
-// on a dirty one it is the difference between a deploy and an outage.
+// see. On a clean project the prune finds nothing and costs seconds (two
+// bulk gcloud reads since 2026-10-21; it used to take ~20 minutes); on a
+// dirty one it is the difference between a deploy and an outage.
 console.log("Pruning idle Cloud Run revisions to reclaim headroom...");
 try {
   run("node", [path.join(__dirname, "prune-cloud-run-revisions.mjs")]);

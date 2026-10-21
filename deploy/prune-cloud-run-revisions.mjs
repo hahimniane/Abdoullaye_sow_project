@@ -17,101 +17,83 @@
 //
 // Usage: node prune-cloud-run-revisions.mjs [--dry-run]
 
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { resolveProjectId, resolveRegion } from "./project-config.mjs";
+import { revisionsToPrune } from "./prune-plan.mjs";
 
 const PROJECT = resolveProjectId();
 const REGION = resolveRegion({projectId: PROJECT, envName: "CLOUD_RUN_REGION"});
 const DRY_RUN = process.argv.includes("--dry-run");
-const CONCURRENCY = Number(process.env.PRUNE_CONCURRENCY || 6);
+const CONCURRENCY = Number(process.env.PRUNE_CONCURRENCY || 8);
 
-function gcloud(args) {
-  const result = spawnSync("gcloud", args, {encoding: "utf8"});
-  return {
-    ok: result.status === 0,
-    stdout: result.stdout || "",
-    stderr: result.stderr || "",
-  };
-}
-
-function listServices() {
-  const result = gcloud([
-    "run", "services", "list",
-    "--project", PROJECT, "--region", REGION,
-    "--format", "value(metadata.name)",
-  ]);
-  if (!result.ok) return [];
-  return result.stdout.split("\n").map((line) => line.trim()).filter(Boolean);
-}
-
-function pruneService(service) {
-  const serving = gcloud([
-    "run", "services", "describe", service,
-    "--project", PROJECT, "--region", REGION,
-    "--format", "value(status.latestReadyRevisionName)",
-  ]).stdout.trim();
-
-  // Without a known serving revision this cannot tell a live revision from a
-  // dead one, and guessing would take the site down. Skip loudly instead.
-  if (!serving) return {service, skipped: true, deleted: 0, kept: ""};
-
-  const revisions = gcloud([
-    "run", "revisions", "list",
-    "--service", service,
-    "--project", PROJECT, "--region", REGION,
-    "--format", "value(metadata.name)",
-  ]).stdout.split("\n").map((line) => line.trim()).filter(Boolean);
-
-  let deleted = 0;
-  for (const revision of revisions) {
-    if (revision === serving) continue;
-    if (DRY_RUN) {
-      deleted += 1;
-      continue;
-    }
-    const result = gcloud([
-      "run", "revisions", "delete", revision,
-      "--project", PROJECT, "--region", REGION, "--quiet",
-    ]);
-    if (result.ok) deleted += 1;
+// Two bulk reads (every service, every revision in the region) instead of two
+// gcloud calls per service: the old per-service loop used spawnSync inside
+// "parallel" workers, which blocked the event loop, so it really ran one
+// service at a time - about 20 minutes for 318 services (2026-10-21).
+function gcloudJson(args) {
+  const result = spawnSync("gcloud", [...args, "--format", "json"], {
+    encoding: "utf8", maxBuffer: 256 * 1024 * 1024,
+  });
+  if (result.status !== 0) {
+    throw new Error(`gcloud ${args.slice(0, 3).join(" ")} failed: ` +
+      String(result.stderr || "").slice(0, 300));
   }
-  return {service, skipped: false, deleted, kept: serving};
+  return JSON.parse(result.stdout || "[]");
+}
+
+// Deletes run truly in parallel: async child processes, not spawnSync.
+function gcloudAsync(args) {
+  return new Promise((resolve) => {
+    const child = spawn("gcloud", args, {stdio: ["ignore", "ignore", "pipe"]});
+    let stderr = "";
+    child.stderr.on("data", (chunk) => { stderr += chunk; });
+    child.on("close", (code) => resolve({ok: code === 0, stderr}));
+    child.on("error", (error) => resolve({ok: false, stderr: String(error)}));
+  });
 }
 
 async function main() {
-  const services = listServices();
+  const where = ["--project", PROJECT, "--region", REGION];
+  const services = gcloudJson(["run", "services", "list", ...where]);
   if (services.length === 0) {
     console.log("No Cloud Run services found; nothing to prune.");
     return;
   }
+  const revisions = gcloudJson(["run", "revisions", "list", ...where]);
+  const plan = revisionsToPrune(services, revisions);
   console.log(
-      `${DRY_RUN ? "Would prune" : "Pruning"} idle revisions across ` +
-      `${services.length} services in ${REGION}...`,
+      `${DRY_RUN ? "Would prune" : "Pruning"} ${plan.delete.length} idle ` +
+      `revisions across ${services.length} services in ${REGION}` +
+      (plan.skippedServices.length ?
+        ` (skipped ${plan.skippedServices.length}: no serving revision)` : "") +
+      "...",
   );
-
-  const queue = [...services];
+  for (const service of plan.skippedServices) {
+    console.log(`SKIP ${service} (no serving revision)`);
+  }
+  if (DRY_RUN || plan.delete.length === 0) {
+    console.log(`${DRY_RUN ? "Would delete" : "Deleted"} ` +
+      `${DRY_RUN ? plan.delete.length : 0} idle revisions`);
+    return;
+  }
+  const queue = [...plan.delete];
   let deleted = 0;
-  let skipped = 0;
+  let failed = 0;
   const workers = Array.from(
       {length: Math.max(1, Math.min(CONCURRENCY, queue.length))},
       async () => {
         for (let next = queue.shift(); next; next = queue.shift()) {
-          const result = pruneService(next);
-          if (result.skipped) {
-            skipped += 1;
-            console.log(`SKIP ${result.service} (no serving revision)`);
-          } else {
-            deleted += result.deleted;
-          }
+          const result = await gcloudAsync(["run", "revisions", "delete",
+            next, ...where, "--quiet"]);
+          if (result.ok) deleted += 1;
+          else failed += 1;
         }
       },
   );
   await Promise.all(workers);
-
-  console.log(
-      `${DRY_RUN ? "Would delete" : "Deleted"} ${deleted} idle revisions` +
-      (skipped ? `; skipped ${skipped} services` : ""),
-  );
+  console.log(`Deleted ${deleted} idle revisions` +
+    (failed ? `; ${failed} could not be deleted (usually the newest of a ` +
+      "service, which Cloud Run protects)" : ""));
 }
 
 await main();
