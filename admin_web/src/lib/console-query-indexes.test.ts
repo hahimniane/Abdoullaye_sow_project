@@ -231,10 +231,8 @@ const SITES: Site[] = [
   // --- lib/public-cars.ts ---------------------------------------------------
   { file: L("public-cars.ts"), kind: "usePagedQuery", what: "active cars newest first", shapes: [raw("cars", [["status", "==", "active"]], { field: "createdAt", direction: "desc" })] },
   // --- business-console.tsx -------------------------------------------------
-  ...["carPurchases", "barrelShipments", "freightShipments", "transportRequests"].map((name): Site => ({
-    file: C("business-console.tsx"), kind: "useBusinessCollection", what: `Today recent ${name}`, shapes: [bc(name, { pageSize: 25, sort: "query" })],
-  })),
-  { file: C("business-console.tsx"), kind: "useBusinessCollection", what: "Today recent parkedCars", shapes: [bc("parkedCars", { pageSize: 25, orderBy: "parkingDate" })] },
+  // Today's queues are counted on the server (getBusinessOverview); the tab
+  // keeps only its unacknowledged ledger changes live.
   { file: C("business-console.tsx"), kind: "useBusinessCollection", what: "Growth insights", shapes: [bc("businessInsights", { pageSize: 3 })] },
   { file: C("business-console.tsx"), kind: "useBusinessCollection", what: "Today ledger changes", shapes: [bc("lotLedgerAudit", { pageSize: 6, orderBy: "at", where: [["acknowledged", "==", false]] })] },
   // --- invoices-panel.tsx ---------------------------------------------------
@@ -389,6 +387,11 @@ test("the server totals' own queries are indexed too", () => {
   assert.match(server, /\.where\("paidAtMonth", ">=", input\.rangeStart\)\s*\.where\("paidAtMonth", "<=", input\.rangeEnd\)\s*\.orderBy\("paidAtMonth"\)/);
   assert.match(server, /\.where\("month", ">=", input\.readFrom\)\s*\.where\("month", "<=", input\.readThrough\)\s*\.orderBy\("month"\)/);
   assert.match(server, /parked\.where\("occupancyEndMs", "<", boundaryMs\)/);
+  for (const name of ["containerLinePayments", "inventorySales", "inventoryCreditPayments"]) {
+    assert.match(server, new RegExp(`scoped\\("${name}"\\)\\s*\\.where\\("createdAt", ">=", from\\)\\.where\\("createdAt", "<", until\\)\\s*\\.orderBy\\("createdAt"`));
+  }
+  assert.match(server, /\.where\("paidOn", ">=", months\.firstDay\)\s*\.where\("paidOn", "<=", months\.lastDay\)\s*\.orderBy\("paidOn"\)/);
+  assert.match(server, /\.where\("paidAtMonth", ">=", months\.previousMonth\)\s*\.where\("paidAtMonth", "<=", months\.month\)\s*\.orderBy\("paidAtMonth"\)/);
   const shapes: QueryShape[] = [
     raw("lotActivities", [eq("businessId"), ["activityDate", ">=", 0], ["activityDate", "<", 1]], { field: "activityDate", direction: "desc" }),
     raw("lotActivityPayments", [eq("businessId"), ["paidAtMonth", ">=", "a"], ["paidAtMonth", "<=", "b"]], { field: "paidAtMonth", direction: "asc" }),
@@ -396,6 +399,17 @@ test("the server totals' own queries are indexed too", () => {
     raw("parkedCars", [eq("businessId"), ["occupancyEndMs", "<", 0]]),
     raw("parkedCars", [eq("businessId"), ["occupancyEndMs", ">=", 0]]),
     raw("invoices", [eq("businessId"), eq("status"), ["dueOn", ">", ""], ["dueOn", "<", "z"]]),
+    // getBusinessOverview (Today): two months of payments, open containers,
+    // and the aggregates behind the queues and balances.
+    raw("containerLinePayments", [eq("businessId"), ["createdAt", ">=", 0], ["createdAt", "<", 1]], { field: "createdAt", direction: "asc" }),
+    raw("invoicePayments", [eq("businessId"), ["paidOn", ">=", "a"], ["paidOn", "<=", "b"]], { field: "paidOn", direction: "asc" }),
+    raw("lotActivityPayments", [eq("businessId"), ["paidAtMonth", ">=", "a"], ["paidAtMonth", "<=", "b"]], { field: "paidAtMonth", direction: "asc" }),
+    raw("inventorySales", [eq("businessId"), ["createdAt", ">=", 0], ["createdAt", "<", 1]], { field: "createdAt", direction: "desc" }),
+    raw("inventoryCreditPayments", [eq("businessId"), ["createdAt", ">=", 0], ["createdAt", "<", 1]], { field: "createdAt", direction: "desc" }),
+    raw("containers", [eq("businessId"), eq("status")]),
+    raw("packageRequests", [eq("businessId"), eq("status")]),
+    raw("containerLines", [eq("businessId"), eq("containerStatus")]),
+    raw("inventorySales", [eq("businessId"), eq("creditStatus")]),
   ];
   const missing = shapes.filter((shape) => !shapeIsIndexed(shape, indexes)).map(describeRequiredIndex);
   assert.deepEqual(missing, []);

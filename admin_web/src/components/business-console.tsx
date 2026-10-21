@@ -75,14 +75,11 @@ import {
   useBusinessHasRecords,
   useBusinessStaff,
 } from "@/lib/business-data";
-import {
-  emptyBusinessOverview,
-  isOpenStatus,
-  purchaseStatus,
-  type BusinessOverview,
-} from "@/lib/business-overview";
 import { useServerTotals } from "@/lib/use-server-totals";
-import { TotalsStatus } from "@/components/totals-status";
+import { Panel } from "@/components/panel";
+import { TodayView } from "@/components/business/today-view";
+import type { BusinessTodayResponse, TodayAttentionItem, TodayContainersView } from "@/lib/business-today";
+import { previewBusinessToday } from "@/lib/business-today-preview";
 import {
   buildBusinessSidebarGroups,
   businessPermissionHeld,
@@ -94,7 +91,7 @@ import {
 } from "@/lib/business-sidebar";
 import { buildBusinessVerificationChecklist } from "@/lib/business-verification";
 import { db, functions } from "@/lib/firebase";
-import { formatDate, formatMoney, text } from "@/lib/format";
+import { formatDate, text } from "@/lib/format";
 import { inventoryViewerFromProfile, saleFocusFrom, type SaleFocus } from "@/lib/inventory";
 import { transferFocusFrom, type TransferFocus } from "@/lib/inventory-transfers";
 import {
@@ -107,16 +104,6 @@ import {
   type BusinessPanelView,
 } from "@/lib/notification-routing";
 import type { FirestoreRow, UserProfile } from "@/types/admin";
-
-/** The newest records per service that "Needs attention" looks through. */
-const ATTENTION_SAMPLE = 25;
-
-type BusinessOverviewResponse = {
-  overview: BusinessOverview;
-  complete?: boolean;
-  computedAtMs?: number;
-  cached?: boolean;
-};
 
 type BusinessConsoleProps = {
   firebaseUser: User;
@@ -396,50 +383,38 @@ export function BusinessConsole({
     setActiveTab("destinations");
   }, []);
 
-  // Today's figures come from the server, over every record: the tab used to
-  // total five listeners capped at 500 rows with no order, so past 500 a
-  // business saw a random subset of its own numbers.
+  // Today's figures come from the server, over every record (the Volume
+  // rollup, payments, aggregates): one callable, cached a few minutes and cut
+  // to what this viewer may see. The local preview shows a sample instead.
   const onToday = enabled && activeTab === "today";
-  const overview = useServerTotals<BusinessOverviewResponse>(
+  const overview = useServerTotals<BusinessTodayResponse>(
     "getBusinessOverview",
     onToday ? { businessId } : null,
   );
-  // "Needs attention" is a short live list: the newest records per service,
-  // ordered, of which the open ones are shown. A handful of documents each,
-  // only while Today is open.
-  const recentOptions = { pageSize: ATTENTION_SAMPLE, sort: "query" } as const;
-  const purchases = useBusinessCollection(
-    "carPurchases",
-    businessId,
-    onToday && services.has("carSales"),
-    recentOptions,
+  const previewToday = useMemo(
+    () => (previewMode ? previewBusinessToday(services) : null),
+    [previewMode, services],
   );
-  const shipments = useBusinessCollection(
-    "barrelShipments",
-    businessId,
-    onToday && services.has("barrelShipping"),
-    recentOptions,
-  );
-  const freightShipments = useBusinessCollection(
-    "freightShipments",
-    businessId,
-    onToday && services.has("freight"),
-    recentOptions,
-  );
-  const transports = useBusinessCollection(
-    "transportRequests",
-    businessId,
-    onToday && services.has("carTransport"),
-    recentOptions,
-  );
-  // Stays recorded in the app carry no createdAt; every stay has its
-  // parkingDate, so the newest stays are read by that.
-  const parkedCars = useBusinessCollection(
-    "parkedCars",
-    businessId,
-    onToday && services.has("carParking"),
-    { ...recentOptions, orderBy: "parkingDate" },
-  );
+  const today = previewToday ?? overview.data?.today ?? null;
+  // Where a Today row lands on the Containers tab: one container, or the
+  // waiting / requests list. Forgotten on leaving the tab, so opening
+  // Containers from the sidebar later shows the usual list.
+  const [todayContainerFocus, setTodayContainerFocus] = useState("");
+  const [todayContainersView, setTodayContainersView] = useState<TodayContainersView>("");
+  useEffect(() => {
+    if (activeTab !== "containers") {
+      setTodayContainerFocus("");
+      setTodayContainersView("");
+    }
+  }, [activeTab]);
+  const openTodayItem = useCallback((item: TodayAttentionItem) => {
+    if (item.tab === "containers") setTodayContainersView(item.view);
+    setActiveTab(item.tab);
+  }, []);
+  const openTodayContainer = useCallback((containerId: string) => {
+    setTodayContainerFocus(containerId);
+    setActiveTab("containers");
+  }, []);
   // Growth shows the three newest insights; that is all it reads.
   const insights = useBusinessCollection(
     "businessInsights",
@@ -470,31 +445,6 @@ export function BusinessConsole({
     payoutsEnabled: business?.payoutsEnabled,
   });
   const canOpenSupport = visibleTabs.some((tab) => tab.id === "cases");
-  // Each row keeps the tab that can actually act on it: a work list whose
-  // rows go nowhere just tells the owner to go searching for the same
-  // shipment a second time.
-  const attentionRows: AttentionRow[] = [
-    ...shipments.rows
-      .filter((row) => isOpenStatus(row.status))
-      .slice(0, 3)
-      .map((row) => ({row, tab: "barrels" as BusinessTab})),
-    ...freightShipments.rows
-      .filter((row) => isOpenStatus(row.status))
-      .slice(0, 3)
-      .map((row) => ({row, tab: "freight" as BusinessTab})),
-    ...purchases.rows
-      .filter((row) => isOpenStatus(purchaseStatus(row)))
-      .slice(0, 3)
-      .map((row) => ({row, tab: "purchases" as BusinessTab})),
-    ...transports.rows
-      .filter((row) => isOpenStatus(row.status))
-      .slice(0, 3)
-      .map((row) => ({row, tab: "transport" as BusinessTab})),
-    ...parkedCars.rows
-      .filter((row) => isOpenStatus(row.status))
-      .slice(0, 3)
-      .map((row) => ({row, tab: "parking" as BusinessTab})),
-  ].slice(0, 8);
 
   return (
     // has-floating-assistant reserves scroll room at the end of the page so
@@ -667,24 +617,28 @@ export function BusinessConsole({
 
           {activeTab === "today" && (
             <TodayView
-              businessId={businessId}
-              business={business}
-              attentionRows={attentionRows}
               ledgerEvents={ledgerEvents.rows}
-              onOpenTab={setActiveTab}
-              overview={overview.data?.overview ?? null}
-              overviewState={{
+              onOpenAttention={openTodayItem}
+              onOpenContainer={openTodayContainer}
+              onOpenLedger={() => setActiveTab("ledger")}
+              previewMode={previewMode}
+              state={{
                 computedAtMs: overview.data?.computedAtMs ?? null,
                 complete: overview.data?.complete !== false,
                 loading: overview.loading,
                 error: overview.error,
                 refresh: () => overview.refresh(true),
               }}
-              services={services}
-              previewMode={previewMode}
-              onOpenSupport={() => setActiveTab("cases")}
-              canOpenSupport={canOpenSupport}
-            />
+              today={today}
+            >
+              <PayoutsPanel
+                businessId={businessId}
+                business={business}
+                previewMode={previewMode}
+                onOpenSupport={() => setActiveTab("cases")}
+                canOpenSupport={canOpenSupport}
+              />
+            </TodayView>
           )}
           {activeTab === "profile" && (
             <>
@@ -776,14 +730,16 @@ export function BusinessConsole({
               // A deep link names the container; a "number isn't mine"
               // notification names only the line, and the panel finds it.
               focusContainerId={
-                notificationFocusView === "line" ? "" : containerLink?.containerId ?? ""
+                notificationFocusView === "line"
+                  ? ""
+                  : todayContainerFocus || (containerLink?.containerId ?? "")
               }
               focusLineId={
                 notificationFocusView === "line"
                   ? notificationFocusId
                   : containerLink?.lineId ?? ""
               }
-              focusView={notificationFocusView === "requests" ? "requests" : ""}
+              focusView={notificationFocusView === "requests" ? "requests" : todayContainersView}
               focusRequestId={notificationFocusView === "requests" ? notificationFocusId : ""}
             />
           )}
@@ -1058,173 +1014,6 @@ function StripeSetupBanner({
         </button>
       </div>
     </section>
-  );
-}
-
-function TodayView({
-  businessId,
-  business,
-  attentionRows,
-  ledgerEvents,
-  onOpenTab,
-  overview: serverOverview,
-  overviewState,
-  services,
-  previewMode,
-  onOpenSupport,
-  canOpenSupport,
-}: {
-  businessId: string;
-  business: FirestoreRow | null;
-  attentionRows: AttentionRow[];
-  ledgerEvents: FirestoreRow[];
-  onOpenTab: (tab: BusinessTab) => void;
-  /** Worked out by the server over every record (getBusinessOverview). */
-  overview: BusinessOverview | null;
-  overviewState: {
-    computedAtMs: number | null;
-    complete: boolean;
-    loading: boolean;
-    error: string;
-    refresh: () => void;
-  };
-  services: Set<string>;
-  previewMode: boolean;
-  onOpenSupport: () => void;
-  canOpenSupport: boolean;
-}) {
-  const overview = useMemo(
-    () => serverOverview ?? emptyBusinessOverview(),
-    [serverOverview],
-  );
-  const eventMs = (r: FirestoreRow) => {
-    const a = r.at as { toMillis?: () => number; seconds?: number } | undefined;
-    if (a?.toMillis) return a.toMillis();
-    if (a?.seconds) return a.seconds * 1000;
-    return 0;
-  };
-  const ledgerAlerts = ledgerEvents
-    .filter((e) => e.acknowledged !== true)
-    .sort((a, b) => eventMs(b) - eventMs(a))
-    .slice(0, 6);
-  async function dismissLedgerEvent(id: string) {
-    if (previewMode) return;
-    try {
-      await httpsCallable(functions, "acknowledgeLotLedgerEvent")({
-        eventId: id,
-      });
-    } catch {
-      // A failed dismiss is non-fatal; the event simply stays listed.
-    }
-  }
-
-  const metrics = [
-    {
-      label: "Active listings",
-      value: overview.metrics.activeListings,
-      tone: "good",
-    },
-    {
-      label: "Open shipments",
-      value: overview.metrics.openShipments,
-      tone: "attention",
-    },
-    {
-      label: "Pending purchases",
-      value: overview.metrics.pendingPurchases,
-      tone: "attention",
-    },
-    {
-      label: "Support requests",
-      value: overview.metrics.openSupport,
-      tone: "neutral",
-    },
-  ];
-  return (
-    <div className="stack">
-      <div className="metric-grid">
-        {metrics.map((metric) => (
-          <article className={`metric ${metric.tone}`} key={metric.label}>
-            <span>{metric.label}</span>
-            <strong>{metric.value}</strong>
-          </article>
-        ))}
-      </div>
-      {!previewMode && (
-        <TotalsStatus
-          computedAtMs={overviewState.computedAtMs}
-          complete={overviewState.complete}
-          error={overviewState.error}
-          loading={overviewState.loading}
-          onRefresh={overviewState.refresh}
-        />
-      )}
-      <AnalyticsView overview={overview} services={services} />
-      <PayoutsPanel
-        businessId={businessId}
-        business={business}
-        previewMode={previewMode}
-        onOpenSupport={onOpenSupport}
-        canOpenSupport={canOpenSupport}
-      />
-      <div className="split-grid">
-        <Panel title="Needs attention" icon={<BarChart3 size={18} />}>
-          <div className="row-list compact">
-            {attentionRows.map(({row, tab}) => (
-              <DataRow
-                key={`${row._path ?? row.id}`}
-                title={text(
-                  row.trackingCode ??
-                    row.title ??
-                    row.vehicleTitle ??
-                    row.carTitle,
-                  row.id,
-                )}
-                subtitle={formatDate(row.updatedAt ?? row.createdAt)}
-                status={text(row.purchaseStatus ?? row.status, "pending")}
-                onOpen={() => onOpenTab(tab)}
-              />
-            ))}
-            {attentionRows.length === 0 && ledgerAlerts.length === 0 && (
-              <EmptyState text="No urgent operational items right now." />
-            )}
-            {ledgerAlerts.map((ev) => (
-              <article className="data-row" key={String(ev.id)} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <div className="clickable" style={{ flex: 1, cursor: "pointer" }} role="button" tabIndex={0} onClick={() => onOpenTab("ledger")} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpenTab("ledger"); } }}>
-                  <strong>{text(ev.action, "") === "voided" ? "Ledger entry voided" : text(ev.action, "") === "paid" ? "Ledger payment received" : "Ledger entry edited"}</strong>
-                  <div><small><span data-audit-summary>{text(ev.summary, "")}</span>{text(ev.byStaffId, "") ? " · by staff" : ""} · {formatDate(ev.at)}</small></div>
-                </div>
-                <button className="ghost-button" type="button" onClick={() => dismissLedgerEvent(String(ev.id))}>Dismiss</button>
-              </article>
-            ))}
-          </div>
-        </Panel>
-        <Panel title="Enabled services" icon={<Building2 size={18} />}>
-          <div className="tool-list">
-            {Array.from(services).map((service) => (
-              <span className="status-pill" key={service}>
-                {serviceLabels[service] ?? service}
-              </span>
-            ))}
-            {services.size === 0 && (
-              <EmptyState text="No services are enabled yet." />
-            )}
-          </div>
-        </Panel>
-      </div>
-      {(overview.metrics.transports > 0 || overview.metrics.parkedCars > 0) && (
-        <div className="metric-grid">
-          <article className="metric neutral">
-            <span>Transport requests</span>
-            <strong>{overview.metrics.transports}</strong>
-          </article>
-          <article className="metric neutral">
-            <span>Parked cars</span>
-            <strong>{overview.metrics.parkedCars}</strong>
-          </article>
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -1512,149 +1301,6 @@ function PayoutsPanel({
   );
 }
 
-function AnalyticsView({
-  overview,
-  services,
-}: {
-  overview: BusinessOverview;
-  services: Set<string>;
-}) {
-  const {
-    listingBreakdown,
-    operationBreakdown,
-    purchaseBreakdown,
-    earnings,
-    activeInventoryValue,
-    paidHoldValue,
-  } = overview;
-  const visibleServiceRows = earnings.services.filter(
-    (service) =>
-      services.has(service.serviceId) ||
-      service.paidTransactions > 0 ||
-      service.pendingTransactions > 0,
-  );
-
-  return (
-    <div className="stack">
-      <div className="split-grid">
-        <Panel title="Analytics" icon={<BarChart3 size={18} />}>
-          <div className="metric-grid">
-            <article className="metric money">
-              <span>Active inventory value</span>
-              <strong>{formatMoney(activeInventoryValue)}</strong>
-            </article>
-            <article className="metric money">
-              <span>Hold deposits</span>
-              <strong>{formatMoney(paidHoldValue)}</strong>
-            </article>
-          </div>
-          <div className="analytics-bars">
-            <AnalyticsBars title="Listings" rows={listingBreakdown} />
-            <AnalyticsBars title="Purchases" rows={purchaseBreakdown} />
-          </div>
-        </Panel>
-        <Panel title="Operations mix" icon={<ClipboardList size={18} />}>
-          <AnalyticsBars
-            title="Operational statuses"
-            rows={operationBreakdown}
-          />
-        </Panel>
-      </div>
-      <Panel title="Business earnings" icon={<Banknote size={18} />}>
-        <div className="metric-grid earnings-metrics">
-          <article className="metric money">
-            <span>Gross received</span>
-            <strong>{formatMoney(earnings.totals.grossReceived)}</strong>
-          </article>
-          <article className="metric attention">
-            <span>Platform fees</span>
-            <strong>{formatMoney(earnings.totals.platformFees)}</strong>
-          </article>
-          <article className="metric good">
-            <span>Business earnings</span>
-            <strong>{formatMoney(earnings.totals.businessEarnings)}</strong>
-          </article>
-          <article className="metric neutral">
-            <span>Pending payments</span>
-            <strong>{formatMoney(earnings.totals.pendingGross)}</strong>
-          </article>
-        </div>
-        <div className="list-summary">
-          <span>Paid transactions</span>{" "}
-          <b>{earnings.totals.paidTransactions.toLocaleString()}</b> ·{" "}
-          <span>Pending transactions</span>{" "}
-          <b>{earnings.totals.pendingTransactions.toLocaleString()}</b>
-        </div>
-        <div className="earnings-table">
-          <div className="earnings-table-head">
-            <span>Service</span>
-            <span>Gross received</span>
-            <span>Platform fees</span>
-            <span>Business earnings</span>
-            <span>Pending</span>
-          </div>
-          {visibleServiceRows.map((service) => (
-            <div className="earnings-table-row" key={service.serviceId}>
-              <span>
-                <strong>{service.label}</strong>
-                <small>
-                  <span>Paid</span> {service.paidTransactions} ·{" "}
-                  <span>Pending</span> {service.pendingTransactions}
-                </small>
-              </span>
-              <span>{formatMoney(service.grossReceived)}</span>
-              <span>{formatMoney(service.platformFees)}</span>
-              <span>{formatMoney(service.businessEarnings)}</span>
-              <span>{formatMoney(service.pendingGross)}</span>
-            </div>
-          ))}
-        </div>
-        {earnings.totals.paidTransactions === 0 &&
-          earnings.totals.pendingTransactions === 0 && (
-          <EmptyState text="No paid business transactions are loaded yet." />
-        )}
-      </Panel>
-    </div>
-  );
-}
-
-function AnalyticsBars({
-  title,
-  rows,
-}: {
-  title: string;
-  rows: Array<[string, number]>;
-}) {
-  const total = rows.reduce((sum, [, count]) => sum + count, 0);
-  return (
-    <div className="analytics-bars">
-      <div className="analytics-bar-label">
-        <span>{title}</span>
-        <span>{total}</span>
-      </div>
-      {rows.map(([label, count]) => {
-        const width =
-          total > 0 ? Math.max(4, Math.round((count / total) * 100)) : 0;
-        return (
-          <div className="analytics-bar" key={label}>
-            <div className="analytics-bar-label">
-              <span>{statusLabel(label)}</span>
-              <span>{count}</span>
-            </div>
-            <div className="analytics-bar-track">
-              <div
-                className="analytics-bar-fill"
-                style={{ width: `${width}%` }}
-              />
-            </div>
-          </div>
-        );
-      })}
-      {rows.length === 0 && <EmptyState text="No rows loaded yet." />}
-    </div>
-  );
-}
-
 function ProfileView({
   business,
   profile,
@@ -1704,70 +1350,6 @@ function ProfileView({
   );
 }
 
-function Panel({
-  title,
-  icon,
-  action,
-  children,
-}: {
-  title: string;
-  icon: React.ReactNode;
-  action?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <article className="panel">
-      <div className="panel-header">
-        <div>
-          {icon}
-          <h2>{title}</h2>
-        </div>
-        {action && <div className="panel-action">{action}</div>}
-      </div>
-      {children}
-    </article>
-  );
-}
-
-function DataRow({
-  title,
-  subtitle,
-  status,
-  onOpen,
-}: {
-  title: string;
-  subtitle: string;
-  status: string;
-  onOpen?: () => void;
-}) {
-  return (
-    // A work item names something the owner must act on; the row opens the
-    // queue that can act on it instead of leaving them to find it again.
-    <article
-      className={`data-row${onOpen ? " clickable" : ""}`}
-      onClick={onOpen}
-      onKeyDown={onOpen ? (event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          onOpen();
-        }
-      } : undefined}
-      role={onOpen ? "button" : undefined}
-      tabIndex={onOpen ? 0 : undefined}
-    >
-      <div>
-        <strong>{title}</strong>
-        <small>{subtitle}</small>
-      </div>
-      <span
-        className={`status-pill compact ${isOpenStatus(status) ? "warning" : ""}`}
-      >
-        {statusLabel(status)}
-      </span>
-    </article>
-  );
-}
-
 function EmptyState({text: message}: {text: string}) {
   return <div className="empty-state">{message}</div>;
 }
@@ -1805,8 +1387,6 @@ function hasBusinessPermission(profile: UserProfile, permission: string) {
     : [];
   return businessPermissionHeld(permissions, permission);
 }
-
-type AttentionRow = {row: FirestoreRow; tab: BusinessTab};
 
 function statusLabel(value: unknown) {
   const normalized = text(value, "unknown").toLowerCase();

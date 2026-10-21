@@ -162,6 +162,10 @@ const USERS = {
     businessPermissions: ["parking"]},
   invoicesStaff: {role: "staff", businessId: "biz",
     businessPermissions: ["invoices"]},
+  containersStaff: {role: "staff", businessId: "biz",
+    businessPermissions: ["containers"]},
+  supportStaff: {role: "staff", businessId: "biz",
+    businessPermissions: ["support"]},
   outsider: {role: "businessOwner", businessId: "other"},
   customer: {role: "customer"},
   financeAdmin: {role: "admin", effectiveCapabilities: ["finance"]},
@@ -429,6 +433,152 @@ describe("console totals callables: what they answer", () => {
         const third = await handlers.getBusinessOverview(
             call("owner", {businessId: "biz", refresh: true}));
         assert.equal(third.cached, true);
+      });
+
+  // The Today page (business_overview.js): a shipping business's real month.
+  function todayData() {
+    const at = (iso) => Timestamp.fromDate(new Date(iso));
+    return {
+      businesses: {biz: {enabledServices: ["barrelShipping", "carSales"]}},
+      volumeMonthly: {
+        "biz_2026-10": {businessId: "biz", month: "2026-10", pieces: 42,
+          barrels: 30, packages: 11, cars: 1, containersShipped: 1,
+          containerPieces: 20, containers: [{id: "k1", cars: 2,
+            barrels: 15, packages: 3}]},
+        "biz_2026-09": {businessId: "biz", month: "2026-09", pieces: 20,
+          barrels: 15, packages: 5, cars: 0},
+      },
+      containers: {
+        k2: {businessId: "biz", status: "loading", label: "Conakry 12",
+          barrelCount: 6, otherCount: 2, lineCount: 4,
+          createdAt: at("2026-10-01T12:00:00Z")},
+        k3: {businessId: "biz", status: "arrived", label: "Old"},
+        k9: {businessId: "other", status: "loading", label: "Not ours"},
+      },
+      packageRequests: {
+        r1: {businessId: "biz", status: "new"},
+        r2: {businessId: "biz", status: "confirmed"},
+        r3: {businessId: "biz", status: "received"},
+      },
+      containerLines: {
+        l1: {businessId: "biz", containerStatus: "waiting", priceCents: 10000,
+          paidCents: 4000},
+        l2: {businessId: "biz", containerStatus: "loading", priceCents: 6000,
+          paidCents: 6000},
+        l3: {businessId: "other", containerStatus: "waiting",
+          priceCents: 99900, paidCents: 0},
+      },
+      containerLinePayments: {
+        p1: {businessId: "biz", amountCents: 4000, method: "cash",
+          reverted: false, createdAt: at("2026-10-02T15:00:00Z")},
+        p2: {businessId: "biz", amountCents: 6000, method: "zelle",
+          reverted: false, createdAt: at("2026-09-12T15:00:00Z")},
+        p3: {businessId: "biz", amountCents: 500, method: "cash",
+          reverted: true, createdAt: at("2026-10-02T15:00:00Z")},
+        p4: {businessId: "other", amountCents: 70000, method: "cash",
+          reverted: false, createdAt: at("2026-10-02T15:00:00Z")},
+      },
+      invoices: {
+        i1: {businessId: "biz", status: "open", balanceCents: 2500},
+        i2: {businessId: "biz", status: "paid", balanceCents: 0},
+      },
+      invoicePayments: {
+        ip1: {businessId: "biz", amountCents: 1500, method: "check",
+          paidOn: "2026-10-04", reverted: false},
+      },
+      barrelShipments: {
+        b1: {businessId: "biz", status: "pending", paymentStatus: "succeeded",
+          totalCents: 8000, paidAt: at("2026-10-03T12:00:00Z")},
+      },
+      cars: {c1: {businessId: "biz", status: "active", price: 9000}},
+      carPurchases: {},
+      supportCases: {s1: {businessId: "biz", status: "open"}},
+    };
+  }
+
+  it("Today counts the month's real work and money for the owner",
+      async () => {
+        const {handlers} = handlersFor(todayData());
+        const result = await handlers.getBusinessOverview(
+            call("owner", {businessId: "biz"}));
+        const today = result.today;
+        assert.equal(result.complete, true);
+        assert.equal(today.month, "2026-10");
+        assert.equal(today.activity.current.packages, 11);
+        assert.equal(today.activity.current.barrels, 30);
+        assert.equal(today.activity.current.carsShipped, 2);
+        assert.equal(today.activity.previous.packages, 5);
+        assert.equal(today.activity.change.packages, 120);
+        assert.equal(today.containers.loading, 1);
+        assert.deepEqual(today.containers.list.map((c) => c.name),
+            ["Conakry 12"]);
+        assert.equal(today.queues.packageRequests, 2);
+        assert.equal(today.queues.waitingPackages, 1);
+        assert.equal(today.queues.openInvoices, 1);
+        assert.equal(today.queues.barrelOrders, 1);
+        assert.equal(today.queues.supportRequests, 1);
+        assert.equal(today.owed.packagesCents, 6000);
+        assert.equal(today.owed.invoicesCents, 2500);
+        assert.equal(today.owed.totalCents, 8500);
+        // Counter (package + invoice) and online, this month only.
+        assert.equal(today.money.current.totalCents, 4000 + 1500 + 8000);
+        assert.equal(today.money.current.byMethod.cash, 4000);
+        assert.equal(today.money.current.byMethod.check, 1500);
+        assert.equal(today.money.current.byMethod.online, 8000);
+        assert.equal(today.money.previous.byMethod.zelle, 6000);
+        assert.equal(today.listings.active, 1);
+        assert.deepEqual(today.unavailable, []);
+        // The legacy block stays for consoles on the previous bundle.
+        assert.equal(result.overview.metrics.activeListings, 1);
+      });
+
+  it("Today shows staff only what their own tabs show", async () => {
+    const {handlers} = handlersFor(todayData());
+    const staff = await handlers.getBusinessOverview(
+        call("containersStaff", {businessId: "biz"}));
+    assert.equal(staff.today.activity.current.packages, 11);
+    assert.equal(staff.today.owed.packagesCents, 6000);
+    assert.equal(staff.today.owed.totalCents, null);
+    assert.equal(staff.today.money, null);
+    assert.equal(staff.today.queues.openInvoices, null);
+    assert.equal(staff.overview, null, "no business-wide earnings");
+    // Served from the same cached count, cut differently.
+    const support = await handlers.getBusinessOverview(
+        call("supportStaff", {businessId: "biz"}));
+    assert.equal(support.cached, true);
+    assert.equal(support.today.activity, null);
+    assert.equal(support.today.containers, null);
+    assert.equal(support.today.queues.supportRequests, 1);
+    assert.equal(support.today.queues.packageRequests, null);
+    assert.equal(support.today.listings, null);
+  });
+
+  it("Today answers when one read fails, says so, and does not cache it",
+      async () => {
+        const {handlers, db} = handlersFor(todayData());
+        const collection = db.collection;
+        db.collection = (name) => {
+          if (name === "containerLinePayments") {
+            throw new Error("FAILED_PRECONDITION: the query requires an index");
+          }
+          return collection(name);
+        };
+        const first = await handlers.getBusinessOverview(
+            call("owner", {businessId: "biz"}));
+        assert.equal(first.complete, false);
+        assert.deepEqual(first.today.unavailable, ["packagePayments"]);
+        // Everything else still answers.
+        assert.equal(first.today.activity.current.packages, 11);
+        assert.equal(first.today.money.current.byMethod.check, 1500);
+        assert.equal(first.today.money.current.byMethod.cash, 0);
+        assert.ok(!db.writes.some((p) => p.startsWith("consoleSummaryCache/")),
+            "a partial answer is not cached");
+        db.collection = collection;
+        const second = await handlers.getBusinessOverview(
+            call("owner", {businessId: "biz"}));
+        assert.equal(second.cached, false);
+        assert.equal(second.complete, true);
+        assert.equal(second.today.money.current.byMethod.cash, 4000);
       });
 
   // Regression: the parking cache key embeds the viewer's zone, and an

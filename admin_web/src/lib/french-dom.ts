@@ -857,6 +857,56 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
     "entreprises approuvées sont actuellement disponibles pour le transport de véhicules. L’admissibilité de l’itinéraire est confirmée de façon sécurisée lors de l’envoi.",
 };
 
+// The business Today page (components/business/today-view.tsx and the
+// labels in lib/business-today.ts).
+const BUSINESS_TODAY_TRANSLATIONS: Record<string, string> = {
+  "vs last month": "par rapport au mois dernier",
+  "No figure last month": "Aucun chiffre le mois dernier",
+  "Money collected this month": "Argent encaissé ce mois-ci",
+  "By service": "Par service",
+  "By method": "Par mode de paiement",
+  "No payments recorded this month yet.": "Aucun paiement enregistré ce mois-ci pour l’instant.",
+  "Last month": "Mois dernier",
+  "Still owed by customers": "Reste dû par les clients",
+  "Counter payments (cash, Zelle, card in person and the rest) and online card payments, by the day they were received.":
+    "Paiements au comptoir (espèces, Zelle, carte en personne et autres) et paiements en ligne par carte, selon le jour de leur réception.",
+  "Some payments could not be counted, so these totals may be low. Refresh in a moment.":
+    "Certains paiements n’ont pas pu être comptés : ces totaux peuvent être sous-estimés. Actualisez dans un instant.",
+  "Compared with": "Comparé à",
+  "New York time": "Heure de New York",
+  "Nothing is waiting on you right now.": "Rien ne vous attend pour le moment.",
+  "This list could not be loaded.": "Cette liste n’a pas pu être chargée.",
+  "Counting what is waiting…": "Décompte de ce qui est en attente…",
+  "Open containers": "Ouvrir les conteneurs",
+  "Containers in progress": "Conteneurs en cours",
+  "No container is loading or at sea.": "Aucun conteneur en chargement ni en mer.",
+  "See every open container": "Voir tous les conteneurs en cours",
+  "Some figures could not be loaded. Refresh in a moment.":
+    "Certains chiffres n’ont pas pu être chargés. Actualisez dans un instant.",
+  "Cars shipped": "Voitures embarquées",
+  "Containers sailed": "Conteneurs partis",
+  "Open now": "Ouverts actuellement",
+  "Money collected": "Argent encaissé",
+  "Cars in the lot": "Voitures sur le parc",
+  Spaces: "Places",
+  "Package requests to answer": "Demandes de colis à traiter",
+  "Packages waiting for a container": "Colis en attente d’un conteneur",
+  "Containers loading": "Conteneurs en chargement",
+  "Open barrel orders": "Commandes de barils en cours",
+  "Open freight orders": "Commandes de fret en cours",
+  "Car purchases in progress": "Achats de voitures en cours",
+  "Open transport requests": "Demandes de transport en cours",
+  "Unpaid package balances": "Soldes de colis impayés",
+  "Open invoices": "Factures ouvertes",
+  "Parking balances due": "Soldes de stationnement dus",
+  "Shop credit to collect": "Crédit boutique à encaisser",
+  "Shop credit": "Crédit boutique",
+  "Online (card)": "En ligne (carte)",
+  "Barrels & packages": "Barils et colis",
+  "Lot jobs": "Travaux du parc",
+  "Online orders": "Commandes en ligne",
+};
+
 export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Invitation security": "Sécurité de l’invitation",
   "Finish setting up your access": "Terminez la configuration de votre accès",
@@ -895,6 +945,7 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "We could not activate this invitation. Try again or ask the sender to resend it.":
     "Nous n’avons pas pu activer cette invitation. Réessayez ou demandez à l’expéditeur de la renvoyer.",
   ...CUSTOMER_SHIPPING_TRANSLATIONS,
+  ...BUSINESS_TODAY_TRANSLATIONS,
   "Quote on eligible customer requests, then manage accepted jobs separately.":
     "Répondez aux demandes admissibles des clients, puis gérez séparément les transports acceptés.",
   "Quote opportunities": "Possibilités de devis",

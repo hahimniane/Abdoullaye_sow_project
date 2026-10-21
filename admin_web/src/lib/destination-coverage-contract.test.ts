@@ -367,10 +367,13 @@ describe("business destination service coverage", () => {
   });
 
   it("lets car-transport-only businesses open destination configuration", () => {
-    assert.match(
-      consoleSource,
-      /services\.has\("carTransport"\)/,
-    );
+    // Services & coverage carries no service gate (only its permission), so
+    // a business that offers nothing but car transport still reaches it.
+    const sidebar = readFileSync(new URL("./business-sidebar.ts", import.meta.url), "utf8");
+    const entry = sidebar.match(/\{id: "destinations",[^}]*\}/)?.[0] ?? "";
+    assert.match(entry, /permission: "destinations"/);
+    assert.doesNotMatch(entry, /\bservices?:/);
+    assert.match(consoleSource, /businessTabServiceAllowed\(tab, \(id\) => services\.has\(id\)\)/);
   });
 
   it("uses a responsive operational list and full-height country drawer", () => {
