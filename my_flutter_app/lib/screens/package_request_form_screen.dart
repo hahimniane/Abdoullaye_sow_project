@@ -518,12 +518,11 @@ class _PackageRequestFormScreenState extends State<PackageRequestFormScreen> {
     if (customer != null) _prefill(customer);
     final business = _options?.business;
 
+    // Nobody has to sign in to ask for an estimate: a signed-out phone fills
+    // the form (its name and WhatsApp number included) and the service starts
+    // a guest session at the first photo or at Send, as the website does.
     Widget body;
-    if (customer == null) {
-      body = _SignInPrompt(
-        onSignIn: () => Navigator.of(context).pushNamed('/login'),
-      );
-    } else if (_loading) {
+    if (_loading) {
       body = const Center(child: CircularProgressIndicator());
     } else if (_loadError != null) {
       body = Center(
@@ -967,29 +966,6 @@ class _PackageRequestFormScreenState extends State<PackageRequestFormScreen> {
         onTap: _send,
       ),
     ];
-  }
-}
-
-class _SignInPrompt extends StatelessWidget {
-  const _SignInPrompt({required this.onSignIn});
-
-  final VoidCallback onSignIn;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    return ListView(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      children: [
-        LotEmptyState(
-          key: const Key('request-sign-in'),
-          icon: Icons.person_outline,
-          title: l10n.prqSignInTitle,
-          hint: l10n.prqSignInHint,
-        ),
-        RequestPrimaryButton(label: l10n.prqSignIn, onTap: onSignIn),
-      ],
-    );
   }
 }
 
