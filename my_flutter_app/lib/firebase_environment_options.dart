@@ -15,14 +15,13 @@ import 'firebase_options_staging.dart';
 /// Cutover is changing [defaultEnvironment] (or building with
 /// `--dart-define=FIREBASE_ENV=new`).
 ///
-/// TODO(cutover-apps): the server and web moved to the new project on
-/// 2026-10-20, but the mobile apps deliberately STAY on 'production' (the old
-/// project, which keeps serving their callables) until a new app build is
-/// approved. That build flips this to 'new', swaps the native files
-/// (google-services.json, Info.plist URL scheme) and moves `apps` in
-/// deploy/project-config.json to "new" - see docs/PROJECT_MIGRATION.md.
+/// Cutover: the server and web moved to the new project on 2026-10-20; the
+/// apps follow from 1.0.20 (this default, google-services.json, the
+/// Info.plist URL scheme and `apps` in deploy/project-config.json all name
+/// the new project). Older installs keep talking to the old project until
+/// the force-update gate moves them - see docs/PROJECT_MIGRATION.md.
 abstract final class FirebaseEnvironmentOptions {
-  static const String defaultEnvironment = 'production';
+  static const String defaultEnvironment = 'new';
 
   static const String environment = String.fromEnvironment(
     'FIREBASE_ENV',
