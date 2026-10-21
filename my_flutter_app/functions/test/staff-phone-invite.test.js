@@ -164,6 +164,16 @@ describe("the WhatsApp outcome", () => {
   });
 });
 
+describe("the acceptance marker", () => {
+  it("keeps the name the owner typed, for the People card", () => {
+    const marker = phoneInviteMarker({invitationId: "inv", phoneE164: GN,
+      businessId: "biz-a", invitedName: "  Hassimiou Niane "}, "now");
+    assert.equal(marker.phoneInvite.invitedName, "Hassimiou Niane");
+    assert.equal(phoneInviteMarker({invitationId: "inv", phoneE164: GN,
+      businessId: "biz-a"}, "now").phoneInvite.invitedName, "");
+  });
+});
+
 describe("the phone-code sign-in exception", () => {
   const phoneStaff = {role: "staff", businessId: "biz-a",
     ...phoneInviteMarker({invitationId: "inv", phoneE164: GN,

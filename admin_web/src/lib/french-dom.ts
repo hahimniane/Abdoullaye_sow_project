@@ -6528,6 +6528,8 @@ Object.assign(TEXT_TRANSLATIONS, {
 // (People panel, admin console), the pending list, and the /j/<token> page.
 // Staff is "membre de l’équipe".
 Object.assign(TEXT_TRANSLATIONS, {
+  "Invited as": "Invité sous le nom",
+  "Can manage": "Peut gérer",
   "Phone (WhatsApp)": "Téléphone (WhatsApp)",
   "Send the invitation by": "Envoyer l’invitation par",
   "WhatsApp number": "Numéro WhatsApp",

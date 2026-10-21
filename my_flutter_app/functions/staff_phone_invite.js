@@ -236,20 +236,25 @@ function staffPhoneSignInAllowed(profile, phone) {
 
 /**
  * The profile fields that mark a phone-invited staff member, written on
- * acceptance.
+ * acceptance. `invitedName` is the name the owner typed in the invitation:
+ * when the number already had an account under another name, that account
+ * keeps its own name (one phone = one account) and the People card shows
+ * "Invited as <invitedName>" so the owner still recognises who joined.
  *
- * @param {{invitationId: string, phoneE164: string, businessId: string}}
- *   accepted What was accepted.
+ * @param {{invitationId: string, phoneE164: string, businessId: string,
+ *   invitedName: (string|undefined)}} accepted What was accepted.
  * @param {*} acceptedAt A server timestamp.
  * @return {object} The fields.
  */
-function phoneInviteMarker({invitationId, phoneE164, businessId}, acceptedAt) {
+function phoneInviteMarker(
+    {invitationId, phoneE164, businessId, invitedName}, acceptedAt) {
   return {
     signInMethod: CHANNEL.PHONE,
     phoneInvite: {
       invitationId: cleanText(invitationId, 160),
       phoneE164: strictE164(phoneE164),
       businessId: cleanText(businessId, 160),
+      invitedName: cleanText(invitedName, 200),
       acceptedAt,
     },
   };

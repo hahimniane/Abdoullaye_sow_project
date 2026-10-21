@@ -424,3 +424,21 @@ export function visiblePendingInvitations(
 ): PendingInvitation[] {
   return invitations.filter((invitation) => !dismissed.includes(invitation.invitationId));
 }
+
+/**
+ * The name the owner typed in a phone invitation, shown on the People card
+ * as "Invited as ..." when the number already had an account under another
+ * name (that account keeps its own name: one phone = one account). Empty when
+ * there is no invited name or it is the account's name anyway.
+ */
+export function invitedAsName(row: Record<string, unknown>): string {
+  const invite = row.phoneInvite;
+  const invited =
+    invite && typeof invite === "object" && typeof (invite as { invitedName?: unknown }).invitedName === "string"
+      ? (invite as { invitedName: string }).invitedName.trim()
+      : "";
+  if (!invited) return "";
+  const norm = (value: string) => value.trim().replace(/\s+/g, " ").toLowerCase();
+  const own = typeof row.fullName === "string" ? row.fullName : "";
+  return norm(invited) === norm(own) ? "" : invited;
+}

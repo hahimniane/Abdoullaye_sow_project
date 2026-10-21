@@ -136,6 +136,7 @@ import {
   emptyStaffInviteDraft,
   inviteNeedsSharing,
   inviteRefusalMessage,
+  invitedAsName,
   staffInvitePayload,
   staffInviteProblem,
   staffInviteResultFrom,
@@ -3109,12 +3110,18 @@ function StaffRow({
 
   const role = text(row.role, "staff");
   const isOwner = role === "businessOwner";
+  const invitedAs = invitedAsName(row);
   return (
     <article className="pur-card">
       <div className="pur-head">
         <div className="pur-title">
           <strong>{text(row.fullName ?? row.email, "Team member")}</strong>
           <span className="pur-kind">{staffContact(row)}</span>
+          {invitedAs ? (
+            <span className="pur-invited-as">
+              <span>Invited as</span> <strong data-no-translate>{invitedAs}</strong>
+            </span>
+          ) : null}
         </div>
         <span className={`lst-badge ${isOwner ? "navy" : "ok"}`}>{isOwner ? "Owner" : "Staff"}</span>
       </div>

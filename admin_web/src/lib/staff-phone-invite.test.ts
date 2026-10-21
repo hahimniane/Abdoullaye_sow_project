@@ -459,3 +459,21 @@ test("the customer console lists, joins and dismisses with progress and storage 
   assert.match(client, /await call\(\{ invitationId \}\)/);
   assert.match(read("../components/customer-console.tsx"), /<PendingInvitationsPrompt uid=\{firebaseUser\.uid\} \/>/);
 });
+
+test("Invited as: shown only when the invite named someone else", async () => {
+  const { invitedAsName } = await import("./staff-phone-invite.ts");
+  // The real case: +1 917-517-7935 already belonged to "Test Customer".
+  assert.equal(
+    invitedAsName({ fullName: "Test Customer", phoneInvite: { invitedName: "Hassimiou Niane" } }),
+    "Hassimiou Niane",
+  );
+  assert.equal(invitedAsName({ fullName: "Hassimiou  Niane", phoneInvite: { invitedName: "hassimiou niane " } }), "");
+  assert.equal(invitedAsName({ fullName: "Ali", phoneInvite: {} }), "");
+  assert.equal(invitedAsName({ fullName: "Ali" }), "");
+  assert.equal(invitedAsName({ phoneInvite: { invitedName: "Fatou" } }), "Fatou");
+});
+
+test("Invited as and Can manage are translated", () => {
+  assert.equal(TEXT_TRANSLATIONS["Invited as"], "Invité sous le nom");
+  assert.equal(TEXT_TRANSLATIONS["Can manage"], "Peut gérer");
+});

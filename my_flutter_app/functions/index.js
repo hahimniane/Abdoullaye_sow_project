@@ -25929,6 +25929,7 @@ async function acceptAccessInvitationHandler(request) {
           invitationId,
           phoneE164: verifiedPhone,
           businessId: invitation.businessId,
+          invitedName: invitation.fullName,
         }, now) : {}),
       };
       update = {
