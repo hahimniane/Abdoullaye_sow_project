@@ -2,7 +2,7 @@
 
 Everyone with goods on a container hears about them on WhatsApp: the
 customer who handed the goods in (the **sender**) and the person collecting
-them at the other end (the **receiver**). Each person gets at most three
+them at the other end (the **receiver**). Each person gets at most four
 messages per package, each **one bilingual message** (an English block, then
 a French block):
 
@@ -11,6 +11,25 @@ a French block):
 | `received` | `shipment_received_2lang` | The package is registered: dropped off to wait for a container (`addWaitingPackage`) or added straight onto one (`addContainerLine`). Assigning a waiting package to a box, or taking it off one, sends nothing. |
 | `shipped` | `shipment_departed_2lang` | Staff mark the container **Shipped**, or the carrier feed reports it on the vessel — whichever comes first. |
 | `arrived` | `shipment_ready_pickup_2lang` | Staff mark the container **Ready for pickup**. Only staff: the carrier's "discharged / available at the port" is recorded on the timeline and sends nothing, because a box at the port cannot be collected yet. |
+| `delivered` | `shipment_delivered_2lang` | Destination staff mark the **package** delivered (*Mark delivered*: the `deliver` action of `updateContainerLine`; docs/WAITING_PACKAGES.md "Delivered at destination"). Per line, like `received`. Undoing a delivery sends nothing, and a delivery repeated after an undo finds the rows already there, so nobody hears twice. |
+
+### Delivered (2026-10-21)
+
+`queuePackageDelivered` (index.js) queues one
+`containerUpdates/{lineId}_{role}_delivered` row per person right after the
+delivery transaction, through `queueContainerLineUpdate` and
+`recipientsForLine` like every other update: the sender and the receiver,
+once each (same number on both sides, or *Sender is the receiver*, is one
+person), a US business's 10-digit local numbers messaged as +1, a person
+switched off or with no country code skipped. A failure to queue is logged
+and never fails the delivery. The message is built at send time from the
+line: the day (`deliveredAt`, written "October 21, 2026" / "21 octobre
+2026", read in UTC) and who collected it (`collectedBy`). A row whose line
+is no longer delivered when its turn comes (the delivery was undone first)
+is marked `failed` and says so. There is no legacy version: with
+`WHATSAPP_TEMPLATE_SET=legacy` the delivered message is still
+`shipment_delivered_2lang`. `delivered` ranks after `arrived` on the line's
+`lastCustomerUpdate`.
 
 ### "Arrived" now means ready for pickup (2026-10-18)
 
@@ -231,7 +250,8 @@ A template that Meta has not approved yet answers every send with error
 `132001` ("template name does not exist in the translation"). Meta gives the
 same code for a name that is still in review and for one that does not
 exist, so this also covers the three bilingual templates submitted on
-2026-10-18 — the check is by error code, not by template name. Such a row is not failed: it becomes `waiting_for_template`, the
+2026-10-18 and `shipment_delivered_2lang` (2026-10-21) — the check is by
+error code, not by template name. Such a row is not failed: it becomes `waiting_for_template`, the
 try does not count towards the 5-attempt limit, and the scheduled function
 `requeueTemplateWaitingUpdates` (every 30 minutes) puts every waiting row back
 to `queued`, which sends it again. The first sweep after Meta approves the
@@ -362,6 +382,48 @@ Client"), business → `Laawol`, what → `goods` / `marchandises`, destination
 → `its destination country` / `son pays de destination`, the pickup
 fallbacks are in *Pickup details per destination* above, tracking code →
 `-`.
+
+### `shipment_delivered_2lang`
+
+Sent once per person when destination staff mark the package delivered
+(`delivered`). Variables: {{1}} name, {{2}} business, {{3}} what (EN),
+{{4}} day (EN), {{5}} collected by, {{6}} business, {{7}} what (FR), {{8}}
+day (FR), {{9}} collected by, {{10}} tracking code. A custom template (not
+Meta's library), so no 30-character limit; blanks still fall back (name →
+`Client`, business → `Laawol`, what → `goods` / `marchandises`, day → `the
+day it was collected` / `le jour de son retrait`, collected by → `the
+receiver` / `le destinataire`, code → `-`). Same button as the others:
+*Visit website*, `Track · Suivre`, Dynamic,
+`https://customer.laawoldigital.com/t/{{1}}` (the tracking code).
+
+```
+Hello / Bonjour {{1}} 👋
+
+*ENGLISH*
+{{2}} delivered your shipment of {{3}} on {{4}}. It was collected by {{5}}.
+
+—————
+*FRANÇAIS*
+{{6}} a remis votre envoi de {{7}} le {{8}}. Il a été récupéré par {{9}}.
+
+🔎 Tracking code / Code de suivi : {{10}}
+
+Tap the button below to see its details.
+Appuyez sur le bouton ci-dessous pour voir les détails.
+```
+
+Sample values: `Fatou`, `Dala Shipping`, `3 barrels`, `October 21, 2026`,
+`Mamadou Bah`, `Dala Shipping`, `3 barils`, `21 octobre 2026`,
+`Mamadou Bah`, `CL-K7M4P2`.
+
+Created with `~/laawol-deploy-logs/create_delivered_template.py` (dry run
+by default, `--submit` sends; language `en`, category **Utility**). Status
+(2026-10-21): written, **not submitted**. Until Meta approves it every
+delivered send answers `132001` and the row waits as `waiting_for_template`
+(see *Templates still in review*): it does not use up an attempt, the
+half-hourly `requeueTemplateWaitingUpdates` sweep retries it, and the first
+sweep after approval sends every delivered message that was waiting (up to
+14 days old). Nothing has to be re-queued by hand.
 
 ### `staff_account_setup`
 

@@ -422,6 +422,25 @@ const {
   validateDestinationPickup,
 } = require("./destination_pickup");
 const {
+  DELIVERY_ACTION,
+  DELIVERY_FIELDS,
+  DELIVERY_MESSAGES,
+  DELIVERY_SECTIONS,
+  DELIVERY_UNDO_SECTION,
+  DELIVERY_MONEY_SECTIONS,
+  deliveryActionOf,
+  lineIsDelivered,
+  deliveryRefusal,
+  collectedByOf,
+  collectedByErrors,
+  deliveryBalanceRefusal,
+  deliveryBalanceView,
+  deliveryRecord,
+  deliveredLineCount,
+  deliveryAuditSummary,
+  deliveryUndoAuditSummary,
+} = require("./container_delivery");
+const {
   distributeCents,
   groupRootId,
   lineCounts,
@@ -815,6 +834,10 @@ const VALID_BUSINESS_PERMISSIONS = [
   // opened them too (it is offered only where Parking is on), so a shop that
   // sells without Parking grants this one to its staff instead.
   "invoices",
+  // Destination staff who hand packages over: look a package up (scan or
+  // code) and mark it delivered - no prices, payments or other tabs
+  // (container_delivery.js).
+  "deliveries",
 ];
 const VALID_PLATFORM_ADMIN_ROLES = [
   "superAdmin",
@@ -17122,9 +17145,14 @@ async function loadContainerFor(db, uid, businessId, containerId) {
 async function refreshContainerCounts(db, ref) {
   const lines = await db.collection("containerLines")
       .where("containerId", "==", ref.id).get();
-  const counts = containerCounts(lines.docs.map((d) => d.data() || {}));
-  await ref.set({...counts, updatedAt: FirestoreFieldValue.serverTimestamp()},
-      {merge: true});
+  const rows = lines.docs.map((d) => d.data() || {});
+  const counts = containerCounts(rows);
+  await ref.set({
+    ...counts,
+    // "X of Y delivered": kept by each delivery, repaired here.
+    deliveredCount: deliveredLineCount(rows),
+    updatedAt: FirestoreFieldValue.serverTimestamp(),
+  }, {merge: true});
   return counts.lineCount;
 }
 
@@ -18172,14 +18200,173 @@ async function editContainerLine(db, args) {
   return {success: true, lineId, changed: changes};
 }
 
+/**
+ * A refusal of a delivery the screens can act on: the message, and the
+ * code in `details.reason`.
+ *
+ * @param {string} code A DELIVERY_MESSAGES key.
+ * @param {object} [extra] More details (the balance view).
+ * @return {HttpsError} The error to throw.
+ */
+function deliveryError(code, extra = {}) {
+  const status = code === "line_not_found" ? "not-found" :
+    (code === "delivery_action_invalid" || code === "collected_by_too_long" ?
+      "invalid-argument" : "failed-precondition");
+  return new HttpsError(status, DELIVERY_MESSAGES[code] || code,
+      {reason: code, ...extra});
+}
+
+/**
+ * Marks a package delivered at the destination, or undoes that
+ * (docs/WAITING_PACKAGES.md "Delivered at destination"). One transaction
+ * re-reads the line, its container and (for a split package) its group,
+ * then writes the line and the container's `deliveredCount` together, so
+ * "X of Y delivered" never drifts and two taps deliver once. Only a newly
+ * delivered package queues its WhatsApp message (one per person; the row ids
+ * are fixed, so even a delivery after an undo never sends twice). An undo
+ * tells nobody.
+ *
+ * @param {object} db Firestore.
+ * @param {object} args {uid, businessId, data (the request: action, lineId,
+ *   collectedBy, acknowledgeBalance)}.
+ * @return {Promise<object>} The callable's answer.
+ */
+async function containerLineDelivery(db, args) {
+  const {uid, businessId, data} = args;
+  const action = deliveryActionOf(data.action);
+  if (!action) throw deliveryError("delivery_action_invalid");
+  const user = action === DELIVERY_ACTION.UNDO ?
+    await requireBusinessPermission(uid, businessId, DELIVERY_UNDO_SECTION) :
+    await requireAnyBusinessPermission(uid, businessId, DELIVERY_SECTIONS);
+  const canSeeMoney = DELIVERY_MONEY_SECTIONS.some((section) =>
+    hasBusinessPermission(user, section));
+  const lineId = String(data.lineId || "").trim();
+  if (!lineId || lineId.includes("/")) throw deliveryError("line_not_found");
+  const typed = data.collectedBy;
+  if (action === DELIVERY_ACTION.DELIVER) {
+    const errors = collectedByErrors(typed);
+    if (errors.length > 0) throw deliveryError(errors[0]);
+  }
+  const lineRef = db.collection("containerLines").doc(lineId);
+  // Read before the transaction: who is handing it over, by name.
+  const staffName = action === DELIVERY_ACTION.DELIVER ?
+    await businessStaffName(db, businessId, uid) : "";
+  const outcome = await db.runTransaction(async (tx) => {
+    const lineDoc = await tx.get(lineRef);
+    const row = lineDoc.exists ? lineDoc.data() || {} : null;
+    if (!row || String(row.businessId || "") !== businessId) {
+      throw deliveryError("line_not_found");
+    }
+    const containerId = String(row.containerId || "");
+    const boxRef = containerId ?
+      db.collection("containers").doc(containerId) : null;
+    const box = boxRef ? await tx.get(boxRef) : null;
+    if (action === DELIVERY_ACTION.UNDO) {
+      // Undoing what is not delivered changes nothing.
+      if (!lineIsDelivered(row)) return {row, changed: false};
+      const cleared = {};
+      for (const field of DELIVERY_FIELDS) {
+        cleared[field] = FirestoreFieldValue.delete();
+      }
+      tx.update(lineRef, {
+        ...cleared,
+        deliveryUndoneAt: FirestoreFieldValue.serverTimestamp(),
+        deliveryUndoneByStaffId: uid,
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      });
+      if (box?.exists) {
+        tx.set(boxRef, {
+          deliveredCount: FirestoreFieldValue.increment(-1),
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        }, {merge: true});
+      }
+      return {row, changed: true};
+    }
+    // Delivered already: a second tap (or a second phone) changes nothing
+    // and sends nothing.
+    if (lineIsDelivered(row)) {
+      return {row, changed: false, collectedBy: String(row.collectedBy || ""),
+        balanceCents: Number(row.deliveredBalanceCents) || 0};
+    }
+    const refusal = deliveryRefusal(row,
+        box?.exists ? box.data() || {} : null);
+    if (refusal) throw deliveryError(refusal);
+    // A part of a split package owes what its whole group owes: the
+    // payments live on the root.
+    const group = await txLineGroup(tx, db, businessId, lineId, row);
+    const balanceCents =
+      lineGroupSummary(group.entries, group.rootId).balanceCents;
+    const balanceRefusal = deliveryBalanceRefusal(balanceCents,
+        data.acknowledgeBalance === true);
+    if (balanceRefusal) {
+      throw deliveryError(balanceRefusal,
+          deliveryBalanceView(balanceCents, canSeeMoney));
+    }
+    const collectedBy = collectedByOf(typed, row);
+    tx.update(lineRef, {
+      ...deliveryRecord({staffId: uid, staffName, collectedBy, balanceCents}),
+      deliveredAt: FirestoreFieldValue.serverTimestamp(),
+      updatedAt: FirestoreFieldValue.serverTimestamp(),
+    });
+    tx.set(boxRef, {
+      deliveredCount: FirestoreFieldValue.increment(1),
+      updatedAt: FirestoreFieldValue.serverTimestamp(),
+    }, {merge: true});
+    return {row, changed: true, collectedBy, balanceCents};
+  });
+  const {row, changed} = outcome;
+  if (action === DELIVERY_ACTION.UNDO) {
+    if (changed) {
+      await containerLineAudit(businessId, lineId, row,
+          "line_delivery_undone", uid,
+          deliveryUndoAuditSummary(containerLineTitle(row)));
+    }
+    return {success: true, lineId, undone: changed};
+  }
+  if (changed) {
+    await containerLineAudit(businessId, lineId, row, "line_delivered", uid,
+        deliveryAuditSummary({
+          what: containerLineTitle(row),
+          collectedBy: outcome.collectedBy,
+          balanceText: outcome.balanceCents > 0 ?
+            lotMoney(outcome.balanceCents) : "",
+        }));
+    await queuePackageDelivered(db, {lineRef, businessId,
+      containerId: String(row.containerId || "")});
+  }
+  return {
+    success: true,
+    lineId,
+    delivered: true,
+    alreadyDelivered: !changed,
+    collectedBy: outcome.collectedBy,
+    ...deliveryBalanceView(outcome.balanceCents, canSeeMoney),
+  };
+}
+
 // The whole line: what it is and whose, as well as its contacts. Only the
 // contacts may change once the box has shipped.
+//
+// With `action` it is a package delivery instead (container_delivery.js):
+// `deliver` (containers or deliveries permission) or `undo_delivery`
+// (containers). An action here rather than its own export: the Cloud
+// Functions CPU budget (test/scaling-contract.test.js) is at its limit.
 exports.updateContainerLine = onCall(
-    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+      // A delivery queues the delivered message (queuePackageDelivered).
+      secrets: [whatsappAccessToken, whatsappPhoneNumberId],
+    },
     async (request) => {
       const uid = requireAuth(request);
       const data = request.data || {};
       const businessId = String(data.businessId || "").trim();
+      if (data.action !== undefined && data.action !== null &&
+          data.action !== "") {
+        return containerLineDelivery(admin.firestore(), {uid, businessId,
+          data});
+      }
       await requireBusinessPermission(uid, businessId, CONTAINER_SECTION);
       return editContainerLine(admin.firestore(), {
         uid, businessId,
@@ -19271,6 +19458,44 @@ async function queuePackageReceived(db, args) {
   }
 }
 
+/**
+ * Tells the sender and the receiver that their package was handed over
+ * (`delivered`, shipment_delivered_2lang): one
+ * `containerUpdates/{lineId}_{role}_delivered` row each, through the same
+ * queue, the same per-person rules (recipientsForLine: switched off, no
+ * number, same person once, a US business's local numbers as +1) and the
+ * same `waiting_for_whatsapp` / `waiting_for_template` handling as every
+ * other update. The ids are fixed, so a delivery repeated after an undo
+ * never sends a second message.
+ *
+ * Never fails the delivery: it is already recorded. A failure is logged.
+ *
+ * @param {object} db Firestore.
+ * @param {object} args {lineRef, businessId, containerId}.
+ * @return {Promise<void>}
+ */
+async function queuePackageDelivered(db, args) {
+  try {
+    const businessDoc =
+      await db.collection("businesses").doc(args.businessId).get();
+    await queueContainerLineUpdate(db, {
+      lineRef: args.lineRef,
+      businessId: args.businessId,
+      containerId: String(args.containerId || ""),
+      businessName: String(businessDoc.data()?.name || ""),
+      update: CONTAINER_UPDATE.DELIVERED,
+      status: containerWhatsAppConfigured() ?
+        CONTAINER_UPDATE_STATUS.QUEUED : CONTAINER_UPDATE_STATUS.WAITING,
+      requeue: false,
+    });
+  } catch (error) {
+    logger.error("Could not queue the package delivered message", {
+      lineId: args.lineRef?.id, businessId: args.businessId,
+      error: String(error),
+    });
+  }
+}
+
 exports.sendContainerCustomerUpdates = onDocumentCreated(
     {
       document: "containers/{containerId}/trackingEvents/{eventId}",
@@ -19442,6 +19667,13 @@ exports.deliverContainerCustomerUpdate = onDocumentWritten(
         return;
       }
       const line = lineDoc.data() || {};
+      // A delivery undone before its message went out says nothing.
+      if (row.update === CONTAINER_UPDATE.DELIVERED && !lineIsDelivered(line)) {
+        await recordContainerUpdateAttempt(db, rowRef, row, {
+          status: CONTAINER_UPDATE_STATUS.FAILED, leaseUntilMs: 0,
+          error: "The delivery was undone before the message was sent."});
+        return;
+      }
       // Read at send time: the destination may only be on the container,
       // and a waiting package may have been put on one since it was queued.
       const containerId = String(line.containerId || row.containerId || "");

@@ -370,3 +370,63 @@ before-booked; `loading` is still `booked`.
 ## Zelle bank check
 
 A package payment recorded as Zelle (`method: "zelle"`) can be checked against the owner's connected bank (docs/ZELLE_BANK_CHECK.md, kind `container_line_payment`, needs the `containers` section). The server writes `bankCheck` on the `containerLinePayments` row: `{status: "confirmed", creditId, amountCents, atMs, timeKnown, senderName, institutionName, checkedByUid, checkedAt}` or `{status: "not_found", checkedByUid, checkedAt}`.
+
+## Delivered at destination
+
+Owner decisions 2026-10-21. Destination staff hand a package (one
+`containerLines` row, all of its pieces at once) to the person collecting it
+and mark it **delivered** ("Mark delivered" / "Marquer comme livré"). Pure
+rules: `functions/container_delivery.js` (unit-tested in
+`test/container-delivery.test.js`; against the emulator in
+`test/container-callables.test.js` "delivered at destination").
+
+**Callable.** An action on `updateContainerLine` (no new export: the Cloud
+Functions CPU budget in `test/scaling-contract.test.js` is at its limit):
+
+- `{businessId, lineId, action: "deliver", collectedBy?, acknowledgeBalance?}`
+  → `{success, lineId, delivered: true, alreadyDelivered, collectedBy,
+  hasBalance, balanceCents}`. Marking an already delivered package changes
+  nothing and sends nothing (`alreadyDelivered: true`).
+- `{businessId, lineId, action: "undo_delivery"}` → `{success, lineId,
+  undone}`. Clears the delivery, writes `deliveryUndoneAt` /
+  `deliveryUndoneByStaffId` and a History entry. Sends nothing.
+- Refusals (`details.reason`): `delivery_action_invalid`,
+  `delivery_not_arrived` (only a package on a container marked **Ready for
+  pickup** - stored `arrived` - can be delivered; waiting packages and boxes
+  still loading or at sea are refused), `delivery_balance_due`,
+  `collected_by_too_long` (over 120 characters), `line_not_found`.
+
+**Fields on the line.** `deliveredAt` (server time), `deliveredByStaffId`,
+`deliveredByName` (their name in the business, for display),
+`collectedBy` (what staff typed, one line; prefilled with and defaulting to
+the receiver's name - someone may collect for them; else the line's
+customer), `deliveredBalanceCents` (what the package's group still owed when
+it was handed over). The container keeps `deliveredCount` beside
+`lineCount`, written in the same transaction and repaired by every recount
+(`refreshContainerCounts`): the console and the app show **"X of Y
+delivered"**. A container is never closed by it.
+
+**Unpaid balance: warn, never block.** A package whose group still owes money
+(`lineGroupSummary(...).balanceCents`; a split part owes what its whole
+group owes) is refused with `delivery_balance_due` until the caller sends
+`acknowledgeBalance: true`. The refusal carries `hasBalance: true` and
+`balanceCents` - the amount only for someone who may see money.
+
+**Who may do what.**
+
+| Action | Who |
+| --- | --- |
+| Mark delivered | Owners, admins, staff with **containers** or the new **deliveries** permission (French "Livraisons") |
+| Undo a delivery | Owners, admins, staff with **containers** (a manager) |
+| See prices, payments, the amount owed | Owners, admins, staff with **containers** or **ledger** |
+
+A deliveries-only person looks packages up (label QR or typed `CL-` code),
+sees the receiver and sender, the container and its status, the delivery
+state and who collected it, and is told "This package still has an unpaid
+balance - check with the office" without an amount. They get no other
+container screens. The Firestore rules let any of the business's staff read
+its lines (as before), so hiding the money is the clients' job.
+
+**WhatsApp.** A new delivery queues the `delivered` update
+(`shipment_delivered_2lang`) for the sender and the receiver, once each -
+see docs/WHATSAPP_CONTAINER_UPDATES.md "Delivered".

@@ -2673,3 +2673,320 @@ describe("pieces on lines", () => {
     assert.equal(paid.lineId, root.lineId);
   });
 });
+
+// Package delivered at destination (container_delivery.js): an action on
+// updateContainerLine. Marking records the line and the container's count in
+// one transaction, warns (never blocks) on a balance, tells each person once,
+// and only a manager may undo - silently.
+describe("delivered at destination", () => {
+  const DELIVERIES_ONLY = "container-test-deliveries-only";
+  before(async () => {
+    await db.collection("users").doc(DELIVERIES_ONLY).set({
+      role: "staff", businessId: BIZ, businessPermissions: ["deliveries"],
+      fullName: "Ousmane Porter", email: "porter@example.test",
+    });
+  });
+  const markDelivered = (lineId, extra = {}, uid = OWNER) =>
+    call("updateContainerLine", {lineId, action: "deliver", ...extra}, uid);
+  const undoDelivery = (lineId, uid = OWNER) =>
+    call("updateContainerLine", {lineId, action: "undo_delivery"}, uid);
+  const lineOf = async (lineId) =>
+    (await db.collection("containerLines").doc(lineId).get()).data();
+  const boxOf = async (box) =>
+    (await db.collection("containers").doc(box).get()).data();
+  const row = (lineId, role) =>
+    db.collection("containerUpdates").doc(`${lineId}_${role}_delivered`);
+  async function audits(box, action) {
+    const snap = await db.collection("lotLedgerAudit")
+        .where("entityId", "==", box).where("action", "==", action).get();
+    return snap.docs.map((d) => d.get("summary"));
+  }
+  async function arrivedBox(lines = [barrelLine(3)]) {
+    const box = await newContainer();
+    const ids = [];
+    for (const line of lines) {
+      const {lineId} = await call("addContainerLine",
+          {containerId: box, line});
+      ids.push(lineId);
+    }
+    await call("setContainerStatus", {containerId: box, status: "shipped"});
+    await call("setContainerStatus", {containerId: box, status: "arrived"});
+    return {box, lineIds: ids};
+  }
+
+  it("refuses a package that is not at the destination yet", async () => {
+    const box = await newContainer();
+    const {lineId} = await call("addContainerLine",
+        {containerId: box, line: barrelLine(1)});
+    await assert.rejects(markDelivered(lineId),
+        (error) => error.details?.reason === "delivery_not_arrived");
+    await call("setContainerStatus", {containerId: box, status: "shipped"});
+    await assert.rejects(markDelivered(lineId),
+        (error) => error.details?.reason === "delivery_not_arrived");
+    const waiting = await call("addWaitingPackage", {...barrelLine(1),
+      destinationCountryId: "gn", destinationCountryName: "Guinea"});
+    await assert.rejects(markDelivered(waiting.lineId),
+        (error) => error.details?.reason === "delivery_not_arrived");
+    await assert.rejects(
+        call("updateContainerLine", {lineId, action: "teleport"}),
+        (error) => error.details?.reason === "delivery_action_invalid");
+    assert.equal((await lineOf(lineId)).deliveredAt, undefined);
+  });
+
+  it("records when, by whom and who collected it, and counts X of Y",
+      async () => {
+        const {box, lineIds: [first, second]} =
+          await arrivedBox([barrelLine(3), barrelLine(2)]);
+        assert.equal((await boxOf(box)).deliveredCount, 0);
+        const result = await markDelivered(first);
+        assert.equal(result.delivered, true);
+        assert.equal(result.alreadyDelivered, false);
+        assert.equal(result.collectedBy, "Mariama Bah");
+        assert.equal(result.hasBalance, false);
+        const line = await lineOf(first);
+        assert.ok(line.deliveredAt && line.deliveredAt.toMillis() > 0);
+        assert.equal(line.deliveredByStaffId, OWNER);
+        assert.equal(line.deliveredByName, "Dala Owner");
+        // Prefilled with the receiver; someone else may collect.
+        assert.equal(line.collectedBy, "Mariama Bah");
+        assert.equal(line.deliveredBalanceCents, 0);
+        // The container's own status does not move: no auto-close.
+        const counted = await boxOf(box);
+        assert.equal(counted.status, "arrived");
+        assert.equal(counted.deliveredCount, 1);
+        assert.equal(counted.lineCount, 2);
+        await markDelivered(second, {collectedBy: "  Ibrahima\nSow "});
+        assert.equal((await lineOf(second)).collectedBy, "Ibrahima Sow");
+        assert.equal((await boxOf(box)).deliveredCount, 2);
+        assert.deepEqual((await audits(box, "line_delivered")).sort(), [
+          "Delivered 2 barrels for Fatou Diallo, collected by Ibrahima Sow",
+          "Delivered 3 barrels for Fatou Diallo, collected by Mariama Bah",
+        ]);
+        await assert.rejects(markDelivered(first,
+            {collectedBy: "x".repeat(121)}),
+        (error) => error.details?.reason === "collected_by_too_long");
+      });
+
+  it("warns about an unpaid balance, then delivers once confirmed",
+      async () => {
+        const {box, lineIds: [lineId]} = await arrivedBox();
+        await call("setContainerLinePrice", {lineId, priceCents: 10000,
+          payOnArrival: false});
+        await pay({lineId, amountCents: 6000, method: "cash"});
+        // A manager is told how much.
+        await assert.rejects(markDelivered(lineId), (error) =>
+          error.code === "failed-precondition" &&
+          error.details?.reason === "delivery_balance_due" &&
+          error.details?.hasBalance === true &&
+          error.details?.balanceCents === 4000);
+        // A deliveries-only person is told there is a balance, not how much.
+        await assert.rejects(markDelivered(lineId, {}, DELIVERIES_ONLY),
+            (error) => error.details?.reason === "delivery_balance_due" &&
+            error.details?.hasBalance === true &&
+            error.details?.balanceCents === null);
+        assert.equal((await lineOf(lineId)).deliveredAt, undefined);
+        const done = await markDelivered(lineId, {acknowledgeBalance: true},
+            DELIVERIES_ONLY);
+        assert.equal(done.alreadyDelivered, false);
+        assert.equal(done.hasBalance, true);
+        assert.equal(done.balanceCents, null);
+        const line = await lineOf(lineId);
+        assert.equal(line.deliveredBalanceCents, 4000);
+        assert.equal(line.deliveredByStaffId, DELIVERIES_ONLY);
+        assert.equal(line.deliveredByName, "Ousmane Porter");
+        assert.deepEqual(await audits(box, "line_delivered"), [
+          "Delivered 3 barrels for Fatou Diallo, collected by Mariama Bah, " +
+            "with $40.00 still owed",
+        ]);
+      });
+
+  it("lets containers or deliveries staff mark, nobody else", async () => {
+    const {lineIds: [a, b]} =
+      await arrivedBox([barrelLine(1), barrelLine(1)]);
+    await assert.rejects(markDelivered(a, {}, NO_CONTAINERS),
+        (error) => error.code === "permission-denied");
+    await assert.rejects(markDelivered(a, {}, OTHER_BIZ_STAFF),
+        (error) => error.code === "permission-denied");
+    // Deliveries is not the containers section: no ordinary line edits.
+    await assert.rejects(call("updateContainerLine", {lineId: a,
+      line: barrelLine(2)}, DELIVERIES_ONLY),
+    (error) => error.code === "permission-denied");
+    assert.equal((await markDelivered(a, {}, DELIVERIES_ONLY)).delivered,
+        true);
+    assert.equal((await markDelivered(b, {}, RECEIVER)).delivered, true);
+  });
+
+  it("lets only the owner or a manager undo, silently", async () => {
+    connectWhatsApp();
+    const {box, lineIds: [lineId]} = await arrivedBox();
+    await markDelivered(lineId, {}, DELIVERIES_ONLY);
+    const rowsBefore = (await db.collection("containerUpdates")
+        .where("lineId", "==", lineId).get()).size;
+    for (const uid of [DELIVERIES_ONLY, NO_CONTAINERS, OTHER_BIZ_STAFF]) {
+      await assert.rejects(undoDelivery(lineId, uid),
+          (error) => error.code === "permission-denied", uid);
+    }
+    assert.ok((await lineOf(lineId)).deliveredAt);
+    const undone = await undoDelivery(lineId);
+    assert.equal(undone.undone, true);
+    const line = await lineOf(lineId);
+    for (const field of ["deliveredAt", "deliveredByStaffId",
+      "deliveredByName", "collectedBy", "deliveredBalanceCents"]) {
+      assert.equal(line[field], undefined, field);
+    }
+    assert.equal(line.deliveryUndoneByStaffId, OWNER);
+    assert.ok(line.deliveryUndoneAt);
+    assert.equal((await boxOf(box)).deliveredCount, 0);
+    // No message about an undo.
+    assert.equal((await db.collection("containerUpdates")
+        .where("lineId", "==", lineId).get()).size, rowsBefore);
+    assert.deepEqual(await audits(box, "line_delivery_undone"),
+        ["Undid the delivery of 3 barrels for Fatou Diallo"]);
+    // Undoing again changes nothing; a manager on staff may undo too.
+    assert.equal((await undoDelivery(lineId)).undone, false);
+    assert.equal((await boxOf(box)).deliveredCount, 0);
+    await markDelivered(lineId);
+    assert.equal((await undoDelivery(lineId, RECEIVER)).undone, true);
+  });
+
+  it("tells the sender and the receiver once each, however often it is " +
+      "marked", async () => {
+    connectWhatsApp();
+    const {box, lineIds: [lineId]} = await arrivedBox();
+    await markDelivered(lineId, {collectedBy: "Ibrahima Sow"});
+    for (const role of ["sender", "receiver"]) {
+      const queued = await row(lineId, role).get();
+      assert.equal(queued.get("status"), "queued", role);
+      assert.equal(queued.get("update"), "delivered");
+    }
+    // A second tap is idempotent: nothing changes, nothing is queued.
+    const again = await markDelivered(lineId);
+    assert.equal(again.alreadyDelivered, true);
+    assert.equal(again.collectedBy, "Ibrahima Sow");
+    assert.equal((await boxOf(box)).deliveredCount, 1);
+    assert.equal((await audits(box, "line_delivered")).length, 1);
+    fakeWhatsApp(OK);
+    for (const role of ["sender", "receiver"]) {
+      await deliver(row(lineId, role).id);
+    }
+    assert.equal(whatsappCalls.length, 2);
+    for (const sent of whatsappCalls) {
+      assert.equal(sent.template.name, "shipment_delivered_2lang");
+      assert.equal(sent.template.language.code, "en");
+    }
+    const receiverCall = whatsappCalls.find((c) => c.to === "224620000000");
+    const texts = receiverCall.template.components[0].parameters
+        .map((p) => p.text);
+    assert.equal(texts.length, 10);
+    assert.deepEqual([texts[0], texts[1], texts[2], texts[4], texts[5],
+      texts[6], texts[8]], ["Mariama Bah", "Dala Shipping", "3 barrels",
+      "Ibrahima Sow", "Dala Shipping", "3 barils", "Ibrahima Sow"]);
+    assert.match(texts[3], /^[A-Z][a-z]+ \d{1,2}, \d{4}$/);
+    assert.match(texts[7], /^\d{1,2} [a-zéû]+ \d{4}$/);
+    assert.ok(texts[9].startsWith("CL-"));
+    assert.ok(whatsappCalls.some((c) => c.to === "16465550100"));
+    const line = await lineOf(lineId);
+    assert.equal(line.lastCustomerUpdate.update, "delivered");
+    assert.deepEqual(line.lastCustomerUpdate.results
+        .map((entry) => entry.status), ["sent", "sent"]);
+    // Undo, then deliver again: the rows exist, so nobody hears twice.
+    await undoDelivery(lineId);
+    await markDelivered(lineId);
+    for (const role of ["sender", "receiver"]) {
+      assert.equal((await row(lineId, role).get()).get("status"), "sent");
+    }
+    assert.equal((await db.collection("containerUpdates")
+        .where("lineId", "==", lineId).where("update", "==", "delivered")
+        .get()).size, 2);
+  });
+
+  it("tells one person once when they are both sender and receiver",
+      async () => {
+        connectWhatsApp();
+        const {lineIds: [same, shared]} = await arrivedBox([
+          {...barrelLine(1), senderIsReceiver: true},
+          {...barrelLine(1), customerPhone: "+224 620 00 00 00"},
+        ]);
+        await markDelivered(same);
+        await markDelivered(shared);
+        for (const lineId of [same, shared]) {
+          const rows = await db.collection("containerUpdates")
+              .where("lineId", "==", lineId)
+              .where("update", "==", "delivered").get();
+          assert.equal(rows.size, 1, lineId);
+        }
+      });
+
+  it("records who would hear while WhatsApp is not connected", async () => {
+    const {lineIds: [lineId]} = await arrivedBox();
+    await markDelivered(lineId);
+    for (const role of ["sender", "receiver"]) {
+      assert.equal((await row(lineId, role).get()).get("status"),
+          "waiting_for_whatsapp");
+    }
+  });
+
+  it("waits for Meta to approve the template, without using an attempt",
+      async () => {
+        connectWhatsApp();
+        const {lineIds: [lineId]} = await arrivedBox();
+        await markDelivered(lineId);
+        fakeWhatsApp({status: 404, body: {error: {code: 132001,
+          message: "(#132001) Template name does not exist in the " +
+            "translation"}}});
+        await deliver(row(lineId, "receiver").id);
+        const waiting = await row(lineId, "receiver").get();
+        assert.equal(waiting.get("status"), "waiting_for_template");
+        assert.equal(waiting.get("attempts"), 0);
+        assert.equal(whatsappCalls[0].template.name,
+            "shipment_delivered_2lang");
+        // The half-hourly sweep queues it again; approved, it sends.
+        await functions.requeueTemplateWaitingUpdates.run({});
+        assert.equal((await row(lineId, "receiver").get()).get("status"),
+            "queued");
+        fakeWhatsApp(OK);
+        await deliver(row(lineId, "receiver").id);
+        assert.equal((await row(lineId, "receiver").get()).get("status"),
+            "sent");
+      });
+
+  it("says nothing when the delivery was undone before the send",
+      async () => {
+        connectWhatsApp();
+        const {lineIds: [lineId]} = await arrivedBox();
+        await markDelivered(lineId);
+        await undoDelivery(lineId);
+        fakeWhatsApp(OK);
+        await deliver(row(lineId, "receiver").id);
+        assert.equal(whatsappCalls.length, 0);
+        const failed = await row(lineId, "receiver").get();
+        assert.equal(failed.get("status"), "failed");
+        assert.match(failed.get("error"), /undone/);
+      });
+
+  it("delivers once when two phones mark it at the same moment",
+      async () => {
+        const {box, lineIds: [lineId]} = await arrivedBox();
+        const results = await Promise.allSettled([
+          markDelivered(lineId), markDelivered(lineId, {}, DELIVERIES_ONLY),
+          markDelivered(lineId, {}, RECEIVER)]);
+        const fresh = results.filter((r) => r.status === "fulfilled" &&
+          r.value.alreadyDelivered === false);
+        assert.equal(fresh.length, 1, JSON.stringify(results.map((r) =>
+          r.reason?.message || r.value)));
+        assert.equal((await boxOf(box)).deliveredCount, 1);
+        assert.equal((await audits(box, "line_delivered")).length, 1);
+      });
+
+  it("repairs X of Y in a recount", async () => {
+    const {box, lineIds: [a]} =
+      await arrivedBox([barrelLine(1), barrelLine(1)]);
+    await markDelivered(a);
+    await db.collection("containers").doc(box).update({deliveredCount: 7});
+    // Asking for the status the box already has recounts its tallies.
+    await call("setContainerStatus", {containerId: box, status: "arrived"});
+    const counted = await boxOf(box);
+    assert.equal(counted.deliveredCount, 1);
+    assert.equal(counted.lineCount, 2);
+  });
+});

@@ -50,6 +50,9 @@ const CONTAINER_UPDATE = Object.freeze({
   // messageUpdateFor), so a person hears "arrived" once.
   AT_PORT: "at_port",
   ARRIVED: "arrived",
+  // Destination staff handed the package over (container_delivery.js). Per
+  // line, like `received`: never a moment on a container's timeline.
+  DELIVERED: "delivered",
 });
 const CONTAINER_UPDATES = Object.freeze(Object.values(CONTAINER_UPDATE));
 
@@ -382,6 +385,28 @@ function pickupDestinationIds(line, container) {
 }
 
 /**
+ * The day a package was delivered, as the delivered message says it:
+ * "October 21, 2026" / "21 octobre 2026". Read in UTC - the destinations
+ * (West Africa) sit on or next to it, and a business's own time zone is its
+ * origin's, not the destination's.
+ *
+ * @param {*} value The line's deliveredAt (a Timestamp, a Date or ms).
+ * @param {"en"|"fr"} language The language.
+ * @return {string} The day, or "" when there is none.
+ */
+function deliveryDayText(value, language) {
+  const ms = toMillis(value);
+  if (!ms) return "";
+  try {
+    return new Intl.DateTimeFormat(language === "fr" ? "fr-FR" : "en-US",
+        {year: "numeric", month: "long", day: "numeric", timeZone: "UTC"})
+        .format(new Date(ms));
+  } catch (_) {
+    return "";
+  }
+}
+
+/**
  * The WhatsApp Cloud API request body for one person and one update. The
  * template and the order of its variables live in whatsapp_templates.js;
  * this gathers the values from the records - each in the reader's language
@@ -428,6 +453,11 @@ function whatsappUpdateMessage(args) {
       pickupPlaceFr: pickupPlace(pickup.city, destinationFr),
       pickupAddress: pickup.address,
       pickupPhone: pickup.phone,
+      deliveredOnEn: deliveryDayText(args.line?.deliveredAt, "en"),
+      deliveredOnFr: deliveryDayText(args.line?.deliveredAt, "fr"),
+      // Who collected it (the receiver unless staff named someone else).
+      collectedByEn: text(args.line?.collectedBy, 120),
+      collectedByFr: text(args.line?.collectedBy, 120),
     },
   });
 }
@@ -503,6 +533,7 @@ const UPDATE_RANK = Object.freeze({
   [CONTAINER_UPDATE.SHIPPED]: 2,
   [CONTAINER_UPDATE.AT_PORT]: 3,
   [CONTAINER_UPDATE.ARRIVED]: 4,
+  [CONTAINER_UPDATE.DELIVERED]: 5,
 });
 
 /**
@@ -747,4 +778,5 @@ module.exports = {
   pickupDestinationIds,
   whatsappUpdateMessage,
   whatsappConfigured,
+  deliveryDayText,
 };

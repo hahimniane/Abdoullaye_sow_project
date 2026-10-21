@@ -36,6 +36,10 @@ const VALUES = Object.freeze({
   pickupPlaceFr: "Conakry, Guinée",
   pickupAddress: "Madina, near the market",
   pickupPhone: "+224620000000",
+  deliveredOnEn: "October 21, 2026",
+  deliveredOnFr: "21 octobre 2026",
+  collectedByEn: "Mamadou Bah",
+  collectedByFr: "Mamadou Bah",
 });
 
 const bodyOf = (template, values = VALUES, language = "en") =>
@@ -48,8 +52,8 @@ const ALL_TEMPLATES = [...BILINGUAL_TEMPLATES, ...LEGACY_TEMPLATES];
 describe("which template each update sends", () => {
   it("names the bilingual and the legacy templates exactly", () => {
     assert.deepEqual([...BILINGUAL_TEMPLATES].sort(), [
-      "shipment_departed_2lang", "shipment_ready_pickup_2lang",
-      "shipment_received_2lang"]);
+      "shipment_delivered_2lang", "shipment_departed_2lang",
+      "shipment_ready_pickup_2lang", "shipment_received_2lang"]);
     assert.deepEqual([...LEGACY_TEMPLATES].sort(), [
       "container_arrived", "container_departed", "package_received"]);
     assert.deepEqual(Object.values(TEMPLATE).sort(),
@@ -81,7 +85,22 @@ describe("which template each update sends", () => {
       received: "shipment_received_2lang",
       shipped: "shipment_departed_2lang",
       arrived: "shipment_ready_pickup_2lang",
+      delivered: "shipment_delivered_2lang",
     });
+  });
+
+  // Delivered has no legacy version: the bilingual message goes in both
+  // sets, registered under "en" like the others.
+  it("sends the delivered message in both sets", () => {
+    for (const set of ["bilingual", "legacy"]) {
+      assert.equal(templateForUpdate("delivered", set),
+          "shipment_delivered_2lang");
+      const body = templateMessage({update: "delivered",
+        phone: "+224620000000", language: "fr", values: VALUES,
+        templateSet: set});
+      assert.equal(body.template.name, "shipment_delivered_2lang");
+      assert.deepEqual(body.template.language, {code: "en"});
+    }
   });
 
   // A box at the port is not ready for pickup: an old at_port row has no
@@ -173,8 +192,19 @@ describe("the bilingual variables, in the order Meta numbered them", () => {
     ]);
   });
 
+  it("fills shipment_delivered_2lang: name, business/what/day/collector " +
+      "in English and French, then the code", () => {
+    assert.equal(TEMPLATE_VARIABLES.shipment_delivered_2lang.length, 10);
+    assert.deepEqual(bodyOf("shipment_delivered_2lang"), [
+      "Mariama Bah",
+      "Dala Shipping", "3 barrels", "October 21, 2026", "Mamadou Bah",
+      "Dala Shipping", "3 barils", "21 octobre 2026", "Mamadou Bah",
+      "CL-K7M4P2",
+    ]);
+  });
+
   it("fills both languages whoever reads it, in one 'en' message", () => {
-    for (const update of ["received", "shipped", "arrived"]) {
+    for (const update of ["received", "shipped", "arrived", "delivered"]) {
       const forFr = templateMessage({update, phone: "+224620000000",
         language: "fr", values: VALUES, templateSet: "bilingual"});
       const forEn = templateMessage({update, phone: "+16465550100",
@@ -271,6 +301,13 @@ describe("what fills a blank", () => {
     assert.deepEqual(bodyOf("shipment_received_2lang", {}), [
       "Client", "Laawol", "goods", "its destination country",
       "Laawol", "marchandises", "son pays de destination", "-",
+    ]);
+    // "... on the day it was collected. It was collected by the receiver."
+    assert.deepEqual(bodyOf("shipment_delivered_2lang", {}), [
+      "Client", "Laawol", "goods", "the day it was collected",
+      "the receiver",
+      "Laawol", "marchandises", "le jour de son retrait", "le destinataire",
+      "-",
     ]);
   });
 

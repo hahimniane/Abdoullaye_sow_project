@@ -19,6 +19,10 @@
  *   shipment_departed_2lang      - the container has sailed.
  *   shipment_ready_pickup_2lang  - staff marked it ready for pickup; carries
  *                                  the pickup place, address and phone.
+ *   shipment_delivered_2lang     - destination staff handed it over (who
+ *                                  collected it, and the day). It has no
+ *                                  legacy version: the legacy set sends it
+ *                                  too.
  *
  * "legacy" - one template per update, in the reader's language (en or fr),
  * kept as the fallback in case Meta rejects the bilingual set:
@@ -36,6 +40,7 @@ const TEMPLATE = Object.freeze({
   SHIPMENT_RECEIVED_2LANG: "shipment_received_2lang",
   SHIPMENT_DEPARTED_2LANG: "shipment_departed_2lang",
   SHIPMENT_READY_PICKUP_2LANG: "shipment_ready_pickup_2lang",
+  SHIPMENT_DELIVERED_2LANG: "shipment_delivered_2lang",
   // Legacy, one language per message.
   PACKAGE_RECEIVED: "package_received",
   CONTAINER_DEPARTED: "container_departed",
@@ -51,6 +56,7 @@ const BILINGUAL_TEMPLATES = Object.freeze([
   TEMPLATE.SHIPMENT_RECEIVED_2LANG,
   TEMPLATE.SHIPMENT_DEPARTED_2LANG,
   TEMPLATE.SHIPMENT_READY_PICKUP_2LANG,
+  TEMPLATE.SHIPMENT_DELIVERED_2LANG,
 ]);
 const LEGACY_TEMPLATES = Object.freeze([
   TEMPLATE.PACKAGE_RECEIVED,
@@ -75,6 +81,12 @@ const VARIABLE = Object.freeze({
   PICKUP_PLACE_FR: "pickupPlaceFr",
   PICKUP_ADDRESS: "pickupAddress",
   PICKUP_PHONE: "pickupPhone",
+  // Delivered at destination: the day ("October 21, 2026" / "21 octobre
+  // 2026") and who collected it.
+  DELIVERED_ON_EN: "deliveredOnEn",
+  DELIVERED_ON_FR: "deliveredOnFr",
+  COLLECTED_BY_EN: "collectedByEn",
+  COLLECTED_BY_FR: "collectedByFr",
   // Package requests (docs/PACKAGE_REQUESTS.md §7 "WhatsApp templates").
   TOTAL_EN: "totalEn",
   TOTAL_FR: "totalFr",
@@ -95,6 +107,10 @@ const VARIABLE_LANGUAGE = Object.freeze({
   [VARIABLE.DESTINATION_FR]: "fr",
   [VARIABLE.PICKUP_PLACE_EN]: "en",
   [VARIABLE.PICKUP_PLACE_FR]: "fr",
+  [VARIABLE.DELIVERED_ON_EN]: "en",
+  [VARIABLE.DELIVERED_ON_FR]: "fr",
+  [VARIABLE.COLLECTED_BY_EN]: "en",
+  [VARIABLE.COLLECTED_BY_FR]: "fr",
   [VARIABLE.TOTAL_EN]: "en",
   [VARIABLE.TOTAL_FR]: "fr",
   [VARIABLE.PIECES_EN]: "en",
@@ -123,6 +139,14 @@ const TEMPLATE_VARIABLES = Object.freeze({
     VARIABLE.WHAT_FR, VARIABLE.BUSINESS, VARIABLE.PICKUP_PLACE_FR,
     VARIABLE.PICKUP_ADDRESS, VARIABLE.PICKUP_PHONE, VARIABLE.TRACKING_CODE,
   ]),
+  [TEMPLATE.SHIPMENT_DELIVERED_2LANG]: Object.freeze([
+    VARIABLE.NAME,
+    VARIABLE.BUSINESS, VARIABLE.WHAT_EN, VARIABLE.DELIVERED_ON_EN,
+    VARIABLE.COLLECTED_BY_EN,
+    VARIABLE.BUSINESS, VARIABLE.WHAT_FR, VARIABLE.DELIVERED_ON_FR,
+    VARIABLE.COLLECTED_BY_FR,
+    VARIABLE.TRACKING_CODE,
+  ]),
   [TEMPLATE.PACKAGE_RECEIVED]: Object.freeze([
     VARIABLE.NAME, VARIABLE.BUSINESS, VARIABLE.WHAT, VARIABLE.DESTINATION,
     VARIABLE.TRACKING_CODE,
@@ -146,6 +170,7 @@ const TEMPLATE_BY_UPDATE = Object.freeze({
   received: TEMPLATE.SHIPMENT_RECEIVED_2LANG,
   shipped: TEMPLATE.SHIPMENT_DEPARTED_2LANG,
   arrived: TEMPLATE.SHIPMENT_READY_PICKUP_2LANG,
+  delivered: TEMPLATE.SHIPMENT_DELIVERED_2LANG,
 });
 
 // The fallback set. `at_port` is a legacy row written before the two
@@ -155,6 +180,9 @@ const LEGACY_TEMPLATE_BY_UPDATE = Object.freeze({
   shipped: TEMPLATE.CONTAINER_DEPARTED,
   at_port: TEMPLATE.CONTAINER_ARRIVED,
   arrived: TEMPLATE.CONTAINER_ARRIVED,
+  // No legacy version exists: the delivered message is always the bilingual
+  // one, whichever set is switched on.
+  delivered: TEMPLATE.SHIPMENT_DELIVERED_2LANG,
 });
 
 // Legacy templates exist in each reader's language; the bilingual ones are
@@ -189,6 +217,13 @@ const FALLBACK = Object.freeze({
   // "Pickup address / Adresse : —"
   [VARIABLE.PICKUP_ADDRESS]: {en: "—", fr: "—", both: "—"},
   [VARIABLE.PICKUP_PHONE]: {en: "—", fr: "—", both: "—"},
+  // "delivered your shipment of 3 barrels on the day it was collected" -
+  // never reached in practice: a delivered line always has its day.
+  [VARIABLE.DELIVERED_ON_EN]: {en: "the day it was collected"},
+  [VARIABLE.DELIVERED_ON_FR]: {fr: "le jour de son retrait"},
+  // "It was collected by the receiver." - a line that names nobody.
+  [VARIABLE.COLLECTED_BY_EN]: {en: "the receiver"},
+  [VARIABLE.COLLECTED_BY_FR]: {fr: "le destinataire"},
   // "you can reach them on the number on your receipt" / "vous pouvez la
   // joindre au numéro indiqué sur votre reçu" - the French body reads
   // "joindre au {{5}}", so the fallback starts after "au".
@@ -222,6 +257,10 @@ const MAX_PARAMETER = {
   [VARIABLE.PICKUP_PLACE_FR]: 120,
   [VARIABLE.PICKUP_ADDRESS]: 200,
   [VARIABLE.PICKUP_PHONE]: 40,
+  [VARIABLE.DELIVERED_ON_EN]: 40,
+  [VARIABLE.DELIVERED_ON_FR]: 40,
+  [VARIABLE.COLLECTED_BY_EN]: 120,
+  [VARIABLE.COLLECTED_BY_FR]: 120,
   [VARIABLE.BUSINESS_PHONE]: 40,
   [VARIABLE.TRACKING_CODE]: 40,
   [VARIABLE.TOTAL_EN]: 40,
@@ -266,7 +305,7 @@ function isBilingualTemplate(template) {
 
 /**
  * @param {string} update A row's update (received, shipped, at_port,
- *   arrived).
+ *   arrived, delivered).
  * @param {string} [templateSet] "bilingual" or "legacy"; the switch when
  *   omitted.
  * @return {string|null} The template's name, or null for an update that has
