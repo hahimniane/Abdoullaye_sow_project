@@ -111,6 +111,36 @@ function isInternationalPhone(value) {
   return INTERNATIONAL_PHONE.test(phone(value));
 }
 
+// A US business's customers mostly hand in local numbers ("9171234567").
+// WhatsApp needs the country code, so for a business in the United States a
+// valid 10-digit North American number (or 11 digits starting with 1) is
+// read as +1. Nothing else is guessed: another country's local number is
+// left as typed and still skipped as "needs_country_code" (owner, 2026-10-21:
+// a sender typed without +1 got no message).
+const US_COUNTRY = /^(us|usa|united states|united states of america)$/i;
+const NANP_LOCAL = /^[2-9]\d{2}[2-9]\d{6}$/;
+
+/**
+ * The phone WhatsApp is sent to: as stored, or +1-prefixed for a US
+ * business's 10-digit North American number.
+ *
+ * @param {*} value A stored or typed phone.
+ * @param {*} businessCountry The business's `country` ("United States", "US").
+ * @return {string} The phone to message.
+ */
+function phoneWithBusinessCountry(value, businessCountry) {
+  const stored = phone(value);
+  if (!stored || INTERNATIONAL_PHONE.test(stored)) return stored;
+  if (!US_COUNTRY.test(String(businessCountry ?? "").trim())) return stored;
+  const digits = stored.replace(/\D/g, "");
+  if (NANP_LOCAL.test(digits)) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith("1") &&
+      NANP_LOCAL.test(digits.slice(1))) {
+    return `+${digits}`;
+  }
+  return stored;
+}
+
 /**
  * Empty is fine (nobody to reach); anything else must look like a phone.
  * Local numbers are still accepted - older app versions send them - but only
@@ -1287,6 +1317,7 @@ const CONTAINER_MESSAGES = Object.freeze({
 });
 
 module.exports = {
+  phoneWithBusinessCountry,
   LINE_STATUS_WAITING,
   WAITING_HOLDER,
   MAX_LINE_IDS,

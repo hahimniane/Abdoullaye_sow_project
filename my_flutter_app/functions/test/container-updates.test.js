@@ -158,6 +158,31 @@ describe("who is told", () => {
     ]);
   });
 
+  it("messages a US business's 10-digit local number as +1", () => {
+    // The real case (Keren, 2026-10-19): the sender was typed without +1.
+    const us = {businessCountry: "United States"};
+    const {send, skipped} = recipientsForLine(line({
+      customerPhone: "(929) 555-1987"}), us);
+    assert.deepEqual(skipped, []);
+    assert.equal(send.find((who) => who.role === "sender").phone,
+        "+19295551987");
+    assert.equal(recipientsForLine(line({customerPhone: "19295551987"}), us)
+        .send.find((who) => who.role === "sender").phone, "+19295551987");
+    // Not a valid North American number: never guessed.
+    assert.deepEqual(recipientsForLine(line({customerPhone: "1295551987"}),
+        us).skipped.map((who) => who.reason), ["needs_country_code"]);
+    // A Guinean local number stays skipped, even for a US business.
+    assert.deepEqual(recipientsForLine(line({customerPhone: "622112233"}),
+        us).skipped.map((who) => who.reason), ["needs_country_code"]);
+    // Outside the US nothing is guessed.
+    assert.deepEqual(recipientsForLine(line({customerPhone: "9295551987"}),
+        {businessCountry: "Guinea"}).skipped.map((who) => who.reason),
+    ["needs_country_code"]);
+    // Same person once, typed both ways.
+    assert.equal(recipientsForLine(line({customerPhone: "6465550100",
+      receiverPhone: "+1 646 555 0100"}), us).send.length, 1);
+  });
+
   it("does not report a receiver nobody named", () => {
     const {skipped} = recipientsForLine(line({
       receiverName: "", receiverPhone: "",

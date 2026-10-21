@@ -19148,7 +19148,14 @@ async function queueContainerLineUpdate(db, args) {
     if (!lineDoc.exists) return tally;
     const line = lineDoc.data() || {};
     const trackingCode = String(line.trackingCode || "");
-    const {send, skipped} = recipientsForLine(line);
+    // A US business's 10-digit local numbers are messaged as +1.
+    const businessDoc = businessId ?
+      await tx.get(db.collection("businesses").doc(String(businessId))) :
+      null;
+    const {send, skipped} = recipientsForLine(line, {
+      businessCountry: businessDoc?.exists ?
+        String(businessDoc.data()?.country || "") : "",
+    });
     const rowRefs = send.map((who) => db.collection("containerUpdates")
         .doc(containerUpdateMessageId(lineRef.id, who.role, update)));
     const rows = rowRefs.length > 0 ? await tx.getAll(...rowRefs) : [];

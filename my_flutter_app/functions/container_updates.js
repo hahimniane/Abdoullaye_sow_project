@@ -26,7 +26,10 @@
  * docs/WHATSAPP_CONTAINER_UPDATES.md and must match.
  */
 
-const {isInternationalPhone} = require("./container_manifest");
+const {
+  isInternationalPhone,
+  phoneWithBusinessCountry,
+} = require("./container_manifest");
 const {ALL_COUNTRIES} = require("./country_catalog");
 const {
   TEMPLATE_SET,
@@ -191,24 +194,28 @@ function describeLine(line, language, group = null) {
  * Who should hear about a line, and why anyone else will not.
  *
  * @param {object} line A containerLines row.
+ * @param {{businessCountry: (string|undefined)}} [opts] The business's
+ *   country: a US business's 10-digit local numbers are messaged as +1.
  * @return {{send: object[], skipped: object[]}} The people to message,
  *   each {role, name, phone}, and the people passed over with a reason.
  */
-function recipientsForLine(line) {
+function recipientsForLine(line, {businessCountry = ""} = {}) {
   const row = line && typeof line === "object" ? line : {};
+  const reach = (value) =>
+    phoneWithBusinessCountry(text(value, 40), businessCountry);
   const people = [];
   if (text(row.ownerKind, 20) === "customer") {
     people.push({
       role: "sender",
       name: text(row.customerName, 120),
-      phone: text(row.customerPhone, 40),
+      phone: reach(row.customerPhone),
       on: row.notifyCustomer !== false,
     });
   }
   people.push({
     role: "receiver",
     name: text(row.receiverName, 120),
-    phone: text(row.receiverPhone, 40),
+    phone: reach(row.receiverPhone),
     on: row.notifyReceiver !== false,
   });
   const send = [];
