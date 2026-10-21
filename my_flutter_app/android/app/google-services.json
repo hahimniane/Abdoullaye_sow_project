@@ -12,7 +12,28 @@
           "package_name": "com.laawoldigital.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "127318353394-g1l25ttbso8v298r57ialjvn7vp4jfat.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.laawoldigital.app",
+            "certificate_hash": "ae8388ebf3d11c2f9057da883424223cc768fe06"
+          }
+        },
+        {
+          "client_id": "127318353394-lbjvm41894vrid2p28trosf9n0q7jfgf.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.laawoldigital.app",
+            "certificate_hash": "f471eaf14d04bf2042a11500f3fca1ee9500c223"
+          }
+        },
+        {
+          "client_id": "127318353394-hfp1jf3abq7j13it7ug201ccv7fpj1hu.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyCRCTpw_pH0XQ_dsbE7SGIIILNcb5cGEco"
@@ -20,7 +41,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "127318353394-hfp1jf3abq7j13it7ug201ccv7fpj1hu.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "127318353394-3t82qud6k4s4deunvj2oaaqocuqh08h6.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.laawoldigital.app"
+              }
+            }
+          ]
         }
       }
     }

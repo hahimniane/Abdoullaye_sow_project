@@ -34,6 +34,22 @@ abstract final class FirebaseEnvironmentOptions {
     platform: defaultTargetPlatform,
   );
 
+  /// Sign in with Google's client ids for [requestedEnvironment], or null
+  /// where the project has no Google OAuth clients (the old production
+  /// project and staging): the app then offers no Google button there.
+  static GoogleSignInClientIds? googleSignInClientIdsFor(
+    String requestedEnvironment,
+  ) {
+    if (requestedEnvironment.trim().toLowerCase() != 'new') return null;
+    return const GoogleSignInClientIds(
+      iosClientId: NewProjectFirebaseOptions.googleIosClientId,
+      serverClientId: NewProjectFirebaseOptions.googleServerClientId,
+    );
+  }
+
+  static GoogleSignInClientIds? get googleSignInClientIds =>
+      googleSignInClientIdsFor(environment);
+
   static FirebaseOptions forEnvironment(
     String requestedEnvironment, {
     required bool isWeb,
@@ -115,4 +131,15 @@ abstract final class FirebaseEnvironmentOptions {
         );
     }
   }
+}
+
+/// The OAuth clients Sign in with Google needs on the phone.
+class GoogleSignInClientIds {
+  const GoogleSignInClientIds({
+    required this.iosClientId,
+    required this.serverClientId,
+  });
+
+  final String iosClientId;
+  final String serverClientId;
 }

@@ -669,3 +669,14 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   under a pushed screen stays built, so find text by the pushed screen's
   key. Adding an Android verified link filter updates the count in
   `inventory_parity_test.dart` (now 5 with `/j/`).
+- A NEW exported Cloud Function can fail `test/scaling-contract.test.js`
+  (reserved CPU = sum of maxInstances, budget 1000, at the limit in
+  2026-10). Prefer a mode on an existing callable (Google sign-in rides
+  `createMissingUserProfile({self: true})`) over a new export. Firebase web
+  auth on localhost: `localhost` is NOT an authorized domain of
+  laawol-a855a, so Google popup/redirect fails there with
+  `auth/unauthorized-domain` (the console shows "Google sign-in is not
+  available here"), and a redirect refused before leaving the page delays
+  the next boot ~30 s while Auth waits on its iframe. A real Google sign-in
+  needs a human click on an authorized console domain; the Browser pane
+  blocks the popup.

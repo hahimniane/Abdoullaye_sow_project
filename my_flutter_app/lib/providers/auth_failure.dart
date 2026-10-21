@@ -25,6 +25,18 @@ enum AuthErrorCode {
   invalidPhone,
   invalidOwnerPhone,
   invalidBusinessPhone,
+
+  /// Google/Apple sign-in with an email that already has an account signed
+  /// into another way (password): sign in that way once and it is linked.
+  accountExistsWithOtherSignIn,
+
+  /// Google or Apple sign-in did not complete (their sheet failed, or the
+  /// account could not be set up). Closing the sheet is not a failure.
+  socialSignInFailed,
+
+  /// A new Google/Apple account that an access invitation is waiting for,
+  /// and the invitation could not be accepted on its own.
+  invitationWaiting,
   unknown,
 }
 

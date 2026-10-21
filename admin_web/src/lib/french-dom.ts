@@ -6631,6 +6631,23 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Not now": "Pas maintenant",
 });
 
+// Sign in with Google (google-sign-in-button.tsx, social-sign-in.ts): the
+// button on every console sign-in and its failures.
+Object.assign(TEXT_TRANSLATIONS, {
+  "Continue with Google": "Continuer avec Google",
+  "Opening Google...": "Ouverture de Google...",
+  "This email already has a Laawol account. Sign in with your email and password once, and Google will be linked to it.":
+    "Cet e-mail a déjà un compte Laawol. Connectez-vous une fois avec votre e-mail et votre mot de passe, et Google y sera associé.",
+  "This account is disabled. Contact Laawol support.":
+    "Ce compte est désactivé. Contactez l’assistance Laawol.",
+  "Google sign-in is not available here right now. Sign in with your email instead.":
+    "La connexion avec Google n’est pas disponible ici pour le moment. Connectez-vous plutôt avec votre e-mail.",
+  "We couldn’t sign you in with Google. Try again, or sign in another way.":
+    "Nous n’avons pas pu vous connecter avec Google. Réessayez ou connectez-vous autrement.",
+  "We couldn’t finish setting up your account. Try again.":
+    "Nous n’avons pas pu terminer la création de votre compte. Réessayez.",
+});
+
 export const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {
   // Laawol bills (billing-views.tsx).
   "Open this business's bill": "Ouvrir le montant dû de cette entreprise",

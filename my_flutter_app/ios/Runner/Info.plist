@@ -32,9 +32,18 @@
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>app-1-127318353394-ios-920363c21e47717bc5776b</string>
+				<!-- Sign in with Google: REVERSED_CLIENT_ID of the iOS OAuth
+				     client (GoogleService-Info.plist, project laawol-a855a). -->
+				<string>com.googleusercontent.apps.127318353394-3t82qud6k4s4deunvj2oaaqocuqh08h6</string>
 			</array>
 		</dict>
 	</array>
+	<!-- Sign in with Google (google_sign_in): the iOS OAuth client, and the
+	     web client whose audience Firebase Auth accepts for the ID token. -->
+	<key>GIDClientID</key>
+	<string>127318353394-3t82qud6k4s4deunvj2oaaqocuqh08h6.apps.googleusercontent.com</string>
+	<key>GIDServerClientID</key>
+	<string>127318353394-hfp1jf3abq7j13it7ug201ccv7fpj1hu.apps.googleusercontent.com</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSBluetoothAlwaysUsageDescription</key>

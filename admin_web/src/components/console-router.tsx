@@ -22,6 +22,12 @@ import { DisclosureCheckbox } from "@/components/disclosure-checkbox";
 import { CustomerPhoneField } from "@/components/customer-phone-field";
 import { PhoneSignIn } from "@/components/phone-sign-in";
 import { completePhoneSignInOnce } from "@/lib/phone-accounts-client";
+import { GoogleSignInButton } from "@/components/google-sign-in-button";
+import { SOCIAL_SIGN_IN_COPY, isSocialAccount } from "@/lib/social-sign-in";
+import {
+  completeSocialSignInOnce,
+  linkPendingSocialCredential,
+} from "@/lib/social-sign-in-client";
 import { consoleAccessLost, resolveConsoleKind, serviceEntryApplies } from "@/lib/console-routing";
 import { customerServiceFromLocation } from "@/lib/customer-service-intent";
 import { ItemTagPage } from "@/components/item-tag-page";
@@ -344,6 +350,23 @@ export function ConsoleRouter() {
         // showing a phone account the invitation setup.
         if (!snap.exists() && phoneOnlyAccount(user)) {
           await completePhoneSignInOnce(user.uid).catch(() => undefined);
+          if (!active || !isCurrent()) return;
+          snap = await loadProfile(user.uid);
+          if (!active || !isCurrent()) return;
+        }
+        // A first Google sign-in: the server makes a customer profile (never
+        // business or platform access), or leaves the account to a waiting
+        // invitation - which then shows the invitation setup below. An
+        // existing account (same email) already has its profile and never
+        // gets here.
+        if (!snap.exists() && isSocialAccount(user.providerData)) {
+          try {
+            await completeSocialSignInOnce(user.uid);
+          } catch {
+            if (!active || !isCurrent()) return;
+            setAuthError(SOCIAL_SIGN_IN_COPY.profileFailed);
+            return;
+          }
           if (!active || !isCurrent()) return;
           snap = await loadProfile(user.uid);
           if (!active || !isCurrent()) return;
@@ -822,10 +845,12 @@ function RoleSignInCard({
   // "Sign in with your phone" (customer host only): a WhatsApp or text code
   // instead of the email and password. Its own panel, not a nested form.
   const [phoneMode, setPhoneMode] = useState(false);
+  // Continue with Google is running: the other sign-in buttons wait.
+  const [googleBusy, setGoogleBusy] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (submitting) return;
+    if (submitting || googleBusy) return;
     setSubmitting(true);
     setError("");
     setNotice("");
@@ -859,7 +884,13 @@ function RoleSignInCard({
         }
         return;
       }
-      await signInWithEmailAndPassword(auth, email.trim(), password);
+      const signedIn = await signInWithEmailAndPassword(
+        auth,
+        email.trim(),
+        password,
+      );
+      // A Google sign-in that found this email's account: link it now.
+      await linkPendingSocialCredential(signedIn.user);
     } catch (authActionError) {
       setError(readableAuthError(authActionError));
     } finally {
@@ -984,7 +1015,11 @@ function RoleSignInCard({
           )}
           {(error || authError) && <div className="error-box">{error || authError}</div>}
           {notice && <div className="info-band">{notice}</div>}
-          <button className="primary-button" type="submit" disabled={submitting}>
+          <button
+            className="primary-button"
+            type="submit"
+            disabled={submitting || googleBusy}
+          >
             {submitting
               ? "Please wait..."
               : mode === "sign-up"
@@ -1006,14 +1041,25 @@ function RoleSignInCard({
               Forgot password?
             </button>
           )}
-          {mode === "sign-in" && customerSignUp && (
+          {mode !== "forgot" && (
             <>
               <div className="customer-auth-divider login-or">
                 <span>or</span>
               </div>
+              {/* Every host and role: an existing account (same email)
+                  opens as itself, a new one is a customer. */}
+              <GoogleSignInButton
+                disabled={submitting}
+                onBusyChange={setGoogleBusy}
+                onError={setError}
+              />
+            </>
+          )}
+          {mode === "sign-in" && customerSignUp && (
+            <>
               <button
                 className="secondary-button"
-                disabled={submitting}
+                disabled={submitting || googleBusy}
                 onClick={() => {
                   setPhoneMode(true);
                   setError("");

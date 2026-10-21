@@ -19,6 +19,10 @@ String authErrorText(AppLocalizations l10n, AuthErrorCode code) {
     AuthErrorCode.invalidPhone => l10n.invalidPhoneWithCountryCode,
     AuthErrorCode.invalidOwnerPhone => l10n.authErrorInvalidOwnerPhone,
     AuthErrorCode.invalidBusinessPhone => l10n.authErrorInvalidBusinessPhone,
+    AuthErrorCode.accountExistsWithOtherSignIn =>
+      l10n.authErrorAccountExistsOtherSignIn,
+    AuthErrorCode.socialSignInFailed => l10n.authErrorSocialSignInFailed,
+    AuthErrorCode.invitationWaiting => l10n.authErrorInvitationWaiting,
     AuthErrorCode.unknown => l10n.authErrorUnknown,
   };
 }

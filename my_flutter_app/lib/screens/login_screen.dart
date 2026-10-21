@@ -9,6 +9,7 @@ import '../utils/auth_error_text.dart';
 import '../utils/auth_navigation.dart';
 import '../utils/business_registration_navigation.dart';
 import '../widgets/app_snackbars.dart';
+import '../widgets/social_sign_in_buttons.dart';
 import 'phone_sign_in_screen.dart';
 
 @visibleForTesting
@@ -343,7 +344,7 @@ class _LoginScreenState extends State<LoginScreen>
                                           width: double.infinity,
                                           height: 56,
                                           child: ElevatedButton(
-                                            onPressed: authProvider.isLoading
+                                            onPressed: authProvider.isSigningIn
                                                 ? null
                                                 : _handleLogin,
                                             style: ElevatedButton.styleFrom(
@@ -408,6 +409,15 @@ class _LoginScreenState extends State<LoginScreen>
                                           ),
                                         ),
                                       ),
+                                    ),
+                                    const SizedBox(height: 16),
+
+                                    // Continue with Google (and Apple on
+                                    // iOS): any role - an existing account
+                                    // opens as itself, a new one is a
+                                    // customer.
+                                    SocialSignInSection(
+                                      onSignedIn: _afterSignedIn,
                                     ),
                                     const SizedBox(height: 8),
 

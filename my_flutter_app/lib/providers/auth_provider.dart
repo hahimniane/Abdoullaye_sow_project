@@ -17,6 +17,7 @@ import '../services/notification_routing.dart';
 import '../services/phone_account_service.dart';
 import '../services/phone_accounts.dart';
 import '../services/push_notification_service.dart';
+import '../services/social_sign_in.dart';
 import '../services/staff_invites.dart'
     show ProfileAuthority, profileAccessLost;
 import '../utils/phone_number_validator.dart';
@@ -766,6 +767,7 @@ class AuthProvider extends ChangeNotifier {
 
       _user = userCredential.user;
       _userEmail = userCredential.user?.email;
+      await _linkPendingSocialCredential(userCredential.user);
 
       // Check if user profile exists, if not create one
       if (_user != null) {
@@ -807,6 +809,8 @@ class AuthProvider extends ChangeNotifier {
       debugPrint('Error during logout: $e');
       await _auth.signOut();
     }
+    // The next "Continue with Google" asks which Google account again.
+    unawaited(PlatformSocialCredentialSource.instance.signOutGoogle());
     // A role lookup still running for this account must not land afterwards.
     _roleLookups.invalidate();
     _stopProfileWatch();
@@ -1184,6 +1188,139 @@ class AuthProvider extends ChangeNotifier {
     }
     unawaited(_registerPushNotificationsIfPossible());
     notifyListeners();
+  }
+
+  /// The Google/Apple sign-in running now, if any: its button shows a
+  /// spinner and every sign-in button waits.
+  SocialProvider? _socialSignInInFlight;
+  SocialProvider? get socialSignInInFlight => _socialSignInInFlight;
+
+  /// Any sign-in running (email/password, Google or Apple).
+  bool get isSigningIn => _isLoading || _socialSignInInFlight != null;
+
+  /// A Google/Apple credential whose email already had an account signed
+  /// into another way: linked after that account's password sign-in
+  /// ([authenticate]) when the emails match.
+  AuthCredential? _pendingSocialCredential;
+  String? _pendingSocialEmail;
+
+  /// "Continue with Google" / "Continue with Apple" (lib/services/
+  /// social_sign_in.dart). An existing account (same email) keeps its
+  /// profile and role; a new one becomes a customer through
+  /// `createMissingUserProfile({self: true})`. Returns [SocialSignInOutcome.cancelled] when
+  /// the person closed the sheet; throws an [AuthFailure] otherwise.
+  Future<SocialSignInOutcome> signInWithSocial(SocialProvider provider) async {
+    if (isSigningIn) return SocialSignInOutcome.cancelled;
+    _socialSignInInFlight = provider;
+    notifyListeners();
+    try {
+      final flow = SocialSignInFlow(
+        source: PlatformSocialCredentialSource.instance,
+        signIn: _signInWithSocialCredential,
+        loadProfile: _loadProfileAfterSocialSignIn,
+        completeProfile: _completeSocialProfile,
+        signOut: logout,
+      );
+      final outcome = await flow.run(provider);
+      if (outcome == SocialSignInOutcome.signedIn) {
+        unawaited(_registerPushNotificationsIfPossible());
+      }
+      return outcome;
+    } on AuthFailure {
+      rethrow;
+    } catch (error) {
+      debugPrint('Social sign-in failed: $error');
+      throw const AuthFailure(AuthErrorCode.socialSignInFailed);
+    } finally {
+      _socialSignInInFlight = null;
+      notifyListeners();
+    }
+  }
+
+  Future<String> _signInWithSocialCredential(SocialCredential social) async {
+    final UserCredential result;
+    try {
+      result = await _auth.signInWithCredential(social.credential);
+    } on FirebaseAuthException catch (error) {
+      debugPrint('Social sign-in refused: ${error.code}');
+      final code = socialAuthErrorCodeFor(error.code);
+      if (code == AuthErrorCode.accountExistsWithOtherSignIn) {
+        _pendingSocialCredential = error.credential ?? social.credential;
+        _pendingSocialEmail = error.email ?? social.email;
+      }
+      throw AuthFailure(code);
+    }
+    final user = result.user;
+    if (user == null) throw const AuthFailure(AuthErrorCode.socialSignInFailed);
+    _pendingSocialCredential = null;
+    _pendingSocialEmail = null;
+    _user = user;
+    _userEmail = user.email;
+    // Apple gives the name on the first sign-in only: keep it on the Auth
+    // user, where completeSocialSignIn reads it for the new profile.
+    final name = social.displayName?.trim() ?? '';
+    if ((user.displayName ?? '').trim().isEmpty && name.isNotEmpty) {
+      try {
+        await user.updateDisplayName(name);
+      } catch (error) {
+        debugPrint('Display name not saved: $error');
+      }
+    }
+    return user.uid;
+  }
+
+  /// The profile of the account a social sign-in opened, loaded the way
+  /// [_afterPhoneSignIn] loads it (waiting for the auth event's lookup).
+  /// The lookup also activates an access invitation for a verified email.
+  Future<bool> _loadProfileAfterSocialSignIn(String uid) async {
+    final inFlight = _roleCheckInFlight;
+    if (inFlight != null) {
+      try {
+        await inFlight;
+      } catch (_) {}
+    }
+    await _checkUserRole();
+    final loaded = _profileUid == uid && _auth.currentUser?.uid == uid;
+    if (loaded) {
+      _initializationIssue = null;
+      _ensureProfileWatch(uid);
+    }
+    notifyListeners();
+    return loaded;
+  }
+
+  Future<SocialProfileAnswer> _completeSocialProfile() async {
+    final response = await callWithAppCheckRecovery(
+      () => _functions
+          .httpsCallable(completeSocialSignInCallable)
+          .call<Object?>(completeSocialSignInPayload),
+    );
+    final data = response.data;
+    return SocialProfileAnswer.fromMap(
+      data is Map ? Map<Object?, Object?>.from(data) : const {},
+    );
+  }
+
+  /// After a password sign-in: attach the Google/Apple credential that
+  /// bumped into this account, so "Continue with Google" works next time.
+  /// Never blocks or fails the sign-in.
+  Future<void> _linkPendingSocialCredential(User? user) async {
+    final credential = _pendingSocialCredential;
+    final pendingEmail = _pendingSocialEmail;
+    _pendingSocialCredential = null;
+    _pendingSocialEmail = null;
+    if (user == null || credential == null) return;
+    if (!shouldLinkPendingSocialCredential(
+      pendingEmail: pendingEmail,
+      signedInEmail: user.email,
+    )) {
+      return;
+    }
+    try {
+      await user.linkWithCredential(credential);
+    } catch (error) {
+      debugPrint('Social credential not linked: $error');
+    }
   }
 
   Future<void> syncLinkedPhoneVerification() async {

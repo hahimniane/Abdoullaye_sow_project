@@ -45,7 +45,21 @@ abstract final class NewProjectFirebaseOptions {
     projectId: projectId,
     storageBucket: 'laawol-a855a.firebasestorage.app',
     iosBundleId: 'com.laawoldigital.app',
+    // The iOS OAuth client (GoogleService-Info.plist CLIENT_ID), used by
+    // Sign in with Google; ios/Runner/Info.plist carries it as GIDClientID
+    // and its reversed form as a URL scheme.
+    iosClientId: googleIosClientId,
   );
+
+  /// Sign in with Google: the iOS OAuth client of the iOS app.
+  static const String googleIosClientId =
+      '127318353394-3t82qud6k4s4deunvj2oaaqocuqh08h6.apps.googleusercontent.com';
+
+  /// Sign in with Google: the project's WEB OAuth client (client_type 3 in
+  /// google-services.json). Android and iOS ask Google for an ID token whose
+  /// audience is this client, which is the one Firebase Auth accepts.
+  static const String googleServerClientId =
+      '127318353394-hfp1jf3abq7j13it7ug201ccv7fpj1hu.apps.googleusercontent.com';
 
   /// True once [options] carries every value a real client needs.
   static bool isConfigured(FirebaseOptions options) =>

@@ -8142,5 +8142,11 @@
   "stiPendingInvitedNoInviter": "Vous êtes invité à rejoindre {business} en tant que membre de l’équipe.",
   "stiPlatformName": "l’administration de Laawol Digital",
   "stiJoin": "Rejoindre {business}",
-  "stiNotNow": "Plus tard"
+  "stiNotNow": "Plus tard",
+  "continueWithGoogle": "Continuer avec Google",
+  "continueWithApple": "Continuer avec Apple",
+  "socialSignInDivider": "ou",
+  "authErrorAccountExistsOtherSignIn": "Cet e-mail a déjà un compte Laawol. Connectez-vous une fois avec votre e-mail et votre mot de passe, et Google y sera associé.",
+  "authErrorSocialSignInFailed": "Nous n’avons pas pu vous connecter avec ce compte. Réessayez ou connectez-vous autrement.",
+  "authErrorInvitationWaiting": "Une invitation attend ce compte. Ouvrez le lien d’invitation reçu pour la rejoindre."
 }

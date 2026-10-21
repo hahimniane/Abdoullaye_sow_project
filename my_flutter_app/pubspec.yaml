@@ -71,6 +71,9 @@ dependencies:
   flutter_blue_plus: 1.36.8
   qr: ^3.0.2
   plaid_flutter: ^5.2.1
+  google_sign_in: ^7.2.0
+  sign_in_with_apple: ^8.2.0
+  crypto: ^3.0.7
 
 dev_dependencies:
   flutter_test:

@@ -9,6 +9,8 @@ import '../utils/legal_links.dart';
 import '../utils/business_registration_navigation.dart';
 import '../utils/phone_number_validator.dart';
 import '../widgets/app_snackbars.dart';
+import '../widgets/social_sign_in_buttons.dart';
+import '../utils/auth_navigation.dart';
 import '../widgets/country_phone_field.dart';
 
 class SignUpScreen extends StatefulWidget {
@@ -134,6 +136,23 @@ class _SignUpScreenState extends State<SignUpScreen>
         setState(() => _signUpFailure = SignUpFailureKind.unknown);
       }
     }
+  }
+
+  /// After Continue with Google/Apple: back to the screen that asked for
+  /// an account, else the home for this account's role.
+  Future<void> _afterSocialSignIn(AuthProvider authProvider) async {
+    if (!mounted) return;
+    final routeArgs = ModalRoute.of(context)?.settings.arguments;
+    final shouldReturn =
+        routeArgs is Map && routeArgs['returnToPrevious'] == true;
+    if (shouldReturn) {
+      Navigator.pop(context, true);
+      return;
+    }
+    await navigateAfterLogin(
+      context,
+      hasBusinessDashboardAccess: authProvider.hasBusinessDashboardAccess,
+    );
   }
 
   void _openSignIn() {
@@ -686,7 +705,7 @@ class _SignUpScreenState extends State<SignUpScreen>
                                           width: double.infinity,
                                           height: 56,
                                           child: ElevatedButton(
-                                            onPressed: authProvider.isLoading
+                                            onPressed: authProvider.isSigningIn
                                                 ? null
                                                 : _handleSignUp,
                                             style: ElevatedButton.styleFrom(
@@ -737,7 +756,15 @@ class _SignUpScreenState extends State<SignUpScreen>
                                         );
                                       },
                                     ),
-                                    const SizedBox(height: 24),
+                                    const SizedBox(height: 16),
+
+                                    // Or sign up with Google (and Apple on
+                                    // iOS); an email that already has an
+                                    // account simply signs into it.
+                                    SocialSignInSection(
+                                      onSignedIn: _afterSocialSignIn,
+                                    ),
+                                    const SizedBox(height: 16),
 
                                     // Already have account - Sign In
                                     Row(

@@ -430,3 +430,19 @@ Add future project conventions and repeated architectural decisions here.
   The TOP inset stays per screen: a Scaffold with an AppBar handles it; a
   screen without one must pad its header with `MediaQuery.paddingOf(context)
   .top` (gradient headers paint behind the status bar) or use SafeArea.
+- Sign in with Google / Apple (2026-10-21): pure rules + flow in
+  `lib/services/social_sign_in.dart` (`socialProvidersFor` - Apple on iOS
+  only, Google only where `FirebaseEnvironmentOptions.googleSignInClientIds`
+  exists; `SocialSignInFlow` behind ports, fakes in
+  `test/social_sign_in_test.dart`); SDK glue `PlatformSocialCredentialSource`
+  (google_sign_in 7 `initialize`/`authenticate`, Apple nonce -> SHA-256).
+  Screens use `SocialSignInSection` (`lib/widgets/social_sign_in_buttons.dart`)
+  and route like an email sign-in. One email = one account: an existing uid
+  keeps its profile; a new one gets a CUSTOMER profile from
+  `createMissingUserProfile({self: true})` (functions `social_sign_in.js`),
+  never staff/owner/admin; a waiting invitation is left to
+  acceptAccessInvitation. `account-exists-with-different-credential` keeps
+  the credential and links it after that email's password sign-in. Web:
+  `admin_web/src/lib/social-sign-in*.ts`, `GoogleSignInButton` in
+  `RoleSignInCard`; the router calls `completeSocialSignInOnce` before
+  deciding a Google account has no profile.

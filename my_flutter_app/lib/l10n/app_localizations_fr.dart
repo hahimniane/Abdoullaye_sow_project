@@ -16162,4 +16162,25 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get stiNotNow => 'Plus tard';
+
+  @override
+  String get continueWithGoogle => 'Continuer avec Google';
+
+  @override
+  String get continueWithApple => 'Continuer avec Apple';
+
+  @override
+  String get socialSignInDivider => 'ou';
+
+  @override
+  String get authErrorAccountExistsOtherSignIn =>
+      'Cet e-mail a déjà un compte Laawol. Connectez-vous une fois avec votre e-mail et votre mot de passe, et Google y sera associé.';
+
+  @override
+  String get authErrorSocialSignInFailed =>
+      'Nous n’avons pas pu vous connecter avec ce compte. Réessayez ou connectez-vous autrement.';
+
+  @override
+  String get authErrorInvitationWaiting =>
+      'Une invitation attend ce compte. Ouvrez le lien d’invitation reçu pour la rejoindre.';
 }

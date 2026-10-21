@@ -45,6 +45,7 @@ const {
   shippedContainerOf,
 } = require("./guest_tracking");
 const {createPhoneAccounts, notSignedInYet} = require("./phone_accounts");
+const {createSocialSignIn} = require("./social_sign_in");
 const {
   addressBucket,
   appCheckTokenFromHeaders,
@@ -26080,9 +26081,37 @@ exports.acceptAccessInvitation = onCall(
     acceptAccessInvitationHandler,
 );
 
+// Sign in with Google / Apple: a new social account gets a customer
+// profile (never business or platform access); an existing account is left
+// exactly as it is. See social_sign_in.js. Served by createMissingUserProfile
+// with {self: true} - the profile-repair callable, for the caller's own
+// missing profile - rather than a function of its own: every deployed
+// function reserves Cloud Run CPU (test/scaling-contract.test.js).
+const socialSignIn = createSocialSignIn({
+  db: () => admin.firestore(),
+  auth: () => admin.auth(),
+  FieldValue: FirestoreFieldValue,
+  defaultNotificationPreferences,
+  pendingInvitationsFor: (uid, email, phone) =>
+    pendingInvitationsFor(uid, email, strictE164(phone)),
+  normalizePhone: (phone) => normalizePhoneAlias(phone),
+  logger,
+});
+
 exports.createMissingUserProfile = onCall(
     MARKETPLACE_PEOPLE_CALLABLE_OPTIONS,
     async (request) => {
+      // {self: true}: after a Google/Apple sign-in, the caller's OWN missing
+      // profile - always a customer (completeSocialSignIn). Everything else
+      // is the admin repair below, unchanged.
+      if (request.data?.self === true) {
+        await enforceCallableRateLimit(request, {
+          name: "completeSocialSignIn",
+          limit: 20,
+          windowSeconds: 60 * 60,
+        });
+        return socialSignIn.completeSocialSignIn(request);
+      }
       const callerUid = requireAuth(request);
       const caller = await getUserProfile(callerUid);
       requireAdminCapability(

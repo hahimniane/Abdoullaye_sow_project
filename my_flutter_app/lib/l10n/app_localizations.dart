@@ -27002,6 +27002,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Not now'**
   String get stiNotNow;
+
+  /// No description provided for @continueWithGoogle.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue with Google'**
+  String get continueWithGoogle;
+
+  /// No description provided for @continueWithApple.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue with Apple'**
+  String get continueWithApple;
+
+  /// No description provided for @socialSignInDivider.
+  ///
+  /// In en, this message translates to:
+  /// **'or'**
+  String get socialSignInDivider;
+
+  /// No description provided for @authErrorAccountExistsOtherSignIn.
+  ///
+  /// In en, this message translates to:
+  /// **'This email already has a Laawol account. Sign in with your email and password once, and Google will be linked to it.'**
+  String get authErrorAccountExistsOtherSignIn;
+
+  /// No description provided for @authErrorSocialSignInFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'We couldn’t sign you in with that account. Try again, or sign in another way.'**
+  String get authErrorSocialSignInFailed;
+
+  /// No description provided for @authErrorInvitationWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'An invitation is waiting for this account. Open the invitation link you received to join.'**
+  String get authErrorInvitationWaiting;
 }
 
 class _AppLocalizationsDelegate
