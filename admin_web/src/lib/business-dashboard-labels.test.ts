@@ -48,11 +48,16 @@ test("the whole-order cancel tooltip translates as one sentence", () => {
 
 test("a work-list row opens the queue that can act on it", () => {
   // The rows named shipments but tapping one went nowhere, so the owner had
-  // to find the same record a second time in the service queue.
-  assert.match(consoleSource, /onOpenTab=\{setActiveTab\}/);
-  assert.match(consoleSource, /onOpen=\{\(\) => onOpenTab\(tab\)\}/);
-  assert.match(consoleSource, /tab: "freight" as BusinessTab/);
-  assert.match(consoleSource, /tab: "barrels" as BusinessTab/);
+  // to find the same record a second time in the service queue. Today's
+  // "Needs attention" rows each carry their tab (lib/business-today.ts) and
+  // the console opens it.
+  const todaySource = readFileSync("src/components/business/today-view.tsx", "utf8");
+  assert.match(todaySource, /onClick=\{\(\) => onOpen\(item\)\}/);
+  assert.match(consoleSource, /onOpenAttention=\{openTodayItem\}/);
+  assert.match(consoleSource, /setActiveTab\(item\.tab\);/);
+  const lib = readFileSync("src/lib/business-today.ts", "utf8");
+  assert.match(lib, /tab: "freight", count: "freightOrders"/);
+  assert.match(lib, /tab: "barrels", count: "barrelOrders"/);
 });
 
 test("a guest's price request confirms on screen, with its code", () => {

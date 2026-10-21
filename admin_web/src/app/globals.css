@@ -15698,6 +15698,372 @@ button.pkq-card:hover { border-color: var(--brand); }
 .status-pill.people-not-signed-in { background: rgba(245, 158, 11, 0.1); border-color: rgba(180, 83, 9, 0.22); }
 .people-action-note { color: var(--muted); flex-basis: 100%; font-size: 12px; line-height: 1.45; margin: 0; }
 
+/* ---------- Business Today (components/business/today-view.tsx) ----------
+   The month's tiles, what is waiting, the containers in progress and the
+   money. Tiles reuse .metric; its ".metric span" label style must not reach
+   the spans inside a tile's note, and ".metric b" (the ledger's 24px figure)
+   must not reach the change badge. Light only, like the rest of the console. */
+.today-head {
+  align-items: flex-end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  justify-content: space-between;
+}
+
+.today-head-title {
+  min-width: 0;
+}
+
+.today-eyebrow {
+  color: var(--brand);
+  display: block;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.today-head h2 {
+  color: var(--ink);
+  font-size: 22px;
+  letter-spacing: -0.2px;
+  line-height: 1.2;
+  margin: 2px 0 0;
+}
+
+.today-head p {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 4px 0 0;
+}
+
+.today-head .totals-status {
+  margin: 0;
+}
+
+.today-page .panel-action .ghost-button {
+  white-space: nowrap;
+}
+
+.today-tiles {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+}
+
+.today-tiles .metric.today-tile {
+  min-height: 0;
+  padding: 14px 16px;
+}
+
+.today-tiles .metric.today-tile > span {
+  font-size: 11.5px;
+  line-height: 1.3;
+}
+
+.today-tiles .metric strong.today-figure {
+  font-size: 28px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  margin-top: 10px;
+  overflow-wrap: anywhere;
+}
+
+/* A money figure never breaks inside "26 918 $US"; it gets smaller instead. */
+.today-tiles .metric strong.today-figure.is-money {
+  overflow-wrap: normal;
+  white-space: nowrap;
+}
+
+.today-tiles .metric small.today-tile-note {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  margin-top: 8px;
+}
+
+.today-tiles .metric small span {
+  color: inherit;
+  display: inline;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.today-tiles .metric small .today-note-figure {
+  color: var(--ink);
+  font-weight: 750;
+}
+
+.today-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  align-items: start;
+}
+
+.today-attention,
+.today-containers {
+  display: grid;
+}
+
+.today-attention-row,
+.today-container-row {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid rgba(13, 148, 136, 0.1);
+  color: var(--ink);
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  gap: 10px;
+  min-height: 52px;
+  padding: 10px 18px;
+  text-align: left;
+  width: 100%;
+}
+
+.today-attention-row:hover,
+.today-attention-row:focus-visible,
+.today-container-row:hover,
+.today-container-row:focus-visible {
+  background: var(--paper-soft);
+}
+
+.today-attention-row svg {
+  color: var(--muted);
+  flex: none;
+}
+
+.today-attention-label {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 650;
+  min-width: 0;
+}
+
+.today-attention-figures {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  justify-content: flex-end;
+  font-variant-numeric: tabular-nums;
+}
+
+.today-attention-count {
+  background: rgba(245, 158, 11, 0.14);
+  border-radius: 999px;
+  color: #73510c;
+  font-size: 13px;
+  font-weight: 800;
+  min-width: 28px;
+  padding: 2px 9px;
+  text-align: center;
+}
+
+.today-attention-amount {
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 750;
+}
+
+.today-container-main {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+
+.today-container-main strong {
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.today-container-main small {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.today-more {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--brand);
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 750;
+  gap: 4px;
+  justify-self: start;
+  padding: 10px 18px 12px;
+}
+
+.today-money-total {
+  color: var(--muted);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.today-money-total strong {
+  color: var(--ink);
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.today-money {
+  display: grid;
+  gap: 18px 28px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 16px 18px 4px;
+}
+
+.today-money-block {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  min-width: 0;
+}
+
+.today-money-block h3 {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.today-bar-row {
+  display: grid;
+  gap: 5px;
+}
+
+.today-bar-label {
+  align-items: baseline;
+  display: flex;
+  font-size: 13.5px;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.today-bar-label b {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.today-money-foot {
+  border-top: 1px solid rgba(13, 148, 136, 0.1);
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 13px;
+  gap: 8px 24px;
+  margin-top: 12px;
+  padding: 12px 18px 0;
+}
+
+.today-money-foot b {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.today-owed {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
+.today-owed-parts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+
+.today-owed-parts > span::before {
+  content: "· ";
+}
+
+.today-money-hint {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 8px 18px 16px;
+}
+
+.today-partial {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  margin: 0;
+}
+
+@media (max-width: 1050px) {
+  .today-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 720px) {
+  .today-tiles {
+    gap: 10px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .today-tiles .metric.today-tile {
+    padding: 12px;
+  }
+
+  .today-tiles .metric strong.today-figure {
+    font-size: 22px;
+  }
+
+  .today-tiles .metric strong.today-figure.is-money {
+    font-size: 17px;
+  }
+
+  /* A panel's action (Open containers, the month's total) drops under its
+     title rather than running off a narrow card. */
+  .today-page .panel-header {
+    flex-wrap: wrap;
+    padding: 10px 14px;
+    row-gap: 6px;
+  }
+
+  .today-page .panel-action {
+    margin-left: 0;
+  }
+
+  .today-head h2 {
+    font-size: 20px;
+  }
+
+  .today-money {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 14px 14px 4px;
+  }
+
+  .today-attention-row,
+  .today-container-row {
+    padding: 10px 14px;
+  }
+
+  .today-money-foot {
+    padding: 12px 14px 0;
+  }
+
+  .today-money-hint {
+    margin: 8px 14px 14px;
+  }
+}
+
+
 /* ---- Laawol bills (billing-views.tsx) ------------------------------------
    Built on the Volume page's pieces (vol-topbar, the month picker, the
    table in .vol-table-scroll): the table scrolls inside its card, never the
@@ -16251,3 +16617,4 @@ button.pkq-card:hover { border-color: var(--brand); }
 .pending-invite-error { color: var(--danger, #b42318); flex-basis: 100%; }
 .pending-invite-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; max-width: 100%; }
 .pending-invite-actions .primary-button { max-width: 100%; white-space: normal; }
+

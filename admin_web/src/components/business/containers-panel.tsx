@@ -163,7 +163,11 @@ type ContainersPanelProps = {
    */
   focusContainerId?: string;
   focusLineId?: string;
-  /** A package request notification: open the Requests list on that one. */
+  /**
+   * A package request notification: open the Requests list on that one.
+   * "waiting" (from Today's "Packages waiting for a container") opens the
+   * waiting list.
+   */
   focusView?: string;
   focusRequestId?: string;
 };
@@ -291,12 +295,14 @@ export function ContainersPanel({
   const [destinationFilter, setDestinationFilter] = useState("");
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState("");
-  const [view, setView] = useState<ListView>(focusView === "requests" ? "requests" : "containers");
+  const [view, setView] = useState<ListView>(
+    focusView === "requests" || focusView === "waiting" ? focusView : "containers",
+  );
   // A request notification opened while the panel is already on screen.
   useEffect(() => {
-    if (focusView === "requests") {
+    if (focusView === "requests" || focusView === "waiting") {
       setSelectedId("");
-      setView("requests");
+      setView(focusView);
     }
   }, [focusView, focusRequestId]);
 

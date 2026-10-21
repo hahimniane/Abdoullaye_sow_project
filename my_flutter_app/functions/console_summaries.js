@@ -1162,6 +1162,7 @@ module.exports = {
   lotActivityMonth,
   lotActivityScoreboard,
   lotLedgerTotals,
+  lineDate,
   lotMonthExpenseCents,
   normalizeTimeZone,
   parkingSummaryPartial,

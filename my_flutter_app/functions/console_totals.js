@@ -38,6 +38,10 @@ const {
 } = require("./console_summaries");
 const crypto = require("node:crypto");
 const {drainPages} = require("./scheduled_sweep");
+const businessToday = require("./business_overview");
+const {OPEN_STATUSES: OPEN_PACKAGE_REQUEST_STATUSES} =
+  require("./package_requests");
+const {VOLUME_COLLECTION, volumeDocId} = require("./volume_counts");
 
 const CACHE_COLLECTION = "consoleSummaryCache";
 /** Bumped when a cached payload's shape or math changes. */
@@ -51,6 +55,13 @@ const SCAN_PAGE_SIZE = 500;
 /** Leave room inside the callable's timeout for the answer itself. */
 const SCAN_BUDGET_MS = 90 * 1000;
 const IN_BATCH = 30;
+/**
+ * Today reads two months of payments per collection; past this many rows
+ * (a busy counter takes far fewer) the month is marked short, not read on.
+ */
+const TODAY_PAYMENT_PAGES = 5;
+/** Open containers read for Today; the list shows five. */
+const TODAY_CONTAINER_READ = 60;
 
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -233,9 +244,10 @@ function createConsoleTotalsHandlers(deps) {
    *
    * @param {object} query A Firestore query (ordering optional).
    * @param {number} deadlineMs Stop starting pages after this.
+   * @param {number} [maxPages] Stop after this many pages (marked short).
    * @return {Promise<{rows: Array<object>, complete: boolean}>} Rows.
    */
-  async function readAll(query, deadlineMs) {
+  async function readAll(query, deadlineMs, maxPages = 1000) {
     const rows = [];
     const result = await drainPages({
       fetchPage: async (cursor) => {
@@ -247,10 +259,34 @@ function createConsoleTotalsHandlers(deps) {
       },
       pageSize: SCAN_PAGE_SIZE,
       deadlineMs,
+      maxPages,
       // The deadline was taken from this clock; measure it with the same one.
       now: () => now().getTime(),
     });
     return {rows, complete: result.exhausted};
+  }
+
+  /**
+   * One aggregation over a query: `filters` narrow it, `fields` name what
+   * to return - "count", or the stored field to sum.
+   *
+   * @param {object} base The query to start from.
+   * @param {Array<Array>} filters [field, op, value] triples.
+   * @param {Object<string, string>} fields Result key -> "count" | field.
+   * @return {Promise<Object<string, number>>} The figures.
+   */
+  async function aggregateOf(base, filters, fields) {
+    const {AggregateField} = require("firebase-admin/firestore");
+    let query = base;
+    for (const [field, op, value] of filters) {
+      query = query.where(field, op, value);
+    }
+    const spec = Object.fromEntries(Object.entries(fields).map(
+        ([key, field]) => [key, field === "count" ?
+          AggregateField.count() : AggregateField.sum(field)]));
+    const data = (await query.aggregate(spec).get()).data();
+    return Object.fromEntries(Object.keys(fields)
+        .map((key) => [key, Number(data[key]) || 0]));
   }
 
   async function readCache(key) {
@@ -300,52 +336,178 @@ function createConsoleTotalsHandlers(deps) {
 
   // ---- Business Today -----------------------------------------------------
 
+  // Everything Today shows for one business this month (business_overview.js
+  // decides; this reads). Each read stands alone: one that fails or stops
+  // early is named in `unavailable` and the rest still answer.
+  async function computeBusinessToday(businessId, services, business,
+      months) {
+    const deadline = now().getTime() + SCAN_BUDGET_MS;
+    const {Timestamp} = require("firebase-admin/firestore");
+    const scoped = (name) => db().collection(name)
+        .where("businessId", "==", businessId);
+    const shipping = businessToday.SHIPPING_SERVICES
+        .some((id) => services.has(id));
+    const inventoryOn = services.has("inventory");
+    const from = Timestamp.fromMillis(months.startMs);
+    const until = Timestamp.fromMillis(months.endMs);
+    const unavailable = [];
+    // null when the read is not made (service off) or failed.
+    const attempt = async (name, enabled, read) => {
+      if (!enabled) return null;
+      try {
+        const out = await read();
+        const paged = Boolean(out) && typeof out === "object" &&
+          Array.isArray(out.rows);
+        if (paged && out.complete === false) unavailable.push(name);
+        return paged ? out.rows : out;
+      } catch (error) {
+        unavailable.push(name);
+        logger.warn("Business Today: a read failed", {businessId,
+          read: name, error: String(error?.message || error)});
+        return null;
+      }
+    };
+    const payments = (query) => readAll(query, deadline, TODAY_PAYMENT_PAGES);
+    const invoiceAggregate = Object.fromEntries(
+        invoiceBoardAggregates(months.lastDay)
+            .map((spec) => [spec.key, spec]));
+    const [cars, purchases, shipments, freightShipments, transports,
+      parkedCars, support, volume, containers, packageRequestsOpen,
+      waitingPackages, linesOwed, invoicesOwed, shopCreditOwed,
+      packagePayments, invoicePayments, lotPayments, shopSales,
+      shopCreditPayments] = await Promise.all([
+      attempt("listings", services.has("carSales"),
+          () => readAll(scoped("cars"), deadline)),
+      attempt("purchases", services.has("carSales"),
+          () => readAll(scoped("carPurchases"), deadline)),
+      attempt("barrels", services.has("barrelShipping"),
+          () => readAll(scoped("barrelShipments"), deadline)),
+      attempt("freight", services.has("freight"),
+          () => readAll(scoped("freightShipments"), deadline)),
+      attempt("transport", services.has("carTransport"),
+          () => readAll(scoped("transportRequests"), deadline)),
+      attempt("parking", services.has("carParking"),
+          () => readAll(scoped("parkedCars"), deadline)),
+      attempt("support", true,
+          () => readAll(scoped("supportCases"), deadline)),
+      // The Volume rollup's two months: two document reads.
+      attempt("volume", shipping, async () => {
+        const collection = db().collection(VOLUME_COLLECTION);
+        const [current, previous] = await db().getAll(
+            collection.doc(volumeDocId(businessId, months.month)),
+            collection.doc(volumeDocId(businessId, months.previousMonth)));
+        return {current: current.exists ? current.data() : null,
+          previous: previous.exists ? previous.data() : null};
+      }),
+      attempt("containers", shipping, async () => {
+        const snap = await scoped("containers")
+            .where("status", "in",
+                [...businessToday.IN_PROGRESS_CONTAINER_STATUSES])
+            .limit(TODAY_CONTAINER_READ).get();
+        return {rows: snap.docs.map((doc) => ({id: doc.id, ...doc.data()})),
+          complete: snap.docs.length < TODAY_CONTAINER_READ};
+      }),
+      attempt("packageRequests", shipping, async () => (await aggregateOf(
+          scoped("packageRequests"),
+          [["status", "in", [...OPEN_PACKAGE_REQUEST_STATUSES]]],
+          {n: "count"})).n),
+      attempt("waitingPackages", shipping, async () => (await aggregateOf(
+          scoped("containerLines"), [["containerStatus", "==", "waiting"]],
+          {n: "count"})).n),
+      // What every package was priced at, less what was paid on it. Paid
+      // never passes the price (recordContainerLinePayment), so the
+      // difference is what is still owed.
+      attempt("packagesOwed", shipping, () => aggregateOf(
+          scoped("containerLines"), [],
+          {priceCents: "priceCents", paidCents: "paidCents"})),
+      // The Invoices board's own "open" and "owed" figures.
+      attempt("invoicesOwed", true, () => aggregateOf(
+          scoped("invoices"), invoiceAggregate.open.filters,
+          {count: "count", balanceCents: invoiceAggregate.owedCents.sum})),
+      attempt("shopCredit", inventoryOn, () => aggregateOf(
+          scoped("inventorySales"), [["creditStatus", "==", "open"]],
+          {creditCents: "creditCents", creditPaidCents: "creditPaidCents"})),
+      attempt("packagePayments", shipping, () => payments(
+          scoped("containerLinePayments")
+              .where("createdAt", ">=", from).where("createdAt", "<", until)
+              .orderBy("createdAt")
+              .select("amountCents", "method", "source", "reverted",
+                  "createdAt"))),
+      attempt("invoicePayments", true, () => payments(
+          scoped("invoicePayments")
+              .where("paidOn", ">=", months.firstDay)
+              .where("paidOn", "<=", months.lastDay)
+              .orderBy("paidOn")
+              .select("amountCents", "method", "paidOn", "reverted",
+                  "createdAt"))),
+      attempt("lotPayments", services.has("carParking"), () => payments(
+          scoped("lotActivityPayments")
+              .where("paidAtMonth", ">=", months.previousMonth)
+              .where("paidAtMonth", "<=", months.month)
+              .orderBy("paidAtMonth")
+              .select("amountCents", "source", "receivedVia", "paidAtMonth",
+                  "reverted", "voided", "createdAt"))),
+      attempt("shopSales", inventoryOn, () => payments(
+          scoped("inventorySales")
+              .where("createdAt", ">=", from).where("createdAt", "<", until)
+              .orderBy("createdAt", "desc")
+              .select("paidNowCents", "totalCents", "creditCents",
+                  "creditPaidCents", "paymentMethod", "voided",
+                  "createdAt"))),
+      attempt("shopCreditPayments", inventoryOn, () => payments(
+          scoped("inventoryCreditPayments")
+              .where("createdAt", ">=", from).where("createdAt", "<", until)
+              .orderBy("createdAt", "desc")
+              .select("amountCents", "method", "reverted", "createdAt"))),
+    ]);
+    const rows = {cars, purchases, shipments, freightShipments, transports,
+      parkedCars, support};
+    const list = (value) => value || [];
+    return {
+      today: businessToday.buildToday({
+        months, now: now(), ...rows, volume, containers,
+        packageRequestsOpen, waitingPackages, linesOwed, invoicesOwed,
+        shopCreditOwed, packagePayments, invoicePayments, lotPayments,
+        shopSales, shopCreditPayments,
+        parkingSpaces: Number(business?.parkingTotalSpaces) || 0,
+        unavailable,
+      }),
+      // The page before Today was rebuilt read this; consoles still on that
+      // bundle keep working until they reload.
+      overview: businessOverviewSummary({
+        cars: list(cars), purchases: list(purchases),
+        shipments: list(shipments), freightShipments: list(freightShipments),
+        transports: list(transports), parkedCars: list(parkedCars),
+        support: list(support)}),
+      complete: unavailable.length === 0,
+    };
+  }
+
   async function getBusinessOverview(request) {
     const uid = requireAuth(request);
     const businessId = businessIdFrom(request);
     const user = await requireBusinessManager(uid, businessId);
     const businessSnap = await db().collection("businesses")
         .doc(businessId).get();
+    const business = businessSnap.data() || {};
     const services = new Set(
-        normalizeBusinessServices(businessSnap.data()?.enabledServices));
-    const withCars = hasBusinessPermission(user, "listings");
-    const key = `businessOverview__${businessId}__${withCars ? "cars" : "-"}`;
-    return cached(key, OVERVIEW_TTL_MS, request.data?.refresh === true,
-        async () => {
-          const deadline = now().getTime() + SCAN_BUDGET_MS;
-          const scoped = (name) => db().collection(name)
-              .where("businessId", "==", businessId);
-          const none = {rows: [], complete: true};
-          const [cars, purchases, shipments, freightShipments, transports,
-            parkedCars, support] = await Promise.all([
-            withCars ? readAll(scoped("cars"), deadline) : none,
-            services.has("carSales") ?
-              readAll(scoped("carPurchases"), deadline) : none,
-            services.has("barrelShipping") ?
-              readAll(scoped("barrelShipments"), deadline) : none,
-            services.has("freight") ?
-              readAll(scoped("freightShipments"), deadline) : none,
-            services.has("carTransport") ?
-              readAll(scoped("transportRequests"), deadline) : none,
-            services.has("carParking") ?
-              readAll(scoped("parkedCars"), deadline) : none,
-            readAll(scoped("supportCases"), deadline),
-          ]);
-          const parts = [cars, purchases, shipments, freightShipments,
-            transports, parkedCars, support];
-          return {
-            overview: businessOverviewSummary({
-              cars: cars.rows,
-              purchases: purchases.rows,
-              shipments: shipments.rows,
-              freightShipments: freightShipments.rows,
-              transports: transports.rows,
-              parkedCars: parkedCars.rows,
-              support: support.rows,
-            }),
-            complete: parts.every((part) => part.complete),
-          };
-        });
+        normalizeBusinessServices(business.enabledServices));
+    const viewer = businessToday.todayViewer(user, services,
+        hasBusinessPermission);
+    const months = businessToday.todayMonths(now());
+    // One answer per business and month, cut per viewer below: the month in
+    // the key starts a new count on the 1st.
+    const key = `businessToday__${businessId}__${months.month}`;
+    const answer = await cached(key, OVERVIEW_TTL_MS,
+        request.data?.refresh === true,
+        () => computeBusinessToday(businessId, services, business, months));
+    return {
+      today: businessToday.todayForViewer(answer.today, viewer),
+      overview: viewer.finance ? answer.overview : null,
+      complete: answer.complete !== false,
+      computedAtMs: answer.computedAtMs,
+      cached: answer.cached,
+    };
   }
 
   // ---- Invoices -----------------------------------------------------------
@@ -377,17 +539,11 @@ function createConsoleTotalsHandlers(deps) {
       zonedDayKey(now(), normalizeTimeZone(request.data?.timeZone));
     const base = db().collection("invoices")
         .where("businessId", "==", businessId);
-    const {AggregateField} = require("firebase-admin/firestore");
     const results = await Promise.all(
         invoiceBoardAggregates(today).map(async (spec) => {
-          let query = base;
-          for (const [field, op, value] of spec.filters) {
-            query = query.where(field, op, value);
-          }
-          const snap = await query.aggregate(spec.sum ?
-            {value: AggregateField.sum(spec.sum)} :
-            {value: AggregateField.count()}).get();
-          return [spec.key, Number(snap.data().value) || 0];
+          const figure = await aggregateOf(base, spec.filters,
+              {value: spec.sum || "count"});
+          return [spec.key, figure.value];
         }));
     return {board: Object.fromEntries(results), today,
       computedAtMs: now().getTime()};

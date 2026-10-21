@@ -347,7 +347,8 @@ test("the consoles mark their History summaries for the audit table", () => {
     "src/components/business/containers-panel.tsx",
     "src/components/business/invoices-panel.tsx",
     "src/components/business/operations-panels.tsx",
-    "src/components/business-console.tsx",
+    // Today's ledger changes (moved out of business-console.tsx).
+    "src/components/business/today-view.tsx",
   ]) {
     const source = readFileSync(file, "utf8");
     const summaries = source.match(/\{text\((?:h|hr|ev)\.summary, ""\)\}/g) ?? [];

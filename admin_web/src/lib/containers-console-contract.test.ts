@@ -47,8 +47,12 @@ test("the console routes the tab to ContainersPanel like every other panel", () 
   // and line to open.
   // A "this number isn't mine" notification names only a line: it wins over
   // an earlier deep link, and the panel finds the line's container itself.
-  assert.match(consoleSource, /\{activeTab === "containers" && \(\s*<ContainersPanel\s+businessId=\{businessId\}\s+business=\{business\}\s+previewMode=\{previewMode\}\s+(?:\/\/[^\n]*\n\s*)*focusContainerId=\{\s*notificationFocusView === "line" \? "" : containerLink\?\.containerId \?\? ""\s*\}\s+focusLineId=\{\s*notificationFocusView === "line"\s*\? notificationFocusId\s*: containerLink\?\.lineId \?\? ""\s*\}\s+focusView=\{notificationFocusView === "requests" \? "requests" : ""\}\s+focusRequestId=\{notificationFocusView === "requests" \? notificationFocusId : ""\}\s+\/>\s*\)\}/);
+  assert.match(consoleSource, /\{activeTab === "containers" && \(\s*<ContainersPanel\s+businessId=\{businessId\}\s+business=\{business\}\s+previewMode=\{previewMode\}\s+(?:\/\/[^\n]*\n\s*)*focusContainerId=\{\s*notificationFocusView === "line"\s*\? ""\s*: todayContainerFocus \|\| \(containerLink\?\.containerId \?\? ""\)\s*\}\s+focusLineId=\{\s*notificationFocusView === "line"\s*\? notificationFocusId\s*: containerLink\?\.lineId \?\? ""\s*\}\s+focusView=\{notificationFocusView === "requests" \? "requests" : todayContainersView\}\s+focusRequestId=\{notificationFocusView === "requests" \? notificationFocusId : ""\}\s+\/>\s*\)\}/);
   assert.match(consoleSource, /containers: <Container \{\.\.\.props\} \/>,/, "the sidebar icon map must cover the tab");
+  // Today's rows land on one container or on the waiting / requests list,
+  // and that is forgotten on leaving the tab.
+  assert.match(consoleSource, /if \(activeTab !== "containers"\) \{\s*setTodayContainerFocus\(""\);\s*setTodayContainersView\(""\);/);
+  assert.match(panelSource, /focusView === "requests" \|\| focusView === "waiting" \? focusView : "containers"/);
 });
 
 // The deep link a package's staff view opens:
