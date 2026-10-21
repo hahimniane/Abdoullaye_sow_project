@@ -11421,8 +11421,8 @@ exports.updateAdminRecordStatus = onCall(
 );
 
 // A platform admin switches Inventory on or off for an existing business.
-// Owners cannot (ownerEditableServices keeps their saves from touching it), so
-// this is the one place it changes after the business is created.
+// Owners can too, from Services & coverage (updateBusinessProfile passes
+// ownerMayToggle to ownerEditableServices, 2026-10-21).
 exports.setBusinessInventoryService = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK,
@@ -12162,14 +12162,15 @@ exports.updateBusinessProfile = onCall(
       if (profile.website) {
         profile.website = requireValidWebsite(profile.website);
       }
-      // Whether Inventory is on stays as it is unless a platform admin saves.
+      // The owner switches Inventory here like any other service
+      // (2026-10-21); the public application still only requests it.
       const normalizedServices = inventory.ownerEditableServices(
           normalizeBusinessServices(
               enabledServices,
               current.enabledServices || DEFAULT_BUSINESS_SERVICES,
           ),
           current.enabledServices, user.role === "admin",
-          VALID_BUSINESS_SERVICES,
+          VALID_BUSINESS_SERVICES, {ownerMayToggle: true},
       );
       const holdMode = carHoldPricingMode === "per_day" ? "per_day" : "flat";
       const holdFlatFee = numberOrFallback(carHoldFlatFee, 500);
@@ -12190,6 +12191,9 @@ exports.updateBusinessProfile = onCall(
       await businessRef.set({
         ...profile,
         enabledServices: normalizedServices,
+        // A request from the application is answered once it is on.
+        ...(normalizedServices.includes("inventory") &&
+          current.requestedInventory ? {requestedInventory: false} : {}),
         carHoldPricingMode: holdMode,
         carHoldFlatFee: holdFlatFee > 0 ? holdFlatFee : 500,
         carHoldDailyRate: holdDailyRate > 0 ? holdDailyRate : 100,
