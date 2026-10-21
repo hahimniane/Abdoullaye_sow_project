@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { httpsCallable } from "firebase/functions";
 import { Banknote, Pencil, Plus, Printer, RefreshCw, Tag, X } from "lucide-react";
 
-import { ContactPhone } from "@/components/business/contact-phone";
+import { ContactPhone, SenderIsReceiverBox } from "@/components/business/contact-phone";
 import { ContainerLabelsDialog } from "@/components/business/container-labels-dialog";
 import { PackagePaymentDialog } from "@/components/business/package-payment-dialog";
 import { PiecesEditor } from "@/components/business/pieces-editor";
@@ -18,8 +18,10 @@ import {
   containerLineTitleIsCopy,
   containerLineWhatsApp,
   containerLineWhatsAppText,
+  lineCustomerIsReceiver,
   lineDraftHasPieces,
   phoneCountryForDestination,
+  withSenderIsReceiver,
 } from "@/lib/container-manifest";
 import { linePickupFeeCents, type LineGroupSummary } from "@/lib/line-pieces";
 import { newPieceDraft, savePrintLabelsText } from "@/lib/piece-drafts";
@@ -221,7 +223,10 @@ export function WaitingPackagesPanel({
   const moneyAvailable = intakeMoneyAvailable(draft);
   const staffIds = useMemo(() => staffOptions.map((s) => s.id), [staffOptions]);
   const setMoney = (patch: Partial<IntakeMoneyDraft>) => setDraft((d) => ({ ...d, money: { ...d.money, ...patch } }));
-  const fieldErrors = triedSave ? validateWaitingPackage(draft, staffIds) : [];
+  // The package being edited, if any: an old one with no receiver is only
+  // asked for one when its people change (the server's rule).
+  const editingRow = editingId ? sorted.find((row) => text(row.id, "") === editingId) : undefined;
+  const fieldErrors = triedSave ? validateWaitingPackage(draft, staffIds, editingRow) : [];
   const fieldError = (field: WaitingPackageField) => waitingPackageFieldMessage(fieldErrors, field);
   // aria-invalid + aria-describedby for a field that shows its own message.
   const invalidProps = (field: WaitingPackageField) => {
@@ -335,7 +340,7 @@ export function WaitingPackagesPanel({
   }
 
   async function save(mode: SaveMode) {
-    const errors = validateWaitingPackage(draft, staffIds);
+    const errors = validateWaitingPackage(draft, staffIds, editingRow);
     if (errors.length) {
       setDraftError(waitingPackageMessage(errors));
       setTriedSave(true);
@@ -452,10 +457,20 @@ export function WaitingPackagesPanel({
                     )}
                   </span>
                   <span>
-                    <strong data-no-translate>{line.customerName}</strong>
-                    <small data-no-translate>{line.customerPhone}</small>
-                    <RecordPhoneFlags row={row} field="customerPhone" />
-                    {line.receiverName && <small data-no-translate>→ {line.receiverName}{line.receiverPhone ? ` · ${line.receiverPhone}` : ""}</small>}
+                    {/* No sender of its own: the receiver is the customer. */}
+                    {lineCustomerIsReceiver(row) ? (
+                      <>
+                        <strong data-no-translate>{line.receiverName}</strong>
+                        <small data-no-translate>{line.receiverPhone}</small>
+                      </>
+                    ) : (
+                      <>
+                        <strong data-no-translate>{line.customerName}</strong>
+                        <small data-no-translate>{line.customerPhone}</small>
+                        <RecordPhoneFlags row={row} field="customerPhone" />
+                        {line.receiverName && <small data-no-translate>→ {line.receiverName}{line.receiverPhone ? ` · ${line.receiverPhone}` : ""}</small>}
+                      </>
+                    )}
                     <RecordPhoneFlags row={row} field="receiverPhone" />
                     <small className="ctn-wa">{summary}</small>
                     {warnings.map((warning) => (<small className="ctn-wa-warn" key={warning}>{warning}</small>))}
@@ -630,9 +645,11 @@ export function WaitingPackagesPanel({
                 </div>
               )}
 
+              <SenderIsReceiverBox checked={draft.senderIsReceiver} disabled={busy} onChange={(on) => { setCustomerPick(null); setCustomerMenuOpen(false); setDraft((d) => withSenderIsReceiver(d, on)); }} />
+              {!draft.senderIsReceiver && (
               <div className="lst-form-grid">
                 <label className="lst-field" style={{ position: "relative" }}><span>Customer</span>
-                  <input id="wpk-customer-name" {...invalidProps("wpk-customer-name")} value={draft.customerName} autoComplete="off" onFocus={() => setCustomerMenuOpen(true)} onBlur={() => window.setTimeout(() => setCustomerMenuOpen(false), 150)} onChange={(e) => { setCustomerPick(null); setCustomerMenuOpen(true); setDraft((d) => ({ ...d, customerName: e.target.value })); }} />
+                  <input id="wpk-customer-name" {...invalidProps("wpk-customer-name")} value={draft.customerName} placeholder="optional" autoComplete="off" onFocus={() => setCustomerMenuOpen(true)} onBlur={() => window.setTimeout(() => setCustomerMenuOpen(false), 150)} onChange={(e) => { setCustomerPick(null); setCustomerMenuOpen(true); setDraft((d) => ({ ...d, customerName: e.target.value })); }} />
                   {customerMatches.length > 0 && (
                     <ul className="lst-suggest" role="listbox" aria-label="Saved customers">
                       {customerMatches.map((c) => (
@@ -652,8 +669,9 @@ export function WaitingPackagesPanel({
                   initialCountryCode={customerPhoneCountry}
                 />
               </div>
+              )}
               <div className="lst-form-grid">
-                <label className="lst-field"><span>Receiver at destination</span><input value={draft.receiverName} placeholder="The name written on it" onChange={(e) => setDraft((d) => ({ ...d, receiverName: e.target.value }))} /></label>
+                <label className="lst-field"><span>Receiver at destination</span><input id="wpk-receiver-name" {...invalidProps("wpk-receiver-name")} value={draft.receiverName} placeholder="The name written on it" onChange={(e) => setDraft((d) => ({ ...d, receiverName: e.target.value }))} />{fieldErrorNote("wpk-receiver-name")}</label>
                 <ContactPhone
                   id="wpk-receiver-phone"
                   label="Receiver's phone"

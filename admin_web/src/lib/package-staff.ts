@@ -29,6 +29,7 @@ import {
   containerTitle,
   contactPhoneReach,
   type ContainerStatus,
+  lineCustomerIsReceiver,
 } from "./container-manifest.ts";
 import { destinationCountryOptionForRow } from "./destination-countries.ts";
 import { recordPhoneFlags, type RecordPhoneField } from "./phone-accounts.ts";
@@ -400,7 +401,10 @@ export function packageStaffViewModel(line: unknown, container: unknown, lang: "
     vin: kind === "car" ? cleanVin(row.vinNumber) : "",
     description: text(row.description, 120),
     stock,
-    owner: stock ? null : person(row.customerName, row.customerPhone, row, "customerPhone"),
+    // No sender of its own: the receiver is the customer (lineCustomer).
+    owner: stock ? null : lineCustomerIsReceiver(row)
+      ? person(receiverName, receiverPhone, row, "receiverPhone")
+      : person(row.customerName, row.customerPhone, row, "customerPhone"),
     receiver: receiverName || receiverPhone ? person(receiverName, receiverPhone, row, "receiverPhone") : null,
     // Only the line's own container: a stale snapshot of another one (the
     // line was just moved) is not shown under it.

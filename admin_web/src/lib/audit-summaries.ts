@@ -25,6 +25,7 @@ const CONTACT_FIELDS: Record<string, string> = {
   "receiver's phone": "téléphone du destinataire",
   "customer's WhatsApp updates": "mises à jour WhatsApp du client",
   "receiver's WhatsApp updates": "mises à jour WhatsApp du destinataire",
+  "sender is the receiver": "l’expéditeur est le destinataire",
 };
 
 // updateContainer reports the record's own field keys.

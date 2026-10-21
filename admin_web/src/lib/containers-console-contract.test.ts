@@ -151,8 +151,13 @@ test("the line form reuses the ledger's VIN prefill and customer memory rather t
   assert.match(operationsSource, /async function decodeActivityVin\(vin: string\) \{\s*setVinHint\(VIN_LOOKING_UP\);\s*try \{\s*const result = await decodeVinWithCatalog\(vin\);/);
   // The car fields stay catalog pickers, never free text.
   assert.match(panelSource, /\{getMakes\(\)\.map\(\(m\) => \(<option key=\{m\} value=\{m\}>\{m\}<\/option>\)\)\}/);
-  // Stock lines name nobody: the customer fields are hidden, not greyed.
-  assert.match(panelSource, /\{ownerVisible && lineDraft\.ownerKind === "customer" && \(\s*<div className="lst-form-grid">/);
+  // Stock lines name nobody: the customer fields are hidden, not greyed -
+  // and so are they when the sender is the receiver (owner, 2026-10-21).
+  assert.match(panelSource, /\{ownerVisible && lineDraft\.ownerKind === "customer" && !lineDraft\.senderIsReceiver && \(\s*<div className="lst-form-grid">/);
+  assert.match(panelSource, /<SenderIsReceiverBox checked=\{lineDraft\.senderIsReceiver\}[\s\S]{0,240}?withSenderIsReceiver\(d, on\)/);
+  assert.match(panelSource, /<SenderIsReceiverBox checked=\{contactsDraft\.senderIsReceiver\}[\s\S]{0,240}?withSenderIsReceiver\(d, on\)/);
+  // An edit is judged against the stored line (old lines with no receiver).
+  assert.match(panelSource, /validateContainerLineDraft\(lineDraft, editing\)/);
 });
 
 test("a car line asks whether the car is in the lot before it shows a VIN field", () => {
@@ -289,7 +294,7 @@ test("one tap copies a VIN or a customer name where they are shown", () => {
 // text, applies to both of the line's phones and to the contacts correction.
 test("a line's phones use the shared calling-code picker, never a free-text input", () => {
   // One ContactPhone, shared with the waiting-packages form (contact-phone.tsx).
-  assert.match(panelSource, /import \{ ContactPhone \} from "@\/components\/business\/contact-phone";/);
+  assert.match(panelSource, /import \{ ContactPhone, SenderIsReceiverBox \} from "@\/components\/business\/contact-phone";/);
   assert.match(contactPhoneSource, /import \{ CustomerPhoneField \} from "@\/components\/customer-phone-field";/);
   assert.match(contactPhoneSource, /<CustomerPhoneField\s+id=\{id\}[\s\S]*?initialCountryCode=\{initialCountryCode\}/);
   // No plain <input> is bound to either phone anywhere in the panel.

@@ -11,6 +11,7 @@ import {
   containerLineTitle,
   containerLineTitleIsCopy,
   containerTitle,
+  lineCustomer,
 } from "@/lib/container-manifest";
 import { functions } from "@/lib/firebase";
 import { currentLanguage, text } from "@/lib/format";
@@ -236,7 +237,7 @@ export function AddWaitingPackagesDialog({
                           <span className="wpk-pick-main">
                             <strong data-no-translate={containerLineTitleIsCopy(line) ? undefined : true}>{containerLineTitle(line, lang)}</strong>
                             <small data-no-translate>
-                              {[text(line.customerName, ""), text(line.customerPhone, "")].filter(Boolean).join(" · ")}
+                              {[lineCustomer(line).name, lineCustomer(line).phone].filter(Boolean).join(" · ")}
                             </small>
                             {blocked && reason && <small className="wpk-block-reason">{reason}</small>}
                           </span>

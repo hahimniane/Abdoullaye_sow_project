@@ -217,6 +217,7 @@ test("container History sentences translate around the typed values", () => {
     ["Received 2 barrels from Box 1", "Réception de 2 barils depuis Box 1"],
     ["Changed receiver's phone for Awa Diallo", "Modification : téléphone du destinataire pour Awa Diallo"],
     ["Changed customer's name, receiver's WhatsApp updates", "Modification : nom du client, mises à jour WhatsApp du destinataire"],
+    ["Changed customer's name, customer's phone, sender is the receiver for Mariama", "Modification : nom du client, téléphone du client, l’expéditeur est le destinataire pour Mariama"],
     ["Changed label, notes", "Modification : nom, notes"],
     ["Changed notes, carrierScac", "Modification : notes, compagnie maritime"],
     // updateContainerLine (container_manifest.js containerLineEditAudit).

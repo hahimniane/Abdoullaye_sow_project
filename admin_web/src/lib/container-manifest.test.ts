@@ -69,6 +69,12 @@ import {
   type ContainerRefusal,
   editedLinePayload,
   containerCounts as manifestCounts,
+  lineContactsEdited,
+  lineCustomer,
+  lineCustomerIsReceiver,
+  lineCustomerName,
+  lineCustomerPhone,
+  withSenderIsReceiver,
 } from "./container-manifest.ts";
 import { newPieceDraft } from "./piece-drafts.ts";
 
@@ -248,16 +254,16 @@ test("only a loading container is open; only an empty one can be deleted", () =>
 
 test("a car line needs a VIN of at least six characters", () => {
   assert.deepEqual(
-    validateContainerLineDraft({ ...emptyContainerLineDraft, customerName: "Aissatou" }),
+    validateContainerLineDraft({ ...emptyContainerLineDraft, customerName: "Aissatou", receiverName: "Mariama" }),
     ["vin_required"],
   );
   assert.deepEqual(
-    validateContainerLineDraft({ ...emptyContainerLineDraft, vinNumber: "1hg-cm", customerName: "Aissatou" }),
+    validateContainerLineDraft({ ...emptyContainerLineDraft, vinNumber: "1hg-cm", customerName: "Aissatou", receiverName: "Mariama" }),
     ["vin_required"],
     "punctuation does not count toward the six",
   );
   assert.deepEqual(
-    validateContainerLineDraft({ ...emptyContainerLineDraft, vinNumber: "1HGCM82633A004352", customerName: "Aissatou" }),
+    validateContainerLineDraft({ ...emptyContainerLineDraft, vinNumber: "1HGCM82633A004352", customerName: "Aissatou", receiverName: "Mariama" }),
     [],
   );
 });
@@ -282,10 +288,13 @@ test("a line that is not a car is judged by its pieces, as the server judges the
   assert.deepEqual(validateContainerLineDraft({ ...stock, kind: "other", quantity: "", description: "" }), []);
 });
 
-test("a customer's line names the customer; stock names no one", () => {
+test("a customer's line names its receiver, the sender is optional; stock names no one", () => {
   const car = { ...emptyContainerLineDraft, vinNumber: "1HGCM82633A004352" };
-  assert.deepEqual(validateContainerLineDraft(car), ["customer_name_required"]);
+  assert.deepEqual(validateContainerLineDraft(car), ["receiver_name_required"]);
+  assert.deepEqual(validateContainerLineDraft({ ...car, customerName: "Fatou" }), ["receiver_name_required"]);
+  assert.deepEqual(validateContainerLineDraft({ ...car, receiverName: "Mariama" }), [], "no sender is fine");
   assert.deepEqual(validateContainerLineDraft({ ...car, ownerKind: "stock" }), []);
+  assert.equal(CONTAINER_MESSAGES.receiver_name_required, "Enter the receiver's name.");
   assert.deepEqual(
     validateContainerLineDraft({ ...car, kind: "boat" as never, ownerKind: "nobody" as never }),
     ["line_kind_invalid", "owner_kind_invalid"],
@@ -326,6 +335,7 @@ test("the line payload keeps only the fields its kind and owner use", () => {
     // Nobody to message without a number, so both switches are off.
     notifyCustomer: false,
     notifyReceiver: false,
+    senderIsReceiver: false,
   });
   const barrels = containerLinePayload({
     ...emptyContainerLineDraft,
@@ -682,7 +692,7 @@ test("picking a parked car fills the car and the owner and keeps the answer at y
     { id: "p1", vinNumber: "1HGCM82633A004352", carMake: "Honda", carModel: "Accord", carYear: "2003", customerName: "Aissatou Bah", customerPhone: "+1 646 555 0100" },
     new Map(),
   );
-  const typed = { ...emptyContainerLineDraft, inLot: "yes" as const, ownerKind: "stock" as const, customerName: "", customerPhone: "" };
+  const typed = { ...emptyContainerLineDraft, inLot: "yes" as const, ownerKind: "stock" as const, customerName: "", customerPhone: "", receiverName: "Mariama" };
   const filled = lineDraftFromParkedCar(typed, pick);
   assert.equal(filled.inLot, "yes");
   assert.equal(filled.parkedCarId, "p1");
@@ -751,7 +761,7 @@ test("only a + international number can receive WhatsApp", () => {
 });
 
 test("a phone that is there must look like one; a local number is still accepted", () => {
-  const barrels = { ...emptyContainerLineDraft, kind: "barrels" as const, quantity: "2", customerName: "Aissatou" };
+  const barrels = { ...emptyContainerLineDraft, kind: "barrels" as const, quantity: "2", customerName: "Aissatou", receiverName: "Mariama" };
   assert.deepEqual(validateContainerLineDraft(barrels), []);
   assert.deepEqual(validateContainerLineDraft({ ...barrels, customerPhone: "622 11 22 33" }), []);
   assert.deepEqual(validateContainerLineDraft({ ...barrels, customerPhone: "+1 646 555 0100" }), []);
@@ -805,6 +815,7 @@ test("a contacts correction reads the stored line, and a missing switch reads as
     receiverPhone: "+224620000000",
     notifyCustomer: true,
     notifyReceiver: true,
+    senderIsReceiver: false,
   });
   assert.equal(containerLineContactsDraftFromRow({ notifyCustomer: false }).notifyCustomer, false);
 });
@@ -819,11 +830,14 @@ test("a contacts correction is validated and shaped like the server's update", (
     receiverPhone: "",
     notifyCustomer: true,
     notifyReceiver: true,
+    senderIsReceiver: false,
   };
   assert.deepEqual(validateContainerLineContactsDraft(draft, customerLine), []);
+  // The sender may be taken away; the receiver may not.
+  assert.deepEqual(validateContainerLineContactsDraft({ ...draft, customerName: "" }, customerLine), []);
   assert.deepEqual(
-    validateContainerLineContactsDraft({ ...draft, customerName: "" }, customerLine),
-    ["customer_name_required"],
+    validateContainerLineContactsDraft({ ...draft, receiverName: " " }, customerLine),
+    ["receiver_name_required"],
   );
   assert.deepEqual(
     validateContainerLineContactsDraft({ ...draft, customerName: "", receiverPhone: "x" }, stockLine),
@@ -837,6 +851,7 @@ test("a contacts correction is validated and shaped like the server's update", (
     receiverPhone: "",
     notifyCustomer: true,
     notifyReceiver: false,
+    senderIsReceiver: false,
   });
   assert.deepEqual(updateContainerLineContactsRequest("biz", customerLine, draft), {
     businessId: "biz",
@@ -878,6 +893,7 @@ test("a stored line opens the add-line form pre-filled for editing", () => {
     receiverPhone: "+224620000000",
     notifyCustomer: false,
     notifyReceiver: true,
+    senderIsReceiver: false,
     pickupFee: null,
   });
   assert.deepEqual(validateContainerLineDraft({ ...draft, pieces: carPieces }), []);
@@ -901,6 +917,7 @@ test("a stored line opens the add-line form pre-filled for editing", () => {
     receiverPhone: "+224620000000",
     notifyCustomer: false,
     notifyReceiver: true,
+    senderIsReceiver: false,
   });
   assert.ok(!("trackingCode" in request.line), "the code is never sent");
 
@@ -1173,4 +1190,90 @@ test("a destination mismatch names the packages that did not fit", () => {
   assert.equal(held.conflictContainerId, "");
   assert.equal(held.conflictWaiting, true);
   assert.equal(containerCallableFailure({ details: { reason: "vin_already_loaded", conflictContainerId: "S" } }).conflictWaiting, false);
+});
+
+// ---------------------------------------------------------------------------
+// Owner, 2026-10-21: the sender is optional, the receiver required, and
+// "Sender is the receiver" stores one person on both sides.
+// ---------------------------------------------------------------------------
+
+test("sender is the receiver stores the receiver as the sender, off by default", () => {
+  assert.equal(emptyContainerLineDraft.senderIsReceiver, false);
+  const draft = {
+    ...emptyContainerLineDraft,
+    kind: "barrels" as const,
+    customerName: "stale",
+    customerPhone: "not a phone",
+    receiverName: " Mariama Bah ",
+    receiverPhone: "+224 620 00 00 00",
+    senderIsReceiver: true,
+  };
+  // The hidden sender fields are not checked: the receiver's are.
+  assert.deepEqual(validateContainerLineDraft(draft), []);
+  const payload = containerLinePayload(draft);
+  assert.equal(payload.senderIsReceiver, true);
+  assert.equal(payload.customerName, "Mariama Bah");
+  assert.equal(payload.customerPhone, "+224620000000");
+  assert.equal(payload.notifyCustomer, true);
+  assert.equal(containerLinePayload({ ...draft, notifyReceiver: false }).notifyCustomer, false, "one person, one switch");
+  // Never on stock.
+  assert.equal(containerLinePayload({ ...draft, ownerKind: "stock" }).senderIsReceiver, false);
+  // Ticking or unticking empties the sender's own fields.
+  const ticked = withSenderIsReceiver({ ...draft, senderIsReceiver: false, customerName: "Fatou", customerPhone: "+1" }, true);
+  assert.equal(ticked.senderIsReceiver, true);
+  assert.equal(ticked.customerName, "");
+  assert.equal(withSenderIsReceiver(ticked, false).customerPhone, "");
+});
+
+test("a stored line with sender is the receiver opens ticked, its sender fields blank", () => {
+  const row = {
+    id: "L9", kind: "barrels", quantity: 1, ownerKind: "customer",
+    customerName: "Mariama", customerPhone: "+224620000000",
+    receiverName: "Mariama", receiverPhone: "+224620000000",
+    notifyCustomer: true, notifyReceiver: true, senderIsReceiver: true,
+  };
+  const draft = containerLineDraftFromRow(row);
+  assert.equal(draft.senderIsReceiver, true);
+  assert.equal(draft.customerName, "");
+  assert.equal(draft.customerPhone, "");
+  // Saved as it opened, nothing about its people changed.
+  assert.equal(lineContactsEdited(row, draft), false);
+  const contacts = containerLineContactsDraftFromRow(row);
+  assert.equal(contacts.senderIsReceiver, true);
+  assert.equal(contacts.customerName, "");
+  assert.deepEqual(containerLineContactsPayload(contacts, row), {
+    customerName: "Mariama", customerPhone: "+224620000000",
+    receiverName: "Mariama", receiverPhone: "+224620000000",
+    notifyCustomer: true, notifyReceiver: true, senderIsReceiver: true,
+  });
+  assert.equal(containerLineFromRow(row).senderIsReceiver, true);
+});
+
+test("an old line with no receiver takes an edit that leaves its people alone", () => {
+  const old = {
+    id: "L3", containerId: "C1", kind: "car", vinNumber: "1HGCM82633A004352",
+    ownerKind: "customer", customerName: "Fatou", customerPhone: "+16465550100",
+    receiverName: "", receiverPhone: "",
+  };
+  const draft = containerLineDraftFromRow(old);
+  assert.deepEqual(validateContainerLineDraft({ ...draft, carMake: "Toyota" }, old), []);
+  assert.deepEqual(validateContainerLineDraft({ ...draft, customerPhone: "+16465550199" }, old), ["receiver_name_required"]);
+  assert.deepEqual(validateContainerLineDraft({ ...draft, carMake: "Toyota" }), ["receiver_name_required"], "a new line always names its receiver");
+  const contacts = containerLineContactsDraftFromRow(old);
+  assert.deepEqual(validateContainerLineContactsDraft(contacts, old), []);
+  assert.deepEqual(validateContainerLineContactsDraft({ ...contacts, customerName: "Fatou B" }, old), ["receiver_name_required"]);
+});
+
+test("with no sender the receiver is the customer, name and phone from one person", () => {
+  const line = { ownerKind: "customer", customerName: "", customerPhone: "", receiverName: "Mariama", receiverPhone: "+224620000000" };
+  assert.deepEqual(lineCustomer(line), { name: "Mariama", phone: "+224620000000" });
+  assert.equal(lineCustomerName(line), "Mariama");
+  assert.equal(lineCustomerPhone(line), "+224620000000");
+  assert.equal(lineCustomerIsReceiver(line), true);
+  assert.deepEqual(lineCustomer({ ...line, customerName: "Fatou" }), { name: "Fatou", phone: "" });
+  assert.equal(lineCustomerIsReceiver({ ...line, customerName: "Fatou" }), false);
+  assert.deepEqual(lineCustomer({ ...line, customerPhone: "+16465550100" }), { name: "", phone: "+16465550100" });
+  assert.equal(lineCustomerIsReceiver({ ...line, customerName: "Mariama", senderIsReceiver: true }), true);
+  assert.deepEqual(lineCustomer({ ...line, ownerKind: "stock" }), { name: "", phone: "" });
+  assert.equal(lineCustomerIsReceiver({ ...line, ownerKind: "stock" }), false);
 });

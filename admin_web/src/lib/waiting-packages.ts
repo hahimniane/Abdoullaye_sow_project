@@ -598,6 +598,8 @@ export type WaitingPackageDraft = {
   receiverPhone: string;
   notifyCustomer: boolean;
   notifyReceiver: boolean;
+  /** "Sender is the receiver": the sender fields hidden, the receiver stored as both. */
+  senderIsReceiver: boolean;
   destinationCountryId: string;
   destinationCountryName: string;
   /** A car's size in inches as typed (each piece has its own). */
@@ -639,6 +641,7 @@ export function emptyWaitingPackageDraft(destination: DestinationRef | null = nu
     receiverPhone: "",
     notifyCustomer: true,
     notifyReceiver: true,
+    senderIsReceiver: false,
     destinationCountryId: destination?.id ?? "",
     destinationCountryName: destination?.name ?? "",
     lengthIn: "",
@@ -657,11 +660,14 @@ export function emptyWaitingPackageDraft(destination: DestinationRef | null = nu
  * and the money start over, on the business's main destination.
  */
 export function nextPackageForSameSender(draft: WaitingPackageDraft, destination: DestinationRef | null = null): WaitingPackageDraft {
+  // A sender who was the receiver stays the sender, now named in the sender
+  // fields: the next package goes to someone else.
+  const same = draft.senderIsReceiver;
   return {
     ...emptyWaitingPackageDraft(destination),
-    customerName: draft.customerName,
-    customerPhone: draft.customerPhone,
-    notifyCustomer: draft.notifyCustomer,
+    customerName: same ? draft.receiverName : draft.customerName,
+    customerPhone: same ? draft.receiverPhone : draft.customerPhone,
+    notifyCustomer: same ? draft.notifyReceiver : draft.notifyCustomer,
   };
 }
 
@@ -683,6 +689,7 @@ export function waitingPackageDraftFromRow(row: unknown): WaitingPackageDraft {
     receiverPhone: base.receiverPhone,
     notifyCustomer: base.notifyCustomer,
     notifyReceiver: base.notifyReceiver,
+    senderIsReceiver: base.senderIsReceiver,
     destinationCountryId: line.destinationCountryId,
     destinationCountryName: line.destinationCountryName,
     // A car's own size and price; a package's are on its pieces.
@@ -718,6 +725,7 @@ function lineDraftOf(draft: WaitingPackageDraft): ContainerLineDraft {
     receiverPhone: draft.receiverPhone,
     notifyCustomer: draft.notifyCustomer,
     notifyReceiver: draft.notifyReceiver,
+    senderIsReceiver: draft.senderIsReceiver === true,
   };
 }
 
@@ -755,8 +763,14 @@ function readSides(draft: Pick<WaitingPackageDraft, "lengthIn" | "widthIn" | "he
  * package's own, then the money taken at drop-off (when the switch is on).
  * `staffIds` is the business's people the "Received by" select offers.
  */
-export function validateWaitingPackage(draft: WaitingPackageDraft, staffIds?: readonly string[]): WaitingPackageError[] {
-  const errors: WaitingPackageError[] = validateContainerLineDraft(lineDraftOf(draft));
+export function validateWaitingPackage(
+  draft: WaitingPackageDraft,
+  staffIds?: readonly string[],
+  original?: unknown,
+): WaitingPackageError[] {
+  // `original`: the stored package when the form edits one (an old package
+  // with no receiver is only asked for one when its people change).
+  const errors: WaitingPackageError[] = validateContainerLineDraft(lineDraftOf(draft), original);
   if (!text(draft.destinationCountryId, 60)) errors.push("package_destination_required");
   if (!lineDraftHasPieces(draft)) {
     // A car's own size and price; pieces carry theirs (checked above).
@@ -866,6 +880,7 @@ export const WAITING_PACKAGE_FIELD_ORDER = [
   "wpk-received-by",
   "wpk-customer-name",
   "wpk-customer-phone",
+  "wpk-receiver-name",
   "wpk-receiver-phone",
 ] as const;
 
@@ -892,6 +907,7 @@ const WAITING_PACKAGE_ERROR_FIELD: Partial<Record<WaitingPackageError, WaitingPa
   received_by_invalid: "wpk-received-by",
   customer_name_required: "wpk-customer-name",
   customer_phone_invalid: "wpk-customer-phone",
+  receiver_name_required: "wpk-receiver-name",
   receiver_phone_invalid: "wpk-receiver-phone",
 };
 

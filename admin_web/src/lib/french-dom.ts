@@ -5276,6 +5276,8 @@ Object.assign(TEXT_TRANSLATIONS, {
     "Le téléphone du destinataire ne ressemble pas à un numéro de téléphone.",
   "Send this person WhatsApp updates about this shipment":
     "Envoyer à cette personne des mises à jour WhatsApp sur cet envoi",
+  // Package forms (owner, 2026-10-21): the sender may be the receiver.
+  "Sender is the receiver": "L’expéditeur est le destinataire",
   "Add the country code so WhatsApp updates can reach this number.":
     "Ajoutez l’indicatif du pays pour que les mises à jour WhatsApp puissent atteindre ce numéro.",
   "This number is too short to receive WhatsApp updates.":

@@ -64,3 +64,26 @@ export function ContactPhone({
     </div>
   );
 }
+
+/**
+ * "Sender is the receiver" (owner, 2026-10-21): off by default; ticked, the
+ * form hides the sender's fields and the server stores the receiver as the
+ * sender too. Every package form (add/edit line, waiting package, contacts)
+ * uses this one box.
+ */
+export function SenderIsReceiverBox({
+  checked,
+  onChange,
+  disabled = false,
+}: {
+  checked: boolean;
+  onChange: (value: boolean) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <label className="ctn-notify ctn-same-person">
+      <input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
+      <span>Sender is the receiver</span>
+    </label>
+  );
+}

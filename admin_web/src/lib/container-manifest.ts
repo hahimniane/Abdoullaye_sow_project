@@ -244,6 +244,7 @@ export type ContainerRefusal =
   | "description_required"
   | "owner_kind_invalid"
   | "customer_name_required"
+  | "receiver_name_required"
   | "customer_phone_invalid"
   | "receiver_phone_invalid"
   | "vin_already_loaded"
@@ -306,6 +307,7 @@ export const CONTAINER_MESSAGES: Record<ContainerRefusal, string> = {
   description_required: "Say what it is.",
   owner_kind_invalid: "Say whose this is: a customer, or your own stock.",
   customer_name_required: "Enter the customer's name.",
+  receiver_name_required: "Enter the receiver's name.",
   customer_phone_invalid:
     "The customer's phone doesn't look like a phone number.",
   receiver_phone_invalid:
@@ -554,6 +556,11 @@ export type ContainerLineDraft = {
   /** Whether the receiver hears about the shipment on WhatsApp. On by default. */
   notifyReceiver: boolean;
   /**
+   * "Sender is the receiver" (owner, 2026-10-21; off by default): the sender
+   * fields are hidden and the server stores the receiver as the sender too.
+   */
+  senderIsReceiver: boolean;
+  /**
    * What a line that is not a car holds: each barrel, box or other thing
    * handed over (docs/WAITING_PACKAGES.md "Pieces"). `quantity` and
    * `description` are what the server writes from them for older apps.
@@ -585,6 +592,7 @@ export const emptyContainerLineDraft: ContainerLineDraft = {
   receiverPhone: "",
   notifyCustomer: true,
   notifyReceiver: true,
+  senderIsReceiver: false,
   pieces: [newPieceDraft()],
   pickupFee: null,
 };
@@ -601,6 +609,7 @@ export type ContainerLineError =
   | "description_required"
   | "owner_kind_invalid"
   | "customer_name_required"
+  | "receiver_name_required"
   | "customer_phone_invalid"
   | "receiver_phone_invalid"
   | "pieces_required"
@@ -614,22 +623,45 @@ export type ContainerLineError =
 
 type ContactPhoneError = "customer_phone_invalid" | "receiver_phone_invalid";
 
+/** The contact fields every line form, and every stored line, carries. */
+type LineContactInput = {
+  customerName?: unknown;
+  customerPhone?: unknown;
+  receiverName?: unknown;
+  receiverPhone?: unknown;
+  notifyCustomer?: unknown;
+  notifyReceiver?: unknown;
+  senderIsReceiver?: unknown;
+};
+
+/** Whether "Sender is the receiver" is ticked (the server's `senderIsReceiverOf`). */
+function senderIsReceiverOf(input: { senderIsReceiver?: unknown }): boolean {
+  return input.senderIsReceiver === true || input.senderIsReceiver === "true";
+}
+
 /** Same checks as the server's `contactPhoneErrors`. */
 function contactPhoneErrors(
-  input: { customerPhone?: unknown; receiverPhone?: unknown },
+  input: { customerPhone?: unknown; receiverPhone?: unknown; senderIsReceiver?: unknown },
   owner: string,
 ): ContactPhoneError[] {
   const errors: ContactPhoneError[] = [];
-  if (owner === "customer" && !phoneAcceptable(input.customerPhone)) {
+  // A sender who is the receiver has the receiver's phone, checked below.
+  if (owner === "customer" && !senderIsReceiverOf(input) && !phoneAcceptable(input.customerPhone)) {
     errors.push("customer_phone_invalid");
   }
   if (!phoneAcceptable(input.receiverPhone)) errors.push("receiver_phone_invalid");
   return errors;
 }
 
-/** Same checks as the server's `validateContainerLine`. */
+/**
+ * Same checks as the server's `validateContainerLine`. `original` is the
+ * stored line when the form edits one: a line saved before the receiver's
+ * name was required is only asked for it when its people change
+ * (`lineContactsEdited`), as on the server.
+ */
 export function validateContainerLineDraft(
   draft: ContainerLineDraft,
+  original?: unknown,
 ): ContainerLineError[] {
   const errors: ContainerLineError[] = [];
   const kind = text(draft.kind, 20);
@@ -650,13 +682,78 @@ export function validateContainerLineDraft(
   if (!(CONTAINER_OWNER_KINDS as readonly string[]).includes(owner)) {
     errors.push("owner_kind_invalid");
   }
-  // A customer's line has to say who; the business's own stock has no one to
-  // name, and asking for a name there is how fictional customers get typed.
-  if (owner === "customer" && !text(draft.customerName, MAX_LABEL)) {
-    errors.push("customer_name_required");
+  // A customer's line names who collects it; the sender is optional (owner,
+  // 2026-10-21) and the business's own stock names nobody it does not want to.
+  if (
+    owner === "customer" &&
+    !text(draft.receiverName, MAX_LABEL) &&
+    (original === undefined || original === null || lineContactsEdited(original, draft))
+  ) {
+    errors.push("receiver_name_required");
   }
   errors.push(...contactPhoneErrors(draft, owner));
   return errors;
+}
+
+/**
+ * Whether a form changes who a stored line is from or to, or whose it is -
+ * the server's `lineContactsEdited`, compared as both would be stored.
+ */
+export function lineContactsEdited(line: unknown, next: LineContactInput & { ownerKind?: unknown }): boolean {
+  const r = asRow(line);
+  const ownerBefore = text(r.ownerKind, 20);
+  const ownerAfter = next.ownerKind === undefined ? ownerBefore : text(next.ownerKind, 20);
+  if (ownerBefore !== ownerAfter) return true;
+  const a = lineContacts(r, ownerBefore);
+  const b = lineContacts(next, ownerAfter);
+  return (Object.keys(a) as (keyof typeof a)[]).some((key) => String(a[key]) !== String(b[key]));
+}
+
+/**
+ * Ticking or unticking "Sender is the receiver": either way the sender's own
+ * fields start empty (ticked they are hidden, and the server copies the
+ * receiver into them; unticked they open blank).
+ */
+export function withSenderIsReceiver<T extends { senderIsReceiver: boolean; customerName: string; customerPhone: string; notifyCustomer: boolean }>(
+  draft: T,
+  on: boolean,
+): T {
+  return { ...draft, senderIsReceiver: on, customerName: "", customerPhone: "", notifyCustomer: true };
+}
+
+/**
+ * Who the customer of a line is (the server's `lineCustomer`): the sender
+ * when any sender detail was given, else the receiver - a line with no
+ * sender belongs to whoever collects it. Name and phone always come from the
+ * same person; stock has none.
+ */
+export function lineCustomer(line: unknown): { name: string; phone: string } {
+  const r = asRow(line);
+  if (text(r.ownerKind, 20) === "stock") return { name: "", phone: "" };
+  const name = text(r.customerName, MAX_LABEL);
+  const phone = text(r.customerPhone, 40);
+  if (name || phone) return { name, phone };
+  return { name: text(r.receiverName, MAX_LABEL), phone: text(r.receiverPhone, 40) };
+}
+
+/**
+ * Whether a customer's line has no sender of its own - none given, or
+ * "Sender is the receiver" - so its receiver is shown as its customer.
+ */
+export function lineCustomerIsReceiver(line: unknown): boolean {
+  const r = asRow(line);
+  if (text(r.ownerKind, 20) === "stock") return false;
+  return senderIsReceiverOf(r) || (!text(r.customerName, MAX_LABEL) && !text(r.customerPhone, 40));
+}
+
+/** The customer's name (`lineCustomer`). */
+export function lineCustomerName(line: unknown): string {
+  return lineCustomer(line).name;
+}
+
+/** The customer's phone (`lineCustomer`). */
+export function lineCustomerPhone(line: unknown): string {
+  return lineCustomer(line).phone;
 }
 
 /**
@@ -664,29 +761,24 @@ export function validateContainerLineDraft(
  * it: phones stripped of formatting, a stock line naming no customer, and
  * each WhatsApp switch forced off when there is no number to send to.
  */
-function lineContacts(
-  input: {
-    customerName?: unknown;
-    customerPhone?: unknown;
-    receiverName?: unknown;
-    receiverPhone?: unknown;
-    notifyCustomer?: unknown;
-    notifyReceiver?: unknown;
-  },
-  owner: string,
-) {
+function lineContacts(input: LineContactInput, owner: string) {
   const customer = owner === "customer";
-  const customerPhone = customer ? cleanContainerPhone(input.customerPhone) : "";
+  // "Sender is the receiver": one person, written on both sides.
+  const same = customer && senderIsReceiverOf(input);
+  const receiverName = text(input.receiverName, MAX_LABEL);
   const receiverPhone = cleanContainerPhone(input.receiverPhone);
+  const customerPhone = !customer ? "" : same ? receiverPhone : cleanContainerPhone(input.customerPhone);
+  const notifyReceiver = Boolean(receiverPhone) && onUnlessOff(input.notifyReceiver);
   return {
-    customerName: customer ? text(input.customerName, MAX_LABEL) : "",
+    customerName: !customer ? "" : same ? receiverName : text(input.customerName, MAX_LABEL),
     customerPhone,
     // Either owner kind may name a receiver: stock goes to the business's
     // own agent at the port.
-    receiverName: text(input.receiverName, MAX_LABEL),
+    receiverName,
     receiverPhone,
-    notifyCustomer: Boolean(customerPhone) && onUnlessOff(input.notifyCustomer),
-    notifyReceiver: Boolean(receiverPhone) && onUnlessOff(input.notifyReceiver),
+    notifyCustomer: same ? notifyReceiver : Boolean(customerPhone) && onUnlessOff(input.notifyCustomer),
+    notifyReceiver,
+    senderIsReceiver: same,
   };
 }
 
@@ -796,6 +888,9 @@ export function containerLineDraftFromRow(line: unknown): ContainerLineDraft {
   const owner: ContainerOwnerKind = text(r.ownerKind, 20) === "stock" ? "stock" : "customer";
   const isCar = kind === "car";
   const quantity = positiveInt(r.quantity);
+  // Ticked, the sender fields are the receiver's copies: hidden, and blank
+  // again if the box is unticked.
+  const same = owner === "customer" && senderIsReceiverOf(r);
   return {
     kind,
     inLot: isCar ? "no" : "",
@@ -807,14 +902,15 @@ export function containerLineDraftFromRow(line: unknown): ContainerLineDraft {
     quantity: !isCar && quantity > 0 ? String(quantity) : "",
     description: kind === "other" ? text(r.description, MAX_LABEL) : "",
     ownerKind: owner,
-    customerName: owner === "customer" ? text(r.customerName, MAX_LABEL) : "",
-    customerPhone: owner === "customer" ? text(r.customerPhone, 40) : "",
+    customerName: owner === "customer" && !same ? text(r.customerName, MAX_LABEL) : "",
+    customerPhone: owner === "customer" && !same ? text(r.customerPhone, 40) : "",
     receiverName: text(r.receiverName, MAX_LABEL),
     receiverPhone: text(r.receiverPhone, 40),
     // Someone with no number yet starts switched on, as on a new line; a
     // switch staff turned off stays off.
-    notifyCustomer: !text(r.customerPhone, 40) || onUnlessOff(r.notifyCustomer),
+    notifyCustomer: same || !text(r.customerPhone, 40) || onUnlessOff(r.notifyCustomer),
     notifyReceiver: !text(r.receiverPhone, 40) || onUnlessOff(r.notifyReceiver),
+    senderIsReceiver: same,
     // The line's pieces, ids kept (a legacy line's count expanded).
     pieces: pieceDraftsFromLine(r),
     // Its own pickup fee, kept apart from the pieces, when it has one.
@@ -849,6 +945,8 @@ export type ContainerLineContactsDraft = {
   receiverPhone: string;
   notifyCustomer: boolean;
   notifyReceiver: boolean;
+  /** "Sender is the receiver": the sender fields hidden, the receiver stored as both. */
+  senderIsReceiver: boolean;
 };
 
 /**
@@ -858,25 +956,30 @@ export type ContainerLineContactsDraft = {
  */
 export function containerLineContactsDraftFromRow(line: unknown): ContainerLineContactsDraft {
   const r = asRow(line);
+  const same = text(r.ownerKind, 20) === "customer" && senderIsReceiverOf(r);
   return {
-    customerName: text(r.customerName, MAX_LABEL),
-    customerPhone: text(r.customerPhone, 40),
+    customerName: same ? "" : text(r.customerName, MAX_LABEL),
+    customerPhone: same ? "" : text(r.customerPhone, 40),
     receiverName: text(r.receiverName, MAX_LABEL),
     receiverPhone: text(r.receiverPhone, 40),
-    notifyCustomer: onUnlessOff(r.notifyCustomer),
+    notifyCustomer: same || onUnlessOff(r.notifyCustomer),
     notifyReceiver: onUnlessOff(r.notifyReceiver),
+    senderIsReceiver: same,
   };
 }
 
-/** Same checks as the server's `validateContainerLineContacts`. */
+/**
+ * Same checks as the server's `validateContainerLineContacts`: the sender is
+ * optional, and a customer's line whose people change names its receiver.
+ */
 export function validateContainerLineContactsDraft(
   draft: ContainerLineContactsDraft,
   line: unknown,
 ): ContainerLineError[] {
   const owner = text(asRow(line).ownerKind, 20);
   const errors: ContainerLineError[] = [];
-  if (owner === "customer" && !text(draft.customerName, MAX_LABEL)) {
-    errors.push("customer_name_required");
+  if (owner === "customer" && !text(draft.receiverName, MAX_LABEL) && lineContactsEdited(line, draft)) {
+    errors.push("receiver_name_required");
   }
   errors.push(...contactPhoneErrors(draft, owner));
   return errors;
@@ -1302,6 +1405,8 @@ export type ContainerLine = {
   customerPhone: string;
   receiverName: string;
   receiverPhone: string;
+  /** The sender is the receiver (their name and phone are stored on both sides). */
+  senderIsReceiver: boolean;
   trackingCode: string;
   destinationCountryId: string;
   destinationCountryName: string;
@@ -1355,6 +1460,7 @@ export function containerLineFromRow(row: unknown): ContainerLine {
     customerPhone: text(r.customerPhone, 40),
     receiverName: text(r.receiverName, MAX_LABEL),
     receiverPhone: text(r.receiverPhone, 40),
+    senderIsReceiver: r.senderIsReceiver === true,
     trackingCode: text(r.trackingCode, 40),
     destinationCountryId: text(r.destinationCountryId, 60),
     destinationCountryName: text(r.destinationCountryName, MAX_LABEL),

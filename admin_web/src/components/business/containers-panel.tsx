@@ -59,6 +59,9 @@ import {
   containerLineDraftFromRow,
   containerLineFocus,
   containerLineIsStock,
+  lineCustomerIsReceiver,
+  lineCustomerName,
+  withSenderIsReceiver,
   containerLinePayload,
   containerLineTitle,
   containerLineTitleIsCopy,
@@ -115,7 +118,7 @@ import { closePendingTab, openPendingTab, sendPendingTab } from "@/lib/pending-t
 import { CopyValue } from "@/components/copy-value";
 import { ContainerLabelsDialog } from "@/components/business/container-labels-dialog";
 import { AddWaitingPackagesDialog } from "@/components/business/add-waiting-packages-dialog";
-import { ContactPhone } from "@/components/business/contact-phone";
+import { ContactPhone, SenderIsReceiverBox } from "@/components/business/contact-phone";
 import { PackageMoney, PackageSize, WaitingPackagesPanel } from "@/components/business/waiting-packages-panel";
 import { ExpectedRequestsSection, PackageRequestsPanel } from "@/components/business/package-requests-panel";
 import { CustomerPhoneField } from "@/components/customer-phone-field";
@@ -851,14 +854,16 @@ export function ContainersPanel({
   // cargo selected and the customer cleared, for the next customer's share.
   async function saveLine(andAnother = false) {
     if (!selected) return;
-    const errors = validateContainerLineDraft(lineDraft);
+    const editing = editingLineId ? lines.rows.find((row) => String(row.id) === editingLineId) : undefined;
+    // An edited line saved before the receiver's name was required is only
+    // asked for it when its people change (the server's rule).
+    const errors = validateContainerLineDraft(lineDraft, editing);
     if (errors.length) {
       setDraftError(containerMessage(errors));
       setLineTried(true);
       return;
     }
     const line = containerLinePayload(lineDraft);
-    const editing = editingLineId ? lines.rows.find((row) => String(row.id) === editingLineId) : undefined;
     // The same refusal the server gives, without the round trip: the rows are
     // already here, so a car on another open container is caught as typed.
     // An edited line never conflicts with itself.
@@ -891,7 +896,7 @@ export function ContainersPanel({
       }
       // "1 barrel" / "2 barrels, 1 box": the list's own wording.
       const what = containerLineTitle(line, lang);
-      const whose = line.customerName || "Business stock";
+      const whose = line.ownerKind === "stock" ? "Business stock" : lineCustomerName(line);
       setAddedThisSitting((list) => [...list, `${what} — ${whose}${line.receiverName ? ` → ${line.receiverName}` : ""}`]);
       setCustomerPick(null);
       setCustomerMenuOpen(false);
@@ -1115,10 +1120,11 @@ export function ContainersPanel({
                     >
                       <span><strong data-no-translate={containerLineTitleIsCopy(row) ? undefined : true}>{title}</strong>{vin && vin !== title && <small data-no-translate>{vin}</small>}{vin && <CopyValue value={vin} label="Copy VIN" />}<LineTrackingCode code={text(row.trackingCode, "")} /><PackageSize line={row} /><PackageMoney line={row} group={groupForLine(lineGroups, row)} lang={lang} /></span>
                       <span>
-                        {stock ? <strong>Business stock</strong> : <strong data-no-translate>{text(row.customerName, "")}</strong>}
-                        {!stock && <small data-no-translate>{text(row.customerPhone, "")}</small>}
-                        {!stock && <RecordPhoneFlags row={row} field="customerPhone" />}
-                        {text(row.receiverName, "") && <small data-no-translate>→ {text(row.receiverName, "")}{text(row.receiverPhone, "") ? ` · ${text(row.receiverPhone, "")}` : ""}</small>}
+                        {/* No sender of its own: the receiver is the customer. */}
+                        {stock ? <strong>Business stock</strong> : <strong data-no-translate>{lineCustomerName(row)}</strong>}
+                        {!stock && <small data-no-translate>{lineCustomerIsReceiver(row) ? text(row.receiverPhone, "") : text(row.customerPhone, "")}</small>}
+                        {!stock && !lineCustomerIsReceiver(row) && <RecordPhoneFlags row={row} field="customerPhone" />}
+                        {text(row.receiverName, "") && !lineCustomerIsReceiver(row) && <small data-no-translate>→ {text(row.receiverName, "")}{text(row.receiverPhone, "") ? ` · ${text(row.receiverPhone, "")}` : ""}</small>}
                         <RecordPhoneFlags row={row} field="receiverPhone" />
                         <LineWhatsApp line={row} />
                       </span>
@@ -1235,9 +1241,9 @@ export function ContainersPanel({
                       >
                         <span><strong data-no-translate={containerLineTitleIsCopy(hit.line) ? undefined : true}>{title}</strong>{vin && vin !== title && <small data-no-translate>{vin}</small>}{vin && <CopyValue value={vin} label="Copy VIN" />}<LineTrackingCode code={text(hit.line.trackingCode, "")} /></span>
                         <span>
-                          {stock ? <strong>Business stock</strong> : <strong data-no-translate>{text(hit.line.customerName, "")}</strong>}
-                          {!stock && <small data-no-translate>{text(hit.line.customerPhone, "")}</small>}
-                          {!stock && <RecordPhoneFlags row={hit.line} field="customerPhone" />}
+                          {stock ? <strong>Business stock</strong> : <strong data-no-translate>{lineCustomerName(hit.line)}</strong>}
+                          {!stock && <small data-no-translate>{lineCustomerIsReceiver(hit.line) ? text(hit.line.receiverPhone, "") : text(hit.line.customerPhone, "")}</small>}
+                          {!stock && !lineCustomerIsReceiver(hit.line) && <RecordPhoneFlags row={hit.line} field="customerPhone" />}
                           <RecordPhoneFlags row={hit.line} field="receiverPhone" />
                           <LineWhatsApp line={hit.line} />
                         </span>
@@ -1503,16 +1509,19 @@ export function ContainersPanel({
               {ownerVisible && (
               <fieldset className="lst-fieldset">
                 <label className="lst-radio"><input type="radio" name="ctnowner" checked={lineDraft.ownerKind === "customer"} onChange={() => setLineDraft((d) => ({ ...d, ownerKind: "customer" }))} /><span>A customer's — say who</span></label>
-                <label className="lst-radio"><input type="radio" name="ctnowner" checked={lineDraft.ownerKind === "stock"} onChange={() => { setCustomerMenuOpen(false); setLineDraft((d) => ({ ...d, ownerKind: "stock", customerName: "", customerPhone: "" })); }} /><span>Business stock — your own goods, nobody to name</span></label>
+                <label className="lst-radio"><input type="radio" name="ctnowner" checked={lineDraft.ownerKind === "stock"} onChange={() => { setCustomerMenuOpen(false); setLineDraft((d) => ({ ...d, ownerKind: "stock", customerName: "", customerPhone: "", senderIsReceiver: false })); }} /><span>Business stock — your own goods, nobody to name</span></label>
               </fieldset>
               )}
               {addedThisSitting.length > 0 && (
                 <p className="lst-hint" role="status">Added so far: <span data-no-translate>{addedThisSitting.join("; ")}</span>.</p>
               )}
               {ownerVisible && lineDraft.ownerKind === "customer" && (
+                <SenderIsReceiverBox checked={lineDraft.senderIsReceiver} disabled={busy} onChange={(on) => { setCustomerPick(null); setCustomerMenuOpen(false); setLineDraft((d) => withSenderIsReceiver(d, on)); }} />
+              )}
+              {ownerVisible && lineDraft.ownerKind === "customer" && !lineDraft.senderIsReceiver && (
                 <div className="lst-form-grid">
                   <label className="lst-field" style={{ position: "relative" }}><span>Customer</span>
-                    <input value={lineDraft.customerName} autoComplete="off" onFocus={() => setCustomerMenuOpen(true)} onBlur={() => window.setTimeout(() => setCustomerMenuOpen(false), 150)} onChange={(e) => { setCustomerPick(null); setCustomerMenuOpen(true); setLineDraft((d) => ({ ...d, customerName: e.target.value })); }} />
+                    <input value={lineDraft.customerName} placeholder="optional" autoComplete="off" onFocus={() => setCustomerMenuOpen(true)} onBlur={() => window.setTimeout(() => setCustomerMenuOpen(false), 150)} onChange={(e) => { setCustomerPick(null); setCustomerMenuOpen(true); setLineDraft((d) => ({ ...d, customerName: e.target.value })); }} />
                     {customerMatches.length > 0 && (
                       <ul className="lst-suggest" role="listbox" aria-label="Saved customers">
                         {customerMatches.map((c) => (
@@ -1606,9 +1615,12 @@ export function ContainersPanel({
               {draftError && <div className="lst-form-error" role="alert">{draftError}</div>}
               <p className="lst-hint">Names and phone numbers can be corrected at any time, even after the container has sailed.</p>
               {!containerLineIsStock(contactsLine) && (
+                <SenderIsReceiverBox checked={contactsDraft.senderIsReceiver} disabled={busy} onChange={(on) => setContactsDraft((d) => withSenderIsReceiver(d, on))} />
+              )}
+              {!containerLineIsStock(contactsLine) && !contactsDraft.senderIsReceiver && (
                 <div className="lst-form-grid">
                   <label className="lst-field"><span>Customer</span>
-                    <input value={contactsDraft.customerName} autoComplete="off" onChange={(e) => setContactsDraft((d) => ({ ...d, customerName: e.target.value }))} />
+                    <input value={contactsDraft.customerName} placeholder="optional" autoComplete="off" onChange={(e) => setContactsDraft((d) => ({ ...d, customerName: e.target.value }))} />
                   </label>
                   <ContactPhone
                     id="ctn-contacts-customer-phone"

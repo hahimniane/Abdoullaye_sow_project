@@ -229,14 +229,19 @@ test("the register form's 'Money received now?' asks what the payment dialog ask
   assert.match(panelSource, /<span>Received by<\/span>[\s\S]*?<option value="">Choose staff<\/option>[\s\S]*?staffOptions\.map/);
   assert.match(paymentSource, /INVOICE_PAYMENT_METHODS\.map\(\(m\) => \(<option key=\{m\} value=\{m\}>\{INVOICE_PAYMENT_METHOD_LABELS\[m\]\}<\/option>\)\)/);
   // Checked against the people offered, sent with the package, cleared for the next one.
-  assert.match(panelSource, /validateWaitingPackage\(draft, staffIds\)/);
+  assert.match(panelSource, /validateWaitingPackage\(draft, staffIds, editingRow\)/);
   assert.match(panelSource, /addWaitingPackagePayload\(businessId, draft\)/);
   assert.match(panelSource, /setDraft\(nextPackageForSameSender\(draft, defaultDestination\)\)/);
 });
 
 test("the customer's and receiver's phones use the shared picker through ContactPhone", () => {
-  assert.match(panelSource, /import \{ ContactPhone \} from "@\/components\/business\/contact-phone";/);
+  assert.match(panelSource, /import \{ ContactPhone, SenderIsReceiverBox \} from "@\/components\/business\/contact-phone";/);
   assert.equal((panelSource.match(/<ContactPhone\b/g) ?? []).length, 2);
+  // "Sender is the receiver" hides the sender's fields (owner, 2026-10-21);
+  // the receiver's name is a field the refusal can focus.
+  assert.match(panelSource, /<SenderIsReceiverBox checked=\{draft\.senderIsReceiver\}[\s\S]{0,240}?withSenderIsReceiver\(d, on\)/);
+  assert.match(panelSource, /\{!draft\.senderIsReceiver && \(\s*<div className="lst-form-grid">/);
+  assert.match(panelSource, /<input id="wpk-receiver-name" \{\.\.\.invalidProps\("wpk-receiver-name"\)\}/);
   assert.doesNotMatch(panelSource, /<input[^>]*value=\{[^}]*(customerPhone|receiverPhone)\}/);
 });
 

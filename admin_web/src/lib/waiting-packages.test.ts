@@ -434,9 +434,30 @@ test("save & add another keeps only the sender, for a different receiver or coun
   assert.deepEqual(next.money, emptyIntakeMoney());
 });
 
+test("sender is the receiver: one person on both sides, and the next package keeps them as sender", () => {
+  const same = draft({ customerName: "", customerPhone: "", senderIsReceiver: true });
+  assert.deepEqual(validateWaitingPackage(same), []);
+  const payload = addWaitingPackagePayload("biz", same);
+  assert.equal(payload.senderIsReceiver, true);
+  assert.equal(payload.customerName, "Mariama Bah");
+  assert.equal(payload.customerPhone, "+224620112233");
+  // Save & add another: the next package goes to someone else, from them.
+  const next = nextPackageForSameSender(same, guinea);
+  assert.equal(next.senderIsReceiver, false);
+  assert.equal(next.customerName, "Mariama Bah");
+  assert.equal(next.customerPhone, "+224 620 11 22 33");
+  assert.equal(next.receiverName, "");
+  // Reopened, the box is ticked and the sender fields are blank.
+  const reopened = waitingPackageDraftFromRow({ id: "w", ...payload });
+  assert.equal(reopened.senderIsReceiver, true);
+  assert.equal(reopened.customerName, "");
+});
+
 test("a package needs pieces that say what they are, a country, and a car its VIN, size and price", () => {
   assert.deepEqual(validateWaitingPackage(draft()), []);
-  assert.deepEqual(validateWaitingPackage(draft({ customerName: "" })), ["customer_name_required"]);
+  // The sender is optional (owner, 2026-10-21); the receiver's name is not.
+  assert.deepEqual(validateWaitingPackage(draft({ customerName: "", customerPhone: "" })), []);
+  assert.deepEqual(validateWaitingPackage(draft({ receiverName: " " })), ["receiver_name_required"]);
   assert.deepEqual(validateWaitingPackage(draft({ pieces: [] })), ["pieces_required"]);
   assert.deepEqual(validateWaitingPackage(draft({ pieces: [box("")] })), ["piece_description_required"]);
   assert.deepEqual(validateWaitingPackage(draft({ pieces: [barrel("-3")] })), ["piece_price_invalid"]);
@@ -453,12 +474,13 @@ test("a package needs pieces that say what they are, a country, and a car its VI
   // Pieces ignore the car-only fields entirely.
   assert.deepEqual(validateWaitingPackage(draft({ lengthIn: "40", price: "x" })), []);
   // Every problem at once, in the server's sentences.
-  const everything = validateWaitingPackage(draft({ customerName: "", destinationCountryId: "", pieces: [box("", "x")] }));
-  assert.deepEqual(everything, ["piece_price_invalid", "piece_description_required", "customer_name_required", "package_destination_required"]);
+  const everything = validateWaitingPackage(draft({ receiverName: "", destinationCountryId: "", pieces: [box("", "x")] }));
+  assert.deepEqual(everything, ["piece_price_invalid", "piece_description_required", "receiver_name_required", "package_destination_required"]);
   assert.equal(
-    waitingPackageMessage(["customer_name_required", "piece_size_invalid"]),
-    `${CONTAINER_MESSAGES.customer_name_required} ${CONTAINER_MESSAGES.piece_size_invalid}`,
+    waitingPackageMessage(["receiver_name_required", "piece_size_invalid"]),
+    `${CONTAINER_MESSAGES.receiver_name_required} ${CONTAINER_MESSAGES.piece_size_invalid}`,
   );
+  assert.equal(firstInvalidWaitingPackageField(["receiver_name_required"]), "wpk-receiver-name");
 });
 
 test("the add request sends the pieces (ids, kinds, sizes, cents) and the summary older servers read", () => {
@@ -482,6 +504,7 @@ test("the add request sends the pieces (ids, kinds, sizes, cents) and the summar
     receiverPhone: "+224620112233",
     notifyCustomer: true,
     notifyReceiver: true,
+    senderIsReceiver: false,
     quantity: 2,
     description: "Barrel, Clothes",
     pieces: [
@@ -616,7 +639,12 @@ test("a waiting package opens back into the form with its pieces, ids kept", () 
   ]);
   assert.equal(reopened.price, "", "no line price for pieces");
   assert.equal(reopened.payOnArrival, true);
-  assert.deepEqual(validateWaitingPackage({ ...draft(), ...reopened, customerName: "Fatou Diallo" }), []);
+  assert.deepEqual(validateWaitingPackage({ ...draft(), ...reopened, customerName: "Fatou Diallo", receiverName: "Mariama Bah" }), []);
+  // Saved before the receiver's name was required: an edit that leaves its
+  // people alone is not refused; one that changes them asks for it.
+  const storedLine = { ...stored, ownerKind: "customer" };
+  assert.deepEqual(validateWaitingPackage(reopened, undefined, storedLine), []);
+  assert.deepEqual(validateWaitingPackage({ ...reopened, customerPhone: "+16465550100" }, undefined, storedLine), ["receiver_name_required"]);
   // A line from before pieces reads as its pieces: 3 barrels, the price spread.
   const old = waitingPackageDraftFromRow({ id: "l", kind: "barrels", quantity: 3, customerName: "A", priceCents: 10000 });
   assert.deepEqual(old.pieces.map((p) => [p.id, p.kind, p.price]), [["p1", "barrel", "33.34"], ["p2", "barrel", "33.33"], ["p3", "barrel", "33.33"]]);
@@ -865,7 +893,7 @@ test("every refusal the register form can produce that names a field maps to one
   const fields = new Set<string>(WAITING_PACKAGE_FIELD_ORDER);
   const everything = validateWaitingPackage(
     {
-      ...draft({ kind: "car", vinNumber: "", customerName: "", customerPhone: "12", receiverPhone: "12", lengthIn: "3", price: "x", destinationCountryId: "" }),
+      ...draft({ kind: "car", vinNumber: "", customerName: "", customerPhone: "12", receiverName: "", receiverPhone: "12", lengthIn: "3", price: "x", destinationCountryId: "" }),
       money: { ...emptyIntakeMoney(), received: true, amount: "", method: "barter" as never, receivedByStaffId: "" },
     },
     ["cashier"],
