@@ -947,12 +947,16 @@ class WaitingPackageCard extends StatelessWidget {
     final locale = dateLocaleOf(context);
     final addedBy =
         staff.where((s) => s.id == line.addedByStaffId).firstOrNull?.name ?? '';
-    final owner = [line.customerName, line.customerPhone]
+    // With no sender of its own, the receiver is the customer
+    // (lineCustomer) and is not repeated after the arrow.
+    final owner = [lineCustomerName(line), lineCustomerPhone(line)]
         .where((p) => p.isNotEmpty)
         .join(' · ');
-    final receiver = [line.receiverName, line.receiverPhone]
-        .where((p) => p.isNotEmpty)
-        .join(' · ');
+    final receiver = line.customerIsReceiver
+        ? ''
+        : [line.receiverName, line.receiverPhone]
+            .where((p) => p.isNotEmpty)
+            .join(' · ');
     final size = packageSize(line);
     final where = [
       // "3 pieces · Guinea": the count the labels are printed for.
@@ -1030,7 +1034,7 @@ class WaitingPackageCard extends StatelessWidget {
                       line.vehicleLabel != line.vinNumber)
                     Text(line.vinNumber, style: muted(12.5)),
                   if (owner.isNotEmpty) Text(owner, style: muted(13)),
-                  if (line.customerPhone.isNotEmpty)
+                  if (line.customerPhone.isNotEmpty && !line.customerIsReceiver)
                     RecordPhoneFlagNotes(
                       flags: line.phoneFlags(RecordPhoneField.customer),
                       field: RecordPhoneField.customer,

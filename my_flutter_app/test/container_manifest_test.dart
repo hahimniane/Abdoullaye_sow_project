@@ -202,6 +202,7 @@ void main() {
           kind: containerLineKindBarrels,
           ownerKind: containerOwnerCustomer,
           customerName: 'Mamadou',
+          receiverName: 'Mariama',
         )),
         ['quantity_required'],
       );
@@ -218,14 +219,35 @@ void main() {
       );
     });
 
-    test('a customer line names the customer; stock names nobody', () {
+    // Owner, 2026-10-21: the sender is optional, the receiver's name is
+    // required on a customer's line.
+    test('a customer line names its receiver; stock names nobody', () {
       expect(
         validateContainerLine(const ContainerLineDraft(
           kind: containerLineKindBarrels,
           quantity: 4,
           ownerKind: containerOwnerCustomer,
         )),
-        ['customer_name_required'],
+        ['receiver_name_required'],
+      );
+      expect(
+        validateContainerLine(const ContainerLineDraft(
+          kind: containerLineKindBarrels,
+          quantity: 4,
+          ownerKind: containerOwnerCustomer,
+          customerName: 'Fatou',
+        )),
+        ['receiver_name_required'],
+      );
+      expect(
+        validateContainerLine(const ContainerLineDraft(
+          kind: containerLineKindBarrels,
+          quantity: 4,
+          ownerKind: containerOwnerCustomer,
+          receiverName: 'Mariama',
+        )),
+        isEmpty,
+        reason: 'no sender is fine',
       );
       expect(
         validateContainerLine(const ContainerLineDraft(
@@ -439,7 +461,7 @@ void main() {
   group('who hears about a line', () {
     ContainerLineDraft customerLine({
       String customerPhone = '',
-      String receiverName = '',
+      String receiverName = 'Mariama',
       String receiverPhone = '',
       bool notifyCustomer = true,
       bool notifyReceiver = true,
@@ -616,16 +638,27 @@ void main() {
         'receiverPhone': '+224620000000',
         'notifyCustomer': true,
         'notifyReceiver': true,
+        'senderIsReceiver': false,
       });
+      // The sender may be taken away; the receiver may not.
       expect(
         validateContainerLineContacts(
-            const ContainerLineContactsDraft(customerName: ' '), stored),
-        ['customer_name_required'],
+            const ContainerLineContactsDraft(
+                customerName: ' ', receiverName: 'Mariama'),
+            stored),
+        isEmpty,
+      );
+      expect(
+        validateContainerLineContacts(
+            const ContainerLineContactsDraft(customerName: 'Fatou'), stored),
+        ['receiver_name_required'],
       );
       expect(
         validateContainerLineContacts(
           const ContainerLineContactsDraft(
-              customerName: 'Fatou', receiverPhone: 'nope'),
+              customerName: 'Fatou',
+              receiverName: 'Mariama',
+              receiverPhone: 'nope'),
           stored,
         ),
         ['receiver_phone_invalid'],
@@ -736,6 +769,131 @@ void main() {
           isFalse);
       expect(containerCarrierNeedsChoice(box()), isFalse);
       expect(containerCarrierNeedsChoice(null), isFalse);
+    });
+  });
+
+  // Owner, 2026-10-21: the sender is optional, the receiver required, and
+  // "Sender is the receiver" stores one person on both sides. Mirrors
+  // functions/test/container-manifest.test.js.
+  group('sender and receiver', () {
+    ContainerLine stored(Map<String, dynamic> extra) =>
+        ContainerLine.fromMap('l1', {
+          'businessId': 'b1',
+          'containerId': 'c1',
+          'kind': containerLineKindBarrels,
+          'quantity': 2,
+          'ownerKind': containerOwnerCustomer,
+          ...extra,
+        });
+
+    test('sender is the receiver stores copies and the flag', () {
+      const draft = ContainerLineDraft(
+        kind: containerLineKindBarrels,
+        quantity: 1,
+        ownerKind: containerOwnerCustomer,
+        customerName: 'stale',
+        customerPhone: 'not a phone',
+        receiverName: ' Mariama Bah ',
+        receiverPhone: '+224 620 00 00 00',
+        senderIsReceiver: true,
+      );
+      // The hidden sender fields are not checked: the receiver's are.
+      expect(validateContainerLine(draft), isEmpty);
+      final record = containerLineRecord(draft);
+      expect(record['senderIsReceiver'], isTrue);
+      expect(record['customerName'], 'Mariama Bah');
+      expect(record['customerPhone'], '+224620000000');
+      expect(record['notifyCustomer'], isTrue);
+      expect(const ContainerLineDraft().senderIsReceiver, isFalse,
+          reason: 'off by default');
+      // Never on stock.
+      final stock = containerLineRecord(const ContainerLineDraft(
+        kind: containerLineKindBarrels,
+        quantity: 1,
+        ownerKind: containerOwnerStock,
+        receiverName: 'Agent',
+        senderIsReceiver: true,
+      ));
+      expect(stock['senderIsReceiver'], isFalse);
+      expect(stock['customerName'], '');
+    });
+
+    test('a stored line with the box ticked hears once, as the receiver', () {
+      final line = stored({
+        'customerName': 'Mariama',
+        'customerPhone': '+224620000000',
+        'receiverName': 'Mariama',
+        'receiverPhone': '+224620000000',
+        'senderIsReceiver': true,
+      });
+      expect(line.senderIsReceiver, isTrue);
+      expect(line.updatesCustomer, isFalse);
+      expect(line.updatesReceiver, isTrue);
+      expect(line.customerIsReceiver, isTrue);
+      final start = ContainerLineContactsDraft.fromLine(line);
+      expect(start.senderIsReceiver, isTrue);
+      expect(start.customerName, '');
+      expect(start.customerPhone, '');
+      expect(lineContactsEdited(line, start), isFalse);
+      expect(validateContainerLineContacts(start, line), isEmpty);
+    });
+
+    test('with no sender the receiver is the customer, from one person', () {
+      final line = stored({
+        'receiverName': 'Mariama',
+        'receiverPhone': '+224620000000',
+      });
+      expect(lineCustomer(line), (name: 'Mariama', phone: '+224620000000'));
+      expect(lineCustomerName(line), 'Mariama');
+      expect(lineCustomerPhone(line), '+224620000000');
+      expect(line.customerIsReceiver, isTrue);
+      final sender = stored({
+        'customerName': 'Fatou',
+        'receiverName': 'Mariama',
+        'receiverPhone': '+224620000000',
+      });
+      expect(lineCustomer(sender), (name: 'Fatou', phone: ''));
+      expect(sender.customerIsReceiver, isFalse);
+      expect(lineCustomer(stored({
+        'ownerKind': containerOwnerStock,
+        'receiverName': 'Agent',
+      })), (name: '', phone: ''));
+      // Search answers for the receiver as the customer.
+      expect(
+          [for (final h in searchContainerLines([line], const {}, 'mari'))
+            h.line.id],
+          ['l1']);
+    });
+
+    test('an old line with no receiver takes an edit that leaves its people',
+        () {
+      final old = stored({
+        'customerName': 'Fatou',
+        'customerPhone': '+16465550100',
+      });
+      const unchanged = ContainerLineDraft(
+        kind: containerLineKindBarrels,
+        quantity: 5,
+        ownerKind: containerOwnerCustomer,
+        customerName: 'Fatou',
+        customerPhone: '+1 646 555 0100',
+      );
+      expect(validateContainerLine(unchanged, current: old), isEmpty);
+      expect(validateContainerLine(unchanged), ['receiver_name_required'],
+          reason: 'a new line always names its receiver');
+      const newPhone = ContainerLineDraft(
+        kind: containerLineKindBarrels,
+        quantity: 5,
+        ownerKind: containerOwnerCustomer,
+        customerName: 'Fatou',
+        customerPhone: '+16465550199',
+      );
+      expect(validateContainerLine(newPhone, current: old),
+          ['receiver_name_required']);
+      expect(
+          validateContainerLineContacts(
+              ContainerLineContactsDraft.fromLine(old), old),
+          isEmpty);
     });
   });
 }

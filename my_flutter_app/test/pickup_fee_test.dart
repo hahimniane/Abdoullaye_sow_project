@@ -57,6 +57,7 @@ void main() {
       kind: 'other',
       ownerKind: 'customer',
       customerName: 'Fatou Diallo',
+      receiverName: 'Mariama Bah',
       pieces: pieces,
       pickupFeeCents: 2000,
     );

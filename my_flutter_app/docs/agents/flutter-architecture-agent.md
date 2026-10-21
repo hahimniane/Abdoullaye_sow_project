@@ -446,3 +446,12 @@ Add future project conventions and repeated architectural decisions here.
   `admin_web/src/lib/social-sign-in*.ts`, `GoogleSignInButton` in
   `RoleSignInCard`; the router calls `completeSocialSignInOnce` before
   deciding a Google account has no profile.
+- Package lines (docs/WAITING_PACKAGES.md "Sender and receiver",
+  2026-10-21): the sender is optional, the receiver's name required on a
+  customer line; "Sender is the receiver" (`senderIsReceiver`) stores the
+  receiver on both sides and is one `SenderIsReceiverBox` in
+  `containers_screen.dart` (line sheet + contacts sheet). Whoever a line's
+  customer is comes from `lineCustomer` / `ContainerLine.customerIsReceiver`;
+  edit forms pass the stored line (`validateContainerLine(draft, current:)`)
+  so an old line with no receiver is only asked for one when its people
+  change (`lineContactsEdited`), as the server does.

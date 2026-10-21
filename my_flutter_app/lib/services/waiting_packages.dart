@@ -510,8 +510,11 @@ String? assignSelectionRefusal(int count) =>
 /// checks, then the two things a waiting package cannot do without - a
 /// customer (stock is not "dropped off") and a destination. Mirrors
 /// `validateWaitingPackage`.
-List<String> validateWaitingPackage(ContainerLineDraft draft) {
-  final errors = validateContainerLine(draft);
+List<String> validateWaitingPackage(
+  ContainerLineDraft draft, {
+  ContainerLine? current,
+}) {
+  final errors = validateContainerLine(draft, current: current);
   if (draft.ownerKind.trim() == containerOwnerStock) {
     errors.add('owner_kind_invalid');
   }

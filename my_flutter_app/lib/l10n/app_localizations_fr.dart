@@ -9341,6 +9341,12 @@ class AppLocalizationsFr extends AppLocalizations {
       'Envoyer à cette personne les mises à jour WhatsApp de cet envoi';
 
   @override
+  String get ctrErrReceiverName => 'Saisissez le nom du destinataire.';
+
+  @override
+  String get ctrSenderIsReceiver => 'L’expéditeur est le destinataire';
+
+  @override
   String get ctrNotifyNeedsPhone =>
       'Ajoutez un numéro de téléphone pour activer cette option.';
 

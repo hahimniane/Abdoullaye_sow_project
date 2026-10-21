@@ -220,12 +220,87 @@ void main() {
     expect(_switch(tester, 'contacts-phone-notify').value, isTrue);
     expect(_switch(tester, 'contacts-receiver-phone-notify').value, isFalse);
 
-    // A customer's line keeps a customer: refused at the field, before any
-    // round trip (none could be made here - there is no Firebase app).
-    await tester.enterText(find.byKey(const Key('contacts-customer')), ' ');
+    // A customer's line keeps its receiver (the sender is optional, owner
+    // 2026-10-21): refused at the field, before any round trip (none could
+    // be made here - there is no Firebase app).
+    await tester.enterText(find.byKey(const Key('contacts-receiver')), ' ');
     await tester.tap(find.byKey(const Key('contacts-save')));
     await tester.pumpAndSettle();
-    expect(find.text("Enter the customer's name."), findsOneWidget);
+    expect(find.text("Enter the receiver's name."), findsOneWidget);
+    expect(find.text("Enter the customer's name."), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('sender is the receiver hides the sender, off by default',
+      (tester) async {
+    await _pump(
+      tester,
+      containerLineFormSheetForTesting(
+        container: _box,
+        customerCountryCode: 'US',
+        receiverCountryCode: 'GN',
+      ),
+    );
+    await tester.tap(find.byKey(const Key('line-kind-pieces')));
+    await tester.pumpAndSettle();
+    final box = find.byKey(const Key('line-same-person'));
+    expect(find.text('Sender is the receiver'), findsOneWidget);
+    expect(tester.widget<CheckboxListTile>(box).value, isFalse);
+    expect(find.byKey(const Key('line-customer')), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('line-customer')), 'Fatou');
+    await tester.tap(box);
+    await tester.pumpAndSettle();
+    expect(tester.widget<CheckboxListTile>(box).value, isTrue);
+    expect(find.byKey(const Key('line-customer')), findsNothing);
+    expect(find.byKey(const Key('line-phone')), findsNothing);
+    // Unticked, the sender fields come back empty.
+    await tester.tap(box);
+    await tester.pumpAndSettle();
+    expect(
+        tester
+            .widget<TextField>(find.byKey(const Key('line-customer')))
+            .controller!
+            .text,
+        '');
+    // No receiver: refused at the field; no sender is fine.
+    await tester.tap(find.byKey(const Key('line-save')));
+    await tester.pumpAndSettle();
+    expect(find.text("Enter the receiver's name."), findsOneWidget);
+    expect(find.text("Enter the customer's name."), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a line whose sender is the receiver opens ticked, in French too',
+      (tester) async {
+    await _pump(
+      tester,
+      containerLineContactsSheetForTesting(
+        line: _line({
+          'customerName': 'Mariama Bah',
+          'customerPhone': '+224620000000',
+          'receiverName': 'Mariama Bah',
+          'receiverPhone': '+224620000000',
+          'senderIsReceiver': true,
+        }),
+        customerCountryCode: 'US',
+        receiverCountryCode: 'GN',
+      ),
+      locale: const Locale('fr'),
+    );
+    final box = find.byKey(const Key('contacts-same-person'));
+    expect(find.text('L’expéditeur est le destinataire'), findsOneWidget);
+    expect(tester.widget<CheckboxListTile>(box).value, isTrue);
+    expect(find.byKey(const Key('contacts-customer')), findsNothing);
+    await tester.tap(box);
+    await tester.pumpAndSettle();
+    expect(
+        tester
+            .widget<TextField>(find.byKey(const Key('contacts-customer')))
+            .controller!
+            .text,
+        '',
+        reason: 'unticked, the sender fields open empty');
+    expect(_stored(tester, 'contacts-phone'), '');
     expect(tester.takeException(), isNull);
   });
 

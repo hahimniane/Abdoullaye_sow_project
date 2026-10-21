@@ -596,8 +596,8 @@ class _ContainersScreenState extends State<ContainersScreen> {
               make: line.carMake,
               model: line.carModel,
               year: line.carYear,
-              customerName: line.customerName,
-              customerPhone: line.customerPhone,
+              customerName: lineCustomerName(line),
+              customerPhone: lineCustomerPhone(line),
             ),
       ];
 
@@ -2654,14 +2654,18 @@ class _LineCard extends StatelessWidget {
             .firstOrNull
             ?.name ??
         '';
+    // With no sender of its own, the receiver is the customer
+    // (lineCustomer) and is not repeated after the arrow.
     final owner = line.isStock
         ? l10n.ctrStock
-        : [line.customerName, line.customerPhone]
+        : [lineCustomerName(line), lineCustomerPhone(line)]
             .where((p) => p.isNotEmpty)
             .join(' · ');
-    final receiver = [line.receiverName, line.receiverPhone]
-        .where((p) => p.isNotEmpty)
-        .join(' · ');
+    final receiver = line.customerIsReceiver
+        ? ''
+        : [line.receiverName, line.receiverPhone]
+            .where((p) => p.isNotEmpty)
+            .join(' · ');
     final detail = [
       if (line.isCar && line.vinNumber.isNotEmpty && line.vehicleLabel != line.vinNumber)
         line.vinNumber,
@@ -3438,6 +3442,11 @@ class _LineFormSheetState extends State<_LineFormSheet> {
   /// staff switch it off, and only ever sent with a phone.
   bool _notifyCustomer = true;
   bool _notifyReceiver = true;
+
+  /// "Sender is the receiver" (owner, 2026-10-21): off by default; ticked,
+  /// the sender fields are hidden and the server stores the receiver as the
+  /// sender too.
+  bool _senderIsReceiver = false;
   bool _busy = false;
   Set<String> _errors = {};
   String _serverNote = '';
@@ -3502,7 +3511,10 @@ class _LineFormSheetState extends State<_LineFormSheet> {
       _year.text = line.carYear;
       _decodedVin = line.vinNumber;
     }
-    if (!line.isStock) {
+    // Ticked, the sender fields are the receiver's copies: hidden, and blank
+    // again if the box is unticked.
+    _senderIsReceiver = line.senderIsReceiver;
+    if (!line.isStock && !line.senderIsReceiver) {
       _customer.text = line.customerName;
       _phone.text = line.customerPhone;
     }
@@ -3510,7 +3522,9 @@ class _LineFormSheetState extends State<_LineFormSheet> {
     _receiverPhone.text = line.receiverPhone;
     // A switch staff turned off stays off; someone with no number yet starts
     // switched on, as on a new line.
-    _notifyCustomer = line.customerPhone.isEmpty || line.notifyCustomer;
+    _notifyCustomer = line.senderIsReceiver ||
+        line.customerPhone.isEmpty ||
+        line.notifyCustomer;
     _notifyReceiver = line.receiverPhone.isEmpty || line.notifyReceiver;
     if (_waiting) {
       _destinationId = line.destinationCountryId;
@@ -3896,6 +3910,8 @@ class _LineFormSheetState extends State<_LineFormSheet> {
         receiverPhone: _receiverPhone.text,
         notifyCustomer: _notifyCustomer,
         notifyReceiver: _notifyReceiver,
+        senderIsReceiver:
+            _owner == containerOwnerCustomer && _senderIsReceiver,
         // The package's own fields only when it is one: a line on a container
         // sends none of them, so editing it leaves its size and price alone.
         destinationCountryId: _waiting ? _destinationId : '',
@@ -3956,9 +3972,12 @@ class _LineFormSheetState extends State<_LineFormSheet> {
   }) async {
     final l10n = AppLocalizations.of(context)!;
     final draft = _draft;
-    final errors =
-        (_waiting ? validateWaitingPackage(draft) : validateContainerLine(draft))
-            .toSet();
+    // An edited line saved before the receiver's name was required is only
+    // asked for it when its people change (the server's rule).
+    final errors = (_waiting
+            ? validateWaitingPackage(draft, current: widget.existing)
+            : validateContainerLine(draft, current: widget.existing))
+        .toSet();
     // A price that was typed but cannot be read is its own refusal; the draft
     // only carries the cents it could read.
     if (_waiting && _isCar && readPackagePrice(_price.text).error != null) {
@@ -4044,6 +4063,7 @@ class _LineFormSheetState extends State<_LineFormSheet> {
           _receiverPhone.clear();
           _notifyCustomer = true;
           _notifyReceiver = true;
+          _senderIsReceiver = false;
           _suggestions = const [];
         });
         return;
@@ -4211,6 +4231,7 @@ class _LineFormSheetState extends State<_LineFormSheet> {
     'quantity_required',
     'description_required',
     'customer_name_required',
+    'receiver_name_required',
     'customer_phone_invalid',
     'receiver_phone_invalid',
     'package_destination_required',
@@ -4577,7 +4598,23 @@ class _LineFormSheetState extends State<_LineFormSheet> {
                 selected: _owner == containerOwnerCustomer,
                 onTap: () => setState(() => _owner = containerOwnerCustomer),
               ),
-            if (_owner == containerOwnerCustomer) ...[
+            if (_owner == containerOwnerCustomer)
+              SenderIsReceiverBox(
+                fieldKey: 'line-same-person',
+                value: _senderIsReceiver,
+                onChanged: (on) => setState(() {
+                  // Either way the sender's own fields start empty.
+                  _senderIsReceiver = on;
+                  _customer.clear();
+                  _phone.clear();
+                  _notifyCustomer = true;
+                  _suggestions = const [];
+                  _errors = {..._errors}
+                    ..remove('customer_name_required')
+                    ..remove('customer_phone_invalid');
+                }),
+              ),
+            if (_owner == containerOwnerCustomer && !_senderIsReceiver) ...[
               TextField(
                 key: const Key('line-customer'),
                 controller: _customer,
@@ -4664,9 +4701,11 @@ class _LineFormSheetState extends State<_LineFormSheet> {
               key: const Key('line-receiver'),
               controller: _receiver,
               textCapitalization: TextCapitalization.words,
+              onChanged: (_) => _clearError('receiver_name_required'),
               decoration: InputDecoration(
                 labelText: l10n.ctrReceiver,
                 hintText: l10n.ctrReceiverHint,
+                errorText: errorFor('receiver_name_required'),
               ),
             ),
             const SizedBox(height: AppSpacing.md),
@@ -4832,6 +4871,45 @@ class _ContactPhone extends StatelessWidget {
   }
 }
 
+/// "Sender is the receiver" (owner, 2026-10-21): off by default; ticked, the
+/// form hides the sender's fields and the server stores the receiver as the
+/// sender too. The add/edit line sheet (containers and waiting packages) and
+/// the contacts sheet use this one box.
+class SenderIsReceiverBox extends StatelessWidget {
+  const SenderIsReceiverBox({
+    super.key,
+    required this.fieldKey,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String fieldKey;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return CheckboxListTile(
+      key: Key(fieldKey),
+      contentPadding: EdgeInsets.zero,
+      dense: true,
+      controlAffinity: ListTileControlAffinity.leading,
+      value: value,
+      onChanged: (v) => onChanged(v ?? false),
+      title: Text(
+        l10n.ctrSenderIsReceiver,
+        style: const TextStyle(
+          fontSize: 13,
+          height: 1.3,
+          fontWeight: FontWeight.w600,
+          color: AppColors.ink,
+        ),
+      ),
+    );
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Correcting a line's contacts.
 // ---------------------------------------------------------------------------
@@ -4857,18 +4935,21 @@ class _LineContactsSheet extends StatefulWidget {
 }
 
 class _LineContactsSheetState extends State<_LineContactsSheet> {
-  late final _customer = TextEditingController(text: widget.line.customerName);
-  late final _phone = TextEditingController(text: widget.line.customerPhone);
+  // With "Sender is the receiver" the sender fields are the receiver's
+  // copies: hidden, and blank again if the box is unticked.
+  late final _start = ContainerLineContactsDraft.fromLine(widget.line);
+  late final _customer = TextEditingController(text: _start.customerName);
+  late final _phone = TextEditingController(text: _start.customerPhone);
   late final _receiver = TextEditingController(text: widget.line.receiverName);
   late final _receiverPhone =
       TextEditingController(text: widget.line.receiverPhone);
 
   /// A switch that was turned off stays off; a person who had no number yet
   /// starts switched on, as on a new line.
-  late bool _notifyCustomer =
-      widget.line.customerPhone.isEmpty || widget.line.notifyCustomer;
+  late bool _notifyCustomer = _start.customerPhone.isEmpty || _start.notifyCustomer;
   late bool _notifyReceiver =
       widget.line.receiverPhone.isEmpty || widget.line.notifyReceiver;
+  late bool _senderIsReceiver = _start.senderIsReceiver;
 
   bool _busy = false;
   Set<String> _errors = {};
@@ -4897,10 +4978,12 @@ class _LineContactsSheetState extends State<_LineContactsSheet> {
         receiverPhone: _receiverPhone.text,
         notifyCustomer: _notifyCustomer,
         notifyReceiver: _notifyReceiver,
+        senderIsReceiver: _customerLine && _senderIsReceiver,
       );
 
   static const _fieldCodes = {
     'customer_name_required',
+    'receiver_name_required',
     'customer_phone_invalid',
     'receiver_phone_invalid',
   };
@@ -4992,6 +5075,23 @@ class _LineContactsSheetState extends State<_LineContactsSheet> {
             ),
           ),
           if (_customerLine) ...[
+            const SizedBox(height: AppSpacing.sm),
+            SenderIsReceiverBox(
+              fieldKey: 'contacts-same-person',
+              value: _senderIsReceiver,
+              onChanged: (on) => setState(() {
+                // Either way the sender's own fields start empty.
+                _senderIsReceiver = on;
+                _customer.clear();
+                _phone.clear();
+                _notifyCustomer = true;
+                _errors = {..._errors}
+                  ..remove('customer_name_required')
+                  ..remove('customer_phone_invalid');
+              }),
+            ),
+          ],
+          if (_customerLine && !_senderIsReceiver) ...[
             const SizedBox(height: AppSpacing.md),
             TextField(
               key: const Key('contacts-customer'),
@@ -5020,10 +5120,11 @@ class _LineContactsSheetState extends State<_LineContactsSheet> {
             key: const Key('contacts-receiver'),
             controller: _receiver,
             textCapitalization: TextCapitalization.words,
-            onChanged: (_) => _clearError('server'),
+            onChanged: (_) => _clearError('receiver_name_required'),
             decoration: InputDecoration(
               labelText: l10n.ctrReceiver,
               hintText: l10n.ctrReceiverHint,
+              errorText: errorFor('receiver_name_required'),
             ),
           ),
           const SizedBox(height: AppSpacing.md),
@@ -5636,6 +5737,7 @@ String containerErrorText(
     'description_required' => l10n.ctrErrDescription,
     'owner_kind_invalid' => l10n.ctrErrOwnerKind,
     'customer_name_required' => l10n.lotErrCustomerName,
+    'receiver_name_required' => l10n.ctrErrReceiverName,
     'customer_phone_invalid' => l10n.ctrErrCustomerPhoneInvalid,
     'receiver_phone_invalid' => l10n.ctrErrReceiverPhoneInvalid,
     'vin_already_loaded' => conflictWaiting

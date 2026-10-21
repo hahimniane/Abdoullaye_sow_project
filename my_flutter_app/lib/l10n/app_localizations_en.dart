@@ -9193,6 +9193,12 @@ class AppLocalizationsEn extends AppLocalizations {
       'Send this person WhatsApp updates about this shipment';
 
   @override
+  String get ctrErrReceiverName => 'Enter the receiver\'s name.';
+
+  @override
+  String get ctrSenderIsReceiver => 'Sender is the receiver';
+
+  @override
   String get ctrNotifyNeedsPhone => 'Add a phone number to turn this on.';
 
   @override

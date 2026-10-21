@@ -98,6 +98,7 @@ const containerRefusalCodes = <String>[
   'description_required',
   'owner_kind_invalid',
   'customer_name_required',
+  'receiver_name_required',
   'customer_phone_invalid',
   'receiver_phone_invalid',
   'vin_already_loaded',
@@ -480,6 +481,7 @@ class ContainerLineDraft {
     this.receiverPhone = '',
     this.notifyCustomer = true,
     this.notifyReceiver = true,
+    this.senderIsReceiver = false,
     this.destinationCountryId = '',
     this.destinationCountryName = '',
     this.lengthIn = '',
@@ -512,6 +514,11 @@ class ContainerLineDraft {
   /// record turns it off when the phone is empty.
   final bool notifyCustomer;
   final bool notifyReceiver;
+
+  /// "Sender is the receiver" (owner, 2026-10-21; off by default): the
+  /// sender fields are hidden and the server stores the receiver as the
+  /// sender too.
+  final bool senderIsReceiver;
 
   /// Where the package is going. Only a waiting package must name one (it is
   /// what decides which containers may take it); on a container's own line it
@@ -559,7 +566,14 @@ class ContainerLineDraft {
 
 /// Error codes. Mirrors `validateContainerLine`: a line with pieces is
 /// judged by them (`pieceErrors`, 1-60) and its price is their sum.
-List<String> validateContainerLine(ContainerLineDraft input) {
+///
+/// [current] is the stored line when the form edits one: a line saved before
+/// the receiver's name was required is only asked for it when its people
+/// change ([lineContactsEdited]), as on the server.
+List<String> validateContainerLine(
+  ContainerLineDraft input, {
+  ContainerLine? current,
+}) {
   final errors = <String>[];
   final kind = _text(input.kind, 20);
   final pieced = input.usesPieces;
@@ -584,14 +598,21 @@ List<String> validateContainerLine(ContainerLineDraft input) {
 
   final owner = _text(input.ownerKind, 20);
   if (!containerOwnerKinds.contains(owner)) errors.add('owner_kind_invalid');
-  // A customer's line has to say who; the business's own stock has no one to
-  // name, and asking for a name there is how fictional customers get typed.
+  // A customer's line names who collects it; the sender is optional (owner,
+  // 2026-10-21) and the business's own stock names nobody it does not want to.
   if (owner == containerOwnerCustomer &&
-      _text(input.customerName, containerMaxLabel).isEmpty) {
-    errors.add('customer_name_required');
+      _text(input.receiverName, containerMaxLabel).isEmpty &&
+      (current == null ||
+          lineContactsEdited(current, _draftContacts(input), owner))) {
+    errors.add('receiver_name_required');
   }
   errors.addAll(
-    _contactPhoneErrors(input.customerPhone, input.receiverPhone, owner),
+    _contactPhoneErrors(
+      input.customerPhone,
+      input.receiverPhone,
+      owner,
+      senderIsReceiver: input.senderIsReceiver,
+    ),
   );
   if (pieced) {
     // Sizes are each piece's own; the price is the sum of the pieces plus
@@ -648,10 +669,13 @@ List<String> packagePriceErrors(int? priceCents, [int paidCents = 0]) {
 List<String> _contactPhoneErrors(
   String customerPhone,
   String receiverPhone,
-  String owner,
-) {
+  String owner, {
+  bool senderIsReceiver = false,
+}) {
   return [
+    // A sender who is the receiver has the receiver's phone, checked below.
     if (owner == containerOwnerCustomer &&
+        !senderIsReceiver &&
         !containerPhoneAcceptable(customerPhone))
       'customer_phone_invalid',
     if (!containerPhoneAcceptable(receiverPhone)) 'receiver_phone_invalid',
@@ -670,23 +694,98 @@ Map<String, dynamic> _containerLineContacts({
   required String receiverPhone,
   required Object? notifyCustomer,
   required Object? notifyReceiver,
+  bool senderIsReceiver = false,
 }) {
   final customer = owner == containerOwnerCustomer;
-  final storedCustomerPhone = customer ? containerPhone(customerPhone) : '';
+  // "Sender is the receiver": one person, written on both sides.
+  final same = customer && senderIsReceiver;
+  final storedReceiverName = _text(receiverName, containerMaxLabel);
   final storedReceiverPhone = containerPhone(receiverPhone);
+  final storedCustomerPhone = !customer
+      ? ''
+      : (same ? storedReceiverPhone : containerPhone(customerPhone));
+  final receiverOn =
+      storedReceiverPhone.isNotEmpty && _onUnlessOff(notifyReceiver);
   return {
-    'customerName': customer ? _text(customerName, containerMaxLabel) : '',
+    'customerName': !customer
+        ? ''
+        : (same ? storedReceiverName : _text(customerName, containerMaxLabel)),
     'customerPhone': storedCustomerPhone,
     // Either owner kind may name a receiver: stock goes to the business's
     // own agent at the port.
-    'receiverName': _text(receiverName, containerMaxLabel),
+    'receiverName': storedReceiverName,
     'receiverPhone': storedReceiverPhone,
-    'notifyCustomer':
-        storedCustomerPhone.isNotEmpty && _onUnlessOff(notifyCustomer),
-    'notifyReceiver':
-        storedReceiverPhone.isNotEmpty && _onUnlessOff(notifyReceiver),
+    // One person on both sides has one switch: the receiver's.
+    'notifyCustomer': same
+        ? receiverOn
+        : storedCustomerPhone.isNotEmpty && _onUnlessOff(notifyCustomer),
+    'notifyReceiver': receiverOn,
+    'senderIsReceiver': same,
   };
 }
+
+/// The contact fields of a line form, before they are stored.
+ContainerLineContactsDraft _draftContacts(ContainerLineDraft input) =>
+    ContainerLineContactsDraft(
+      customerName: input.customerName,
+      customerPhone: input.customerPhone,
+      receiverName: input.receiverName,
+      receiverPhone: input.receiverPhone,
+      notifyCustomer: input.notifyCustomer,
+      notifyReceiver: input.notifyReceiver,
+      senderIsReceiver: input.senderIsReceiver,
+    );
+
+/// Whether a form changes who a stored line is from or to, or whose it is
+/// ([owner], the form's; the line's own when null). Mirrors
+/// `lineContactsEdited`, compared as both would be stored.
+bool lineContactsEdited(
+  ContainerLine current,
+  ContainerLineContactsDraft next, [
+  String? owner,
+]) {
+  final after = owner ?? current.ownerKind;
+  if (after != current.ownerKind) return true;
+  final a = _containerLineContacts(
+    owner: current.ownerKind,
+    customerName: current.customerName,
+    customerPhone: current.customerPhone,
+    receiverName: current.receiverName,
+    receiverPhone: current.receiverPhone,
+    notifyCustomer: current.notifyCustomer,
+    notifyReceiver: current.notifyReceiver,
+    senderIsReceiver: current.senderIsReceiver,
+  );
+  final b = _containerLineContacts(
+    owner: after,
+    customerName: next.customerName,
+    customerPhone: next.customerPhone,
+    receiverName: next.receiverName,
+    receiverPhone: next.receiverPhone,
+    notifyCustomer: next.notifyCustomer,
+    notifyReceiver: next.notifyReceiver,
+    senderIsReceiver: next.senderIsReceiver,
+  );
+  return a.keys.any((key) => '${a[key]}' != '${b[key]}');
+}
+
+/// Who the customer of a line is: the sender when any sender detail was
+/// given, else the receiver - a line with no sender belongs to whoever
+/// collects it. Name and phone always come from the same person; stock has
+/// none. Mirrors `lineCustomer`.
+({String name, String phone}) lineCustomer(ContainerLine line) {
+  if (line.isStock) return (name: '', phone: '');
+  if (line.customerName.isNotEmpty || line.customerPhone.isNotEmpty) {
+    return (name: line.customerName, phone: line.customerPhone);
+  }
+  return (name: line.receiverName, phone: line.receiverPhone);
+}
+
+/// The customer's name ([lineCustomer]). Mirrors `lineCustomerName`.
+String lineCustomerName(ContainerLine line) => lineCustomer(line).name;
+
+/// The customer's phone ([lineCustomer]). Mirrors `lineCustomerPhone`.
+String lineCustomerPhone(ContainerLine line) => lineCustomer(line).phone;
 
 /// The line body the callable is sent, shaped the way the server stores it:
 /// a car carries no quantity, stock carries no customer. Mirrors
@@ -721,6 +820,7 @@ Map<String, dynamic> containerLineRecord(ContainerLineDraft input) {
         receiverPhone: input.receiverPhone,
         notifyCustomer: input.notifyCustomer,
         notifyReceiver: input.notifyReceiver,
+        senderIsReceiver: input.senderIsReceiver,
       ),
     };
   }
@@ -749,6 +849,7 @@ Map<String, dynamic> containerLineRecord(ContainerLineDraft input) {
       receiverPhone: input.receiverPhone,
       notifyCustomer: input.notifyCustomer,
       notifyReceiver: input.notifyReceiver,
+      senderIsReceiver: input.senderIsReceiver,
     ),
   };
 }
@@ -768,17 +869,21 @@ class ContainerLineContactsDraft {
     this.receiverPhone = '',
     this.notifyCustomer = true,
     this.notifyReceiver = true,
+    this.senderIsReceiver = false,
   });
 
-  /// The line's contacts as they stand, to start a correction from.
+  /// The line's contacts as they stand, to start a correction from. With
+  /// "Sender is the receiver" the sender fields are the receiver's copies:
+  /// hidden, and blank again if the box is unticked.
   factory ContainerLineContactsDraft.fromLine(ContainerLine line) =>
       ContainerLineContactsDraft(
-        customerName: line.customerName,
-        customerPhone: line.customerPhone,
+        customerName: line.senderIsReceiver ? '' : line.customerName,
+        customerPhone: line.senderIsReceiver ? '' : line.customerPhone,
         receiverName: line.receiverName,
         receiverPhone: line.receiverPhone,
-        notifyCustomer: line.notifyCustomer,
+        notifyCustomer: line.senderIsReceiver || line.notifyCustomer,
         notifyReceiver: line.notifyReceiver,
+        senderIsReceiver: line.senderIsReceiver,
       );
 
   final String customerName;
@@ -787,11 +892,12 @@ class ContainerLineContactsDraft {
   final String receiverPhone;
   final bool notifyCustomer;
   final bool notifyReceiver;
+  final bool senderIsReceiver;
 }
 
-/// Checks a contact correction against the line it changes: a customer's
-/// line keeps a customer name, and every phone must look like one. Mirrors
-/// `validateContainerLineContacts`.
+/// Checks a contact correction against the line it changes: the sender is
+/// optional, a customer's line whose people change names its receiver, and
+/// every phone must look like one. Mirrors `validateContainerLineContacts`.
 List<String> validateContainerLineContacts(
   ContainerLineContactsDraft input,
   ContainerLine current,
@@ -799,11 +905,17 @@ List<String> validateContainerLineContacts(
   final owner = current.ownerKind;
   final errors = <String>[];
   if (owner == containerOwnerCustomer &&
-      _text(input.customerName, containerMaxLabel).isEmpty) {
-    errors.add('customer_name_required');
+      _text(input.receiverName, containerMaxLabel).isEmpty &&
+      lineContactsEdited(current, input)) {
+    errors.add('receiver_name_required');
   }
   errors.addAll(
-    _contactPhoneErrors(input.customerPhone, input.receiverPhone, owner),
+    _contactPhoneErrors(
+      input.customerPhone,
+      input.receiverPhone,
+      owner,
+      senderIsReceiver: input.senderIsReceiver,
+    ),
   );
   return errors;
 }
@@ -823,6 +935,7 @@ Map<String, dynamic> containerLineContactsUpdate(
     receiverPhone: input.receiverPhone,
     notifyCustomer: input.notifyCustomer,
     notifyReceiver: input.notifyReceiver,
+    senderIsReceiver: input.senderIsReceiver,
   );
 }
 
@@ -848,6 +961,7 @@ class ContainerLine {
     this.trackingCode = '',
     this.notifyCustomer = false,
     this.notifyReceiver = false,
+    this.senderIsReceiver = false,
     required this.addedByStaffId,
     required this.createdAt,
     required this.updatedAt,
@@ -923,6 +1037,10 @@ class ContainerLine {
   /// decide it: on unless switched off, and never without a phone.
   final bool notifyCustomer;
   final bool notifyReceiver;
+
+  /// "Sender is the receiver": the receiver's name and phone are stored as
+  /// the sender's too, and they hear once, as the receiver.
+  final bool senderIsReceiver;
   final String addedByStaffId;
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -1020,6 +1138,8 @@ class ContainerLine {
           customerPhone.isNotEmpty && _onUnlessOff(d['notifyCustomer']),
       notifyReceiver:
           receiverPhone.isNotEmpty && _onUnlessOff(d['notifyReceiver']),
+      senderIsReceiver: _text(d['ownerKind'], 20) == containerOwnerCustomer &&
+          d['senderIsReceiver'] == true,
       addedByStaffId: _text(d['addedByStaffId'], containerMaxLabel),
       createdAt: createdAt,
       updatedAt: lotDateOf(d['updatedAt']),
@@ -1079,7 +1199,7 @@ class ContainerLine {
   /// written in full international form. The same decision the server's
   /// `recipientsForLine` makes before it sends.
   bool get updatesCustomer =>
-      _isCustomerLine && notifyCustomer && isInternationalPhone(customerPhone);
+      _hasOwnSender && notifyCustomer && isInternationalPhone(customerPhone);
 
   /// The receiver will hear about the shipment on WhatsApp.
   bool get updatesReceiver =>
@@ -1088,11 +1208,21 @@ class ContainerLine {
   /// Switched on, but the number has no country code, so no message can
   /// reach it. The tile says so; editing the contacts fixes it.
   bool get customerPhoneLacksCountryCode =>
-      _isCustomerLine &&
+      _hasOwnSender &&
       notifyCustomer &&
       containerPhoneLacksCountryCode(customerPhone);
 
   bool get _isCustomerLine => ownerKind == containerOwnerCustomer;
+
+  /// A customer's line whose sender is someone other than the receiver (a
+  /// sender who is the receiver hears once, as the receiver).
+  bool get _hasOwnSender => _isCustomerLine && !senderIsReceiver;
+
+  /// A customer's line with no sender of its own - none given, or "Sender
+  /// is the receiver" - so its receiver is shown as its customer.
+  bool get customerIsReceiver =>
+      _isCustomerLine &&
+      (senderIsReceiver || (customerName.isEmpty && customerPhone.isEmpty));
   bool get receiverPhoneLacksCountryCode =>
       notifyReceiver && containerPhoneLacksCountryCode(receiverPhone);
 
@@ -1426,7 +1556,8 @@ List<ContainerSearchHit> searchContainerLines(
         score = 4;
       }
     }
-    final name = line.customerName.toLowerCase();
+    // With no sender, the receiver is the customer (lineCustomer).
+    final name = lineCustomerName(line).toLowerCase();
     if (name.isNotEmpty) {
       if (name.startsWith(q)) {
         score = score < 4 ? 4 : score;

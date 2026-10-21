@@ -4063,6 +4063,8 @@
   "ctrErrCustomerPhoneInvalid": "The customer's phone doesn't look like a phone number.",
   "ctrErrReceiverPhoneInvalid": "The receiver's phone doesn't look like a phone number.",
   "ctrNotifyToggle": "Send this person WhatsApp updates about this shipment",
+  "ctrErrReceiverName": "Enter the receiver's name.",
+  "ctrSenderIsReceiver": "Sender is the receiver",
   "ctrNotifyNeedsPhone": "Add a phone number to turn this on.",
   "ctrPhoneNeedsCountryCode": "Add the country code so WhatsApp updates can reach this number.",
   "ctrLineTrackingCode": "Tracking code {code}",

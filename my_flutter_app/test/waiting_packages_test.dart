@@ -40,6 +40,7 @@ ContainerLineDraft _draft({
   int quantity = 2,
   String ownerKind = containerOwnerCustomer,
   String customerName = 'Fatou Diallo',
+  String receiverName = 'Mariama Bah',
   String destinationCountryId = 'guinea',
   String destinationCountryName = 'Guinea',
   String lengthIn = '',
@@ -53,6 +54,7 @@ ContainerLineDraft _draft({
       quantity: quantity,
       ownerKind: ownerKind,
       customerName: customerName,
+      receiverName: receiverName,
       destinationCountryId: destinationCountryId,
       destinationCountryName: destinationCountryName,
       lengthIn: lengthIn,
@@ -364,16 +366,18 @@ void main() {
       expect(validateWaitingPackage(_draft()), isEmpty);
       expect(validateWaitingPackage(_draft(destinationCountryId: '')),
           ['package_destination_required']);
-      expect(validateWaitingPackage(_draft(customerName: '')),
-          ['customer_name_required']);
+      // The sender is optional (owner, 2026-10-21); the receiver is not.
+      expect(validateWaitingPackage(_draft(customerName: '')), isEmpty);
+      expect(validateWaitingPackage(_draft(receiverName: ' ')),
+          ['receiver_name_required']);
       expect(validateWaitingPackage(_draft(ownerKind: containerOwnerStock)),
           ['owner_kind_invalid'],
           reason: 'stock is not dropped off at a counter');
       expect(validateWaitingPackage(_draft(quantity: 0)), ['quantity_required']);
       expect(
           validateWaitingPackage(
-              _draft(destinationCountryId: '', customerName: '', quantity: 0)),
-          ['quantity_required', 'customer_name_required',
+              _draft(destinationCountryId: '', receiverName: '', quantity: 0)),
+          ['quantity_required', 'receiver_name_required',
             'package_destination_required']);
     });
 

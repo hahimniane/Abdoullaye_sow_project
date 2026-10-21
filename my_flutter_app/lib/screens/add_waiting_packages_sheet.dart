@@ -377,9 +377,10 @@ class _PickRow extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final line = entry.line;
     final size = packageSize(line);
+    // With no sender, the receiver is the customer (lineCustomer).
     final people = [
-      line.customerName,
-      line.customerPhone,
+      lineCustomerName(line),
+      lineCustomerPhone(line),
     ].where((p) => p.isNotEmpty).join(' · ');
     final facts = [
       if (!line.isCar) l10n.pcsPieceCount(line.pieceCount),

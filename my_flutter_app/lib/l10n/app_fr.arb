@@ -4063,6 +4063,8 @@
   "ctrErrCustomerPhoneInvalid": "Le téléphone du client ne ressemble pas à un numéro de téléphone.",
   "ctrErrReceiverPhoneInvalid": "Le téléphone du destinataire ne ressemble pas à un numéro de téléphone.",
   "ctrNotifyToggle": "Envoyer à cette personne les mises à jour WhatsApp de cet envoi",
+  "ctrErrReceiverName": "Saisissez le nom du destinataire.",
+  "ctrSenderIsReceiver": "L’expéditeur est le destinataire",
   "ctrNotifyNeedsPhone": "Ajoutez un numéro de téléphone pour activer cette option.",
   "ctrPhoneNeedsCountryCode": "Ajoutez l'indicatif pays pour que les mises à jour WhatsApp puissent joindre ce numéro.",
   "ctrLineTrackingCode": "Code de suivi {code}",

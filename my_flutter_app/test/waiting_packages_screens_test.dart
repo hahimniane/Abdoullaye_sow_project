@@ -271,7 +271,9 @@ void main() {
       // A box has to say what it is.
       await _tap(tester, 'piece-kind-0-box');
       await _tap(tester, 'line-save');
-      expect(find.text("Enter the customer's name."), findsOneWidget);
+      // The sender is optional (owner, 2026-10-21); the receiver is not.
+      expect(find.text("Enter the receiver's name."), findsOneWidget);
+      expect(find.text("Enter the customer's name."), findsNothing);
       expect(find.byKey(const Key('piece-error-0')), findsOneWidget);
       expect(find.text('Say what each box or item is.'), findsOneWidget);
       expect(find.text('Choose where this package is going.'), findsNothing);
@@ -290,6 +292,7 @@ void main() {
       final calls = _Calls();
       await _openSheet<WaitingPackageSaved>(tester, sheet(calls));
       await _type(tester, 'line-customer', 'Fatou Diallo');
+      await _type(tester, 'line-receiver', 'Mariama Bah');
       await _tap(tester, 'piece-add-size-0');
       await _type(tester, 'piece-length-0', '40');
       await _tap(tester, 'line-save');
@@ -306,6 +309,7 @@ void main() {
       final calls = _Calls();
       await _openSheet<WaitingPackageSaved>(tester, sheet(calls));
       await _type(tester, 'line-customer', 'Fatou Diallo');
+      await _type(tester, 'line-receiver', 'Mariama Bah');
       await _type(tester, 'piece-price-0', '1.2.3');
       await _tap(tester, 'line-save');
       expect(find.text("Enter each piece's price in dollars, zero or more."),
@@ -378,6 +382,7 @@ void main() {
         ..answers['addWaitingPackage'] = {'lineId': 'l1', 'trackingCode': 'CL-BBBBBB'};
       await _openSheet<WaitingPackageSaved>(tester, sheet(calls));
       await _type(tester, 'line-customer', 'Fatou');
+      await _type(tester, 'line-receiver', 'Mariama Bah');
       await _tap(tester, 'wpk-destination');
       expect(find.text('Your destinations'), findsOneWidget);
       await tester.tap(find.text('Senegal').first);
@@ -428,6 +433,7 @@ void main() {
         ..answers['addWaitingPackage'] = {'lineId': 'l5', 'trackingCode': 'CL-PRNT22'};
       final opened = await _openSheet<WaitingPackageSaved>(tester, sheet(calls));
       await _type(tester, 'line-customer', 'Fatou');
+      await _type(tester, 'line-receiver', 'Mariama Bah');
       await _tap(tester, 'line-save-and-print');
       expect(opened.value!.printLabel, isTrue);
       expect(opened.value!.lineId, 'l5');
@@ -439,6 +445,7 @@ void main() {
         ..refuse = (_) => _refusal('destination_mismatch');
       final opened = await _openSheet<WaitingPackageSaved>(tester, sheet(calls));
       await _type(tester, 'line-customer', 'Fatou');
+      await _type(tester, 'line-receiver', 'Mariama Bah');
       await _tap(tester, 'line-save');
       expect(find.text('A package can only go on a container headed to the same country.'),
           findsOneWidget);
@@ -1388,6 +1395,7 @@ void main() {
     // One barrel (the sheet opens on it) for Fatou.
     Future<void> barrel(WidgetTester tester) async {
       await _type(tester, 'line-customer', 'Fatou Diallo');
+      await _type(tester, 'line-receiver', 'Mariama Bah');
     }
 
     testWidgets('the switch stays off until there is a price', (tester) async {
@@ -1484,8 +1492,10 @@ void main() {
       expect(find.text('Ibrahima Sow'), findsNothing);
       expect(find.text('Cash'), findsOneWidget);
 
-      // Switched off again: the second package goes without a payment.
+      // Switched off again: the second package goes without a payment (to
+      // a new receiver - add another clears the receiver).
       await _tap(tester, 'wpk-money-received');
+      await _type(tester, 'line-receiver', 'Awa Sow');
       await _tap(tester, 'line-save');
       expect(calls.of('addWaitingPackage'), hasLength(2));
       expect(calls.of('addWaitingPackage').last.containsKey('payment'), isFalse);

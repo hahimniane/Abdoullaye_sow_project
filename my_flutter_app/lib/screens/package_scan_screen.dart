@@ -346,9 +346,11 @@ class _HitRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final line = hit.line;
+    // With no sender, the receiver is the customer (lineCustomer).
     final people = [
-      if (!line.isStock && line.customerName.isNotEmpty) line.customerName,
-      if (line.receiverName.isNotEmpty) '→ ${line.receiverName}',
+      if (lineCustomerName(line).isNotEmpty) lineCustomerName(line),
+      if (line.receiverName.isNotEmpty && !line.customerIsReceiver)
+        '→ ${line.receiverName}',
     ].join(' ');
     final container = hit.container;
     return PressableScale(

@@ -528,13 +528,16 @@ class PackageResultView extends StatelessWidget {
           title: l10n.pkgOwner,
           child: line.isStock
               ? _Fact(icon: Icons.storefront_outlined, text: l10n.ctrStock)
+              // With no sender of its own, the receiver is the customer.
               : _Person(
                   role: 'customer',
-                  name: line.customerName,
-                  phone: line.customerPhone,
+                  name: lineCustomerName(line),
+                  phone: lineCustomerPhone(line),
                   lacksCountryCode:
-                      containerPhoneLacksCountryCode(line.customerPhone),
-                  flags: line.phoneFlags(RecordPhoneField.customer),
+                      containerPhoneLacksCountryCode(lineCustomerPhone(line)),
+                  flags: line.phoneFlags(line.customerIsReceiver
+                      ? RecordPhoneField.receiver
+                      : RecordPhoneField.customer),
                   onCall: onCall,
                   onWhatsApp: onWhatsApp,
                 ),

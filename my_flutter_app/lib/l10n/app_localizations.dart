@@ -16194,6 +16194,18 @@ abstract class AppLocalizations {
   /// **'Send this person WhatsApp updates about this shipment'**
   String get ctrNotifyToggle;
 
+  /// No description provided for @ctrErrReceiverName.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the receiver\'s name.'**
+  String get ctrErrReceiverName;
+
+  /// No description provided for @ctrSenderIsReceiver.
+  ///
+  /// In en, this message translates to:
+  /// **'Sender is the receiver'**
+  String get ctrSenderIsReceiver;
+
   /// No description provided for @ctrNotifyNeedsPhone.
   ///
   /// In en, this message translates to:
