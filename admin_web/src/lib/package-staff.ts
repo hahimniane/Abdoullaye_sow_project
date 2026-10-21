@@ -4,8 +4,8 @@
  * A package label's QR opens https://customer.laawoldigital.com/t/CL-XXXXXX,
  * which lands on `?service=tracking&code=CL-XXXXXX`. Everyone gets the public
  * tracking result there. Owners and staff of the business that holds the
- * line - and platform admins with operations access - also get what the
- * mobile app's package screen shows (my_flutter_app/lib/screens/
+ * line (staff with Containers or Deliveries) - and platform admins with
+ * operations access - also get what the mobile app's package screen shows (my_flutter_app/lib/screens/
  * package_result_screen.dart): what it is, whose it is and who collects it
  * with a way to call or message them, its container, and whether the
  * WhatsApp updates reached anyone.
@@ -105,12 +105,14 @@ export function packageStaffScope(input: {
     return businessId ? { kind: "business", businessId } : { kind: "none" };
   }
   if (role === "staff") {
-    // Staff need the Containers permission, as the console's tab does. The
-    // permission alone is not enough: the business has to be theirs.
+    // Staff need the Containers permission, as the console's tab does - or
+    // Deliveries: destination staff scan a label to hand the package over
+    // (they see no prices there). The permission alone is not enough: the
+    // business has to be theirs.
     const permissions = Array.isArray(profile.businessPermissions)
       ? profile.businessPermissions.map((item) => text(item, 40))
       : [];
-    return businessId && permissions.includes("containers")
+    return businessId && (permissions.includes("containers") || permissions.includes("deliveries"))
       ? { kind: "business", businessId }
       : { kind: "none" };
   }
@@ -180,6 +182,8 @@ export const PACKAGE_UPDATE_SENTENCE: Record<string, string> = {
   at_port: "Last update: at the destination port",
   // `arrived` is the ready-for-pickup message, sent when staff mark it.
   arrived: "Last update: ready for pickup",
+  // Handed over at the destination (container_delivery.js).
+  delivered: "Last update: delivered",
 };
 
 const RESULT_PHRASE: Record<string, string> = {

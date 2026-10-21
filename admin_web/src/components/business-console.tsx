@@ -22,6 +22,7 @@ import {
   Menu,
   MessageCircle,
   Package,
+  PackageCheck,
   ParkingCircle,
   Search,
   Settings,
@@ -39,6 +40,7 @@ import {CheckBankDialog, CheckBankHeaderEntry} from "@/components/business/check
 import {canCheckBank, checkBankEntry} from "@/lib/bank-check";
 import {canManageBank, readBankStatus, type BankStatus} from "@/lib/zelle-check";
 import {ContainersPanel} from "@/components/business/containers-panel";
+import {DeliveriesPanel} from "@/components/business/deliveries-panel";
 import {BusinessVolumePanel} from "@/components/volume-views";
 import {containerDeepLinkFromSearch, type ContainerDeepLink} from "@/lib/package-staff";
 import {InventoryPanel} from "@/components/business/inventory-panel";
@@ -786,6 +788,9 @@ export function BusinessConsole({
               focusView={notificationFocusView === "requests" ? "requests" : ""}
               focusRequestId={notificationFocusView === "requests" ? notificationFocusId : ""}
             />
+          )}
+          {activeTab === "deliveries" && (
+            <DeliveriesPanel firebaseUser={firebaseUser} profile={profile} previewMode={previewMode} />
           )}
           {activeTab === "volume" && (
             <BusinessVolumePanel businessId={businessId} previewMode={previewMode} />
@@ -1786,6 +1791,7 @@ function tabIcon(tab: BusinessTab) {
     parking: <ParkingCircle {...props} />,
     ledger: <BookOpen {...props} />,
     containers: <Container {...props} />,
+    deliveries: <PackageCheck {...props} />,
     volume: <BarChart3 {...props} />,
     invoices: <Receipt {...props} />,
     inventory: <Boxes {...props} />,

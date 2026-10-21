@@ -72,8 +72,12 @@ test("staff and admins on the customer host reach the tracking page, not their c
 test("reprinting reuses the containers panel's labels dialog", () => {
   assert.match(staffSource, /import \{ ContainerLabelsDialog \} from "@\/components\/business\/container-labels-dialog";/);
   assert.match(staffSource, /<ContainerLabelsDialog\s+businessId=\{view\.businessId\}\s+container=\{containerRow\}\s+line=\{line\}/);
-  // The console link is the owners' and staff's; admins work elsewhere.
-  assert.match(staffSource, /\{scope\.kind === "business" && \(\s*<a className="secondary-button" href=\{view\.consoleLink\}/);
+  // The console link is the owners' and staff's; admins work elsewhere, and
+  // the business console's own Deliveries tab (embedded) has no need of it.
+  assert.match(staffSource, /\{scope\.kind === "business" && !embedded && \(\s*<a className="secondary-button" href=\{view\.consoleLink\}/);
+  // Labels and the console are the Containers permission's: a deliveries-only
+  // person (container-delivery.ts deliveryAccess) gets neither.
+  assert.match(staffSource, /\{access\.canUndo && \(\s*<div className="pkg-staff-actions">/);
 });
 
 test("what people typed is marked so the French pass leaves it alone", () => {

@@ -118,6 +118,22 @@ function lineWhat(value: string) {
   return value;
 }
 
+/**
+ * containerLineTitle: "3 barrels for Fatou Diallo", "car 1HG… for Awa", a
+ * line with no customer ("2 barrels") or the server's "a package".
+ */
+function lineTitle(value: string) {
+  if (value === "a package") return "un colis";
+  const match = /^(.+?) for (.+)$/.exec(value);
+  return match ? `${lineWhat(match[1])} pour ${match[2]}` : lineWhat(value);
+}
+
+/** "de 3 barils pour Fatou" / "d’un colis". */
+function ofLineTitle(value: string) {
+  const title = lineTitle(value);
+  return title === "un colis" ? "d’un colis" : `de ${title}`;
+}
+
 function removal(value: string) {
   const what = lineWhat(value);
   return what === "une ligne" ? "Retrait d’une ligne" : `Retrait de ${what}`;
@@ -190,6 +206,13 @@ const rules: Rule[] = [
   [/^Shipped with (\d+) lines?$/, (m) => `Expédié avec ${m[1]} ${plural(m[1], "ligne", "lignes")}`],
   [/^Marked arrived$/, () => "Marqué comme arrivé"],
   [/^Marked ready for pickup$/, () => "Marqué prêt à récupérer"],
+  // A package handed over at the destination (container_delivery.js
+  // deliveryAuditSummary / deliveryUndoAuditSummary).
+  [new RegExp(`^Delivered (.+?)(?:, collected by (.+?))?(?:, with (${MONEY}) still owed)?$`), (m) =>
+    `Livraison ${ofLineTitle(m[1])}` +
+      (m[2] ? `, récupéré par ${m[2]}` : "") +
+      (m[3] ? `, avec ${m[3]} encore dû` : "")],
+  [/^Undid the delivery of (.+)$/, (m) => `Livraison annulée : ${lineTitle(m[1])}`],
   [/^Carrier reported (.+)$/, (m) =>
     `Le transporteur signale : ${CARRIER_STATUSES[m[1]] ?? m[1]}`],
   [/^Started (.+)$/, (m) => `Début du chargement : ${m[1]}`],

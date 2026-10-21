@@ -282,7 +282,8 @@ test("Inventory is a service, a staff permission, and a sidebar tab gated on bot
   assert.equal(tab?.permission, "inventory");
   const admin = read("../components/admin-console.tsx");
   assert.match(admin, /\{ id: "inventory", label: "Inventory" \},\n\];/);
-  assert.match(admin, /"containers",\n  "inventory",\n\] as const;/);
+  // Later permissions (deliveries) follow inventory in the payload list.
+  assert.match(admin, /"containers",\n  "inventory",\n(?:  "[a-z]+",\n)*\] as const;/);
   assert.match(admin, /inventory: "inventory",\n\};/);
   const people = read("../components/business/profile-support-people.tsx");
   assert.match(people, /\{id: "inventory", label: "Inventory"\}/);

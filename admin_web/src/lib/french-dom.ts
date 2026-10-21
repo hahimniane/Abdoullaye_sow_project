@@ -6650,6 +6650,61 @@ Object.assign(TEXT_TRANSLATIONS, {
     "Nous n’avons pas pu terminer la création de votre compte. Réessayez.",
 });
 
+// Package delivered at the destination (container-delivery.ts,
+// package-delivery.tsx, deliveries-panel.tsx, the server's
+// container_delivery.js): the Deliveries tab and permission, the Mark
+// delivered dialog, the undo, and every refusal.
+Object.assign(TEXT_TRANSLATIONS, {
+  Deliveries: "Livraisons",
+  "Mark packages delivered": "Marquer les colis comme livrés",
+  "Hand packages over at the destination": "Remettre les colis à destination",
+  "Find a package by the code on its label, check who collects it, and mark it delivered.":
+    "Trouvez un colis grâce au code sur son étiquette, vérifiez qui le récupère et marquez-le comme livré.",
+  "Package code": "Code du colis",
+  "Find package": "Trouver le colis",
+  "That is not a package code. Codes look like CL-K7M4P2.":
+    "Ce n’est pas un code de colis. Les codes ressemblent à CL-K7M4P2.",
+  "You can also scan the label's QR code with your phone camera.":
+    "Vous pouvez aussi scanner le code QR de l’étiquette avec l’appareil photo de votre téléphone.",
+  "This code is not on any of your packages. Check it and try again.":
+    "Ce code ne correspond à aucun de vos colis. Vérifiez-le et réessayez.",
+  "Mark delivered": "Marquer comme livré",
+  "Mark delivered anyway": "Marquer comme livré quand même",
+  "Marking delivered…": "Marquage comme livré…",
+  "Picked up by": "Récupéré par",
+  "The receiver, unless someone collects for them.":
+    "Le destinataire, sauf si quelqu’un le récupère à sa place.",
+  "Mark it delivered anyway? The balance stays on the package.":
+    "Le marquer comme livré quand même ? Le solde reste dû sur le colis.",
+  "Undo delivery": "Annuler la livraison",
+  "Undoing…": "Annulation en cours…",
+  "Handed over by": "Remis par",
+  "Ready to hand over.": "Prêt à être remis.",
+  "It can be marked delivered once its container is ready for pickup.":
+    "Il pourra être marqué comme livré quand son conteneur sera prêt à récupérer.",
+  "Delivery undone": "Livraison annulée",
+  "Last update: delivered": "Dernière mise à jour : livré",
+  // Refusals (details.reason).
+  "That is not something a package delivery can do.":
+    "Ce n’est pas une action possible pour la livraison d’un colis.",
+  "A package can be marked delivered once its container is ready for pickup.":
+    "Un colis peut être marqué comme livré une fois son conteneur prêt à récupérer.",
+  "This package still has an unpaid balance. Confirm to mark it delivered anyway.":
+    "Ce colis a encore un solde impayé. Confirmez pour le marquer comme livré quand même.",
+  "Keep the name of who collected it to 120 characters.":
+    "Limitez le nom de la personne qui l’a récupéré à 120 caractères.",
+  "That package no longer exists.": "Ce colis n’existe plus.",
+  "Your account is not allowed to do this. Ask the business owner.":
+    "Votre compte n’est pas autorisé à faire ceci. Demandez au propriétaire de l’entreprise.",
+  "The delivery did not save. Check your connection and try again.":
+    "La livraison n’a pas été enregistrée. Vérifiez votre connexion et réessayez.",
+  // Results.
+  "Marked delivered.": "Marqué comme livré.",
+  "This package was already marked delivered.": "Ce colis était déjà marqué comme livré.",
+  "Delivery undone.": "Livraison annulée.",
+  "This package was not marked delivered.": "Ce colis n’était pas marqué comme livré.",
+});
+
 export const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {
   // Laawol bills (billing-views.tsx).
   "Open this business's bill": "Ouvrir le montant dû de cette entreprise",

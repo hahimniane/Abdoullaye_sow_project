@@ -10,6 +10,7 @@ export type BusinessTab =
   | "parking"
   | "ledger"
   | "containers"
+  | "deliveries"
   | "volume"
   | "invoices"
   | "inventory"
@@ -52,6 +53,9 @@ export const shippingServiceIds = ["barrelShipping", "freight", "carTransport", 
  */
 export const businessPermissionImplies: Readonly<Record<string, readonly string[]>> = {
   invoices: ["ledger"],
+  // Whoever manages containers may hand packages over too (the server lets
+  // "containers" deliver), so the Deliveries tab is theirs as well.
+  deliveries: ["containers"],
 };
 
 /** Whether a team member's permission list grants `permission`, directly or through another. */
@@ -102,6 +106,10 @@ export const businessSidebarTabs: BusinessSidebarTab[] = [
   // one, so it shows when ANY shipping service is on (owners and staff
   // alike), plus the permission.
   {id: "containers", label: "Containers", description: "Loading lists and sailings", group: "transport", services: shippingServiceIds, permission: "containers"},
+  // Destination staff hand packages over: find one by its label's code and
+  // mark it delivered. Its own "deliveries" permission (no prices, payments
+  // or loading lists); "containers" implies it (businessPermissionImplies).
+  {id: "deliveries", label: "Deliveries", description: "Mark packages delivered", group: "transport", services: shippingServiceIds, permission: "deliveries"},
   // The month's pieces received and containers shipped: the same people as
   // Containers (owner, staff holding "containers"), the same service gate.
   {id: "volume", label: "Volume", description: "Pieces received and containers shipped", group: "transport", services: shippingServiceIds, permission: "containers"},

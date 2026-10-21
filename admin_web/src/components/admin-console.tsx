@@ -249,6 +249,7 @@ const businessStaffPermissionOptions = [
   "growth",
   "containers",
   "inventory",
+  "deliveries",
 ] as const;
 
 function businessPermissionLabel(permission: string) {
@@ -257,6 +258,7 @@ function businessPermissionLabel(permission: string) {
   if (permission === "containers") return "Containers";
   if (permission === "inventory") return "Inventory";
   if (permission === "invoices") return "Invoices";
+  if (permission === "deliveries") return "Deliveries";
   return permission.charAt(0).toUpperCase() + permission.slice(1);
 }
 
@@ -271,6 +273,7 @@ const businessPermissionRequiredService: Partial<Record<string, string | readonl
   parking: "carParking",
   ledger: "carParking",
   containers: shippingServiceIds, // any shipping service
+  deliveries: shippingServiceIds, // handing packages over: any shipping service
   listings: "carSales",
   purchases: "carSales",
   inventory: "inventory",

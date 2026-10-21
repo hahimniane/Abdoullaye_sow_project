@@ -227,6 +227,7 @@ const businessPermissionOptions = [
   {id: "parking", label: "Parking"},
   {id: "ledger", label: "Lot ledger"},
   {id: "containers", label: "Containers"},
+  {id: "deliveries", label: "Deliveries", description: "Hand packages over at the destination"},
   {id: "invoices", label: "Invoices", description: "Receipts and what is owed"},
   {id: "inventory", label: "Inventory"},
   {id: "destinations", label: "Services & coverage"},
@@ -249,6 +250,8 @@ const businessPermissionRequiredService: Partial<Record<string, string | readonl
   parking: "carParking",
   ledger: "carParking",
   containers: shippingServiceIds,
+  // Handing packages over at the destination: any business that ships.
+  deliveries: shippingServiceIds,
   listings: "carSales",
   purchases: "carSales",
   inventory: "inventory",

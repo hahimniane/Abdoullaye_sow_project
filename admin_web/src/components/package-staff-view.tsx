@@ -15,8 +15,10 @@ import {
 import { ExternalLink, MessageCircle, Package, Phone, RefreshCw, Tag } from "lucide-react";
 
 import { ContainerLabelsDialog } from "@/components/business/container-labels-dialog";
+import { PackageDeliverySection } from "@/components/business/package-delivery";
 import { resolveAdminRoleKey, type AdminPermissionsConfig } from "@/lib/admin-access";
 import { CONTAINER_STATUS_LABELS, CONTAINER_STATUS_TONES, LINE_STAGE_LABELS, LINE_STAGE_TONES } from "@/lib/container-manifest";
+import { deliveryAccess, deliveryBalanceCents } from "@/lib/container-delivery";
 import { destinationCountryName, destinationCountryOptionForRow } from "@/lib/destination-countries";
 import { db } from "@/lib/firebase";
 import { currentLanguage, formatDate, formatDateTime } from "@/lib/format";
@@ -64,15 +66,22 @@ type LineState = {
  * or platform admins with operations access. Everyone else - and staff
  * holding another business's label - sees nothing here: the line query is
  * scoped to their own business, and the rules refuse anything wider.
+ *
+ * Staff with Deliveries (and not Containers) get it too, to hand a package
+ * over: no prices, payments or balances, no labels and no console link.
+ * `embedded` is the business console's Deliveries tab, where there is no
+ * public result below.
  */
 export function PackageStaffView({
   code,
   firebaseUser,
   profile,
+  embedded = false,
 }: {
   code: string;
   firebaseUser: User | null | undefined;
   profile: UserProfile;
+  embedded?: boolean;
 }) {
   const role = String(profile.role ?? "");
   const superAdmin = resolveAdminRoleKey(profile.adminRole, false) === "superAdmin";
@@ -114,6 +123,8 @@ export function PackageStaffView({
     [profile, firebaseUser, adminOperations],
   );
   const scopeBusinessId = scope.kind === "business" ? scope.businessId : "";
+  // Who may mark delivered, undo, and see money (container_delivery.js).
+  const access = useMemo(() => deliveryAccess(profile), [profile]);
   const active = scope.kind !== "none" && Boolean(code);
   const key = `${scope.kind}|${scopeBusinessId}|${code}`;
 
@@ -218,6 +229,8 @@ export function PackageStaffView({
   const partHint = group && line ? partHintText(group, line, viewLang) : "";
   // A collected request's pickup fee, inside the price: its own row.
   const pickupFee = group ? group.pickupFeeCents : line ? linePickupFeeCents(line) : 0;
+  // What the package still owes, for the delivery warning (its whole group's).
+  const balanceCents = line ? deliveryBalanceCents(group ?? groupForLine(null, line)) : 0;
   const [labelsOpen, setLabelsOpen] = useState(false);
 
   // Waiting on an admin's role, or nobody this view is for.
@@ -228,9 +241,11 @@ export function PackageStaffView({
   if (current?.status === "not_found") {
     return (
       <div className="info-band pkg-staff-note" role="status">
-        {scope.kind === "admin"
-          ? "No container line has this code. The public tracking result is below."
-          : "This code is not on any of your containers. The public tracking result is below."}
+        {embedded
+          ? "This code is not on any of your packages. Check it and try again."
+          : scope.kind === "admin"
+            ? "No container line has this code. The public tracking result is below."
+            : "This code is not on any of your containers. The public tracking result is below."}
       </div>
     );
   }
@@ -277,7 +292,7 @@ export function PackageStaffView({
         {box && <span className={`lst-badge ${CONTAINER_STATUS_TONES[box.status]}`}>{CONTAINER_STATUS_LABELS[box.status]}</span>}
         {view.waiting && <span className={`lst-badge ${LINE_STAGE_TONES.waiting}`}>{LINE_STAGE_LABELS.waiting}</span>}
       </div>
-      <p className="panel-lede pkg-staff-lede">Only your team sees this. The customer&apos;s public tracking result is below.</p>
+      {!embedded && <p className="panel-lede pkg-staff-lede">Only your team sees this. The customer&apos;s public tracking result is below.</p>}
 
       <section className="pkg-staff-section">
         <h3>What it is</h3>
@@ -300,12 +315,13 @@ export function PackageStaffView({
         </section>
       </div>
 
-      {(view.size || view.payment.status !== "no_price") && (
+      {/* Money only for people who may see it: never a deliveries-only person. */}
+      {(view.size || (access.canSeeMoney && view.payment.status !== "no_price")) && (
         <section className="pkg-staff-section">
-          <h3>Size and price</h3>
+          <h3>{access.canSeeMoney ? "Size and price" : "Package size"}</h3>
           <div className="pur-info">
             {view.size && <div><span>Package size</span><b data-no-translate>{view.size.dimensionsText}</b><small data-no-translate>{view.size.volumeText}</small></div>}
-            {view.payment.priceCents !== null && (
+            {access.canSeeMoney && view.payment.priceCents !== null && (
               <>
                 {pickupFee > 0 && <div><span>Pickup fee</span><b data-no-translate>{moneyText(pickupFee, lang)}</b></div>}
                 <div><span>Price</span><b data-no-translate>{moneyText(view.payment.priceCents, lang)}</b></div>
@@ -313,7 +329,9 @@ export function PackageStaffView({
                 <div><span>Still owed</span><b data-no-translate>{moneyText(view.payment.balanceCents, lang)}</b></div>
               </>
             )}
-            <div><span>Payment</span><b><span className={`lst-badge ${PACKAGE_PAYMENT_TONES[view.payment.status]}`}>{PACKAGE_PAYMENT_LABELS[view.payment.status]}</span></b>{partHint && <small data-no-translate>{partHint}</small>}</div>
+            {access.canSeeMoney && (
+              <div><span>Payment</span><b><span className={`lst-badge ${PACKAGE_PAYMENT_TONES[view.payment.status]}`}>{PACKAGE_PAYMENT_LABELS[view.payment.status]}</span></b>{partHint && <small data-no-translate>{partHint}</small>}</div>
+            )}
           </div>
         </section>
       )}
@@ -341,6 +359,14 @@ export function PackageStaffView({
         )}
       </section>
 
+      <PackageDeliverySection
+        access={access}
+        balanceCents={balanceCents}
+        businessId={view.businessId}
+        container={containerRow}
+        line={line}
+      />
+
       <section className="pkg-staff-section">
         <h3>WhatsApp updates</h3>
         <ul className="pkg-staff-updates">
@@ -364,23 +390,29 @@ export function PackageStaffView({
         </ul>
       </section>
 
-      <div className="pkg-staff-actions">
-        <button
-          className="primary-button"
-          disabled={!containerRow && !view.waiting}
-          onClick={() => setLabelsOpen(true)}
-          type="button"
-        >
-          <Tag aria-hidden="true" size={16} /> Reprint labels
-        </button>
-        {/* The business console is the owners' and staff's; a platform
-            admin works from the admin console instead. */}
-        {scope.kind === "business" && (
-          <a className="secondary-button" href={view.consoleLink} rel="noopener" target="_blank">
-            <ExternalLink aria-hidden="true" size={16} /> Open in business console
-          </a>
-        )}
-      </div>
+      {/* Labels and the containers screen are the Containers permission's
+          (the label callable requires it): a deliveries-only person has
+          neither. */}
+      {access.canUndo && (
+        <div className="pkg-staff-actions">
+          <button
+            className="primary-button"
+            disabled={!containerRow && !view.waiting}
+            onClick={() => setLabelsOpen(true)}
+            type="button"
+          >
+            <Tag aria-hidden="true" size={16} /> Reprint labels
+          </button>
+          {/* The business console is the owners' and staff's; a platform
+              admin works from the admin console instead. Already in it,
+              there is nothing to open. */}
+          {scope.kind === "business" && !embedded && (
+            <a className="secondary-button" href={view.consoleLink} rel="noopener" target="_blank">
+              <ExternalLink aria-hidden="true" size={16} /> Open in business console
+            </a>
+          )}
+        </div>
+      )}
 
       {labelsOpen && (containerRow || view.waiting) && (
         <ContainerLabelsDialog

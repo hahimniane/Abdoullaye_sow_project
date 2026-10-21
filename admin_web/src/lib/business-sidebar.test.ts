@@ -35,7 +35,7 @@ describe("business sidebar navigation", () => {
     assert.equal(transport?.label, "Transport & shipping");
     assert.deepEqual(
       transport?.tabs.map((tab) => tab.id),
-      ["barrels", "freight", "transport", "parking", "ledger", "containers", "volume"],
+      ["barrels", "freight", "transport", "parking", "ledger", "containers", "deliveries", "volume"],
     );
   });
 
@@ -146,6 +146,27 @@ describe("business sidebar navigation", () => {
     assert.equal(visibleTabIds([], ["ledger"]).includes("invoices"), true);
     assert.equal(visibleTabIds([], ["people", "parking"]).includes("invoices"), false);
     assert.equal(visibleTabIds([], "owner").includes("invoices"), true);
+  });
+
+  it("gates Deliveries on its own permission and the shipping services; containers implies it", () => {
+    const entry = businessSidebarTabs.find((tab) => tab.id === "deliveries");
+    assert.equal(entry?.label, "Deliveries");
+    assert.equal(entry?.permission, "deliveries");
+    assert.deepEqual(entry?.services, shippingServiceIds);
+    assert.equal(entry?.group, "transport");
+    // A deliveries-only person sees Deliveries and nothing of Containers.
+    const deliveriesOnly = visibleTabIds(["barrelShipping"], ["deliveries"]);
+    assert.equal(deliveriesOnly.includes("deliveries"), true);
+    assert.equal(deliveriesOnly.includes("containers"), false);
+    assert.equal(deliveriesOnly.includes("volume"), false);
+    assert.equal(deliveriesOnly.includes("ledger"), false);
+    // Managers of containers and owners have it too.
+    assert.equal(visibleTabIds(["barrelShipping"], ["containers"]).includes("deliveries"), true);
+    assert.equal(visibleTabIds(["freight"], "owner").includes("deliveries"), true);
+    // A shop that ships nothing has nothing to deliver.
+    assert.equal(visibleTabIds(["inventory"], "owner").includes("deliveries"), false);
+    assert.equal(businessPermissionHeld(["deliveries"], "containers"), false, "deliveries must not open Containers");
+    assert.equal(businessPermissionHeld(["ledger"], "deliveries"), false);
   });
 
   it("only ledger implies invoices, and not the other way round", () => {

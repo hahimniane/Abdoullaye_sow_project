@@ -14687,6 +14687,28 @@ html[data-lang-pending] body {
   .pkg-staff-actions > * { flex: 1 1 100%; justify-content: center; }
 }
 
+/* Package delivered at the destination (package-delivery.tsx): the
+   unpaid-balance warning, the result line, the Deliveries tab's code search,
+   and the containers list's "Mark delivered" cell. */
+.dlv-warning { margin: 12px 0 0; padding: 10px 12px; border-radius: 10px; background: rgba(245, 158, 11, 0.14); color: #92400e; font-weight: 600; line-height: 1.45; }
+.dlv-notice { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 10px; padding: 8px 12px; border-radius: 10px; background: var(--mist); color: var(--brand-strong, #0f766e); font-size: 13.5px; }
+.dlv-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+.dlv-panel { display: flex; flex-direction: column; gap: 16px; }
+.dlv-panel .pkg-staff, .dlv-panel .pkg-staff-note { max-width: none; }
+.dlv-find { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; padding: 0 16px; }
+.dlv-find .lst-field { flex: 1 1 240px; max-width: 360px; }
+.dlv-find .lst-field input { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.04em; text-transform: uppercase; }
+.dlv-panel > .panel > .lst-form-error { margin: 10px 16px 0; }
+.dlv-hint { padding: 0 16px 14px; }
+.ctn-table .mini-table-row > span > .ctn-deliver-btn { align-self: flex-start; padding: 6px 10px; font-size: 12.5px; white-space: nowrap; }
+@media (max-width: 600px) {
+  .dlv-find { padding: 0 12px; }
+  .dlv-find .lst-field { max-width: none; }
+  .dlv-find .lst-btn { flex: 1 1 100%; justify-content: center; }
+  .dlv-hint { padding: 0 12px 12px; }
+  .dlv-actions > * { flex: 1 1 100%; justify-content: center; }
+}
+
 /* One-tap copy beside a value nobody should retype (VIN, customer name). */
 .copy-value{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;margin-left:6px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--muted);cursor:pointer;vertical-align:middle}
 .copy-value:hover{background:var(--mist);color:var(--brand-strong)}

@@ -14,6 +14,7 @@ import {
   ArrowLeft,
   ArrowRightLeft,
   Container,
+  PackageCheck,
   History,
   Pencil,
   Phone,
@@ -119,6 +120,14 @@ import { CopyValue } from "@/components/copy-value";
 import { ContainerLabelsDialog } from "@/components/business/container-labels-dialog";
 import { AddWaitingPackagesDialog } from "@/components/business/add-waiting-packages-dialog";
 import { ContactPhone, SenderIsReceiverBox } from "@/components/business/contact-phone";
+import { LineDeliveredChip, MarkDeliveredDialog, UndoDeliveryButton } from "@/components/business/package-delivery";
+import {
+  containerDeliveryProgress,
+  deliveredOfText,
+  deliveryBalanceCents,
+  deliveryStage,
+  showsDeliveryProgress,
+} from "@/lib/container-delivery";
 import { PackageMoney, PackageSize, WaitingPackagesPanel } from "@/components/business/waiting-packages-panel";
 import { ExpectedRequestsSection, PackageRequestsPanel } from "@/components/business/package-requests-panel";
 import { CustomerPhoneField } from "@/components/customer-phone-field";
@@ -329,6 +338,8 @@ export function ContainersPanel({
   // the fallback link.
   const [labelsContainerId, setLabelsContainerId] = useState("");
   const [labelsLineId, setLabelsLineId] = useState("");
+  // The package being marked delivered (its own dialog, over the list).
+  const [deliverLineId, setDeliverLineId] = useState("");
 
   const lang = currentLanguage() === "fr" ? "fr" : "en";
 
@@ -420,6 +431,9 @@ export function ContainersPanel({
   const selectedOpen = selected ? containerIsOpen(selected) : false;
   const selectedStatus = selected ? containerStatus(selected) : "loading";
   const selectedCounts = selected ? containerRowCounts(selected, selectedLines) : null;
+  // "X of Y delivered" once the container is ready for pickup.
+  const selectedDelivery = selected ? containerDeliveryProgress(selected, selectedLines) : null;
+  const deliverLine = deliverLineId ? selectedLines.find((row) => String(row.id) === deliverLineId) ?? null : null;
 
   // New packages open on the main destination (or the first one listed).
   const waitingDestination = useMemo(() => defaultWaitingDestination(destinations.rows), [destinations.rows]);
@@ -1082,6 +1096,9 @@ export function ContainersPanel({
               {selectedCounts && (
                 <div><span>On board</span><b>{selectedCounts.carCount} · {selectedCounts.barrelCount} · {selectedCounts.otherCount}</b><small>cars · barrels · other</small></div>
               )}
+              {selectedDelivery && showsDeliveryProgress(selected, selectedDelivery) && (
+                <div><span>Delivered</span><b data-no-translate>{deliveredOfText(selectedDelivery, lang)}</b></div>
+              )}
             </div>
             {containerCarrierNeedsChoice(selected) && (
               <p className="ctn-carrier-notice" role="status">
@@ -1106,12 +1123,14 @@ export function ContainersPanel({
           ) : (
             <div className="mini-table">
               <div className="ctn-table">
-                <div className="mini-table-head"><span>Cargo</span><span>Whose</span><span>Added</span><span aria-hidden="true"></span></div>
+                <div className="mini-table-head"><span>Cargo</span><span>Whose</span>{selectedStatus === "arrived" ? <span>Delivery</span> : <span>Added</span>}<span aria-hidden="true"></span></div>
                 {selectedLines.map((row) => {
                   const vin = cleanVin(row.vinNumber);
                   const title = containerLineTitle(row, lang);
                   const stock = containerLineIsStock(row);
                   const by = staffName(text(row.addedByStaffId, ""));
+                  // Ready for pickup: each package is handed over, or not yet.
+                  const stage = selectedStatus === "arrived" || row.deliveredAt ? deliveryStage(row, selected) : "";
                   return (
                     <div
                       className={`mini-table-row${focusLineId && String(row.id) === focusLineId ? " ctn-line-focus" : ""}`}
@@ -1128,8 +1147,21 @@ export function ContainersPanel({
                         <RecordPhoneFlags row={row} field="receiverPhone" />
                         <LineWhatsApp line={row} />
                       </span>
-                      <span><strong>{formatDate(row.createdAt)}</strong>{by && <small data-no-translate>{by}</small>}</span>
+                      {stage === "delivered" ? (
+                        <span><LineDeliveredChip line={row} /></span>
+                      ) : stage === "ready" ? (
+                        <span>
+                          <button className="lst-btn ghost ctn-deliver-btn" type="button" disabled={busy} onClick={() => setDeliverLineId(String(row.id))}>
+                            <PackageCheck size={14} /> Mark delivered
+                          </button>
+                        </span>
+                      ) : (
+                        <span><strong>{formatDate(row.createdAt)}</strong>{by && <small data-no-translate>{by}</small>}</span>
+                      )}
                       <span className="ctn-row-actions">
+                        {stage === "delivered" && (
+                          <UndoDeliveryButton businessId={businessId} line={row} onDone={setFlash} variant="icon" />
+                        )}
                         <button className="ghost-button" type="button" disabled={busy} onClick={() => openLabels(selectedId, row)} title="Print labels" aria-label="Print labels"><Tag size={14} /></button>
                         <button className="ghost-button" type="button" disabled={busy} onClick={() => openContacts(row)} title="Edit contacts" aria-label="Edit contacts"><Phone size={14} /></button>
                         {selectedOpen && (
@@ -1253,7 +1285,7 @@ export function ContainersPanel({
                           {hit.waiting && Boolean(text(hit.line.destinationCountryName, "")) && <small>{destinationLabel(hit.line)}</small>}
                         </span>
                         <span className="ctn-hit-state">
-                          <span><StatusBadge status={hit.status} />{Boolean(hit.sailedAt) && <small>{formatDate(hit.sailedAt)}</small>}</span>
+                          <span><StatusBadge status={hit.status} />{Boolean(hit.sailedAt) && <small>{formatDate(hit.sailedAt)}</small>}<LineDeliveredChip line={hit.line} /></span>
                           {containerId && (
                             <button
                               className="ghost-button"
@@ -1287,7 +1319,9 @@ export function ContainersPanel({
                 <div className="mini-table-head"><span>Container</span><span>Destination</span><span>On board</span><span>State</span></div>
                 {visibleContainers.map((row) => {
                   const status = containerStatus(row);
-                  const counts = containerRowCounts(row, linesByContainer.get(String(row.id)) ?? []);
+                  const rowLines = linesByContainer.get(String(row.id)) ?? [];
+                  const counts = containerRowCounts(row, rowLines);
+                  const delivery = containerDeliveryProgress(row, rowLines);
                   const number = text(row.containerNumber, "");
                   const id = String(row.id);
                   return (
@@ -1306,6 +1340,7 @@ export function ContainersPanel({
                         <StatusBadge status={status} />
                         {status === "shipped" && Boolean(row.sailedAt) && <small>{formatDate(row.sailedAt)}</small>}
                         {status === "arrived" && Boolean(row.arrivedAt) && <small>{formatDate(row.arrivedAt)}</small>}
+                        {showsDeliveryProgress(row, delivery) && <small data-no-translate>{deliveredOfText(delivery, lang)}</small>}
                       </span>
                     </div>
                   );
@@ -1680,6 +1715,18 @@ export function ContainersPanel({
         />
       )}
 
+      {deliverLine && selected && (
+        <MarkDeliveredDialog
+          balanceCents={deliveryBalanceCents(groupForLine(lineGroups, deliverLine))}
+          businessId={businessId}
+          // Only people with Containers reach this panel: they see money.
+          canSeeMoney
+          line={deliverLine}
+          onClose={() => setDeliverLineId("")}
+          onDone={setFlash}
+        />
+      )}
+
       {modal === "history" && (
         <div className="lst-modal-overlay" role="dialog" aria-modal="true" {...overlayDismiss(closeModal)}>
           <div className="lst-modal" style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
@@ -1723,6 +1770,9 @@ function auditActionLabel(action: string) {
     line_edited: "Line changed",
     // assignContainerLines with pieceCounts: some pieces went, the rest stay as a part.
     line_split: "Split",
+    // Handed over at the destination (container_delivery.js), and undone.
+    line_delivered: "Delivered",
+    line_delivery_undone: "Delivery undone",
     shipped: "Shipped",
     arrived: "Ready for pickup",
     deleted: "Deleted",
