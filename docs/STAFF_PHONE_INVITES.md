@@ -231,11 +231,14 @@ after)`, pure). Suspension and deletion already revoked. From that moment:
 
 ## 7. The WhatsApp template
 
-`staff_invite_2lang`, category UTILITY, language `en`, created by the owner
-with `~/laawol-deploy-logs/create_staff_invite_template.py` (prints by
+`staff_account_setup`: Meta's Template Library template
+`account_creation_confirmation_3` (UTILITY, pre-approved, fixed wording), in
+`en_US` and `fr`, chosen by the invitation's language. Created by the owner
+with `~/laawol-deploy-logs/create_staff_setup_template.py` (prints by
 default, `--submit` sends; the token comes from Secret Manager and is never
-printed). Body and variables: docs/WHATSAPP_CONTAINER_UPDATES.md
-(`staff_invite_2lang`). Button: URL, `Accept · Accepter`,
+printed). Our own `staff_invite_2lang` was re-categorized Marketing by Meta,
+which is not delivered to US numbers. Body and variables:
+docs/WHATSAPP_CONTAINER_UPDATES.md (`staff_account_setup`). Button: URL,
 `https://customer.laawoldigital.com/j/{{1}}` (the link token). Built only by
 `staffInviteTemplateMessage` in `whatsapp_templates.js`.
 

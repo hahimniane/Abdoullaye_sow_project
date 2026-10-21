@@ -425,9 +425,9 @@ function createStaffPhoneInvites(deps) {
         result = await deps.sendWhatsApp(deps.inviteMessage({
           phone: invitation.phoneE164,
           name: invitation.fullName,
-          inviter: invitation.invitedByName || invitation.businessName,
           business: invitation.businessName,
           token: invitation.linkToken,
+          locale: invitation.locale,
         }));
       } catch (error) {
         result = {ok: false, error: String(error?.message || error)};

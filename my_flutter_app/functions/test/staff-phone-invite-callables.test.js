@@ -195,10 +195,10 @@ describe("inviting by phone", () => {
         assert.deepEqual(stored.businessPermissions, ["inventory"]);
 
         const message = lastTo(phone);
-        assert.equal(message.template.name, "staff_invite_2lang");
+        assert.equal(message.template.name, "staff_account_setup");
         assert.deepEqual(message.template.components[0].parameters
-            .map((p) => p.text), ["Mamadou Barry", "Fatou Diallo",
-          "Dala Shipping", "Fatou Diallo", "Dala Shipping"]);
+            .map((p) => p.text), ["Mamadou Barry",
+          "your staff access at Dala Shipping"]);
         assert.equal(message.template.components[1].parameters[0].text,
             tokenOf(result.inviteLink));
       });
@@ -298,7 +298,7 @@ describe("resend and cancel", () => {
         assert.ok(stored.expiresAt.toMillis() > before);
         assert.equal(stored.sendCount, 2);
         assert.equal(messagesTo(phone).filter((body) =>
-          body.template.name === "staff_invite_2lang").length, 2);
+          body.template.name === "staff_account_setup").length, 2);
 
         await functions.cancelAccessInvitation.run({auth: asOwner(),
           data: {invitationId: first.invitationId}});

@@ -288,45 +288,59 @@ describe("the invitations list row", () => {
   });
 });
 
-describe("the staff_invite_2lang template", () => {
-  it("fills the body in the documented order and the /j/ button", () => {
+describe("the staff_account_setup template (Meta library)", () => {
+  it("sends the library template: name, access, /j/ button", () => {
     const token = "b".repeat(43);
     const body = staffInviteTemplateMessage({phone: GN, name: "Mamadou",
-      inviter: "Fatou\nDiallo", business: "Dala   Shipping", token});
+      business: "Dala   Shipping", token, locale: "en"});
     assert.equal(body.to, "224622123456");
     assert.equal(body.template.name, STAFF_INVITE_TEMPLATE);
-    assert.equal(body.template.name, "staff_invite_2lang");
-    assert.deepEqual(body.template.language, {code: "en"});
+    assert.equal(body.template.name, "staff_account_setup");
+    assert.deepEqual(body.template.language, {code: "en_US"});
     assert.deepEqual(body.template.components[0].parameters
         .map((p) => p.text),
-    ["Mamadou", "Fatou Diallo", "Dala Shipping", "Fatou Diallo",
-      "Dala Shipping"]);
+    ["Mamadou", "your staff access at Dala Shipping"]);
+    assert.equal(STAFF_INVITE_VARIABLES.length,
+        body.template.components[0].parameters.length);
     assert.deepEqual(body.template.components[1], {type: "button",
       sub_type: "url", index: "0", parameters: [{type: "text",
         text: token}]});
   });
 
-  it("never sends an empty parameter", () => {
-    const body = staffInviteTemplateMessage({phone: GN, token: "t"});
-    for (const parameter of body.template.components[0].parameters) {
-      assert.ok(parameter.text.length > 0);
+  it("uses the French library version for a French invitation", () => {
+    const body = staffInviteTemplateMessage({phone: GN, name: "Mamadou",
+      business: "Dala Shipping", token: "t", locale: "fr-FR"});
+    assert.deepEqual(body.template.language, {code: "fr"});
+    assert.equal(body.template.components[0].parameters[1].text,
+        "accès employé chez Dala Shipping");
+  });
+
+  it("falls back to English for a missing or unknown locale", () => {
+    for (const locale of [undefined, "", "es", "EN"]) {
+      const body = staffInviteTemplateMessage({phone: GN, token: "t",
+        locale});
+      assert.deepEqual(body.template.language, {code: "en_US"});
     }
   });
 
-  it("is documented with as many variables as the code fills", () => {
+  it("never sends an empty or multi-line parameter", () => {
+    for (const locale of ["en", "fr"]) {
+      const body = staffInviteTemplateMessage({phone: GN, token: "t",
+        name: "  ", business: "", locale});
+      for (const parameter of body.template.components[0].parameters) {
+        assert.ok(parameter.text.length > 0);
+        assert.doesNotMatch(parameter.text, /[\r\n\t]/);
+      }
+    }
+  });
+
+  it("is documented under its own name", () => {
     const doc = readFileSync(path.join(__dirname, "..", "..", "..", "docs",
         "WHATSAPP_CONTAINER_UPDATES.md"), "utf8");
-    const section = doc.slice(doc.indexOf("### `staff_invite_2lang`"));
-    assert.ok(doc.includes("### `staff_invite_2lang`"));
-    const [bodyText] = section.split("```").filter((_, i) => i % 2 === 1);
-    const highest = Math.max(...[...bodyText.matchAll(/\{\{(\d+)\}\}/g)]
-        .map((m) => Number(m[1])));
-    assert.equal(highest, STAFF_INVITE_VARIABLES.length);
-    assert.match(bodyText, /\*ENGLISH\*/);
-    assert.match(bodyText, /—————\n\*FRANÇAIS\*/);
-    // Meta refuses a body that starts or ends with a variable.
-    assert.doesNotMatch(bodyText.trim(), /^\{\{|\}\}$/);
-    assert.match(section, /create_staff_invite_template\.py/);
+    const section = doc.slice(doc.indexOf("### `staff_account_setup`"));
+    assert.ok(doc.includes("### `staff_account_setup`"));
+    assert.match(section, /account_creation_confirmation_3/);
+    assert.match(section, /create_staff_setup_template\.py/);
     assert.match(section, /customer\.laawoldigital\.com\/j\/\{\{1\}\}/);
   });
 });

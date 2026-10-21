@@ -363,37 +363,41 @@ Client"), business → `Laawol`, what → `goods` / `marchandises`, destination
 fallbacks are in *Pickup details per destination* above, tracking code →
 `-`.
 
-### `staff_invite_2lang`
+### `staff_account_setup`
 
 A business inviting a person as staff by their WhatsApp number
 (docs/STAFF_PHONE_INVITES.md). Not a shipment update: sent once per
 invitation (and again on Resend) by `inviteBusinessMember` /
-`resendAccessInvitation`, built by `staffInviteTemplateMessage`. Category
-**Utility**, language `en`, one body holding both languages. Button: *Visit
-website*, text `Accept · Accepter`, URL type **Dynamic**,
-`https://customer.laawoldigital.com/j/{{1}}`, whose only parameter is the
-invitation's link token. Variables: {{1}} the invited person's name, {{2}}
-who invited (EN), {{3}} business (EN), {{4}} who invited (FR), {{5}}
-business (FR).
+`resendAccessInvitation`, built by `staffInviteTemplateMessage`.
+
+This is **Meta's own Template Library template**
+`account_creation_confirmation_3`, created as `staff_account_setup` in
+`en_US` and `fr` (category **Utility**, pre-approved; the wording is Meta's
+and cannot be edited, only the parameters and the button URL are ours). The
+invitation's language (the console's language when it was sent) picks the
+version; anything not French is English. Button: URL, *Verify account* /
+*Confirmer le compte*, `https://customer.laawoldigital.com/j/{{1}}`, whose
+only parameter is the invitation's link token. Variables: {{1}} the invited
+person's name, {{2}} `your staff access at <business>` /
+`accès employé chez <business>`.
 
 ```
-Hello / Bonjour {{1}} 👋
-
-*ENGLISH*
-{{2}} invited you to join {{3}} on Laawol as staff. Tap the button below, then sign in with this WhatsApp number to accept. The invitation expires in 7 days.
-
-—————
-*FRANÇAIS*
-{{4}} vous invite à rejoindre {{5}} sur Laawol en tant que membre de l'équipe. Appuyez sur le bouton ci-dessous, puis connectez-vous avec ce numéro WhatsApp pour accepter. L'invitation expire dans 7 jours.
+EN  Hi {{1}}, Your new account has been created successfully.
+    Please verify {{2}} to complete your profile.
+FR  Bonjour {{1}}, Votre nouveau compte a été créé correctement.
+    Veuillez confirmer votre {{2}} pour terminer la configuration de votre profil.
 ```
 
-Sample values: `Mamadou`, `Fatou Diallo`, `Dala Shipping`, `Fatou Diallo`,
-`Dala Shipping`. Blanks: the inviter falls back to the business name, then
-`Laawol`. Created with `~/laawol-deploy-logs/create_staff_invite_template.py`
-(dry run by default, `--submit` sends). Until Meta approves it a send answers
-`132001`: the invitation stays pending, nothing is retried by itself, and the
-owner sees "WhatsApp message not sent yet - share this link" (Resend tries
-again).
+Why not our own wording: `staff_invite_2lang` ("{{2}} invited you to join
+{{3}} on Laawol...") was submitted as Utility and **re-categorized Marketing**
+by Meta (2026-10-20); Meta does not deliver marketing templates to US (+1)
+numbers, so invites were accepted by the API and then silently dropped. A
+reworded "account notice" (`staff_access_2lang`) was rejected outright.
+Library templates avoid both. Created with
+`~/laawol-deploy-logs/create_staff_setup_template.py` (dry run by default,
+`--submit` sends). Until Meta approves a language a send answers `132001`:
+the invitation stays pending and the owner sees "WhatsApp message not sent
+yet - share this link" (Resend tries again).
 
 #### The legacy templates (fallback, `WHATSAPP_TEMPLATE_SET=legacy`)
 

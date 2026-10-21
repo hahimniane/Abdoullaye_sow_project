@@ -487,35 +487,60 @@ function loginCodeTemplateMessage(args) {
 }
 
 /**
- * The staff invitation (docs/STAFF_PHONE_INVITES.md): a UTILITY template,
- * registered once under language "en", whose body holds the English text
- * then the French one, like the *_2lang shipment templates. One URL button,
- * https://customer.laawoldigital.com/j/{{1}}, whose parameter is the
- * invitation's link token. Created by the owner with
- * ~/laawol-deploy-logs/create_staff_invite_template.py.
+ * The staff invitation (docs/STAFF_PHONE_INVITES.md). Meta's own Template
+ * Library template `account_creation_confirmation_3`, created as
+ * `staff_account_setup` in en_US and fr (pre-approved UTILITY; fixed wording,
+ * only the parameters are ours). Our earlier `staff_invite_2lang` was
+ * re-categorized MARKETING by Meta, and marketing templates are not delivered
+ * to US numbers; a reworded one was rejected. Created by the owner with
+ * ~/laawol-deploy-logs/create_staff_setup_template.py.
+ *
+ *   EN  Hi {{1}}, Your new account has been created successfully. Please
+ *       verify {{2}} to complete your profile.   [Verify account]
+ *   FR  Bonjour {{1}}, Votre nouveau compte a été créé correctement.
+ *       Veuillez confirmer votre {{2}} pour terminer la configuration de
+ *       votre profil.   [Confirmer le compte]
+ *
+ * One URL button, https://customer.laawoldigital.com/j/{{1}}, whose
+ * parameter is the invitation's link token.
  */
-const STAFF_INVITE_TEMPLATE = "staff_invite_2lang";
-// {{1}} invitee, {{2}} inviter, {{3}} business, {{4}} inviter, {{5}}
-// business.
-const STAFF_INVITE_VARIABLES = Object.freeze([
-  "name", "inviter", "business", "inviter", "business",
-]);
+const STAFF_INVITE_TEMPLATE = "staff_account_setup";
+// The library template is registered per language (not one 2-language body).
+const STAFF_INVITE_LANGUAGES = Object.freeze({en: "en_US", fr: "fr"});
+// {{1}} invited person, {{2}} what to verify ("your staff access at X").
+const STAFF_INVITE_VARIABLES = Object.freeze(["name", "access"]);
 const STAFF_INVITE_FALLBACK = Object.freeze({
-  name: "👋",
-  inviter: "Laawol",
-  business: "Laawol",
+  en: {name: "there", business: "Laawol"},
+  fr: {name: "à vous", business: "Laawol"},
 });
+
+/**
+ * The invitation's language: French when the invite was made in French,
+ * English otherwise.
+ *
+ * @param {string} locale The invitation's locale ("fr", "fr-FR", "en", ...).
+ * @return {"en"|"fr"} The language.
+ */
+function staffInviteLanguage(locale) {
+  return /^fr/i.test(String(locale ?? "").trim()) ? "fr" : "en";
+}
 
 /**
  * The /messages body for one staff invitation.
  *
- * @param {{phone: string, name: string, inviter: string, business: string,
- *   token: string}} args Who is invited, by whom, to what, and the link
- *   token for the button.
+ * @param {{phone: string, name: string, business: string, token: string,
+ *   locale: string}} args Who is invited, to which business, the link token
+ *   for the button, and the invitation's language.
  * @return {object} The request body.
  */
 function staffInviteTemplateMessage(args) {
   const values = args || {};
+  const language = staffInviteLanguage(values.locale);
+  const fallback = STAFF_INVITE_FALLBACK[language];
+  const business = clean(values.business, 60) || fallback.business;
+  const access = language === "fr" ?
+    `accès employé chez ${business}` :
+    `your staff access at ${business}`;
   const parameter = (text) => ({type: "text", text});
   return {
     messaging_product: "whatsapp",
@@ -523,12 +548,14 @@ function staffInviteTemplateMessage(args) {
     type: "template",
     template: {
       name: STAFF_INVITE_TEMPLATE,
-      language: {code: BILINGUAL_TEMPLATE_LANGUAGE},
+      language: {code: STAFF_INVITE_LANGUAGES[language]},
       components: [
         {
           type: "body",
-          parameters: STAFF_INVITE_VARIABLES.map((variable) => parameter(
-              clean(values[variable], 60) || STAFF_INVITE_FALLBACK[variable])),
+          parameters: [
+            parameter(clean(values.name, 60) || fallback.name),
+            parameter(access),
+          ],
         },
         {
           // https://customer.laawoldigital.com/j/{{1}}
@@ -572,5 +599,7 @@ module.exports = {
   loginCodeTemplateMessage,
   STAFF_INVITE_TEMPLATE,
   STAFF_INVITE_VARIABLES,
+  STAFF_INVITE_LANGUAGES,
+  staffInviteLanguage,
   staffInviteTemplateMessage,
 };
