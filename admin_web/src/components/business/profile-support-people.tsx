@@ -23,6 +23,7 @@ import {
   Package,
   ParkingCircle,
   Plane,
+  QrCode,
   Plus,
   RefreshCw,
   Save,
@@ -294,6 +295,13 @@ const serviceOptions = [
     id: "carParking",
     label: "Car parking",
     description: "Facility capacity, rates, and vehicle pickup.",
+  },
+  {
+    // Owners switch it themselves since 2026-10-21; off only hides the
+    // screens, products and sales stay.
+    id: "inventory",
+    label: "Inventory",
+    description: "Products, stock, QR tags, and shop sales.",
   },
 ];
 
@@ -843,8 +851,10 @@ export function BusinessServicesPanel({
     );
   }
 
-  const activeServiceCount = draft.enabledServices.length;
-  const activeServiceSummary = `${activeServiceCount} of 6 services active`;
+  const activeServiceCount = visibleServiceOptions.filter((service) =>
+    draft.enabledServices.includes(service.id),
+  ).length;
+  const activeServiceSummary = `${activeServiceCount} of ${visibleServiceOptions.length} services active`;
   const offersCarSales = draft.enabledServices.includes("carSales");
   const offersParking = draft.enabledServices.includes("carParking");
   const offersFreight = draft.enabledServices.includes("freight");
@@ -2256,6 +2266,8 @@ function businessServiceIcon(serviceId: string) {
       return <Truck size={21} />;
     case "carParking":
       return <ParkingCircle size={21} />;
+    case "inventory":
+      return <QrCode size={21} />;
     default:
       return <Building2 size={21} />;
   }

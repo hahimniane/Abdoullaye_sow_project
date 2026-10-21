@@ -991,17 +991,23 @@ function tagsModel({item, consoleUrl, copies}) {
 }
 
 /**
- * Inventory is switched on by a platform admin, not by the owner. An owner's
- * own application or profile save can neither add it nor drop it: whether it
- * is on stays what the business already had. A platform admin sets it freely.
+ * Who may switch Inventory. A platform admin sets it freely. Since
+ * 2026-10-21 (owner decision) a business owner may switch it on and off from
+ * Services & coverage (the profile save passes `ownerMayToggle`); turning it
+ * off only hides the screens, products and sales are never deleted. The
+ * public application still cannot add it: there Inventory is a request flag
+ * (`requestedInventory`), so whether it is on stays what the business had.
  * @param {string[]} requested - The normalized list the caller sent.
  * @param {*} current - The business's stored enabledServices (may be absent).
  * @param {boolean} callerIsAdmin - Whether a platform admin is saving.
  * @param {string[]} validOrder - VALID_BUSINESS_SERVICES, to keep their order.
+ * @param {{ownerMayToggle: (boolean|undefined)}} [options] - The owner's own
+ *   profile save may switch Inventory.
  * @return {string[]} The services to store.
  */
-function ownerEditableServices(requested, current, callerIsAdmin, validOrder) {
-  if (callerIsAdmin) return requested;
+function ownerEditableServices(requested, current, callerIsAdmin, validOrder,
+    {ownerMayToggle = false} = {}) {
+  if (callerIsAdmin || ownerMayToggle === true) return requested;
   const had = Array.isArray(current) && current.includes("inventory");
   return validOrder.filter((service) => service === "inventory" ?
     had : requested.includes(service));

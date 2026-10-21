@@ -569,6 +569,17 @@ describe("ownerEditableServices", () => {
     assert.deepEqual(ownerEditableServices(["inventory"], undefined, false,
         ORDER), []);
   });
+  it("lets the owner switch it from Services & coverage (profile save)",
+      () => {
+        const owner = {ownerMayToggle: true};
+        assert.deepEqual(ownerEditableServices(["freight", "inventory"],
+            ["freight"], false, ORDER, owner), ["freight", "inventory"]);
+        assert.deepEqual(ownerEditableServices(["freight"],
+            ["freight", "inventory"], false, ORDER, owner), ["freight"]);
+        // Only a strict true opens it.
+        assert.deepEqual(ownerEditableServices(["inventory"], [], false,
+            ORDER, {ownerMayToggle: "yes"}), []);
+      });
   it("lets a platform admin set it freely", () => {
     assert.deepEqual(
         ownerEditableServices(["freight", "inventory"], ["freight"], true,
@@ -628,11 +639,18 @@ describe("The admin Inventory switch is wired on the server", () => {
   });
 });
 
-describe("Inventory stays admin-only in the owner-facing callables", () => {
+describe("Who may switch Inventory in the owner-facing callables", () => {
+  const src = fs.readFileSync(path.join(__dirname, "..", "index.js"), "utf8");
   it("filters the application and the profile update", () => {
-    const src = fs.readFileSync(path.join(__dirname, "..", "index.js"), "utf8");
     const uses = src.match(/inventory\.ownerEditableServices\(/g) || [];
     assert.equal(uses.length, 2);
+  });
+  it("lets the owner switch it only in the profile save", () => {
+    const apply = src.slice(src.indexOf("exports.submitBusinessApplication"),
+        src.indexOf("exports.createAdminBusiness"));
+    const profile = src.slice(src.indexOf("exports.updateBusinessProfile"));
+    assert.doesNotMatch(apply, /ownerMayToggle/);
+    assert.match(profile.slice(0, 6000), /ownerMayToggle: true/);
   });
 });
 
