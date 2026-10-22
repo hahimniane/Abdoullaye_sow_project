@@ -386,6 +386,51 @@ void businessRoutingTests() {
       expect(routeForNotificationData({'type': 'container_line'}), isNull);
     });
 
+    test('platform activity opens the businesses list for an admin', () {
+      // One event: a car, a package or a sale in some business.
+      for (final kind in ['car', 'package', 'sale']) {
+        final route = routeForNotificationData({
+          'type': 'platform_activity',
+          'businessId': 'biz-1',
+          'kind': kind,
+          'summary': 'false',
+          'relatedCollection': 'parkedCars',
+          'relatedId': 'rec-1',
+        }, audience: business);
+        expect(route?.name, '/businesses', reason: kind);
+        expect(route?.arguments, isNull);
+      }
+      // A 10-minute summary names no record.
+      final summary = routeForNotificationData({
+        'type': 'platform_activity',
+        'businessId': 'biz-1',
+        'kind': '',
+        'summary': 'true',
+        'relatedCollection': '',
+        'relatedId': '',
+      }, audience: business);
+      expect(summary?.name, '/businesses');
+      // Someone joined a business as staff.
+      final joined = routeForNotificationData({
+        'type': 'business_member_joined',
+        'businessId': 'biz-1',
+        'uid': 'u-9',
+      }, audience: business);
+      expect(joined?.name, '/businesses');
+      // Admins route as the business audience; anyone else opens nothing.
+      expect(
+        routeForNotificationData({
+          'type': 'platform_activity',
+          'businessId': 'biz-1',
+        }),
+        isNull,
+      );
+      expect(
+        routeForNotificationData({'type': 'business_member_joined'}),
+        isNull,
+      );
+    });
+
     test('a sale at the store opens the Inventory sales list', () {
       final route = routeForNotificationData({
         'type': 'inventory_sale',

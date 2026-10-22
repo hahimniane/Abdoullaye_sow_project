@@ -1502,6 +1502,7 @@
   "inventorySalesNotifications": "Ventes de mon magasin",
   "parkedCarAlertsNotifications": "Voitures garées par mon équipe",
   "packageAlertsNotifications": "Colis enregistrés par mon équipe",
+  "platformActivityNotifications": "Activité de la plateforme (voitures, colis, ventes de toutes les entreprises)",
   "faceId": "Face ID",
   "faceIdUnlock": "Utiliser Face ID pour déverrouiller l’application",
   "faceIdUnavailable": "Face ID n’est pas disponible sur cet appareil",

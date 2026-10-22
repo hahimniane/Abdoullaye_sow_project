@@ -6776,6 +6776,12 @@ abstract class AppLocalizations {
   /// **'Packages saved by my team'**
   String get packageAlertsNotifications;
 
+  /// No description provided for @platformActivityNotifications.
+  ///
+  /// In en, this message translates to:
+  /// **'Platform activity (cars, packages, sales in every business)'**
+  String get platformActivityNotifications;
+
   /// No description provided for @faceId.
   ///
   /// In en, this message translates to:

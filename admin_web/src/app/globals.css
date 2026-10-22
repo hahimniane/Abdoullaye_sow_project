@@ -5401,6 +5401,15 @@ html[data-lang-pending] body {
   width: 100%;
 }
 
+/* "My alerts" under the account form (platform activity switch). */
+.account-alerts {
+  padding: 0 22px 22px;
+}
+
+.account-alerts:empty {
+  display: none;
+}
+
 .account-drawer-actions {
   border-top: 1px solid var(--rule);
   display: flex;

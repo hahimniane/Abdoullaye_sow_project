@@ -1502,6 +1502,7 @@
   "inventorySalesNotifications": "Sales at my store",
   "parkedCarAlertsNotifications": "Cars parked by my team",
   "packageAlertsNotifications": "Packages saved by my team",
+  "platformActivityNotifications": "Platform activity (cars, packages, sales in every business)",
   "faceId": "Face ID",
   "faceIdUnlock": "Use Face ID to unlock this app",
   "faceIdUnavailable": "Face ID is not available on this device",

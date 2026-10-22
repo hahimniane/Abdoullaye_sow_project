@@ -11,6 +11,7 @@ import '../providers/auth_provider.dart';
 import '../services/biometric_lock_service.dart';
 import '../services/inventory.dart' show inventoryAvailable;
 import '../services/push_notification_service.dart';
+import '../services/platform_activity_alerts.dart';
 import '../services/staff_activity_alerts.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
@@ -148,7 +149,8 @@ class _AccountProfileScreenState extends State<AccountProfileScreen> {
           _preferences.inventoryCredit ||
           _preferences.inventoryTransfers ||
           _preferences.parkedCarAlerts ||
-          _preferences.packageAlerts) {
+          _preferences.packageAlerts ||
+          _preferences.platformActivity) {
         try {
           await PushNotificationService().requestPermissionAndRegister();
         } catch (error) {
@@ -580,6 +582,20 @@ class _AccountProfileScreenState extends State<AccountProfileScreen> {
                       value: _preferences.packageAlerts,
                       onChanged: (value) => _updatePreferences(
                         _preferences.copyWith(packageAlerts: value),
+                      ),
+                    ),
+                  // Platform admins who look after businesses hear about
+                  // cars, packages and sales in every business.
+                  if (showPlatformActivitySwitch(
+                    role: auth.role ?? '',
+                    adminRole: auth.adminRole ?? '',
+                  ))
+                    _PreferenceSwitch(
+                      key: const Key('platform-activity-notifications'),
+                      title: l10n.platformActivityNotifications,
+                      value: _preferences.platformActivity,
+                      onChanged: (value) => _updatePreferences(
+                        _preferences.copyWith(platformActivity: value),
                       ),
                     ),
                 ],

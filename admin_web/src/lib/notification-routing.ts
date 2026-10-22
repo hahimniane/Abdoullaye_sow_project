@@ -64,6 +64,8 @@ export type BusinessNotificationTarget = {
 export type AdminNotificationTarget = {
   tab: string;
   caseId?: string;
+  /** Businesses tab: the business to open ("" or absent = the list as it is). */
+  businessId?: string;
 };
 
 const ORDER_TYPE_COLLECTIONS: Record<string, string> = {
@@ -366,6 +368,13 @@ export function adminTargetForNotification(
     case "business_verification_document":
     case "business_verification_review":
       return {tab: "businesses"};
+    // Platform activity (functions platform_activity_alerts.js): cars parked,
+    // packages saved and shop sales in a business - a single event or a
+    // 10-minute summary - and someone joining a business as staff. Both open
+    // that business on the Businesses tab.
+    case "platform_activity":
+    case "business_member_joined":
+      return {tab: "businesses", businessId: firstText(data.businessId)};
     default:
       return {tab: "today"};
   }

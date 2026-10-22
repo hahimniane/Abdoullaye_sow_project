@@ -74,6 +74,29 @@ void main() {
           .parkedCarAlerts,
       isTrue,
     );
+    // Platform activity (platform admins): on by default and on for a
+    // profile saved before the switch existed; only `false` turns it off.
+    expect(prefs.platformActivity, isTrue);
+    expect(
+      NotificationPreferences.fromMap({'packageAlerts': true})
+          .platformActivity,
+      isTrue,
+    );
+    final platformOff =
+        NotificationPreferences.defaults.copyWith(platformActivity: false);
+    expect(platformOff.toMap()['platformActivity'], isFalse);
+    expect(
+      NotificationPreferences.fromMap(platformOff.toMap()).platformActivity,
+      isFalse,
+    );
+    expect(platformOff.parkedCarAlerts, isTrue);
+    expect(platformOff.packageAlerts, isTrue);
+    expect(platformOff.inventorySales, isTrue);
+    expect(
+      NotificationPreferences.fromMap({'platformActivity': null})
+          .platformActivity,
+      isTrue,
+    );
   });
 
   test('notification preferences serialize and preserve disabled values', () {
@@ -99,6 +122,7 @@ void main() {
       'inventoryTransfers': true,
       'parkedCarAlerts': true,
       'packageAlerts': true,
+      'platformActivity': true,
     });
     expect(
       NotificationPreferences.fromMap(prefs.toMap()).shipmentActivity,

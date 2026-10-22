@@ -813,6 +813,15 @@ service cloud.firestore {
     match /staffActivityAlertClaims/{claimId} {
       allow read, write: if false;
     }
+    // Platform activity alerts (functions platform_activity_alerts.js): one
+    // grouping window per business for the platform admins, and one claim
+    // per parked car / package / sale. The server's alone.
+    match /platformActivityAlerts/{businessId} {
+      allow read, write: if false;
+    }
+    match /platformActivityAlertClaims/{claimId} {
+      allow read, write: if false;
+    }
     // Zelle bank check (docs/ZELLE_BANK_CHECK.md): the connected bank (a
     // sealed access token, the feed cursor) and the deposits read from it.
     // The server's alone - not even the owner reads them directly; the

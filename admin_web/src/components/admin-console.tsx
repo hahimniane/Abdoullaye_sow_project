@@ -91,6 +91,11 @@ import { isValidE164, normalizePhone } from "@/lib/phone";
 import { ReviewsPanel } from "@/components/business/reviews-panel";
 import { SearchableSelect } from "@/components/searchable-select";
 import { ToggleRow } from "@/components/toggle-row";
+import {
+  mergeNotificationPreferences,
+  platformActivityNotificationPreferenceFields,
+  receivesPlatformActivityAlerts,
+} from "@/lib/notification-preferences";
 import { COUNTRY_CATALOG } from "@/lib/country-catalog";
 import { CITIES_BY_STATE, US_STATE_NAMES } from "@/lib/us-locations";
 import { auth, db, functions, storage } from "@/lib/firebase";
@@ -1940,6 +1945,8 @@ export function AdminConsole() {
   const [authError, setAuthError] = useState("");
   const [activeTab, setActiveTab] = useState<Tab>("today");
   const [notificationCaseId, setNotificationCaseId] = useState("");
+  // Bell -> Businesses: the business a platform activity alert names.
+  const [notificationBusinessId, setNotificationBusinessId] = useState("");
   // Same bundle serves every subdomain, so the tab title has to be set here
   // rather than in layout metadata - otherwise all three consoles read alike.
   useConsoleDocumentTitle("admin", tabLabel(activeTab));
@@ -2544,6 +2551,7 @@ export function AdminConsole() {
               const target = adminTargetForNotification(data);
               setActiveTab(target.tab);
               setNotificationCaseId(target.caseId ?? "");
+              setNotificationBusinessId(target.businessId ?? "");
             }}
             uid={firebaseUser?.uid ?? ""}
           />
@@ -2683,6 +2691,7 @@ export function AdminConsole() {
               notifications={notificationRows}
               supportRequests={supportRequestRows}
               runAction={runAction}
+              focusBusinessId={notificationBusinessId}
             />
           )}
           {activeTab === "operations" && (
@@ -2776,6 +2785,8 @@ export function AdminConsole() {
               notificationDeliveriesLoading={notificationDeliveries.loading}
               pricing={pricingRows}
               previewMode={previewMode}
+              profile={profile}
+              onProfileUpdated={setProfile}
               runAction={runAction}
             />
           )}
@@ -4910,6 +4921,8 @@ function SettingsView({
   notificationDeliveriesLoading,
   pricing,
   previewMode,
+  profile,
+  onProfileUpdated,
   runAction,
 }: {
   businesses: FirestoreRow[];
@@ -4920,6 +4933,8 @@ function SettingsView({
   notificationDeliveriesLoading: boolean;
   pricing: FirestoreRow[];
   previewMode: boolean;
+  profile: UserProfile | null;
+  onProfileUpdated: (profile: UserProfile | null) => void;
   runAction: ActionRunner;
 }) {
   const [draft, setDraft] = useState<Record<string, RoleConfig>>(() =>
@@ -5247,6 +5262,8 @@ function SettingsView({
         notificationDeliveriesLoading={notificationDeliveriesLoading}
         pricing={pricing}
         previewMode={previewMode}
+        profile={profile}
+        onProfileUpdated={onProfileUpdated}
         runAction={runAction}
       />
     </div>
@@ -5429,6 +5446,8 @@ function MoreSettings({
   notificationDeliveriesLoading,
   pricing,
   previewMode,
+  profile,
+  onProfileUpdated,
   runAction,
   section,
 }: {
@@ -5439,6 +5458,8 @@ function MoreSettings({
   notificationDeliveriesLoading: boolean;
   pricing: FirestoreRow[];
   previewMode: boolean;
+  profile: UserProfile | null;
+  onProfileUpdated: (profile: UserProfile | null) => void;
   runAction: ActionRunner;
   section: SettingsSection;
 }) {
@@ -6493,6 +6514,15 @@ function MoreSettings({
           />
         </div>
       </Panel>
+      )}
+
+      {section === "notifications" && (
+        <MyAlertsPanel
+          profile={profile}
+          previewMode={previewMode}
+          onProfileUpdated={onProfileUpdated}
+          runAction={runAction}
+        />
       )}
 
       {section === "notifications" && (
@@ -7792,6 +7822,72 @@ function WebsiteView({
   );
 }
 
+/**
+ * "My alerts": the signed-in admin's own platform activity switch. Shown only
+ * to the admins the server tells (functions platform_activity_alerts.js:
+ * role admin, adminRole superAdmin or operationsManager). Saves on toggle
+ * through the same updateNotificationPreferences callable the business and
+ * customer consoles use - with the whole merged set, since the server
+ * normalizes it and would reset any key left out.
+ */
+function MyAlertsPanel({
+  profile,
+  previewMode,
+  onProfileUpdated,
+  runAction,
+}: {
+  profile: UserProfile | null;
+  previewMode: boolean;
+  onProfileUpdated: (profile: UserProfile | null) => void;
+  runAction: ActionRunner;
+}) {
+  const [saving, setSaving] = useState(false);
+  const prefs = mergeNotificationPreferences(profile?.notificationPreferences);
+  if (!profile) return null;
+  if (!previewMode && !receivesPlatformActivityAlerts(profile.role, profile.adminRole)) {
+    return null;
+  }
+
+  async function save(key: keyof typeof prefs, value: boolean) {
+    if (!profile || previewMode) return;
+    const next = { ...prefs, [key]: value };
+    const result = await httpsCallable(
+      functions,
+      "updateNotificationPreferences",
+    )({ notificationPreferences: next });
+    const saved = (result.data as { notificationPreferences?: Record<string, boolean> })
+      ?.notificationPreferences;
+    onProfileUpdated({ ...profile, notificationPreferences: saved ?? next });
+  }
+
+  return (
+    <Panel title="My alerts" icon={<Activity size={18} />}>
+      <div className="toggle-list">
+        {platformActivityNotificationPreferenceFields.map((field) => (
+          <ToggleRow
+            key={field.key}
+            label={field.label}
+            hint={field.hint}
+            checked={prefs[field.key]}
+            onChange={(value) => {
+              if (saving) return;
+              setSaving(true);
+              void Promise.resolve(
+                runAction(
+                  value
+                    ? "Platform activity alerts on"
+                    : "Platform activity alerts off",
+                  () => save(field.key, value),
+                ),
+              ).finally(() => setSaving(false));
+            }}
+          />
+        ))}
+      </div>
+    </Panel>
+  );
+}
+
 function AdminAccountPanel({
   firebaseUser,
   open,
@@ -8089,6 +8185,16 @@ function AdminAccountPanel({
             </button>
           </div>
         </form>
+        {/* Settings is super-admin only, so operations managers switch their
+            platform activity alerts here. */}
+        <div className="account-alerts">
+          <MyAlertsPanel
+            profile={profile}
+            previewMode={false}
+            onProfileUpdated={onProfileUpdated}
+            runAction={runAction}
+          />
+        </div>
       </aside>
     </div>
   );
@@ -8544,6 +8650,7 @@ function BusinessesView({
   notifications,
   supportRequests,
   runAction,
+  focusBusinessId = "",
 }: {
   businesses: FirestoreRow[];
   users: FirestoreRow[];
@@ -8558,6 +8665,8 @@ function BusinessesView({
   notifications: FirestoreRow[];
   supportRequests: FirestoreRow[];
   runAction: ActionRunner;
+  /** A bell click (platform activity alert): open this business. */
+  focusBusinessId?: string;
 }) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -8573,7 +8682,16 @@ function BusinessesView({
   );
   const [search, setSearch] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
-  const [selectedBusinessId, setSelectedBusinessId] = useState<string>("");
+  const [selectedBusinessId, setSelectedBusinessId] = useState<string>(
+    focusBusinessId,
+  );
+  // A bell click while this tab is already open: show that business, clearing
+  // a search that would hide it.
+  useEffect(() => {
+    if (!focusBusinessId) return;
+    setSearch("");
+    setSelectedBusinessId(focusBusinessId);
+  }, [focusBusinessId]);
   const assignableUsers = useMemo(() => {
     return users
         .filter((user) => user._inferred !== true)

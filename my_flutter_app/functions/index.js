@@ -501,6 +501,7 @@ const inventory = require("./inventory");
 // Staff activity alerts: a car parked / a package saved, told to the others
 // (namespaced: its pure rules share names like toMillis with this file).
 const staffActivity = require("./staff_activity_alerts");
+const platformActivity = require("./platform_activity_alerts");
 const inventoryTransfers = require("./inventory_transfers");
 const {renderInventoryTags} = require("./inventory_tags");
 const {
@@ -26244,6 +26245,26 @@ async function acceptAccessInvitationHandler(request) {
       fullName: String(current.fullName || invitation.fullName || ""),
     };
   });
+  if (accepted.kind === "business" && accepted.businessId) {
+    // Someone joined a business: the platform admins hear it at once (rare,
+    // so never grouped). A failed push never fails the joining.
+    const business = await platformActivityBusiness(admin.firestore(),
+        accepted.businessId).catch(() => null);
+    const businessName = business?.name || accepted.businessName ||
+      "a business";
+    await safeNotifyAdminsForPlatformEvent({
+      capability: "businesses",
+      settingKey: "businessLifecycle",
+      title: "New staff member",
+      body: `${accepted.fullName || "Someone"} joined ${businessName} ` +
+        "as staff.",
+      data: {
+        type: platformActivity.BUSINESS_MEMBER_JOINED_TYPE,
+        businessId: accepted.businessId,
+        uid,
+      },
+    });
+  }
   if (accepted.storeAccess) {
     await inventorySetupAudit(accepted.businessId, "inventory_store",
         accepted.storeAccess.homeStoreId || uid, "staff_access_set", uid,
@@ -43808,14 +43829,201 @@ async function handleStaffActivityRecord(db, kind, recordId, record) {
 async function onStaffActivityCreated(kind, event, recordId) {
   const record = event.data?.data();
   if (!record) return;
+  const db = admin.firestore();
+  await Promise.all([
+    handleStaffActivityRecord(db, kind, recordId, record).then(
+        (outcome) => logger.info("Staff activity alert",
+            {kind, recordId, ...outcome}),
+        (error) => logger.warn("Staff activity alert failed", {kind,
+          recordId, error: String(error?.message || error)})),
+    onPlatformActivityRecord(db, kind, recordId, record),
+  ]);
+}
+
+// ---------------------------------------------------------------------------
+// Platform activity alerts (platform_activity_alerts.js): the platform's
+// admins hear about cars parked, packages saved and shop sales in every
+// business. One window per business: the first event goes out at once,
+// the rest become one summary from flushStaffActivityAlerts.
+// ---------------------------------------------------------------------------
+
+const PLATFORM_ADMIN_SCAN = 100;
+
+/**
+ * @param {object} db Firestore.
+ * @return {Promise<Array<object>>} Every platform admin's profile.
+ */
+async function platformActivityAdmins(db) {
+  const snap = await db.collection("users").where("role", "==", "admin")
+      .limit(PLATFORM_ADMIN_SCAN).get();
+  return snap.docs.map((doc) => ({id: doc.id, ...doc.data()}));
+}
+
+/**
+ * @param {object} db Firestore.
+ * @param {string} businessId The business.
+ * @return {Promise<?{name: string, ownerUids: string[]}>} Null when it does
+ *   not exist.
+ */
+async function platformActivityBusiness(db, businessId) {
+  const doc = await db.collection("businesses").doc(businessId).get();
+  if (!doc.exists) return null;
+  const data = doc.data() || {};
+  const ownerUid = String(data.ownerUid || "").trim();
+  return {name: String(data.name || data.businessName || "").trim(),
+    ownerUids: ownerUid ? [ownerUid] : []};
+}
+
+/**
+ * @param {object} plan planPlatformAlert / planPlatformSummary's answer.
+ * @return {Promise<number>} How many admins it went to.
+ */
+async function sendPlatformActivityPlan(plan) {
+  await Promise.all(plan.recipients.map((recipient) =>
+    safeSendPreferenceNotification({
+      uid: recipient.uid,
+      preferenceKey: platformActivity.PLATFORM_ACTIVITY_PREFERENCE,
+      title: recipient.title,
+      body: recipient.body,
+      data: plan.data,
+      pushOnly: true,
+    })));
+  return plan.recipients.length;
+}
+
+/**
+ * One just-created parked car, package or sale, for the platform admins:
+ * claim it once, step its business's window, send now when it says so.
+ *
+ * @param {object} db Firestore.
+ * @param {string} kind "car" | "package" | "sale".
+ * @param {string} recordId The document's id.
+ * @param {object} record The document as created.
+ * @return {Promise<object>} What happened (for the log).
+ */
+async function handlePlatformActivityRecord(db, kind, recordId, record) {
+  const nowMs = Date.now();
+  const event = platformActivity.platformEventFor(kind, record, recordId,
+      nowMs);
+  if (event.skip) return {skipped: event.skip};
+  const {businessId, actorUid} = event;
+  const [business, admins, actorDoc] = await Promise.all([
+    platformActivityBusiness(db, businessId),
+    platformActivityAdmins(db),
+    db.collection("users").doc(actorUid).get(),
+  ]);
+  if (!business) return {skipped: "no_business"};
+  const actor = actorDoc.exists ? {id: actorDoc.id, ...actorDoc.data()} :
+    null;
+  const actorInfo = staffActivity.activityActor({businessId,
+    users: actor ? [actor] : [], actorUid, actor,
+    ownerUids: business.ownerUids});
+  if (!actorInfo.ok) return {skipped: "not_staff"};
+  const who = {admins, actorUid, ownerUids: business.ownerUids,
+    isBlocked: accountAccessBlocked};
+  if (platformActivity.planPlatformRecipients(who).length === 0) {
+    return {skipped: "no_recipients"};
+  }
+  const claimRef = db.collection(
+      platformActivity.PLATFORM_ACTIVITY_ALERT_CLAIMS)
+      .doc(platformActivity.platformClaimId(kind, recordId));
+  const windowRef = db.collection(platformActivity.PLATFORM_ACTIVITY_ALERTS)
+      .doc(businessId);
+  const tallied = {kind, actorUid, actorName: actorInfo.name,
+    cents: record?.totalCents};
+  const step = await db.runTransaction(async (tx) => {
+    const [claim, window] = await tx.getAll(claimRef, windowRef);
+    if (claim.exists) return null;
+    const planned = platformActivity.planPlatformWindowEvent(
+        window.exists ? window.data() || {} : null, tallied, nowMs);
+    const now = FirestoreFieldValue.serverTimestamp();
+    tx.create(claimRef, {businessId, kind, recordId, actorUid,
+      action: planned.action, createdAt: now});
+    // The whole window, not a merge: a merge would keep tallied people
+    // that a reset means to drop.
+    tx.set(windowRef, {...planned.next, businessId, lastRecordId: recordId,
+      updatedAt: now});
+    return planned;
+  });
+  if (!step) return {skipped: "already_claimed"};
+  if (step.action === "hold") return {held: true};
+  let plan;
+  if (step.action === "summary") {
+    plan = platformActivity.planPlatformSummary({...who, businessId,
+      businessName: business.name, tally: step.tally});
+  } else {
+    const containerId = String(record?.containerId || "").trim();
+    const container = kind === platformActivity.PLATFORM_KIND.PACKAGE &&
+      containerId ?
+      (await db.collection("containers").doc(containerId).get()).data() :
+      null;
+    plan = platformActivity.planPlatformAlert({...who, kind, businessId,
+      businessName: business.name, record, recordId,
+      actorName: actorInfo.name, container});
+  }
+  const sent = await sendPlatformActivityPlan(plan);
+  return {[step.action]: sent};
+}
+
+/**
+ * @param {object} db Firestore.
+ * @param {string} kind "car" | "package" | "sale".
+ * @param {string} recordId The document's id.
+ * @param {object} record The document as created.
+ * @return {Promise<void>} Never rejects (the claim guards a repeat).
+ */
+async function onPlatformActivityRecord(db, kind, recordId, record) {
   try {
-    const outcome = await handleStaffActivityRecord(admin.firestore(), kind,
-        recordId, record);
-    logger.info("Staff activity alert", {kind, recordId, ...outcome});
+    const outcome = await handlePlatformActivityRecord(db, kind, recordId,
+        record);
+    logger.info("Platform activity alert", {kind, recordId, ...outcome});
   } catch (error) {
-    logger.warn("Staff activity alert failed", {kind, recordId,
+    logger.warn("Platform activity alert failed", {kind, recordId,
       error: String(error?.message || error)});
   }
+}
+
+// A shop sale (recordInventorySale) is news for the platform admins. The
+// store's own team already hears from notifyInventorySale.
+exports.notifyAdminsOfSale = onDocumentCreated(
+    {document: "inventorySales/{saleId}", maxInstances: 1,
+      timeoutSeconds: 60},
+    async (event) => {
+      const record = event.data?.data();
+      if (!record) return;
+      await onPlatformActivityRecord(admin.firestore(),
+          platformActivity.PLATFORM_KIND.SALE, event.params.saleId, record);
+    },
+);
+
+/**
+ * Sends one ended business window's summary to the admins, claimed (tally
+ * reset) in a transaction first so two runs never both send it.
+ *
+ * @param {object} db Firestore.
+ * @param {object} doc The window's snapshot from the query.
+ * @param {object} run {nowMs, admins (a promise of the admins)}.
+ * @return {Promise<number>} Admins told.
+ */
+async function flushPlatformActivityWindow(db, doc, {nowMs, admins}) {
+  const claimed = await db.runTransaction(async (tx) => {
+    const fresh = await tx.get(doc.ref);
+    if (!fresh.exists) return null;
+    const step = platformActivity.planPlatformWindowFlush(fresh.data() || {},
+        nowMs);
+    if (step.next) {
+      tx.update(doc.ref, {...step.next,
+        updatedAt: FirestoreFieldValue.serverTimestamp()});
+    }
+    return step.flush ? step.tally : null;
+  });
+  if (!claimed) return 0;
+  const business = await platformActivityBusiness(db, doc.id);
+  if (!business) return 0;
+  const plan = platformActivity.planPlatformSummary({businessId: doc.id,
+    businessName: business.name, tally: claimed, admins: await admins,
+    ownerUids: business.ownerUids, isBlocked: accountAccessBlocked});
+  return sendPlatformActivityPlan(plan);
 }
 
 // A car parked by a business's person: createBusinessParkingEntry
@@ -43880,8 +44088,10 @@ async function flushStaffActivityWindow(db, doc, {nowMs, contexts}) {
 }
 
 // Every 10 minutes: each window that has ended with events still waiting
-// sends them as one summary ("Aissatou saved 12 more packages"). One query
-// on the due time (a single-field index), paged until done or the deadline.
+// sends them as one summary ("Aissatou saved 12 more packages"), then the
+// platform admins' per-business windows ("Diallo Shipping · more activity").
+// One query per collection on the due time (a single-field index), paged
+// until done or the deadline.
 exports.flushStaffActivityAlerts = onSchedule(
     {
       schedule: "every 10 minutes",
@@ -43893,36 +44103,49 @@ exports.flushStaffActivityAlerts = onSchedule(
     async () => {
       const db = admin.firestore();
       const nowMs = Date.now();
+      const deadlineMs = sweepDeadline({startMs: nowMs,
+        timeoutSeconds: STAFF_ACTIVITY_FLUSH_TIMEOUT_S});
       const contexts = new Map();
-      let told = 0;
-      let failed = 0;
-      const run = await drainPages({
-        pageSize: STAFF_ACTIVITY_FLUSH_PAGE,
-        deadlineMs: sweepDeadline({startMs: nowMs,
-          timeoutSeconds: STAFF_ACTIVITY_FLUSH_TIMEOUT_S}),
-        fetchPage: async (cursor) => {
-          let query = db.collection(staffActivity.STAFF_ACTIVITY_ALERTS)
-              .where("flushDueMs", "<=", nowMs)
-              .orderBy("flushDueMs")
-              .limit(STAFF_ACTIVITY_FLUSH_PAGE);
-          if (cursor) query = query.startAfter(cursor);
-          return (await query.get()).docs;
-        },
-        processPage: async (docs) => {
-          const results = await mapWithConcurrency(docs,
-              STAFF_ACTIVITY_FLUSH_CONCURRENCY,
-              (doc) => flushStaffActivityWindow(db, doc, {nowMs, contexts}));
-          for (const result of results) {
-            if (result.status === "fulfilled") told += result.value || 0;
-            else {
-              failed += 1;
-              logger.warn("Staff activity summary failed",
-                  {error: String(result.reason?.message || result.reason)});
+      let admins = null;
+      const drain = async (collection, flushOne, label) => {
+        let told = 0;
+        let failed = 0;
+        const run = await drainPages({
+          pageSize: STAFF_ACTIVITY_FLUSH_PAGE,
+          deadlineMs,
+          fetchPage: async (cursor) => {
+            let query = db.collection(collection)
+                .where("flushDueMs", "<=", nowMs)
+                .orderBy("flushDueMs")
+                .limit(STAFF_ACTIVITY_FLUSH_PAGE);
+            if (cursor) query = query.startAfter(cursor);
+            return (await query.get()).docs;
+          },
+          processPage: async (docs) => {
+            const results = await mapWithConcurrency(docs,
+                STAFF_ACTIVITY_FLUSH_CONCURRENCY, flushOne);
+            for (const result of results) {
+              if (result.status === "fulfilled") told += result.value || 0;
+              else {
+                failed += 1;
+                logger.warn(`${label} summary failed`,
+                    {error: String(result.reason?.message || result.reason)});
+              }
             }
-          }
-        },
-      });
-      logger.info("Staff activity summaries flushed", {...run, told,
-        failed});
+          },
+        });
+        logger.info(`${label} summaries flushed`, {...run, told, failed});
+      };
+      await drain(staffActivity.STAFF_ACTIVITY_ALERTS,
+          (doc) => flushStaffActivityWindow(db, doc, {nowMs, contexts}),
+          "Staff activity");
+      // The platform admins' per-business summaries. Admins are read once
+      // per run, and only when a window is due.
+      await drain(platformActivity.PLATFORM_ACTIVITY_ALERTS,
+          (doc) => {
+            admins = admins || platformActivityAdmins(db);
+            return flushPlatformActivityWindow(db, doc, {nowMs, admins});
+          },
+          "Platform activity");
     },
 );

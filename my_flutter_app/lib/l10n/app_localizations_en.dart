@@ -3691,6 +3691,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get packageAlertsNotifications => 'Packages saved by my team';
 
   @override
+  String get platformActivityNotifications =>
+      'Platform activity (cars, packages, sales in every business)';
+
+  @override
   String get faceId => 'Face ID';
 
   @override

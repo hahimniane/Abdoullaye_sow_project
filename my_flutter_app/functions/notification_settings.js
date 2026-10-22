@@ -28,6 +28,9 @@ function defaultNotificationPreferences() {
     // business saves a package (owners, and staff with containers or
     // deliveries). On unless switched off.
     packageAlerts: true,
+    // Platform admins: cars, packages and sales across every business
+    // (platform_activity_alerts.js).
+    platformActivity: true,
   };
 }
 
@@ -68,6 +71,8 @@ function normalizeNotificationPreferences(raw) {
       prefs.parkedCarAlerts !== false && defaults.parkedCarAlerts,
     packageAlerts:
       prefs.packageAlerts !== false && defaults.packageAlerts,
+    platformActivity:
+      prefs.platformActivity !== false && defaults.platformActivity,
   };
 }
 

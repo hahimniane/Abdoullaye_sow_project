@@ -41,6 +41,7 @@ describe("notification settings helpers", () => {
           inventoryTransfers: true,
           parkedCarAlerts: true,
           packageAlerts: true,
+          platformActivity: true,
         },
     );
   });

@@ -19,6 +19,12 @@ export type NotificationPreferences = {
   parkedCarAlerts: boolean;
   /** Staff activity: "Packages saved by my team" (someone else of the business saved a package). */
   packageAlerts: boolean;
+  /**
+   * Platform admins (super admin, operations manager): "Platform activity" -
+   * cars parked, packages saved and shop sales in every business, grouped per
+   * business every 10 minutes (functions platform_activity_alerts.js).
+   */
+  platformActivity: boolean;
 };
 
 export function defaultNotificationPreferences(): NotificationPreferences {
@@ -35,6 +41,7 @@ export function defaultNotificationPreferences(): NotificationPreferences {
     inventoryTransfers: true,
     parkedCarAlerts: true,
     packageAlerts: true,
+    platformActivity: true,
   };
 }
 
@@ -130,5 +137,38 @@ export const packageNotificationPreferenceFields: Array<{
     key: "packageAlerts",
     label: "Packages saved by my team",
     hint: "A notification when someone else of the business saves a package",
+  },
+];
+
+/**
+ * Platform activity alerts (functions platform_activity_alerts.js): only
+ * platform admins whose adminRole is superAdmin or operationsManager receive
+ * them, so only they see the switch. The admin console decides.
+ */
+export const PLATFORM_ACTIVITY_ADMIN_ROLES: readonly string[] = [
+  "superAdmin",
+  "operationsManager",
+];
+
+export function receivesPlatformActivityAlerts(
+  role: unknown,
+  adminRole: unknown,
+): boolean {
+  return (
+    role === "admin" &&
+    typeof adminRole === "string" &&
+    PLATFORM_ACTIVITY_ADMIN_ROLES.includes(adminRole.trim())
+  );
+}
+
+export const platformActivityNotificationPreferenceFields: Array<{
+  key: keyof NotificationPreferences;
+  label: string;
+  hint: string;
+}> = [
+  {
+    key: "platformActivity",
+    label: "Platform activity",
+    hint: "A push when a car is parked, a package saved or a shop sale is made in any business (grouped every 10 minutes)",
   },
 ];

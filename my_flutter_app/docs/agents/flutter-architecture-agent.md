@@ -320,6 +320,16 @@ Add future project conventions and repeated architectural decisions here.
   `container_line`, grouped per person in 10-minute windows) have French
   copy; `sendPreferenceNotification` itself takes one title/body. A
   deliveries-only person's copy never carries a package's price.
+- Platform activity alerts (functions `platform_activity_alerts.js`) tell
+  platform admins (`superAdmin`, `operationsManager`) about cars, packages
+  and shop sales in every business: type `platform_activity`, preference
+  `platformActivity`, one 10-minute window per business, flushed by the same
+  `flushStaffActivityAlerts`. Never a business's own owner (they get the
+  staff alert). Someone joining a business as staff is
+  `business_member_joined`, sent at once through
+  `notifyAdminsForPlatformEvent` (preference `businessActivity`). A new
+  event kind for admins goes through `platformEventFor` + the tally; do not
+  add a second admin feed.
 - "Received by" pickers list everyone the server accepts: `users` whose
   `businessId` is the business plus the business's `ownerUid`
   (`withBusinessOwner` in `lot_ledger.dart`). A users query alone can miss an

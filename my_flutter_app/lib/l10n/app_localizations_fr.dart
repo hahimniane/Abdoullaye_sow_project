@@ -3770,6 +3770,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get packageAlertsNotifications => 'Colis enregistrés par mon équipe';
 
   @override
+  String get platformActivityNotifications =>
+      'Activité de la plateforme (voitures, colis, ventes de toutes les entreprises)';
+
+  @override
   String get faceId => 'Face ID';
 
   @override

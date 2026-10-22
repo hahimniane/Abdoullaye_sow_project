@@ -352,6 +352,14 @@ describe("accepting after a phone sign-in", () => {
     assert.equal(staff.inventoryHomeStoreId, STORE_B);
     assert.equal(staff.inventoryAllStores, false);
     assert.equal((await invitation(made.invitationId)).status, "accepted");
+    // The platform admins hear that someone joined (platform activity).
+    const joined = (await db.collection("users").doc(SUPER)
+        .collection("notifications").get()).docs.map((d) => d.data())
+        .filter((n) => n.data?.type === "business_member_joined" &&
+          n.data?.uid === signedIn.uid);
+    assert.equal(joined.length, 1);
+    assert.equal(joined[0].body, "New Staff joined Dala Shipping as staff.");
+    assert.equal(joined[0].data.businessId, BIZ);
 
     // Signing in again with the number (code and text) opens the staff
     // account: the exception.

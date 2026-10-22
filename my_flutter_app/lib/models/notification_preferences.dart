@@ -16,6 +16,7 @@ class NotificationPreferences {
     this.inventoryTransfers = true,
     this.parkedCarAlerts = true,
     this.packageAlerts = true,
+    this.platformActivity = true,
   });
 
   final bool pushNotifications;
@@ -53,6 +54,12 @@ class NotificationPreferences {
   /// unless switched off.
   final bool packageAlerts;
 
+  /// "Platform activity" (platform admins only: superAdmin and
+  /// operationsManager): a push when someone in any business parks a car,
+  /// saves a package or makes a shop sale, and when someone joins a business
+  /// as staff. On unless switched off.
+  final bool platformActivity;
+
   static const defaults = NotificationPreferences();
 
   factory NotificationPreferences.fromMap(Map<String, dynamic>? data) {
@@ -79,6 +86,7 @@ class NotificationPreferences {
       inventoryTransfers: data['inventoryTransfers'] != false,
       parkedCarAlerts: data['parkedCarAlerts'] != false,
       packageAlerts: data['packageAlerts'] != false,
+      platformActivity: data['platformActivity'] != false,
     );
   }
 
@@ -100,6 +108,7 @@ class NotificationPreferences {
       'inventoryTransfers': inventoryTransfers,
       'parkedCarAlerts': parkedCarAlerts,
       'packageAlerts': packageAlerts,
+      'platformActivity': platformActivity,
     };
   }
 
@@ -120,6 +129,7 @@ class NotificationPreferences {
     bool? inventoryTransfers,
     bool? parkedCarAlerts,
     bool? packageAlerts,
+    bool? platformActivity,
   }) {
     return NotificationPreferences(
       pushNotifications: pushNotifications ?? this.pushNotifications,
@@ -138,6 +148,7 @@ class NotificationPreferences {
       inventoryTransfers: inventoryTransfers ?? this.inventoryTransfers,
       parkedCarAlerts: parkedCarAlerts ?? this.parkedCarAlerts,
       packageAlerts: packageAlerts ?? this.packageAlerts,
+      platformActivity: platformActivity ?? this.platformActivity,
     );
   }
 }

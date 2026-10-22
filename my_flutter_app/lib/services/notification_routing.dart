@@ -376,6 +376,14 @@ NotificationRoute? _businessRouteForNotificationData(
         '/business-package',
         arguments: BusinessPackageArguments(lineId: lineId, trackingCode: code),
       );
+    // Platform admins: "Fatou parked a car at Bronx Auto", a 10-minute
+    // summary, or "Moussa joined Bronx Auto". The admin is not in that
+    // business, so its own screens (cars, packages, sales) would show the
+    // admin's empty business; the businesses list is where the app looks
+    // after businesses (the dashboard's "Businesses" button).
+    case 'platform_activity':
+    case 'business_member_joined':
+      return const NotificationRoute('/businesses');
     case 'transport_opportunity':
     case 'transport_job_paid':
     case 'transport_request_status':

@@ -3130,3 +3130,123 @@ describe("staff activity alerts", () => {
             .doc("car_alerts-car-2").get()).exists, false);
       });
 });
+
+// Platform activity alerts (platform_activity_alerts.js): the same create
+// triggers, the sale trigger and the flush tell the platform's admins - the
+// first event of a business at once, the rest of its window as one summary.
+describe("platform activity alerts", () => {
+  const PBIZ = "platform-alerts-biz";
+  const P_OWNER = "platform-alerts-owner";
+  const P_CLERK = "platform-alerts-clerk";
+  const P_SELLER = "platform-alerts-seller";
+  const P_SUPER = "platform-alerts-super";
+  const P_OPS = "platform-alerts-ops";
+  const P_FINANCE = "platform-alerts-finance";
+  const P_MUTED = "platform-alerts-muted";
+  const {Timestamp} = admin.firestore;
+
+  before(async () => {
+    await Promise.all([
+      db.collection("businesses").doc(PBIZ).set({name: "Diallo Shipping",
+        status: "approved", ownerUid: P_OWNER}),
+      db.collection("users").doc(P_OWNER).set({role: "businessOwner",
+        businessId: PBIZ, fullName: "Abdoullaye Sow"}),
+      db.collection("users").doc(P_CLERK).set({role: "staff",
+        businessId: PBIZ, fullName: "Aissatou Bah",
+        businessPermissions: ["containers"]}),
+      db.collection("users").doc(P_SELLER).set({role: "staff",
+        businessId: PBIZ, fullName: "Moussa Camara",
+        businessPermissions: ["inventory"]}),
+      db.collection("users").doc(P_SUPER).set({role: "admin",
+        adminRole: "superAdmin", fullName: "Hashim"}),
+      db.collection("users").doc(P_OPS).set({role: "admin",
+        adminRole: "operationsManager", preferredLanguage: "fr"}),
+      db.collection("users").doc(P_FINANCE).set({role: "admin",
+        adminRole: "financeManager"}),
+      db.collection("users").doc(P_MUTED).set({role: "admin",
+        adminRole: "superAdmin",
+        notificationPreferences: {platformActivity: false}}),
+    ]);
+  });
+
+  const feed = async (uid) => (await db.collection("users").doc(uid)
+      .collection("notifications").get()).docs.map((d) => d.data())
+      .filter((n) => n.data?.type === "platform_activity");
+  const windowRef = () => db.collection("platformActivityAlerts").doc(PBIZ);
+  let serial = 0;
+  async function packageSaved() {
+    serial += 1;
+    const ref = db.collection("containerLines").doc(`platform-line-${serial}`);
+    await ref.set({businessId: PBIZ, containerId: "", kind: "barrels",
+      ownerKind: "customer", receiverName: "Fatou Diallo", priceCents: 15000,
+      addedByStaffId: P_CLERK, rootLineId: ref.id,
+      trackingCode: `CL-PA${serial}`, createdAt: Timestamp.now()});
+    await functions.notifyStaffOfNewPackage.run({data: await ref.get(),
+      params: {lineId: ref.id}});
+    return ref;
+  }
+  async function saleMade(id, extra = {}) {
+    const ref = db.collection("inventorySales").doc(id);
+    await ref.set({businessId: PBIZ, soldByStaffId: P_SELLER, voided: false,
+      totalCents: 8000, lines: [{quantity: 2}], createdAt: Timestamp.now(),
+      ...extra});
+    await functions.notifyAdminsOfSale.run({data: await ref.get(),
+      params: {saleId: id}});
+  }
+
+  it("tells super admins and operations managers once, at once",
+      async () => {
+        const ref = await packageSaved();
+        // A retried event.
+        await functions.notifyStaffOfNewPackage.run({data: await ref.get(),
+          params: {lineId: ref.id}});
+        const superFeed = await feed(P_SUPER);
+        assert.equal(superFeed.length, 1);
+        assert.equal(superFeed[0].title, "Diallo Shipping");
+        assert.equal(superFeed[0].body, "Aissatou saved a package for " +
+          "Fatou Diallo · $150.00 · waiting for a container");
+        assert.equal(superFeed[0].data.businessId, PBIZ);
+        assert.equal(superFeed[0].data.relatedId, ref.id);
+        const ops = await feed(P_OPS);
+        assert.equal(ops.length, 1);
+        assert.match(ops[0].body, /^Aissatou a enregistré un colis/);
+        for (const uid of [P_FINANCE, P_MUTED, P_OWNER, P_CLERK]) {
+          assert.equal((await feed(uid)).length, 0, uid);
+        }
+      });
+
+  it("tallies the rest of the window and flushes one summary", async () => {
+    await packageSaved();
+    await packageSaved();
+    await saleMade("platform-sale-1");
+    // A voided sale is not news.
+    await saleMade("platform-sale-2", {voided: true});
+    assert.equal((await feed(P_SUPER)).length, 1);
+    const held = (await windowRef().get()).data();
+    assert.equal(held.pending, 3);
+    const past = Date.now() - 1000;
+    await windowRef().update({windowEndMs: past, flushDueMs: past});
+    await functions.flushStaffActivityAlerts.run({});
+    await functions.flushStaffActivityAlerts.run({});
+    const superFeed = await feed(P_SUPER);
+    assert.equal(superFeed.length, 2);
+    const summary = superFeed.find((n) => n.data.summary === "true");
+    assert.equal(summary.title, "Diallo Shipping · more activity");
+    assert.equal(summary.body,
+        "Aissatou: 2 packages · Moussa: 1 sale ($80.00)");
+    assert.ok((await feed(P_OPS)).some((n) => n.body ===
+      "Aissatou : 2 colis · Moussa : 1 vente ($80.00)"));
+    const after = (await windowRef().get()).data();
+    assert.equal(after.pending, 0);
+    assert.deepEqual(after.tally, {});
+  });
+
+  it("a sale opening a new window goes out at once", async () => {
+    await windowRef().update({windowEndMs: Date.now() - 1000});
+    await saleMade("platform-sale-3");
+    const superFeed = await feed(P_SUPER);
+    assert.ok(superFeed.some((n) => n.body ===
+      "Moussa sold 2 pieces · $80.00" &&
+      n.data.relatedCollection === "inventorySales"));
+  });
+});

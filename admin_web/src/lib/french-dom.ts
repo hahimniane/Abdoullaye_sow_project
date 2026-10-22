@@ -5918,6 +5918,13 @@ Object.assign(TEXT_TRANSLATIONS, {
   "A notification when someone else of the business parks a car": "Une notification quand quelqu’un d’autre de l’entreprise gare une voiture",
   "Packages saved by my team": "Colis enregistrés par mon équipe",
   "A notification when someone else of the business saves a package": "Une notification quand quelqu’un d’autre de l’entreprise enregistre un colis",
+  // Platform activity alerts (admin console "My alerts"): cars parked,
+  // packages saved and shop sales in every business, for platform admins.
+  "My alerts": "Mes alertes",
+  "Platform activity": "Activité de la plateforme",
+  "A push when a car is parked, a package saved or a shop sale is made in any business (grouped every 10 minutes)": "Une notification quand une voiture est garée, un colis enregistré ou une vente faite en boutique dans n’importe quelle entreprise (regroupées toutes les 10 minutes)",
+  "Platform activity alerts on": "Alertes d’activité de la plateforme activées",
+  "Platform activity alerts off": "Alertes d’activité de la plateforme désactivées",
   "Sales by day": "Ventes par jour",
   "Sales by hour": "Ventes par heure",
   "Sales by month": "Ventes par mois",
