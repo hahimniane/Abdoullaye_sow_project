@@ -17,6 +17,7 @@ import { MailCheck, RefreshCw, Send, ShieldCheck, Smartphone } from "lucide-reac
 import {
   type ConsoleHost,
   consoleHostKind,
+  offersPhoneSignIn,
 } from "@/lib/console-host";
 import { DisclosureCheckbox } from "@/components/disclosure-checkbox";
 import { CustomerPhoneField } from "@/components/customer-phone-field";
@@ -834,6 +835,7 @@ function RoleSignInCard({
     }
   }, []);
   const customerSignUp = consoleHost === "customer";
+  const phoneSignInOffered = offersPhoneSignIn(consoleHost);
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -842,7 +844,7 @@ function RoleSignInCard({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  // "Sign in with your phone" (customer host only): a WhatsApp or text code
+  // "Sign in with your phone" (customer and business hosts): a WhatsApp or text code
   // instead of the email and password. Its own panel, not a nested form.
   const [phoneMode, setPhoneMode] = useState(false);
   // Continue with Google is running: the other sign-in buttons wait.
@@ -916,9 +918,14 @@ function RoleSignInCard({
             </p>
           </div>
         </div>
-        {phoneMode && customerSignUp ? (
+        {phoneMode && phoneSignInOffered ? (
           <div className="login-card">
             <h2>Sign in with your phone</h2>
+            {consoleHost === "business" && (
+              <p className="card-sub">
+                {"For staff who were invited by phone. Owners sign in with their email and password."}
+              </p>
+            )}
             <PhoneSignIn
               idPrefix={embedded ? "embedded-phone-sign-in" : "phone-sign-in"}
               onBack={() => setPhoneMode(false)}
@@ -1055,7 +1062,7 @@ function RoleSignInCard({
               />
             </>
           )}
-          {mode === "sign-in" && customerSignUp && (
+          {mode === "sign-in" && phoneSignInOffered && (
             <>
               <button
                 className="secondary-button"

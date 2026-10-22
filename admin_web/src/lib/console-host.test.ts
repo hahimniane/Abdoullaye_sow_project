@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { consoleHostKind } from "./console-host.ts";
+import { consoleHostKind, offersPhoneSignIn } from "./console-host.ts";
 import { translateValue } from "./french-dom.ts";
 
 test("each deployed host resolves to its own console kind", () => {
@@ -48,4 +48,16 @@ test("the host-specific intro copy is localized in French", () => {
     const french = translateValue(english, "fr");
     assert.notEqual(french, english, english);
   }
+});
+
+test("phone sign-in is offered to customers and phone-invited staff, never on admin", () => {
+  assert.equal(offersPhoneSignIn("customer"), true);
+  // Staff invited by WhatsApp have no email or password: without this they
+  // could not open the business console at all.
+  assert.equal(offersPhoneSignIn("business"), true);
+  assert.equal(offersPhoneSignIn("admin"), false);
+  assert.equal(
+    translateValue("For staff who were invited by phone. Owners sign in with their email and password.", "fr"),
+    "Pour le personnel invité par téléphone. Les propriétaires se connectent avec leur courriel et leur mot de passe.",
+  );
 });

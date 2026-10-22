@@ -20,3 +20,13 @@ export function consoleHostKind(hostname: string): ConsoleHost {
   }
   return "customer";
 }
+
+/**
+ * "Sign in with your phone" (a WhatsApp or text code): customers, and on the
+ * business host the staff who joined through a phone invitation - they have
+ * no email or password (docs/STAFF_PHONE_INVITES.md §2). Never on the admin
+ * host: platform admins are refused phone codes.
+ */
+export function offersPhoneSignIn(host: ConsoleHost): boolean {
+  return host === "customer" || host === "business";
+}

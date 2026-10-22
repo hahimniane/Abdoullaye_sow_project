@@ -6481,6 +6481,7 @@ Object.assign(TEXT_TRANSLATIONS, {
   // Sign in with your phone (console-router.tsx, phone-sign-in.tsx).
   "Sign in with your phone": "Se connecter avec son téléphone",
   "Use email instead": "Se connecter avec un courriel",
+  "For staff who were invited by phone. Owners sign in with their email and password.": "Pour le personnel invité par téléphone. Les propriétaires se connectent avec leur courriel et leur mot de passe.",
   "We’ll send a 6-digit code to your phone on WhatsApp.":
     "Nous enverrons un code à 6 chiffres sur WhatsApp à votre téléphone.",
   "Send code on WhatsApp": "Recevoir le code sur WhatsApp",

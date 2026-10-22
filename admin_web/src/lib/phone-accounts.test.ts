@@ -352,10 +352,11 @@ test("My packages never shows money", () => {
   assert.doesNotMatch(source, /priceCents|moneyText|formatMoney|payment/);
 });
 
-test("the sign-in form offers the phone only on the customer host, as its own panel", () => {
+test("the sign-in form offers the phone on the customer and business hosts (offersPhoneSignIn), as its own panel", () => {
   const router = read("../components/console-router.tsx");
-  assert.match(router, /\{phoneMode && customerSignUp \? \(/);
-  assert.match(router, /\{mode === "sign-in" && customerSignUp && \(/);
+  assert.match(router, /const phoneSignInOffered = offersPhoneSignIn\(consoleHost\);/);
+  assert.match(router, /\{phoneMode && phoneSignInOffered \? \(/);
+  assert.match(router, /\{mode === "sign-in" && phoneSignInOffered && \(/);
   // A first SMS sign-in waits for the profile instead of the invitation setup.
   assert.match(router, /if \(!snap\.exists\(\) && phoneOnlyAccount\(user\)\) \{\s*await completePhoneSignInOnce\(user\.uid\)/);
 });
