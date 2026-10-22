@@ -332,6 +332,60 @@ void businessRoutingTests() {
           '/support-thread');
     });
 
+    test('a car parked by the team opens that car, a summary the list', () {
+      final route = routeForNotificationData({
+        'type': 'parked_car',
+        'businessId': 'biz-1',
+        'parkedCarId': 'pc-1',
+        'trackingCode': 'PK-7Q2M',
+        'relatedCollection': 'parkedCars',
+        'relatedId': 'pc-1',
+      }, audience: business);
+      expect(route?.name, '/business-record');
+      final args = route?.arguments as BusinessRecordArguments;
+      expect(args.collection, 'parkedCars');
+      expect(args.id, 'pc-1');
+      expect(args.fallbackCategory, 'parking');
+
+      final summary = routeForNotificationData({
+        'type': 'parked_car',
+        'businessId': 'biz-1',
+        'summary': 'true',
+        'count': '4',
+      }, audience: business);
+      expect(summary?.name, '/business-home');
+      expect(
+        (summary?.arguments as BusinessHomeArguments).category,
+        'parking',
+      );
+      // Only a business opens it.
+      expect(routeForNotificationData({'type': 'parked_car'}), isNull);
+    });
+
+    test('a package saved by the team opens that package', () {
+      final route = routeForNotificationData({
+        'type': 'container_line',
+        'businessId': 'biz-1',
+        'lineId': 'line-1',
+        'containerId': '',
+        'trackingCode': 'CL-K7M4P2',
+        'relatedCollection': 'containerLines',
+        'relatedId': 'line-1',
+      }, audience: business);
+      expect(route?.name, '/business-package');
+      final args = route?.arguments as BusinessPackageArguments;
+      expect(args.lineId, 'line-1');
+      expect(args.trackingCode, 'CL-K7M4P2');
+
+      final summary = routeForNotificationData({
+        'type': 'container_line',
+        'summary': 'true',
+        'count': '12',
+      }, audience: business);
+      expect(summary?.name, '/business-home');
+      expect(routeForNotificationData({'type': 'container_line'}), isNull);
+    });
+
     test('a sale at the store opens the Inventory sales list', () {
       final route = routeForNotificationData({
         'type': 'inventory_sale',

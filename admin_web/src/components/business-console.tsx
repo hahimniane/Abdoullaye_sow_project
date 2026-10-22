@@ -69,6 +69,8 @@ import { UserText } from "@/components/user-text";
 import { ToggleRow } from "@/components/toggle-row";
 import {
   inventoryNotificationPreferenceFields,
+  packageNotificationPreferenceFields,
+  parkedCarNotificationPreferenceFields,
   mergeNotificationPreferences,
   notificationPreferenceFields,
 } from "@/lib/notification-preferences";
@@ -126,7 +128,17 @@ const serviceLabels: Record<string, string> = {
 
 const businessSidebarStorageKey = "laawol:business-sidebar-pins";
 
-function NotificationPreferencesPanel({ profile, showInventory = false }: { profile: UserProfile; showInventory?: boolean }) {
+function NotificationPreferencesPanel({
+  profile,
+  showInventory = false,
+  showParkedCars = false,
+  showPackages = false,
+}: {
+  profile: UserProfile;
+  showInventory?: boolean;
+  showParkedCars?: boolean;
+  showPackages?: boolean;
+}) {
   const [prefs, setPrefs] = useState(() =>
     mergeNotificationPreferences(profile.notificationPreferences),
   );
@@ -159,7 +171,12 @@ function NotificationPreferencesPanel({ profile, showInventory = false }: { prof
       {error && <div className="error-box">{error}</div>}
       {notice && <div className="info-band">{notice}</div>}
       <div className="toggle-list">
-        {[...notificationPreferenceFields, ...(showInventory ? inventoryNotificationPreferenceFields : [])].map((field) => (
+        {[
+          ...notificationPreferenceFields,
+          ...(showInventory ? inventoryNotificationPreferenceFields : []),
+          ...(showParkedCars ? parkedCarNotificationPreferenceFields : []),
+          ...(showPackages ? packageNotificationPreferenceFields : []),
+        ].map((field) => (
           <ToggleRow
             key={field.key}
             label={field.label}
@@ -654,7 +671,14 @@ export function BusinessConsole({
                   focusRequest={bankFocus}
                 />
               )}
-              <NotificationPreferencesPanel profile={profile} showInventory={visibleTabs.some((tab) => tab.id === "inventory")} />
+              <NotificationPreferencesPanel
+                profile={profile}
+                showInventory={visibleTabs.some((tab) => tab.id === "inventory")}
+                // Staff activity alerts reach owners and the staff of that area:
+                // the parking tab, or the containers / deliveries tabs.
+                showParkedCars={visibleTabs.some((tab) => tab.id === "parking")}
+                showPackages={visibleTabs.some((tab) => tab.id === "containers" || tab.id === "deliveries")}
+              />
             </>
           )}
           {activeTab === "listings" && (

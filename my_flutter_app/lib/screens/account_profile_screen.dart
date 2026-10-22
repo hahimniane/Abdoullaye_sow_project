@@ -11,6 +11,7 @@ import '../providers/auth_provider.dart';
 import '../services/biometric_lock_service.dart';
 import '../services/inventory.dart' show inventoryAvailable;
 import '../services/push_notification_service.dart';
+import '../services/staff_activity_alerts.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../utils/auth_error_text.dart';
@@ -145,7 +146,9 @@ class _AccountProfileScreenState extends State<AccountProfileScreen> {
           _preferences.reviewActivity ||
           _preferences.inventorySales ||
           _preferences.inventoryCredit ||
-          _preferences.inventoryTransfers) {
+          _preferences.inventoryTransfers ||
+          _preferences.parkedCarAlerts ||
+          _preferences.packageAlerts) {
         try {
           await PushNotificationService().requestPermissionAndRegister();
         } catch (error) {
@@ -545,6 +548,38 @@ class _AccountProfileScreenState extends State<AccountProfileScreen> {
                       value: _preferences.inventoryTransfers,
                       onChanged: (value) => _updatePreferences(
                         _preferences.copyWith(inventoryTransfers: value),
+                      ),
+                    ),
+                  // Only the people the server tells about a car parked or a
+                  // package saved by someone else see these switches.
+                  if (showParkedCarAlertsSwitch(
+                    isOwner: auth.isBusinessOwner,
+                    isStaff: auth.isStaff,
+                    services: auth.businessServices,
+                    permissions: auth.businessPermissions,
+                    businessId: auth.businessId ?? '',
+                  ))
+                    _PreferenceSwitch(
+                      key: const Key('parked-car-alerts-notifications'),
+                      title: l10n.parkedCarAlertsNotifications,
+                      value: _preferences.parkedCarAlerts,
+                      onChanged: (value) => _updatePreferences(
+                        _preferences.copyWith(parkedCarAlerts: value),
+                      ),
+                    ),
+                  if (showPackageAlertsSwitch(
+                    isOwner: auth.isBusinessOwner,
+                    isStaff: auth.isStaff,
+                    services: auth.businessServices,
+                    permissions: auth.businessPermissions,
+                    businessId: auth.businessId ?? '',
+                  ))
+                    _PreferenceSwitch(
+                      key: const Key('package-alerts-notifications'),
+                      title: l10n.packageAlertsNotifications,
+                      value: _preferences.packageAlerts,
+                      onChanged: (value) => _updatePreferences(
+                        _preferences.copyWith(packageAlerts: value),
                       ),
                     ),
                 ],

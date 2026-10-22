@@ -39,6 +39,8 @@ describe("notification settings helpers", () => {
           inventorySales: true,
           inventoryCredit: true,
           inventoryTransfers: true,
+          parkedCarAlerts: true,
+          packageAlerts: true,
         },
     );
   });

@@ -3685,6 +3685,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get inventorySalesNotifications => 'Sales at my store';
 
   @override
+  String get parkedCarAlertsNotifications => 'Cars parked by my team';
+
+  @override
+  String get packageAlertsNotifications => 'Packages saved by my team';
+
+  @override
   String get faceId => 'Face ID';
 
   @override

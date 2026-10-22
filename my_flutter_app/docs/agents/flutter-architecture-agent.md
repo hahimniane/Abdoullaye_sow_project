@@ -314,9 +314,12 @@ Add future project conventions and repeated architectural decisions here.
   in `main.dart`) on start, sign-in and every switch, through
   `updateCustomerProfile` with only `{preferredLanguage}`. Server-written
   pushes pick their language with functions `notification_settings.js`
-  `recipientLanguage(user)` - the one helper; never re-derive it. Only the
-  inventory sale push has French copy so far; `sendPreferenceNotification`
-  itself takes one title/body.
+  `recipientLanguage(user)` - the one helper; never re-derive it. The
+  inventory sale push and the staff activity alerts (functions
+  `staff_activity_alerts.js`: "Car parked" `parked_car`, "Package saved"
+  `container_line`, grouped per person in 10-minute windows) have French
+  copy; `sendPreferenceNotification` itself takes one title/body. A
+  deliveries-only person's copy never carries a package's price.
 - "Received by" pickers list everyone the server accepts: `users` whose
   `businessId` is the business plus the business's `ownerUid`
   (`withBusinessOwner` in `lot_ledger.dart`). A users query alone can miss an

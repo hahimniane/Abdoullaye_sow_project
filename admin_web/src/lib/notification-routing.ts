@@ -110,6 +110,8 @@ const TYPE_COLLECTIONS: Record<string, string> = {
   barrel_pool_balance_due: "barrelPools",
   deposit_refund_due: "barrelPools",
   inventory_sale: "inventorySales",
+  parked_car: "parkedCars",
+  container_line: "containerLines",
   inventory_transfer: "inventoryTransfers",
 };
 
@@ -280,6 +282,16 @@ export function businessTargetForNotification(
       return {tab: "freight", focusId, panelView: "requests"};
     case "parking_reservation_status":
       return {tab: "parking", focusId};
+    // "Car parked" by someone else of the business: that car. A summary
+    // ("Mamadou parked 4 more cars") names none: the parking list.
+    case "parked_car":
+      return {tab: "parking", focusId: firstText(data.parkedCarId, focusId)};
+    // "Package saved": that package, wherever it is (on a container or
+    // waiting). A summary opens Containers.
+    case "container_line": {
+      const lineId = firstText(data.lineId, focusId);
+      return lineId ? {tab: "containers", focusId: lineId, panelView: "line"} : {tab: "containers"};
+    }
     // The 1st of the month: the month just ended, its bills ready to send.
     case "parking_month_end":
       return {tab: "parking", panelView: `month_end:${data.monthKey ?? ""}`};

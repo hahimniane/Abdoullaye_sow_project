@@ -14,6 +14,8 @@ class NotificationPreferences {
     this.inventorySales = true,
     this.inventoryCredit = true,
     this.inventoryTransfers = true,
+    this.parkedCarAlerts = true,
+    this.packageAlerts = true,
   });
 
   final bool pushNotifications;
@@ -42,6 +44,15 @@ class NotificationPreferences {
   /// and the reminders while one waits. On unless switched off.
   final bool inventoryTransfers;
 
+  /// "Cars parked by my team": a push when someone else of the business
+  /// parks a car (owners, and staff with parking). On unless switched off.
+  final bool parkedCarAlerts;
+
+  /// "Packages saved by my team": a push when someone else of the business
+  /// saves a package (owners, and staff with containers or deliveries). On
+  /// unless switched off.
+  final bool packageAlerts;
+
   static const defaults = NotificationPreferences();
 
   factory NotificationPreferences.fromMap(Map<String, dynamic>? data) {
@@ -66,6 +77,8 @@ class NotificationPreferences {
       inventorySales: data['inventorySales'] != false,
       inventoryCredit: data['inventoryCredit'] != false,
       inventoryTransfers: data['inventoryTransfers'] != false,
+      parkedCarAlerts: data['parkedCarAlerts'] != false,
+      packageAlerts: data['packageAlerts'] != false,
     );
   }
 
@@ -85,6 +98,8 @@ class NotificationPreferences {
       'inventorySales': inventorySales,
       'inventoryCredit': inventoryCredit,
       'inventoryTransfers': inventoryTransfers,
+      'parkedCarAlerts': parkedCarAlerts,
+      'packageAlerts': packageAlerts,
     };
   }
 
@@ -103,6 +118,8 @@ class NotificationPreferences {
     bool? inventorySales,
     bool? inventoryCredit,
     bool? inventoryTransfers,
+    bool? parkedCarAlerts,
+    bool? packageAlerts,
   }) {
     return NotificationPreferences(
       pushNotifications: pushNotifications ?? this.pushNotifications,
@@ -119,6 +136,8 @@ class NotificationPreferences {
       inventorySales: inventorySales ?? this.inventorySales,
       inventoryCredit: inventoryCredit ?? this.inventoryCredit,
       inventoryTransfers: inventoryTransfers ?? this.inventoryTransfers,
+      parkedCarAlerts: parkedCarAlerts ?? this.parkedCarAlerts,
+      packageAlerts: packageAlerts ?? this.packageAlerts,
     );
   }
 }

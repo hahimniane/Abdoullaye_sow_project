@@ -574,7 +574,13 @@ service cloud.firestore {
         (resource.data.customerUid == request.auth.uid ||
          isAdmin(request.auth.uid) ||
          canManageBusiness(request.auth.uid, resource.data.businessId));
+      // Who parked it is who is signed in: a direct write may name only
+      // itself (`createdByUid`, the app's "Print receipt only"), and never
+      // `enteredByUid`, which createBusinessParkingEntry stamps. The staff
+      // "car parked" alert names that person (notifyStaffOfParkedCar).
       allow create: if request.auth != null &&
+        request.resource.data.get('createdByUid', request.auth.uid) == request.auth.uid &&
+        !('enteredByUid' in request.resource.data) &&
         (hasAdminCapability(request.auth.uid, 'operations') ||
          canManageBusinessSection(request.auth.uid, request.resource.data.businessId, 'parking'));
       // Direct client updates are limited to what the app and console
@@ -796,6 +802,15 @@ service cloud.firestore {
     // One claim per sale so its "Sale at ..." push goes out once: the
     // server's alone.
     match /inventorySaleNotifications/{saleId} {
+      allow read, write: if false;
+    }
+    // Staff activity alerts (functions staff_activity_alerts.js): each
+    // person's grouping window and one claim per parked car / package, so
+    // its alert goes out once. The server's alone.
+    match /staffActivityAlerts/{windowId} {
+      allow read, write: if false;
+    }
+    match /staffActivityAlertClaims/{claimId} {
       allow read, write: if false;
     }
     // Zelle bank check (docs/ZELLE_BANK_CHECK.md): the connected bank (a

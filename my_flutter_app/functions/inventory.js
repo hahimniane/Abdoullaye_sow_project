@@ -2597,6 +2597,7 @@ module.exports = {
   SALE_NOTIFICATION_PREFERENCE,
   MAX_SALE_NOTIFICATION_RECIPIENTS,
   planSaleNotification,
+  sellerFirstName,
   ownerEditableServices,
   planInventoryService,
   INVENTORY_PAYMENT_METHODS,

@@ -15,6 +15,10 @@ export type NotificationPreferences = {
   inventoryCredit: boolean;
   /** Inventory: "Store transfers" (sent to my store, cancelled, didn't arrive, reminders). */
   inventoryTransfers: boolean;
+  /** Staff activity: "Cars parked by my team" (someone else of the business parked a car). */
+  parkedCarAlerts: boolean;
+  /** Staff activity: "Packages saved by my team" (someone else of the business saved a package). */
+  packageAlerts: boolean;
 };
 
 export function defaultNotificationPreferences(): NotificationPreferences {
@@ -29,6 +33,8 @@ export function defaultNotificationPreferences(): NotificationPreferences {
     inventorySales: true,
     inventoryCredit: true,
     inventoryTransfers: true,
+    parkedCarAlerts: true,
+    packageAlerts: true,
   };
 }
 
@@ -95,5 +101,34 @@ export const inventoryNotificationPreferenceFields: Array<{
     key: "inventoryTransfers",
     label: "Store transfers",
     hint: "When stock is sent to your store, and when items of a transfer didn't arrive",
+  },
+];
+
+/**
+ * Staff activity alerts (functions staff_activity_alerts.js): shown to the
+ * people the server tells - owners, and staff who work parking (cars) or
+ * containers / deliveries (packages). The business console decides.
+ */
+export const parkedCarNotificationPreferenceFields: Array<{
+  key: keyof NotificationPreferences;
+  label: string;
+  hint: string;
+}> = [
+  {
+    key: "parkedCarAlerts",
+    label: "Cars parked by my team",
+    hint: "A notification when someone else of the business parks a car",
+  },
+];
+
+export const packageNotificationPreferenceFields: Array<{
+  key: keyof NotificationPreferences;
+  label: string;
+  hint: string;
+}> = [
+  {
+    key: "packageAlerts",
+    label: "Packages saved by my team",
+    hint: "A notification when someone else of the business saves a package",
   },
 ];

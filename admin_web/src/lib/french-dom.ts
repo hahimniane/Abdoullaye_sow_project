@@ -5912,6 +5912,12 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Pick a day": "Choisir un jour",
   "Remove the due date": "Retirer l’échéance",
   "Sales at my store": "Ventes de mon magasin",
+  // Staff activity alerts (notification preferences): a car parked / a package
+  // saved by someone else of the business.
+  "Cars parked by my team": "Voitures garées par mon équipe",
+  "A notification when someone else of the business parks a car": "Une notification quand quelqu’un d’autre de l’entreprise gare une voiture",
+  "Packages saved by my team": "Colis enregistrés par mon équipe",
+  "A notification when someone else of the business saves a package": "Une notification quand quelqu’un d’autre de l’entreprise enregistre un colis",
   "Sales by day": "Ventes par jour",
   "Sales by hour": "Ventes par heure",
   "Sales by month": "Ventes par mois",

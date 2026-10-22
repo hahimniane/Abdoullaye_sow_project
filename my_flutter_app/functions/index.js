@@ -498,6 +498,9 @@ const {
   renderContainerLabels,
 } = require("./container_labels");
 const inventory = require("./inventory");
+// Staff activity alerts: a car parked / a package saved, told to the others
+// (namespaced: its pure rules share names like toMillis with this file).
+const staffActivity = require("./staff_activity_alerts");
 const inventoryTransfers = require("./inventory_transfers");
 const {renderInventoryTags} = require("./inventory_tags");
 const {
@@ -19759,6 +19762,9 @@ exports.requeueTemplateWaitingUpdates = onSchedule(
       schedule: "every 30 minutes",
       timeZone: "America/New_York",
       timeoutSeconds: 120,
+      // One run every half hour: one instance is all it uses (and the
+      // instance budget needs the two it would reserve).
+      maxInstances: 1,
     },
     async () => {
       const db = admin.firestore();
@@ -31400,7 +31406,9 @@ exports.markBarrelPoolBalanceCollected = onCall(
 );
 
 exports.expireBarrelPools = onSchedule(
-    {schedule: "every 24 hours", timeoutSeconds: 540},
+    // Fired once a day by the scheduler: one instance is all it uses (and
+    // the instance budget needs the two it would reserve).
+    {schedule: "every 24 hours", timeoutSeconds: 540, maxInstances: 1},
     async () => {
       const db = admin.firestore();
       // Every pool past its join deadline, oldest deadline first, paged
@@ -43651,5 +43659,270 @@ exports.sweepPackageRequests = onSchedule(
         if (snap.size < PACKAGE_REQUEST_SWEEP_PAGE) break;
       }
       logger.info("Package requests swept", tally);
+    },
+);
+
+// ---------------------------------------------------------------------------
+// Staff activity alerts (staff_activity_alerts.js): a car parked or a package
+// saved is told to the business's owner(s) and the staff who work in that
+// area - a push and an inbox entry, never an email or SMS. The first event
+// of a person goes out at once; their next ones within the window only
+// count, and flushStaffActivityAlerts sends them as one summary.
+// ---------------------------------------------------------------------------
+
+// The people an alert is planned from. Generous on purpose - the planner
+// filters and caps them at MAX_ACTIVITY_RECIPIENTS.
+const STAFF_ACTIVITY_NOTIFY_SCAN = 300;
+const STAFF_ACTIVITY_FLUSH_PAGE = 100;
+const STAFF_ACTIVITY_FLUSH_TIMEOUT_S = 120;
+const STAFF_ACTIVITY_FLUSH_CONCURRENCY = 5;
+
+/**
+ * The business's staff and owner(s), the way the inventory credit reminders
+ * read them: `users` of the business plus the business document's owner,
+ * whose profile may lack `businessId`.
+ *
+ * @param {object} db Firestore.
+ * @param {string} businessId The business.
+ * @return {Promise<?{users: Array<object>, ownerUids: string[]}>} Null when
+ *   the business does not exist.
+ */
+async function staffActivityPeople(db, businessId) {
+  const [business, people] = await Promise.all([
+    db.collection("businesses").doc(businessId).get(),
+    db.collection("users").where("businessId", "==", businessId)
+        .where("role", "in", ["staff", "businessOwner"])
+        .limit(STAFF_ACTIVITY_NOTIFY_SCAN).get(),
+  ]);
+  if (!business.exists) return null;
+  const ownerUid = String(business.data()?.ownerUid || "").trim();
+  const users = people.docs.map((doc) => ({id: doc.id, ...doc.data()}));
+  if (ownerUid && !users.some((user) => user.id === ownerUid)) {
+    const owner = await db.collection("users").doc(ownerUid).get();
+    if (owner.exists) users.push({id: owner.id, ...owner.data()});
+  }
+  return {users, ownerUids: ownerUid ? [ownerUid] : []};
+}
+
+/**
+ * @param {object} db Firestore.
+ * @param {{users: Array<object>}} people staffActivityPeople's answer.
+ * @param {string} actorUid Who did it.
+ * @return {Promise<?object>} Their profile (with `id`), or null.
+ */
+async function staffActivityActorProfile(db, people, actorUid) {
+  const known = people.users.find((user) => user.id === actorUid);
+  if (known) return known;
+  const doc = await db.collection("users").doc(actorUid).get();
+  return doc.exists ? {id: doc.id, ...doc.data()} : null;
+}
+
+/**
+ * Sends a plan: push + inbox, under the kind's preference, never email/SMS.
+ *
+ * @param {string} kind "car" | "package".
+ * @param {object} plan planActivityAlert / planActivitySummary's answer.
+ * @return {Promise<number>} How many people it went to.
+ */
+async function sendStaffActivityPlan(kind, plan) {
+  await Promise.all(plan.recipients.map((recipient) =>
+    safeSendPreferenceNotification({
+      uid: recipient.uid,
+      preferenceKey: staffActivity.ACTIVITY_PREFERENCE[kind],
+      title: recipient.title,
+      body: recipient.body,
+      data: plan.data,
+      pushOnly: true,
+    })));
+  return plan.recipients.length;
+}
+
+/**
+ * One just-created parked car or package: claim it (once per record, so a
+ * retried event never counts or sends twice), step its person's window, and
+ * send now when the window says so.
+ *
+ * @param {object} db Firestore.
+ * @param {string} kind "car" | "package".
+ * @param {string} recordId The document's id.
+ * @param {object} record The document as created.
+ * @return {Promise<object>} What happened (for the log).
+ */
+async function handleStaffActivityRecord(db, kind, recordId, record) {
+  const nowMs = Date.now();
+  const event = staffActivity.activityEventFor(kind, record, recordId, nowMs);
+  if (event.skip) return {skipped: event.skip};
+  const {businessId, actorUid} = event;
+  const people = await staffActivityPeople(db, businessId);
+  if (!people) return {skipped: "no_business"};
+  const actor = await staffActivityActorProfile(db, people, actorUid);
+  const base = {kind, businessId, users: people.users, actorUid, actor,
+    ownerUids: people.ownerUids, isBlocked: accountAccessBlocked};
+  if (!staffActivity.activityActor(base).ok) return {skipped: "not_staff"};
+  // Nobody to tell (one-person business, everyone switched it off): no
+  // window to keep either.
+  if (staffActivity.planActivityRecipients(base).length === 0) {
+    return {skipped: "no_recipients"};
+  }
+  const claimRef = db.collection(staffActivity.STAFF_ACTIVITY_ALERT_CLAIMS)
+      .doc(staffActivity.activityClaimId(kind, recordId));
+  const windowRef = db.collection(staffActivity.STAFF_ACTIVITY_ALERTS)
+      .doc(staffActivity.activityWindowId(businessId, kind, actorUid));
+  const step = await db.runTransaction(async (tx) => {
+    const [claim, window] = await tx.getAll(claimRef, windowRef);
+    if (claim.exists) return null;
+    const planned = staffActivity.planWindowEvent(
+        window.exists ? window.data() || {} : null, nowMs);
+    const now = FirestoreFieldValue.serverTimestamp();
+    tx.create(claimRef, {businessId, kind, recordId, actorUid,
+      action: planned.action, createdAt: now});
+    tx.set(windowRef, {businessId, kind, actorUid, ...planned.next,
+      lastRecordId: recordId, updatedAt: now}, {merge: true});
+    return planned;
+  });
+  if (!step) return {skipped: "already_claimed"};
+  if (step.action === "hold") return {held: true};
+  let plan;
+  if (step.action === "summary") {
+    plan = staffActivity.planActivitySummary({...base, count: step.count});
+  } else {
+    const containerId = String(record?.containerId || "").trim();
+    const container = kind === staffActivity.ACTIVITY_KIND.PACKAGE &&
+      containerId ?
+      (await db.collection("containers").doc(containerId).get()).data() :
+      null;
+    plan = staffActivity.planActivityAlert({...base, record, recordId,
+      container});
+  }
+  const sent = await sendStaffActivityPlan(kind, plan);
+  return {[step.action]: sent};
+}
+
+/**
+ * @param {string} kind "car" | "package".
+ * @param {object} event The Firestore create event.
+ * @param {string} recordId The document's id.
+ * @return {Promise<void>} Never rejects: an alert is not worth a retry
+ *   storm, and the claim already guards a repeat.
+ */
+async function onStaffActivityCreated(kind, event, recordId) {
+  const record = event.data?.data();
+  if (!record) return;
+  try {
+    const outcome = await handleStaffActivityRecord(admin.firestore(), kind,
+        recordId, record);
+    logger.info("Staff activity alert", {kind, recordId, ...outcome});
+  } catch (error) {
+    logger.warn("Staff activity alert failed", {kind, recordId,
+      error: String(error?.message || error)});
+  }
+}
+
+// A car parked by a business's person: createBusinessParkingEntry
+// (`enteredByUid`) or the app's direct "Print receipt only" write
+// (`createdByUid`). A customer's online reservation never alerts.
+exports.notifyStaffOfParkedCar = onDocumentCreated(
+    {document: "parkedCars/{parkedCarId}", maxInstances: 1,
+      timeoutSeconds: 60},
+    async (event) => onStaffActivityCreated(staffActivity.ACTIVITY_KIND.CAR,
+        event, event.params.parkedCarId),
+);
+
+// A package saved: addContainerLine, addWaitingPackage or
+// receivePackageRequest (`addedByStaffId`). A split part
+// (assignContainerLines) is the same package and never alerts.
+exports.notifyStaffOfNewPackage = onDocumentCreated(
+    {document: "containerLines/{lineId}", maxInstances: 1,
+      timeoutSeconds: 60},
+    async (event) => onStaffActivityCreated(
+        staffActivity.ACTIVITY_KIND.PACKAGE, event, event.params.lineId),
+);
+
+/**
+ * Sends one ended window's summary: claimed (count reset) in a transaction
+ * first, so two runs never both send it.
+ *
+ * @param {object} db Firestore.
+ * @param {object} doc The window's snapshot from the query.
+ * @param {object} run {nowMs, contexts (businessId -> promise)}.
+ * @return {Promise<number>} People told.
+ */
+async function flushStaffActivityWindow(db, doc, {nowMs, contexts}) {
+  const claimed = await db.runTransaction(async (tx) => {
+    const fresh = await tx.get(doc.ref);
+    if (!fresh.exists) return null;
+    const state = fresh.data() || {};
+    const step = staffActivity.planWindowFlush(state, nowMs);
+    if (step.next) {
+      tx.update(doc.ref, {...step.next,
+        updatedAt: FirestoreFieldValue.serverTimestamp()});
+    }
+    return step.flush ? {state, count: step.count} : null;
+  });
+  if (!claimed) return 0;
+  const businessId = String(claimed.state.businessId || "");
+  const kind = String(claimed.state.kind || "");
+  const actorUid = String(claimed.state.actorUid || "");
+  if (!businessId || !actorUid ||
+      !staffActivity.ACTIVITY_KINDS.includes(kind)) {
+    return 0;
+  }
+  if (!contexts.has(businessId)) {
+    contexts.set(businessId, staffActivityPeople(db, businessId));
+  }
+  const people = await contexts.get(businessId);
+  if (!people) return 0;
+  const actor = await staffActivityActorProfile(db, people, actorUid);
+  const plan = staffActivity.planActivitySummary({kind, businessId,
+    users: people.users, actorUid, actor, ownerUids: people.ownerUids,
+    count: claimed.count, isBlocked: accountAccessBlocked});
+  return sendStaffActivityPlan(kind, plan);
+}
+
+// Every 10 minutes: each window that has ended with events still waiting
+// sends them as one summary ("Aissatou saved 12 more packages"). One query
+// on the due time (a single-field index), paged until done or the deadline.
+exports.flushStaffActivityAlerts = onSchedule(
+    {
+      schedule: "every 10 minutes",
+      timeZone: "America/New_York",
+      timeoutSeconds: STAFF_ACTIVITY_FLUSH_TIMEOUT_S,
+      // One run every 10 minutes: one instance is all it uses.
+      maxInstances: 1,
+    },
+    async () => {
+      const db = admin.firestore();
+      const nowMs = Date.now();
+      const contexts = new Map();
+      let told = 0;
+      let failed = 0;
+      const run = await drainPages({
+        pageSize: STAFF_ACTIVITY_FLUSH_PAGE,
+        deadlineMs: sweepDeadline({startMs: nowMs,
+          timeoutSeconds: STAFF_ACTIVITY_FLUSH_TIMEOUT_S}),
+        fetchPage: async (cursor) => {
+          let query = db.collection(staffActivity.STAFF_ACTIVITY_ALERTS)
+              .where("flushDueMs", "<=", nowMs)
+              .orderBy("flushDueMs")
+              .limit(STAFF_ACTIVITY_FLUSH_PAGE);
+          if (cursor) query = query.startAfter(cursor);
+          return (await query.get()).docs;
+        },
+        processPage: async (docs) => {
+          const results = await mapWithConcurrency(docs,
+              STAFF_ACTIVITY_FLUSH_CONCURRENCY,
+              (doc) => flushStaffActivityWindow(db, doc, {nowMs, contexts}));
+          for (const result of results) {
+            if (result.status === "fulfilled") told += result.value || 0;
+            else {
+              failed += 1;
+              logger.warn("Staff activity summary failed",
+                  {error: String(result.reason?.message || result.reason)});
+            }
+          }
+        },
+      });
+      logger.info("Staff activity summaries flushed", {...run, told,
+        failed});
     },
 );

@@ -786,6 +786,11 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
             'businessName': auth.isAdmin
                 ? BusinessProfile.defaultBusinessName
                 : auth.businessName ?? BusinessProfile.defaultBusinessName,
+            // Who parked it and when: the server's "car parked" alert to the
+            // rest of the team names this person (notifyStaffOfParkedCar),
+            // and the rules hold createdByUid to the signed-in account.
+            if (auth.user?.uid != null) 'createdByUid': auth.user!.uid,
+            'createdAt': FieldValue.serverTimestamp(),
           });
 
       savedRecord = newRecord.copyWith(id: docRef.id);

@@ -21,6 +21,13 @@ function defaultNotificationPreferences() {
     // sent to my store (or cancelled), when pieces did not arrive, and the
     // reminders. On unless switched off.
     inventoryTransfers: true,
+    // Staff activity: "Cars parked" - a push when someone else of the
+    // business parks a car (owners, and staff with parking). On unless off.
+    parkedCarAlerts: true,
+    // Staff activity: "Packages saved" - a push when someone else of the
+    // business saves a package (owners, and staff with containers or
+    // deliveries). On unless switched off.
+    packageAlerts: true,
   };
 }
 
@@ -57,6 +64,10 @@ function normalizeNotificationPreferences(raw) {
       prefs.inventoryCredit !== false && defaults.inventoryCredit,
     inventoryTransfers:
       prefs.inventoryTransfers !== false && defaults.inventoryTransfers,
+    parkedCarAlerts:
+      prefs.parkedCarAlerts !== false && defaults.parkedCarAlerts,
+    packageAlerts:
+      prefs.packageAlerts !== false && defaults.packageAlerts,
   };
 }
 

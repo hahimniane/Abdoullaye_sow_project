@@ -2990,3 +2990,143 @@ describe("delivered at destination", () => {
     assert.equal(counted.lineCount, 2);
   });
 });
+
+// Staff activity alerts (staff_activity_alerts.js): the create triggers and
+// the 10-minute flush, run against the emulator - a package or a car parked
+// tells the others once, a burst is grouped into one summary, and a split
+// part or a customer's reservation tells nobody.
+describe("staff activity alerts", () => {
+  const ABIZ = "alerts-test-biz";
+  const A_OWNER = "alerts-test-owner";
+  const A_CLERK = "alerts-test-clerk";
+  const A_DRIVER = "alerts-test-driver";
+  const A_PARKER = "alerts-test-parker";
+  const A_MUTED = "alerts-test-muted";
+  const A_FOREIGN = "alerts-test-foreign";
+  const {Timestamp} = admin.firestore;
+
+  before(async () => {
+    await Promise.all([
+      db.collection("businesses").doc(ABIZ).set({name: "Alerts Shipping",
+        status: "approved", ownerUid: A_OWNER}),
+      db.collection("users").doc(A_OWNER).set({role: "businessOwner",
+        businessId: ABIZ, fullName: "Abdoullaye Sow",
+        preferredLanguage: "fr"}),
+      db.collection("users").doc(A_CLERK).set({role: "staff",
+        businessId: ABIZ, fullName: "Aissatou Bah",
+        businessPermissions: ["containers"]}),
+      db.collection("users").doc(A_DRIVER).set({role: "staff",
+        businessId: ABIZ, fullName: "Ousmane Porter",
+        businessPermissions: ["deliveries"]}),
+      db.collection("users").doc(A_PARKER).set({role: "staff",
+        businessId: ABIZ, fullName: "Mamadou Diallo",
+        businessPermissions: ["parking"]}),
+      db.collection("users").doc(A_MUTED).set({role: "staff",
+        businessId: ABIZ, businessPermissions: ["containers", "parking"],
+        notificationPreferences: {packageAlerts: false,
+          parkedCarAlerts: false}}),
+      db.collection("users").doc(A_FOREIGN).set({role: "staff",
+        businessId: "alerts-other-biz",
+        businessPermissions: ["containers", "parking"]}),
+    ]);
+  });
+
+  const inbox = async (uid) => (await db.collection("users").doc(uid)
+      .collection("notifications").get()).docs.map((d) => d.data());
+  let lineSerial = 0;
+  async function newLine(extra = {}) {
+    lineSerial += 1;
+    const ref = db.collection("containerLines").doc(`alerts-line-${
+      lineSerial}`);
+    await ref.set({businessId: ABIZ, containerId: "", kind: "barrels",
+      ownerKind: "customer", customerName: "", receiverName: "Fatou Diallo",
+      priceCents: 15000, addedByStaffId: A_CLERK, rootLineId: ref.id,
+      trackingCode: `CL-AL${lineSerial}`, createdAt: Timestamp.now(),
+      ...extra});
+    return ref;
+  }
+  const packageSaved = async (ref) =>
+    functions.notifyStaffOfNewPackage.run({data: await ref.get(),
+      params: {lineId: ref.id}});
+  const windowRef = (kind, actor) => db.collection("staffActivityAlerts")
+      .doc(`${ABIZ}_${kind}_${actor}`);
+
+  it("tells the owner and delivery staff once, prices only to the owner",
+      async () => {
+        const ref = await newLine();
+        await packageSaved(ref);
+        await packageSaved(ref); // a retried event
+        const [owner] = await inbox(A_OWNER);
+        assert.equal((await inbox(A_OWNER)).length, 1);
+        assert.equal(owner.title, "Colis enregistré");
+        assert.equal(owner.body, "Aissatou a enregistré un colis pour " +
+          "Fatou Diallo · $150.00 · en attente d'un conteneur");
+        assert.equal(owner.data.type, "container_line");
+        assert.equal(owner.data.lineId, ref.id);
+        const driver = await inbox(A_DRIVER);
+        assert.equal(driver.length, 1);
+        assert.equal(driver[0].body, "Aissatou saved a package for " +
+          "Fatou Diallo · waiting for a container");
+        for (const uid of [A_CLERK, A_MUTED, A_FOREIGN, A_PARKER]) {
+          assert.equal((await inbox(uid)).length, 0, uid);
+        }
+      });
+
+  it("groups the next packages and flushes them as one summary",
+      async () => {
+        await packageSaved(await newLine());
+        await packageSaved(await newLine());
+        assert.equal((await inbox(A_OWNER)).length, 1);
+        const held = (await windowRef("package", A_CLERK).get()).data();
+        assert.equal(held.pending, 2);
+        // A split part is the same package: no alert, no count.
+        const part = await newLine({rootLineId: "alerts-line-1",
+          splitFromLineId: "alerts-line-1"});
+        await packageSaved(part);
+        assert.equal((await windowRef("package", A_CLERK).get())
+            .get("pending"), 2);
+        // The window ends; the flush sends one summary, and only once.
+        const past = Date.now() - 1000;
+        await windowRef("package", A_CLERK).update({windowEndMs: past,
+          flushDueMs: past});
+        await functions.flushStaffActivityAlerts.run({});
+        await functions.flushStaffActivityAlerts.run({});
+        const owner = await inbox(A_OWNER);
+        assert.equal(owner.length, 2);
+        assert.ok(owner.some((n) => n.body ===
+          "Aissatou a enregistré 2 colis de plus"));
+        const driver = await inbox(A_DRIVER);
+        assert.ok(driver.some((n) => n.body ===
+          "Aissatou saved 2 more packages"));
+        assert.equal((await windowRef("package", A_CLERK).get())
+            .get("pending"), 0);
+      });
+
+  it("tells about a car parked by staff, never a customer reservation",
+      async () => {
+        const parked = db.collection("parkedCars").doc("alerts-car-1");
+        await parked.set({businessId: ABIZ, enteredByUid: A_PARKER,
+          enteredByBusiness: true, source: "business",
+          trackingCode: "PK-AL1", carYear: "2018", carMake: "Toyota",
+          carModel: "Camry", createdAt: Timestamp.now()});
+        const reservation = db.collection("parkedCars").doc("alerts-car-2");
+        await reservation.set({businessId: ABIZ, customerUid: "a-customer",
+          trackingCode: "PK-AL2", carMake: "Honda", carModel: "Civic",
+          createdAt: Timestamp.now()});
+        const earlier = (await inbox(A_OWNER)).length;
+        for (const ref of [parked, reservation]) {
+          await functions.notifyStaffOfParkedCar.run({data: await ref.get(),
+            params: {parkedCarId: ref.id}});
+        }
+        const owner = await inbox(A_OWNER);
+        assert.equal(owner.length, earlier + 1);
+        assert.ok(owner.some((n) => n.body ===
+          "Mamadou a garé une Toyota Camry 2018 · PK-AL1" &&
+          n.data.parkedCarId === "alerts-car-1"));
+        // Package people do not hear about cars.
+        assert.ok(!(await inbox(A_CLERK)).some((n) =>
+          n.data.type === "parked_car"));
+        assert.equal((await db.collection("staffActivityAlertClaims")
+            .doc("car_alerts-car-2").get()).exists, false);
+      });
+});

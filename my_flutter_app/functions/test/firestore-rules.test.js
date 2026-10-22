@@ -1738,6 +1738,52 @@ describe("business dashboard Firestore rules", () => {
         );
       });
 
+  // The staff "car parked" alert names who parked it (notifyStaffOfParkedCar):
+  // a direct write may name only the signed-in person, and never claim the
+  // callable's `enteredByUid`.
+  it("lets a direct parked-car write name only its own author", async () => {
+    const entry = {
+      businessId: "biz_a",
+      trackingCode: "PC-SELF1",
+      ownerName: "Walk-up Customer",
+      status: "parked",
+    };
+    await assertSucceeds(firestoreFor("staff-parking-a")
+        .doc("parkedCars/park_self_named")
+        .set({...entry, createdByUid: "staff-parking-a"}));
+    // Old app builds name nobody: still allowed (they just do not alert).
+    await assertSucceeds(firestoreFor("staff-parking-a")
+        .doc("parkedCars/park_self_unnamed").set(entry));
+    await assertFails(firestoreFor("staff-parking-a")
+        .doc("parkedCars/park_forged_creator")
+        .set({...entry, createdByUid: "owner-a"}));
+    await assertFails(firestoreFor("staff-parking-a")
+        .doc("parkedCars/park_forged_entered")
+        .set({...entry, enteredByUid: "staff-parking-a"}));
+  });
+
+  it("keeps the staff activity windows and claims server-only", async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await db.doc("staffActivityAlerts/biz_a_car_staff-parking-a").set({
+        businessId: "biz_a", kind: "car", actorUid: "staff-parking-a",
+        pending: 3});
+      await db.doc("staffActivityAlertClaims/car_park_a").set({
+        businessId: "biz_a"});
+    });
+    for (const uid of ["owner-a", "staff-parking-a", "super-admin"]) {
+      const db = firestoreFor(uid);
+      await assertFails(
+          db.doc("staffActivityAlerts/biz_a_car_staff-parking-a").get());
+      await assertFails(db.doc("staffActivityAlertClaims/car_park_a").get());
+      await assertFails(
+          db.doc("staffActivityAlerts/biz_a_car_staff-parking-a")
+              .set({pending: 0}, {merge: true}));
+      await assertFails(db.doc("staffActivityAlertClaims/car_forged")
+          .set({businessId: "biz_a"}));
+    }
+  });
+
   it("returns every posted car for a scoped listings query", async () => {
     const ownerDb = firestoreFor("owner-a");
 

@@ -356,6 +356,26 @@ NotificationRoute? _businessRouteForNotificationData(
         _firstNonEmpty(data, ['reservationId', 'relatedId', 'recordId']),
         'parking',
       );
+    // "Car parked": someone else of the business parked a car - that car.
+    // A summary ("Mamadou parked 4 more cars") names none: the parking list.
+    case 'parked_car':
+      return _businessRecord(
+        'parkedCars',
+        _firstNonEmpty(data, ['parkedCarId', 'relatedId']),
+        'parking',
+      );
+    // "Package saved": that package's page (a summary opens the business
+    // home, where the packages are).
+    case 'container_line':
+      final lineId = _firstNonEmpty(data, ['lineId', 'relatedId']);
+      final code = data['trackingCode']?.toString().trim() ?? '';
+      if (lineId.isEmpty && code.isEmpty) {
+        return const NotificationRoute('/business-home');
+      }
+      return NotificationRoute(
+        '/business-package',
+        arguments: BusinessPackageArguments(lineId: lineId, trackingCode: code),
+      );
     case 'transport_opportunity':
     case 'transport_job_paid':
     case 'transport_request_status':

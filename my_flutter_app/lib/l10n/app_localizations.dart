@@ -6764,6 +6764,18 @@ abstract class AppLocalizations {
   /// **'Sales at my store'**
   String get inventorySalesNotifications;
 
+  /// No description provided for @parkedCarAlertsNotifications.
+  ///
+  /// In en, this message translates to:
+  /// **'Cars parked by my team'**
+  String get parkedCarAlertsNotifications;
+
+  /// No description provided for @packageAlertsNotifications.
+  ///
+  /// In en, this message translates to:
+  /// **'Packages saved by my team'**
+  String get packageAlertsNotifications;
+
   /// No description provided for @faceId.
   ///
   /// In en, this message translates to:

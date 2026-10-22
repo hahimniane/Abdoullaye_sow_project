@@ -54,6 +54,26 @@ void main() {
     );
     expect(transfersOff.inventorySales, isTrue);
     expect(transfersOff.inventoryCredit, isTrue);
+    // Staff activity alerts: on by default, each its own switch.
+    expect(prefs.parkedCarAlerts, isTrue);
+    expect(prefs.packageAlerts, isTrue);
+    final carsOff =
+        NotificationPreferences.defaults.copyWith(parkedCarAlerts: false);
+    expect(carsOff.toMap()['parkedCarAlerts'], isFalse);
+    expect(
+      NotificationPreferences.fromMap(carsOff.toMap()).parkedCarAlerts,
+      isFalse,
+    );
+    expect(carsOff.packageAlerts, isTrue);
+    expect(
+      NotificationPreferences.fromMap({'packageAlerts': false}).packageAlerts,
+      isFalse,
+    );
+    expect(
+      NotificationPreferences.fromMap({'packageAlerts': false})
+          .parkedCarAlerts,
+      isTrue,
+    );
   });
 
   test('notification preferences serialize and preserve disabled values', () {
@@ -77,6 +97,8 @@ void main() {
       'inventorySales': true,
       'inventoryCredit': true,
       'inventoryTransfers': true,
+      'parkedCarAlerts': true,
+      'packageAlerts': true,
     });
     expect(
       NotificationPreferences.fromMap(prefs.toMap()).shipmentActivity,
