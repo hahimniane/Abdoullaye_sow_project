@@ -430,3 +430,91 @@ its lines (as before), so hiding the money is the clients' job.
 **WhatsApp.** A new delivery queues the `delivered` update
 (`shipment_delivered_2lang`) for the sender and the receiver, once each -
 see docs/WHATSAPP_CONTAINER_UPDATES.md "Delivered".
+
+## Scan to load
+
+Owner decisions 2026-10-22. Loading a container is "scan, beep, next": staff
+open a container that is still **loading**, tap **Start loading**, and every
+package label they scan goes onto *that* container. It is an explicit mode on
+one container - an ordinary scan elsewhere (look-up, delivery, reprint) never
+moves a package. Several phones may load the same container at once.
+
+**Who.** Owners, admins and staff with the **containers** permission (the
+people who may already put waiting packages on a container by hand).
+
+**Callable.** Actions on `assignContainerLines` (no new export - see
+"Delivered at destination"). Without `action` it behaves exactly as before.
+
+- `{businessId, containerId, action: "scan", code, scanId, move?}` - `code`
+  is a package code as printed (`CL-K7M4P2`, a split part `CL-K7M4P2-2`) or
+  the label's whole tracking link; the server extracts and upper-cases the
+  code. `scanId` is a client-made id (8-64 chars `[A-Za-z0-9_-]`) for this
+  one scan: a retried request with a `scanId` the line already took answers
+  the same result and changes nothing (the line keeps its last 20 in
+  `loadScanIds`). Answers `{success, result, line, container}`:
+  - `result: "loaded"` - the package was **waiting**: it goes onto this
+    container whole (all its pieces, exactly as `assignContainerLines`
+    without `pieceCounts`) and `loadScannedPieces` becomes 1.
+  - `result: "counted"` - already on this container: one more of its pieces
+    scanned (`loadScannedPieces + 1`).
+  - `result: "all_scanned"` - already on this container and every piece was
+    scanned already: nothing changes (the phone buzzes "all N already in").
+  - `line`: `{lineId, trackingCode, name (receiver, else customer), kind,
+    pieceCount, scannedPieces, destinationCountryName}`; `container`:
+    `{containerId, label, lineCount, pieceCount}` after the change.
+  - Refusals (`details.reason`), nothing changes: `line_not_found` (no
+    package of this business has that code), `container_locked` (the
+    container is not loading), `container_destination_required`,
+    `destination_mismatch`, `line_delivered`, `line_in_other_container`
+    (`details`: `otherContainerId`, `otherContainerLabel`, `otherStatus`,
+    `canMove` - true only while that container is still loading),
+    `scan_code_invalid`, `scan_id_invalid`.
+  - `move: true` after `line_in_other_container` with `canMove`: the package
+    moves from the other loading container to this one (as
+    `moveContainerLine`) and counts as `loaded`.
+- `{businessId, containerId, action: "undo_scan", lineId}` - takes back the
+  last scan of that package: `loadScannedPieces - 1`; at 0, a package that
+  this mode put on the container (`loadAddedByScan`) goes back to waiting (as
+  `unassignContainerLine`), one added by hand just keeps 0. Answers
+  `{success, result: "uncounted" | "unloaded", line, container}`.
+- `{businessId, containerId, action: "load_summary"}` - for **Done loading**.
+  Answers `{success, container, incomplete: [line...] (scanned at least once,
+  fewer pieces scanned than it has), unscanned: [line...] (on the container,
+  never scanned - put on by hand, or before this mode), waitingCount,
+  waiting: [line...] (first 50 waiting packages of the business going to the
+  container's destination)}`.
+- `{businessId, containerId, action: "leave_unscanned", lineId}` - for an
+  incomplete package: the scanned pieces stay on the container, the rest is
+  split off as a waiting part exactly as "Split across containers" (the
+  part gets the next `-n` code; payments stay on the root; no WhatsApp).
+  Answers `{success, line, part: {lineId, trackingCode, pieceCount}}`.
+  Refused with `piece_count_invalid` unless `0 < scanned < pieceCount`.
+
+**Fields on the line.** `loadScannedPieces` (int, pieces scanned onto its
+current container), `loadAddedByScan` (true when this mode put it there),
+`loadScannedAt`, `loadScannedByStaffId`, `loadScanIds` (last 20 scan ids).
+All are cleared when the line leaves the container (unassign, move,
+remove) and are server-only (the rules' client allow-lists never include
+them).
+
+**Pieces.** Every piece of a package carries the same QR, so a scan counts
+"one more piece of this package", not a particular piece. A split keeps the
+first n pieces on the container (as today); for a package of mixed pieces the
+staff fix the pieces by hand afterwards.
+
+**Not on scan.** No WhatsApp (the "shipped" update still goes when the
+container ships) and no container timeline moment. The package's History
+gets one "loaded on <container>" entry when it goes on; counted scans write
+nothing.
+
+**Clients.** App: **Start loading** on a loading container (containers
+permission) opens a scanner that stays open: each label is sent at once with
+a success or error buzz and sound, the same label is ignored for 2 s, a
+running total ("37 packages · 52 pieces scanned") and the last scans listed
+(green loaded, blue "2 of 5", amber all in, red refused with the reason),
+**Undo** on the last scan, a field to type a code for a damaged label, the
+move question for `line_in_other_container`, and **Done loading** with the
+summary (each incomplete package: "Load all" - keep it whole - or "Leave N
+waiting"). The console shows the same counts; console loading by scanner gun
+is a later step.
+
