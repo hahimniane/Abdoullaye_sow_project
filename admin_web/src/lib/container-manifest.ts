@@ -281,7 +281,14 @@ export type ContainerRefusal =
   | "piece_size_invalid"
   | "piece_price_invalid"
   | "piece_count_invalid"
-  | "line_has_parts";
+  | "line_has_parts"
+  // Scan to load (functions container_loading.js).
+  | "load_action_invalid"
+  | "scan_code_invalid"
+  | "scan_id_invalid"
+  | "scan_line_not_found"
+  | "line_delivered"
+  | "line_in_other_container";
 
 export const CONTAINER_MESSAGES: Record<ContainerRefusal, string> = {
   container_label_required: "Give the container a working name, or its container or booking number.",
@@ -361,6 +368,12 @@ export const CONTAINER_MESSAGES: Record<ContainerRefusal, string> = {
     "Choose how many pieces go in: from 1 to the number the package has.",
   line_has_parts:
     "Other parts of this package are still listed. Remove them first.",
+  load_action_invalid: "That is not something loading can do.",
+  scan_code_invalid: "That is not a package code.",
+  scan_id_invalid: "This scan could not be sent. Scan the label again.",
+  scan_line_not_found: "No package of yours has that code.",
+  line_delivered: "This package was already delivered.",
+  line_in_other_container: "This package is on another container.",
 };
 
 export function containerMessage(codes: readonly ContainerRefusal[]): string {

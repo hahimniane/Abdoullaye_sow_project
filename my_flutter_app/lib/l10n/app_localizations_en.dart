@@ -16350,4 +16350,75 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get ldgRestWaiting => 'The rest stays waiting.';
+
+  @override
+  String get lotDuplicatesTitle => 'Possible duplicates';
+
+  @override
+  String lotDuplicatesBanner(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count cars have the same job twice',
+      one: '1 car has the same job twice',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get lotDuplicatesBannerNote =>
+      'Tap to review and void the one entered by mistake.';
+
+  @override
+  String get lotDuplicatesExplain =>
+      'The same car with the same job more than once. Void the one entered by mistake — it stays on the record, struck through.';
+
+  @override
+  String get lotDuplicateSameCustomer => 'Same customer — likely entered twice';
+
+  @override
+  String get lotDuplicateDifferentCustomers =>
+      'Different customers — may be a resale; void only if entered by mistake';
+
+  @override
+  String get lotDuplicatesNone => 'No possible duplicates.';
+
+  @override
+  String lotVinTail(String tail) {
+    return 'VIN $tail';
+  }
+
+  @override
+  String lotVinDuplicateNotice(
+    String article,
+    String job,
+    String code,
+    String date,
+  ) {
+    String _temp0 = intl.Intl.selectLogic(article, {'an': 'an', 'other': 'a'});
+    return 'This car already has $_temp0 $job for this customer: $code ($date)';
+  }
+
+  @override
+  String get lotOpenIt => 'Open it';
+
+  @override
+  String get lotRepeatConfirmTitle => 'Record it again?';
+
+  @override
+  String lotRepeatConfirmItem(String date, String customer, String code) {
+    return 'on $date for $customer ($code)';
+  }
+
+  @override
+  String lotRepeatConfirmBody(String article, String job, String items) {
+    String _temp0 = intl.Intl.selectLogic(article, {'an': 'an', 'other': 'a'});
+    return 'This car already had $_temp0 $job $items. Record another for this customer?';
+  }
+
+  @override
+  String get lotRecordAnother => 'Record another';
+
+  @override
+  String get lotEntryNotFound => 'That entry could not be opened.';
 }

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_storage/firebase_storage.dart' as storage;
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
 import 'package:image_picker/image_picker.dart';
@@ -17,8 +18,10 @@ import '../services/lot_customers.dart';
 import '../services/firestore_query_spec.dart';
 import '../services/known_car_lookup.dart';
 import '../services/lot_ledger.dart';
+import '../services/lot_vin_duplicates.dart';
 import '../services/vin_decoder_service.dart';
 import '../utils/action_confirmation.dart';
+import '../utils/date_display.dart';
 import '../utils/money_input.dart';
 import '../utils/vin_utils.dart';
 import '../theme/app_colors.dart';
@@ -44,9 +47,17 @@ import 'vin_scanner_screen.dart';
 /// month's money above the list it comes from), and how to leave (back, top
 /// left, where it always is).
 class LotLedgerScreen extends StatefulWidget {
-  const LotLedgerScreen({super.key, required this.businessId});
+  const LotLedgerScreen({
+    super.key,
+    required this.businessId,
+    this.focusActivityId,
+  });
 
   final String businessId;
+
+  /// An activity to open on arrival - the one a notification is about (a
+  /// confirmed repeat of the VIN duplicate rule).
+  final String? focusActivityId;
 
   @override
   State<LotLedgerScreen> createState() => _LotLedgerScreenState();
@@ -104,6 +115,13 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
   String _businessName = '';
   int _proofThresholdCents = lotDefaultProofThresholdCents;
 
+  /// "Possible duplicates": the same car with the same job more than once,
+  /// as the server finds them over every activity of the business (this
+  /// screen only loads the months on screen). A notifier, so the open sheet
+  /// follows a void.
+  final ValueNotifier<List<LotDuplicateGroup>> _duplicates =
+      ValueNotifier(const []);
+
   int _segment = 0;
   int _direction = 1;
   late String _month = lotMonthKey(DateTime.now());
@@ -145,6 +163,87 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
   void initState() {
     super.initState();
     _listen();
+    final focus = widget.focusActivityId?.trim() ?? '';
+    if (focus.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_openActivityById(focus));
+      });
+    }
+  }
+
+  /// Something was recorded, edited or voided: refresh what depends on it.
+  void _afterChange() {
+    _loadCustomers();
+    unawaited(_loadDuplicates());
+  }
+
+  /// Asks the server for the business's possible duplicates. Silent on
+  /// failure: the ledger works without the list, and the next change asks
+  /// again.
+  Future<void> _loadDuplicates() async {
+    try {
+      final result = await FirebaseFunctions.instance
+          .httpsCallable('getLotLedgerTotals')
+          .call<Object?>({
+        'businessId': widget.businessId,
+        'action': 'vinDuplicates',
+      });
+      if (!mounted) return;
+      _duplicates.value = lotDuplicateGroupsFrom(result.data);
+      setState(() {});
+    } catch (error) {
+      debugPrint('Lot ledger: duplicates unavailable ($error)');
+    }
+  }
+
+  /// Opens one activity's details by id, even outside the months on screen.
+  Future<void> _openActivityById(String activityId) async {
+    LotActivity? activity =
+        _activities.where((a) => a.id == activityId).firstOrNull;
+    if (activity == null) {
+      try {
+        final doc = await _db
+            .collection(lotActivitiesCollection)
+            .doc(activityId)
+            .get();
+        final data = doc.data();
+        if (doc.exists && data != null) {
+          activity = LotActivity.fromMap(doc.id, data);
+        }
+      } catch (_) {
+        activity = null;
+      }
+    }
+    if (!mounted) return;
+    if (activity == null) {
+      showErrorSnackBar(
+          context, AppLocalizations.of(context)!.lotEntryNotFound);
+      return;
+    }
+    await showLotSheet<void>(
+      context,
+      _ActivityDetailSheet(
+        activity: activity,
+        staff: _staff,
+        types: _types,
+        customers: _customers,
+        knownCars: _knownCars,
+        businessId: widget.businessId,
+        onChanged: _afterChange,
+        onOpenActivity: _openActivityById,
+      ),
+    );
+  }
+
+  void _openDuplicates() {
+    showLotSheet<void>(
+      context,
+      _DuplicatesSheet(
+        groups: _duplicates,
+        onChanged: _afterChange,
+        onOpenActivity: _openActivityById,
+      ),
+    );
   }
 
   /// An error handler for a listener the ledger can live without. Unhandled,
@@ -236,6 +335,7 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
     // The lot's customer memory is a one-shot read: it seeds the customer
     // picker, and a new customer written by a record refreshes it.
     _loadCustomers();
+    unawaited(_loadDuplicates());
     unawaited(_carLookup.loadRecent().then((_) {
       if (mounted) setState(() {});
     }));
@@ -372,6 +472,7 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
       s.cancel();
     }
     _windowSafety?.cancel();
+    _duplicates.dispose();
     super.dispose();
   }
 
@@ -632,7 +733,10 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
           search: _search,
           onTypeFilter: (v) => setState(() => _typeFilter = v),
           onSearch: (v) => setState(() => _search = v),
-          onRecorded: _loadCustomers,
+          onRecorded: _afterChange,
+          duplicateCount: _duplicates.value.length,
+          onOpenDuplicates: _openDuplicates,
+          onOpenActivity: _openActivityById,
         );
     }
   }
@@ -1086,6 +1190,282 @@ class _AwaitingBanner extends StatelessWidget {
   }
 }
 
+/// "2 cars have the same job twice": the way into the possible duplicates.
+class _DuplicatesBanner extends StatelessWidget {
+  const _DuplicatesBanner({
+    required this.title,
+    required this.note,
+    required this.onTap,
+  });
+
+  final String title;
+  final String note;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return PressableScale(
+      onTap: onTap,
+      scale: 0.985,
+      child: Container(
+        key: const Key('lot-duplicates-banner'),
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm,
+        ),
+        decoration: BoxDecoration(
+          color: AppColors.saffron.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          border: Border.all(color: AppColors.saffron.withValues(alpha: 0.4)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.content_copy_outlined,
+                size: 16, color: AppColors.warn),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.ink,
+                    ),
+                  ),
+                  Text(
+                    note,
+                    style: const TextStyle(fontSize: 11, color: AppColors.muted),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, size: 18, color: AppColors.muted),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The duplicate rule's refusal on the form, with the record it repeats one
+/// tap away.
+class _DuplicateNotice extends StatelessWidget {
+  const _DuplicateNotice({
+    required this.text,
+    required this.actionLabel,
+    required this.onAction,
+  });
+
+  final String text;
+  final String actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const Key('lot-duplicate-notice'),
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.md, AppSpacing.sm, AppSpacing.xs, AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: AppColors.errorRed.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        border: Border.all(color: AppColors.errorRed.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.block_outlined, size: 16, color: AppColors.errorRed),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(fontSize: 13, color: AppColors.ink),
+            ),
+          ),
+          if (onAction != null)
+            TextButton(onPressed: onAction, child: Text(actionLabel)),
+        ],
+      ),
+    );
+  }
+}
+
+/// "Possible duplicates": every car + job the business recorded more than
+/// once, each record with its code, date, customer, fee and status, and a
+/// Void that goes through the ledger's own void sheet.
+class _DuplicatesSheet extends StatelessWidget {
+  const _DuplicatesSheet({
+    required this.groups,
+    required this.onChanged,
+    required this.onOpenActivity,
+  });
+
+  final ValueListenable<List<LotDuplicateGroup>> groups;
+  final VoidCallback onChanged;
+  final Future<void> Function(String activityId) onOpenActivity;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return ValueListenableBuilder<List<LotDuplicateGroup>>(
+      valueListenable: groups,
+      builder: (context, list, _) => LotSheetShell(
+        title: l10n.lotDuplicatesTitle,
+        subtitle: l10n.lotDuplicatesExplain,
+        body: list.isEmpty
+            ? LotEmptyState(
+                icon: Icons.check_circle_outline,
+                title: l10n.lotDuplicatesNone,
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (final group in list)
+                    _DuplicateGroupCard(
+                      group: group,
+                      onChanged: onChanged,
+                      onOpenActivity: onOpenActivity,
+                    ),
+                ],
+              ),
+      ),
+    );
+  }
+}
+
+class _DuplicateGroupCard extends StatelessWidget {
+  const _DuplicateGroupCard({
+    required this.group,
+    required this.onChanged,
+    required this.onOpenActivity,
+  });
+
+  final LotDuplicateGroup group;
+  final VoidCallback onChanged;
+  final Future<void> Function(String activityId) onOpenActivity;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final latest = group.activities.last;
+    final car = [latest.carYear, latest.carMake, latest.carModel]
+        .where((p) => p.isNotEmpty)
+        .join(' ');
+    final job = group.jobLabel.isNotEmpty ? group.jobLabel : latest.label;
+    final locale = dateLocaleOf(context);
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.md),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.paper,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        border: Border.all(color: AppColors.rule),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            [job, if (car.isNotEmpty) car].join(' · '),
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: AppColors.ink,
+            ),
+          ),
+          Text(
+            l10n.lotVinTail(lotVinTail(group.vinKey)),
+            style: const TextStyle(fontSize: 12, color: AppColors.muted),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            group.sameCustomer
+                ? l10n.lotDuplicateSameCustomer
+                : l10n.lotDuplicateDifferentCustomers,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: group.sameCustomer ? AppColors.errorRed : AppColors.warn,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          for (final activity in group.activities)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.xs),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: InkWell(
+                      onTap: () => onOpenActivity(activity.id),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            [
+                              activity.trackingCode,
+                              if (activity.activityDate != null)
+                                displayDate(
+                                    activity.activityDate!.toLocal(), locale),
+                            ].where((p) => p.isNotEmpty).join(' · '),
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.ink,
+                            ),
+                          ),
+                          Text(
+                            [activity.customerName, activity.customerPhone]
+                                .where((p) => p.isNotEmpty)
+                                .join(' · '),
+                            style: const TextStyle(
+                                fontSize: 12, color: AppColors.muted),
+                          ),
+                          const SizedBox(height: 2),
+                          Row(
+                            children: [
+                              Text(
+                                formatLotCents(activity.feeCents),
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.ink,
+                                ),
+                              ),
+                              const SizedBox(width: AppSpacing.sm),
+                              _StatusPill(activity: activity),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  TextButton.icon(
+                    style: TextButton.styleFrom(
+                        foregroundColor: AppColors.errorRed),
+                    onPressed: () => showLotSheet(
+                      context,
+                      _VoidSheet(
+                        callable: 'voidLotActivity',
+                        idKey: 'activityId',
+                        id: activity.id,
+                        onDone: onChanged,
+                      ),
+                    ),
+                    icon: const Icon(Icons.block_outlined, size: 16),
+                    label: Text(l10n.lotVoid),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 /// A segmented control whose thumb is driven by a spring rather than a fixed
 /// curve: a tap mid-flight re-targets from where the thumb actually is, at the
 /// speed it is already moving, instead of restarting from the logical value.
@@ -1348,6 +1728,9 @@ class _ActivityPanel extends StatelessWidget {
     required this.onTypeFilter,
     required this.onSearch,
     required this.onRecorded,
+    required this.duplicateCount,
+    required this.onOpenDuplicates,
+    required this.onOpenActivity,
   });
 
   final String businessId;
@@ -1375,6 +1758,13 @@ class _ActivityPanel extends StatelessWidget {
   final ValueChanged<String> onTypeFilter;
   final ValueChanged<String> onSearch;
   final VoidCallback onRecorded;
+
+  /// How many car + job groups the server lists as possible duplicates.
+  final int duplicateCount;
+  final VoidCallback onOpenDuplicates;
+
+  /// Opens an activity by id (a duplicate refusal's "Open it").
+  final Future<void> Function(String activityId) onOpenActivity;
 
   @override
   Widget build(BuildContext context) {
@@ -1419,6 +1809,14 @@ class _ActivityPanel extends StatelessWidget {
         ],
       ),
       const SizedBox(height: AppSpacing.md),
+      if (duplicateCount > 0) ...[
+        _DuplicatesBanner(
+          title: l10n.lotDuplicatesBanner(duplicateCount),
+          note: l10n.lotDuplicatesBannerNote,
+          onTap: onOpenDuplicates,
+        ),
+        const SizedBox(height: AppSpacing.md),
+      ],
       // Date range, then the owed/collected money filter.
       _ActivityRangeBar(
         range: range,
@@ -1492,6 +1890,7 @@ class _ActivityPanel extends StatelessWidget {
                   knownCars: knownCars,
                   businessId: businessId,
                   onChanged: onRecorded,
+                  onOpenActivity: onOpenActivity,
                 ),
               ),
             );
@@ -1513,6 +1912,7 @@ class _ActivityPanel extends StatelessWidget {
                 customers: customers,
                 knownCars: knownCars,
                 onSaved: onRecorded,
+                onOpenActivity: onOpenActivity,
               ),
             ),
           ),
@@ -1896,6 +2296,7 @@ class _ActivityFormSheet extends StatefulWidget {
     required this.customers,
     required this.knownCars,
     required this.onSaved,
+    required this.onOpenActivity,
     this.existing,
   });
 
@@ -1905,6 +2306,9 @@ class _ActivityFormSheet extends StatefulWidget {
   final List<LotCustomer> customers;
   final List<LotKnownCar> knownCars;
   final VoidCallback onSaved;
+
+  /// Opens a recorded activity: the one a duplicate refusal names.
+  final Future<void> Function(String activityId) onOpenActivity;
   final LotActivity? existing;
 
   @override
@@ -1934,6 +2338,9 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
   bool _busy = false;
   Set<String> _errors = {};
   List<LotCustomer> _suggestions = const [];
+
+  /// The VIN duplicate rule's refusal: the record this one would repeat.
+  LotVinJobExisting? _duplicate;
 
   final VinDecoderService _vinDecoder = NhtsaVinDecoderService();
   String _vinHint = '';
@@ -2141,7 +2548,34 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
     if (picked != null && mounted) setState(() => _date = picked);
   }
 
-  Future<void> _submit() async {
+  /// What this job is called, for the duplicate rule's notices.
+  String get _jobName => _isCustom
+      ? _customLabel.text.trim()
+      : (_type?.label ?? widget.existing?.label ?? '');
+
+  String _dateText(DateTime? date) =>
+      date == null ? '' : displayDate(date.toLocal(), dateLocaleOf(context));
+
+  /// "This car already had a Dispatch on Oct 1, 2026 for Fatou (LA-1). Record
+  /// another for this customer?"
+  String _repeatQuestion(AppLocalizations l10n, List<LotVinJobExisting> rows) {
+    final items = rows
+        .map((row) => l10n.lotRepeatConfirmItem(
+              _dateText(row.activityDate),
+              row.customerName,
+              row.trackingCode,
+            ))
+        .join(', ');
+    return l10n.lotRepeatConfirmBody(
+        lotJobArticle(_jobName), _jobName, items);
+  }
+
+  Future<void> _openDuplicate(String activityId) async {
+    Navigator.of(context).pop();
+    await widget.onOpenActivity(activityId);
+  }
+
+  Future<void> _submit({bool confirmRepeat = false}) async {
     final l10n = AppLocalizations.of(context)!;
     final draft = LotActivityDraft(
       activityTypeId: _typeId ?? '',
@@ -2170,7 +2604,11 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
       return;
     }
 
-    setState(() => _busy = true);
+    setState(() {
+      _busy = true;
+      _duplicate = null;
+    });
+    List<LotVinJobExisting>? repeatOf;
     final payload = <String, dynamic>{
       'businessId': widget.businessId,
       'activityTypeId': _typeId,
@@ -2204,15 +2642,21 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
     try {
       final functions = FirebaseFunctions.instance;
       Object? data;
+      // The VIN duplicate rule: a repeat for another customer is sent
+      // again with `confirmRepeat` once someone says yes.
       if (_editing) {
         final result = await functions.httpsCallable('updateLotActivity').call<Object?>({
           'activityId': widget.existing!.id,
           'changes': payload,
+          if (confirmRepeat) 'confirmRepeat': true,
         });
         data = result.data;
       } else {
         final result =
-            await functions.httpsCallable('createLotActivity').call<Object?>(payload);
+            await functions.httpsCallable('createLotActivity').call<Object?>({
+          ...payload,
+          if (confirmRepeat) 'confirmRepeat': true,
+        });
         data = result.data;
       }
       if (!mounted) return;
@@ -2237,16 +2681,41 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
       );
     } on FirebaseFunctionsException catch (error) {
       if (!mounted) return;
-      AppHaptics.refuse();
-      showErrorSnackBar(context, error.message ?? l10n.lotCouldNotSave);
+      final refusal = lotVinJobRefusalFrom(error.details);
+      if (refusal != null &&
+          refusal.kind == LotVinJobRefusalKind.duplicate &&
+          refusal.existing.isNotEmpty) {
+        // The same car, job and customer: refused, with the record it
+        // repeats one tap away.
+        AppHaptics.refuse();
+        setState(() => _duplicate = refusal.existing.first);
+      } else if (refusal != null &&
+          refusal.kind == LotVinJobRefusalKind.repeat) {
+        repeatOf = refusal.existing;
+      } else {
+        AppHaptics.refuse();
+        showErrorSnackBar(context, error.message ?? l10n.lotCouldNotSave);
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+    final repeats = repeatOf;
+    if (repeats != null && mounted) {
+      final again = await confirmMajorAction(
+        context,
+        title: l10n.lotRepeatConfirmTitle,
+        message: _repeatQuestion(l10n, repeats),
+        confirmLabel: l10n.lotRecordAnother,
+        icon: Icons.help_outline,
+      );
+      if (again && mounted) await _submit(confirmRepeat: true);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final duplicate = _duplicate;
     String? errorFor(String code) => _errors.contains(code)
         ? _lotErrorText(
             l10n,
@@ -2271,6 +2740,21 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (duplicate != null) ...[
+            _DuplicateNotice(
+              text: l10n.lotVinDuplicateNotice(
+                lotJobArticle(_jobName),
+                _jobName,
+                duplicate.trackingCode,
+                _dateText(duplicate.activityDate),
+              ),
+              actionLabel: l10n.lotOpenIt,
+              onAction: duplicate.activityId.isEmpty
+                  ? null
+                  : () => _openDuplicate(duplicate.activityId),
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
           LotPickerField(
             label: l10n.lotWhatWasDone,
             value: _isCustom
@@ -2653,6 +3137,7 @@ class _ActivityDetailSheet extends StatelessWidget {
     required this.knownCars,
     required this.businessId,
     required this.onChanged,
+    required this.onOpenActivity,
   });
 
   final LotActivity activity;
@@ -2662,6 +3147,7 @@ class _ActivityDetailSheet extends StatelessWidget {
   final List<LotKnownCar> knownCars;
   final String businessId;
   final VoidCallback onChanged;
+  final Future<void> Function(String activityId) onOpenActivity;
 
   String _staffName(String id) =>
       staff.where((s) => s.id == id).firstOrNull?.name ?? '';
@@ -2825,6 +3311,7 @@ class _ActivityDetailSheet extends StatelessWidget {
                   customers: customers,
                   knownCars: knownCars,
                   onSaved: onChanged,
+                  onOpenActivity: onOpenActivity,
                   existing: activity,
                 ),
               ),

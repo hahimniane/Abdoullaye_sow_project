@@ -4822,6 +4822,17 @@ Object.assign(TEXT_TRANSLATIONS, {
     "Elle reste dans le registre (barrée) et sort des totaux — elle n’est jamais supprimée. Les autres membres voient qui l’a invalidée et pourquoi.",
   "Reason (optional)": "Motif (facultatif)",
   "Void entry": "Invalider l’entrée",
+  // The VIN duplicate rule (lot-vin-duplicates.ts). The sentences that carry
+  // a job, a code or a date are built in the page's language there.
+  "Possible duplicates": "Doublons possibles",
+  "The same car with the same job more than once. Void the one entered by mistake — it stays on the record, struck through.":
+    "La même voiture avec le même travail plus d’une fois. Invalidez celle saisie par erreur — elle reste dans le registre, barrée.",
+  "Same customer — likely entered twice": "Même client — probablement saisi deux fois",
+  "Different customers — may be a resale; void only if entered by mistake":
+    "Clients différents — peut-être une revente ; n’invalidez que si c’est une erreur de saisie",
+  "Different customers": "Clients différents",
+  "Open it": "L’ouvrir",
+  "That entry could not be opened.": "Impossible d’ouvrir cette entrée.",
   "Change history": "Historique des modifications",
   "Every edit and void on this entry, most recent first.":
     "Chaque modification et invalidation de cette entrée, la plus récente en premier.",
@@ -6481,6 +6492,13 @@ Object.assign(TEXT_TRANSLATIONS, {
   // Sign in with your phone (console-router.tsx, phone-sign-in.tsx).
   "Sign in with your phone": "Se connecter avec son téléphone",
   "Use email instead": "Se connecter avec un courriel",
+  // Scan to load refusals (container-manifest.ts).
+  "That is not something loading can do.": "Ce n’est pas une action possible pendant le chargement.",
+  "That is not a package code.": "Ce n’est pas un code de colis.",
+  "This scan could not be sent. Scan the label again.": "Ce scan n’a pas pu être envoyé. Scannez l’étiquette à nouveau.",
+  "No package of yours has that code.": "Aucun de vos colis n’a ce code.",
+  "This package was already delivered.": "Ce colis a déjà été livré.",
+  "This package is on another container.": "Ce colis est sur un autre conteneur.",
   "For staff who were invited by phone. Owners sign in with their email and password.": "Pour le personnel invité par téléphone. Les propriétaires se connectent avec leur courriel et leur mot de passe.",
   "We’ll send a 6-digit code to your phone on WhatsApp.":
     "Nous enverrons un code à 6 chiffres sur WhatsApp à votre téléphone.",

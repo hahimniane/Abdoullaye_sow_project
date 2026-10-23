@@ -966,14 +966,19 @@ test("a failed save says so inside the modal, not behind it", () => {
   assert.match(panel, /onError\?: \(message: string\) => void/);
   assert.match(panel, /onError\?\.\(message\)/);
 
-  // The two lot-ledger saves that run from a modal use it.
+  // The type save, run from a modal, uses it.
   const saves = panel.match(/await runPanelAction\([\s\S]*?\}, setDraftError\);/g) ?? [];
-  assert.ok(
-    saves.length >= 2,
-    "the activity save and the type save should both route their failure " +
-    "into the modal's own error line");
-  assert.ok(saves.some((s) => /createLotActivity/.test(s)));
   assert.ok(saves.some((s) => /upsertLotActivityType/.test(s)));
+
+  // The activity save handles its own failure (the VIN duplicate rule
+  // answers some refusals with a notice or a question instead), and any
+  // other failure still lands in the modal's own error line.
+  const activitySave = panel.slice(
+    panel.indexOf("async function saveActivity("),
+    panel.indexOf("async function openExistingActivity("),
+  );
+  assert.match(activitySave, /createLotActivity/);
+  assert.match(activitySave, /\} catch \(error\) \{[\s\S]*?setDraftError\(message\);[\s\S]*?\} finally \{\s*setBusy\(false\);/);
 });
 
 

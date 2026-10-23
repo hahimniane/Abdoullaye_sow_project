@@ -461,3 +461,25 @@ test("the owner's Check bank limit notice opens Settings on the bank card", () =
   const consoleSource = readFileSync(new URL("../components/business-console.tsx", import.meta.url), "utf8");
   assert.match(consoleSource, /target\.panelView === "bank"/);
 });
+
+test("a lot ledger repeat alert opens the ledger on that activity", () => {
+  const data = {
+    type: "lot_activity_repeat",
+    businessId: "biz-1",
+    activityId: "act-9",
+    relatedId: "act-9",
+    relatedCollection: "lotActivities",
+    trackingCode: "LA-K7M4P2",
+  };
+  assert.deepEqual(businessTargetForNotification(data), {tab: "ledger", focusId: "act-9"});
+  assert.deepEqual(focusFromNotification(data), {collection: "lotActivities", id: "act-9"});
+  // An older payload with only the activity id still lands on it.
+  assert.deepEqual(
+    businessTargetForNotification({type: "lot_activity_repeat", activityId: "act-3"}),
+    {tab: "ledger", focusId: "act-3"},
+  );
+  const business = readFileSync("src/components/business-console.tsx", "utf8");
+  assert.match(business, /<LotLedgerPanel[\s\S]{0,200}focusRecordId=\{notificationFocusId\}/);
+  const panels = readFileSync("src/components/business/operations-panels.tsx", "utf8");
+  assert.match(panels, /void openExistingActivity\(focusRecordId\)/);
+});

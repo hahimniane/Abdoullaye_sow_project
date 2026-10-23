@@ -675,6 +675,12 @@ service cloud.firestore {
       allow read: if lotLedgerRead(resource.data.businessId);
       allow write: if false;
     }
+    // The VIN duplicate rule's locks (functions lot_ledger.js
+    // lotVinJobLockId): one active activity per car, job and customer, so a
+    // double tap cannot record it twice. The server's alone.
+    match /lotVinJobLocks/{lockId} {
+      allow read, write: if false;
+    }
     // Containers the business loads itself, and what went in them. Read by
     // the business's managers; every write goes through the container
     // callables as admin, so a client cannot ship a box or rewrite what was

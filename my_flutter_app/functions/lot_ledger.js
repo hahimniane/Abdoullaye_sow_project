@@ -16,6 +16,8 @@
  * a later rename does not silently rewrite last quarter's entries.
  */
 
+const crypto = require("node:crypto");
+
 const LOT_ACTIVITY_PAYMENT_METHODS = Object.freeze([
   "payment_link",
   "direct",
@@ -232,7 +234,9 @@ function lotActivityRecord(input, opts) {
     carMake: text(input.carMake, 80),
     carModel: text(input.carModel, 80),
     carYear: text(input.carYear, 8),
-    vinNumber: text(input.vinNumber, MAX_VIN).toUpperCase(),
+    // Stored as its key (upper case, no spaces) so the duplicate rule's
+    // same-VIN lookup is one equality query.
+    vinNumber: lotVinKey(text(input.vinNumber, 40)).slice(0, MAX_VIN),
     auctionHouse: normalizeAuctionHouse(input.auctionHouse),
     paymentMethod: method,
     receivedVia: direct ? normalizeReceivedVia(input.receivedVia) : "",
@@ -566,6 +570,386 @@ function validateLotExpenseLine(input) {
   return errors;
 }
 
+// -------------------------------------------------------------------------
+// The VIN duplicate rule (owner decision 2026-10-22).
+//
+// One car, one job, one customer: an active activity with the same VIN key,
+// the same job key and the same customer is a mistake (a double tap, or the
+// same job typed twice) and is refused outright. The same car and job for a
+// DIFFERENT customer may be real - the car was sold on and the new owner had
+// it done again - so it is allowed once someone confirms it, and the owner
+// is told. Activities with no VIN are never checked. "Active" is what
+// voidLotActivity leaves alive: `voided !== true` (a voided unpaid link also
+// turns `cancelled`, but never without `voided`).
+// -------------------------------------------------------------------------
+
+/**
+ * @param {*} value A VIN as typed or stored.
+ * @return {string} Upper case with every space removed ("" for none).
+ */
+function lotVinKey(value) {
+  return String(value ?? "").toUpperCase().replace(/\s+/g, "");
+}
+
+/**
+ * Which job an activity is: its type, or for a one-off what was typed.
+ *
+ * @param {object} activity activityTypeId / customLabel.
+ * @return {string} The job key, "" when there is none.
+ */
+function lotJobKey(activity) {
+  const row = activity && typeof activity === "object" ? activity : {};
+  const typeId = text(row.activityTypeId, MAX_LABEL);
+  if (!typeId) return "";
+  if (typeId !== LOT_CUSTOM_ACTIVITY_ID) return typeId;
+  const label = text(row.customLabel, MAX_LABEL).toLowerCase();
+  return label ? `${LOT_CUSTOM_ACTIVITY_ID}:${label}` : "";
+}
+
+/**
+ * @param {*} value A phone number as typed.
+ * @return {string} Its digits.
+ */
+function lotPhoneDigits(value) {
+  return String(value ?? "").replace(/\D+/g, "");
+}
+
+/**
+ * @param {*} value A name as typed.
+ * @return {string} Lower case with every space removed.
+ */
+function lotNameKey(value) {
+  return String(value ?? "").toLowerCase().replace(/\s+/g, "");
+}
+
+/**
+ * Whether two activities are for the same customer. When both carry a
+ * phone, the phone decides (digits only; the last 10 when both have 10 or
+ * more, so "+1 (201) 555-1234" is "2015551234"); otherwise the name does,
+ * case- and space-insensitive. Two people who share a name but not a phone
+ * stay two people.
+ *
+ * @param {object} a customerName / customerPhone.
+ * @param {object} b customerName / customerPhone.
+ * @return {boolean} True for the same customer.
+ */
+function lotSameCustomer(a, b) {
+  const pa = lotPhoneDigits(a?.customerPhone);
+  const pb = lotPhoneDigits(b?.customerPhone);
+  if (pa && pb) {
+    return pa.length >= 10 && pb.length >= 10 ?
+      pa.slice(-10) === pb.slice(-10) : pa === pb;
+  }
+  const na = lotNameKey(a?.customerName);
+  return Boolean(na) && na === lotNameKey(b?.customerName);
+}
+
+/**
+ * The customer half of a lock id: the phone when there is one (its last 10
+ * digits from 10 on), else the name. Two records with the same key are
+ * always the same customer by lotSameCustomer; the converse is checked by
+ * the same-VIN query, not the lock.
+ *
+ * @param {object} activity customerName / customerPhone.
+ * @return {string} "p:<digits>", "n:<name>", or "".
+ */
+function lotCustomerMatchKey(activity) {
+  const phone = lotPhoneDigits(activity?.customerPhone);
+  if (phone) return `p:${phone.length >= 10 ? phone.slice(-10) : phone}`;
+  const name = lotNameKey(activity?.customerName);
+  return name ? `n:${name}` : "";
+}
+
+/**
+ * @param {object} row A stored activity.
+ * @return {boolean} True unless it was voided.
+ */
+function lotActivityActive(row) {
+  return Boolean(row && typeof row === "object") && row.voided !== true;
+}
+
+/**
+ * @param {string} value Any text.
+ * @return {string} 16 hex characters of its SHA-256.
+ */
+function lotShortHash(value) {
+  return crypto.createHash("sha256").update(String(value)).digest("hex")
+      .slice(0, 16);
+}
+
+/**
+ * The lock document that makes the "same customer" refusal race-safe:
+ * `lotVinJobLocks/{businessId}__{vin}__{job}__{customer}`. The job and the
+ * customer are hashed - a one-off's label and a name are free text, and a
+ * document id cannot hold "/".
+ *
+ * @param {string} businessId The business.
+ * @param {object} activity The activity (as stored or about to be).
+ * @return {string} The lock id, "" when the activity is never checked.
+ */
+function lotVinJobLockId(businessId, activity) {
+  const biz = text(businessId, MAX_LABEL);
+  const vinKey = lotVinKey(activity?.vinNumber);
+  const jobKey = lotJobKey(activity);
+  const customerKey = lotCustomerMatchKey(activity);
+  if (!biz || !vinKey || !jobKey || !customerKey) return "";
+  const vin = vinKey.replace(/[^A-Z0-9]/g, "_").slice(0, 40);
+  return `${biz}__${vin}__${lotShortHash(jobKey)}__${
+    lotShortHash(customerKey)}`;
+}
+
+/**
+ * @param {object} activity The activity.
+ * @return {string} "vinKey|jobKey|customerKey": what the rule depends on.
+ */
+function lotVinJobIdentity(activity) {
+  return [lotVinKey(activity?.vinNumber), lotJobKey(activity),
+    lotCustomerMatchKey(activity)].join("|");
+}
+
+/**
+ * When an activity happened, in milliseconds. Reads a Firestore Timestamp,
+ * a Date, an ISO string or a number.
+ *
+ * @param {*} value activityDate as stored.
+ * @return {number} Milliseconds, or 0 when unknown.
+ */
+function lotDateMs(value) {
+  if (!value) return 0;
+  if (typeof value.toMillis === "function") return value.toMillis();
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  const parsed = new Date(String(value)).getTime();
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+/**
+ * @param {object} a A stored activity.
+ * @param {object} b Another.
+ * @return {number} Oldest first; ties by id, so the order is stable.
+ */
+function byLotActivityDate(a, b) {
+  const d = lotDateMs(a?.activityDate) - lotDateMs(b?.activityDate);
+  if (d !== 0) return d;
+  const x = String(a?.id ?? "");
+  const y = String(b?.id ?? "");
+  return x < y ? -1 : x > y ? 1 : 0;
+}
+
+/**
+ * The candidate against the business's activities that share its VIN.
+ *
+ * @param {object} candidate The activity being created or edited.
+ * @param {object[]} rows Stored activities (with `id`).
+ * @param {{excludeId: (string|undefined)}} [opts] The activity itself, on
+ *   an edit.
+ * @return {{duplicate: ?object, repeats: object[]}} `duplicate`: an active
+ *   one for the same customer (refused); `repeats`: active ones for other
+ *   customers (allowed once confirmed), oldest first.
+ */
+function lotVinJobConflicts(candidate, rows, opts = {}) {
+  const vinKey = lotVinKey(candidate?.vinNumber);
+  const jobKey = lotJobKey(candidate);
+  if (!vinKey || !jobKey) return {duplicate: null, repeats: []};
+  const excludeId = text(opts.excludeId, MAX_LABEL);
+  const seen = new Set();
+  const same = [];
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const id = String(row?.id ?? "");
+    if (!lotActivityActive(row) || (excludeId && id === excludeId)) continue;
+    if (seen.has(id)) continue;
+    if (lotVinKey(row.vinNumber) !== vinKey) continue;
+    if (lotJobKey(row) !== jobKey) continue;
+    seen.add(id);
+    same.push(row);
+  }
+  same.sort(byLotActivityDate);
+  const duplicate = same.find((row) => lotSameCustomer(candidate, row)) ||
+    null;
+  return {duplicate, repeats: duplicate ? [] : same};
+}
+
+/**
+ * What a record is called in a list or an alert: the type's label, or what
+ * was typed for a one-off.
+ *
+ * @param {object} activity The activity.
+ * @return {string} The job's name ("" when it has none).
+ */
+function lotJobLabel(activity) {
+  const row = activity && typeof activity === "object" ? activity : {};
+  const custom = text(row.activityTypeId, MAX_LABEL) === LOT_CUSTOM_ACTIVITY_ID;
+  const typeLabel = text(row.activityTypeLabel, MAX_LABEL);
+  const customLabel = text(row.customLabel, MAX_LABEL);
+  return custom ? customLabel || typeLabel : typeLabel || customLabel;
+}
+
+/**
+ * The business's possible duplicates: its active activities with a VIN,
+ * grouped by VIN key + job key, every group of two or more. A group is
+ * `sameCustomer` when any two of its records are for the same customer -
+ * likely a mistake; otherwise every record is a different customer, which
+ * may be a resale. Mistakes first, then the most recent group first.
+ *
+ * @param {object[]} rows Stored activities (with `id`).
+ * @return {object[]} [{key, vinKey, jobKey, jobLabel, sameCustomer,
+ *   activities}], each group's activities oldest first.
+ */
+function lotVinDuplicateGroups(rows) {
+  const groups = new Map();
+  for (const row of Array.isArray(rows) ? rows : []) {
+    if (!lotActivityActive(row)) continue;
+    const vinKey = lotVinKey(row.vinNumber);
+    const jobKey = lotJobKey(row);
+    if (!vinKey || !jobKey) continue;
+    const key = `${vinKey}|${jobKey}`;
+    if (!groups.has(key)) groups.set(key, {key, vinKey, jobKey, members: []});
+    groups.get(key).members.push(row);
+  }
+  const out = [];
+  for (const group of groups.values()) {
+    if (group.members.length < 2) continue;
+    const members = [...group.members].sort(byLotActivityDate);
+    let sameCustomer = false;
+    for (let i = 0; i < members.length && !sameCustomer; i++) {
+      for (let j = i + 1; j < members.length; j++) {
+        if (lotSameCustomer(members[i], members[j])) {
+          sameCustomer = true;
+          break;
+        }
+      }
+    }
+    out.push({
+      key: group.key,
+      vinKey: group.vinKey,
+      jobKey: group.jobKey,
+      jobLabel: lotJobLabel(members[members.length - 1]),
+      sameCustomer,
+      activities: members,
+      latestMs: lotDateMs(members[members.length - 1].activityDate),
+    });
+  }
+  out.sort((a, b) => (a.sameCustomer === b.sameCustomer ?
+    b.latestMs - a.latestMs || (a.key < b.key ? -1 : 1) :
+    a.sameCustomer ? -1 : 1));
+  return out.map(({latestMs, ...group}) => group);
+}
+
+/** The fields a duplicate list reads (and the only ones the read selects). */
+const LOT_DUPLICATE_FIELDS = Object.freeze([
+  "activityTypeId", "activityTypeLabel", "customLabel", "vinNumber",
+  "customerName", "customerPhone", "voided", "trackingCode", "activityDate",
+  "feeCents", "amountPaidCents", "paymentStatus", "paymentMethod",
+  "carYear", "carMake", "carModel",
+]);
+
+/**
+ * One record of a duplicate group, as a callable answers it: plain JSON,
+ * the activity's own field names, the date in milliseconds.
+ *
+ * @param {object} row A stored activity (with `id`).
+ * @return {object} The record.
+ */
+function lotDuplicateMember(row) {
+  return {
+    id: String(row.id ?? ""),
+    trackingCode: text(row.trackingCode, 40),
+    activityDate: lotDateMs(row.activityDate) || null,
+    activityTypeId: text(row.activityTypeId, MAX_LABEL),
+    activityTypeLabel: text(row.activityTypeLabel, MAX_LABEL),
+    customLabel: text(row.customLabel, MAX_LABEL),
+    customerName: text(row.customerName),
+    customerPhone: text(row.customerPhone, 40),
+    vinNumber: lotVinKey(row.vinNumber),
+    carYear: text(row.carYear, 8),
+    carMake: text(row.carMake, 80),
+    carModel: text(row.carModel, 80),
+    feeCents: Math.max(0, intCents(row.feeCents) || 0),
+    amountPaidCents: Math.max(0, intCents(row.amountPaidCents) || 0),
+    paymentStatus: text(row.paymentStatus, 40),
+    paymentMethod: text(row.paymentMethod, 40),
+  };
+}
+
+/**
+ * lotVinDuplicateGroups, as the clients receive it.
+ *
+ * @param {object[]} rows Stored activities (with `id`).
+ * @return {object[]} The groups, each record as lotDuplicateMember.
+ */
+function lotVinDuplicateSummary(rows) {
+  return lotVinDuplicateGroups(rows).map((group) => ({
+    ...group,
+    activities: group.activities.map(lotDuplicateMember),
+  }));
+}
+
+/**
+ * One earlier record, as a refusal's `details` name it.
+ *
+ * @param {object} row A stored activity (with `id`).
+ * @return {object} {activityId, trackingCode, activityDate, customerName}.
+ */
+function lotVinJobExisting(row) {
+  const ms = lotDateMs(row?.activityDate);
+  return {
+    activityId: String(row?.id ?? ""),
+    trackingCode: text(row?.trackingCode, 40),
+    activityDate: ms ? new Date(ms).toISOString() : "",
+    customerName: text(row?.customerName),
+  };
+}
+
+/**
+ * The car an alert names: "2018 Toyota Camry" / "Toyota Camry 2018", or
+ * "a car" / "une voiture" when the record names none.
+ *
+ * @param {object} activity The activity.
+ * @param {"en"|"fr"} language The language.
+ * @return {string} The car.
+ */
+function lotRepeatCarName(activity, language) {
+  const year = text(activity?.carYear, 8);
+  const name = [text(activity?.carMake, 80), text(activity?.carModel, 80)]
+      .filter(Boolean).join(" ");
+  if (language === "fr") {
+    return [name, year].filter(Boolean).join(" ") || "une voiture";
+  }
+  return [year, name].filter(Boolean).join(" ") || "a car";
+}
+
+/**
+ * The words of the owner's alert for a confirmed repeat: "A second
+ * Dispatch was recorded for 2018 Toyota Camry · VIN …12345678 (LA-K7M4P2)
+ * by Mamadou".
+ *
+ * @param {object} activity The new activity (as stored).
+ * @param {string} actorName The first name of who recorded it.
+ * @param {"en"|"fr"} language The owner's language.
+ * @return {{title: string, body: string}} The copy.
+ */
+function lotRepeatAlertCopy(activity, actorName, language) {
+  const fr = language === "fr";
+  const job = lotJobLabel(activity) || (fr ? "travail" : "job");
+  const vin = lotVinKey(activity?.vinNumber);
+  const code = text(activity?.trackingCode, 40);
+  const tail = `${vin ? ` · VIN …${vin.slice(-8)}` : ""}${
+    code ? ` (${code})` : ""}`;
+  const car = lotRepeatCarName(activity, fr ? "fr" : "en");
+  const who = text(actorName, 120) || (fr ? "quelqu'un" : "someone");
+  if (fr) {
+    return {
+      title: `Deuxième ${job} enregistré`,
+      body: `Un deuxième ${job} a été enregistré pour ${car}${tail} ` +
+        `par ${who}`,
+    };
+  }
+  return {
+    title: `Second ${job} recorded`,
+    body: `A second ${job} was recorded for ${car}${tail} by ${who}`,
+  };
+}
+
 module.exports = {
   LOT_ACTIVITY_PAYMENT_METHODS,
   LOT_CUSTOM_ACTIVITY_ID,
@@ -597,4 +981,20 @@ module.exports = {
   validateLotExpenseEntry,
   lotExpenseEntryRecord,
   validateLotExpenseLine,
+  lotVinKey,
+  lotJobKey,
+  lotPhoneDigits,
+  lotSameCustomer,
+  lotCustomerMatchKey,
+  lotActivityActive,
+  lotVinJobLockId,
+  lotVinJobIdentity,
+  lotVinJobConflicts,
+  lotJobLabel,
+  lotVinDuplicateGroups,
+  LOT_DUPLICATE_FIELDS,
+  lotDuplicateMember,
+  lotVinDuplicateSummary,
+  lotVinJobExisting,
+  lotRepeatAlertCopy,
 };

@@ -536,3 +536,195 @@ describe("the type's vehicle rule reaches the validator", () => {
     }
   });
 });
+
+describe("the VIN duplicate rule (owner decision 2026-10-22)", () => {
+  const {
+    lotVinKey,
+    lotJobKey,
+    lotSameCustomer,
+    lotCustomerMatchKey,
+    lotActivityActive,
+    lotVinJobLockId,
+    lotVinJobIdentity,
+    lotVinJobConflicts,
+    lotVinDuplicateGroups,
+    lotVinDuplicateSummary,
+    lotVinJobExisting,
+    lotRepeatAlertCopy,
+    lotActivityRecord: record,
+  } = require("../lot_ledger");
+  const at = (iso) => ({toMillis: () => Date.parse(iso)});
+  const row = (id, extra = {}) => ({
+    id, activityTypeId: "dispatch", activityTypeLabel: "Dispatch",
+    vinNumber: "1HGCM82633A004352", customerName: "Alimou Barry",
+    customerPhone: "+1 (201) 555-1234", trackingCode: `LA-${id}`,
+    activityDate: at("2026-10-01T12:00:00Z"), ...extra,
+  });
+
+  it("keys the VIN upper case with every space removed", () => {
+    assert.equal(lotVinKey(" 1hg cm8\t2633a 004352 "), "1HGCM82633A004352");
+    assert.equal(lotVinKey(null), "");
+    // The record stores the key, so the same-VIN lookup is one equality.
+    assert.equal(record({vinNumber: "1hg cm82633a004352", paymentMethod:
+      "direct"}, {}).vinNumber, "1HGCM82633A004352");
+  });
+
+  it("keys the job by type, a one-off by its label", () => {
+    assert.equal(lotJobKey({activityTypeId: "dispatch"}), "dispatch");
+    assert.equal(lotJobKey({activityTypeId: "custom",
+      customLabel: "  Key Cutting "}), "custom:key cutting");
+    assert.equal(lotJobKey({activityTypeId: "custom", customLabel: ""}), "");
+    assert.equal(lotJobKey({}), "");
+  });
+
+  it("matches a customer by phone digits, else by name", () => {
+    // Formatting never matters; 10+ digits compare their last 10.
+    assert.ok(lotSameCustomer({customerPhone: "+1 (201) 555-1234"},
+        {customerPhone: "2015551234"}));
+    assert.ok(lotSameCustomer({customerPhone: "12015551234"},
+        {customerPhone: "201-555-1234"}));
+    // Short numbers compare whole.
+    assert.ok(lotSameCustomer({customerPhone: "555 1234"},
+        {customerPhone: "5551234"}));
+    assert.equal(lotSameCustomer({customerPhone: "5551234"},
+        {customerPhone: "2015551234"}), false);
+    // Two phones that differ are two people, whatever the names say.
+    assert.equal(lotSameCustomer(
+        {customerName: "Alimou", customerPhone: "2015551234"},
+        {customerName: "Alimou", customerPhone: "2015559999"}), false);
+    // No phone on one side: the name decides, case and spaces ignored.
+    assert.ok(lotSameCustomer({customerName: "Alimou  Barry"},
+        {customerName: "alimou barry", customerPhone: "2015551234"}));
+    assert.ok(lotSameCustomer({customerName: "Abdoul Aye"},
+        {customerName: "ABDOULAYE"}));
+    assert.equal(lotSameCustomer({customerName: "Alimou"},
+        {customerName: "Fatou"}), false);
+    assert.equal(lotSameCustomer({}, {}), false);
+  });
+
+  it("gives the lock a customer key that follows the match", () => {
+    assert.equal(lotCustomerMatchKey({customerPhone: "+1 201 555 1234"}),
+        "p:2015551234");
+    assert.equal(lotCustomerMatchKey({customerName: "Alimou Barry"}),
+        "n:alimoubarry");
+    assert.equal(lotCustomerMatchKey({}), "");
+  });
+
+  it("counts only what voidLotActivity leaves alive", () => {
+    assert.equal(lotActivityActive(row("a")), true);
+    assert.equal(lotActivityActive(row("a", {voided: true})), false);
+    assert.equal(lotActivityActive(null), false);
+  });
+
+  it("names one lock per business, car, job and customer", () => {
+    const a = lotVinJobLockId("biz", row("a"));
+    assert.match(a, /^biz__1HGCM82633A004352__[0-9a-f]{16}__[0-9a-f]{16}$/);
+    // The same customer, typed differently: the same lock.
+    assert.equal(lotVinJobLockId("biz", row("b", {
+      customerPhone: "201.555.1234", vinNumber: "1hgcm82633a004352"})), a);
+    assert.notEqual(lotVinJobLockId("other", row("a")), a);
+    assert.notEqual(lotVinJobLockId("biz", row("a", {
+      activityTypeId: "storage"})), a);
+    assert.notEqual(lotVinJobLockId("biz", row("a", {
+      customerPhone: "2015559999"})), a);
+    // A one-off's label never reaches the id raw ("/" would break it).
+    assert.doesNotMatch(lotVinJobLockId("biz", row("a", {
+      activityTypeId: "custom", customLabel: "tow/fix"})), /\//);
+    // No VIN, no lock - and no check.
+    assert.equal(lotVinJobLockId("biz", row("a", {vinNumber: ""})), "");
+    assert.equal(lotVinJobIdentity(row("a")),
+        lotVinJobIdentity(row("b", {customerPhone: "2015551234"})));
+  });
+
+  it("refuses the same customer, asks about another, ignores the rest",
+      () => {
+        const rows = [
+          row("old", {activityDate: at("2026-09-01T12:00:00Z")}),
+          row("voided", {voided: true, customerPhone: "2015550000"}),
+          row("other-job", {activityTypeId: "storage"}),
+          row("other-car", {vinNumber: "JH4KA8260MC000000"}),
+        ];
+        const same = lotVinJobConflicts(row("new"), rows);
+        assert.equal(same.duplicate.id, "old");
+        assert.deepEqual(same.repeats, []);
+
+        const other = lotVinJobConflicts(row("new", {
+          customerName: "Fatou", customerPhone: "6465550000"}), rows);
+        assert.equal(other.duplicate, null);
+        assert.deepEqual(other.repeats.map((r) => r.id), ["old"]);
+
+        // An edit never conflicts with itself.
+        assert.deepEqual(lotVinJobConflicts(row("old"), rows,
+            {excludeId: "old"}), {duplicate: null, repeats: []});
+        // No VIN: never checked.
+        assert.deepEqual(lotVinJobConflicts(row("new", {vinNumber: " "}),
+            rows), {duplicate: null, repeats: []});
+        // A voided one never counts, even for the same customer.
+        assert.deepEqual(lotVinJobConflicts(row("new"),
+            [row("gone", {voided: true})]), {duplicate: null, repeats: []});
+      });
+
+  it("names the earlier record the way the refusal details carry it", () => {
+    assert.deepEqual(lotVinJobExisting(row("old")), {
+      activityId: "old", trackingCode: "LA-old",
+      activityDate: "2026-10-01T12:00:00.000Z",
+      customerName: "Alimou Barry",
+    });
+  });
+
+  it("groups possible duplicates by car + job, mistakes first", () => {
+    const groups = lotVinDuplicateGroups([
+      // A resale: same car and job, two customers.
+      row("r1", {vinNumber: "JH4KA8260MC000000", customerPhone: "1",
+        activityDate: at("2026-10-10T12:00:00Z")}),
+      row("r2", {vinNumber: "JH4KA8260MC000000", customerPhone: "2",
+        activityDate: at("2026-10-12T12:00:00Z")}),
+      // A mistake: the same customer twice (and a third, voided).
+      row("m1", {activityDate: at("2026-08-01T12:00:00Z")}),
+      row("m2", {customerPhone: "2015551234",
+        activityDate: at("2026-08-02T12:00:00Z")}),
+      row("m3", {voided: true}),
+      // Alone, or not a car: never a group.
+      row("solo", {activityTypeId: "storage"}),
+      row("nocar1", {vinNumber: ""}),
+      row("nocar2", {vinNumber: ""}),
+    ]);
+    assert.deepEqual(groups.map((g) => [g.vinKey, g.jobKey, g.sameCustomer,
+      g.activities.map((a) => a.id)]), [
+      ["1HGCM82633A004352", "dispatch", true, ["m1", "m2"]],
+      ["JH4KA8260MC000000", "dispatch", false, ["r1", "r2"]],
+    ]);
+    assert.equal(groups[0].jobLabel, "Dispatch");
+  });
+
+  it("answers the groups as plain JSON with the date in milliseconds",
+      () => {
+        const [group] = lotVinDuplicateSummary([
+          row("a", {feeCents: 15000, paymentStatus: "succeeded"}),
+          row("b", {feeCents: "2500", vinNumber: "1hgcm82633a 004352"}),
+        ]);
+        assert.equal(group.activities[0].activityDate,
+            Date.parse("2026-10-01T12:00:00Z"));
+        assert.equal(group.activities[0].feeCents, 15000);
+        assert.equal(group.activities[1].feeCents, 2500);
+        assert.equal(group.activities[1].vinNumber, "1HGCM82633A004352");
+        assert.doesNotThrow(() => JSON.stringify(group));
+      });
+
+  it("words the owner's alert in their language", () => {
+    const activity = row("new", {carYear: "2018", carMake: "Toyota",
+      carModel: "Camry"});
+    assert.deepEqual(lotRepeatAlertCopy(activity, "Mamadou", "en"), {
+      title: "Second Dispatch recorded",
+      body: "A second Dispatch was recorded for 2018 Toyota Camry · " +
+        "VIN …3A004352 (LA-new) by Mamadou",
+    });
+    assert.deepEqual(lotRepeatAlertCopy(activity, "Mamadou", "fr"), {
+      title: "Deuxième Dispatch enregistré",
+      body: "Un deuxième Dispatch a été enregistré pour Toyota Camry 2018 · " +
+        "VIN …3A004352 (LA-new) par Mamadou",
+    });
+    assert.match(lotRepeatAlertCopy(row("x"), "", "en").body,
+        /for a car · VIN …3A004352 \(LA-x\) by someone$/);
+  });
+});

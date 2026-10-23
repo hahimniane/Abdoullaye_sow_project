@@ -115,6 +115,7 @@ const TYPE_COLLECTIONS: Record<string, string> = {
   parked_car: "parkedCars",
   container_line: "containerLines",
   inventory_transfer: "inventoryTransfers",
+  lot_activity_repeat: "lotActivities",
 };
 
 function firstText(...values: Array<string | undefined>): string {
@@ -309,6 +310,10 @@ export function businessTargetForNotification(
         panelView: "sales",
         storeId: firstText(data.storeId),
       };
+    // "A second Dispatch was recorded for …" (the lot ledger's VIN rule,
+    // a repeat for another customer confirmed): the ledger, that record open.
+    case "lot_activity_repeat":
+      return {tab: "ledger", focusId: firstText(data.activityId, focusId)};
     // A store transfer (sent, cancelled, differences, reminders): Inventory → Transfers with it open.
     case "inventory_transfer":
       return {tab: "inventory", panelView: "transfers", focusId};

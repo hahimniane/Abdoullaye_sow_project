@@ -484,3 +484,11 @@ Add future project conventions and repeated architectural decisions here.
   (`hasDeliveriesAccess`); any new package surface must hide prices,
   payments, edits, labels and the container page when `restricted` /
   `!canSeeMoney`.
+- Lot ledger VIN duplicate rule (owner, 2026-10-22): the server decides
+  (`functions/lot_ledger.js`, lock docs `lotVinJobLocks` taken in the create
+  transaction, released on void, moved on an edit that changes car/job/
+  customer). Clients only parse `details.reason` and resend a confirmed
+  repeat with `confirmRepeat: true`; "Possible duplicates" comes from
+  `getLotLedgerTotals` `action: 'vinDuplicates'` (every activity), never from
+  the date-windowed list. Reading one activity by id uses
+  `lotActivitiesCollection` (business_activity_queries.dart), not a query.
