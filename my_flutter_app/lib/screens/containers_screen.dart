@@ -1761,7 +1761,10 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
           businessId: widget.businessId,
           container: container,
           liveUpdates: _feed,
+          // Holds the waiting packages too: "Still to load" reads them from
+          // here, as "Add waiting packages" does.
           liveLines: () => _feed.lines,
+          staff: widget.staff,
         ),
       ),
     );

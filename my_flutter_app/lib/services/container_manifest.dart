@@ -1009,11 +1009,23 @@ class ContainerLine {
     this.deliveryUndoneAt,
     this.deliveryUndoneByStaffId = '',
     this.loadScannedPieces = 0,
+    this.containerAssignedAt,
+    this.containerAssignedByStaffId = '',
+    this.containerAssignedVia = '',
   });
 
   final String id;
   final String businessId;
   final String containerId;
+
+  /// Loading lists (docs/WAITING_PACKAGES.md "Loading lists"): when, by
+  /// whom and how the package went onto its current container
+  /// (`containerAssignedVia`: `hand`, `scan` or `move`). Server-written and
+  /// cleared when it leaves the container. Lines put on before these
+  /// existed have none: '' / null ("added earlier").
+  final DateTime? containerAssignedAt;
+  final String containerAssignedByStaffId;
+  final String containerAssignedVia;
 
   /// Scan to load (docs/WAITING_PACKAGES.md "Scan to load"): how many of
   /// its pieces were scanned onto its current container. Server-written,
@@ -1219,6 +1231,9 @@ class ContainerLine {
       deliveryUndoneAt: lotDateOf(d['deliveryUndoneAt']),
       deliveryUndoneByStaffId: _text(d['deliveryUndoneByStaffId'], 128),
       loadScannedPieces: _positiveInt(d['loadScannedPieces']),
+      containerAssignedAt: lotDateOf(d['containerAssignedAt']),
+      containerAssignedByStaffId: _text(d['containerAssignedByStaffId'], 128),
+      containerAssignedVia: _text(d['containerAssignedVia'], 20),
     );
   }
 

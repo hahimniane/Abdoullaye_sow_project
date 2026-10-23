@@ -7,19 +7,26 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import '../l10n/app_localizations.dart';
 import '../services/container_loading.dart';
 import '../services/container_manifest.dart';
+import '../services/lot_ledger.dart' show LotStaff;
 import '../services/package_codes.dart';
 import '../services/waiting_package_service.dart'
     show ContainerCallableCaller, callContainerCallable;
+import '../services/waiting_packages.dart' show unassignLineRequest;
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../utils/action_confirmation.dart';
 import '../utils/app_feedback.dart';
+import '../utils/date_display.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/lot_sheets.dart';
 import '../widgets/scanner_camera_view.dart';
 import 'containers_screen.dart'
-    show ContainerActionButton, showContainerLabelSheet;
+    show
+        ContainerActionButton,
+        containerLineTitle,
+        containerRefusalText,
+        showContainerLabelSheet;
 
 /// The sound and buzz of a scan: [ok] is a light tap and a click, anything
 /// else (refused, not counted, no connection) a vibration. Injected in
@@ -39,9 +46,17 @@ const Color loadBlue = Color(0xFF1D4ED8);
 /// A damaged label is typed. Done loading asks the server what is left
 /// (packages part-way on, never scanned, still waiting) before leaving.
 ///
-/// Every call is `assignContainerLines` with an `action`, through [caller]
-/// (the container callables' caller, so a widget test answers instead of
-/// Firebase). The rules live in `services/container_loading.dart`.
+/// Under the camera, three tabs share one scrolling area (so the scanner
+/// stays usable): Recent scans, **On this container** (filters, search and
+/// Take off) and **Still to load** (the waiting packages going to this
+/// container's country, loaded with a tap). Both lists are built from
+/// [liveLines] - the containers feed the container page already reads, which
+/// holds the waiting packages too - so there is no new Firestore query.
+///
+/// Every scan call is `assignContainerLines` with an `action`, through
+/// [caller] (the container callables' caller, so a widget test answers
+/// instead of Firebase); Take off is `unassignContainerLine` through it too.
+/// The rules live in `services/container_loading.dart`.
 class ContainerLoadingScreen extends StatefulWidget {
   const ContainerLoadingScreen({
     super.key,
@@ -50,6 +65,7 @@ class ContainerLoadingScreen extends StatefulWidget {
     this.caller = callContainerCallable,
     this.liveUpdates,
     this.liveLines,
+    this.staff = const [],
     this.feedback = _defaultLoadFeedback,
     this.callTimeout = const Duration(seconds: 20),
     this.cameraEnabled = true,
@@ -64,6 +80,9 @@ class ContainerLoadingScreen extends StatefulWidget {
   /// the total comes from this phone's answers.
   final Listenable? liveUpdates;
   final List<ContainerLine> Function()? liveLines;
+
+  /// The business's people, to name who added a package.
+  final List<LotStaff> staff;
 
   final LoadFeedback feedback;
 
@@ -80,8 +99,12 @@ class ContainerLoadingScreen extends StatefulWidget {
   State<ContainerLoadingScreen> createState() => _ContainerLoadingScreenState();
 }
 
+/// The tabs under the camera.
+enum _LoadTab { recent, onContainer, stillToLoad }
+
 class _ContainerLoadingScreenState extends State<ContainerLoadingScreen> {
   final _typed = TextEditingController();
+  final _searchField = TextEditingController();
   final _guard = LoadDuplicateGuard();
   MobileScannerController? _camera;
 
@@ -108,6 +131,23 @@ class _ContainerLoadingScreenState extends State<ContainerLoadingScreen> {
   bool _undoing = false;
   bool _summaryBusy = false;
 
+  // The lists. The lines are read once per live update and the rows worked
+  // out once per change of lines, filter or search - never per build.
+  _LoadTab _tab = _LoadTab.recent;
+  LoadListFilter _filter = LoadListFilter.recent;
+  String _query = '';
+  List<ContainerLine> _onLines = const [];
+  List<ContainerLine> _stillLines = const [];
+  List<LoadListItem> _onItems = const [];
+  List<LoadListItem> _stillItems = const [];
+
+  /// The row a tap in Still to load made, by line id: the tile shows how
+  /// that scan went.
+  final Map<String, int> _tapRows = {};
+
+  /// Packages being taken off.
+  final Set<String> _takingOff = {};
+
   String get _containerId => widget.container.id;
 
   @override
@@ -125,6 +165,7 @@ class _ContainerLoadingScreenState extends State<ContainerLoadingScreen> {
     widget.liveUpdates?.removeListener(_onLive);
     _camera?.dispose();
     _typed.dispose();
+    _searchField.dispose();
     super.dispose();
   }
 
@@ -134,6 +175,15 @@ class _ContainerLoadingScreenState extends State<ContainerLoadingScreen> {
     final lines = read();
     _liveTotals = loadTotalsOfLines(lines, _containerId);
     _liveContainerTotals = loadContainerTotalsOfLines(lines, _containerId);
+    _onLines = loadOnContainerLines(lines, _containerId);
+    _stillLines = loadStillToLoadLines(lines, widget.container);
+    _refreshLists();
+  }
+
+  /// Works the two lists' rows out again (lines, filter or search changed).
+  void _refreshLists() {
+    _onItems = loadOnContainerItems(_onLines, _filter, _query);
+    _stillItems = loadStillToLoadItems(_stillLines, _query);
   }
 
   /// Keeps what an answer says about a package and the container.
@@ -408,8 +458,313 @@ class _ContainerLoadingScreenState extends State<ContainerLoadingScreen> {
   }
 
   // -------------------------------------------------------------------------
+  // The lists: Take off, and a tap in Still to load.
+  // -------------------------------------------------------------------------
+
+  void _setFilter(LoadListFilter filter) {
+    if (filter == _filter) return;
+    setState(() {
+      _filter = filter;
+      _refreshLists();
+    });
+  }
+
+  void _setQuery(String query) {
+    setState(() {
+      _query = query;
+      _refreshLists();
+    });
+  }
+
+  void _setTab(_LoadTab tab) {
+    if (tab != _tab) setState(() => _tab = tab);
+  }
+
+  /// A tap in Still to load goes the way a scan of the label does: the same
+  /// request with a fresh scan id, the same buzz, a row in Recent scans.
+  void _loadWaiting(ContainerLine line) {
+    final code = line.trackingCode;
+    if (_modal || code.isEmpty) return;
+    final key = _nextKey++;
+    _tapRows[line.id] = key;
+    // The camera leaves that label alone for the usual window.
+    _guard.accept(code, DateTime.now());
+    unawaited(_scan(code, key: key));
+  }
+
+  /// Take off: confirm, then `unassignContainerLine` - the package goes back
+  /// to waiting with its label and code unchanged. The server refuses it
+  /// once the container is not loading; its words are shown.
+  Future<void> _takeOff(ContainerLine line) async {
+    if (_takingOff.contains(line.id)) return;
+    final l10n = AppLocalizations.of(context)!;
+    final what = line.trackingCode.isNotEmpty
+        ? line.trackingCode
+        : containerLineTitle(l10n, line);
+    var confirmed = false;
+    await _pauseFor(() async {
+      confirmed = await confirmMajorAction(
+        context,
+        title: l10n.ldgTakeOffTitle,
+        message: l10n.ldgTakeOffMessage(what, widget.container.displayName),
+        confirmLabel: l10n.ldgTakeOff,
+        icon: Icons.remove_circle_outline,
+      );
+    });
+    if (!confirmed || !mounted) return;
+    setState(() => _takingOff.add(line.id));
+    try {
+      await widget
+          .caller(
+            'unassignContainerLine',
+            unassignLineRequest(widget.businessId, line.id),
+          )
+          .timeout(widget.callTimeout);
+      if (!mounted) return;
+      // Back to waiting: its label scans as a fresh load again, and none of
+      // its pieces count here any more.
+      _guard.forget(line.trackingCode);
+      setState(() {
+        _latestByLine.remove(line.id);
+        _tapRows.remove(line.id);
+      });
+      widget.feedback(true);
+      showSuccessSnackBar(context, l10n.wpkSentBack);
+    } catch (error) {
+      if (!mounted) return;
+      widget.feedback(false);
+      showErrorSnackBar(context, loadTakeOffErrorText(l10n, error));
+    } finally {
+      if (mounted) setState(() => _takingOff.remove(line.id));
+    }
+  }
+
+  // -------------------------------------------------------------------------
   // Drawing.
   // -------------------------------------------------------------------------
+
+  Widget _recentList(AppLocalizations l10n) {
+    if (_rows.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg,
+          vertical: AppSpacing.sm,
+        ),
+        child: Text(
+          l10n.ldgNoScans,
+          key: const Key('load-no-scans'),
+          style: const TextStyle(
+            fontSize: 13,
+            height: 1.4,
+            color: AppColors.muted,
+          ),
+        ),
+      );
+    }
+    return ListView.builder(
+      key: const Key('load-recent'),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        0,
+        AppSpacing.lg,
+        AppSpacing.lg,
+      ),
+      itemCount: _rows.length,
+      itemBuilder: (context, i) {
+        final row = _rows[i];
+        final canUndo = loadCanUndo(_rows, row);
+        return LoadScanRowTile(
+          key: ValueKey('load-row-${row.key}'),
+          row: row,
+          undoBusy: canUndo && _undoing,
+          onUndo: canUndo && !_undoing ? () => _undo(row) : null,
+          onRetry: loadCanRetry(row) ? () => _retry(row) : null,
+        );
+      },
+    );
+  }
+
+  /// The search box both lists share.
+  Widget _searchBox(AppLocalizations l10n) => Padding(
+    padding: const EdgeInsets.fromLTRB(
+      AppSpacing.lg,
+      AppSpacing.xs,
+      AppSpacing.lg,
+      AppSpacing.xs,
+    ),
+    child: TextField(
+      key: const Key('load-list-search'),
+      controller: _searchField,
+      autocorrect: false,
+      textInputAction: TextInputAction.search,
+      onChanged: _setQuery,
+      decoration: InputDecoration(
+        hintText: l10n.ldgSearchHint,
+        isDense: true,
+        prefixIcon: const Icon(Icons.search, size: 20),
+        suffixIcon: _query.isEmpty
+            ? null
+            : IconButton(
+                key: const Key('load-list-search-clear'),
+                tooltip: MaterialLocalizations.of(context).deleteButtonTooltip,
+                icon: const Icon(Icons.close, size: 18),
+                onPressed: () {
+                  _searchField.clear();
+                  _setQuery('');
+                },
+              ),
+      ),
+    ),
+  );
+
+  Widget _onContainerTab(AppLocalizations l10n) {
+    if (widget.liveLines == null) return const SizedBox.shrink();
+    final locale = dateLocaleOf(context);
+    final canTakeOff = widget.container.isLoading;
+    return Column(
+      key: const Key('load-on-container'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.xs,
+            AppSpacing.lg,
+            0,
+          ),
+          child: Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: 0,
+            children: [
+              for (final f in LoadListFilter.values)
+                ChoiceChip(
+                  key: ValueKey('load-filter-${f.name}'),
+                  label: Text(_filterLabel(l10n, f)),
+                  selected: _filter == f,
+                  visualDensity: VisualDensity.compact,
+                  labelStyle: const TextStyle(fontSize: 12.5),
+                  onSelected: (_) => _setFilter(f),
+                ),
+            ],
+          ),
+        ),
+        _searchBox(l10n),
+        Expanded(
+          child: _onItems.isEmpty
+              ? _ListNote(
+                  key: const Key('load-on-empty'),
+                  text: _onLines.isEmpty
+                      ? l10n.ldgNothingOnContainer
+                      : (_query.trim().isNotEmpty
+                            ? l10n.ldgNoMatches
+                            : (_filter == LoadListFilter.notScanned
+                                  ? l10n.ldgAllScannedHere
+                                  : l10n.ldgNoMatches)),
+                )
+              : ListView.builder(
+                  key: const Key('load-on-list'),
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.lg,
+                    AppSpacing.xs,
+                    AppSpacing.lg,
+                    AppSpacing.lg,
+                  ),
+                  itemCount: _onItems.length,
+                  itemBuilder: (context, i) {
+                    final item = _onItems[i];
+                    if (item is LoadGroupItem) {
+                      return _GroupHeader(
+                        key: ValueKey('load-group-${item.group.key}'),
+                        text: loadOnGroupText(l10n, item.group),
+                      );
+                    }
+                    final line = (item as LoadLineItem).line;
+                    return _OnContainerTile(
+                      key: ValueKey('load-on-${line.id}'),
+                      line: line,
+                      showAdded: _filter == LoadListFilter.recent,
+                      addedText: loadAddedText(
+                        l10n,
+                        line,
+                        widget.staff,
+                        locale,
+                      ),
+                      grouped: _filter == LoadListFilter.byCustomer,
+                      canTakeOff: canTakeOff && loadCanTakeOff(line),
+                      busy: _takingOff.contains(line.id),
+                      onTakeOff: () => _takeOff(line),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _stillToLoadTab(AppLocalizations l10n) {
+    if (widget.liveLines == null) return const SizedBox.shrink();
+    final destination = widget.container.destinationCountryName.isNotEmpty
+        ? widget.container.destinationCountryName
+        : l10n.ldgThisDestination;
+    return Column(
+      key: const Key('load-still'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _searchBox(l10n),
+        Expanded(
+          child: _stillItems.isEmpty
+              ? _ListNote(
+                  key: const Key('load-still-empty'),
+                  text: _stillLines.isEmpty
+                      ? l10n.ldgNothingToLoad(destination)
+                      : l10n.ldgNoMatches,
+                )
+              : ListView.builder(
+                  key: const Key('load-still-list'),
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.lg,
+                    AppSpacing.xs,
+                    AppSpacing.lg,
+                    AppSpacing.lg,
+                  ),
+                  itemCount: _stillItems.length,
+                  itemBuilder: (context, i) {
+                    final item = _stillItems[i];
+                    if (item is LoadGroupItem) {
+                      return _GroupHeader(
+                        key: ValueKey('load-still-group-${item.group.key}'),
+                        text: loadWaitingGroupText(l10n, item.group),
+                      );
+                    }
+                    final line = (item as LoadLineItem).line;
+                    final rowKey = _tapRows[line.id];
+                    final row = rowKey == null
+                        ? null
+                        : _rows.where((r) => r.key == rowKey).firstOrNull;
+                    return _StillTile(
+                      key: ValueKey('load-still-${line.id}'),
+                      line: line,
+                      row: row,
+                      onTap: _modal ? null : () => _loadWaiting(line),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  String _filterLabel(AppLocalizations l10n, LoadListFilter filter) =>
+      switch (filter) {
+        LoadListFilter.recent => l10n.ldgFilterRecent,
+        LoadListFilter.byCustomer => l10n.ldgFilterByCustomer,
+        LoadListFilter.notScanned => l10n.ldgFilterNotScanned,
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -498,6 +853,24 @@ class _ContainerLoadingScreenState extends State<ContainerLoadingScreen> {
                                 fontSize: 12.5,
                                 height: 1.3,
                                 color: AppColors.muted,
+                              ),
+                            ),
+                          if (widget.liveLines != null)
+                            Text(
+                              l10n.ldgStillWaitingFor(
+                                _stillLines.length,
+                                container.destinationCountryName.isNotEmpty
+                                    ? container.destinationCountryName
+                                    : l10n.ldgThisDestination,
+                              ),
+                              key: const Key('load-still-waiting'),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 12.5,
+                                height: 1.3,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.warn,
                               ),
                             ),
                         ],
@@ -624,64 +997,31 @@ class _ContainerLoadingScreenState extends State<ContainerLoadingScreen> {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg + 2,
+              AppSpacing.lg,
               AppSpacing.md,
               AppSpacing.lg,
               AppSpacing.xs,
             ),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                l10n.ldgRecent,
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.3,
-                  color: AppColors.muted,
-                ),
-              ),
+            child: _LoadTabBar(
+              tab: _tab,
+              onTab: _setTab,
+              labels: {
+                _LoadTab.recent: l10n.ldgRecent,
+                _LoadTab.onContainer: widget.liveLines == null
+                    ? l10n.ldgTabOnContainer
+                    : '${l10n.ldgTabOnContainer} (${_onLines.length})',
+                _LoadTab.stillToLoad: widget.liveLines == null
+                    ? l10n.ldgTabStillToLoad
+                    : '${l10n.ldgTabStillToLoad} (${_stillLines.length})',
+              },
             ),
           ),
           Expanded(
-            child: _rows.isEmpty
-                ? Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.lg,
-                      vertical: AppSpacing.sm,
-                    ),
-                    child: Text(
-                      l10n.ldgNoScans,
-                      key: const Key('load-no-scans'),
-                      style: const TextStyle(
-                        fontSize: 13,
-                        height: 1.4,
-                        color: AppColors.muted,
-                      ),
-                    ),
-                  )
-                : ListView.builder(
-                    key: const Key('load-recent'),
-                    keyboardDismissBehavior:
-                        ScrollViewKeyboardDismissBehavior.onDrag,
-                    padding: const EdgeInsets.fromLTRB(
-                      AppSpacing.lg,
-                      0,
-                      AppSpacing.lg,
-                      AppSpacing.lg,
-                    ),
-                    itemCount: _rows.length,
-                    itemBuilder: (context, i) {
-                      final row = _rows[i];
-                      final canUndo = loadCanUndo(_rows, row);
-                      return LoadScanRowTile(
-                        key: ValueKey('load-row-${row.key}'),
-                        row: row,
-                        undoBusy: canUndo && _undoing,
-                        onUndo: canUndo && !_undoing ? () => _undo(row) : null,
-                        onRetry: loadCanRetry(row) ? () => _retry(row) : null,
-                      );
-                    },
-                  ),
+            child: switch (_tab) {
+              _LoadTab.recent => _recentList(l10n),
+              _LoadTab.onContainer => _onContainerTab(l10n),
+              _LoadTab.stillToLoad => _stillToLoadTab(l10n),
+            },
           ),
           if (!keyboardOpen)
             Container(
@@ -731,6 +1071,59 @@ String loadContainerTotalsText(AppLocalizations l10n, LoadTotals totals) =>
       l10n.ldgTotalPackages(totals.packages),
       l10n.ldgPieces(totals.pieces),
     );
+
+/// "OUMOU BARRY · 3 packages · 5 of 6 pieces scanned": a customer's header
+/// in "On this container".
+String loadOnGroupText(AppLocalizations l10n, LoadCustomerGroup group) =>
+    '${loadGroupName(l10n, group)} · ${l10n.ldgTotalPackages(group.packages)}'
+    ' · ${l10n.ldgScannedOfPieces(group.scannedPieces, group.pieces)}';
+
+/// "Aliou Diallo · 2 packages waiting": a customer's header in "Still to
+/// load".
+String loadWaitingGroupText(AppLocalizations l10n, LoadCustomerGroup group) =>
+    '${loadGroupName(l10n, group)} · '
+    '${l10n.ldgPackagesWaiting(group.packages)}';
+
+/// The customer's name; their phone when no name was given; else "No name".
+String loadGroupName(AppLocalizations l10n, LoadCustomerGroup group) =>
+    group.name.isNotEmpty ? group.name : l10n.ldgNoCustomerName;
+
+/// Who added a package and how, in the order the list reads: "Added by Awa
+/// · By scan · Oct 23 3:05 PM". A package put on before this was recorded
+/// says "Added earlier".
+String loadAddedText(
+  AppLocalizations l10n,
+  ContainerLine line,
+  List<LotStaff> staff,
+  String locale,
+) {
+  final who = loadStaffName(staff, line.containerAssignedByStaffId);
+  final at = line.containerAssignedAt;
+  final parts = [
+    if (who.isNotEmpty) l10n.ldgAddedBy(who),
+    switch (loadViaOf(line.containerAssignedVia)) {
+      loadViaScan => l10n.ldgViaScan,
+      loadViaHand => l10n.ldgViaHand,
+      loadViaMove => l10n.ldgViaMove,
+      _ => '',
+    },
+    if (at != null) displayMonthDayTime(at, locale),
+  ].where((p) => p.isNotEmpty).toList();
+  return parts.isEmpty ? l10n.ldgAddedEarlier : parts.join(' · ');
+}
+
+/// A Take off that failed: the server's refusal in our words
+/// (`containerErrorText`), "no connection" when it never got through.
+String loadTakeOffErrorText(AppLocalizations l10n, Object error) {
+  if (error is FirebaseFunctionsException) {
+    return parseLoadFailure(error.code, null).offline
+        ? l10n.dlvErrOffline
+        : containerRefusalText(l10n, error);
+  }
+  return loadFailureOf(error).offline
+      ? l10n.dlvErrOffline
+      : l10n.lotCouldNotSave;
+}
 
 /// An Undo or a Leave N waiting that failed. They name a package by line
 /// id, so `line_not_found` there means it is no longer on this container.
@@ -791,6 +1184,10 @@ String loadRowText(AppLocalizations l10n, LoadRow row) {
           ? '$loaded · ${l10n.ldgCountedOf(scanned, total)}'
           : loaded;
     case LoadRowState.counted:
+      // Already on the container before any scan: not "Loaded".
+      if (row.alreadyOnContainer) {
+        return l10n.ldgAlreadyOnContainer(scanned, total);
+      }
       return l10n.ldgCountedOf(scanned, total);
     case LoadRowState.allScanned:
       return l10n.ldgAllIn(total);
@@ -816,6 +1213,7 @@ Color loadToneColor(LoadTone tone) => switch (tone) {
   LoadTone.amber => AppColors.warn,
   LoadTone.red => AppColors.errorRed,
   LoadTone.grey => AppColors.muted,
+  LoadTone.neutral => AppColors.muted,
 };
 
 IconData _toneIcon(LoadTone tone) => switch (tone) {
@@ -825,6 +1223,7 @@ IconData _toneIcon(LoadTone tone) => switch (tone) {
   LoadTone.amber => Icons.info,
   LoadTone.red => Icons.error,
   LoadTone.grey => Icons.undo,
+  LoadTone.neutral => Icons.inventory_2_outlined,
 };
 
 /// One scan in Recent scans: the code and whose it is, and what happened in
@@ -963,6 +1362,352 @@ class LoadScanRowTile extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// The lists.
+// ---------------------------------------------------------------------------
+
+/// Recent scans | On this container | Still to load: one row of equal
+/// segments. A label may run to two lines (French is longer) rather than
+/// overflow.
+class _LoadTabBar extends StatelessWidget {
+  const _LoadTabBar({
+    required this.tab,
+    required this.onTab,
+    required this.labels,
+  });
+
+  final _LoadTab tab;
+  final ValueChanged<_LoadTab> onTab;
+  final Map<_LoadTab, String> labels;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        for (final t in _LoadTab.values)
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(
+                right: t == _LoadTab.values.last ? 0 : AppSpacing.xs,
+              ),
+              child: Semantics(
+                button: true,
+                selected: tab == t,
+                child: InkWell(
+                  key: ValueKey('load-tab-${t.name}'),
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                  onTap: () => onTab(t),
+                  child: Container(
+                    constraints: const BoxConstraints(minHeight: 44),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.xs,
+                      vertical: 6,
+                    ),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: tab == t ? AppColors.mist : AppColors.paper,
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                      border: Border.all(
+                        color: tab == t ? AppColors.cobalt : AppColors.rule,
+                      ),
+                    ),
+                    child: Text(
+                      labels[t] ?? '',
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        height: 1.2,
+                        fontWeight: tab == t
+                            ? FontWeight.w700
+                            : FontWeight.w600,
+                        color: tab == t
+                            ? AppColors.cobaltDeep
+                            : AppColors.muted,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _ListNote extends StatelessWidget {
+  const _ListNote({super.key, required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(
+      horizontal: AppSpacing.lg,
+      vertical: AppSpacing.md,
+    ),
+    child: Text(
+      text,
+      style: const TextStyle(fontSize: 13, height: 1.4, color: AppColors.muted),
+    ),
+  );
+}
+
+/// A customer's name with their counts, above their packages.
+class _GroupHeader extends StatelessWidget {
+  const _GroupHeader({super.key, required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: AppSpacing.sm, bottom: AppSpacing.xs),
+    child: Text(
+      text,
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      style: const TextStyle(
+        fontSize: 13,
+        height: 1.3,
+        fontWeight: FontWeight.w700,
+        color: AppColors.cobaltDeep,
+      ),
+    ),
+  );
+}
+
+BoxDecoration _listCard() => BoxDecoration(
+  color: AppColors.paper,
+  borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+  border: Border.all(color: AppColors.rule),
+);
+
+const _listTitleStyle = TextStyle(
+  fontSize: 14,
+  fontWeight: FontWeight.w700,
+  color: AppColors.ink,
+);
+
+const _listMetaStyle = TextStyle(
+  fontSize: 12.5,
+  height: 1.3,
+  color: AppColors.muted,
+);
+
+/// A package on this container: its code and owner, how far it is scanned,
+/// (in Recently added) who put it on and how, and Take off.
+class _OnContainerTile extends StatelessWidget {
+  const _OnContainerTile({
+    super.key,
+    required this.line,
+    required this.showAdded,
+    required this.addedText,
+    required this.grouped,
+    required this.canTakeOff,
+    required this.busy,
+    required this.onTakeOff,
+  });
+
+  final ContainerLine line;
+  final bool showAdded;
+  final String addedText;
+
+  /// Under its customer's header: the customer is not repeated.
+  final bool grouped;
+  final bool canTakeOff;
+  final bool busy;
+  final VoidCallback onTakeOff;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final code = line.trackingCode.isNotEmpty
+        ? line.trackingCode
+        : containerLineTitle(l10n, line);
+    final who = lineCustomerName(line);
+    final scanned = line.loadScannedPieces;
+    final progress = scanned > 0
+        ? l10n.ldgScannedOfPieces(scanned, line.pieceCount)
+        : '${l10n.pcsPieceCount(line.pieceCount)} · '
+              '${l10n.ldgFilterNotScanned}';
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.sm,
+        AppSpacing.xs,
+        AppSpacing.sm,
+      ),
+      decoration: _listCard(),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  grouped || who.isEmpty ? code : '$code · $who',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _listTitleStyle,
+                ),
+                Text(
+                  progress,
+                  key: ValueKey('load-on-progress-${line.id}'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    height: 1.3,
+                    fontWeight: FontWeight.w600,
+                    color: scanned > 0 ? loadBlue : AppColors.muted,
+                  ),
+                ),
+                if (showAdded)
+                  Text(
+                    addedText,
+                    key: ValueKey('load-on-added-${line.id}'),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: _listMetaStyle,
+                  ),
+              ],
+            ),
+          ),
+          if (canTakeOff) ...[
+            const SizedBox(width: AppSpacing.xs),
+            TextButton.icon(
+              key: ValueKey('load-takeoff-${line.id}'),
+              onPressed: busy ? null : onTakeOff,
+              icon: busy
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.remove_circle_outline, size: 18),
+              label: Text(l10n.ldgTakeOff),
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.errorRed,
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// A waiting package: tap to load it onto this container. After a tap the
+/// tile says how that scan went, in the scan row's own colour and words.
+class _StillTile extends StatelessWidget {
+  const _StillTile({
+    super.key,
+    required this.line,
+    required this.row,
+    required this.onTap,
+  });
+
+  final ContainerLine line;
+
+  /// The scan row a tap made, while it is shown in Recent scans.
+  final LoadRow? row;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final r = row;
+    final showRow = r != null && r.state != LoadRowState.undone;
+    final sending = r?.state == LoadRowState.sending;
+    // Once the server took it the tile waits for the live feed to move it.
+    final done = showRow && (r.counted || r.state == LoadRowState.allScanned);
+    final code = line.trackingCode;
+    final receiver = line.customerIsReceiver ? '' : line.receiverName;
+    final facts = [
+      containerLineTitle(l10n, line),
+      l10n.pcsPieceCount(line.pieceCount),
+      if (receiver.isNotEmpty) receiver,
+    ].where((p) => p.isNotEmpty).join(' · ');
+    final enabled = onTap != null && code.isNotEmpty && !sending && !done;
+    final tone = showRow ? r.tone : LoadTone.pending;
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+      decoration: _listCard(),
+      clipBehavior: Clip.antiAlias,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: enabled ? onTap : null,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.md,
+              AppSpacing.sm,
+              AppSpacing.md,
+              AppSpacing.sm,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        code.isEmpty ? facts : code,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _listTitleStyle,
+                      ),
+                      if (code.isNotEmpty && facts.isNotEmpty)
+                        Text(
+                          facts,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: _listMetaStyle,
+                        ),
+                      if (showRow && !sending)
+                        Text(
+                          loadRowText(l10n, r),
+                          key: ValueKey('load-still-result-${line.id}'),
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            height: 1.3,
+                            fontWeight: FontWeight.w600,
+                            color: loadToneColor(tone),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                if (sending)
+                  const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                else if (!done && code.isNotEmpty)
+                  Text(
+                    l10n.ldgLoadIt,
+                    key: ValueKey('load-still-go-${line.id}'),
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: enabled ? AppColors.cobaltDeep : AppColors.muted,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

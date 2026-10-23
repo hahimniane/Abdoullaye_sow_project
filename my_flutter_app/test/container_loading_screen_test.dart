@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_flutter_app/l10n/app_localizations.dart';
 import 'package:my_flutter_app/screens/container_loading_screen.dart';
+import 'package:my_flutter_app/services/container_loading.dart' show isLoadScanId;
 import 'package:my_flutter_app/services/container_manifest.dart';
+import 'package:my_flutter_app/services/lot_ledger.dart' show LotStaff;
 import 'package:my_flutter_app/theme/app_theme.dart';
 
 /// The loading screen as staff use it: typed codes go through the same path
@@ -23,12 +25,22 @@ typedef _Answer = Object? Function(Map<String, Object?> payload);
 /// Records every call and answers from [answers] by action; an answer that
 /// is an exception is thrown.
 class _FakeCaller {
-  _FakeCaller(this.answers);
+  _FakeCaller(this.answers, {this.unassign});
 
   final Map<String, _Answer> answers;
+
+  /// Answers `unassignContainerLine` (Take off); null refuses the test.
+  final _Answer? unassign;
   final List<Map<String, Object?>> calls = [];
+  final List<Map<String, Object?>> unassigned = [];
 
   Future<Object?> call(String name, Map<String, Object?> payload) async {
+    if (name == 'unassignContainerLine') {
+      unassigned.add(payload);
+      final answer = unassign!(payload);
+      if (answer is Exception) throw answer;
+      return answer;
+    }
     expect(name, 'assignContainerLines');
     calls.add(payload);
     final answer = answers[payload['action']]!(payload);
@@ -82,12 +94,14 @@ Future<List<bool>> _open(
   Size size = const Size(375, 812),
   Listenable? liveUpdates,
   List<ContainerLine> Function()? liveLines,
+  List<LotStaff> staff = const [],
+  List<bool>? feedbackInto,
 }) async {
   tester.view.physicalSize = size * 2;
   tester.view.devicePixelRatio = 2;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
-  final feedback = <bool>[];
+  final feedback = feedbackInto ?? <bool>[];
   await tester.pumpWidget(
     MaterialApp(
       theme: AppTheme.light,
@@ -109,6 +123,7 @@ Future<List<bool>> _open(
             feedback: feedback.add,
             liveUpdates: liveUpdates,
             liveLines: liveLines,
+            staff: staff,
           ),
         ),
       );
@@ -659,5 +674,535 @@ void main() {
       findsOneWidget,
     );
     expect(tester.takeException(), isNull);
+  });
+
+  // -------------------------------------------------------------------------
+  // Loading lists.
+  // -------------------------------------------------------------------------
+
+  final oct23 = DateTime(2026, 10, 23, 15, 5);
+
+  ContainerLine listLine(
+    String id, {
+    String code = '',
+    String customer = '',
+    String phone = '',
+    String receiver = '',
+    int pieces = 1,
+    int? scanned,
+    DateTime? at,
+    String by = '',
+    String via = '',
+    bool waiting = false,
+    String status = containerStatusLoading,
+    String destination = 'guinea',
+  }) => ContainerLine.fromMap(id, {
+    'businessId': 'b1',
+    'containerId': waiting ? '' : 'c1',
+    'containerStatus': waiting ? containerLineStatusWaiting : status,
+    'kind': containerLineKindBarrels,
+    'quantity': pieces,
+    'ownerKind': containerOwnerCustomer,
+    'trackingCode': code,
+    'customerName': customer,
+    'customerPhone': phone,
+    'receiverName': receiver,
+    'destinationCountryId': destination,
+    'loadScannedPieces': ?scanned,
+    if (at != null) 'containerAssignedAt': at.millisecondsSinceEpoch,
+    if (by.isNotEmpty) 'containerAssignedByStaffId': by,
+    if (via.isNotEmpty) 'containerAssignedVia': via,
+  });
+
+  /// Two phones' worth of lines: three on the box, four waiting (three for
+  /// Guinea, one for Mali).
+  List<ContainerLine> feedLines() => [
+    listLine(
+      'on1',
+      code: 'CL-ON1',
+      customer: 'OUMOU BARRY',
+      pieces: 3,
+      scanned: 2,
+      at: oct23,
+      by: 'u1',
+      via: 'scan',
+    ),
+    listLine(
+      'on2',
+      code: 'CL-ON2',
+      customer: 'OUMOU BARRY',
+      pieces: 3,
+      scanned: 3,
+      at: oct23.subtract(const Duration(hours: 3)),
+      by: 'u2',
+      via: 'hand',
+    ),
+    listLine('on3', code: 'CL-ON3', customer: 'Aliou Diallo', pieces: 2),
+    listLine('w1', code: 'CL-W1', customer: 'Fanta Keita', waiting: true),
+    listLine('w2', code: 'CL-W2', customer: 'Fanta Keita', waiting: true),
+    listLine('w3', code: 'CL-W3', customer: 'Zeinab Sow', waiting: true),
+    listLine(
+      'w4',
+      code: 'CL-W4',
+      customer: 'Kadiatou',
+      waiting: true,
+      destination: 'mali',
+    ),
+  ];
+
+  const staff = [
+    LotStaff(id: 'u1', name: 'Awa Camara'),
+    LotStaff(id: 'u2', name: 'Moussa Bah'),
+  ];
+
+  Future<ValueNotifier<List<ContainerLine>>> openLists(
+    WidgetTester tester,
+    _FakeCaller caller, {
+    Locale locale = const Locale('en'),
+    List<ContainerLine>? lines,
+    List<bool>? feedback,
+  }) async {
+    final live = ValueNotifier<List<ContainerLine>>(lines ?? feedLines());
+    await _open(
+      tester,
+      caller,
+      locale: locale,
+      liveUpdates: live,
+      liveLines: () => live.value,
+      staff: staff,
+      feedbackInto: feedback,
+    );
+    return live;
+  }
+
+  Future<void> tab(WidgetTester tester, String name) async {
+    await tester.tap(find.byKey(ValueKey('load-tab-$name')));
+    await tester.pumpAndSettle();
+  }
+
+  /// Top-to-bottom order of [keys] on screen.
+  List<String> order(WidgetTester tester, List<String> keys) {
+    final at = <String, double>{
+      for (final k in keys)
+        if (find.byKey(ValueKey(k)).evaluate().isNotEmpty)
+          k: tester.getTopLeft(find.byKey(ValueKey(k))).dy,
+    };
+    return at.keys.toList()..sort((a, b) => at[a]!.compareTo(at[b]!));
+  }
+
+  testWidgets('the header counts what still waits for the destination', (
+    tester,
+  ) async {
+    await openLists(tester, _FakeCaller({}));
+    expect(find.text('3 still waiting for Guinea'), findsOneWidget);
+    expect(find.text('Recent scans'), findsOneWidget);
+    expect(find.text('On this container (3)'), findsOneWidget);
+    expect(find.text('Still to load (3)'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the header follows the feed when a package goes on', (
+    tester,
+  ) async {
+    final live = await openLists(tester, _FakeCaller({}));
+    live.value = [
+      for (final l in feedLines())
+        if (l.id != 'w1') l,
+    ];
+    await tester.pump();
+    expect(find.text('2 still waiting for Guinea'), findsOneWidget);
+    expect(find.text('Still to load (2)'), findsOneWidget);
+  });
+
+  testWidgets('a counted scan of a package already there is a neutral row', (
+    tester,
+  ) async {
+    final caller = _FakeCaller({
+      'scan': (p) => {
+        'success': true,
+        'result': 'counted',
+        'line': {
+          'lineId': 'on3',
+          'trackingCode': 'CL-K7M4P2',
+          'name': 'Aliou Diallo',
+          'pieceCount': 5,
+          'scannedPieces': 1,
+          'addedByScan': false,
+          'assignedVia': 'hand',
+          'customerName': 'Aliou Diallo',
+        },
+      },
+    });
+    await _open(tester, caller);
+    await _type(tester, 'CL-K7M4P2');
+    expect(
+      find.text('Already on this container · 1 of 5 scanned'),
+      findsOneWidget,
+    );
+    expect(find.text('Loaded'), findsNothing);
+    expect(find.text('1 of 5'), findsNothing);
+  });
+
+  testWidgets('Still to load groups by customer; a tap sends a scan', (
+    tester,
+  ) async {
+    final feedback = <bool>[];
+    final caller = _FakeCaller({
+      'scan': (p) => _scanAnswer('loaded', lineId: 'w1', code: 'CL-W1'),
+    });
+    await openLists(tester, caller, feedback: feedback);
+    await tab(tester, 'stillToLoad');
+    // Only the Guinea ones, under their customers.
+    expect(find.text('Fanta Keita · 2 packages waiting'), findsOneWidget);
+    expect(find.text('Zeinab Sow · 1 package waiting'), findsOneWidget);
+    expect(find.text('CL-W4'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('load-still-w1')));
+    await tester.pumpAndSettle();
+    final scan = caller.of('scan').single;
+    expect(scan['businessId'], 'b1');
+    expect(scan['containerId'], 'c1');
+    expect(scan['code'], 'CL-W1');
+    expect(scan['scanId'], isA<String>());
+    expect(isLoadScanId(scan['scanId'] as String), isTrue);
+    expect(scan.containsKey('move'), isFalse);
+    // The tile says how it went, and the same buzz as a scan.
+    expect(find.byKey(const ValueKey('load-still-result-w1')), findsOneWidget);
+    expect(find.text('Loaded'), findsWidgets);
+    expect(feedback, [true]);
+    // It is in Recent scans too.
+    await tab(tester, 'recent');
+    expect(find.text('CL-W1 · Mariama Bah'), findsOneWidget);
+
+    // A tapped package cannot be tapped again while the feed catches up.
+    await tab(tester, 'stillToLoad');
+    await tester.tap(find.byKey(const ValueKey('load-still-w1')));
+    await tester.pumpAndSettle();
+    expect(caller.of('scan').length, 1);
+  });
+
+  testWidgets(
+    'a refused tap in Still to load says why, and can be tried again',
+    (tester) async {
+      var n = 0;
+      final caller = _FakeCaller({
+        'scan': (p) {
+          n++;
+          return n == 1
+              ? _refusal('failed-precondition', {'reason': 'container_locked'})
+              : _scanAnswer('loaded', lineId: 'w3', code: 'CL-W3');
+        },
+      });
+      final feedback = <bool>[];
+      await openLists(tester, caller, feedback: feedback);
+      await tab(tester, 'stillToLoad');
+      await tester.tap(find.byKey(const ValueKey('load-still-w3')));
+      await tester.pumpAndSettle();
+      expect(find.text('This container is no longer loading.'), findsOneWidget);
+      expect(feedback, [false]);
+      await tester.tap(find.byKey(const ValueKey('load-still-w3')));
+      await tester.pumpAndSettle();
+      expect(caller.of('scan').length, 2);
+      // A new request each time.
+      expect(
+        caller.of('scan')[1]['scanId'],
+        isNot(caller.of('scan')[0]['scanId']),
+      );
+    },
+  );
+
+  testWidgets(
+    'Still to load: search narrows it, and says when nothing is left',
+    (tester) async {
+      await openLists(tester, _FakeCaller({}));
+      await tab(tester, 'stillToLoad');
+      await tester.enterText(
+        find.byKey(const Key('load-list-search')),
+        'zeinab',
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('load-still-w3')), findsOneWidget);
+      expect(find.byKey(const ValueKey('load-still-w1')), findsNothing);
+      await tester.enterText(
+        find.byKey(const Key('load-list-search')),
+        'nobody',
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('No package matches.'), findsOneWidget);
+    },
+  );
+
+  testWidgets('Still to load with nothing waiting says so', (tester) async {
+    await openLists(
+      tester,
+      _FakeCaller({}),
+      lines: [listLine('on3', code: 'CL-ON3', customer: 'Aliou Diallo')],
+    );
+    expect(find.text('0 still waiting for Guinea'), findsOneWidget);
+    await tab(tester, 'stillToLoad');
+    expect(find.text('No package is waiting for Guinea.'), findsOneWidget);
+  });
+
+  testWidgets('On this container: recently added, with who and how', (
+    tester,
+  ) async {
+    await openLists(tester, _FakeCaller({}));
+    await tab(tester, 'onContainer');
+    // Newest first; the one with no time last.
+    expect(order(tester, ['load-on-on1', 'load-on-on2', 'load-on-on3']), [
+      'load-on-on1',
+      'load-on-on2',
+      'load-on-on3',
+    ]);
+    final first = tester
+        .widget<Text>(find.byKey(const ValueKey('load-on-added-on1')))
+        .data!;
+    expect(first, startsWith('Added by Awa Camara · By scan · Oct 23'));
+    final second = tester
+        .widget<Text>(find.byKey(const ValueKey('load-on-added-on2')))
+        .data!;
+    expect(second, startsWith('Added by Moussa Bah · By hand · Oct 23'));
+    expect(
+      tester.widget<Text>(find.byKey(const ValueKey('load-on-added-on3'))).data,
+      'Added earlier',
+    );
+    expect(find.text('2 of 3 pieces scanned'), findsOneWidget);
+    expect(find.text('2 pieces · Not scanned yet'), findsOneWidget);
+  });
+
+  testWidgets('On this container: by customer, and not scanned yet', (
+    tester,
+  ) async {
+    await openLists(tester, _FakeCaller({}));
+    await tab(tester, 'onContainer');
+    await tester.tap(find.byKey(const ValueKey('load-filter-byCustomer')));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('OUMOU BARRY · 2 packages · 5 of 6 pieces scanned'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Aliou Diallo · 1 package · 0 of 2 pieces scanned'),
+      findsOneWidget,
+    );
+    // The customer is not repeated on each package under the header.
+    expect(find.text('CL-ON1'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('load-filter-notScanned')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('load-on-on3')), findsOneWidget);
+    expect(find.byKey(const ValueKey('load-on-on1')), findsNothing);
+    expect(find.byKey(const ValueKey('load-on-on2')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('load-filter-recent')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('load-on-on1')), findsOneWidget);
+  });
+
+  testWidgets('On this container: search by code, name or phone', (
+    tester,
+  ) async {
+    await openLists(
+      tester,
+      _FakeCaller({}),
+      lines: [
+        listLine(
+          'a',
+          code: 'CL-AAA111',
+          customer: 'Mariama',
+          phone: '+224 600 11 22 33',
+        ),
+        listLine('b', code: 'CL-BBB222', customer: 'Aliou'),
+      ],
+    );
+    await tab(tester, 'onContainer');
+    Future<void> search(String q) async {
+      await tester.enterText(find.byKey(const Key('load-list-search')), q);
+      await tester.pumpAndSettle();
+    }
+
+    await search('bbb2');
+    expect(find.byKey(const ValueKey('load-on-b')), findsOneWidget);
+    expect(find.byKey(const ValueKey('load-on-a')), findsNothing);
+    await search('mariama');
+    expect(find.byKey(const ValueKey('load-on-a')), findsOneWidget);
+    expect(find.byKey(const ValueKey('load-on-b')), findsNothing);
+    await search('600 11');
+    expect(find.byKey(const ValueKey('load-on-a')), findsOneWidget);
+    await search('zzz');
+    expect(find.text('No package matches.'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('load-list-search-clear')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('load-on-b')), findsOneWidget);
+  });
+
+  testWidgets('Take off asks first, then sends the package back to waiting', (
+    tester,
+  ) async {
+    final feedback = <bool>[];
+    final caller = _FakeCaller(
+      {},
+      unassign: (p) => {'success': true, 'lineId': p['lineId']},
+    );
+    await openLists(tester, caller, feedback: feedback);
+    await tab(tester, 'onContainer');
+    await tester.tap(find.byKey(const ValueKey('load-takeoff-on1')));
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        'Take CL-ON1 off Sailing 3 Oct, box 2? It goes back to waiting.',
+      ),
+      findsOneWidget,
+    );
+    // Cancel: nothing is sent.
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(caller.unassigned, isEmpty);
+
+    await tester.tap(find.byKey(const ValueKey('load-takeoff-on1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Take off'));
+    await tester.pumpAndSettle();
+    expect(caller.unassigned, [
+      {'businessId': 'b1', 'lineId': 'on1'},
+    ]);
+    expect(find.text('Package sent back to waiting.'), findsOneWidget);
+    expect(feedback, [true]);
+  });
+
+  testWidgets('a refused Take off shows the refusal in plain words', (
+    tester,
+  ) async {
+    final feedback = <bool>[];
+    final caller = _FakeCaller(
+      {},
+      unassign: (p) =>
+          _refusal('failed-precondition', {'reason': 'container_locked'}),
+    );
+    await openLists(tester, caller, feedback: feedback);
+    await tab(tester, 'onContainer');
+    await tester.tap(find.byKey(const ValueKey('load-takeoff-on2')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Take off'));
+    await tester.pumpAndSettle();
+    expect(caller.unassigned.length, 1);
+    expect(find.textContaining('This container has shipped'), findsOneWidget);
+    expect(feedback, [false]);
+    // The button is back for another try.
+    expect(
+      tester
+          .widget<TextButton>(find.byKey(const ValueKey('load-takeoff-on2')))
+          .onPressed,
+      isNotNull,
+    );
+  });
+
+  testWidgets('Take off is not offered once the container is not loading', (
+    tester,
+  ) async {
+    await openLists(
+      tester,
+      _FakeCaller({}),
+      lines: [
+        listLine(
+          's1',
+          code: 'CL-S1',
+          customer: 'Aliou',
+          status: containerStatusShipped,
+        ),
+        listLine('l1', code: 'CL-L1', customer: 'Aliou'),
+      ],
+    );
+    await tab(tester, 'onContainer');
+    expect(find.byKey(const ValueKey('load-takeoff-l1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('load-takeoff-s1')), findsNothing);
+  });
+
+  testWidgets('a package taken off in the feed leaves On this container', (
+    tester,
+  ) async {
+    final live = await openLists(tester, _FakeCaller({}));
+    await tab(tester, 'onContainer');
+    expect(find.byKey(const ValueKey('load-on-on3')), findsOneWidget);
+    live.value = [
+      for (final l in feedLines())
+        if (l.id != 'on3') l,
+    ];
+    await tester.pump();
+    expect(find.byKey(const ValueKey('load-on-on3')), findsNothing);
+    expect(find.text('On this container (2)'), findsOneWidget);
+  });
+
+  testWidgets('French fits a 375-wide phone, lists included', (tester) async {
+    final caller = _FakeCaller({
+      'scan': (p) => _scanAnswer('loaded', lineId: 'w1', code: 'CL-W1'),
+    }, unassign: (p) => {'success': true});
+    await openLists(tester, caller, locale: const Locale('fr'));
+    expect(find.text('3 encore en attente pour Guinea'), findsOneWidget);
+    expect(find.text('Sur ce conteneur (3)'), findsOneWidget);
+    expect(find.text('À charger (3)'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tab(tester, 'onContainer');
+    expect(find.text('Ajoutés récemment'), findsOneWidget);
+    expect(find.text('Par client'), findsOneWidget);
+    expect(find.text('Pas encore scannés'), findsOneWidget);
+    expect(find.text('Retirer'), findsWidgets);
+    expect(
+      find.textContaining('Ajouté par Awa Camara · Par scan'),
+      findsOneWidget,
+    );
+    expect(find.text('Ajouté plus tôt'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.byKey(const ValueKey('load-filter-byCustomer')));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('OUMOU BARRY · 2 colis · 5 pièces scannées sur 6'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.byKey(const ValueKey('load-takeoff-on1')));
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        'Retirer CL-ON1 de Sailing 3 Oct, box 2 ? Le colis repasse en attente.',
+      ),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.text('Annuler'));
+    await tester.pumpAndSettle();
+
+    await tab(tester, 'stillToLoad');
+    expect(find.text('Fanta Keita · 2 colis en attente'), findsOneWidget);
+    expect(find.text('Charger'), findsWidgets);
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.byKey(const ValueKey('load-still-w1')));
+    await tester.pumpAndSettle();
+    expect(find.text('Chargé'), findsWidgets);
+    expect(tester.takeException(), isNull);
+
+    // A package of a long name does not push the layout out either.
+    await tester.enterText(find.byKey(const Key('load-list-search')), 'x');
+    await tester.pumpAndSettle();
+    expect(find.text('Aucun colis ne correspond.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the lists keep the scanner and the Done bar on screen', (
+    tester,
+  ) async {
+    await openLists(tester, _FakeCaller({}));
+    await tab(tester, 'onContainer');
+    expect(find.byKey(const Key('load-type-code')), findsOneWidget);
+    expect(find.byKey(const Key('load-done')), findsOneWidget);
+    final size = tester.view.physicalSize / tester.view.devicePixelRatio;
+    final done = tester.getBottomLeft(find.byKey(const Key('load-done'))).dy;
+    expect(done, lessThanOrEqualTo(size.height));
+    // The list area is a real, scrollable area of its own.
+    final list = tester.getSize(find.byKey(const Key('load-on-list')));
+    expect(list.height, greaterThan(40));
   });
 }

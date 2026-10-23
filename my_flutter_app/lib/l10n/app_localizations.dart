@@ -27739,6 +27739,150 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'That entry could not be opened.'**
   String get lotEntryNotFound;
+
+  /// No description provided for @ldgAlreadyOnContainer.
+  ///
+  /// In en, this message translates to:
+  /// **'{scanned, plural, one{Already on this container · {scanned} of {total} scanned} other{Already on this container · {scanned} of {total} scanned}}'**
+  String ldgAlreadyOnContainer(int scanned, int total);
+
+  /// No description provided for @ldgTabOnContainer.
+  ///
+  /// In en, this message translates to:
+  /// **'On this container'**
+  String get ldgTabOnContainer;
+
+  /// No description provided for @ldgTabStillToLoad.
+  ///
+  /// In en, this message translates to:
+  /// **'Still to load'**
+  String get ldgTabStillToLoad;
+
+  /// No description provided for @ldgFilterRecent.
+  ///
+  /// In en, this message translates to:
+  /// **'Recently added'**
+  String get ldgFilterRecent;
+
+  /// No description provided for @ldgFilterByCustomer.
+  ///
+  /// In en, this message translates to:
+  /// **'By customer'**
+  String get ldgFilterByCustomer;
+
+  /// No description provided for @ldgFilterNotScanned.
+  ///
+  /// In en, this message translates to:
+  /// **'Not scanned yet'**
+  String get ldgFilterNotScanned;
+
+  /// No description provided for @ldgSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search code, name or phone'**
+  String get ldgSearchHint;
+
+  /// No description provided for @ldgScannedOfPieces.
+  ///
+  /// In en, this message translates to:
+  /// **'{scanned} of {total} {total, plural, one{piece} other{pieces}} scanned'**
+  String ldgScannedOfPieces(int scanned, int total);
+
+  /// No description provided for @ldgNoCustomerName.
+  ///
+  /// In en, this message translates to:
+  /// **'No name'**
+  String get ldgNoCustomerName;
+
+  /// No description provided for @ldgPackagesWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{{count} package waiting} other{{count} packages waiting}}'**
+  String ldgPackagesWaiting(int count);
+
+  /// No description provided for @ldgAddedBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Added by {name}'**
+  String ldgAddedBy(String name);
+
+  /// No description provided for @ldgViaScan.
+  ///
+  /// In en, this message translates to:
+  /// **'By scan'**
+  String get ldgViaScan;
+
+  /// No description provided for @ldgViaHand.
+  ///
+  /// In en, this message translates to:
+  /// **'By hand'**
+  String get ldgViaHand;
+
+  /// No description provided for @ldgViaMove.
+  ///
+  /// In en, this message translates to:
+  /// **'Moved'**
+  String get ldgViaMove;
+
+  /// No description provided for @ldgAddedEarlier.
+  ///
+  /// In en, this message translates to:
+  /// **'Added earlier'**
+  String get ldgAddedEarlier;
+
+  /// No description provided for @ldgTakeOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Take off'**
+  String get ldgTakeOff;
+
+  /// No description provided for @ldgTakeOffTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Take it off?'**
+  String get ldgTakeOffTitle;
+
+  /// No description provided for @ldgTakeOffMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Take {code} off {container}? It goes back to waiting.'**
+  String ldgTakeOffMessage(String code, String container);
+
+  /// No description provided for @ldgLoadIt.
+  ///
+  /// In en, this message translates to:
+  /// **'Load'**
+  String get ldgLoadIt;
+
+  /// No description provided for @ldgStillWaitingFor.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} still waiting for {destination}'**
+  String ldgStillWaitingFor(int count, String destination);
+
+  /// No description provided for @ldgNothingOnContainer.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing on this container yet.'**
+  String get ldgNothingOnContainer;
+
+  /// No description provided for @ldgNoMatches.
+  ///
+  /// In en, this message translates to:
+  /// **'No package matches.'**
+  String get ldgNoMatches;
+
+  /// No description provided for @ldgAllScannedHere.
+  ///
+  /// In en, this message translates to:
+  /// **'Every package here has been scanned.'**
+  String get ldgAllScannedHere;
+
+  /// No description provided for @ldgNothingToLoad.
+  ///
+  /// In en, this message translates to:
+  /// **'No package is waiting for {destination}.'**
+  String ldgNothingToLoad(String destination);
 }
 
 class _AppLocalizationsDelegate

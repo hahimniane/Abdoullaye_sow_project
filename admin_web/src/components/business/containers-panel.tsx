@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
   collection,
   getDocs,
@@ -24,7 +24,6 @@ import {
   Ship,
   Tag,
   Trash2,
-  Undo2,
   X,
 } from "lucide-react";
 
@@ -102,7 +101,32 @@ import {
   type LineStage,
   type ParkedCarPick,
 } from "@/lib/container-manifest";
-import { buildLineGroups, defaultWaitingDestination, groupForLine } from "@/lib/waiting-packages";
+import {
+  addedHowText,
+  filterLabel,
+  groupHeaderText,
+  lineAddedBy,
+  lineAddedMs,
+  lineAddedVia,
+  linePieceTotal,
+  lineScannedPieces,
+  loadingFiltersFor,
+  loadingView,
+  scanProgressText,
+  stillGroupHeaderText,
+  stillToLoad,
+  stillWaitingText,
+  takeOffConfirmText,
+  type LoadingFilter,
+} from "@/lib/container-loading-lists";
+import {
+  assignLinesRequest,
+  assignedText,
+  buildLineGroups,
+  defaultWaitingDestination,
+  groupForLine,
+  runPackageCall,
+} from "@/lib/waiting-packages";
 import { newPieceDraft } from "@/lib/piece-drafts";
 import { PiecesEditor } from "@/components/business/pieces-editor";
 import { OCEAN_CARRIERS, isKnownCarrierScac, oceanCarrierLabel } from "@/lib/ocean-carrier-catalog";
@@ -112,7 +136,7 @@ import {
   destinationCountryOptionForRow,
 } from "@/lib/destination-countries";
 import { db, functions } from "@/lib/firebase";
-import { currentLanguage, formatDate, text } from "@/lib/format";
+import { currentLanguage, formatDate, formatDateTime, text } from "@/lib/format";
 import { staffNameFrom, staffNameIndex, staffOptionsFrom } from "@/lib/staff-names";
 import { overlayDismiss } from "@/lib/overlay-dismiss";
 import { closePendingTab, openPendingTab, sendPendingTab } from "@/lib/pending-tab";
@@ -171,6 +195,9 @@ type ContainersPanelProps = {
   focusView?: string;
   focusRequestId?: string;
 };
+
+/** Stands in for a container with no lines, so the loading-list memos below keep a stable input. */
+const NO_ROWS: FirestoreRow[] = [];
 
 type ContainerModal = "" | "container" | "line" | "move" | "history" | "contacts" | "labels" | "assign";
 
@@ -346,6 +373,11 @@ export function ContainersPanel({
   const [labelsLineId, setLabelsLineId] = useState("");
   // The package being marked delivered (its own dialog, over the list).
   const [deliverLineId, setDeliverLineId] = useState("");
+  // The opened container's package list: which chip, what is typed in its
+  // search, and the waiting package being added from "Still to load".
+  const [loadFilter, setLoadFilter] = useState<LoadingFilter>("all");
+  const [loadSearch, setLoadSearch] = useState("");
+  const [addingLineId, setAddingLineId] = useState("");
 
   const lang = currentLanguage() === "fr" ? "fr" : "en";
 
@@ -433,12 +465,30 @@ export function ContainersPanel({
   const searching = search.trim().length >= 2;
 
   const selected = selectedId ? containerById.get(selectedId) : undefined;
-  const selectedLines = selected ? linesByContainer.get(selectedId) ?? [] : [];
+  const selectedLines = selected ? linesByContainer.get(selectedId) ?? NO_ROWS : NO_ROWS;
   const selectedOpen = selected ? containerIsOpen(selected) : false;
   const selectedStatus = selected ? containerStatus(selected) : "loading";
   const selectedCounts = selected ? containerRowCounts(selected, selectedLines) : null;
   // "X of Y delivered" once the container is ready for pickup.
   const selectedDelivery = selected ? containerDeliveryProgress(selected, selectedLines) : null;
+  // The loading lists: the chip and search over this container's lines, and
+  // the waiting packages that could still go on it. Built once per change of
+  // the inputs, read per row.
+  const loadChips = loadingFiltersFor(selectedStatus === "loading");
+  const activeFilter: LoadingFilter = loadChips.some((chip) => chip.id === loadFilter) ? loadFilter : "all";
+  const loadView = useMemo(
+    () => loadingView(selectedLines, activeFilter, loadSearch),
+    [selectedLines, activeFilter, loadSearch],
+  );
+  const still = useMemo(
+    () => (selected && selectedOpen ? stillToLoad(waiting.rows, selected) : null),
+    [selected, selectedOpen, waiting.rows],
+  );
+  // A different container starts on "All" with an empty search.
+  useEffect(() => {
+    setLoadFilter("all");
+    setLoadSearch("");
+  }, [selectedId]);
   const deliverLine = deliverLineId ? selectedLines.find((row) => String(row.id) === deliverLineId) ?? null : null;
 
   // New packages open on the main destination (or the first one listed).
@@ -939,18 +989,33 @@ export function ContainersPanel({
     });
   }
 
-  // While the container loads, a package can leave it again: back to the
-  // waiting list, same label, same code.
+  // While the container loads, a package can leave it again ("Take off"):
+  // back to the waiting list, same label, same code. Offered on every row of
+  // a loading container, the ones put on before the loading lists included.
   async function sendBackToWaiting(row: FirestoreRow) {
     if (!selected) return;
     const ok = await confirmImportantAction(
-      `Send ${containerLineTitle(row, "en")} back to waiting? It leaves ${containerTitle(selected)}; its label and code stay the same.`,
-      `Remettre ${containerLineTitle(row, "fr")} en attente ? Il quitte ${containerTitle(selected)} ; son étiquette et son code ne changent pas.`,
+      takeOffConfirmText(row, containerTitle(selected), "en"),
+      takeOffConfirmText(row, containerTitle(selected), "fr"),
     );
     if (!ok) return;
     await runPanelAction(setBusy, setFlash, "Package sent back to waiting.", async () => {
       await httpsCallable(functions, "unassignContainerLine")({ businessId, lineId: String(row.id) });
     });
+  }
+
+  // "Still to load": put one waiting package, whole, on this container - the
+  // same callable the "Add waiting packages" dialog uses.
+  async function addWaitingPackage(row: FirestoreRow) {
+    if (!selected) return;
+    const id = String(row.id);
+    setFlash("");
+    setAddingLineId(id);
+    await runPackageCall(setBusy, async () => {
+      await httpsCallable(functions, "assignContainerLines")(assignLinesRequest(businessId, selectedId, [id], {}, waiting.rows));
+      setFlash(assignedText(1, containerTitle(selected), lang));
+    }, (failure) => setFlash(failure.message));
+    setAddingLineId("");
   }
 
   // Contacts stay correctable in every state: a wrong number matters most
@@ -1124,13 +1189,46 @@ export function ContainersPanel({
               </span>
             )}
           </div>
+          {still && still.hasDestination && (
+            <p className="ctn-still-line" role="status" data-no-translate>{stillWaitingText(still.total, destinationLabel(selected), lang)}</p>
+          )}
+          {selectedLines.length > 0 && (
+            <div className="ctn-load-tools">
+              <div className="service-segments" role="group" aria-label="Filter packages">
+                {loadChips.map((chip) => (
+                  <span
+                    key={chip.id}
+                    role="button"
+                    tabIndex={0}
+                    className={`segment ${activeFilter === chip.id ? "active" : ""}`}
+                    aria-pressed={activeFilter === chip.id}
+                    data-no-translate
+                    onClick={() => setLoadFilter(chip.id)}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setLoadFilter(chip.id); } }}
+                  >
+                    {filterLabel(chip.id, lang)}
+                  </span>
+                ))}
+              </div>
+              <input type="search" placeholder="Search code, name or phone" value={loadSearch} onChange={(e) => setLoadSearch(e.target.value)} aria-label="Search code, name or phone" />
+            </div>
+          )}
           {selectedLines.length === 0 ? (
             <EmptyState text={selectedOpen ? "Nothing loaded yet. Add the first line." : "This container has no lines."} />
+          ) : loadView.count === 0 ? (
+            <EmptyState text={activeFilter === "unscanned" && loadSearch.trim().length < 2 ? "Every package has been scanned." : "Nothing matches that search."} />
           ) : (
             <div className="mini-table">
               <div className="ctn-table">
                 <div className="mini-table-head"><span>Cargo</span><span>Whose</span>{selectedStatus === "arrived" ? <span>Delivery</span> : <span>Added</span>}<span aria-hidden="true"></span></div>
-                {selectedLines.map((row) => {
+                {loadView.groups.map((section) => (
+                <Fragment key={section.key}>
+                {section.group && (
+                  <div className="ctn-group-head" data-no-translate>
+                    {groupHeaderText(section.group.name, section.group.packages, section.group.scanned, section.group.pieces, lang)}
+                  </div>
+                )}
+                {section.lines.map((row) => {
                   const vin = cleanVin(row.vinNumber);
                   const title = containerLineTitle(row, lang);
                   const stock = containerLineIsStock(row);
@@ -1143,7 +1241,12 @@ export function ContainersPanel({
                       id={`ctn-line-${String(row.id)}`}
                       key={String(row.id)}
                     >
-                      <span><strong data-no-translate={containerLineTitleIsCopy(row) ? undefined : true}>{title}</strong>{vin && vin !== title && <small data-no-translate>{vin}</small>}{vin && <CopyValue value={vin} label="Copy VIN" />}<LineTrackingCode code={text(row.trackingCode, "")} /><PackageSize line={row} /><PackageMoney line={row} group={groupForLine(lineGroups, row)} lang={lang} /></span>
+                      <span><strong data-no-translate={containerLineTitleIsCopy(row) ? undefined : true}>{title}</strong>{vin && vin !== title && <small data-no-translate>{vin}</small>}{vin && <CopyValue value={vin} label="Copy VIN" />}<LineTrackingCode code={text(row.trackingCode, "")} /><PackageSize line={row} /><PackageMoney line={row} group={groupForLine(lineGroups, row)} lang={lang} />
+                        {/* A loading container: every package can come off again, however it got on. Never on a shipped or arrived one. */}
+                        {selectedOpen && (
+                          <button className="lst-btn ghost ctn-takeoff" type="button" disabled={busy} onClick={() => void sendBackToWaiting(row)}>Take off</button>
+                        )}
+                      </span>
                       <span>
                         {/* No sender of its own: the receiver is the customer. */}
                         {stock ? <strong>Business stock</strong> : <strong data-no-translate>{lineCustomerName(row)}</strong>}
@@ -1162,7 +1265,25 @@ export function ContainersPanel({
                           </button>
                         </span>
                       ) : (
-                        <span><strong>{formatDate(row.createdAt)}</strong>{by && <small data-no-translate>{by}</small>}</span>
+                        <span>
+                          {activeFilter === "recent" && selectedOpen ? (
+                            <>
+                              {/* When it went on, by whom and how; a line put on before this was recorded is "added earlier". */}
+                              <strong data-no-translate>{lineAddedMs(row) ? formatDateTime(row.containerAssignedAt) : addedHowText("", lang)}</strong>
+                              {lineAddedMs(row) > 0 && (
+                                <small data-no-translate>{[addedHowText(lineAddedVia(row), lang), staffName(lineAddedBy(row))].filter(Boolean).join(" · ")}</small>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              <strong>{formatDate(row.createdAt)}</strong>
+                              {by && <small data-no-translate>{by}</small>}
+                            </>
+                          )}
+                          {selectedStatus === "loading" && (
+                            <small data-no-translate>{scanProgressText(lineScannedPieces(row), linePieceTotal(row), lang)}</small>
+                          )}
+                        </span>
                       )}
                       <span className="ctn-row-actions">
                         {stage === "delivered" && (
@@ -1174,7 +1295,6 @@ export function ContainersPanel({
                           <>
                             <button className="ghost-button" type="button" disabled={busy} onClick={() => openEditLine(row)} title="Edit line" aria-label="Edit line"><Pencil size={14} /></button>
                             <button className="ghost-button" type="button" disabled={busy} onClick={() => openMove(row)} title="Move to another container"><ArrowRightLeft size={14} /></button>
-                            <button className="ghost-button" type="button" disabled={busy} onClick={() => void sendBackToWaiting(row)} title="Send back to waiting" aria-label="Send back to waiting"><Undo2 size={14} /></button>
                             <button className="ghost-button" type="button" disabled={busy} onClick={() => void removeLine(row)} title="Remove line"><X size={14} /></button>
                           </>
                         )}
@@ -1182,8 +1302,40 @@ export function ContainersPanel({
                     </div>
                   );
                 })}
+                </Fragment>
+                ))}
               </div>
             </div>
+          )}
+          {still && (
+            <section className="ctn-still" aria-label="Still to load">
+              <div className="panel-header">
+                <div><h3>Still to load</h3><span className="panel-count">{still.total}</span></div>
+              </div>
+              <p className="panel-lede">Packages waiting for this container&apos;s destination. Add puts the whole package on the container.</p>
+              {!still.hasDestination ? (
+                <EmptyState text="Set this container's destination to see what's still waiting." />
+              ) : still.total === 0 ? (
+                <EmptyState text="Nothing is waiting for this destination." />
+              ) : (
+                still.groups.map((group) => (
+                  <div className="ctn-still-group" key={group.key}>
+                    <div className="ctn-group-head" data-no-translate>{stillGroupHeaderText(group.name, group.packages, lang)}</div>
+                    {group.lines.map((row) => (
+                      <div className="ctn-still-row" key={String(row.id)}>
+                        <span>
+                          <strong data-no-translate={containerLineTitleIsCopy(row) ? undefined : true}>{containerLineTitle(row, lang)}</strong>
+                          <LineTrackingCode code={text((row as Row).trackingCode, "")} />
+                        </span>
+                        <button className="lst-btn ghost" type="button" disabled={busy} aria-busy={addingLineId === String(row.id)} onClick={() => void addWaitingPackage(row)}>
+                          {addingLineId === String(row.id) ? <RefreshCw className="spin" size={14} /> : <Plus size={14} />} Add
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ))
+              )}
+            </section>
           )}
         </article>
       ) : view === "requests" ? (
