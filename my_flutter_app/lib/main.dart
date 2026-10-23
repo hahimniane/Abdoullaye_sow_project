@@ -32,6 +32,7 @@ import 'screens/business_reviews_screen.dart';
 import 'screens/business_transport_screen.dart';
 import 'screens/inventory_sales_screen.dart';
 import 'screens/inventory_transfers_screen.dart';
+import 'screens/lot_ledger_screen.dart';
 import 'services/business_service_overview.dart';
 import 'screens/park_car_screen.dart';
 import 'screens/send_barrel_screen.dart';
@@ -74,6 +75,7 @@ import 'screens/package_result_screen.dart';
 import 'screens/package_request_detail_screen.dart';
 import 'screens/package_request_form_screen.dart';
 import 'services/notification_routing.dart';
+import 'utils/business_permissions.dart';
 import 'services/stripe_config_service.dart';
 import 'widgets/profile_language_sync_host.dart';
 import 'widgets/system_nav_bar_safe_area.dart';
@@ -383,6 +385,23 @@ class MyApp extends StatelessWidget {
                 final args = ModalRoute.of(context)!.settings.arguments
                     as BusinessRecordArguments;
                 return BusinessRecordScreen(arguments: args);
+              },
+              // "A second Dispatch was recorded for ..." (the lot ledger's
+              // VIN rule): the ledger, opened on that activity. Without the
+              // ledger permission, the menu.
+              '/lot-ledger': (context) {
+                final auth = context.read<AuthProvider>();
+                final args = ModalRoute.of(context)?.settings.arguments;
+                final businessId = auth.businessId ?? '';
+                if (businessId.isEmpty ||
+                    !auth.hasBusinessPermission(BusinessPermission.ledger)) {
+                  return const HomeMenu(showBackButton: true);
+                }
+                return LotLedgerScreen(
+                  businessId: businessId,
+                  focusActivityId:
+                      args is LotLedgerArguments ? args.activityId : null,
+                );
               },
               '/business-transport': (context) {
                 final businessId =

@@ -346,6 +346,43 @@ describe("console totals callables: what they answer", () => {
         assert.equal(result.board.count, 1200);
       });
 
+  it("answers the lot ledger's possible duplicates over every activity",
+      async () => {
+        const at = (iso) => Timestamp.fromDate(new Date(iso));
+        const job = {activityTypeId: "dispatch",
+          activityTypeLabel: "Dispatch", vinNumber: "1HGCM82633A004352"};
+        const data = {
+          lotActivities: {
+            // Months apart: a date-paged list would never show both.
+            d1: {businessId: "biz", ...job, customerName: "Alimou",
+              customerPhone: "2015551234", trackingCode: "LA-D1",
+              feeCents: 5000, activityDate: at("2025-01-05T12:00:00Z")},
+            d2: {businessId: "biz", ...job, customerName: "alimou",
+              trackingCode: "LA-D2", feeCents: 5000,
+              activityDate: at("2026-10-02T12:00:00Z")},
+            v1: {businessId: "biz", ...job, customerName: "Alimou",
+              voided: true, activityDate: at("2026-10-03T12:00:00Z")},
+            x1: {businessId: "other", ...job, customerName: "Alimou",
+              activityDate: at("2026-10-02T12:00:00Z")},
+          },
+        };
+        const {handlers} = handlersFor(data);
+        await assert.rejects(handlers.getLotLedgerTotals(call("parkingStaff",
+            {businessId: "biz", action: "vinDuplicates"})),
+        {code: "permission-denied"});
+        const result = await handlers.getLotLedgerTotals(call("ledgerStaff",
+            {businessId: "biz", action: "vinDuplicates"}));
+        assert.equal(result.complete, true);
+        assert.equal(result.duplicates.length, 1);
+        const [group] = result.duplicates;
+        assert.equal(group.sameCustomer, true);
+        assert.deepEqual(group.activities.map((row) => row.id), ["d1", "d2"]);
+        assert.equal(group.activities[1].trackingCode, "LA-D2");
+        assert.equal(group.activities[1].activityDate,
+            Date.parse("2026-10-02T12:00:00Z"));
+        assert.equal(result.ledger, undefined);
+      });
+
   it("the ledger totals match the definition over the same records",
       async () => {
         const at = (iso) => Timestamp.fromDate(new Date(iso));

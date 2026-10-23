@@ -746,6 +746,7 @@ export function BusinessConsole({
               businessName={businessName}
               business={business}
               previewMode={previewMode}
+              focusRecordId={notificationFocusId}
             />
           )}
           {activeTab === "containers" && (

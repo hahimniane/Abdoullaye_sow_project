@@ -398,6 +398,11 @@ FirestoreQuerySpec parkedCarsEndingFromSpec(String businessId, int startMs) =>
       ],
     );
 
+/// The ledger's activities collection, for reading ONE record by id - the one
+/// a notification or a duplicate refusal names. A single document, never a
+/// query: lists of activities go through the specs below.
+const lotActivitiesCollection = 'lotActivities';
+
 /// Ledger activities dated in [from, to). The date bounds are passed as the
 /// SDK's own values (Timestamps) by the caller.
 FirestoreQuerySpec lotActivitiesBetweenSpec(

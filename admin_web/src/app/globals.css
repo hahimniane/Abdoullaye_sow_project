@@ -2339,6 +2339,19 @@ button[data-loading="true"]::before {
 }
 
 .lot-activity-table .mini-table-row { min-height: 46px; }
+
+/* "Possible duplicates" above the activity log: one block per car + job. */
+.lot-duplicates .lot-dup-group { padding: 10px 0; border-top: 1px solid var(--rule); }
+.lot-duplicates .lot-dup-group:first-of-type { border-top: 0; }
+.lot-duplicates .lot-dup-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+.lot-duplicates .lot-dup-head small { color: var(--muted); }
+.lot-duplicates .lst-hint { margin: 4px 0 0; }
+.lot-duplicates .lot-row-actions { opacity: 1; }
 .lot-activity-table .mini-table-row.voided { opacity: 0.55; }
 
 .lot-activity-table .mini-table-row > span {

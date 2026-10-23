@@ -6,6 +6,7 @@ import {
   collection,
   deleteField,
   doc,
+  getDoc,
   getDocs,
   limit,
   onSnapshot,
@@ -77,6 +78,15 @@ import {
   withSelectedDestinationCountry,
 } from "@/lib/destination-countries";
 import { confirmImportantAction } from "@/lib/action-confirmation";
+import {
+  lotDuplicateGroupsFrom,
+  lotDuplicateNotice,
+  lotRepeatQuestion,
+  lotVinJobRefusal,
+  lotVinTail,
+  type LotDuplicateMember,
+  type LotVinJobExisting,
+} from "@/lib/lot-vin-duplicates";
 import {
   useActiveParkedCars,
   useBusinessCollection,
@@ -7761,7 +7771,7 @@ function lotRangeLabel(start: string, end: string): string {
 
 const LOT_TAG_TINTS = ["#0d9488", "#f59e0b", "#6366f1", "#db2777", "#0891b2"];
 
-export function LotLedgerPanel({ businessId, business, previewMode = false }: PanelProps) {
+export function LotLedgerPanel({ businessId, business, previewMode = false, focusRecordId = "" }: PanelProps) {
   const enabled = Boolean(businessId && !previewMode);
   // What the lot charges for and what it spends on: short lists, read whole.
   const activityTypes = useBusinessCollection("lotActivityTypes", businessId, enabled, { pageSize: null });
@@ -7834,6 +7844,11 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
   const [voidReason, setVoidReason] = useState("");
   const [historyRows, setHistoryRows] = useState<FirestoreRow[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  // The VIN duplicate rule (lot-vin-duplicates.ts): the refusal shown on the
+  // form, with the record it names, and a nudge that re-reads the
+  // "Possible duplicates" list after a save or a void.
+  const [dupNotice, setDupNotice] = useState<{ text: string; activityId: string } | null>(null);
+  const [dupBump, setDupBump] = useState(0);
 
   const year = Number(month.split("-")[0]) || new Date().getUTCFullYear();
   const thresholdCents = Number(business?.expenseProofThresholdCents);
@@ -7942,6 +7957,18 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
     ledgerReload,
   );
   const serverLedger = ledgerTotals.data?.ledger ?? null;
+  // "Possible duplicates": the same car with the same job more than once,
+  // found by the server over every activity of the business (the list
+  // below is paged by date; a duplicate can sit months apart).
+  const duplicateAnswer = useServerTotals<unknown>(
+    "getLotLedgerTotals",
+    enabled ? { businessId, action: "vinDuplicates" } : null,
+    `${totalsReloadKey(activities.rows)}#${dupBump}`,
+  );
+  const duplicateGroups = useMemo(
+    () => lotDuplicateGroupsFrom(duplicateAnswer.data),
+    [duplicateAnswer.data],
+  );
   const serverParking = ledgerTotals.data?.parking ?? null;
 
   // How many recorded jobs use each activity type, counted (not read) while
@@ -8055,6 +8082,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
     setVinHint("");
     setVoidTarget(null);
     setVoidReason("");
+    setDupNotice(null);
     setChaseAmountMode("full");
     setInstalment(emptyLotInstalmentDraft);
   }
@@ -8228,7 +8256,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
     }
   }
 
-  async function saveActivity() {
+  async function saveActivity(confirmRepeat = false) {
     // The chosen type decides whether a VIN is demanded and whether the car
     // fields are sent at all, exactly as the callable decides it server-side.
     const vehicleOptions = { needsVehicle: typeNeedsVehicle };
@@ -8238,15 +8266,102 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
       return;
     }
     const payload = lotActivityPayload(activityDraft, businessId, vehicleOptions);
-    await runPanelAction(setBusy, setFlash, editId ? "Activity updated." : "Activity recorded.", async () => {
+    const jobName = activityDraft.activityTypeId === LOT_CUSTOM_ACTIVITY_ID
+      ? activityDraft.customLabel.trim()
+      : text(selectedType?.label, "");
+    const extra = confirmRepeat ? { confirmRepeat: true } : {};
+    let repeatOf: LotVinJobExisting[] | null = null;
+    setBusy(true);
+    setFlash("");
+    setDraftError("");
+    setDupNotice(null);
+    try {
       if (editId) {
-        await httpsCallable(functions, "updateLotActivity")({ activityId: editId, changes: payload });
+        await httpsCallable(functions, "updateLotActivity")({ activityId: editId, changes: payload, ...extra });
       } else {
-        await httpsCallable(functions, "createLotActivity")(payload);
+        await httpsCallable(functions, "createLotActivity")({ ...payload, ...extra });
       }
+      setFlash(editId ? "Activity updated." : "Activity recorded.");
       setMonth(payload.activityDate.slice(0, 7) || month);
+      setDupBump((value) => value + 1);
       closeModal();
-    }, setDraftError);
+    } catch (error) {
+      // The VIN duplicate rule: the same car, job and customer is refused
+      // with the record it repeats; another customer asks first.
+      const refusal = lotVinJobRefusal(error);
+      if (refusal?.kind === "duplicate") {
+        setDupNotice({
+          text: lotDuplicateNotice(jobName, refusal.existing, formatDate, currentLanguage() === "fr" ? "fr" : "en"),
+          activityId: refusal.existing.activityId,
+        });
+      } else if (refusal?.kind === "repeat") {
+        repeatOf = refusal.existing;
+      } else {
+        const message = error instanceof Error ? error.message : "Action failed.";
+        setFlash(message);
+        setDraftError(message);
+      }
+    } finally {
+      setBusy(false);
+    }
+    if (repeatOf) {
+      const question = lotRepeatQuestion(jobName, repeatOf, formatDate);
+      if (await confirmImportantAction(question.en, question.fr)) await saveActivity(true);
+    }
+  }
+
+  /**
+   * Opens a recorded activity by id - the one a duplicate refusal names, or
+   * the one a notification is about - even when it is outside the dates on
+   * screen. A voided one opens on its history (it cannot be edited).
+   */
+  async function openExistingActivity(activityId: string) {
+    if (!activityId) return;
+    let row = activityById(activityId);
+    if (!row) {
+      try {
+        const snap = await getDoc(doc(db, "lotActivities", activityId));
+        if (snap.exists()) row = { id: snap.id, ...snap.data() } as Record<string, unknown>;
+      } catch {
+        row = undefined;
+      }
+    }
+    if (!row) {
+      setFlash("That entry could not be opened.");
+      return;
+    }
+    setDupNotice(null);
+    if (row.voided === true) {
+      await openHistory(activityId);
+      return;
+    }
+    setCustomerPick(null);
+    setCustomerMenuOpen(false);
+    setVinHint("");
+    openEdit(row);
+  }
+
+  // A notification about an activity (a confirmed repeat) opens it, once.
+  const openedFocusRef = useRef("");
+  useEffect(() => {
+    if (!enabled || !focusRecordId || openedFocusRef.current === focusRecordId) return;
+    openedFocusRef.current = focusRecordId;
+    // Opening is a one-shot reaction to the id; the helpers it calls are
+    // re-created every render and must not re-trigger it.
+    void openExistingActivity(focusRecordId);
+  }, [enabled, focusRecordId]);
+
+  /** "Void" on a possible duplicate: the panel's own void confirm. */
+  function voidDuplicate(row: LotDuplicateMember) {
+    const vehicle = [row.carYear, row.carMake, row.carModel].filter(Boolean).join(" ") || row.vinNumber;
+    setVoidTarget({
+      type: "activity",
+      id: row.id,
+      label: `${vehicle || row.trackingCode} · ${row.trackingCode} · ${lotFormatCents(row.feeCents)}`,
+    });
+    setVoidReason("");
+    setDraftError("");
+    setModal("void");
   }
 
   async function saveType(draft: LotActivityTypeDraft, typeId?: string) {
@@ -8388,6 +8503,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
       : { entryId: voidTarget.id, reason: voidReason.trim() };
     await runPanelAction(setBusy, setFlash, "Voided.", async () => {
       await httpsCallable(functions, fn)(payload);
+      setDupBump((value) => value + 1);
       closeModal();
     });
   }
@@ -8637,6 +8753,53 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
             <div className="pk-stat"><span>Owed</span><b className={activityMoney.owedCents > 0 ? "owed" : undefined}>{lotFormatCents(activityMoney.owedCents)}</b></div>
             <div className="pk-stat"><span>Jobs</span><b>{activityMoney.jobs}</b></div>
           </div>
+
+          {duplicateGroups.length > 0 && (
+            <div className="panel lot-duplicates">
+              <div className="panel-header"><h3>Possible duplicates</h3><span className="panel-count">{duplicateGroups.length}</span></div>
+              <p className="panel-lede">The same car with the same job more than once. Void the one entered by mistake — it stays on the record, struck through.</p>
+              {duplicateGroups.map((group) => {
+                const latest = group.activities[group.activities.length - 1];
+                const car = [latest.carYear, latest.carMake, latest.carModel].filter(Boolean).join(" ");
+                return (
+                  <div className="lot-dup-group" key={group.key}>
+                    <div className="lot-dup-head">
+                      <strong data-no-translate>{group.jobLabel || group.jobKey}</strong>
+                      {car && <span data-no-translate>{car}</span>}
+                      <small>VIN <span data-no-translate>{lotVinTail(group.vinKey)}</span></small>
+                      {group.sameCustomer
+                        ? <span className="status-pill danger compact">Same customer — likely entered twice</span>
+                        : <span className="status-pill warning compact">Different customers</span>}
+                    </div>
+                    {!group.sameCustomer && <p className="lst-hint">Different customers — may be a resale; void only if entered by mistake</p>}
+                    <div className="mini-table">
+                      <div className="lot-activity-table" style={{ minWidth: 720 }}>
+                        <div className="mini-table-head"><span>Code</span><span>Date</span><span>Customer</span><span>Status</span><span className="lot-col-fee">Fee</span><span aria-hidden="true"></span></div>
+                        {group.activities.map((row) => {
+                          const r = row as unknown as Record<string, unknown>;
+                          const badge = lotActivityPaymentBadge(r);
+                          return (
+                            <div className="mini-table-row" key={row.id}>
+                              <span><strong data-no-translate>{row.trackingCode || "—"}</strong></span>
+                              <span><strong>{formatDate(row.activityDate)}</strong></span>
+                              <span><strong data-no-translate>{row.customerName}</strong><small data-no-translate>{row.customerPhone}</small></span>
+                              <span>{badge
+                                ? <span className={`status-pill compact ${badge === "Paid" ? "good" : "warning"}`}>{badge}</span>
+                                : <span className="status-pill compact">{lotActivityPaymentLabel(r)}</span>}</span>
+                              <span className="lot-col-fee"><strong>{lotFormatCents(row.feeCents)}</strong></span>
+                              <span className="lot-row-actions">
+                                <button className="ghost-button" type="button" disabled={busy} onClick={() => voidDuplicate(row)} title="Void"><Ban size={14} /> Void</button>
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           <div className="panel">
             <div className="panel-header"><h3>Activity log</h3><span className="panel-count">{loadedCountLabel(scopedActivities.length, activities.hasMore)}</span></div>
@@ -8904,6 +9067,14 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
             <header className="lst-modal-head"><div><h3>{editId ? "Edit this activity" : "Record activity"}</h3><p>{editId ? "Changing the fee on an unpaid link re-issues it at the new amount." : "Log a job the lot billed for."}</p></div><button className="lst-icon-btn" type="button" onClick={closeModal} aria-label="Close"><X size={18} /></button></header>
             <div className="lst-modal-body">
               {draftError && <div className="lst-form-error" role="alert">{draftError}</div>}
+              {dupNotice && (
+                <div className="lst-form-error" role="alert">
+                  <span data-no-translate>{dupNotice.text}</span>{" "}
+                  {dupNotice.activityId && (
+                    <button className="ghost-button" type="button" disabled={busy} onClick={() => void openExistingActivity(dupNotice.activityId)}>Open it</button>
+                  )}
+                </div>
+              )}
               <div className="lst-form-grid">
                 <label className="lst-field wide"><span>What was done</span>
                   <select value={activityDraft.activityTypeId} onChange={(e) => {
@@ -9005,7 +9176,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false }: Pa
               </fieldset>
               )}
             </div>
-            <footer className="lst-modal-foot"><button className="lst-btn ghost" type="button" disabled={busy} onClick={closeModal}>Cancel</button><button className="lst-add" type="button" disabled={busy} onClick={saveActivity}>{busy ? "Saving..." : editId ? "Save changes" : "Record activity"}</button></footer>
+            <footer className="lst-modal-foot"><button className="lst-btn ghost" type="button" disabled={busy} onClick={closeModal}>Cancel</button><button className="lst-add" type="button" disabled={busy} onClick={() => void saveActivity()}>{busy ? "Saving..." : editId ? "Save changes" : "Record activity"}</button></footer>
           </div>
         </div>
       )}

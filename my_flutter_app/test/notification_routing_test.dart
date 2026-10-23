@@ -6,6 +6,7 @@ import 'package:my_flutter_app/screens/tracking_screen.dart';
 import 'package:my_flutter_app/services/notification_routing.dart';
 
 void main() {
+  lotLedgerRepeatRoutingTests();
   businessRoutingTests();
   phoneReportedRoutingTests();
   group('routeForNotificationData', () {
@@ -687,6 +688,49 @@ void phoneReportedRoutingTests() {
       final main = File('lib/main.dart').readAsStringSync();
       expect(main, contains("'/business-package': (context)"));
       expect(main, contains("'/my-packages': (context)"));
+    });
+  });
+}
+
+
+/// The lot ledger's VIN rule: "A second Dispatch was recorded for ..." goes
+/// to the owner; the tap opens the ledger on that activity.
+void lotLedgerRepeatRoutingTests() {
+  group('lot ledger repeat alerts', () {
+    const business = NotificationAudience.business;
+    final payload = {
+      'type': 'lot_activity_repeat',
+      'businessId': 'biz-1',
+      'activityId': 'act-9',
+      'relatedId': 'act-9',
+      'relatedCollection': 'lotActivities',
+      'trackingCode': 'LA-K7M4P2',
+    };
+
+    test('opens the ledger on that activity', () {
+      final route = routeForNotificationData(payload, audience: business);
+      expect(route?.name, '/lot-ledger');
+      expect((route?.arguments as LotLedgerArguments).activityId, 'act-9');
+      expect(collectionFromNotification(payload), 'lotActivities');
+      // relatedId alone is enough.
+      final related = routeForNotificationData(
+        {'type': 'lot_activity_repeat', 'relatedId': 'act-2'},
+        audience: business,
+      );
+      expect((related?.arguments as LotLedgerArguments).activityId, 'act-2');
+      // A customer never gets one.
+      expect(routeForNotificationData(payload), isNull);
+    });
+
+    test('is a MaterialApp route that checks the ledger permission', () {
+      final main = File('lib/main.dart').readAsStringSync();
+      expect(main, contains("'/lot-ledger': (context)"));
+      expect(main, contains('args is LotLedgerArguments ? args.activityId'));
+      expect(main,
+          contains('auth.hasBusinessPermission(BusinessPermission.ledger)'));
+      final screen =
+          File('lib/screens/lot_ledger_screen.dart').readAsStringSync();
+      expect(screen, contains('_openActivityById(focus)'));
     });
   });
 }

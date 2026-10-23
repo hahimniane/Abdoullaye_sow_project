@@ -1784,6 +1784,29 @@ describe("business dashboard Firestore rules", () => {
     }
   });
 
+  // The lot ledger's VIN duplicate locks (lot_ledger.js lotVinJobLockId):
+  // a client that could delete one could record the same job twice.
+  it("keeps the lot ledger's VIN/job locks server-only", async () => {
+    const lock = "lotVinJobLocks/biz_a__1HGCM82633A004352__aa__bb";
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await context.firestore().doc(lock).set({
+        businessId: "biz_a", activityId: "act_1",
+        vinKey: "1HGCM82633A004352", jobKey: "dispatch",
+        customerKey: "p:2015551234"});
+    });
+    for (const uid of ["owner-a", "staff-parking-a", "super-admin"]) {
+      const db = firestoreFor(uid);
+      await assertFails(db.doc(lock).get());
+      await assertFails(db.collection("lotVinJobLocks")
+          .where("businessId", "==", "biz_a").get());
+      await assertFails(db.doc(lock).set({activityId: "forged"},
+          {merge: true}));
+      await assertFails(db.doc(lock).delete());
+      await assertFails(db.doc("lotVinJobLocks/biz_a__new__cc__dd")
+          .set({businessId: "biz_a", activityId: "act_2"}));
+    }
+  });
+
   it("returns every posted car for a scoped listings query", async () => {
     const ownerDb = firestoreFor("owner-a");
 

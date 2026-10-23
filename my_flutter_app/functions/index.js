@@ -347,6 +347,14 @@ const {
   lotExpenseEntryRecord,
   validateLotExpenseLine,
   normalizeReceivedVia: lotNormalizeReceivedVia,
+  lotVinKey,
+  lotJobKey,
+  lotVinJobLockId,
+  lotVinJobIdentity,
+  lotVinJobConflicts,
+  lotCustomerMatchKey,
+  lotVinJobExisting,
+  lotRepeatAlertCopy,
 } = require("./lot_ledger");
 const {
   CONTAINER_STATUS,
@@ -15719,6 +15727,155 @@ function lotLedgerMessage(errors) {
   return errors.map((code) => LOT_LEDGER_MESSAGES[code] || code).join(" ");
 }
 
+// ---- The VIN duplicate rule (lot_ledger.js, owner decision 2026-10-22) ----
+// Same car + same job + same customer is refused; same car + same job for a
+// different customer needs `confirmRepeat: true`, and then the owner hears
+// about it. `lotVinJobLocks/{id}` (server-only) holds one active activity
+// per car/job/customer so two taps of "Save" cannot both land.
+
+const LOT_VIN_JOB_LOCKS = "lotVinJobLocks";
+
+/**
+ * Inside a transaction: the business's activities that share the candidate's
+ * VIN, plus whichever one its lock names (a record stored before VINs were
+ * kept without spaces would not match the equality query).
+ *
+ * @param {object} tx The transaction.
+ * @param {object} db Firestore.
+ * @param {string} businessId The business.
+ * @param {object} candidate The activity being written.
+ * @return {Promise<{lockRef: ?object, rows: object[]}>} The lock to take
+ *   (null when the activity is never checked) and the rows to check.
+ */
+async function readLotVinJobState(tx, db, businessId, candidate) {
+  const vinKey = lotVinKey(candidate.vinNumber);
+  const lockId = lotVinJobLockId(businessId, candidate);
+  const lockRef = lockId ? db.collection(LOT_VIN_JOB_LOCKS).doc(lockId) : null;
+  const [lockSnap, sameVin] = await Promise.all([
+    lockRef ? tx.get(lockRef) : Promise.resolve(null),
+    tx.get(db.collection("lotActivities")
+        .where("businessId", "==", businessId)
+        .where("vinNumber", "==", vinKey)),
+  ]);
+  const rows = sameVin.docs.map((doc) => ({id: doc.id, ...doc.data()}));
+  const heldId = lockSnap?.exists ?
+    String(lockSnap.data()?.activityId || "") : "";
+  if (heldId && !rows.some((row) => row.id === heldId)) {
+    const held = await tx.get(db.collection("lotActivities").doc(heldId));
+    if (held.exists && held.data()?.businessId === businessId) {
+      rows.push({id: held.id, ...held.data()});
+    }
+  }
+  return {lockRef, rows};
+}
+
+/**
+ * Applies the rule; throws its refusal.
+ *
+ * @param {object} params {candidate, rows, excludeId, confirmRepeat}.
+ * @return {string[]} The active activities a confirmed repeat repeats
+ *   (empty when there are none).
+ */
+function applyLotVinJobRule({candidate, rows, excludeId, confirmRepeat}) {
+  const {duplicate, repeats} =
+    lotVinJobConflicts(candidate, rows, {excludeId});
+  if (duplicate) {
+    const existing = lotVinJobExisting(duplicate);
+    throw new HttpsError(
+        "already-exists",
+        "This car already has this job for this customer" +
+          (existing.trackingCode ? ` (${existing.trackingCode}).` : "."),
+        {
+          reason: "vin_job_duplicate",
+          existingActivityId: existing.activityId,
+          existingTrackingCode: existing.trackingCode,
+          existingActivityDate: existing.activityDate,
+          existingCustomerName: existing.customerName,
+        },
+    );
+  }
+  if (repeats.length > 0 && confirmRepeat !== true) {
+    throw new HttpsError(
+        "failed-precondition",
+        "This car already had this job for another customer. Confirm to " +
+          "record another.",
+        {
+          reason: "vin_job_repeat_confirm",
+          existing: repeats.map(lotVinJobExisting),
+        },
+    );
+  }
+  return repeats.map((row) => String(row.id));
+}
+
+/**
+ * The lock document's body.
+ *
+ * @param {string} businessId The business.
+ * @param {string} activityId The activity holding it.
+ * @param {object} activity The activity.
+ * @return {object} The body.
+ */
+function lotVinJobLockRecord(businessId, activityId, activity) {
+  return {
+    businessId,
+    activityId,
+    vinKey: lotVinKey(activity.vinNumber),
+    jobKey: lotJobKey(activity),
+    customerKey: lotCustomerMatchKey(activity),
+    updatedAt: FirestoreFieldValue.serverTimestamp(),
+  };
+}
+
+/**
+ * A confirmed repeat: tell the business's owner(s) - a push and an inbox
+ * entry, never an email or SMS - in their own language. Not the person who
+ * recorded it. Best-effort: never fails the record.
+ *
+ * @param {object} db Firestore.
+ * @param {object} params {businessId, activityId, activity, actorUid}.
+ * @return {Promise<number>} How many owners it went to.
+ */
+async function notifyLotActivityRepeat(db, {
+  businessId, activityId, activity, actorUid,
+}) {
+  try {
+    const people = await staffActivityPeople(db, businessId);
+    if (!people) return 0;
+    const actor = await staffActivityActorProfile(db, people, actorUid);
+    const actorName = actor ? inventory.sellerFirstName(actor) : "";
+    const owners = people.users.filter((user) => user.id !== actorUid &&
+      (people.ownerUids.includes(user.id) ||
+        (user.role === "businessOwner" &&
+          String(user.businessId || "") === businessId)));
+    await Promise.all(owners.map((owner) => {
+      const copy = lotRepeatAlertCopy(
+          activity, actorName, recipientLanguage(owner));
+      return safeSendPreferenceNotification({
+        uid: owner.id,
+        preferenceKey: "businessActivity",
+        title: copy.title,
+        body: copy.body,
+        data: {
+          type: "lot_activity_repeat",
+          businessId,
+          activityId,
+          relatedId: activityId,
+          relatedCollection: "lotActivities",
+          trackingCode: String(activity.trackingCode || ""),
+        },
+        pushOnly: true,
+      });
+    }));
+    return owners.length;
+  } catch (error) {
+    logger.warn("Lot repeat alert not sent", {
+      businessId, activityId, error: String(error?.message || error),
+    });
+    return 0;
+  }
+}
+
 // Money-field labels for a readable change summary.
 const LOT_AUDIT_FIELDS = Object.freeze({
   feeCents: {label: "Fee", money: true},
@@ -16420,7 +16577,7 @@ exports.createLotActivity = onCall(
       });
       const activityDate = lotActivityMidday(data.activityDate);
       const now = FirestoreFieldValue.serverTimestamp();
-      await activityRef.set({
+      const body = {
         ...record,
         businessId,
         trackingCode,
@@ -16432,7 +16589,39 @@ exports.createLotActivity = onCall(
         currency: SHIPMENT_CURRENCY,
         createdAt: now,
         updatedAt: now,
-      });
+      };
+      // The VIN duplicate rule: checked, written and locked in one
+      // transaction, so a double tap lands once. No VIN, no check.
+      let repeatOf = [];
+      if (lotVinKey(record.vinNumber) && lotJobKey(record)) {
+        await db.runTransaction(async (tx) => {
+          const state = await readLotVinJobState(tx, db, businessId, record);
+          repeatOf = applyLotVinJobRule({
+            candidate: record, rows: state.rows,
+            confirmRepeat: data.confirmRepeat === true,
+          });
+          tx.set(activityRef, {
+            ...body,
+            ...(repeatOf.length > 0 && {
+              repeatOfActivityIds: repeatOf,
+              repeatConfirmedByStaffId: uid,
+              repeatConfirmedAt: now,
+            }),
+          });
+          if (state.lockRef) {
+            tx.set(state.lockRef,
+                lotVinJobLockRecord(businessId, activityRef.id, record));
+          }
+        });
+      } else {
+        await activityRef.set(body);
+      }
+      if (repeatOf.length > 0) {
+        await notifyLotActivityRepeat(db, {
+          businessId, activityId: activityRef.id,
+          activity: {...record, trackingCode}, actorUid: uid,
+        });
+      }
 
       await rememberLotCustomer(db, {
         businessId, seen: record, source: "activity", staffId: uid,
@@ -16442,6 +16631,7 @@ exports.createLotActivity = onCall(
         activityId: activityRef.id,
         trackingCode,
         paymentStatus: status,
+        ...(repeatOf.length > 0 && {repeatOfActivityIds: repeatOf}),
       };
       if (!needsStripe || SIMULATE_PAYMENTS) return response;
 
@@ -16503,7 +16693,7 @@ exports.updateLotActivity = onCall(
         ...lotActivityLockedPaymentFields(current),
       };
       const activityDate = lotActivityMidday(changes.activityDate);
-      await ref.set({
+      const update = {
         ...record,
         editedByStaffId: uid,
         activityDate: activityDate ?
@@ -16511,7 +16701,65 @@ exports.updateLotActivity = onCall(
         activityDateMonth: activityDate ?
           lotMonthKeyOf(activityDate) : current.activityDateMonth,
         updatedAt: FirestoreFieldValue.serverTimestamp(),
-      }, {merge: true});
+      };
+      // The VIN duplicate rule, when the edit changes the car, the job or
+      // the customer: checked against every other activity, and the lock
+      // moves with the record.
+      let repeatOf = [];
+      if (lotVinJobIdentity(current) !== lotVinJobIdentity(record)) {
+        const oldLockId = lotVinJobLockId(businessId, current);
+        const oldLockRef = oldLockId ?
+          db.collection(LOT_VIN_JOB_LOCKS).doc(oldLockId) : null;
+        const checked = Boolean(lotVinKey(record.vinNumber) &&
+          lotJobKey(record));
+        await db.runTransaction(async (tx) => {
+          const [fresh, oldLock, state] = await Promise.all([
+            tx.get(ref),
+            oldLockRef ? tx.get(oldLockRef) : Promise.resolve(null),
+            checked ? readLotVinJobState(tx, db, businessId, record) :
+              Promise.resolve(null),
+          ]);
+          if (fresh.data()?.voided === true) {
+            throw new HttpsError("failed-precondition",
+                LOT_LEDGER_MESSAGES.activity_voided,
+                {reason: "activity_voided"});
+          }
+          if (state) {
+            repeatOf = applyLotVinJobRule({
+              candidate: record, rows: state.rows, excludeId: activityId,
+              confirmRepeat: data.confirmRepeat === true ||
+                changes.confirmRepeat === true,
+            });
+          }
+          tx.set(ref, {
+            ...update,
+            ...(repeatOf.length > 0 && {
+              repeatOfActivityIds: repeatOf,
+              repeatConfirmedByStaffId: uid,
+              repeatConfirmedAt: FirestoreFieldValue.serverTimestamp(),
+            }),
+          }, {merge: true});
+          if (oldLock?.exists &&
+              String(oldLock.data()?.activityId || "") === activityId &&
+              oldLockRef.id !== state?.lockRef?.id) {
+            tx.delete(oldLockRef);
+          }
+          if (state?.lockRef) {
+            tx.set(state.lockRef,
+                lotVinJobLockRecord(businessId, activityId, record));
+          }
+        });
+      } else {
+        await ref.set(update, {merge: true});
+      }
+      if (repeatOf.length > 0) {
+        await notifyLotActivityRepeat(db, {
+          businessId, activityId,
+          activity: {...record,
+            trackingCode: String(current.trackingCode || "")},
+          actorUid: uid,
+        });
+      }
 
       const diff = lotFieldDiff(current, record);
       if (diff.length > 0) {
@@ -24007,17 +24255,34 @@ exports.voidLotActivity = onCall(
             String(current.stripeConnectedAccountId || "").trim() || undefined,
         ).catch(() => null);
       }
-      await ref.set({
-        voided: true,
-        voidedByStaffId: uid,
-        voidReason: reason,
-        voidedAt: FirestoreFieldValue.serverTimestamp(),
-        ...(unpaidLink && {
-          paymentStatus: LOT_ACTIVITY_PAYMENT_STATUS.CANCELLED,
-          checkoutStatus: "cancelled",
-        }),
-        updatedAt: FirestoreFieldValue.serverTimestamp(),
-      }, {merge: true});
+      // Voided and unlocked together: once it is dead, the same car, job
+      // and customer may be recorded again.
+      await db.runTransaction(async (tx) => {
+        const fresh = await tx.get(ref);
+        const row = fresh.data() || {};
+        if (row.voided === true) {
+          throw new HttpsError("failed-precondition", "Already voided.");
+        }
+        const lockId = lotVinJobLockId(businessId, row);
+        const lockRef = lockId ?
+          db.collection(LOT_VIN_JOB_LOCKS).doc(lockId) : null;
+        const lock = lockRef ? await tx.get(lockRef) : null;
+        tx.set(ref, {
+          voided: true,
+          voidedByStaffId: uid,
+          voidReason: reason,
+          voidedAt: FirestoreFieldValue.serverTimestamp(),
+          ...(unpaidLink && {
+            paymentStatus: LOT_ACTIVITY_PAYMENT_STATUS.CANCELLED,
+            checkoutStatus: "cancelled",
+          }),
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        }, {merge: true});
+        if (lock?.exists &&
+            String(lock.data()?.activityId || "") === activityId) {
+          tx.delete(lockRef);
+        }
+      });
       await writeLotLedgerAudit({
         businessId,
         entityType: "activity",

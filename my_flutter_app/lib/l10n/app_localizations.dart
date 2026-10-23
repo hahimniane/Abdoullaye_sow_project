@@ -27278,6 +27278,101 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'delivered'**
   String get pkgMomentDelivered;
+
+  /// No description provided for @lotDuplicatesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Possible duplicates'**
+  String get lotDuplicatesTitle;
+
+  /// No description provided for @lotDuplicatesBanner.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 car has the same job twice} other{{count} cars have the same job twice}}'**
+  String lotDuplicatesBanner(int count);
+
+  /// No description provided for @lotDuplicatesBannerNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap to review and void the one entered by mistake.'**
+  String get lotDuplicatesBannerNote;
+
+  /// No description provided for @lotDuplicatesExplain.
+  ///
+  /// In en, this message translates to:
+  /// **'The same car with the same job more than once. Void the one entered by mistake — it stays on the record, struck through.'**
+  String get lotDuplicatesExplain;
+
+  /// No description provided for @lotDuplicateSameCustomer.
+  ///
+  /// In en, this message translates to:
+  /// **'Same customer — likely entered twice'**
+  String get lotDuplicateSameCustomer;
+
+  /// No description provided for @lotDuplicateDifferentCustomers.
+  ///
+  /// In en, this message translates to:
+  /// **'Different customers — may be a resale; void only if entered by mistake'**
+  String get lotDuplicateDifferentCustomers;
+
+  /// No description provided for @lotDuplicatesNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No possible duplicates.'**
+  String get lotDuplicatesNone;
+
+  /// No description provided for @lotVinTail.
+  ///
+  /// In en, this message translates to:
+  /// **'VIN {tail}'**
+  String lotVinTail(String tail);
+
+  /// No description provided for @lotVinDuplicateNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'This car already has {article, select, an{an} other{a}} {job} for this customer: {code} ({date})'**
+  String lotVinDuplicateNotice(
+    String article,
+    String job,
+    String code,
+    String date,
+  );
+
+  /// No description provided for @lotOpenIt.
+  ///
+  /// In en, this message translates to:
+  /// **'Open it'**
+  String get lotOpenIt;
+
+  /// No description provided for @lotRepeatConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Record it again?'**
+  String get lotRepeatConfirmTitle;
+
+  /// No description provided for @lotRepeatConfirmItem.
+  ///
+  /// In en, this message translates to:
+  /// **'on {date} for {customer} ({code})'**
+  String lotRepeatConfirmItem(String date, String customer, String code);
+
+  /// No description provided for @lotRepeatConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This car already had {article, select, an{an} other{a}} {job} {items}. Record another for this customer?'**
+  String lotRepeatConfirmBody(String article, String job, String items);
+
+  /// No description provided for @lotRecordAnother.
+  ///
+  /// In en, this message translates to:
+  /// **'Record another'**
+  String get lotRecordAnother;
+
+  /// No description provided for @lotEntryNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'That entry could not be opened.'**
+  String get lotEntryNotFound;
 }
 
 class _AppLocalizationsDelegate

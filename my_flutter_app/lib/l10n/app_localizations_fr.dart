@@ -16329,4 +16329,74 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get pkgMomentDelivered => 'livré';
+
+  @override
+  String get lotDuplicatesTitle => 'Doublons possibles';
+
+  @override
+  String lotDuplicatesBanner(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count voitures ont deux fois le même travail',
+      one: '1 voiture a deux fois le même travail',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get lotDuplicatesBannerNote =>
+      'Touchez pour vérifier et invalider celle saisie par erreur.';
+
+  @override
+  String get lotDuplicatesExplain =>
+      'La même voiture avec le même travail plus d’une fois. Invalidez celle saisie par erreur — elle reste dans le registre, barrée.';
+
+  @override
+  String get lotDuplicateSameCustomer =>
+      'Même client — probablement saisi deux fois';
+
+  @override
+  String get lotDuplicateDifferentCustomers =>
+      'Clients différents — peut-être une revente ; n’invalidez que si c’est une erreur de saisie';
+
+  @override
+  String get lotDuplicatesNone => 'Aucun doublon possible.';
+
+  @override
+  String lotVinTail(String tail) {
+    return 'VIN $tail';
+  }
+
+  @override
+  String lotVinDuplicateNotice(
+    String article,
+    String job,
+    String code,
+    String date,
+  ) {
+    return 'Cette voiture a déjà « $job » pour ce client : $code ($date)';
+  }
+
+  @override
+  String get lotOpenIt => 'L’ouvrir';
+
+  @override
+  String get lotRepeatConfirmTitle => 'L’enregistrer à nouveau ?';
+
+  @override
+  String lotRepeatConfirmItem(String date, String customer, String code) {
+    return 'le $date pour $customer ($code)';
+  }
+
+  @override
+  String lotRepeatConfirmBody(String article, String job, String items) {
+    return 'Cette voiture a déjà eu « $job » $items. En enregistrer un autre pour ce client ?';
+  }
+
+  @override
+  String get lotRecordAnother => 'En enregistrer un autre';
+
+  @override
+  String get lotEntryNotFound => 'Impossible d’ouvrir cette entrée.';
 }

@@ -37,6 +37,8 @@ const {
   zonedDayKey,
 } = require("./console_summaries");
 const crypto = require("node:crypto");
+const {LOT_DUPLICATE_FIELDS, lotVinDuplicateSummary} =
+  require("./lot_ledger");
 const {drainPages} = require("./scheduled_sweep");
 const businessToday = require("./business_overview");
 const {OPEN_STATUSES: OPEN_PACKAGE_REQUEST_STATUSES} =
@@ -606,6 +608,9 @@ function createConsoleTotalsHandlers(deps) {
     const uid = requireAuth(request);
     const businessId = businessIdFrom(request);
     await requireBusinessPermission(uid, businessId, "ledger");
+    if (String(request.data?.action || "") === "vinDuplicates") {
+      return lotVinDuplicates(businessId);
+    }
     let input;
     try {
       input = normalizeLedgerRequest(request.data || {}, now());
@@ -689,6 +694,26 @@ function createConsoleTotalsHandlers(deps) {
         month: input.month, year: input.year, nowMonth: input.nowMonth},
       complete: [activityRead, paymentRead, linesRead, entryRead,
         undatedEntries].every((part) => part.complete) && parking.complete,
+      computedAtMs: now().getTime(),
+    };
+  }
+
+  /**
+   * The lot ledger's "Possible duplicates" (lot_ledger.js): every activity of
+   * the business, read whole - the lists page by date, and a duplicate can
+   * sit months apart - but only the fields the list shows.
+   *
+   * @param {string} businessId The business (permission already checked).
+   * @return {Promise<object>} {duplicates, complete, computedAtMs}.
+   */
+  async function lotVinDuplicates(businessId) {
+    const deadline = now().getTime() + SCAN_BUDGET_MS;
+    const read = await readAll(db().collection("lotActivities")
+        .where("businessId", "==", businessId)
+        .select(...LOT_DUPLICATE_FIELDS), deadline);
+    return {
+      duplicates: lotVinDuplicateSummary(read.rows),
+      complete: read.complete,
       computedAtMs: now().getTime(),
     };
   }

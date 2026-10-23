@@ -74,6 +74,14 @@ class BusinessBankArguments {
   final String businessId;
 }
 
+/// The lot ledger, opened on one activity - a confirmed repeat of the VIN
+/// duplicate rule ("A second Dispatch was recorded for ...").
+class LotLedgerArguments {
+  const LotLedgerArguments({this.activityId});
+
+  final String? activityId;
+}
+
 /// One package (container line) on the business side, opened by its code or
 /// its line id - a "number isn't theirs" notification
 /// (docs/PHONE_ACCOUNTS.md §6.1) names both.
@@ -120,6 +128,7 @@ const _typeCollections = <String, String>{
   'car_purchase_status': 'carPurchases',
   'car_viewing_status': 'carPurchases',
   'package_request': 'packageRequests',
+  'lot_activity_repeat': 'lotActivities',
 };
 
 String collectionForNotificationType(String type) =>
@@ -462,6 +471,16 @@ NotificationRoute? _businessRouteForNotificationData(
       return NotificationRoute(
         '/business-bank',
         arguments: BusinessBankArguments(businessId: businessId),
+      );
+    // The lot ledger's VIN rule: a second job on the same car, for another
+    // customer, was confirmed - the ledger, opened on that activity.
+    case 'lot_activity_repeat':
+      final activityId = _firstNonEmpty(data, ['activityId', 'relatedId']);
+      return NotificationRoute(
+        '/lot-ledger',
+        arguments: LotLedgerArguments(
+          activityId: activityId.isEmpty ? null : activityId,
+        ),
       );
     // A store transfer was sent, cancelled, came up short, or is waiting:
     // the transfers list, opened on that transfer.
