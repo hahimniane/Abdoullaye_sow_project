@@ -441,6 +441,26 @@ const {
   deliveryUndoAuditSummary,
 } = require("./container_delivery");
 const {
+  LOAD_ACTION,
+  LOAD_FIELDS,
+  LOAD_SUMMARY_WAITING_LIMIT,
+  loadActionOf,
+  scanCodeFrom,
+  scanIdOf,
+  linePieceCount,
+  appendScanId,
+  scanDecision,
+  undoScanDecision,
+  leaveUnscannedDecision,
+  loadLineView,
+  loadContainerView,
+  addCountDeltas,
+  loadSummaryOf,
+  scanLoadAuditSummary,
+  scanUnloadAuditSummary,
+  scanMoveBackAuditSummary,
+} = require("./container_loading");
+const {
   distributeCents,
   groupRootId,
   lineCounts,
@@ -18005,32 +18025,14 @@ exports.moveContainerLine = onCall(
         const lockRef = row.kind === "car" ?
           containerVinLockRef(db, businessId, row.vinNumber) : null;
         const lock = lockRef ? await tx.get(lockRef) : null;
-        tx.update(lineRef, {
-          containerId: to.ref.id,
-          containerStatus:
-            String(toBox.data()?.status || CONTAINER_STATUS.LOADING),
-          updatedAt: FirestoreFieldValue.serverTimestamp(),
-        });
-        tx.set(from.ref, {
-          ...containerCountsIncrement(row, -1),
-          updatedAt: FirestoreFieldValue.serverTimestamp(),
-        }, {merge: true});
-        tx.set(to.ref, {
-          ...containerCountsIncrement(row, 1),
-          updatedAt: FirestoreFieldValue.serverTimestamp(),
-        }, {merge: true});
-        if (lock?.exists && String(lock.data()?.lineId || "") === lineRef.id) {
-          tx.update(lockRef, {containerId: to.ref.id,
-            updatedAt: FirestoreFieldValue.serverTimestamp()});
-        }
+        // Scanning's marks were for the box it leaves.
+        txWriteMove(tx, {lineRef, row, fromRef: from.ref, toRef: to.ref,
+          toStatus: String(toBox.data()?.status || CONTAINER_STATUS.LOADING),
+          lockRef, lock, lineFields: clearedLoadFields()});
       });
-      const what = line.kind === "car" ? `car ${line.vinNumber}` :
-        (line.kind === "barrels" ? barrelsLabel(line.quantity) :
-          String(line.description || "a line"));
-      await containerAudit(businessId, from.ref.id, "line_moved", uid,
-          `Moved ${what} to ${String(to.data.label || to.ref.id)}`);
-      await containerAudit(businessId, to.ref.id, "line_moved", uid,
-          `Received ${what} from ${String(from.data.label || from.ref.id)}`);
+      await moveAudits({businessId, uid, line,
+        from: {id: from.ref.id, label: String(from.data.label || from.ref.id)},
+        to: {id: to.ref.id, label: String(to.data.label || to.ref.id)}});
       return {success: true, lineId: lineRef.id, containerId: to.ref.id};
     },
 );
@@ -18561,6 +18563,750 @@ function requestedPieceCounts(raw) {
   return out;
 }
 
+/**
+ * Field deletes that take scanning's marks (LOAD_FIELDS) off a line that
+ * leaves its container: unassigned, moved, or sent back by an undone scan.
+ *
+ * @return {object} Fields for an update.
+ */
+function clearedLoadFields() {
+  const out = {};
+  for (const field of LOAD_FIELDS) out[field] = FirestoreFieldValue.delete();
+  return out;
+}
+
+/**
+ * The marks a scan leaves on a package it puts on a container, over a clean
+ * slate (any mark left from before is deleted). A package taken from waiting
+ * is `loadAddedByScan`; one moved from another container remembers that
+ * container instead, so undoing the scan moves it back.
+ *
+ * @param {string} uid Who scanned.
+ * @param {string} scanId The scan.
+ * @param {string} movedFrom The container it was moved from, or "".
+ * @return {object} Fields for an update.
+ */
+function scanLoadFields(uid, scanId, movedFrom = "") {
+  return {
+    ...clearedLoadFields(),
+    loadScannedPieces: 1,
+    ...(movedFrom ? {loadMovedFromContainerId: movedFrom} :
+      {loadAddedByScan: true}),
+    loadScannedAt: FirestoreFieldValue.serverTimestamp(),
+    loadScannedByStaffId: uid,
+    loadScanIds: [scanId],
+  };
+}
+
+/**
+ * A line as it reads after an update: the delete sentinels taken out.
+ *
+ * @param {object} row The line as read.
+ * @param {object} fields The update.
+ * @return {object} The line after it.
+ */
+function lineAfterUpdate(row, fields) {
+  const out = {...row};
+  for (const [key, value] of Object.entries(fields)) {
+    if (value instanceof FirestoreFieldValue &&
+        value.isEqual(FirestoreFieldValue.delete())) {
+      delete out[key];
+    } else {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
+/**
+ * What putting waiting lines on a container reads first, as a transaction
+ * requires: each split line's group (for the next part number) and the
+ * cars' VIN locks.
+ *
+ * @param {object} tx The transaction.
+ * @param {object} db Firestore.
+ * @param {string} businessId The business.
+ * @param {object[]} plans {id, line, ...splitPieces(line, n)} per line.
+ * @return {Promise<object>} {groups, lockRefs, locks}.
+ */
+async function txAssignmentReads(tx, db, businessId, plans) {
+  const groups = new Map();
+  for (const plan of plans.filter((p) => p.split)) {
+    const rootId = groupRootId(plan.line, plan.id);
+    if (!groups.has(rootId)) {
+      groups.set(rootId,
+          await txLineGroup(tx, db, businessId, plan.id, plan.line));
+    }
+  }
+  const lockRefs = plans
+      .filter(({line}) => line.kind === "car")
+      .map(({id, line}) => ({id, lockRef: containerVinLockRef(
+          db, businessId, line.vinNumber)}))
+      .filter(({lockRef}) => lockRef);
+  const locks = lockRefs.length > 0 ?
+    await tx.getAll(...lockRefs.map(({lockRef}) => lockRef)) : [];
+  return {groups, lockRefs, locks};
+}
+
+/**
+ * Splits a line inside a transaction: the first pieces (plan.going) stay on
+ * the line with `lineFields`, the rest (plan.staying) become a new waiting
+ * part coded `<root code>-<k>`, k one past the group's highest part. The
+ * part has the line's people, switches, destination and receipt, nothing
+ * paid (payments stay on the root). Used when a waiting line goes on a
+ * container only in part, and when the unscanned pieces of a loaded line
+ * are left waiting.
+ *
+ * @param {object} tx The transaction.
+ * @param {object} db Firestore.
+ * @param {object} args {plan ({id, line, going, staying}), group
+ *   (txLineGroup), lastIndex (Map rootId -> highest part used in this
+ *   transaction), partRef, businessId, uid, now, lineFields (also written
+ *   on the line)}.
+ * @return {object} {going (the line's piece fields after), part: {lineId,
+ *   partLineId, trackingCode, pieceCount, fromCode, going, total, line}}.
+ */
+function txSplitLine(tx, db, args) {
+  const {plan, group, lastIndex, partRef, businessId, uid, now} = args;
+  const lineRef = db.collection("containerLines").doc(plan.id);
+  const rootId = groupRootId(plan.line, plan.id);
+  const root = group.root || plan.line;
+  const index = Math.max(lastIndex.get(rootId) || 0,
+      nextPartIndex(root, group.entries.map((e) => e.line)) - 1) + 1;
+  lastIndex.set(rootId, index);
+  const rootCode = String(root.trackingCode ||
+    plan.line.trackingCode || "");
+  // The pickup fee stays on the line that goes (the root keeps it;
+  // a part never had one); the part that stays has none.
+  const going = piecesLineFields(plan.going,
+      lineHasPickupFee(plan.line) ? linePickupFeeCents(plan.line) :
+        null);
+  const staying = piecesLineFields(plan.staying);
+  const isRoot = rootId === plan.id;
+  tx.update(lineRef, {
+    ...(args.lineFields || {}),
+    ...going,
+    rootLineId: rootId,
+    partIndex: partIndexOf(plan.line),
+    ...(isRoot ? {lastPartIndex: index} : {}),
+    updatedAt: now,
+  });
+  if (!isRoot) {
+    tx.update(db.collection("containerLines").doc(rootId),
+        {lastPartIndex: index, updatedAt: now});
+  }
+  const line = plan.line;
+  const code = partTrackingCode(rootCode, index);
+  // Same customer, receiver, phones, switches, destination and
+  // receipt as the line it came from; nothing paid on it (payments
+  // stay on the root); waiting for a container of its own.
+  tx.set(partRef, {
+    businessId,
+    containerId: "",
+    containerStatus: LINE_STATUS_WAITING,
+    vinNumber: "", carMake: "", carModel: "", carYear: "",
+    ownerKind: String(line.ownerKind || "customer"),
+    customerName: String(line.customerName || ""),
+    customerPhone: String(line.customerPhone || ""),
+    receiverName: String(line.receiverName || ""),
+    receiverPhone: String(line.receiverPhone || ""),
+    notifyCustomer: line.notifyCustomer !== false,
+    notifyReceiver: line.notifyReceiver !== false,
+    senderIsReceiver: line.senderIsReceiver === true,
+    destinationCountryId: String(line.destinationCountryId || ""),
+    destinationCountryName: String(line.destinationCountryName || ""),
+    payOnArrival: line.payOnArrival === true,
+    ...staying,
+    paidCents: 0,
+    source: lineSourceOf(line.source || root.source),
+    requestId: String(line.requestId || root.requestId || ""),
+    // Received when the root was: volume counts each piece once,
+    // in the month it came in.
+    receivedAt: root.receivedAt || root.createdAt ||
+      line.receivedAt || line.createdAt || now,
+    rootLineId: rootId,
+    partIndex: index,
+    splitFromLineId: plan.id,
+    trackingCode: code,
+    addedByStaffId: uid,
+    createdAt: now,
+    updatedAt: now,
+  });
+  return {going, part: {lineId: plan.id, partLineId: partRef.id,
+    trackingCode: code, pieceCount: staying.pieceCount,
+    fromCode: String(plan.line.trackingCode || ""),
+    going: going.pieceCount,
+    total: going.pieceCount + staying.pieceCount,
+    line: plan.line}};
+}
+
+/**
+ * Puts waiting lines on a container inside a transaction, after
+ * txAssignmentReads: each goes whole, or split (txSplitLine), the cars'
+ * VIN locks follow, and the container's tallies grow once by the pieces
+ * that went in.
+ *
+ * @param {object} tx The transaction.
+ * @param {object} db Firestore.
+ * @param {object} args {ref (the container), boxData, plans, reads,
+ *   partRefs (Map line id -> new part ref), businessId, uid, lineExtra
+ *   (more fields for every line that goes, e.g. a scan's marks)}.
+ * @return {object} {loaded: [{id, line}], parts}.
+ */
+function txWriteAssignment(tx, db, args) {
+  const {ref, boxData, plans, reads, partRefs, businessId, uid} = args;
+  const lineExtra = args.lineExtra || {};
+  const status = String(boxData.status || CONTAINER_STATUS.LOADING);
+  const now = FirestoreFieldValue.serverTimestamp();
+  const lastIndex = new Map();
+  const loaded = [];
+  const parts = [];
+  for (const plan of plans) {
+    const lineRef = db.collection("containerLines").doc(plan.id);
+    if (!plan.split) {
+      tx.update(lineRef, {containerId: ref.id, containerStatus: status,
+        ...lineExtra, updatedAt: now});
+      loaded.push({id: plan.id, line: plan.line});
+      continue;
+    }
+    const {going, part} = txSplitLine(tx, db, {
+      plan, lastIndex, businessId, uid, now,
+      group: reads.groups.get(groupRootId(plan.line, plan.id)),
+      partRef: partRefs.get(plan.id),
+      lineFields: {containerId: ref.id, containerStatus: status,
+        ...lineExtra},
+    });
+    loaded.push({id: plan.id, line: {...plan.line, ...going}});
+    parts.push(part);
+  }
+  reads.locks.forEach((lock, i) => {
+    if (lock.exists && String(lock.data()?.lineId || "") ===
+        reads.lockRefs[i].id) {
+      tx.update(lock.ref, {containerId: ref.id, updatedAt: now});
+    }
+  });
+  if (loaded.length > 0) {
+    // The tallies count only the pieces that went in.
+    const increments = {};
+    for (const [key, value] of Object.entries(
+        containerLinesCountsDelta(loaded.map(({line}) => line), 1))) {
+      increments[key] = FirestoreFieldValue.increment(value);
+    }
+    tx.set(ref, {...increments, updatedAt: now}, {merge: true});
+  }
+  return {loaded, parts};
+}
+
+/**
+ * Moves a line from one loading container to another inside a
+ * transaction: the line (with `lineFields`), both containers' tallies and
+ * the car's VIN lock. The caller has read both containers, the line and the
+ * lock, and checked them.
+ *
+ * @param {object} tx The transaction.
+ * @param {object} args {lineRef, row (the line as read), fromRef, toRef,
+ *   toStatus, lockRef, lock, lineFields}.
+ */
+function txWriteMove(tx, args) {
+  const {lineRef, row, fromRef, toRef, lockRef, lock} = args;
+  tx.update(lineRef, {
+    containerId: toRef.id,
+    containerStatus: args.toStatus,
+    ...(args.lineFields || {}),
+    updatedAt: FirestoreFieldValue.serverTimestamp(),
+  });
+  tx.set(fromRef, {
+    ...containerCountsIncrement(row, -1),
+    updatedAt: FirestoreFieldValue.serverTimestamp(),
+  }, {merge: true});
+  tx.set(toRef, {
+    ...containerCountsIncrement(row, 1),
+    updatedAt: FirestoreFieldValue.serverTimestamp(),
+  }, {merge: true});
+  if (lock?.exists && String(lock.data()?.lineId || "") === lineRef.id) {
+    tx.update(lockRef, {containerId: toRef.id,
+      updatedAt: FirestoreFieldValue.serverTimestamp()});
+  }
+}
+
+/**
+ * Sends a line on a loading container back to waiting inside a
+ * transaction: the line (scanning's marks cleared), its container's
+ * tallies, and the car's VIN lock, which keeps holding with no container.
+ *
+ * @param {object} tx The transaction.
+ * @param {object} args {lineRef, row (the line as read), boxRef, lockRef,
+ *   lock}.
+ */
+function txWriteUnassign(tx, args) {
+  const {lineRef, row, boxRef, lockRef, lock} = args;
+  tx.update(lineRef, {
+    containerId: "",
+    containerStatus: LINE_STATUS_WAITING,
+    ...clearedLoadFields(),
+    updatedAt: FirestoreFieldValue.serverTimestamp(),
+  });
+  tx.set(boxRef, {
+    ...containerCountsIncrement(row, -1),
+    updatedAt: FirestoreFieldValue.serverTimestamp(),
+  }, {merge: true});
+  // The car keeps its lock: it is still holding, now on the waiting
+  // list instead of on the box.
+  if (lock?.exists && String(lock.data()?.lineId || "") === lineRef.id) {
+    tx.update(lockRef, {containerId: "",
+      updatedAt: FirestoreFieldValue.serverTimestamp()});
+  }
+}
+
+/**
+ * The History of a split: on the line that went, and on the new part.
+ *
+ * @param {string} businessId The business.
+ * @param {string} uid Who split it.
+ * @param {string} label The container the line is on.
+ * @param {object} part From txSplitLine.
+ * @return {Promise<void>}
+ */
+async function splitAudits(businessId, uid, label, part) {
+  await writeLotLedgerAudit({
+    businessId, entityType: "container_line", entityId: part.lineId,
+    action: "line_split", byStaffId: uid, changes: [],
+    summary: `Split ${part.fromCode}: ${part.going} of ${part.total} ` +
+      `pieces to ${label}, ${part.pieceCount} stay waiting as ` +
+      `${part.trackingCode}`,
+  });
+  await writeLotLedgerAudit({
+    businessId, entityType: "container_line",
+    entityId: part.partLineId,
+    action: "line_split", byStaffId: uid, changes: [],
+    summary: `Split from ${part.fromCode}: ${part.pieceCount} ` +
+      `piece${part.pieceCount === 1 ? "" : "s"} waiting for a ` +
+      "container",
+  });
+}
+
+/**
+ * The History of a line moved between containers, on both containers.
+ *
+ * @param {object} args {businessId, uid, line, from: {id, label}, to: {id,
+ *   label}}.
+ * @return {Promise<void>}
+ */
+async function moveAudits(args) {
+  const {businessId, uid, line, from, to} = args;
+  const what = line.kind === "car" ? `car ${line.vinNumber}` :
+    (line.kind === "barrels" ? barrelsLabel(line.quantity) :
+      String(line.description || "a line"));
+  await containerAudit(businessId, from.id, "line_moved", uid,
+      `Moved ${what} to ${to.label}`);
+  await containerAudit(businessId, to.id, "line_moved", uid,
+      `Received ${what} from ${from.label}`);
+}
+
+// -------------------------------------------------------------------------
+// Scan to load (docs/WAITING_PACKAGES.md "Scan to load"). Actions on
+// assignContainerLines - no new export: the Cloud Functions CPU budget
+// (test/scaling-contract.test.js) is at its limit. The decisions are pure
+// (container_loading.js); the writes are the assign, move, unassign and
+// split ones above, so a scanned package lands exactly as one added by hand.
+// No WhatsApp and no container timeline moment.
+// -------------------------------------------------------------------------
+
+/**
+ * A loading refusal: the message, the code, and the line it is about.
+ *
+ * @param {string} code A CONTAINER_MESSAGES key.
+ * @param {string} lineId The line, or "".
+ * @param {object} details More details (line_in_other_container).
+ * @return {HttpsError} The error to throw.
+ */
+function loadingRefusal(code, lineId = "", details = {}) {
+  const lineIds = lineId ? [lineId] : [];
+  if (["scan_code_invalid", "scan_id_invalid", "load_action_invalid",
+    "piece_count_invalid"].includes(code)) {
+    return new HttpsError("invalid-argument", CONTAINER_MESSAGES[code],
+        {reason: code, reasons: [code], lineIds});
+  }
+  if (code === "line_not_found") {
+    return new HttpsError("not-found", lineId ?
+      CONTAINER_MESSAGES.line_not_found :
+      CONTAINER_MESSAGES.scan_line_not_found, {reason: code, lineIds});
+  }
+  return new HttpsError("failed-precondition",
+      CONTAINER_MESSAGES[code] || code, {reason: code, lineIds, ...details});
+}
+
+/**
+ * The business's line carrying a package code: equality on `businessId`
+ * and `trackingCode` only (as the app's package look-up), so no composite
+ * index is needed and another business's label is never found.
+ *
+ * @param {object} db Firestore.
+ * @param {string} businessId The business.
+ * @param {string} code "CL-XXXXXX" or "CL-XXXXXX-n".
+ * @return {Promise<object|null>} The line's snapshot.
+ */
+async function businessLineByCode(db, businessId, code) {
+  const snap = await db.collection("containerLines")
+      .where("businessId", "==", businessId)
+      .where("trackingCode", "==", code)
+      .limit(1)
+      .get();
+  return snap.empty ? null : snap.docs[0];
+}
+
+/**
+ * One scan of a package label while loading a container. One transaction
+ * re-reads the container and the line (and the container the line is on,
+ * when that is another): a retried scan id answers the same and changes
+ * nothing; a waiting package goes on whole (the assign writes); one already
+ * here counts one more piece; one on another loading container moves here
+ * when the caller confirmed (the move writes).
+ *
+ * @param {object} db Firestore.
+ * @param {object} args {uid, businessId, ref (the container), data}.
+ * @return {Promise<object>} {success, result, line, container}.
+ */
+async function scanToLoad(db, {uid, businessId, ref, data}) {
+  const code = scanCodeFrom(data.code);
+  if (!code) throw loadingRefusal("scan_code_invalid");
+  const scanId = scanIdOf(data.scanId);
+  if (!scanId) throw loadingRefusal("scan_id_invalid");
+  const found = await businessLineByCode(db, businessId, code);
+  if (!found) throw loadingRefusal("line_not_found");
+  const lineRef = found.ref;
+  const lineId = lineRef.id;
+  const done = await db.runTransaction(async (tx) => {
+    const [box, lineDoc] = await tx.getAll(ref, lineRef);
+    if (!box.exists || String(box.data()?.businessId) !== businessId) {
+      throw new HttpsError(
+          "not-found", CONTAINER_MESSAGES.container_not_found);
+    }
+    const boxData = box.data() || {};
+    const row = lineDoc.exists ? lineDoc.data() || {} : null;
+    const onId = row ? String(row.containerId || "") : "";
+    const otherRef = onId && onId !== ref.id ?
+      db.collection("containers").doc(onId) : null;
+    const otherDoc = otherRef ? await tx.get(otherRef) : null;
+    const other = otherDoc?.exists &&
+      String(otherDoc.data()?.businessId) === businessId ?
+      otherDoc.data() || {} : null;
+    const decision = scanDecision({line: row, lineId, businessId,
+      container: boxData, containerId: ref.id, otherContainer: other,
+      scanId, move: data.move === true});
+    if (decision.refusal) {
+      throw loadingRefusal(decision.refusal, lineId, decision.details);
+    }
+    if (decision.change === "none") return {decision, row, boxData};
+    const now = FirestoreFieldValue.serverTimestamp();
+    if (decision.change === "count") {
+      const marks = {
+        loadScannedPieces: decision.scannedPieces,
+        loadScannedAt: now,
+        loadScannedByStaffId: uid,
+        loadScanIds: appendScanId(row.loadScanIds, scanId,
+            linePieceCount(row)),
+      };
+      tx.update(lineRef, {...marks, updatedAt: now});
+      return {decision, row: {...row, ...marks}, boxData};
+    }
+    const marks = scanLoadFields(uid, scanId,
+        decision.change === "move" ? onId : "");
+    const after = lineAfterUpdate({...row, containerId: ref.id}, marks);
+    const delta = containerLinesCountsDelta([row], 1);
+    if (decision.change === "load") {
+      // Whole, exactly as assignContainerLines without pieceCounts.
+      const plans = [{id: lineId, line: row, ...splitPieces(row)}];
+      const reads = await txAssignmentReads(tx, db, businessId, plans);
+      txWriteAssignment(tx, db, {ref, boxData, plans, reads,
+        partRefs: new Map(), businessId, uid, lineExtra: marks});
+      return {decision, row: after, boxData, delta};
+    }
+    // Moved here from the other container, still loading (as
+    // moveContainerLine).
+    const lockRef = row.kind === "car" ?
+      containerVinLockRef(db, businessId, row.vinNumber) : null;
+    const lock = lockRef ? await tx.get(lockRef) : null;
+    txWriteMove(tx, {lineRef, row, fromRef: otherRef, toRef: ref,
+      toStatus: String(boxData.status || CONTAINER_STATUS.LOADING),
+      lockRef, lock, lineFields: marks});
+    return {decision, row: after, boxData, delta,
+      from: {id: onId, label: String(other.label || onId)}};
+  });
+  const {decision, row} = done;
+  if (decision.change === "load" || decision.change === "move") {
+    const label = String(done.boxData.label || ref.id);
+    if (done.from) {
+      await moveAudits({businessId, uid, line: row, from: done.from,
+        to: {id: ref.id, label}});
+    }
+    // One entry on the package's own History; counted scans write none.
+    await writeLotLedgerAudit({
+      businessId, entityType: "container_line", entityId: lineId,
+      action: "line_assigned", byStaffId: uid, changes: [],
+      summary: scanLoadAuditSummary({what: containerLineTitle(row), label,
+        fromLabel: done.from?.label || ""}),
+    });
+  }
+  return {
+    success: true,
+    result: decision.result,
+    line: loadLineView(lineId, row),
+    container: loadContainerView(ref.id, done.boxData, done.delta),
+  };
+}
+
+/**
+ * Takes back a scan of a package (the one named by `scanId`, else the
+ * last): one piece fewer. At none, a package this mode took from waiting
+ * goes back to waiting (the unassign writes), one a scan moved here goes
+ * back to the container it came from while that one is still loading (the
+ * move writes), and one added by hand keeps 0. A scan already taken back
+ * changes nothing (`already_undone`).
+ *
+ * @param {object} db Firestore.
+ * @param {object} args {uid, businessId, ref (the container), data}.
+ * @return {Promise<object>} {success, result, line, container,
+ *   movedBackTo?}.
+ */
+async function undoLoadScan(db, {uid, businessId, ref, data}) {
+  const lineId = String(data.lineId || "").trim();
+  if (!lineId || lineId.includes("/")) {
+    throw containerRefusal("line_not_found", []);
+  }
+  const lineRef = db.collection("containerLines").doc(lineId);
+  const done = await db.runTransaction(async (tx) => {
+    const [box, lineDoc] = await tx.getAll(ref, lineRef);
+    if (!box.exists || String(box.data()?.businessId) !== businessId) {
+      throw new HttpsError(
+          "not-found", CONTAINER_MESSAGES.container_not_found);
+    }
+    const boxData = box.data() || {};
+    const row = lineDoc.exists ? lineDoc.data() || {} : null;
+    // Reads first: the container a scan moved it from.
+    const fromId = row && String(row.containerId || "") === ref.id ?
+      String(row.loadMovedFromContainerId || "") : "";
+    const originRef = fromId && !fromId.includes("/") && fromId !== ref.id ?
+      db.collection("containers").doc(fromId) : null;
+    const originDoc = originRef ? await tx.get(originRef) : null;
+    const origin = originDoc?.exists ? originDoc.data() || {} : null;
+    const decision = undoScanDecision({line: row, businessId,
+      container: boxData, containerId: ref.id, scanId: data.scanId,
+      origin});
+    if (decision.refusal) throw loadingRefusal(decision.refusal, lineId);
+    if (decision.change === "none") return {decision, row, boxData};
+    if (decision.change === "uncount") {
+      const marks = {
+        loadScannedPieces: decision.scannedPieces,
+        loadScanIds: decision.scanIds,
+      };
+      tx.update(lineRef, {...marks,
+        updatedAt: FirestoreFieldValue.serverTimestamp()});
+      return {decision, row: {...row, ...marks}, boxData};
+    }
+    const lockRef = row.kind === "car" ?
+      containerVinLockRef(db, businessId, row.vinNumber) : null;
+    const lock = lockRef ? await tx.get(lockRef) : null;
+    const delta = containerLinesCountsDelta([row], -1);
+    if (decision.change === "move_back") {
+      txWriteMove(tx, {lineRef, row, fromRef: ref, toRef: originRef,
+        toStatus: String(origin.status || CONTAINER_STATUS.LOADING),
+        lockRef, lock, lineFields: clearedLoadFields()});
+      return {decision, boxData, delta,
+        row: lineAfterUpdate({...row, containerId: fromId,
+          containerStatus: String(origin.status ||
+            CONTAINER_STATUS.LOADING)}, clearedLoadFields()),
+        origin: {containerId: fromId, label: String(origin.label || "")}};
+    }
+    txWriteUnassign(tx, {lineRef, row, boxRef: ref, lockRef, lock});
+    return {decision, boxData, delta,
+      row: lineAfterUpdate({...row, containerId: "",
+        containerStatus: LINE_STATUS_WAITING}, clearedLoadFields())};
+  });
+  const {decision, row} = done;
+  const label = String(done.boxData.label || ref.id);
+  if (decision.change === "unload") {
+    await writeLotLedgerAudit({
+      businessId, entityType: "container_line", entityId: lineId,
+      action: "line_unassigned", byStaffId: uid, changes: [],
+      summary: scanUnloadAuditSummary(label),
+    });
+  }
+  if (decision.change === "move_back") {
+    const toLabel = done.origin.label || done.origin.containerId;
+    await moveAudits({businessId, uid, line: row,
+      from: {id: ref.id, label},
+      to: {id: done.origin.containerId, label: toLabel}});
+    await writeLotLedgerAudit({
+      businessId, entityType: "container_line", entityId: lineId,
+      action: "line_moved", byStaffId: uid, changes: [],
+      summary: scanMoveBackAuditSummary({label, toLabel}),
+    });
+  }
+  return {
+    success: true,
+    result: decision.result,
+    line: loadLineView(lineId, row),
+    container: loadContainerView(ref.id, done.boxData, done.delta),
+    ...(done.origin ? {movedBackTo: done.origin} : {}),
+  };
+}
+
+/**
+ * The Done loading summary: packages part scanned, packages on the
+ * container never scanned, and the business's waiting packages going where
+ * the container goes: up to LOAD_SUMMARY_WAITING_LIMIT of them (whichever
+ * the query returns first, then sorted by drop-off) and how many there are.
+ * Equality filters only, so no composite index is needed; the list and the
+ * count use the same query.
+ *
+ * @param {object} db Firestore.
+ * @param {object} args {businessId, ref (the container), box (its data)}.
+ * @return {Promise<object>} {success, container, incomplete, unscanned,
+ *   waitingCount, waiting}.
+ */
+async function loadSummary(db, {businessId, ref, box}) {
+  const waitingQuery = db.collection("containerLines")
+      .where("businessId", "==", businessId)
+      .where("containerStatus", "==", LINE_STATUS_WAITING)
+      .where("destinationCountryId", "==",
+          String(box.destinationCountryId || "").trim())
+      .where("containerId", "==", "");
+  const [onBox, waitingSnap, waitingCount] = await Promise.all([
+    db.collection("containerLines").where("containerId", "==", ref.id).get(),
+    waitingQuery.limit(LOAD_SUMMARY_WAITING_LIMIT).get(),
+    waitingQuery.count().get(),
+  ]);
+  const entries = onBox.docs
+      .filter((d) => String(d.data()?.businessId) === businessId)
+      .map((d) => ({id: d.id, line: d.data() || {}}));
+  const {incomplete, unscanned} = loadSummaryOf(entries);
+  const receivedMs = (line) =>
+    timestampMillis(line.receivedAt || line.createdAt) || 0;
+  const waiting = waitingSnap.docs
+      .map((d) => ({id: d.id, line: d.data() || {}}))
+      .sort((a, b) => receivedMs(a.line) - receivedMs(b.line))
+      .map(({id, line}) => loadLineView(id, line));
+  return {
+    success: true,
+    container: loadContainerView(ref.id, box),
+    incomplete,
+    unscanned,
+    waitingCount: Number(waitingCount.data().count) || 0,
+    waiting,
+  };
+}
+
+/**
+ * Leaves the unscanned pieces of a part scanned package waiting: the
+ * scanned pieces stay on the container, the rest are split off as a
+ * waiting part (the same split as assignContainerLines with pieceCounts),
+ * and the container's tallies drop by the pieces that left. The line
+ * remembers the part (`loadLeftPartId`), so a retried request answers with
+ * it (`alreadyDone: true`) instead of being refused.
+ *
+ * @param {object} db Firestore.
+ * @param {object} args {uid, businessId, ref (the container), data}.
+ * @return {Promise<object>} {success, alreadyDone, line, part, container}.
+ */
+async function leaveUnscannedWaiting(db, {uid, businessId, ref, data}) {
+  const lineId = String(data.lineId || "").trim();
+  if (!lineId || lineId.includes("/")) {
+    throw containerRefusal("line_not_found", []);
+  }
+  const lineRef = db.collection("containerLines").doc(lineId);
+  // Minted outside the transaction: an auto id reads nothing.
+  const partRef = db.collection("containerLines").doc();
+  const done = await db.runTransaction(async (tx) => {
+    const [box, lineDoc] = await tx.getAll(ref, lineRef);
+    if (!box.exists || String(box.data()?.businessId) !== businessId) {
+      throw new HttpsError(
+          "not-found", CONTAINER_MESSAGES.container_not_found);
+    }
+    const boxData = box.data() || {};
+    const row = lineDoc.exists ? lineDoc.data() || {} : null;
+    if (!row || String(row.businessId) !== businessId ||
+        String(row.containerId || "") !== ref.id) {
+      throw loadingRefusal("line_not_found", lineId);
+    }
+    const decision = leaveUnscannedDecision(row);
+    // Done already (a retried request): answer with the part it made.
+    if (decision.change === "none") {
+      const partDoc = await tx.get(
+          db.collection("containerLines").doc(decision.partId));
+      const partLine = partDoc.exists ? partDoc.data() || {} : {};
+      return {row, boxData, alreadyDone: true, part: {
+        partLineId: decision.partId,
+        trackingCode: String(partLine.trackingCode || ""),
+        pieceCount: partDoc.exists ? linePieceCount(partLine) : 0,
+      }};
+    }
+    if (!containerIsOpen(boxData)) {
+      throw loadingRefusal("container_locked", lineId);
+    }
+    if (decision.refusal) throw loadingRefusal(decision.refusal, lineId);
+    const plan = {id: lineId, line: row,
+      ...splitPieces(row, Number(row.loadScannedPieces))};
+    const group = await txLineGroup(tx, db, businessId, lineId, row);
+    const now = FirestoreFieldValue.serverTimestamp();
+    const {going, part} = txSplitLine(tx, db, {plan, group,
+      lastIndex: new Map(), partRef, businessId, uid, now,
+      lineFields: {loadLeftPartId: partRef.id}});
+    const after = {...row, ...going, loadLeftPartId: partRef.id};
+    // Still one line on the box, fewer pieces.
+    const delta = addCountDeltas(containerLinesCountsDelta([after], 1),
+        containerLinesCountsDelta([row], -1));
+    const increments = {};
+    for (const [key, value] of Object.entries(delta)) {
+      increments[key] = FirestoreFieldValue.increment(value);
+    }
+    tx.set(ref, {...increments, updatedAt: now}, {merge: true});
+    return {row: after, part, boxData, delta, alreadyDone: false};
+  });
+  if (!done.alreadyDone) {
+    await splitAudits(businessId, uid,
+        String(done.boxData.label || ref.id), done.part);
+  }
+  return {
+    success: true,
+    alreadyDone: done.alreadyDone,
+    line: loadLineView(lineId, done.row),
+    part: {lineId: done.part.partLineId,
+      trackingCode: done.part.trackingCode,
+      pieceCount: done.part.pieceCount},
+    container: loadContainerView(ref.id, done.boxData, done.delta),
+  };
+}
+
+/**
+ * The scan to load actions on assignContainerLines. Same gate as adding by
+ * hand: the containers permission (owners and admins hold it).
+ *
+ * @param {object} db Firestore.
+ * @param {object} args {uid, businessId, data (the request)}.
+ * @return {Promise<object>} The action's answer.
+ */
+async function containerLoadingAction(db, {uid, businessId, data}) {
+  const action = loadActionOf(data.action);
+  if (!action) {
+    await requireBusinessPermission(uid, businessId, CONTAINER_SECTION);
+    throw loadingRefusal("load_action_invalid");
+  }
+  const {ref, data: box} =
+    await loadContainerFor(db, uid, businessId, data.containerId);
+  const args = {uid, businessId, ref, box, data};
+  switch (action) {
+    case LOAD_ACTION.SCAN:
+      return scanToLoad(db, args);
+    case LOAD_ACTION.UNDO_SCAN:
+      return undoLoadScan(db, args);
+    case LOAD_ACTION.LOAD_SUMMARY:
+      return loadSummary(db, args);
+    default:
+      return leaveUnscannedWaiting(db, args);
+  }
+}
+
 exports.assignContainerLines = onCall(
     {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
     async (request) => {
@@ -18568,6 +19314,11 @@ exports.assignContainerLines = onCall(
       const data = request.data || {};
       const businessId = String(data.businessId || "").trim();
       const db = admin.firestore();
+      // With `action` it is scan to load instead (container_loading.js).
+      if (data.action !== undefined && data.action !== null &&
+          data.action !== "") {
+        return containerLoadingAction(db, {uid, businessId, data});
+      }
       const {ref} =
         await loadContainerFor(db, uid, businessId, data.containerId);
       const {ids, errors} = cleanLineIds(data.lineIds);
@@ -18622,125 +19373,10 @@ exports.assignContainerLines = onCall(
               {reason: "piece_count_invalid",
                 reasons: ["piece_count_invalid"], lineIds: badCounts});
         }
-        // Reads first, as a transaction requires: each split line's group
-        // (for the next part number) and the cars' VIN locks.
-        const groups = new Map();
-        for (const plan of plans.filter((p) => p.split)) {
-          const rootId = groupRootId(plan.line, plan.id);
-          if (!groups.has(rootId)) {
-            groups.set(rootId,
-                await txLineGroup(tx, db, businessId, plan.id, plan.line));
-          }
-        }
-        const lockRefs = entries
-            .filter(({line}) => line.kind === "car")
-            .map(({id, line}) => ({id, lockRef: containerVinLockRef(
-                db, businessId, line.vinNumber)}))
-            .filter(({lockRef}) => lockRef);
-        const locks = lockRefs.length > 0 ?
-          await tx.getAll(...lockRefs.map(({lockRef}) => lockRef)) : [];
-        const status = String(boxData.status || CONTAINER_STATUS.LOADING);
-        const now = FirestoreFieldValue.serverTimestamp();
-        const lastIndex = new Map();
-        const loaded = [];
-        const parts = [];
-        for (const plan of plans) {
-          const lineRef = db.collection("containerLines").doc(plan.id);
-          if (!plan.split) {
-            tx.update(lineRef, {containerId: ref.id, containerStatus: status,
-              updatedAt: now});
-            loaded.push({id: plan.id, line: plan.line});
-            continue;
-          }
-          const rootId = groupRootId(plan.line, plan.id);
-          const group = groups.get(rootId);
-          const root = group.root || plan.line;
-          const index = Math.max(lastIndex.get(rootId) || 0,
-              nextPartIndex(root, group.entries.map((e) => e.line)) - 1) + 1;
-          lastIndex.set(rootId, index);
-          const rootCode = String(root.trackingCode ||
-            plan.line.trackingCode || "");
-          // The pickup fee stays on the line that goes (the root keeps it;
-          // a part never had one); the part that stays has none.
-          const going = piecesLineFields(plan.going,
-              lineHasPickupFee(plan.line) ? linePickupFeeCents(plan.line) :
-                null);
-          const staying = piecesLineFields(plan.staying);
-          const isRoot = rootId === plan.id;
-          tx.update(lineRef, {
-            containerId: ref.id,
-            containerStatus: status,
-            ...going,
-            rootLineId: rootId,
-            partIndex: partIndexOf(plan.line),
-            ...(isRoot ? {lastPartIndex: index} : {}),
-            updatedAt: now,
-          });
-          if (!isRoot) {
-            tx.update(db.collection("containerLines").doc(rootId),
-                {lastPartIndex: index, updatedAt: now});
-          }
-          const partRef = partRefs.get(plan.id);
-          const line = plan.line;
-          const code = partTrackingCode(rootCode, index);
-          // Same customer, receiver, phones, switches, destination and
-          // receipt as the line it came from; nothing paid on it (payments
-          // stay on the root); waiting for a container of its own.
-          tx.set(partRef, {
-            businessId,
-            containerId: "",
-            containerStatus: LINE_STATUS_WAITING,
-            vinNumber: "", carMake: "", carModel: "", carYear: "",
-            ownerKind: String(line.ownerKind || "customer"),
-            customerName: String(line.customerName || ""),
-            customerPhone: String(line.customerPhone || ""),
-            receiverName: String(line.receiverName || ""),
-            receiverPhone: String(line.receiverPhone || ""),
-            notifyCustomer: line.notifyCustomer !== false,
-            notifyReceiver: line.notifyReceiver !== false,
-            senderIsReceiver: line.senderIsReceiver === true,
-            destinationCountryId: String(line.destinationCountryId || ""),
-            destinationCountryName: String(line.destinationCountryName || ""),
-            payOnArrival: line.payOnArrival === true,
-            ...staying,
-            paidCents: 0,
-            source: lineSourceOf(line.source || root.source),
-            requestId: String(line.requestId || root.requestId || ""),
-            // Received when the root was: volume counts each piece once,
-            // in the month it came in.
-            receivedAt: root.receivedAt || root.createdAt ||
-              line.receivedAt || line.createdAt || now,
-            rootLineId: rootId,
-            partIndex: index,
-            splitFromLineId: plan.id,
-            trackingCode: code,
-            addedByStaffId: uid,
-            createdAt: now,
-            updatedAt: now,
-          });
-          loaded.push({id: plan.id, line: {...plan.line, ...going}});
-          parts.push({lineId: plan.id, partLineId: partRef.id,
-            trackingCode: code, pieceCount: staying.pieceCount,
-            fromCode: String(plan.line.trackingCode || ""),
-            going: going.pieceCount,
-            total: going.pieceCount + staying.pieceCount,
-            line: plan.line});
-        }
-        locks.forEach((lock, i) => {
-          if (lock.exists && String(lock.data()?.lineId || "") ===
-              lockRefs[i].id) {
-            tx.update(lock.ref, {containerId: ref.id, updatedAt: now});
-          }
-        });
-        if (loaded.length > 0) {
-          // The tallies count only the pieces that went in.
-          const increments = {};
-          for (const [key, value] of Object.entries(
-              containerLinesCountsDelta(loaded.map(({line}) => line), 1))) {
-            increments[key] = FirestoreFieldValue.increment(value);
-          }
-          tx.set(ref, {...increments, updatedAt: now}, {merge: true});
-        }
+        // Reads first, as a transaction requires.
+        const reads = await txAssignmentReads(tx, db, businessId, plans);
+        const {loaded, parts} = txWriteAssignment(tx, db, {ref, boxData,
+          plans, reads, partRefs, businessId, uid});
         return {box: boxData, entries: loaded, parts,
           alreadyAssigned: already.length};
       });
@@ -18762,21 +19398,7 @@ exports.assignContainerLines = onCall(
         })));
       }
       for (const part of placed.parts) {
-        await writeLotLedgerAudit({
-          businessId, entityType: "container_line", entityId: part.lineId,
-          action: "line_split", byStaffId: uid, changes: [],
-          summary: `Split ${part.fromCode}: ${part.going} of ${part.total} ` +
-            `pieces to ${label}, ${part.pieceCount} stay waiting as ` +
-            `${part.trackingCode}`,
-        });
-        await writeLotLedgerAudit({
-          businessId, entityType: "container_line",
-          entityId: part.partLineId,
-          action: "line_split", byStaffId: uid, changes: [],
-          summary: `Split from ${part.fromCode}: ${part.pieceCount} ` +
-            `piece${part.pieceCount === 1 ? "" : "s"} waiting for a ` +
-            "container",
-        });
+        await splitAudits(businessId, uid, label, part);
       }
       return {
         success: true,
@@ -18819,21 +19441,7 @@ exports.unassignContainerLine = onCall(
         const lockRef = row.kind === "car" ?
           containerVinLockRef(db, businessId, row.vinNumber) : null;
         const lock = lockRef ? await tx.get(lockRef) : null;
-        tx.update(lineRef, {
-          containerId: "",
-          containerStatus: LINE_STATUS_WAITING,
-          updatedAt: FirestoreFieldValue.serverTimestamp(),
-        });
-        tx.set(boxRef, {
-          ...containerCountsIncrement(row, -1),
-          updatedAt: FirestoreFieldValue.serverTimestamp(),
-        }, {merge: true});
-        // The car keeps its lock: it is still holding, now on the waiting
-        // list instead of on the box.
-        if (lock?.exists && String(lock.data()?.lineId || "") === lineId) {
-          tx.update(lockRef, {containerId: "",
-            updatedAt: FirestoreFieldValue.serverTimestamp()});
-        }
+        txWriteUnassign(tx, {lineRef, row, boxRef, lockRef, lock});
         return {row, box: box.data() || {}, boxId};
       });
       const label = String(placed.box.label || placed.boxId);

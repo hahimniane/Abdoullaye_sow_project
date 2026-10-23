@@ -144,6 +144,14 @@ const containerRefusalCodes = <String>[
   'piece_price_invalid',
   'piece_count_invalid',
   'line_has_parts',
+  // Scan to load (docs/WAITING_PACKAGES.md "Scan to load"); the loading
+  // screen's own words are in container_loading_screen.dart.
+  'load_action_invalid',
+  'scan_code_invalid',
+  'scan_id_invalid',
+  'scan_line_not_found',
+  'line_delivered',
+  'line_in_other_container',
 ];
 
 String _text(Object? value, [int max = containerMaxText]) {
@@ -1000,11 +1008,17 @@ class ContainerLine {
     this.deliveredBalanceCents = 0,
     this.deliveryUndoneAt,
     this.deliveryUndoneByStaffId = '',
+    this.loadScannedPieces = 0,
   });
 
   final String id;
   final String businessId;
   final String containerId;
+
+  /// Scan to load (docs/WAITING_PACKAGES.md "Scan to load"): how many of
+  /// its pieces were scanned onto its current container. Server-written,
+  /// cleared when it leaves the container; absent reads as 0.
+  final int loadScannedPieces;
 
   /// Handed over at the destination (functions `container_delivery.js`
   /// DELIVERY_FIELDS): when, by whom (uid and name), who collected it (the
@@ -1204,6 +1218,7 @@ class ContainerLine {
       deliveredBalanceCents: _paidCents(d['deliveredBalanceCents']),
       deliveryUndoneAt: lotDateOf(d['deliveryUndoneAt']),
       deliveryUndoneByStaffId: _text(d['deliveryUndoneByStaffId'], 128),
+      loadScannedPieces: _positiveInt(d['loadScannedPieces']),
     );
   }
 

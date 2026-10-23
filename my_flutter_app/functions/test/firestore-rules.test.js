@@ -1072,6 +1072,11 @@ describe("business dashboard Firestore rules", () => {
             "containerLinePayments/pay_a")));
         await assertFails(updateDoc(doc(owner, "containerLines/wait_a"),
             {paidCents: 15000, containerStatus: "shipped"}));
+        // Scan to load's marks are the server's alone, even for the owner
+        // (a client that could write them could say a package is loaded).
+        await assertFails(updateDoc(doc(owner, "containerLines/wait_a"),
+            {loadScannedPieces: 3, loadAddedByScan: true,
+              loadScanIds: ["forged-scan"]}));
         await assertFails(deleteDoc(doc(owner, "containerLines/wait_a")));
       });
 

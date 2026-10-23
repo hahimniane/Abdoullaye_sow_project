@@ -27278,6 +27278,372 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'delivered'**
   String get pkgMomentDelivered;
+
+  /// No description provided for @ldgStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Start loading'**
+  String get ldgStart;
+
+  /// No description provided for @ldgHeaderTo.
+  ///
+  /// In en, this message translates to:
+  /// **'To {destination}'**
+  String ldgHeaderTo(String destination);
+
+  /// No description provided for @ldgTotalPackages.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 package} other{{count} packages}}'**
+  String ldgTotalPackages(int count);
+
+  /// No description provided for @ldgTotalPieces.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 piece scanned} other{{count} pieces scanned}}'**
+  String ldgTotalPieces(int count);
+
+  /// No description provided for @ldgCameraUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'The camera is unavailable. Type the code printed on each label below.'**
+  String get ldgCameraUnavailable;
+
+  /// No description provided for @ldgTypeCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Type a code'**
+  String get ldgTypeCode;
+
+  /// No description provided for @ldgTypeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'CL-K7M4P2'**
+  String get ldgTypeHint;
+
+  /// No description provided for @ldgTypeSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Load'**
+  String get ldgTypeSend;
+
+  /// No description provided for @ldgRecent.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent scans'**
+  String get ldgRecent;
+
+  /// No description provided for @ldgNoScans.
+  ///
+  /// In en, this message translates to:
+  /// **'Each label you scan shows here.'**
+  String get ldgNoScans;
+
+  /// No description provided for @ldgSending.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending…'**
+  String get ldgSending;
+
+  /// No description provided for @ldgLoaded.
+  ///
+  /// In en, this message translates to:
+  /// **'Loaded'**
+  String get ldgLoaded;
+
+  /// No description provided for @ldgLoadedOf.
+  ///
+  /// In en, this message translates to:
+  /// **'Loaded · {scanned} of {total}'**
+  String ldgLoadedOf(int scanned, int total);
+
+  /// No description provided for @ldgMovedHere.
+  ///
+  /// In en, this message translates to:
+  /// **'Moved here'**
+  String get ldgMovedHere;
+
+  /// No description provided for @ldgCountedOf.
+  ///
+  /// In en, this message translates to:
+  /// **'{scanned} of {total}'**
+  String ldgCountedOf(int scanned, int total);
+
+  /// No description provided for @ldgAllIn.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Already in} other{All {count} already in}}'**
+  String ldgAllIn(int count);
+
+  /// No description provided for @ldgUndo.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo'**
+  String get ldgUndo;
+
+  /// No description provided for @ldgUndoneBack.
+  ///
+  /// In en, this message translates to:
+  /// **'Undone · back to waiting'**
+  String get ldgUndoneBack;
+
+  /// No description provided for @ldgUndoneOf.
+  ///
+  /// In en, this message translates to:
+  /// **'Undone · {scanned} of {total}'**
+  String ldgUndoneOf(int scanned, int total);
+
+  /// No description provided for @ldgUndoFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t undo. Try again.'**
+  String get ldgUndoFailed;
+
+  /// No description provided for @ldgErrOffline.
+  ///
+  /// In en, this message translates to:
+  /// **'No connection - scan again'**
+  String get ldgErrOffline;
+
+  /// No description provided for @ldgErrNotAllowed.
+  ///
+  /// In en, this message translates to:
+  /// **'You don’t have access to load containers.'**
+  String get ldgErrNotAllowed;
+
+  /// No description provided for @ldgErrNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'No package has this code.'**
+  String get ldgErrNotFound;
+
+  /// No description provided for @ldgErrLocked.
+  ///
+  /// In en, this message translates to:
+  /// **'This container is no longer loading.'**
+  String get ldgErrLocked;
+
+  /// No description provided for @ldgErrDestinationRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Give this container a destination first.'**
+  String get ldgErrDestinationRequired;
+
+  /// No description provided for @ldgErrDestinationMismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'This package goes to another country.'**
+  String get ldgErrDestinationMismatch;
+
+  /// No description provided for @ldgErrDelivered.
+  ///
+  /// In en, this message translates to:
+  /// **'This package was already delivered.'**
+  String get ldgErrDelivered;
+
+  /// No description provided for @ldgErrOtherContainer.
+  ///
+  /// In en, this message translates to:
+  /// **'This package is on {container}.'**
+  String ldgErrOtherContainer(String container);
+
+  /// No description provided for @ldgErrShippedContainer.
+  ///
+  /// In en, this message translates to:
+  /// **'This package already left on {container}.'**
+  String ldgErrShippedContainer(String container);
+
+  /// No description provided for @ldgErrCodeInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'That is not a package code.'**
+  String get ldgErrCodeInvalid;
+
+  /// No description provided for @ldgErrScanId.
+  ///
+  /// In en, this message translates to:
+  /// **'The scan didn’t go through. Scan again.'**
+  String get ldgErrScanId;
+
+  /// No description provided for @ldgErrPieceCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Only a package with some of its pieces scanned can be left waiting.'**
+  String get ldgErrPieceCount;
+
+  /// No description provided for @ldgErrGeneric.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t scan this label. Scan again.'**
+  String get ldgErrGeneric;
+
+  /// No description provided for @ldgMoveTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Move it here?'**
+  String get ldgMoveTitle;
+
+  /// No description provided for @ldgMoveMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This package is on {container}. Move it here?'**
+  String ldgMoveMessage(String container);
+
+  /// No description provided for @ldgMoveConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Move here'**
+  String get ldgMoveConfirm;
+
+  /// No description provided for @ldgDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Done loading'**
+  String get ldgDone;
+
+  /// No description provided for @ldgSummaryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Before you finish'**
+  String get ldgSummaryTitle;
+
+  /// No description provided for @ldgSummaryFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t get the summary.'**
+  String get ldgSummaryFailed;
+
+  /// No description provided for @ldgIncompleteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Not every piece was scanned'**
+  String get ldgIncompleteTitle;
+
+  /// No description provided for @ldgIncompleteOf.
+  ///
+  /// In en, this message translates to:
+  /// **'{scanned} of {total} pieces scanned'**
+  String ldgIncompleteOf(int scanned, int total);
+
+  /// No description provided for @ldgLoadAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Load all'**
+  String get ldgLoadAll;
+
+  /// No description provided for @ldgLeaveWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Leave 1 waiting} other{Leave {count} waiting}}'**
+  String ldgLeaveWaiting(int count);
+
+  /// No description provided for @ldgGoesWhole.
+  ///
+  /// In en, this message translates to:
+  /// **'All of it goes'**
+  String get ldgGoesWhole;
+
+  /// No description provided for @ldgLeftWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 left waiting as {code}} other{{count} left waiting as {code}}}'**
+  String ldgLeftWaiting(int count, String code);
+
+  /// No description provided for @ldgUnscanned.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 package on the container was never scanned} other{{count} packages on the container were never scanned}}'**
+  String ldgUnscanned(int count);
+
+  /// No description provided for @ldgUnscannedNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Put on by hand, or before scanning started.'**
+  String get ldgUnscannedNote;
+
+  /// No description provided for @ldgWaitingNotScanned.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 waiting package for {destination} was not scanned} other{{count} waiting packages for {destination} were not scanned}}'**
+  String ldgWaitingNotScanned(int count, String destination);
+
+  /// No description provided for @ldgThisDestination.
+  ///
+  /// In en, this message translates to:
+  /// **'this destination'**
+  String get ldgThisDestination;
+
+  /// No description provided for @ldgWaitingMore.
+  ///
+  /// In en, this message translates to:
+  /// **'and {count} more'**
+  String ldgWaitingMore(int count);
+
+  /// No description provided for @ldgAllClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Every package on the container was scanned in full.'**
+  String get ldgAllClear;
+
+  /// No description provided for @ldgKeepScanning.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep scanning'**
+  String get ldgKeepScanning;
+
+  /// No description provided for @ldgErrAction.
+  ///
+  /// In en, this message translates to:
+  /// **'That is not something loading can do.'**
+  String get ldgErrAction;
+
+  /// No description provided for @ldgErrInAnotherContainer.
+  ///
+  /// In en, this message translates to:
+  /// **'This package is on another container.'**
+  String get ldgErrInAnotherContainer;
+
+  /// No description provided for @ldgOnContainer.
+  ///
+  /// In en, this message translates to:
+  /// **'On the container: {packages} · {pieces}'**
+  String ldgOnContainer(String packages, String pieces);
+
+  /// No description provided for @ldgPieces.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 piece} other{{count} pieces}}'**
+  String ldgPieces(int count);
+
+  /// No description provided for @ldgErrNotOnContainer.
+  ///
+  /// In en, this message translates to:
+  /// **'This package is no longer on this container.'**
+  String get ldgErrNotOnContainer;
+
+  /// No description provided for @ldgUndoneMovedBack.
+  ///
+  /// In en, this message translates to:
+  /// **'Moved back to {container}'**
+  String ldgUndoneMovedBack(String container);
+
+  /// No description provided for @ldgAlreadyUndone.
+  ///
+  /// In en, this message translates to:
+  /// **'Already undone'**
+  String get ldgAlreadyUndone;
+
+  /// No description provided for @ldgMoveScannedWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 of its pieces was already scanned into {container}.} other{{count} of its pieces were already scanned into {container}.}}'**
+  String ldgMoveScannedWarning(int count, String container);
+
+  /// No description provided for @ldgRestWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'The rest stays waiting.'**
+  String get ldgRestWaiting;
 }
 
 class _AppLocalizationsDelegate

@@ -1037,6 +1037,16 @@ describe("the container callables and their gates", () => {
     const next = source.indexOf("\nexports.", start + 1);
     return source.slice(start, next === -1 ? undefined : next);
   };
+  // A shared helper the callables delegate their writes to (the scan to
+  // load actions run the same ones).
+  const helper = (name) => {
+    const start = source.search(
+        new RegExp(`\\n(async )?function ${name}\\(`));
+    assert.ok(start > -1, `${name} not found`);
+    const rest = source.slice(start + 1);
+    const next = rest.search(/\n(async function|function|exports\.)/);
+    return rest.slice(0, next === -1 ? undefined : next);
+  };
 
   it("exposes every callable the clients call, gated on containers", () => {
     for (const name of ["createContainer", "updateContainer",
@@ -1098,7 +1108,10 @@ describe("the container callables and their gates", () => {
         assert.match(remove, /tx\.delete\(lockRef\)/);
         const move = callable("moveContainerLine");
         assert.match(move, /db\.runTransaction\(/);
-        assert.match(move, /tx\.update\(lockRef, \{containerId: to\.ref\.id/);
+        assert.match(move,
+            /txWriteMove\(tx, \{lineRef, row, fromRef: from\.ref/);
+        assert.match(helper("txWriteMove"),
+            /tx\.update\(lockRef, \{containerId: toRef\.id/);
         const release = source.slice(
             source.indexOf("async function releaseContainerVinLocks("),
             source.indexOf("const CONTAINER_LINE_CODE_PREFIX"));
@@ -1111,11 +1124,12 @@ describe("the container callables and their gates", () => {
         /containerCountsIncrement\(record, 1\)/);
     assert.match(callable("removeContainerLine"),
         /containerCountsIncrement\(row, -1\)/);
-    const move = callable("moveContainerLine");
+    assert.match(callable("moveContainerLine"), /txWriteMove\(tx, /);
+    const move = helper("txWriteMove");
     assert.match(move,
-        /tx\.set\(from\.ref, \{\s*\.\.\.containerCountsIncrement\(row, -1\)/);
+        /tx\.set\(fromRef, \{\s*\.\.\.containerCountsIncrement\(row, -1\)/);
     assert.match(move,
-        /tx\.set\(to\.ref, \{\s*\.\.\.containerCountsIncrement\(row, 1\)/);
+        /tx\.set\(toRef, \{\s*\.\.\.containerCountsIncrement\(row, 1\)/);
     for (const name of ["addContainerLine", "removeContainerLine",
       "moveContainerLine"]) {
       assert.doesNotMatch(callable(name), /refreshContainerCounts\(/,
@@ -1247,20 +1261,27 @@ describe("the container callables and their gates", () => {
         /containerAssignRefusal\(boxData, entries, businessId\)/);
     // The checks come before any write, and the tallies move once.
     assert.ok(body.indexOf("containerAssignRefusal(") <
-      body.indexOf("tx.update("));
-    assert.equal((body.match(/tx\.set\(ref,/g) || []).length, 1);
-    assert.match(body, /containerLinesCountsDelta\(/);
-    assert.match(body, /tx\.update\(lock\.ref, \{containerId: ref\.id/);
+      body.indexOf("txWriteAssignment("));
+    assert.ok(body.indexOf("txAssignmentReads(") <
+      body.indexOf("txWriteAssignment("));
+    const writes = helper("txWriteAssignment");
+    assert.equal((writes.match(/tx\.set\(ref,/g) || []).length, 1);
+    assert.match(writes, /containerLinesCountsDelta\(/);
+    assert.match(writes, /tx\.update\(lock\.ref, \{containerId: ref\.id/);
     assert.doesNotMatch(body, /refreshContainerCounts\(/);
   });
 
   it("sends a package back to waiting with its lock and tallies", () => {
     const body = callable("unassignContainerLine");
     assert.match(body, /db\.runTransaction\(/);
-    assert.match(body, /containerStatus: LINE_STATUS_WAITING/);
-    assert.match(body, /containerCountsIncrement\(row, -1\)/);
-    assert.match(body, /tx\.update\(lockRef, \{containerId: ""/);
-    assert.doesNotMatch(body, /tx\.delete\(lockRef\)/);
+    assert.match(body, /txWriteUnassign\(tx, /);
+    const writes = helper("txWriteUnassign");
+    assert.match(writes, /containerStatus: LINE_STATUS_WAITING/);
+    // Scanning's marks leave with the package.
+    assert.match(writes, /\.\.\.clearedLoadFields\(\)/);
+    assert.match(writes, /containerCountsIncrement\(row, -1\)/);
+    assert.match(writes, /tx\.update\(lockRef, \{containerId: ""/);
+    assert.doesNotMatch(body + writes, /tx\.delete\(lockRef\)/);
   });
 
   it("records and reverts payments inside a transaction on the line", () => {
