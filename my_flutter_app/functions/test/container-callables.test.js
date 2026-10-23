@@ -3250,3 +3250,501 @@ describe("platform activity alerts", () => {
       n.data.relatedCollection === "inventorySales"));
   });
 });
+
+describe("scan to load", () => {
+  const SCAN_BIZ = "scan-load-test-biz";
+  const S_OWNER = "scan-load-test-owner";
+  const S_LOADER = "scan-load-test-loader";
+  const S_PORTER = "scan-load-test-deliveries-only";
+  before(async () => {
+    await Promise.all([
+      db.collection("businesses").doc(SCAN_BIZ).set({
+        name: "Scan Shipping", status: "approved", ownerUid: S_OWNER,
+      }),
+      db.collection("users").doc(S_OWNER).set({
+        role: "businessOwner", businessId: SCAN_BIZ, fullName: "Scan Owner",
+      }),
+      db.collection("users").doc(S_LOADER).set({
+        role: "staff", businessId: SCAN_BIZ, fullName: "Lamine Loader",
+        businessPermissions: ["containers"],
+      }),
+      db.collection("users").doc(S_PORTER).set({
+        role: "staff", businessId: SCAN_BIZ, fullName: "Ousmane Porter",
+        businessPermissions: ["deliveries"],
+      }),
+    ]);
+  });
+  // Its own business, so the waiting list and its count are this suite's.
+  const run = (name, data, uid = S_OWNER) =>
+    functions[name].run({auth: {uid, token: {}}, data: {businessId: SCAN_BIZ,
+      ...data}});
+  const GUINEA = {destinationCountryId: "gn",
+    destinationCountryName: "Guinea"};
+  const SENEGAL = {destinationCountryId: "sn",
+    destinationCountryName: "Senegal"};
+  const people = {ownerKind: "customer", customerName: "Fatou Diallo",
+    customerPhone: "+16465550100", receiverName: "Mariama Bah",
+    receiverPhone: "+224620000000"};
+  const barrels = (n, extra = {}) => ({...people, ...GUINEA,
+    pieces: Array.from({length: n}, () => ({kind: "barrel"})), ...extra});
+  let boxSerial = 0;
+  async function box(extra = {}) {
+    boxSerial += 1;
+    const {containerId} = await run("createContainer", {
+      label: `Scan box ${boxSerial}`, ...GUINEA, ...extra});
+    return containerId;
+  }
+  const drop = (extra) => run("addWaitingPackage", extra || barrels(3));
+  let scanSerial = 0;
+  const nextScanId = () => `scan-test-${String(++scanSerial).padStart(4, "0")}`;
+  const scan = (containerId, code, extra = {}, uid = S_OWNER) =>
+    run("assignContainerLines", {containerId, action: "scan", code,
+      scanId: nextScanId(), ...extra}, uid);
+  const undo = (containerId, lineId, extra = {}) =>
+    run("assignContainerLines", {containerId, action: "undo_scan", lineId,
+      ...extra});
+  const lineOf = async (id) =>
+    (await db.collection("containerLines").doc(id).get()).data();
+  const tallies = async (id) => {
+    const row = (await db.collection("containers").doc(id).get()).data();
+    return {lineCount: row.lineCount, carCount: row.carCount,
+      barrelCount: row.barrelCount, otherCount: row.otherCount};
+  };
+  const audits = async (entityId, action) => {
+    const snap = await db.collection("lotLedgerAudit")
+        .where("entityId", "==", entityId).where("action", "==", action).get();
+    return snap.docs.map((d) => d.data());
+  };
+  const link = (code) => `https://customer.laawoldigital.com/t/${code}`;
+  const refused = (reason) => (error) => error.details?.reason === reason;
+  const LOAD_KEYS = ["loadScannedPieces", "loadAddedByScan", "loadScannedAt",
+    "loadScannedByStaffId", "loadScanIds", "loadMovedFromContainerId",
+    "loadLeftPartId"];
+  const noLoadFields = (line) =>
+    LOAD_KEYS.every((key) => line[key] === undefined);
+
+  it("puts a waiting package on whole, then counts, then says all in",
+      async () => {
+        const containerId = await box();
+        const {lineId, trackingCode} = await drop();
+        const first = await scan(containerId, link(trackingCode), {},
+            S_LOADER);
+        assert.equal(first.success, true);
+        assert.equal(first.result, "loaded");
+        assert.deepEqual(first.line, {lineId, trackingCode,
+          name: "Mariama Bah", kind: "barrels", pieceCount: 3,
+          scannedPieces: 1, destinationCountryName: "Guinea"});
+        assert.deepEqual(first.container, {containerId,
+          label: `Scan box ${boxSerial}`, lineCount: 1, pieceCount: 3});
+        let line = await lineOf(lineId);
+        assert.equal(line.containerId, containerId);
+        assert.equal(line.containerStatus, "loading");
+        assert.equal(line.loadScannedPieces, 1);
+        assert.equal(line.loadAddedByScan, true);
+        assert.equal(line.loadScannedByStaffId, S_LOADER);
+        assert.ok(line.loadScannedAt.toMillis() > 0);
+        assert.equal(line.loadScanIds.length, 1);
+        assert.deepEqual(await tallies(containerId),
+            {lineCount: 1, carCount: 0, barrelCount: 3, otherCount: 0});
+        // One History entry on the package; no moment, no message.
+        const [loaded] = await audits(lineId, "line_assigned");
+        assert.match(loaded.summary,
+            /^Loaded 3 barrels for Fatou Diallo on Scan box \d+ by scan$/);
+        const moments = await db.collection("containers").doc(containerId)
+            .collection("trackingEvents").get();
+        assert.equal(moments.size, 0);
+
+        // Typed, lower case: one more piece of the same package.
+        const second = await scan(containerId, trackingCode.toLowerCase());
+        assert.equal(second.result, "counted");
+        assert.equal(second.line.scannedPieces, 2);
+        assert.equal(second.line.pieceCount, 3);
+        assert.equal(second.container.lineCount, 1);
+        assert.equal((await scan(containerId, trackingCode)).result,
+            "counted");
+        const fourth = await scan(containerId, trackingCode);
+        assert.equal(fourth.result, "all_scanned");
+        assert.equal(fourth.line.scannedPieces, 3);
+        line = await lineOf(lineId);
+        assert.equal(line.loadScannedPieces, 3);
+        assert.equal(line.loadScanIds.length, 3);
+        assert.deepEqual(await tallies(containerId),
+            {lineCount: 1, carCount: 0, barrelCount: 3, otherCount: 0});
+        // Counted scans write no History.
+        assert.equal((await audits(lineId, "line_assigned")).length, 1);
+      });
+
+  it("answers a retried scan id the same and changes nothing", async () => {
+    const containerId = await box();
+    const {lineId, trackingCode} = await drop();
+    const scanId = nextScanId();
+    const first = await scan(containerId, trackingCode, {scanId});
+    const countedId = nextScanId();
+    await scan(containerId, trackingCode, {scanId: countedId});
+    const before = await lineOf(lineId);
+    const again = await scan(containerId, trackingCode, {scanId});
+    assert.equal(again.result, "loaded");
+    assert.equal(again.line.scannedPieces, 2);
+    assert.equal((await scan(containerId, trackingCode,
+        {scanId: countedId})).result, "counted");
+    const after = await lineOf(lineId);
+    assert.equal(after.loadScannedPieces, 2);
+    assert.deepEqual(after.loadScanIds, before.loadScanIds);
+    assert.equal(after.updatedAt.toMillis(), before.updatedAt.toMillis());
+    assert.deepEqual(await tallies(containerId),
+        {lineCount: 1, carCount: 0, barrelCount: 3, otherCount: 0});
+    assert.deepEqual(first.container, again.container);
+  });
+
+  it("refuses bad codes and ids, and codes it does not have", async () => {
+    const containerId = await box();
+    await assert.rejects(scan(containerId, "CL-K7M4P0"),
+        refused("scan_code_invalid"));
+    await assert.rejects(scan(containerId, "https://example.com/x"),
+        refused("scan_code_invalid"));
+    const {trackingCode} = await drop();
+    await assert.rejects(scan(containerId, trackingCode, {scanId: "short"}),
+        refused("scan_id_invalid"));
+    await assert.rejects(scan(containerId, "CL-ZZZZZZ"), (error) =>
+      error.code === "not-found" &&
+      error.details?.reason === "line_not_found");
+    // Another business's label is not found either.
+    const theirs = await call("addWaitingPackage", {...barrels(1)});
+    await assert.rejects(scan(containerId, theirs.trackingCode),
+        refused("line_not_found"));
+    await assert.rejects(
+        run("assignContainerLines", {containerId, action: "teleport"}),
+        refused("load_action_invalid"));
+  });
+
+  it("keeps the destination a hard block", async () => {
+    const containerId = await box();
+    const {lineId, trackingCode} = await drop(barrels(2, SENEGAL));
+    await assert.rejects(scan(containerId, trackingCode),
+        refused("destination_mismatch"));
+    const line = await lineOf(lineId);
+    assert.equal(line.containerId, "");
+    assert.ok(noLoadFields(line));
+    const undecided = await box({destinationCountryId: "",
+      destinationCountryName: ""});
+    await assert.rejects(scan(undecided, trackingCode),
+        refused("container_destination_required"));
+  });
+
+  it("refuses a delivered package and a container not loading",
+      async () => {
+        const arrived = await box();
+        const {lineId, trackingCode} = await drop(barrels(1));
+        await run("assignContainerLines", {containerId: arrived,
+          lineIds: [lineId]});
+        await run("setContainerStatus", {containerId: arrived,
+          status: "shipped"});
+        await assert.rejects(scan(arrived, trackingCode),
+            refused("container_locked"));
+        await run("setContainerStatus", {containerId: arrived,
+          status: "arrived"});
+        await run("updateContainerLine", {lineId, action: "deliver"});
+        const loadingBox = await box();
+        await assert.rejects(scan(loadingBox, trackingCode),
+            refused("line_delivered"));
+      });
+
+  it("offers to move a package from another loading container", async () => {
+    const from = await box();
+    const to = await box();
+    const {lineId, trackingCode} = await drop();
+    await scan(from, trackingCode);
+    await scan(from, trackingCode);
+    let error;
+    try {
+      await scan(to, trackingCode);
+    } catch (caught) {
+      error = caught;
+    }
+    assert.equal(error?.details?.reason, "line_in_other_container");
+    assert.equal(error.details.otherContainerId, from);
+    assert.match(error.details.otherContainerLabel, /^Scan box \d+$/);
+    assert.equal(error.details.otherStatus, "loading");
+    assert.equal(error.details.canMove, true);
+    // Two of its pieces were scanned into the other box: the app warns.
+    assert.equal(error.details.otherScannedPieces, 2);
+    assert.equal((await lineOf(lineId)).containerId, from);
+    const moved = await scan(to, trackingCode, {move: true});
+    assert.equal(moved.result, "loaded");
+    assert.equal(moved.line.scannedPieces, 1);
+    const line = await lineOf(lineId);
+    assert.equal(line.containerId, to);
+    // Counted afresh on the new container, remembering where it came from.
+    assert.equal(line.loadScannedPieces, 1);
+    assert.equal(line.loadScanIds.length, 1);
+    assert.equal(line.loadMovedFromContainerId, from);
+    assert.equal(line.loadAddedByScan, undefined);
+    assert.deepEqual(await tallies(from),
+        {lineCount: 0, carCount: 0, barrelCount: 0, otherCount: 0});
+    assert.deepEqual(await tallies(to),
+        {lineCount: 1, carCount: 0, barrelCount: 3, otherCount: 0});
+    const loads = await audits(lineId, "line_assigned");
+    assert.equal(loads.length, 2);
+    assert.ok(loads.some((row) =>
+      /by scan \(moved from Scan box \d+\)$/.test(row.summary)));
+    // The container it left says where it went, as a move by hand does.
+    assert.equal((await audits(from, "line_moved")).length, 1);
+  });
+
+  it("never moves a package off a container that has shipped", async () => {
+    const shipped = await box();
+    const {trackingCode, lineId} = await drop(barrels(1));
+    await run("assignContainerLines", {containerId: shipped,
+      lineIds: [lineId]});
+    await run("setContainerStatus", {containerId: shipped,
+      status: "shipped"});
+    const loadingBox = await box();
+    for (const move of [false, true]) {
+      await assert.rejects(scan(loadingBox, trackingCode, {move}),
+          (error) => error.details?.reason === "line_in_other_container" &&
+            error.details.canMove === false &&
+            error.details.otherStatus === "shipped");
+    }
+    assert.equal((await lineOf(lineId)).containerId, shipped);
+  });
+
+  it("is only for people with the containers permission", async () => {
+    const containerId = await box();
+    const {trackingCode} = await drop();
+    for (const action of ["scan", "undo_scan", "load_summary",
+      "leave_unscanned"]) {
+      await assert.rejects(run("assignContainerLines", {containerId, action,
+        code: trackingCode, scanId: nextScanId(), lineId: "x"}, S_PORTER),
+      (error) => error.code === "permission-denied", action);
+    }
+  });
+
+  it("undoes a scan: one piece back, then back to waiting", async () => {
+    const containerId = await box();
+    const {lineId, trackingCode} = await drop();
+    await scan(containerId, trackingCode);
+    const lastId = nextScanId();
+    await scan(containerId, trackingCode, {scanId: lastId});
+    const uncounted = await undo(containerId, lineId, {scanId: lastId});
+    assert.equal(uncounted.result, "uncounted");
+    assert.equal(uncounted.line.scannedPieces, 1);
+    // The same undo asked again takes back nothing more, and says so.
+    const repeated = await undo(containerId, lineId, {scanId: lastId});
+    assert.equal(repeated.result, "already_undone");
+    assert.equal(repeated.line.scannedPieces, 1);
+    assert.equal((await lineOf(lineId)).loadScanIds.length, 1);
+    const unloaded = await undo(containerId, lineId);
+    assert.equal(unloaded.result, "unloaded");
+    assert.equal(unloaded.line.scannedPieces, 0);
+    assert.equal(unloaded.container.lineCount, 0);
+    const line = await lineOf(lineId);
+    assert.equal(line.containerId, "");
+    assert.equal(line.containerStatus, "waiting");
+    assert.ok(noLoadFields(line));
+    assert.deepEqual(await tallies(containerId),
+        {lineCount: 0, carCount: 0, barrelCount: 0, otherCount: 0});
+    const [entry] = await audits(lineId, "line_unassigned");
+    assert.match(entry.summary, /^Scan undone: taken off Scan box \d+/);
+    // Asked again once it is waiting: nothing changes.
+    const again = await undo(containerId, lineId, {scanId: lastId});
+    assert.equal(again.result, "already_undone");
+    assert.equal((await lineOf(lineId)).containerId, "");
+  });
+
+  it("takes back the named scan even when it is not the last", async () => {
+    const containerId = await box();
+    const {lineId, trackingCode} = await drop();
+    const firstId = nextScanId();
+    await scan(containerId, trackingCode, {scanId: firstId});
+    await scan(containerId, trackingCode);
+    const result = await undo(containerId, lineId, {scanId: firstId});
+    assert.equal(result.result, "uncounted");
+    assert.equal(result.line.scannedPieces, 1);
+    const line = await lineOf(lineId);
+    assert.equal(line.loadScanIds.includes(firstId), false);
+    assert.equal(line.containerId, containerId);
+  });
+
+  it("moves a package a scan moved back where it came from", async () => {
+    const from = await box();
+    const to = await box();
+    const {lineId, trackingCode} = await drop();
+    await scan(from, trackingCode);
+    const moveId = nextScanId();
+    await scan(to, trackingCode, {move: true, scanId: moveId});
+    const back = await undo(to, lineId, {scanId: moveId});
+    assert.equal(back.result, "moved_back");
+    assert.deepEqual(back.movedBackTo, {containerId: from,
+      label: `Scan box ${boxSerial - 1}`});
+    assert.equal(back.line.scannedPieces, 0);
+    assert.equal(back.container.lineCount, 0);
+    const line = await lineOf(lineId);
+    assert.equal(line.containerId, from);
+    assert.equal(line.containerStatus, "loading");
+    assert.ok(noLoadFields(line));
+    assert.deepEqual(await tallies(from),
+        {lineCount: 1, carCount: 0, barrelCount: 3, otherCount: 0});
+    assert.deepEqual(await tallies(to),
+        {lineCount: 0, carCount: 0, barrelCount: 0, otherCount: 0});
+    const [entry] = await audits(lineId, "line_moved");
+    assert.match(entry.summary,
+        /^Scan undone: moved back from Scan box \d+ to Scan box \d+$/);
+    // Asked again: nothing more.
+    assert.equal((await undo(to, lineId, {scanId: moveId})).result,
+        "already_undone");
+  });
+
+  it("keeps a moved package here at 0 once its old box has shipped",
+      async () => {
+        const from = await box();
+        const to = await box();
+        const {lineId, trackingCode} = await drop();
+        const other = await drop(barrels(1));
+        await scan(from, trackingCode);
+        await scan(to, trackingCode, {move: true});
+        // Something else on the old box, so it can ship.
+        await run("assignContainerLines", {containerId: from,
+          lineIds: [other.lineId]});
+        await run("setContainerStatus", {containerId: from,
+          status: "shipped"});
+        const result = await undo(to, lineId);
+        assert.equal(result.result, "uncounted");
+        assert.equal(result.line.scannedPieces, 0);
+        assert.equal((await lineOf(lineId)).containerId, to);
+        assert.deepEqual(await tallies(to),
+            {lineCount: 1, carCount: 0, barrelCount: 3, otherCount: 0});
+      });
+
+  it("keeps a package added by hand on the container at 0", async () => {
+    const containerId = await box();
+    const {lineId, trackingCode} = await drop();
+    await run("assignContainerLines", {containerId, lineIds: [lineId]});
+    const counted = await scan(containerId, trackingCode);
+    assert.equal(counted.result, "counted");
+    assert.equal(counted.line.scannedPieces, 1);
+    const back = await undo(containerId, lineId);
+    assert.equal(back.result, "uncounted");
+    assert.equal(back.line.scannedPieces, 0);
+    assert.equal((await lineOf(lineId)).containerId, containerId);
+    // Nothing left to take back: no change, and not "uncounted".
+    assert.equal((await undo(containerId, lineId)).result, "already_undone");
+  });
+
+  it("clears the scan marks when a package is moved or unassigned",
+      async () => {
+        const first = await box();
+        const second = await box();
+        const {lineId, trackingCode} = await drop();
+        await scan(first, trackingCode);
+        await run("moveContainerLine", {lineId, toContainerId: second});
+        let line = await lineOf(lineId);
+        assert.equal(line.containerId, second);
+        assert.ok(noLoadFields(line));
+        await scan(second, trackingCode);
+        await run("unassignContainerLine", {lineId});
+        line = await lineOf(lineId);
+        assert.equal(line.containerId, "");
+        assert.ok(noLoadFields(line));
+      });
+
+  it("sums up for Done loading", async () => {
+    const MALI = {destinationCountryId: "ml",
+      destinationCountryName: "Mali"};
+    const containerId = await box(MALI);
+    const part = await drop(barrels(3, MALI));
+    const whole = await drop(barrels(1, MALI));
+    const byHand = await drop(barrels(2, MALI));
+    const waitingOnes = [];
+    for (let i = 0; i < 3; i++) waitingOnes.push(await drop(barrels(1, MALI)));
+    // Going elsewhere: not on the waiting list for this container.
+    await drop(barrels(1, SENEGAL));
+    await scan(containerId, part.trackingCode);
+    await scan(containerId, whole.trackingCode);
+    await run("assignContainerLines", {containerId,
+      lineIds: [byHand.lineId]});
+    const summary = await run("assignContainerLines", {containerId,
+      action: "load_summary"});
+    assert.equal(summary.success, true);
+    assert.deepEqual(summary.container, {containerId,
+      label: `Scan box ${boxSerial}`, lineCount: 3, pieceCount: 6});
+    assert.deepEqual(summary.incomplete.map((row) =>
+      [row.lineId, row.scannedPieces, row.pieceCount]),
+    [[part.lineId, 1, 3]]);
+    assert.deepEqual(summary.unscanned.map((row) => row.lineId),
+        [byHand.lineId]);
+    assert.equal(summary.waitingCount, 3);
+    assert.deepEqual(summary.waiting.map((row) => row.lineId).sort(),
+        waitingOnes.map((one) => one.lineId).sort());
+    assert.equal(summary.waiting[0].destinationCountryName, "Mali");
+  });
+
+  it("leaves the unscanned pieces waiting as a part", async () => {
+    const containerId = await box();
+    const {lineId, trackingCode} = await drop(barrels(4));
+    const leave = () => run("assignContainerLines", {containerId,
+      action: "leave_unscanned", lineId});
+    // Not on this container yet.
+    await assert.rejects(leave(), refused("line_not_found"));
+    await scan(containerId, trackingCode);
+    await scan(containerId, trackingCode);
+    const result = await leave();
+    assert.equal(result.success, true);
+    assert.equal(result.alreadyDone, false);
+    assert.equal(result.line.pieceCount, 2);
+    assert.equal(result.line.scannedPieces, 2);
+    assert.equal(result.part.trackingCode, `${trackingCode}-2`);
+    assert.equal(result.part.pieceCount, 2);
+    assert.deepEqual(result.container, {containerId,
+      label: `Scan box ${boxSerial}`, lineCount: 1, pieceCount: 2});
+    const going = await lineOf(lineId);
+    assert.equal(going.containerId, containerId);
+    assert.equal(going.pieceCount, 2);
+    assert.equal(going.loadScannedPieces, 2);
+    const staying = await lineOf(result.part.lineId);
+    assert.equal(staying.containerId, "");
+    assert.equal(staying.containerStatus, "waiting");
+    assert.equal(staying.rootLineId, lineId);
+    assert.equal(staying.pieceCount, 2);
+    assert.ok(noLoadFields(staying));
+    assert.deepEqual(await tallies(containerId),
+        {lineCount: 1, carCount: 0, barrelCount: 2, otherCount: 0});
+    assert.equal(going.loadLeftPartId, result.part.lineId);
+    // Asked again (its answer lost): the same part, nothing new.
+    const again = await leave();
+    assert.equal(again.alreadyDone, true);
+    assert.deepEqual(again.part, result.part);
+    assert.equal((await audits(lineId, "line_split")).length, 1);
+    assert.deepEqual(await tallies(containerId),
+        {lineCount: 1, carCount: 0, barrelCount: 2, otherCount: 0});
+    // Never scanned (put on by hand): nothing to keep.
+    const byHand = await drop(barrels(2));
+    await run("assignContainerLines", {containerId,
+      lineIds: [byHand.lineId]});
+    await assert.rejects(run("assignContainerLines", {containerId,
+      action: "leave_unscanned", lineId: byHand.lineId}),
+    refused("piece_count_invalid"));
+    // The part is scanned onto a container by its own code.
+    const later = await box();
+    const loaded = await scan(later, result.part.trackingCode);
+    assert.equal(loaded.result, "loaded");
+    assert.equal(loaded.line.lineId, result.part.lineId);
+    // No message for a split.
+    const queued = await db.collection("containerUpdates")
+        .doc(`${result.part.lineId}_sender_received`).get();
+    assert.equal(queued.exists, false);
+  });
+
+  it("leaves assignContainerLines without an action as it was", async () => {
+    const containerId = await box();
+    const {lineId} = await drop();
+    const result = await run("assignContainerLines", {containerId,
+      lineIds: [lineId]});
+    assert.deepEqual(result, {success: true, assigned: 1,
+      alreadyAssigned: 0, parts: []});
+    const line = await lineOf(lineId);
+    assert.equal(line.containerId, containerId);
+    assert.ok(noLoadFields(line));
+    const [entry] = await audits(lineId, "line_assigned");
+    assert.match(entry.summary, /^Added 3 barrels for Fatou Diallo to /);
+  });
+});

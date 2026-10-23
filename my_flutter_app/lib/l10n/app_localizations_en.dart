@@ -16066,4 +16066,288 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pkgMomentDelivered => 'delivered';
+
+  @override
+  String get ldgStart => 'Start loading';
+
+  @override
+  String ldgHeaderTo(String destination) {
+    return 'To $destination';
+  }
+
+  @override
+  String ldgTotalPackages(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count packages',
+      one: '1 package',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String ldgTotalPieces(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count pieces scanned',
+      one: '1 piece scanned',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get ldgCameraUnavailable =>
+      'The camera is unavailable. Type the code printed on each label below.';
+
+  @override
+  String get ldgTypeCode => 'Type a code';
+
+  @override
+  String get ldgTypeHint => 'CL-K7M4P2';
+
+  @override
+  String get ldgTypeSend => 'Load';
+
+  @override
+  String get ldgRecent => 'Recent scans';
+
+  @override
+  String get ldgNoScans => 'Each label you scan shows here.';
+
+  @override
+  String get ldgSending => 'Sending…';
+
+  @override
+  String get ldgLoaded => 'Loaded';
+
+  @override
+  String ldgLoadedOf(int scanned, int total) {
+    return 'Loaded · $scanned of $total';
+  }
+
+  @override
+  String get ldgMovedHere => 'Moved here';
+
+  @override
+  String ldgCountedOf(int scanned, int total) {
+    return '$scanned of $total';
+  }
+
+  @override
+  String ldgAllIn(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'All $count already in',
+      one: 'Already in',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get ldgUndo => 'Undo';
+
+  @override
+  String get ldgUndoneBack => 'Undone · back to waiting';
+
+  @override
+  String ldgUndoneOf(int scanned, int total) {
+    return 'Undone · $scanned of $total';
+  }
+
+  @override
+  String get ldgUndoFailed => 'Couldn’t undo. Try again.';
+
+  @override
+  String get ldgErrOffline => 'No connection - scan again';
+
+  @override
+  String get ldgErrNotAllowed => 'You don’t have access to load containers.';
+
+  @override
+  String get ldgErrNotFound => 'No package has this code.';
+
+  @override
+  String get ldgErrLocked => 'This container is no longer loading.';
+
+  @override
+  String get ldgErrDestinationRequired =>
+      'Give this container a destination first.';
+
+  @override
+  String get ldgErrDestinationMismatch =>
+      'This package goes to another country.';
+
+  @override
+  String get ldgErrDelivered => 'This package was already delivered.';
+
+  @override
+  String ldgErrOtherContainer(String container) {
+    return 'This package is on $container.';
+  }
+
+  @override
+  String ldgErrShippedContainer(String container) {
+    return 'This package already left on $container.';
+  }
+
+  @override
+  String get ldgErrCodeInvalid => 'That is not a package code.';
+
+  @override
+  String get ldgErrScanId => 'The scan didn’t go through. Scan again.';
+
+  @override
+  String get ldgErrPieceCount =>
+      'Only a package with some of its pieces scanned can be left waiting.';
+
+  @override
+  String get ldgErrGeneric => 'Couldn’t scan this label. Scan again.';
+
+  @override
+  String get ldgMoveTitle => 'Move it here?';
+
+  @override
+  String ldgMoveMessage(String container) {
+    return 'This package is on $container. Move it here?';
+  }
+
+  @override
+  String get ldgMoveConfirm => 'Move here';
+
+  @override
+  String get ldgDone => 'Done loading';
+
+  @override
+  String get ldgSummaryTitle => 'Before you finish';
+
+  @override
+  String get ldgSummaryFailed => 'Couldn’t get the summary.';
+
+  @override
+  String get ldgIncompleteTitle => 'Not every piece was scanned';
+
+  @override
+  String ldgIncompleteOf(int scanned, int total) {
+    return '$scanned of $total pieces scanned';
+  }
+
+  @override
+  String get ldgLoadAll => 'Load all';
+
+  @override
+  String ldgLeaveWaiting(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Leave $count waiting',
+      one: 'Leave 1 waiting',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get ldgGoesWhole => 'All of it goes';
+
+  @override
+  String ldgLeftWaiting(int count, String code) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count left waiting as $code',
+      one: '1 left waiting as $code',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String ldgUnscanned(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count packages on the container were never scanned',
+      one: '1 package on the container was never scanned',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get ldgUnscannedNote => 'Put on by hand, or before scanning started.';
+
+  @override
+  String ldgWaitingNotScanned(int count, String destination) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count waiting packages for $destination were not scanned',
+      one: '1 waiting package for $destination was not scanned',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get ldgThisDestination => 'this destination';
+
+  @override
+  String ldgWaitingMore(int count) {
+    return 'and $count more';
+  }
+
+  @override
+  String get ldgAllClear =>
+      'Every package on the container was scanned in full.';
+
+  @override
+  String get ldgKeepScanning => 'Keep scanning';
+
+  @override
+  String get ldgErrAction => 'That is not something loading can do.';
+
+  @override
+  String get ldgErrInAnotherContainer =>
+      'This package is on another container.';
+
+  @override
+  String ldgOnContainer(String packages, String pieces) {
+    return 'On the container: $packages · $pieces';
+  }
+
+  @override
+  String ldgPieces(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count pieces',
+      one: '1 piece',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get ldgErrNotOnContainer =>
+      'This package is no longer on this container.';
+
+  @override
+  String ldgUndoneMovedBack(String container) {
+    return 'Moved back to $container';
+  }
+
+  @override
+  String get ldgAlreadyUndone => 'Already undone';
+
+  @override
+  String ldgMoveScannedWarning(int count, String container) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count of its pieces were already scanned into $container.',
+      one: '1 of its pieces was already scanned into $container.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get ldgRestWaiting => 'The rest stays waiting.';
 }

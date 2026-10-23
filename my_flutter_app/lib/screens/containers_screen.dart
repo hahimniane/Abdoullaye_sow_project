@@ -54,6 +54,7 @@ import '../widgets/waiting_package_fields.dart';
 import 'add_waiting_packages_sheet.dart';
 import 'bank_check_sheet.dart';
 import 'business_requests_screen.dart';
+import 'container_loading_screen.dart';
 import 'label_printer_settings_screen.dart';
 import 'package_payment_sheet.dart';
 import 'package_result_screen.dart';
@@ -1748,6 +1749,24 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
     );
   }
 
+  /// Scan to load (docs/WAITING_PACKAGES.md "Scan to load"): the scanner
+  /// that stays open and puts each label it reads on this box. The running
+  /// total follows this screen's live feed, so other phones' scans count.
+  Future<void> _startLoading() async {
+    final container = _container;
+    if (container == null || !container.isLoading) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ContainerLoadingScreen(
+          businessId: widget.businessId,
+          container: container,
+          liveUpdates: _feed,
+          liveLines: () => _feed.lines,
+        ),
+      ),
+    );
+  }
+
   Future<void> _ship() async {
     final l10n = AppLocalizations.of(context)!;
     final container = _container;
@@ -2248,6 +2267,19 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
                         ),
                       ],
                     ),
+                    // Scan to load: every label scanned goes onto this box.
+                    // The same people who may add waiting packages by hand.
+                    if (container.isLoading && !access.restricted) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      ContainerActionButton(
+                        key: const Key('container-start-loading'),
+                        icon: Icons.qr_code_scanner,
+                        label: l10n.ldgStart,
+                        primary: true,
+                        enabled: !busy,
+                        onTap: _startLoading,
+                      ),
+                    ],
                     if (!container.isArrived) ...[
                       const SizedBox(height: AppSpacing.sm),
                       ContainerActionButton(
@@ -5926,6 +5958,13 @@ String containerErrorText(
     'piece_price_invalid' => l10n.pcsErrPriceInvalid,
     'piece_count_invalid' => l10n.pcsErrCountInvalid,
     'line_has_parts' => l10n.pcsErrLineHasParts,
+    // Scan to load: the loading screen's words (ldgErr*).
+    'load_action_invalid' => l10n.ldgErrAction,
+    'scan_code_invalid' => l10n.ldgErrCodeInvalid,
+    'scan_id_invalid' => l10n.ldgErrScanId,
+    'scan_line_not_found' => l10n.ldgErrNotFound,
+    'line_delivered' => l10n.ldgErrDelivered,
+    'line_in_other_container' => l10n.ldgErrInAnotherContainer,
     _ => l10n.lotCouldNotSave,
   };
 }

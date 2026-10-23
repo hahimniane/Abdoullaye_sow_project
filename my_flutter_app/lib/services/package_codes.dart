@@ -20,10 +20,17 @@ const packageLinkHost = 'customer.laawoldigital.com';
 final RegExp _packageCode =
     RegExp('^$packageCodePrefix([$packageTrackingAlphabet]{6})\$');
 
+/// A part of a package split across containers: the root's code and its
+/// part number, `CL-K7M4P2-2` (docs/WAITING_PACKAGES.md "Split across
+/// containers"). Mirrors the part branch of `normalizeTrackingCode`.
+final RegExp _packagePartCode =
+    RegExp('^$packageCodePrefix([$packageTrackingAlphabet]{6})([1-9][0-9]?)\$');
+
 /// [raw] - a QR payload, a typed code, a pasted link - as "CL-XXXXXX", or
 /// null when it holds no container-line code.
 ///
-/// Accepts "CL-K7M4P2", "cl k7m4p2", "CLK7M4P2", the label's link
+/// Accepts "CL-K7M4P2", "cl k7m4p2", "CLK7M4P2", a split part's
+/// "CL-K7M4P2-2", the label's link
 /// `https://customer.laawoldigital.com/t/CL-K7M4P2` (with or without the
 /// scheme) and the older `/?service=tracking&code=CL-K7M4P2`. A link to any
 /// other site is refused: a QR on someone else's box is not ours to read.
@@ -52,7 +59,11 @@ String? packageCodeFromLink(Uri? uri) {
 String? _normalize(String value) {
   final stripped = value.toUpperCase().replaceAll(RegExp('[^A-Z0-9]'), '');
   final match = _packageCode.firstMatch(stripped);
-  return match == null ? null : '$packageCodePrefix-${match.group(1)}';
+  if (match != null) return '$packageCodePrefix-${match.group(1)}';
+  final part = _packagePartCode.firstMatch(stripped);
+  return part == null
+      ? null
+      : '$packageCodePrefix-${part.group(1)}-${part.group(2)}';
 }
 
 /// The code-bearing part of a Laawol link, or null when [text] is not one.

@@ -16329,4 +16329,288 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get pkgMomentDelivered => 'livré';
+
+  @override
+  String get ldgStart => 'Commencer le chargement';
+
+  @override
+  String ldgHeaderTo(String destination) {
+    return 'Vers $destination';
+  }
+
+  @override
+  String ldgTotalPackages(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count colis',
+      one: '$count colis',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String ldgTotalPieces(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count pièces scannées',
+      one: '$count pièce scannée',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get ldgCameraUnavailable =>
+      'L’appareil photo n’est pas disponible. Saisissez ci-dessous le code imprimé sur chaque étiquette.';
+
+  @override
+  String get ldgTypeCode => 'Saisir un code';
+
+  @override
+  String get ldgTypeHint => 'CL-K7M4P2';
+
+  @override
+  String get ldgTypeSend => 'Charger';
+
+  @override
+  String get ldgRecent => 'Derniers scans';
+
+  @override
+  String get ldgNoScans => 'Chaque étiquette scannée s’affiche ici.';
+
+  @override
+  String get ldgSending => 'Envoi…';
+
+  @override
+  String get ldgLoaded => 'Chargé';
+
+  @override
+  String ldgLoadedOf(int scanned, int total) {
+    return 'Chargé · $scanned sur $total';
+  }
+
+  @override
+  String get ldgMovedHere => 'Déplacé ici';
+
+  @override
+  String ldgCountedOf(int scanned, int total) {
+    return '$scanned sur $total';
+  }
+
+  @override
+  String ldgAllIn(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Les $count sont déjà chargés',
+      one: 'Déjà chargé',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get ldgUndo => 'Annuler';
+
+  @override
+  String get ldgUndoneBack => 'Annulé · remis en attente';
+
+  @override
+  String ldgUndoneOf(int scanned, int total) {
+    return 'Annulé · $scanned sur $total';
+  }
+
+  @override
+  String get ldgUndoFailed => 'Impossible d’annuler. Réessayez.';
+
+  @override
+  String get ldgErrOffline => 'Pas de connexion - scannez à nouveau';
+
+  @override
+  String get ldgErrNotAllowed =>
+      'Vous n’avez pas accès au chargement des conteneurs.';
+
+  @override
+  String get ldgErrNotFound => 'Aucun colis n’a ce code.';
+
+  @override
+  String get ldgErrLocked => 'Ce conteneur n’est plus en chargement.';
+
+  @override
+  String get ldgErrDestinationRequired =>
+      'Indiquez d’abord la destination de ce conteneur.';
+
+  @override
+  String get ldgErrDestinationMismatch => 'Ce colis va dans un autre pays.';
+
+  @override
+  String get ldgErrDelivered => 'Ce colis a déjà été livré.';
+
+  @override
+  String ldgErrOtherContainer(String container) {
+    return 'Ce colis est sur $container.';
+  }
+
+  @override
+  String ldgErrShippedContainer(String container) {
+    return 'Ce colis est déjà parti sur $container.';
+  }
+
+  @override
+  String get ldgErrCodeInvalid => 'Ce n’est pas un code de colis.';
+
+  @override
+  String get ldgErrScanId => 'Le scan n’est pas passé. Scannez à nouveau.';
+
+  @override
+  String get ldgErrPieceCount =>
+      'Seul un colis dont une partie des pièces a été scannée peut rester en attente.';
+
+  @override
+  String get ldgErrGeneric =>
+      'Impossible de scanner cette étiquette. Scannez à nouveau.';
+
+  @override
+  String get ldgMoveTitle => 'Le déplacer ici ?';
+
+  @override
+  String ldgMoveMessage(String container) {
+    return 'Ce colis est sur $container. Le déplacer ici ?';
+  }
+
+  @override
+  String get ldgMoveConfirm => 'Déplacer ici';
+
+  @override
+  String get ldgDone => 'Chargement terminé';
+
+  @override
+  String get ldgSummaryTitle => 'Avant de terminer';
+
+  @override
+  String get ldgSummaryFailed => 'Impossible d’obtenir le récapitulatif.';
+
+  @override
+  String get ldgIncompleteTitle => 'Toutes les pièces n’ont pas été scannées';
+
+  @override
+  String ldgIncompleteOf(int scanned, int total) {
+    return '$scanned pièces scannées sur $total';
+  }
+
+  @override
+  String get ldgLoadAll => 'Tout charger';
+
+  @override
+  String ldgLeaveWaiting(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'En laisser $count en attente',
+      one: 'En laisser $count en attente',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get ldgGoesWhole => 'Tout part';
+
+  @override
+  String ldgLeftWaiting(int count, String code) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count laissées en attente sous $code',
+      one: '$count laissée en attente sous $code',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String ldgUnscanned(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count colis du conteneur n’ont jamais été scannés',
+      one: '$count colis du conteneur n’a jamais été scanné',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get ldgUnscannedNote =>
+      'Ajoutés à la main, ou avant le début du scan.';
+
+  @override
+  String ldgWaitingNotScanned(int count, String destination) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count colis en attente pour $destination n’ont pas été scannés',
+      one: '$count colis en attente pour $destination n’a pas été scanné',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get ldgThisDestination => 'cette destination';
+
+  @override
+  String ldgWaitingMore(int count) {
+    return 'et $count de plus';
+  }
+
+  @override
+  String get ldgAllClear =>
+      'Tous les colis du conteneur ont été scannés en entier.';
+
+  @override
+  String get ldgKeepScanning => 'Continuer à scanner';
+
+  @override
+  String get ldgErrAction => 'Ce n’est pas une action de chargement.';
+
+  @override
+  String get ldgErrInAnotherContainer => 'Ce colis est sur un autre conteneur.';
+
+  @override
+  String ldgOnContainer(String packages, String pieces) {
+    return 'Sur le conteneur : $packages · $pieces';
+  }
+
+  @override
+  String ldgPieces(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count pièces',
+      one: '$count pièce',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get ldgErrNotOnContainer => 'Ce colis n’est plus sur ce conteneur.';
+
+  @override
+  String ldgUndoneMovedBack(String container) {
+    return 'Remis sur $container';
+  }
+
+  @override
+  String get ldgAlreadyUndone => 'Déjà annulé';
+
+  @override
+  String ldgMoveScannedWarning(int count, String container) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count de ses pièces ont déjà été scannées dans $container.',
+      one: '$count de ses pièces a déjà été scannée dans $container.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get ldgRestWaiting => 'Le reste reste en attente.';
 }

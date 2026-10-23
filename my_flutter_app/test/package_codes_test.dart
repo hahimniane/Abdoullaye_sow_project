@@ -69,6 +69,25 @@ void main() {
     test('is idempotent: its output reads back as itself', () {
       final once = packageCodeFromScan('cl k7m4p2')!;
       expect(packageCodeFromScan(once), once);
+      final part = packageCodeFromScan('cl k7m4p2 2')!;
+      expect(packageCodeFromScan(part), part);
+    });
+
+    // A part of a package split across containers carries its own code on
+    // its labels; the server reads it the same way (normalizeTrackingCode).
+    test('reads a split part code, typed or from its label link', () {
+      for (final raw in [
+        'CL-K7M4P2-2',
+        'cl-k7m4p2-2',
+        'CLK7M4P22',
+        'https://customer.laawoldigital.com/t/CL-K7M4P2-2',
+      ]) {
+        expect(packageCodeFromScan(raw), 'CL-K7M4P2-2', reason: raw);
+      }
+      expect(packageCodeFromScan('CL-K7M4P2-12'), 'CL-K7M4P2-12');
+      for (final raw in ['CL-K7M4P2-0', 'CL-K7M4P2-123', 'CL-K7M4P2-2X']) {
+        expect(packageCodeFromScan(raw), isNull, reason: raw);
+      }
     });
   });
 
