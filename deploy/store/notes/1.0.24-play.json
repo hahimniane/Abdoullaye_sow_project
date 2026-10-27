@@ -1,0 +1,4 @@
+{
+  "en-US": "Loading lists on the container: see every package on it, filter by recently added, by customer or not scanned yet, and take any package off.\n\"Still to load\" shows the waiting packages for that destination, grouped by customer - tap one to load it.\nEach package shows when it went on, who added it, and whether it was added by hand, by scan or moved from another container.",
+  "fr-FR": "Listes de chargement du conteneur : voyez chaque colis à bord, filtrez par ajout récent, par client ou non scanné, et retirez n’importe quel colis.\n« À charger » montre les colis en attente pour cette destination, groupés par client - touchez-en un pour le charger.\nChaque colis indique quand il a été chargé, par qui, et s’il a été ajouté à la main, par scan ou déplacé d’un autre conteneur."
+}
