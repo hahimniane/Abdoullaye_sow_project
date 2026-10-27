@@ -549,3 +549,38 @@ summary (each incomplete package: "Load all" - keep it whole - or "Leave N
 waiting"). The console shows the same counts; console loading by scanner gun
 is a later step.
 
+### Loading lists (owner decisions 2026-10-23)
+
+**When and how a package went on.** Every path that puts a line on a
+container (`assignContainerLines` by hand, the `scan` action, a move by
+`moveContainerLine` or by a scan with `move: true`) writes
+`containerAssignedAt` (server time), `containerAssignedByStaffId` and
+`containerAssignedVia` (`"hand"` | `"scan"` | `"move"`). They are cleared
+with the other container fields when the line leaves the container
+(unassign, the undo that unloads, back to waiting). Lines put on before
+this have none (shown as "added earlier", sorted last).
+
+**Scan answers.** The `line` view in every scan / undo / summary answer
+also carries `addedByScan` (true when this mode put it on),
+`assignedVia`, `assignedAt` (ms or null) and `customerName` /
+`customerPhone` (the sender, else the receiver - `lineCustomerName`).
+A `counted` scan of a package that was already on the container before
+any scan (`addedByScan` false and `scannedPieces` 1) is shown as
+**"Already on this container · 1 of N scanned"** (neutral), never as
+"Loaded" - green "Loaded" only for `result: "loaded"`.
+
+**Lists on the loading screen (app) and the container page (console).**
+Built from what the clients already read (the container's lines and the
+business's waiting lines); no new callable:
+
+- **On this container** with filters: *Recently added* (newest
+  `containerAssignedAt` first, with who and how), *By customer* (grouped by
+  customer: packages, pieces, pieces scanned), *Not scanned yet*
+  (`loadScannedPieces` 0 or absent), and a search (code, name, phone).
+  Each row has **Take off** (confirm, then `unassignContainerLine`; only
+  while loading).
+- **Still to load**: waiting packages of the business going to the
+  container's destination, grouped by customer with counts; tapping one
+  loads it (the `scan` action with its code and a fresh scanId).
+- The header adds "<n> still waiting for <destination>".
+

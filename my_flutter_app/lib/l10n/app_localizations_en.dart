@@ -16421,4 +16421,108 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get lotEntryNotFound => 'That entry could not be opened.';
+
+  @override
+  String ldgAlreadyOnContainer(int scanned, int total) {
+    String _temp0 = intl.Intl.pluralLogic(
+      scanned,
+      locale: localeName,
+      other: 'Already on this container · $scanned of $total scanned',
+      one: 'Already on this container · $scanned of $total scanned',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get ldgTabOnContainer => 'On this container';
+
+  @override
+  String get ldgTabStillToLoad => 'Still to load';
+
+  @override
+  String get ldgFilterRecent => 'Recently added';
+
+  @override
+  String get ldgFilterByCustomer => 'By customer';
+
+  @override
+  String get ldgFilterNotScanned => 'Not scanned yet';
+
+  @override
+  String get ldgSearchHint => 'Search code, name or phone';
+
+  @override
+  String ldgScannedOfPieces(int scanned, int total) {
+    String _temp0 = intl.Intl.pluralLogic(
+      total,
+      locale: localeName,
+      other: 'pieces',
+      one: 'piece',
+    );
+    return '$scanned of $total $_temp0 scanned';
+  }
+
+  @override
+  String get ldgNoCustomerName => 'No name';
+
+  @override
+  String ldgPackagesWaiting(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count packages waiting',
+      one: '$count package waiting',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String ldgAddedBy(String name) {
+    return 'Added by $name';
+  }
+
+  @override
+  String get ldgViaScan => 'By scan';
+
+  @override
+  String get ldgViaHand => 'By hand';
+
+  @override
+  String get ldgViaMove => 'Moved';
+
+  @override
+  String get ldgAddedEarlier => 'Added earlier';
+
+  @override
+  String get ldgTakeOff => 'Take off';
+
+  @override
+  String get ldgTakeOffTitle => 'Take it off?';
+
+  @override
+  String ldgTakeOffMessage(String code, String container) {
+    return 'Take $code off $container? It goes back to waiting.';
+  }
+
+  @override
+  String get ldgLoadIt => 'Load';
+
+  @override
+  String ldgStillWaitingFor(int count, String destination) {
+    return '$count still waiting for $destination';
+  }
+
+  @override
+  String get ldgNothingOnContainer => 'Nothing on this container yet.';
+
+  @override
+  String get ldgNoMatches => 'No package matches.';
+
+  @override
+  String get ldgAllScannedHere => 'Every package here has been scanned.';
+
+  @override
+  String ldgNothingToLoad(String destination) {
+    return 'No package is waiting for $destination.';
+  }
 }

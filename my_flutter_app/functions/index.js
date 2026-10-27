@@ -451,6 +451,8 @@ const {
 const {
   LOAD_ACTION,
   LOAD_FIELDS,
+  ASSIGN_VIA,
+  ASSIGN_FIELDS,
   LOAD_SUMMARY_WAITING_LIMIT,
   loadActionOf,
   scanCodeFrom,
@@ -18035,6 +18037,7 @@ exports.addContainerLine = onCall(
           businessId,
           ...record,
           ...counterReceiptFields(lineRef.id),
+          ...assignmentFields(uid, ASSIGN_VIA.HAND),
           trackingCode,
           createdAt: FirestoreFieldValue.serverTimestamp(),
           updatedAt: FirestoreFieldValue.serverTimestamp(),
@@ -18274,7 +18277,7 @@ exports.moveContainerLine = onCall(
           containerVinLockRef(db, businessId, row.vinNumber) : null;
         const lock = lockRef ? await tx.get(lockRef) : null;
         // Scanning's marks were for the box it leaves.
-        txWriteMove(tx, {lineRef, row, fromRef: from.ref, toRef: to.ref,
+        txWriteMove(tx, {lineRef, row, fromRef: from.ref, toRef: to.ref, uid,
           toStatus: String(toBox.data()?.status || CONTAINER_STATUS.LOADING),
           lockRef, lock, lineFields: clearedLoadFields()});
       });
@@ -18812,15 +18815,39 @@ function requestedPieceCounts(raw) {
 }
 
 /**
- * Field deletes that take scanning's marks (LOAD_FIELDS) off a line that
- * leaves its container: unassigned, moved, or sent back by an undone scan.
+ * Field deletes that take scanning's marks (LOAD_FIELDS) and the
+ * assignment marks (ASSIGN_FIELDS: when, by whom and how it went on) off a
+ * line that leaves its container: unassigned, moved, or sent back by an
+ * undone scan.
  *
  * @return {object} Fields for an update.
  */
 function clearedLoadFields() {
   const out = {};
-  for (const field of LOAD_FIELDS) out[field] = FirestoreFieldValue.delete();
+  for (const field of [...LOAD_FIELDS, ...ASSIGN_FIELDS]) {
+    out[field] = FirestoreFieldValue.delete();
+  }
   return out;
+}
+
+/**
+ * The marks every path that puts a line on a container leaves on it: when,
+ * by whom and how (ASSIGN_VIA: by hand, by scan, or moved from another
+ * container). Cleared with clearedLoadFields when it leaves.
+ *
+ * @param {string} uid Who put it on.
+ * @param {string} via An ASSIGN_VIA value.
+ * @param {*} at The time: the server's (default) or, for the answer a
+ *   caller builds from the line, the caller's own clock.
+ * @return {object} Fields for an update or a set.
+ */
+function assignmentFields(uid, via,
+    at = FirestoreFieldValue.serverTimestamp()) {
+  return {
+    containerAssignedAt: at,
+    containerAssignedByStaffId: String(uid || ""),
+    containerAssignedVia: via,
+  };
 }
 
 /**
@@ -18997,8 +19024,9 @@ function txSplitLine(tx, db, args) {
  * @param {object} tx The transaction.
  * @param {object} db Firestore.
  * @param {object} args {ref (the container), boxData, plans, reads,
- *   partRefs (Map line id -> new part ref), businessId, uid, lineExtra
- *   (more fields for every line that goes, e.g. a scan's marks)}.
+ *   partRefs (Map line id -> new part ref), businessId, uid, via (an
+ *   ASSIGN_VIA, default "hand"), lineExtra (more fields for every line that
+ *   goes, e.g. a scan's marks)}.
  * @return {object} {loaded: [{id, line}], parts}.
  */
 function txWriteAssignment(tx, db, args) {
@@ -19006,6 +19034,9 @@ function txWriteAssignment(tx, db, args) {
   const lineExtra = args.lineExtra || {};
   const status = String(boxData.status || CONTAINER_STATUS.LOADING);
   const now = FirestoreFieldValue.serverTimestamp();
+  // When, by whom and how it went on. A part that stays waiting (the other
+  // side of a split) is a new line without them.
+  const marks = assignmentFields(uid, args.via || ASSIGN_VIA.HAND, now);
   const lastIndex = new Map();
   const loaded = [];
   const parts = [];
@@ -19013,7 +19044,7 @@ function txWriteAssignment(tx, db, args) {
     const lineRef = db.collection("containerLines").doc(plan.id);
     if (!plan.split) {
       tx.update(lineRef, {containerId: ref.id, containerStatus: status,
-        ...lineExtra, updatedAt: now});
+        ...lineExtra, ...marks, updatedAt: now});
       loaded.push({id: plan.id, line: plan.line});
       continue;
     }
@@ -19022,7 +19053,7 @@ function txWriteAssignment(tx, db, args) {
       group: reads.groups.get(groupRootId(plan.line, plan.id)),
       partRef: partRefs.get(plan.id),
       lineFields: {containerId: ref.id, containerStatus: status,
-        ...lineExtra},
+        ...lineExtra, ...marks},
     });
     loaded.push({id: plan.id, line: {...plan.line, ...going}});
     parts.push(part);
@@ -19053,7 +19084,7 @@ function txWriteAssignment(tx, db, args) {
  *
  * @param {object} tx The transaction.
  * @param {object} args {lineRef, row (the line as read), fromRef, toRef,
- *   toStatus, lockRef, lock, lineFields}.
+ *   toStatus, lockRef, lock, uid (who moved it), lineFields}.
  */
 function txWriteMove(tx, args) {
   const {lineRef, row, fromRef, toRef, lockRef, lock} = args;
@@ -19061,6 +19092,7 @@ function txWriteMove(tx, args) {
     containerId: toRef.id,
     containerStatus: args.toStatus,
     ...(args.lineFields || {}),
+    ...assignmentFields(args.uid, ASSIGN_VIA.MOVE),
     updatedAt: FirestoreFieldValue.serverTimestamp(),
   });
   tx.set(fromRef, {
@@ -19260,14 +19292,18 @@ async function scanToLoad(db, {uid, businessId, ref, data}) {
     }
     const marks = scanLoadFields(uid, scanId,
         decision.change === "move" ? onId : "");
-    const after = lineAfterUpdate({...row, containerId: ref.id}, marks);
+    const via = decision.change === "move" ? ASSIGN_VIA.MOVE :
+      ASSIGN_VIA.SCAN;
+    const after = lineAfterUpdate({...row, containerId: ref.id},
+        {...marks, ...assignmentFields(uid, via, new Date())});
     const delta = containerLinesCountsDelta([row], 1);
     if (decision.change === "load") {
       // Whole, exactly as assignContainerLines without pieceCounts.
       const plans = [{id: lineId, line: row, ...splitPieces(row)}];
       const reads = await txAssignmentReads(tx, db, businessId, plans);
       txWriteAssignment(tx, db, {ref, boxData, plans, reads,
-        partRefs: new Map(), businessId, uid, lineExtra: marks});
+        partRefs: new Map(), businessId, uid, via: ASSIGN_VIA.SCAN,
+        lineExtra: marks});
       return {decision, row: after, boxData, delta};
     }
     // Moved here from the other container, still loading (as
@@ -19275,7 +19311,7 @@ async function scanToLoad(db, {uid, businessId, ref, data}) {
     const lockRef = row.kind === "car" ?
       containerVinLockRef(db, businessId, row.vinNumber) : null;
     const lock = lockRef ? await tx.get(lockRef) : null;
-    txWriteMove(tx, {lineRef, row, fromRef: otherRef, toRef: ref,
+    txWriteMove(tx, {lineRef, row, fromRef: otherRef, toRef: ref, uid,
       toStatus: String(boxData.status || CONTAINER_STATUS.LOADING),
       lockRef, lock, lineFields: marks});
     return {decision, row: after, boxData, delta,
@@ -19357,13 +19393,15 @@ async function undoLoadScan(db, {uid, businessId, ref, data}) {
     const lock = lockRef ? await tx.get(lockRef) : null;
     const delta = containerLinesCountsDelta([row], -1);
     if (decision.change === "move_back") {
-      txWriteMove(tx, {lineRef, row, fromRef: ref, toRef: originRef,
+      txWriteMove(tx, {lineRef, row, fromRef: ref, toRef: originRef, uid,
         toStatus: String(origin.status || CONTAINER_STATUS.LOADING),
         lockRef, lock, lineFields: clearedLoadFields()});
       return {decision, boxData, delta,
         row: lineAfterUpdate({...row, containerId: fromId,
           containerStatus: String(origin.status ||
-            CONTAINER_STATUS.LOADING)}, clearedLoadFields()),
+            CONTAINER_STATUS.LOADING)},
+        {...clearedLoadFields(),
+          ...assignmentFields(uid, ASSIGN_VIA.MOVE, new Date())}),
         origin: {containerId: fromId, label: String(origin.label || "")}};
     }
     txWriteUnassign(tx, {lineRef, row, boxRef: ref, lockRef, lock});
@@ -19624,7 +19662,7 @@ exports.assignContainerLines = onCall(
         // Reads first, as a transaction requires.
         const reads = await txAssignmentReads(tx, db, businessId, plans);
         const {loaded, parts} = txWriteAssignment(tx, db, {ref, boxData,
-          plans, reads, partRefs, businessId, uid});
+          plans, reads, partRefs, businessId, uid, via: ASSIGN_VIA.HAND});
         return {box: boxData, entries: loaded, parts,
           alreadyAssigned: already.length};
       });

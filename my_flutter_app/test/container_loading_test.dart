@@ -2,12 +2,16 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:my_flutter_app/l10n/app_localizations.dart';
 import 'package:my_flutter_app/screens/container_loading_screen.dart';
 import 'package:my_flutter_app/services/container_loading.dart';
 import 'package:my_flutter_app/services/container_manifest.dart';
+import 'package:my_flutter_app/services/lot_ledger.dart' show LotStaff;
+import 'package:my_flutter_app/utils/date_display.dart';
 
 /// Scan to load (docs/WAITING_PACKAGES.md "Scan to load"): the pure rules
 /// behind the loading screen - the requests, the answers and refusals read
@@ -16,6 +20,11 @@ import 'package:my_flutter_app/services/container_manifest.dart';
 void main() {
   final en = lookupAppLocalizations(const Locale('en'));
   final fr = lookupAppLocalizations(const Locale('fr'));
+
+  setUpAll(() async {
+    await initializeDateFormatting('en');
+    await initializeDateFormatting('fr');
+  });
 
   group('requests', () {
     test('a scan names the container, the code and its own scan id', () {
@@ -686,6 +695,544 @@ void main() {
       final enLdg = enArb.keys.where((k) => k.contains('ldg')).toSet();
       final frLdg = frArb.keys.where((k) => k.contains('ldg')).toSet();
       expect(frLdg, enLdg);
+    });
+  });
+
+  group('loading lists', () {
+    final oct23 = DateTime(2026, 10, 23, 15, 5);
+
+    ContainerLine line(
+      String id, {
+      String code = '',
+      String customer = '',
+      String phone = '',
+      String receiver = '',
+      String receiverPhone = '',
+      int pieces = 1,
+      int? scanned,
+      DateTime? at,
+      String by = '',
+      String via = '',
+      bool waiting = false,
+      String status = containerStatusLoading,
+      String destination = 'guinea',
+    }) => ContainerLine.fromMap(id, {
+      'businessId': 'b1',
+      'containerId': waiting ? '' : 'c1',
+      'containerStatus': waiting ? containerLineStatusWaiting : status,
+      'kind': containerLineKindBarrels,
+      'quantity': pieces,
+      'ownerKind': containerOwnerCustomer,
+      'trackingCode': code,
+      'customerName': customer,
+      'customerPhone': phone,
+      'receiverName': receiver,
+      'receiverPhone': receiverPhone,
+      'destinationCountryId': destination,
+      'loadScannedPieces': ?scanned,
+      if (at != null) 'containerAssignedAt': at.millisecondsSinceEpoch,
+      if (by.isNotEmpty) 'containerAssignedByStaffId': by,
+      if (via.isNotEmpty) 'containerAssignedVia': via,
+    });
+
+    List<String> ids(Iterable<ContainerLine> lines) => [
+      for (final l in lines) l.id,
+    ];
+
+    test('a line reads the new fields, and older lines have none', () {
+      final fresh = line('a', at: oct23, by: 'u1', via: 'scan');
+      expect(fresh.containerAssignedAt, oct23);
+      expect(fresh.containerAssignedByStaffId, 'u1');
+      expect(fresh.containerAssignedVia, 'scan');
+      final old = line('b');
+      expect(old.containerAssignedAt, isNull);
+      expect(old.containerAssignedByStaffId, '');
+      expect(old.containerAssignedVia, '');
+      // Garbage never throws.
+      final odd = ContainerLine.fromMap('c', {
+        'containerAssignedAt': 'not a date',
+        'containerAssignedByStaffId': 7,
+        'containerAssignedVia': null,
+      });
+      expect(odd.containerAssignedAt, isNull);
+      expect(odd.containerAssignedVia, '');
+    });
+
+    test('an answer reads the new fields, and an older one has none', () {
+      final line = LoadLine.fromMap({
+        'lineId': 'l1',
+        'addedByScan': true,
+        'assignedVia': 'SCAN',
+        'assignedAt': oct23.millisecondsSinceEpoch,
+        'customerName': 'Oumou Barry',
+        'customerPhone': '+224600000000',
+      });
+      expect(line.addedByScan, isTrue);
+      expect(line.assignedVia, loadViaScan);
+      expect(line.assignedAt, oct23);
+      expect(line.customerName, 'Oumou Barry');
+      expect(line.customerPhone, '+224600000000');
+      final old = LoadLine.fromMap({'lineId': 'l2'});
+      expect(old.addedByScan, isFalse);
+      expect(old.assignedVia, '');
+      expect(old.assignedAt, isNull);
+      expect(old.customerName, '');
+      // A via the app does not know, and a null time, read as nothing.
+      final odd = LoadLine.fromMap({
+        'lineId': 'l3',
+        'assignedVia': 'teleport',
+        'assignedAt': null,
+      });
+      expect(odd.assignedVia, '');
+      expect(odd.assignedAt, isNull);
+    });
+
+    group('the neutral row', () {
+      LoadAnswer answer(
+        String result, {
+        bool addedByScan = false,
+        int scanned = 1,
+        int pieces = 5,
+      }) => LoadAnswer.fromCallable({
+        'result': result,
+        'line': {
+          'lineId': 'l1',
+          'trackingCode': 'CL-K7M4P2',
+          'pieceCount': pieces,
+          'scannedPieces': scanned,
+          'addedByScan': addedByScan,
+        },
+      });
+      const sending = LoadRow(
+        key: 1,
+        code: 'CL-K7M4P2',
+        state: LoadRowState.sending,
+      );
+
+      test('counted on a package already there is neutral, not Loaded', () {
+        final row = sending.answered(answer('counted'));
+        expect(row.alreadyOnContainer, isTrue);
+        expect(row.tone, LoadTone.neutral);
+        expect(
+          loadRowText(en, row),
+          'Already on this container · 1 of 5 scanned',
+        );
+        expect(loadRowText(fr, row), 'Déjà sur ce conteneur · 1 sur 5 scannée');
+        expect(loadRowText(en, row), isNot(contains('Loaded')));
+        // It still counted a piece: Undo takes it back.
+        expect(loadCanUndo([row], row), isTrue);
+      });
+
+      test('a field the server did not send reads as not added by scan', () {
+        final bare = sending.answered(
+          LoadAnswer.fromCallable({
+            'result': 'counted',
+            'line': {'lineId': 'l1', 'pieceCount': 3, 'scannedPieces': 1},
+          }),
+        );
+        expect(bare.tone, LoadTone.neutral);
+        expect(loadRowText(en, bare), contains('Already on this container'));
+      });
+
+      test('only result loaded is the green Loaded', () {
+        final loaded = sending.answered(answer('loaded', pieces: 1));
+        expect(loaded.tone, LoadTone.green);
+        expect(loadRowText(en, loaded), 'Loaded');
+        // Even a loaded answer that does not say addedByScan.
+        expect(loaded.alreadyOnContainer, isFalse);
+      });
+
+      test('the rule: not added by scan and exactly one piece scanned', () {
+        bool rule({required bool byScan, required int scanned}) =>
+            loadCountedWasAlreadyOn(
+              LoadLine(
+                lineId: 'l',
+                addedByScan: byScan,
+                scannedPieces: scanned,
+                pieceCount: 5,
+              ),
+            );
+        expect(rule(byScan: false, scanned: 1), isTrue);
+        expect(rule(byScan: true, scanned: 1), isFalse);
+        expect(rule(byScan: false, scanned: 2), isFalse);
+        expect(rule(byScan: false, scanned: 0), isFalse);
+      });
+
+      test('a package this mode loaded keeps its blue "2 of 5"', () {
+        final second = sending.answered(
+          answer('counted', addedByScan: true, scanned: 2),
+        );
+        expect(second.tone, LoadTone.blue);
+        expect(loadRowText(en, second), '2 of 5');
+        final first = sending.answered(
+          answer('counted', addedByScan: true, scanned: 1),
+        );
+        expect(first.tone, LoadTone.blue);
+        expect(loadRowText(en, first), '1 of 5');
+      });
+    });
+
+    group('Recently added', () {
+      test('newest first; the ones with no time go last as added earlier', () {
+        final lines = [
+          line('old1', code: 'CL-B'),
+          line(
+            'mid',
+            code: 'CL-M',
+            at: oct23.subtract(const Duration(hours: 2)),
+          ),
+          line('new', code: 'CL-N', at: oct23),
+          line('old0', code: 'CL-A'),
+        ];
+        expect(ids(loadRecentlyAdded(lines)), ['new', 'mid', 'old0', 'old1']);
+        // The same input twice gives the same order.
+        expect(
+          ids(loadRecentlyAdded(lines.reversed)),
+          ids(loadRecentlyAdded(lines)),
+        );
+      });
+
+      test('who added it and how, in both languages, US dates in English', () {
+        final staff = [const LotStaff(id: 'u1', name: 'Awa Camara')];
+        // Month first and 12-hour in English, the French form in French.
+        expect(displayMonthDayTime(oct23, 'en'), startsWith('Oct 23'));
+        expect(displayMonthDayTime(oct23, 'en'), contains('PM'));
+        expect(displayMonthDayTime(oct23, 'fr'), '23 oct. 15:05');
+        final byScan = line('a', at: oct23, by: 'u1', via: 'scan');
+        expect(
+          loadAddedText(en, byScan, staff, 'en'),
+          'Added by Awa Camara · By scan · ${displayMonthDayTime(oct23, 'en')}',
+        );
+        expect(
+          loadAddedText(fr, byScan, staff, 'fr'),
+          'Ajouté par Awa Camara · Par scan · ${displayMonthDayTime(oct23, 'fr')}',
+        );
+        expect(
+          loadAddedText(
+            en,
+            line('b', at: oct23, by: 'u1', via: 'hand'),
+            staff,
+            'en',
+          ),
+          contains('By hand'),
+        );
+        expect(
+          loadAddedText(
+            en,
+            line('c', at: oct23, by: 'u1', via: 'move'),
+            staff,
+            'en',
+          ),
+          contains('Moved'),
+        );
+        // Someone no longer in the list: how and when, no name.
+        expect(
+          loadAddedText(
+            en,
+            line('d', at: oct23, by: 'gone', via: 'scan'),
+            staff,
+            'en',
+          ),
+          'By scan · ${displayMonthDayTime(oct23, 'en')}',
+        );
+        // Put on before this was recorded.
+        expect(loadAddedText(en, line('e'), staff, 'en'), 'Added earlier');
+        expect(loadAddedText(fr, line('e'), staff, 'fr'), 'Ajouté plus tôt');
+      });
+
+      test('the staff name is looked up by id', () {
+        final staff = [
+          const LotStaff(id: 'u1', name: 'Awa'),
+          const LotStaff(id: 'u2', name: 'Moussa'),
+        ];
+        expect(loadStaffName(staff, 'u2'), 'Moussa');
+        expect(loadStaffName(staff, 'zz'), '');
+        expect(loadStaffName(staff, ''), '');
+      });
+    });
+
+    group('By customer', () {
+      final lines = [
+        line('1', code: 'CL-1', customer: 'OUMOU BARRY', pieces: 2, scanned: 2),
+        line(
+          '2',
+          code: 'CL-2',
+          customer: 'oumou  barry',
+          pieces: 3,
+          scanned: 3,
+        ),
+        line('3', code: 'CL-3', customer: 'Oumou Barry', pieces: 1, scanned: 0),
+        line(
+          '4',
+          code: 'CL-4',
+          customer: 'Aliou Diallo',
+          pieces: 4,
+          scanned: 1,
+        ),
+        // No sender: the receiver is the customer.
+        line('5', code: 'CL-5', receiver: 'Zeinab Sow', pieces: 1),
+        // Neither a name nor a phone.
+        line('6', code: 'CL-6'),
+      ];
+
+      test('grouped by customer: packages, pieces, pieces scanned', () {
+        final groups = loadGroupByCustomer(lines);
+        expect(
+          [for (final g in groups) g.name],
+          ['Aliou Diallo', 'OUMOU BARRY', 'Zeinab Sow', ''],
+        );
+        final oumou = groups[1];
+        expect(ids(oumou.lines), ['1', '2', '3']);
+        expect(oumou.packages, 3);
+        expect(oumou.pieces, 6);
+        expect(oumou.scannedPieces, 5);
+        expect(groups[3].key, '');
+      });
+
+      test(
+        'a header reads like "OUMOU BARRY · 3 packages · 5 of 6 pieces scanned"',
+        () {
+          final oumou = loadGroupByCustomer(lines)[1];
+          expect(
+            loadOnGroupText(en, oumou),
+            'OUMOU BARRY · 3 packages · 5 of 6 pieces scanned',
+          );
+          expect(
+            loadOnGroupText(fr, oumou),
+            'OUMOU BARRY · 3 colis · 5 pièces scannées sur 6',
+          );
+          final aliou = loadGroupByCustomer(lines)[0];
+          expect(
+            loadOnGroupText(en, aliou),
+            'Aliou Diallo · 1 package · 1 of 4 pieces scanned',
+          );
+          expect(
+            loadOnGroupText(en, loadGroupByCustomer(lines)[3]),
+            'No name · 1 package · 0 of 1 piece scanned',
+          );
+        },
+      );
+
+      test('with no name the phone is the customer', () {
+        final groups = loadGroupByCustomer([
+          line('a', phone: '+224 600 00 00 01'),
+          line('b', phone: '+224600000001'),
+        ]);
+        expect(groups.length, 1);
+        expect(groups.single.name, '+224 600 00 00 01');
+        expect(groups.single.packages, 2);
+      });
+
+      test('the filter builds a header then its packages', () {
+        final items = loadOnContainerItems(
+          lines,
+          LoadListFilter.byCustomer,
+          '',
+        );
+        expect(items.first, isA<LoadGroupItem>());
+        expect(
+          [for (final i in items) i is LoadGroupItem ? 'G' : 'L'],
+          ['G', 'L', 'G', 'L', 'L', 'L', 'G', 'L', 'G', 'L'],
+        );
+      });
+    });
+
+    group('Not scanned yet', () {
+      test('0 or absent, nothing else', () {
+        final lines = [
+          line('zero', code: 'CL-1', scanned: 0),
+          line('absent', code: 'CL-2'),
+          line('some', code: 'CL-3', scanned: 1),
+        ];
+        expect(ids(loadNotScanned(lines)), ['zero', 'absent']);
+        expect(
+          ids(
+            loadOnContainerItems(
+              lines,
+              LoadListFilter.notScanned,
+              '',
+            ).whereType<LoadLineItem>().map((i) => i.line),
+          ),
+          ['zero', 'absent'],
+        );
+      });
+    });
+
+    group('search', () {
+      final lines = [
+        line(
+          'a',
+          code: 'CL-K7M4P2',
+          customer: 'Mariama Bah',
+          phone: '+224 622 11 22 33',
+          receiver: 'Ibrahima Sow',
+          receiverPhone: '+1 (347) 555-0188',
+        ),
+        line('b', code: 'CL-ZZZ999', customer: 'Aliou Diallo'),
+      ];
+
+      test('by code, with or without the dash and in any case', () {
+        expect(ids(lines.where((l) => loadLineMatches(l, 'k7m4'))), ['a']);
+        expect(ids(lines.where((l) => loadLineMatches(l, 'cl-k7m4p2'))), ['a']);
+        expect(ids(lines.where((l) => loadLineMatches(l, 'CLK7M4P2'))), ['a']);
+      });
+
+      test('by name, the sender or the receiver', () {
+        expect(ids(lines.where((l) => loadLineMatches(l, 'mariama'))), ['a']);
+        expect(ids(lines.where((l) => loadLineMatches(l, 'DIALLO'))), ['b']);
+        expect(ids(lines.where((l) => loadLineMatches(l, 'ibrahima s'))), [
+          'a',
+        ]);
+      });
+
+      test('by phone however it is punctuated', () {
+        expect(ids(lines.where((l) => loadLineMatches(l, '622 11'))), ['a']);
+        expect(ids(lines.where((l) => loadLineMatches(l, '+1347555'))), ['a']);
+      });
+
+      test('empty or punctuation only matches everything; a miss nothing', () {
+        expect(lines.every((l) => loadLineMatches(l, '')), isTrue);
+        expect(lines.every((l) => loadLineMatches(l, ' - ')), isTrue);
+        expect(lines.any((l) => loadLineMatches(l, 'nobody')), isFalse);
+      });
+
+      test('the search narrows every filter', () {
+        final items = loadOnContainerItems(
+          lines,
+          LoadListFilter.recent,
+          'aliou',
+        );
+        expect(items.length, 1);
+        expect((items.single as LoadLineItem).line.id, 'b');
+      });
+    });
+
+    group('Still to load', () {
+      final box = ShippingContainer.fromMap('c1', {
+        'businessId': 'b1',
+        'label': 'Box 1',
+        'status': containerStatusLoading,
+        'destinationCountryId': 'guinea',
+        'destinationCountryName': 'Guinea',
+      });
+      final lines = [
+        line('w1', code: 'CL-W1', customer: 'Aliou Diallo', waiting: true),
+        line('w2', code: 'CL-W2', customer: 'Aliou Diallo', waiting: true),
+        line('w3', code: 'CL-W3', customer: 'Fanta Keita', waiting: true),
+        line(
+          'mali',
+          customer: 'Fanta Keita',
+          waiting: true,
+          destination: 'mali',
+        ),
+        line('on', code: 'CL-ON', customer: 'Aliou Diallo'),
+      ];
+
+      test('waiting packages going to the container country, only', () {
+        expect(ids(loadStillToLoadLines(lines, box)), ['w1', 'w2', 'w3']);
+      });
+
+      test('a container with no destination takes none', () {
+        final open = ShippingContainer.fromMap('c2', {
+          'businessId': 'b1',
+          'status': containerStatusLoading,
+        });
+        expect(loadStillToLoadLines(lines, open), isEmpty);
+      });
+
+      test('grouped by customer, counts in words', () {
+        final items = loadStillToLoadItems(
+          loadStillToLoadLines(lines, box),
+          '',
+        );
+        final groups = items.whereType<LoadGroupItem>().map((i) => i.group);
+        expect(
+          [for (final g in groups) loadWaitingGroupText(en, g)],
+          [
+            'Aliou Diallo · 2 packages waiting',
+            'Fanta Keita · 1 package waiting',
+          ],
+        );
+        expect(
+          [for (final g in groups) loadWaitingGroupText(fr, g)],
+          [
+            'Aliou Diallo · 2 colis en attente',
+            'Fanta Keita · 1 colis en attente',
+          ],
+        );
+      });
+
+      test('on the container is only this container', () {
+        expect(ids(loadOnContainerLines(lines, 'c1')), ['on']);
+        expect(loadOnContainerLines(lines, 'c9'), isEmpty);
+      });
+
+      test('the header and the empty note in both languages', () {
+        expect(
+          en.ldgStillWaitingFor(12, 'Guinea'),
+          '12 still waiting for Guinea',
+        );
+        expect(
+          fr.ldgStillWaitingFor(12, 'Guinée'),
+          '12 encore en attente pour Guinée',
+        );
+        expect(
+          en.ldgNothingToLoad('Guinea'),
+          'No package is waiting for Guinea.',
+        );
+      });
+    });
+
+    group('Take off', () {
+      test('only while loading, and not once delivered', () {
+        expect(loadCanTakeOff(line('a')), isTrue);
+        expect(
+          loadCanTakeOff(line('b', status: containerStatusShipped)),
+          isFalse,
+        );
+        expect(
+          loadCanTakeOff(line('c', status: containerStatusLoading)),
+          isTrue,
+        );
+      });
+
+      test('the confirm question names the code and the container', () {
+        expect(
+          en.ldgTakeOffMessage('CL-K7M4P2', 'Box 2'),
+          'Take CL-K7M4P2 off Box 2? It goes back to waiting.',
+        );
+        expect(
+          fr.ldgTakeOffMessage('CL-K7M4P2', 'Box 2'),
+          'Retirer CL-K7M4P2 de Box 2 ? Le colis repasse en attente.',
+        );
+      });
+
+      test('a refusal is shown in the container words, never raw', () {
+        final locked = FirebaseFunctionsException(
+          message: 'refused',
+          code: 'failed-precondition',
+          details: {'reason': 'container_locked'},
+        );
+        expect(loadTakeOffErrorText(en, locked), en.ctrErrLocked);
+        expect(loadTakeOffErrorText(fr, locked), fr.ctrErrLocked);
+        final gone = FirebaseFunctionsException(
+          message: 'refused',
+          code: 'not-found',
+          details: {'reason': 'line_not_found'},
+        );
+        expect(loadTakeOffErrorText(en, gone), en.ctrErrLineNotFound);
+        expect(
+          loadTakeOffErrorText(
+            en,
+            FirebaseFunctionsException(message: 'x', code: 'unavailable'),
+          ),
+          en.dlvErrOffline,
+        );
+        expect(
+          loadTakeOffErrorText(en, StateError('boom')),
+          en.lotCouldNotSave,
+        );
+      });
     });
   });
 }

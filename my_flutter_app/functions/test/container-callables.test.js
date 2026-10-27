@@ -3322,6 +3322,11 @@ describe("scan to load", () => {
     "loadLeftPartId"];
   const noLoadFields = (line) =>
     LOAD_KEYS.every((key) => line[key] === undefined);
+  // The answer to the scan that put it on reads the function's clock; the
+  // stored mark is the server's commit time - a few ms apart.
+  const sameTime = (answered, stored) =>
+    assert.ok(Math.abs(answered - stored.toMillis()) < 5000,
+        `${answered} is not near ${stored.toMillis()}`);
 
   it("puts a waiting package on whole, then counts, then says all in",
       async () => {
@@ -3331,9 +3336,13 @@ describe("scan to load", () => {
             S_LOADER);
         assert.equal(first.success, true);
         assert.equal(first.result, "loaded");
-        assert.deepEqual(first.line, {lineId, trackingCode,
+        const {assignedAt, ...firstLine} = first.line;
+        sameTime(assignedAt, (await lineOf(lineId)).containerAssignedAt);
+        assert.deepEqual(firstLine, {lineId, trackingCode,
           name: "Mariama Bah", kind: "barrels", pieceCount: 3,
-          scannedPieces: 1, destinationCountryName: "Guinea"});
+          scannedPieces: 1, destinationCountryName: "Guinea",
+          addedByScan: true, assignedVia: "scan",
+          customerName: "Fatou Diallo", customerPhone: "+16465550100"});
         assert.deepEqual(first.container, {containerId,
           label: `Scan box ${boxSerial}`, lineCount: 1, pieceCount: 3});
         let line = await lineOf(lineId);
@@ -3732,6 +3741,158 @@ describe("scan to load", () => {
     const queued = await db.collection("containerUpdates")
         .doc(`${result.part.lineId}_sender_received`).get();
     assert.equal(queued.exists, false);
+  });
+
+  describe("when, by whom and how a package went on", () => {
+    const MARKS = ["containerAssignedAt", "containerAssignedByStaffId",
+      "containerAssignedVia"];
+    const noMarks = (line) => MARKS.every((key) => line[key] === undefined);
+    const marked = (line, via, uid) => {
+      assert.equal(line.containerAssignedVia, via);
+      assert.equal(line.containerAssignedByStaffId, uid);
+      assert.ok(line.containerAssignedAt.toMillis() > 0);
+    };
+
+    it("says hand for assignContainerLines without a scan", async () => {
+      const containerId = await box();
+      const {lineId} = await drop();
+      await run("assignContainerLines", {containerId, lineIds: [lineId]},
+          S_LOADER);
+      marked(await lineOf(lineId), "hand", S_LOADER);
+      // Asked again (nothing changes): the marks stay as they were.
+      const before = (await lineOf(lineId)).containerAssignedAt.toMillis();
+      await run("assignContainerLines", {containerId, lineIds: [lineId]});
+      const line = await lineOf(lineId);
+      assert.equal(line.containerAssignedAt.toMillis(), before);
+      assert.equal(line.containerAssignedByStaffId, S_LOADER);
+    });
+
+    it("says hand for a package added straight onto a container",
+        async () => {
+          const containerId = await box();
+          const {lineId} = await run("addContainerLine", {containerId,
+            line: {...people, ...GUINEA,
+              pieces: [{kind: "barrel"}, {kind: "barrel"}]}}, S_LOADER);
+          marked(await lineOf(lineId), "hand", S_LOADER);
+        });
+
+    it("says scan for a scan from waiting, and keeps it when counting",
+        async () => {
+          const containerId = await box();
+          const {lineId, trackingCode} = await drop();
+          const loaded = await scan(containerId, trackingCode, {}, S_LOADER);
+          const line = await lineOf(lineId);
+          marked(line, "scan", S_LOADER);
+          assert.equal(loaded.line.assignedVia, "scan");
+          sameTime(loaded.line.assignedAt, line.containerAssignedAt);
+          assert.equal(loaded.line.addedByScan, true);
+          const counted = await scan(containerId, trackingCode, {}, S_OWNER);
+          const after = await lineOf(lineId);
+          marked(after, "scan", S_LOADER);
+          assert.equal(after.containerAssignedAt.toMillis(),
+              line.containerAssignedAt.toMillis());
+          assert.equal(counted.line.assignedVia, "scan");
+          assert.equal(counted.line.assignedAt,
+              line.containerAssignedAt.toMillis());
+        });
+
+    it("says move for a move by hand and a scan with move", async () => {
+      const first = await box();
+      const second = await box();
+      const third = await box();
+      const {lineId, trackingCode} = await drop();
+      await run("assignContainerLines", {containerId: first,
+        lineIds: [lineId]});
+      marked(await lineOf(lineId), "hand", S_OWNER);
+      await run("moveContainerLine", {lineId, toContainerId: second},
+          S_LOADER);
+      marked(await lineOf(lineId), "move", S_LOADER);
+      const moved = await scan(third, trackingCode, {move: true}, S_OWNER);
+      const line = await lineOf(lineId);
+      marked(line, "move", S_OWNER);
+      assert.equal(line.containerId, third);
+      assert.equal(moved.line.assignedVia, "move");
+      assert.equal(moved.line.addedByScan, false);
+      sameTime(moved.line.assignedAt, line.containerAssignedAt);
+    });
+
+    it("writes move for the container an undone move goes back to",
+        async () => {
+          const from = await box();
+          const to = await box();
+          const {lineId, trackingCode} = await drop();
+          await scan(from, trackingCode, {}, S_OWNER);
+          const moveId = nextScanId();
+          await scan(to, trackingCode, {move: true, scanId: moveId}, S_OWNER);
+          const back = await undo(to, lineId, {scanId: moveId});
+          assert.equal(back.result, "moved_back");
+          const line = await lineOf(lineId);
+          assert.equal(line.containerId, from);
+          marked(line, "move", S_OWNER);
+          assert.equal(back.line.assignedVia, "move");
+          sameTime(back.line.assignedAt, line.containerAssignedAt);
+        });
+
+    it("clears them when the package leaves the container", async () => {
+      const containerId = await box();
+      const byHand = await drop();
+      await run("assignContainerLines", {containerId,
+        lineIds: [byHand.lineId]});
+      await run("unassignContainerLine", {lineId: byHand.lineId});
+      let line = await lineOf(byHand.lineId);
+      assert.equal(line.containerId, "");
+      assert.ok(noMarks(line));
+      // The undo that unloads a scanned package clears them too.
+      const scanned = await drop();
+      await scan(containerId, scanned.trackingCode);
+      marked(await lineOf(scanned.lineId), "scan", S_OWNER);
+      const result = await undo(containerId, scanned.lineId);
+      assert.equal(result.result, "unloaded");
+      assert.equal(result.line.assignedVia, "");
+      assert.equal(result.line.assignedAt, null);
+      assert.equal(result.line.addedByScan, false);
+      line = await lineOf(scanned.lineId);
+      assert.equal(line.containerId, "");
+      assert.ok(noMarks(line));
+      assert.ok(noLoadFields(line));
+    });
+
+    it("gives the part that stays waiting none", async () => {
+      const root = await drop(barrels(4));
+      const containerId = await box();
+      const result = await run("assignContainerLines", {containerId,
+        lineIds: [root.lineId], pieceCounts: {[root.lineId]: 2}}, S_LOADER);
+      assert.equal(result.parts.length, 1);
+      marked(await lineOf(root.lineId), "hand", S_LOADER);
+      const part = await lineOf(result.parts[0].partLineId);
+      assert.equal(part.containerId, "");
+      assert.ok(noMarks(part));
+      // Leave N waiting after scans: the part has none either.
+      const other = await drop(barrels(3));
+      await scan(containerId, other.trackingCode);
+      const left = await run("assignContainerLines", {containerId,
+        action: "leave_unscanned", lineId: other.lineId});
+      marked(await lineOf(other.lineId), "scan", S_OWNER);
+      assert.ok(noMarks(await lineOf(left.part.lineId)));
+      assert.equal(left.line.assignedVia, "scan");
+    });
+
+    it("tells the summary rows how each package went on", async () => {
+      const containerId = await box();
+      const byHand = await drop(barrels(2, {customerName: "",
+        customerPhone: ""}));
+      await run("assignContainerLines", {containerId,
+        lineIds: [byHand.lineId]});
+      const summary = await run("assignContainerLines", {containerId,
+        action: "load_summary"});
+      const [row] = summary.unscanned;
+      assert.equal(row.assignedVia, "hand");
+      assert.equal(row.addedByScan, false);
+      assert.ok(row.assignedAt > 0);
+      // No sender: the receiver is the customer.
+      assert.equal(row.customerName, "Mariama Bah");
+      assert.equal(row.customerPhone, "+224620000000");
+    });
   });
 
   it("leaves assignContainerLines without an action as it was", async () => {

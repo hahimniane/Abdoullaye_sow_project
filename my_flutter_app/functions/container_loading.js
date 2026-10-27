@@ -26,6 +26,7 @@ const {
   containerIsOpen,
   destinationMismatch,
   lineCustomerName,
+  lineCustomerPhone,
 } = require("./container_manifest");
 const {lineIsDelivered} = require("./container_delivery");
 const {lineCounts} = require("./line_pieces");
@@ -84,6 +85,16 @@ const LOAD_FIELDS = Object.freeze([
   // The waiting part "Leave N waiting" made, so a retried request answers
   // with it.
   "loadLeftPartId",
+]);
+
+// When, by whom and how a line was put on its container (docs/
+// WAITING_PACKAGES.md "Loading lists"). Written by every path that puts a
+// line on a container; cleared with the LOAD_FIELDS when it leaves.
+const ASSIGN_VIA = Object.freeze({HAND: "hand", SCAN: "scan", MOVE: "move"});
+const ASSIGN_FIELDS = Object.freeze([
+  "containerAssignedAt",
+  "containerAssignedByStaffId",
+  "containerAssignedVia",
 ]);
 
 const text = (value, max = 200) => String(value ?? "").trim().slice(0, max);
@@ -378,12 +389,31 @@ function leaveUnscannedDecision(line) {
 }
 
 /**
+ * @param {*} value A stored timestamp (Firestore Timestamp, Date, or
+ *   milliseconds).
+ * @return {number|null} Milliseconds, or null when it is not a time.
+ */
+function millisOf(value) {
+  if (value && typeof value.toMillis === "function") {
+    const ms = value.toMillis();
+    return Number.isFinite(ms) ? ms : null;
+  }
+  if (value instanceof Date) {
+    const ms = value.getTime();
+    return Number.isFinite(ms) ? ms : null;
+  }
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+/**
  * A line as the loading screen shows it.
  *
  * @param {string} lineId The line.
  * @param {object} line The line (after the change).
  * @return {object} {lineId, trackingCode, name, kind, pieceCount,
- *   scannedPieces, destinationCountryName}.
+ *   scannedPieces, destinationCountryName, addedByScan, assignedVia,
+ *   assignedAt (ms or null), customerName, customerPhone (the sender, else
+ *   the receiver)}.
  */
 function loadLineView(lineId, line) {
   const row = asRow(line);
@@ -396,6 +426,13 @@ function loadLineView(lineId, line) {
     pieceCount: linePieceCount(row),
     scannedPieces: scannedPiecesOf(row),
     destinationCountryName: text(row.destinationCountryName, 120),
+    // How it got on the container (lines put on before this have none).
+    addedByScan: row.loadAddedByScan === true,
+    assignedVia: Object.values(ASSIGN_VIA).includes(
+        row.containerAssignedVia) ? row.containerAssignedVia : "",
+    assignedAt: millisOf(row.containerAssignedAt),
+    customerName: lineCustomerName(row),
+    customerPhone: lineCustomerPhone(row),
   };
 }
 
@@ -502,6 +539,8 @@ module.exports = {
   SCAN_RESULT,
   UNDO_RESULT,
   LOAD_FIELDS,
+  ASSIGN_VIA,
+  ASSIGN_FIELDS,
   MIN_LOAD_SCAN_IDS,
   MAX_LOAD_SCAN_IDS,
   LOAD_SUMMARY_WAITING_LIMIT,

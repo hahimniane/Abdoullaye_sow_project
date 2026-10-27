@@ -9,6 +9,8 @@ const {describe, it} = require("node:test");
 const {
   LOAD_ACTION,
   LOAD_FIELDS,
+  ASSIGN_VIA,
+  ASSIGN_FIELDS,
   MIN_LOAD_SCAN_IDS,
   MAX_LOAD_SCAN_IDS,
   loadActionOf,
@@ -357,11 +359,71 @@ describe("views", () => {
       lineId: "l1", trackingCode: "CL-K7M4P2", name: "Mariama Bah",
       kind: "barrels", pieceCount: 3, scannedPieces: 2,
       destinationCountryName: "Guinea",
+      addedByScan: false, assignedVia: "", assignedAt: null,
+      customerName: "Fatou Diallo", customerPhone: "",
     });
     assert.equal(loadLineView("l1", onBox({customerName: "Fatou Diallo"}))
         .name, "Fatou Diallo");
     // Never more scanned than it has (pieces edited away).
     assert.equal(scannedPiecesOf(onBox({loadScannedPieces: 9})), 3);
+  });
+
+  it("says how, when and for whom a package went on", () => {
+    const at = 1760000000000;
+    const view = loadLineView("l1", onBox({receiverName: "Mariama Bah",
+      receiverPhone: "+224620000000", customerName: "Fatou Diallo",
+      customerPhone: "+16465550100", loadAddedByScan: true,
+      containerAssignedVia: "scan",
+      containerAssignedAt: {toMillis: () => at}}));
+    assert.equal(view.addedByScan, true);
+    assert.equal(view.assignedVia, "scan");
+    assert.equal(view.assignedAt, at);
+    // The sender, not the receiver (the name column is the receiver).
+    assert.equal(view.name, "Mariama Bah");
+    assert.equal(view.customerName, "Fatou Diallo");
+    assert.equal(view.customerPhone, "+16465550100");
+    // A Date and a number are times too; anything else is none.
+    assert.equal(loadLineView("l1", onBox({
+      containerAssignedAt: new Date(at)})).assignedAt, at);
+    assert.equal(loadLineView("l1", onBox({containerAssignedAt: at}))
+        .assignedAt, at);
+    assert.equal(loadLineView("l1", onBox({containerAssignedAt: "soon"}))
+        .assignedAt, null);
+    assert.equal(loadLineView("l1", onBox({containerAssignedAt: {}}))
+        .assignedAt, null);
+  });
+
+  it("falls back to the receiver as the customer, and to nothing", () => {
+    const receiver = loadLineView("l1", onBox({receiverName: "Mariama Bah",
+      receiverPhone: "+224620000000"}));
+    assert.equal(receiver.customerName, "Mariama Bah");
+    assert.equal(receiver.customerPhone, "+224620000000");
+    // A sender with only a phone is still the sender.
+    const phoneOnly = loadLineView("l1", onBox({customerPhone: "+1646",
+      receiverName: "Mariama Bah", receiverPhone: "+224620000000"}));
+    assert.equal(phoneOnly.customerName, "");
+    assert.equal(phoneOnly.customerPhone, "+1646");
+    // Business stock names nobody.
+    const stock = loadLineView("l1", onBox({ownerKind: "stock",
+      customerName: "Fatou", receiverName: "Agent"}));
+    assert.equal(stock.customerName, "");
+    assert.equal(stock.customerPhone, "");
+    assert.equal(stock.name, "Agent");
+  });
+
+  it("leaves lines put on before this without how or when", () => {
+    const old = loadLineView("l1", onBox());
+    assert.equal(old.addedByScan, false);
+    assert.equal(old.assignedVia, "");
+    assert.equal(old.assignedAt, null);
+    // Not a way anyone writes: shown as none.
+    assert.equal(loadLineView("l1", onBox({containerAssignedVia: "magic"}))
+        .assignedVia, "");
+    assert.deepEqual(ASSIGN_VIA, {HAND: "hand", SCAN: "scan", MOVE: "move"});
+    assert.deepEqual([...ASSIGN_FIELDS], ["containerAssignedAt",
+      "containerAssignedByStaffId", "containerAssignedVia"]);
+    // Kept apart from the scan marks, which the app also reads.
+    assert.ok(ASSIGN_FIELDS.every((field) => !LOAD_FIELDS.includes(field)));
   });
 
   it("shows the container after a change", () => {

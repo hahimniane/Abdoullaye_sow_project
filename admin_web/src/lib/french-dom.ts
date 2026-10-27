@@ -6788,6 +6788,23 @@ Object.assign(TEXT_TRANSLATIONS, {
   "This package was not marked delivered.": "Ce colis n’était pas marqué comme livré.",
 });
 
+// Loading lists on a container's page (container-loading-lists.ts). The chip
+// labels, the "Scanned / By hand / Moved" words and the counted sentences are
+// built per language there; these are the strings the page leaves to the DOM.
+Object.assign(TEXT_TRANSLATIONS, {
+  "Search code, name or phone": "Rechercher un code, un nom ou un téléphone",
+  "Filter packages": "Filtrer les colis",
+  "Take off": "Retirer",
+  "Set this container's destination to see what's still waiting.":
+    "Définissez la destination de ce conteneur pour voir ce qui attend encore.",
+  "Still to load": "Reste à charger",
+  "Packages waiting for this container's destination. Add puts the whole package on the container.":
+    "Colis en attente pour la destination de ce conteneur. Ajouter met le colis entier sur le conteneur.",
+  "Nothing is waiting for this destination.": "Aucun colis n’attend pour cette destination.",
+  "Nothing matches that search.": "Rien ne correspond à cette recherche.",
+  "Every package has been scanned.": "Tous les colis ont été scannés.",
+});
+
 export const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {
   // Laawol bills (billing-views.tsx).
   "Open this business's bill": "Ouvrir le montant dû de cette entreprise",
@@ -6893,6 +6910,8 @@ export const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {
 export const REVERSE_PREFERENCES: Record<string, string> = {
   // "Packages" (the Volume pages) and "Package" share "Colis".
   "Colis": "Package",
+  // "Remove" and the loading lists' "Take off" share "Retirer".
+  "Retirer": "Remove",
   "Suspendu": "Suspended",
   "Ajouter une destination": "Add destination",
   "Adresse exacte de collecte (facultatif)": "Exact pickup address (optional)",

@@ -15,6 +15,8 @@ import 'dart:math';
 
 import '../utils/callable_data.dart';
 import 'container_manifest.dart';
+import 'lot_ledger.dart' show LotStaff;
+import 'waiting_packages.dart' show destinationMismatch;
 
 /// The callable every loading action rides on (no new export).
 const loadCallable = 'assignContainerLines';
@@ -151,7 +153,9 @@ Map<String, Object?> loadLeaveRequest({
 
 /// A package as the loading answers describe it: `{lineId, trackingCode,
 /// name (receiver, else customer), kind, pieceCount, scannedPieces,
-/// destinationCountryName}`.
+/// destinationCountryName}`, and (docs/WAITING_PACKAGES.md "Loading lists")
+/// `addedByScan`, `assignedVia`, `assignedAt` (ms or null), `customerName`
+/// and `customerPhone`. Older servers send none of the last five.
 class LoadLine {
   const LoadLine({
     required this.lineId,
@@ -161,6 +165,11 @@ class LoadLine {
     this.pieceCount = 0,
     this.scannedPieces = 0,
     this.destinationCountryName = '',
+    this.addedByScan = false,
+    this.assignedVia = '',
+    this.assignedAt,
+    this.customerName = '',
+    this.customerPhone = '',
   });
 
   factory LoadLine.fromMap(Object? data) {
@@ -173,6 +182,11 @@ class LoadLine {
       pieceCount: max(0, callableInt(m['pieceCount'])),
       scannedPieces: max(0, callableInt(m['scannedPieces'])),
       destinationCountryName: callableString(m['destinationCountryName']),
+      addedByScan: callableBool(m['addedByScan']),
+      assignedVia: loadViaOf(callableString(m['assignedVia'])),
+      assignedAt: _loadDateOf(m['assignedAt']),
+      customerName: callableString(m['customerName']),
+      customerPhone: callableString(m['customerPhone']),
     );
   }
 
@@ -184,8 +198,28 @@ class LoadLine {
   final int scannedPieces;
   final String destinationCountryName;
 
+  /// True when scan to load put it on the container (it was waiting).
+  /// False or absent: it was already on the container, or was moved here.
+  final bool addedByScan;
+
+  /// How it went on: [loadViaHand], [loadViaScan], [loadViaMove]; '' when
+  /// the server did not say.
+  final String assignedVia;
+  final DateTime? assignedAt;
+
+  /// The sender, else the receiver (`lineCustomerName`); '' when absent.
+  final String customerName;
+  final String customerPhone;
+
   /// Pieces not scanned yet ("Leave N waiting").
   int get unscannedPieces => max(0, pieceCount - scannedPieces);
+}
+
+/// An epoch-milliseconds field from an answer; null when absent or not a
+/// time.
+DateTime? _loadDateOf(Object? value) {
+  final ms = callableInt(value);
+  return ms > 0 ? DateTime.fromMillisecondsSinceEpoch(ms) : null;
 }
 
 /// The container after a change: `{containerId, label, lineCount,
@@ -507,8 +541,9 @@ bool loadShouldAutoRetry(LoadFailure failure, int attempt) =>
 
 enum LoadRowState { sending, loaded, counted, allScanned, refused, undone }
 
-/// The colour a row is drawn in.
-enum LoadTone { pending, green, blue, amber, red, grey }
+/// The colour a row is drawn in. [neutral] is a package that was already on
+/// the container: scanning it counted a piece, but it was not loaded now.
+enum LoadTone { pending, green, blue, amber, red, grey, neutral }
 
 /// One scan in the Recent list.
 class LoadRow {
@@ -593,25 +628,45 @@ class LoadRow {
         : (answer.movedBackTo?.containerId ?? ''),
   );
 
+  /// A `counted` answer for a package that was on the container before any
+  /// scan: it did not just load, so the row is neutral ("Already on this
+  /// container"), never the green "Loaded" ([loadCountedWasAlreadyOn]).
+  bool get alreadyOnContainer =>
+      state == LoadRowState.counted &&
+      line != null &&
+      loadCountedWasAlreadyOn(line!);
+
   /// The server took it: what Undo can take back.
   bool get counted =>
       state == LoadRowState.loaded || state == LoadRowState.counted;
 
+  /// Neutral when already on the container; green when this piece completes
+  /// the package (like a load); else blue, part-way.
+  LoadTone get _countedTone {
+    if (alreadyOnContainer) return LoadTone.neutral;
+    final l = line;
+    return l != null && l.pieceCount > 0 && l.scannedPieces >= l.pieceCount
+        ? LoadTone.green
+        : LoadTone.blue;
+  }
+
   LoadTone get tone => switch (state) {
     LoadRowState.sending => LoadTone.pending,
     LoadRowState.loaded => LoadTone.green,
-    LoadRowState.counted =>
-      // The last piece of a package completes it: green, like a load.
-      line != null &&
-              line!.pieceCount > 0 &&
-              line!.scannedPieces >= line!.pieceCount
-          ? LoadTone.green
-          : LoadTone.blue,
+    LoadRowState.counted => _countedTone,
     LoadRowState.allScanned => LoadTone.amber,
     LoadRowState.refused => LoadTone.red,
     LoadRowState.undone => LoadTone.grey,
   };
 }
+
+/// Whether a `counted` answer is the first scan of a package that was
+/// already on the container (put on by hand, moved, or before scanning
+/// began): it was not added by scan and this is its first piece. Shown as
+/// "Already on this container · 1 of N scanned"; green "Loaded" is only for
+/// `result: "loaded"`.
+bool loadCountedWasAlreadyOn(LoadLine line) =>
+    !line.addedByScan && line.scannedPieces == 1;
 
 /// Retry is offered on a scan that got no answer: it resends the SAME
 /// request (same scan id), so a send that did land is not counted twice.
@@ -764,3 +819,224 @@ class LoadSummaryView {
   /// Nothing to look at: every package on it scanned in full, none left.
   bool get allClear => !showsIncomplete && !showsUnscanned && !showsWaiting;
 }
+
+// ---------------------------------------------------------------------------
+// Loading lists (docs/WAITING_PACKAGES.md "Loading lists").
+// ---------------------------------------------------------------------------
+
+/// `containerAssignedVia`: how a package went onto the container.
+const loadViaHand = 'hand';
+const loadViaScan = 'scan';
+const loadViaMove = 'move';
+
+/// [raw] if it is one of the three ways the server writes, else '' (a line
+/// put on before the field existed, or a value this app does not know).
+String loadViaOf(String raw) {
+  final v = raw.trim().toLowerCase();
+  return v == loadViaHand || v == loadViaScan || v == loadViaMove ? v : '';
+}
+
+/// The filters of "On this container".
+enum LoadListFilter { recent, byCustomer, notScanned }
+
+/// The name of the staff member with [id], or '' when nobody in [staff] has
+/// it - the same lookup the waiting packages list uses for "added by".
+String loadStaffName(Iterable<LotStaff> staff, String id) {
+  if (id.isEmpty) return '';
+  for (final s in staff) {
+    if (s.id == id) return s.name;
+  }
+  return '';
+}
+
+/// The packages on [containerId] in the live [lines].
+List<ContainerLine> loadOnContainerLines(
+  Iterable<ContainerLine> lines,
+  String containerId,
+) => [
+  for (final l in lines)
+    if (l.containerId == containerId) l,
+];
+
+/// Waiting packages of the business going where [container] goes: the ones
+/// "Still to load" offers. Mirrors `destinationMismatch`, the rule the server
+/// applies to a scan, so a tap is never refused for the destination.
+List<ContainerLine> loadStillToLoadLines(
+  Iterable<ContainerLine> lines,
+  ShippingContainer container,
+) => [
+  for (final l in lines)
+    if (l.isWaiting && destinationMismatch(l, container) == null) l,
+];
+
+/// Letters and digits only, lower case: "CL K7M4-P2", "cl-k7m4p2" and
+/// "+1 (347) 555" compare by what they say, not how they are punctuated.
+String _squash(String text) =>
+    text.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+
+/// Whether [line] answers a search for [query] by code, name or phone - the
+/// sender's or the receiver's. An empty query matches everything.
+bool loadLineMatches(ContainerLine line, String query) {
+  final wanted = _squash(query);
+  if (wanted.isEmpty) return true;
+  for (final field in [
+    line.trackingCode,
+    line.customerName,
+    line.receiverName,
+    line.customerPhone,
+    line.receiverPhone,
+  ]) {
+    if (_squash(field).contains(wanted)) return true;
+  }
+  return false;
+}
+
+int _byCode(ContainerLine a, ContainerLine b) {
+  final c = a.trackingCode.compareTo(b.trackingCode);
+  return c != 0 ? c : a.id.compareTo(b.id);
+}
+
+/// Newest `containerAssignedAt` first; the ones without it ("added
+/// earlier") go last, in code order.
+List<ContainerLine> loadRecentlyAdded(Iterable<ContainerLine> lines) {
+  final out = lines.toList();
+  out.sort((a, b) {
+    final x = a.containerAssignedAt, y = b.containerAssignedAt;
+    if (x == null && y == null) return _byCode(a, b);
+    if (x == null) return 1;
+    if (y == null) return -1;
+    final c = y.compareTo(x);
+    return c != 0 ? c : _byCode(a, b);
+  });
+  return out;
+}
+
+/// Packages with no piece scanned onto the container yet
+/// (`loadScannedPieces` 0 or absent), in [loadRecentlyAdded] order.
+List<ContainerLine> loadNotScanned(Iterable<ContainerLine> lines) =>
+    loadRecentlyAdded([
+      for (final l in lines)
+        if (l.loadScannedPieces <= 0) l,
+    ]);
+
+/// One customer's packages: their count, their pieces, and how many pieces
+/// of them are scanned.
+class LoadCustomerGroup {
+  const LoadCustomerGroup({
+    required this.key,
+    required this.name,
+    required this.phone,
+    required this.lines,
+  });
+
+  /// What the packages share (the squashed name, else the squashed phone);
+  /// '' for packages with neither.
+  final String key;
+
+  /// The customer's name (sender, else receiver - `lineCustomerName`); the
+  /// phone when no name was given; '' when neither.
+  final String name;
+  final String phone;
+  final List<ContainerLine> lines;
+
+  int get packages => lines.length;
+  int get pieces => lines.fold(0, (sum, l) => sum + l.pieceCount);
+  int get scannedPieces => lines.fold(0, (sum, l) => sum + l.loadScannedPieces);
+}
+
+/// [lines] grouped by customer (sender, else receiver - `lineCustomer`),
+/// groups in name order with the unnamed last, each group's packages in code
+/// order. Two packages of one person group even if one spells the name in
+/// different case or spacing.
+List<LoadCustomerGroup> loadGroupByCustomer(Iterable<ContainerLine> lines) {
+  final byKey = <String, List<ContainerLine>>{};
+  final names = <String, String>{};
+  final phones = <String, String>{};
+  for (final l in lines) {
+    final who = lineCustomer(l);
+    final key = _squash(who.name).isNotEmpty
+        ? _squash(who.name)
+        : _squash(who.phone);
+    byKey.putIfAbsent(key, () => []).add(l);
+    if (who.name.isNotEmpty) names.putIfAbsent(key, () => who.name);
+    if (who.phone.isNotEmpty) phones.putIfAbsent(key, () => who.phone);
+  }
+  final groups = [
+    for (final e in byKey.entries)
+      LoadCustomerGroup(
+        key: e.key,
+        name: names[e.key] ?? phones[e.key] ?? '',
+        phone: phones[e.key] ?? '',
+        lines: e.value..sort(_byCode),
+      ),
+  ];
+  groups.sort((a, b) {
+    if (a.key.isEmpty != b.key.isEmpty) return a.key.isEmpty ? 1 : -1;
+    final c = a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    return c != 0 ? c : a.key.compareTo(b.key);
+  });
+  return groups;
+}
+
+/// One row of a list: a customer's header, or a package.
+sealed class LoadListItem {
+  const LoadListItem();
+}
+
+class LoadGroupItem extends LoadListItem {
+  const LoadGroupItem(this.group);
+  final LoadCustomerGroup group;
+}
+
+class LoadLineItem extends LoadListItem {
+  const LoadLineItem(this.line);
+  final ContainerLine line;
+}
+
+List<LoadListItem> _groupedItems(Iterable<ContainerLine> lines) => [
+  for (final g in loadGroupByCustomer(lines)) ...[
+    LoadGroupItem(g),
+    for (final l in g.lines) LoadLineItem(l),
+  ],
+];
+
+/// What "On this container" draws for [filter] and a search [query]: the
+/// packages on the container narrowed by the search, then listed flat
+/// (recently added, not scanned yet) or under their customers.
+List<LoadListItem> loadOnContainerItems(
+  Iterable<ContainerLine> onContainer,
+  LoadListFilter filter,
+  String query,
+) {
+  final found = [
+    for (final l in onContainer)
+      if (loadLineMatches(l, query)) l,
+  ];
+  return switch (filter) {
+    LoadListFilter.recent => [
+      for (final l in loadRecentlyAdded(found)) LoadLineItem(l),
+    ],
+    LoadListFilter.notScanned => [
+      for (final l in loadNotScanned(found)) LoadLineItem(l),
+    ],
+    LoadListFilter.byCustomer => _groupedItems(found),
+  };
+}
+
+/// What "Still to load" draws: the waiting packages narrowed by [query],
+/// under their customers.
+List<LoadListItem> loadStillToLoadItems(
+  Iterable<ContainerLine> waiting,
+  String query,
+) => _groupedItems([
+  for (final l in waiting)
+    if (loadLineMatches(l, query)) l,
+]);
+
+/// Take off is offered only while the line's container is loading (a line
+/// read with no status is taken to be loading - the screen itself only opens
+/// on a loading container) and it has not been handed over.
+bool loadCanTakeOff(ContainerLine line) =>
+    (line.containerStatus.isEmpty ||
+        line.containerStatus == containerStatusLoading) &&
+    !line.isDelivered;

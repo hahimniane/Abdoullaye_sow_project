@@ -16683,4 +16683,108 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get lotEntryNotFound => 'Impossible d’ouvrir cette entrée.';
+
+  @override
+  String ldgAlreadyOnContainer(int scanned, int total) {
+    String _temp0 = intl.Intl.pluralLogic(
+      scanned,
+      locale: localeName,
+      other: 'Déjà sur ce conteneur · $scanned sur $total scannées',
+      one: 'Déjà sur ce conteneur · $scanned sur $total scannée',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get ldgTabOnContainer => 'Sur ce conteneur';
+
+  @override
+  String get ldgTabStillToLoad => 'À charger';
+
+  @override
+  String get ldgFilterRecent => 'Ajoutés récemment';
+
+  @override
+  String get ldgFilterByCustomer => 'Par client';
+
+  @override
+  String get ldgFilterNotScanned => 'Pas encore scannés';
+
+  @override
+  String get ldgSearchHint => 'Chercher un code, un nom ou un téléphone';
+
+  @override
+  String ldgScannedOfPieces(int scanned, int total) {
+    String _temp0 = intl.Intl.pluralLogic(
+      scanned,
+      locale: localeName,
+      other: 'pièces scannées',
+      one: 'pièce scannée',
+    );
+    return '$scanned $_temp0 sur $total';
+  }
+
+  @override
+  String get ldgNoCustomerName => 'Sans nom';
+
+  @override
+  String ldgPackagesWaiting(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count colis en attente',
+      one: '$count colis en attente',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String ldgAddedBy(String name) {
+    return 'Ajouté par $name';
+  }
+
+  @override
+  String get ldgViaScan => 'Par scan';
+
+  @override
+  String get ldgViaHand => 'À la main';
+
+  @override
+  String get ldgViaMove => 'Déplacé';
+
+  @override
+  String get ldgAddedEarlier => 'Ajouté plus tôt';
+
+  @override
+  String get ldgTakeOff => 'Retirer';
+
+  @override
+  String get ldgTakeOffTitle => 'Le retirer ?';
+
+  @override
+  String ldgTakeOffMessage(String code, String container) {
+    return 'Retirer $code de $container ? Le colis repasse en attente.';
+  }
+
+  @override
+  String get ldgLoadIt => 'Charger';
+
+  @override
+  String ldgStillWaitingFor(int count, String destination) {
+    return '$count encore en attente pour $destination';
+  }
+
+  @override
+  String get ldgNothingOnContainer => 'Rien sur ce conteneur pour l’instant.';
+
+  @override
+  String get ldgNoMatches => 'Aucun colis ne correspond.';
+
+  @override
+  String get ldgAllScannedHere => 'Tous les colis ont été scannés.';
+
+  @override
+  String ldgNothingToLoad(String destination) {
+    return 'Aucun colis n’attend pour $destination.';
+  }
 }
