@@ -283,6 +283,16 @@ describe("staff answer", () => {
     return caseRef(BIZ, P1);
   }
 
+  it("pings staff only when they switched it on, even after a profile save", async () => {
+    // A profile save normalizes preferences; it must not switch staff on.
+    const {normalizeNotificationPreferences} = require("../notification_settings");
+    await db.collection("users").doc(STAFF_OFF).set({notificationPreferences:
+      normalizeNotificationPreferences({pushNotifications: true})}, {merge: true});
+    await conversationWithMessage();
+    assert.equal(await notificationCount(STAFF_OFF), 0);
+    assert.equal(await notificationCount(STAFF_ON), 1);
+  });
+
   it("relays a reply signed with the person and the business, even without the Support permission", async () => {
     const ref = await conversationWithMessage();
     const result = await call("sendSupportMessage", {caseId: ref.id, content: "Loaded on Friday's container."}, STAFF_ON);
@@ -379,6 +389,11 @@ describe("staff answer", () => {
     assert.equal(caseId, `wa_${BIZ}_${P1.slice(1)}`);
     const {packages} = await call("whatsappConversation", {action: "packages", caseId}, STAFF_OFF);
     assert.deepEqual(packages.map((p) => p.trackingCode), ["CL-9"]);
+    // A local number would open the wrong person's thread.
+    await assert.rejects(call("whatsappConversation", {action: "open", phone: "621000001"}, STAFF_OFF));
+    // Hand-over choices: Laawol and the other business that knows them.
+    const {options} = await call("whatsappConversation", {action: "handoffOptions", caseId}, STAFF_OFF);
+    assert.deepEqual(options.map((o) => o.businessId), ["laawol", BIZ2]);
   });
 
   it("only Laawol switches the inbox mode", async () => {

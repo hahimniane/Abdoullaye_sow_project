@@ -31,9 +31,8 @@ function defaultNotificationPreferences() {
     // Platform admins: cars, packages and sales across every business
     // (platform_activity_alerts.js).
     platformActivity: true,
-    // Two-way WhatsApp: a customer wrote. On for owners unless switched
-    // off; staff must switch it on (the notifier reads the raw value).
-    whatsappMessages: true,
+    // whatsappMessages is deliberately absent: a missing value means "not
+    // chosen" - on for owners, off for staff (notifyWhatsAppConversation).
   };
 }
 
@@ -76,8 +75,10 @@ function normalizeNotificationPreferences(raw) {
       prefs.packageAlerts !== false && defaults.packageAlerts,
     platformActivity:
       prefs.platformActivity !== false && defaults.platformActivity,
-    whatsappMessages:
-      prefs.whatsappMessages !== false && defaults.whatsappMessages,
+    // Kept only when the person chose it, so saving a profile never turns
+    // WhatsApp pushes on for staff by default.
+    ...(typeof prefs.whatsappMessages === "boolean" ?
+      {whatsappMessages: prefs.whatsappMessages} : {}),
   };
 }
 

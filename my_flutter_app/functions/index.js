@@ -20406,9 +20406,11 @@ exports.whatsappConversation = onCall(
               whatsappInbox.LAAWOL_INBOX :
             (isBusiness ? String(user.businessId) : "");
           if (!inbox) throw new HttpsError("permission-denied", "Denied");
-          if (!whatsappInbox.phoneFromWa(phone) ||
-              phone.replace(/\D/g, "").length < 8) {
-            throw new HttpsError("invalid-argument", "Phone required");
+          // A full international number only ("+224..."): a local one
+          // would open a conversation with the wrong person.
+          if (!/^\+\d{8,15}$/.test(phone.replace(/[\s().-]/g, ""))) {
+            throw new HttpsError("invalid-argument",
+                "Use the full international number, starting with +");
           }
           const caseId = await service.openConversation({inboxId: inbox,
             phone: whatsappInbox.phoneFromWa(phone),
@@ -20441,7 +20443,7 @@ exports.whatsappConversation = onCall(
             const contact = (await db.collection("whatsappContacts")
                 .doc(conv.whatsappPhone).get()).data() || {};
             const candidates = await service.routingCandidates(
-                conv.whatsappPhone, contact);
+                conv.whatsappPhone, contact, {allRecords: true});
             if (!candidates.some((c) => c.businessId === to)) {
               throw new HttpsError("permission-denied",
                   "That business has no shipment for this customer");
@@ -20469,6 +20471,27 @@ exports.whatsappConversation = onCall(
                 .catch(() => {});
           }
           return {success: true, caseId: targetId};
+        }
+        case "handoffOptions": {
+          // Where this conversation may go: Laawol, and (for staff) the
+          // other businesses that know this customer; admins any business.
+          const conv = await loadCase();
+          const contact = (await db.collection("whatsappContacts")
+              .doc(conv.whatsappPhone).get()).data() || {};
+          const candidates = isAdmin ?
+            (await db.collection("businesses").limit(200).get()).docs.map(
+                (doc) => ({businessId: doc.id,
+                  businessName: String(doc.data()?.name || doc.id)})) :
+            await service.routingCandidates(conv.whatsappPhone, contact,
+                {allRecords: true});
+          const here = conv.businessId || whatsappInbox.LAAWOL_INBOX;
+          const options = [{businessId: whatsappInbox.LAAWOL_INBOX,
+            businessName: "Laawol"}, ...candidates
+              .filter((c) => c.businessId !== whatsappInbox.LAAWOL_INBOX)
+              .map((c) => ({businessId: c.businessId,
+                businessName: c.businessName || c.businessId}))]
+              .filter((o) => o.businessId !== here);
+          return {success: true, options};
         }
         case "packages": {
           const conv = await loadCase();
@@ -41548,6 +41571,9 @@ exports.uploadSupportAttachmentMetadata = onCall(
           mimeType,
           fileSize,
           caption: cleanText(request.data?.caption, 1000),
+          ...(Number(request.data?.durationSeconds) > 0 ? {durationSeconds:
+            Math.min(3600, Math.round(Number(request.data.durationSeconds)))} :
+            {}),
         },
       });
       await db.runTransaction(async (transaction) => {

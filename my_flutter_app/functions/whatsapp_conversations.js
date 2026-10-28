@@ -140,9 +140,11 @@ function createWhatsAppConversations(deps) {
    *
    * @param {string} phone The number.
    * @param {object} contact Its whatsappContacts record.
+   * @param {object} opts {allRecords}: also search every record type even
+   *   when contacts or conversations already name businesses (hand-over).
    * @return {Promise<object[]>} Candidates for routeInbound.
    */
-  async function routingCandidates(phone, contact) {
+  async function routingCandidates(phone, contact, {allRecords = false} = {}) {
     const byId = new Map();
     const add = (businessId, name, atMs) => {
       if (!businessId) return;
@@ -167,7 +169,8 @@ function createWhatsAppConversations(deps) {
         add(wa.LAAWOL_INBOX, "Laawol", at);
       }
     }
-    if (byId.size === 0 && typeof deps.shipmentQueries === "function") {
+    if ((byId.size === 0 || allRecords) &&
+        typeof deps.shipmentQueries === "function") {
       // Never messaged by a business we recorded: find who has their number.
       const sources = deps.shipmentQueries();
       const snaps = await Promise.all(sources.map((s) =>
@@ -180,7 +183,9 @@ function createWhatsAppConversations(deps) {
           if (id) ids.add(id);
         }
       }
-      for (const id of ids) add(id, await businessName(id), 0);
+      for (const id of ids) {
+        if (!byId.has(id)) add(id, await businessName(id), 0);
+      }
     }
     return Array.from(byId.values());
   }

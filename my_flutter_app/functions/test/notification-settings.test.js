@@ -42,19 +42,22 @@ describe("notification settings helpers", () => {
           parkedCarAlerts: true,
           packageAlerts: true,
           platformActivity: true,
-          whatsappMessages: true,
         },
     );
   });
 
-  it("keeps WhatsApp messages on unless it is switched off", () => {
+  it("keeps WhatsApp messages only when the person chose", () => {
+    // Missing = not chosen: owners get it, staff do not
+    // (notifyWhatsAppConversation). A profile save must not turn it on.
     assert.equal(
-        normalizeNotificationPreferences(undefined).whatsappMessages, true);
+        "whatsappMessages" in normalizeNotificationPreferences(undefined),
+        false);
     assert.equal(
-        normalizeNotificationPreferences({whatsappMessages: false})
-            .whatsappMessages,
-        false,
-    );
+        "whatsappMessages" in normalizeNotificationPreferences({}), false);
+    assert.equal(normalizeNotificationPreferences({whatsappMessages: false})
+        .whatsappMessages, false);
+    assert.equal(normalizeNotificationPreferences({whatsappMessages: true})
+        .whatsappMessages, true);
   });
 
   it("keeps Store transfers on unless it is switched off", () => {
