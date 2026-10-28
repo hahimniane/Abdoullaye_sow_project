@@ -1,4 +1,5 @@
 /* eslint-disable max-len */
+/* global globalThis */
 "use strict";
 
 const assert = require("node:assert/strict");

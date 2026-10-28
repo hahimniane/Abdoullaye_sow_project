@@ -2991,25 +2991,27 @@ describe("marketplace support Firestore rules", () => {
     await assertFails(strangerDb.doc("supportCases/case_a").get());
   });
 
-  it("lets everyone at the business read its WhatsApp conversations, and no one else", async () => {
+  it("lets the whole business read its WhatsApp threads", async () => {
     // docs/WHATSAPP_CONVERSATIONS.md: no Support permission needed.
     const listingStaffDb = firestoreFor("staff-listings-a");
     const ownerB = firestoreFor("owner-b");
     const customerDb = firestoreFor("customer-support");
-    await assertSucceeds(listingStaffDb.doc("supportCases/wa_biz_a_224621000001").get());
+    const waCase = "supportCases/wa_biz_a_224621000001";
+    await assertSucceeds(listingStaffDb.doc(waCase).get());
     await assertSucceeds(
-        listingStaffDb.collection("supportCases/wa_biz_a_224621000001/messages").get());
+        listingStaffDb.collection(`${waCase}/messages`).get());
     await assertSucceeds(listingStaffDb.collection("supportCases")
         .where("businessId", "==", "biz_a")
         .where("caseType", "==", "whatsapp").get());
-    await assertFails(ownerB.doc("supportCases/wa_biz_a_224621000001").get());
-    await assertFails(customerDb.doc("supportCases/wa_biz_a_224621000001").get());
+    await assertFails(ownerB.doc(waCase).get());
+    await assertFails(customerDb.doc(waCase).get());
     // Still server-written only.
-    await assertFails(listingStaffDb.doc("supportCases/wa_biz_a_224621000001")
+    await assertFails(listingStaffDb.doc(waCase)
         .set({status: "resolved"}, {merge: true}));
     // The routing and stop records are server-only.
-    await assertFails(firestoreFor("owner-a").doc("whatsappContacts/+224621000001").get());
-    await assertFails(firestoreFor("owner-a").doc("whatsappStops/+224621000001").get());
+    const ownerA = firestoreFor("owner-a");
+    await assertFails(ownerA.doc("whatsappContacts/+224621000001").get());
+    await assertFails(ownerA.doc("whatsappStops/+224621000001").get());
   });
 
   it("allows the business and admin inbox LIST queries", async () => {
