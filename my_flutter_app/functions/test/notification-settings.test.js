@@ -42,7 +42,18 @@ describe("notification settings helpers", () => {
           parkedCarAlerts: true,
           packageAlerts: true,
           platformActivity: true,
+          whatsappMessages: true,
         },
+    );
+  });
+
+  it("keeps WhatsApp messages on unless it is switched off", () => {
+    assert.equal(
+        normalizeNotificationPreferences(undefined).whatsappMessages, true);
+    assert.equal(
+        normalizeNotificationPreferences({whatsappMessages: false})
+            .whatsappMessages,
+        false,
     );
   });
 

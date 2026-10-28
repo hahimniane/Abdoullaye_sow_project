@@ -45,6 +45,11 @@ const {
   shippedContainerOf,
 } = require("./guest_tracking");
 const {createPhoneAccounts, notSignedInYet} = require("./phone_accounts");
+const whatsappInbox = require("./whatsapp_inbox");
+const {
+  createWhatsAppConversations,
+  STOPPED_ERROR_CODE: WHATSAPP_STOPPED_ERROR_CODE,
+} = require("./whatsapp_conversations");
 const {createSocialSignIn} = require("./social_sign_in");
 const {
   addressBucket,
@@ -695,6 +700,9 @@ const terminal49ApiKey = defineSecret("TERMINAL49_API_KEY");
 // update is recorded as waiting and nothing is sent.
 const whatsappAccessToken = defineSecret("WHATSAPP_ACCESS_TOKEN");
 const whatsappPhoneNumberId = defineSecret("WHATSAPP_PHONE_NUMBER_ID");
+// Two-way WhatsApp (docs/WHATSAPP_CONVERSATIONS.md): the Meta app secret,
+// which signs every webhook call (and derives the verify token).
+const whatsappAppSecret = defineSecret("WHATSAPP_APP_SECRET");
 const WHATSAPP_GRAPH_URL = "https://graph.facebook.com/v21.0";
 const TERMINAL49_BASE_URL = "https://api.terminal49.com/v2";
 const TERMINAL49_TIMEOUT_MS = 15 * 1000;
@@ -11173,6 +11181,8 @@ exports.createAdminBusiness = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
+      // Platform admins only, a few times a month.
+      maxInstances: 1,
     },
     async (request) => {
       const adminUid = requireAuth(request);
@@ -11894,6 +11904,8 @@ exports.reviewBusinessApplication = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
+      // Platform admins only, a few times a month.
+      maxInstances: 1,
     },
     async (request) => {
       const adminUid = requireAuth(request);
@@ -20165,6 +20177,16 @@ exports.setContainerStatus = onCall(
  *   error: string}>} httpStatus is 0 when no answer came (network, timeout).
  */
 async function sendWhatsAppMessage(body) {
+  // A customer who replied STOP gets no more templates (login codes and
+  // staff invites are asked for by the person, so they still go).
+  if (body?.type === "template" &&
+      !WHATSAPP_ALWAYS_ALLOWED_TEMPLATES.includes(
+          String(body.template?.name || "")) &&
+      await whatsappConversations().isStopped(body.to).catch(() => false)) {
+    return {ok: false, httpStatus: 400, messageId: "",
+      errorCode: WHATSAPP_STOPPED_ERROR_CODE,
+      error: "The customer replied STOP to WhatsApp updates."};
+  }
   const token = safeSecretValue(whatsappAccessToken).trim();
   const numberId = safeSecretValue(whatsappPhoneNumberId).trim();
   try {
@@ -20209,6 +20231,341 @@ function containerWhatsAppConfigured() {
     phoneNumberId: safeSecretValue(whatsappPhoneNumberId),
   });
 }
+
+// Templates a person asks for themselves: never held back by STOP.
+const WHATSAPP_ALWAYS_ALLOWED_TEMPLATES = Object.freeze([
+  "laawol_login_code",
+  "staff_account_setup",
+]);
+
+let whatsappConversationsService = null;
+
+/**
+ * The two-way WhatsApp service (whatsapp_conversations.js), wired to this
+ * project's Firestore, Storage, sender and notifications.
+ *
+ * @return {object} The service.
+ */
+function whatsappConversations() {
+  if (whatsappConversationsService) return whatsappConversationsService;
+  whatsappConversationsService = createWhatsAppConversations({
+    db: admin.firestore(),
+    bucket: (() => {
+      try {
+        return admin.storage().bucket(storageBucketName());
+      } catch (error) {
+        return null;
+      }
+    })(),
+    FieldValue: FirestoreFieldValue,
+    Timestamp: FirestoreTimestamp,
+    logger,
+    send: sendWhatsAppMessage,
+    graphMedia: downloadWhatsAppMedia,
+    notifyConversation: notifyWhatsAppConversation,
+    recordFailedUpdate: recordFailedWhatsAppUpdate,
+    shipmentQueries: require("./phone_accounts").shipmentQueries,
+  });
+  return whatsappConversationsService;
+}
+
+/**
+ * A file a customer sent: Meta's media id -> its bytes.
+ *
+ * @param {string} mediaId Meta's media id.
+ * @return {Promise<{buffer: Buffer, mimeType: string}>} The file.
+ */
+async function downloadWhatsAppMedia(mediaId) {
+  const token = safeSecretValue(whatsappAccessToken).trim();
+  const headers = {Authorization: `Bearer ${token}`};
+  const info = await fetch(
+      `${WHATSAPP_GRAPH_URL}/${encodeURIComponent(mediaId)}`,
+      {headers, signal: AbortSignal.timeout(WHATSAPP_TIMEOUT_MS)});
+  const meta = await info.json().catch(() => ({}));
+  if (!info.ok || !meta.url) {
+    throw new Error(meta?.error?.message || `media ${info.status}`);
+  }
+  const file = await fetch(meta.url,
+      {headers, signal: AbortSignal.timeout(45 * 1000)});
+  if (!file.ok) throw new Error(`media download ${file.status}`);
+  return {buffer: Buffer.from(await file.arrayBuffer()),
+    mimeType: String(meta.mime_type || file.headers.get("content-type") ||
+      "")};
+}
+
+/**
+ * Tells the people who answer a conversation that the customer wrote: the
+ * business owner (unless switched off) and staff who switched "WhatsApp
+ * messages" on; Laawol's support admins for Laawol's own inbox.
+ *
+ * @param {object} conversation The supportCases record.
+ * @param {string} preview What the customer wrote.
+ * @return {Promise<void>}
+ */
+async function notifyWhatsAppConversation(conversation, preview) {
+  const db = admin.firestore();
+  const recipients = [];
+  if (conversation.businessId) {
+    const people = await db.collection("users")
+        .where("businessId", "==", conversation.businessId)
+        .where("role", "in", ["businessOwner", "staff"])
+        .limit(300).get();
+    for (const doc of people.docs) {
+      const user = doc.data() || {};
+      if (user.accountAccessBlocked === true) continue;
+      const prefs = user.notificationPreferences || {};
+      const wants = user.role === "businessOwner" ?
+        prefs.whatsappMessages !== false : prefs.whatsappMessages === true;
+      if (wants) recipients.push(doc.id);
+    }
+  } else {
+    const admins = await db.collection("users")
+        .where("role", "==", "admin").limit(100).get();
+    for (const doc of admins.docs) {
+      if (hasAdminCapability({id: doc.id, ...doc.data()}, "support")) {
+        recipients.push(doc.id);
+      }
+    }
+  }
+  const name = String(conversation.customerName ||
+    conversation.whatsappPhone || "Customer");
+  await Promise.all(recipients.map((uid) => safeSendPreferenceNotification({
+    uid,
+    preferenceKey: "whatsappMessages",
+    title: `WhatsApp: ${name}`.slice(0, 120),
+    body: String(preview || "New message").slice(0, 300),
+    data: {type: "whatsapp_message", caseId: conversation.id,
+      businessId: conversation.businessId || ""},
+    pushOnly: true,
+  })));
+}
+
+/**
+ * Meta reported a package update undeliverable after it was accepted: the
+ * line shows it failed, like any other failure.
+ *
+ * @param {object} rowRef The containerUpdates row.
+ * @param {object} row Its data.
+ * @param {string} error Meta's reason.
+ * @return {Promise<void>}
+ */
+async function recordFailedWhatsAppUpdate(rowRef, row, error) {
+  if (!row || row.requestId || !row.lineId) return;
+  const db = admin.firestore();
+  const lineRef = db.collection("containerLines").doc(String(row.lineId));
+  await db.runTransaction(async (tx) => {
+    const lineDoc = await tx.get(lineRef);
+    if (!lineDoc.exists) return;
+    const merged = mergeLastCustomerUpdate(
+        lineDoc.data()?.lastCustomerUpdate, String(row.update || ""),
+        [{role: String(row.role || ""), status: "failed",
+          reason: String(error || "").slice(0, 120)}], Date.now());
+    if (merged) tx.update(lineRef, {lastCustomerUpdate: merged});
+  });
+}
+
+// Everything staff do to a WhatsApp conversation besides writing in it
+// (docs/WHATSAPP_CONVERSATIONS.md): open one from a package, Done / reopen,
+// a private note, hand it to another business or to Laawol, the customer's
+// packages, their own display name, and (Laawol) the inbox mode.
+exports.whatsappConversation = onCall(
+    {
+      enforceAppCheck: ENFORCE_APP_CHECK,
+      cors: true,
+      maxInstances: 1,
+    },
+    async (request) => {
+      const uid = requireAuth(request);
+      const user = await getUserProfile(uid);
+      const db = admin.firestore();
+      const service = whatsappConversations();
+      const action = cleanText(request.data?.action, 40);
+      const isAdmin = user.role === "admin" &&
+        hasAdminCapability(user, "support");
+      const isBusiness = (user.role === "businessOwner" ||
+        user.role === "staff") && Boolean(user.businessId) &&
+        user.accountAccessBlocked !== true;
+      const loadCase = async () => {
+        const caseId = cleanText(request.data?.caseId, 220);
+        if (!caseId.startsWith("wa_")) {
+          throw new HttpsError("invalid-argument", "Conversation required");
+        }
+        const doc = await db.collection("supportCases").doc(caseId).get();
+        const conv = doc.exists ? {id: doc.id, ...doc.data()} : null;
+        if (!conv || conv.caseType !== "whatsapp" ||
+            !supportCanReadCase(user, conv)) {
+          throw new HttpsError("permission-denied", "Not your conversation");
+        }
+        return conv;
+      };
+      switch (action) {
+        case "open": {
+          const phone = cleanText(request.data?.phone, 40);
+          const inbox = isAdmin ?
+            cleanText(request.data?.businessId, 128) ||
+              whatsappInbox.LAAWOL_INBOX :
+            (isBusiness ? String(user.businessId) : "");
+          if (!inbox) throw new HttpsError("permission-denied", "Denied");
+          if (!whatsappInbox.phoneFromWa(phone) ||
+              phone.replace(/\D/g, "").length < 8) {
+            throw new HttpsError("invalid-argument", "Phone required");
+          }
+          const caseId = await service.openConversation({inboxId: inbox,
+            phone: whatsappInbox.phoneFromWa(phone),
+            name: cleanText(request.data?.name, 120)});
+          return {success: true, caseId};
+        }
+        case "done":
+        case "reopen": {
+          const conv = await loadCase();
+          await service.setState(conv.id, action === "done" ?
+            whatsappInbox.CONVERSATION_STATE.DONE :
+            whatsappInbox.CONVERSATION_STATE.NEEDS_REPLY);
+          return {success: true};
+        }
+        case "note": {
+          const conv = await loadCase();
+          const messageId = await service.addNote(conv.id, {
+            text: cleanText(request.data?.text, 2000), user: {...user,
+              id: uid}, isAdmin: user.role === "admin"});
+          return {success: true, messageId};
+        }
+        case "handoff": {
+          const conv = await loadCase();
+          const to = cleanText(request.data?.to, 128);
+          if (!to || to === (conv.businessId || whatsappInbox.LAAWOL_INBOX)) {
+            throw new HttpsError("invalid-argument", "Pick another inbox");
+          }
+          if (to !== whatsappInbox.LAAWOL_INBOX && !isAdmin) {
+            // Staff hand over only to a business that knows this customer.
+            const contact = (await db.collection("whatsappContacts")
+                .doc(conv.whatsappPhone).get()).data() || {};
+            const candidates = await service.routingCandidates(
+                conv.whatsappPhone, contact);
+            if (!candidates.some((c) => c.businessId === to)) {
+              throw new HttpsError("permission-denied",
+                  "That business has no shipment for this customer");
+            }
+          }
+          if (to !== whatsappInbox.LAAWOL_INBOX) {
+            const target = await db.collection("businesses").doc(to).get();
+            if (!target.exists) {
+              throw new HttpsError("not-found", "Business not found");
+            }
+          }
+          const targetName = await service.businessName(to);
+          const {targetId} = await service.moveMessages(conv.id,
+              whatsappInbox.conversationId(to, conv.whatsappPhone),
+              targetName, {byName: whatsappInbox.senderLabel({
+                chatDisplayName: user.chatDisplayName,
+                fullName: user.fullName, isLaawol: user.role === "admin",
+                businessName: conv.businessName}),
+              note: cleanText(request.data?.note, 300)});
+          const moved = await db.collection("supportCases").doc(targetId)
+              .get();
+          if (moved.exists) {
+            await notifyWhatsAppConversation({id: moved.id, ...moved.data()},
+                `Handed over from ${conv.businessName || "Laawol"}`)
+                .catch(() => {});
+          }
+          return {success: true, caseId: targetId};
+        }
+        case "packages": {
+          const conv = await loadCase();
+          const businessId = conv.businessId ||
+            (isAdmin ? cleanText(conv.suggestedBusinessId, 128) : "");
+          const packages = await service.customerPackages(businessId,
+              conv.whatsappPhone);
+          return {success: true, packages};
+        }
+        case "setDisplayName": {
+          const name = cleanText(request.data?.name, 40);
+          await db.collection("users").doc(uid).set({
+            chatDisplayName: name,
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
+          }, {merge: true});
+          return {success: true, name};
+        }
+        case "mode": {
+          if (!isAdmin) throw new HttpsError("permission-denied", "Denied");
+          return {success: true, mode: await service.inboxMode()};
+        }
+        case "setMode": {
+          if (!isAdmin) throw new HttpsError("permission-denied", "Denied");
+          const mode = cleanText(request.data?.mode, 40);
+          if (!Object.values(whatsappInbox.INBOX_MODE).includes(mode)) {
+            throw new HttpsError("invalid-argument", "Unknown mode");
+          }
+          const batch = db.batch();
+          batch.set(db.collection("appConfig").doc("whatsappInbox"), {
+            mode, updatedBy: uid,
+            updatedAt: FirestoreFieldValue.serverTimestamp(),
+          }, {merge: true});
+          setAdminAuditLog(batch, {
+            action: "whatsapp_inbox_mode", actorUid: uid,
+            actorRole: user.role, targetCollection: "appConfig",
+            targetId: "whatsappInbox", targetLabel: "WhatsApp inbox",
+            statusField: "mode", nextValue: mode,
+          });
+          await batch.commit();
+          return {success: true, mode};
+        }
+        default:
+          throw new HttpsError("invalid-argument", "Unknown action");
+      }
+    },
+);
+
+// Meta calls this for every message a customer sends to the Laawol number
+// and every delivery status of what we sent (docs/WHATSAPP_CONVERSATIONS.md).
+// GET answers Meta's one-time verification; POST must carry Meta's
+// signature. Always 200 once the signature is good, so Meta does not retry
+// events we already handled (a failed one is retried by its own dedupe).
+exports.whatsappWebhook = onRequest(
+    {
+      cors: false,
+      invoker: "public",
+      maxInstances: 2,
+      timeoutSeconds: 120,
+      memory: "512MiB",
+      secrets: [whatsappAppSecret, whatsappAccessToken, whatsappPhoneNumberId],
+    },
+    async (req, res) => {
+      const secret = safeSecretValue(whatsappAppSecret);
+      if (req.method === "GET") {
+        const token = whatsappInbox.verifyTokenFor(secret);
+        if (req.query["hub.mode"] === "subscribe" && token &&
+            req.query["hub.verify_token"] === token) {
+          res.status(200).send(String(req.query["hub.challenge"] || ""));
+          return;
+        }
+        res.status(403).send("Forbidden");
+        return;
+      }
+      if (req.method !== "POST") {
+        res.status(405).send("Method not allowed");
+        return;
+      }
+      if (!whatsappInbox.verifySignature(req.rawBody,
+          req.get("x-hub-signature-256"), secret)) {
+        logger.warn("WhatsApp webhook with a bad signature");
+        res.status(401).send("Bad signature");
+        return;
+      }
+      let body = null;
+      try {
+        body = JSON.parse(req.rawBody.toString("utf8"));
+      } catch (error) {
+        res.status(400).send("Bad JSON");
+        return;
+      }
+      const parsed = whatsappInbox.parseWebhook(body);
+      const tally = await whatsappConversations()
+          .handleWebhookEvents(parsed);
+      if (tally.errors > 0) logger.warn("WhatsApp webhook errors", tally);
+      res.status(200).send("OK");
+    },
+);
 
 /**
  * Writes one line's `containerUpdates` rows for one update - one per person
@@ -20442,6 +20799,15 @@ exports.sendContainerCustomerUpdates = onDocumentCreated(
  * @return {Promise<void>}
  */
 async function recordContainerUpdateAttempt(db, rowRef, row, fields) {
+  // Who last messaged this number decides where their reply goes.
+  if (fields?.status === CONTAINER_UPDATE_STATUS.SENT && row) {
+    await whatsappConversations().recordContact({
+      phone: row.phone, businessId: row.businessId,
+      businessName: row.businessName, trackingCode: row.trackingCode,
+      name: row.name, template: row.update,
+    }).catch((error) => logger.warn("WhatsApp contact not recorded", {
+      error: String(error).slice(0, 200)}));
+  }
   // A package request's message (estimate, reminders) is about the request,
   // not a line: its state goes on the request.
   if (row && row.requestId) {
@@ -40429,7 +40795,15 @@ function supportCanAdminSeeAll(user) {
 
 function supportCanReadCase(user, supportCase) {
   if (!user || !supportCase) return false;
-  if (user.id === supportCase.customerUid) return true;
+  if (supportCase.customerUid && user.id === supportCase.customerUid) {
+    return true;
+  }
+  // WhatsApp conversations: everyone at the business answers them.
+  if (supportCase.caseType === "whatsapp" && supportCase.businessId &&
+      (user.role === "businessOwner" || user.role === "staff") &&
+      user.businessId === supportCase.businessId) {
+    return user.accountAccessBlocked !== true;
+  }
   if (
     (user.role === "businessOwner" || user.role === "staff") &&
     user.businessId === supportCase.businessId
@@ -40445,7 +40819,12 @@ function supportCanReply(user, supportCase) {
   const role = supportRoleForUser(user, supportCase);
   if (role === "customer") return true;
   if (role === "admin") return supportCanAdminSeeAll(user);
-  if (role === "business") return hasBusinessPermission(user, "support");
+  if (role === "business") {
+    if (supportCase.caseType === "whatsapp") {
+      return user.accountAccessBlocked !== true;
+    }
+    return hasBusinessPermission(user, "support");
+  }
   return false;
 }
 
@@ -40985,6 +41364,8 @@ exports.sendSupportMessage = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
+      // A WhatsApp conversation's reply goes out from here.
+      secrets: [whatsappAccessToken, whatsappPhoneNumberId],
     },
     async (request) => {
       const uid = requireAuth(request);
@@ -41055,6 +41436,13 @@ exports.sendSupportMessage = onCall(
           createdAt: now,
         }, {merge: true});
       });
+      if (supportCase.caseType === "whatsapp") {
+        // The customer reads it on WhatsApp; nobody else is pinged.
+        const delivery = await whatsappConversations().relayStaffMessage({
+          caseRef: ref, messageRef, user, isAdmin: senderRole === "admin",
+        });
+        return {success: true, caseId, messageId: messageRef.id, delivery};
+      }
       await notifySupportParticipants({
         supportCase,
         senderUid: uid,
@@ -41076,6 +41464,8 @@ exports.uploadSupportAttachmentMetadata = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
+      // A WhatsApp conversation's file goes out from here.
+      secrets: [whatsappAccessToken, whatsappPhoneNumberId],
     },
     async (request) => {
       const uid = requireAuth(request);
@@ -41182,6 +41572,13 @@ exports.uploadSupportAttachmentMetadata = onCall(
           createdAt: now,
         });
       });
+      if (supportCase.caseType === "whatsapp") {
+        const delivery = await whatsappConversations().relayStaffMessage({
+          caseRef: ref, messageRef, user,
+          isAdmin: message.senderRole === "admin",
+        });
+        return {success: true, caseId, messageId: messageRef.id, delivery};
+      }
       await notifySupportParticipants({
         supportCase,
         senderUid: uid,
@@ -44562,6 +44959,14 @@ exports.sweepPackageRequests = onSchedule(
         logger.info("Recent record phones swept", phones);
       } catch (error) {
         logger.warn("Recent record phone sweep failed",
+            {error: String(error?.message || error)});
+      }
+      // WhatsApp files older than 12 months (docs/WHATSAPP_CONVERSATIONS.md).
+      try {
+        const deleted = await whatsappConversations().sweepMedia(100);
+        if (deleted > 0) logger.info("Old WhatsApp files deleted", {deleted});
+      } catch (error) {
+        logger.warn("WhatsApp file sweep failed",
             {error: String(error?.message || error)});
       }
       const deadlineMs = startedMs + 240 * 1000;

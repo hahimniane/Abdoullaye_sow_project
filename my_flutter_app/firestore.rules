@@ -426,6 +426,14 @@ service cloud.firestore {
           (
             data.businessId is string &&
             canManageBusinessSection(request.auth.uid, data.businessId, 'support')
+          ) ||
+          // WhatsApp conversations: everyone at the business answers them
+          // (docs/WHATSAPP_CONVERSATIONS.md).
+          (
+            data.get('caseType', '') == 'whatsapp' &&
+            data.businessId is string &&
+            data.businessId != '' &&
+            canManageBusiness(request.auth.uid, data.businessId)
           )
         );
     }
