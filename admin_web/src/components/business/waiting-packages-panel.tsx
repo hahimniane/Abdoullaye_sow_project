@@ -407,7 +407,7 @@ export function WaitingPackagesPanel({
   return (
     <article className="panel">
       <div className="panel-header">
-        <div><h2>Containers</h2><span className="panel-count">{shown.length}</span></div>
+        <div><h2>Waiting list</h2><span className="panel-count">{shown.length}</span></div>
         <span className="panel-action">
           <button className="lst-add" type="button" disabled={busy || !enabled} onClick={openRegister}><Plus size={16} /> Register a package</button>
         </span>

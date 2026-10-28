@@ -373,7 +373,7 @@ describe("business destination service coverage", () => {
     const entry = sidebar.match(/\{id: "destinations",[^}]*\}/)?.[0] ?? "";
     assert.match(entry, /permission: "destinations"/);
     assert.doesNotMatch(entry, /\bservices?:/);
-    assert.match(consoleSource, /businessTabServiceAllowed\(tab, \(id\) => services\.has\(id\)\)/);
+    assert.match(consoleSource, /visibleBusinessTabs\(\s*\(id\) => services\.has\(id\),/);
   });
 
   it("uses a responsive operational list and full-height country drawer", () => {

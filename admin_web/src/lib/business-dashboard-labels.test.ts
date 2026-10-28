@@ -54,7 +54,7 @@ test("a work-list row opens the queue that can act on it", () => {
   const todaySource = readFileSync("src/components/business/today-view.tsx", "utf8");
   assert.match(todaySource, /onClick=\{\(\) => onOpen\(item\)\}/);
   assert.match(consoleSource, /onOpenAttention=\{openTodayItem\}/);
-  assert.match(consoleSource, /setActiveTab\(item\.tab\);/);
+  assert.match(consoleSource, /setActiveTab\(item\.tab, item\.view\);/);
   const lib = readFileSync("src/lib/business-today.ts", "utf8");
   assert.match(lib, /tab: "freight", count: "freightOrders"/);
   assert.match(lib, /tab: "barrels", count: "barrelOrders"/);

@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   collection,
   getDocs,
@@ -194,6 +194,15 @@ type ContainersPanelProps = {
    */
   focusView?: string;
   focusRequestId?: string;
+  /**
+   * Inside the Shipping page the list is one of its steps: the page owns the
+   * choice (`view` + `onViewChange`) and draws the step bar, so the panel
+   * leaves its own Containers / Waiting / Requests switch out. `onCounts`
+   * hands the page what each list holds, for the step bar.
+   */
+  view?: ListView;
+  onViewChange?: (view: ListView) => void;
+  onCounts?: (counts: Record<ListView, number>) => void;
 };
 
 /** Stands in for a container with no lines, so the loading-list memos below keep a stable input. */
@@ -202,7 +211,7 @@ const NO_ROWS: FirestoreRow[] = [];
 type ContainerModal = "" | "container" | "line" | "move" | "history" | "contacts" | "labels" | "assign";
 
 /** The two lists the panel offers: the containers, and the packages still waiting for one. */
-type ListView = "containers" | "waiting" | "requests";
+export type ListView = "containers" | "waiting" | "requests";
 
 function StatusBadge({ status }: { status: LineStage }) {
   return <span className={statusPillClass(LINE_STAGE_TONES[status])}>{LINE_STAGE_LABELS[status]}</span>;
@@ -251,6 +260,9 @@ export function ContainersPanel({
   focusLineId = "",
   focusView = "",
   focusRequestId = "",
+  view: controlledView,
+  onViewChange,
+  onCounts,
 }: ContainersPanelProps) {
   // Loads the make/model/year catalog on demand; re-renders when it is in.
   useCarCatalog();
@@ -305,6 +317,20 @@ export function ContainersPanel({
   const requests = usePackageRequests(businessId, enabled);
   const officeLocations = useBusinessOfficeLocations(businessId, enabled);
   const openRequestCount = requests.rows.filter((row) => row.status === "new" || row.status === "estimate_sent").length;
+  // What each list holds, for the Shipping page's step bar: open requests,
+  // packages waiting, and containers still loading or at sea. Reported only
+  // once loaded and only when a number changes (plain numbers as deps).
+  const onCountsRef = useRef(onCounts);
+  useEffect(() => {
+    onCountsRef.current = onCounts;
+  }, [onCounts]);
+  const countsReady = !openContainers.loading && !waiting.loading && !requests.loading;
+  const openContainerCount = openContainers.rows.length;
+  const waitingCount = waiting.rows.length;
+  useEffect(() => {
+    if (!countsReady) return;
+    onCountsRef.current?.({ requests: openRequestCount, waiting: waitingCount, containers: openContainerCount });
+  }, [countsReady, openRequestCount, waitingCount, openContainerCount]);
   const destinations = useBusinessDestinations(businessId, enabled);
   const staff = useBusinessStaff(businessId, enabled);
   // The cars in the lot right now (the line form offers them), whole and
@@ -322,16 +348,30 @@ export function ContainersPanel({
   const [destinationFilter, setDestinationFilter] = useState("");
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState("");
-  const [view, setView] = useState<ListView>(
+  const [ownView, setOwnView] = useState<ListView>(
     focusView === "requests" || focusView === "waiting" ? focusView : "containers",
   );
+  // Controlled inside the Shipping page; its own state when used alone.
+  const embedded = controlledView !== undefined;
+  const view = controlledView ?? ownView;
+  // Read through a ref so setView never changes identity: the focus effects
+  // below depend on it, and a new callback from the page on every render
+  // must not re-run them (they clear the open container).
+  const onViewChangeRef = useRef(onViewChange);
+  useEffect(() => {
+    onViewChangeRef.current = onViewChange;
+  }, [onViewChange]);
+  const setView = useCallback((next: ListView) => {
+    if (onViewChangeRef.current) onViewChangeRef.current(next);
+    else setOwnView(next);
+  }, []);
   // A request notification opened while the panel is already on screen.
   useEffect(() => {
     if (focusView === "requests" || focusView === "waiting") {
       setSelectedId("");
       setView(focusView);
     }
-  }, [focusView, focusRequestId]);
+  }, [focusView, focusRequestId, setView]);
 
   const [modal, setModal] = useState<ContainerModal>("");
   const [busy, setBusy] = useState(false);
@@ -518,7 +558,7 @@ export function ContainersPanel({
     focusOpened.current = true;
     setView("containers");
     setSelectedId(targetContainerId);
-  }, [targetContainerId, containerById]);
+  }, [targetContainerId, containerById, setView]);
   // Then its line is scrolled into view once it has rendered.
   useEffect(() => {
     if (focusScrolled.current || !focusLineId || !targetContainerId || selectedId !== targetContainerId) return;
@@ -534,7 +574,7 @@ export function ContainersPanel({
     waitingOpened.current = true;
     setSelectedId("");
     setView("waiting");
-  }, [lineFocusView]);
+  }, [lineFocusView, setView]);
 
   // A container deleted or lost from the list closes its detail view.
   useEffect(() => {
@@ -1088,7 +1128,7 @@ export function ContainersPanel({
   const loadError = containers.error || lines.error;
 
   // The two lists the panel offers, with how many each holds.
-  const viewTabs = (
+  const viewTabs = embedded ? null : (
     <div className="service-segments" role="tablist" aria-label="Container lists">
       {([["containers", "Containers", containers.rows.length], ["waiting", "Waiting list", waiting.rows.length], ["requests", "Requests", openRequestCount]] as [ListView, string, number][]).map(([id, label, count]) => (
         <span

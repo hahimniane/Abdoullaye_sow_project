@@ -18,14 +18,29 @@ export type BusinessTab =
   | "people"
   | "reviews"
   | "cases"
-  | "growth";
+  | "growth"
+  | "shipping";
+
+/**
+ * The steps of the Shipping page, in the order a package moves: asked for,
+ * dropped off, loaded, handed over - then the online orders and the month.
+ * Each was its own sidebar tab before; they are one page now so a package's
+ * whole trip is in one place.
+ */
+export type ShippingStep =
+  | "requests"
+  | "waiting"
+  | "containers"
+  | "deliveries"
+  | "barrels"
+  | "freight"
+  | "volume";
 
 export type BusinessSidebarGroupId =
   | "overview"
-  | "business"
-  | "sales"
-  | "transport"
-  | "manage";
+  | "cars"
+  | "money"
+  | "business";
 
 export type BusinessSidebarTab = {
   id: BusinessTab;
@@ -86,62 +101,127 @@ export type BusinessSidebarGroup = {
 
 export const businessSidebarTabs: BusinessSidebarTab[] = [
   {id: "today", label: "Today", description: "Needs attention", group: "overview"},
-  {id: "profile", label: "Business", description: "Identity and verification", group: "business", permission: "profile"},
-  {id: "destinations", label: "Services & coverage", description: "Availability, pickup, rates, and routes", group: "business", permission: "destinations"},
-  {id: "people", label: "People", description: "Owners and staff", group: "business", permission: "people"},
-  {id: "listings", label: "Listings", description: "Vehicles for sale", group: "sales", service: "carSales", permission: "listings"},
-  {id: "purchases", label: "Purchases", description: "Holds and buyers", group: "sales", service: "carSales", permission: "purchases"},
+  // Every shipping step in one page (shippingSteps below): it shows when the
+  // viewer can open at least one of them (visibleShippingSteps).
+  {id: "shipping", label: "Shipping", description: "Requests, waiting list, containers, deliveries", group: "overview", services: shippingServiceIds},
+  {id: "parking", label: "Parking", description: "Stored cars", group: "cars", service: "carParking", permission: "parking"},
+  {id: "ledger", label: "Lot ledger", description: "Activity, expenses, reports", group: "cars", service: "carParking", permission: "ledger"},
+  {id: "transport", label: "Transport jobs", description: "Vehicle moves", group: "cars", service: "carTransport", permission: "transport"},
+  {id: "listings", label: "Listings", description: "Vehicles for sale", group: "cars", service: "carSales", permission: "listings"},
+  {id: "purchases", label: "Purchases", description: "Holds and buyers", group: "cars", service: "carSales", permission: "purchases"},
   // A viewing is an appointment, not a sale: no money moves and nothing is
   // bought. It shares the purchases permission because it is the same record
   // and the same staff work it, but it gets its own queue so "someone wants to
   // see a car" is not buried among holds and deposits.
-  {id: "viewings", label: "Viewings", description: "Appointment requests", group: "sales", service: "carSales", permission: "purchases"},
-  {id: "barrels", label: "Barrels", description: "Shipping queue", group: "transport", service: "barrelShipping", permission: "barrels"},
-  {id: "freight", label: "Freight", description: "Parcel shipping queue", group: "transport", service: "freight", permission: "freight"},
-  {id: "transport", label: "Transport", description: "Vehicle moves", group: "transport", service: "carTransport", permission: "transport"},
-  {id: "parking", label: "Parking", description: "Stored cars", group: "transport", service: "carParking", permission: "parking"},
-  {id: "ledger", label: "Lot ledger", description: "Activity, expenses, reports", group: "transport", service: "carParking", permission: "ledger"},
-  // A container is the business's own loading list, independent of any
-  // customer request - but only a business that ships or stores goods loads
-  // one, so it shows when ANY shipping service is on (owners and staff
-  // alike), plus the permission.
-  {id: "containers", label: "Containers", description: "Loading lists and sailings", group: "transport", services: shippingServiceIds, permission: "containers"},
-  // Destination staff hand packages over: find one by its label's code and
-  // mark it delivered. Its own "deliveries" permission (no prices, payments
-  // or loading lists); "containers" implies it (businessPermissionImplies).
-  {id: "deliveries", label: "Deliveries", description: "Mark packages delivered", group: "transport", services: shippingServiceIds, permission: "deliveries"},
-  // The month's pieces received and containers shipped: the same people as
-  // Containers (owner, staff holding "containers"), the same service gate.
-  {id: "volume", label: "Volume", description: "Pieces received and containers shipped", group: "transport", services: shippingServiceIds, permission: "containers"},
+  {id: "viewings", label: "Viewings", description: "Appointment requests", group: "cars", service: "carSales", permission: "purchases"},
   // Invoices are written by hand for anything the business sold, on the
   // platform or off it, so no service gate. Its own "invoices" permission;
   // "ledger" implies it (businessPermissionImplies), so the people who work
   // the lot's money keep this tab.
-  {id: "invoices", label: "Invoices", description: "Receipts and what is owed", group: "manage", permission: "invoices"},
+  {id: "invoices", label: "Invoices", description: "Receipts and what is owed", group: "money", permission: "invoices"},
   // Inventory is the shop's own goods, sold at the counter in the app and
   // recorded here. Its own service (admin switches it on per business, no
   // charge) and its own permission. It sits with Invoices - both are what the
-  // business sold - rather than under "Vehicle sales", which it is not.
-  {id: "inventory", label: "Inventory", description: "Products, stock and counter sales", group: "manage", service: "inventory", permission: "inventory"},
-  {id: "reviews", label: "Reviews", description: "Ratings and customer feedback", group: "manage", permission: "reviews"},
-  {id: "cases", label: "Support", description: "Customers and help", group: "manage", permission: "support"},
-  {id: "growth", label: "Growth", description: "Plan and advisor", group: "manage", permission: "growth"},
+  // business sold.
+  {id: "inventory", label: "Inventory", description: "Products, stock and counter sales", group: "money", service: "inventory", permission: "inventory"},
+  {id: "profile", label: "Profile", description: "Identity and verification", group: "business", permission: "profile"},
+  {id: "destinations", label: "Services & coverage", description: "Availability, pickup, rates, and routes", group: "business", permission: "destinations"},
+  {id: "people", label: "People", description: "Owners and staff", group: "business", permission: "people"},
+  {id: "reviews", label: "Reviews", description: "Ratings and customer feedback", group: "business", permission: "reviews"},
+  {id: "cases", label: "Support", description: "Customers and help", group: "business", permission: "support"},
+  {id: "growth", label: "Growth", description: "Plan and advisor", group: "business", permission: "growth"},
 ];
+
+export type ShippingStepSpec = {
+  id: ShippingStep;
+  label: string;
+  /** Part of the package's trip (shown with arrows between), or an extra list. */
+  flow: boolean;
+  service?: string;
+  services?: string[];
+  permission: string;
+};
+
+/**
+ * The Shipping page's steps. Requests, Waiting and Containers are the lists
+ * of one loading-list workspace (the "containers" permission, as before);
+ * Deliveries keeps its own permission, which "containers" implies.
+ */
+export const shippingSteps: ShippingStepSpec[] = [
+  {id: "requests", label: "Requests", flow: true, services: shippingServiceIds, permission: "containers"},
+  {id: "waiting", label: "Waiting", flow: true, services: shippingServiceIds, permission: "containers"},
+  {id: "containers", label: "Containers", flow: true, services: shippingServiceIds, permission: "containers"},
+  {id: "deliveries", label: "Deliveries", flow: true, services: shippingServiceIds, permission: "deliveries"},
+  {id: "barrels", label: "Barrel orders", flow: false, service: "barrelShipping", permission: "barrels"},
+  {id: "freight", label: "Freight", flow: false, service: "freight", permission: "freight"},
+  {id: "volume", label: "This month", flow: false, services: shippingServiceIds, permission: "containers"},
+];
+
+/** The Shipping steps this viewer may open: the business offers it and the person holds its permission. */
+export function visibleShippingSteps(
+  offers: (serviceId: string) => boolean,
+  holds: (permission: string) => boolean,
+): ShippingStepSpec[] {
+  return shippingSteps.filter((step) =>
+    businessTabServiceAllowed(step, offers) && holds(step.permission),
+  );
+}
+
+/**
+ * The sidebar sections this viewer sees. Shipping shows when at least one
+ * of its steps does; a business that stopped offering car sales keeps
+ * Listings while it still has listings (`hasListings`).
+ */
+export function visibleBusinessTabs(
+  offers: (serviceId: string) => boolean,
+  holds: (permission: string) => boolean,
+  {hasListings = false}: {hasListings?: boolean} = {},
+): BusinessSidebarTab[] {
+  const shippingOpen = visibleShippingSteps(offers, holds).length > 0;
+  return businessSidebarTabs.filter((tab) => {
+    if (tab.id === "shipping") return shippingOpen;
+    const serviceAllowed =
+      businessTabServiceAllowed(tab, offers) ||
+      (tab.id === "listings" && hasListings);
+    return serviceAllowed && (!tab.permission || holds(tab.permission));
+  });
+}
+
+/** The steps that are lists of the loading-list workspace (one ContainersPanel). */
+export const containerListSteps: readonly ShippingStep[] = ["requests", "waiting", "containers"];
+
+/**
+ * Where an old tab id lands now. Notifications, Today's rows and the
+ * tracking page's deep link still name "containers", "barrels" and the
+ * rest; each opens the matching Shipping step. `view` is the list a
+ * notification or Today row asks for ("requests", "waiting").
+ */
+export function shippingStepForTab(tab: string, view = ""): ShippingStep | null {
+  switch (tab) {
+    case "containers":
+      return view === "requests" || view === "waiting" ? view : "containers";
+    case "deliveries":
+    case "barrels":
+    case "freight":
+    case "volume":
+      return tab;
+    default:
+      return null;
+  }
+}
 
 const groupLabels: Record<BusinessSidebarGroupId, string> = {
   overview: "Overview",
-  business: "Business setup",
-  sales: "Vehicle sales",
-  transport: "Transport & shipping",
-  manage: "Manage",
+  cars: "Cars",
+  money: "Money",
+  business: "Business",
 };
 
 const groupOrder: BusinessSidebarGroupId[] = [
   "overview",
+  "cars",
+  "money",
   "business",
-  "sales",
-  "transport",
-  "manage",
 ];
 
 export function normalizePinnedTabs(
@@ -149,8 +229,11 @@ export function normalizePinnedTabs(
   availableTabs: readonly BusinessSidebarTab[],
 ) {
   const available = new Set(availableTabs.map((tab) => tab.id));
-  return pinnedTabs.filter((id): id is BusinessTab =>
-    available.has(id as BusinessTab),
+  // A pin saved on an old shipping tab (Containers, Barrels...) is a pin on
+  // Shipping now; several of them are one pin.
+  const mapped = pinnedTabs.map((id) => (shippingStepForTab(id) ? "shipping" : id));
+  return mapped.filter((id, index): id is BusinessTab =>
+    available.has(id as BusinessTab) && mapped.indexOf(id) === index,
   );
 }
 

@@ -235,10 +235,10 @@ test("translates both post-Stripe variants of the business notice", () => {
   // back to English on the one screen a new partner reads most carefully.
   assert.equal(
     translateValue(
-      "This business is currently pending. Stripe setup is complete. Open Business to upload the verification documents we still need before it can be approved.",
+      "This business is currently pending. Stripe setup is complete. Open Profile to upload the verification documents we still need before it can be approved.",
       "fr",
     ),
-    "Cette entreprise est en attente. La configuration Stripe est terminée. Ouvrez Entreprise pour téléverser les documents de vérification qu’il nous manque avant l’approbation.",
+    "Cette entreprise est en attente. La configuration Stripe est terminée. Ouvrez Profil pour téléverser les documents de vérification qu’il nous manque avant l’approbation.",
   );
   assert.equal(
     translateValue(

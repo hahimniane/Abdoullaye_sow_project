@@ -1732,6 +1732,13 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   Today: "Aujourd’hui",
   Transport: "Transport",
   "Transport & shipping": "Transport et expédition",
+  // Business sidebar since the Shipping page (business-sidebar.ts).
+  Money: "Caisse",
+  Waiting: "À charger",
+  "Barrel orders": "Commandes de barils",
+  "Transport jobs": "Missions de transport",
+  "Requests, waiting list, containers, deliveries": "Demandes, liste d’attente, conteneurs, livraisons",
+  "Shipping steps": "Étapes de l’expédition",
   "Transport date": "Date de transport",
   "Upgrade to Pro": "Passer à Pro",
   "Upload logo": "Téléverser le logo",
@@ -2234,12 +2241,12 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
     "Des modifications ont été demandées pour cette entreprise. Terminez la configuration Stripe et complétez les informations de profil demandées pendant l’attente de l’approbation de la plateforme.",
   "This business is currently pending. Complete Stripe setup and any requested profile details while it waits for platform approval.":
     "Cette entreprise est en attente. Terminez la configuration Stripe et complétez les informations de profil demandées pendant l’attente de l’approbation de la plateforme.",
-  "This business is currently changes requested. Stripe setup is complete. Open Business to upload the verification documents we still need before it can be approved.":
-    "Des modifications ont été demandées pour cette entreprise. La configuration Stripe est terminée. Ouvrez Entreprise pour téléverser les documents de vérification qu’il nous manque avant l’approbation.",
-  "This business is currently pending. Stripe setup is complete. Open Business to upload the verification documents we still need before it can be approved.":
-    "Cette entreprise est en attente. La configuration Stripe est terminée. Ouvrez Entreprise pour téléverser les documents de vérification qu’il nous manque avant l’approbation.",
-  "This business is currently rejected. Stripe setup is complete. Open Business to upload the verification documents we still need before it can be approved.":
-    "Cette entreprise a été refusée. La configuration Stripe est terminée. Ouvrez Entreprise pour téléverser les documents de vérification qu’il nous manque avant l’approbation.",
+  "This business is currently changes requested. Stripe setup is complete. Open Profile to upload the verification documents we still need before it can be approved.":
+    "Des modifications ont été demandées pour cette entreprise. La configuration Stripe est terminée. Ouvrez Profil pour téléverser les documents de vérification qu’il nous manque avant l’approbation.",
+  "This business is currently pending. Stripe setup is complete. Open Profile to upload the verification documents we still need before it can be approved.":
+    "Cette entreprise est en attente. La configuration Stripe est terminée. Ouvrez Profil pour téléverser les documents de vérification qu’il nous manque avant l’approbation.",
+  "This business is currently rejected. Stripe setup is complete. Open Profile to upload the verification documents we still need before it can be approved.":
+    "Cette entreprise a été refusée. La configuration Stripe est terminée. Ouvrez Profil pour téléverser les documents de vérification qu’il nous manque avant l’approbation.",
   "This business is currently changes requested. Stripe setup and your documents are in, so nothing more is needed from you while it waits for platform approval.":
     "Des modifications ont été demandées pour cette entreprise. La configuration Stripe et vos documents sont enregistrés : vous n’avez plus rien à faire pendant l’attente de l’approbation de la plateforme.",
   "This business is currently pending. Stripe setup and your documents are in, so nothing more is needed from you while it waits for platform approval.":

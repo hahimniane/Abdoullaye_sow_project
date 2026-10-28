@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 import { translateValue } from "./french-dom.ts";
-import { businessSidebarTabs } from "./business-sidebar.ts";
+import { businessSidebarTabs, shippingStepForTab, shippingSteps } from "./business-sidebar.ts";
 
 // Containers are the business's own loading lists. These tests pin the
 // console wiring the feature depends on — the tab, its permission, the panel
@@ -22,17 +22,23 @@ const peopleSource = read("../components/business/profile-support-people.tsx");
 const sidebarSource = read("./business-sidebar.ts");
 const stylesSource = read("../app/globals.css");
 
-test("the Containers tab sits under Transport & shipping, gated by its permission and any shipping service", () => {
-  const tab = businessSidebarTabs.find((entry) => entry.id === "containers");
-  assert.ok(tab, "no containers tab");
-  assert.equal(tab.label, "Containers");
-  assert.equal(tab.group, "transport");
-  assert.equal(tab.permission, "containers");
-  assert.equal(tab.service, undefined, "shown on ANY of several services, not one");
-  assert.deepEqual(tab.services, ["barrelShipping", "freight", "carTransport", "carParking"]);
-  assert.match(sidebarSource, /\{id: "containers", label: "Containers", [^}]*services: shippingServiceIds, permission: "containers"\}/);
+test("Containers is a step of the Shipping page, gated by its permission and any shipping service", () => {
+  // The old tab id is a step now; nothing in the sidebar is called Containers.
+  assert.equal(businessSidebarTabs.some((entry) => entry.id === "containers"), false);
+  const shipping = businessSidebarTabs.find((entry) => entry.id === "shipping");
+  assert.ok(shipping, "no shipping section");
+  assert.equal(shipping.group, "overview");
+  assert.deepEqual(shipping.services, ["barrelShipping", "freight", "carTransport", "carParking"]);
+  const step = shippingSteps.find((entry) => entry.id === "containers");
+  assert.ok(step, "no containers step");
+  assert.equal(step.label, "Containers");
+  assert.equal(step.permission, "containers");
+  assert.equal(step.service, undefined, "shown on ANY of several services, not one");
+  assert.deepEqual(step.services, ["barrelShipping", "freight", "carTransport", "carParking"]);
+  assert.match(sidebarSource, /\{id: "containers", label: "Containers", flow: true, services: shippingServiceIds, permission: "containers"\}/);
   // The console decides visibility with the shared rule, for owners and staff alike.
-  assert.match(consoleSource, /businessTabServiceAllowed\(tab, \(id\) => services\.has\(id\)\)/);
+  assert.match(consoleSource, /visibleBusinessTabs\(\s*\(id\) => services\.has\(id\),/);
+  assert.match(consoleSource, /visibleShippingSteps\(\s*\(id\) => services\.has\(id\),/);
   // The People chip reads "not yet offered" on the same any-of rule.
   assert.match(peopleSource, /containers: shippingServiceIds,/);
   // The staff-permission chip the owner grants, in the People panel — the
@@ -40,26 +46,31 @@ test("the Containers tab sits under Transport & shipping, gated by its permissio
   assert.match(peopleSource, /const businessPermissionOptions = \[[\s\S]*?\{id: "containers", label: "Containers"\}[\s\S]*?\];/);
 });
 
-test("the console routes the tab to ContainersPanel like every other panel", () => {
+test("the Shipping page routes its list steps to one ContainersPanel", () => {
   assert.match(consoleSource, /import \{ContainersPanel\} from "@\/components\/business\/containers-panel";/);
-  // The business record rides along so the phone pickers open on its country.
-  // A package's "Open in business console" link rides along as the container
-  // and line to open.
-  // A "this number isn't mine" notification names only a line: it wins over
-  // an earlier deep link, and the panel finds the line's container itself.
-  assert.match(consoleSource, /\{activeTab === "containers" && \(\s*<ContainersPanel\s+businessId=\{businessId\}\s+business=\{business\}\s+previewMode=\{previewMode\}\s+(?:\/\/[^\n]*\n\s*)*focusContainerId=\{\s*notificationFocusView === "line"\s*\? ""\s*: todayContainerFocus \|\| \(containerLink\?\.containerId \?\? ""\)\s*\}\s+focusLineId=\{\s*notificationFocusView === "line"\s*\? notificationFocusId\s*: containerLink\?\.lineId \?\? ""\s*\}\s+focusView=\{notificationFocusView === "requests" \? "requests" : todayContainersView\}\s+focusRequestId=\{notificationFocusView === "requests" \? notificationFocusId : ""\}\s+\/>\s*\)\}/);
-  assert.match(consoleSource, /containers: <Container \{\.\.\.props\} \/>,/, "the sidebar icon map must cover the tab");
+  // Requests, Waiting and Containers are the panel's three lists, chosen by
+  // the page; the panel stays mounted across them.
+  assert.match(consoleSource, /\{containerListSteps\.includes\(activeShippingStep\) && \(\s*<ContainersPanel\s+businessId=\{businessId\}\s+business=\{business\}\s+previewMode=\{previewMode\}\s+view=\{activeShippingStep as ListView\}\s+onViewChange=\{onContainerView\}\s+onCounts=\{onContainerCounts\}\s+(?:\/\/[^\n]*\n\s*)*focusContainerId=\{\s*notificationFocusView === "line"\s*\? ""\s*: todayContainerFocus \|\| \(containerLink\?\.containerId \?\? ""\)\s*\}\s+focusLineId=\{\s*notificationFocusView === "line"\s*\? notificationFocusId\s*: containerLink\?\.lineId \?\? ""\s*\}\s+focusView=\{notificationFocusView === "requests" \? "requests" : todayContainersView\}\s+focusRequestId=\{notificationFocusView === "requests" \? notificationFocusId : ""\}\s+\/>\s*\)\}/);
+  assert.match(consoleSource, /shipping: <Container \{\.\.\.props\} \/>,/, "the sidebar icon map must cover the section");
+  // Old tab ids (notifications, Today rows, links) open their step.
+  assert.match(consoleSource, /const step = shippingStepForTab\(tab, view\);\s*if \(step\) \{\s*setShippingStep\(step\);\s*setActiveTabState\("shipping"\);/);
+  assert.equal(shippingStepForTab("containers", "waiting"), "waiting");
   // Today's rows land on one container or on the waiting / requests list,
-  // and that is forgotten on leaving the tab.
-  assert.match(consoleSource, /if \(activeTab !== "containers"\) \{\s*setTodayContainerFocus\(""\);\s*setTodayContainersView\(""\);/);
+  // and that is forgotten on leaving the page or picking a step by hand.
+  assert.match(consoleSource, /if \(activeTab !== "shipping"\) \{\s*setTodayContainerFocus\(""\);\s*setTodayContainersView\(""\);/);
+  assert.match(consoleSource, /const selectShippingStep = useCallback\(\(step: ShippingStep\) => \{\s*setNotificationFocusId\(""\);\s*setNotificationFocusView\(""\);\s*setTodayContainerFocus\(""\);\s*setTodayContainersView\(""\);\s*setContainerLink\(null\);/);
   assert.match(panelSource, /focusView === "requests" \|\| focusView === "waiting" \? focusView : "containers"/);
+  // Embedded, the panel draws no switch of its own, and its view setter
+  // never changes identity (the focus effects depend on it).
+  assert.match(panelSource, /const viewTabs = embedded \? null : \(/);
+  assert.match(panelSource, /const setView = useCallback\(\(next: ListView\) => \{\s*if \(onViewChangeRef\.current\) onViewChangeRef\.current\(next\);\s*else setOwnView\(next\);\s*\}, \[\]\);/);
 });
 
 // The deep link a package's staff view opens:
 // https://business.laawoldigital.com/?container=<id>&line=<lineId>.
-test("?container=&line= opens the Containers tab on that container with the line marked", () => {
+test("?container=&line= opens the Containers step on that container with the line marked", () => {
   // Read once at mount, and only switches tab when the link is there.
-  assert.match(consoleSource, /const link = containerDeepLinkFromSearch\(window\.location\.search\);\s*if \(!link\) return;\s*setContainerLink\(link\);\s*setActiveTab\("containers"\);\s*\}, \[\]\);/);
+  assert.match(consoleSource, /const link = containerDeepLinkFromSearch\(window\.location\.search\);\s*if \(!link\) return;\s*setContainerLink\(link\);\s*setActiveTab\("containers"\);\s*\}, \[setActiveTab\]\);/);
   // Staff without the tab still fall back to Today.
   assert.match(consoleSource, /if \(!visibleTabs\.some\(\(tab\) => tab\.id === activeTab\)\) \{\s*setActiveTab\("today"\);/);
   // The panel opens the container once it is known - an old arrival past the

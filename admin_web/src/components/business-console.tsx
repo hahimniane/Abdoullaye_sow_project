@@ -88,11 +88,17 @@ import {
   buildBusinessSidebarGroups,
   businessPermissionHeld,
   businessSidebarTabs,
-  businessTabServiceAllowed,
+  containerListSteps,
   normalizePinnedTabs,
+  shippingStepForTab,
+  visibleBusinessTabs,
+  visibleShippingSteps,
   type BusinessSidebarTab,
   type BusinessTab,
+  type ShippingStep,
 } from "@/lib/business-sidebar";
+import {ShippingStepBar} from "@/components/business/shipping-steps";
+import type {ListView} from "@/components/business/containers-panel";
 import { buildBusinessVerificationChecklist } from "@/lib/business-verification";
 import { db, functions } from "@/lib/firebase";
 import { formatDate, text } from "@/lib/format";
@@ -211,7 +217,22 @@ export function BusinessConsole({
 }: BusinessConsoleProps) {
   const businessId = text(profile.businessId, "");
   const previewMode = Boolean(previewBusiness);
-  const [activeTab, setActiveTab] = useState<BusinessTab>("today");
+  const [activeTab, setActiveTabState] = useState<BusinessTab>("today");
+  // Which step of the Shipping page is open; "" = the first one this viewer
+  // may open (decided once the steps are known, below).
+  const [shippingStep, setShippingStep] = useState<ShippingStep | "">("");
+  // Every way into a section goes through here: the old shipping tab ids
+  // (Containers, Barrels, Freight, Deliveries, Volume - still named by
+  // notifications, Today's rows and links) open that step of Shipping.
+  const setActiveTab = useCallback((tab: BusinessTab, view = "") => {
+    const step = shippingStepForTab(tab, view);
+    if (step) {
+      setShippingStep(step);
+      setActiveTabState("shipping");
+      return;
+    }
+    setActiveTabState(tab);
+  }, []);
   useConsoleDocumentTitle("business");
   // `?container=<id>&line=<lineId>`: a package's "Open in business console"
   // on the tracking page. Read once at mount - an arrival, not a
@@ -223,7 +244,7 @@ export function BusinessConsole({
     if (!link) return;
     setContainerLink(link);
     setActiveTab("containers");
-  }, []);
+  }, [setActiveTab]);
   // Set when a notification is opened, so the destination panel can scroll to
   // and highlight the exact record instead of dropping the business into a
   // list of everything and making them hunt for it.
@@ -338,7 +359,7 @@ export function BusinessConsole({
   const openBankCard = useCallback(() => {
     setActiveTab("profile");
     setBankFocus((value) => value + 1);
-  }, []);
+  }, [setActiveTab]);
 
   const canManageListings = hasBusinessPermission(profile, "listings");
   // A business that no longer offers car sales keeps its Listings tab while
@@ -351,16 +372,38 @@ export function BusinessConsole({
   );
   const hasListings = listingsProbe.hasRecords;
 
-  const visibleTabs = useMemo(() => {
-    return businessSidebarTabs.filter((tab) => {
-      const serviceAllowed =
-        businessTabServiceAllowed(tab, (id) => services.has(id)) ||
-        (tab.id === "listings" && hasListings);
-      const permissionAllowed =
-        !tab.permission || hasBusinessPermission(profile, tab.permission);
-      return serviceAllowed && permissionAllowed;
-    });
-  }, [hasListings, profile, services]);
+  const visibleTabs = useMemo(
+    () => visibleBusinessTabs(
+      (id) => services.has(id),
+      (permission) => hasBusinessPermission(profile, permission),
+      {hasListings},
+    ),
+    [hasListings, profile, services],
+  );
+  const shippingSteps = useMemo(
+    () => visibleShippingSteps(
+      (id) => services.has(id),
+      (permission) => hasBusinessPermission(profile, permission),
+    ),
+    [profile, services],
+  );
+  // The open step: the one asked for, when this viewer may open it;
+  // otherwise the first of theirs.
+  const activeShippingStep: ShippingStep | "" =
+    shippingSteps.find((step) => step.id === shippingStep)?.id ??
+    shippingSteps[0]?.id ??
+    "";
+  const [shippingCounts, setShippingCounts] = useState<Partial<Record<ShippingStep, number>>>({});
+  const onContainerCounts = useCallback((counts: Record<ListView, number>) => {
+    setShippingCounts((current) =>
+      current.requests === counts.requests &&
+      current.waiting === counts.waiting &&
+      current.containers === counts.containers
+        ? current
+        : {...current, ...counts},
+    );
+  }, []);
+  const onContainerView = useCallback((view: ListView) => setShippingStep(view), []);
 
   useEffect(() => {
     setPinnedTabs((current) => {
@@ -400,7 +443,7 @@ export function BusinessConsole({
   const openDestinationSetup = useCallback(() => {
     setDestinationSetupRequest((value) => value + 1);
     setActiveTab("destinations");
-  }, []);
+  }, [setActiveTab]);
 
   // Today's figures come from the server, over every record (the Volume
   // rollup, payments, aggregates): one callable, cached a few minutes and cut
@@ -421,19 +464,30 @@ export function BusinessConsole({
   const [todayContainerFocus, setTodayContainerFocus] = useState("");
   const [todayContainersView, setTodayContainersView] = useState<TodayContainersView>("");
   useEffect(() => {
-    if (activeTab !== "containers") {
+    if (activeTab !== "shipping") {
       setTodayContainerFocus("");
       setTodayContainersView("");
     }
   }, [activeTab]);
   const openTodayItem = useCallback((item: TodayAttentionItem) => {
     if (item.tab === "containers") setTodayContainersView(item.view);
-    setActiveTab(item.tab);
+    setActiveTab(item.tab, item.view);
+  }, [setActiveTab]);
+  // A step picked by hand forgets where a notification, a Today row or a
+  // tracking link pointed: otherwise coming back to the lists would jump to
+  // that record again instead of the step the person chose.
+  const selectShippingStep = useCallback((step: ShippingStep) => {
+    setNotificationFocusId("");
+    setNotificationFocusView("");
+    setTodayContainerFocus("");
+    setTodayContainersView("");
+    setContainerLink(null);
+    setShippingStep(step);
   }, []);
   const openTodayContainer = useCallback((containerId: string) => {
     setTodayContainerFocus(containerId);
     setActiveTab("containers");
-  }, []);
+  }, [setActiveTab]);
   // Growth shows the three newest insights; that is all it reads.
   const insights = useBusinessCollection(
     "businessInsights",
@@ -535,7 +589,7 @@ export function BusinessConsole({
             enabled={Boolean(firebaseUser.uid) && !previewMode}
             onSelect={(data) => {
               const target = businessTargetForNotification(data);
-              setActiveTab(target.tab);
+              setActiveTab(target.tab, target.panelView ?? "");
               setNotificationFocusId(target.focusId ?? "");
               setNotificationFocusView(target.panelView ?? "");
               setNotificationCaseId(target.caseId ?? "");
@@ -706,22 +760,6 @@ export function BusinessConsole({
               scope="viewings"
             />
           )}
-          {activeTab === "barrels" && (
-            <BarrelsPanel
-              businessId={businessId}
-              focusRecordId={notificationFocusId}
-              previewMode={previewMode}
-              onOpenDestinations={openDestinationSetup}
-            />
-          )}
-          {activeTab === "freight" && (
-            <FreightPanel
-              businessId={businessId}
-              focusRecordId={notificationFocusId}
-              focusView={notificationFocusView}
-              previewMode={previewMode}
-            />
-          )}
           {activeTab === "transport" && (
             <TransportPanel
               businessId={businessId}
@@ -749,32 +787,61 @@ export function BusinessConsole({
               focusRecordId={notificationFocusId}
             />
           )}
-          {activeTab === "containers" && (
-            <ContainersPanel
-              businessId={businessId}
-              business={business}
-              previewMode={previewMode}
-              // A deep link names the container; a "number isn't mine"
-              // notification names only the line, and the panel finds it.
-              focusContainerId={
-                notificationFocusView === "line"
-                  ? ""
-                  : todayContainerFocus || (containerLink?.containerId ?? "")
-              }
-              focusLineId={
-                notificationFocusView === "line"
-                  ? notificationFocusId
-                  : containerLink?.lineId ?? ""
-              }
-              focusView={notificationFocusView === "requests" ? "requests" : todayContainersView}
-              focusRequestId={notificationFocusView === "requests" ? notificationFocusId : ""}
-            />
-          )}
-          {activeTab === "deliveries" && (
-            <DeliveriesPanel firebaseUser={firebaseUser} profile={profile} previewMode={previewMode} />
-          )}
-          {activeTab === "volume" && (
-            <BusinessVolumePanel businessId={businessId} previewMode={previewMode} />
+          {activeTab === "shipping" && activeShippingStep && (
+            <div className="shipping-page">
+              <ShippingStepBar
+                active={activeShippingStep}
+                counts={shippingCounts}
+                onSelect={selectShippingStep}
+                steps={shippingSteps}
+              />
+              {containerListSteps.includes(activeShippingStep) && (
+                <ContainersPanel
+                  businessId={businessId}
+                  business={business}
+                  previewMode={previewMode}
+                  view={activeShippingStep as ListView}
+                  onViewChange={onContainerView}
+                  onCounts={onContainerCounts}
+                  // A deep link names the container; a "number isn't mine"
+                  // notification names only the line, and the panel finds it.
+                  focusContainerId={
+                    notificationFocusView === "line"
+                      ? ""
+                      : todayContainerFocus || (containerLink?.containerId ?? "")
+                  }
+                  focusLineId={
+                    notificationFocusView === "line"
+                      ? notificationFocusId
+                      : containerLink?.lineId ?? ""
+                  }
+                  focusView={notificationFocusView === "requests" ? "requests" : todayContainersView}
+                  focusRequestId={notificationFocusView === "requests" ? notificationFocusId : ""}
+                />
+              )}
+              {activeShippingStep === "deliveries" && (
+                <DeliveriesPanel firebaseUser={firebaseUser} profile={profile} previewMode={previewMode} />
+              )}
+              {activeShippingStep === "barrels" && (
+                <BarrelsPanel
+                  businessId={businessId}
+                  focusRecordId={notificationFocusId}
+                  previewMode={previewMode}
+                  onOpenDestinations={openDestinationSetup}
+                />
+              )}
+              {activeShippingStep === "freight" && (
+                <FreightPanel
+                  businessId={businessId}
+                  focusRecordId={notificationFocusId}
+                  focusView={notificationFocusView}
+                  previewMode={previewMode}
+                />
+              )}
+              {activeShippingStep === "volume" && (
+                <BusinessVolumePanel businessId={businessId} previewMode={previewMode} />
+              )}
+            </div>
           )}
           {activeTab === "invoices" && (
             <InvoicesPanel
@@ -1407,6 +1474,7 @@ function tabIcon(tab: BusinessTab) {
     reviews: <Star {...props} />,
     cases: <MessageCircle {...props} />,
     growth: <Sparkles {...props} />,
+    shipping: <Container {...props} />,
   };
   return icons[tab];
 }
@@ -1475,7 +1543,7 @@ function businessStatusNotice(
     return `This business is currently ${state}. Complete Stripe setup and any requested profile details while it waits for platform approval.`;
   }
   if (documentsOutstanding) {
-    return `This business is currently ${state}. Stripe setup is complete. Open Business to upload the verification documents we still need before it can be approved.`;
+    return `This business is currently ${state}. Stripe setup is complete. Open Profile to upload the verification documents we still need before it can be approved.`;
   }
   return `This business is currently ${state}. Stripe setup and your documents are in, so nothing more is needed from you while it waits for platform approval.`;
 }

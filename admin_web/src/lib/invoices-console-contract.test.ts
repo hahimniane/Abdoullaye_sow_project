@@ -18,11 +18,11 @@ const sidebarSource = read("./business-sidebar.ts");
 const backendSource = read("../../../my_flutter_app/functions/index.js");
 const rulesSource = read("../../../my_flutter_app/firestore.rules");
 
-test("the Invoices tab sits under Manage, gated by its own permission (ledger implies it) and no service", () => {
+test("the Invoices tab sits under Money, gated by its own permission (ledger implies it) and no service", () => {
   const tab = businessSidebarTabs.find((entry) => entry.id === "invoices");
   assert.ok(tab, "no invoices tab");
   assert.equal(tab.label, "Invoices");
-  assert.equal(tab.group, "manage");
+  assert.equal(tab.group, "money");
   assert.equal(tab.permission, "invoices");
   assert.equal(tab.service, undefined, "an invoice is not tied to a sold service");
   assert.equal(tab.services, undefined, "an invoice is not tied to any sold service");

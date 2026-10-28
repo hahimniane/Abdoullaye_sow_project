@@ -230,7 +230,7 @@ export function PackageRequestsPanel({ businessId, business, rows, loading, erro
   return (
     <article className="panel">
       <div className="panel-header">
-        <div><h2>Containers</h2><span className="panel-count">{counts.needs_estimate + counts.waiting_customer}</span></div>
+        <div><h2>Requests</h2><span className="panel-count">{counts.needs_estimate + counts.waiting_customer}</span></div>
         <span className="panel-action">
           <button className="lst-btn ghost" disabled={!enabled} onClick={() => setSettingsOpen(true)} type="button"><Settings size={16} aria-hidden="true" /> Request settings</button>
         </span>

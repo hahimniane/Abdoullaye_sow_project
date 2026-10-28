@@ -16669,3 +16669,27 @@ button.pkq-card:hover { border-color: var(--brand); }
 .pending-invite-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; max-width: 100%; }
 .pending-invite-actions .primary-button { max-width: 100%; white-space: normal; }
 
+
+/* The Shipping page's step bar: the package's trip with arrows between,
+   then the extra lists after a gap. */
+.shipping-steps {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 22px;
+  margin-bottom: 18px;
+}
+.shipping-steps .shipping-flow {
+  align-items: center;
+  gap: 6px;
+}
+.shipping-steps .shipping-step-arrow {
+  color: var(--muted);
+  flex: none;
+}
+.shipping-steps .service-segments .segment {
+  padding: 9px 14px;
+}
+@media (max-width: 640px) {
+  .shipping-steps .shipping-step-arrow { display: none; }
+}
