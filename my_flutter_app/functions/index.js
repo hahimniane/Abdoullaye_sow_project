@@ -419,6 +419,7 @@ const {
   requeueDecision,
   latestCustomerUpdate,
   mergeLastCustomerUpdate,
+  withDeliveryTick,
   updateForContainerStatus,
   updateForCarrierStatus,
   containerStatusFromCarrier,
@@ -20263,7 +20264,7 @@ function whatsappConversations() {
     send: sendWhatsAppMessage,
     graphMedia: downloadWhatsAppMedia,
     notifyConversation: notifyWhatsAppConversation,
-    recordFailedUpdate: recordFailedWhatsAppUpdate,
+    recordUpdateDelivery: recordWhatsAppUpdateDelivery,
     shipmentQueries: require("./phone_accounts").shipmentQueries,
   });
   return whatsappConversationsService;
@@ -20341,26 +20342,27 @@ async function notifyWhatsAppConversation(conversation, preview) {
 }
 
 /**
- * Meta reported a package update undeliverable after it was accepted: the
- * line shows it failed, like any other failure.
+ * Meta's delivery report for a package update: the line's latest update
+ * shows delivered / read / failed for that person, without moving its time
+ * (container_updates.js withDeliveryTick).
  *
  * @param {object} rowRef The containerUpdates row.
  * @param {object} row Its data.
- * @param {string} error Meta's reason.
+ * @param {string} delivery delivered | read | failed.
+ * @param {string} error Meta's reason, for a failure.
  * @return {Promise<void>}
  */
-async function recordFailedWhatsAppUpdate(rowRef, row, error) {
+async function recordWhatsAppUpdateDelivery(rowRef, row, delivery, error) {
   if (!row || row.requestId || !row.lineId) return;
   const db = admin.firestore();
   const lineRef = db.collection("containerLines").doc(String(row.lineId));
   await db.runTransaction(async (tx) => {
     const lineDoc = await tx.get(lineRef);
     if (!lineDoc.exists) return;
-    const merged = mergeLastCustomerUpdate(
-        lineDoc.data()?.lastCustomerUpdate, String(row.update || ""),
-        [{role: String(row.role || ""), status: "failed",
-          reason: String(error || "").slice(0, 120)}], Date.now());
-    if (merged) tx.update(lineRef, {lastCustomerUpdate: merged});
+    const next = withDeliveryTick(lineDoc.data()?.lastCustomerUpdate,
+        String(row.update || ""), String(row.role || ""), delivery,
+        String(error || ""));
+    if (next) tx.update(lineRef, {lastCustomerUpdate: next});
   });
 }
 

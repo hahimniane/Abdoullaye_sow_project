@@ -744,7 +744,46 @@ function mergeLastCustomerUpdate(previous, update, entries, atMs) {
   return {update: text(update, 20), results, atMs};
 }
 
+/**
+ * Meta's delivery report for one person's message, put on the line's
+ * `lastCustomerUpdate` without moving its time: the entry for that role
+ * gains `delivery` (delivered | read | failed) and, for a failure,
+ * `status: "failed"` with the reason (as any other failure shows).
+ *
+ * @param {object} previous The line's lastCustomerUpdate.
+ * @param {string} update The update the message was about.
+ * @param {string} role sender | receiver.
+ * @param {string} delivery delivered | read | failed.
+ * @param {string} reason Meta's reason, for a failure.
+ * @return {object|null} The new value, or null when nothing changes (a
+ *   later update replaced it, or the role is not on it).
+ */
+function withDeliveryTick(previous, update, role, delivery, reason = "") {
+  if (!previous || typeof previous !== "object") return null;
+  if (text(previous.update, 20) !== text(update, 20)) return null;
+  const results = Array.isArray(previous.results) ? previous.results : [];
+  const who = text(role, 20);
+  if (!["delivered", "read", "failed"].includes(delivery)) return null;
+  let changed = false;
+  const next = results.map((entry) => {
+    if (text(entry?.role, 20) !== who) return entry;
+    const current = text(entry.delivery, 20);
+    // read never goes back; failed only replaces sent/delivered.
+    if (current === "read" || current === delivery) return entry;
+    if (current === "failed" && delivery !== "read") return entry;
+    changed = true;
+    return {
+      ...entry,
+      delivery,
+      ...(delivery === "failed" ? {status: "failed",
+        ...(reason ? {reason: text(reason, 60)} : {})} : {}),
+    };
+  });
+  return changed ? {...previous, results: next} : null;
+}
+
 module.exports = {
+  withDeliveryTick,
   UPDATE_STATUS,
   TEMPLATE_NOT_READY_CODES,
   TEMPLATE_WAIT_MAX_MS,

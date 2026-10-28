@@ -406,7 +406,10 @@ describe("staff answer", () => {
 
 describe("package updates", () => {
   it("records who messaged the number, and Meta's failure on the update row", async () => {
-    await db.collection("containerUpdates").doc("u-1").set({businessId: BIZ, phone: P1,
+    await db.collection("containerLines").doc("line-u").set({businessId: BIZ,
+      lastCustomerUpdate: {update: "received", atMs: 1000,
+        results: [{role: "sender", status: "sent"}, {role: "receiver", status: "sent"}]}});
+    await db.collection("containerUpdates").doc("u-1").set({businessId: BIZ, phone: P1, lineId: "line-u",
       whatsappMessageId: "wamid.update.1", status: "sent", update: "received", role: "sender"});
     await postWebhook({statuses: [{id: "wamid.update.1", status: "delivered", recipient_id: P1.slice(1), timestamp: "1"}]});
     await postWebhook({statuses: [{id: "wamid.update.1", status: "failed", recipient_id: P1.slice(1), timestamp: "2",
@@ -414,5 +417,10 @@ describe("package updates", () => {
     const row = (await db.collection("containerUpdates").doc("u-1").get()).data();
     assert.equal(row.deliveryStatus, "failed");
     assert.equal(row.deliveryError, "Message undeliverable");
+    const last = (await db.collection("containerLines").doc("line-u").get()).data().lastCustomerUpdate;
+    assert.equal(last.atMs, 1000, "the update's time does not move");
+    assert.deepEqual(last.results, [
+      {role: "sender", status: "failed", delivery: "failed", reason: "Message undeliverable"},
+      {role: "receiver", status: "sent"}]);
   });
 });

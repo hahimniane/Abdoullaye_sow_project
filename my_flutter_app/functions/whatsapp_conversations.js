@@ -66,7 +66,8 @@ function monthKey(ms) {
  *
  * @param {object} deps {db, bucket, FieldValue, Timestamp, send(body),
  *   graphMedia(mediaId) -> {buffer, mimeType}, notifyConversation(conv,
- *   preview, opts), recordFailedUpdate(rowRef, row, error), shipmentQueries(),
+ *   preview, opts), recordUpdateDelivery(rowRef, row, delivery, error),
+ *   shipmentQueries(),
  *   logger, now()}.
  * @return {object} The service.
  */
@@ -792,7 +793,7 @@ function createWhatsAppConversations(deps) {
         .where("whatsappMessageId", "==", st.wamid).limit(1).get();
     if (rows.empty) return "unknown";
     const rowRef = rows.docs[0].ref;
-    let failedRow = null;
+    let changed = null;
     await db.runTransaction(async (tx) => {
       const snap = await tx.get(rowRef);
       if (!snap.exists) return;
@@ -806,11 +807,11 @@ function createWhatsAppConversations(deps) {
         ...(next === "failed" ? {deliveryError: st.errorTitle ||
           `Error ${st.errorCode}`, deliveryErrorCode: st.errorCode || 0} : {}),
       });
-      if (next === "failed") failedRow = row;
+      changed = {row, next};
     });
-    if (failedRow && deps.recordFailedUpdate) {
-      await deps.recordFailedUpdate(rowRef, failedRow,
-          st.errorTitle || `Error ${st.errorCode}`);
+    if (changed && changed.next !== "sent" && deps.recordUpdateDelivery) {
+      await deps.recordUpdateDelivery(rowRef, changed.row, changed.next,
+          st.errorTitle || (st.errorCode ? `Error ${st.errorCode}` : ""));
     }
     return "update";
   }

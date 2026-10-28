@@ -913,3 +913,30 @@ describe("templates still in review", () => {
     assert.match(source, /errorCode: Number\(data\?\.error\?\.code\)/);
   });
 });
+
+/* eslint-disable max-len */
+describe("Meta's delivery ticks on a line's latest update", () => {
+  const {withDeliveryTick} = require("../container_updates");
+  const last = {update: "departed", atMs: 5, results: [
+    {role: "sender", status: "sent"}, {role: "receiver", status: "sent"}]};
+  it("marks one person delivered, then read, without moving the time", () => {
+    const delivered = withDeliveryTick(last, "departed", "receiver", "delivered");
+    assert.deepEqual(delivered.results[1], {role: "receiver", status: "sent", delivery: "delivered"});
+    assert.equal(delivered.atMs, 5);
+    const read = withDeliveryTick(delivered, "departed", "receiver", "read");
+    assert.equal(read.results[1].delivery, "read");
+    assert.equal(withDeliveryTick(read, "departed", "receiver", "delivered"), null);
+    assert.equal(withDeliveryTick(read, "departed", "receiver", "failed"), null);
+  });
+  it("shows a failure as failed with Meta's reason", () => {
+    const failed = withDeliveryTick(last, "departed", "sender", "failed", "Not on WhatsApp");
+    assert.deepEqual(failed.results[0], {role: "sender", status: "failed", delivery: "failed",
+      reason: "Not on WhatsApp"});
+  });
+  it("ignores reports about an older update or an unknown role", () => {
+    assert.equal(withDeliveryTick(last, "received", "sender", "read"), null);
+    assert.equal(withDeliveryTick(last, "departed", "agent", "read"), null);
+    assert.equal(withDeliveryTick(null, "departed", "sender", "read"), null);
+  });
+});
+/* eslint-enable max-len */
