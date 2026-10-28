@@ -169,7 +169,7 @@ describe("business sidebar navigation", () => {
     );
 
     // Typing an old section's name still finds where it went.
-    for (const needle of ["containers", "deliveries", "waiting"]) {
+    for (const needle of ["containers", "deliveries", "waiting", "barrels", "freight", "volume"]) {
       assert.deepEqual(
         buildBusinessSidebarGroups(businessSidebarTabs, [], needle).flatMap((group) => group.tabs.map((tab) => tab.id)),
         ["shipping"],

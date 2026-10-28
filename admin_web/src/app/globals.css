@@ -16693,3 +16693,13 @@ button.pkq-card:hover { border-color: var(--brand); }
 @media (max-width: 640px) {
   .shipping-steps .shipping-step-arrow { display: none; }
 }
+
+/* "The menu has a new layout" (menu-moved-dialog.tsx). */
+.menu-moved-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding-left: 20px;
+}
+.menu-moved-list li { color: var(--ink); font-size: 14px; line-height: 1.45; }
+.menu-moved-tip { color: var(--muted); font-size: 13px; margin: 16px 0 0; }

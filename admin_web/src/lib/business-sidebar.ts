@@ -51,6 +51,8 @@ export type BusinessSidebarTab = {
   /** Shown when the business offers ANY of these (use `service` for a single one). */
   services?: string[];
   permission?: string;
+  /** Old names the sidebar search still finds this section by. */
+  keywords?: string[];
 };
 
 /**
@@ -103,10 +105,10 @@ export const businessSidebarTabs: BusinessSidebarTab[] = [
   {id: "today", label: "Today", description: "Needs attention", group: "overview"},
   // Every shipping step in one page (shippingSteps below): it shows when the
   // viewer can open at least one of them (visibleShippingSteps).
-  {id: "shipping", label: "Shipping", description: "Requests, waiting list, containers, deliveries", group: "overview", services: shippingServiceIds},
+  {id: "shipping", label: "Shipping", description: "Requests, waiting list, containers, deliveries", group: "overview", services: shippingServiceIds, keywords: ["Barrels", "Barrel orders", "Freight", "Volume", "Waiting list", "Packages"]},
   {id: "parking", label: "Parking", description: "Stored cars", group: "cars", service: "carParking", permission: "parking"},
   {id: "ledger", label: "Lot ledger", description: "Activity, expenses, reports", group: "cars", service: "carParking", permission: "ledger"},
-  {id: "transport", label: "Transport jobs", description: "Vehicle moves", group: "cars", service: "carTransport", permission: "transport"},
+  {id: "transport", label: "Transport jobs", description: "Vehicle moves", group: "cars", service: "carTransport", permission: "transport", keywords: ["Transport"]},
   {id: "listings", label: "Listings", description: "Vehicles for sale", group: "cars", service: "carSales", permission: "listings"},
   {id: "purchases", label: "Purchases", description: "Holds and buyers", group: "cars", service: "carSales", permission: "purchases"},
   // A viewing is an appointment, not a sale: no money moves and nothing is
@@ -124,7 +126,7 @@ export const businessSidebarTabs: BusinessSidebarTab[] = [
   // charge) and its own permission. It sits with Invoices - both are what the
   // business sold.
   {id: "inventory", label: "Inventory", description: "Products, stock and counter sales", group: "money", service: "inventory", permission: "inventory"},
-  {id: "profile", label: "Profile", description: "Identity and verification", group: "business", permission: "profile"},
+  {id: "profile", label: "Profile", description: "Identity and verification", group: "business", permission: "profile", keywords: ["Business"]},
   {id: "destinations", label: "Services & coverage", description: "Availability, pickup, rates, and routes", group: "business", permission: "destinations"},
   {id: "people", label: "People", description: "Owners and staff", group: "business", permission: "people"},
   {id: "reviews", label: "Reviews", description: "Ratings and customer feedback", group: "business", permission: "reviews"},
@@ -246,7 +248,7 @@ export function buildBusinessSidebarGroups(
   const pinned = new Set(normalizePinnedTabs(pinnedTabs, tabs));
   const matchingTabs = needle
     ? tabs.filter((tab) =>
-        [tab.label, tab.description, groupLabels[tab.group], tab.service]
+        [tab.label, tab.description, groupLabels[tab.group], tab.service, ...(tab.keywords ?? [])]
           .filter(Boolean)
           .some((value) => String(value).toLowerCase().includes(needle)),
       )

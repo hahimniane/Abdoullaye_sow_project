@@ -98,6 +98,13 @@ import {
   type ShippingStep,
 } from "@/lib/business-sidebar";
 import {ShippingStepBar} from "@/components/business/shipping-steps";
+import {MenuMovedDialog} from "@/components/business/menu-moved-dialog";
+import {
+  menuMovedLines,
+  readMenuMovedDismissed,
+  shouldShowMenuMovedNotice,
+  writeMenuMovedDismissed,
+} from "@/lib/menu-moved-notice";
 import type {ListView} from "@/components/business/containers-panel";
 import { buildBusinessVerificationChecklist } from "@/lib/business-verification";
 import { db, functions } from "@/lib/firebase";
@@ -404,6 +411,27 @@ export function BusinessConsole({
     );
   }, []);
   const onContainerView = useCallback((view: ListView) => setShippingStep(view), []);
+
+  // "The menu has a new layout", once per person and browser, listing only
+  // the moves that touch the sections this person can open.
+  const menuMoved = useMemo(
+    () => menuMovedLines(visibleTabs.map((tab) => tab.id), shippingSteps.map((step) => step.id)),
+    [shippingSteps, visibleTabs],
+  );
+  const [menuMovedOpen, setMenuMovedOpen] = useState(false);
+  const menuMovedChecked = useRef(false);
+  useEffect(() => {
+    // Decided once, after the business record (and so its services) loaded.
+    if (menuMovedChecked.current || !business || menuMoved.length === 0) return;
+    menuMovedChecked.current = true;
+    if (shouldShowMenuMovedNotice(Date.now(), readMenuMovedDismissed(), menuMoved)) {
+      setMenuMovedOpen(true);
+    }
+  }, [business, menuMoved]);
+  const closeMenuMoved = useCallback(() => {
+    writeMenuMovedDismissed();
+    setMenuMovedOpen(false);
+  }, []);
 
   useEffect(() => {
     setPinnedTabs((current) => {
@@ -944,6 +972,17 @@ export function BusinessConsole({
       {/* Mounted once for the whole console so the assistant floats over every
           tab and keeps its conversation while the business navigates. */}
       <AssistantWidget businessId={businessId} previewMode={previewMode} />
+      {menuMovedOpen && (
+        <MenuMovedDialog
+          canOpenShipping={visibleTabs.some((tab) => tab.id === "shipping")}
+          lines={menuMoved}
+          onClose={closeMenuMoved}
+          onOpenShipping={() => {
+            closeMenuMoved();
+            setActiveTab("shipping");
+          }}
+        />
+      )}
       {checkBankOpen && (
         <CheckBankDialog businessId={businessId} previewMode={previewMode} onClose={() => setCheckBankOpen(false)} />
       )}

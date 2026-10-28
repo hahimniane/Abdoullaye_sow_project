@@ -1739,6 +1739,22 @@ export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Transport jobs": "Missions de transport",
   "Requests, waiting list, containers, deliveries": "Demandes, liste d’attente, conteneurs, livraisons",
   "Shipping steps": "Étapes de l’expédition",
+  // The one-time "menu has moved" message (menu-moved-notice.ts).
+  "The menu has a new layout": "Le menu a une nouvelle présentation",
+  "Everything is still here, grouped by the work you do.": "Tout est toujours là, regroupé selon votre travail.",
+  "Requests, Waiting list, Containers and Deliveries are now one page: Shipping. Its steps run along the top in the order a package moves.":
+    "Les demandes, la liste d’attente (À charger), les conteneurs et les livraisons forment maintenant une seule page : Expédition. Ses étapes sont en haut, dans l’ordre où avance un colis.",
+  "Barrel orders, Freight and Volume (now This month) are at the end of the same row.":
+    "Commandes de barils, Fret et Volume (maintenant Ce mois-ci) sont au bout de la même rangée.",
+  "Parking, Lot ledger, Transport jobs and car sales are under Cars.":
+    "Stationnement, Registre du parc, Missions de transport et ventes de voitures sont sous Voitures.",
+  "Invoices and Inventory are under Money.": "Factures et Inventaire sont sous Caisse.",
+  "Your business details are now called Profile, under Business.":
+    "Les informations de votre entreprise s’appellent maintenant Profil, sous Entreprise.",
+  "Can't find something? Type its old name in the search box above the menu.":
+    "Vous ne trouvez pas quelque chose ? Tapez son ancien nom dans la recherche au-dessus du menu.",
+  "Show me Shipping": "Voir Expédition",
+  "Got it": "Compris",
   "Transport date": "Date de transport",
   "Upgrade to Pro": "Passer à Pro",
   "Upload logo": "Téléverser le logo",
