@@ -130,7 +130,11 @@ export const businessSidebarTabs: BusinessSidebarTab[] = [
   {id: "destinations", label: "Services & coverage", description: "Availability, pickup, rates, and routes", group: "business", permission: "destinations"},
   {id: "people", label: "People", description: "Owners and staff", group: "business", permission: "people"},
   {id: "reviews", label: "Reviews", description: "Ratings and customer feedback", group: "business", permission: "reviews"},
-  {id: "cases", label: "Support", description: "Customers and help", group: "business", permission: "support"},
+  // Everyone at the business answers WhatsApp (docs/WHATSAPP_CONVERSATIONS.md
+  // decision 6), so Support has no permission gate: staff without "support"
+  // see only the WhatsApp conversations there (whatsapp-conversations.ts
+  // businessSupportAccess); with it, every case as before.
+  {id: "cases", label: "Support", description: "Customers and help", group: "business", keywords: ["WhatsApp"]},
   {id: "growth", label: "Growth", description: "Plan and advisor", group: "business", permission: "growth"},
 ];
 

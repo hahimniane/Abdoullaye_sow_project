@@ -228,7 +228,46 @@ export function packageUpdateResultTone(status: string): PackageUpdateTone {
   return RESULT_TONE[status] ?? "muted";
 }
 
-export type PackageUpdateResult = { role: string; text: string; tone: PackageUpdateTone };
+export type PackageUpdateResult = {
+  role: string;
+  text: string;
+  tone: PackageUpdateTone;
+  /**
+   * Why it failed, as WhatsApp said it ("Message undeliverable"): Meta's
+   * report of an update it accepted and then could not deliver is merged
+   * into the line with this reason (functions recordFailedWhatsAppUpdate).
+   * Empty for every other outcome.
+   */
+  failure: string;
+  /**
+   * Meta's report on the message (functions withDeliveryTick): "delivered"
+   * or "read" with its ticks; a failure is `tone: "error"` + `failure`.
+   * Null before Meta reports, and for anything not sent.
+   */
+  tick: PackageUpdateTick | null;
+};
+
+export type PackageUpdateTick = {
+  delivery: "delivered" | "read";
+  /** "✓✓" - never translated. */
+  ticks: string;
+  /** A whole dictionary key: "Delivered" / "Read". */
+  label: string;
+  /** "Customer" / "Receiver", for the compact line on the lists. */
+  who: string;
+};
+
+/** The ticks of one person's update, from the result's `delivery`. */
+export function packageUpdateTick(role: string, delivery: unknown, status = ""): PackageUpdateTick | null {
+  const value = typeof delivery === "string" ? delivery.trim() : "";
+  if (status === "failed" || (value !== "delivered" && value !== "read")) return null;
+  return {
+    delivery: value,
+    ticks: "✓✓",
+    label: value === "read" ? "Read" : "Delivered",
+    who: role === "receiver" ? "Receiver" : "Customer",
+  };
+}
 
 export type PackageLastUpdate = {
   sentence: string;
@@ -252,16 +291,39 @@ export function packageLastUpdate(value: unknown): PackageLastUpdate | null {
     const role = text(entry.role, 20);
     const status = text(entry.status, 40);
     if (!role || !status) continue;
+    const reason = text(entry.reason, 120);
     results.push({
       role,
-      text: packageUpdateResultText(role, status, text(entry.reason, 40)),
+      text: packageUpdateResultText(role, status, reason),
       tone: packageUpdateResultTone(status),
+      failure: status === "failed" && !SKIP_PHRASE[reason] ? reason : "",
+      tick: packageUpdateTick(role, entry.delivery, status),
     });
   }
   const atMs = Number(row.atMs);
   const at = Number.isFinite(atMs) && atMs > 0 ? new Date(Math.round(atMs)) : dateOf(row.at);
   // A moment this build does not know yet still reads as an update.
   return { sentence: PACKAGE_UPDATE_SENTENCE[update] ?? "Latest update", at, results };
+}
+
+/**
+ * The people the line's last WhatsApp update failed to reach - shown on the
+ * Waiting list and the containers so a failure stands out where staff work,
+ * not only on the package's own page. Empty when nothing failed.
+ */
+export function packageUpdateFailures(lastCustomerUpdate: unknown): PackageUpdateResult[] {
+  const last = packageLastUpdate(lastCustomerUpdate);
+  return last ? last.results.filter((result) => result.tone === "error") : [];
+}
+
+/**
+ * What the lists show of the line's last update, compactly: who it failed to
+ * reach (with WhatsApp's reason) and who it reached ("Receiver ✓✓ Read").
+ * A plain "sent" with no report yet shows nothing.
+ */
+export function packageUpdateMarks(lastCustomerUpdate: unknown): PackageUpdateResult[] {
+  const last = packageLastUpdate(lastCustomerUpdate);
+  return last ? last.results.filter((result) => result.tone === "error" || result.tick !== null) : [];
 }
 
 function dateOf(value: unknown): Date | null {

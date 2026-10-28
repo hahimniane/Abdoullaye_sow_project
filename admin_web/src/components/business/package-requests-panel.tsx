@@ -29,6 +29,7 @@ import { auth, functions, storage } from "@/lib/firebase";
 import { currentLanguage } from "@/lib/format";
 import { INVOICE_PAYMENT_METHODS, INVOICE_PAYMENT_METHOD_LABELS, centsToInput as ledgerCentsToInput, type InvoicePaymentMethod } from "@/lib/invoice-ledger";
 import { overlayDismiss } from "@/lib/overlay-dismiss";
+import { MessageCustomerButton } from "@/components/support/message-customer";
 import {
   LOCK_HEARTBEAT_MS,
   PICKUP_WINDOW_LABELS,
@@ -160,7 +161,7 @@ function WhatsAppLine({ row }: { row: Row }) {
   return null;
 }
 
-function PersonLines({ row }: { row: Row }) {
+function PersonLines({ row, withMessage = false }: { row: Row; withMessage?: boolean }) {
   const sender = asRow(row.sender);
   const receiver = asRow(row.receiver);
   return (
@@ -168,6 +169,8 @@ function PersonLines({ row }: { row: Row }) {
       <strong data-no-translate>{str(sender.name)}</strong>
       <small data-no-translate>{str(sender.phoneE164)}</small>
       {str(receiver.name) && <small data-no-translate>→ {str(receiver.name)}{str(receiver.phoneE164) ? ` · ${str(receiver.phoneE164)}` : ""}</small>}
+      {/* Never inside the clickable request card (a button in a button). */}
+      {withMessage && <MessageCustomerButton row={row} />}
     </span>
   );
 }
@@ -470,7 +473,7 @@ function EstimateDialog({ businessId, row, onClose, onFlash }: { businessId: str
           )}
           {lockState === "taking" && <div className="pkq-banner" role="status"><RefreshCw className="spin" size={14} aria-hidden="true" /> Opening…</div>}
           <div className="pkq-detail">
-            <PersonLines row={row} />
+            <PersonLines row={row} withMessage />
             <WhenLine row={row} />
             <WhatsAppLine row={row} />
           </div>
@@ -638,7 +641,7 @@ export function ExpectedRequestsSection({ businessId, rows, staffOptions, onFlas
           return (
             <div className="pkq-card expected" key={str(row.id)}>
               <RequestTitle row={row} />
-              <PersonLines row={row} />
+              <PersonLines row={row} withMessage />
               <WhenLine row={row} />
               <span className="pkq-badges">
                 {card && <span className="status-pill ok"><CreditCard aria-hidden="true" size={12} /> Paid online</span>}

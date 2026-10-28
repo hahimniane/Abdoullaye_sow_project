@@ -64,6 +64,8 @@ export type BusinessNotificationTarget = {
 export type AdminNotificationTarget = {
   tab: string;
   caseId?: string;
+  /** Support tab: the WhatsApp view instead of the escalated cases. */
+  supportView?: "whatsapp";
   /** Businesses tab: the business to open ("" or absent = the list as it is). */
   businessId?: string;
 };
@@ -262,6 +264,10 @@ export function businessTargetForNotification(
     case "support_escalated":
     case "support_case_update":
       return {tab: "cases", caseId, focusId: caseId};
+    // A customer wrote on WhatsApp (functions notifyWhatsAppConversation):
+    // the conversation is a Support case, open on Support for everyone.
+    case "whatsapp_message":
+      return {tab: "cases", caseId, focusId: caseId};
     case "business_verification_review":
     case "business_verification_document":
     case "business_application_status":
@@ -368,6 +374,10 @@ export function adminTargetForNotification(
     case "support_escalated":
     case "support_case_update":
       return {tab: "support", caseId};
+    // Laawol's WhatsApp view holds every conversation, its own inbox and
+    // every business's.
+    case "whatsapp_message":
+      return {tab: "support", caseId, supportView: "whatsapp"};
     case "business_application":
     case "business_application_status":
     case "business_verification_document":

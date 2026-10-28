@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   collection,
   doc,
@@ -36,20 +36,47 @@ import {
 
 import { LoadMoreButton } from "@/components/show-more";
 import { AttachmentPreview } from "@/components/support/attachment-preview";
+import {
+  InboxModeSwitch,
+  StoppedUpdatesTag,
+  WhatsAppBadge,
+  WhatsAppStatePill,
+  WhatsAppThread,
+  type WhatsAppRequest,
+} from "@/components/support/whatsapp-thread";
 import { UserText } from "@/components/user-text";
 import { db, functions } from "@/lib/firebase";
 import { asDate, currentLocale, formatDate, formatMoney, text } from "@/lib/format";
-import { uploadSupportAttachmentFile } from "@/lib/support-attachments";
+import {
+  inferSupportMessageType,
+  uploadSupportAttachmentFile,
+  type SupportAttachmentPayload,
+} from "@/lib/support-attachments";
 import {
   SUPPORT_CASES_PAGE_SIZE,
   supportCasesQuerySpec,
+  type SupportInboxView,
 } from "@/lib/support-cases-query";
 import { usePagedQuery } from "@/lib/use-paged-query";
-import type {
-  ActionConfirmationOptions,
-  ActionRunner,
+import {
+  confirmImportantAction,
+  type ActionConfirmationOptions,
+  type ActionRunner,
 } from "@/lib/action-confirmation";
 import { executeSupportAction } from "@/lib/support-action";
+import {
+  WHATSAPP_FILTERS,
+  isWhatsAppCase,
+  whatsappFilterCounts,
+  whatsappFilterMatches,
+  whatsappInboxLabel,
+  type WhatsAppFilter,
+} from "@/lib/whatsapp-conversations";
+import {
+  previewWhatsAppCall,
+  previewWhatsAppMessages,
+  previewWhatsAppThreads,
+} from "@/lib/whatsapp-preview";
 import type { FirestoreRow } from "@/types/admin";
 
 export type SupportCasesPanelProps = {
@@ -62,6 +89,17 @@ export type SupportCasesPanelProps = {
   runAction?: ActionRunner;
   /** Open this thread when a notification names it. */
   caseId?: string;
+  /**
+   * Business staff without the Support permission: they answer WhatsApp
+   * (everyone at the business does) and see only those conversations.
+   */
+  whatsappOnly?: boolean;
+  /** Admin: open on the WhatsApp view (a WhatsApp notification). */
+  initialView?: SupportInboxView;
+  /** The signed-in person's name on WhatsApp (chatDisplayName, else first name). */
+  chatName?: string;
+  /** Local preview: sample conversations, nothing read or sent. */
+  previewMode?: boolean;
 };
 
 // Business owners/staff escalate to admins when they cannot resolve a
@@ -119,6 +157,8 @@ function useSupportCases(
   businessId: string,
   enabled: boolean,
   caseId: string,
+  view: SupportInboxView,
+  previewMode: boolean,
 ): {
   rows: FirestoreRow[];
   loading: boolean;
@@ -129,8 +169,8 @@ function useSupportCases(
   hasMore: boolean;
   loadMore: () => void;
 } {
-  const active = enabled && !(scope === "business" && !businessId);
-  const spec = supportCasesQuerySpec(scope, businessId);
+  const active = enabled && !previewMode && !(scope === "business" && !businessId);
+  const spec = supportCasesQuerySpec(scope, businessId, view);
   const paged = usePagedQuery({
     source: active ? { path: ["supportCases"] } : null,
     filters: spec.filters,
@@ -163,9 +203,11 @@ function useSupportCases(
   const resolvingLink = linkedMissing && linked.id !== caseId;
 
   const rows = useMemo(() => {
-    const base = linkedRow ? [...paged.rows, linkedRow] : paged.rows;
+    const base = previewMode
+      ? (previewWhatsAppThreads(scope, view) as FirestoreRow[])
+      : linkedRow ? [...paged.rows, linkedRow] : paged.rows;
     return base.slice().sort((a, b) => activityMs(b) - activityMs(a));
-  }, [paged.rows, linkedRow]);
+  }, [paged.rows, linkedRow, previewMode, scope, view]);
 
   return {
     rows,
@@ -181,12 +223,19 @@ function useSupportCases(
 function useSupportMessages(
   caseId: string,
   uid: string,
+  previewMode = false,
 ): { rows: FirestoreRow[]; loading: boolean; error: string } {
   const [rows, setRows] = useState<FirestoreRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (previewMode) {
+      setRows(previewWhatsAppMessages(caseId) as FirestoreRow[]);
+      setLoading(false);
+      setError("");
+      return;
+    }
     if (!caseId) {
       setRows([]);
       setLoading(false);
@@ -222,7 +271,7 @@ function useSupportMessages(
       },
     );
     return unsubscribe;
-  }, [caseId, uid]);
+  }, [caseId, uid, previewMode]);
 
   return { rows, loading, error };
 }
@@ -362,9 +411,20 @@ export function SupportCasesPanel({
   enabled: enabledOverride,
   runAction,
   caseId = "",
+  whatsappOnly = false,
+  initialView = "cases",
+  chatName = "",
+  previewMode = false,
 }: SupportCasesPanelProps) {
   const enabled =
     enabledOverride ?? (scope === "admin" ? true : Boolean(businessId));
+  // Admin: the escalated cases or every WhatsApp conversation (a query
+  // each). Business: everything, or only WhatsApp for staff without the
+  // Support permission (the only query the rules allow them).
+  const [adminView, setAdminView] = useState<SupportInboxView>(initialView);
+  const view: SupportInboxView = scope === "admin"
+    ? adminView
+    : whatsappOnly ? "whatsapp" : "cases";
   const {
     rows,
     loading,
@@ -373,10 +433,13 @@ export function SupportCasesPanel({
     error,
     hasMore,
     loadMore,
-  } = useSupportCases(scope, businessId, enabled, caseId);
+  } = useSupportCases(scope, businessId, enabled || previewMode, caseId, view, previewMode);
   const [selectedId, setSelectedId] = useState("");
   const [search, setSearch] = useState("");
   const [showResolved, setShowResolved] = useState(false);
+  // Business with the Support permission: every case, or just WhatsApp.
+  const [channel, setChannel] = useState<"all" | "whatsapp">("all");
+  const [waFilter, setWaFilter] = useState<WhatsAppFilter>("needs_reply");
   const [showPlatformRequest, setShowPlatformRequest] = useState(false);
   const [platformDraft, setPlatformDraft] = useState({
     priority: "normal",
@@ -386,12 +449,24 @@ export function SupportCasesPanel({
   const [busyAction, setBusyAction] = useState("");
   const [localError, setLocalError] = useState("");
   const platformErrorRef = useRef<HTMLDivElement>(null);
+  // The list shows WhatsApp conversations only, with their state filter.
+  const whatsappList = view === "whatsapp" || channel === "whatsapp";
+
+  const waCounts = useMemo(
+    () => (whatsappList ? whatsappFilterCounts(rows) : null),
+    [rows, whatsappList],
+  );
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
     return rows.filter((row) => {
-      const status = text(row.status, "open").toLowerCase();
-      if (!showResolved && RESOLVED_STATUSES.has(status)) return false;
+      if (whatsappList) {
+        if (!isWhatsAppCase(row)) return false;
+        if (!whatsappFilterMatches(row, waFilter)) return false;
+      } else {
+        const status = text(row.status, "open").toLowerCase();
+        if (!showResolved && RESOLVED_STATUSES.has(status)) return false;
+      }
       if (!term) return true;
       const haystack = [
         row.subject,
@@ -400,12 +475,14 @@ export function SupportCasesPanel({
         row.customerEmail,
         row.businessName,
         row.lastMessage,
+        row.whatsappPhone,
+        row.suggestedBusinessName,
       ]
         .map((value) => text(value, "").toLowerCase())
         .join(" ");
       return haystack.includes(term);
     });
-  }, [rows, search, showResolved]);
+  }, [rows, search, showResolved, whatsappList, waFilter]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -422,8 +499,10 @@ export function SupportCasesPanel({
     if (!caseId) return;
     setSelectedId(caseId);
     setShowResolved(true);
+    setWaFilter("all");
     setSearch("");
-  }, [caseId]);
+    if (scope === "admin") setAdminView(initialView);
+  }, [caseId, initialView, scope]);
 
   const selectedCase = rows.find((row) => row.id === selectedId) ?? null;
 
@@ -438,27 +517,34 @@ export function SupportCasesPanel({
     name: string,
     payload: Record<string, unknown>,
     options?: ActionConfirmationOptions,
+    onResult?: (data: unknown) => void,
   ): Promise<boolean> {
     if (busyAction) return false;
+    // A confirmation is asked here when no console runner asks it.
+    if (options?.confirm && (!runAction || previewMode)) {
+      if (!(await confirmImportantAction(options.confirm, options.confirmFr))) return false;
+    }
     const action = async () => {
-      await httpsCallable(functions, name)(payload);
+      const result = previewMode
+        ? { data: await previewWhatsAppCall(name, payload) }
+        : await httpsCallable(functions, name)(payload);
+      onResult?.(result.data);
     };
+    // The preview never reaches the console's runner (it would not run the
+    // action), so the panel shows the sample answer itself.
+    const runner = previewMode ? undefined : runAction;
     setLocalError("");
     setBusyAction(label);
     try {
-      const result = options
+      const result = options && runner
         ? await executeSupportAction(
             label,
             action,
             async (actionLabel, trackedAction) => {
-              if (runAction) {
-                await runAction(actionLabel, trackedAction, options);
-              } else {
-                await trackedAction();
-              }
+              await runner(actionLabel, trackedAction, options);
             },
           )
-        : await executeSupportAction(label, action, runAction);
+        : await executeSupportAction(label, action, runner);
       if (!result.completed && result.error) {
         setLocalError(result.error);
       }
@@ -467,6 +553,35 @@ export function SupportCasesPanel({
       setBusyAction("");
     }
   }
+
+  // A read for a header (the customer's packages, the inbox mode): no busy
+  // state, no toast.
+  const request = useCallback<WhatsAppRequest>(
+    async (name, payload) => previewMode
+      ? previewWhatsAppCall(name, payload)
+      : (await httpsCallable(functions, name)(payload)).data,
+    [previewMode],
+  );
+
+  const uploadFile = useCallback(
+    async (file: File): Promise<SupportAttachmentPayload> => {
+      if (!previewMode) {
+        return uploadSupportAttachmentFile({ caseId: selectedId, uploaderUid: currentUid, file });
+      }
+      const mimeType = file.type || "application/octet-stream";
+      return {
+        caseId: selectedId,
+        fileUrl: "",
+        filePath: `support_cases/${selectedId}/${currentUid}/preview`,
+        fileName: file.name,
+        mimeType,
+        fileSize: file.size,
+        messageType: inferSupportMessageType(mimeType),
+      };
+    },
+    [currentUid, previewMode, selectedId],
+  );
+
 
   async function createPlatformRequest(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -490,19 +605,26 @@ export function SupportCasesPanel({
     setLocalError("");
   }
 
+  const title = scope === "admin"
+    ? view === "whatsapp" ? "WhatsApp conversations" : "Escalated support"
+    : "Support";
+  const subtitle = scope === "admin"
+    ? view === "whatsapp"
+      ? "Every conversation on Laawol's WhatsApp number, for every business."
+      : "Cases customers or businesses escalated to the admin team."
+    : whatsappOnly
+      ? "Answer customers who write to you on WhatsApp."
+      : "Manage customer order conversations and reach the admin team from one support inbox.";
+
   return (
     <section className="lst">
       <header className="lst-head">
         <div className="lst-head-text">
-          <h2>{scope === "admin" ? "Escalated support" : "Support"}</h2>
-          <p>
-            {scope === "admin"
-              ? "Cases customers or businesses escalated to the admin team."
-              : "Manage customer order conversations and reach the admin team from one support inbox."}
-          </p>
+          <h2>{title}</h2>
+          <p>{subtitle}</p>
         </div>
         <div className="lst-head-actions">
-          {scope === "business" && canReply && (
+          {scope === "business" && canReply && !whatsappOnly && (
             <button className="lst-add" type="button" disabled={Boolean(busyAction)} onClick={() => {
               setLocalError("");
               setShowPlatformRequest(true);
@@ -510,17 +632,48 @@ export function SupportCasesPanel({
               <Send size={15} /> New admin request
             </button>
           )}
-          <label className="sup-toggle">
-            <input
-              type="checkbox"
-              checked={showResolved}
-              onChange={(event) => setShowResolved(event.target.checked)}
-            />
-            Show resolved
-          </label>
+          {!whatsappList && (
+            <label className="sup-toggle">
+              <input
+                type="checkbox"
+                checked={showResolved}
+                onChange={(event) => setShowResolved(event.target.checked)}
+              />
+              Show resolved
+            </label>
+          )}
         </div>
       </header>
 
+      {(scope === "admin" || (!whatsappOnly && scope === "business")) && (
+        <div className="wa-views" role="tablist" aria-label="Support lists">
+          {scope === "admin" ? (
+            <>
+              <button type="button" role="tab" aria-selected={adminView === "cases"} className={adminView === "cases" ? "active" : ""} onClick={() => { setAdminView("cases"); setSelectedId(""); }}>
+                <LifeBuoy size={13} /> Escalated
+              </button>
+              <button type="button" role="tab" aria-selected={adminView === "whatsapp"} className={adminView === "whatsapp" ? "active" : ""} onClick={() => { setAdminView("whatsapp"); setSelectedId(""); }}>
+                <MessageCircle size={13} /> WhatsApp
+              </button>
+            </>
+          ) : (
+            <>
+              <button type="button" role="tab" aria-selected={channel === "all"} className={channel === "all" ? "active" : ""} onClick={() => setChannel("all")}>
+                <LifeBuoy size={13} /> All cases
+              </button>
+              <button type="button" role="tab" aria-selected={channel === "whatsapp"} className={channel === "whatsapp" ? "active" : ""} onClick={() => setChannel("whatsapp")}>
+                <MessageCircle size={13} /> WhatsApp
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {scope === "admin" && view === "whatsapp" && (
+        <InboxModeSwitch request={request} onCall={call} busyAction={busyAction} canChange={canReply} />
+      )}
+
+      {previewMode && <div className="info-band">Preview: sample conversations. Nothing is sent.</div>}
       {(error || localError) && <div className="error-box">{error || localError}</div>}
 
       <div className="sup-layout">
@@ -531,43 +684,91 @@ export function SupportCasesPanel({
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
+          {whatsappList && waCounts && (
+            <div className="wa-filters" role="group" aria-label="Conversation state">
+              {WHATSAPP_FILTERS.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  aria-pressed={waFilter === option.id}
+                  className={waFilter === option.id ? "active" : ""}
+                  onClick={() => setWaFilter(option.id)}
+                >
+                  <span>{option.label}</span>
+                  <span className="wa-filter-count" data-no-translate>{waCounts[option.id]}</span>
+                </button>
+              ))}
+            </div>
+          )}
           {loading && <div className="empty-state">Loading…</div>}
           {!loading && filtered.length === 0 && (
             <div className="lst-empty">
-              <div className="lst-empty-icon"><LifeBuoy size={26} /></div>
-              <h3>No support cases</h3>
+              <div className="lst-empty-icon">{whatsappList ? <MessageCircle size={26} /> : <LifeBuoy size={26} />}</div>
+              <h3>{whatsappList ? "No WhatsApp conversations" : "No support cases"}</h3>
               <p>
-                {scope === "admin"
-                  ? "Escalated cases will appear here."
-                  : "Customer order cases and admin help requests will appear here."}
+                {whatsappList
+                  ? "Conversations appear here when customers write to the WhatsApp number."
+                  : scope === "admin"
+                    ? "Escalated cases will appear here."
+                    : "Customer order cases and admin help requests will appear here."}
               </p>
             </div>
           )}
           <div className="sup-inbox-list">
             {filtered.map((row) => {
+              const whatsapp = isWhatsAppCase(row);
               const status = text(row.status, "open").toLowerCase();
               const unresolved = !RESOLVED_STATUSES.has(status);
+              const unread = Number(row.unreadCount) || 0;
+              const inbox = whatsapp ? whatsappInboxLabel(row) : null;
               return (
                 <button
                   key={row.id}
                   type="button"
-                  className={`sup-inbox-item ${row.id === selectedId ? "active" : ""}`}
+                  className={`sup-inbox-item ${row.id === selectedId ? "active" : ""} ${whatsapp ? "wa-item" : ""}`}
                   onClick={() => setSelectedId(row.id)}
                 >
                   <div className="sup-inbox-top">
-                    <strong>{text(row.subject, "") ? <UserText value={row.subject} /> : text(row.relatedLabel, "Support case")}</strong>
-                    <span className={`status-pill compact ${unresolved ? "warning" : ""}`}>
-                      {statusLabel(row.status)}
-                    </span>
+                    <strong>
+                      {whatsapp
+                        ? <UserText value={row.customerName} fallback="Customer" />
+                        : text(row.subject, "") ? <UserText value={row.subject} /> : text(row.relatedLabel, "Support case")}
+                    </strong>
+                    {whatsapp ? (
+                      <WhatsAppStatePill row={row} />
+                    ) : (
+                      <span className={`status-pill compact ${unresolved ? "warning" : ""}`}>
+                        {statusLabel(row.status)}
+                      </span>
+                    )}
                   </div>
                   <span className="sup-inbox-sub">
-                    <CaseAudience row={row} />
-                    {scope === "admin" ? <> · <UserText value={row.businessName} fallback="Business" /></> : ""}
+                    {whatsapp ? (
+                      <>
+                        <WhatsAppBadge /> <span data-no-translate>{text(row.whatsappPhone, "")}</span>
+                        {scope === "admin" && inbox && (
+                          <>
+                            {" · "}
+                            {inbox.isLaawol ? <>Laawol</> : <UserText value={inbox.owner} fallback="Business" />}
+                            {inbox.suggested && <> · <span>Belongs to</span> <UserText value={inbox.suggested} /></>}
+                          </>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <CaseAudience row={row} />
+                        {scope === "admin" ? <> · <UserText value={row.businessName} fallback="Business" /></> : ""}
+                      </>
+                    )}
                   </span>
                   <span className="sup-inbox-preview"><UserText value={row.lastMessage} fallback="No messages yet" /></span>
                   <span className="sup-inbox-foot">
                     <span className="sup-inbox-time">{formatDateTime(row.lastMessageAt ?? row.updatedAt)}</span>
-                    {scope === "admin" && text(row.assignedAdminUid, "") && (
+                    {whatsapp && row.updatesStopped === true && <StoppedUpdatesTag />}
+                    {whatsapp && unread > 0 && whatsappFilterMatches(row, "needs_reply") && (
+                      <span className="wa-unread" title="Unread messages" data-no-translate>{unread}</span>
+                    )}
+                    {!whatsapp && scope === "admin" && text(row.assignedAdminUid, "") && (
                       <span className="sup-inbox-claim">
                         <UserCheck size={11} />
                         {text(row.assignedAdminUid, "") === currentUid ? "You" : "Claimed"}
@@ -578,11 +779,34 @@ export function SupportCasesPanel({
               );
             })}
           </div>
-          <LoadMoreButton hasMore={hasMore} loading={loadingMore} onLoadMore={loadMore} />
+          {!previewMode && <LoadMoreButton hasMore={hasMore} loading={loadingMore} onLoadMore={loadMore} />}
         </aside>
 
         <div className="sup-thread-wrap">
-          {selectedCase ? (
+          {selectedCase && isWhatsAppCase(selectedCase) ? (
+            <WhatsAppThreadContainer
+              key={selectedCase.id}
+              scope={scope}
+              supportCase={selectedCase}
+              currentUid={currentUid}
+              canAnswer={scope === "business" ? true : canReply}
+              onCall={call}
+              request={request}
+              busyAction={busyAction}
+              chatName={chatName}
+              uploadFile={uploadFile}
+              previewMode={previewMode}
+              onHandedOver={(nextId) => {
+                // Laawol sees every conversation: follow it. A business
+                // keeps its own (now done) thread.
+                if (scope === "admin") {
+                  setAdminView("whatsapp");
+                  setWaFilter("all");
+                  setSelectedId(nextId);
+                }
+              }}
+            />
+          ) : selectedCase ? (
             <SupportThread
               key={selectedCase.id}
               scope={scope}
@@ -596,7 +820,7 @@ export function SupportCasesPanel({
           ) : (
             <div className="sup-thread-empty">
               <MessageCircle size={30} />
-              <p>Select a case to read the conversation and reply.</p>
+              <p>{whatsappList ? "Select a conversation to read it and reply." : "Select a case to read the conversation and reply."}</p>
             </div>
           )}
         </div>
@@ -666,6 +890,28 @@ export function SupportCasesPanel({
       )}
     </section>
   );
+}
+
+/**
+ * Reads a WhatsApp conversation's messages (newest 200, live) and marks it
+ * read, then hands them to the WhatsApp thread view.
+ */
+function WhatsAppThreadContainer({
+  currentUid,
+  previewMode,
+  supportCase,
+  ...rest
+}: Omit<Parameters<typeof WhatsAppThread>[0], "messages" | "loading" | "error"> & {
+  currentUid: string;
+  previewMode: boolean;
+}) {
+  const caseId = supportCase.id;
+  const { rows: messages, loading, error } = useSupportMessages(caseId, currentUid, previewMode);
+  useEffect(() => {
+    if (previewMode || !caseId || messages.length === 0) return;
+    httpsCallable(functions, "markSupportCaseRead")({ caseId }).catch(() => {});
+  }, [caseId, messages.length, previewMode]);
+  return <WhatsAppThread {...rest} supportCase={supportCase} messages={messages} loading={loading} error={error} />;
 }
 
 function isBusinessPlatformCase(row: FirestoreRow): boolean {

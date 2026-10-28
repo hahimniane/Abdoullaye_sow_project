@@ -1,5 +1,6 @@
 "use client";
 
+import { UpdateTick } from "@/components/business/line-update-failures";
 import { useEffect, useMemo, useState } from "react";
 import type { User } from "firebase/auth";
 import {
@@ -381,7 +382,12 @@ export function PackageStaffView({
                 {view.lastUpdate.at && <> · <time data-no-translate dateTime={view.lastUpdate.at.toISOString()}>{formatDateTime(view.lastUpdate.at)}</time></>}
               </li>
               {view.lastUpdate.results.map((result) => (
-                <li className={`pkg-staff-result ${result.tone}`} key={`${result.role}-${result.text}`}>{result.text}</li>
+                <li className={`pkg-staff-result ${result.tone}`} key={`${result.role}-${result.text}`}>
+                  {result.text}
+                  {/* WhatsApp's own reason for an update it could not deliver. */}
+                  {result.failure && <> · <span data-no-translate>{result.failure}</span></>}
+                  {result.tick && <> · <UpdateTick tick={result.tick} /></>}
+                </li>
               ))}
             </>
           ) : (

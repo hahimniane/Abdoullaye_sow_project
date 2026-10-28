@@ -219,4 +219,23 @@ describe("business sidebar navigation", () => {
     assert.equal(businessPermissionHeld([], "invoices"), false);
     assert.equal(businessPermissionHeld(["ledger"], "inventory"), false);
   });
+  it("shows Support to everyone at the business: all of them answer WhatsApp", () => {
+    const entry = businessSidebarTabs.find((tab) => tab.id === "cases");
+    assert.equal(entry?.permission, undefined);
+    // Staff with no permission at all, staff with other permissions, the owner.
+    for (const permissions of [[], ["parking"], ["containers", "ledger"], "owner"] as const) {
+      assert.equal(
+        visibleTabIds(["barrelShipping"], permissions === "owner" ? "owner" : [...permissions]).includes("cases"),
+        true,
+        String(permissions),
+      );
+    }
+    // A shop with no shipping service still has Support.
+    assert.equal(visibleTabIds([], []).includes("cases"), true);
+  });
+
+  it("finds Support by searching WhatsApp", () => {
+    const groups = buildBusinessSidebarGroups(businessSidebarTabs, [], "whatsapp");
+    assert.deepEqual(groups.flatMap((group) => group.tabs.map((tab) => tab.id)), ["cases"]);
+  });
 });

@@ -64,6 +64,13 @@ import {
 } from "@/components/business/profile-support-people";
 import { ReviewsPanel } from "@/components/business/reviews-panel";
 import { SupportCasesPanel } from "@/components/support/support-cases-panel";
+import { MessageCustomerProvider } from "@/components/support/message-customer";
+import {
+  businessSupportAccess,
+  chatDisplayName,
+  whatsappMessagesHint,
+  whatsappMessagesOn,
+} from "@/lib/whatsapp-conversations";
 import { NotificationBell } from "@/components/notification-bell";
 import { UserText } from "@/components/user-text";
 import { ToggleRow } from "@/components/toggle-row";
@@ -155,6 +162,12 @@ function NotificationPreferencesPanel({
   const [prefs, setPrefs] = useState(() =>
     mergeNotificationPreferences(profile.notificationPreferences),
   );
+  // Everyone at the business answers WhatsApp; the owner hears about new
+  // messages unless they switch it off, staff once they switch it on. Always
+  // saved explicitly: the server reads the raw value.
+  const [whatsappOn, setWhatsappOn] = useState(() =>
+    whatsappMessagesOn(profile.role, profile.notificationPreferences),
+  );
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
@@ -166,7 +179,7 @@ function NotificationPreferencesPanel({
     setNotice("");
     try {
       await httpsCallable(functions, "updateNotificationPreferences")({
-        notificationPreferences: prefs,
+        notificationPreferences: { ...prefs, whatsappMessages: whatsappOn },
       });
       setNotice("Notification preferences saved.");
     } catch {
@@ -200,6 +213,12 @@ function NotificationPreferencesPanel({
             }
           />
         ))}
+        <ToggleRow
+          label="WhatsApp messages"
+          hint={whatsappMessagesHint(profile.role)}
+          checked={whatsappOn}
+          onChange={setWhatsappOn}
+        />
       </div>
       <div className="customer-profile-actions">
         <button
@@ -545,7 +564,18 @@ export function BusinessConsole({
     chargesEnabled: business?.chargesEnabled,
     payoutsEnabled: business?.payoutsEnabled,
   });
-  const canOpenSupport = visibleTabs.some((tab) => tab.id === "cases");
+  // Everyone opens Support for WhatsApp; reaching Laawol (an admin request)
+  // and the other cases stay with the Support permission.
+  const supportAccess = businessSupportAccess(hasBusinessPermission(profile, "support"));
+  const canOpenSupport = supportAccess.canReplyToCases;
+  // "Message customer" on a package: the conversation opens in Support.
+  const messageCustomer = useMemo(() => ({
+    previewMode,
+    openConversation: (caseId: string) => {
+      setNotificationCaseId(caseId);
+      setActiveTab("cases");
+    },
+  }), [previewMode, setActiveTab]);
 
   return (
     // has-floating-assistant reserves scroll room at the end of the page so
@@ -691,6 +721,7 @@ export function BusinessConsole({
           ))}
         </nav>
 
+        <MessageCustomerProvider value={messageCustomer}>
         <section className="content">
           {(businessError || !businessId) && (
             <div className="error-box">
@@ -946,14 +977,17 @@ export function BusinessConsole({
             <SupportCasesPanel
               scope="business"
               businessId={businessId}
+              enabled={!previewMode}
               caseId={notificationCaseId}
               currentUid={firebaseUser.uid}
               currentName={text(
                 profile.fullName ?? firebaseUser.email,
                 "Business",
               )}
-              canReply={hasBusinessPermission(profile, "support")}
-              enabled={!previewMode}
+              canReply={supportAccess.canReplyToCases}
+              whatsappOnly={supportAccess.whatsappOnly}
+              chatName={chatDisplayName(profile)}
+              previewMode={previewMode}
             />
           )}
           {activeTab === "growth" && (
@@ -967,6 +1001,7 @@ export function BusinessConsole({
             />
           )}
         </section>
+        </MessageCustomerProvider>
       </main>
 
       {/* Mounted once for the whole console so the assistant floats over every

@@ -171,6 +171,8 @@ import {
 } from "@/lib/vin-lookup";
 import { statusPillClass } from "@/lib/status-pill";
 import { RecordPhoneFlags } from "@/components/phone-flags";
+import { LineUpdateFailures } from "@/components/business/line-update-failures";
+import { MessageCustomerButton } from "@/components/support/message-customer";
 import { unflaggedLineWarnings } from "@/lib/phone-accounts";
 import type { FirestoreRow } from "@/types/admin";
 
@@ -243,6 +245,7 @@ function LineWhatsApp({ line }: { line: Row }) {
       {warnings.map((warning) => (
         <small className="ctn-wa-warn" key={warning}>{warning}</small>
       ))}
+      <LineUpdateFailures line={line} />
     </>
   );
 }
@@ -1295,6 +1298,7 @@ export function ContainersPanel({
                         {text(row.receiverName, "") && !lineCustomerIsReceiver(row) && <small data-no-translate>→ {text(row.receiverName, "")}{text(row.receiverPhone, "") ? ` · ${text(row.receiverPhone, "")}` : ""}</small>}
                         <RecordPhoneFlags row={row} field="receiverPhone" />
                         <LineWhatsApp line={row} />
+                        <MessageCustomerButton row={row} />
                       </span>
                       {stage === "delivered" ? (
                         <span><LineDeliveredChip line={row} /></span>

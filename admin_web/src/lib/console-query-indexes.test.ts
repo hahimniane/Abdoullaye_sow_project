@@ -279,10 +279,12 @@ const SITES: Site[] = [
   // --- support --------------------------------------------------------------
   {
     file: join("src", "components", "support", "support-cases-panel.tsx"), kind: "usePagedQuery", what: "support inbox",
-    shapes: (["business", "admin"] as const).map((scope) => {
-      const spec = supportCasesQuerySpec(scope, "biz");
-      return raw("supportCases", spec.filters, spec.orderBy);
-    }),
+    shapes: (["business", "admin"] as const).flatMap((scope) =>
+      (["cases", "whatsapp"] as const).map((view) => {
+        const spec = supportCasesQuerySpec(scope, "biz", view);
+        return raw("supportCases", spec.filters, spec.orderBy);
+      }),
+    ),
   },
   { file: join("src", "components", "support", "support-cases-panel.tsx"), kind: "query", what: "case messages", shapes: [raw("messages", [], { field: "createdAt", direction: "asc" })] },
   { file: join("src", "components", "support", "support-cases-panel.tsx"), kind: "query", what: "internal notes", shapes: [raw("internalNotes", [], { field: "createdAt", direction: "desc" })] },

@@ -6828,6 +6828,131 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Every package has been scanned.": "Tous les colis ont été scannés.",
 });
 
+// Two-way WhatsApp in Support (whatsapp-conversations.ts, whatsapp-thread.tsx,
+// support-cases-panel.tsx, message-customer.tsx, notification switches).
+Object.assign(TEXT_TRANSLATIONS, {
+  // The inbox: states, lists and filters.
+  "Needs reply": "Réponse attendue",
+  "Asking which business": "Choix de l’entreprise",
+  "All conversations": "Toutes les conversations",
+  "WhatsApp conversations": "Conversations WhatsApp",
+  "Every conversation on Laawol's WhatsApp number, for every business.":
+    "Toutes les conversations du numéro WhatsApp de Laawol, pour toutes les entreprises.",
+  "Answer customers who write to you on WhatsApp.":
+    "Répondez aux clients qui vous écrivent sur WhatsApp.",
+  "Support lists": "Listes d’assistance",
+  "Escalated": "Transmis à l’admin",
+  "All cases": "Tous les dossiers d’assistance",
+  "Preview: sample conversations. Nothing is sent.":
+    "Aperçu : conversations d’exemple. Rien n’est envoyé.",
+  "Conversation state": "État de la conversation",
+  "No WhatsApp conversations": "Aucune conversation WhatsApp",
+  "Conversations appear here when customers write to the WhatsApp number.":
+    "Les conversations apparaissent ici quand des clients écrivent au numéro WhatsApp.",
+  "Unread messages": "Messages non lus",
+  "Select a conversation to read it and reply.":
+    "Sélectionnez une conversation pour la lire et y répondre.",
+  "Belongs to": "Concerne",
+  "Stopped updates": "Mises à jour arrêtées",
+  "The customer sent STOP. Package updates are paused until they send START.":
+    "Le client a envoyé STOP. Les mises à jour des colis sont suspendues jusqu’à ce qu’il envoie START.",
+  // The customer's packages.
+  "Customer's packages": "Colis du client",
+  "Loading packages…": "Chargement des colis…",
+  "The packages could not be loaded.": "Les colis n’ont pas pu être chargés.",
+  "No package of this business has this number.":
+    "Aucun colis de cette entreprise n’a ce numéro.",
+  // Messages, ticks and files.
+  "Private note": "Note privée",
+  "Only your team sees this": "Visible uniquement par votre équipe",
+  "Automatic reply": "Réponse automatique",
+  "Read by the customer": "Lu par le client",
+  "Not delivered": "Non distribué",
+  "Waits for the customer to write — we sent them a WhatsApp asking them to reply":
+    "En attente d’un message du client — nous lui avons envoyé un WhatsApp lui demandant de répondre",
+  "Waits for the customer to write. They stopped updates, so we could not ask them to reply.":
+    "En attente d’un message du client. Il a arrêté les mises à jour, nous n’avons donc pas pu lui demander de répondre.",
+  "Will be delivered when the customer writes": "Sera distribué quand le client écrira",
+  "The customer stopped updates": "Le client a arrêté les mises à jour",
+  "File deleted after 12 months": "Fichier supprimé après 12 mois",
+  "File not available": "Fichier indisponible",
+  "File too large": "Fichier trop volumineux",
+  "The file could not be downloaded": "Le fichier n’a pas pu être téléchargé",
+  "This conversation was handed over. New messages from the customer go to the new inbox.":
+    "Cette conversation a été transférée. Les nouveaux messages du client vont dans la nouvelle boîte de réception.",
+  "No messages yet.": "Aucun message pour l’instant.",
+  // The composer.
+  "Write a reply or a note": "Écrire une réponse ou une note",
+  "Reply on WhatsApp": "Répondre sur WhatsApp",
+  "Write a note only your team sees…": "Écrivez une note visible uniquement par votre équipe…",
+  "Adding…": "Ajout…",
+  "Photo or video": "Photo ou vidéo",
+  "Record voice note": "Enregistrer un message vocal",
+  "Recording…": "Enregistrement en cours…",
+  "Stop recording": "Arrêter l’enregistrement",
+  "Discard recording": "Jeter l’enregistrement",
+  "Send voice note": "Envoyer le message vocal",
+  "This browser records in a format WhatsApp cannot play as a voice note. It will arrive as a file.":
+    "Ce navigateur enregistre dans un format que WhatsApp ne lit pas comme message vocal. Il arrivera sous forme de fichier.",
+  "The microphone is not available. Allow it in your browser and try again.":
+    "Le microphone n’est pas disponible. Autorisez-le dans votre navigateur et réessayez.",
+  "Customers see": "Les clients voient",
+  "Name customers see on WhatsApp": "Nom affiché aux clients sur WhatsApp",
+  "Your first name": "Votre prénom",
+  "Empty uses your first name. Your messages are signed with this name and the business name.":
+    "Vide, votre prénom est utilisé. Vos messages sont signés avec ce nom et celui de l’entreprise.",
+  "Mark done": "Marquer terminé",
+  "Hand over": "Transférer la conversation",
+  "Hand over to": "Transférer à",
+  "Note for them (optional)": "Note pour eux (facultatif)",
+  "Handing over…": "Transfert en cours…",
+  "Confirm hand over": "Confirmer le transfert",
+  "The list could not be loaded. Try again.": "La liste n’a pas pu être chargée. Réessayez.",
+  "No other inbox can take this conversation.":
+    "Aucune autre boîte de réception ne peut reprendre cette conversation.",
+  // A package update's ticks ("Receiver ✓✓ Read"); "Delivered" is shared.
+  "Read": "Lu",
+  "You can hand it to Laawol, or to another business that has a package for this customer.":
+    "Vous pouvez la transférer à Laawol, ou à une autre entreprise qui a un colis pour ce client.",
+  // What each action reports (admin toasts, busy labels).
+  "WhatsApp reply sent": "Réponse WhatsApp envoyée",
+  "Private note added": "Note privée ajoutée",
+  "WhatsApp file sent": "Fichier WhatsApp envoyé",
+  "Voice note sent": "Message vocal envoyé",
+  "Conversation marked done": "Conversation marquée terminée",
+  "Conversation reopened": "Conversation rouverte",
+  "Conversation handed over": "Conversation transférée",
+  "Display name saved": "Nom affiché enregistré",
+  "WhatsApp inbox mode changed": "Mode de la boîte WhatsApp modifié",
+  // Laawol's inbox mode.
+  "Who answers new WhatsApp conversations": "Qui répond aux nouvelles conversations WhatsApp",
+  "The inbox mode could not be loaded.": "Le mode de la boîte de réception n’a pas pu être chargé.",
+  "WhatsApp inbox mode": "Mode de la boîte WhatsApp",
+  "Current mode": "Mode actuel",
+  "Switching…": "Changement…",
+  "Laawol only": "Laawol uniquement",
+  "Switch to Laawol only": "Passer en Laawol uniquement",
+  "Switch to Businesses": "Passer en mode Entreprises",
+  "Every conversation comes to Laawol. Each one records the business it belongs to, and businesses do not see it.":
+    "Toutes les conversations arrivent chez Laawol. Chacune indique l’entreprise concernée, et les entreprises ne la voient pas.",
+  "Each conversation goes to the business whose package it is. Laawol still sees every conversation, and numbers no business knows come to Laawol.":
+    "Chaque conversation va à l’entreprise à qui appartient le colis. Laawol voit toujours toutes les conversations, et les numéros qu’aucune entreprise ne connaît arrivent chez Laawol.",
+  // "Message customer" on Shipping.
+  "Message customer": "Écrire au client",
+  "The conversation could not be opened. Try again.":
+    "La conversation n’a pas pu être ouverte. Réessayez.",
+  // Notification switches.
+  "WhatsApp messages": "Messages WhatsApp",
+  "A notification when a customer writes on WhatsApp. Off until you turn it on.":
+    "Une notification quand un client écrit sur WhatsApp. Désactivé tant que vous ne l’activez pas.",
+  "A notification when a customer writes on WhatsApp. On unless you turn it off.":
+    "Une notification quand un client écrit sur WhatsApp. Activé sauf si vous le désactivez.",
+  "A notification when a customer writes to Laawol's WhatsApp inbox. On unless you turn it off.":
+    "Une notification quand un client écrit à la boîte WhatsApp de Laawol. Activé sauf si vous le désactivez.",
+  "WhatsApp message alerts on": "Alertes de messages WhatsApp activées",
+  "WhatsApp message alerts off": "Alertes de messages WhatsApp désactivées",
+});
+
 export const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {
   // Laawol bills (billing-views.tsx).
   "Open this business's bill": "Ouvrir le montant dû de cette entreprise",

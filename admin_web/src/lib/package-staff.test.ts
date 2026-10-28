@@ -10,6 +10,9 @@ import {
   packageCallHref,
   packageCodeFrom,
   packageLastUpdate,
+  packageUpdateFailures,
+  packageUpdateMarks,
+  packageUpdateTick,
   packageStaffCandidate,
   packageStaffScope,
   packageStaffViewModel,
@@ -362,4 +365,54 @@ test("the server's phone flags reach the staff view's people", () => {
   assert.equal(view.receiver?.reportedNotMine, true);
   // A clean line carries neither.
   assert.equal(packageStaffViewModel(carLine, box).owner?.reportedNotMine, false);
+});
+
+test("an update WhatsApp could not deliver shows as failed, with WhatsApp's reason", () => {
+  // functions recordFailedWhatsAppUpdate merges Meta's late failure into the line.
+  const value = {
+    update: "shipped",
+    atMs: Date.UTC(2026, 9, 28, 10, 0),
+    results: [
+      { role: "sender", status: "sent" },
+      { role: "receiver", status: "failed", reason: "Message undeliverable" },
+    ],
+  };
+  const last = packageLastUpdate(value);
+  assert.deepEqual(
+    last?.results.map((r) => [r.text, r.tone, r.failure]),
+    [["Customer: sent", "ok", ""], ["Receiver: failed to send", "error", "Message undeliverable"]],
+  );
+  assert.deepEqual(packageUpdateFailures(value).map((r) => [r.role, r.failure]), [["receiver", "Message undeliverable"]]);
+});
+
+test("nothing failed, nothing flagged; a skip code is never shown as a failure reason", () => {
+  assert.deepEqual(packageUpdateFailures({ update: "received", results: [{ role: "sender", status: "sent" }] }), []);
+  assert.deepEqual(packageUpdateFailures(null), []);
+  const skipped = packageLastUpdate({ update: "received", results: [{ role: "sender", status: "skipped", reason: "no_phone" }] });
+  assert.equal(skipped?.results[0].failure, "");
+  const failedNoReason = packageUpdateFailures({ update: "received", results: [{ role: "sender", status: "failed" }] });
+  assert.deepEqual(failedNoReason.map((r) => [r.text, r.failure]), [["Customer: failed to send", ""]]);
+});
+
+test("Meta's report on a package update: delivered and read ticks, failures stay failures", () => {
+  // functions withDeliveryTick puts `delivery` on each person's result.
+  const value = {
+    update: "shipped",
+    atMs: Date.UTC(2026, 9, 28, 10, 0),
+    results: [
+      { role: "sender", status: "sent", delivery: "delivered" },
+      { role: "receiver", status: "sent", delivery: "read" },
+    ],
+  };
+  const last = packageLastUpdate(value);
+  assert.deepEqual(
+    last?.results.map((r) => [r.text, r.tick?.ticks, r.tick?.label, r.tick?.who]),
+    [["Customer: sent", "✓✓", "Delivered", "Customer"], ["Receiver: sent", "✓✓", "Read", "Receiver"]],
+  );
+  assert.deepEqual(packageUpdateMarks(value).map((r) => r.tick?.delivery), ["delivered", "read"]);
+  const failed = { update: "shipped", results: [{ role: "receiver", status: "failed", delivery: "failed", reason: "Message undeliverable" }, { role: "sender", status: "sent" }] };
+  assert.deepEqual(packageUpdateMarks(failed).map((r) => [r.tone, r.tick, r.failure]), [["error", null, "Message undeliverable"]]);
+  assert.equal(packageUpdateTick("sender", "failed", "failed"), null);
+  assert.equal(packageUpdateTick("sender", "sent"), null);
+  assert.equal(packageUpdateTick("sender", undefined), null);
 });

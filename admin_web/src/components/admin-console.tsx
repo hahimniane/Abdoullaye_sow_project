@@ -91,6 +91,7 @@ import { isValidE164, normalizePhone } from "@/lib/phone";
 import { ReviewsPanel } from "@/components/business/reviews-panel";
 import { SearchableSelect } from "@/components/searchable-select";
 import { ToggleRow } from "@/components/toggle-row";
+import { chatDisplayName, whatsappMessagesOn } from "@/lib/whatsapp-conversations";
 import {
   mergeNotificationPreferences,
   platformActivityNotificationPreferenceFields,
@@ -1945,6 +1946,8 @@ export function AdminConsole() {
   const [authError, setAuthError] = useState("");
   const [activeTab, setActiveTab] = useState<Tab>("today");
   const [notificationCaseId, setNotificationCaseId] = useState("");
+  // Bell -> Support: a WhatsApp message opens the WhatsApp view.
+  const [notificationSupportView, setNotificationSupportView] = useState<"cases" | "whatsapp">("cases");
   // Bell -> Businesses: the business a platform activity alert names.
   const [notificationBusinessId, setNotificationBusinessId] = useState("");
   // Same bundle serves every subdomain, so the tab title has to be set here
@@ -2551,6 +2554,7 @@ export function AdminConsole() {
               const target = adminTargetForNotification(data);
               setActiveTab(target.tab);
               setNotificationCaseId(target.caseId ?? "");
+              setNotificationSupportView(target.supportView ?? "cases");
               setNotificationBusinessId(target.businessId ?? "");
             }}
             uid={firebaseUser?.uid ?? ""}
@@ -2754,6 +2758,7 @@ export function AdminConsole() {
             <SupportCasesPanel
               scope="admin"
               caseId={notificationCaseId}
+              initialView={notificationSupportView}
               currentUid={firebaseUser?.uid ?? ""}
               currentName={text(
                 profile?.fullName ?? firebaseUser?.email,
@@ -2761,6 +2766,8 @@ export function AdminConsole() {
               )}
               canReply={perms.can("support")}
               runAction={runAction}
+              chatName={chatDisplayName(profile)}
+              previewMode={previewMode}
             />
           )}
           {activeTab === "website" && (
@@ -6522,6 +6529,8 @@ function MoreSettings({
           previewMode={previewMode}
           onProfileUpdated={onProfileUpdated}
           runAction={runAction}
+          // Settings is the super admin's, who answers support.
+          canSupport
         />
       )}
 
@@ -7823,34 +7832,39 @@ function WebsiteView({
 }
 
 /**
- * "My alerts": the signed-in admin's own platform activity switch. Shown only
- * to the admins the server tells (functions platform_activity_alerts.js:
- * role admin, adminRole superAdmin or operationsManager). Saves on toggle
- * through the same updateNotificationPreferences callable the business and
- * customer consoles use - with the whole merged set, since the server
- * normalizes it and would reset any key left out.
+ * "My alerts": the signed-in admin's own switches. Platform activity shows
+ * only to the admins the server tells (functions platform_activity_alerts.js:
+ * role admin, adminRole superAdmin or operationsManager); WhatsApp messages to
+ * the admins who answer support (functions notifyWhatsAppConversation pushes
+ * Laawol's own WhatsApp inbox to them, on unless switched off). Saves on
+ * toggle through the same updateNotificationPreferences callable the business
+ * and customer consoles use - with the whole merged set, WhatsApp included,
+ * since the server normalizes it and would reset any key left out.
  */
 function MyAlertsPanel({
   profile,
   previewMode,
   onProfileUpdated,
   runAction,
+  canSupport = false,
 }: {
   profile: UserProfile | null;
   previewMode: boolean;
   onProfileUpdated: (profile: UserProfile | null) => void;
   runAction: ActionRunner;
+  canSupport?: boolean;
 }) {
   const [saving, setSaving] = useState(false);
   const prefs = mergeNotificationPreferences(profile?.notificationPreferences);
+  const whatsappOn = whatsappMessagesOn(profile?.role, profile?.notificationPreferences);
   if (!profile) return null;
-  if (!previewMode && !receivesPlatformActivityAlerts(profile.role, profile.adminRole)) {
-    return null;
-  }
+  const showPlatform = previewMode || receivesPlatformActivityAlerts(profile.role, profile.adminRole);
+  const showWhatsApp = previewMode || canSupport;
+  if (!showPlatform && !showWhatsApp) return null;
 
-  async function save(key: keyof typeof prefs, value: boolean) {
+  async function save(key: string, value: boolean) {
     if (!profile || previewMode) return;
-    const next = { ...prefs, [key]: value };
+    const next = { ...prefs, whatsappMessages: whatsappOn, [key]: value };
     const result = await httpsCallable(
       functions,
       "updateNotificationPreferences",
@@ -7860,29 +7874,40 @@ function MyAlertsPanel({
     onProfileUpdated({ ...profile, notificationPreferences: saved ?? next });
   }
 
+  function toggle(key: string, value: boolean, label: string) {
+    if (saving) return;
+    setSaving(true);
+    void Promise.resolve(runAction(label, () => save(key, value))).finally(() => setSaving(false));
+  }
+
   return (
     <Panel title="My alerts" icon={<Activity size={18} />}>
       <div className="toggle-list">
-        {platformActivityNotificationPreferenceFields.map((field) => (
+        {showPlatform && platformActivityNotificationPreferenceFields.map((field) => (
           <ToggleRow
             key={field.key}
             label={field.label}
             hint={field.hint}
             checked={prefs[field.key]}
-            onChange={(value) => {
-              if (saving) return;
-              setSaving(true);
-              void Promise.resolve(
-                runAction(
-                  value
-                    ? "Platform activity alerts on"
-                    : "Platform activity alerts off",
-                  () => save(field.key, value),
-                ),
-              ).finally(() => setSaving(false));
-            }}
+            onChange={(value) => toggle(
+              field.key,
+              value,
+              value ? "Platform activity alerts on" : "Platform activity alerts off",
+            )}
           />
         ))}
+        {showWhatsApp && (
+          <ToggleRow
+            label="WhatsApp messages"
+            hint="A notification when a customer writes to Laawol's WhatsApp inbox. On unless you turn it off."
+            checked={whatsappOn}
+            onChange={(value) => toggle(
+              "whatsappMessages",
+              value,
+              value ? "WhatsApp message alerts on" : "WhatsApp message alerts off",
+            )}
+          />
+        )}
       </div>
     </Panel>
   );
@@ -8193,6 +8218,7 @@ function AdminAccountPanel({
             previewMode={false}
             onProfileUpdated={onProfileUpdated}
             runAction={runAction}
+            canSupport={perms.can("support")}
           />
         </div>
       </aside>

@@ -73,6 +73,8 @@ import {
   vinDecodeHint,
 } from "@/lib/vin-lookup";
 import { RecordPhoneFlags } from "@/components/phone-flags";
+import { LineUpdateFailures } from "@/components/business/line-update-failures";
+import { MessageCustomerButton } from "@/components/support/message-customer";
 import { unflaggedLineWarnings } from "@/lib/phone-accounts";
 import type { FirestoreRow } from "@/types/admin";
 
@@ -474,6 +476,8 @@ export function WaitingPackagesPanel({
                     <RecordPhoneFlags row={row} field="receiverPhone" />
                     <small className="ctn-wa">{summary}</small>
                     {warnings.map((warning) => (<small className="ctn-wa-warn" key={warning}>{warning}</small>))}
+                    <LineUpdateFailures line={row} />
+                    <MessageCustomerButton row={row} />
                   </span>
                   <span>
                     <strong>{destinationPlace(line.destinationCountryId, line.destinationCountryName, lang) || "—"}</strong>

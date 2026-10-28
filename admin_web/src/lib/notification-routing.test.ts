@@ -483,3 +483,16 @@ test("a lot ledger repeat alert opens the ledger on that activity", () => {
   const panels = readFileSync("src/components/business/operations-panels.tsx", "utf8");
   assert.match(panels, /void openExistingActivity\(focusRecordId\)/);
 });
+
+test("a WhatsApp message opens its conversation in the business's Support", () => {
+  const target = businessTargetForNotification({type: "whatsapp_message", caseId: "wa_biz1_224621000001", businessId: "biz1"});
+  assert.equal(target.tab, "cases");
+  assert.equal(target.caseId, "wa_biz1_224621000001");
+});
+
+test("a WhatsApp message opens Laawol's WhatsApp view on that conversation", () => {
+  const target = adminTargetForNotification({type: "whatsapp_message", caseId: "wa_laawol_224621000001", businessId: ""});
+  assert.equal(target.tab, "support");
+  assert.equal(target.caseId, "wa_laawol_224621000001");
+  assert.equal(target.supportView, "whatsapp");
+});
