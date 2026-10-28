@@ -46,6 +46,11 @@ abstract interface class SupportRepository {
     String? businessId,
   });
 
+  /// WhatsApp conversations, newest first: one business's when
+  /// [businessId] is given (everyone at the business may read them), every
+  /// one for a Laawol admin when it is null.
+  Stream<List<SupportCase>> watchWhatsAppInbox({String? businessId});
+
   Stream<SupportCase?> watchCase(String caseId);
 
   Stream<SupportMessageWindow> watchMessages(
@@ -67,7 +72,9 @@ abstract interface class SupportRepository {
     String priority = 'normal',
   });
 
-  Future<void> sendMessage({
+  /// Returns the server's `delivery` for a WhatsApp conversation (`sent` |
+  /// `waiting` | `stopped` | `failed`), null for any other case.
+  Future<String?> sendMessage({
     required String caseId,
     required String content,
     SupportReplyReference? replyTo,
@@ -118,7 +125,8 @@ abstract interface class SupportRepository {
     String caption = '',
   });
 
-  Future<void> uploadAttachmentFile({
+  /// Like [sendMessage], returns the WhatsApp `delivery` (null otherwise).
+  Future<String?> uploadAttachmentFile({
     required String caseId,
     required String fileName,
     required List<int> bytes,
@@ -128,7 +136,8 @@ abstract interface class SupportRepository {
     String caption = '',
   });
 
-  Future<void> uploadPickedAttachment({
+  /// Like [sendMessage], returns the WhatsApp `delivery` (null otherwise).
+  Future<String?> uploadPickedAttachment({
     required String caseId,
     required XFile file,
     required String mimeType,
@@ -195,6 +204,26 @@ class SupportService implements SupportRepository {
         });
       return cases;
     });
+  }
+
+  @override
+  Stream<List<SupportCase>> watchWhatsAppInbox({String? businessId}) {
+    Query<Map<String, dynamic>> query = _firestore.collection('supportCases');
+    if (businessId != null) {
+      if (businessId.isEmpty) return Stream.value(const <SupportCase>[]);
+      query = query.where('businessId', isEqualTo: businessId);
+    }
+    // Both shapes have an index: (businessId, caseType, updatedAt desc) and
+    // (caseType, updatedAt desc). The rules let everyone at the business
+    // run the first one, Support permission or not.
+    return query
+        .where('caseType', isEqualTo: 'whatsapp')
+        .orderBy('updatedAt', descending: true)
+        .limit(200)
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs.map(SupportCase.fromFirestore).toList(),
+        );
   }
 
   @override
@@ -290,17 +319,24 @@ class SupportService implements SupportRepository {
   }
 
   @override
-  Future<void> sendMessage({
+  Future<String?> sendMessage({
     required String caseId,
     required String content,
     SupportReplyReference? replyTo,
   }) async {
-    await _functions.httpsCallable('sendSupportMessage').call({
+    final result = await _functions.httpsCallable('sendSupportMessage').call({
       'caseId': caseId,
       'content': content,
       'messageType': 'text',
       if (replyTo != null) 'replyTo': replyTo.toJson(),
     });
+    return _delivery(result.data);
+  }
+
+  static String? _delivery(Object? data) {
+    if (data is! Map) return null;
+    final delivery = data['delivery'];
+    return delivery is String && delivery.isNotEmpty ? delivery : null;
   }
 
   @override
@@ -428,7 +464,7 @@ class SupportService implements SupportRepository {
   }
 
   @override
-  Future<void> uploadAttachmentFile({
+  Future<String?> uploadAttachmentFile({
     required String caseId,
     required String fileName,
     required List<int> bytes,
@@ -446,7 +482,7 @@ class SupportService implements SupportRepository {
     final metadata = SettableMetadata(contentType: mimeType);
     final uploadBytes = bytes is Uint8List ? bytes : Uint8List.fromList(bytes);
     await ref.putData(uploadBytes, metadata);
-    await _createAttachmentMessage(
+    return _createAttachmentMessage(
       reference: ref,
       caseId: caseId,
       fileName: fileName,
@@ -460,7 +496,7 @@ class SupportService implements SupportRepository {
   }
 
   @override
-  Future<void> uploadPickedAttachment({
+  Future<String?> uploadPickedAttachment({
     required String caseId,
     required XFile file,
     required String mimeType,
@@ -476,7 +512,7 @@ class SupportService implements SupportRepository {
     final ref = _storage.ref(path);
     final metadata = SettableMetadata(contentType: mimeType);
     await putSupportXFile(reference: ref, file: file, metadata: metadata);
-    await _createAttachmentMessage(
+    return _createAttachmentMessage(
       reference: ref,
       caseId: caseId,
       fileName: file.name,
@@ -489,7 +525,7 @@ class SupportService implements SupportRepository {
     );
   }
 
-  Future<void> _createAttachmentMessage({
+  Future<String?> _createAttachmentMessage({
     required Reference reference,
     required String caseId,
     required String fileName,
@@ -502,17 +538,20 @@ class SupportService implements SupportRepository {
   }) async {
     final url = await reference.getDownloadURL();
     try {
-      await _functions.httpsCallable('uploadSupportAttachmentMetadata').call({
-        'caseId': caseId,
-        'fileUrl': url,
-        'filePath': filePath,
-        'fileName': fileName,
-        'mimeType': mimeType,
-        'fileSize': fileSize,
-        'messageType': messageType,
-        'durationSeconds': ?durationSeconds,
-        if (caption.trim().isNotEmpty) 'caption': caption.trim(),
-      });
+      final result = await _functions
+          .httpsCallable('uploadSupportAttachmentMetadata')
+          .call({
+            'caseId': caseId,
+            'fileUrl': url,
+            'filePath': filePath,
+            'fileName': fileName,
+            'mimeType': mimeType,
+            'fileSize': fileSize,
+            'messageType': messageType,
+            'durationSeconds': ?durationSeconds,
+            if (caption.trim().isNotEmpty) 'caption': caption.trim(),
+          });
+      return _delivery(result.data);
     } catch (_) {
       try {
         await reference.delete();

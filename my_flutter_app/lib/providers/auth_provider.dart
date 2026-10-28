@@ -29,6 +29,7 @@ import 'auth_failure.dart';
 import 'auth_lookup_guard.dart';
 import 'auth_profile_gate.dart';
 import '../utils/app_check_recovery.dart';
+import '../services/whatsapp_conversations.dart' show whatsAppMessagesOn;
 
 export 'auth_failure.dart';
 
@@ -141,6 +142,9 @@ class AuthProvider extends ChangeNotifier {
   String? _normalizedPhone;
   bool _phoneVerified = false;
   String? _profileImageUrl;
+
+  /// "Name customers see on WhatsApp" (`chatDisplayName`); '' = first name.
+  String _chatDisplayName = '';
   NotificationPreferences _notificationPreferences =
       NotificationPreferences.defaults;
 
@@ -242,6 +246,15 @@ class AuthProvider extends ChangeNotifier {
   bool linkedPhoneMatches(String phoneNumber) =>
       PhoneNumberValidator.matches(linkedPhoneNumber, phoneNumber);
   String? get profileImageUrl => _profileImageUrl;
+  String get chatDisplayName => _chatDisplayName;
+
+  /// After `whatsappConversation {action: setDisplayName}` succeeded.
+  void applyChatDisplayName(String name) {
+    if (_chatDisplayName == name) return;
+    _chatDisplayName = name;
+    notifyListeners();
+  }
+
   NotificationPreferences get notificationPreferences =>
       _notificationPreferences;
 
@@ -595,6 +608,7 @@ class AuthProvider extends ChangeNotifier {
         _normalizedPhone = data?['normalizedPhone'] as String?;
         _phoneVerified = data?['phoneVerified'] == true;
         _profileImageUrl = data?['profileImageUrl'] as String?;
+        _chatDisplayName = (data?['chatDisplayName'] ?? '').toString().trim();
         _notificationPreferences = NotificationPreferences.fromMap(
           data?['notificationPreferences'] is Map<String, dynamic>
               ? data!['notificationPreferences'] as Map<String, dynamic>
@@ -678,6 +692,7 @@ class AuthProvider extends ChangeNotifier {
     _normalizedPhone = null;
     _phoneVerified = false;
     _profileImageUrl = null;
+    _chatDisplayName = '';
     _notificationPreferences = NotificationPreferences.defaults;
     _profileLanguage = null;
   }
@@ -885,7 +900,18 @@ class AuthProvider extends ChangeNotifier {
     if (!PhoneNumberValidator.isValid(trimmedPhone)) {
       throw const AuthFailure(AuthErrorCode.invalidPhone);
     }
-    final prefs = notificationPreferences ?? _notificationPreferences;
+    var prefs = notificationPreferences ?? _notificationPreferences;
+    // The server stores a missing "WhatsApp messages" as on, which would
+    // switch staff on by saving any profile change: always send the value
+    // the person sees (owners on, staff off until they choose).
+    if (prefs.whatsappMessages == null) {
+      prefs = prefs.copyWith(
+        whatsappMessages: whatsAppMessagesOn(
+          preference: null,
+          role: _role ?? '',
+        ),
+      );
+    }
     final callable = _functions.httpsCallable('updateCustomerProfile');
     final response = await callable.call<Map<String, dynamic>>({
       'fullName': fullName.trim(),

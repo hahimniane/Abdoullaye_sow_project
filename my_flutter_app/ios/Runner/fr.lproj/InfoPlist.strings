@@ -5,3 +5,4 @@
 "NSLocationWhenInUseUsageDescription" = "Laawol utilise votre position pour aider à remplir votre adresse de collecte.";
 "NSPhotoLibraryAddUsageDescription" = "Laawol peut enregistrer les images de services et de véhicules sélectionnées dans votre photothèque.";
 "NSPhotoLibraryUsageDescription" = "Laawol doit accéder à votre photothèque pour choisir des photos pour les annonces et les demandes de service.";
+"NSMicrophoneUsageDescription" = "Laawol utilise le micro pour enregistrer les messages vocaux que vous envoyez aux clients sur WhatsApp.";

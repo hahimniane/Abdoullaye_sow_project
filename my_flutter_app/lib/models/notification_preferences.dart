@@ -17,6 +17,7 @@ class NotificationPreferences {
     this.parkedCarAlerts = true,
     this.packageAlerts = true,
     this.platformActivity = true,
+    this.whatsappMessages,
   });
 
   final bool pushNotifications;
@@ -60,6 +61,12 @@ class NotificationPreferences {
   /// as staff. On unless switched off.
   final bool platformActivity;
 
+  /// "WhatsApp messages": a push when a customer writes on WhatsApp. Null
+  /// until the person chooses: then owners (and Laawol admins) hear, staff
+  /// do not - so it is never written until it is set, or saving the profile
+  /// would freeze today's default. Read it through `whatsAppMessagesOn`.
+  final bool? whatsappMessages;
+
   static const defaults = NotificationPreferences();
 
   factory NotificationPreferences.fromMap(Map<String, dynamic>? data) {
@@ -87,6 +94,9 @@ class NotificationPreferences {
       parkedCarAlerts: data['parkedCarAlerts'] != false,
       packageAlerts: data['packageAlerts'] != false,
       platformActivity: data['platformActivity'] != false,
+      whatsappMessages: data['whatsappMessages'] is bool
+          ? data['whatsappMessages'] as bool
+          : null,
     );
   }
 
@@ -109,6 +119,7 @@ class NotificationPreferences {
       'parkedCarAlerts': parkedCarAlerts,
       'packageAlerts': packageAlerts,
       'platformActivity': platformActivity,
+      'whatsappMessages': ?whatsappMessages,
     };
   }
 
@@ -130,6 +141,7 @@ class NotificationPreferences {
     bool? parkedCarAlerts,
     bool? packageAlerts,
     bool? platformActivity,
+    bool? whatsappMessages,
   }) {
     return NotificationPreferences(
       pushNotifications: pushNotifications ?? this.pushNotifications,
@@ -149,6 +161,7 @@ class NotificationPreferences {
       parkedCarAlerts: parkedCarAlerts ?? this.parkedCarAlerts,
       packageAlerts: packageAlerts ?? this.packageAlerts,
       platformActivity: platformActivity ?? this.platformActivity,
+      whatsappMessages: whatsappMessages ?? this.whatsappMessages,
     );
   }
 }

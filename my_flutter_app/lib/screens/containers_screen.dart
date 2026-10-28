@@ -61,6 +61,9 @@ import 'package_result_screen.dart';
 import 'package_scan_screen.dart';
 import 'vin_scanner_screen.dart';
 import 'waiting_packages_screen.dart';
+import '../services/whatsapp_conversations.dart' show messageCustomerTargets;
+import '../widgets/whatsapp_widgets.dart'
+    show PackageUpdateTicks, openWhatsAppForLine;
 import 'zelle_check_sheet.dart' show zelleViewerIsOwner;
 
 /// Containers, yard-side.
@@ -2004,6 +2007,10 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
       await _undoDelivery(line);
       return;
     }
+    if (action == 'message') {
+      await openWhatsAppForLine(context, line);
+      return;
+    }
     if (action == 'contacts') {
       // Open in every state: a wrong number matters most once the box has
       // sailed, which is when the updates start going out.
@@ -2949,6 +2956,8 @@ class _LineCard extends StatelessWidget {
                       text: l10n.ctrUpdatesOff,
                       color: AppColors.muted,
                     ),
+                  // How far the last update got on WhatsApp (decision 15).
+                  PackageUpdateTicks(line: line, indent: 20),
                   for (final warning in unreachable)
                     _LineNote(
                       key: ValueKey('line-phone-warning:$warning'),
@@ -3090,6 +3099,15 @@ class _LineActionsSheet extends StatelessWidget {
               label: l10n.dlvUndo,
               destructive: true,
               onTap: () => Navigator.of(context).pop('undo_delivery'),
+            ),
+          // A conversation with the customer on WhatsApp, in every state
+          // (docs/WHATSAPP_CONVERSATIONS.md decision 5).
+          if (messageCustomerTargets(line).isNotEmpty)
+            ContainerSheetAction(
+              key: const Key('line-message-customer'),
+              icon: Icons.chat_outlined,
+              label: l10n.waMessageCustomer,
+              onTap: () => Navigator.of(context).pop('message'),
             ),
           // Contacts stay correctable after the box ships; the rest of the
           // line is the record of what went.

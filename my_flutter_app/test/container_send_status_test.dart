@@ -314,8 +314,30 @@ void main() {
           ]),
         ),
       );
-      expect(find.text('Customer: sent'), findsOneWidget);
-      expect(find.text('Receiver: failed to send'), findsOneWidget);
+      // Sent and failed are WhatsApp ticks (docs/WHATSAPP_CONVERSATIONS.md
+      // decision 15), with what WhatsApp reported later.
+      expect(find.text('Customer ✓ Sent'), findsOneWidget);
+      expect(find.text('Receiver ⚠ Not delivered'), findsOneWidget);
+
+      await _pump(
+        tester,
+        packageResultViewForTesting(
+          line: _line([
+            {'role': 'sender', 'status': 'sent', 'delivery': 'read'},
+            {
+              'role': 'receiver',
+              'status': 'failed',
+              'delivery': 'failed',
+              'reason': 'Message undeliverable',
+            },
+          ]),
+        ),
+      );
+      expect(find.text('Customer ✓✓ Read'), findsOneWidget);
+      expect(
+        find.text('Receiver ⚠ Not delivered: Message undeliverable'),
+        findsOneWidget,
+      );
     });
 
     testWidgets('the queue states read in French', (tester) async {

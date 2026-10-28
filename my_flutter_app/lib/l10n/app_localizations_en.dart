@@ -16525,4 +16525,302 @@ class AppLocalizationsEn extends AppLocalizations {
   String ldgNothingToLoad(String destination) {
     return 'No package is waiting for $destination.';
   }
+
+  @override
+  String get waWhatsApp => 'WhatsApp';
+
+  @override
+  String get waListSupport => 'Support cases';
+
+  @override
+  String get waFilterAll => 'All';
+
+  @override
+  String get waFilterNeedsReply => 'Needs reply';
+
+  @override
+  String get waFilterWaiting => 'Waiting for customer';
+
+  @override
+  String get waFilterDone => 'Done';
+
+  @override
+  String get waStateNeedsReply => 'Needs reply';
+
+  @override
+  String get waStateWaiting => 'Waiting for customer';
+
+  @override
+  String get waStateChoosing => 'Asked which business';
+
+  @override
+  String get waStateDone => 'Done';
+
+  @override
+  String get waStoppedUpdates => 'Stopped updates';
+
+  @override
+  String waSuggestedFor(String business) {
+    return 'For $business';
+  }
+
+  @override
+  String get waHandedOverPill => 'Handed over';
+
+  @override
+  String get waEmptyTitle => 'No WhatsApp conversations';
+
+  @override
+  String get waEmptySubtitle =>
+      'When a customer writes to Laawol’s WhatsApp number about a package, the conversation appears here.';
+
+  @override
+  String get waSearch => 'Search name, number or message';
+
+  @override
+  String get waLaawol => 'Laawol';
+
+  @override
+  String get waCustomerPackages => 'Packages';
+
+  @override
+  String get waPackagesLoading => 'Loading packages…';
+
+  @override
+  String get waPackagesFailed => 'Couldn’t load the packages.';
+
+  @override
+  String get waNoPackages => 'No package with your business for this number.';
+
+  @override
+  String get waPackageSender => 'Sender';
+
+  @override
+  String get waPackageReceiver => 'Receiver';
+
+  @override
+  String get waMarkDone => 'Mark done';
+
+  @override
+  String get waMarkingDone => 'Marking done…';
+
+  @override
+  String get waReopen => 'Reopen';
+
+  @override
+  String get waReopening => 'Reopening…';
+
+  @override
+  String get waPrivateNote => 'Private note';
+
+  @override
+  String get waOnlyYourTeam => 'Only your team sees this';
+
+  @override
+  String get waNoteSaving => 'Saving note…';
+
+  @override
+  String get waNoteSaved => 'Note saved.';
+
+  @override
+  String get waHandOver => 'Hand over';
+
+  @override
+  String get waHandOverTitle => 'Hand over this conversation';
+
+  @override
+  String get waHandOverSubtitle =>
+      'It moves to the other inbox with its messages. The customer isn’t told.';
+
+  @override
+  String get waHandOverToLaawol => 'Laawol support';
+
+  @override
+  String get waHandOverToBusiness => 'Another business';
+
+  @override
+  String get waHandOverStaffHint =>
+      'Laawol can pass it on to another business that ships for this customer.';
+
+  @override
+  String get waHandOverNote => 'Note for them (optional)';
+
+  @override
+  String get waHandingOver => 'Handing over…';
+
+  @override
+  String waHandedOverTo(String name) {
+    return 'Handed over to $name.';
+  }
+
+  @override
+  String get waPickBusiness => 'Pick a business';
+
+  @override
+  String get waRefusalNotThisCustomer =>
+      'That business has no shipment for this customer.';
+
+  @override
+  String get waRefusalPickAnother =>
+      'It’s already in that inbox. Pick another one.';
+
+  @override
+  String get waRefusalBusinessNotFound => 'That business no longer exists.';
+
+  @override
+  String get waRefusalNotAllowed => 'You can’t do this on this conversation.';
+
+  @override
+  String get waRefusalPhone => 'This number needs its country code first.';
+
+  @override
+  String get waRefusalOffline => 'No connection. Try again.';
+
+  @override
+  String get waRefusalUnknown => 'That didn’t work. Try again.';
+
+  @override
+  String get waAutoReply => 'Automatic reply';
+
+  @override
+  String get waNoteBadge => 'Private note · Only your team sees this';
+
+  @override
+  String get waMediaDeleted => 'File deleted after 12 months';
+
+  @override
+  String get waTickSent => 'Sent';
+
+  @override
+  String get waTickDelivered => 'Delivered';
+
+  @override
+  String get waTickRead => 'Read';
+
+  @override
+  String get waTickFailed => 'Not delivered';
+
+  @override
+  String waTickFailedReason(String reason) {
+    return 'Not delivered: $reason';
+  }
+
+  @override
+  String get waTickWaiting => 'Waiting: goes out when the customer replies';
+
+  @override
+  String get waTickStopped => 'Waiting: the customer stopped updates';
+
+  @override
+  String get waPlay => 'Play';
+
+  @override
+  String get waPause => 'Pause';
+
+  @override
+  String get waAudioFailed => 'Couldn’t play this voice note.';
+
+  @override
+  String get waDeliveryWaiting =>
+      'Outside WhatsApp’s 24-hour window: the customer was asked to reply, and your message goes out when they do.';
+
+  @override
+  String get waDeliveryStopped =>
+      'The customer stopped updates. Your message goes out if they write again.';
+
+  @override
+  String get waDeliveryFailed =>
+      'WhatsApp didn’t accept this message. The reason is under it.';
+
+  @override
+  String get waWindowClosed =>
+      'The customer last wrote over 24 hours ago. What you send waits until they reply.';
+
+  @override
+  String get waWriteMessage => 'Message on WhatsApp';
+
+  @override
+  String get waRecordVoice => 'Record a voice note';
+
+  @override
+  String waRecording(String time) {
+    return 'Recording $time';
+  }
+
+  @override
+  String get waSendVoice => 'Send voice note';
+
+  @override
+  String get waDiscardVoice => 'Discard voice note';
+
+  @override
+  String get waMicDenied =>
+      'Allow the microphone in Settings to record voice notes.';
+
+  @override
+  String get waRecordFailed => 'Couldn’t record. Try again.';
+
+  @override
+  String get waVoiceTooShort => 'That recording was too short.';
+
+  @override
+  String get waMessageCustomer => 'Message customer';
+
+  @override
+  String get waMessageWho => 'Who do you want to message?';
+
+  @override
+  String get waOpening => 'Opening the conversation…';
+
+  @override
+  String get waNeedsCountryCode =>
+      'Add the country code to message this number';
+
+  @override
+  String get waNoPhone => 'No phone number on this package.';
+
+  @override
+  String get waNotifTitle => 'WhatsApp messages';
+
+  @override
+  String get waNotifOwner =>
+      'When a customer writes on WhatsApp. On for owners unless you switch it off.';
+
+  @override
+  String get waNotifStaff =>
+      'When a customer writes on WhatsApp. Off for staff until you switch it on.';
+
+  @override
+  String get waDisplayNameTitle => 'Name customers see on WhatsApp';
+
+  @override
+  String waDisplayNameHelp(String example) {
+    return 'Your replies are signed $example. Leave it empty to use your first name.';
+  }
+
+  @override
+  String get waDisplayNameSave => 'Save name';
+
+  @override
+  String get waDisplayNameSaved => 'Name saved.';
+
+  @override
+  String get waNotifAdmin =>
+      'When a customer writes to Laawol on WhatsApp. On unless you switch it off.';
+
+  @override
+  String waPackageTick(String who, String mark, String status) {
+    return '$who $mark $status';
+  }
+
+  @override
+  String waPackageTickFailed(String who, String mark, String reason) {
+    return '$who $mark Not delivered: $reason';
+  }
+
+  @override
+  String get waHandOverLoading => 'Loading where it can go…';
+
+  @override
+  String get waHandOverNoOptions => 'There is nowhere else to hand it.';
 }

@@ -56,6 +56,8 @@
 	<string>We use your location to help auto-fill pickup and delivery addresses for your transport requests.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>We use your location to auto-fill your pickup address.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Laawol uses the microphone to record voice notes you send to customers on WhatsApp.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>We add selected car images to your library.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

@@ -15,11 +15,13 @@ import '../models/support_case.dart';
 import '../models/support_message.dart';
 import '../providers/auth_provider.dart';
 import '../services/support_service.dart';
+import '../services/whatsapp_conversations.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../utils/support_attachment_policy.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/async_action_button.dart';
+import '../widgets/whatsapp_widgets.dart';
 
 typedef SupportImagePicker = Future<XFile?> Function(ImageSource source);
 typedef SupportAttachmentPicker = Future<XFile?> Function();
@@ -34,6 +36,9 @@ class SupportThreadScreen extends StatefulWidget {
     this.imagePicker,
     this.videoPicker,
     this.documentPicker,
+    this.whatsAppService,
+    this.voiceRecorder,
+    this.clock = DateTime.now,
   });
 
   final String caseId;
@@ -43,6 +48,15 @@ class SupportThreadScreen extends StatefulWidget {
   final SupportImagePicker? imagePicker;
   final SupportAttachmentPicker? videoPicker;
   final SupportAttachmentPicker? documentPicker;
+
+  /// The `whatsappConversation` callable (tests hand in a fake caller).
+  final WhatsAppConversationService? whatsAppService;
+
+  /// Records voice notes in a WhatsApp thread (tests need no microphone).
+  final VoiceNoteRecorder? voiceRecorder;
+
+  /// The time, for a voice note's length and the reply window (tests).
+  final DateTime Function() clock;
 
   @override
   State<SupportThreadScreen> createState() => _SupportThreadScreenState();
@@ -72,10 +86,26 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
   SupportMessageWindow? _lastWindow;
   bool _loadingEarlier = false;
 
+  // WhatsApp conversations (docs/WHATSAPP_CONVERSATIONS.md).
+  late final WhatsAppConversationService _whatsApp;
+  VoiceNoteRecorder? _recorder;
+  bool _recording = false;
+  bool _startingRecording = false;
+  bool _sendingVoice = false;
+  DateTime? _recordingStartedAt;
+  Duration _recordingElapsed = Duration.zero;
+  Timer? _recordingTicker;
+  Future<List<WhatsAppPackage>>? _packages;
+  String? _packagesCaseId;
+
+  VoiceNoteRecorder get _voiceRecorder =>
+      _recorder ??= widget.voiceRecorder ?? PackageVoiceNoteRecorder();
+
   @override
   void initState() {
     super.initState();
     _supportService = widget.supportRepository ?? SupportService();
+    _whatsApp = widget.whatsAppService ?? const WhatsAppConversationService();
     _caseStream = _supportService.watchCase(widget.caseId);
     unawaited(_supportService.markRead(widget.caseId));
   }
@@ -113,8 +143,222 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
     });
   }
 
+  /// The customer's packages, asked once per conversation (and on Retry).
+  Future<List<WhatsAppPackage>> _packagesFor(String caseId) {
+    final existing = _packages;
+    if (existing != null && _packagesCaseId == caseId) return existing;
+    _packagesCaseId = caseId;
+    return _packages = _whatsApp
+        .packages(caseId)
+        .timeout(const Duration(seconds: 20));
+  }
+
+  void _retryPackages(String caseId) {
+    setState(() {
+      _packages = null;
+      _packagesFor(caseId);
+    });
+  }
+
+  void _showDeliveryNotice(String? delivery) {
+    if (!mounted) return;
+    final notice = whatsAppDeliveryNotice(
+      AppLocalizations.of(context)!,
+      whatsAppDeliveryOf(delivery),
+    );
+    if (notice == null) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(notice), duration: const Duration(seconds: 6)),
+    );
+  }
+
+  Future<void> _markDone(SupportCase supportCase, {required bool done}) async {
+    try {
+      if (done) {
+        await _whatsApp.markDone(supportCase.id);
+      } else {
+        await _whatsApp.reopen(supportCase.id);
+      }
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            whatsAppRefusalText(AppLocalizations.of(context)!, error),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _addWhatsAppNote(SupportCase supportCase) async {
+    final l10n = AppLocalizations.of(context)!;
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => WhatsAppNoteSheet(
+        onSave: (text) => _whatsApp.addNote(supportCase.id, text),
+      ),
+    );
+    if (saved == true && mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.waNoteSaved)));
+    }
+  }
+
+  Future<void> _handOver(SupportCase supportCase, bool isAdmin) async {
+    final l10n = AppLocalizations.of(context)!;
+    final result = await showModalBottomSheet<WhatsAppHandOverResult>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => WhatsAppHandOverSheet(
+        supportCase: supportCase,
+        service: _whatsApp,
+        isAdmin: isAdmin,
+      ),
+    );
+    if (result == null || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      SnackBar(content: Text(l10n.waHandedOverTo(result.name))),
+    );
+    // Laawol reads every inbox, so it follows the conversation; a business
+    // cannot read another's, so its person goes back to the list.
+    if (isAdmin && result.caseId.isNotEmpty) {
+      await Navigator.of(
+        context,
+      ).pushReplacementNamed('/support-thread', arguments: result.caseId);
+    } else {
+      await Navigator.of(context).maybePop();
+    }
+  }
+
+  Future<void> _startRecording() async {
+    final l10n = AppLocalizations.of(context)!;
+    if (_recording || _startingRecording || _sendingVoice || _uploading) {
+      return;
+    }
+    setState(() => _startingRecording = true);
+    try {
+      final recorder = _voiceRecorder;
+      if (!await recorder.hasPermission()) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(l10n.waMicDenied)));
+        return;
+      }
+      await recorder.start();
+      if (!mounted) {
+        await recorder.cancel();
+        return;
+      }
+      FocusManager.instance.primaryFocus?.unfocus();
+      _recordingTicker?.cancel();
+      setState(() {
+        _recording = true;
+        _recordingStartedAt = widget.clock();
+        _recordingElapsed = Duration.zero;
+      });
+      _recordingTicker = Timer.periodic(const Duration(milliseconds: 250), (_) {
+        final started = _recordingStartedAt;
+        if (!mounted || started == null) return;
+        final elapsed = widget.clock().difference(started);
+        setState(() => _recordingElapsed = elapsed);
+        if (elapsed >= voiceNoteMaxDuration) unawaited(_sendRecording());
+      });
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.waRecordFailed)));
+    } finally {
+      if (mounted) setState(() => _startingRecording = false);
+    }
+  }
+
+  void _stopTicker() {
+    _recordingTicker?.cancel();
+    _recordingTicker = null;
+  }
+
+  Future<void> _cancelRecording() async {
+    if (!_recording || _sendingVoice) return;
+    _stopTicker();
+    setState(() {
+      _recording = false;
+      _recordingStartedAt = null;
+    });
+    try {
+      await _voiceRecorder.cancel();
+    } catch (_) {
+      // Nothing to keep either way.
+    }
+  }
+
+  Future<void> _sendRecording() async {
+    final l10n = AppLocalizations.of(context)!;
+    if (!_recording || _sendingVoice) return;
+    _stopTicker();
+    final started = _recordingStartedAt;
+    final length = started == null
+        ? _recordingElapsed
+        : widget.clock().difference(started);
+    setState(() => _sendingVoice = true);
+    try {
+      final path = await _voiceRecorder.stop();
+      if (path == null || path.isEmpty) {
+        throw StateError('no recording');
+      }
+      if (!voiceNoteLongEnough(length)) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(l10n.waVoiceTooShort)));
+        }
+        return;
+      }
+      final format = whatsAppVoiceNoteFormat;
+      final delivery = await _supportService.uploadPickedAttachment(
+        caseId: widget.caseId,
+        file: XFile(
+          path,
+          name: format.fileName(started ?? widget.clock()),
+          mimeType: format.mimeType,
+        ),
+        mimeType: format.mimeType,
+        messageType: 'voice',
+        durationSeconds: length.inSeconds,
+      );
+      _showDeliveryNotice(delivery);
+    } catch (error) {
+      if (!mounted) return;
+      final message = error is StateError
+          ? l10n.waRecordFailed
+          : _supportAttachmentUploadFailureMessage(l10n, error);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _sendingVoice = false;
+          _recording = false;
+          _recordingStartedAt = null;
+        });
+      }
+    }
+  }
+
   @override
   void dispose() {
+    _stopTicker();
+    final recorder = _recorder;
+    if (recorder != null) {
+      if (_recording) unawaited(recorder.cancel().catchError((_) {}));
+      unawaited(recorder.dispose().catchError((_) {}));
+    }
     _typingTimer?.cancel();
     unawaited(_supportService.setTyping(widget.caseId, false));
     _messageController.dispose();
@@ -147,11 +391,12 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
           content: text,
         );
       } else {
-        await _supportService.sendMessage(
+        final delivery = await _supportService.sendMessage(
           caseId: widget.caseId,
           content: text,
           replyTo: replyTo,
         );
+        _showDeliveryNotice(delivery);
       }
     } catch (error) {
       if (!mounted) return;
@@ -323,7 +568,7 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
     if (!mounted || _uploading) return l10n.supportUploadFailed;
     setState(() => _uploading = true);
     try {
-      await _supportService.uploadPickedAttachment(
+      final delivery = await _supportService.uploadPickedAttachment(
         caseId: widget.caseId,
         file: attachment.file,
         mimeType: attachment.mimeType,
@@ -332,6 +577,10 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
       );
       _messageController.clear();
       _composerRevision += 1;
+      // After the review sheet has closed, so the notice is not under it.
+      if (delivery != null) {
+        scheduleMicrotask(() => _showDeliveryNotice(delivery));
+      }
       return null;
     } catch (error) {
       if (!mounted) return l10n.supportUploadFailed;
@@ -457,8 +706,9 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
   void _showMessageActions(
     SupportMessage message,
     bool mine,
-    String senderLabel,
-  ) {
+    String senderLabel, {
+    bool whatsApp = false,
+  }) {
     final l10n = AppLocalizations.of(context)!;
     showModalBottomSheet<void>(
       context: context,
@@ -466,20 +716,23 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ListTile(
-              leading: const Icon(Icons.reply_outlined),
-              title: Text(l10n.supportReply),
-              onTap: () {
-                Navigator.pop(context);
-                setState(() {
-                  _replyingTo = message.toReplyReference(
-                    senderNameOverride: senderLabel,
-                  );
-                  _editingMessage = null;
-                });
-              },
-            ),
-            if (mine && message.messageType == 'text')
+            // What reached the customer on WhatsApp cannot be quoted or
+            // edited there, so a WhatsApp thread offers neither.
+            if (!whatsApp)
+              ListTile(
+                leading: const Icon(Icons.reply_outlined),
+                title: Text(l10n.supportReply),
+                onTap: () {
+                  Navigator.pop(context);
+                  setState(() {
+                    _replyingTo = message.toReplyReference(
+                      senderNameOverride: senderLabel,
+                    );
+                    _editingMessage = null;
+                  });
+                },
+              ),
+            if (!whatsApp && mine && message.messageType == 'text')
               ListTile(
                 leading: const Icon(Icons.edit_outlined),
                 title: Text(l10n.supportEditMessage),
@@ -527,9 +780,43 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
             if (supportCase == null) {
               return const Center(child: CircularProgressIndicator());
             }
+            final whatsApp = supportCase.isWhatsApp;
             return Column(
               children: [
-                _ThreadHeader(supportCase: supportCase),
+                if (whatsApp) ...[
+                  _WhatsAppThreadHeader(supportCase: supportCase),
+                  // Always in reach, however long the conversation: the
+                  // actions and the customer's packages stay under the
+                  // header instead of above the oldest message.
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surface,
+                      border: const Border(
+                        bottom: BorderSide(color: AppColors.rule),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        WhatsAppThreadActions(
+                          supportCase: supportCase,
+                          onDone: () => _markDone(supportCase, done: true),
+                          onReopen: () => _markDone(supportCase, done: false),
+                          onNote: () => _addWhatsAppNote(supportCase),
+                          onHandOver: () => _handOver(supportCase, isAdmin),
+                        ),
+                        WhatsAppPackagesCard(
+                          supportCase: supportCase,
+                          packages: _packagesFor(supportCase.id),
+                          onRetry: () => _retryPackages(supportCase.id),
+                        ),
+                      ],
+                    ),
+                  ),
+                ] else
+                  _ThreadHeader(supportCase: supportCase),
                 Expanded(
                   child: StreamBuilder<SupportMessageWindow>(
                     stream: _messagesFor(uid),
@@ -539,8 +826,7 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
                       final window = snapshot.data ?? _lastWindow;
                       if (snapshot.hasData) _lastWindow = snapshot.data;
                       if (_loadingEarlier &&
-                          (snapshot.connectionState ==
-                                  ConnectionState.active ||
+                          (snapshot.connectionState == ConnectionState.active ||
                               snapshot.hasError)) {
                         _loadingEarlier = false;
                       }
@@ -563,11 +849,14 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
                       // then (above the oldest) "Load earlier messages",
                       // then the case actions and context card on top.
                       final earlierSlots = showLoadEarlier ? 1 : 0;
+                      // A WhatsApp thread keeps its actions and packages
+                      // under the header, so it has no top slots.
+                      final topSlots = whatsApp ? 0 : 2;
                       return ListView.builder(
                         controller: _scrollController,
                         reverse: true,
                         padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                        itemCount: messages.length + earlierSlots + 2,
+                        itemCount: messages.length + earlierSlots + topSlots,
                         itemBuilder: (context, rawIndex) {
                           if (showLoadEarlier && rawIndex == messages.length) {
                             return _LoadEarlierMessages(
@@ -616,6 +905,25 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
                           }
                           final message = messages[index];
                           final mine = message.senderId == uid;
+                          if (whatsApp) {
+                            return WhatsAppMessageBubble(
+                              message: message,
+                              mine: mine,
+                              text: _supportMessageDisplayText(message),
+                              fileTile: (textColor) => _AttachmentOpenTile(
+                                message: message,
+                                // A light tile on our teal bubbles.
+                                mine: textColor == Colors.white,
+                                textColor: textColor,
+                              ),
+                              onLongPress: () => _showMessageActions(
+                                message,
+                                mine,
+                                whatsAppSenderName(message),
+                                whatsApp: true,
+                              ),
+                            );
+                          }
                           // Viewer role decides whose name is shown. Customers
                           // never see individual staff names: a business shows
                           // as the business, an admin as Laawol support.
@@ -645,13 +953,33 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
                     },
                   ),
                 ),
-                if (isAdmin)
+                // A WhatsApp conversation keeps its notes in the thread and
+                // goes to Laawol by hand-over, not escalation.
+                if (isAdmin && !whatsApp)
                   _AdminNotes(caseId: widget.caseId, service: _supportService),
-                _SupportEscalationBar(
-                  supportCase: supportCase,
-                  onEscalate: () => _showEscalationSheet(supportCase),
-                ),
+                if (!whatsApp)
+                  _SupportEscalationBar(
+                    supportCase: supportCase,
+                    onEscalate: () => _showEscalationSheet(supportCase),
+                  ),
+                if (whatsApp &&
+                    !whatsAppWindowOpen(
+                      supportCase.lastCustomerMessageAtMs,
+                      widget.clock(),
+                    ))
+                  const WhatsAppWindowNotice(),
                 _Composer(
+                  hintText: whatsApp ? l10n.waWriteMessage : null,
+                  onRecord: whatsApp ? _startRecording : null,
+                  startingRecording: _startingRecording,
+                  recordingBar: whatsApp && _recording
+                      ? VoiceNoteRecordingBar(
+                          elapsed: _recordingElapsed,
+                          sending: _sendingVoice,
+                          onCancel: _cancelRecording,
+                          onSend: _sendRecording,
+                        )
+                      : null,
                   controller: _messageController,
                   sending: _sending,
                   uploading: _uploading,
@@ -1197,6 +1525,79 @@ class _ThreadHeader extends StatelessWidget {
                   style: Theme.of(
                     context,
                   ).textTheme.bodySmall?.copyWith(color: AppColors.muted),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A WhatsApp conversation's header: the customer, their number, which
+/// inbox holds it, its state and whether they stopped updates.
+class _WhatsAppThreadHeader extends StatelessWidget {
+  const _WhatsAppThreadHeader({required this.supportCase});
+
+  final SupportCase supportCase;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final name = supportCase.customerName.trim().isNotEmpty
+        ? supportCase.customerName.trim()
+        : supportCase.whatsappPhone;
+    final inbox = supportCase.businessId.isEmpty
+        ? l10n.waLaawol
+        : supportCase.businessName;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 16, 10),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        border: const Border(bottom: BorderSide(color: AppColors.rule)),
+      ),
+      child: Row(
+        children: [
+          const AppBackButton(),
+          const SizedBox(width: 10),
+          CircleAvatar(
+            backgroundColor: AppColors.sage.withValues(alpha: 0.14),
+            child: const Icon(Icons.chat_outlined, color: AppColors.sage),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                Text(
+                  [
+                    if (supportCase.whatsappPhone.isNotEmpty &&
+                        supportCase.whatsappPhone != name)
+                      supportCase.whatsappPhone,
+                    if (inbox.isNotEmpty) inbox,
+                  ].join(' · '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: AppColors.muted),
+                ),
+                const SizedBox(height: 4),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: [
+                    const WhatsAppBadge(),
+                    WhatsAppPill.state(l10n, whatsAppStateOf(supportCase)),
+                    if (supportCase.updatesStopped) WhatsAppPill.stopped(l10n),
+                  ],
                 ),
               ],
             ),
@@ -1808,6 +2209,10 @@ class _AttachmentOpenTileState extends State<_AttachmentOpenTile> {
 
 class _Composer extends StatelessWidget {
   const _Composer({
+    this.hintText,
+    this.onRecord,
+    this.startingRecording = false,
+    this.recordingBar,
     required this.controller,
     required this.sending,
     required this.uploading,
@@ -1831,9 +2236,22 @@ class _Composer extends StatelessWidget {
   final ValueChanged<String> onChanged;
   final VoidCallback onCancelReply;
 
+  /// The field's hint; the Support wording when null.
+  final String? hintText;
+
+  /// Records a voice note (WhatsApp threads); no microphone when null.
+  final VoidCallback? onRecord;
+
+  /// The microphone is being asked for / the recorder is starting.
+  final bool startingRecording;
+
+  /// Replaces the field while a voice note records.
+  final Widget? recordingBar;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final record = onRecord;
     return Container(
       padding: EdgeInsets.fromLTRB(
         12,
@@ -1875,56 +2293,74 @@ class _Composer extends StatelessWidget {
                 ],
               ),
             ),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              IconButton.filledTonal(
-                onPressed: uploading ? null : onAttach,
-                icon: uploading
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.add),
-                tooltip: l10n.supportAddAttachment,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: TextField(
-                  key: ValueKey<int>(revision),
-                  controller: controller,
-                  minLines: 1,
-                  maxLines: 5,
-                  onChanged: onChanged,
-                  decoration: InputDecoration(
-                    hintText: l10n.writeSupportMessage,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
+          if (recordingBar != null)
+            recordingBar!
+          else
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                IconButton.filledTonal(
+                  onPressed: uploading ? null : onAttach,
+                  icon: uploading
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.add),
+                  tooltip: l10n.supportAddAttachment,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    key: ValueKey<int>(revision),
+                    controller: controller,
+                    minLines: 1,
+                    maxLines: 5,
+                    onChanged: onChanged,
+                    decoration: InputDecoration(
+                      hintText: hintText ?? l10n.writeSupportMessage,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              IconButton.filled(
-                onPressed: sending ? null : onSend,
-                icon: sending
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            Colors.white,
+                if (record != null) ...[
+                  const SizedBox(width: 4),
+                  IconButton(
+                    key: const Key('wa-voice-record'),
+                    onPressed: uploading || startingRecording ? null : record,
+                    tooltip: l10n.waRecordVoice,
+                    icon: startingRecording
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.mic_none),
+                  ),
+                ],
+                const SizedBox(width: 8),
+                IconButton.filled(
+                  onPressed: sending ? null : onSend,
+                  icon: sending
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
                           ),
-                        ),
-                      )
-                    : Icon(editingMessage == null ? Icons.send : Icons.check),
-                tooltip: l10n.sendMessage,
-              ),
-            ],
-          ),
+                        )
+                      : Icon(editingMessage == null ? Icons.send : Icons.check),
+                  tooltip: l10n.sendMessage,
+                ),
+              ],
+            ),
         ],
       ),
     );

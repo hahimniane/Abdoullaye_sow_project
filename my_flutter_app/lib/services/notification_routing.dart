@@ -268,6 +268,9 @@ NotificationRoute? routeForNotificationData(
       return const NotificationRoute('/business-register');
     case 'support_message':
     case 'support_escalated':
+    // A customer wrote on WhatsApp (docs/WHATSAPP_CONVERSATIONS.md): the
+    // conversation is a Support case, so it opens in the same thread.
+    case 'whatsapp_message':
       final caseId = data['caseId']?.toString();
       if (caseId == null || caseId.isEmpty) return null;
       return NotificationRoute('/support-thread', arguments: caseId);

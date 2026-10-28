@@ -183,7 +183,7 @@ void main() {
       // intl may put a narrow no-break space before PM; match up to the time.
       expect(find.textContaining('Last update: left port, Oct 3, 2026 2:15'),
           findsOneWidget);
-      expect(find.text('Customer: sent'), findsOneWidget);
+      expect(find.text('Customer ✓ Sent'), findsOneWidget);
       expect(find.text('Receiver: not sent, the phone has no country code'),
           findsOneWidget);
       // The three next actions.

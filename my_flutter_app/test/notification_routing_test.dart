@@ -193,6 +193,24 @@ void main() {
       expect(route?.arguments, 'case-8');
     });
 
+    test('routes a WhatsApp message push to its conversation thread', () {
+      final route = routeForNotificationData({
+        'type': 'whatsapp_message',
+        'caseId': 'wa_business-1_224621000001',
+        'businessId': 'business-1',
+      });
+
+      expect(route?.name, '/support-thread');
+      expect(route?.arguments, 'wa_business-1_224621000001');
+      expect(
+        routeForNotificationData(
+          {'type': 'whatsapp_message'},
+          audience: NotificationAudience.business,
+        ),
+        isNull,
+      );
+    });
+
     test('does not route a support message with no case id', () {
       final route = routeForNotificationData({'type': 'support_message'});
 

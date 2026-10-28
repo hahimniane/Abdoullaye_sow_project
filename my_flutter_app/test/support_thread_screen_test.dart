@@ -87,14 +87,18 @@ class _FakeSupportRepository implements SupportRepository {
     setTypingCount += 1;
   }
 
+  /// What the server says it did with a WhatsApp message (null otherwise).
+  String? delivery;
+
   @override
-  Future<void> sendMessage({
+  Future<String?> sendMessage({
     required String caseId,
     required String content,
     SupportReplyReference? replyTo,
   }) async {
     sentContent = content;
     sentReplyTo = replyTo;
+    return delivery;
   }
 
   @override
@@ -154,6 +158,11 @@ class _FakeSupportRepository implements SupportRepository {
   }
 
   @override
+  Stream<List<SupportCase>> watchWhatsAppInbox({String? businessId}) {
+    throw UnimplementedError();
+  }
+
+  @override
   Stream<List<Map<String, dynamic>>> watchTimeline(String caseId) {
     return Stream.value(const <Map<String, dynamic>>[]);
   }
@@ -200,7 +209,7 @@ class _FakeSupportRepository implements SupportRepository {
   }
 
   @override
-  Future<void> uploadAttachmentFile({
+  Future<String?> uploadAttachmentFile({
     required String caseId,
     required String fileName,
     required List<int> bytes,
@@ -211,10 +220,13 @@ class _FakeSupportRepository implements SupportRepository {
   }) async {
     uploadedFileName = fileName;
     uploadedMessageType = messageType;
+    return delivery;
   }
 
+  int? uploadedDurationSeconds;
+
   @override
-  Future<void> uploadPickedAttachment({
+  Future<String?> uploadPickedAttachment({
     required String caseId,
     required XFile file,
     required String mimeType,
@@ -227,10 +239,12 @@ class _FakeSupportRepository implements SupportRepository {
     uploadedMessageType = messageType;
     uploadedMimeType = mimeType;
     uploadedCaption = caption;
+    uploadedDurationSeconds = durationSeconds;
     if (uploadFailuresRemaining > 0) {
       uploadFailuresRemaining -= 1;
       throw uploadFailure ?? StateError('test upload failure');
     }
+    return delivery;
   }
 
   @override

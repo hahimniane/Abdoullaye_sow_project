@@ -7,12 +7,14 @@ import 'package:provider/provider.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/notification_preferences.dart';
+import '../models/platform_access.dart';
 import '../providers/auth_provider.dart';
 import '../services/biometric_lock_service.dart';
 import '../services/inventory.dart' show inventoryAvailable;
 import '../services/push_notification_service.dart';
 import '../services/platform_activity_alerts.dart';
 import '../services/staff_activity_alerts.dart';
+import '../services/whatsapp_conversations.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../utils/auth_error_text.dart';
@@ -23,6 +25,7 @@ import '../utils/root_navigation.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/country_phone_field.dart';
+import '../widgets/whatsapp_widgets.dart' show WhatsAppDisplayNameField;
 import 'phone_verification_screen.dart';
 
 class AccountProfileScreen extends StatefulWidget {
@@ -150,7 +153,8 @@ class _AccountProfileScreenState extends State<AccountProfileScreen> {
           _preferences.inventoryTransfers ||
           _preferences.parkedCarAlerts ||
           _preferences.packageAlerts ||
-          _preferences.platformActivity) {
+          _preferences.platformActivity ||
+          _preferences.whatsappMessages == true) {
         try {
           await PushNotificationService().requestPermissionAndRegister();
         } catch (error) {
@@ -584,6 +588,32 @@ class _AccountProfileScreenState extends State<AccountProfileScreen> {
                         _preferences.copyWith(packageAlerts: value),
                       ),
                     ),
+                  // A customer wrote on WhatsApp (docs/WHATSAPP_CONVERSATIONS.md
+                  // decision 7): owners hear unless they switch it off, staff
+                  // only once they switch it on.
+                  if (showWhatsAppMessagesSwitch(
+                    role: auth.role ?? '',
+                    businessId: auth.businessId ?? '',
+                    canViewPlatformSupport: auth.canViewPlatformSection(
+                      PlatformSection.support,
+                    ),
+                  ))
+                    _PreferenceSwitch(
+                      key: const Key('whatsapp-messages-notifications'),
+                      title: l10n.waNotifTitle,
+                      subtitle: auth.isAdmin
+                          ? l10n.waNotifAdmin
+                          : (auth.isStaff
+                                ? l10n.waNotifStaff
+                                : l10n.waNotifOwner),
+                      value: whatsAppMessagesOn(
+                        preference: _preferences.whatsappMessages,
+                        role: auth.role ?? '',
+                      ),
+                      onChanged: (value) => _updatePreferences(
+                        _preferences.copyWith(whatsappMessages: value),
+                      ),
+                    ),
                   // Platform admins who look after businesses hear about
                   // cars, packages and sales in every business.
                   if (showPlatformActivitySwitch(
@@ -601,6 +631,29 @@ class _AccountProfileScreenState extends State<AccountProfileScreen> {
                 ],
               ),
             ),
+            // How replies are signed on WhatsApp ("Mamadou (Nensona)"):
+            // for everyone who answers customers there.
+            if (showWhatsAppMessagesSwitch(
+              role: auth.role ?? '',
+              businessId: auth.businessId ?? '',
+              canViewPlatformSupport: auth.canViewPlatformSection(
+                PlatformSection.support,
+              ),
+            )) ...[
+              const SizedBox(height: 14),
+              _ProfileSection(
+                title: l10n.waDisplayNameTitle,
+                child: WhatsAppDisplayNameField(
+                  key: const Key('whatsapp-display-name-section'),
+                  initialName: auth.chatDisplayName,
+                  fullName: auth.customerName ?? _nameController.text,
+                  businessName: auth.isAdmin
+                      ? l10n.waLaawol
+                      : (auth.businessName ?? ''),
+                  onSaved: auth.applyChatDisplayName,
+                ),
+              ),
+            ],
             const SizedBox(height: 14),
             _ProfileSection(
               title: l10n.faceId,
@@ -680,9 +733,11 @@ class _PreferenceSwitch extends StatelessWidget {
     required this.title,
     required this.value,
     required this.onChanged,
+    this.subtitle,
   });
 
   final String title;
+  final String? subtitle;
   final bool value;
   final ValueChanged<bool> onChanged;
 
@@ -693,6 +748,7 @@ class _PreferenceSwitch extends StatelessWidget {
       onChanged: onChanged,
       contentPadding: EdgeInsets.zero,
       title: Text(title),
+      subtitle: subtitle == null ? null : Text(subtitle!),
     );
   }
 }

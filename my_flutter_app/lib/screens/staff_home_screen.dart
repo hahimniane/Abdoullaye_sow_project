@@ -10,6 +10,7 @@ import '../models/business_profile.dart';
 import '../models/business_service.dart';
 import '../models/platform_access.dart';
 import '../services/shop_home.dart';
+import '../services/whatsapp_conversations.dart';
 import '../utils/business_permissions.dart';
 import 'business_profile_screen.dart';
 import 'home_menu.dart';
@@ -62,6 +63,7 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> {
     required bool canManageSupport,
     required bool canViewPeople,
     required bool canViewPlatformSupport,
+    required String businessId,
     String? shopApprovalStatus,
   }) {
     final hasCarSales = hasBusinessService(
@@ -130,7 +132,14 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> {
             label: l10n.support,
           ),
         )
-      else if (!isAdmin && canManageSupport)
+      // Everyone at a business answers WhatsApp (docs/WHATSAPP_CONVERSATIONS.md
+      // decision 6): without the Support permission the tab shows only the
+      // WhatsApp conversations.
+      else if (showBusinessSupportTab(
+        isAdmin: isAdmin,
+        canManageSupport: canManageSupport,
+        businessId: businessId,
+      ))
         _StaffTab(
           'support',
           const SupportInboxScreen.business(),
@@ -241,6 +250,7 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> {
           canManageSupport: canManageSupport,
           canViewPeople: canViewPeople,
           canViewPlatformSupport: canViewPlatformSupport,
+          businessId: businessId,
         ),
       );
     }
@@ -268,6 +278,7 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> {
           canManageSupport: canManageSupport,
           canViewPeople: canViewPeople,
           canViewPlatformSupport: canViewPlatformSupport,
+          businessId: businessId,
           shopApprovalStatus: shopOnly ? business.status : null,
         );
         return _scaffold(

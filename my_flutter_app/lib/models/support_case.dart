@@ -36,6 +36,16 @@ class SupportCase {
     this.reopenedAt,
     this.createdAt,
     this.updatedAt,
+    this.inbox = '',
+    this.whatsappPhone = '',
+    this.whatsappState = '',
+    this.whatsappLang = '',
+    this.updatesStopped = false,
+    this.unreadCount = 0,
+    this.handedTo = '',
+    this.suggestedBusinessId = '',
+    this.suggestedBusinessName = '',
+    this.lastCustomerMessageAtMs = 0,
   });
 
   final String id;
@@ -72,6 +82,40 @@ class SupportCase {
   final DateTime? reopenedAt;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+
+  // Two-way WhatsApp (docs/WHATSAPP_CONVERSATIONS.md). Empty / false / 0 on
+  // every other kind of case.
+
+  /// `laawol` or the business id whose inbox holds the conversation.
+  final String inbox;
+
+  /// The customer's number, E.164.
+  final String whatsappPhone;
+
+  /// `needs_reply` | `waiting_customer` | `done` | `choosing`.
+  final String whatsappState;
+
+  /// `fr` | `en`: the language the customer's automatic replies use.
+  final String whatsappLang;
+
+  /// The customer sent STOP: no package updates go to the number.
+  final bool updatesStopped;
+
+  /// Customer messages since staff last replied.
+  final int unreadCount;
+
+  /// Set on a conversation that was handed to another inbox (it is Done).
+  final String handedTo;
+
+  /// Launch week: the business the conversation would belong to.
+  final String suggestedBusinessId;
+  final String suggestedBusinessName;
+
+  /// Start of WhatsApp's 24-hour reply window (0 = closed).
+  final int lastCustomerMessageAtMs;
+
+  /// A customer's WhatsApp conversation, not an app support case.
+  bool get isWhatsApp => caseType == 'whatsapp';
 
   bool get isEscalated => escalationStatus == 'escalated';
   bool get isResolved => status == 'resolved' || status == 'closed';
@@ -125,8 +169,22 @@ class SupportCase {
       reopenedAt: _toDateTime(data['reopenedAt']),
       createdAt: _toDateTime(data['createdAt']),
       updatedAt: _toDateTime(data['updatedAt']),
+      inbox: _string(data['inbox']),
+      whatsappPhone: _string(data['whatsappPhone']),
+      whatsappState: _string(data['whatsappState']),
+      whatsappLang: _string(data['whatsappLang']),
+      updatesStopped: data['updatesStopped'] == true,
+      unreadCount: _int(data['unreadCount']),
+      handedTo: _string(data['handedTo']),
+      suggestedBusinessId: _string(data['suggestedBusinessId']),
+      suggestedBusinessName: _string(data['suggestedBusinessName']),
+      lastCustomerMessageAtMs: _int(data['lastCustomerMessageAtMs']),
     );
   }
+
+  static String _string(dynamic value) => value is String ? value : '';
+
+  static int _int(dynamic value) => value is num ? value.toInt() : 0;
 
   static DateTime? _toDateTime(dynamic value) {
     if (value is Timestamp) return value.toDate();

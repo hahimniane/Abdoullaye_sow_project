@@ -30,6 +30,9 @@ import 'package_estimate_screen.dart';
 import 'package_payment_sheet.dart';
 import 'package_result_screen.dart';
 import 'receive_request_sheet.dart';
+import '../services/whatsapp_conversations.dart' show messageCustomerTargets;
+import '../widgets/whatsapp_widgets.dart'
+    show PackageUpdateTicks, openWhatsAppForLine;
 
 /// The way into the waiting list from the containers screen: how many
 /// packages have been dropped off with no container yet, one tap from the
@@ -396,6 +399,13 @@ class _WaitingPackagesScreenState extends State<WaitingPackagesScreen> {
               label: l10n.wpkEditPackage,
               onTap: () => Navigator.of(context).pop('edit'),
             ),
+            if (messageCustomerTargets(line).isNotEmpty)
+              ContainerSheetAction(
+                key: const Key('waiting-message-customer'),
+                icon: Icons.chat_outlined,
+                label: l10n.waMessageCustomer,
+                onTap: () => Navigator.of(context).pop('message'),
+              ),
             ContainerSheetAction(
               key: const Key('waiting-contacts'),
               icon: Icons.contact_phone_outlined,
@@ -448,6 +458,8 @@ class _WaitingPackagesScreenState extends State<WaitingPackagesScreen> {
           businessCountryCode: widget.businessCountryCode,
           destinations: widget.destinations,
         );
+      case 'message':
+        await openWhatsAppForLine(context, line);
       case 'open':
         _open(line);
       case 'history':
@@ -1050,6 +1062,8 @@ class WaitingPackageCard extends StatelessWidget {
                       who: l10n.ctrReceiverShort,
                       dense: true,
                     ),
+                  // How far the last update got on WhatsApp (decision 15).
+                  PackageUpdateTicks(line: line),
                   if (where.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 3),

@@ -81,6 +81,41 @@ class SupportMessage {
   String get caption => (metadata['caption'] ?? '').toString().trim();
   int? get fileSize =>
       _intOrNull(metadata['fileSize'] ?? metadata['file_size']);
+  String get mimeType =>
+      (metadata['mimeType'] ?? metadata['mime_type'] ?? '').toString().trim();
+
+  // Two-way WhatsApp (docs/WHATSAPP_CONVERSATIONS.md).
+
+  Map<String, dynamic> get _whatsapp => metadata['whatsapp'] is Map
+      ? Map<String, dynamic>.from(metadata['whatsapp'] as Map)
+      : const <String, dynamic>{};
+
+  /// `in` (the customer wrote) | `out` (we sent) | '' (not relayed).
+  String get whatsappDirection => (_whatsapp['direction'] ?? '').toString();
+
+  /// `sent` | `delivered` | `read` | `failed` | `waiting_for_reply` | ''.
+  String get whatsappStatus => (_whatsapp['status'] ?? '').toString();
+
+  /// Meta's reason when [whatsappStatus] is `failed`.
+  String get whatsappError => (_whatsapp['error'] ?? '').toString().trim();
+
+  /// The customer had sent STOP when this was held for the reply window.
+  bool get whatsappStopped => _whatsapp['stopped'] == true;
+
+  /// The signature the customer saw, e.g. "Mamadou (Nensona)".
+  String get whatsappLabel =>
+      (metadata['whatsappLabel'] ?? '').toString().trim();
+
+  /// An automatic reply the server sent.
+  bool get isAutoReply => metadata['auto'] == true;
+
+  /// A private note (or a system note such as a hand-over): never sent to
+  /// the customer.
+  bool get isPrivateNote => metadata['note'] == true;
+
+  /// The received file was deleted after 12 months; the text is kept.
+  bool get mediaDeleted => metadata['mediaDeleted'] == true;
+
   int? get durationSeconds =>
       _intOrNull(metadata['durationSeconds'] ?? metadata['duration_seconds']);
 

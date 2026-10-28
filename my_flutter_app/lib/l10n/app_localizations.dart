@@ -27883,6 +27883,546 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No package is waiting for {destination}.'**
   String ldgNothingToLoad(String destination);
+
+  /// No description provided for @waWhatsApp.
+  ///
+  /// In en, this message translates to:
+  /// **'WhatsApp'**
+  String get waWhatsApp;
+
+  /// No description provided for @waListSupport.
+  ///
+  /// In en, this message translates to:
+  /// **'Support cases'**
+  String get waListSupport;
+
+  /// No description provided for @waFilterAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get waFilterAll;
+
+  /// No description provided for @waFilterNeedsReply.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs reply'**
+  String get waFilterNeedsReply;
+
+  /// No description provided for @waFilterWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for customer'**
+  String get waFilterWaiting;
+
+  /// No description provided for @waFilterDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get waFilterDone;
+
+  /// No description provided for @waStateNeedsReply.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs reply'**
+  String get waStateNeedsReply;
+
+  /// No description provided for @waStateWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for customer'**
+  String get waStateWaiting;
+
+  /// No description provided for @waStateChoosing.
+  ///
+  /// In en, this message translates to:
+  /// **'Asked which business'**
+  String get waStateChoosing;
+
+  /// No description provided for @waStateDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get waStateDone;
+
+  /// No description provided for @waStoppedUpdates.
+  ///
+  /// In en, this message translates to:
+  /// **'Stopped updates'**
+  String get waStoppedUpdates;
+
+  /// No description provided for @waSuggestedFor.
+  ///
+  /// In en, this message translates to:
+  /// **'For {business}'**
+  String waSuggestedFor(String business);
+
+  /// No description provided for @waHandedOverPill.
+  ///
+  /// In en, this message translates to:
+  /// **'Handed over'**
+  String get waHandedOverPill;
+
+  /// No description provided for @waEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No WhatsApp conversations'**
+  String get waEmptyTitle;
+
+  /// No description provided for @waEmptySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'When a customer writes to Laawol’s WhatsApp number about a package, the conversation appears here.'**
+  String get waEmptySubtitle;
+
+  /// No description provided for @waSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Search name, number or message'**
+  String get waSearch;
+
+  /// No description provided for @waLaawol.
+  ///
+  /// In en, this message translates to:
+  /// **'Laawol'**
+  String get waLaawol;
+
+  /// No description provided for @waCustomerPackages.
+  ///
+  /// In en, this message translates to:
+  /// **'Packages'**
+  String get waCustomerPackages;
+
+  /// No description provided for @waPackagesLoading.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading packages…'**
+  String get waPackagesLoading;
+
+  /// No description provided for @waPackagesFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t load the packages.'**
+  String get waPackagesFailed;
+
+  /// No description provided for @waNoPackages.
+  ///
+  /// In en, this message translates to:
+  /// **'No package with your business for this number.'**
+  String get waNoPackages;
+
+  /// No description provided for @waPackageSender.
+  ///
+  /// In en, this message translates to:
+  /// **'Sender'**
+  String get waPackageSender;
+
+  /// No description provided for @waPackageReceiver.
+  ///
+  /// In en, this message translates to:
+  /// **'Receiver'**
+  String get waPackageReceiver;
+
+  /// No description provided for @waMarkDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark done'**
+  String get waMarkDone;
+
+  /// No description provided for @waMarkingDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Marking done…'**
+  String get waMarkingDone;
+
+  /// No description provided for @waReopen.
+  ///
+  /// In en, this message translates to:
+  /// **'Reopen'**
+  String get waReopen;
+
+  /// No description provided for @waReopening.
+  ///
+  /// In en, this message translates to:
+  /// **'Reopening…'**
+  String get waReopening;
+
+  /// No description provided for @waPrivateNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Private note'**
+  String get waPrivateNote;
+
+  /// No description provided for @waOnlyYourTeam.
+  ///
+  /// In en, this message translates to:
+  /// **'Only your team sees this'**
+  String get waOnlyYourTeam;
+
+  /// No description provided for @waNoteSaving.
+  ///
+  /// In en, this message translates to:
+  /// **'Saving note…'**
+  String get waNoteSaving;
+
+  /// No description provided for @waNoteSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Note saved.'**
+  String get waNoteSaved;
+
+  /// No description provided for @waHandOver.
+  ///
+  /// In en, this message translates to:
+  /// **'Hand over'**
+  String get waHandOver;
+
+  /// No description provided for @waHandOverTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Hand over this conversation'**
+  String get waHandOverTitle;
+
+  /// No description provided for @waHandOverSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'It moves to the other inbox with its messages. The customer isn’t told.'**
+  String get waHandOverSubtitle;
+
+  /// No description provided for @waHandOverToLaawol.
+  ///
+  /// In en, this message translates to:
+  /// **'Laawol support'**
+  String get waHandOverToLaawol;
+
+  /// No description provided for @waHandOverToBusiness.
+  ///
+  /// In en, this message translates to:
+  /// **'Another business'**
+  String get waHandOverToBusiness;
+
+  /// No description provided for @waHandOverStaffHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Laawol can pass it on to another business that ships for this customer.'**
+  String get waHandOverStaffHint;
+
+  /// No description provided for @waHandOverNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Note for them (optional)'**
+  String get waHandOverNote;
+
+  /// No description provided for @waHandingOver.
+  ///
+  /// In en, this message translates to:
+  /// **'Handing over…'**
+  String get waHandingOver;
+
+  /// No description provided for @waHandedOverTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Handed over to {name}.'**
+  String waHandedOverTo(String name);
+
+  /// No description provided for @waPickBusiness.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a business'**
+  String get waPickBusiness;
+
+  /// No description provided for @waRefusalNotThisCustomer.
+  ///
+  /// In en, this message translates to:
+  /// **'That business has no shipment for this customer.'**
+  String get waRefusalNotThisCustomer;
+
+  /// No description provided for @waRefusalPickAnother.
+  ///
+  /// In en, this message translates to:
+  /// **'It’s already in that inbox. Pick another one.'**
+  String get waRefusalPickAnother;
+
+  /// No description provided for @waRefusalBusinessNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'That business no longer exists.'**
+  String get waRefusalBusinessNotFound;
+
+  /// No description provided for @waRefusalNotAllowed.
+  ///
+  /// In en, this message translates to:
+  /// **'You can’t do this on this conversation.'**
+  String get waRefusalNotAllowed;
+
+  /// No description provided for @waRefusalPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'This number needs its country code first.'**
+  String get waRefusalPhone;
+
+  /// No description provided for @waRefusalOffline.
+  ///
+  /// In en, this message translates to:
+  /// **'No connection. Try again.'**
+  String get waRefusalOffline;
+
+  /// No description provided for @waRefusalUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'That didn’t work. Try again.'**
+  String get waRefusalUnknown;
+
+  /// No description provided for @waAutoReply.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic reply'**
+  String get waAutoReply;
+
+  /// No description provided for @waNoteBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Private note · Only your team sees this'**
+  String get waNoteBadge;
+
+  /// No description provided for @waMediaDeleted.
+  ///
+  /// In en, this message translates to:
+  /// **'File deleted after 12 months'**
+  String get waMediaDeleted;
+
+  /// No description provided for @waTickSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent'**
+  String get waTickSent;
+
+  /// No description provided for @waTickDelivered.
+  ///
+  /// In en, this message translates to:
+  /// **'Delivered'**
+  String get waTickDelivered;
+
+  /// No description provided for @waTickRead.
+  ///
+  /// In en, this message translates to:
+  /// **'Read'**
+  String get waTickRead;
+
+  /// No description provided for @waTickFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Not delivered'**
+  String get waTickFailed;
+
+  /// No description provided for @waTickFailedReason.
+  ///
+  /// In en, this message translates to:
+  /// **'Not delivered: {reason}'**
+  String waTickFailedReason(String reason);
+
+  /// No description provided for @waTickWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting: goes out when the customer replies'**
+  String get waTickWaiting;
+
+  /// No description provided for @waTickStopped.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting: the customer stopped updates'**
+  String get waTickStopped;
+
+  /// No description provided for @waPlay.
+  ///
+  /// In en, this message translates to:
+  /// **'Play'**
+  String get waPlay;
+
+  /// No description provided for @waPause.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause'**
+  String get waPause;
+
+  /// No description provided for @waAudioFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t play this voice note.'**
+  String get waAudioFailed;
+
+  /// No description provided for @waDeliveryWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'Outside WhatsApp’s 24-hour window: the customer was asked to reply, and your message goes out when they do.'**
+  String get waDeliveryWaiting;
+
+  /// No description provided for @waDeliveryStopped.
+  ///
+  /// In en, this message translates to:
+  /// **'The customer stopped updates. Your message goes out if they write again.'**
+  String get waDeliveryStopped;
+
+  /// No description provided for @waDeliveryFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'WhatsApp didn’t accept this message. The reason is under it.'**
+  String get waDeliveryFailed;
+
+  /// No description provided for @waWindowClosed.
+  ///
+  /// In en, this message translates to:
+  /// **'The customer last wrote over 24 hours ago. What you send waits until they reply.'**
+  String get waWindowClosed;
+
+  /// No description provided for @waWriteMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Message on WhatsApp'**
+  String get waWriteMessage;
+
+  /// No description provided for @waRecordVoice.
+  ///
+  /// In en, this message translates to:
+  /// **'Record a voice note'**
+  String get waRecordVoice;
+
+  /// No description provided for @waRecording.
+  ///
+  /// In en, this message translates to:
+  /// **'Recording {time}'**
+  String waRecording(String time);
+
+  /// No description provided for @waSendVoice.
+  ///
+  /// In en, this message translates to:
+  /// **'Send voice note'**
+  String get waSendVoice;
+
+  /// No description provided for @waDiscardVoice.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard voice note'**
+  String get waDiscardVoice;
+
+  /// No description provided for @waMicDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow the microphone in Settings to record voice notes.'**
+  String get waMicDenied;
+
+  /// No description provided for @waRecordFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t record. Try again.'**
+  String get waRecordFailed;
+
+  /// No description provided for @waVoiceTooShort.
+  ///
+  /// In en, this message translates to:
+  /// **'That recording was too short.'**
+  String get waVoiceTooShort;
+
+  /// No description provided for @waMessageCustomer.
+  ///
+  /// In en, this message translates to:
+  /// **'Message customer'**
+  String get waMessageCustomer;
+
+  /// No description provided for @waMessageWho.
+  ///
+  /// In en, this message translates to:
+  /// **'Who do you want to message?'**
+  String get waMessageWho;
+
+  /// No description provided for @waOpening.
+  ///
+  /// In en, this message translates to:
+  /// **'Opening the conversation…'**
+  String get waOpening;
+
+  /// No description provided for @waNeedsCountryCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Add the country code to message this number'**
+  String get waNeedsCountryCode;
+
+  /// No description provided for @waNoPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'No phone number on this package.'**
+  String get waNoPhone;
+
+  /// No description provided for @waNotifTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'WhatsApp messages'**
+  String get waNotifTitle;
+
+  /// No description provided for @waNotifOwner.
+  ///
+  /// In en, this message translates to:
+  /// **'When a customer writes on WhatsApp. On for owners unless you switch it off.'**
+  String get waNotifOwner;
+
+  /// No description provided for @waNotifStaff.
+  ///
+  /// In en, this message translates to:
+  /// **'When a customer writes on WhatsApp. Off for staff until you switch it on.'**
+  String get waNotifStaff;
+
+  /// No description provided for @waDisplayNameTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Name customers see on WhatsApp'**
+  String get waDisplayNameTitle;
+
+  /// No description provided for @waDisplayNameHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Your replies are signed {example}. Leave it empty to use your first name.'**
+  String waDisplayNameHelp(String example);
+
+  /// No description provided for @waDisplayNameSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save name'**
+  String get waDisplayNameSave;
+
+  /// No description provided for @waDisplayNameSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Name saved.'**
+  String get waDisplayNameSaved;
+
+  /// No description provided for @waNotifAdmin.
+  ///
+  /// In en, this message translates to:
+  /// **'When a customer writes to Laawol on WhatsApp. On unless you switch it off.'**
+  String get waNotifAdmin;
+
+  /// No description provided for @waPackageTick.
+  ///
+  /// In en, this message translates to:
+  /// **'{who} {mark} {status}'**
+  String waPackageTick(String who, String mark, String status);
+
+  /// No description provided for @waPackageTickFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'{who} {mark} Not delivered: {reason}'**
+  String waPackageTickFailed(String who, String mark, String reason);
+
+  /// No description provided for @waHandOverLoading.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading where it can go…'**
+  String get waHandOverLoading;
+
+  /// No description provided for @waHandOverNoOptions.
+  ///
+  /// In en, this message translates to:
+  /// **'There is nowhere else to hand it.'**
+  String get waHandOverNoOptions;
 }
 
 class _AppLocalizationsDelegate

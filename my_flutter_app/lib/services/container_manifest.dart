@@ -1391,6 +1391,7 @@ class ContainerLineUpdateResult {
     required this.role,
     required this.status,
     this.reason = '',
+    this.delivery = '',
   });
 
   /// [containerUpdateRoleSender] (the customer) or
@@ -1401,8 +1402,12 @@ class ContainerLineUpdateResult {
   final String status;
 
   /// Why a skipped person was skipped: no_phone, switched_off or
-  /// needs_country_code.
+  /// needs_country_code. On a failure, Meta's reason.
   final String reason;
+
+  /// What WhatsApp reported after it was sent: delivered, read or failed
+  /// ('' until it reports; docs/WHATSAPP_CONVERSATIONS.md decision 15).
+  final String delivery;
 }
 
 /// `containerLines/{id}.lastCustomerUpdate`: `{update, results, atMs}`.
@@ -1434,7 +1439,8 @@ class ContainerLineUpdate {
         results.add(ContainerLineUpdateResult(
           role: role,
           status: status,
-          reason: _text(item['reason'], 40),
+          reason: _text(item['reason'], 120),
+          delivery: _text(item['delivery'], 20),
         ));
       }
     }

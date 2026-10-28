@@ -17,6 +17,7 @@ import '../l10n/app_localizations.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_motion.dart';
 import '../theme/app_spacing.dart';
+import '../services/whatsapp_conversations.dart' show showBusinessSupportTab;
 import '../services/business_activity_queries.dart';
 import '../services/business_parking_entry.dart';
 import '../services/business_service_overview.dart';
@@ -1523,7 +1524,13 @@ List<_BusinessTool> _businessTools(
         l10n.businessReviewsTitle,
         () => go(BusinessReviewsScreen(businessId: businessId)),
       ),
-    if (auth.hasBusinessPermission(BusinessPermission.support))
+    // Everyone at the business answers WhatsApp; without the Support
+    // permission the inbox shows only those conversations.
+    if (showBusinessSupportTab(
+      isAdmin: auth.isAdmin,
+      canManageSupport: auth.hasBusinessPermission(BusinessPermission.support),
+      businessId: businessId,
+    ))
       _BusinessTool(
         'support',
         Icons.forum_outlined,

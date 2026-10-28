@@ -26,6 +26,10 @@ import '../widgets/lot_sheets.dart';
 import '../widgets/package_delivery_widgets.dart';
 import '../widgets/package_money.dart';
 import '../widgets/phone_account_widgets.dart' show RecordPhoneFlagNotes;
+import '../services/whatsapp_conversations.dart'
+    show PackageUpdateTick, messageCustomerTargets, packageUpdateTickOf;
+import '../widgets/whatsapp_widgets.dart'
+    show openWhatsAppForLine, packageUpdateTickLabel;
 import 'containers_screen.dart';
 import 'package_payment_sheet.dart';
 
@@ -390,6 +394,9 @@ class _PackageResultScreenState extends State<PackageResultScreen> {
             _container == null && !line.isWaiting ? null : _printLabels,
         onOpenContainer: _openContainer,
         onPricePayments: _pricePayments,
+        onMessageCustomer: messageCustomerTargets(line).isEmpty
+            ? null
+            : () => openWhatsAppForLine(context, line),
         onMarkDelivered: canMarkDelivered(line, _container, access)
             ? _markDelivered
             : null,
@@ -514,6 +521,7 @@ class PackageResultView extends StatelessWidget {
     required this.onOpenContainer,
     this.onEditLine,
     this.onPricePayments,
+    this.onMessageCustomer,
     this.group,
     this.access = PackageAccess.full,
     this.onMarkDelivered,
@@ -554,6 +562,10 @@ class PackageResultView extends StatelessWidget {
 
   /// Opens the price and payments sheet; null hides the button.
   final VoidCallback? onPricePayments;
+
+  /// Opens the WhatsApp conversation with the customer, through Laawol's
+  /// number (docs/WHATSAPP_CONVERSATIONS.md); null hides the button.
+  final VoidCallback? onMessageCustomer;
 
   @override
   Widget build(BuildContext context) {
@@ -812,6 +824,17 @@ class PackageResultView extends StatelessWidget {
           title: l10n.pkgUpdates,
           child: _Updates(line: line, locale: locale),
         ),
+        // Everyone at the business answers the customer (decision 6), so
+        // this is offered to a deliveries-only person too.
+        if (onMessageCustomer != null) ...[
+          const SizedBox(height: AppSpacing.sm),
+          ContainerActionButton(
+            key: const Key('pkg-message-customer'),
+            icon: Icons.forum_outlined,
+            label: l10n.waMessageCustomer,
+            onTap: onMessageCustomer!,
+          ),
+        ],
         // Everything below changes the package or opens the container page
         // (which shows every price): a manager's, not a deliveries-only
         // person's.
@@ -1225,16 +1248,30 @@ class _Updates extends StatelessWidget {
           for (final result in last.results)
             Padding(
               padding: const EdgeInsets.only(left: 24),
-              child: _Fact(
-                icon: _resultIcon(result.status),
-                text: l10n.pkgUpdateResult(
-                  result.role == containerUpdateRoleReceiver
-                      ? l10n.ctrReceiverShort
-                      : l10n.lotCustomer,
-                  _resultLabel(l10n, result),
-                ),
-                color: _resultColor(result.status),
-              ),
+              // Sent, delivered, read or failed: WhatsApp's tick
+              // ("Customer ✓✓ Delivered"); queued or skipped: what happened.
+              child: switch (packageUpdateTickOf(result)) {
+                final tick? => _Fact(
+                    key: ValueKey('pkg-update-tick:${result.role}'),
+                    icon: tick.tick == PackageUpdateTick.failed
+                        ? Icons.error_outline
+                        : Icons.done_all,
+                    text: packageUpdateTickLabel(l10n, tick),
+                    color: tick.tick == PackageUpdateTick.failed
+                        ? AppColors.errorRed
+                        : AppColors.sage,
+                  ),
+                null => _Fact(
+                    icon: _resultIcon(result.status),
+                    text: l10n.pkgUpdateResult(
+                      result.role == containerUpdateRoleReceiver
+                          ? l10n.ctrReceiverShort
+                          : l10n.lotCustomer,
+                      _resultLabel(l10n, result),
+                    ),
+                    color: _resultColor(result.status),
+                  ),
+              },
             ),
         ],
       ],
