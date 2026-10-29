@@ -125,7 +125,9 @@ function netStaffExpenses(customers, ctx) {
   const byCustomer = staffByCustomer(ctx?.links);
   const names = ctx?.staffNames || {};
   const owedByStaff = {};
-  for (const [id, c] of Object.entries(credits)) owedByStaff[id] = c.creditCents;
+  for (const [id, c] of Object.entries(credits)) {
+    owedByStaff[id] = c.creditCents;
+  }
 
   const netted = (customers || []).map((customer) => {
     const linked = byCustomer[customer.key] || [];
@@ -212,7 +214,9 @@ function itemsAfterCredit(items, creditCents) {
     const amount = cents(item.amountCents);
     const covered = Math.min(amount, left);
     left -= covered;
-    if (amount - covered > 0) out.push({...item, amountCents: amount - covered});
+    if (amount - covered > 0) {
+      out.push({...item, amountCents: amount - covered});
+    }
   }
   return out;
 }
