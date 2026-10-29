@@ -7424,6 +7424,8 @@ Object.assign(ATTRIBUTE_TRANSLATIONS, {
   "Amount paid back": "Montant remboursé",
   "Find a parking customer": "Trouver un client du parking",
   "Name or phone": "Nom ou téléphone",
+});
+
 // Voiding a parked car or a whole expense line (void-record.tsx): the record
 // stays, struck through, and drops out of the totals. The reason and the
 // name in "Voided · reason · by · date" are user data, never translated.
