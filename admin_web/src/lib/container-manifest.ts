@@ -97,6 +97,47 @@ export type ContainerOwnerKind = (typeof CONTAINER_OWNER_KINDS)[number];
  */
 export const ISO_CONTAINER_NUMBER = /^[A-Z]{4}\d{7}$/;
 
+// A flight is a container marked air (docs/AIR_PACKAGES.md §1): the same
+// list, labels, statuses and messages, named by an air waybill instead of a
+// container number. "sea" is what every container was before the field.
+export const SHIP_MODES = ["sea", "air"] as const;
+export type ShipMode = (typeof SHIP_MODES)[number];
+/** An air waybill as stored: letters, digits and dashes, 6-20 of them, upper case ("176-12345678"). */
+export const AIR_WAYBILL = /^[A-Z0-9-]{6,20}$/;
+const MAX_AIRLINE = 60;
+
+/** "air", or "sea" for anything else (the server's `shipModeOf`). */
+export function shipModeOf(value: unknown): ShipMode {
+  return String(value ?? "").trim().slice(0, 10).toLowerCase() === "air" ? "air" : "sea";
+}
+
+/** Whether a stored or drafted container flies. */
+export function isAirContainer(container: unknown): boolean {
+  return shipModeOf(asRow(container).shipMode) === "air";
+}
+
+/** An air waybill as stored: upper case, spaces dropped. */
+export function airWaybillOf(value: unknown): string {
+  return String(value ?? "").trim().slice(0, 40).toUpperCase().replace(/\s+/g, "");
+}
+
+/**
+ * What staff call a container of this mode: a flight is a "Shipment", a box
+ * a "Container", on every screen. The French words are the server's
+ * (`containerKindWord`), so documents and screens agree.
+ */
+export function containerKindWord(container: unknown, lang: "en" | "fr" = "en"): string {
+  const air = isAirContainer(container);
+  if (lang === "fr") return air ? "Envoi" : "Conteneur";
+  return air ? "Shipment" : "Container";
+}
+
+/**
+ * The air waybill refusal's sentence, the server's own, until the console
+ * refusal map carries `air_waybill_invalid` (it is read from there first).
+ */
+const AIR_WAYBILL_MESSAGE = "An air waybill is 6 to 20 letters, digits or dashes, like 176-12345678.";
+
 const MAX_TEXT = 200;
 const MAX_LABEL = 120;
 const MAX_NOTE = 500;
@@ -376,8 +417,11 @@ export const CONTAINER_MESSAGES: Record<ContainerRefusal, string> = {
   line_in_other_container: "This package is on another container.",
 };
 
-export function containerMessage(codes: readonly ContainerRefusal[]): string {
-  return codes.map((code) => CONTAINER_MESSAGES[code]).join(" ");
+export function containerMessage(codes: readonly (ContainerRefusal | ContainerError)[]): string {
+  return codes
+    .map((code) => (CONTAINER_MESSAGES as Record<string, string>)[code] ?? (code === "air_waybill_invalid" ? AIR_WAYBILL_MESSAGE : ""))
+    .filter(Boolean)
+    .join(" ");
 }
 
 /** The most packages one `assignContainerLines` call takes. */
@@ -389,7 +433,13 @@ export const MAX_ASSIGN_LINES = 100;
 
 export type ContainerDraft = {
   label: string;
+  /** Sea (a box, the default) or air (a flight: waybill and airline, no number). */
+  shipMode: ShipMode;
   containerNumber: string;
+  /** Air only: the air waybill, required unless a working name is given. */
+  airWaybill: string;
+  /** Air only, optional. */
+  airline: string;
   bookingReference: string;
   destinationCountryId: string;
   destinationCountryName: string;
@@ -400,7 +450,10 @@ export type ContainerDraft = {
 
 export const emptyContainerDraft: ContainerDraft = {
   label: "",
+  shipMode: "sea",
   containerNumber: "",
+  airWaybill: "",
+  airline: "",
   bookingReference: "",
   destinationCountryId: "",
   destinationCountryName: "",
@@ -422,7 +475,8 @@ export function containerCarrierScac(value: unknown): string {
 export function containerCarrierNeedsChoice(row: unknown): boolean {
   const r = asRow(row);
   const number = text(r.containerNumber, 20);
-  if (!number || containerStatus(r) === "arrived") return false;
+  // A flight is never on the ocean carrier feed: nothing to choose.
+  if (isAirContainer(r) || !number || containerStatus(r) === "arrived") return false;
   if (text(r.trackingProvider, 40) === "carrier_api" && text(r.trackedContainerNumber, 20) === number) {
     return false;
   }
@@ -435,19 +489,26 @@ export function containerCarrierNeedsChoice(row: unknown): boolean {
 
 export type ContainerError =
   | "container_label_required"
-  | "container_number_invalid";
+  | "container_number_invalid"
+  | "air_waybill_invalid";
 
-/** Same checks as the server's `validateContainer`, every problem at once. */
+/** Same checks as the server's `validateContainer`, every problem at once, mode-aware. */
 export function validateContainerDraft(draft: ContainerDraft): ContainerError[] {
   const errors: ContainerError[] = [];
-  const number = text(draft.containerNumber, 20).toUpperCase();
+  const air = isAirContainer(draft);
+  // A flight has no container number: the box is the plane's.
+  const number = air ? "" : text(draft.containerNumber, 20).toUpperCase();
+  const waybill = air ? airWaybillOf(draft.airWaybill) : "";
   // The working name is for the box that has no number yet; a container or
-  // booking number is a name enough.
-  if (!text(draft.label, MAX_LABEL) && !number && !text(draft.bookingReference, 60)) {
+  // booking number (or a flight's waybill) is a name enough.
+  if (!text(draft.label, MAX_LABEL) && !number && !waybill && !text(draft.bookingReference, 60)) {
     errors.push("container_label_required");
   }
   if (number && !ISO_CONTAINER_NUMBER.test(number)) {
     errors.push("container_number_invalid");
+  }
+  if (waybill && !AIR_WAYBILL.test(waybill)) {
+    errors.push("air_waybill_invalid");
   }
   return errors;
 }
@@ -455,29 +516,39 @@ export function validateContainerDraft(draft: ContainerDraft): ContainerError[] 
 /**
  * The fields a business may set, shaped as the server's `containerRecord`
  * plus the shipping line (`carrierScac`), which both callables take apart.
+ * A flight carries its waybill and airline and no container number or
+ * shipping line; a box the other way round.
  */
 export function containerPayload(draft: ContainerDraft) {
+  const air = isAirContainer(draft);
   return {
     label: text(draft.label, MAX_LABEL),
-    containerNumber: text(draft.containerNumber, 20).toUpperCase(),
+    shipMode: air ? ("air" as const) : ("sea" as const),
+    containerNumber: air ? "" : text(draft.containerNumber, 20).toUpperCase(),
+    airWaybill: air ? airWaybillOf(draft.airWaybill) : "",
+    airline: air ? text(draft.airline, MAX_AIRLINE) : "",
     bookingReference: text(draft.bookingReference, 60).toUpperCase(),
     destinationCountryId: text(draft.destinationCountryId, 60),
     destinationCountryName: text(draft.destinationCountryName, MAX_LABEL),
     notes: text(draft.notes, MAX_NOTE),
-    carrierScac: containerCarrierScac(draft.carrierScac),
+    carrierScac: air ? "" : containerCarrierScac(draft.carrierScac),
   };
 }
 
 /** A stored container back into the edit form. */
 export function containerDraftFromRow(row: Row): ContainerDraft {
+  const air = isAirContainer(row);
   return {
     label: text(row.label, MAX_LABEL),
-    containerNumber: text(row.containerNumber, 20),
+    shipMode: air ? "air" : "sea",
+    containerNumber: air ? "" : text(row.containerNumber, 20),
+    airWaybill: air ? airWaybillOf(row.airWaybill) : "",
+    airline: air ? text(row.airline, MAX_AIRLINE) : "",
     bookingReference: text(row.bookingReference, 60),
     destinationCountryId: text(row.destinationCountryId, 60),
     destinationCountryName: text(row.destinationCountryName, MAX_LABEL),
     notes: text(row.notes, MAX_NOTE),
-    carrierScac: containerCarrierScac(row.carrierScac),
+    carrierScac: air ? "" : containerCarrierScac(row.carrierScac),
   };
 }
 
@@ -1312,9 +1383,12 @@ export function containerRowCounts(row: unknown, lines: readonly unknown[]): Con
 // Reading rows: what the list, the search and the cross-link say.
 // ---------------------------------------------------------------------------
 
-/** The container number when known, else the working name. */
+/** The container number (a flight's air waybill) when known, else the working name. */
 export function containerTitle(row: unknown): string {
   const r = asRow(row);
+  if (isAirContainer(r)) {
+    return airWaybillOf(r.airWaybill) || text(r.label, MAX_LABEL) || text(r.bookingReference, 60) || "Shipment";
+  }
   return text(r.containerNumber, 20) || text(r.label, MAX_LABEL) || text(r.bookingReference, 60) || "Container";
 }
 

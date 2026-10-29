@@ -22,6 +22,8 @@ import {
 
 import { ContainerLabelsDialog } from "@/components/business/container-labels-dialog";
 import { PiecesEditor } from "@/components/business/pieces-editor";
+import { ProofFields } from "@/components/business/proof-fields";
+import { emptyProofDraft, proofDraftProblems, proofPayload, proofProblemText, type ProofDraft } from "@/lib/package-proof";
 import { CONTAINER_MESSAGES } from "@/lib/container-manifest";
 import type { PieceDraft } from "@/lib/piece-drafts";
 import { CopyValue } from "@/components/copy-value";
@@ -703,6 +705,10 @@ function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onF
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState<InvoicePaymentMethod>("cash");
   const [receivedBy, setReceivedBy] = useState(auth.currentUser?.uid ?? "");
+  // The proof staff add at the counter (docs/AIR_PACKAGES.md §4.2): photos,
+  // what is inside, weight and declared value. The server copies the
+  // request's own photos ahead of these; a received request never needs one.
+  const [proof, setProof] = useState<ProofDraft>(() => emptyProofDraft());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const collect = str(row.handoff) === "collect";
@@ -715,6 +721,12 @@ function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onF
     if (problem) {
       setShowErrors(true);
       setError(REQUEST_ERROR_MESSAGES[problem] ?? CONTAINER_MESSAGES[problem as keyof typeof CONTAINER_MESSAGES] ?? REQUEST_ERROR_MESSAGES.price_invalid);
+      return;
+    }
+    const proofProblems = proofDraftProblems(proof);
+    if (proofProblems.length) {
+      setShowErrors(true);
+      setError(proofProblemText(proofProblems[0]));
       return;
     }
     let payment: Record<string, unknown> | undefined;
@@ -740,6 +752,7 @@ function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onF
         ...(pickupFeeCents !== undefined ? { pickupFeeCents } : {}),
         payOnArrival,
         ...(payment ? { payment } : {}),
+        ...proofPayload(proof),
       });
       onFlash(receivedFlash(result.trackingCode, result.alreadyReceived, l));
       onReceived(receivedLineStub(result, payloadPieces, pickupFeeCents ?? null));
@@ -770,6 +783,15 @@ function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onF
             pieces={pieces}
             showErrors={showErrors}
             {...(collect ? { pickupFee, onPickupFeeChange: setPickupFee } : {})}
+          />
+          <ProofFields
+            id="pkq-receive-proof"
+            businessId={businessId}
+            draft={proof}
+            onChange={setProof}
+            showErrors={showErrors}
+            disabled={busy}
+            lang={l}
           />
           {card ? (
             <p className="lst-hint"><CreditCard size={14} aria-hidden="true" /> <span>Paid online by card</span> <span data-no-translate>{moneyText(Number(asRow(row.payment).paidCents) || 0, l)}</span></p>

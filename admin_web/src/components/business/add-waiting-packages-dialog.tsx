@@ -5,6 +5,8 @@ import { httpsCallable } from "firebase/functions";
 import { Minus, Plus, RefreshCw, Tag, X } from "lucide-react";
 
 import { ContainerLabelsDialog } from "@/components/business/container-labels-dialog";
+import { confirmImportantAction } from "@/lib/action-confirmation";
+import { loadAnywayText, withProblemAcknowledgement } from "@/lib/package-proof";
 import {
   MAX_ASSIGN_LINES,
   CONTAINER_MESSAGES,
@@ -118,7 +120,18 @@ export function AddWaitingPackagesDialog({
     setError("");
     setOffending([]);
     await runPackageCall(setBusy, async () => {
-      const response = await httpsCallable(functions, "assignContainerLines")(request);
+      // A sender who reported a problem: the server warns and refuses until
+      // staff confirm; the package itself is never refused for it
+      // (docs/AIR_PACKAGES.md §4.8). Declined, nothing is loaded.
+      const response = await withProblemAcknowledgement(
+        (acknowledgeProblems) => httpsCallable(functions, "assignContainerLines")(acknowledgeProblems ? { ...request, acknowledgeProblems: true } : request),
+        async (lineIds) => {
+          const codes = lineIds.map((id) => text(everything.find((entry) => entry.id === id)?.line.trackingCode, id));
+          const ok = await confirmImportantAction(loadAnywayText(codes, "en"), loadAnywayText(codes, "fr"));
+          return ok;
+        },
+      );
+      if (!response) return;
       const answer = assignAnswerFrom(response.data);
       const message = assignedText(request.lineIds.length, containerName, lang);
       onAssigned(message);

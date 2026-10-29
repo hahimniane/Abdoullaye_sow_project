@@ -17,8 +17,18 @@ import { ExternalLink, MessageCircle, Package, Phone, RefreshCw, Tag } from "luc
 
 import { ContainerLabelsDialog } from "@/components/business/container-labels-dialog";
 import { PackageDeliverySection } from "@/components/business/package-delivery";
+import { ProofPhotoThumbs, ProofTicks, SenderProblemBanner } from "@/components/business/proof-ticks";
 import { resolveAdminRoleKey, type AdminPermissionsConfig } from "@/lib/admin-access";
-import { CONTAINER_STATUS_LABELS, CONTAINER_STATUS_TONES, LINE_STAGE_LABELS, LINE_STAGE_TONES } from "@/lib/container-manifest";
+import { CONTAINER_STATUS_LABELS, CONTAINER_STATUS_TONES, LINE_STAGE_LABELS, LINE_STAGE_TONES, isAirContainer } from "@/lib/container-manifest";
+import {
+  lineContents,
+  lineDeclaredValueCents,
+  linePhotoPaths,
+  lineWeightLb,
+  proofTickLabels,
+  proofTicks,
+  weightText,
+} from "@/lib/package-proof";
 import { deliveryAccess, deliveryBalanceCents } from "@/lib/container-delivery";
 import { destinationCountryName, destinationCountryOptionForRow } from "@/lib/destination-countries";
 import { db } from "@/lib/firebase";
@@ -269,6 +279,14 @@ export function PackageStaffView({
 
   const lang = currentLanguage() === "fr" ? "fr" : "en";
   const box = view.container;
+  // The proof on the package (docs/AIR_PACKAGES.md): read once from the line.
+  const ticks = proofTicks(line);
+  const tickLabels = proofTickLabels(ticks, lang);
+  const photoPaths = linePhotoPaths(line);
+  const contents = lineContents(line);
+  const weightLb = lineWeightLb(line);
+  const declaredValueCents = lineDeclaredValueCents(line);
+  const air = container ? isAirContainer(container) : false;
   const destinationOption = box ? destinationCountryOptionForRow({ id: box.destinationId, name: box.destinationName }) : null;
   const destination = box && destinationOption
     ? destinationOption.id ? destinationCountryName(destinationOption.id, lang) : box.destinationName
@@ -305,6 +323,32 @@ export function PackageStaffView({
         </div>
       </section>
 
+      <SenderProblemBanner line={line} />
+
+      <section className="pkg-staff-section">
+        <h3>Proof</h3>
+        <div className="prf-staff-ticks">
+          <ProofTicks line={line} ticks={ticks} />
+          <small data-no-translate>{tickLabels.photo} · {tickLabels.sender} · {tickLabels.delivered}</small>
+        </div>
+        {photoPaths.length > 0 ? <ProofPhotoThumbs paths={photoPaths} /> : <p className="pkg-staff-muted">No drop-off photo.</p>}
+        <div className="pur-info">
+          <div>
+            <span>What&apos;s inside</span>
+            {contents.length > 0 ? (
+              <b data-no-translate>{contents.map((item) => `${item.quantity > 1 ? `${item.quantity} ` : ""}${item.label}${item.serial ? ` (${item.serial})` : ""}`).join(", ")}</b>
+            ) : (
+              <b>Not listed</b>
+            )}
+          </div>
+          <div><span>Weight</span>{weightLb !== null ? <b data-no-translate>{weightText(weightLb, lang)}</b> : <b>Not weighed</b>}</div>
+          {/* The declared value is money on the package: never for a deliveries-only person. */}
+          {access.canSeeMoney && (
+            <div><span>Declared value</span>{declaredValueCents !== null ? <b data-no-translate>{moneyText(declaredValueCents, lang)}</b> : <b>Not declared</b>}</div>
+          )}
+        </div>
+      </section>
+
       <div className="pkg-staff-people">
         <section className="pkg-staff-section">
           <h3>Owner</h3>
@@ -338,7 +382,7 @@ export function PackageStaffView({
       )}
 
       <section className="pkg-staff-section">
-        <h3>Container</h3>
+        <h3>{air ? "Shipment" : "Container"}</h3>
         {view.waiting ? (
           <div className="pur-info">
             <div><span>Container</span><b>Waiting for a container</b></div>
@@ -347,12 +391,13 @@ export function PackageStaffView({
         ) : box ? (
           <div className="pur-info">
             <div>
-              <span>Container</span>
+              <span>{air ? "Shipment" : "Container"}</span>
               <b data-no-translate>{box.title}</b>
               {box.subtitle && <small data-no-translate>{box.subtitle}</small>}
+              {air && <small>By air</small>}
             </div>
             <div><span>Destination</span><b>{destination || "No destination yet"}</b></div>
-            {box.sailedAt && <div><span>Sailed</span><b>{formatDate(box.sailedAt)}</b></div>}
+            {box.sailedAt && <div><span>{air ? "Departed" : "Sailed"}</span><b>{formatDate(box.sailedAt)}</b></div>}
             {box.arrivedAt && <div><span>Ready for pickup</span><b>{formatDate(box.arrivedAt)}</b></div>}
           </div>
         ) : (

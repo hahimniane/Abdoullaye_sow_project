@@ -35,7 +35,7 @@ function errorText(error: unknown): string {
  * conversation in, or without a number WhatsApp can reach (with its country
  * code). With both a sender and a receiver, it asks which.
  */
-export function MessageCustomerButton({ row }: { row: unknown }) {
+export function MessageCustomerButton({ row, label = "Message customer" }: { row: unknown; /** The button's words; "Open conversation" on a sender's problem flag. */ label?: "Message customer" | "Open conversation" }) {
   const target = useContext(MessageCustomerContext);
   const contacts = packageMessageContacts(row);
   const [choosing, setChoosing] = useState(false);
@@ -90,7 +90,7 @@ export function MessageCustomerButton({ row }: { row: unknown }) {
         }}
       >
         {busy ? <RefreshCw className="spin" size={12} /> : <MessageCircle size={12} />}
-        {busy ? "Opening…" : "Message customer"}
+        {busy ? "Opening…" : label === "Open conversation" ? "Open conversation" : "Message customer"}
       </button>
       {choosing && (
         <span className="wa-message-choices" role="menu">
