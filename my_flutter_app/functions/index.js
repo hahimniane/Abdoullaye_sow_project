@@ -234,7 +234,6 @@ const {
 // pure rules share names (toMillis, moneyText) with helpers in this file.
 const packageRequests = require("./package_requests");
 const requestReceive = require("./request_receive");
-const packageProof = require("./package_proof");
 const {
   loginCodeTemplateMessage,
   requestTemplateMessage,

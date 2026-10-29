@@ -1632,6 +1632,9 @@ describe("air containers", () => {
     assert.match(update, /isAirContainer\(merged\) \? ""/);
     const create = section("exports.createContainer =");
     assert.match(create, /isAirContainer\(record\) \? \{carrierScac: ""\}/);
+  });
+});
+
 // Proof on the package (docs/AIR_PACKAGES.md §2, §4.2): the four fields a
 // line stores through package_proof.validateProofFields, edited and
 // audited like the price.
