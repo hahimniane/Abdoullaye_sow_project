@@ -83,6 +83,7 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
   List<String> _yearOptions = [];
   final VinDecoderService _vinDecoderService = NhtsaVinDecoderService();
   bool _isVinDecoding = false;
+
   /// The last VIN already looked up, so typing one character past a
   /// complete VIN does not fire a second identical request.
   String _lastAutoDecodedVin = '';
@@ -108,6 +109,7 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
   bool _partByDays = true;
   final _partValueController = TextEditingController();
   String _partReceivedBy = '';
+
   /// Who took the money, asked separately for each of the two ways it
   /// can arrive: settling the whole balance, and settling a link the lot
   /// already sent. Sharing one field would let a pick made for one action
@@ -919,8 +921,11 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
 
   /// A one-tap copy for a value nobody should retype - the VIN, the owner's
   /// name. Nothing when the field is empty.
-  Widget? _copyIcon(TextEditingController controller, String tooltip,
-      String copiedMessage) {
+  Widget? _copyIcon(
+    TextEditingController controller,
+    String tooltip,
+    String copiedMessage,
+  ) {
     if (controller.text.trim().isEmpty) return null;
     return IconButton(
       tooltip: tooltip,
@@ -928,8 +933,9 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
       onPressed: () async {
         await Clipboard.setData(ClipboardData(text: controller.text.trim()));
         if (!mounted) return;
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(copiedMessage)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(copiedMessage)));
       },
     );
   }
@@ -942,7 +948,8 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     // Marking money received is a parking-permission action, not an admin one:
     // the lot's own staff are the people who take the Zelle.
     final bool canRecordPayment =
-        isAdmin || authProvider.hasBusinessPermission(BusinessPermission.parking);
+        isAdmin ||
+        authProvider.hasBusinessPermission(BusinessPermission.parking);
     final bool isBusinessEntry = _isBusinessEntry;
     final bool isPaidEntry = _isPaidEntry;
     // A walk-up is the lot's own record, taken at its own window, so its staff
@@ -1281,7 +1288,10 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
             decoration: InputDecoration(
               labelText: l10n.ownerName,
               suffixIcon: _copyIcon(
-                  _ownerNameController, l10n.copyName, l10n.nameCopied),
+                _ownerNameController,
+                l10n.copyName,
+                l10n.nameCopied,
+              ),
             ),
             validator: (value) {
               if (!canEdit) return null;
@@ -1394,7 +1404,9 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
               // Optional on a walk-up, the way the console has it - and the
               // message was an English literal, so a French lot was told
               // "Please enter VIN number" in the middle of a French form.
-              labelText: isBusinessEntry ? l10n.vinNumberOptional : l10n.vinNumber,
+              labelText: isBusinessEntry
+                  ? l10n.vinNumberOptional
+                  : l10n.vinNumber,
               helperText: canEdit ? l10n.lotVinHint : null,
               suffixIcon: _isVinDecoding
                   ? const Padding(
@@ -1495,10 +1507,9 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
           .get();
       final data = doc.data();
       if (data == null || !mounted) return;
-      final links = containerVinLinks(
-        parsed,
-        [ShippingContainer.fromMap(doc.id, data)],
-      );
+      final links = containerVinLinks(parsed, [
+        ShippingContainer.fromMap(doc.id, data),
+      ]);
       setState(() => _containerLink = links[vin]);
     } catch (_) {
       // Not readable, or not there: the card simply carries no link.
@@ -1655,8 +1666,8 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
       showErrorSnackBar(context, l10n.parkingSayWhoReceived);
       return;
     }
-    final outstandingCents =
-        (businessParkingBalance(_paymentFields) * 100).round();
+    final outstandingCents = (businessParkingBalance(_paymentFields) * 100)
+        .round();
     if (outstandingCents <= 0) {
       showErrorSnackBar(context, l10n.parkingNothingOutstanding);
       return;
@@ -1673,8 +1684,8 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     );
   }
 
-  /// The car left. Stamps today as the leave date and stops the accrual; it
-  /// does not touch the money, which is why the confirmation says so.
+  /// The car left. Stamps the device's local calendar day as the leave date;
+  /// the server freezes the accrued total so any unpaid balance survives.
   Future<void> _closeStay() async {
     final l10n = AppLocalizations.of(context)!;
     final confirmed = await confirmMajorAction(
@@ -1688,6 +1699,7 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     await _runBillingAction(
       () => _businessParkingService.closeStay(
         parkedCarId: widget.parkedCar.id,
+        endDate: DateTime.now(),
       ),
       success: l10n.parkingStayClosed,
       failure: l10n.parkingStayCouldNotBeClosed,
@@ -1781,7 +1793,9 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
       });
       showSuccessSnackBar(
         context,
-        result.alreadyPaid ? l10n.parkingAlreadyMarkedPaid : l10n.paymentRecorded,
+        result.alreadyPaid
+            ? l10n.parkingAlreadyMarkedPaid
+            : l10n.paymentRecorded,
       );
     } on FirebaseFunctionsException catch (error) {
       if (!mounted) return;
@@ -1876,7 +1890,9 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                 child: Text(
                   l10n.lotParkingHistoryTitle,
                   style: const TextStyle(
-                      fontSize: 17, fontWeight: FontWeight.w700),
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
               Expanded(
@@ -1902,8 +1918,8 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                       controller: controller,
                       padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
                       itemCount: docs.length,
-                      separatorBuilder: (_, _) => Divider(
-                          height: 18, color: Colors.grey.shade200),
+                      separatorBuilder: (_, _) =>
+                          Divider(height: 18, color: Colors.grey.shade200),
                       itemBuilder: (context, i) {
                         final d = docs[i].data();
                         final summary = (d['summary'] ?? d['action'] ?? '')
@@ -1920,13 +1936,20 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                             Text(
                               summary,
                               style: const TextStyle(
-                                  fontSize: 14, fontWeight: FontWeight.w600),
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              [who, when].where((s) => s.isNotEmpty).join(' · '),
+                              [
+                                who,
+                                when,
+                              ].where((s) => s.isNotEmpty).join(' · '),
                               style: TextStyle(
-                                  fontSize: 12, color: Colors.grey.shade600),
+                                fontSize: 12,
+                                color: Colors.grey.shade600,
+                              ),
                             ),
                           ],
                         );
@@ -2136,7 +2159,10 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
 
   /// The payment card for a walk-up the lot entered itself. Absent entirely
   /// for a customer's own booking, whose payment the platform owns.
-  Widget _buildBusinessPaymentCard(AppLocalizations l10n, bool canRecordPayment) {
+  Widget _buildBusinessPaymentCard(
+    AppLocalizations l10n,
+    bool canRecordPayment,
+  ) {
     final currency = NumberFormat.simpleCurrency(
       locale: Localizations.localeOf(context).toString(),
       name: 'USD',
@@ -2155,13 +2181,11 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     // Cancelling is a parking-permission action for the same reason marking a
     // payment received is - and the callable enforces the permission anyway.
     final canCancelLink =
-        canRecordPayment &&
-        canCancelBusinessParkingPaymentLink(_paymentFields);
+        canRecordPayment && canCancelBusinessParkingPaymentLink(_paymentFields);
     // Same gate, same reasons: a paid entry, a killed link or a record with no
     // link has nothing to resend, and the server would refuse all three.
     final canResendLink =
-        canRecordPayment &&
-        canResendBusinessParkingPaymentLink(_paymentFields);
+        canRecordPayment && canResendBusinessParkingPaymentLink(_paymentFields);
     // Not the same gate: a cancelled link can still be checked, because a
     // customer can pay in the minutes before the lot kills it and that payment
     // is the one nobody would otherwise find. Only a settled record has
@@ -2248,16 +2272,16 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                 l10n: l10n,
                 value: _receivedInPersonBy,
                 fieldKey: 'received-in-person',
-                onChanged: (next) =>
-                    setState(() => _receivedInPersonBy = next),
+                onChanged: (next) => setState(() => _receivedInPersonBy = next),
               ),
               const SizedBox(height: 8),
               SizedBox(
                 width: double.infinity,
                 child: AsyncActionButton.outlined(
                   key: const ValueKey<String>('parking-payment-received'),
-                  onPressed:
-                      _isMarkingPaid ? null : _recordPaymentReceivedInPerson,
+                  onPressed: _isMarkingPaid
+                      ? null
+                      : _recordPaymentReceivedInPerson,
                   icon: Icons.payments_outlined,
                   label: l10n.parkingPaymentReceivedInPerson,
                 ),
@@ -2287,7 +2311,8 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
           if ((isPaid || businessParkingIsPartlyPaid(_paymentFields)) &&
               canRecordPayment &&
               isBusinessEnteredParking(_paymentFields) &&
-              (_paymentFields['paymentMethod'] ?? '').toString() == 'direct') ...[
+              (_paymentFields['paymentMethod'] ?? '').toString() ==
+                  'direct') ...[
             const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,
@@ -2327,10 +2352,7 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
               style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
             ),
             const SizedBox(height: 4),
-            SelectableText(
-              checkoutUrl,
-              style: const TextStyle(fontSize: 12.5),
-            ),
+            SelectableText(checkoutUrl, style: const TextStyle(fontSize: 12.5)),
             const SizedBox(height: 8),
             Wrap(
               spacing: 12,
@@ -2386,9 +2408,7 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                   .map(
                     (value) => DropdownMenuItem<String>(
                       value: value,
-                      child: Text(
-                        businessParkingReceivedViaLabel(l10n, value),
-                      ),
+                      child: Text(businessParkingReceivedViaLabel(l10n, value)),
                     ),
                   )
                   .toList(),
@@ -2416,9 +2436,10 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                 ),
                 style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700),
               ),
-            if (_staffLabel(_paymentFields['receivedByStaffId'] ??
-                    _paymentFields['directPaymentMarkedByUid'])
-                .isNotEmpty)
+            if (_staffLabel(
+              _paymentFields['receivedByStaffId'] ??
+                  _paymentFields['directPaymentMarkedByUid'],
+            ).isNotEmpty)
               Text(
                 '${l10n.parkingReceivedBy}: '
                 '${_staffLabel(_paymentFields['receivedByStaffId'] ?? _paymentFields['directPaymentMarkedByUid'])}',
@@ -2535,7 +2556,11 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
         const SizedBox(height: 10),
         Text(
           note,
-          style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700, height: 1.3),
+          style: TextStyle(
+            fontSize: 12.5,
+            color: Colors.grey.shade700,
+            height: 1.3,
+          ),
         ),
         if (paid > 0) ...[
           const SizedBox(height: 6),
@@ -2561,7 +2586,10 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(label, style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600)),
+        Text(
+          label,
+          style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600),
+        ),
         const SizedBox(height: 3),
         Text(
           value,
@@ -2615,7 +2643,10 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
             Expanded(
               child: SegmentedButton<bool>(
                 segments: [
-                  ButtonSegment<bool>(value: true, label: Text(l10n.parkingDays)),
+                  ButtonSegment<bool>(
+                    value: true,
+                    label: Text(l10n.parkingDays),
+                  ),
                   ButtonSegment<bool>(
                     value: false,
                     label: Text(l10n.parkingAmount),
@@ -2634,7 +2665,9 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
           controller: _partValueController,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           decoration: InputDecoration(
-            labelText: _partByDays ? l10n.parkingDaysPaid : l10n.parkingAmountPaid,
+            labelText: _partByDays
+                ? l10n.parkingDaysPaid
+                : l10n.parkingAmountPaid,
           ),
         ),
         const SizedBox(height: 10),
@@ -2672,9 +2705,9 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
               onPressed: _isMarkingPaid
                   ? null
                   : () => setState(() {
-                        _partOpen = false;
-                        _partValueController.clear();
-                      }),
+                      _partOpen = false;
+                      _partValueController.clear();
+                    }),
               child: Text(l10n.cancel),
             ),
           ],

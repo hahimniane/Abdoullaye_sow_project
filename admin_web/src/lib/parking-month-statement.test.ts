@@ -53,6 +53,28 @@ test("left mid-month, priced stays across months, and the exclusions", () => {
   assert.equal(parkingMonthStatement({ ...diallo, paymentStatus: "not_required" }, "2026-09", OCT1)!.dueCents, 45000, "a mislabelled open stay still owes");
 });
 
+test("a closed part-paid stay is paid in September and owed in October", () => {
+  const row = {
+    ...diallo,
+    parkingDate: at("2026-09-16"),
+    parkingEndDate: at("2026-10-13"),
+    dailyRate: 12,
+    amountDueCents: 33600,
+    amountPaidCents: 18000,
+  };
+  const now = new Date("2026-10-29T15:00:00Z");
+  const september = parkingMonthStatement(row, "2026-09", now)!;
+  const october = parkingMonthStatement(row, "2026-10", now)!;
+  assert.equal(september.days, 15);
+  assert.equal(september.monthCents, 18000);
+  assert.equal(september.monthPaidCents, 18000);
+  assert.equal(september.dueCents, 0);
+  assert.equal(october.days, 13);
+  assert.equal(october.monthCents, 15600);
+  assert.equal(october.monthPaidCents, 0);
+  assert.equal(october.dueCents, 15600);
+});
+
 test("the business's month adds up and lists who owes, biggest first", () => {
   const s = parkingMonthSummary([
     diallo,

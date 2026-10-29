@@ -571,6 +571,94 @@ function businessParkingPartialPaymentPlan({entry, days, amountCents,
     openEnded};
 }
 
+/**
+ * Freezes an open stay at the calendar day the car left.
+ *
+ * Open stays deliberately carry a zero stored total while they accrue. When
+ * they become fixed stays, every reader switches to that stored total, so the
+ * close transition must materialize the inclusive days at the car's own rate.
+ * Otherwise a part-paid stay keeps its payment but loses the bill behind it.
+ *
+ * @param {{entry: !Object, endDate: *}} params Current record and leave day.
+ * @return {{ok: boolean, reason: string, days: number, amountDueCents: number,
+ *   remainingCents: number, fullyCovered: boolean, update: ?Object}}
+ */
+function businessParkingClosePlan({entry, endDate}) {
+  const data = entry && typeof entry === "object" ? entry : {};
+  if (text(data.source, 40) !== BUSINESS_PARKING_SOURCE &&
+      data.enteredByBusiness !== true) {
+    return closeRefusal("not_a_business_entry");
+  }
+  if (text(data.paymentMethod, 40) !== "direct") {
+    return closeRefusal("payment_method_not_direct");
+  }
+  if (data.parkingEndDate) {
+    return closeRefusal("already_closed");
+  }
+  if (text(data.status, 40) === BUSINESS_PARKING_STATUS.CANCELLED) {
+    return closeRefusal("entry_cancelled");
+  }
+
+  const storedDate = (value) => {
+    if (value && typeof value.toDate === "function") {
+      const converted = value.toDate();
+      return converted instanceof Date && !Number.isNaN(converted.getTime()) ?
+        converted : null;
+    }
+    return parseEntryDate(value);
+  };
+  const start = storedDate(data.parkingDate);
+  const end = storedDate(endDate);
+  if (!start) return closeRefusal("start_date_missing");
+  if (!end) return closeRefusal("end_date_invalid");
+
+  const dayMs = 24 * 60 * 60 * 1000;
+  const dayNumber = (date) => Math.floor(Date.UTC(
+      date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()) / dayMs);
+  const calendarDays = dayNumber(end) - dayNumber(start) + 1;
+  if (calendarDays <= 0) return closeRefusal("end_before_start");
+
+  const minimumDays = Math.max(1, Math.floor(Number(data.minimumDays) || 1));
+  const days = Math.max(minimumDays, calendarDays);
+  const dailyRateCents = Math.max(0, Math.round(
+      Number(data.dailyRateCents) || Number(data.dailyRate) * 100 || 0));
+  if (dailyRateCents <= 0) return closeRefusal("daily_rate_missing");
+
+  const amountDueCents = days * dailyRateCents;
+  const amountPaidCents = Math.max(
+      0, Math.round(Number(data.amountPaidCents) || 0));
+  const remainingCents = Math.max(0, amountDueCents - amountPaidCents);
+  const fullyCovered = amountDueCents > 0 && remainingCents === 0;
+  const update = {
+    amountDueCents,
+    amountDue: dollars(amountDueCents),
+    totalCostCents: amountDueCents,
+    totalCost: dollars(amountDueCents),
+  };
+
+  Object.assign(update, directPaymentPayoutFields(amountDueCents), {
+    paymentStatus: fullyCovered ?
+      BUSINESS_PARKING_PAYMENT_STATUS.PAID :
+      BUSINESS_PARKING_PAYMENT_STATUS.AWAITING_DIRECT,
+  });
+  if (fullyCovered) update.directPaymentReceived = true;
+
+  return {
+    ok: true,
+    reason: "",
+    days,
+    amountDueCents,
+    remainingCents,
+    fullyCovered,
+    update,
+  };
+}
+
+function closeRefusal(reason) {
+  return {ok: false, reason, days: 0, amountDueCents: 0,
+    remainingCents: 0, fullyCovered: false, update: null};
+}
+
 function partialRefusal(reason) {
   return {ok: false, reason, appliedCents: 0, newPaidCents: 0,
     fullyCovered: false, openEnded: false};
@@ -975,4 +1063,5 @@ module.exports = {
   normalizeParkingRates,
   parkingRateSelection,
   businessParkingPartialPaymentPlan,
+  businessParkingClosePlan,
 };
