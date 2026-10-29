@@ -34,7 +34,7 @@ final Uint8List png = base64Decode(
 
 const path = 'packagePhotos/b1/staff1/abcd1234efgh.png';
 
-class _Uploads {
+class FakeUploads {
   final List<Uint8List> sent = [];
   final List<Completer<String>> pending = [];
   Object? error;
@@ -53,13 +53,13 @@ Future<String> noUrl(String path) async => '';
 ProofFieldsController controller({
   PackageProofDraft initial = PackageProofDraft.empty,
   Uint8List? picked,
-  _Uploads? uploads,
+  FakeUploads? uploads,
 }) =>
     ProofFieldsController(
       businessId: 'b1',
       initial: initial,
       picker: (ImageSource source) async => picked,
-      uploader: (uploads ?? _Uploads()).call,
+      uploader: (uploads ?? FakeUploads()).call,
       urlOf: noUrl,
     );
 
@@ -216,7 +216,7 @@ void main() {
   group('ProofFields', () {
     testWidgets('takes a photo, shows it uploading, then keeps its path',
         (tester) async {
-      final uploads = _Uploads();
+      final uploads = FakeUploads();
       final c = controller(picked: png, uploads: uploads);
       addTearDown(c.dispose);
       await pump(tester, ProofFields(controller: c));
@@ -241,7 +241,7 @@ void main() {
 
     testWidgets('names a refused or failed upload and a backed-out picker',
         (tester) async {
-      final uploads = _Uploads()..error = const PackagePhotoFailure('unavailable');
+      final uploads = FakeUploads()..error = const PackagePhotoFailure('unavailable');
       final c = controller(picked: png, uploads: uploads);
       addTearDown(c.dispose);
       await pump(tester, ProofFields(controller: c));
@@ -399,7 +399,7 @@ void main() {
     testWidgets('requires a photo when the business says so, then sends the proof',
         (tester) async {
       final log = <(String, Map<String, Object?>)>[];
-      final uploads = _Uploads();
+      final uploads = FakeUploads();
       final c = controller(picked: png, uploads: uploads);
       addTearDown(c.dispose);
       await pump(

@@ -106,8 +106,18 @@ export function accruedThroughCents(row: Row, day: number, today: number): numbe
     const daily = Math.round((Number(row.dailyRate) || 0) * 100);
     return daily > 0 ? days * daily : 0;
   }
-  const total = centsOf(row, ["amountDueCents", "totalCostCents"], ["amountDue", "totalCost"]);
   const stayDays = end - start + 1;
+  let total = centsOf(row, ["amountDueCents", "totalCostCents"], ["amountDue", "totalCost"]);
+  // Older direct stays could be closed while their open-ended $0 placeholder
+  // was left in amountDueCents. Rebuild only those business-entered daily-rate
+  // stays; otherwise the paid parking vanishes from month end entirely.
+  const legacyDirectStay = total <= 0 && text(row.paymentMethod, 40) === "direct" &&
+    (text(row.source, 40) === "business" || row.enteredByBusiness === true);
+  if (legacyDirectStay) {
+    const daily = Math.round((Number(row.dailyRate) || 0) * 100);
+    const minimumDays = Math.max(1, Math.floor(Number(row.minimumDays) || 1));
+    if (daily > 0) total = Math.max(stayDays, minimumDays) * daily;
+  }
   return stayDays > 0 ? Math.round(total * days / stayDays) : 0;
 }
 

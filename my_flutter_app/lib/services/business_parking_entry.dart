@@ -241,9 +241,10 @@ class BusinessParkingEntryResult {
       paymentMethod: _trimmed(at('paymentMethod'), 40),
       amountDue: (dollars ?? cents / 100).toDouble(),
       amountDueCents: cents,
-      platformFeeCents: (num.tryParse(_trimmed(at('platformFeeCents'), 20)) ?? 0)
-          .round()
-          .clamp(0, 1 << 40),
+      platformFeeCents:
+          (num.tryParse(_trimmed(at('platformFeeCents'), 20)) ?? 0)
+              .round()
+              .clamp(0, 1 << 40),
       paymentStatus: _trimmed(at('paymentStatus'), 40),
       checkoutUrl: _trimmed(at('checkoutUrl'), 2048),
       checkoutSessionId: _trimmed(at('checkoutSessionId'), 180),
@@ -623,7 +624,9 @@ bool businessParkingListIsNarrowed({
 }) {
   if (search.trim().isNotEmpty) return true;
   final status = statusFilter.trim();
-  if (status.isNotEmpty && status != businessParkingStatusFilterAll) return true;
+  if (status.isNotEmpty && status != businessParkingStatusFilterAll) {
+    return true;
+  }
   if (paymentFilter != BusinessParkingPaymentFilter.all) return true;
   return from != null || to != null;
 }
@@ -745,17 +748,21 @@ List<int> businessParkingCollectedByMonth(
     final collected = (businessParkingAmountPaid(row, now: now) * 100).round();
     if (collected <= 0) continue;
     final raw = row['parkingPayments'];
-    final payments = <({int cents, DateTime? at})>[
-      for (final item in (raw is List ? raw : const []))
-        if (item is Map)
-          (
-            cents: _parkingPaymentCents(Map<String, dynamic>.from(item)),
-            at: _toDateOrNull(item['at']),
-          ),
-    ]
-      ..removeWhere((p) => p.cents <= 0)
-      ..sort((a, b) => (a.at?.millisecondsSinceEpoch ?? 0)
-          .compareTo(b.at?.millisecondsSinceEpoch ?? 0));
+    final payments =
+        <({int cents, DateTime? at})>[
+            for (final item in (raw is List ? raw : const []))
+              if (item is Map)
+                (
+                  cents: _parkingPaymentCents(Map<String, dynamic>.from(item)),
+                  at: _toDateOrNull(item['at']),
+                ),
+          ]
+          ..removeWhere((p) => p.cents <= 0)
+          ..sort(
+            (a, b) => (a.at?.millisecondsSinceEpoch ?? 0).compareTo(
+              b.at?.millisecondsSinceEpoch ?? 0,
+            ),
+          );
     var documented = 0;
     for (final entry in payments) {
       final cents = entry.cents < collected - documented
@@ -768,7 +775,8 @@ List<int> businessParkingCollectedByMonth(
     }
     final remainder = collected - documented;
     if (remainder <= 0) continue;
-    final settledOn = _toDateOrNull(row['directPaymentReceivedAt']) ??
+    final settledOn =
+        _toDateOrNull(row['directPaymentReceivedAt']) ??
         _toDateOrNull(row['paidAt']) ??
         _toDateOrNull(row['updatedAt']) ??
         _toDateOrNull(row['createdAt']);
@@ -1016,9 +1024,13 @@ class BusinessParkingDocumentLink {
 /// recorded and never billed, so this is what the lot is owed - not what the
 /// platform collected.
 double businessParkingAmountDue(Map<String, dynamic> row) {
-  final cents = num.tryParse(_trimmed(row['amountDueCents'] ?? row['totalCostCents'], 20));
+  final cents = num.tryParse(
+    _trimmed(row['amountDueCents'] ?? row['totalCostCents'], 20),
+  );
   if (cents != null && cents > 0) return cents.round() / 100;
-  final dollars = num.tryParse(_trimmed(row['amountDue'] ?? row['totalCost'], 20));
+  final dollars = num.tryParse(
+    _trimmed(row['amountDue'] ?? row['totalCost'], 20),
+  );
   return (dollars ?? 0).toDouble();
 }
 
@@ -1061,7 +1073,8 @@ double businessParkingAccrued(Map<String, dynamic> row, {DateTime? now}) {
 /// Mirrors the console's `businessParkingBalance`.
 double businessParkingBalance(Map<String, dynamic> row, {DateTime? now}) {
   if (_trimmed(row['status'], 40) == 'cancelled') return 0;
-  final owed = businessParkingAccrued(row, now: now) -
+  final owed =
+      businessParkingAccrued(row, now: now) -
       businessParkingAmountPaid(row, now: now);
   return owed > 0 ? (owed * 100).round() / 100 : 0;
 }
@@ -1112,7 +1125,8 @@ BusinessParkingUnbilled businessParkingUnbilled(
       amount: 0,
     );
   }
-  final from = billedThrough ??
+  final from =
+      billedThrough ??
       _toDateOrNull(row['parkingDate']) ??
       _toDateOrNull(row['createdAt']);
   if (from == null) {
@@ -1295,7 +1309,8 @@ BusinessParkingOverdue businessParkingOverdue(
   var amount = 0.0;
   for (final row in rows) {
     if (_trimmed(row['status'], 40) == 'cancelled') continue;
-    if (businessParkingEndLabel(row, now: now) != BusinessParkingEndLabel.ended) {
+    if (businessParkingEndLabel(row, now: now) !=
+        BusinessParkingEndLabel.ended) {
       continue;
     }
     final balance = businessParkingBalance(row, now: now);
@@ -1304,7 +1319,10 @@ BusinessParkingOverdue businessParkingOverdue(
       amount += balance;
     }
   }
-  return BusinessParkingOverdue(count: count, amount: (amount * 100).round() / 100);
+  return BusinessParkingOverdue(
+    count: count,
+    amount: (amount * 100).round() / 100,
+  );
 }
 
 /// The one status kind a row belongs to. Mirrors the console's
@@ -1327,18 +1345,16 @@ class ParkingFacets {
   bool get isEmpty => kinds.isEmpty && payments.isEmpty;
 
   ParkingFacets toggleKind(ParkingKind kind) => ParkingFacets(
-        kinds: kinds.contains(kind)
-            ? ({...kinds}..remove(kind))
-            : {...kinds, kind},
-        payments: payments,
-      );
+    kinds: kinds.contains(kind) ? ({...kinds}..remove(kind)) : {...kinds, kind},
+    payments: payments,
+  );
 
   ParkingFacets togglePayment(ParkingPaymentClass payment) => ParkingFacets(
-        kinds: kinds,
-        payments: payments.contains(payment)
-            ? ({...payments}..remove(payment))
-            : {...payments, payment},
-      );
+    kinds: kinds,
+    payments: payments.contains(payment)
+        ? ({...payments}..remove(payment))
+        : {...payments, payment},
+  );
 }
 
 /// Which status kind [row] is, in precedence order. Mirrors the console.
@@ -1350,7 +1366,9 @@ ParkingKind parkingRowKind(Map<String, dynamic> row, {DateTime? now}) {
   if (_trimmed(row['status'], 40) == 'pending_payment') {
     return ParkingKind.pending;
   }
-  return isBusinessEnteredParking(row) ? ParkingKind.inLot : ParkingKind.reserved;
+  return isBusinessEnteredParking(row)
+      ? ParkingKind.inLot
+      : ParkingKind.reserved;
 }
 
 /// How [row] sits on money. Mirrors the console's `parkingRowPayment`.
@@ -1376,8 +1394,10 @@ bool businessParkingMatchesFacets(
   DateTime? now,
 }) {
   final kindOk =
-      facets.kinds.isEmpty || facets.kinds.contains(parkingRowKind(row, now: now));
-  final payOk = facets.payments.isEmpty ||
+      facets.kinds.isEmpty ||
+      facets.kinds.contains(parkingRowKind(row, now: now));
+  final payOk =
+      facets.payments.isEmpty ||
       facets.payments.contains(parkingRowPayment(row));
   return kindOk && payOk;
 }
@@ -1421,12 +1441,12 @@ class BusinessParkingService {
   /// Undo a hand-marked direct payment: set a "paid" walk-up back to awaiting
   /// the payment. Logged in the car's change history.
   Future<void> revertPaid({required String entryId, String reason = ''}) async {
-    await _functions
-        .httpsCallable('revertBusinessParkingPaid')
-        .call<Object?>(<String, dynamic>{
-          'entryId': entryId,
-          if (reason.trim().isNotEmpty) 'reason': reason.trim(),
-        });
+    await _functions.httpsCallable('revertBusinessParkingPaid').call<Object?>(
+      <String, dynamic>{
+        'entryId': entryId,
+        if (reason.trim().isNotEmpty) 'reason': reason.trim(),
+      },
+    );
   }
 
   /// Records part of a stay's cost: either a number of days (priced from the
@@ -1454,9 +1474,9 @@ class BusinessParkingService {
   /// stay with a leave date with `failed-precondition`, because its price
   /// already covers its whole range.
   Future<void> billThroughToday({required String parkedCarId}) async {
-    await _functions
-        .httpsCallable('billParkingThroughToday')
-        .call<Object?>(<String, dynamic>{'parkedCarId': parkedCarId});
+    await _functions.httpsCallable('billParkingThroughToday').call<Object?>(
+      <String, dynamic>{'parkedCarId': parkedCarId},
+    );
   }
 
   /// The customer handed the money over at the gate instead of using the link
@@ -1474,8 +1494,8 @@ class BusinessParkingService {
         });
   }
 
-  /// The car left. Stamps the leave date and stops the accrual; it does not
-  /// touch the money, so a balance the lot is still owed survives it.
+  /// The car left. Stamps the local leave day and stops the accrual. The
+  /// server materializes the accrued total so an unpaid balance survives.
   Future<void> closeStay({
     required String parkedCarId,
     DateTime? endDate,
@@ -1485,7 +1505,8 @@ class BusinessParkingService {
         .call<Object?>(<String, dynamic>{
           'parkedCarId': parkedCarId,
           if (endDate != null)
-            'endDate': '${endDate.year.toString().padLeft(4, '0')}-'
+            'endDate':
+                '${endDate.year.toString().padLeft(4, '0')}-'
                 '${endDate.month.toString().padLeft(2, '0')}-'
                 '${endDate.day.toString().padLeft(2, '0')}',
         });

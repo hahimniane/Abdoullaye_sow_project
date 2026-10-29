@@ -14654,6 +14654,75 @@ html[data-lang-pending] body {
 .pcs-fee { border: 1px dashed var(--rule); border-radius: 12px; padding: 10px 12px; background: var(--paper); display: flex; flex-direction: column; gap: 4px; }
 .pcs-fee .lst-field { max-width: 220px; }
 .pcs-total-row { align-self: flex-end; }
+/* Air packages (W1) - proof on a package (docs/AIR_PACKAGES.md): the three
+   ticks on list rows and the staff view, the sender's problem flag, the
+   proof editor (photos, what is inside, weight, declared value) and the
+   Sea / Air choice on the container form. */
+.prf-ticks { display: inline-flex; align-items: center; gap: 4px; margin-top: 2px; }
+.prf-tick {
+  display: inline-flex; align-items: center; gap: 3px;
+  height: 18px; min-width: 18px; padding: 0 4px; border-radius: 999px;
+  background: var(--mist); color: var(--muted); font-size: 10.5px; font-weight: 700; line-height: 1;
+}
+.prf-tick.on { background: rgba(16, 185, 129, 0.16); color: #047857; }
+.prf-tick.on.without-code { background: rgba(245, 158, 11, 0.18); color: #92400e; }
+.prf-tick.prf-sender-asked { background: rgba(245, 158, 11, 0.18); color: #92400e; }
+.prf-tick.prf-sender-confirmed { background: rgba(16, 185, 129, 0.16); color: #047857; }
+.prf-tick.prf-sender-problem { background: rgba(220, 38, 38, 0.14); color: var(--danger, #b91c1c); }
+.prf-tick-note { letter-spacing: 0; }
+.ctn-table .mini-table-row > span > .prf-ticks { overflow: visible; }
+/* The sender tapped Something's wrong: red, with the way into the conversation. */
+.prf-problem {
+  display: flex; gap: 10px; align-items: flex-start;
+  margin: 12px 0 0; padding: 10px 12px; border-radius: 10px;
+  border: 1px solid rgba(220, 38, 38, 0.3); background: rgba(220, 38, 38, 0.08);
+  color: var(--danger, #b91c1c); font-size: 13px; line-height: 1.45;
+}
+.prf-problem > svg { flex: none; margin-top: 2px; }
+.prf-problem p { margin: 4px 0 0; color: var(--ink); font-weight: 500; }
+.prf-problem .wa-message-customer { display: inline-flex; margin-top: 6px; }
+.prf-problem-compact,
+.ctn-table .mini-table-row > span > small.prf-problem-compact {
+  display: inline-flex; flex-wrap: wrap; align-items: center; gap: 3px 6px;
+  margin: 2px 0 0; padding: 0; border: 0; background: none;
+  color: var(--danger, #b91c1c); font-size: 12px; font-weight: 700; white-space: normal;
+}
+.prf-problem-compact .wa-message-customer { margin: 0; }
+/* "By air" beside a flight's name. */
+.prf-air { display: inline-flex; align-items: center; gap: 4px; color: var(--brand-strong, #0f766e); font-weight: 600; }
+.ctn-table .mini-table-row > span > small.prf-air { color: var(--brand-strong, #0f766e); font-weight: 600; }
+p.prf-air { margin: 4px 0 0; font-size: 13px; }
+.prf-mode > span { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 700; color: var(--ink-soft, #3c5450); }
+.prf-mode .segment { display: inline-flex; align-items: center; gap: 6px; }
+/* The proof editor inside the line forms. */
+.prf-fields { display: flex; flex-direction: column; gap: 14px; margin-top: 14px; outline: none; }
+.prf-section { display: flex; flex-direction: column; gap: 8px; }
+.prf-section-head { display: flex; flex-direction: column; gap: 2px; }
+.prf-section-head > .lst-hint { margin: 0; }
+.prf-photo-list .pkr-photo { background: var(--paper-soft); }
+.prf-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.prf-item {
+  display: grid; grid-template-columns: minmax(0, 2fr) 72px minmax(0, 1.4fr) auto; gap: 8px; align-items: end;
+  padding: 8px 10px; border: 1px solid var(--rule); border-radius: 12px; background: var(--paper);
+}
+.prf-item .lst-field span { font-size: 12px; }
+.prf-item-remove { align-self: end; margin-bottom: 4px; }
+.prf-item-error { grid-column: 1 / -1; }
+.prf-add-item { align-self: flex-start; }
+.prf-measures { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.prf-staff-ticks { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+.prf-staff-ticks small { color: var(--muted); }
+.pkg-staff .prf-photos { margin-bottom: 10px; }
+.pkg-staff .prf-photos img { height: 72px; width: 72px; }
+.wpk-proof-chips { flex: 0 0 auto; }
+@media (max-width: 720px) {
+  .prf-item { grid-template-columns: minmax(0, 1fr) 72px auto; }
+  .prf-item .prf-item-serial { grid-column: 1 / -1; }
+}
+@media (max-width: 480px) {
+  .prf-measures { grid-template-columns: 1fr; }
+  .prf-item { padding: 8px; }
+}
 .wpk-split { display: flex; flex-direction: column; gap: 4px; margin: 6px 12px 10px 42px; padding: 8px 10px; border-radius: 10px; background: var(--mist); }
 .wpk-split-stepper { display: flex; align-items: center; gap: 8px; }
 .wpk-split-stepper .ghost-button { min-width: 30px; justify-content: center; }
@@ -16776,3 +16845,46 @@ button.pkq-card:hover { border-color: var(--brand); }
 /* A package update's ticks on the lists ("Receiver ✓✓ Read"). */
 .ctn-wa-tick, .ctn-table .mini-table-row > span > small.ctn-wa-tick { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); }
 .wa-tick-label { letter-spacing: normal; font-weight: 600; }
+
+/* Air packages (W2): the Mark delivered dialog's pickup code, override and
+   photo; the Deliveries page's arrivals; the counter's request lookup; the
+   Proof switches; the tracking page's photos. */
+.dlv-code-input { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 22px; letter-spacing: 0.4em; text-align: center; max-width: 180px; }
+.dlv-override { margin: 12px 0 4px; }
+.dlv-override-toggle { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; padding: 0; }
+.dlv-override-fields { display: grid; gap: 10px; margin-top: 8px; padding: 10px 12px; border: 1px dashed var(--rule); border-radius: 10px; }
+.dlv-override-fields .lst-hint { margin: 0; }
+.dlv-photo-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 6px; }
+.dlv-photo { display: inline-flex; border-radius: 8px; overflow: hidden; border: 1px solid var(--rule); }
+.dlv-photo img { display: block; width: 56px; height: 56px; object-fit: cover; }
+.dlv-arrived .panel-header { align-items: center; }
+.dlv-arrived-list { display: grid; gap: 14px; padding: 0 16px 16px; }
+.dlv-arrived-box h3 { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 15px; margin: 0 0 6px; }
+.dlv-arrived-box h3 small { color: var(--muted); font-weight: 500; }
+.dlv-arrived-box ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.dlv-arrived-box li { display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--rule); border-radius: 10px; }
+.dlv-arrived-who { display: grid; gap: 1px; min-width: 0; }
+.dlv-arrived-who b { overflow-wrap: anywhere; }
+.dlv-arrived-who small, .dlv-arrived-box li > small { color: var(--muted); font-size: 12.5px; }
+@media (max-width: 640px) {
+  .dlv-arrived-list { padding: 0 12px 12px; }
+  .dlv-arrived-box li { grid-template-columns: 1fr auto; }
+  .dlv-arrived-box li .dlv-arrived-who { grid-column: 1 / -1; }
+}
+.pkq-code-lookup { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin: 0 0 12px; }
+.pkq-code-lookup .lst-field { flex: 1 1 220px; max-width: 320px; }
+.pkq-code-lookup .lst-field input { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.04em; text-transform: uppercase; }
+.pkq-code-lookup .lst-form-error { flex-basis: 100%; margin: 0; }
+.pkq-proof-switch { display: grid; gap: 4px; margin: 10px 0; }
+.pkq-proof-switch .lst-hint { margin: 0 0 0 24px; }
+.guest-tracking-photos { border: 1px solid var(--rule); border-radius: 8px; display: grid; gap: 8px; padding: 12px; }
+.guest-tracking-photos h3 { font-size: 15px; margin: 0; }
+.guest-tracking-photos p { color: var(--muted); line-height: 1.5; margin: 0; }
+.guest-tracking-photos ul { display: flex; flex-wrap: wrap; gap: 10px; list-style: none; margin: 0; padding: 0; }
+.guest-tracking-photos li { display: grid; gap: 4px; justify-items: center; }
+.guest-tracking-photos li small { color: var(--muted); font-size: 12px; }
+.guest-tracking-photo { padding: 0; border: 1px solid var(--rule); border-radius: 8px; background: none; cursor: pointer; overflow: hidden; width: 84px; height: 84px; }
+.guest-tracking-photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.guest-tracking-lightbox figure { margin: 0; display: grid; gap: 10px; justify-items: center; }
+.guest-tracking-lightbox figcaption { display: flex; gap: 14px; color: #fff; font-size: 14px; }
+.guest-tracking-lightbox figcaption a { color: #fff; text-decoration: underline; }

@@ -37,7 +37,12 @@ import {
   containerRowCounts,
   containerTitle,
   containerTransitionRefusal,
+  containerKindWord,
   emptyContainerDraft,
+  isAirContainer,
+  shipModeOf,
+  airWaybillOf,
+  AIR_WAYBILL,
   emptyContainerLineDraft,
   filterContainers,
   filterParkedCarPicks,
@@ -141,6 +146,7 @@ test("a container needs a name; the number is optional but must be ISO 6346", ()
 
 test("the payload trims, upper-cases the number and the reference, and caps the note", () => {
   const payload = containerPayload({
+    ...emptyContainerDraft,
     label: "  Sailing 3 Oct, box 2  ",
     containerNumber: " msku1234567 ",
     bookingReference: " bl-778 ",
@@ -172,7 +178,10 @@ test("a stored row round-trips into the edit form", () => {
   });
   assert.deepEqual(draft, {
     label: "Box 2",
+    shipMode: "sea",
     containerNumber: "MSKU1234567",
+    airWaybill: "",
+    airline: "",
     bookingReference: "BL-1",
     destinationCountryId: "guinea",
     destinationCountryName: "Guinea",
@@ -1276,4 +1285,72 @@ test("with no sender the receiver is the customer, name and phone from one perso
   assert.equal(lineCustomerIsReceiver({ ...line, customerName: "Mariama", senderIsReceiver: true }), true);
   assert.deepEqual(lineCustomer({ ...line, ownerKind: "stock" }), { name: "", phone: "" });
   assert.equal(lineCustomerIsReceiver({ ...line, ownerKind: "stock" }), false);
+});
+
+// ---------------------------------------------------------------------------
+// Air shipments (docs/AIR_PACKAGES.md): a container marked air, named by its
+// waybill, with no container number and no shipping line.
+// ---------------------------------------------------------------------------
+
+test("a container is sea unless marked air, and is called a Shipment when it flies", () => {
+  assert.equal(shipModeOf(undefined), "sea");
+  assert.equal(shipModeOf("AIR"), "air");
+  assert.equal(isAirContainer({ shipMode: "air" }), true);
+  assert.equal(isAirContainer({}), false);
+  assert.equal(containerKindWord({ shipMode: "air" }), "Shipment");
+  assert.equal(containerKindWord({}), "Container");
+  assert.equal(containerKindWord({ shipMode: "air" }, "fr"), "Envoi");
+  assert.equal(containerKindWord({}, "fr"), "Conteneur");
+  assert.match(serverSource, /const AIR_WAYBILL = \/\^\[A-Z0-9-\]\{6,20\}\$\/;/);
+  assert.equal(AIR_WAYBILL.source, "^[A-Z0-9-]{6,20}$");
+});
+
+test("an air shipment needs a waybill or a name; the waybill is 6-20 letters, digits or dashes", () => {
+  const air = { ...emptyContainerDraft, shipMode: "air" as const };
+  assert.deepEqual(validateContainerDraft(air), ["container_label_required"]);
+  assert.deepEqual(validateContainerDraft({ ...air, airWaybill: "176-12345678" }), []);
+  assert.deepEqual(validateContainerDraft({ ...air, airWaybill: "176 1234 5678" }), [], "spaces people type are dropped");
+  assert.deepEqual(validateContainerDraft({ ...air, label: "Flight Friday" }), []);
+  assert.deepEqual(validateContainerDraft({ ...air, label: "Flight Friday", airWaybill: "12" }), ["air_waybill_invalid"]);
+  assert.deepEqual(validateContainerDraft({ ...air, airWaybill: "176/12345678" }), ["air_waybill_invalid"]);
+  // A container number typed before switching to air is ignored, never checked.
+  assert.deepEqual(validateContainerDraft({ ...air, label: "F", containerNumber: "BAD" }), []);
+  assert.equal(containerMessage(["air_waybill_invalid"]), "An air waybill is 6 to 20 letters, digits or dashes, like 176-12345678.");
+  assert.equal(airWaybillOf(" 176 1234 5678 "), "17612345678");
+  assert.equal(airWaybillOf("ab-123456"), "AB-123456");
+});
+
+test("the payload carries the mode: a flight sends its waybill and airline, no number or line; a box the reverse", () => {
+  const flight = containerPayload({
+    ...emptyContainerDraft,
+    shipMode: "air",
+    label: "Friday flight",
+    containerNumber: "MSKU1234567",
+    airWaybill: " 176-1234 5678 ",
+    airline: "  Air France  ",
+    carrierScac: "MSCU",
+  });
+  assert.equal(flight.shipMode, "air");
+  assert.equal(flight.airWaybill, "176-12345678");
+  assert.equal(flight.airline, "Air France");
+  assert.equal(flight.containerNumber, "");
+  assert.equal(flight.carrierScac, "");
+  const box = containerPayload({ ...emptyContainerDraft, containerNumber: "msku1234567", airWaybill: "176-12345678", airline: "AF" });
+  assert.equal(box.shipMode, "sea");
+  assert.equal(box.containerNumber, "MSKU1234567");
+  assert.equal(box.airWaybill, "");
+  assert.equal(box.airline, "");
+});
+
+test("a stored flight round-trips into the form and is titled by its waybill", () => {
+  const row = { shipMode: "air", airWaybill: "176-12345678", airline: "Air France", label: "Friday", containerNumber: "", status: "loading" };
+  const draft = containerDraftFromRow(row);
+  assert.equal(draft.shipMode, "air");
+  assert.equal(draft.airWaybill, "176-12345678");
+  assert.equal(draft.airline, "Air France");
+  assert.equal(containerTitle(row), "176-12345678");
+  assert.equal(containerTitle({ shipMode: "air", label: "Friday" }), "Friday");
+  assert.equal(containerTitle({ shipMode: "air" }), "Shipment");
+  // Never on the ocean feed: nothing to choose, however the number reads.
+  assert.equal(containerCarrierNeedsChoice({ ...row, containerNumber: "TCKU6418832", carrierTrackingError: "carrier_unknown", carrierTrackingFailedFor: "TCKU6418832" }), false);
 });

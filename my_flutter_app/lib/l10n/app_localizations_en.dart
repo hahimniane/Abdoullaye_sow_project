@@ -17077,4 +17077,219 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get airCustomsList => 'Customs list';
+
+  @override
+  String get deliverRefusalAirWaybillInvalid =>
+      'Enter an air waybill of 6 to 20 letters, digits or dashes.';
+
+  @override
+  String get deliverRefusalPhotoInvalid =>
+      'One of the photos could not be used. Add it again.';
+
+  @override
+  String get deliverRefusalPhotoRequired =>
+      'Add at least one photo of the package.';
+
+  @override
+  String get deliverRefusalContentsInvalid =>
+      'Check the item list: a name up to 60 characters, a quantity from 1 to 99, and an optional serial number.';
+
+  @override
+  String get deliverRefusalWeightInvalid =>
+      'Enter a weight between 0.1 and 2000 lb.';
+
+  @override
+  String get deliverRefusalDeclaredValueInvalid =>
+      'Enter a declared value of \$0 or more.';
+
+  @override
+  String get deliverRefusalPickupCodeInvalid =>
+      'The pickup code does not match. Ask the receiver for the code in their message, or deliver without a code.';
+
+  @override
+  String get deliverRefusalOverrideIncomplete =>
+      'Delivering without a code needs the name of the person collecting and a photo.';
+
+  @override
+  String get deliverRefusalCollectedCentsInvalid =>
+      'Enter the amount collected in dollars, zero or more.';
+
+  @override
+  String get deliverRefusalProofSettingsInvalid =>
+      'Check the proof settings: each switch is on or off.';
+
+  @override
+  String get deliverRefusalSenderProblem =>
+      'The sender reported a problem with this package. Check with them before it goes on.';
+
+  @override
+  String get deliverPickupCodeLabel => 'Pickup code';
+
+  @override
+  String get deliverPickupCodeHelper =>
+      'The 4 digits in the receiver’s message.';
+
+  @override
+  String get deliverPickupCodeIncomplete => 'Enter the 4-digit code.';
+
+  @override
+  String get deliverWithoutCodeTitle => 'Deliver without a code';
+
+  @override
+  String get deliverWithoutCodeNote =>
+      'Type who is collecting it and take their photo. The package will show “Delivered without code”.';
+
+  @override
+  String get deliverCollectorLabel => 'Who collected it';
+
+  @override
+  String get deliverPhotoLabel => 'Photo of the person collecting';
+
+  @override
+  String get deliverTakePhoto => 'Take a photo';
+
+  @override
+  String get deliverRetakePhoto => 'Retake';
+
+  @override
+  String get deliverPhotoUploading => 'Uploading the photo…';
+
+  @override
+  String get deliverPhotoAdded => 'Photo added';
+
+  @override
+  String get deliverPhotoFailed => 'Couldn’t add the photo. Try again.';
+
+  @override
+  String get deliverCollectedNowLabel => 'Collected now (USD)';
+
+  @override
+  String get deliverCollectedNowHelper =>
+      'Optional. Whole dollars collected at handover.';
+
+  @override
+  String deliverOwes(String amount) {
+    return 'Owes $amount';
+  }
+
+  @override
+  String get deliverCollectedNowInvalid => 'Enter whole dollars, zero or more.';
+
+  @override
+  String deliverDoneCollected(String amount) {
+    return 'Delivered · $amount collected';
+  }
+
+  @override
+  String get deliverWithoutCodePill => 'Delivered without code';
+
+  @override
+  String get deliverPhotoOfCollector => 'Photo of the person who collected it';
+
+  @override
+  String get deliverHomeTitle => 'Deliveries';
+
+  @override
+  String get deliverHomeSubtitle =>
+      'Hand packages over to the people collecting them.';
+
+  @override
+  String get deliverToHandOver => 'To hand over';
+
+  @override
+  String get deliverToHandOverEmpty => 'Nothing to hand over right now.';
+
+  @override
+  String get deliverToHandOverEmptyHint =>
+      'Packages appear here once their shipment or container is ready for pickup.';
+
+  @override
+  String get deliverScan => 'Scan a label';
+
+  @override
+  String get deliverEnterCode => 'Enter a code';
+
+  @override
+  String get deliverEnterCodeHint => 'CL-XXXXXX';
+
+  @override
+  String get deliverCodeInvalid => 'That is not a package code.';
+
+  @override
+  String get deliverFind => 'Find';
+
+  @override
+  String get deliverShipment => 'Shipment';
+
+  @override
+  String get deliverContainer => 'Container';
+
+  @override
+  String deliverPieces(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count pieces',
+      one: '1 piece',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get deliverCouldNotLoad =>
+      'Couldn’t load the deliveries. Check your connection and try again.';
+
+  @override
+  String get deliverRetry => 'Retry';
+
+  @override
+  String get deliverDetails => 'Details';
+
+  @override
+  String get proofSettingTitle => 'Proof';
+
+  @override
+  String get proofSettingPhotosRequired => 'Photos required at drop-off';
+
+  @override
+  String get proofSettingPhotosRequiredNote =>
+      'Staff must add at least one photo before a counter package is saved.';
+
+  @override
+  String get proofSettingSenderConfirm =>
+      'Ask the sender to confirm by WhatsApp';
+
+  @override
+  String get proofSettingSenderConfirmNote =>
+      'Right after drop-off, the sender gets the first photo and the item list with OK / Something’s wrong.';
+
+  @override
+  String get proofSettingPickupCode => 'Pickup code at delivery';
+
+  @override
+  String get proofSettingPickupCodeNote =>
+      'Each package gets a 4-digit code sent to the receiver; your agent asks for it at handover.';
+
+  @override
+  String get lookupTitle => 'Enter the customer’s code';
+
+  @override
+  String get lookupHint =>
+      'Type the code on the customer’s request, like R-K7M4P.';
+
+  @override
+  String get lookupCodeLabel => 'Request code';
+
+  @override
+  String get lookupCodeInvalid =>
+      'A request code has 5 letters or digits, like R-K7M4P.';
+
+  @override
+  String get lookupFind => 'Find the request';
+
+  @override
+  String get lookupFinding => 'Looking up…';
+
+  @override
+  String get lookupNotFound => 'No request with that code for this business.';
 }

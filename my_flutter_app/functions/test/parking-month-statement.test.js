@@ -77,6 +77,49 @@ describe("one car's month", () => {
         12000);
   });
 
+  it("carries a closed part-paid stay into its unpaid October days", () => {
+    const closedPartPaid = {
+      ...diallo,
+      id: "c-hr",
+      parkingDate: at("2026-09-16"),
+      parkingEndDate: at("2026-10-13"),
+      dailyRate: 12,
+      amountDueCents: 33600,
+      amountPaidCents: 18000,
+    };
+    const now = new Date("2026-10-29T15:00:00Z");
+    const september = parkingMonthStatement(closedPartPaid, "2026-09", now);
+    const october = parkingMonthStatement(closedPartPaid, "2026-10", now);
+
+    assert.equal(september.days, 15);
+    assert.equal(september.monthCents, 18000);
+    assert.equal(september.monthPaidCents, 18000);
+    assert.equal(september.dueCents, 0);
+    assert.equal(october.days, 13);
+    assert.equal(october.monthCents, 15600);
+    assert.equal(october.monthPaidCents, 0);
+    assert.equal(october.dueCents, 15600);
+  });
+
+  it("rebuilds a legacy direct stay whose stored total is zero", () => {
+    const row = {
+      ...diallo,
+      parkingDate: at("2026-09-16"),
+      parkingEndDate: at("2026-10-13"),
+      dailyRate: 12,
+      amountDueCents: 0,
+      amountPaidCents: 18000,
+      paymentMethod: "direct",
+      source: "business",
+      enteredByBusiness: true,
+    };
+    const now = new Date("2026-10-29T15:00:00Z");
+    assert.equal(parkingMonthStatement(row, "2026-09", now).monthPaidCents,
+        18000);
+    assert.equal(parkingMonthStatement(row, "2026-09", now).dueCents, 0);
+    assert.equal(parkingMonthStatement(row, "2026-10", now).dueCents, 15600);
+  });
+
   it("leaves out cars that owe nothing for the month", () => {
     assert.equal(parkingMonthStatement(
         {...diallo, amountPaidCents: 45000}, "2026-09", OCT1).owes, false);

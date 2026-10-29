@@ -17348,4 +17348,221 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get airCustomsList => 'Liste douane';
+
+  @override
+  String get deliverRefusalAirWaybillInvalid =>
+      'Entrez une lettre de transport aérien de 6 à 20 lettres, chiffres ou tirets.';
+
+  @override
+  String get deliverRefusalPhotoInvalid =>
+      'Une des photos n’a pas pu être utilisée. Ajoutez-la de nouveau.';
+
+  @override
+  String get deliverRefusalPhotoRequired =>
+      'Ajoutez au moins une photo du colis.';
+
+  @override
+  String get deliverRefusalContentsInvalid =>
+      'Vérifiez la liste des articles : un nom de 60 caractères au plus, une quantité de 1 à 99 et un numéro de série facultatif.';
+
+  @override
+  String get deliverRefusalWeightInvalid =>
+      'Entrez un poids entre 0,1 et 2000 lb.';
+
+  @override
+  String get deliverRefusalDeclaredValueInvalid =>
+      'Entrez une valeur déclarée de 0 \$ ou plus.';
+
+  @override
+  String get deliverRefusalPickupCodeInvalid =>
+      'Le code de retrait ne correspond pas. Demandez au destinataire le code reçu dans son message, ou livrez sans code.';
+
+  @override
+  String get deliverRefusalOverrideIncomplete =>
+      'Livrer sans code demande le nom de la personne qui récupère et une photo.';
+
+  @override
+  String get deliverRefusalCollectedCentsInvalid =>
+      'Entrez le montant encaissé en dollars, zéro ou plus.';
+
+  @override
+  String get deliverRefusalProofSettingsInvalid =>
+      'Vérifiez les réglages de preuve : chaque interrupteur est activé ou non.';
+
+  @override
+  String get deliverRefusalSenderProblem =>
+      'L’expéditeur a signalé un problème sur ce colis. Vérifiez avec lui avant qu’il parte.';
+
+  @override
+  String get deliverPickupCodeLabel => 'Code de retrait';
+
+  @override
+  String get deliverPickupCodeHelper =>
+      'Les 4 chiffres dans le message du destinataire.';
+
+  @override
+  String get deliverPickupCodeIncomplete => 'Entrez le code à 4 chiffres.';
+
+  @override
+  String get deliverWithoutCodeTitle => 'Livrer sans code';
+
+  @override
+  String get deliverWithoutCodeNote =>
+      'Indiquez qui récupère le colis et prenez sa photo. Le colis affichera « Livré sans code ».';
+
+  @override
+  String get deliverCollectorLabel => 'Qui l’a récupéré';
+
+  @override
+  String get deliverPhotoLabel => 'Photo de la personne qui récupère';
+
+  @override
+  String get deliverTakePhoto => 'Prendre une photo';
+
+  @override
+  String get deliverRetakePhoto => 'Reprendre';
+
+  @override
+  String get deliverPhotoUploading => 'Envoi de la photo…';
+
+  @override
+  String get deliverPhotoAdded => 'Photo ajoutée';
+
+  @override
+  String get deliverPhotoFailed => 'Impossible d’ajouter la photo. Réessayez.';
+
+  @override
+  String get deliverCollectedNowLabel => 'Encaissé maintenant (USD)';
+
+  @override
+  String get deliverCollectedNowHelper =>
+      'Facultatif. Dollars entiers encaissés à la remise.';
+
+  @override
+  String deliverOwes(String amount) {
+    return 'Doit $amount';
+  }
+
+  @override
+  String get deliverCollectedNowInvalid =>
+      'Entrez des dollars entiers, zéro ou plus.';
+
+  @override
+  String deliverDoneCollected(String amount) {
+    return 'Livré · $amount encaissés';
+  }
+
+  @override
+  String get deliverWithoutCodePill => 'Livré sans code';
+
+  @override
+  String get deliverPhotoOfCollector => 'Photo de la personne qui l’a récupéré';
+
+  @override
+  String get deliverHomeTitle => 'Livraisons';
+
+  @override
+  String get deliverHomeSubtitle =>
+      'Remettez les colis aux personnes qui les récupèrent.';
+
+  @override
+  String get deliverToHandOver => 'À remettre';
+
+  @override
+  String get deliverToHandOverEmpty => 'Rien à remettre pour le moment.';
+
+  @override
+  String get deliverToHandOverEmptyHint =>
+      'Les colis apparaissent ici une fois leur envoi ou conteneur prêt à récupérer.';
+
+  @override
+  String get deliverScan => 'Scanner une étiquette';
+
+  @override
+  String get deliverEnterCode => 'Entrer un code';
+
+  @override
+  String get deliverEnterCodeHint => 'CL-XXXXXX';
+
+  @override
+  String get deliverCodeInvalid => 'Ce n’est pas un code de colis.';
+
+  @override
+  String get deliverFind => 'Chercher';
+
+  @override
+  String get deliverShipment => 'Envoi';
+
+  @override
+  String get deliverContainer => 'Conteneur';
+
+  @override
+  String deliverPieces(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count pièces',
+      one: '1 pièce',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get deliverCouldNotLoad =>
+      'Impossible de charger les livraisons. Vérifiez votre connexion et réessayez.';
+
+  @override
+  String get deliverRetry => 'Réessayer';
+
+  @override
+  String get deliverDetails => 'Détails';
+
+  @override
+  String get proofSettingTitle => 'Preuve';
+
+  @override
+  String get proofSettingPhotosRequired => 'Photos obligatoires au dépôt';
+
+  @override
+  String get proofSettingPhotosRequiredNote =>
+      'Le personnel doit ajouter au moins une photo avant d’enregistrer un colis au comptoir.';
+
+  @override
+  String get proofSettingSenderConfirm =>
+      'Demander à l’expéditeur de confirmer par WhatsApp';
+
+  @override
+  String get proofSettingSenderConfirmNote =>
+      'Juste après le dépôt, l’expéditeur reçoit la première photo et la liste des articles avec OK / Something’s wrong.';
+
+  @override
+  String get proofSettingPickupCode => 'Code de retrait à la livraison';
+
+  @override
+  String get proofSettingPickupCodeNote =>
+      'Chaque colis reçoit un code à 4 chiffres envoyé au destinataire ; votre agent le demande à la remise.';
+
+  @override
+  String get lookupTitle => 'Entrer le code du client';
+
+  @override
+  String get lookupHint =>
+      'Tapez le code de la demande du client, par exemple R-K7M4P.';
+
+  @override
+  String get lookupCodeLabel => 'Code de la demande';
+
+  @override
+  String get lookupCodeInvalid =>
+      'Un code de demande a 5 lettres ou chiffres, par exemple R-K7M4P.';
+
+  @override
+  String get lookupFind => 'Trouver la demande';
+
+  @override
+  String get lookupFinding => 'Recherche…';
+
+  @override
+  String get lookupNotFound =>
+      'Aucune demande avec ce code pour cette entreprise.';
 }

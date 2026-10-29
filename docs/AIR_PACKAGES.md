@@ -136,9 +136,13 @@ header.
   right? Tap OK, or Something's wrong." FR: "Bonjour, {{5}} a reçu votre colis :
   {{6}} ({{7}}). Est-ce correct ? Appuyez sur OK ou Something's wrong."
   Footer: "Code {{8}}" is not allowed in footers → put the code in the body.
-- **`shipment_ready_pickup_code_2lang`** — the existing ready-for-pickup text
-  plus "Your pickup code is {{11}} / Votre code de retrait est {{11}}". Used
-  for a line that has a `pickupCode`; otherwise the old template.
+- **Pickup number:** Meta's classifier rejects any template that carries a
+  "code to show" as an authentication message (two wordings tried on
+  2026-10-29, both `INCORRECT_CATEGORY`). So there is no separate template:
+  a line with a `pickupCode` sends the approved `shipment_ready_pickup_2lang`
+  and the number rides in the address parameter — "Madina office · Pickup
+  number / N° de retrait : 4821" (`container_updates.pickupAddressWithCode`).
+  The receiver gets it; the sender only when the sender is the receiver.
 - Reply text when the customer taps a button (free-form, inside the window):
   OK → "Thanks, noted. / Merci, c'est noté."; problem → "Sorry about that.
   {{business}} will reply here. / Désolé. {{business}} vous répondra ici."

@@ -495,41 +495,15 @@ Status (2026-10-29): written, **not submitted**. Until Meta approves it a
 confirm send answers `132001` and waits as `waiting_for_template` like any
 other template in review.
 
-### `shipment_ready_pickup_code_2lang`
+### Pickup number (no template of its own)
 
-Ready for pickup **with the pickup code** (docs/AIR_PACKAGES.md §3, §4.3):
-sent in place of `shipment_ready_pickup_2lang` for a line that has a
-`pickupCode` (minted when the business has *Pickup code at delivery* on).
-The code goes to the **receiver**, and to the sender only when the sender
-is the receiver (the switch, or the same number on both sides;
-`pickupCodeFor`); a sender-only row keeps the old template. Variables:
-{{1}}–{{10}} as `shipment_ready_pickup_2lang`, then {{11}} the pickup code.
-Same button: *Visit website*, `Track · Suivre`, Dynamic,
-`https://customer.laawoldigital.com/t/{{1}}` (the tracking code).
-
-```
-Hello / Bonjour {{1}} 👋
-
-*ENGLISH*
-Good news: your shipment of {{2}} from {{3}} is ready for pickup in {{4}}. Show the pickup code below when you collect it.
-
-—————
-*FRANÇAIS*
-Bonne nouvelle : votre envoi de {{5}} confié à {{6}} est prêt à être récupéré à {{7}}. Présentez le code de retrait ci-dessous pour le récupérer.
-
-📍 Pickup address / Adresse : {{8}}
-📞 Phone / Téléphone : {{9}}
-🔎 Tracking code / Code de suivi : {{10}}
-🔑 Pickup code / Code de retrait : {{11}}
-
-Tap the button below to follow it.
-Appuyez sur le bouton ci-dessous pour le suivre.
-```
-
-Sample values: `Fatou`, `3 barrels`, `Dala Shipping`, `Conakry, Guinea`,
-`3 fûts`, `Dala Shipping`, `Conakry, Guinée`,
-`Madina, near the market, Conakry`, `+224 620 00 00 00`, `CL-K7M4P2`,
-`4821`. The legacy set has no code variant (`container_arrived` as before).
+A line with a `pickupCode` (docs/AIR_PACKAGES.md §4.3) sends the approved
+`shipment_ready_pickup_2lang`; the number rides in the address parameter
+{{8}}: "Madina office · Pickup number / N° de retrait : 4821"
+(`container_updates.pickupAddressWithCode`). Meta rejected a dedicated
+template twice (`INCORRECT_CATEGORY`: a "code to show" reads as an
+authentication message), so none is submitted. The receiver's row gets the
+number; the sender's only when the sender is the receiver.
 
 ### `staff_account_setup`
 

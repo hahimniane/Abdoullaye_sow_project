@@ -9555,7 +9555,10 @@ function ParkingBillingActions({ row, staff }: { row: FirestoreRow; staff: Fires
   }
   async function close() {
     await runPanelAction(setBusy, setFlash, "Stay closed.", async () => {
-      await httpsCallable(functions, "closeParkingStay")({ parkedCarId: row.id });
+      await httpsCallable(functions, "closeParkingStay")({
+        parkedCarId: row.id,
+        endDate: localDateKey(),
+      });
     });
   }
   // What the car still owes right now: a fixed stay's total minus payments, or

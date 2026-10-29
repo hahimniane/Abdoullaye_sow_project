@@ -211,8 +211,8 @@ void main() {
 
   group('proof settings and ticks', () {
     test('reads the three switches, missing means off', () {
-      expect(proofSettingsOf({}), PackageProofSettings.off);
-      expect(proofSettingsOf(null), PackageProofSettings.off);
+      expect(proofSettingsOf({}), const PackageProofSettings());
+      expect(proofSettingsOf(null), const PackageProofSettings());
       expect(
         proofSettingsOf({
           'packageProofSettings': {'photosRequired': true, 'pickupCode': 'yes'},
@@ -226,7 +226,7 @@ void main() {
       expect(photoRequirementRefusal(on), 'photo_required');
       expect(photoRequirementRefusal(on, photoPaths: [path]), '');
       expect(photoRequirementRefusal(on, source: 'request'), '');
-      expect(photoRequirementRefusal(PackageProofSettings.off), '');
+      expect(photoRequirementRefusal(const PackageProofSettings()), '');
     });
 
     test('shows the three ticks', () {

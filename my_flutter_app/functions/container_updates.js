@@ -305,6 +305,23 @@ function rowUpdateFor(update, role, ask) {
  * @param {string} role "sender" or "receiver".
  * @return {string} The code, or "".
  */
+/**
+ * The address line of the ready-for-pickup message, with the pickup number
+ * when this person gets one: "Madina office · Pickup number / N° de
+ * retrait : 4821". Meta rejects a template that carries the number as its
+ * own variable (it reads as an authentication code), so it rides here.
+ *
+ * @param {string} address The destination's pickup address, may be "".
+ * @param {string} code From pickupCodeFor, may be "".
+ * @return {string}
+ */
+function pickupAddressWithCode(address, code) {
+  const place = text(address, 150);
+  if (!code) return place;
+  const note = `Pickup number / N° de retrait : ${code}`;
+  return place ? `${place} · ${note}` : note;
+}
+
 function pickupCodeFor(line, role) {
   const code = text(line?.pickupCode, 10);
   if (!code) return "";
@@ -524,7 +541,8 @@ function whatsappUpdateMessage(args) {
       destinationFr,
       pickupPlaceEn: pickupPlace(pickup.city, destinationEn),
       pickupPlaceFr: pickupPlace(pickup.city, destinationFr),
-      pickupAddress: pickup.address,
+      pickupAddress: pickupAddressWithCode(pickup.address,
+          pickupCodeFor(line, args.role)),
       pickupPhone: pickup.phone,
       deliveredOnEn: deliveryDayText(args.line?.deliveredAt, "en"),
       deliveredOnFr: deliveryDayText(args.line?.deliveredAt, "fr"),
@@ -932,6 +950,7 @@ module.exports = {
   recipientsForLine,
   askSenderToConfirm,
   rowUpdateFor,
+  pickupAddressWithCode,
   pickupCodeFor,
   confirmationPhotoLink,
   containerUpdateMessageId,

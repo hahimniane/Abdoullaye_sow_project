@@ -592,7 +592,7 @@ class _ContainersScreenState extends State<ContainersScreen> {
 
   /// The business's proof switches (docs/AIR_PACKAGES.md §1.3), read from
   /// its document: photos required at the counter, and the rest.
-  PackageProofSettings _proofSettings = PackageProofSettings.off;
+  PackageProofSettings _proofSettings = const PackageProofSettings();
 
   String _filter = containerStatusLoading;
   String _search = '';
@@ -1577,7 +1577,7 @@ class ContainerDetailScreen extends StatefulWidget {
     required this.onCustomerRecorded,
     this.feed,
     this.deliveryService = const ContainerDeliveryService(),
-    this.proofSettings = PackageProofSettings.off,
+    this.proofSettings = const PackageProofSettings(),
   });
 
   final String businessId;
@@ -3731,7 +3731,7 @@ class _LineFormSheet extends StatefulWidget {
     this.defaultDestination,
     this.caller = callContainerCallable,
     this.staff = const [],
-    this.proofSettings = PackageProofSettings.off,
+    this.proofSettings = const PackageProofSettings(),
     this.proofController,
   }) : assert(waiting || container != null);
 
@@ -6455,7 +6455,7 @@ Future<bool> editContainerLine(
   List<Map<String, dynamic>> parkedCarRows = const [],
   String businessCountryCode = '',
   List<DestinationCountry> destinations = const [],
-  PackageProofSettings proofSettings = PackageProofSettings.off,
+  PackageProofSettings proofSettings = const PackageProofSettings(),
 }) async {
   final saved = await showLotSheet<bool>(
     context,
@@ -6498,7 +6498,7 @@ Future<WaitingPackageSaved?> showWaitingPackageSheet(
   VoidCallback? onLineAdded,
   ContainerCallableCaller caller = callContainerCallable,
   List<LotStaff> staff = const [],
-  PackageProofSettings proofSettings = PackageProofSettings.off,
+  PackageProofSettings proofSettings = const PackageProofSettings(),
   ProofFieldsController? proofController,
 }) {
   final start = existing == null
@@ -6607,7 +6607,7 @@ Widget containerLineFormSheetForTesting({
   String receiverCountryCode = 'US',
   ContainerLine? existing,
   List<ContainerLine> lines = const [],
-  PackageProofSettings proofSettings = PackageProofSettings.off,
+  PackageProofSettings proofSettings = const PackageProofSettings(),
   ProofFieldsController? proofController,
 }) =>
     _LineFormSheet(
@@ -6635,7 +6635,7 @@ Widget waitingPackageSheetForTesting({
   List<ContainerLine> lines = const [],
   List<LotCustomer> customers = const [],
   List<LotStaff> staff = const [],
-  PackageProofSettings proofSettings = PackageProofSettings.off,
+  PackageProofSettings proofSettings = const PackageProofSettings(),
   ProofFieldsController? proofController,
 }) =>
     _LineFormSheet(

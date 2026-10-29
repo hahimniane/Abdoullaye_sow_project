@@ -14,10 +14,12 @@ import {
   ArrowLeft,
   ArrowRightLeft,
   Container,
+  FileText,
   PackageCheck,
   History,
   Pencil,
   Phone,
+  Plane,
   Plus,
   Printer,
   RefreshCw,
@@ -55,6 +57,8 @@ import {
   containerDeleteRefusal,
   containerDraftFromRow,
   containerIsOpen,
+  containerKindWord,
+  isAirContainer,
   containerLineContactsDraftFromRow,
   containerLineDraftFromRow,
   containerLineFocus,
@@ -100,7 +104,21 @@ import {
   type ContainerStatus,
   type LineStage,
   type ParkedCarPick,
+  type ShipMode,
 } from "@/lib/container-manifest";
+import {
+  emptyProofDraft,
+  loadAnywayText,
+  proofDraftFromLine,
+  proofDraftProblems,
+  proofPayload,
+  proofProblemText,
+  proofSettingsOf,
+  withProblemAcknowledgement,
+  type ProofDraft,
+} from "@/lib/package-proof";
+import { ProofFields } from "@/components/business/proof-fields";
+import { ProofTicks, SenderProblemBanner } from "@/components/business/proof-ticks";
 import {
   addedHowText,
   filterLabel,
@@ -391,6 +409,10 @@ export function ContainersPanel({
   // The line the form is editing; "" when it is adding a new one. The same
   // form and draft serve both.
   const [editingLineId, setEditingLineId] = useState("");
+  // The proof on the line being added or edited: photos, what is inside,
+  // weight and declared value (docs/AIR_PACKAGES.md). Its own draft beside
+  // the line's, merged into the request on save.
+  const [lineProof, setLineProof] = useState<ProofDraft>(() => emptyProofDraft());
   // Lines saved from this one opening of the form. Five barrels for three
   // customers are three lines, entered back to back without closing it.
   const [addedThisSitting, setAddedThisSitting] = useState<string[]>([]);
@@ -423,6 +445,9 @@ export function ContainersPanel({
   const [addingLineId, setAddingLineId] = useState("");
 
   const lang = currentLanguage() === "fr" ? "fr" : "en";
+  // The business's proof switches (photos required at drop-off, sender
+  // confirmation, pickup code), read from the business document.
+  const proofSettings = useMemo(() => proofSettingsOf(business), [business]);
 
   const containerById = useMemo(() => {
     const map = new Map<string, FirestoreRow>();
@@ -510,6 +535,8 @@ export function ContainersPanel({
   const selected = selectedId ? containerById.get(selectedId) : undefined;
   const selectedLines = selected ? linesByContainer.get(selectedId) ?? NO_ROWS : NO_ROWS;
   const selectedOpen = selected ? containerIsOpen(selected) : false;
+  // A flight: "Shipment" everywhere the panel would say "Container".
+  const selectedAir = selected ? isAirContainer(selected) : false;
   const selectedStatus = selected ? containerStatus(selected) : "loading";
   const selectedCounts = selected ? containerRowCounts(selected, selectedLines) : null;
   // "X of Y delivered" once the container is ready for pickup.
@@ -680,14 +707,17 @@ export function ContainersPanel({
     const payload = containerPayload(containerDraft);
     const editing = editingContainerId;
     const wasOpen = editing ? containerIsOpen(containerById.get(editing)) : true;
-    await runPanelAction(setBusy, setFlash, editing ? "Container updated." : "Container started.", async () => {
+    const air = isAirContainer(containerDraft);
+    const saved = editing ? (air ? "Shipment updated." : "Container updated.") : (air ? "Shipment started." : "Container started.");
+    await runPanelAction(setBusy, setFlash, saved, async () => {
       if (editing) {
         // A shipped container only takes a note; sending its identity back
         // unchanged is harmless, but sending only what may change keeps the
         // audit line honest.
         // The shipping line stays choosable after sailing: that is when
-        // carrier tracking needs it.
-        const changes = wasOpen ? payload : { notes: payload.notes, carrierScac: payload.carrierScac };
+        // carrier tracking needs it. A flight has none: its waybill and
+        // airline are locked with the rest once it has departed.
+        const changes = wasOpen ? payload : air ? { notes: payload.notes } : { notes: payload.notes, carrierScac: payload.carrierScac };
         await httpsCallable(functions, "updateContainer")({ businessId, containerId: editing, changes });
       } else {
         const response = await httpsCallable(functions, "createContainer")({ businessId, ...payload });
@@ -710,7 +740,7 @@ export function ContainersPanel({
       `Supprimer ${containerTitle(row)} ? Il est vide, rien d’autre ne change.`,
     );
     if (!ok) return;
-    await runPanelAction(setBusy, setFlash, "Container deleted.", async () => {
+    await runPanelAction(setBusy, setFlash, isAirContainer(row) ? "Shipment deleted." : "Container deleted.", async () => {
       await httpsCallable(functions, "deleteContainer")({ businessId, containerId: String(row.id) });
       setSelectedId("");
     });
@@ -725,13 +755,14 @@ export function ContainersPanel({
       return;
     }
     const title = containerTitle(row);
+    const air = isAirContainer(row);
     const ok = await confirmImportantAction(
       next === "shipped"
-        ? `Mark ${title} as shipped? Today becomes its sailing date and the list is locked; only notes can change after this.`
-        : `Mark ${title} ready for pickup? Customers are told on WhatsApp where to collect, and the container closes.`,
+        ? `Mark ${title} as shipped? Today becomes its ${air ? "departure" : "sailing"} date and the list is locked; only notes can change after this.`
+        : `Mark ${title} ready for pickup? Customers are told on WhatsApp where to collect, and the ${air ? "shipment" : "container"} closes.`,
       next === "shipped"
         ? `Marquer ${title} comme expédié ? Aujourd’hui devient sa date de départ et la liste est verrouillée ; seules les notes pourront changer ensuite.`
-        : `Marquer ${title} prêt à récupérer ? Les clients sont prévenus sur WhatsApp de l’endroit où récupérer, et le conteneur est clôturé.`,
+        : `Marquer ${title} prêt à récupérer ? Les clients sont prévenus sur WhatsApp de l’endroit où récupérer, et ${air ? "l’envoi" : "le conteneur"} est clôturé.`,
     );
     if (!ok) return;
     await runPanelAction(setBusy, setFlash, next === "shipped" ? "Marked as shipped." : "Marked ready for pickup.", async () => {
@@ -750,6 +781,22 @@ export function ContainersPanel({
       const url = text(data.url, "");
       if (!url) throw new Error("The loading list is not ready yet. Try again in a moment.");
       // Blocked even so: leave the link on screen rather than a button that did nothing.
+      if (!sendPendingTab(tab, url)) setDocumentLink(url);
+    }, () => closePendingTab(tab));
+  }
+
+  // The customs list (docs/AIR_PACKAGES.md §4.9): one table per container
+  // with each package's contents, serials, weight and declared value. Money
+  // is on it, so the server asks for the containers permission - the one
+  // that opens this panel.
+  async function openCustomsList(row: FirestoreRow) {
+    setDocumentLink("");
+    const tab = openPendingTab(window);
+    await runPanelAction(setBusy, setFlash, "", async () => {
+      const response = await httpsCallable(functions, "getContainerDocumentUrl")({ businessId, containerId: String(row.id), view: "customs" });
+      const data = (response.data ?? {}) as { url?: string };
+      const url = text(data.url, "");
+      if (!url) throw new Error("The customs list is not ready yet. Try again in a moment.");
       if (!sendPendingTab(tab, url)) setDocumentLink(url);
     }, () => closePendingTab(tab));
   }
@@ -793,6 +840,7 @@ export function ContainersPanel({
 
   function openAddLine() {
     setLineDraft(emptyContainerLineDraft);
+    setLineProof(emptyProofDraft());
     setLineTried(false);
     setEditingLineId("");
     setAddedThisSitting([]);
@@ -812,6 +860,7 @@ export function ContainersPanel({
   function openEditLine(row: FirestoreRow) {
     const draft = containerLineDraftFromRow(row);
     setLineDraft(draft);
+    setLineProof(proofDraftFromLine(row));
     setEditingLineId(String(row.id));
     setLineTried(false);
     setAddedThisSitting([]);
@@ -976,7 +1025,18 @@ export function ContainersPanel({
       setLineTried(true);
       return;
     }
-    const line = containerLinePayload(lineDraft);
+    // The proof fields, checked as the server will: a photo is required at
+    // the counter when the business says so (a received request never is).
+    const proofProblems = proofDraftProblems(lineProof, {
+      photosRequired: proofSettings.photosRequired && text(editing?.source, "counter") === "counter",
+    });
+    if (proofProblems.length) {
+      setDraftError(proofProblemText(proofProblems[0]));
+      setLineTried(true);
+      return;
+    }
+    const proof = proofPayload(lineProof);
+    const line = { ...containerLinePayload(lineDraft), ...proof };
     // The same refusal the server gives, without the round trip: the rows are
     // already here, so a car on another open container is caught as typed.
     // An edited line never conflicts with itself.
@@ -996,7 +1056,8 @@ export function ContainersPanel({
         return;
       }
       await runPanelAction(setBusy, setFlash, "Line updated.", async () => {
-        await httpsCallable(functions, "updateContainerLine")(updateContainerLineRequest(businessId, editing, lineDraft));
+        const request = updateContainerLineRequest(businessId, editing, lineDraft);
+        await httpsCallable(functions, "updateContainerLine")({ ...request, line: { ...request.line, ...proof } });
         closeModal();
       }, failInModal);
       return;
@@ -1017,6 +1078,8 @@ export function ContainersPanel({
       setLineTried(false);
       // The next customer's share: the same kind of cargo, a fresh first piece.
       setLineDraft((d) => ({ ...emptyContainerLineDraft, kind: d.kind, ownerKind: d.ownerKind, pieces: [newPieceDraft(d.pieces[0]?.kind ?? "barrel")] }));
+      // The next customer's package has its own photos and contents.
+      setLineProof(emptyProofDraft());
     }, failInModal);
   }
 
@@ -1054,9 +1117,19 @@ export function ContainersPanel({
     const id = String(row.id);
     setFlash("");
     setAddingLineId(id);
+    const request = assignLinesRequest(businessId, selectedId, [id], {}, waiting.rows);
     await runPackageCall(setBusy, async () => {
-      await httpsCallable(functions, "assignContainerLines")(assignLinesRequest(businessId, selectedId, [id], {}, waiting.rows));
-      setFlash(assignedText(1, containerTitle(selected), lang));
+      // A sender who reported a problem: the server warns and refuses until
+      // staff confirm; the package is never refused for it (docs/AIR_PACKAGES.md §4.8).
+      const done = await withProblemAcknowledgement(
+        (acknowledgeProblems) => httpsCallable(functions, "assignContainerLines")(acknowledgeProblems ? { ...request, acknowledgeProblems: true } : request),
+        async (lineIds) => {
+          const codes = lineIds.map((lineId) => text(waiting.rows.find((w) => String(w.id) === lineId)?.trackingCode, lineId));
+          const ok = await confirmImportantAction(loadAnywayText(codes, "en"), loadAnywayText(codes, "fr"));
+          return ok;
+        },
+      );
+      if (done) setFlash(assignedText(1, containerTitle(selected), lang));
     }, (failure) => setFlash(failure.message));
     setAddingLineId("");
   }
@@ -1110,6 +1183,8 @@ export function ContainersPanel({
   const ownerVisible = lineDraft.kind !== "car" || carFieldsVisible;
   const moveTargets = loadingContainers.filter((row) => String(row.id) !== selectedId);
   const movingLine = moveLineId ? selectedLines.find((row) => String(row.id) === moveLineId) : undefined;
+  const editingLineRow = editingLineId ? lines.rows.find((row) => String(row.id) === editingLineId) : undefined;
+  const draftAir = containerDraft.shipMode === "air";
   const contactsLine = contactsLineId ? lines.rows.find((row) => String(row.id) === contactsLineId) : undefined;
   const contactsLineContainer = contactsLine ? containerById.get(text(contactsLine.containerId, "")) : undefined;
   const labelsContainer = labelsContainerId ? containerById.get(labelsContainerId) : undefined;
@@ -1175,7 +1250,8 @@ export function ContainersPanel({
             <div className="ctn-detail-head">
               <div>
                 <h2 data-no-translate>{containerTitle(selected)}</h2>
-                {text(selected.containerNumber, "") && text(selected.label, "") && <p className="panel-lede" data-no-translate>{text(selected.label, "")}</p>}
+                {(text(selected.containerNumber, "") || text(selected.airWaybill, "")) && text(selected.label, "") && <p className="panel-lede" data-no-translate>{text(selected.label, "")}</p>}
+                {selectedAir && <p className="panel-lede prf-air"><Plane size={12} aria-hidden="true" /> <span>By air</span>{text(selected.airline, "") && <span data-no-translate> · {text(selected.airline, "")}</span>}</p>}
               </div>
               <div className="ctn-detail-actions">
                 <button className="lst-btn ghost" type="button" disabled={busy} onClick={() => openEdit(selected)}>
@@ -1186,6 +1262,9 @@ export function ContainersPanel({
                 </button>
                 <button className="lst-btn ghost" type="button" disabled={busy} onClick={() => openLabels(selectedId)}>
                   <Tag size={14} /> Print labels
+                </button>
+                <button className="lst-btn ghost" type="button" disabled={busy} aria-busy={busy} onClick={() => void openCustomsList(selected)}>
+                  <FileText size={14} /> Customs list
                 </button>
                 <button className="lst-btn ghost" type="button" onClick={() => void openHistory(selectedId)}><History size={14} /> History</button>
                 {selectedStatus === "loading" && (
@@ -1200,12 +1279,20 @@ export function ContainersPanel({
               </div>
             </div>
             <div className="pur-info ctn-info">
-              <div><span>Container number</span><b data-no-translate>{text(selected.containerNumber, "—")}</b></div>
+              {selectedAir ? (
+                <div><span>Air waybill</span><b data-no-translate>{text(selected.airWaybill, "—")}</b></div>
+              ) : (
+                <div><span>Container number</span><b data-no-translate>{text(selected.containerNumber, "—")}</b></div>
+              )}
               <div><span>Booking / BL reference</span><b data-no-translate>{text(selected.bookingReference, "—")}</b></div>
               <div><span>Destination</span><b>{destinationLabel(selected) || "—"}</b></div>
-              <div><span>Shipping line</span>{oceanCarrierLabel(selected.carrierScac) ? <b data-no-translate>{oceanCarrierLabel(selected.carrierScac)}</b> : <b>Not chosen yet</b>}</div>
+              {selectedAir ? (
+                <div><span>Airline</span>{text(selected.airline, "") ? <b data-no-translate>{text(selected.airline, "")}</b> : <b>Not given</b>}</div>
+              ) : (
+                <div><span>Shipping line</span>{oceanCarrierLabel(selected.carrierScac) ? <b data-no-translate>{oceanCarrierLabel(selected.carrierScac)}</b> : <b>Not chosen yet</b>}</div>
+              )}
               <div><span>Started</span><b>{formatDate(selected.createdAt) || "—"}</b></div>
-              {Boolean(selected.sailedAt) && <div><span>Sailed</span><b>{formatDate(selected.sailedAt)}</b></div>}
+              {Boolean(selected.sailedAt) && <div><span>{selectedAir ? "Departed" : "Sailed"}</span><b>{formatDate(selected.sailedAt)}</b></div>}
               {Boolean(selected.arrivedAt) && <div><span>Ready for pickup</span><b>{formatDate(selected.arrivedAt)}</b></div>}
               {selectedCounts && (
                 <div><span>On board</span><b>{selectedCounts.carCount} · {selectedCounts.barrelCount} · {selectedCounts.otherCount}</b><small>cars · barrels · other</small></div>
@@ -1257,7 +1344,7 @@ export function ContainersPanel({
             </div>
           )}
           {selectedLines.length === 0 ? (
-            <EmptyState text={selectedOpen ? "Nothing loaded yet. Add the first line." : "This container has no lines."} />
+            <EmptyState text={selectedOpen ? "Nothing loaded yet. Add the first line." : selectedAir ? "This shipment has no lines." : "This container has no lines."} />
           ) : loadView.count === 0 ? (
             <EmptyState text={activeFilter === "unscanned" && loadSearch.trim().length < 2 ? "Every package has been scanned." : "Nothing matches that search."} />
           ) : (
@@ -1298,6 +1385,8 @@ export function ContainersPanel({
                         {text(row.receiverName, "") && !lineCustomerIsReceiver(row) && <small data-no-translate>→ {text(row.receiverName, "")}{text(row.receiverPhone, "") ? ` · ${text(row.receiverPhone, "")}` : ""}</small>}
                         <RecordPhoneFlags row={row} field="receiverPhone" />
                         <LineWhatsApp line={row} />
+                        <ProofTicks line={row} />
+                        <SenderProblemBanner line={row} compact />
                         <MessageCustomerButton row={row} />
                       </span>
                       {stage === "delivered" ? (
@@ -1419,6 +1508,7 @@ export function ContainersPanel({
           staffName={staffName}
           staffOptions={staffOptions}
           groups={lineGroups}
+          proofSettings={proofSettings}
           onFlash={setFlash}
           enabled={enabled}
           focusLineId={lineFocusView === "waiting" ? focusLineId : ""}
@@ -1480,6 +1570,7 @@ export function ContainersPanel({
                           {!stock && !lineCustomerIsReceiver(hit.line) && <RecordPhoneFlags row={hit.line} field="customerPhone" />}
                           <RecordPhoneFlags row={hit.line} field="receiverPhone" />
                           <LineWhatsApp line={hit.line} />
+                          <ProofTicks line={hit.line} />
                         </span>
                         <span>
                           {hit.container ? <strong data-no-translate>{containerTitle(hit.container)}</strong> : hit.waiting ? <strong>Waiting for a container</strong> : <strong>—</strong>}
@@ -1524,7 +1615,8 @@ export function ContainersPanel({
                   const rowLines = linesByContainer.get(String(row.id)) ?? [];
                   const counts = containerRowCounts(row, rowLines);
                   const delivery = containerDeliveryProgress(row, rowLines);
-                  const number = text(row.containerNumber, "");
+                  const number = text(row.containerNumber, "") || text(row.airWaybill, "");
+                  const air = isAirContainer(row);
                   const id = String(row.id);
                   return (
                     <div
@@ -1535,7 +1627,7 @@ export function ContainersPanel({
                       onClick={() => setSelectedId(id)}
                       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedId(id); } }}
                     >
-                      <span><strong data-no-translate>{containerTitle(row)}</strong>{number && <small data-no-translate>{text(row.label, "")}</small>}</span>
+                      <span><strong data-no-translate>{containerTitle(row)}</strong>{number && <small data-no-translate>{text(row.label, "")}</small>}{air && <small className="prf-air"><Plane size={11} aria-hidden="true" /> <span>By air</span></small>}</span>
                       <span><strong>{destinationLabel(row) || "—"}</strong>{text(row.bookingReference, "") && <small data-no-translate>{text(row.bookingReference, "")}</small>}</span>
                       <span><strong>{counts.carCount} · {counts.barrelCount} · {counts.otherCount}</strong><small>cars · barrels · other</small></span>
                       <span>
@@ -1565,11 +1657,11 @@ export function ContainersPanel({
           <div className="lst-modal" style={{ maxWidth: 620 }} onClick={(e) => e.stopPropagation()}>
             <header className="lst-modal-head">
               <div>
-                <h3>{!editingContainerId ? "New container" : selectedOpen ? "Edit container" : "Add a note"}</h3>
+                <h3>{!editingContainerId ? (draftAir ? "New shipment" : "New container") : selectedOpen ? (draftAir ? "Edit shipment" : "Edit container") : "Add a note"}</h3>
                 <p>{!editingContainerId
-                  ? "Give it a working name now; the container number can come later."
+                  ? (draftAir ? "Give it a working name now; the air waybill can come later." : "Give it a working name now; the container number can come later.")
                   : selectedOpen
-                    ? "Name, number, reference and destination stay editable until it ships."
+                    ? (draftAir ? "Name, waybill, airline, reference and destination stay editable until it departs." : "Name, number, reference and destination stay editable until it ships.")
                     : "The list is the record of what went. A correction after sailing is written beside it, as a note."}</p>
               </div>
               <button className="lst-icon-btn" type="button" onClick={closeModal} aria-label="Close"><X size={18} /></button>
@@ -1579,8 +1671,37 @@ export function ContainersPanel({
               <div className="lst-form-grid">
                 {(!editingContainerId || selectedOpen) && (
                   <>
-                    <label className="lst-field wide"><span>Working name</span><input value={containerDraft.label} onChange={(e) => setContainerDraft((d) => ({ ...d, label: e.target.value }))} placeholder="Sailing 3 Oct, box 2" /><small className="lst-hint">Optional once there is a container or booking number.</small></label>
-                    <label className="lst-field"><span>Container number</span><input value={containerDraft.containerNumber} onChange={(e) => setContainerDraft((d) => ({ ...d, containerNumber: e.target.value.toUpperCase() }))} placeholder="e.g. MSKU1234567" /><small className="lst-hint">Four letters and seven digits, when the shipping line sends it.</small></label>
+                    {/* Sea or air (docs/AIR_PACKAGES.md §1): a flight is a container
+                        named by its air waybill, with no container number and no
+                        shipping line. Sea is what every container was before. */}
+                    <div className="lst-field wide prf-mode">
+                      <span>How it travels</span>
+                      <div className="service-segments pcs-kinds" role="radiogroup" aria-label="How it travels">
+                        {(["sea", "air"] as ShipMode[]).map((mode) => (
+                          <button
+                            key={mode}
+                            type="button"
+                            role="radio"
+                            aria-checked={containerDraft.shipMode === mode}
+                            className={`segment${containerDraft.shipMode === mode ? " active" : ""}`}
+                            disabled={busy}
+                            onClick={() => setContainerDraft((d) => ({ ...d, shipMode: mode }))}
+                          >
+                            {mode === "sea" ? <Ship size={14} aria-hidden="true" /> : <Plane size={14} aria-hidden="true" />}
+                            {mode === "sea" ? "Sea" : "Air"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <label className="lst-field wide"><span>Working name</span><input value={containerDraft.label} onChange={(e) => setContainerDraft((d) => ({ ...d, label: e.target.value }))} placeholder={draftAir ? "Flight Friday 7 Nov" : "Sailing 3 Oct, box 2"} /><small className="lst-hint">{draftAir ? "Optional once there is an air waybill or booking number." : "Optional once there is a container or booking number."}</small></label>
+                    {draftAir ? (
+                      <>
+                        <label className="lst-field"><span>Air waybill</span><input value={containerDraft.airWaybill} onChange={(e) => setContainerDraft((d) => ({ ...d, airWaybill: e.target.value.toUpperCase() }))} placeholder="e.g. 176-12345678" /><small className="lst-hint">Letters, digits and dashes, 6 to 20 of them, from the airline&apos;s waybill.</small></label>
+                        <label className="lst-field"><span>Airline</span><input value={containerDraft.airline} maxLength={60} onChange={(e) => setContainerDraft((d) => ({ ...d, airline: e.target.value }))} placeholder="optional" /></label>
+                      </>
+                    ) : (
+                      <label className="lst-field"><span>Container number</span><input value={containerDraft.containerNumber} onChange={(e) => setContainerDraft((d) => ({ ...d, containerNumber: e.target.value.toUpperCase() }))} placeholder="e.g. MSKU1234567" /><small className="lst-hint">Four letters and seven digits, when the shipping line sends it.</small></label>
+                    )}
                     <label className="lst-field"><span>Booking / BL reference</span><input value={containerDraft.bookingReference} onChange={(e) => setContainerDraft((d) => ({ ...d, bookingReference: e.target.value }))} /></label>
                     <label className="lst-field wide"><span>Destination</span>
                       <select value={containerDraft.destinationCountryId} onChange={(e) => pickDestination(e.target.value)}>
@@ -1608,9 +1729,11 @@ export function ContainersPanel({
                     sailing, since carrier tracking needs it most then. Empty
                     lets tracking guess it from the container number, which
                     fails for leasing prefixes such as TCKU. */}
-                {editingContainerId && containerCarrierNeedsChoice(containerById.get(editingContainerId)) && !containerDraft.carrierScac && (
+                {!draftAir && editingContainerId && containerCarrierNeedsChoice(containerById.get(editingContainerId)) && !containerDraft.carrierScac && (
                   <p className="ctn-carrier-notice" role="status">Tracking couldn&apos;t find the shipping line — choose it to start tracking.</p>
                 )}
+                {/* A flight has no shipping line and is never on the ocean feed. */}
+                {!draftAir && (
                 <label className="lst-field wide"><span>Shipping line</span>
                   <select value={containerDraft.carrierScac} onChange={(e) => setContainerDraft((d) => ({ ...d, carrierScac: e.target.value }))}>
                     <option value="">Not sure — guess from the container number</option>
@@ -1620,6 +1743,7 @@ export function ContainersPanel({
                     {OCEAN_CARRIERS.map((carrier) => (<option key={carrier.scac} value={carrier.scac} data-no-translate>{`${carrier.name} · ${carrier.scac}`}</option>))}
                   </select>
                 </label>
+                )}
                 <label className="lst-field wide"><span>Notes</span><textarea rows={3} value={containerDraft.notes} onChange={(e) => setContainerDraft((d) => ({ ...d, notes: e.target.value }))} /></label>
               </div>
             </div>
@@ -1627,7 +1751,7 @@ export function ContainersPanel({
               <button className="lst-btn ghost" type="button" disabled={busy} onClick={closeModal}>Cancel</button>
               <button className="lst-add" type="button" disabled={busy} aria-busy={busy} onClick={() => void saveContainer()}>
                 {busy ? <RefreshCw className="spin" size={16} /> : null}
-                {busy ? "Saving..." : editingContainerId ? "Save" : "Start container"}
+                {busy ? "Saving..." : editingContainerId ? "Save" : draftAir ? "Start shipment" : "Start container"}
               </button>
             </footer>
           </div>
@@ -1791,6 +1915,18 @@ export function ContainersPanel({
                     initialCountryCode={receiverPhoneCountry}
                   />
                 </div>
+              )}
+              {ownerVisible && (
+                <ProofFields
+                  id="ctn-proof"
+                  businessId={businessId}
+                  draft={lineProof}
+                  onChange={setLineProof}
+                  showErrors={lineTried}
+                  disabled={busy}
+                  lang={lang}
+                  photosRequired={proofSettings.photosRequired && text(editingLineRow?.source, "counter") === "counter"}
+                />
               )}
               {ownerVisible && lineDraft.kind !== "car" && !editingLineId && (
                 <p className="lst-hint">Several customers&apos; pieces in one go? Save each customer&apos;s share and add the next.</p>

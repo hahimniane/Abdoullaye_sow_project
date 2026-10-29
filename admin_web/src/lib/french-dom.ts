@@ -6953,6 +6953,86 @@ Object.assign(TEXT_TRANSLATIONS, {
   "WhatsApp message alerts off": "Alertes de messages WhatsApp désactivées",
 });
 
+// Air packages (W2) (docs/AIR_PACKAGES.md): the Mark delivered dialog's
+// pickup code, override and money collected; the Deliveries page's arrivals;
+// the Proof switches; the counter's request lookup; the tracking page's
+// flight block and photos; and every proof refusal.
+Object.assign(TEXT_TRANSLATIONS, {
+  // Mark delivered (package-delivery.tsx).
+  "Pickup code": "Code de retrait",
+  "The 4-digit code in the receiver's ready-for-pickup message.":
+    "Le code à 4 chiffres dans le message « prêt à récupérer » du destinataire.",
+  "Deliver without a code": "Livrer sans code",
+  "The package will show Delivered without code. Say who collected it and take their photo.":
+    "Le colis affichera « Livré sans code ». Indiquez qui l’a récupéré et prenez sa photo.",
+  "Who collected it": "Qui l’a récupéré",
+  "Photo of the person collecting": "Photo de la personne qui récupère",
+  "Photo of the person who collected it": "Photo de la personne qui l’a récupéré",
+  "Uploading photo…": "Envoi de la photo…",
+  "Retake photo": "Reprendre la photo",
+  "Take photo": "Prendre une photo",
+  "Collected now ($)": "Encaissé maintenant ($)",
+  "US dollars taken at handover, if any. It is recorded as a cash payment on the package.":
+    "Dollars US reçus à la remise, le cas échéant. Enregistrés comme paiement en espèces sur le colis.",
+  "Delivered without code": "Livré sans code",
+  "Collected at handover": "Encaissé à la remise",
+  // Refusals (container_delivery.js DELIVERY_MESSAGES, package_proof.js REFUSAL, container_manifest.js).
+  "Enter the amount collected in dollars, zero or more.":
+    "Entrez le montant encaissé en dollars, zéro ou plus.",
+  "Add at least one photo of the package.": "Ajoutez au moins une photo du colis.",
+  "Check the item list: a name up to 60 characters, a quantity from 1 to 99, and an optional serial number.":
+    "Vérifiez la liste des articles : un nom de 60 caractères maximum, une quantité de 1 à 99 et un numéro de série facultatif.",
+  "Enter a weight between 0.1 and 2000 lb.": "Entrez un poids entre 0,1 et 2000 lb.",
+  "Enter a declared value of $0 or more.": "Entrez une valeur déclarée de 0 $ ou plus.",
+  "The pickup code does not match. Ask the receiver for the code in their message, or deliver without a code.":
+    "Le code de retrait ne correspond pas. Demandez au destinataire le code reçu dans son message, ou livrez sans code.",
+  "Delivering without a code needs the name of the person collecting and a photo.":
+    "Livrer sans code demande le nom de la personne qui récupère et une photo.",
+  "An air waybill is 6 to 20 letters, digits or dashes, like 176-12345678.":
+    "Une lettre de transport aérien compte 6 à 20 lettres, chiffres ou tirets, comme 176-12345678.",
+  "The sender reported a problem with this package. Confirm to load it anyway.":
+    "L’expéditeur a signalé un problème avec ce colis. Confirmez pour le charger quand même.",
+  "Check the proof settings: each switch is on or off.":
+    "Vérifiez les réglages de preuve : chaque interrupteur est activé ou désactivé.",
+  // Deliveries page (deliveries-panel.tsx).
+  "Arrived · to hand over": "Arrivés · à remettre",
+  "Every shipment ready for pickup and the packages still on it.":
+    "Chaque envoi prêt à récupérer et les colis qui s’y trouvent encore.",
+  "Nothing is waiting to be handed over.": "Rien n’attend d’être remis.",
+  Shipment: "Envoi",
+  // Proof settings (package-requests-panel.tsx, lib/package-requests.ts).
+  Proof: "Preuve",
+  "Photos required at drop-off": "Photos obligatoires au dépôt",
+  "A package taken at the counter needs at least one photo before it is saved. A received request keeps the customer's photos.":
+    "Un colis pris au comptoir doit avoir au moins une photo avant d’être enregistré. Une demande reçue garde les photos du client.",
+  "Ask the sender to confirm by WhatsApp": "Demander à l’expéditeur de confirmer par WhatsApp",
+  "Right after drop-off the sender gets the first photo and the item list with OK / Something's wrong. No answer ships the package as Not confirmed.":
+    "Juste après le dépôt, l’expéditeur reçoit la première photo et la liste des articles avec OK / Something's wrong. Sans réponse, le colis part comme Non confirmé.",
+  "Pickup code at delivery": "Code de retrait à la livraison",
+  "Each package gets a 4-digit code, sent to the receiver when it is ready for pickup. Without it the agent must name who collected and take a photo.":
+    "Chaque colis reçoit un code à 4 chiffres, envoyé au destinataire quand il est prêt à récupérer. Sans ce code, l’agent doit indiquer qui a récupéré et prendre une photo.",
+  // The counter's request lookup (ExpectedRequestsSection).
+  "Enter the customer's code": "Entrez le code du client",
+  "Looking up…": "Recherche en cours…",
+  "Open request": "Ouvrir la demande",
+  "That is not a request code. Codes look like R-K7M4P.":
+    "Ce n’est pas un code de demande. Les codes ressemblent à R-K7M4P.",
+  "No request with that code for this business.":
+    "Aucune demande avec ce code pour cette entreprise.",
+  // Tracking page (guest-tracking.tsx): a flight, and the package's photos.
+  Flight: "Vol",
+  "Your package travels by air. Here is the flight it is on.":
+    "Votre colis voyage par avion. Voici le vol qui le transporte.",
+  Airline: "Compagnie aérienne",
+  "Air waybill": "Lettre de transport aérien",
+  "Photos of the package": "Photos du colis",
+  "Photos of this package: at drop-off, what was sent on WhatsApp, and at delivery.":
+    "Les photos de ce colis : au dépôt, ce qui a été envoyé sur WhatsApp et à la livraison.",
+  "Sent by WhatsApp": "Envoyé par WhatsApp",
+  "At delivery": "À la livraison",
+  "Open full size": "Ouvrir en taille réelle",
+});
+
 export const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {
   // Laawol bills (billing-views.tsx).
   "Open this business's bill": "Ouvrir le montant dû de cette entreprise",
@@ -7159,6 +7239,90 @@ export function buildReverseDictionary(
   }
   return result;
 }
+
+// Air packages (W1) - docs/AIR_PACKAGES.md: air shipments on the Containers
+// step, the proof on a package (photos, what is inside, weight, declared
+// value), the three ticks, the sender's problem flag and the customs list.
+// Appended last so the parallel delivery/settings work (W2) merges cleanly.
+Object.assign(TEXT_TRANSLATIONS, {
+  // The container form and detail, when it flies.
+  "Shipment": "Envoi",
+  "New shipment": "Nouvel envoi",
+  "Edit shipment": "Modifier l’envoi",
+  "Start shipment": "Créer l’envoi",
+  "Shipment started.": "Envoi créé.",
+  "Shipment deleted.": "Envoi supprimé.",
+  "This shipment has no lines.": "Cet envoi n’a aucune ligne.",
+  "How it travels": "Par mer ou par avion",
+  "Air waybill": "Lettre de transport aérien",
+  "Airline": "Compagnie aérienne",
+  "By air": "Par avion",
+  "Departed": "Date de départ",
+  "Give it a working name now; the air waybill can come later.":
+    "Donnez-lui un nom provisoire ; la lettre de transport aérien pourra venir plus tard.",
+  "Name, waybill, airline, reference and destination stay editable until it departs.":
+    "Nom, LTA, compagnie, référence et destination restent modifiables jusqu’au départ.",
+  "Optional once there is an air waybill or booking number.":
+    "Facultatif dès qu’il y a une lettre de transport aérien ou un numéro de réservation.",
+  "Letters, digits and dashes, 6 to 20 of them, from the airline's waybill.":
+    "Lettres, chiffres et tirets, de 6 à 20, d’après la LTA de la compagnie.",
+  "An air waybill is 6 to 20 letters, digits or dashes, like 176-12345678.":
+    "Une lettre de transport aérien compte 6 à 20 lettres, chiffres ou tirets, comme 176-12345678.",
+  // The customs list.
+  "Customs list": "Liste douanière",
+  "The customs list is not ready yet. Try again in a moment.":
+    "La liste douanière n’est pas encore prête. Réessayez dans un instant.",
+  // The proof editor.
+  "At least one photo of the package is required.":
+    "Au moins une photo du colis est obligatoire.",
+  "Optional. Up to 5 photos of the package as dropped off.":
+    "Facultatif. Jusqu’à 5 photos du colis tel que déposé.",
+  "Add photo": "Ajouter une photo",
+  "Photo of the package": "Photo du colis déposé",
+  "What's inside": "Contenu",
+  "Optional. The sender confirms this list and customs read it.":
+    "Facultatif. L’expéditeur confirme cette liste et la douane la lit.",
+  "Item": "Article",
+  "Qty": "Qté",
+  "Serial / IMEI": "Série / IMEI",
+  "Remove item": "Retirer l’article",
+  "Add item": "Nouvel article",
+  "Weight (lb)": "Poids (lb)",
+  "Declared value ($)": "Valeur déclarée ($)",
+  "Whole dollars. Never printed on the label.":
+    "Dollars entiers. Jamais imprimé sur l’étiquette.",
+  "That file is not a photo.": "Ce fichier n’est pas une photo.",
+  "That photo could not be read.": "Cette photo n’a pas pu être lue.",
+  "That photo is too large.": "Cette photo est trop lourde.",
+  "Sign in again to add photos.": "Reconnectez-vous pour ajouter des photos.",
+  "Wait for the photos to finish uploading.":
+    "Attendez la fin de l’envoi des photos.",
+  // The server's proof refusals (package_proof.REFUSAL).
+  "Add at least one photo of the package.": "Ajoutez au moins une photo du colis.",
+  "Check the item list: a name up to 60 characters, a quantity from 1 to 99, and an optional serial number.":
+    "Vérifiez la liste des articles : un nom de 60 caractères au plus, une quantité de 1 à 99 et un numéro de série facultatif.",
+  "Enter a weight between 0.1 and 2000 lb.": "Saisissez un poids entre 0,1 et 2000 lb.",
+  "Enter a declared value of $0 or more.": "Saisissez une valeur déclarée de 0 $ ou plus.",
+  // The ticks, the problem flag and the Missing proof filter.
+  "Proof": "Preuves",
+  "Missing proof": "Preuves manquantes",
+  "All": "Tous",
+  "Every waiting package has its proof.": "Chaque colis en attente a ses preuves.",
+  "Sender reported a problem": "L’expéditeur a signalé un problème",
+  "The sender tapped Something's wrong on the confirmation message. Loading this package warns but never blocks.":
+    "L’expéditeur a appuyé sur Something's wrong dans le message de confirmation. Le chargement de ce colis avertit mais ne bloque jamais.",
+  // The staff view's proof section.
+  "No drop-off photo.": "Aucune photo de dépôt.",
+  "Not listed": "Non renseigné",
+  "Not weighed": "Non pesé",
+  "Declared value": "Valeur déclarée",
+  "Not declared": "Non déclarée",
+});
+Object.assign(ATTRIBUTE_TRANSLATIONS, {
+  "Flight Friday 7 Nov": "Vol du vendredi 7 nov.",
+  "e.g. 176-12345678": "ex. 176-12345678",
+  "e.g. iPhone 13": "ex. iPhone 13",
+});
 
 const englishDictionary = { ...TEXT_TRANSLATIONS, ...ATTRIBUTE_TRANSLATIONS };
 const frenchDictionary = buildReverseDictionary([

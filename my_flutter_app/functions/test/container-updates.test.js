@@ -944,7 +944,8 @@ describe("Meta's delivery ticks on a line's latest update", () => {
 /* eslint-disable max-len */
 describe("the sender's confirmation and the pickup code (docs/AIR_PACKAGES.md)", () => {
   const {
-    askSenderToConfirm, rowUpdateFor, pickupCodeFor, confirmationPhotoLink,
+    askSenderToConfirm, rowUpdateFor, pickupCodeFor, pickupAddressWithCode,
+    confirmationPhotoLink,
     summaryUpdate, updateRank, withDeliveryTick,
   } = require("../container_updates");
   const {photoLink, PHOTO_LINK_MS} = require("../package_proof");
@@ -1049,24 +1050,30 @@ describe("the sender's confirmation and the pickup code (docs/AIR_PACKAGES.md)",
     }).template.name, "shipment_received_2lang");
   });
 
-  it("sends ready for pickup with the code to the receiver, and without to the sender", () => {
+  it("puts the pickup number in the receiver's address line, not the sender's", () => {
     const args = (role, phone) => ({
       phone, name: "Mariama Bah", businessName: "Dala", line: proofLine(),
       container: {destinationCountryId: "gn", destinationCountryName: "Guinea"},
       update: "arrived", trackingCode: "CL-K7M4P2", role,
+      pickupDestination: {pickupCity: "Conakry", pickupAddress: "Madina office",
+        pickupPhone: "+224620000000"},
     });
     const receiver = whatsappUpdateMessage(args("receiver", "+224620000000"));
-    assert.equal(receiver.template.name, "shipment_ready_pickup_code_2lang");
-    assert.equal(receiver.template.components[0].parameters.length, 11);
-    assert.equal(receiver.template.components[0].parameters.at(-1).text, "4821");
+    assert.equal(receiver.template.name, "shipment_ready_pickup_2lang");
+    assert.equal(receiver.template.components[0].parameters.length, 10);
+    assert.equal(receiver.template.components[0].parameters[7].text,
+        "Madina office · Pickup number / N° de retrait : 4821");
     assert.deepEqual(receiver.template.components[1].parameters, [{type: "text", text: "CL-K7M4P2"}]);
     const sender = whatsappUpdateMessage(args("sender", "+16465550100"));
     assert.equal(sender.template.name, "shipment_ready_pickup_2lang");
-    assert.equal(sender.template.components[0].parameters.length, 10);
-    // No code on the line: the old template for everyone.
+    assert.equal(sender.template.components[0].parameters[7].text, "Madina office");
+    // No code on the line: the plain address for everyone.
     const none = whatsappUpdateMessage({...args("receiver", "+224620000000"), line: proofLine({pickupCode: ""})});
-    assert.equal(none.template.name, "shipment_ready_pickup_2lang");
-    // The legacy set has no code variant.
+    assert.equal(none.template.components[0].parameters[7].text, "Madina office");
+    // No address known: the number alone.
+    assert.equal(pickupAddressWithCode("", "4821"), "Pickup number / N° de retrait : 4821");
+    assert.equal(pickupAddressWithCode("Madina office", ""), "Madina office");
+    // The legacy set is unchanged.
     assert.equal(whatsappUpdateMessage({...args("receiver", "+224620000000"), templateSet: "legacy"}).template.name, "container_arrived");
   });
 

@@ -38,13 +38,80 @@ abstract final class DeliveryReason {
   static const collectedByTooLong = 'collected_by_too_long';
   static const lineNotFound = 'line_not_found';
 
+  /// USD collected at handover (docs/AIR_PACKAGES.md §4.7): not a whole
+  /// number of cents, or over the ledger's ceiling.
+  static const collectedCentsInvalid = 'collected_cents_invalid';
+
+  /// The proof refusals (`package_proof.REFUSAL`), spread into
+  /// `DELIVERY_MESSAGES` on the server. A delivery meets the last two:
+  /// the pickup code did not match, or the override lacks a name or a
+  /// photo. The others are line-edit refusals that share the callable.
+  static const photoInvalid = 'photo_invalid';
+  static const photoRequired = 'photo_required';
+  static const contentsInvalid = 'contents_invalid';
+  static const weightInvalid = 'weight_invalid';
+  static const declaredValueInvalid = 'declared_value_invalid';
+  static const pickupCodeInvalid = 'pickup_code_invalid';
+  static const overrideIncomplete = 'override_incomplete';
+
   static const all = <String>[
     actionInvalid,
+    collectedCentsInvalid,
+    photoInvalid,
+    photoRequired,
+    contentsInvalid,
+    weightInvalid,
+    declaredValueInvalid,
+    pickupCodeInvalid,
+    overrideIncomplete,
     notArrived,
     balanceDue,
     collectedByTooLong,
     lineNotFound,
   ];
+}
+
+// ---------------------------------------------------------------------------
+// The pickup code and the override (docs/AIR_PACKAGES.md §1.6, §4.7).
+// ---------------------------------------------------------------------------
+
+/// Whether the Mark delivered sheet asks for the pickup code: the business
+/// switch is on AND the line was minted a code. Mirrors the first branch of
+/// `handoverCheck`. The code itself is never shown to deliveries-only
+/// staff; the sheet only needs to know one exists.
+bool deliveryAsksPickupCode({
+  required bool businessPickupCode,
+  required String linePickupCode,
+}) => businessPickupCode && linePickupCode.trim().isNotEmpty;
+
+/// What the agent typed as the code, digits only. Mirrors the cleaning in
+/// `pickupCodeMatches`; four digits are a complete code.
+String pickupCodeDigits(String typed) =>
+    typed.replaceAll(RegExp(r'\D'), '');
+
+bool pickupCodeComplete(String typed) => pickupCodeDigits(typed).length == 4;
+
+/// The least the override needs before it is sent: a name of two
+/// characters and a photo. Mirrors the `override_incomplete` branch of
+/// `handoverCheck`. Empty when complete.
+List<String> deliveryOverrideErrors({
+  required String collectedBy,
+  required String photoPath,
+}) => deliveryOneLine(collectedBy).length < 2 || photoPath.trim().isEmpty
+    ? const [DeliveryReason.overrideIncomplete]
+    : const [];
+
+/// "Collected now" as typed, in whole dollars: cents, 0 for blank, null
+/// when it is not an amount (a negative, a fraction of a cent, letters).
+/// Mirrors `collectedCentsOf` on whole-dollar input.
+int? collectedCentsFromInput(String typed) {
+  final text = typed.trim().replaceAll(RegExp(r'[\$,\s]'), '');
+  if (text.isEmpty) return 0;
+  final value = double.tryParse(text);
+  if (value == null || value < 0 || !value.isFinite) return null;
+  final cents = (value * 100).round();
+  if ((value * 100 - cents).abs() > 1e-6) return null;
+  return cents;
 }
 
 // ---------------------------------------------------------------------------
@@ -259,18 +326,35 @@ DeliveryBalanceNotice deliveryBalanceNotice({
 /// `updateContainerLine` with `action: deliver`. [collectedBy] is sent as
 /// typed (one line); blank lets the server name the receiver.
 /// [acknowledgeBalance] is true once the person saw the balance warning.
+///
+/// [pickupCode] is what the agent typed (digits only are sent); [overrideCollectedBy]
+/// and [overridePhotoPath] together are the "deliver without a code"
+/// override; [collectedCents] is the USD collected now (0 sends nothing).
 Map<String, Object?> deliverLineRequest(
   String businessId,
   String lineId, {
   String collectedBy = '',
   bool acknowledgeBalance = false,
-}) => {
-  'businessId': businessId,
-  'lineId': lineId,
-  'action': deliveryActionDeliver,
-  'collectedBy': deliveryOneLine(collectedBy),
-  'acknowledgeBalance': acknowledgeBalance,
-};
+  String pickupCode = '',
+  String overrideCollectedBy = '',
+  String overridePhotoPath = '',
+  int collectedCents = 0,
+}) {
+  final code = pickupCodeDigits(pickupCode);
+  final overrideName = deliveryOneLine(overrideCollectedBy);
+  final overridePhoto = overridePhotoPath.trim();
+  return {
+    'businessId': businessId,
+    'lineId': lineId,
+    'action': deliveryActionDeliver,
+    'collectedBy': deliveryOneLine(collectedBy),
+    'acknowledgeBalance': acknowledgeBalance,
+    if (code.isNotEmpty) 'pickupCode': code,
+    if (overrideName.isNotEmpty || overridePhoto.isNotEmpty)
+      'override': {'collectedBy': overrideName, 'photoPath': overridePhoto},
+    if (collectedCents > 0) 'collectedCents': collectedCents,
+  };
+}
 
 /// `updateContainerLine` with `action: undo_delivery`.
 Map<String, Object?> undoDeliveryRequest(String businessId, String lineId) => {
@@ -287,6 +371,9 @@ class DeliveryResult {
     required this.collectedBy,
     required this.hasBalance,
     this.balanceCents,
+    this.deliveredWithoutCode = false,
+    this.collectedCents = 0,
+    this.paymentId = '',
   });
 
   factory DeliveryResult.fromCallable(Object? data) {
@@ -298,6 +385,9 @@ class DeliveryResult {
       collectedBy: callableString(map['collectedBy']),
       hasBalance: callableBool(map['hasBalance']),
       balanceCents: cents is num ? callableInt(cents) : null,
+      deliveredWithoutCode: callableBool(map['deliveredWithoutCode']),
+      collectedCents: callableInt(map['collectedCents']),
+      paymentId: callableString(map['paymentId']),
     );
   }
 
@@ -311,6 +401,14 @@ class DeliveryResult {
 
   /// Null for a caller who may not see money.
   final int? balanceCents;
+
+  /// The override was used (docs/AIR_PACKAGES.md §4.7).
+  final bool deliveredWithoutCode;
+
+  /// USD collected at handover, and the payment row it wrote ('' when
+  /// nothing was collected).
+  final int collectedCents;
+  final String paymentId;
 }
 
 /// The answer to an undo: false when the package was not delivered.

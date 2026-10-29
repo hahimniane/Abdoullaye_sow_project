@@ -7,6 +7,10 @@
 /// Dart: no Firebase, no clock, tested on its own.
 library;
 
+import 'package_requests.dart' show PackageProofSettings;
+
+export 'package_requests.dart' show PackageProofSettings;
+
 // ---------------------------------------------------------------------------
 // Vocabulary shared with the server.
 // ---------------------------------------------------------------------------
@@ -424,45 +428,11 @@ class PackageProofFields {
 // The business's switches.
 // ---------------------------------------------------------------------------
 
-/// `businesses/{id}.packageProofSettings`; anything missing is off.
-class PackageProofSettings {
-  const PackageProofSettings({
-    this.photosRequired = false,
-    this.senderConfirm = false,
-    this.pickupCode = false,
-  });
-
-  static const off = PackageProofSettings();
-
-  final bool photosRequired;
-  final bool senderConfirm;
-  final bool pickupCode;
-
-  /// Mirrors `proofSettingsOf`: reads the business document.
-  factory PackageProofSettings.of(Map<String, dynamic>? business) {
-    final raw = business?['packageProofSettings'];
-    final m = raw is Map ? raw : const {};
-    return PackageProofSettings(
-      photosRequired: m['photosRequired'] == true,
-      senderConfirm: m['senderConfirm'] == true,
-      pickupCode: m['pickupCode'] == true,
-    );
-  }
-
-  @override
-  bool operator ==(Object other) =>
-      other is PackageProofSettings &&
-      other.photosRequired == photosRequired &&
-      other.senderConfirm == senderConfirm &&
-      other.pickupCode == pickupCode;
-
-  @override
-  int get hashCode => Object.hash(photosRequired, senderConfirm, pickupCode);
-}
-
-/// The three switches from the business document. Mirrors `proofSettingsOf`.
+/// The three switches from the business document; anything missing is off.
+/// Mirrors `proofSettingsOf`. One class for the switches: the settings
+/// screen's [PackageProofSettings] (package_requests.dart), re-exported here.
 PackageProofSettings proofSettingsOf(Map<String, dynamic>? business) =>
-    PackageProofSettings.of(business);
+    PackageProofSettings.fromBusiness(business ?? const {});
 
 /// Whether a counter drop-off may be saved without a photo: "" or
 /// "photo_required". Mirrors `photoRequirementRefusal`.

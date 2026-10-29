@@ -30,10 +30,10 @@ import 'package_estimate_screen.dart';
 import 'package_payment_sheet.dart';
 import 'package_result_screen.dart';
 import 'receive_request_sheet.dart';
+import '../widgets/request_code_lookup_sheet.dart';
 import '../services/whatsapp_conversations.dart' show messageCustomerTargets;
 import '../widgets/whatsapp_widgets.dart'
     show PackageUpdateTicks, openWhatsAppForLine;
-import '../services/package_proof.dart' show PackageProofSettings;
 import '../widgets/proof_ticks.dart';
 
 /// The way into the waiting list from the containers screen: how many
@@ -120,7 +120,7 @@ class WaitingPackagesScreen extends StatefulWidget {
     this.caller = callContainerCallable,
     this.labelOpener = openContainerLabels,
     this.requestFeed,
-    this.proofSettings = PackageProofSettings.off,
+    this.proofSettings = const PackageProofSettings(),
   });
 
   final String businessId;
@@ -188,6 +188,20 @@ class _WaitingPackagesScreenState extends State<WaitingPackagesScreen> {
         ].any((s) => s.toLowerCase().contains(q)))
           r,
     ];
+  }
+
+  /// "Enter the customer's code" (docs/AIR_PACKAGES.md §4.10): the request
+  /// the code names opens in the same Received sheet an Expected card does.
+  Future<void> _lookupCode() async {
+    final service = widget.requestFeed?.service;
+    if (service == null || _busy.isNotEmpty) return;
+    final request = await showRequestCodeLookupSheet(
+      context,
+      businessId: widget.businessId,
+      service: service,
+    );
+    if (request == null || !mounted) return;
+    await _receive(request);
   }
 
   Future<void> _receive(PackageRequest request) async {
@@ -612,6 +626,10 @@ class _WaitingPackagesScreenState extends State<WaitingPackagesScreen> {
                     onReceived: _receive,
                     onCancelRequest: _cancelRequest,
                     onOpenRequest: _openRequest,
+                    onLookupCode: widget.requestFeed == null
+                        ? null
+                        : (_busy.isNotEmpty ? null : _lookupCode),
+                    showLookupCode: widget.requestFeed != null,
                   ),
                 Positioned(
                   left: 0,
@@ -649,6 +667,8 @@ class WaitingPackagesList extends StatelessWidget {
     this.onCancelRequest,
     this.onOpenRequest,
     this.busyRequestId = '',
+    this.onLookupCode,
+    this.showLookupCode = false,
   });
 
   /// What to show, already filtered, newest first.
@@ -673,6 +693,15 @@ class WaitingPackagesList extends StatelessWidget {
   final ValueChanged<PackageRequest>? onOpenRequest;
   final String busyRequestId;
 
+  /// "Enter the customer's code" above the list (docs/AIR_PACKAGES.md
+  /// §4.10), shown when the business takes requests ([showLookupCode]);
+  /// null disables it while something else is busy.
+  final VoidCallback? onLookupCode;
+  final bool showLookupCode;
+
+  Widget? get _lookupRow =>
+      showLookupCode ? RequestCodeLookupRow(onTap: onLookupCode) : null;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -682,6 +711,7 @@ class WaitingPackagesList extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(
             AppSpacing.lg, AppSpacing.md, AppSpacing.lg, 120),
         children: [
+          ?_lookupRow,
           LotEmptyState(
             key: const Key('waiting-empty'),
             icon: Icons.inventory_2_outlined,
@@ -691,11 +721,15 @@ class WaitingPackagesList extends StatelessWidget {
         ],
       );
     }
+    final lookup = _lookupRow;
+    final offset = lookup == null ? 0 : 1;
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(
           AppSpacing.lg, AppSpacing.md, AppSpacing.lg, 120),
-      itemCount: lines.length,
-      itemBuilder: (context, i) {
+      itemCount: lines.length + offset,
+      itemBuilder: (context, index) {
+        if (lookup != null && index == 0) return lookup;
+        final i = index - offset;
         final line = lines[i];
         return RiseIn(
           key: ValueKey(line.id),
@@ -736,6 +770,7 @@ class WaitingPackagesList extends StatelessWidget {
         120,
       ),
       children: [
+        ?_lookupRow,
         header(
           l10n.prqExpectedTitle(expected.length),
           const Key('waiting-expected-title'),

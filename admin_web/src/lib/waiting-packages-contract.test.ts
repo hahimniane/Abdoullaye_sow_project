@@ -19,6 +19,9 @@ const panelPath = "../components/business/waiting-packages-panel.tsx";
 const paymentPath = "../components/business/package-payment-dialog.tsx";
 const assignPath = "../components/business/add-waiting-packages-dialog.tsx";
 const piecesPath = "../components/business/pieces-editor.tsx";
+// The proof editor (docs/AIR_PACKAGES.md), shown inside the same forms. The
+// ticks' few strings are pinned in air-packages-console-contract.test.ts.
+const proofFieldsPath = "../components/business/proof-fields.tsx";
 const guestPath = "../components/guest-tracking.tsx";
 const containersPath = "../components/business/containers-panel.tsx";
 const operationsPath = "../components/business/operations-panels.tsx";
@@ -38,7 +41,7 @@ const businessDataSource = read("./business-data.ts");
 // ---------------------------------------------------------------------------
 
 /** Spelled the same in French, or not words at all (units, symbols). */
-const SAME_IN_FRENCH = new Set(["Description", "Destination", "VIN", "Total", "ft³"]);
+const SAME_IN_FRENCH = new Set(["Description", "Destination", "VIN", "Total", "ft³", "Photos"]);
 
 const ATTRIBUTES_WITH_COPY = new Set(["placeholder", "title", "aria-label", "label", "alt"]);
 /** Functions whose string arguments end up on screen. */
@@ -98,6 +101,7 @@ for (const [name, source, path] of [
   ["the package payment dialog", paymentSource, paymentPath],
   ["the add-waiting-packages dialog", assignSource, assignPath],
   ["the pieces editor", piecesSource, piecesPath],
+  ["the proof editor", read(proofFieldsPath), proofFieldsPath],
 ] as const) {
   test(`every sentence on ${name} has its French`, () => {
     const strings = screenStrings(source, path);

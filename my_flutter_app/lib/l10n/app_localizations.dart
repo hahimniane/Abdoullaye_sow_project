@@ -28879,6 +28879,366 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Customs list'**
   String get airCustomsList;
+
+  /// No description provided for @deliverRefusalAirWaybillInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter an air waybill of 6 to 20 letters, digits or dashes.'**
+  String get deliverRefusalAirWaybillInvalid;
+
+  /// No description provided for @deliverRefusalPhotoInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'One of the photos could not be used. Add it again.'**
+  String get deliverRefusalPhotoInvalid;
+
+  /// No description provided for @deliverRefusalPhotoRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Add at least one photo of the package.'**
+  String get deliverRefusalPhotoRequired;
+
+  /// No description provided for @deliverRefusalContentsInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Check the item list: a name up to 60 characters, a quantity from 1 to 99, and an optional serial number.'**
+  String get deliverRefusalContentsInvalid;
+
+  /// No description provided for @deliverRefusalWeightInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a weight between 0.1 and 2000 lb.'**
+  String get deliverRefusalWeightInvalid;
+
+  /// No description provided for @deliverRefusalDeclaredValueInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a declared value of \$0 or more.'**
+  String get deliverRefusalDeclaredValueInvalid;
+
+  /// No description provided for @deliverRefusalPickupCodeInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'The pickup code does not match. Ask the receiver for the code in their message, or deliver without a code.'**
+  String get deliverRefusalPickupCodeInvalid;
+
+  /// No description provided for @deliverRefusalOverrideIncomplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delivering without a code needs the name of the person collecting and a photo.'**
+  String get deliverRefusalOverrideIncomplete;
+
+  /// No description provided for @deliverRefusalCollectedCentsInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the amount collected in dollars, zero or more.'**
+  String get deliverRefusalCollectedCentsInvalid;
+
+  /// No description provided for @deliverRefusalProofSettingsInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Check the proof settings: each switch is on or off.'**
+  String get deliverRefusalProofSettingsInvalid;
+
+  /// No description provided for @deliverRefusalSenderProblem.
+  ///
+  /// In en, this message translates to:
+  /// **'The sender reported a problem with this package. Check with them before it goes on.'**
+  String get deliverRefusalSenderProblem;
+
+  /// No description provided for @deliverPickupCodeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Pickup code'**
+  String get deliverPickupCodeLabel;
+
+  /// No description provided for @deliverPickupCodeHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'The 4 digits in the receiver’s message.'**
+  String get deliverPickupCodeHelper;
+
+  /// No description provided for @deliverPickupCodeIncomplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the 4-digit code.'**
+  String get deliverPickupCodeIncomplete;
+
+  /// No description provided for @deliverWithoutCodeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Deliver without a code'**
+  String get deliverWithoutCodeTitle;
+
+  /// No description provided for @deliverWithoutCodeNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Type who is collecting it and take their photo. The package will show “Delivered without code”.'**
+  String get deliverWithoutCodeNote;
+
+  /// No description provided for @deliverCollectorLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Who collected it'**
+  String get deliverCollectorLabel;
+
+  /// No description provided for @deliverPhotoLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo of the person collecting'**
+  String get deliverPhotoLabel;
+
+  /// No description provided for @deliverTakePhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Take a photo'**
+  String get deliverTakePhoto;
+
+  /// No description provided for @deliverRetakePhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Retake'**
+  String get deliverRetakePhoto;
+
+  /// No description provided for @deliverPhotoUploading.
+  ///
+  /// In en, this message translates to:
+  /// **'Uploading the photo…'**
+  String get deliverPhotoUploading;
+
+  /// No description provided for @deliverPhotoAdded.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo added'**
+  String get deliverPhotoAdded;
+
+  /// No description provided for @deliverPhotoFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t add the photo. Try again.'**
+  String get deliverPhotoFailed;
+
+  /// No description provided for @deliverCollectedNowLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Collected now (USD)'**
+  String get deliverCollectedNowLabel;
+
+  /// No description provided for @deliverCollectedNowHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Optional. Whole dollars collected at handover.'**
+  String get deliverCollectedNowHelper;
+
+  /// No description provided for @deliverOwes.
+  ///
+  /// In en, this message translates to:
+  /// **'Owes {amount}'**
+  String deliverOwes(String amount);
+
+  /// No description provided for @deliverCollectedNowInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter whole dollars, zero or more.'**
+  String get deliverCollectedNowInvalid;
+
+  /// No description provided for @deliverDoneCollected.
+  ///
+  /// In en, this message translates to:
+  /// **'Delivered · {amount} collected'**
+  String deliverDoneCollected(String amount);
+
+  /// No description provided for @deliverWithoutCodePill.
+  ///
+  /// In en, this message translates to:
+  /// **'Delivered without code'**
+  String get deliverWithoutCodePill;
+
+  /// No description provided for @deliverPhotoOfCollector.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo of the person who collected it'**
+  String get deliverPhotoOfCollector;
+
+  /// No description provided for @deliverHomeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Deliveries'**
+  String get deliverHomeTitle;
+
+  /// No description provided for @deliverHomeSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Hand packages over to the people collecting them.'**
+  String get deliverHomeSubtitle;
+
+  /// No description provided for @deliverToHandOver.
+  ///
+  /// In en, this message translates to:
+  /// **'To hand over'**
+  String get deliverToHandOver;
+
+  /// No description provided for @deliverToHandOverEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing to hand over right now.'**
+  String get deliverToHandOverEmpty;
+
+  /// No description provided for @deliverToHandOverEmptyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Packages appear here once their shipment or container is ready for pickup.'**
+  String get deliverToHandOverEmptyHint;
+
+  /// No description provided for @deliverScan.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan a label'**
+  String get deliverScan;
+
+  /// No description provided for @deliverEnterCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a code'**
+  String get deliverEnterCode;
+
+  /// No description provided for @deliverEnterCodeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'CL-XXXXXX'**
+  String get deliverEnterCodeHint;
+
+  /// No description provided for @deliverCodeInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'That is not a package code.'**
+  String get deliverCodeInvalid;
+
+  /// No description provided for @deliverFind.
+  ///
+  /// In en, this message translates to:
+  /// **'Find'**
+  String get deliverFind;
+
+  /// No description provided for @deliverShipment.
+  ///
+  /// In en, this message translates to:
+  /// **'Shipment'**
+  String get deliverShipment;
+
+  /// No description provided for @deliverContainer.
+  ///
+  /// In en, this message translates to:
+  /// **'Container'**
+  String get deliverContainer;
+
+  /// No description provided for @deliverPieces.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 piece} other{{count} pieces}}'**
+  String deliverPieces(int count);
+
+  /// No description provided for @deliverCouldNotLoad.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t load the deliveries. Check your connection and try again.'**
+  String get deliverCouldNotLoad;
+
+  /// No description provided for @deliverRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get deliverRetry;
+
+  /// No description provided for @deliverDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Details'**
+  String get deliverDetails;
+
+  /// No description provided for @proofSettingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Proof'**
+  String get proofSettingTitle;
+
+  /// No description provided for @proofSettingPhotosRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Photos required at drop-off'**
+  String get proofSettingPhotosRequired;
+
+  /// No description provided for @proofSettingPhotosRequiredNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Staff must add at least one photo before a counter package is saved.'**
+  String get proofSettingPhotosRequiredNote;
+
+  /// No description provided for @proofSettingSenderConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask the sender to confirm by WhatsApp'**
+  String get proofSettingSenderConfirm;
+
+  /// No description provided for @proofSettingSenderConfirmNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Right after drop-off, the sender gets the first photo and the item list with OK / Something’s wrong.'**
+  String get proofSettingSenderConfirmNote;
+
+  /// No description provided for @proofSettingPickupCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Pickup code at delivery'**
+  String get proofSettingPickupCode;
+
+  /// No description provided for @proofSettingPickupCodeNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Each package gets a 4-digit code sent to the receiver; your agent asks for it at handover.'**
+  String get proofSettingPickupCodeNote;
+
+  /// No description provided for @lookupTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the customer’s code'**
+  String get lookupTitle;
+
+  /// No description provided for @lookupHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Type the code on the customer’s request, like R-K7M4P.'**
+  String get lookupHint;
+
+  /// No description provided for @lookupCodeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Request code'**
+  String get lookupCodeLabel;
+
+  /// No description provided for @lookupCodeInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'A request code has 5 letters or digits, like R-K7M4P.'**
+  String get lookupCodeInvalid;
+
+  /// No description provided for @lookupFind.
+  ///
+  /// In en, this message translates to:
+  /// **'Find the request'**
+  String get lookupFind;
+
+  /// No description provided for @lookupFinding.
+  ///
+  /// In en, this message translates to:
+  /// **'Looking up…'**
+  String get lookupFinding;
+
+  /// No description provided for @lookupNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'No request with that code for this business.'**
+  String get lookupNotFound;
 }
 
 class _AppLocalizationsDelegate
