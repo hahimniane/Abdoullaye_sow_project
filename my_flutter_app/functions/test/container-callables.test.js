@@ -4149,3 +4149,129 @@ describe("air containers (flights)", () => {
           view: "customs"})).status, 404);
       });
 });
+
+/* eslint-disable max-len */
+// The sender's confirmation at drop-off (docs/AIR_PACKAGES.md §4.4): with the
+// business switch on and a photo on the line, the sender's `received` row is
+// the `confirm` row; the receiver still hears `received`. Driven through the
+// one queue every registration uses (queueContainerLineUpdate), here by
+// sending a box's current status, so the line can be seeded with its photo.
+describe("the sender's confirmation at drop-off", () => {
+  const PHOTO = `packagePhotos/${BIZ}/${OWNER}/dropoff-photo-1.jpg`;
+  let serial = 0;
+  async function seededLine(box, extra = {}) {
+    serial += 1;
+    const ref = db.collection("containerLines").doc(`confirm-line-${serial}`);
+    await ref.set({
+      businessId: BIZ, containerId: box, kind: "other", quantity: 1,
+      description: "box of clothes", ownerKind: "customer",
+      customerName: "Fatou Diallo", customerPhone: "+16465550100",
+      receiverName: "Mariama Bah", receiverPhone: "+224620000000",
+      trackingCode: `CL-TST${String(serial).padStart(3, "0")}`,
+      contents: [{label: "phones", quantity: 2}, {label: "tablet", quantity: 1}],
+      weightLb: 4.2, photoPaths: [PHOTO], createdAt: new Date(), ...extra,
+    });
+    return ref;
+  }
+  async function sendReceived(box) {
+    await db.collection("containers").doc(box).collection("trackingEvents")
+        .doc("seeded_received").set({label: "Received", source: "staff",
+          customerUpdate: "received", timestamp: new Date()});
+    connectWhatsApp();
+    return call("sendContainerCurrentStatus", {containerId: box});
+  }
+  const rowsOf = async (lineId) => (await db.collection("containerUpdates")
+      .where("lineId", "==", lineId).get()).docs
+      .map((d) => ({id: d.id, ...d.data()})).sort((a, b) => a.id.localeCompare(b.id));
+  const switchOn = () => db.collection("businesses").doc(BIZ)
+      .set({packageProofSettings: {senderConfirm: true}}, {merge: true});
+  afterEach(() => db.collection("businesses").doc(BIZ)
+      .set({packageProofSettings: {senderConfirm: false}}, {merge: true}));
+
+  it("queues confirm for the sender instead of received, received for the receiver, and sends the photo", async () => {
+    await switchOn();
+    const box = await newContainer();
+    const ref = await seededLine(box);
+    assert.equal((await sendReceived(box)).queued, 2);
+    const rows = await rowsOf(ref.id);
+    assert.deepEqual(rows.map((r) => [r.id, r.update, r.role, r.status]), [
+      [`${ref.id}_receiver_received`, "received", "receiver", "queued"],
+      [`${ref.id}_sender_confirm`, "confirm", "sender", "queued"],
+    ]);
+    const line = (await ref.get()).data();
+    assert.equal(line.senderConfirmation.status, "asked");
+    assert.ok(line.senderConfirmation.askedAtMs > 0);
+    assert.match(line.documentToken, /^[A-Za-z0-9_-]{32}$/, "the token the photo link is signed with");
+    assert.equal(line.lastCustomerUpdate.update, "received");
+    assert.deepEqual(line.lastCustomerUpdate.results.map((r) => r.role).sort(), ["receiver", "sender"]);
+    // The message: the photo as the header, the item list and weight, OK /
+    // Something's wrong.
+    fakeWhatsApp(OK);
+    await deliver(`${ref.id}_sender_confirm`);
+    assert.equal(whatsappCalls.length, 1);
+    const [body] = whatsappCalls;
+    assert.equal(body.to, "16465550100");
+    assert.equal(body.template.name, "package_confirm_2lang");
+    assert.deepEqual(body.template.language, {code: "en"});
+    const [header, text, ok, problem] = body.template.components;
+    assert.equal(header.type, "header");
+    assert.match(header.parameters[0].image.link, new RegExp(
+        `^https://laawoldigital\\.com/d\\?view=photo&t=${line.documentToken}` +
+        `&p=${encodeURIComponent(PHOTO).replace(/\\./g, "\\.")}&e=\\d+&s=[0-9a-f]{24}$`));
+    assert.deepEqual(text.parameters.map((p) => p.text), [
+      "Fatou Diallo", "Dala Shipping", "2 phones, tablet", "4.2 lb",
+      "Dala Shipping", "2 phones, tablet", "4,2 lb", line.trackingCode]);
+    assert.deepEqual(ok, {type: "button", sub_type: "quick_reply", index: "0", parameters: [{type: "payload", payload: "confirm_ok"}]});
+    assert.deepEqual(problem, {type: "button", sub_type: "quick_reply", index: "1", parameters: [{type: "payload", payload: "confirm_problem"}]});
+    const sentRow = (await db.collection("containerUpdates").doc(`${ref.id}_sender_confirm`).get()).data();
+    assert.equal(sentRow.status, "sent");
+    assert.equal(sentRow.whatsappMessageId, "wamid.TEST");
+    assert.equal((await ref.get()).data().senderConfirmation.status, "asked");
+    // The receiver's message is the usual one.
+    fakeWhatsApp(OK);
+    await deliver(`${ref.id}_receiver_received`);
+    assert.equal(whatsappCalls[0].template.name, "shipment_received_2lang");
+    // Asking again never re-asks an answered sender.
+    await ref.set({senderConfirmation: {status: "confirmed", askedAtMs: 1, answeredAtMs: 2}}, {merge: true});
+    await db.collection("containerUpdates").doc(`${ref.id}_sender_confirm`).update({status: "failed"});
+    await call("sendContainerCurrentStatus", {containerId: box});
+    assert.equal((await ref.get()).data().senderConfirmation.status, "confirmed");
+  });
+
+  it("sends the plain received without a photo, or with the switch off", async () => {
+    await switchOn();
+    const box = await newContainer();
+    const noPhoto = await seededLine(box, {photoPaths: []});
+    await sendReceived(box);
+    assert.deepEqual((await rowsOf(noPhoto.id)).map((r) => r.id), [
+      `${noPhoto.id}_receiver_received`, `${noPhoto.id}_sender_received`]);
+    assert.equal((await noPhoto.get()).data().senderConfirmation, undefined);
+    await db.collection("businesses").doc(BIZ)
+        .set({packageProofSettings: {senderConfirm: false}}, {merge: true});
+    const off = await newContainer();
+    const withPhoto = await seededLine(off);
+    await sendReceived(off);
+    assert.deepEqual((await rowsOf(withPhoto.id)).map((r) => r.id), [
+      `${withPhoto.id}_receiver_received`, `${withPhoto.id}_sender_received`]);
+    assert.equal((await withPhoto.get()).data().senderConfirmation, undefined);
+    assert.equal((await withPhoto.get()).data().documentToken, undefined);
+  });
+
+  it("sends the pickup code to the receiver when the box is ready", async () => {
+    const box = await newContainer();
+    const ref = await seededLine(box, {pickupCode: "4821"});
+    connectWhatsApp();
+    await call("setContainerStatus", {containerId: box, status: "shipped"});
+    await call("setContainerStatus", {containerId: box, status: "arrived"});
+    await recordMoments(box);
+    fakeWhatsApp(OK);
+    await deliver(`${ref.id}_receiver_arrived`);
+    assert.equal(whatsappCalls[0].template.name, "shipment_ready_pickup_code_2lang");
+    assert.equal(whatsappCalls[0].template.components[0].parameters.at(-1).text, "4821");
+    fakeWhatsApp(OK);
+    await deliver(`${ref.id}_sender_arrived`);
+    assert.equal(whatsappCalls[0].template.name, "shipment_ready_pickup_2lang");
+    assert.equal(whatsappCalls[0].template.components[0].parameters.length, 10);
+  });
+});
+/* eslint-enable max-len */

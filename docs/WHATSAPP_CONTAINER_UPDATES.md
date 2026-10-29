@@ -11,6 +11,7 @@ a French block):
 | `received` | `shipment_received_2lang` | The package is registered: dropped off to wait for a container (`addWaitingPackage`) or added straight onto one (`addContainerLine`). Assigning a waiting package to a box, or taking it off one, sends nothing. |
 | `shipped` | `shipment_departed_2lang` | Staff mark the container **Shipped**, or the carrier feed reports it on the vessel — whichever comes first. |
 | `arrived` | `shipment_ready_pickup_2lang` | Staff mark the container **Ready for pickup**. Only staff: the carrier's "discharged / available at the port" is recorded on the timeline and sends nothing, because a box at the port cannot be collected yet. |
+| `confirm` | `package_confirm_2lang` | **Instead of** the sender's `received` when the business has *Ask the sender to confirm* on and the line has a drop-off photo (docs/AIR_PACKAGES.md §4.4): the first photo, the item list and weight, and two quick replies, **OK ✓** / **Something's wrong**. The receiver still gets `received`. Row `{lineId}_sender_confirm`; on the line's `lastCustomerUpdate` it counts as `received`. |
 | `delivered` | `shipment_delivered_2lang` | Destination staff mark the **package** delivered (*Mark delivered*: the `deliver` action of `updateContainerLine`; docs/WAITING_PACKAGES.md "Delivered at destination"). Per line, like `received`. Undoing a delivery sends nothing, and a delivery repeated after an undo finds the rows already there, so nobody hears twice. |
 
 ### Delivered (2026-10-21)
@@ -424,6 +425,111 @@ delivered send answers `132001` and the row waits as `waiting_for_template`
 half-hourly `requeueTemplateWaitingUpdates` sweep retries it, and the first
 sweep after approval sends every delivered message that was waiting (up to
 14 days old). Nothing has to be re-queued by hand.
+
+### `package_confirm_2lang`
+
+The sender's confirmation (docs/AIR_PACKAGES.md §3–4), sent once to the
+sender at drop-off **instead of** `shipment_received_2lang` when the
+business has *Ask the sender to confirm* on and the line has a photo
+(`queueContainerLineUpdate`: `askSenderToConfirm`). Header: **IMAGE**, the
+first drop-off photo as a 30-day signed link to the `/d?view=photo`
+endpoint (`package_proof.photoLink`, signed with the line's
+`documentToken`, minted with the row when the line has none). Variables:
+{{1}} name, {{2}} business, {{3}} contents (EN), {{4}} weight (EN), {{5}}
+business, {{6}} contents (FR), {{7}} weight (FR), {{8}} tracking code.
+Contents are `contentsText(line.contents)` in both blocks (serials left
+out), or what the line is when there is no item list; weight is "4.2 lb" /
+"4,2 lb", or "—". Buttons: two **quick replies**, `OK ✓` and `Something's
+wrong`, sent with the payloads `confirm_ok` / `confirm_problem`
+(`package_proof.CONFIRM_PAYLOAD`). **No URL button.**
+
+```
+Hello / Bonjour {{1}} 👋
+
+*ENGLISH*
+{{2}} received your package: {{3}} ({{4}}). Is this right? Tap OK, or Something's wrong.
+
+—————
+*FRANÇAIS*
+{{5}} a reçu votre colis : {{6}} ({{7}}). Est-ce correct ? Appuyez sur OK ou Something's wrong.
+
+🔎 Tracking code / Code de suivi : {{8}}
+```
+
+Sample values: `Fatou`, `Dala Shipping`, `2 phones, 1 tablet`, `4.2 lb`,
+`Dala Shipping`, `2 phones, 1 tablet`, `4,2 lb`, `CL-K7M4P2`.
+
+The request body (`whatsapp_templates.templateComponents`): a `header`
+component `{type: "image", image: {link}}`, the `body` with eight texts,
+then `{type: "button", sub_type: "quick_reply", index: "0", parameters:
+[{type: "payload", payload: "confirm_ok"}]}` and the same with index `"1"`
+and `confirm_problem`.
+
+**The reply.** The tap comes back through the webhook as `type: "button"`
+with `button.payload` and `context.id` = the confirmation's wamid
+(`parseWebhook` keeps it as `buttonPayload`). `handleInbound`
+(whatsapp_conversations.js) matches `context.id` to the `containerUpdates`
+row by `whatsappMessageId`, writes the line's `senderConfirmation`
+(`confirmed` / `problem`, `answeredAtMs`, `wamid`) and answers inside the
+window, in the customer's language: OK → "Thanks, noted." / "Merci, c'est
+noté." (no conversation is opened); Something's wrong → the business's
+conversation opens (or reopens) as *needs reply* with a system note
+"Sender reported a problem with package CL-… (contents)", the button text
+in the thread, and "Sorry about that. {business} will reply here." /
+"Désolé. {business} vous répondra ici.". In `laawol_only` mode the thread
+lands with Laawol, suggesting the business, like any inbound.
+
+**Photos with a code.** A photo a customer sends whose text or caption
+names a package code ("CL-K7M4P2", loosely typed, or the label's link:
+`codeInText`) is copied from the conversation's media to
+`packagePhotos/{businessId}/wa/{sha1(wamid)[0..24]}.{jpg|png|webp}` and
+appended to the line's `customerPhotos` (at most 10; the oldest entry
+leaves the list, the file stays until the sweep), with a system note "Photo
+filed on package CL-…" in the thread. The package's business is also the
+routing candidate for a number nothing else knows.
+
+Created with `~/laawol-deploy-logs/create_proof_templates.py` (dry run by
+default, `--apply` submits both templates below; language `en`, category
+**Utility**, with a placeholder header image uploaded for Meta's review).
+Status (2026-10-29): written, **not submitted**. Until Meta approves it a
+confirm send answers `132001` and waits as `waiting_for_template` like any
+other template in review.
+
+### `shipment_ready_pickup_code_2lang`
+
+Ready for pickup **with the pickup code** (docs/AIR_PACKAGES.md §3, §4.3):
+sent in place of `shipment_ready_pickup_2lang` for a line that has a
+`pickupCode` (minted when the business has *Pickup code at delivery* on).
+The code goes to the **receiver**, and to the sender only when the sender
+is the receiver (the switch, or the same number on both sides;
+`pickupCodeFor`); a sender-only row keeps the old template. Variables:
+{{1}}–{{10}} as `shipment_ready_pickup_2lang`, then {{11}} the pickup code.
+Same button: *Visit website*, `Track · Suivre`, Dynamic,
+`https://customer.laawoldigital.com/t/{{1}}` (the tracking code).
+
+```
+Hello / Bonjour {{1}} 👋
+
+*ENGLISH*
+Good news: your shipment of {{2}} from {{3}} is ready for pickup in {{4}}. Show the pickup code below when you collect it.
+
+—————
+*FRANÇAIS*
+Bonne nouvelle : votre envoi de {{5}} confié à {{6}} est prêt à être récupéré à {{7}}. Présentez le code de retrait ci-dessous pour le récupérer.
+
+📍 Pickup address / Adresse : {{8}}
+📞 Phone / Téléphone : {{9}}
+🔎 Tracking code / Code de suivi : {{10}}
+🔑 Pickup code / Code de retrait : {{11}}
+
+Tap the button below to follow it.
+Appuyez sur le bouton ci-dessous pour le suivre.
+```
+
+Sample values: `Fatou`, `3 barrels`, `Dala Shipping`, `Conakry, Guinea`,
+`3 fûts`, `Dala Shipping`, `Conakry, Guinée`,
+`Madina, near the market, Conakry`, `+224 620 00 00 00`, `CL-K7M4P2`,
+`4821`. The legacy set has no code variant (`container_arrived` as before).
 
 ### `staff_account_setup`
 

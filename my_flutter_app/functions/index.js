@@ -413,6 +413,8 @@ const {
 const {
   UPDATE_STATUS: CONTAINER_UPDATE_STATUS,
   CONTAINER_UPDATE,
+  askSenderToConfirm,
+  rowUpdateFor,
   messageUpdateFor,
   WHATSAPP_SEND_LEASE_MS,
   WHATSAPP_TIMEOUT_MS,
@@ -20631,6 +20633,14 @@ exports.whatsappWebhook = onRequest(
  * or whose sender died is queued again, and one that was never written (a
  * number added later) is created; a sent row is never sent twice.
  *
+ * `received`, for a business that asks senders to confirm
+ * (docs/AIR_PACKAGES.md §4.4): the sender's row is `{lineId}_sender_confirm`
+ * (`update: "confirm"`, the photo + item list + OK / Something's wrong)
+ * instead of `_sender_received`, the line's `senderConfirmation` becomes
+ * `asked`, and the line gets the document token the photo link is signed
+ * with; the receiver still gets `received`. A line without a photo sends
+ * the plain `received` and its status stays `none`.
+ *
  * @param {object} db Firestore.
  * @param {object} args {lineRef, businessId, containerId, businessName,
  *   update, status (for new rows), requeue, staffId}.
@@ -20650,21 +20660,27 @@ async function queueContainerLineUpdate(db, args) {
     const businessDoc = businessId ?
       await tx.get(db.collection("businesses").doc(String(businessId))) :
       null;
-    const {send, skipped} = recipientsForLine(line, {
-      businessCountry: businessDoc?.exists ?
-        String(businessDoc.data()?.country || "") : "",
+    const business = businessDoc?.exists ? businessDoc.data() || {} : {};
+    const recipients = recipientsForLine(line, {
+      businessCountry: String(business.country || ""),
     });
+    const {send, skipped} = recipients;
+    const ask = update === CONTAINER_UPDATE.RECEIVED &&
+      askSenderToConfirm(business, line, recipients);
     const rowRefs = send.map((who) => db.collection("containerUpdates")
-        .doc(containerUpdateMessageId(lineRef.id, who.role, update)));
+        .doc(containerUpdateMessageId(lineRef.id, who.role,
+            rowUpdateFor(update, who.role, ask))));
     const rows = rowRefs.length > 0 ? await tx.getAll(...rowRefs) : [];
     const entries = skipped.map((who) =>
       ({role: who.role, status: "skipped", reason: who.reason}));
     tally.skipped = skipped.length;
     const nowMs = Date.now();
+    const lineFields = {};
     send.forEach((who, i) => {
       const row = rows[i].exists ? rows[i].data() || {} : null;
+      const rowUpdate = rowUpdateFor(update, who.role, ask);
       const fields = {
-        businessId, containerId, lineId: lineRef.id, update,
+        businessId, containerId, lineId: lineRef.id, update: rowUpdate,
         role: who.role, name: who.name, phone: who.phone, trackingCode,
         businessName,
       };
@@ -20698,12 +20714,32 @@ async function queueContainerLineUpdate(db, args) {
         tally.queued += 1;
       } else tally.inFlight += 1;
       entries.push({role: who.role, status});
+      if (rowUpdate === CONTAINER_UPDATE.CONFIRM &&
+          (decision === "create" || decision === "requeue")) {
+        // The ask is out: the line waits for the sender's answer. An answer
+        // already given is never asked again.
+        const current = String(line.senderConfirmation?.status || "none");
+        if (current === "none" || current === "asked") {
+          lineFields.senderConfirmation = {
+            ...(line.senderConfirmation || {}), status: "asked",
+            askedAtMs: nowMs,
+          };
+        }
+        // The photo link in the message is signed with the line's document
+        // token; minted here, in the transaction, when the line has none
+        // (the same first-write-wins rule as getContainerDocumentUrl).
+        if (!String(line.documentToken || "").trim()) {
+          lineFields.documentToken =
+            crypto.randomBytes(24).toString("base64url");
+        }
+      }
     });
     // What the business sees on the line: who was told the latest news, and
     // why anyone was not.
     const merged = mergeLastCustomerUpdate(
         line.lastCustomerUpdate, update, entries, nowMs);
-    if (merged) tx.update(lineRef, {lastCustomerUpdate: merged});
+    if (merged) lineFields.lastCustomerUpdate = merged;
+    if (Object.keys(lineFields).length > 0) tx.update(lineRef, lineFields);
     return tally;
   });
 }
@@ -20734,7 +20770,9 @@ async function queueContainerUpdate(db, lineDocs, args) {
  * (`package_received`): one `containerUpdates/{lineId}_{role}_received` row
  * each, through the same queue and the same per-person skips as every
  * other update, `waiting_for_whatsapp` until WhatsApp is connected. The id
- * is fixed, so a retry never queues a second message.
+ * is fixed, so a retry never queues a second message. A business that asks
+ * senders to confirm gets `{lineId}_sender_confirm` for the sender instead
+ * (queueContainerLineUpdate; docs/AIR_PACKAGES.md §4.4).
  *
  * Never fails the registration: the package is already written, and a
  * client that saw an error would register it twice. A failure is logged and
@@ -21025,11 +21063,18 @@ exports.deliverContainerCustomerUpdate = onDocumentWritten(
         pickupDestination,
         update: row.update,
         trackingCode: String(row.trackingCode || line.trackingCode || ""),
+        // The pickup code goes to whoever collects; the confirmation's
+        // photo link is served by the /d endpoint.
+        role: String(row.role || ""),
+        documentBase: String(process.env.PARKING_DOCUMENT_BASE_URL || "")
+            .trim() || "https://laawoldigital.com/d",
       });
       if (!message) {
         await recordContainerUpdateAttempt(db, rowRef, row, {
           status: CONTAINER_UPDATE_STATUS.FAILED, leaseUntilMs: 0,
-          error: `No WhatsApp template for the update "${row.update}".`});
+          error: row.update === CONTAINER_UPDATE.CONFIRM ?
+            "The package has no photo for the confirmation message." :
+            `No WhatsApp template for the update "${row.update}".`});
         return;
       }
       const sent = await sendWhatsAppMessage(message);

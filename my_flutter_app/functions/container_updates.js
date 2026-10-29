@@ -38,12 +38,24 @@ const {
 } = require("./whatsapp_templates");
 const {pickupDetails, pickupPlace} = require("./destination_pickup");
 const {lineHasPieces, linePiecesWhat} = require("./line_pieces");
+const {
+  PHOTO_LINK_MS,
+  contentsText,
+  photoLink,
+  proofSettingsOf,
+  weightText,
+} = require("./package_proof");
 
 const CONTAINER_UPDATE = Object.freeze({
   // The package is registered: dropped off to wait for a container, or
   // added straight onto one. Per line, not a moment on a container's
   // timeline.
   RECEIVED: "received",
+  // The sender's `received` when the business asks senders to confirm
+  // (docs/AIR_PACKAGES.md §4.4): the first drop-off photo, the item list and
+  // two quick replies. Per line and per sender; the receiver still hears
+  // `received`. On the line's summary it reads as `received`.
+  CONFIRM: "confirm",
   SHIPPED: "shipped",
   // The carrier reports the box landed. A timeline moment of its own, but
   // never a message of its own: it shares the arrival's message (see
@@ -86,6 +98,7 @@ const FRENCH_CALLING_CODES = Object.freeze([
 ]);
 
 const text = (value, max = 200) => String(value ?? "").trim().slice(0, max);
+const digitsOf = (value) => text(value, 40).replace(/\D/g, "");
 const positiveInt = (value) => {
   const n = Number(value);
   return Number.isFinite(n) && n > 0 ? Math.round(n) : 0;
@@ -247,6 +260,57 @@ function recipientsForLine(line, {businessCountry = ""} = {}) {
     return true;
   });
   return {send: unique, skipped};
+}
+
+/**
+ * Whether the sender's `received` message is the confirmation ask instead
+ * (docs/AIR_PACKAGES.md §4.4): the business switch is on, the sender is
+ * someone we can message, and the line has a drop-off photo for the
+ * template's header (a confirmation without a photo is not allowed, so such
+ * a line sends the plain `received`).
+ *
+ * @param {object} business The businesses record.
+ * @param {object} line A containerLines row.
+ * @param {{send: object[]}} recipients recipientsForLine of the line.
+ * @return {boolean} True to queue `confirm` for the sender.
+ */
+function askSenderToConfirm(business, line, recipients) {
+  if (!proofSettingsOf(business).senderConfirm) return false;
+  const people = Array.isArray(recipients?.send) ? recipients.send : [];
+  if (!people.some((who) => who.role === "sender")) return false;
+  const photos = Array.isArray(line?.photoPaths) ? line.photoPaths : [];
+  return Boolean(text(photos[0], 300));
+}
+
+/**
+ * The update a row sends for one person: the sender's `received` becomes
+ * `confirm` when the business asks senders to confirm.
+ *
+ * @param {string} update The update being queued.
+ * @param {string} role "sender" or "receiver".
+ * @param {boolean} ask askSenderToConfirm's answer.
+ * @return {string} The row's update.
+ */
+function rowUpdateFor(update, role, ask) {
+  return ask && update === CONTAINER_UPDATE.RECEIVED && role === "sender" ?
+    CONTAINER_UPDATE.CONFIRM : text(update, 20);
+}
+
+/**
+ * Whether the pickup code goes in this person's ready-for-pickup message:
+ * the receiver collects, so the receiver hears it, and the sender only when
+ * the sender is the receiver (the switch, or the same number on both sides).
+ *
+ * @param {object} line A containerLines row.
+ * @param {string} role "sender" or "receiver".
+ * @return {string} The code, or "".
+ */
+function pickupCodeFor(line, role) {
+  const code = text(line?.pickupCode, 10);
+  if (!code) return "";
+  if (role === "receiver" || line?.senderIsReceiver === true) return code;
+  const sender = digitsOf(line?.customerPhone);
+  return sender && sender === digitsOf(line?.receiverPhone) ? code : "";
 }
 
 /**
@@ -415,13 +479,16 @@ function deliveryDayText(value, language) {
  *
  * @param {object} args {phone, name, businessName, businessPhone, business,
  *   line, container, pickupDestination, update, trackingCode,
- *   templateSet?, group?}. `group` is lineGroupSummary of a split line's
- *   group (the "what" then says which share this part is).
- *   `pickupDestination` is the destinationCountries record
- *   (pickupCity, pickupAddress, pickupPhone); `business` the business
- *   record (its address and phone are the pickup fallbacks).
+ *   templateSet?, group?, role?, documentBase?, nowMs?}. `group` is
+ *   lineGroupSummary of a split line's group (the "what" then says which
+ *   share this part is). `pickupDestination` is the destinationCountries
+ *   record (pickupCity, pickupAddress, pickupPhone); `business` the
+ *   business record (its address and phone are the pickup fallbacks).
+ *   `role` decides who hears the pickup code; `documentBase` is the /d
+ *   endpoint the confirmation's photo link is served by.
  * @return {object|null} The /messages request body, or null for an update
- *   that has no message.
+ *   that has no message (a confirmation without a photo or a document
+ *   token among them: the template needs its image header).
  */
 function whatsappUpdateMessage(args) {
   const language = languageForPhone(args.phone);
@@ -433,6 +500,12 @@ function whatsappUpdateMessage(args) {
     phone: text(args.businessPhone, 40) || text(args.business?.phone, 40),
   };
   const pickup = pickupDetails(args.pickupDestination, business);
+  const line = args.line && typeof args.line === "object" ? args.line : {};
+  const contents = contentsText(line.contents);
+  const photo = confirmationPhotoLink(line, args.documentBase, args.nowMs);
+  if (text(args.update, 20) === CONTAINER_UPDATE.CONFIRM && !photo) {
+    return null;
+  }
   return templateMessage({
     phone: text(args.phone, 40),
     update: args.update,
@@ -458,8 +531,35 @@ function whatsappUpdateMessage(args) {
       // Who collected it (the receiver unless staff named someone else).
       collectedByEn: text(args.line?.collectedBy, 120),
       collectedByFr: text(args.line?.collectedBy, 120),
+      // The confirmation: what is inside (the same words in both blocks;
+      // a line with no item list says what the line is), the weight, and
+      // the first drop-off photo as the header.
+      contentsEn: contents || describeLine(line, "en", args.group),
+      contentsFr: contents || describeLine(line, "fr", args.group),
+      weightEn: weightText(line.weightLb, "en"),
+      weightFr: weightText(line.weightLb, "fr"),
+      photoLink: photo,
+      pickupCode: pickupCodeFor(line, args.role),
     },
   });
+}
+
+/**
+ * The confirmation's header: a 30-day link to the line's first drop-off
+ * photo, signed with the line's document token (package_proof.photoLink).
+ *
+ * @param {object} line A containerLines row.
+ * @param {string} documentBase The /d endpoint's URL.
+ * @param {number} [nowMs] The time; the clock when omitted.
+ * @return {string} The link, or "" without a photo, a token or a base.
+ */
+function confirmationPhotoLink(line, documentBase, nowMs = Date.now()) {
+  const photos = Array.isArray(line?.photoPaths) ? line.photoPaths : [];
+  const path = text(photos[0], 300);
+  const token = text(line?.documentToken, 200);
+  const base = text(documentBase, 300).replace(/\/+$/, "");
+  if (!path || !token || !base) return "";
+  return photoLink({base, token, path, expiresMs: nowMs + PHOTO_LINK_MS});
 }
 
 /**
@@ -530,6 +630,7 @@ const WHATSAPP_MAX_EVENT_AGE_MS = 6 * 60 * 60 * 1000;
 // the two arrival moments shared one message.
 const UPDATE_RANK = Object.freeze({
   [CONTAINER_UPDATE.RECEIVED]: 1,
+  [CONTAINER_UPDATE.CONFIRM]: 1,
   [CONTAINER_UPDATE.SHIPPED]: 2,
   [CONTAINER_UPDATE.AT_PORT]: 3,
   [CONTAINER_UPDATE.ARRIVED]: 4,
@@ -542,6 +643,20 @@ const UPDATE_RANK = Object.freeze({
  */
 function updateRank(update) {
   return UPDATE_RANK[text(update, 20)] || 0;
+}
+
+/**
+ * The update a row counts as on the line's `lastCustomerUpdate`: the
+ * sender's confirmation ask is their `received` (same moment, same news),
+ * so both people's entries sit on one summary.
+ *
+ * @param {string} update A row's update.
+ * @return {string} The summary's update.
+ */
+function summaryUpdate(update) {
+  const value = text(update, 20);
+  return value === CONTAINER_UPDATE.CONFIRM ?
+    CONTAINER_UPDATE.RECEIVED : value;
 }
 
 /**
@@ -717,12 +832,14 @@ function latestCustomerUpdate(events, templateSet = whatsappTemplateSet()) {
  * the list again; an older one finishing late changes nothing.
  *
  * @param {object|null} previous The line's lastCustomerUpdate.
- * @param {string} update The update the entries are about.
+ * @param {string} rowUpdate The update the entries are about (a `confirm`
+ *   counts as `received`: summaryUpdate).
  * @param {object[]} entries [{role, status, reason?}].
  * @param {number} atMs The time.
  * @return {object|null} The new value, or null to leave it.
  */
-function mergeLastCustomerUpdate(previous, update, entries, atMs) {
+function mergeLastCustomerUpdate(previous, rowUpdate, entries, atMs) {
+  const update = summaryUpdate(rowUpdate);
   const incoming = (Array.isArray(entries) ? entries : [])
       .filter((entry) => entry && text(entry.role, 20));
   if (incoming.length === 0) return null;
@@ -760,7 +877,7 @@ function mergeLastCustomerUpdate(previous, update, entries, atMs) {
  */
 function withDeliveryTick(previous, update, role, delivery, reason = "") {
   if (!previous || typeof previous !== "object") return null;
-  if (text(previous.update, 20) !== text(update, 20)) return null;
+  if (text(previous.update, 20) !== summaryUpdate(update)) return null;
   const results = Array.isArray(previous.results) ? previous.results : [];
   const who = text(role, 20);
   if (!["delivered", "read", "failed"].includes(delivery)) return null;
@@ -793,6 +910,7 @@ module.exports = {
   WHATSAPP_MAX_ATTEMPTS,
   WHATSAPP_MAX_EVENT_AGE_MS,
   updateRank,
+  summaryUpdate,
   shouldSendQueuedRow,
   claimContainerUpdate,
   whatsappSendOutcome,
@@ -812,6 +930,10 @@ module.exports = {
   carrierTrackingFinished,
   describeLine,
   recipientsForLine,
+  askSenderToConfirm,
+  rowUpdateFor,
+  pickupCodeFor,
+  confirmationPhotoLink,
   containerUpdateMessageId,
   trackingLink,
   pickupDestinationIds,

@@ -23,24 +23,39 @@
  *                                  collected it, and the day). It has no
  *                                  legacy version: the legacy set sends it
  *                                  too.
+ *   package_confirm_2lang        - the sender is asked to confirm what was
+ *                                  dropped off (docs/AIR_PACKAGES.md §3):
+ *                                  the first photo as the header, the item
+ *                                  list and weight, and two quick replies
+ *                                  (OK / Something's wrong) instead of the
+ *                                  tracking button. No legacy version.
+ *   shipment_ready_pickup_code_2lang - ready for pickup, with the pickup
+ *                                  code the receiver shows at handover.
+ *                                  Chosen over shipment_ready_pickup_2lang
+ *                                  when the line has a pickupCode.
  *
  * "legacy" - one template per update, in the reader's language (en or fr),
  * kept as the fallback in case Meta rejects the bilingual set:
  *   package_received, container_departed, container_arrived.
  *
- * Every template carries one dynamic URL button,
+ * Every template but the confirmation carries one dynamic URL button,
  * https://customer.laawoldigital.com/t/{{1}}, whose only parameter is the
- * tracking code. The template `container_status_update` is retired.
+ * tracking code (TEMPLATE_SHAPE lists the exceptions). The template
+ * `container_status_update` is retired.
  *
  * Pure: no Firestore, no network.
  */
+
+const {CONFIRM_PAYLOAD} = require("./package_proof");
 
 const TEMPLATE = Object.freeze({
   // Bilingual (default).
   SHIPMENT_RECEIVED_2LANG: "shipment_received_2lang",
   SHIPMENT_DEPARTED_2LANG: "shipment_departed_2lang",
   SHIPMENT_READY_PICKUP_2LANG: "shipment_ready_pickup_2lang",
+  SHIPMENT_READY_PICKUP_CODE_2LANG: "shipment_ready_pickup_code_2lang",
   SHIPMENT_DELIVERED_2LANG: "shipment_delivered_2lang",
+  PACKAGE_CONFIRM_2LANG: "package_confirm_2lang",
   // Legacy, one language per message.
   PACKAGE_RECEIVED: "package_received",
   CONTAINER_DEPARTED: "container_departed",
@@ -56,7 +71,9 @@ const BILINGUAL_TEMPLATES = Object.freeze([
   TEMPLATE.SHIPMENT_RECEIVED_2LANG,
   TEMPLATE.SHIPMENT_DEPARTED_2LANG,
   TEMPLATE.SHIPMENT_READY_PICKUP_2LANG,
+  TEMPLATE.SHIPMENT_READY_PICKUP_CODE_2LANG,
   TEMPLATE.SHIPMENT_DELIVERED_2LANG,
+  TEMPLATE.PACKAGE_CONFIRM_2LANG,
 ]);
 const LEGACY_TEMPLATES = Object.freeze([
   TEMPLATE.PACKAGE_RECEIVED,
@@ -87,6 +104,15 @@ const VARIABLE = Object.freeze({
   DELIVERED_ON_FR: "deliveredOnFr",
   COLLECTED_BY_EN: "collectedByEn",
   COLLECTED_BY_FR: "collectedByFr",
+  // Proof on a package (docs/AIR_PACKAGES.md): what is inside and how
+  // heavy, the pickup code shown at handover, and the first drop-off photo
+  // (a time-limited link; the confirmation's header, never a body text).
+  CONTENTS_EN: "contentsEn",
+  CONTENTS_FR: "contentsFr",
+  WEIGHT_EN: "weightEn",
+  WEIGHT_FR: "weightFr",
+  PICKUP_CODE: "pickupCode",
+  PHOTO_LINK: "photoLink",
   // Package requests (docs/PACKAGE_REQUESTS.md §7 "WhatsApp templates").
   TOTAL_EN: "totalEn",
   TOTAL_FR: "totalFr",
@@ -111,6 +137,10 @@ const VARIABLE_LANGUAGE = Object.freeze({
   [VARIABLE.DELIVERED_ON_FR]: "fr",
   [VARIABLE.COLLECTED_BY_EN]: "en",
   [VARIABLE.COLLECTED_BY_FR]: "fr",
+  [VARIABLE.CONTENTS_EN]: "en",
+  [VARIABLE.CONTENTS_FR]: "fr",
+  [VARIABLE.WEIGHT_EN]: "en",
+  [VARIABLE.WEIGHT_FR]: "fr",
   [VARIABLE.TOTAL_EN]: "en",
   [VARIABLE.TOTAL_FR]: "fr",
   [VARIABLE.PIECES_EN]: "en",
@@ -138,6 +168,22 @@ const TEMPLATE_VARIABLES = Object.freeze({
     VARIABLE.WHAT_EN, VARIABLE.BUSINESS, VARIABLE.PICKUP_PLACE_EN,
     VARIABLE.WHAT_FR, VARIABLE.BUSINESS, VARIABLE.PICKUP_PLACE_FR,
     VARIABLE.PICKUP_ADDRESS, VARIABLE.PICKUP_PHONE, VARIABLE.TRACKING_CODE,
+  ]),
+  // The ready-for-pickup variables, then the pickup code.
+  [TEMPLATE.SHIPMENT_READY_PICKUP_CODE_2LANG]: Object.freeze([
+    VARIABLE.NAME,
+    VARIABLE.WHAT_EN, VARIABLE.BUSINESS, VARIABLE.PICKUP_PLACE_EN,
+    VARIABLE.WHAT_FR, VARIABLE.BUSINESS, VARIABLE.PICKUP_PLACE_FR,
+    VARIABLE.PICKUP_ADDRESS, VARIABLE.PICKUP_PHONE, VARIABLE.TRACKING_CODE,
+    VARIABLE.PICKUP_CODE,
+  ]),
+  // 1 name, 2 business, 3 contents EN, 4 weight EN, 5 business,
+  // 6 contents FR, 7 weight FR, 8 tracking code.
+  [TEMPLATE.PACKAGE_CONFIRM_2LANG]: Object.freeze([
+    VARIABLE.NAME,
+    VARIABLE.BUSINESS, VARIABLE.CONTENTS_EN, VARIABLE.WEIGHT_EN,
+    VARIABLE.BUSINESS, VARIABLE.CONTENTS_FR, VARIABLE.WEIGHT_FR,
+    VARIABLE.TRACKING_CODE,
   ]),
   [TEMPLATE.SHIPMENT_DELIVERED_2LANG]: Object.freeze([
     VARIABLE.NAME,
@@ -168,7 +214,11 @@ const TEMPLATE_VARIABLES = Object.freeze({
 // container_updates.js); an old `at_port` row sends nothing.
 const TEMPLATE_BY_UPDATE = Object.freeze({
   received: TEMPLATE.SHIPMENT_RECEIVED_2LANG,
+  // The sender's `received`, when the business asks senders to confirm.
+  confirm: TEMPLATE.PACKAGE_CONFIRM_2LANG,
   shipped: TEMPLATE.SHIPMENT_DEPARTED_2LANG,
+  // A line with a pickupCode sends shipment_ready_pickup_code_2lang instead
+  // (templateForUpdate).
   arrived: TEMPLATE.SHIPMENT_READY_PICKUP_2LANG,
   delivered: TEMPLATE.SHIPMENT_DELIVERED_2LANG,
 });
@@ -181,9 +231,22 @@ const LEGACY_TEMPLATE_BY_UPDATE = Object.freeze({
   at_port: TEMPLATE.CONTAINER_ARRIVED,
   arrived: TEMPLATE.CONTAINER_ARRIVED,
   // No legacy version exists: the delivered message is always the bilingual
-  // one, whichever set is switched on.
+  // one, whichever set is switched on. The same for the confirmation.
   delivered: TEMPLATE.SHIPMENT_DELIVERED_2LANG,
+  confirm: TEMPLATE.PACKAGE_CONFIRM_2LANG,
 });
+
+// What a template carries besides its body. Every template has the
+// tracking URL button unless listed here: the confirmation has the first
+// drop-off photo as an image header and two quick replies, whose payloads
+// (package_proof.CONFIRM_PAYLOAD) come back in the customer's button reply.
+const TEMPLATE_SHAPE = Object.freeze({
+  [TEMPLATE.PACKAGE_CONFIRM_2LANG]: Object.freeze({
+    header: "image", buttons: "quick_reply",
+  }),
+});
+const QUICK_REPLY_PAYLOADS = Object.freeze(
+    [CONFIRM_PAYLOAD.OK, CONFIRM_PAYLOAD.PROBLEM]);
 
 // Legacy templates exist in each reader's language; the bilingual ones are
 // registered once, under "en".
@@ -224,6 +287,14 @@ const FALLBACK = Object.freeze({
   // "It was collected by the receiver." - a line that names nobody.
   [VARIABLE.COLLECTED_BY_EN]: {en: "the receiver"},
   [VARIABLE.COLLECTED_BY_FR]: {fr: "le destinataire"},
+  // "received your package: your package (—)" - the builder already falls
+  // back to the line's description, so these are the last resort.
+  [VARIABLE.CONTENTS_EN]: {en: "your package"},
+  [VARIABLE.CONTENTS_FR]: {fr: "votre colis"},
+  [VARIABLE.WEIGHT_EN]: {en: "—"},
+  [VARIABLE.WEIGHT_FR]: {fr: "—"},
+  // Only sent for a line that has a code; never reached.
+  [VARIABLE.PICKUP_CODE]: {en: "—", fr: "—", both: "—"},
   // "you can reach them on the number on your receipt" / "vous pouvez la
   // joindre au numéro indiqué sur votre reçu" - the French body reads
   // "joindre au {{5}}", so the fallback starts after "au".
@@ -263,6 +334,11 @@ const MAX_PARAMETER = {
   [VARIABLE.COLLECTED_BY_FR]: 120,
   [VARIABLE.BUSINESS_PHONE]: 40,
   [VARIABLE.TRACKING_CODE]: 40,
+  [VARIABLE.CONTENTS_EN]: 160,
+  [VARIABLE.CONTENTS_FR]: 160,
+  [VARIABLE.WEIGHT_EN]: 20,
+  [VARIABLE.WEIGHT_FR]: 20,
+  [VARIABLE.PICKUP_CODE]: 10,
   [VARIABLE.TOTAL_EN]: 40,
   [VARIABLE.TOTAL_FR]: 40,
   [VARIABLE.PIECES_EN]: 160,
@@ -304,17 +380,25 @@ function isBilingualTemplate(template) {
 }
 
 /**
- * @param {string} update A row's update (received, shipped, at_port,
- *   arrived, delivered).
+ * @param {string} update A row's update (received, confirm, shipped,
+ *   at_port, arrived, delivered).
  * @param {string} [templateSet] "bilingual" or "legacy"; the switch when
  *   omitted.
+ * @param {object} [values] The values by VARIABLE name: a bilingual
+ *   `arrived` with a `pickupCode` sends the template that carries it.
  * @return {string|null} The template's name, or null for an update that has
  *   no message.
  */
-function templateForUpdate(update, templateSet = whatsappTemplateSet()) {
-  const map = templateSet === TEMPLATE_SET.LEGACY ?
-    LEGACY_TEMPLATE_BY_UPDATE : TEMPLATE_BY_UPDATE;
-  return map[String(update ?? "").trim()] || null;
+function templateForUpdate(update, templateSet = whatsappTemplateSet(),
+    values = {}) {
+  const legacy = templateSet === TEMPLATE_SET.LEGACY;
+  const map = legacy ? LEGACY_TEMPLATE_BY_UPDATE : TEMPLATE_BY_UPDATE;
+  const key = String(update ?? "").trim();
+  if (!legacy && key === "arrived" && clean(values?.[VARIABLE.PICKUP_CODE],
+      MAX_PARAMETER[VARIABLE.PICKUP_CODE])) {
+    return TEMPLATE.SHIPMENT_READY_PICKUP_CODE_2LANG;
+  }
+  return map[key] || null;
 }
 
 /**
@@ -345,11 +429,13 @@ function variableText(variable, values, language) {
 }
 
 /**
- * The template's `components` for one person: the body's variables in the
- * approved order and the tracking button.
+ * The template's `components` for one person: the image header when the
+ * template has one, the body's variables in the approved order, and its
+ * buttons - the tracking URL button, or the quick replies (TEMPLATE_SHAPE).
  *
  * @param {string} template A TEMPLATE name.
- * @param {object} values By VARIABLE name; blanks fall back.
+ * @param {object} values By VARIABLE name; blanks fall back. `photoLink`
+ *   fills an image header.
  * @param {"en"|"fr"} language The reader's language (ignored by a bilingual
  *   template, which fills both).
  * @return {object[]} The Cloud API components.
@@ -357,23 +443,41 @@ function variableText(variable, values, language) {
 function templateComponents(template, values, language) {
   const order = TEMPLATE_VARIABLES[template];
   if (!order) throw new Error(`Unknown WhatsApp template: ${template}`);
+  const shape = TEMPLATE_SHAPE[template] || {header: "", buttons: "url"};
   const lang = isBilingualTemplate(template) ? "both" : language;
   const parameter = (text) => ({type: "text", text});
-  return [
-    {
-      type: "body",
-      parameters: order.map((variable) =>
-        parameter(variableText(variable, values, lang))),
-    },
-    {
+  const parts = [];
+  if (shape.header === "image") {
+    parts.push({
+      type: "header",
+      parameters: [{type: "image", image: {
+        link: String(values?.[VARIABLE.PHOTO_LINK] ?? "").trim(),
+      }}],
+    });
+  }
+  parts.push({
+    type: "body",
+    parameters: order.map((variable) =>
+      parameter(variableText(variable, values, lang))),
+  });
+  if (shape.buttons === "quick_reply") {
+    QUICK_REPLY_PAYLOADS.forEach((payload, index) => parts.push({
+      type: "button",
+      sub_type: "quick_reply",
+      index: String(index),
+      parameters: [{type: "payload", payload}],
+    }));
+  } else {
+    parts.push({
       // https://customer.laawoldigital.com/t/{{1}}
       type: "button",
       sub_type: "url",
       index: "0",
       parameters: [parameter(
           variableText(VARIABLE.TRACKING_CODE, values, lang))],
-    },
-  ];
+    });
+  }
+  return parts;
 }
 
 /**
@@ -385,7 +489,8 @@ function templateComponents(template, values, language) {
  */
 function templateMessage(args) {
   const templateSet = args?.templateSet || whatsappTemplateSet();
-  const template = templateForUpdate(args?.update, templateSet);
+  const template = templateForUpdate(args?.update, templateSet,
+      args?.values || {});
   if (!template) return null;
   const language = isBilingualTemplate(template) ?
     BILINGUAL_TEMPLATE_LANGUAGE : templateLanguage(args.language);
@@ -637,6 +742,8 @@ module.exports = {
   TEMPLATE_VARIABLES,
   TEMPLATE_BY_UPDATE,
   LEGACY_TEMPLATE_BY_UPDATE,
+  TEMPLATE_SHAPE,
+  QUICK_REPLY_PAYLOADS,
   TEMPLATE_LANGUAGES,
   BILINGUAL_TEMPLATE_LANGUAGE,
   FALLBACK,

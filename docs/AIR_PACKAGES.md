@@ -152,7 +152,7 @@ header.
    update, to this line) → refusal `photo_invalid`. When
    `packageProofSettings.photosRequired` and `source === "counter"` and no
    photo → refusal `photo_required`. `receivePackageRequest` copies the
-   request's piece photos into `packagePhotos/{biz}/{lineId}/req_{n}.jpg`
+   request's piece photos into `packagePhotos/{biz}/req/{requestId}_{n}.jpg` (§2)
    and fills `photoPaths` (counts toward the requirement).
 3. **Pickup code:** minted on every new line of a business with
    `pickupCode` on (4 digits, crypto random, not `0000`). Not shown to the
