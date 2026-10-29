@@ -60,6 +60,7 @@ class ParkingMonthPdfCopy {
     this.dueWord = 'due',
     this.itemsLabel,
     this.locale = 'en',
+    this.estimate = '',
   });
 
   final String bill;
@@ -107,6 +108,11 @@ class ParkingMonthPdfCopy {
 
   /// The reader's locale tag, for how dates read ("Sep 1, 2026" in English).
   final String locale;
+
+  /// When set, the paper is the whole-month estimate of a month still
+  /// running: this line ("ESTIMATE — whole month, ...") runs under the
+  /// header. Empty (the default) leaves the normal paper unchanged.
+  final String estimate;
 }
 
 String _t(Object? v) => (v ?? '').toString().trim();
@@ -115,8 +121,9 @@ Future<pw.Widget> _header(
   Map<String, dynamic> business,
   String kind,
   String title,
-  String sub,
-) async {
+  String sub, {
+  String estimate = '',
+}) async {
   final name = _t(business['name']).isEmpty ? 'Laawol Digital' : _t(business['name']);
   final logoUrl = _t(business['logoUrl']).isNotEmpty
       ? _t(business['logoUrl'])
@@ -179,6 +186,17 @@ Future<pw.Widget> _header(
       height: 1.5,
       color: _brand,
     ),
+    if (estimate.isNotEmpty)
+      pw.Padding(
+        padding: const pw.EdgeInsets.only(bottom: 10),
+        child: pw.Align(
+          alignment: pw.Alignment.centerLeft,
+          // The built-in Helvetica has no em dash; a hyphen reads the same.
+          child: pw.Text(estimate.replaceAll('—', '-'),
+              style: pw.TextStyle(
+                  fontSize: 10, fontWeight: pw.FontWeight.bold, color: _due)),
+        ),
+      ),
   ]);
 }
 
@@ -212,7 +230,8 @@ Future<Uint8List> buildParkingMonthBillPdf({
   final c = customer;
   final items = c.cars.length + c.activities.length;
   final head = await _header(business, copy.bill, copy.monthLabel,
-      copy.itemsLabel?.call(items) ?? '');
+      copy.itemsLabel?.call(items) ?? '',
+      estimate: copy.estimate);
   String standing(int paid, int due) => [
         if (paid > 0) '${parkingMoney(paid)} ${copy.paidWord}',
         if (due > 0) '${parkingMoney(due)} ${copy.dueWord}',
@@ -372,7 +391,8 @@ Future<Uint8List> buildParkingMonthSummaryPdf({
   required ParkingMonthPdfCopy copy,
 }) async {
   final s = summary;
-  final head = await _header(business, copy.summary, copy.monthLabel, '');
+  final head = await _header(business, copy.summary, copy.monthLabel, '',
+      estimate: copy.estimate);
   pw.Widget stat(String label, String value, PdfColor color) => pw.Expanded(
         child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
           _label(label),

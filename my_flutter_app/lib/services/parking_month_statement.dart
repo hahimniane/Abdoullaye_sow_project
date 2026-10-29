@@ -39,6 +39,36 @@ String _dayKey(int day) => DateTime.fromMillisecondsSinceEpoch(day * _dayMs,
   return (first: first, last: next - 1);
 }
 
+/// A "whole month" estimate only makes sense for the month still running:
+/// today (UTC) is inside it and before its last day. A past month is already
+/// whole; on the last day "so far" already is the whole month. Mirrors the
+/// console's `parkingMonthCanEstimate`.
+bool parkingMonthCanEstimate(String monthKey, [DateTime? now]) {
+  final month = parkingMonthDays(monthKey);
+  final today = parkingDayNumber(now ?? DateTime.now());
+  if (month == null || today == null) return false;
+  return today >= month.first && today < month.last;
+}
+
+/// The moment a month-end report is worked out "as of". Normally now; for the
+/// whole-month estimate of the month still running, its last day at noon UTC,
+/// so cars still parked run up to the month's end. Read-only preview - nothing
+/// is saved from it. Mirrors the console's `parkingMonthAsOf`.
+DateTime parkingMonthAsOf(String monthKey, bool wholeMonth, [DateTime? now]) {
+  final at = now ?? DateTime.now();
+  if (!wholeMonth || !parkingMonthCanEstimate(monthKey, at)) return at;
+  final month = parkingMonthDays(monthKey)!;
+  final last = DateTime.fromMillisecondsSinceEpoch(month.last * _dayMs,
+      isUtc: true);
+  return DateTime.utc(last.year, last.month, last.day, 12);
+}
+
+/// The month's last day as a day key ("2026-10-31"), or '' for a bad key.
+String parkingMonthLastDayKey(String monthKey) {
+  final month = parkingMonthDays(monthKey);
+  return month == null ? '' : _dayKey(month.last);
+}
+
 String previousParkingMonthKey([DateTime? now]) {
   final n = (now ?? DateTime.now()).toUtc();
   final d = DateTime.utc(n.year, n.month - 1, 1);

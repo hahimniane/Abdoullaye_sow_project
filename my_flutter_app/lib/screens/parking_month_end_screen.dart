@@ -81,6 +81,15 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
   ParkingMonthView _view = ParkingMonthView.owing;
   String _busy = '';
 
+  /// "Whole month (estimate)": the month still running, counted as of its
+  /// last day. A read-only preview; back to "So far" whenever the month
+  /// changes.
+  bool _wholeMonth = false;
+
+  /// Showing the estimate right now (only the unfinished current month has
+  /// one).
+  bool get _estimating => _wholeMonth && parkingMonthCanEstimate(_monthKey);
+
   @override
   void initState() {
     super.initState();
@@ -201,12 +210,16 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
   }
 
   void _showMonth(String monthKey) {
-    setState(() => _monthKey = monthKey);
+    setState(() {
+      _monthKey = monthKey;
+      _wholeMonth = false;
+    });
     _subscribeMonth();
   }
 
   ParkingMonthSummary _summary() {
-    final key = (_docs, _activities, _monthKey);
+    final estimating = _estimating;
+    final key = (_docs, _activities, _monthKey, estimating);
     final cached = _summaryCache;
     if (cached != null && key == _summaryKey) return cached;
     _summaryKey = key;
@@ -215,10 +228,14 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
         for (final d in _docs) {...?d.data(), 'id': d.id},
       ],
       _monthKey,
-      null,
+      parkingMonthAsOf(_monthKey, estimating),
       _activities,
     );
   }
+
+  /// The month's last day as the reader reads a date ("Oct 31, 2026").
+  String _lastDayLabel() =>
+      displayDay(parkingMonthLastDayKey(_monthKey), dateLocaleOf(context));
 
   @override
   void dispose() {
@@ -274,6 +291,7 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
         paidWord: l10n.pmePaidWord,
         dueWord: l10n.pmeDueWord,
         locale: locale,
+        estimate: _estimating ? l10n.pmeEstimateHeader(_lastDayLabel()) : '',
       );
 
   Future<void> _run(String key, Future<void> Function() work) async {
@@ -316,22 +334,23 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
   Future<void> _customerActions(ParkingMonthCustomer customer) async {
     final l10n = AppLocalizations.of(context)!;
     final locale = Localizations.localeOf(context).toLanguageTag();
+    final estimating = _estimating;
     final action = await pickLotOption<String>(
       context,
       title: customer.customerName.isEmpty
           ? l10n.pmePdfBill
           : customer.customerName,
-      options: [
-        LotOption('pdf', l10n.pmeSharePdf),
-        LotOption('text', l10n.pmeSendText),
-        if (customer.dueCents > 0 &&
-            monthBillPaymentPlan(customer).items.isNotEmpty)
-          LotOption('settle', l10n.pmeMarkAllPaid),
-        if (customer.cars.isNotEmpty) LotOption('open', l10n.pmeOpenCar),
-      ],
+      options: parkingMonthCustomerOptions(
+        l10n,
+        customer,
+        estimate: estimating,
+      ),
     );
     if (action == null || !mounted) return;
     switch (action) {
+      // Never collect for days that have not happened yet.
+      case 'settle' || 'open' when estimating:
+        return;
       case 'settle':
         await showLotSheet<bool>(
           context,
@@ -364,8 +383,18 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
           );
         });
       case 'text':
+        // The bill text mirrors the server byte for byte; an estimate only
+        // gets its one-line marker on top.
+        final text = parkingMonthCustomerText(customer, _businessName);
         await SharePlus.instance.share(
-          ShareParams(text: parkingMonthCustomerText(customer, _businessName)),
+          ShareParams(
+            text: estimating
+                ? parkingMonthEstimateText(
+                    l10n.pmeEstimateHeader(_lastDayLabel()),
+                    text,
+                  )
+                : text,
+          ),
         );
       case 'open':
         // A customer with several cars: say which one the payment is for.
@@ -498,6 +527,12 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
                         ),
                       ],
                     ),
+                    ParkingMonthEstimateBar(
+                      monthKey: _monthKey,
+                      wholeMonth: _wholeMonth,
+                      onChanged: (whole) =>
+                          setState(() => _wholeMonth = whole),
+                    ),
                     const SizedBox(height: AppSpacing.sm),
                     Row(
                       children: [
@@ -549,6 +584,102 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
                     onTap: _customerActions,
                   ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// What a customer's card offers: the bill as a PDF or text, and - only for
+/// real numbers, never for the whole-month estimate - the ways to record a
+/// payment ("Mark all paid", open the car).
+List<LotOption<String>> parkingMonthCustomerOptions(
+  AppLocalizations l10n,
+  ParkingMonthCustomer customer, {
+  bool estimate = false,
+}) => [
+  LotOption('pdf', l10n.pmeSharePdf),
+  LotOption('text', l10n.pmeSendText),
+  if (!estimate &&
+      customer.dueCents > 0 &&
+      monthBillPaymentPlan(customer).items.isNotEmpty)
+    LotOption('settle', l10n.pmeMarkAllPaid),
+  if (!estimate && customer.cars.isNotEmpty)
+    LotOption('open', l10n.pmeOpenCar),
+];
+
+/// A shared bill marked as the estimate: the marker line, a blank line, then
+/// the bill text exactly as the server would send it.
+String parkingMonthEstimateText(String header, String billText) =>
+    '$header\n\n$billText';
+
+/// "So far" / "Whole month (estimate)", shown only for the month still
+/// running (`parkingMonthCanEstimate`), with what the estimate means under
+/// it. Nothing for any other month.
+class ParkingMonthEstimateBar extends StatelessWidget {
+  const ParkingMonthEstimateBar({
+    super.key,
+    required this.monthKey,
+    required this.wholeMonth,
+    required this.onChanged,
+    this.now,
+  });
+
+  final String monthKey;
+  final bool wholeMonth;
+  final ValueChanged<bool> onChanged;
+
+  /// The clock, for tests; the real one when null.
+  final DateTime? now;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!parkingMonthCanEstimate(monthKey, now)) return const SizedBox.shrink();
+    final l10n = AppLocalizations.of(context)!;
+    final lastDay = displayDay(
+      parkingMonthLastDayKey(monthKey),
+      dateLocaleOf(context),
+    );
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SegmentedButton<bool>(
+            key: const Key('month-end-estimate-mode'),
+            segments: [
+              ButtonSegment(
+                value: false,
+                label: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(l10n.pmeModeSoFar, maxLines: 1),
+                ),
+              ),
+              ButtonSegment(
+                value: true,
+                label: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(l10n.pmeModeWholeMonth, maxLines: 1),
+                ),
+              ),
+            ],
+            selected: {wholeMonth},
+            showSelectedIcon: false,
+            onSelectionChanged: (set) => onChanged(set.first),
+            style: const ButtonStyle(visualDensity: VisualDensity.compact),
+          ),
+          if (wholeMonth) ...[
+            const SizedBox(height: 6),
+            Text(
+              l10n.pmeEstimateNote(lastDay),
+              key: const Key('month-end-estimate-note'),
+              style: const TextStyle(
+                fontSize: 12,
+                height: 1.3,
+                color: AppColors.warn,
+              ),
+            ),
+          ],
         ],
       ),
     );

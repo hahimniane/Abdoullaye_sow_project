@@ -8565,5 +8565,23 @@
   "lookupCodeInvalid": "Un code de demande a 5 lettres ou chiffres, par exemple R-K7M4P.",
   "lookupFind": "Trouver la demande",
   "lookupFinding": "Recherche…",
-  "lookupNotFound": "Aucune demande avec ce code pour cette entreprise."
+  "lookupNotFound": "Aucune demande avec ce code pour cette entreprise.",
+  "pmeModeSoFar": "Jusqu'à aujourd'hui",
+  "pmeModeWholeMonth": "Mois entier (estimation)",
+  "pmeEstimateNote": "Estimation : les voitures encore garées sont comptées jusqu'au {lastDay}. Rien n'est enregistré.",
+  "@pmeEstimateNote": {
+    "placeholders": {
+      "lastDay": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeEstimateHeader": "ESTIMATION — mois entier, voitures encore garées comptées jusqu'au {lastDay}",
+  "@pmeEstimateHeader": {
+    "placeholders": {
+      "lastDay": {
+        "type": "String"
+      }
+    }
+  }
 }

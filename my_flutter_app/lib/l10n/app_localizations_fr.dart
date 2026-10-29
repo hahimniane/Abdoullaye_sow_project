@@ -17565,4 +17565,20 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get lookupNotFound =>
       'Aucune demande avec ce code pour cette entreprise.';
+
+  @override
+  String get pmeModeSoFar => 'Jusqu\'à aujourd\'hui';
+
+  @override
+  String get pmeModeWholeMonth => 'Mois entier (estimation)';
+
+  @override
+  String pmeEstimateNote(String lastDay) {
+    return 'Estimation : les voitures encore garées sont comptées jusqu\'au $lastDay. Rien n\'est enregistré.';
+  }
+
+  @override
+  String pmeEstimateHeader(String lastDay) {
+    return 'ESTIMATION — mois entier, voitures encore garées comptées jusqu\'au $lastDay';
+  }
 }

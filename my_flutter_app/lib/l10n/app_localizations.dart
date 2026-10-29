@@ -29239,6 +29239,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No request with that code for this business.'**
   String get lookupNotFound;
+
+  /// No description provided for @pmeModeSoFar.
+  ///
+  /// In en, this message translates to:
+  /// **'So far'**
+  String get pmeModeSoFar;
+
+  /// No description provided for @pmeModeWholeMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'Whole month (estimate)'**
+  String get pmeModeWholeMonth;
+
+  /// No description provided for @pmeEstimateNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimate: cars still parked are counted to {lastDay}. Nothing is saved.'**
+  String pmeEstimateNote(String lastDay);
+
+  /// No description provided for @pmeEstimateHeader.
+  ///
+  /// In en, this message translates to:
+  /// **'ESTIMATE — whole month, cars still parked counted to {lastDay}'**
+  String pmeEstimateHeader(String lastDay);
 }
 
 class _AppLocalizationsDelegate
