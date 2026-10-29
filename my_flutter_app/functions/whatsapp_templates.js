@@ -29,10 +29,10 @@
  *                                  list and weight, and two quick replies
  *                                  (OK / Something's wrong) instead of the
  *                                  tracking button. No legacy version.
- *   shipment_ready_pickup_code_2lang - ready for pickup, with the pickup
- *                                  code the receiver shows at handover.
- *                                  Chosen over shipment_ready_pickup_2lang
- *                                  when the line has a pickupCode.
+ *   (A line with a pickupCode sends shipment_ready_pickup_2lang too: Meta's
+ *   classifier rejects any template that carries a "code to show" as an
+ *   authentication message, so the pickup number rides in the address
+ *   parameter - container_updates.pickupAddressWithCode.)
  *
  * "legacy" - one template per update, in the reader's language (en or fr),
  * kept as the fallback in case Meta rejects the bilingual set:
@@ -53,7 +53,6 @@ const TEMPLATE = Object.freeze({
   SHIPMENT_RECEIVED_2LANG: "shipment_received_2lang",
   SHIPMENT_DEPARTED_2LANG: "shipment_departed_2lang",
   SHIPMENT_READY_PICKUP_2LANG: "shipment_ready_pickup_2lang",
-  SHIPMENT_READY_PICKUP_CODE_2LANG: "shipment_ready_pickup_code_2lang",
   SHIPMENT_DELIVERED_2LANG: "shipment_delivered_2lang",
   PACKAGE_CONFIRM_2LANG: "package_confirm_2lang",
   // Legacy, one language per message.
@@ -71,7 +70,6 @@ const BILINGUAL_TEMPLATES = Object.freeze([
   TEMPLATE.SHIPMENT_RECEIVED_2LANG,
   TEMPLATE.SHIPMENT_DEPARTED_2LANG,
   TEMPLATE.SHIPMENT_READY_PICKUP_2LANG,
-  TEMPLATE.SHIPMENT_READY_PICKUP_CODE_2LANG,
   TEMPLATE.SHIPMENT_DELIVERED_2LANG,
   TEMPLATE.PACKAGE_CONFIRM_2LANG,
 ]);
@@ -169,14 +167,6 @@ const TEMPLATE_VARIABLES = Object.freeze({
     VARIABLE.WHAT_FR, VARIABLE.BUSINESS, VARIABLE.PICKUP_PLACE_FR,
     VARIABLE.PICKUP_ADDRESS, VARIABLE.PICKUP_PHONE, VARIABLE.TRACKING_CODE,
   ]),
-  // The ready-for-pickup variables, then the pickup code.
-  [TEMPLATE.SHIPMENT_READY_PICKUP_CODE_2LANG]: Object.freeze([
-    VARIABLE.NAME,
-    VARIABLE.WHAT_EN, VARIABLE.BUSINESS, VARIABLE.PICKUP_PLACE_EN,
-    VARIABLE.WHAT_FR, VARIABLE.BUSINESS, VARIABLE.PICKUP_PLACE_FR,
-    VARIABLE.PICKUP_ADDRESS, VARIABLE.PICKUP_PHONE, VARIABLE.TRACKING_CODE,
-    VARIABLE.PICKUP_CODE,
-  ]),
   // 1 name, 2 business, 3 contents EN, 4 weight EN, 5 business,
   // 6 contents FR, 7 weight FR, 8 tracking code.
   [TEMPLATE.PACKAGE_CONFIRM_2LANG]: Object.freeze([
@@ -217,8 +207,7 @@ const TEMPLATE_BY_UPDATE = Object.freeze({
   // The sender's `received`, when the business asks senders to confirm.
   confirm: TEMPLATE.PACKAGE_CONFIRM_2LANG,
   shipped: TEMPLATE.SHIPMENT_DEPARTED_2LANG,
-  // A line with a pickupCode sends shipment_ready_pickup_code_2lang instead
-  // (templateForUpdate).
+  // The pickup number, when the line has one, rides in the address line.
   arrived: TEMPLATE.SHIPMENT_READY_PICKUP_2LANG,
   delivered: TEMPLATE.SHIPMENT_DELIVERED_2LANG,
 });
@@ -384,21 +373,13 @@ function isBilingualTemplate(template) {
  *   at_port, arrived, delivered).
  * @param {string} [templateSet] "bilingual" or "legacy"; the switch when
  *   omitted.
- * @param {object} [values] The values by VARIABLE name: a bilingual
- *   `arrived` with a `pickupCode` sends the template that carries it.
  * @return {string|null} The template's name, or null for an update that has
  *   no message.
  */
-function templateForUpdate(update, templateSet = whatsappTemplateSet(),
-    values = {}) {
+function templateForUpdate(update, templateSet = whatsappTemplateSet()) {
   const legacy = templateSet === TEMPLATE_SET.LEGACY;
   const map = legacy ? LEGACY_TEMPLATE_BY_UPDATE : TEMPLATE_BY_UPDATE;
-  const key = String(update ?? "").trim();
-  if (!legacy && key === "arrived" && clean(values?.[VARIABLE.PICKUP_CODE],
-      MAX_PARAMETER[VARIABLE.PICKUP_CODE])) {
-    return TEMPLATE.SHIPMENT_READY_PICKUP_CODE_2LANG;
-  }
-  return map[key] || null;
+  return map[String(update ?? "").trim()] || null;
 }
 
 /**
@@ -489,8 +470,7 @@ function templateComponents(template, values, language) {
  */
 function templateMessage(args) {
   const templateSet = args?.templateSet || whatsappTemplateSet();
-  const template = templateForUpdate(args?.update, templateSet,
-      args?.values || {});
+  const template = templateForUpdate(args?.update, templateSet);
   if (!template) return null;
   const language = isBilingualTemplate(template) ?
     BILINGUAL_TEMPLATE_LANGUAGE : templateLanguage(args.language);

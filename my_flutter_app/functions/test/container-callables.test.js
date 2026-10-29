@@ -4267,12 +4267,13 @@ describe("the sender's confirmation at drop-off", () => {
     await recordMoments(box);
     fakeWhatsApp(OK);
     await deliver(`${ref.id}_receiver_arrived`);
-    assert.equal(whatsappCalls[0].template.name, "shipment_ready_pickup_code_2lang");
-    assert.equal(whatsappCalls[0].template.components[0].parameters.at(-1).text, "4821");
+    assert.equal(whatsappCalls[0].template.name, "shipment_ready_pickup_2lang");
+    assert.match(whatsappCalls[0].template.components[0].parameters[7].text,
+        /Pickup number \/ N° de retrait : 4821$/);
     fakeWhatsApp(OK);
     await deliver(`${ref.id}_sender_arrived`);
     assert.equal(whatsappCalls[0].template.name, "shipment_ready_pickup_2lang");
-    assert.equal(whatsappCalls[0].template.components[0].parameters.length, 10);
+    assert.doesNotMatch(whatsappCalls[0].template.components[0].parameters[7].text, /4821/);
   });
 });
 /* eslint-enable max-len */

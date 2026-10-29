@@ -66,8 +66,7 @@ describe("which template each update sends", () => {
     assert.deepEqual([...BILINGUAL_TEMPLATES].sort(), [
       "package_confirm_2lang",
       "shipment_delivered_2lang", "shipment_departed_2lang",
-      "shipment_ready_pickup_2lang", "shipment_ready_pickup_code_2lang",
-      "shipment_received_2lang"]);
+      "shipment_ready_pickup_2lang", "shipment_received_2lang"]);
     assert.deepEqual([...LEGACY_TEMPLATES].sort(), [
       "container_arrived", "container_departed", "package_received"]);
     assert.deepEqual(Object.values(TEMPLATE).sort(),
@@ -103,26 +102,20 @@ describe("which template each update sends", () => {
       delivered: "shipment_delivered_2lang",
     });
   });
-
-  // The pickup code goes in the ready-for-pickup message of a line that
-  // has one (docs/AIR_PACKAGES.md §3); a line without keeps the old
-  // template, and the legacy set has no code variant.
-  it("sends the pickup-code variant of ready for pickup only with a code",
+  // Meta rejects a template that carries a "code to show" (it reads as an
+  // authentication message), so a line with a pickupCode sends the normal
+  // ready-for-pickup template; the number rides in the address parameter
+  // (container_updates.pickupAddressWithCode).
+  it("sends the same ready-for-pickup template with or without a code",
       () => {
-        assert.equal(templateForUpdate("arrived", "bilingual",
-            {pickupCode: "4821"}), "shipment_ready_pickup_code_2lang");
-        for (const values of [{}, {pickupCode: ""}, {pickupCode: "  "}]) {
-          assert.equal(templateForUpdate("arrived", "bilingual", values),
-              "shipment_ready_pickup_2lang");
-        }
-        assert.equal(templateForUpdate("arrived", "legacy",
-            {pickupCode: "4821"}), "container_arrived");
-        assert.equal(templateForUpdate("received", "bilingual",
-            {pickupCode: "4821"}), "shipment_received_2lang");
+        assert.equal(templateForUpdate("arrived", "bilingual"),
+            "shipment_ready_pickup_2lang");
+        assert.equal(templateForUpdate("arrived", "legacy"),
+            "container_arrived");
         const body = templateMessage({update: "arrived",
           phone: "+224620000000", language: "fr", values: VALUES,
           templateSet: "bilingual"});
-        assert.equal(body.template.name, "shipment_ready_pickup_code_2lang");
+        assert.equal(body.template.name, "shipment_ready_pickup_2lang");
         assert.deepEqual(body.template.language, {code: "en"});
       });
 
@@ -237,15 +230,6 @@ describe("the bilingual variables, in the order Meta numbered them", () => {
       "3 barrels", "Dala Shipping", "Conakry, Guinea",
       "3 barils", "Dala Shipping", "Conakry, Guinée",
       "Madina, near the market", "+224620000000", "CL-K7M4P2",
-    ]);
-  });
-
-  it("fills shipment_ready_pickup_code_2lang: the ready-for-pickup " +
-      "variables, then the pickup code", () => {
-    assert.equal(TEMPLATE_VARIABLES.shipment_ready_pickup_code_2lang.length,
-        11);
-    assert.deepEqual(bodyOf("shipment_ready_pickup_code_2lang"), [
-      ...bodyOf("shipment_ready_pickup_2lang"), "4821",
     ]);
   });
 
@@ -410,8 +394,6 @@ describe("what fills a blank", () => {
       "Laawol", "votre colis", "—",
       "-",
     ]);
-    assert.deepEqual(bodyOf("shipment_ready_pickup_code_2lang", {}).at(-1),
-        "—");
     assert.deepEqual(bodyOf("shipment_ready_pickup_2lang", {}), [
       // "Hello / Bonjour Client"
       "Client",
