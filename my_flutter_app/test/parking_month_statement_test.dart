@@ -93,6 +93,23 @@ void main() {
     expect(october.dueCents, 15600);
   });
 
+  test('a legacy direct stay with a zero stored total uses its daily rate', () {
+    final row = diallo({
+      'parkingDate': at('2026-09-16'),
+      'parkingEndDate': at('2026-10-13'),
+      'dailyRate': 12,
+      'amountDueCents': 0,
+      'amountPaidCents': 18000,
+      'paymentMethod': 'direct',
+      'source': 'business',
+      'enteredByBusiness': true,
+    });
+    final now = DateTime.parse('2026-10-29T15:00:00Z');
+    expect(parkingMonthStatement(row, '2026-09', now)!.monthPaidCents, 18000);
+    expect(parkingMonthStatement(row, '2026-09', now)!.dueCents, 0);
+    expect(parkingMonthStatement(row, '2026-10', now)!.dueCents, 15600);
+  });
+
   test('the business\'s month adds up and lists who owes, biggest first', () {
     final s = parkingMonthSummary(
       [

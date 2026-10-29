@@ -75,6 +75,24 @@ test("a closed part-paid stay is paid in September and owed in October", () => {
   assert.equal(october.dueCents, 15600);
 });
 
+test("a legacy direct stay with a zero stored total is rebuilt from its daily rate", () => {
+  const row = {
+    ...diallo,
+    parkingDate: at("2026-09-16"),
+    parkingEndDate: at("2026-10-13"),
+    dailyRate: 12,
+    amountDueCents: 0,
+    amountPaidCents: 18000,
+    paymentMethod: "direct",
+    source: "business",
+    enteredByBusiness: true,
+  };
+  const now = new Date("2026-10-29T15:00:00Z");
+  assert.equal(parkingMonthStatement(row, "2026-09", now)!.monthPaidCents, 18000);
+  assert.equal(parkingMonthStatement(row, "2026-09", now)!.dueCents, 0);
+  assert.equal(parkingMonthStatement(row, "2026-10", now)!.dueCents, 15600);
+});
+
 test("the business's month adds up and lists who owes, biggest first", () => {
   const s = parkingMonthSummary([
     diallo,

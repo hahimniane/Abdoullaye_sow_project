@@ -111,9 +111,25 @@ int parkingAccruedThroughCents(
     final daily = ((num.tryParse('${row['dailyRate'] ?? ''}') ?? 0) * 100).round();
     return daily > 0 ? days * daily : 0;
   }
-  final total = _centsOf(
+  var total = _centsOf(
       row, const ['amountDueCents', 'totalCostCents'], const ['amountDue', 'totalCost']);
   final stayDays = end - start + 1;
+  // Older direct stays could be closed while their open-ended $0 placeholder
+  // was left in amountDueCents. Rebuild only those business-entered daily-rate
+  // stays; otherwise the paid parking vanishes from month end entirely.
+  final legacyDirectStay = total <= 0 &&
+      _text(row['paymentMethod'], 40) == 'direct' &&
+      (_text(row['source'], 40) == 'business' ||
+          row['enteredByBusiness'] == true);
+  if (legacyDirectStay) {
+    final daily =
+        ((num.tryParse('${row['dailyRate'] ?? ''}') ?? 0) * 100).round();
+    final minimumDays =
+        (num.tryParse('${row['minimumDays'] ?? ''}') ?? 1).floor();
+    if (daily > 0) {
+      total = (stayDays > minimumDays ? stayDays : minimumDays) * daily;
+    }
+  }
   return stayDays > 0 ? (total * days / stayDays).round() : 0;
 }
 
