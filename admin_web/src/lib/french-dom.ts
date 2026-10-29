@@ -7240,6 +7240,90 @@ export function buildReverseDictionary(
   return result;
 }
 
+// Air packages (W1) - docs/AIR_PACKAGES.md: air shipments on the Containers
+// step, the proof on a package (photos, what is inside, weight, declared
+// value), the three ticks, the sender's problem flag and the customs list.
+// Appended last so the parallel delivery/settings work (W2) merges cleanly.
+Object.assign(TEXT_TRANSLATIONS, {
+  // The container form and detail, when it flies.
+  "Shipment": "Envoi",
+  "New shipment": "Nouvel envoi",
+  "Edit shipment": "Modifier l’envoi",
+  "Start shipment": "Créer l’envoi",
+  "Shipment started.": "Envoi créé.",
+  "Shipment deleted.": "Envoi supprimé.",
+  "This shipment has no lines.": "Cet envoi n’a aucune ligne.",
+  "How it travels": "Par mer ou par avion",
+  "Air waybill": "Lettre de transport aérien",
+  "Airline": "Compagnie aérienne",
+  "By air": "Par avion",
+  "Departed": "Date de départ",
+  "Give it a working name now; the air waybill can come later.":
+    "Donnez-lui un nom provisoire ; la lettre de transport aérien pourra venir plus tard.",
+  "Name, waybill, airline, reference and destination stay editable until it departs.":
+    "Nom, LTA, compagnie, référence et destination restent modifiables jusqu’au départ.",
+  "Optional once there is an air waybill or booking number.":
+    "Facultatif dès qu’il y a une lettre de transport aérien ou un numéro de réservation.",
+  "Letters, digits and dashes, 6 to 20 of them, from the airline's waybill.":
+    "Lettres, chiffres et tirets, de 6 à 20, d’après la LTA de la compagnie.",
+  "An air waybill is 6 to 20 letters, digits or dashes, like 176-12345678.":
+    "Une lettre de transport aérien compte 6 à 20 lettres, chiffres ou tirets, comme 176-12345678.",
+  // The customs list.
+  "Customs list": "Liste douanière",
+  "The customs list is not ready yet. Try again in a moment.":
+    "La liste douanière n’est pas encore prête. Réessayez dans un instant.",
+  // The proof editor.
+  "At least one photo of the package is required.":
+    "Au moins une photo du colis est obligatoire.",
+  "Optional. Up to 5 photos of the package as dropped off.":
+    "Facultatif. Jusqu’à 5 photos du colis tel que déposé.",
+  "Add photo": "Ajouter une photo",
+  "Photo of the package": "Photo du colis déposé",
+  "What's inside": "Contenu",
+  "Optional. The sender confirms this list and customs read it.":
+    "Facultatif. L’expéditeur confirme cette liste et la douane la lit.",
+  "Item": "Article",
+  "Qty": "Qté",
+  "Serial / IMEI": "Série / IMEI",
+  "Remove item": "Retirer l’article",
+  "Add item": "Nouvel article",
+  "Weight (lb)": "Poids (lb)",
+  "Declared value ($)": "Valeur déclarée ($)",
+  "Whole dollars. Never printed on the label.":
+    "Dollars entiers. Jamais imprimé sur l’étiquette.",
+  "That file is not a photo.": "Ce fichier n’est pas une photo.",
+  "That photo could not be read.": "Cette photo n’a pas pu être lue.",
+  "That photo is too large.": "Cette photo est trop lourde.",
+  "Sign in again to add photos.": "Reconnectez-vous pour ajouter des photos.",
+  "Wait for the photos to finish uploading.":
+    "Attendez la fin de l’envoi des photos.",
+  // The server's proof refusals (package_proof.REFUSAL).
+  "Add at least one photo of the package.": "Ajoutez au moins une photo du colis.",
+  "Check the item list: a name up to 60 characters, a quantity from 1 to 99, and an optional serial number.":
+    "Vérifiez la liste des articles : un nom de 60 caractères au plus, une quantité de 1 à 99 et un numéro de série facultatif.",
+  "Enter a weight between 0.1 and 2000 lb.": "Saisissez un poids entre 0,1 et 2000 lb.",
+  "Enter a declared value of $0 or more.": "Saisissez une valeur déclarée de 0 $ ou plus.",
+  // The ticks, the problem flag and the Missing proof filter.
+  "Proof": "Preuves",
+  "Missing proof": "Preuves manquantes",
+  "All": "Tous",
+  "Every waiting package has its proof.": "Chaque colis en attente a ses preuves.",
+  "Sender reported a problem": "L’expéditeur a signalé un problème",
+  "The sender tapped Something's wrong on the confirmation message. Loading this package warns but never blocks.":
+    "L’expéditeur a appuyé sur Something's wrong dans le message de confirmation. Le chargement de ce colis avertit mais ne bloque jamais.",
+  // The staff view's proof section.
+  "No drop-off photo.": "Aucune photo de dépôt.",
+  "Not listed": "Non renseigné",
+  "Not weighed": "Non pesé",
+  "Declared value": "Valeur déclarée",
+  "Not declared": "Non déclarée",
+});
+Object.assign(ATTRIBUTE_TRANSLATIONS, {
+  "Flight Friday 7 Nov": "Vol du vendredi 7 nov.",
+  "e.g. 176-12345678": "ex. 176-12345678",
+  "e.g. iPhone 13": "ex. iPhone 13",
+});
+
 const englishDictionary = { ...TEXT_TRANSLATIONS, ...ATTRIBUTE_TRANSLATIONS };
 const frenchDictionary = buildReverseDictionary([
   TEXT_TRANSLATIONS,

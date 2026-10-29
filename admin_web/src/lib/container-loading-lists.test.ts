@@ -186,7 +186,9 @@ test("every new string has its French", () => {
 test("the page wires the lists: Take off reuses the one callable, Add reuses assignContainerLines", () => {
   assert.match(panelSource, /httpsCallable\(functions, "unassignContainerLine"\)\(\{ businessId, lineId: String\(row\.id\) \}\)/);
   assert.match(panelSource, /takeOffConfirmText\(row, containerTitle\(selected\), "en"\)/);
-  assert.match(panelSource, /httpsCallable\(functions, "assignContainerLines"\)\(assignLinesRequest\(businessId, selectedId, \[id\], \{\}, waiting\.rows\)\)/);
+  // The same request as before; a sender's problem is acknowledged on a second call (docs/AIR_PACKAGES.md §4.8).
+  assert.match(panelSource, /const request = assignLinesRequest\(businessId, selectedId, \[id\], \{\}, waiting\.rows\);/);
+  assert.match(panelSource, /httpsCallable\(functions, "assignContainerLines"\)\(acknowledgeProblems \? \{ \.\.\.request, acknowledgeProblems: true \} : request\)/);
   // Take off is a visible text button on every row of a container that is loading, however the row got there, and only then.
   assert.match(panelSource, /\{selectedOpen && \(\s*<button className="lst-btn ghost ctn-takeoff" type="button" disabled=\{busy\} onClick=\{\(\) => void sendBackToWaiting\(row\)\}>Take off<\/button>\s*\)\}/);
   assert.equal((panelSource.match(/sendBackToWaiting\(row\)/g) ?? []).length, 1);

@@ -74,6 +74,19 @@ import {
 } from "@/lib/vin-lookup";
 import { RecordPhoneFlags } from "@/components/phone-flags";
 import { LineUpdateFailures } from "@/components/business/line-update-failures";
+import { ProofFields } from "@/components/business/proof-fields";
+import { ProofTicks, SenderProblemBanner } from "@/components/business/proof-ticks";
+import {
+  PROOF_SETTINGS_OFF,
+  emptyProofDraft,
+  lineMissingProof,
+  proofDraftFromLine,
+  proofDraftProblems,
+  proofPayload,
+  proofProblemText,
+  type ProofDraft,
+  type ProofSettings,
+} from "@/lib/package-proof";
 import { MessageCustomerButton } from "@/components/support/message-customer";
 import { unflaggedLineWarnings } from "@/lib/phone-accounts";
 import type { FirestoreRow } from "@/types/admin";
@@ -136,6 +149,8 @@ type WaitingPackagesPanelProps = {
    * and on containers), built once there: a part's money is its group's.
    */
   groups: ReadonlyMap<string, LineGroupSummary>;
+  /** The business's proof switches (docs/AIR_PACKAGES.md §2): photos required at the counter, sender confirmation. */
+  proofSettings?: ProofSettings;
   onFlash: (message: string) => void;
   /** Counters stay off while the business is a preview. */
   enabled: boolean;
@@ -168,6 +183,7 @@ export function WaitingPackagesPanel({
   staffName,
   staffOptions,
   groups,
+  proofSettings = PROOF_SETTINGS_OFF,
   onFlash,
   enabled,
   expected = null,
@@ -177,10 +193,15 @@ export function WaitingPackagesPanel({
   // A decimal comma in French; readMoneyInput reads "45,50" and "45.50" alike.
   const moneyPlaceholder = lang === "fr" ? "0,00" : "0.00";
   const [filter, setFilter] = useState("");
+  // "Missing proof": the packages without a drop-off photo, or whose sender
+  // has not said OK when the business asks for it.
+  const [proofFilter, setProofFilter] = useState<"all" | "missing">("all");
   const [modal, setModal] = useState<Modal>("");
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState<WaitingPackageDraft>(() => emptyWaitingPackageDraft(defaultDestination));
   const [editingId, setEditingId] = useState("");
+  // The package's proof: photos, what is inside, weight and declared value.
+  const [proof, setProof] = useState<ProofDraft>(() => emptyProofDraft());
   const [draftError, setDraftError] = useState("");
   // After a refused save, each field shows its own problem, live, until fixed.
   const [triedSave, setTriedSave] = useState(false);
@@ -203,7 +224,13 @@ export function WaitingPackagesPanel({
     focusScrolled.current = focusLineId;
     row.scrollIntoView({ block: "center", behavior: "smooth" });
   }, [focusLineId, rows]);
-  const shown = useMemo(() => filterWaitingPackages(sorted, filter), [sorted, filter]);
+  const searched = useMemo(() => filterWaitingPackages(sorted, filter), [sorted, filter]);
+  // Both computed once per change of the rows, never per row render.
+  const shown = useMemo(
+    () => (proofFilter === "missing" ? searched.filter((row) => lineMissingProof(row, proofSettings)) : searched),
+    [searched, proofFilter, proofSettings],
+  );
+  const missingCount = useMemo(() => sorted.filter((row) => lineMissingProof(row, proofSettings)).length, [sorted, proofSettings]);
   const searching = text(filter, "").length >= 2;
   const paymentLine = paymentLineId ? sorted.find((row) => text(row.id, "") === paymentLineId) : undefined;
   const paymentGroup = paymentLine ? groupForLine(groups, paymentLine) : undefined;
@@ -259,6 +286,7 @@ export function WaitingPackagesPanel({
 
   function openRegister() {
     setDraft(emptyWaitingPackageDraft(defaultDestination));
+    setProof(emptyProofDraft());
     setEditingId("");
     setAddedThisSitting([]);
     resetFormState();
@@ -268,6 +296,7 @@ export function WaitingPackagesPanel({
   function openEdit(row: Row) {
     const next = waitingPackageDraftFromRow(row);
     setDraft(next);
+    setProof(proofDraftFromLine(row));
     setEditingId(text(row.id, ""));
     setAddedThisSitting([]);
     resetFormState();
@@ -351,6 +380,18 @@ export function WaitingPackagesPanel({
       if (field) window.requestAnimationFrame(() => revealField(document.getElementById(field)));
       return;
     }
+    // The proof fields, checked as the server will: a photo is required at
+    // the counter when the business says so (never on a received request).
+    const proofProblems = proofDraftProblems(proof, {
+      photosRequired: proofSettings.photosRequired && text(editingRow?.source, "counter") === "counter",
+    });
+    if (proofProblems.length) {
+      setDraftError(proofProblemText(proofProblems[0]));
+      setTriedSave(true);
+      window.requestAnimationFrame(() => revealField(document.getElementById("wpk-proof")));
+      return;
+    }
+    const proofFields = proofPayload(proof);
     const fail = (failure: { message: string }) => setDraftError(failure.message);
 
     if (editingId) {
@@ -358,7 +399,8 @@ export function WaitingPackagesPanel({
       await runPackageCall(setBusy, async () => {
         // Piece prices travel with the pieces; setContainerLinePrice only
         // for a car's price or the pay-on-arrival switch.
-        await httpsCallable(functions, "updateContainerLine")(updateWaitingPackageRequest(businessId, editingId, draft, line));
+        const request = updateWaitingPackageRequest(businessId, editingId, draft, line);
+        await httpsCallable(functions, "updateContainerLine")({ ...request, line: { ...request.line, ...proofFields } });
         const priceRequest = line ? editPriceRequest(businessId, editingId, line, draft) : null;
         if (priceRequest) await httpsCallable(functions, "setContainerLinePrice")(priceRequest);
         onFlash("Package updated.");
@@ -368,7 +410,7 @@ export function WaitingPackagesPanel({
     }
 
     await runPackageCall(setBusy, async () => {
-      const response = await httpsCallable(functions, "addWaitingPackage")(addWaitingPackagePayload(businessId, draft));
+      const response = await httpsCallable(functions, "addWaitingPackage")({ ...addWaitingPackagePayload(businessId, draft), ...proofFields });
       const stub = savedPackageStub(response.data, draft);
       const code = text(stub.trackingCode, "");
       if (mode === "print") {
@@ -387,6 +429,8 @@ export function WaitingPackagesPanel({
       const whom = draft.receiverName || draft.customerName || "—";
       setAddedThisSitting((list) => [...list, `${containerLineTitle(stub, lang)} → ${whom}${code ? ` (${code})` : ""}`]);
       setDraft(nextPackageForSameSender(draft, defaultDestination));
+      // The next package has its own photos and contents.
+      setProof(emptyProofDraft());
       resetFormState();
     }, fail);
   }
@@ -417,6 +461,21 @@ export function WaitingPackagesPanel({
       {tabs}
       <div className="panel-tools">
         <input type="search" placeholder="VIN, customer, phone" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Search waiting packages" />
+        <div className="service-segments wpk-proof-chips" role="group" aria-label="Filter packages">
+          {([["all", "All", rows.length], ["missing", "Missing proof", missingCount]] as const).map(([id, label, count]) => (
+            <span
+              key={id}
+              role="button"
+              tabIndex={0}
+              className={`segment ${proofFilter === id ? "active" : ""}`}
+              aria-pressed={proofFilter === id}
+              onClick={() => setProofFilter(id)}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setProofFilter(id); } }}
+            >
+              {label}<b>{count}</b>
+            </span>
+          ))}
+        </div>
       </div>
       <p className="panel-lede">Packages customers dropped off before a container was chosen. Print the label now; add them to a container that goes to the same country when it is loading.</p>
       {error && <div className="lst-form-error" role="alert">{error}</div>}
@@ -427,7 +486,7 @@ export function WaitingPackagesPanel({
       ) : rows.length === 0 ? (
         <div className="empty-state">No packages are waiting. Register one when a customer drops it off.</div>
       ) : shown.length === 0 ? (
-        <div className="empty-state">{searching ? "No waiting package matches that search." : "No packages are waiting."}</div>
+        <div className="empty-state">{proofFilter === "missing" && !searching ? "Every waiting package has its proof." : searching ? "No waiting package matches that search." : "No packages are waiting."}</div>
       ) : (
         <div className="mini-table">
           <div className="ctn-table wpk-table">
@@ -477,6 +536,8 @@ export function WaitingPackagesPanel({
                     <small className="ctn-wa">{summary}</small>
                     {warnings.map((warning) => (<small className="ctn-wa-warn" key={warning}>{warning}</small>))}
                     <LineUpdateFailures line={row} />
+                    <ProofTicks line={row} />
+                    <SenderProblemBanner line={row} compact />
                     <MessageCustomerButton row={row} />
                   </span>
                   <span>
@@ -573,6 +634,17 @@ export function WaitingPackagesPanel({
                 {fieldErrorNote("wpk-length")}
               </div>
               )}
+
+              <ProofFields
+                id="wpk-proof"
+                businessId={businessId}
+                draft={proof}
+                onChange={setProof}
+                showErrors={triedSave}
+                disabled={busy}
+                lang={lang}
+                photosRequired={proofSettings.photosRequired && text(editingRow?.source, "counter") === "counter"}
+              />
 
               <div className="lst-form-grid">
                 <label className="lst-field"><span>Destination</span>
