@@ -5,12 +5,13 @@ import { httpsCallable } from "firebase/functions";
 import { ArrowLeft, Banknote, ChevronDown, ChevronLeft, ChevronRight, Copy, FileDown, RefreshCw, SquarePen, X } from "lucide-react";
 
 import { auth, functions } from "@/lib/firebase";
-import { useParkingMonthInputs } from "@/lib/business-data";
+import { useParkingMonthInputs, useStaffExpenseCreditInputs } from "@/lib/business-data";
 import { BUSINESS_PARKING_RECEIVED_VIA_OPTIONS } from "@/lib/business-parking-entry";
 import { overlayDismiss } from "@/lib/overlay-dismiss";
 
 import { currentLanguage, formatDayKey, text } from "@/lib/format";
 import { PdfPreview, type PdfPreviewFile } from "@/components/pdf-preview";
+import { BusinessOwesSection } from "@/components/business/business-owes-section";
 import {
   buildParkingMonthBillPdf,
   buildParkingMonthSummaryPdf,
@@ -29,7 +30,9 @@ import {
   previousMonthKey,
   shiftMonthKey,
   type ParkingMonthCustomer,
+  type ParkingMonthStaffCredit,
 } from "@/lib/parking-month-statement";
+import type { StaffParkingLinks } from "@/lib/staff-expense-credit";
 import type { FirestoreRow } from "@/types/admin";
 
 type Row = Record<string, unknown>;
@@ -47,6 +50,9 @@ type ParkingMonthEndProps = {
   onClose: () => void;
   /** Opens the car's own record, where its payments are recorded. */
   onOpenCar: (row: FirestoreRow) => void;
+  /** Owner, platform admin, or staff with the `ledger` permission: may
+   * record and void Paid back (docs/STAFF_EXPENSE_CREDIT.md §1.4). */
+  canSettleStaff?: boolean;
 };
 
 /**
@@ -55,7 +61,7 @@ type ParkingMonthEndProps = {
  * to send. Worked out live from the cars; payments are recorded on the car
  * as always, oldest month first, so a bill flips to paid by itself.
  */
-export function ParkingMonthEnd({ businessId, staff = [], business, businessName, initialMonth, onClose, onOpenCar }: ParkingMonthEndProps) {
+export function ParkingMonthEnd({ businessId, staff = [], business, businessName, initialMonth, onClose, onOpenCar, canSettleStaff = false }: ParkingMonthEndProps) {
   const [monthKey, setMonthKey] = useState(initialMonth || previousMonthKey());
   const inputs = useParkingMonthInputs(businessId, monthKey, Boolean(businessId));
   const rows = inputs.cars;
@@ -83,6 +89,27 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
     id: String(s.id),
     name: text(s.fullName, "") || text(s.name, "") || text(s.email, ""),
   })).filter((s) => s.name), [staff]);
+  // Staff expenses come off their parking bill (docs/STAFF_EXPENSE_CREDIT.md):
+  // every lot expense and paid-back record, the owner's links on the
+  // business, the team's names. Netted only when both reads answered - a
+  // team member who cannot read the ledger sees the bills un-netted, with a
+  // note, never half-netted.
+  const credit = useStaffExpenseCreditInputs(businessId, Boolean(businessId));
+  const links = useMemo(
+    () => ((business?.staffParkingLinks && typeof business.staffParkingLinks === "object" ? business.staffParkingLinks : {}) as StaffParkingLinks),
+    [business],
+  );
+  const staffNames = useMemo(() => Object.fromEntries(staffOptions.map((s) => [s.id, s.name])), [staffOptions]);
+  const staffCredit = useMemo<ParkingMonthStaffCredit | null>(
+    () => (credit.available ? { entries: credit.entries, repayments: credit.repayments, links, staffNames } : null),
+    [credit.available, credit.entries, credit.repayments, links, staffNames],
+  );
+  const linkedCustomerNames = useMemo(() => {
+    const out: Record<string, string> = {};
+    for (const link of Object.values(links)) if (link?.customerKey && link.customerName) out[link.customerKey] = link.customerName;
+    return out;
+  }, [links]);
+  const [openExpenses, setOpenExpenses] = useState<Set<string>>(() => new Set());
   const lang = currentLanguage() === "fr" ? "fr" : "en";
   const orgName = text(business?.name, "") || businessName;
   const identity = useMemo(() => ({ ...(business ?? {}), name: orgName }), [business, orgName]);
@@ -91,8 +118,8 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
   const estimating = wholeMonth && canEstimate;
   const lastDay = parkingMonthLastDayLabel(monthKey);
   const summary = useMemo(
-    () => parkingMonthSummary(rows, monthKey, parkingMonthAsOf(monthKey, wholeMonth), activities),
-    [rows, activities, monthKey, wholeMonth],
+    () => parkingMonthSummary(rows, monthKey, parkingMonthAsOf(monthKey, wholeMonth), activities, staffCredit),
+    [rows, activities, monthKey, wholeMonth, staffCredit],
   );
   const thisMonth = new Date().toISOString().slice(0, 7);
   // One row per customer (grouped by phone), their cars underneath.
@@ -107,7 +134,7 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
     setBusyId("summary");
     setFlash("");
     try {
-      const blob = await buildParkingMonthSummaryPdf({ business: identity, summary, language: lang, estimate: estimating });
+      const blob = await buildParkingMonthSummaryPdf({ business: identity, summary, language: lang, estimate: estimating, linkedCustomerNames });
       setPreview({ blob, fileName: parkingMonthFileName("summary", monthKey, "", orgName), title: `Month end — ${monthLabel(monthKey, lang)}` });
     } catch {
       setFlash("The PDF could not be made. Try again.");
@@ -232,6 +259,9 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
       )}
 
       {inputs.error && <div className="error-box" role="alert">{inputs.error}</div>}
+      {!credit.available && !credit.loading && (
+        <p className="lst-hint" role="status">Staff expenses are not taken off these bills: your account cannot see the lot's expenses.</p>
+      )}
       {inputs.loading && (
         <div className="empty-state"><RefreshCw className="spin" size={16} /> Loading…</div>
       )}
@@ -241,6 +271,9 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
         <div className="pk-stat"><span>Billed</span><b>{moneyText(summary.billedCents)}</b><small>{estimating ? "estimate, whole month" : "for the month"}</small></div>
         <div className="pk-stat"><span>Collected</span><b>{moneyText(summary.collectedCents)}</b><small>toward the month</small></div>
         <div className="pk-stat"><span>Paid in full</span><b>{summary.customersPaid.length}</b><small>customers this month</small></div>
+        {summary.expenseCreditCents > 0 && (
+          <div className="pk-stat"><span>Less staff expenses</span><b className="pk-paid">-{moneyText(summary.expenseCreditCents)}</b><small>off staff parking bills</small></div>
+        )}
         <div className="pk-stat"><span>Still owed</span><b className={summary.dueCents > 0 ? "owed" : ""}>{moneyText(summary.dueCents)}</b>
           <small>{summary.olderOwedCents > 0 ? `incl. ${moneyText(summary.olderOwedCents)} from before` : "by the customers below"}</small>
         </div>
@@ -267,8 +300,8 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
                 </div>
                 <div className="pk-month-due">
                   {customer.dueCents > 0
-                    ? <><strong className="pk-owed">{moneyText(customer.dueCents)}</strong><small>{customer.monthPaidCents > 0 ? `${moneyText(customer.monthPaidCents)} paid · ` : ""}{moneyText(customer.monthCents)} this month{customer.priorUnpaidCents > 0 ? ` + ${moneyText(customer.priorUnpaidCents)} from before` : ""}</small></>
-                    : <><span className="lst-badge ok">Paid</span>{customer.monthPaidCents > 0 && <small className="pk-month-paid-via">{moneyText(customer.monthPaidCents)} paid{customer.paidVia.length > 0 ? ` · ${customer.paidVia.map(parkingPaidViaLabel).join(", ")}` : ""}</small>}</>}
+                    ? <><strong className="pk-owed">{moneyText(customer.dueCents)}</strong><small>{customer.monthPaidCents > 0 ? `${moneyText(customer.monthPaidCents)} paid · ` : ""}{moneyText(customer.monthCents)} this month{customer.priorUnpaidCents > 0 ? ` + ${moneyText(customer.priorUnpaidCents)} from before` : ""}</small>{customer.expenseCreditCents > 0 && <small className="pk-month-paid-via">Less expenses -{moneyText(customer.expenseCreditCents)}</small>}</>
+                    : <><span className="lst-badge ok">Paid</span>{customer.monthPaidCents > 0 && <small className="pk-month-paid-via">{moneyText(customer.monthPaidCents)} paid{customer.paidVia.length > 0 ? ` · ${customer.paidVia.map(parkingPaidViaLabel).join(", ")}` : ""}</small>}{customer.expenseCreditCents > 0 && <small className="pk-month-paid-via">Less expenses -{moneyText(customer.expenseCreditCents)}</small>}</>}
                 </div>
                 <div className="pk-month-actions">
                   <button className="lst-btn ghost" type="button" disabled={busyId !== ""} onClick={() => void saveBill(customer)}>
@@ -315,9 +348,49 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
                 const owingLines = [...customer.cars.filter((b) => b.dueCents > 0).map(carLine), ...acts.filter((a) => a.dueCents > 0).map(actLine)];
                 const paidLines = [...customer.cars.filter((b) => b.dueCents <= 0).map(carLine), ...acts.filter((a) => a.dueCents <= 0).map(actLine)];
                 const showPaid = openPaid.has(customer.key);
+                // A linked staff member's lot expenses: one line with what
+                // came off the bill, this month's purchases folded under it.
+                const showExpenses = openExpenses.has(customer.key);
+                const expenseRow = customer.expenseCreditCents > 0 && (
+                  <li className="pk-month-expense">
+                    <span className="pk-month-car">
+                      <strong>Less expenses</strong>
+                      <small>{customer.expenseLines.length > 0 ? "paid for the lot" : "paid for the lot in earlier months"}</small>
+                    </span>
+                    <span className="pk-month-period">
+                      {customer.expenseLines.length > 0 && (
+                        <button className="ghost-button" type="button" aria-expanded={showExpenses} onClick={() => setOpenExpenses((current) => {
+                          const next = new Set(current);
+                          if (next.has(customer.key)) next.delete(customer.key);
+                          else next.add(customer.key);
+                          return next;
+                        })}>
+                          {showExpenses ? <ChevronDown size={14} /> : <ChevronRight size={14} />} {`${customer.expenseLines.length} ${customer.expenseLines.length === 1 ? "expense" : "expenses"} this month`}
+                        </button>
+                      )}
+                    </span>
+                    <span className="pk-month-calc">{`${moneyText(customer.dueBeforeExpensesCents)} before expenses`}</span>
+                    <span className="pk-month-amount"><strong className="pk-paid">-{moneyText(customer.expenseCreditCents)}</strong></span>
+                    <span aria-hidden="true"></span>
+                  </li>
+                );
+                const expenseLines = showExpenses ? customer.expenseLines.map((l) => (
+                  <li key={`exp-${l.id}`} className="pk-month-expense-line">
+                    <span className="pk-month-car">
+                      {l.note ? <strong data-no-translate>{l.note}</strong> : <strong>Expense</strong>}
+                      {l.staffName && <small><span>paid by</span> <span data-no-translate>{l.staffName}</span></small>}
+                    </span>
+                    <span className="pk-month-period">{l.date ? formatDayKey(l.date) : ""}</span>
+                    <span className="pk-month-calc"></span>
+                    <span className="pk-month-amount"><strong>-{moneyText(l.amountCents)}</strong></span>
+                    <span aria-hidden="true"></span>
+                  </li>
+                )) : null;
                 return (
                   <ul>
                     {owingLines}
+                    {expenseRow}
+                    {expenseLines}
                     {paidLines.length > 0 && (
                       <li className="pk-month-paid-toggle">
                         <button className="ghost-button" type="button" aria-expanded={showPaid} onClick={() => setOpenPaid((current) => {
@@ -337,6 +410,19 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
             </article>
           ))}
         </div>
+      )}
+      {credit.available && (
+        <BusinessOwesSection
+          businessId={businessId}
+          monthKey={monthKey}
+          summary={summary}
+          links={links}
+          repayments={credit.repayments}
+          staffOptions={staffOptions}
+          canSettle={canSettleStaff}
+          estimating={estimating}
+          onFlash={setFlash}
+        />
       )}
       {(() => {
         const customer = summary.customers.find((c) => c.key === settleKey);
@@ -367,6 +453,9 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
                   {plan.skipped.map((x) => (
                     <li key={`skip:${x.id}`} className="pk-settle-skip"><span>Parking · {x.label} — {x.reason === "payment_link" ? "paid by card link, not included" : "booked online, not included"}</span><strong>{moneyText(x.amountCents)}</strong></li>
                   ))}
+                  {customer.expenseCreditCents > 0 && (
+                    <li className="pk-settle-skip"><span>Less expenses — covered by the staff member's lot expenses, not recorded</span><strong>-{moneyText(customer.expenseCreditCents)}</strong></li>
+                  )}
                   <li className="pk-settle-total"><span>Total to record</span><strong>{moneyText(plan.totalCents)}</strong></li>
                 </ul>
                 <div className="lst-form-grid">

@@ -835,6 +835,7 @@ export function BusinessConsole({
               business={business}
               focusRecordId={notificationFocusId}
               focusView={notificationFocusView}
+              canManageLedger={hasBusinessPermission(profile, "ledger")}
             />
           )}
           {activeTab === "ledger" && (
@@ -968,6 +969,7 @@ export function BusinessConsole({
               loading={staff.loading}
               error={staff.error}
               canManageStaff={profile.role === "businessOwner"}
+              canLinkParking={profile.role === "businessOwner" || profile.role === "admin"}
             />
           )}
           {activeTab === "reviews" && (

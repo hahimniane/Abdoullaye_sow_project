@@ -29,6 +29,9 @@ const COPY = {
     car: "Car", amount: "Amount", to: "to", activities: "Activities", date: "Date", activity: "Activity", item: "item", items: "items", paidToward: "Paid toward", dueLabel: "due", paidLabel: "paid", olderItems: "Unpaid from before", registeredTo: "registered to", monthTotal: "Total for the month", cars: "cars",
     footer: "Issued through Laawol Digital · laawoldigital.com",
     estimate: "Estimate · whole month",
+    expensesPaid: "Expenses you paid for the lot", expense: "Expense", lessExpenses: "Less expenses",
+    lessStaffExpenses: "Less staff expenses", businessOwes: "Business owes",
+    parkingBill: "Parking bill", noParkingBill: "No parking bill",
   },
   fr: {
     bill: "FACTURE MENSUELLE", summary: "FIN DE MOIS", billedTo: "Facturé à", vehicle: "Véhicule",
@@ -40,6 +43,9 @@ const COPY = {
     car: "Voiture", amount: "Montant", to: "au", activities: "Activités", date: "Date", activity: "Activité", item: "élément", items: "éléments", paidToward: "Payé pour", dueLabel: "dû", paidLabel: "payé", olderItems: "Impayé des mois précédents", registeredTo: "enregistrée au nom de", monthTotal: "Total du mois", cars: "voitures",
     footer: "Émis via Laawol Digital · laawoldigital.com",
     estimate: "Estimation · mois entier",
+    expensesPaid: "Dépenses que vous avez payées pour le parc", expense: "Dépense", lessExpenses: "Moins les dépenses",
+    lessStaffExpenses: "Dépenses équipe", businessOwes: "L’entreprise doit",
+    parkingBill: "Facture de parking", noParkingBill: "Pas de facture de parking",
   },
 } as const;
 
@@ -175,6 +181,15 @@ export async function buildParkingMonthBillPdf(input: { business: Row; customer:
     }
   }
 
+  // A linked staff member's lot expenses (docs/STAFF_EXPENSE_CREDIT.md).
+  const credited = (c.expenseCreditCents || 0) > 0;
+  if (credited && (c.expenseLines || []).length) {
+    section(t.expensesPaid, t.expense, t.date, "");
+    for (const l of c.expenseLines) {
+      line(l.note || t.expense, l.date ? day(l.date) : "", "", `-${moneyText(l.amountCents)}`, l.staffName);
+    }
+  }
+
   room(120);
   y += 4;
   row(doc, y, t.monthTotal, moneyText(c.monthCents), { color: INK });
@@ -196,6 +211,11 @@ export async function buildParkingMonthBillPdf(input: { business: Row; customer:
     row(doc, y, `${t.paidToward} ${a.label}${a.vehicle ? ` · ${a.vehicle}` : ""} (${day(a.date)})`, `-${moneyText(a.paidCents)}`, { color: OK });
     y += 16;
   }
+  if (credited) {
+    room(20);
+    row(doc, y, t.lessExpenses, `-${moneyText(c.expenseCreditCents)}`, { color: OK });
+    y += 16;
+  }
   doc.setDrawColor(...INK).setLineWidth(1.2).line(M, y - 4, R, y - 4);
   y += 14;
   if (c.dueCents > 0) row(doc, y, t.balanceDue, moneyText(c.dueCents), { bold: true, color: DUE });
@@ -205,7 +225,15 @@ export async function buildParkingMonthBillPdf(input: { business: Row; customer:
   return doc.output("blob");
 }
 
-export async function buildParkingMonthSummaryPdf(input: { business: Row; summary: ParkingMonthSummary; language: Lang; estimate?: boolean }): Promise<Blob> {
+export async function buildParkingMonthSummaryPdf(input: {
+  business: Row;
+  summary: ParkingMonthSummary;
+  language: Lang;
+  estimate?: boolean;
+  /** customerKey -> the linked customer's name, for "Business owes" rows
+   * whose customer has no bill this month. */
+  linkedCustomerNames?: Record<string, string>;
+}): Promise<Blob> {
   const { jsPDF } = await import("jspdf");
   const t = COPY[input.language];
   const s = input.summary;
@@ -217,6 +245,9 @@ export async function buildParkingMonthSummaryPdf(input: { business: Row; summar
     [t.carsOnLot, String(s.carsOnLot), INK],
     [t.billed, moneyText(s.billedCents), INK],
     [t.collected, moneyText(s.collectedCents), OK],
+    ...((s.expenseCreditCents || 0) > 0
+      ? [[t.lessStaffExpenses, `-${moneyText(s.expenseCreditCents)}`, OK] as [string, string, [number, number, number]]]
+      : []),
     [t.owed, moneyText(s.dueCents), s.dueCents > 0 ? DUE : INK],
   ];
   const colW = (R - M) / stats.length;
@@ -247,6 +278,37 @@ export async function buildParkingMonthSummaryPdf(input: { business: Row; summar
     y += 6;
     doc.setDrawColor(236, 238, 237).setLineWidth(0.5).line(M, y, R, y);
     y += 14;
+  }
+  // Staff the business still owes for lot expenses they paid.
+  const owes = s.businessOwes || [];
+  if (owes.length > 0) {
+    if (y > 792 - 120) {
+      footer(doc, input.language);
+      doc.addPage();
+      y = M;
+    }
+    y += 14;
+    doc.setFont("helvetica", "bold").setFontSize(8).setTextColor(...MUTED)
+      .text(`${t.businessOwes.toUpperCase()} (${owes.length}) · ${moneyText(s.businessOwesCents)}`, M, y);
+    y += 8;
+    doc.setDrawColor(230, 233, 232).setLineWidth(1).line(M, y, R, y);
+    y += 16;
+    for (const o of owes) {
+      if (y > 792 - 80) {
+        footer(doc, input.language);
+        doc.addPage();
+        y = M;
+      }
+      const bill = s.customers.find((c) => c.key === o.customerKey);
+      const linked = bill?.customerName || (o.customerKey ? input.linkedCustomerNames?.[o.customerKey] ?? "" : "");
+      doc.setFont("helvetica", "bold").setFontSize(10.5).setTextColor(...INK).text(o.staffName || "—", M, y);
+      doc.setFont("helvetica", "normal").setFontSize(9).setTextColor(...MUTED)
+        .text(linked ? `${t.parkingBill}: ${linked}` : t.noParkingBill, M + 150, y);
+      doc.setFont("helvetica", "bold").setFontSize(10.5).setTextColor(...DUE).text(moneyText(o.owedCents), R, y, { align: "right" });
+      y += 6;
+      doc.setDrawColor(236, 238, 237).setLineWidth(0.5).line(M, y, R, y);
+      y += 14;
+    }
   }
   footer(doc, input.language);
   return doc.output("blob");

@@ -39,7 +39,58 @@ test("the view is worked out from the cars and activities, and records only thro
   assert.match(view, /if \(!settleBy\) \{/, "and required before anything is recorded");
   // Cars and the ledger's activities, both read, never written.
   // Counted up to now, or - the whole-month estimate - the month's last day.
-  assert.match(view, /parkingMonthSummary\(rows, monthKey, parkingMonthAsOf\(monthKey, wholeMonth\), activities\)/);
+  // Staff expenses come off their parking bill (docs/STAFF_EXPENSE_CREDIT.md).
+  assert.match(view, /parkingMonthSummary\(rows, monthKey, parkingMonthAsOf\(monthKey, wholeMonth\), activities, staffCredit\)/);
+});
+
+test("staff expenses: read whole, netted only when both reads answered, never half-netted", () => {
+  assert.match(view, /const credit = useStaffExpenseCreditInputs\(businessId, Boolean\(businessId\)\);/);
+  assert.match(view, /credit\.available \? \{ entries: credit\.entries, repayments: credit\.repayments, links, staffNames \} : null/);
+  assert.match(view, /business\.staffParkingLinks/, "the owner's links come from the business already loaded");
+  assert.match(view, /!credit\.available && !credit\.loading && \(/, "a team member who cannot read the ledger gets a note");
+  const data = read("./business-data.ts");
+  assert.match(data, /useBusinessCollection\("lotExpenseEntries", businessId, enabled, complete\)/);
+  assert.match(data, /useBusinessCollection\("staffExpenseRepayments", businessId, enabled, complete\)/);
+  assert.match(data, /available: enabled && !entries\.error && !repayments\.error/);
+});
+
+test("the customer card shows what came off; Business owes follows the list", () => {
+  assert.match(view, /customer\.expenseCreditCents > 0 && <small className="pk-month-paid-via">Less expenses -\{moneyText\(customer\.expenseCreditCents\)\}<\/small>/);
+  assert.match(view, /<li className="pk-month-expense">/);
+  assert.match(view, /customer\.expenseLines\.map\(\(l\) =>/);
+  assert.match(view, /\{l\.note \? <strong data-no-translate>\{l\.note\}<\/strong> : <strong>Expense<\/strong>\}/, "a note is typed, not copy");
+  const list = view.indexOf('<div className="pk-month-list">');
+  const owes = view.indexOf("<BusinessOwesSection");
+  assert.ok(list > 0 && owes > list, "Business owes comes after the customer list");
+  assert.match(view, /canSettle=\{canSettleStaff\}/);
+  assert.match(panels, /canSettleStaff=\{canManageLedger\}/);
+  assert.match(consoleSource, /canManageLedger=\{hasBusinessPermission\(profile, "ledger"\)\}/, "owner, admin, or the ledger permission");
+  assert.match(view, /buildParkingMonthSummaryPdf\(\{ business: identity, summary, language: lang, estimate: estimating, linkedCustomerNames \}\)/);
+});
+
+test("Paid back and Void go through updateLotExpenseEntry's actions, capped at what is owed", () => {
+  const owes = read("../components/business/business-owes-section.tsx");
+  const callables = [...owes.matchAll(/httpsCallable\(functions, "(\w+)"\)/g)].map((m) => m[1]);
+  assert.deepEqual([...new Set(callables)], ["updateLotExpenseEntry"]);
+  assert.doesNotMatch(owes, /setDoc\(|updateDoc\(|addDoc\(|deleteDoc\(/);
+  assert.match(owes, /staffRepaymentRequest\(businessId, payFor\.staffId, draft\)/);
+  assert.match(owes, /action: "void_staff_repayment",/);
+  assert.match(owes, /staffRepaymentProblem\(draft, payFor\.owedCents, today\)/, "the client cap");
+  assert.match(owes, /amount: \(line\.owedCents \/ 100\)\.toFixed\(2\)/, "prefilled with what is owed");
+  assert.match(owes, /givenByStaffId: staffOptions\.some\(\(s\) => s\.id === me\) \? me : ""/, "given by defaults to whoever is signed in");
+  assert.match(owes, /\{canSettle && !estimating && \(/, "never from an estimate, never without the permission");
+  assert.match(owes, /<h3>Void this paid-back record\?<\/h3>/, "a void is confirmed");
+  assert.match(owes, /staffCreditRefusalText\(failure\)/);
+});
+
+test("the People page links each person to a parking bill, owner or admin only", () => {
+  const people = read("../components/business/profile-support-people.tsx");
+  const link = read("../components/business/staff-parking-link.tsx");
+  assert.match(consoleSource, /canLinkParking=\{profile\.role === "businessOwner" \|\| profile\.role === "admin"\}/);
+  assert.match(people, /httpsCallable\(functions, "updateLotExpenseEntry"\)\(\s*staffParkingLinkRequest\(businessId, row\.id, customer\),\s*\)/);
+  assert.match(people, /canLink=\{canLinkParking && Boolean\(onLinkParking\)\}/);
+  assert.match(link, /const cars = useParkingLinkCars\(businessId, true\);/, "the cars are read only while the picker is open");
+  assert.match(link, /parkingLinkChoices\(staff, customers, search\)/, "suggestions first");
 });
 
 test("the whole-month estimate is a preview: only for the current month, nothing collected", () => {

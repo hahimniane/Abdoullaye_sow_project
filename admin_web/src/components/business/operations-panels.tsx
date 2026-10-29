@@ -331,6 +331,9 @@ type PanelProps = {
   openNewToken?: number;
   /** The business document (settings like the expense proof threshold). */
   business?: Record<string, unknown> | null;
+  /** The signed-in person may work the lot ledger (owner, admin, or the
+   * `ledger` permission): month end's Paid back. */
+  canManageLedger?: boolean;
 };
 
 type DestinationDraft = {
@@ -5024,6 +5027,7 @@ export function ParkingPanel({
   previewMode = false,
   focusRecordId = "",
   focusView = "",
+  canManageLedger = false,
 }: PanelProps) {
   // Loads the make/model/year catalog on demand; re-renders when it is in.
   useCarCatalog();
@@ -5831,6 +5835,7 @@ export function ParkingPanel({
           initialMonth={monthEndKey}
           onClose={() => setMonthEndKey("")}
           onOpenCar={(row) => editParking(row)}
+          canSettleStaff={canManageLedger}
         />
       )}
 

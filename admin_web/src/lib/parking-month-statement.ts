@@ -7,6 +7,13 @@
 
 import { BUSINESS_PARKING_RECEIVED_VIA_OPTIONS } from "./business-parking-entry.ts";
 import { lotActivityPaidCents } from "./lot-ledger.ts";
+import {
+  itemsAfterCredit,
+  monthExpenseLines,
+  netStaffExpenses,
+  type BusinessOwesLine,
+  type StaffParkingLinks,
+} from "./staff-expense-credit.ts";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -311,6 +318,40 @@ export type ParkingMonthCustomer = {
   /** How this month's payments came in, method codes in first-seen order. */
   paidVia: string[];
   partialMonth: boolean;
+  /** What was owed before the linked staff's lot expenses came off
+   * (docs/STAFF_EXPENSE_CREDIT.md). Equal to dueCents when nothing is netted. */
+  dueBeforeExpensesCents: number;
+  /** The staff expenses taken off this bill; `dueCents` is after them. */
+  expenseCreditCents: number;
+  /** This month's expenses of the linked staff, oldest first. */
+  expenseLines: ParkingMonthExpenseLine[];
+  /** The staff linked to this customer (their parking bill). */
+  linkedStaffIds: string[];
+};
+
+/** One lot expense a linked staff member paid this month, on their bill. */
+export type ParkingMonthExpenseLine = {
+  id: string;
+  /** "yyyy-mm-dd" (UTC day of spentAt), or "" when undated. */
+  date: string;
+  /** The note, else "Expense". */
+  label: string;
+  note: string;
+  amountCents: number;
+  staffId: string;
+  staffName: string;
+};
+
+/** What staff expenses are netted from (docs/STAFF_EXPENSE_CREDIT.md §3). */
+export type ParkingMonthStaffCredit = {
+  /** lotExpenseEntries rows: `paidByStaffId, amountCents, month, voided, note, spentAt`. */
+  entries: readonly Row[];
+  /** staffExpenseRepayments rows: `staffId, amountCents, month, voided`. */
+  repayments: readonly Row[];
+  /** businesses/{id}.staffParkingLinks. */
+  links?: StaffParkingLinks | null;
+  /** `{[staffId]: name}`. */
+  staffNames?: Record<string, string> | null;
 };
 
 /** Who a bill goes to: the phone, last ten digits. Mirrors the server. */
@@ -396,6 +437,10 @@ export function parkingMonthCustomers(
       paid: parkingMonthCustomerPaid({ monthCents, dueCents }),
       paidVia,
       partialMonth: cars.some((b) => b.partialMonth),
+      dueBeforeExpensesCents: dueCents,
+      expenseCreditCents: 0,
+      expenseLines: [],
+      linkedStaffIds: [],
     });
   }
   return customers.sort((a, b) => b.dueCents - a.dueCents || a.customerName.localeCompare(b.customerName));
@@ -417,6 +462,11 @@ export type ParkingMonthSummary = {
   dueCents: number;
   owing: ParkingMonthBill[];
   bills: ParkingMonthBill[];
+  /** Staff expenses taken off the bills (sum of customers' expenseCreditCents). */
+  expenseCreditCents: number;
+  /** Staff the business still owes for lot expenses, most owed first. */
+  businessOwes: BusinessOwesLine[];
+  businessOwesCents: number;
 };
 
 /** One ledger activity on a month's bill. Mirrors the server. */
@@ -479,6 +529,7 @@ export function parkingMonthSummary(
   monthKey: string,
   now: Date = new Date(),
   activityRows: readonly Row[] = [],
+  staffCredit?: ParkingMonthStaffCredit | null,
 ): ParkingMonthSummary {
   const bills = rows
     .map((row) => parkingMonthStatement(row, monthKey, now))
@@ -492,7 +543,8 @@ export function parkingMonthSummary(
   const inMonth = activities.filter((a) => !a.prior);
   const sumBills = (k: "monthCents" | "monthPaidCents" | "monthUnpaidCents") => bills.reduce((s, b) => s + b[k], 0);
   const sumActs = (k: "feeCents" | "paidCents" | "dueCents") => inMonth.reduce((s, a) => s + a[k], 0);
-  const customers = parkingMonthCustomers(bills, activities);
+  const net = withStaffExpenseCredit(parkingMonthCustomers(bills, activities), monthKey, staffCredit);
+  const customers = net.customers;
   const customersOwing = customers.filter((c) => c.owes);
   return {
     monthKey,
@@ -505,10 +557,64 @@ export function parkingMonthSummary(
     billedCents: sumBills("monthCents") + sumActs("feeCents"),
     collectedCents: sumBills("monthPaidCents") + sumActs("paidCents"),
     owedCents: sumBills("monthUnpaidCents") + sumActs("dueCents"),
-    olderOwedCents: customersOwing.reduce((s, c) => s + c.priorUnpaidCents, 0),
+    // "from before" never reads bigger than what is still owed once a
+    // staff member's expenses came off (identical when nothing is netted).
+    olderOwedCents: customersOwing.reduce((s, c) => s + Math.min(c.priorUnpaidCents, c.dueCents), 0),
     dueCents: customersOwing.reduce((s, c) => s + c.dueCents, 0),
     owing,
     bills,
+    expenseCreditCents: net.expenseCreditCents,
+    businessOwes: net.businessOwes,
+    businessOwesCents: net.businessOwesCents,
+  };
+}
+
+/**
+ * The month's customers with their linked staff's lot expenses taken off
+ * (docs/STAFF_EXPENSE_CREDIT.md §3), and what the business still owes its
+ * staff. Without `credit` the customers come back exactly as they were.
+ * `owes`/`paid` follow the netted `dueCents`.
+ */
+export function withStaffExpenseCredit(
+  customers: ParkingMonthCustomer[],
+  monthKey: string,
+  credit?: ParkingMonthStaffCredit | null,
+): { customers: ParkingMonthCustomer[]; businessOwes: BusinessOwesLine[]; businessOwesCents: number; expenseCreditCents: number } {
+  if (!credit) return { customers, businessOwes: [], businessOwesCents: 0, expenseCreditCents: 0 };
+  const names = credit.staffNames ?? {};
+  const entries = (credit.entries ?? []).map((e) => ({ ...e, spentAtMs: toDate(e.spentAt)?.getTime() ?? 0 }));
+  const net = netStaffExpenses(customers, {
+    entries,
+    repayments: credit.repayments ?? [],
+    links: credit.links ?? {},
+    monthKey,
+    staffNames: names,
+  });
+  const netted = net.customers.map((c) => {
+    const expenseLines = monthExpenseLines(entries, monthKey, c.linkedStaffIds).map((l) => {
+      const day = l.spentAtMs > 0 ? dayNumber(new Date(l.spentAtMs)) : null;
+      return {
+        id: l.id,
+        date: day === null ? "" : dayKeyOf(day),
+        label: l.note || "Expense",
+        note: l.note,
+        amountCents: l.amountCents,
+        staffId: l.staffId,
+        staffName: text(names[l.staffId], 120),
+      };
+    });
+    return {
+      ...c,
+      expenseLines,
+      owes: c.dueCents > 0,
+      paid: parkingMonthCustomerPaid(c),
+    };
+  }).sort((a, b) => b.dueCents - a.dueCents || a.customerName.localeCompare(b.customerName));
+  return {
+    customers: netted,
+    businessOwes: net.businessOwes,
+    businessOwesCents: net.businessOwesCents,
+    expenseCreditCents: net.expenseCreditCents,
   };
 }
 
@@ -590,9 +696,19 @@ export function parkingMonthCustomerText(c: ParkingMonthCustomer, businessName: 
       lines.push(`${dayLabel(a.date)} · ${a.label}${a.vehicle ? ` · ${a.vehicle}` : ""}${named(a)} — ${moneyText(a.dueCents)}`);
     }
   }
+  // A linked staff member's lot expenses (docs/STAFF_EXPENSE_CREDIT.md):
+  // this month's, then what came off the bill in all.
+  const credited = (c.expenseCreditCents || 0) > 0;
+  if (credited && (c.expenseLines || []).length) {
+    lines.push("", "Expenses you paid for the lot");
+    for (const l of c.expenseLines) {
+      lines.push(`${[l.date ? dayLabel(l.date) : "", l.label || "Expense"].filter(Boolean).join(" · ")} — -${moneyText(l.amountCents)}`);
+    }
+  }
   lines.push("", `Total for ${month} — ${moneyText(c.monthCents)}`);
   if (c.priorUnpaidCents > 0) lines.push(`Unpaid from before — ${moneyText(c.priorUnpaidCents)}`);
   if (c.monthPaidCents > 0) lines.push(`Paid — -${moneyText(c.monthPaidCents)}`);
+  if (credited) lines.push(`Less expenses — -${moneyText(c.expenseCreditCents)}`);
   lines.push(c.dueCents > 0 ? `BALANCE DUE: ${moneyText(c.dueCents)}` : "PAID IN FULL");
   return lines.join("\n");
 }
@@ -615,7 +731,9 @@ export function parkingMonthBillText(bill: ParkingMonthBill, businessName: strin
 export type MonthBillPaymentItem = { kind: "car" | "activity"; id: string; label: string; amountCents: number };
 
 /** "Mark all paid": what to record against each line, through the payment
- * each line already takes. Payment-link cars are Stripe's. Mirrors the server. */
+ * each line already takes. Payment-link cars are Stripe's. A linked staff
+ * member's expense credit covers the first items (itemsAfterCredit): only
+ * the rest is recorded. Mirrors the server. */
 export function monthBillPaymentPlan(c: ParkingMonthCustomer): {
   items: MonthBillPaymentItem[];
   skipped: (MonthBillPaymentItem & { reason: "payment_link" | "online" })[];
@@ -633,6 +751,7 @@ export function monthBillPaymentPlan(c: ParkingMonthCustomer): {
     if (a.dueCents <= 0) continue;
     items.push({ kind: "activity", id: a.id, label: `${a.label}${a.vehicle ? ` · ${a.vehicle}` : ""} (${dayLabel(a.date)})`, amountCents: a.dueCents });
   }
-  return { items, skipped, totalCents: items.reduce((s, x) => s + x.amountCents, 0) };
+  const toPay = itemsAfterCredit(items, c.expenseCreditCents || 0);
+  return { items: toPay, skipped, totalCents: toPay.reduce((s, x) => s + x.amountCents, 0) };
 }
 

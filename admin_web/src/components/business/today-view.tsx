@@ -28,6 +28,7 @@ import { CONTAINER_STATUS_LABELS, CONTAINER_STATUS_TONES, type ContainerStatus }
 import { destinationCountryName, destinationCountryOptionForRow } from "@/lib/destination-countries";
 import { functions } from "@/lib/firebase";
 import { currentLanguage, formatDate, text } from "@/lib/format";
+import { ledgerEventTitle } from "@/lib/staff-expense-console";
 import { statusPillClass } from "@/lib/status-pill";
 import { formatVolumeChange, formatVolumeCount, formatVolumeMonth, volumeChangeTone } from "@/lib/volume";
 import type { FirestoreRow } from "@/types/admin";
@@ -262,11 +263,7 @@ function LedgerAlerts({
             tabIndex={0}
           >
             <strong>
-              {text(ev.action, "") === "voided"
-                ? "Ledger entry voided"
-                : text(ev.action, "") === "paid"
-                  ? "Ledger payment received"
-                  : "Ledger entry edited"}
+              {ledgerEventTitle(ev)}
             </strong>
             <div>
               <small>

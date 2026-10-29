@@ -18,6 +18,7 @@
  */
 
 const {lotActivityPaidCents} = require("./lot_ledger");
+const {itemsAfterCredit} = require("./staff_expense_credit");
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -603,12 +604,26 @@ function parkingMonthCustomerText(customer, businessName) {
         `${moneyText(a.dueCents)}`);
     }
   }
+  // A linked staff member's lot expenses (docs/STAFF_EXPENSE_CREDIT.md):
+  // this month's, then what came off the bill in all. Only on a netted
+  // customer (expenseCreditCents > 0); every other bill reads as before.
+  const credited = (Number(c.expenseCreditCents) || 0) > 0;
+  if (credited && (c.expenseLines || []).length) {
+    lines.push("", "Expenses you paid for the lot");
+    for (const l of c.expenseLines) {
+      lines.push(`${[l.date ? dayLabel(l.date) : "", l.label || "Expense"]
+          .filter(Boolean).join(" · ")} — -${moneyText(l.amountCents)}`);
+    }
+  }
   lines.push("", `Total for ${month} — ${moneyText(c.monthCents)}`);
   if (c.priorUnpaidCents > 0) {
     lines.push(`Unpaid from before — ${moneyText(c.priorUnpaidCents)}`);
   }
   if (c.monthPaidCents > 0) {
     lines.push(`Paid — -${moneyText(c.monthPaidCents)}`);
+  }
+  if (credited) {
+    lines.push(`Less expenses — -${moneyText(c.expenseCreditCents)}`);
   }
   lines.push(c.dueCents > 0 ?
     `BALANCE DUE: ${moneyText(c.dueCents)}` : "PAID IN FULL");
@@ -620,7 +635,9 @@ function parkingMonthCustomerText(customer, businessName) {
  * through the same payment each line already takes - a part payment on a
  * car (what the bill shows due on it; a car still parked keeps running into
  * next month), an instalment on an activity (the rest of its fee). A car on
- * a payment link is skipped: that money is Stripe's to record.
+ * a payment link is skipped: that money is Stripe's to record. A linked
+ * staff member's expense credit (`expenseCreditCents`) covers the first
+ * items; only the rest is recorded (docs/STAFF_EXPENSE_CREDIT.md §3).
  *
  * @param {object} customer From parkingMonthCustomers.
  * @return {{items: object[], skipped: object[], totalCents: number}} Plan.
@@ -647,8 +664,9 @@ function monthBillPaymentPlan(customer) {
         `(${dayLabel(a.date)})`,
       amountCents: a.dueCents});
   }
-  return {items, skipped,
-    totalCents: items.reduce((s, x) => s + x.amountCents, 0)};
+  const toPay = itemsAfterCredit(items, Number(c.expenseCreditCents) || 0);
+  return {items: toPay, skipped,
+    totalCents: toPay.reduce((s, x) => s + x.amountCents, 0)};
 }
 
 /**

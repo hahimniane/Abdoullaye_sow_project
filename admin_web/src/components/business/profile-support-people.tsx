@@ -45,6 +45,13 @@ import {
   InviteMethodSwitch,
 } from "@/components/staff-invite-fields";
 import { SearchableSelect } from "@/components/searchable-select";
+import { StaffParkingBillField, StaffParkingLinkPicker } from "@/components/business/staff-parking-link";
+import {
+  staffCreditRefusalText,
+  staffParkingLinkRequest,
+  type ParkingLinkCustomer,
+} from "@/lib/staff-expense-console";
+import type { StaffParkingLinks } from "@/lib/staff-expense-credit";
 import {
   accessInvitationConfirmations,
   accessInvitationContact,
@@ -172,6 +179,9 @@ export type BusinessPeoplePanelProps = {
   loading?: boolean;
   error?: string;
   canManageStaff?: boolean;
+  /** Owner or platform admin: may link each person to their parking bill
+   * (docs/STAFF_EXPENSE_CREDIT.md §1.2). */
+  canLinkParking?: boolean;
   runAction?: ActionRunner;
   toast?: ToastCallback;
 };
@@ -2613,6 +2623,7 @@ export function BusinessPeoplePanel({
   loading = false,
   error: rowsError = "",
   canManageStaff = true,
+  canLinkParking = false,
   runAction,
   toast,
 }: BusinessPeoplePanelProps) {
@@ -2634,6 +2645,44 @@ export function BusinessPeoplePanel({
 
   function update(patch: Partial<StaffDraft>) {
     setDraft((current) => ({...current, ...patch}));
+  }
+
+  // Staff expenses come off their parking bill: who is linked to which
+  // parking customer lives on the business, written only by the callable.
+  const parkingLinks = useMemo(
+    () => ((business?.staffParkingLinks && typeof business.staffParkingLinks === "object" ? business.staffParkingLinks : {}) as StaffParkingLinks),
+    [business],
+  );
+  const [linkFor, setLinkFor] = useState<FirestoreRow | null>(null);
+  const [linkError, setLinkError] = useState("");
+  const linkStaff = useMemo(
+    () => ({ name: text(linkFor?.fullName ?? linkFor?.email, ""), phone: text(linkFor?.phone, "") }),
+    [linkFor],
+  );
+
+  async function saveParkingLink(row: FirestoreRow, customer: ParkingLinkCustomer | null) {
+    const who = text(row.fullName ?? row.email, row.id);
+    setLinkError("");
+    let failed = "";
+    await run(
+      customer ? "Parking bill linked" : "Parking bill unlinked",
+      async () => {
+        try {
+          await httpsCallable(functions, "updateLotExpenseEntry")(
+            staffParkingLinkRequest(businessId, row.id, customer),
+          );
+        } catch (failure) {
+          failed = staffCreditRefusalText(failure);
+          throw new Error(failed);
+        }
+        setLinkFor(null);
+      },
+      customer ? undefined : {
+        confirm: `Unlink ${who}'s parking bill? Their lot expenses will stop coming off it.`,
+        confirmFr: `Délier la facture de parking de ${who} ? Ses dépenses du parc n’y seront plus déduites.`,
+      },
+    );
+    if (failed) setLinkError(failed);
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -2826,9 +2875,25 @@ export function BusinessPeoplePanel({
             setPermissions={(permissions) => { row.businessPermissions = permissions; }}
             inventoryStores={storeAccessStores}
             saveInventoryAccess={saveInventoryAccess}
+            parkingLink={parkingLinks[row.id]}
+            canLinkParking={canLinkParking}
+            onLinkParking={() => { setLinkError(""); setLinkFor(row); }}
+            onUnlinkParking={() => void saveParkingLink(row, null)}
           />
         ))}
       </div>
+
+      {linkFor && (
+        <StaffParkingLinkPicker
+          businessId={businessId}
+          staff={linkStaff}
+          currentKey={text(parkingLinks[linkFor.id]?.customerKey, "")}
+          busy={busy}
+          error={linkError}
+          onPick={(customer) => void saveParkingLink(linkFor, customer)}
+          onClose={() => setLinkFor(null)}
+        />
+      )}
 
       {formOpen && (
         <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={() => setFormOpen(false)}>
@@ -3094,6 +3159,10 @@ function StaffRow({
   savePermissions,
   inventoryStores = [],
   saveInventoryAccess,
+  parkingLink,
+  canLinkParking = false,
+  onLinkParking,
+  onUnlinkParking,
 }: {
   row: FirestoreRow;
   business?: FirestoreRow | null;
@@ -3104,6 +3173,11 @@ function StaffRow({
   /** The active stores, only when the business has two or more (else the controls stay away). */
   inventoryStores?: InventoryStore[];
   saveInventoryAccess?: (row: FirestoreRow, access: StaffStoreAccess) => Promise<void>;
+  /** businesses.staffParkingLinks[this person]. */
+  parkingLink?: StaffParkingLinks[string];
+  canLinkParking?: boolean;
+  onLinkParking?: () => void;
+  onUnlinkParking?: () => void;
 }) {
   const [permissions, setLocalPermissions] = useState<string[]>(() =>
     rowPermissions(row),
@@ -3221,6 +3295,15 @@ function StaffRow({
         </>
       ) : (
         <div className="pur-reliability">Full access to this business workspace.</div>
+      )}
+      {(canLinkParking || parkingLink?.customerKey) && (
+        <StaffParkingBillField
+          link={parkingLink}
+          canLink={canLinkParking && Boolean(onLinkParking)}
+          busy={saving}
+          onLink={() => onLinkParking?.()}
+          onUnlink={() => onUnlinkParking?.()}
+        />
       )}
     </article>
   );
