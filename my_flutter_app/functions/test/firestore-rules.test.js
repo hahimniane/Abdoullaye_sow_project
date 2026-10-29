@@ -4175,6 +4175,89 @@ describe("package request rules", () => {
     await assertFails(storageFor("owner-b").ref(path).getMetadata());
     await assertFails(anonymous("anon-2").ref(path).getMetadata());
     await assertFails(anonymous("anon-1").ref(path).delete());
+    // A deliveries-only agent sees them too (docs/AIR_PACKAGES.md §2).
+    await assertSucceeds(storageForToken("staff-deliveries-a", {
+      role: "staff", businessId: "biz_a",
+      businessPermissions: ["deliveries"]}).ref(path).getMetadata());
+  });
+});
+
+// Package photos (docs/AIR_PACKAGES.md §2 "Storage"): staff upload into
+// their own uid folder, the business's container and delivery people read,
+// nobody overwrites or deletes through the client.
+describe("package photo rules", () => {
+  const containers = () => storageForToken("staff-containers-a", {
+    role: "staff", businessId: "biz_a", businessPermissions: ["containers"]});
+  const deliveries = () => storageForToken("staff-deliveries-a", {
+    role: "staff", businessId: "biz_a", businessPermissions: ["deliveries"]});
+  function putPackagePhoto(storage, businessId, uploader, fileName,
+      options = {}) {
+    return storage.ref(
+        `packagePhotos/${businessId}/${uploader}/${fileName}`).put(
+        imageBytes(options.size), {contentType: options.contentType ||
+          "image/jpeg"});
+  }
+
+  it("lets the owner, container and delivery staff upload to their own " +
+      "folder only", async () => {
+    await assertSucceeds(putPackagePhoto(storageFor("owner-a"), "biz_a",
+        "owner-a", "photo-0001.jpg"));
+    await assertSucceeds(putPackagePhoto(containers(), "biz_a",
+        "staff-containers-a", "photo-0002.webp", {contentType: "image/webp"}));
+    await assertSucceeds(putPackagePhoto(deliveries(), "biz_a",
+        "staff-deliveries-a", "photo-0003.png", {contentType: "image/png"}));
+    // Someone else's folder, the server's folders, another business.
+    await assertFails(putPackagePhoto(containers(), "biz_a", "owner-a",
+        "photo-0004.jpg"));
+    await assertFails(putPackagePhoto(containers(), "biz_a", "req",
+        "photo-0005.jpg"));
+    await assertFails(putPackagePhoto(containers(), "biz_a", "wa",
+        "photo-0006.jpg"));
+    await assertFails(putPackagePhoto(containers(), "biz_b",
+        "staff-containers-a", "photo-0007.jpg"));
+    // Not a container person, not signed in.
+    await assertFails(putPackagePhoto(storageFor("staff-barrels-a"), "biz_a",
+        "staff-barrels-a", "photo-0008.jpg"));
+    await assertFails(putPackagePhoto(storageFor(null), "biz_a", "owner-a",
+        "photo-0009.jpg"));
+    // Type, size and name.
+    for (const contentType of ["image/gif", "text/html", "video/mp4",
+      "application/pdf"]) {
+      await assertFails(putPackagePhoto(containers(), "biz_a",
+          "staff-containers-a", "photo-0010.jpg", {contentType}));
+    }
+    await assertFails(putPackagePhoto(containers(), "biz_a",
+        "staff-containers-a", "photo-0011.jpg",
+        {size: 2 * 1024 * 1024 + 1}));
+    await assertFails(putPackagePhoto(containers(), "biz_a",
+        "staff-containers-a", "bad name.jpg"));
+    await assertFails(putPackagePhoto(containers(), "biz_a",
+        "staff-containers-a", "short.jpg"));
+    await assertFails(putPackagePhoto(containers(), "biz_a",
+        "staff-containers-a", "photo-0012.gif"));
+    // Create only: no overwriting a photo once it is attached.
+    await assertFails(putPackagePhoto(storageFor("owner-a"), "biz_a",
+        "owner-a", "photo-0001.jpg"));
+  });
+
+  it("shows package photos to the business's container and delivery " +
+      "people and operations admins; nobody deletes", async () => {
+    await assertSucceeds(putPackagePhoto(containers(), "biz_a",
+        "staff-containers-a", "photo-0101.jpg"));
+    const path = "packagePhotos/biz_a/staff-containers-a/photo-0101.jpg";
+    await assertSucceeds(containers().ref(path).getMetadata());
+    await assertSucceeds(deliveries().ref(path).getMetadata());
+    await assertSucceeds(storageFor("owner-a").ref(path).getMetadata());
+    await assertSucceeds(
+        storageFor("operations-admin").ref(path).getMetadata());
+    await assertFails(storageFor("staff-barrels-a").ref(path).getMetadata());
+    await assertFails(storageFor("owner-b").ref(path).getMetadata());
+    await assertFails(storageFor("content-admin").ref(path).getMetadata());
+    await assertFails(storageFor("customer-owner").ref(path).getMetadata());
+    await assertFails(storageFor(null).ref(path).getMetadata());
+    await assertFails(containers().ref(path).delete());
+    await assertFails(storageFor("owner-a").ref(path).delete());
+    await assertFails(storageFor("super-admin").ref(path).delete());
   });
 });
 

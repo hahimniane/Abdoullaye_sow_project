@@ -89,7 +89,11 @@ Derived (never stored): the three ticks — `photo` = `photoPaths.length > 0`,
 ### `businesses/{id}.packageProofSettings`
 `{photosRequired: bool, senderConfirm: bool, pickupCode: bool}`; missing = all
 false (`package_proof.proofSettingsOf` / `validateProofSettings`). Saved by the existing owner-only `setPackageRequestSettings` callable
-with an extra `proof` key (no new export: the CPU budget is full).
+with an extra `proof` key (no new export: the CPU budget is full); a save
+without `proof` keeps them; refusal `proof_settings_invalid`. Read back
+from the business document itself (`businesses/{id}.packageProofSettings`,
+readable by the business's managers under the existing rule) and echoed
+as `proof` in the callable's answer.
 
 ### Storage
 `packagePhotos/{businessId}/{uid}/{fileId}.(jpg|jpeg|png|webp)`, ≤ 2 MB,
@@ -152,10 +156,16 @@ header.
    update, to this line) → refusal `photo_invalid`. When
    `packageProofSettings.photosRequired` and `source === "counter"` and no
    photo → refusal `photo_required`. `receivePackageRequest` copies the
-   request's piece photos into `packagePhotos/{biz}/req/{requestId}_{n}.jpg` (§2)
-   and fills `photoPaths` (counts toward the requirement).
+   request's piece photos into `packagePhotos/{biz}/req/{requestId}_{n}.{ext}`
+   (the source extension kept) and fills `photoPaths` ahead of what staff
+   attached, 5 at most; the requirement never applies to a received request
+   (its source is `request`, not `counter`). On an edit a path already on
+   the line is kept without re-reading Storage (server folders included);
+   a new path must be the caller's own upload.
 3. **Pickup code:** minted on every new line of a business with
-   `pickupCode` on (4 digits, crypto random, not `0000`). Not shown to the
+   `pickupCode` on (4 digits, crypto random, not `0000`), the part a split
+   leaves waiting included (it also keeps the root's `photoPaths`: the
+   drop-off photos show the whole drop-off). Not shown to the
    sender; shown to staff with the `containers` permission only; sent in the
    ready-for-pickup message to the **receiver** (and the sender when the
    sender is the receiver).
@@ -188,24 +198,44 @@ header.
    true`, `collectedBy` required (≥ 2 chars), `deliveredPhotoPath` required
    and validated. `collectedCents > 0` writes a `containerLinePayments` row in
    the same transaction (`deliveries` staff may do this; it is the one money
-   action that permission allows). Balance warning rules unchanged.
+   action that permission allows), on the line's root, judged by the same
+   rules as `recordContainerLinePayment` (`payment_exceeds_balance`,
+   `price_required`), and sets `collectedAtDeliveryCents`. Balance warning
+   rules unchanged, counted after the money collected now; `undo_delivery`
+   clears `deliveredWithoutCode` / `deliveredPhotoPath` (the file stays)
+   and never reverts the payment (the owner does, with the existing
+   callable). The answer carries `deliveredWithoutCode`, `collectedCents`
+   and `paymentId`.
 8. **Loading warning:** `assignContainerLines` (`scan` and list) returns
    `warnings: [{lineId, reason: "sender_problem"}]` for lines with
    `senderConfirmation.status === "problem"`; the client confirms with
-   `acknowledgeProblems: true` (same shape as the balance acknowledgement).
-   Never a refusal.
+   `acknowledgeProblems: true` (same shape as the balance acknowledgement:
+   until confirmed the call is refused `failed-precondition` with
+   `reason: "sender_problem"`, `lineIds` and `warnings`; confirmed, the
+   package goes on and the answer still carries `warnings`). Never a
+   refusal of the package itself; a counted scan of a package already on
+   warns no more.
 9. **Customs list:** `getContainerDocumentUrl` with `view: "customs"` → the
    `/d` endpoint renders one table per container: code, sender, receiver,
    contents (with serials), weight, declared value. Letter portrait, printable.
    Needs the `containers` permission (money is on it).
-10. **Request lookup by code:** `packageRequestAction` gets
-    `action: "lookup_code"` `{businessId, code}` → the request (same shape as
-    the Expected list) or `not_found`. The console/app counter uses it to open
+10. **Request lookup by code:** `receivePackageRequest` (there is no
+    `packageRequestAction` callable) gets `action: "lookup_code"`
+    `{businessId, code}` → `{request: {id, ...the stored document without
+    `token`}}` (the shape the Expected list reads straight from Firestore),
+    whatever its status, or `not_found` (also for another business's code).
+    The code is normalised (`package_requests.normalizeRequestCode`: upper
+    case, spaces and dashes dropped, with or without `R-`). Staff with
+    `containers` or `deliveries`. The console/app counter uses it to open
     the existing receive sheet pre-filled.
 11. **Sweep:** `sweepPackageRequests` also deletes `packagePhotos` files of
     lines with `deliveredAt` older than 365 days, clearing `photoPaths`,
     `customerPhotos[].path` and `deliveredPhotoPath` and setting
-    `photosDeletedAtMs`. ≤ 100 lines per run.
+    `photosDeletedAtMs`. ≤ 100 lines per run, visited in `deliveredAt`
+    order from a cursor kept in `platformConfig/packagePhotoSweep`
+    (`afterDeliveredAt`), so no composite index is needed and a cleaned
+    line is never read again; a delivery undone and redone moves past the
+    cursor and is visited again.
 12. **Phone sign-in on the tracking page:** `lookupGuestTracking` returns
     `photos: [{url, kind: "dropoff"|"customer"|"delivered"}]` **only** when the
     caller is signed in as the line's sender or receiver (30-day links).

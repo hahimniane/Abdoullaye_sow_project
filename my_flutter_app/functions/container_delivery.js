@@ -29,6 +29,8 @@
  */
 
 const {lineCustomerName} = require("./container_manifest");
+const {MAX_CENTS} = require("./invoice_ledger");
+const {REFUSAL: PROOF_REFUSAL, handoverCheck} = require("./package_proof");
 
 const DELIVERY_ACTION = Object.freeze({
   DELIVER: "deliver",
@@ -47,17 +49,28 @@ const DELIVERY_MONEY_SECTIONS = Object.freeze(["containers", "ledger"]);
 
 const MAX_COLLECTED_BY = 120;
 
-// The fields a delivery writes on the line, and an undo clears.
+// The fields a delivery writes on the line, and an undo clears. The money
+// collected at handover (`collectedAtDeliveryCents`) is not among them: its
+// payment row stays, and the owner reverts it with the payment callable.
 const DELIVERY_FIELDS = Object.freeze([
   "deliveredAt",
   "deliveredByStaffId",
   "deliveredByName",
   "collectedBy",
   "deliveredBalanceCents",
+  "deliveredWithoutCode",
+  "deliveredPhotoPath",
 ]);
+
+// What a handover collects is recorded as this payment (§4.7).
+const DELIVERY_PAYMENT_METHOD = "cash";
+const DELIVERY_PAYMENT_NOTE = "At pickup";
 
 const DELIVERY_MESSAGES = Object.freeze({
   delivery_action_invalid: "That is not something a package delivery can do.",
+  collected_cents_invalid:
+    "Enter the amount collected in dollars, zero or more.",
+  ...PROOF_REFUSAL,
   delivery_not_arrived:
     "A package can be marked delivered once its container is ready for " +
     "pickup.",
@@ -171,9 +184,12 @@ function deliveryBalanceView(balanceCents, canSeeMoney) {
 }
 
 /**
- * @param {object} args {staffId, staffName, collectedBy, balanceCents}.
+ * @param {object} args {staffId, staffName, collectedBy, balanceCents,
+ *   withoutCode, photoPath}.
  * @return {object} The delivery's fields on the line (the caller adds
- *   `deliveredAt`, the server's time).
+ *   `deliveredAt`, the server's time). `deliveredWithoutCode` and
+ *   `deliveredPhotoPath` are the override (docs/AIR_PACKAGES.md §4.7):
+ *   false and "" for a handover with the code, or with no code asked.
  */
 function deliveryRecord(args) {
   const row = args && typeof args === "object" ? args : {};
@@ -183,6 +199,58 @@ function deliveryRecord(args) {
     collectedBy: oneLine(row.collectedBy).slice(0, MAX_COLLECTED_BY),
     deliveredBalanceCents:
       Math.max(0, Math.round(Number(row.balanceCents)) || 0),
+    deliveredWithoutCode: row.withoutCode === true,
+    deliveredPhotoPath: row.withoutCode === true ?
+      text(row.photoPath, 300) : "",
+  };
+}
+
+/**
+ * The handover rule (package_proof.handoverCheck) on a delivery request:
+ * the business's switch, the line's code and what the agent typed.
+ *
+ * @param {object} settings proofSettingsOf(business).
+ * @param {object} line The stored line.
+ * @param {object} data The request {pickupCode, override}.
+ * @return {{refusal: string, withoutCode: boolean}} "" to deliver.
+ */
+function deliveryHandover(settings, line, data) {
+  const row = data && typeof data === "object" ? data : {};
+  const override = row.override && typeof row.override === "object" ?
+    row.override : null;
+  return handoverCheck(settings, line, {pickupCode: row.pickupCode,
+    override});
+}
+
+/**
+ * USD collected at handover: a whole number of cents, zero for none.
+ *
+ * @param {*} raw The request's `collectedCents`.
+ * @return {number} The cents, or NaN when it is not an amount.
+ */
+function collectedCentsOf(raw) {
+  if (raw === undefined || raw === null || raw === "") return 0;
+  const cents = Number(raw);
+  if (!Number.isInteger(cents) || cents < 0 || cents > MAX_CENTS) return NaN;
+  return cents;
+}
+
+/**
+ * The payment a handover records for the money collected, judged and
+ * stored by the same rules as any other package payment
+ * (container_payments.validateLinePayment / linePaymentRecord): the agent
+ * held the cash and typed it in.
+ *
+ * @param {number} collectedCents What was collected, > 0.
+ * @param {string} staffId The agent.
+ * @return {object} The payment input.
+ */
+function deliveryPaymentInput(collectedCents, staffId) {
+  return {
+    amountCents: Math.round(Number(collectedCents)) || 0,
+    method: DELIVERY_PAYMENT_METHOD,
+    note: DELIVERY_PAYMENT_NOTE,
+    receivedByStaffId: text(staffId, 128),
   };
 }
 
@@ -218,7 +286,8 @@ function containerDeliveryProgress(container) {
  * read by managers, who see money); a deliveries-only person never opens it.
  *
  * @param {object} args {what (containerLineTitle), collectedBy,
- *   balanceText ("" or a formatted amount)}.
+ *   balanceText ("" or a formatted amount), withoutCode, collectedText
+ *   ("" or the amount collected at handover)}.
  * @return {string} e.g. "Delivered 3 barrels for Fatou Diallo, collected by
  *   Mamadou Bah, with $40.00 still owed".
  */
@@ -226,8 +295,11 @@ function deliveryAuditSummary(args) {
   const row = args && typeof args === "object" ? args : {};
   const who = oneLine(row.collectedBy);
   const owed = oneLine(row.balanceText);
+  const collected = oneLine(row.collectedText);
   return `Delivered ${oneLine(row.what) || "a package"}` +
     (who ? `, collected by ${who}` : "") +
+    (row.withoutCode === true ? " without a pickup code" : "") +
+    (collected ? `, ${collected} collected` : "") +
     (owed ? `, with ${owed} still owed` : "");
 }
 
@@ -248,8 +320,13 @@ module.exports = {
   DELIVERY_MONEY_SECTIONS,
   DELIVERY_FIELDS,
   DELIVERY_MESSAGES,
+  DELIVERY_PAYMENT_METHOD,
+  DELIVERY_PAYMENT_NOTE,
   MAX_COLLECTED_BY,
   deliveryActionOf,
+  deliveryHandover,
+  collectedCentsOf,
+  deliveryPaymentInput,
   lineIsDelivered,
   deliveryRefusal,
   collectedByOf,

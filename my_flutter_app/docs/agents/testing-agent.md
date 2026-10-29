@@ -102,6 +102,16 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   reads and query/list reads. Staff `businessPermissions` are section-scoped for
   writes, and missing, empty, or malformed permissions must fail closed. Use the
   explicit-access migration dry run before enabling those rules on legacy data.
+- A callable that reads or copies Storage objects (package photos, request
+  photos) needs the Storage emulator in its suite's `--only` list
+  (`firestore,storage`) and files saved to
+  `admin.storage().bucket(`${GCLOUD_PROJECT}.firebasestorage.app`)`; a
+  missing emulator fails as `photo_invalid`, not as a connection error. To
+  call an `onRequest` export (`parkingDocument`) directly, the fake `res`
+  needs `on`/`once`/`emit`/`setHeader`/`getHeader`/`end` besides
+  `set`/`status`/`send` (see "the photo link" in
+  `test/container-callables.test.js`). A test file not listed in an npm
+  script fails `test-suite-coverage.test.js` in `npm run test:unit`.
 - Callable emulator suites that exercise platform-admin behavior must start both
   Auth and Firestore emulators and seed an `emailVerified: true` Auth user. The
   support suite's canonical command is `npm run test:support`; do not bypass the

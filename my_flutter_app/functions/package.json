@@ -12,7 +12,7 @@
     "test:services": "firebase emulators:exec --config ../firebase.json --only firestore --project demo-laawol-services \"node test/service-callables.test.js\"",
     "test:shared-barrel": "firebase emulators:exec --config ../firebase.json --only firestore --project demo-laawol-shared-barrels \"node test/shared-barrel-callables.test.js\"",
     "test:support": "firebase emulators:exec --config ../firebase.json --only auth,firestore --project demo-laawol-support \"node test/support-case-callables.test.js\"",
-    "test:containers": "firebase emulators:exec --config ../firebase.json --only firestore --project demo-laawol-containers \"node test/container-callables.test.js\"",
+    "test:containers": "firebase emulators:exec --config ../firebase.json --only firestore,storage --project demo-laawol-containers \"node test/container-callables.test.js\"",
     "test:whatsapp": "firebase emulators:exec --config ../firebase.json --only auth,firestore,storage --project demo-laawol-whatsapp \"node test/whatsapp-conversations.test.js\"",
     "test:requests": "firebase emulators:exec --config ../firebase.json --only firestore,storage --project demo-laawol-requests \"node test/package-request-callables.test.js\"",
     "test:inventory": "firebase emulators:exec --config ../firebase.json --only auth,firestore --project demo-laawol-inventory \"node test/inventory-callables.test.js\"",

@@ -234,6 +234,7 @@ const {
 // pure rules share names (toMillis, moneyText) with helpers in this file.
 const packageRequests = require("./package_requests");
 const requestReceive = require("./request_receive");
+const packageProof = require("./package_proof");
 const {
   loginCodeTemplateMessage,
   requestTemplateMessage,
@@ -447,9 +448,13 @@ const {
   DELIVERY_FIELDS,
   DELIVERY_MESSAGES,
   DELIVERY_SECTIONS,
+  DELIVERIES_SECTION,
   DELIVERY_UNDO_SECTION,
   DELIVERY_MONEY_SECTIONS,
   deliveryActionOf,
+  deliveryHandover,
+  collectedCentsOf,
+  deliveryPaymentInput,
   lineIsDelivered,
   deliveryRefusal,
   collectedByOf,
@@ -468,6 +473,8 @@ const {
   ASSIGN_FIELDS,
   LOAD_SUMMARY_WAITING_LIMIT,
   loadActionOf,
+  senderProblemWarnings,
+  loadingProblemRefusal,
   scanCodeFrom,
   scanIdOf,
   linePieceCount,
@@ -14067,6 +14074,44 @@ exports.cancelBusinessParkingPaymentLink = onCall(
 // The printable invoice / receipt. Shares the payment link's token so a
 // business can hand the same URL to a customer, and so both clients open one
 // implementation instead of each rendering their own document.
+/**
+ * The photo a /d?view=photo link points at, when the link is genuine
+ * (package_proof.photoLinkValid: the line's token, the path and the
+ * expiry signed together) and the path is one the line carries - a
+ * drop-off photo, a customer's WhatsApp photo or the handover photo.
+ *
+ * @param {object} db Firestore.
+ * @param {object} req The request ({t, p, e, s}).
+ * @param {string} token The line's document token.
+ * @return {Promise<object|null>} {bytes, contentType}, or null for 404.
+ */
+async function packagePhotoFile(db, req, token) {
+  const lines = await db.collection("containerLines")
+      .where("documentToken", "==", token).limit(1).get();
+  if (lines.empty) return null;
+  const line = lines.docs[0].data() || {};
+  if (!packageProof.photoLinkValid(req.query, token, Date.now())) {
+    return null;
+  }
+  const path = String(req.query?.p || "");
+  const carried = [
+    ...(Array.isArray(line.photoPaths) ? line.photoPaths : []),
+    ...(Array.isArray(line.customerPhotos) ?
+      line.customerPhotos.map((photo) => photo?.path) : []),
+    line.deliveredPhotoPath,
+  ].map((p) => String(p || "")).filter(Boolean);
+  if (!carried.includes(path)) return null;
+  const file = requestPhotoBucket().file(path);
+  try {
+    const [meta] = await file.getMetadata();
+    if (!packageProof.photoMetadataValid(meta)) return null;
+    const [bytes] = await file.download();
+    return {bytes, contentType: String(meta.contentType)};
+  } catch (error) {
+    return null;
+  }
+}
+
 exports.parkingDocument = onRequest(
     {cors: false, maxInstances: 10},
     async (req, res) => {
@@ -14080,6 +14125,15 @@ exports.parkingDocument = onRequest(
       if (!token || token.length < 16) return notFound();
 
       const db = admin.firestore();
+      // A package photo (docs/AIR_PACKAGES.md §2 "Photo links"): the line's
+      // own token, a signed path and an expiry; the file itself, or 404.
+      if (String(req.query?.view || "") === "photo") {
+        const photo = await packagePhotoFile(db, req, token);
+        if (!photo) return notFound();
+        res.set("Content-Type", photo.contentType);
+        res.set("Cache-Control", "private, max-age=3600");
+        return res.status(200).send(photo.bytes);
+      }
       // A product's QR tags have a view of their own: only the item's own
       // token opens them, and nothing else is looked up for that view.
       if (String(req.query?.view || "") === "inventoryTags") {
@@ -17776,6 +17830,86 @@ function counterReceiptFields(lineId) {
     receivedAt: FirestoreFieldValue.serverTimestamp()});
 }
 
+// ---------------------------------------------------------------------------
+// Proof on a package (docs/AIR_PACKAGES.md §4.2, §4.3; package_proof.js):
+// the drop-off photos a line may carry, the business's "photos required"
+// switch, and the pickup code minted with a new line.
+// ---------------------------------------------------------------------------
+
+/**
+ * A refusal of a proof field or rule, with the code the clients map.
+ *
+ * @param {string} code A package_proof.REFUSAL key.
+ * @return {HttpsError} The error to throw.
+ */
+function proofRefusal(code) {
+  return new HttpsError(
+      code === "photo_required" ? "failed-precondition" : "invalid-argument",
+      packageProof.REFUSAL[code] || code, {reason: code, reasons: [code]});
+}
+
+/**
+ * Whether one photo may be attached by this caller: a path of ours in this
+ * business and the caller's own folder (or one the line already carries,
+ * server folders included), and - for a path new to the line - a stored
+ * image under the size the rule allows.
+ *
+ * @param {string} path The Storage path.
+ * @param {object} args {businessId, uid, keep (the paths the line has)}.
+ * @return {Promise<boolean>} True when it may be attached.
+ */
+async function photoAttachable(path, {businessId, uid, keep = []}) {
+  const kept = keep.includes(path);
+  if (!packageProof.photoPathAllowed(path,
+      {businessId, uid, allowServerFolders: kept})) {
+    return false;
+  }
+  if (kept) return true;
+  const meta = await requestPhotoBucket().file(path).getMetadata()
+      .then(([found]) => found).catch(() => null);
+  return packageProof.photoMetadataValid(meta);
+}
+
+/**
+ * The proof checks a new or edited line goes through: every photo must be
+ * attachable (`photo_invalid`), and a counter drop-off of a business that
+ * requires photos must carry one (`photo_required`).
+ *
+ * @param {object} db Firestore.
+ * @param {object} args {businessId, uid, photoPaths (validated), source
+ *   (the line's), keep (the paths the line already has, on an edit)}.
+ * @return {Promise<object>} The business's proof settings
+ *   (package_proof.proofSettingsOf), for the pickup code.
+ */
+async function lineProofChecks(db, args) {
+  const {businessId, uid, source} = args;
+  const photoPaths = Array.isArray(args.photoPaths) ? args.photoPaths : [];
+  const keep = Array.isArray(args.keep) ? args.keep : [];
+  for (const path of photoPaths) {
+    if (!await photoAttachable(path, {businessId, uid, keep})) {
+      throw proofRefusal("photo_invalid");
+    }
+  }
+  const business = await db.collection("businesses").doc(businessId).get();
+  const settings = packageProof.proofSettingsOf(business.data() || {});
+  const refusal = packageProof.photoRequirementRefusal(settings,
+      {source, photoPaths});
+  if (refusal) throw proofRefusal(refusal);
+  return settings;
+}
+
+/**
+ * The pickup code a new line gets when the business asks for one at
+ * handover (§4.3): four random digits, never 0000; nothing otherwise.
+ *
+ * @param {object} settings package_proof.proofSettingsOf(business).
+ * @return {object} {pickupCode} or {}.
+ */
+function mintPickupCode(settings) {
+  return settings?.pickupCode === true ?
+    {pickupCode: packageProof.pickupCodeFrom(crypto.randomBytes(2))} : {};
+}
+
 /**
  * Whether a line was ever split: a part, or a root that has had parts.
  * Only those need their group read; any other line is a group of one.
@@ -18012,6 +18146,10 @@ exports.addContainerLine = onCall(
         containerStatus: String(current.status || CONTAINER_STATUS.LOADING),
         addedByStaffId: uid,
       });
+      // The photos must be the caller's own uploads, and a business that
+      // requires one at the counter gets one (docs/AIR_PACKAGES.md §4.2).
+      const proofSettings = await lineProofChecks(db, {businessId, uid,
+        photoPaths: record.photoPaths, source: "counter"});
       const lineRef = db.collection("containerLines").doc();
       // What the customer types to follow it and what the package label
       // carries - the same short code every other service uses. Minted
@@ -18081,6 +18219,7 @@ exports.addContainerLine = onCall(
           ...record,
           ...counterReceiptFields(lineRef.id),
           ...assignmentFields(uid, ASSIGN_VIA.HAND),
+          ...mintPickupCode(proofSettings),
           trackingCode,
           createdAt: FirestoreFieldValue.serverTimestamp(),
           updatedAt: FirestoreFieldValue.serverTimestamp(),
@@ -18355,6 +18494,23 @@ async function editContainerLine(db, args) {
     throw new HttpsError("not-found", CONTAINER_MESSAGES.line_not_found);
   }
   const lineRef = db.collection("containerLines").doc(lineId);
+  // Photos the edit names: the caller's own uploads, or ones the line
+  // already carries (docs/AIR_PACKAGES.md §4.2). Read before the
+  // transaction: Storage is asked outside it.
+  if (!contactsOnly && input.photoPaths !== undefined &&
+      input.photoPaths !== null) {
+    const stored = await lineRef.get();
+    const row = stored.exists ? stored.data() || {} : null;
+    if (!row || String(row.businessId) !== businessId) {
+      throw new HttpsError("not-found", CONTAINER_MESSAGES.line_not_found);
+    }
+    const {fields, error} = packageProof.validateProofFields(
+        {photoPaths: input.photoPaths});
+    if (error) throw proofRefusal(error);
+    await lineProofChecks(db, {businessId, uid,
+      photoPaths: fields.photoPaths, source: row.source,
+      keep: Array.isArray(row.photoPaths) ? row.photoPaths : []});
+  }
   const edit = () => db.runTransaction(async (tx) => {
     const lineDoc = await tx.get(lineRef);
     const row = lineDoc.exists ? lineDoc.data() || {} : null;
@@ -18509,11 +18665,13 @@ async function editContainerLine(db, args) {
  * @return {HttpsError} The error to throw.
  */
 function deliveryError(code, extra = {}) {
+  const invalid = ["delivery_action_invalid", "collected_by_too_long",
+    "override_incomplete", "collected_cents_invalid", "photo_invalid"];
   const status = code === "line_not_found" ? "not-found" :
-    (code === "delivery_action_invalid" || code === "collected_by_too_long" ?
-      "invalid-argument" : "failed-precondition");
-  return new HttpsError(status, DELIVERY_MESSAGES[code] || code,
-      {reason: code, ...extra});
+    (invalid.includes(code) ? "invalid-argument" : "failed-precondition");
+  return new HttpsError(status,
+      DELIVERY_MESSAGES[code] || containerMessage(code),
+      {reason: code, reasons: [code], ...extra});
 }
 
 /**
@@ -18528,7 +18686,8 @@ function deliveryError(code, extra = {}) {
  *
  * @param {object} db Firestore.
  * @param {object} args {uid, businessId, data (the request: action, lineId,
- *   collectedBy, acknowledgeBalance)}.
+ *   collectedBy, acknowledgeBalance, pickupCode, override {collectedBy,
+ *   photoPath}, collectedCents)}.
  * @return {Promise<object>} The callable's answer.
  */
 async function containerLineDelivery(db, args) {
@@ -18543,14 +18702,31 @@ async function containerLineDelivery(db, args) {
   const lineId = String(data.lineId || "").trim();
   if (!lineId || lineId.includes("/")) throw deliveryError("line_not_found");
   const typed = data.collectedBy;
+  // What the agent collected at handover (docs/AIR_PACKAGES.md §4.7): USD,
+  // recorded as a cash payment on the line's root in the same transaction.
+  const collectedCents = action === DELIVERY_ACTION.DELIVER ?
+    collectedCentsOf(data.collectedCents) : 0;
   if (action === DELIVERY_ACTION.DELIVER) {
     const errors = collectedByErrors(typed);
     if (errors.length > 0) throw deliveryError(errors[0]);
+    if (Number.isNaN(collectedCents)) {
+      throw deliveryError("collected_cents_invalid");
+    }
   }
   const lineRef = db.collection("containerLines").doc(lineId);
-  // Read before the transaction: who is handing it over, by name.
+  // Read before the transaction: who is handing it over, by name; the
+  // business's pickup-code switch; and whether the override photo is the
+  // agent's own upload (Storage is asked outside the transaction).
   const staffName = action === DELIVERY_ACTION.DELIVER ?
     await businessStaffName(db, businessId, uid) : "";
+  const business = action === DELIVERY_ACTION.DELIVER ?
+    await db.collection("businesses").doc(businessId).get() : null;
+  const proofSettings = packageProof.proofSettingsOf(business?.data() || {});
+  const overridePhoto = String(data.override?.photoPath || "").trim();
+  const overridePhotoOk = overridePhoto ?
+    await photoAttachable(overridePhoto, {businessId, uid}) : false;
+  const payRef = collectedCents > 0 ?
+    db.collection("containerLinePayments").doc() : null;
   const outcome = await db.runTransaction(async (tx) => {
     const lineDoc = await tx.get(lineRef);
     const row = lineDoc.exists ? lineDoc.data() || {} : null;
@@ -18586,33 +18762,82 @@ async function containerLineDelivery(db, args) {
     // and sends nothing.
     if (lineIsDelivered(row)) {
       return {row, changed: false, collectedBy: String(row.collectedBy || ""),
-        balanceCents: Number(row.deliveredBalanceCents) || 0};
+        balanceCents: Number(row.deliveredBalanceCents) || 0,
+        collectedCents: 0};
     }
     const refusal = deliveryRefusal(row,
         box?.exists ? box.data() || {} : null);
     if (refusal) throw deliveryError(refusal);
+    // The pickup code (§4.7): a matching code, or the override - who
+    // collected and the agent's photo - when the business asks for one.
+    const handover = deliveryHandover(proofSettings, row, data);
+    if (handover.refusal) throw deliveryError(handover.refusal);
+    if (handover.withoutCode && !overridePhotoOk) {
+      throw deliveryError("photo_invalid");
+    }
     // A part of a split package owes what its whole group owes: the
     // payments live on the root.
     const group = await txLineGroup(tx, db, businessId, lineId, row);
-    const balanceCents =
-      lineGroupSummary(group.entries, group.rootId).balanceCents;
+    const summary = lineGroupSummary(group.entries, group.rootId);
+    let paidAfter = null;
+    let paymentRecord = null;
+    if (payRef) {
+      // Judged against what the payments really add up to, and against the
+      // whole group's price - exactly as recordContainerLinePayment.
+      const payments = await tx.get(db.collection("containerLinePayments")
+          .where("businessId", "==", businessId)
+          .where("lineId", "==", group.rootId));
+      const paidCents = sumContainerLivePayments(
+          payments.docs.map((d) => d.data() || {}));
+      const payment = deliveryPaymentInput(collectedCents, uid);
+      const errors = validateContainerLinePayment(payment,
+          {...(group.root || row), priceCents: summary.priceCents, paidCents});
+      if (errors.length > 0) throw deliveryError(errors[0]);
+      paymentRecord = containerLinePaymentRecord(payment, uid);
+      paidAfter = paidCents + paymentRecord.amountCents;
+    }
+    // What is still owed once the money collected now is counted.
+    const balanceCents = Math.max(0,
+        summary.balanceCents - (paymentRecord ? paymentRecord.amountCents : 0));
     const balanceRefusal = deliveryBalanceRefusal(balanceCents,
         data.acknowledgeBalance === true);
     if (balanceRefusal) {
       throw deliveryError(balanceRefusal,
           deliveryBalanceView(balanceCents, canSeeMoney));
     }
-    const collectedBy = collectedByOf(typed, row);
+    const collectedBy = collectedByOf(handover.withoutCode ?
+      data.override.collectedBy : typed, row);
     tx.update(lineRef, {
-      ...deliveryRecord({staffId: uid, staffName, collectedBy, balanceCents}),
+      ...deliveryRecord({staffId: uid, staffName, collectedBy, balanceCents,
+        withoutCode: handover.withoutCode, photoPath: overridePhoto}),
+      ...(paymentRecord ?
+        {collectedAtDeliveryCents: paymentRecord.amountCents} : {}),
       deliveredAt: FirestoreFieldValue.serverTimestamp(),
       updatedAt: FirestoreFieldValue.serverTimestamp(),
     });
+    if (paymentRecord) {
+      tx.set(payRef, {
+        businessId,
+        lineId: group.rootId,
+        ...paymentRecord,
+        createdAt: FirestoreFieldValue.serverTimestamp(),
+      });
+      tx.update(db.collection("containerLines").doc(group.rootId), {
+        paidCents: paidAfter,
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      });
+    }
     tx.set(boxRef, {
       deliveredCount: FirestoreFieldValue.increment(1),
       updatedAt: FirestoreFieldValue.serverTimestamp(),
     }, {merge: true});
-    return {row, changed: true, collectedBy, balanceCents};
+    return {row, changed: true, collectedBy, balanceCents,
+      withoutCode: handover.withoutCode,
+      collectedCents: paymentRecord ? paymentRecord.amountCents : 0,
+      payment: paymentRecord ? {record: paymentRecord, paidCents: paidAfter,
+        rootId: group.rootId,
+        root: {...(group.root || row), priceCents: summary.priceCents}} :
+        null};
   });
   const {row, changed} = outcome;
   if (action === DELIVERY_ACTION.UNDO) {
@@ -18628,9 +18853,19 @@ async function containerLineDelivery(db, args) {
         deliveryAuditSummary({
           what: containerLineTitle(row),
           collectedBy: outcome.collectedBy,
+          withoutCode: outcome.withoutCode,
+          collectedText: outcome.collectedCents > 0 ?
+            lotMoney(outcome.collectedCents) : "",
           balanceText: outcome.balanceCents > 0 ?
             lotMoney(outcome.balanceCents) : "",
         }));
+    if (outcome.payment) {
+      // The money's own History line, as recordContainerLinePayment writes.
+      const {record, paidCents, rootId, root} = outcome.payment;
+      await containerLineAudit(businessId, rootId, root, "payment", uid,
+          await containerPaymentSummary(db, businessId, uid,
+              {record, row: root, paidCents}));
+    }
     await queuePackageDelivered(db, {lineRef, businessId,
       containerId: String(row.containerId || "")});
   }
@@ -18640,6 +18875,9 @@ async function containerLineDelivery(db, args) {
     delivered: true,
     alreadyDelivered: !changed,
     collectedBy: outcome.collectedBy,
+    deliveredWithoutCode: outcome.withoutCode === true,
+    collectedCents: outcome.collectedCents,
+    paymentId: outcome.payment ? payRef.id : "",
     ...deliveryBalanceView(outcome.balanceCents, canSeeMoney),
   };
 }
@@ -18762,6 +19000,10 @@ exports.addWaitingPackage = onCall(
         containerStatus: LINE_STATUS_WAITING,
         addedByStaffId: uid,
       });
+      // The photos must be the caller's own uploads, and a business that
+      // requires one at the counter gets one (docs/AIR_PACKAGES.md §4.2).
+      const proofSettings = await lineProofChecks(db, {businessId, uid,
+        photoPaths: record.photoPaths, source: "counter"});
       const paymentRecord = payment ?
         containerLinePaymentRecord(payment, uid) : null;
       const paidCents = paymentRecord ? paymentRecord.amountCents : 0;
@@ -18792,6 +19034,7 @@ exports.addWaitingPackage = onCall(
           businessId,
           ...record,
           ...counterReceiptFields(lineRef.id),
+          ...mintPickupCode(proofSettings),
           paidCents,
           trackingCode,
           createdAt: FirestoreFieldValue.serverTimestamp(),
@@ -18963,7 +19206,12 @@ async function txAssignmentReads(tx, db, businessId, plans) {
       .filter(({lockRef}) => lockRef);
   const locks = lockRefs.length > 0 ?
     await tx.getAll(...lockRefs.map(({lockRef}) => lockRef)) : [];
-  return {groups, lockRefs, locks};
+  // A part that stays waiting is a new line: it gets a pickup code when
+  // the business asks for one (docs/AIR_PACKAGES.md §4.3).
+  const business = plans.some((p) => p.split) ?
+    await tx.get(db.collection("businesses").doc(businessId)) : null;
+  return {groups, lockRefs, locks,
+    proofSettings: packageProof.proofSettingsOf(business?.data() || {})};
 }
 
 /**
@@ -18980,7 +19228,8 @@ async function txAssignmentReads(tx, db, businessId, plans) {
  * @param {object} args {plan ({id, line, going, staying}), group
  *   (txLineGroup), lastIndex (Map rootId -> highest part used in this
  *   transaction), partRef, businessId, uid, now, lineFields (also written
- *   on the line)}.
+ *   on the line), proofSettings (the business's, for the part's pickup
+ *   code)}.
  * @return {object} {going (the line's piece fields after), part: {lineId,
  *   partLineId, trackingCode, pieceCount, fromCode, going, total, line}}.
  */
@@ -19035,6 +19284,10 @@ function txSplitLine(tx, db, args) {
     destinationCountryName: String(line.destinationCountryName || ""),
     payOnArrival: line.payOnArrival === true,
     ...staying,
+    // The drop-off photos show the whole drop-off: the part keeps them.
+    // A pickup code of its own, when the business asks for one.
+    photoPaths: Array.isArray(line.photoPaths) ? line.photoPaths : [],
+    ...mintPickupCode(args.proofSettings),
     paidCents: 0,
     source: lineSourceOf(line.source || root.source),
     requestId: String(line.requestId || root.requestId || ""),
@@ -19095,6 +19348,7 @@ function txWriteAssignment(tx, db, args) {
       plan, lastIndex, businessId, uid, now,
       group: reads.groups.get(groupRootId(plan.line, plan.id)),
       partRef: partRefs.get(plan.id),
+      proofSettings: reads.proofSettings,
       lineFields: {containerId: ref.id, containerStatus: status,
         ...lineExtra, ...marks},
     });
@@ -19260,6 +19514,20 @@ function loadingRefusal(code, lineId = "", details = {}) {
 }
 
 /**
+ * The loading warning as a refusal (docs/AIR_PACKAGES.md §4.8), shaped as
+ * the delivery's balance warning: refused with the warnings until the
+ * caller confirms with `acknowledgeProblems: true`.
+ *
+ * @param {object[]} warnings senderProblemWarnings.
+ * @return {HttpsError} The error to throw.
+ */
+function loadingWarningRefusal(warnings) {
+  return new HttpsError("failed-precondition",
+      CONTAINER_MESSAGES.sender_problem, {reason: "sender_problem",
+        lineIds: warnings.map((w) => w.lineId), warnings});
+}
+
+/**
  * The business's line carrying a package code: equality on `businessId`
  * and `trackingCode` only (as the app's package look-up), so no composite
  * index is needed and another business's label is never found.
@@ -19321,6 +19589,13 @@ async function scanToLoad(db, {uid, businessId, ref, data}) {
       throw loadingRefusal(decision.refusal, lineId, decision.details);
     }
     if (decision.change === "none") return {decision, row, boxData};
+    // Going on (or moving here) with a sender's problem on it: the loader
+    // sees the warning and confirms first (docs/AIR_PACKAGES.md §4.8).
+    const warnings = decision.change === "count" ? [] :
+      senderProblemWarnings([{id: lineId, line: row}]);
+    if (loadingProblemRefusal(warnings, data.acknowledgeProblems === true)) {
+      throw loadingWarningRefusal(warnings);
+    }
     const now = FirestoreFieldValue.serverTimestamp();
     if (decision.change === "count") {
       const marks = {
@@ -19347,7 +19622,7 @@ async function scanToLoad(db, {uid, businessId, ref, data}) {
       txWriteAssignment(tx, db, {ref, boxData, plans, reads,
         partRefs: new Map(), businessId, uid, via: ASSIGN_VIA.SCAN,
         lineExtra: marks});
-      return {decision, row: after, boxData, delta};
+      return {decision, row: after, boxData, delta, warnings};
     }
     // Moved here from the other container, still loading (as
     // moveContainerLine).
@@ -19357,7 +19632,7 @@ async function scanToLoad(db, {uid, businessId, ref, data}) {
     txWriteMove(tx, {lineRef, row, fromRef: otherRef, toRef: ref, uid,
       toStatus: String(boxData.status || CONTAINER_STATUS.LOADING),
       lockRef, lock, lineFields: marks});
-    return {decision, row: after, boxData, delta,
+    return {decision, row: after, boxData, delta, warnings,
       from: {id: onId, label: String(other.label || onId)}};
   });
   const {decision, row} = done;
@@ -19380,6 +19655,7 @@ async function scanToLoad(db, {uid, businessId, ref, data}) {
     result: decision.result,
     line: loadLineView(lineId, row),
     container: loadContainerView(ref.id, done.boxData, done.delta),
+    ...(done.warnings?.length > 0 ? {warnings: done.warnings} : {}),
   };
 }
 
@@ -19577,10 +19853,13 @@ async function leaveUnscannedWaiting(db, {uid, businessId, ref, data}) {
     const plan = {id: lineId, line: row,
       ...splitPieces(row, Number(row.loadScannedPieces))};
     const group = await txLineGroup(tx, db, businessId, lineId, row);
+    const business = await tx.get(
+        db.collection("businesses").doc(businessId));
     const now = FirestoreFieldValue.serverTimestamp();
     const {going, part} = txSplitLine(tx, db, {plan, group,
       lastIndex: new Map(), partRef, businessId, uid, now,
-      lineFields: {loadLeftPartId: partRef.id}});
+      lineFields: {loadLeftPartId: partRef.id},
+      proofSettings: packageProof.proofSettingsOf(business.data() || {})});
     const after = {...row, ...going, loadLeftPartId: partRef.id};
     // Still one line on the box, fewer pieces.
     const delta = addCountDeltas(containerLinesCountsDelta([after], 1),
@@ -19691,6 +19970,13 @@ exports.assignContainerLines = onCall(
         const refusal = entries.length === 0 ? null :
           containerAssignRefusal(boxData, entries, businessId);
         if (refusal) throw containerRefusal(refusal.code, refusal.lineIds);
+        // A sender who reported a problem warns, never blocks: the caller
+        // confirms with `acknowledgeProblems` (docs/AIR_PACKAGES.md §4.8).
+        const warnings = senderProblemWarnings(entries);
+        if (loadingProblemRefusal(warnings,
+            data.acknowledgeProblems === true)) {
+          throw loadingWarningRefusal(warnings);
+        }
         // How each line goes: whole, or the first n of its pieces.
         const plans = entries.map((entry) => ({...entry,
           ...splitPieces(entry.line, asked.get(entry.id))}));
@@ -19706,7 +19992,7 @@ exports.assignContainerLines = onCall(
         const reads = await txAssignmentReads(tx, db, businessId, plans);
         const {loaded, parts} = txWriteAssignment(tx, db, {ref, boxData,
           plans, reads, partRefs, businessId, uid, via: ASSIGN_VIA.HAND});
-        return {box: boxData, entries: loaded, parts,
+        return {box: boxData, entries: loaded, parts, warnings,
           alreadyAssigned: already.length};
       });
       const label = String(placed.box.label || ref.id);
@@ -19735,6 +20021,7 @@ exports.assignContainerLines = onCall(
         alreadyAssigned: placed.alreadyAssigned,
         parts: placed.parts.map(({lineId, partLineId, trackingCode,
           pieceCount}) => ({lineId, partLineId, trackingCode, pieceCount})),
+        ...(placed.warnings.length > 0 ? {warnings: placed.warnings} : {}),
       };
     },
 );
@@ -44487,6 +44774,18 @@ exports.setPackageRequestSettings = onCall(
         timeZone: business.packageRequestSettings?.timeZone,
       }, {locationIds: locations.map((loc) => String(loc.id))});
       if (checked.errors.length > 0) throw requestInvalid(checked.errors);
+      // The proof switches (docs/AIR_PACKAGES.md §2): saved here, by the
+      // same owner, when the request names them; read back from the
+      // business document (`packageProofSettings`), which the console and
+      // the app already read.
+      const proof = data.proof === undefined ? null :
+        packageProof.validateProofSettings(data.proof);
+      if (proof && proof.error) {
+        throw new HttpsError("invalid-argument",
+            "Check the proof settings: each switch is on or off.",
+            {reason: proof.error, reasons: [proof.error]});
+      }
+      const proofUpdate = proof ? {packageProofSettings: proof.settings} : {};
       const current = String(business.requestSlug || "");
       const edits = Number(business.requestSlugEdits || 0);
       let wanted = "";
@@ -44517,6 +44816,7 @@ exports.setPackageRequestSettings = onCall(
         if (!wanted) {
           tx.update(businessRef, {
             packageRequestSettings: checked.settings,
+            ...proofUpdate,
             updatedAt: FirestoreFieldValue.serverTimestamp(),
           });
           return current;
@@ -44533,6 +44833,7 @@ exports.setPackageRequestSettings = onCall(
         }
         tx.update(businessRef, {
           packageRequestSettings: checked.settings,
+          ...proofUpdate,
           requestSlug: wanted,
           requestSlugEdits: current ? edits + 1 : edits,
           updatedAt: FirestoreFieldValue.serverTimestamp(),
@@ -44542,7 +44843,9 @@ exports.setPackageRequestSettings = onCall(
       await bumpPublicCatalogVersion();
       return {success: true, requestSlug: slug,
         requestLink: `${REQUEST_LINK_BASE}${slug}`,
-        settings: checked.settings};
+        settings: checked.settings,
+        proof: proof ? proof.settings :
+          packageProof.proofSettingsOf(business)};
     },
 );
 
@@ -44781,6 +45084,11 @@ exports.receivePackageRequest = onCall(
       const uid = requireAuth(request);
       const db = admin.firestore();
       const data = request.data || {};
+      // With `action: "lookup_code"` it is the counter's look-up of a
+      // request by its code instead (docs/AIR_PACKAGES.md §4.10).
+      if (String(data.action || "") === "lookup_code") {
+        return lookupPackageRequestByCode(db, {uid, data});
+      }
       const {ref, user, businessId} =
         await loadStaffPackageRequest(db, uid, data);
       const first = (await ref.get()).data() || {};
@@ -44812,20 +45120,37 @@ exports.receivePackageRequest = onCall(
         errors.push(...validateContainerLinePayment(payment, {
           priceCents: totalCents, paidCents: 0}));
       }
+      // Proof on the package (docs/AIR_PACKAGES.md §4.2): what staff typed
+      // at the counter, checked as on any new line.
+      const proof = packageProof.validateProofFields(data);
+      if (proof.error) errors.push(proof.error);
       if (errors.length > 0) {
         throw new HttpsError("invalid-argument",
             packageRequests.REQUEST_MESSAGES[errors[0]] ||
-              containerMessage(errors),
+              packageProof.REFUSAL[errors[0]] || containerMessage(errors),
             {reason: errors[0], reasons: errors});
       }
       if (payment && !await businessPersonProfile(db, businessId,
           payment.receivedByStaffId)) {
         throw receivedByInvalid();
       }
+      // The photos staff attached must be their own uploads; the
+      // requirement never applies (the line's source is the request).
+      await lineProofChecks(db, {businessId, uid,
+        photoPaths: proof.fields.photoPaths, source: "request"});
       const trackingCode = await generateTrackingCode(
           CONTAINER_LINE_CODE_PREFIX, "containerLines");
       const lineRef = db.collection("containerLines").doc();
       const nowMs = Date.now();
+      // The customer's own photos ride along: copied from the request's
+      // folder into the line's, first, then what staff added (5 at most).
+      const copied = await copyRequestPhotos(businessId, ref.id, first);
+      const photoPaths = [...copied, ...proof.fields.photoPaths]
+          .filter((path, i, all) => all.indexOf(path) === i)
+          .slice(0, packageProof.MAX_PHOTOS);
+      const proofSettings = packageProof.proofSettingsOf(
+          (await db.collection("businesses").doc(businessId).get()).data() ||
+          {});
       const cardPaidCents = card ? Math.min(
           Number(first.payment?.paidCents) || 0,
           totalCents === null ? Infinity : totalCents) : 0;
@@ -44867,11 +45192,16 @@ exports.receivePackageRequest = onCall(
           payOnArrival: data.payOnArrival === true,
           staffUid: uid,
           receivedAt: FirestoreTimestamp.fromMillis(nowMs),
+          photoPaths,
+          contents: proof.fields.contents,
+          weightLb: proof.fields.weightLb,
+          declaredValueCents: proof.fields.declaredValueCents,
         });
         const paidCents = paymentRecord ? paymentRecord.amountCents : 0;
         tx.set(lineRef, {
           businessId,
           ...line,
+          ...mintPickupCode(proofSettings),
           paidCents,
           trackingCode,
           createdAt: FirestoreFieldValue.serverTimestamp(),
@@ -44927,6 +45257,74 @@ exports.receivePackageRequest = onCall(
         alreadyReceived: false};
     },
 );
+
+/**
+ * The counter's look-up of a request by the code the sender was given
+ * (docs/AIR_PACKAGES.md §4.10): "R-K7M4P" however it was typed. Staff with
+ * the containers or the deliveries permission; the request as the Expected
+ * list shows it (the stored document, without the customer's link token),
+ * or `not_found` - also for another business's code.
+ *
+ * @param {object} db Firestore.
+ * @param {object} args {uid, data: {businessId, code}}.
+ * @return {Promise<object>} {success, request: {id, ...}}.
+ */
+async function lookupPackageRequestByCode(db, {uid, data}) {
+  const businessId = String(data?.businessId || "").trim();
+  await requireAnyBusinessPermission(uid, businessId,
+      [CONTAINER_SECTION, DELIVERIES_SECTION]);
+  const code = packageRequests.normalizeRequestCode(data?.code);
+  const notFound = () => requestError("not-found", "not_found");
+  if (!code) throw notFound();
+  const claim = await db.collection("packageRequestCodes").doc(code).get();
+  const requestId = String(claim.data()?.requestId || "");
+  if (!requestId) throw notFound();
+  const snap = await db.collection(PACKAGE_REQUESTS).doc(requestId).get();
+  if (!snap.exists || String(snap.data()?.businessId) !== businessId) {
+    throw notFound();
+  }
+  const {token, ...request} = snap.data() || {};
+  void token;
+  return {success: true, request: {id: snap.id, ...request}};
+}
+
+/**
+ * The customer's request photos, copied onto the line being received
+ * (docs/AIR_PACKAGES.md §4.2): `packagePhotos/{businessId}/req/
+ * {requestId}_{n}.{ext}`, the source's extension kept. A copy that fails
+ * (the file gone, the emulator without it) is left out rather than
+ * refusing the counter; at most MAX_PHOTOS are copied.
+ *
+ * @param {string} businessId The business.
+ * @param {string} requestId The request.
+ * @param {object} request The stored request (pieces[].photoPaths).
+ * @return {Promise<string[]>} The copied paths.
+ */
+async function copyRequestPhotos(businessId, requestId, request) {
+  const sources = (Array.isArray(request?.pieces) ? request.pieces : [])
+      .flatMap((piece) => Array.isArray(piece?.photoPaths) ?
+        piece.photoPaths : [])
+      .map((path) => String(path || ""))
+      .filter((path, i, all) => path && all.indexOf(path) === i)
+      .slice(0, packageProof.MAX_PHOTOS);
+  const bucket = requestPhotoBucket();
+  const copied = [];
+  for (const [index, source] of sources.entries()) {
+    const found = source.match(/\.(jpg|jpeg|png|webp)$/i);
+    const ext = (found ? found[1] : "jpg").toLowerCase();
+    const target = packageProof.photoPath(businessId, "req",
+        `${requestId}_${index + 1}.${ext}`);
+    if (!target) continue;
+    try {
+      await bucket.file(source).copy(bucket.file(target));
+      copied.push(target);
+    } catch (error) {
+      logger.warn("Request photo not copied", {requestId, source,
+        error: String(error?.message || error)});
+    }
+  }
+  return copied;
+}
 
 /**
  * A paid card barrel shipment of a business that keeps card booking becomes
@@ -45126,6 +45524,72 @@ async function runPackageRequestTimer(db, ref, nowMs) {
   return after.action;
 }
 
+// Where the package photo sweep got to: lines are visited in `deliveredAt`
+// order, once each, so the cursor never scans cleaned lines again.
+const PACKAGE_PHOTO_SWEEP_REF = ["platformConfig", "packagePhotoSweep"];
+const PACKAGE_PHOTO_SWEEP_LIMIT = 100;
+
+/**
+ * Deletes the photo files of lines delivered more than PHOTO_RETENTION_MS
+ * ago (docs/AIR_PACKAGES.md §4.11), at most 100 lines a run: `photoPaths`
+ * emptied, each `customerPhotos[].path` blanked, `deliveredPhotoPath`
+ * cleared and `photosDeletedAtMs` set. The record, the item list and the
+ * serials stay. A single-field range on `deliveredAt` from a stored cursor
+ * (no composite index): a line is visited once, whether or not it had
+ * photos; a delivery undone and redone moves past the cursor and is
+ * visited again.
+ *
+ * @param {object} db Firestore.
+ * @param {number} nowMs Now.
+ * @return {Promise<object>} {visited, cleaned}.
+ */
+async function sweepPackagePhotos(db, nowMs) {
+  const cutoff = FirestoreTimestamp.fromMillis(
+      nowMs - packageProof.PHOTO_RETENTION_MS);
+  const cursorRef = db.collection(PACKAGE_PHOTO_SWEEP_REF[0])
+      .doc(PACKAGE_PHOTO_SWEEP_REF[1]);
+  const after = (await cursorRef.get()).data()?.afterDeliveredAt || null;
+  let query = db.collection("containerLines")
+      .where("deliveredAt", "<", cutoff)
+      .orderBy("deliveredAt")
+      .limit(PACKAGE_PHOTO_SWEEP_LIMIT);
+  if (after) query = query.startAfter(after);
+  const snap = await query.get();
+  const bucket = requestPhotoBucket();
+  let cleaned = 0;
+  for (const doc of snap.docs) {
+    const line = doc.data() || {};
+    const customerPhotos = Array.isArray(line.customerPhotos) ?
+      line.customerPhotos : [];
+    const paths = [
+      ...(Array.isArray(line.photoPaths) ? line.photoPaths : []),
+      ...customerPhotos.map((photo) => photo?.path),
+      line.deliveredPhotoPath,
+    ].map((p) => String(p || "")).filter(Boolean);
+    if (paths.length === 0) continue;
+    for (const path of paths) {
+      if (packageProof.photoPathParts(path)) {
+        await bucket.file(path).delete().catch(() => {});
+      }
+    }
+    await doc.ref.update({
+      photoPaths: [],
+      ...(customerPhotos.length > 0 ? {customerPhotos: customerPhotos.map(
+          (photo) => ({...(photo || {}), path: ""}))} : {}),
+      ...(line.deliveredPhotoPath ? {deliveredPhotoPath: ""} : {}),
+      photosDeletedAtMs: nowMs,
+    });
+    cleaned += 1;
+  }
+  if (!snap.empty) {
+    await cursorRef.set({
+      afterDeliveredAt: snap.docs[snap.docs.length - 1].get("deliveredAt"),
+      updatedAtMs: nowMs,
+    }, {merge: true});
+  }
+  return {visited: snap.size, cleaned};
+}
+
 // Hourly: every request whose timer is due, oldest first, a page at a time,
 // under a deadline; whatever is left is picked up next hour.
 exports.sweepPackageRequests = onSchedule(
@@ -45159,6 +45623,15 @@ exports.sweepPackageRequests = onSchedule(
         if (deleted > 0) logger.info("Old WhatsApp files deleted", {deleted});
       } catch (error) {
         logger.warn("WhatsApp file sweep failed",
+            {error: String(error?.message || error)});
+      }
+      // Package photos 12 months after delivery (docs/AIR_PACKAGES.md
+      // §4.11): the files go, the record stays.
+      try {
+        const swept = await sweepPackagePhotos(db, startedMs);
+        if (swept.cleaned > 0) logger.info("Old package photos deleted", swept);
+      } catch (error) {
+        logger.warn("Package photo sweep failed",
             {error: String(error?.message || error)});
       }
       const deadlineMs = startedMs + 240 * 1000;

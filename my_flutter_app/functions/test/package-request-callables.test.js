@@ -213,6 +213,31 @@ describe("request settings", () => {
     assert.equal(await reasonOf(staff("getPackageRequestLinkQr", {},
         NO_CONTAINERS)), "permission-denied");
   });
+
+  // The proof switches (docs/AIR_PACKAGES.md §2): the same owner-only save.
+  it("save the proof switches when named, keep them when not", async () => {
+    const bizRef = db.collection("businesses").doc(BIZ);
+    const saved = await saveSettings({proof: {photosRequired: true,
+      pickupCode: true}});
+    assert.deepEqual(saved.proof,
+        {photosRequired: true, senderConfirm: false, pickupCode: true});
+    assert.deepEqual((await bizRef.get()).data().packageProofSettings,
+        {photosRequired: true, senderConfirm: false, pickupCode: true});
+    const kept = await saveSettings();
+    assert.deepEqual(kept.proof,
+        {photosRequired: true, senderConfirm: false, pickupCode: true});
+    assert.deepEqual((await bizRef.get()).data().packageProofSettings,
+        {photosRequired: true, senderConfirm: false, pickupCode: true});
+    assert.equal(await reasonOf(saveSettings({proof: {pickupCode: "yes"}})),
+        "proof_settings_invalid");
+    assert.equal(await reasonOf(saveSettings({proof: [true]})),
+        "proof_settings_invalid");
+    assert.equal(await reasonOf(saveSettings({proof: {}}, MARIAMA)),
+        "permission-denied");
+    const off = await saveSettings({proof: {}});
+    assert.deepEqual(off.proof,
+        {photosRequired: false, senderConfirm: false, pickupCode: false});
+  });
 });
 
 describe("what customers see", () => {
@@ -598,6 +623,115 @@ describe("Received", () => {
     assert.equal(stored.trackingCode, received.trackingCode);
     const page = await call("getPackageRequestByToken", {token});
     assert.equal(page.request.trackingCode, received.trackingCode);
+  });
+
+  // Proof on the package (docs/AIR_PACKAGES.md §4.2, §4.3, §4.10).
+  it("copies the customer's photos onto the line, takes the counter's " +
+      "proof fields and mints the pickup code", async () => {
+    const bucket = admin.storage().bucket(
+        `${process.env.GCLOUD_PROJECT}.firebasestorage.app`);
+    const bizRef = db.collection("businesses").doc(BIZ);
+    await bizRef.update({packageProofSettings: {photosRequired: true,
+      pickupCode: true}});
+    const theirs = [1, 2].map((n) =>
+      `packageRequestPhotos/${BIZ}/anon-copy/photo-0000000${n}.jpg`);
+    const webp = `packageRequestPhotos/${BIZ}/anon-copy/photo-00000003.webp`;
+    for (const path of theirs) {
+      await bucket.file(path).save(Buffer.alloc(1024, 2),
+          {contentType: "image/jpeg"});
+    }
+    await bucket.file(webp).save(Buffer.alloc(1024, 3),
+        {contentType: "image/webp"});
+    const {requestId} = await call("submitPackageRequest", submission({
+      pieces: [{kind: "box", description: "TV", photoPaths: [theirs[0]]},
+        {kind: "box", description: "Phones", photoPaths: [theirs[1], webp]}],
+    }), "anon-copy", ANON);
+    const mine = `packagePhotos/${BIZ}/${MARIAMA}/photo-counter01.jpg`;
+    await bucket.file(mine).save(Buffer.alloc(512, 4),
+        {contentType: "image/jpeg"});
+    // Someone else's upload is refused before anything is copied.
+    const owners = `packagePhotos/${BIZ}/${OWNER}/photo-counter02.jpg`;
+    await bucket.file(owners).save(Buffer.alloc(512, 4),
+        {contentType: "image/jpeg"});
+    assert.equal(await reasonOf(staff("receivePackageRequest", {requestId,
+      pieces: [], photoPaths: [owners]}, MARIAMA)), "photo_invalid");
+    assert.equal(await reasonOf(staff("receivePackageRequest", {requestId,
+      pieces: [], weightLb: 0}, MARIAMA)), "weight_invalid");
+    const received = await staff("receivePackageRequest", {requestId,
+      pieces: [], photoPaths: [mine],
+      contents: [{label: "TV", quantity: 1}, {label: "Phones", quantity: 2,
+        serial: "IMEI-1"}], weightLb: 12.5, declaredValueCents: 80000},
+    MARIAMA);
+    const line = (await db.collection("containerLines")
+        .doc(received.lineId).get()).data();
+    const copied = [
+      `packagePhotos/${BIZ}/req/${requestId}_1.jpg`,
+      `packagePhotos/${BIZ}/req/${requestId}_2.jpg`,
+      `packagePhotos/${BIZ}/req/${requestId}_3.webp`,
+    ];
+    assert.deepEqual(line.photoPaths, [...copied, mine]);
+    for (const [i, path] of copied.entries()) {
+      const [meta] = await bucket.file(path).getMetadata();
+      assert.equal(meta.contentType, i === 2 ? "image/webp" : "image/jpeg");
+      assert.equal(Number(meta.size), 1024);
+    }
+    // The customer's own copies stay where they were.
+    assert.equal((await bucket.file(theirs[0]).exists())[0], true);
+    assert.deepEqual(line.contents, [
+      {label: "TV", quantity: 1, serial: ""},
+      {label: "Phones", quantity: 2, serial: "IMEI-1"}]);
+    assert.equal(line.weightLb, 12.5);
+    assert.equal(line.declaredValueCents, 80000);
+    assert.match(line.pickupCode, /^\d{4}$/);
+    assert.equal(line.source, "request");
+    // A request without photos is received without any: the requirement
+    // is the counter's, not the request's.
+    const bare = await staff("receivePackageRequest", {requestId:
+      (await submit({pieces: [{kind: "barrel"}]})).requestId, pieces: []},
+    MARIAMA);
+    const bareLine = (await db.collection("containerLines")
+        .doc(bare.lineId).get()).data();
+    assert.deepEqual(bareLine.photoPaths, []);
+    assert.deepEqual(bareLine.contents, []);
+    assert.equal(bareLine.weightLb, null);
+    await bizRef.update({packageProofSettings: {}});
+  });
+
+  it("looks a request up by its code for the counter", async () => {
+    const DELIVERIES = "req-test-deliveries-only";
+    await db.collection("users").doc(DELIVERIES).set({role: "staff",
+      businessId: BIZ, businessPermissions: ["deliveries"],
+      fullName: "Porter"});
+    const {requestId} = await submit({pieces: [{kind: "barrel"}]});
+    const stored = await requestDoc(requestId);
+    const lookup = (code, uid = MARIAMA, businessId = BIZ) =>
+      call("receivePackageRequest", {businessId, action: "lookup_code",
+        code}, uid);
+    for (const typed of [stored.code, stored.code.toLowerCase(),
+      stored.code.replace("R-", ""), ` ${stored.code.replace("-", " ")} `]) {
+      const found = await lookup(typed);
+      assert.equal(found.success, true);
+      assert.equal(found.request.id, requestId, typed);
+      assert.equal(found.request.code, stored.code);
+      assert.equal(found.request.status, stored.status);
+      assert.equal(found.request.sender.name, "Fatou Diallo");
+      assert.equal(found.request.pieces.length, 1);
+      assert.equal("token" in found.request, false);
+    }
+    assert.equal((await lookup(stored.code, DELIVERIES)).request.id,
+        requestId);
+    assert.equal(await reasonOf(lookup("R-ZZZZZ")), "not_found");
+    assert.equal(await reasonOf(lookup("")), "not_found");
+    assert.equal(await reasonOf(lookup("R-K7M")), "not_found");
+    assert.equal(await reasonOf(lookup(stored.code, OTHER_OWNER, OTHER_BIZ)),
+        "not_found");
+    assert.equal(await reasonOf(lookup(stored.code, NO_CONTAINERS)),
+        "permission-denied");
+    assert.equal(await reasonOf(lookup(stored.code, OTHER_OWNER)),
+        "permission-denied");
+    // A received request is still found: the counter says so.
+    await staff("receivePackageRequest", {requestId, pieces: []}, MARIAMA);
+    assert.equal((await lookup(stored.code)).request.status, "received");
   });
 
   it("makes one line when two people tap Received at once", async () => {

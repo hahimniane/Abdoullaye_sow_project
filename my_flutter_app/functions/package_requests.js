@@ -313,6 +313,20 @@ function slugValid(slug) {
 }
 
 /**
+ * A request code as the counter types or scans it (docs/AIR_PACKAGES.md
+ * §4.10): "r k7m4p", "RK7M4P", "R-K7M4P" all mean "R-K7M4P". "" when
+ * what was typed is not five code characters.
+ *
+ * @param {*} raw What was typed or scanned.
+ * @return {string} "R-XXXXX" or "".
+ */
+function normalizeRequestCode(raw) {
+  const body = String(raw ?? "").toUpperCase().replace(/[\s-]+/g, "")
+      .replace(/^R/, "");
+  return /^[A-Z0-9]{5}$/.test(body) ? `R-${body}` : "";
+}
+
+/**
  * @param {string} base A valid slug.
  * @param {number} attempt 0 for the slug itself, then 2, 3, ...
  * @return {string} "base", "base-2", ... still within 40 characters.
@@ -1515,6 +1529,7 @@ function requestNotificationText(event, request, language) {
 }
 
 module.exports = {
+  normalizeRequestCode,
   STATUS,
   STATUSES,
   OPEN_STATUSES,

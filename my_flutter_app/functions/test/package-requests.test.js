@@ -959,3 +959,67 @@ describe("the line Received writes (§7 line fields)", () => {
       id: "l"}), {months: [], containerIds: []});
   });
 });
+
+// The counter's look-up by code (docs/AIR_PACKAGES.md §4.10) and the proof
+// fields a received line carries (§4.2).
+describe("the request code at the counter", () => {
+  it("normalizes what was typed or scanned", () => {
+    for (const typed of ["R-K7M4P", "r-k7m4p", "RK7M4P", "k7m4p",
+      " r k7m4p ", "R - K7M4P", "r-k7-m4p"]) {
+      assert.equal(pr.normalizeRequestCode(typed), "R-K7M4P", typed);
+    }
+    for (const bad of ["", "K7M4", "K7M4P2", "CL-K7M4P2", null, undefined,
+      "R-K7M!P"]) {
+      assert.equal(pr.normalizeRequestCode(bad), "", String(bad));
+    }
+  });
+
+  it("writes the proof fields staff typed on the received line", () => {
+    const request = {
+      handoff: "bring_in",
+      sender: {name: "Fatou Diallo", phoneE164: "+16465550100"},
+      receiver: {name: "Mariama Bah", phoneE164: "+224620000000"},
+      destinationCountryId: "gn", destinationCountryName: "Guinea",
+      pieces: [{id: "p1", kind: "barrel", description: "",
+        estimateCents: 15000}],
+      payment: {timing: "at_handoff", paidCents: 0},
+    };
+    const copied = "packagePhotos/biz/req/req1abcdefghij_1.jpg";
+    const line = rr.requestLineRecord(request, {lineId: "line1",
+      requestId: "req1", staffUid: "staff1", receivedAt: "TS",
+      photoPaths: [copied],
+      contents: [{label: "Phones", quantity: 2}], weightLb: 4,
+      declaredValueCents: 50000});
+    assert.deepEqual(line.photoPaths, [copied]);
+    assert.deepEqual(line.contents,
+        [{label: "Phones", quantity: 2, serial: ""}]);
+    assert.equal(line.weightLb, 4);
+    assert.equal(line.declaredValueCents, 50000);
+    const bare = rr.requestLineRecord(request, {lineId: "line1",
+      requestId: "req1", staffUid: "staff1", receivedAt: "TS"});
+    assert.deepEqual(bare.photoPaths, []);
+    assert.deepEqual(bare.contents, []);
+    assert.equal(bare.weightLb, null);
+    assert.equal(bare.declaredValueCents, null);
+  });
+
+  it("is an action on receivePackageRequest for containers or deliveries " +
+      "staff, never a new export", () => {
+    const {readFileSync} = require("node:fs");
+    const path = require("node:path");
+    const source = readFileSync(path.join(__dirname, "..", "index.js"),
+        "utf8");
+    assert.ok(!source.includes("exports.packageRequestAction ="));
+    assert.ok(!source.includes("exports.lookupPackageRequest"));
+    const from = source.indexOf("exports.receivePackageRequest = onCall(");
+    const body = source.slice(from, source.indexOf("\nexports.", from + 1));
+    assert.match(body, /action \|\| ""\) === "lookup_code"/);
+    const lookup = source.slice(
+        source.indexOf("async function lookupPackageRequestByCode("),
+        source.indexOf("async function copyRequestPhotos("));
+    assert.match(lookup, /\[CONTAINER_SECTION, DELIVERIES_SECTION\]/);
+    assert.match(lookup, /packageRequests\.normalizeRequestCode/);
+    assert.match(lookup, /requestError\("not-found", "not_found"\)/);
+    assert.match(lookup, /const \{token, \.\.\.request\}/);
+  });
+});
