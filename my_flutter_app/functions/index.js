@@ -592,6 +592,8 @@ const {
   monthBoundsMs: parkingMonthBoundsMs,
 } = require("./parking_month_statement");
 const {lotCustomerKey, mergeLotCustomer} = require("./lot_customers");
+const {staffCredits} = require("./staff_expense_credit");
+const staffExpenseLedger = require("./staff_expense_ledger");
 const {
   resolveBillingPlan,
   monthEndBillingAmount,
@@ -9362,7 +9364,28 @@ async function notifyParkingMonthEndFor(db, businessDoc, monthKey, now) {
   const summary = parkingMonthSummary(
       rows(cars), monthKey, now,
       mergeParkingMonthRows(rows(inMonth), rows(unsettled), rows(undated)));
-  const owing = summary.customersOwing.length;
+  // Staff expenses come off their own parking bill (STAFF_EXPENSE_CREDIT.md):
+  // the push counts what is still owed after them. Unlinked lots read
+  // nothing more; a failed read falls back to the bills as they are.
+  const links = businessDoc.data()?.staffParkingLinks || {};
+  let netting = null;
+  if (Object.keys(links).length > 0) {
+    try {
+      const [entries, repayments] = await Promise.all([
+        db.collection("lotExpenseEntries")
+            .where("businessId", "==", businessId).get(),
+        db.collection("staffExpenseRepayments")
+            .where("businessId", "==", businessId).get(),
+      ]);
+      netting = {entries: rows(entries), repayments: rows(repayments), links,
+        monthKey};
+    } catch (error) {
+      logger.warn("Month-end staff expenses not netted", {businessId,
+        error: String(error?.message || error)});
+    }
+  }
+  const {customersOwing: owing, dueCents} =
+    staffExpenseLedger.monthEndOwing(summary.customers, netting);
   if (owing === 0) return {businessId, notified: 0};
   const recipients = new Set();
   const ownerUid = String(businessDoc.data()?.ownerUid || "").trim();
@@ -9385,12 +9408,12 @@ async function notifyParkingMonthEndFor(db, businessDoc, monthKey, now) {
       uid,
       preferenceKey: "businessActivity",
       title: `${month} is over`,
-      body: `${owingText} ${parkingMoneyText(summary.dueCents)}. ` +
+      body: `${owingText} ${parkingMoneyText(dueCents)}. ` +
         "Send their bills.",
       data: {type: "parking_month_end", businessId, monthKey},
     })));
   return {businessId, notified: recipients.size,
-    customersOwing: owing, dueCents: summary.dueCents};
+    customersOwing: owing, dueCents};
 }
 
 exports.notifyParkingMonthEnd = onSchedule(
@@ -17381,6 +17404,218 @@ exports.createLotExpenseEntry = onCall(
     },
 );
 
+// ---- Staff expenses come off their parking bill (STAFF_EXPENSE_CREDIT.md) --
+// Links and repayments are written here only; the bills are computed by
+// staff_expense_credit.js wherever they are shown.
+
+/**
+ * @param {string} code A staff_expense_ledger refusal code.
+ * @return {HttpsError} The refusal, `details.reason` = code.
+ */
+function staffCreditError(code) {
+  const {kind, message} = staffExpenseLedger.staffCreditRefusal(code);
+  return new HttpsError(kind, message, {reason: code, reasons: [code]});
+}
+
+/**
+ * The owner (or a platform admin) links a staff member to the parking
+ * customer whose bill their expenses come off. `customerKey: ""` unlinks.
+ *
+ * @param {string} uid The caller.
+ * @param {object} data businessId, staffId, customerKey, customerName,
+ *   customerPhone.
+ * @return {Promise<object>} `{success, staffId, link}`.
+ */
+async function linkStaffParking(uid, data) {
+  const businessId = String(data.businessId || "").trim();
+  const staffId = String(data.staffId || "").trim();
+  const user = await requireBusinessManager(uid, businessId);
+  const db = admin.firestore();
+  const businessRef = db.collection("businesses").doc(businessId);
+  const businessDoc = await businessRef.get();
+  if (!businessDoc.exists) {
+    throw new HttpsError("not-found", "Business not found");
+  }
+  const business = businessDoc.data() || {};
+  // The same "who is the owner" test the bank uses: businessOwner of this
+  // business, its ownerUid, or a platform admin.
+  if (zelleCheck.bankRoleOf({uid, user, businessId, business}) !== "owner") {
+    throw staffCreditError("link_owner_only");
+  }
+  if (!staffId || staffId.includes("/")) {
+    throw staffCreditError("staff_not_member");
+  }
+  const staffDoc = await db.collection("users").doc(staffId).get();
+  if (!staffDoc.exists ||
+      !staffExpenseLedger.isBusinessMember(staffDoc.data(), businessId)) {
+    throw staffCreditError("staff_not_member");
+  }
+  const {link, refusal} = staffExpenseLedger.staffParkingLinkRecord(data,
+      {uid, nowMs: Date.now()});
+  if (refusal) throw staffCreditError(refusal);
+  const before = business.staffParkingLinks?.[staffId] || null;
+  // A link, not a record: unlinking removes the key.
+  await businessRef.set({
+    staffParkingLinks: {[staffId]: link || FirestoreFieldValue.delete()},
+    updatedAt: FirestoreFieldValue.serverTimestamp(),
+  }, {merge: true});
+  const staffName = String(staffDoc.data()?.fullName ||
+    staffDoc.data()?.displayName || staffId);
+  const from = String(before?.customerName || before?.customerKey || "");
+  const to = String(link?.customerName || link?.customerKey || "");
+  await writeLotLedgerAudit({
+    businessId,
+    entityType: "staff_parking_link",
+    entityId: staffId,
+    action: link ? "linked" : "unlinked",
+    byStaffId: uid,
+    summary: link ?
+      `${staffName}'s expenses come off ${to}'s parking bill` :
+      `${staffName} unlinked from ${from || "their parking bill"}`,
+    changes: from !== to ? [{field: "parkingBill", from, to}] : [],
+  });
+  return {success: true, staffId, link};
+}
+
+/**
+ * Cash (or Zelle, a check...) the business gave a staff member back for
+ * the expenses they paid. At most what it still owes them up to this month.
+ *
+ * @param {string} uid The caller.
+ * @param {object} data businessId, staffId, amountCents, method,
+ *   givenByStaffId, note, paidAt ("yyyy-mm-dd", today when absent).
+ * @return {Promise<object>} `{success, repaymentId, month, creditCents}`.
+ */
+async function recordStaffRepayment(uid, data) {
+  const businessId = String(data.businessId || "").trim();
+  await requireBusinessPermission(uid, businessId, "ledger");
+  const staffId = String(data.staffId || "").trim();
+  if (!staffId || staffId.includes("/")) {
+    throw staffCreditError("staff_not_member");
+  }
+  const nowMs = Date.now();
+  const todayKey = zelleCheck.dateKeyIn(nowMs, "America/New_York");
+  const dayKey = staffExpenseLedger.repaymentDayKey(data.paidAt, todayKey);
+  const early = staffExpenseLedger.repaymentRefusal({...data,
+    creditCents: Number.MAX_SAFE_INTEGER});
+  if (early) throw staffCreditError(early);
+  if (!dayKey) throw staffCreditError("repayment_date_invalid");
+  const db = admin.firestore();
+  const givenBy = String(data.givenByStaffId || "").trim();
+  if (givenBy && givenBy !== uid) {
+    const giver = givenBy.includes("/") ? null :
+      await db.collection("users").doc(givenBy).get();
+    if (!giver?.exists ||
+        !staffExpenseLedger.isBusinessMember(giver.data(), businessId)) {
+      throw staffCreditError("staff_not_member");
+    }
+  }
+  const record = staffExpenseLedger.repaymentRecord(data,
+      {businessId, uid, dayKey});
+  const currentMonth = todayKey.slice(0, 7);
+  const ref = db.collection("staffExpenseRepayments").doc();
+  // In one transaction with the reads, so two Paid back taps cannot both
+  // pass the cap.
+  const creditCents = await db.runTransaction(async (transaction) => {
+    const [entries, repayments] = await Promise.all([
+      transaction.get(db.collection("lotExpenseEntries")
+          .where("businessId", "==", businessId)),
+      transaction.get(db.collection("staffExpenseRepayments")
+          .where("businessId", "==", businessId)),
+    ]);
+    const credits = staffCredits(
+        entries.docs.map((d) => d.data()),
+        repayments.docs.map((d) => d.data()),
+        currentMonth);
+    const credit = credits[staffId]?.creditCents || 0;
+    const refusal = staffExpenseLedger.repaymentRefusal({...data,
+      creditCents: credit});
+    if (refusal) throw staffCreditError(refusal);
+    const now = FirestoreFieldValue.serverTimestamp();
+    transaction.set(ref, {
+      ...record,
+      paidAt: FirestoreTimestamp.fromDate(new Date(`${dayKey}T12:00:00Z`)),
+      createdAt: now,
+    });
+    transaction.set(db.collection("lotLedgerAudit").doc(),
+        lotLedgerAuditRecord({
+          businessId,
+          entityType: "staff_repayment",
+          entityId: ref.id,
+          action: "recorded",
+          byStaffId: uid,
+          summary: `Paid back ${lotMoney(record.amountCents)} for expenses ` +
+            `(${record.method})${record.note ? ` — ${record.note}` : ""}`,
+          changes: [{field: "staffId", from: "", to: staffId}],
+        }));
+    return credit - record.amountCents;
+  });
+  return {success: true, repaymentId: ref.id, month: record.month,
+    creditCents};
+}
+
+/**
+ * A payback recorded by mistake is voided, never deleted.
+ *
+ * @param {string} uid The caller.
+ * @param {object} data businessId, repaymentId, note.
+ * @return {Promise<object>} `{success, repaymentId}`.
+ */
+async function voidStaffRepayment(uid, data) {
+  const businessId = String(data.businessId || "").trim();
+  await requireBusinessPermission(uid, businessId, "ledger");
+  const repaymentId = String(data.repaymentId || "").trim();
+  if (!repaymentId || repaymentId.includes("/")) {
+    throw staffCreditError("repayment_not_found");
+  }
+  const db = admin.firestore();
+  const ref = db.collection("staffExpenseRepayments").doc(repaymentId);
+  const note = String(data.note || "").trim().slice(0, 300);
+  await db.runTransaction(async (transaction) => {
+    const doc = await transaction.get(ref);
+    const current = doc.exists ? doc.data() || {} : null;
+    const refusal =
+      staffExpenseLedger.repaymentVoidRefusal(current, businessId);
+    if (refusal) throw staffCreditError(refusal);
+    transaction.set(ref, {
+      voided: true,
+      voidedAt: FirestoreFieldValue.serverTimestamp(),
+      voidedByUid: uid,
+      ...(note && {voidNote: note}),
+    }, {merge: true});
+    transaction.set(db.collection("lotLedgerAudit").doc(),
+        lotLedgerAuditRecord({
+          businessId,
+          entityType: "staff_repayment",
+          entityId: repaymentId,
+          action: "voided",
+          byStaffId: uid,
+          summary: `Voided a ${lotMoney(current.amountCents)} payback` +
+            (note ? ` — ${note}` : ""),
+          changes: [{field: "voided", from: "false", to: "true"}],
+        }));
+  });
+  return {success: true, repaymentId};
+}
+
+/**
+ * updateLotExpenseEntry's `action` branches (STAFF_EXPENSE_CREDIT.md §4).
+ *
+ * @param {string} uid The caller.
+ * @param {string} action link_staff_parking | record_staff_repayment |
+ *   void_staff_repayment.
+ * @param {object} data The request.
+ * @return {Promise<object>} The action's answer.
+ */
+async function staffExpenseCreditAction(uid, action, data) {
+  if (action === "link_staff_parking") return linkStaffParking(uid, data);
+  if (action === "record_staff_repayment") {
+    return recordStaffRepayment(uid, data);
+  }
+  if (action === "void_staff_repayment") return voidStaffRepayment(uid, data);
+  throw staffCreditError("staff_action_invalid");
+}
+
 // Edit a logged purchase — amount, date, who paid, note, receipt. The line it
 // belongs to never changes through an edit (record a new purchase on another
 // line instead), and a voided purchase is history, not editable. Mirrors
@@ -17390,6 +17625,10 @@ exports.updateLotExpenseEntry = onCall(
     async (request) => {
       const uid = requireAuth(request);
       const data = request.data || {};
+      // Staff expenses netted against parking ride on this callable (no new
+      // export: the CPU budget). No `action` = the purchase edit below.
+      const action = String(data.action || "").trim();
+      if (action) return staffExpenseCreditAction(uid, action, data);
       const entryId = String(data.entryId || "").trim();
       const changes = data.changes || {};
       const db = admin.firestore();

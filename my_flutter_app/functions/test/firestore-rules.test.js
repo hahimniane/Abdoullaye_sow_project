@@ -3917,6 +3917,73 @@ describe("lot ledger collections are callable-only", () => {
   });
 });
 
+describe("staff expense credit is callable-only", () => {
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await db.doc("staffExpenseRepayments/repay_a").set({
+        businessId: "biz_a", staffId: "staff-parking-a", amountCents: 500,
+        month: "2026-10", method: "cash", voided: false,
+      });
+      await db.doc("businesses/biz_a").set({
+        staffParkingLinks: {"staff-parking-a": {
+          customerKey: "phone:2015551234", customerName: "A",
+          customerPhone: "2015551234", linkedAtMs: 1, linkedByUid: "owner-a",
+        }},
+      }, {merge: true});
+    });
+  });
+
+  it("lets the business's managers read repayments, nobody else", async () => {
+    await assertSucceeds(firestoreFor("owner-a")
+        .doc("staffExpenseRepayments/repay_a").get());
+    await assertSucceeds(firestoreFor("staff-parking-a")
+        .doc("staffExpenseRepayments/repay_a").get());
+    await assertSucceeds(firestoreFor("owner-a")
+        .collection("staffExpenseRepayments")
+        .where("businessId", "==", "biz_a").get());
+    await assertFails(firestoreFor("owner-b")
+        .doc("staffExpenseRepayments/repay_a").get());
+    await assertFails(firestoreFor("customer-stranger")
+        .doc("staffExpenseRepayments/repay_a").get());
+    await assertFails(firestoreFor(null)
+        .doc("staffExpenseRepayments/repay_a").get());
+  });
+
+  it("denies every client write to repayments", async () => {
+    for (const uid of ["owner-a", "staff-parking-a", "super-admin"]) {
+      const db = firestoreFor(uid);
+      await assertFails(db.doc(`staffExpenseRepayments/forged_${uid}`).set({
+        businessId: "biz_a", staffId: "staff-parking-a", amountCents: 1,
+      }));
+      await assertFails(db.doc("staffExpenseRepayments/repay_a")
+          .update({voided: true}));
+      await assertFails(db.doc("staffExpenseRepayments/repay_a").delete());
+    }
+  });
+
+  it("shows staffParkingLinks to managers and lets no manager write it",
+      async () => {
+        const owner = firestoreFor("owner-a");
+        const snap = await assertSucceeds(owner.doc("businesses/biz_a").get());
+        assert.equal(
+            snap.data().staffParkingLinks["staff-parking-a"].customerKey,
+            "phone:2015551234");
+        await assertFails(firestoreFor("owner-b").doc("businesses/biz_a")
+            .get());
+        for (const uid of ["owner-a", "staff-parking-a",
+          "staff-profile-a"]) {
+          const db = firestoreFor(uid);
+          await assertFails(db.doc("businesses/biz_a").update({
+            "staffParkingLinks.staff-parking-a.customerKey": "name:someone",
+          }));
+          await assertFails(db.doc("businesses/biz_a").set({
+            staffParkingLinks: {[uid]: {customerKey: "name:me"}},
+          }, {merge: true}));
+        }
+      });
+});
+
 describe("user folder Storage rules", () => {
   function putUserFile(storage, uid, fileName, options = {}) {
     return storage.ref(`users/${uid}/profile/${fileName}`).put(

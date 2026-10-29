@@ -339,3 +339,202 @@ describe("lot ledger: the VIN duplicate rule", () => {
         [a.activityId, b.activityId].sort());
   });
 });
+
+// Staff expenses come off their parking bill (STAFF_EXPENSE_CREDIT.md §4):
+// the actions on updateLotExpenseEntry.
+describe("lot ledger: staff expense credit actions", () => {
+  const SC_BIZ = "staffcredit-biz";
+  const SC_OWNER = "staffcredit-owner";
+  const SC_LEDGER = "staffcredit-ledger";
+  const SC_PARKER = "staffcredit-parker";
+  const SC_PAYER = "staffcredit-payer";
+  const SC_OUTSIDER = "staffcredit-outsider";
+  const SC_CUSTOMER = "staffcredit-customer";
+  const PLATFORM = "staffcredit-admin";
+  const link = (uid, overrides = {}) => run("updateLotExpenseEntry", uid, {
+    action: "link_staff_parking", businessId: SC_BIZ, staffId: SC_PAYER,
+    customerKey: "phone:2015550101", customerName: "Abdoulaye Sow",
+    customerPhone: "201-555-0101", ...overrides,
+  });
+  const repay = (uid, overrides = {}) => run("updateLotExpenseEntry", uid, {
+    action: "record_staff_repayment", businessId: SC_BIZ, staffId: SC_PAYER,
+    amountCents: 1000, method: "cash", note: "from the till", ...overrides,
+  });
+  const voidRepay = (uid, repaymentId) => run("updateLotExpenseEntry", uid,
+      {action: "void_staff_repayment", businessId: SC_BIZ, repaymentId});
+  const links = async () => (await db.collection("businesses").doc(SC_BIZ)
+      .get()).data().staffParkingLinks || {};
+
+  before(async () => {
+    const user = (id, fields) => db.collection("users").doc(id).set({
+      fullName: id, email: `${id}@example.test`, ...fields});
+    await Promise.all([
+      db.collection("businesses").doc(SC_BIZ).set({
+        name: "Staff credit lot", status: "approved", ownerUid: SC_OWNER,
+        enabledServices: ["carParking"],
+      }),
+      user(SC_OWNER, {role: "businessOwner", businessId: SC_BIZ}),
+      user(SC_LEDGER, {role: "staff", businessId: SC_BIZ,
+        businessPermissions: ["ledger"]}),
+      user(SC_PARKER, {role: "staff", businessId: SC_BIZ,
+        businessPermissions: ["parking"]}),
+      user(SC_PAYER, {role: "staff", businessId: SC_BIZ,
+        businessPermissions: ["parking"], fullName: "Abdoulaye Sow"}),
+      user(SC_OUTSIDER, {role: "staff", businessId: "another-biz",
+        businessPermissions: ["ledger"]}),
+      user(SC_CUSTOMER, {role: "customer"}),
+      user(PLATFORM, {role: "admin", adminRole: "superAdmin"}),
+      // $448.31 paid out of pocket over two months; a voided row and
+      // another business's row never count.
+      db.collection("lotExpenseEntries").doc("sc-e1").set({
+        businessId: SC_BIZ, paidByStaffId: SC_PAYER, amountCents: 30000,
+        month: "2026-09", voided: false}),
+      db.collection("lotExpenseEntries").doc("sc-e2").set({
+        businessId: SC_BIZ, paidByStaffId: SC_PAYER, amountCents: 14831,
+        month: "2026-10", voided: false}),
+      db.collection("lotExpenseEntries").doc("sc-e3").set({
+        businessId: SC_BIZ, paidByStaffId: SC_PAYER, amountCents: 50000,
+        month: "2026-10", voided: true}),
+      db.collection("lotExpenseEntries").doc("sc-e4").set({
+        businessId: "another-biz", paidByStaffId: SC_PAYER,
+        amountCents: 50000, month: "2026-10", voided: false}),
+    ]);
+  });
+
+  it("the owner links a staff member, and unlinks them", async () => {
+    const out = await link(SC_OWNER);
+    assert.equal(out.success, true);
+    const stored = (await links())[SC_PAYER];
+    assert.equal(stored.customerKey, "phone:2015550101");
+    assert.equal(stored.customerName, "Abdoulaye Sow");
+    assert.equal(stored.customerPhone, "201-555-0101");
+    assert.equal(stored.linkedByUid, SC_OWNER);
+    assert.ok(stored.linkedAtMs > 0);
+
+    await link(SC_OWNER, {customerKey: "", customerName: "",
+      customerPhone: ""});
+    assert.equal((await links())[SC_PAYER], undefined);
+    const audit = await db.collection("lotLedgerAudit")
+        .where("entityId", "==", SC_PAYER).get();
+    assert.deepEqual(audit.docs.map((d) => d.data().action).sort(),
+        ["linked", "unlinked"]);
+
+    // A platform admin may link too.
+    await link(PLATFORM);
+    assert.equal((await links())[SC_PAYER].linkedByUid, PLATFORM);
+  });
+
+  it("refuses staff linking, even with the ledger permission", async () => {
+    await assert.rejects(link(SC_LEDGER),
+        refusal("permission-denied", "link_owner_only"));
+    await assert.rejects(link(SC_OUTSIDER),
+        (error) => error.code === "permission-denied");
+    await assert.rejects(link(SC_CUSTOMER),
+        (error) => error.code === "permission-denied");
+  });
+
+  it("refuses linking someone not on the staff", async () => {
+    for (const staffId of [SC_OUTSIDER, SC_CUSTOMER, "nobody-at-all", ""]) {
+      await assert.rejects(link(SC_OWNER, {staffId}),
+          refusal("failed-precondition", "staff_not_member"));
+    }
+    await assert.rejects(link(SC_OWNER, {customerKey: "2015550101"}),
+        refusal("invalid-argument", "link_customer_invalid"));
+  });
+
+  it("records a payback up to what is owed, then voids it once", async () => {
+    const out = await repay(SC_LEDGER, {amountCents: 4831,
+      paidAt: "2026-09-30", givenByStaffId: SC_OWNER});
+    assert.equal(out.success, true);
+    assert.equal(out.month, "2026-09");
+    assert.equal(out.creditCents, 40000);
+    const row = (await db.collection("staffExpenseRepayments")
+        .doc(out.repaymentId).get()).data();
+    assert.equal(row.businessId, SC_BIZ);
+    assert.equal(row.staffId, SC_PAYER);
+    assert.equal(row.amountCents, 4831);
+    assert.equal(row.month, "2026-09");
+    assert.equal(row.method, "cash");
+    assert.equal(row.givenByStaffId, SC_OWNER);
+    assert.equal(row.recordedByUid, SC_LEDGER);
+    assert.equal(row.note, "from the till");
+    assert.equal(row.voided, false);
+    assert.equal(row.paidAt.toDate().toISOString(),
+        "2026-09-30T12:00:00.000Z");
+    assert.ok(row.createdAt);
+
+    // $400.00 left: one cent more is refused, the rest is fine.
+    await assert.rejects(repay(SC_OWNER, {amountCents: 40001}),
+        refusal("failed-precondition", "repayment_exceeds_credit"));
+    const rest = await repay(SC_OWNER, {amountCents: 40000,
+      method: "zelle"});
+    assert.equal(rest.creditCents, 0);
+    await assert.rejects(repay(SC_OWNER, {amountCents: 1}),
+        refusal("failed-precondition", "repayment_exceeds_credit"));
+
+    // Voiding gives the credit back; the row stays.
+    await voidRepay(SC_LEDGER, rest.repaymentId);
+    const voided = (await db.collection("staffExpenseRepayments")
+        .doc(rest.repaymentId).get()).data();
+    assert.equal(voided.voided, true);
+    assert.equal(voided.voidedByUid, SC_LEDGER);
+    assert.ok(voided.voidedAt);
+    await assert.rejects(voidRepay(SC_OWNER, rest.repaymentId),
+        refusal("failed-precondition", "repayment_voided"));
+    const again = await repay(SC_OWNER, {amountCents: 40000});
+    assert.equal(again.creditCents, 0);
+    await voidRepay(SC_OWNER, again.repaymentId);
+
+    const audit = await db.collection("lotLedgerAudit")
+        .where("businessId", "==", SC_BIZ)
+        .where("entityType", "==", "staff_repayment").get();
+    assert.deepEqual(audit.docs.map((d) => d.data().action).sort(),
+        ["recorded", "recorded", "recorded", "voided", "voided"]);
+  });
+
+  it("refuses a bad amount, method or date", async () => {
+    for (const amountCents of [0, -5, 12.5, "1000"]) {
+      await assert.rejects(repay(SC_OWNER, {amountCents}),
+          refusal("invalid-argument", "repayment_amount_invalid"));
+    }
+    await assert.rejects(repay(SC_OWNER, {method: "card"}),
+        refusal("invalid-argument", "repayment_method_invalid"));
+    await assert.rejects(repay(SC_OWNER, {paidAt: "2999-01-01"}),
+        refusal("invalid-argument", "repayment_date_invalid"));
+    await assert.rejects(repay(SC_OWNER, {givenByStaffId: SC_OUTSIDER}),
+        refusal("failed-precondition", "staff_not_member"));
+    // Someone who never paid an expense is owed nothing.
+    await assert.rejects(repay(SC_OWNER, {staffId: SC_PARKER}),
+        refusal("failed-precondition", "repayment_exceeds_credit"));
+  });
+
+  it("needs the ledger permission", async () => {
+    await assert.rejects(repay(SC_PARKER),
+        (error) => error.code === "permission-denied");
+    await assert.rejects(repay(SC_OUTSIDER),
+        (error) => error.code === "permission-denied");
+    const out = await repay(SC_LEDGER, {amountCents: 1});
+    await assert.rejects(voidRepay(SC_PARKER, out.repaymentId),
+        (error) => error.code === "permission-denied");
+    await voidRepay(SC_LEDGER, out.repaymentId);
+  });
+
+  it("refuses voiding a payback that is not this business's", async () => {
+    await assert.rejects(voidRepay(SC_OWNER, "no-such-payback"),
+        refusal("not-found", "repayment_not_found"));
+    await db.collection("staffExpenseRepayments").doc("sc-foreign").set({
+      businessId: "another-biz", staffId: SC_PAYER, amountCents: 5,
+      month: "2026-10", voided: false});
+    await assert.rejects(voidRepay(SC_OWNER, "sc-foreign"),
+        refusal("not-found", "repayment_not_found"));
+  });
+
+  it("an unknown action is refused; no action still edits", async () => {
+    await assert.rejects(run("updateLotExpenseEntry", SC_OWNER,
+        {action: "delete_everything", businessId: SC_BIZ}),
+    refusal("invalid-argument", "staff_action_invalid"));
+    await assert.rejects(run("updateLotExpenseEntry", SC_OWNER,
+        {entryId: "no-such-entry", changes: {}}),
+    (error) => error.code === "not-found");
+  });
+});

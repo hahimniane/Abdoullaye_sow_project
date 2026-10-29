@@ -667,6 +667,13 @@ service cloud.firestore {
       allow read: if lotLedgerRead(resource.data.businessId);
       allow write: if false;
     }
+    // Cash given back to staff for the lot expenses they paid
+    // (STAFF_EXPENSE_CREDIT.md). Written only by updateLotExpenseEntry;
+    // never deleted, a mistake is voided.
+    match /staffExpenseRepayments/{repaymentId} {
+      allow read: if lotLedgerRead(resource.data.businessId);
+      allow write: if false;
+    }
     // The lot's customer memory (name, contact, cars seen), written only by
     // the callables when an activity or walk-up is recorded. Managers of the
     // business read it to pick a customer instead of re-keying them.
