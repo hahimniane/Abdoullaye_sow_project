@@ -491,3 +491,64 @@ describe("history and messages", () => {
       "loadScanIds", "loadMovedFromContainerId", "loadLeftPartId"]);
   });
 });
+
+// The loading warning (docs/AIR_PACKAGES.md §4.8): a sender's "Something's
+// wrong" warns the loader; once acknowledged the package goes on.
+describe("the sender's problem warns, never blocks", () => {
+  const {LOAD_WARNING, senderProblemWarnings, loadingProblemRefusal} =
+    require("../container_loading");
+  const problem = waiting({senderConfirmation: {status: "problem",
+    answeredAtMs: 1}});
+
+  it("lists the lines whose sender reported a problem, in order", () => {
+    assert.deepEqual(senderProblemWarnings([
+      {id: "l1", line: waiting()},
+      {id: "l2", line: problem},
+      {id: "l3", line: waiting({senderConfirmation: {status: "confirmed"}})},
+      {id: "l4", line: waiting({senderConfirmation: {status: "asked"}})},
+      {id: "l5", line: problem},
+      {id: "", line: problem},
+    ]), [{lineId: "l2", reason: "sender_problem"},
+      {lineId: "l5", reason: "sender_problem"}]);
+    assert.deepEqual(senderProblemWarnings([]), []);
+    assert.deepEqual(senderProblemWarnings(null), []);
+    assert.equal(LOAD_WARNING.SENDER_PROBLEM, "sender_problem");
+  });
+
+  it("refuses until acknowledged, as the delivery balance does", () => {
+    const warnings = senderProblemWarnings([{id: "l2", line: problem}]);
+    assert.equal(loadingProblemRefusal(warnings, undefined),
+        "sender_problem");
+    assert.equal(loadingProblemRefusal(warnings, false), "sender_problem");
+    assert.equal(loadingProblemRefusal(warnings, "true"), "sender_problem");
+    assert.equal(loadingProblemRefusal(warnings, true), null);
+    assert.equal(loadingProblemRefusal([], false), null);
+  });
+
+  it("is wired into the list assign and the scan, with the answer's " +
+      "warnings", () => {
+    const {readFileSync} = require("node:fs");
+    const path = require("node:path");
+    const source = readFileSync(path.join(__dirname, "..", "index.js"),
+        "utf8");
+    const section = (start, end) => {
+      const from = source.indexOf(start);
+      assert.ok(from > -1, start);
+      const to = source.indexOf(end, from + start.length);
+      return source.slice(from, to === -1 ? undefined : to);
+    };
+    const assign = section("exports.assignContainerLines = onCall(",
+        "\nexports.");
+    assert.match(assign, /senderProblemWarnings\(entries\)/);
+    assert.match(assign, /data\.acknowledgeProblems === true/);
+    assert.match(assign, /warnings: placed\.warnings/);
+    const scan = section("async function scanToLoad(", "\n}\n");
+    assert.match(scan,
+        /senderProblemWarnings\(\[\{id: lineId, line: row\}\]\)/);
+    assert.match(scan, /data\.acknowledgeProblems === true/);
+    assert.match(scan, /warnings: done\.warnings/);
+    const refusal = section("function loadingWarningRefusal(", "\n}\n");
+    assert.match(refusal, /reason: "sender_problem"/);
+    assert.match(refusal, /warnings\}/);
+  });
+});

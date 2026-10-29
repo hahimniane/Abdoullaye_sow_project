@@ -330,11 +330,19 @@ service firebase.storage {
         request.resource.contentType in ['image/jpeg', 'image/png', 'image/webp'];
     }
 
+    // The owner, container staff, and - since docs/AIR_PACKAGES.md - the
+    // deliveries-only agent, who must see the drop-off photos at handover.
     function canReadBusinessContainers(businessId) {
       return isLinkedToBusiness(businessId) &&
         (
           userRole() == 'businessOwner' ||
-          (userRole() == 'staff' && hasBusinessSection('containers'))
+          (
+            userRole() == 'staff' &&
+            (
+              hasBusinessSection('containers') ||
+              hasBusinessSection('deliveries')
+            )
+          )
         );
     }
 
@@ -350,6 +358,36 @@ service firebase.storage {
         request.auth.uid == uploaderUid &&
         fileName.matches('^[A-Za-z0-9_-]{8,64}([.](jpg|jpeg|png|webp))?$') &&
         validRequestPhotoUpload();
+      allow update, delete: if false;
+    }
+
+    // Package photos (docs/AIR_PACKAGES.md §2 "Storage"): the drop-off
+    // photos staff take, the handover photo, and the copies the server makes
+    // of a customer's request or WhatsApp photos (folders `req` and `wa`,
+    // server-only). Upload: the owner or staff with containers or deliveries,
+    // into their OWN uid folder only (the line does not exist yet when the
+    // photo is taken); the callables re-check the path, type and size from
+    // the stored metadata (package_proof.js). Create only, image under 2 MB,
+    // a file id of 8-64 safe characters. Read: the same people and platform
+    // operations admins. The server deletes the files 12 months after
+    // delivery; nobody deletes through the client.
+    function validPackagePhotoUpload() {
+      return request.resource.size <= 2 * 1024 * 1024 &&
+        request.resource.contentType in ['image/jpeg', 'image/png', 'image/webp'];
+    }
+
+    match /packagePhotos/{businessId}/{uploaderUid}/{fileName} {
+      allow read: if request.auth != null &&
+        (
+          canReadBusinessContainers(businessId) ||
+          (isAdmin() && hasBuiltInAdminCapability('operations'))
+        );
+      allow create: if request.auth != null &&
+        resource == null &&
+        request.auth.uid == uploaderUid &&
+        canReadBusinessContainers(businessId) &&
+        fileName.matches('^[A-Za-z0-9_-]{8,64}[.](jpg|jpeg|png|webp)$') &&
+        validPackagePhotoUpload();
       allow update, delete: if false;
     }
 

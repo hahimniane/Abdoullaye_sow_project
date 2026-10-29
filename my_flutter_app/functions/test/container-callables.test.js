@@ -1,6 +1,7 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const crypto = require("node:crypto");
 const {afterEach, before, describe, it} = require("node:test");
 const admin = require("firebase-admin");
 const {EventEmitter} = require("node:events");
@@ -3907,5 +3908,548 @@ describe("scan to load", () => {
     assert.ok(noLoadFields(line));
     const [entry] = await audits(lineId, "line_assigned");
     assert.match(entry.summary, /^Added 3 barrels for Fatou Diallo to /);
+  });
+});
+
+// Proof on the package (docs/AIR_PACKAGES.md): the drop-off photos checked
+// against Storage, the "photos required" switch, the pickup code minted
+// with a line, the handover with the code or the override and the money
+// collected, the loading warning, the /d photo link and the 12-month sweep.
+// Its own business, so its switches disturb no other suite.
+describe("proof on the package", () => {
+  const P_BIZ = "proof-test-biz";
+  const P_OWNER = "proof-test-owner";
+  const P_STAFF = "proof-test-staff";
+  const P_AGENT = "proof-test-deliveries-only";
+  const bucket = admin.storage().bucket(
+      `${process.env.GCLOUD_PROJECT}.firebasestorage.app`);
+  const bizRef = db.collection("businesses").doc(P_BIZ);
+  before(async () => {
+    await Promise.all([
+      bizRef.set({name: "Proof Shipping", status: "approved",
+        ownerUid: P_OWNER}),
+      db.collection("users").doc(P_OWNER).set({
+        role: "businessOwner", businessId: P_BIZ, fullName: "Proof Owner",
+      }),
+      db.collection("users").doc(P_STAFF).set({
+        role: "staff", businessId: P_BIZ, fullName: "Counter Staff",
+        businessPermissions: ["containers"],
+      }),
+      db.collection("users").doc(P_AGENT).set({
+        role: "staff", businessId: P_BIZ, fullName: "Guinea Agent",
+        businessPermissions: ["deliveries"],
+      }),
+    ]);
+  });
+  const switches = (proof) => bizRef.update({packageProofSettings: proof});
+  const run = (name, data, uid = P_OWNER) =>
+    functions[name].run({auth: {uid, token: {}}, data: {businessId: P_BIZ,
+      ...data}});
+  const GUINEA = {destinationCountryId: "gn",
+    destinationCountryName: "Guinea"};
+  const people = {ownerKind: "customer", customerName: "Fatou Diallo",
+    customerPhone: "+16465550100", receiverName: "Mariama Bah",
+    receiverPhone: "+224620000000"};
+  // Unpriced, so a handover owes nothing unless a test prices it.
+  const barrels = (n, extra = {}) => ({...people, ...GUINEA,
+    pieces: Array.from({length: n}, () => ({kind: "barrel"})), ...extra});
+  const priced = (cents) => barrels(cents.length, {pieces: cents.map(
+      (priceCents) => ({kind: "barrel", priceCents}))});
+  const lineOf = async (id) =>
+    (await db.collection("containerLines").doc(id).get()).data();
+  // A refusal names its code as `reason` (one rule) or in `reasons` (the
+  // line validator, every problem at once).
+  const refused = (reason) => (error) => error.details?.reason === reason ||
+    (Array.isArray(error.details?.reasons) &&
+      error.details.reasons.includes(reason));
+  let photoSerial = 0;
+  // A photo as the app uploads it: the uploader's own folder.
+  async function photo(uid, {contentType = "image/jpeg", size = 2048,
+    folder = uid, ext = "jpg"} = {}) {
+    photoSerial += 1;
+    const path = `packagePhotos/${P_BIZ}/${folder}/` +
+      `photo-${String(photoSerial).padStart(8, "0")}.${ext}`;
+    await bucket.file(path).save(Buffer.alloc(size, 1), {contentType});
+    return path;
+  }
+  let boxSerial = 0;
+  async function arrivedBox(lines, uid = P_OWNER) {
+    boxSerial += 1;
+    const {containerId} = await run("createContainer", {
+      label: `Proof box ${boxSerial}`, ...GUINEA}, uid);
+    const ids = [];
+    for (const line of lines) {
+      const {lineId} = await run("addContainerLine", {containerId, line},
+          uid);
+      ids.push(lineId);
+    }
+    await run("setContainerStatus", {containerId, status: "shipped"});
+    await run("setContainerStatus", {containerId, status: "arrived"});
+    return {containerId, lineIds: ids};
+  }
+  const deliver = (lineId, extra = {}, uid = P_AGENT) =>
+    run("updateContainerLine", {lineId, action: "deliver", ...extra}, uid);
+  const paymentsOf = async (lineId) => (await db
+      .collection("containerLinePayments").where("businessId", "==", P_BIZ)
+      .where("lineId", "==", lineId).get()).docs.map((d) => d.data());
+  const audits = async (entityId, action) => {
+    const snap = await db.collection("lotLedgerAudit")
+        .where("entityId", "==", entityId).where("action", "==", action).get();
+    return snap.docs.map((d) => d.get("summary"));
+  };
+
+  describe("photos at drop-off", () => {
+    it("stores the caller's own uploads and refuses anything else",
+        async () => {
+          await switches({});
+          const own = await photo(P_STAFF);
+          const second = await photo(P_STAFF, {contentType: "image/webp",
+            ext: "webp"});
+          const dropped = await run("addWaitingPackage", barrels(2, {
+            photoPaths: [own, second, own],
+            contents: [{label: "Phones", quantity: 2, serial: "IMEI-1"}],
+            weightLb: 4.26, declaredValueCents: 120000}), P_STAFF);
+          const line = await lineOf(dropped.lineId);
+          assert.deepEqual(line.photoPaths, [own, second]);
+          assert.deepEqual(line.contents,
+              [{label: "Phones", quantity: 2, serial: "IMEI-1"}]);
+          assert.equal(line.weightLb, 4.3);
+          assert.equal(line.declaredValueCents, 120000);
+          assert.equal(line.pickupCode, undefined);
+          // Someone else's folder, a missing file, a wrong type, too big,
+          // the server's folder.
+          const others = await photo(P_OWNER);
+          for (const bad of [
+            [others],
+            [`packagePhotos/${P_BIZ}/${P_STAFF}/missing-00000001.jpg`],
+            [await photo(P_STAFF, {contentType: "image/gif"})],
+            [await photo(P_STAFF, {size: 2 * 1024 * 1024 + 1})],
+            [await photo(P_STAFF, {folder: "req"})],
+            [`packageRequestPhotos/${P_BIZ}/${P_STAFF}/photo-00000001.jpg`],
+          ]) {
+            await assert.rejects(run("addWaitingPackage",
+                barrels(1, {photoPaths: bad}), P_STAFF),
+            refused("photo_invalid"), bad[0]);
+            await assert.rejects(run("addContainerLine", {
+              containerId: (await run("createContainer",
+                  {label: "Photo box", ...GUINEA})).containerId,
+              line: barrels(1, {photoPaths: bad})}, P_STAFF),
+            refused("photo_invalid"), bad[0]);
+          }
+          for (const [field, value, reason] of [
+            ["contents", [{label: "x".repeat(61)}], "contents_invalid"],
+            ["weightLb", 0, "weight_invalid"],
+            ["declaredValueCents", -5, "declared_value_invalid"],
+          ]) {
+            await assert.rejects(run("addWaitingPackage",
+                barrels(1, {[field]: value}), P_STAFF), (error) =>
+              error.details?.reasons?.includes(reason), reason);
+          }
+        });
+
+    it("requires one at the counter when the switch is on", async () => {
+      await switches({photosRequired: true});
+      await assert.rejects(run("addWaitingPackage", barrels(1), P_STAFF),
+          (error) => error.code === "failed-precondition" &&
+            error.details?.reason === "photo_required");
+      const {containerId} = await run("createContainer",
+          {label: "Required box", ...GUINEA});
+      await assert.rejects(run("addContainerLine", {containerId,
+        line: barrels(1, {photoPaths: []})}, P_STAFF),
+      refused("photo_required"));
+      const own = await photo(P_STAFF);
+      const dropped = await run("addWaitingPackage",
+          barrels(1, {photoPaths: [own]}), P_STAFF);
+      assert.deepEqual((await lineOf(dropped.lineId)).photoPaths, [own]);
+      const added = await run("addContainerLine", {containerId,
+        line: barrels(1, {photoPaths: [own]})}, P_STAFF);
+      assert.deepEqual((await lineOf(added.lineId)).photoPaths, [own]);
+      // Taking the last photo off a counter line is refused the same way.
+      await assert.rejects(run("updateContainerLine", {
+        lineId: dropped.lineId, line: {...barrels(1), photoPaths: []}},
+      P_STAFF), refused("photo_required"));
+      await switches({});
+    });
+
+    it("edits the four fields, keeping what the server added", async () => {
+      await switches({});
+      const own = await photo(P_STAFF);
+      const dropped = await run("addWaitingPackage",
+          barrels(2, {photoPaths: [own], weightLb: 3}), P_STAFF);
+      // A copy the server made from a request, as a received line has.
+      const copied = await photo(P_STAFF, {folder: "req"});
+      await db.collection("containerLines").doc(dropped.lineId)
+          .update({photoPaths: [copied, own]});
+      const more = await photo(P_STAFF);
+      const edited = await run("updateContainerLine", {
+        lineId: dropped.lineId,
+        line: {...barrels(2), photoPaths: [copied, own, more],
+          contents: [{label: "Tablet"}], weightLb: 3.5,
+          declaredValueCents: 40000}}, P_STAFF);
+      assert.deepEqual(edited.changed,
+          ["photoPaths", "contents", "weightLb", "declaredValueCents"]);
+      const line = await lineOf(dropped.lineId);
+      assert.deepEqual(line.photoPaths, [copied, own, more]);
+      assert.deepEqual(line.contents,
+          [{label: "Tablet", quantity: 1, serial: ""}]);
+      assert.equal(line.weightLb, 3.5);
+      assert.equal(line.declaredValueCents, 40000);
+      // The server's copy may stay, but a new path in the server's folder
+      // is not the caller's to add; nor is the owner's upload.
+      await assert.rejects(run("updateContainerLine", {
+        lineId: dropped.lineId,
+        line: {...barrels(2), photoPaths: [copied,
+          await photo(P_STAFF, {folder: "req"})]}}, P_STAFF),
+      refused("photo_invalid"));
+      await assert.rejects(run("updateContainerLine", {
+        lineId: dropped.lineId,
+        line: {...barrels(2), photoPaths: [await photo(P_OWNER)]}},
+      P_STAFF), refused("photo_invalid"));
+      // An edit that says nothing about them keeps them.
+      await run("updateContainerLine", {lineId: dropped.lineId,
+        line: barrels(3)}, P_STAFF);
+      assert.deepEqual((await lineOf(dropped.lineId)).photoPaths,
+          [copied, own, more]);
+      const history = await audits(dropped.lineId, "line_edited");
+      assert.ok(history.some((s) => /photos, contents, weight, declared value/
+          .test(s)), history.join(" | "));
+    });
+  });
+
+  describe("the pickup code", () => {
+    it("is minted on every new line, parts included, when switched on",
+        async () => {
+          await switches({pickupCode: true});
+          const dropped = await run("addWaitingPackage", barrels(3));
+          const line = await lineOf(dropped.lineId);
+          assert.match(line.pickupCode, /^\d{4}$/);
+          assert.notEqual(line.pickupCode, "0000");
+          const {containerId} = await run("createContainer",
+              {label: "Code box", ...GUINEA});
+          const added = await run("addContainerLine", {containerId,
+            line: barrels(1)});
+          assert.match((await lineOf(added.lineId)).pickupCode, /^\d{4}$/);
+          // Two of the three go on; the part that stays gets its own code.
+          const split = await run("assignContainerLines", {containerId,
+            lineIds: [dropped.lineId], pieceCounts: {[dropped.lineId]: 2}});
+          const part = await lineOf(split.parts[0].partLineId);
+          assert.match(part.pickupCode, /^\d{4}$/);
+          await switches({});
+          const plain = await run("addWaitingPackage", barrels(1));
+          assert.equal((await lineOf(plain.lineId)).pickupCode, undefined);
+        });
+  });
+
+  describe("handover with the code", () => {
+    it("delivers on the code, refuses a wrong one, takes the override",
+        async () => {
+          await switches({pickupCode: true});
+          const {lineIds: [coded, other]} =
+            await arrivedBox([barrels(1), barrels(1)]);
+          const code = (await lineOf(coded)).pickupCode;
+          await assert.rejects(deliver(coded), (error) =>
+            error.code === "failed-precondition" &&
+            error.details?.reason === "pickup_code_invalid");
+          await assert.rejects(deliver(coded, {pickupCode: "0000"}),
+              refused("pickup_code_invalid"));
+          await assert.rejects(deliver(coded,
+              {override: {collectedBy: "Ibrahima Sow"}}),
+          refused("override_incomplete"));
+          await assert.rejects(deliver(coded,
+              {override: {collectedBy: "I", photoPath: await photo(P_AGENT)}}),
+          refused("override_incomplete"));
+          // The photo must be the agent's own upload.
+          await assert.rejects(deliver(coded, {override: {
+            collectedBy: "Ibrahima Sow", photoPath: await photo(P_OWNER)}}),
+          refused("photo_invalid"));
+          assert.equal((await lineOf(coded)).deliveredAt, undefined);
+          const done = await deliver(coded, {pickupCode: ` ${code} `});
+          assert.equal(done.delivered, true);
+          assert.equal(done.deliveredWithoutCode, false);
+          const line = await lineOf(coded);
+          assert.equal(line.deliveredWithoutCode, false);
+          assert.equal(line.deliveredPhotoPath, "");
+          assert.equal(line.collectedBy, "Mariama Bah");
+          // Without the code: who collected, and the agent's photo.
+          const proof = await photo(P_AGENT);
+          const overridden = await deliver(other, {override: {
+            collectedBy: " Ibrahima Sow ", photoPath: proof}});
+          assert.equal(overridden.deliveredWithoutCode, true);
+          assert.equal(overridden.collectedBy, "Ibrahima Sow");
+          const without = await lineOf(other);
+          assert.equal(without.deliveredWithoutCode, true);
+          assert.equal(without.deliveredPhotoPath, proof);
+          assert.equal(without.collectedBy, "Ibrahima Sow");
+          assert.deepEqual((await audits(without.containerId,
+              "line_delivered")).sort(), [
+            "Delivered 1 barrel for Fatou Diallo, collected by Ibrahima " +
+              "Sow without a pickup code",
+            "Delivered 1 barrel for Fatou Diallo, collected by Mariama Bah",
+          ]);
+          // Undo clears the override; the file stays.
+          await run("updateContainerLine", {lineId: other,
+            action: "undo_delivery"});
+          const undone = await lineOf(other);
+          assert.equal(undone.deliveredWithoutCode, undefined);
+          assert.equal(undone.deliveredPhotoPath, undefined);
+          assert.equal((await bucket.file(proof).exists())[0], true);
+          // The switch off: no code asked, even of a line that has one.
+          await switches({});
+          assert.equal((await deliver(other)).delivered, true);
+        });
+
+    it("records the USD collected as a cash payment on the root",
+        async () => {
+          await switches({});
+          const {lineIds: [lineId]} =
+            await arrivedBox([priced([6000, 4000])]);
+          await assert.rejects(deliver(lineId, {collectedCents: -1}),
+              refused("collected_cents_invalid"));
+          await assert.rejects(deliver(lineId, {collectedCents: 12.5}),
+              refused("collected_cents_invalid"));
+          await assert.rejects(deliver(lineId, {collectedCents: 10001}),
+              refused("payment_exceeds_balance"));
+          // Part of it: the rest still warns, then is acknowledged.
+          await assert.rejects(deliver(lineId, {collectedCents: 4000}),
+              (error) => error.details?.reason === "delivery_balance_due" &&
+                error.details?.hasBalance === true &&
+                error.details?.balanceCents === null);
+          assert.deepEqual(await paymentsOf(lineId), []);
+          const done = await deliver(lineId, {collectedCents: 4000,
+            acknowledgeBalance: true});
+          assert.equal(done.collectedCents, 4000);
+          assert.ok(done.paymentId);
+          assert.equal(done.hasBalance, true);
+          const line = await lineOf(lineId);
+          assert.equal(line.collectedAtDeliveryCents, 4000);
+          assert.equal(line.paidCents, 4000);
+          assert.equal(line.deliveredBalanceCents, 6000);
+          const [payment] = await paymentsOf(lineId);
+          assert.equal(payment.amountCents, 4000);
+          assert.equal(payment.method, "cash");
+          assert.equal(payment.note, "At pickup");
+          assert.equal(payment.receivedByStaffId, P_AGENT);
+          assert.equal(payment.recordedByStaffId, P_AGENT);
+          assert.equal(payment.reverted, false);
+          const history = await audits(line.containerId, "payment");
+          assert.ok(history.some((s) =>
+            s.startsWith("Received $40.00 (cash) by Guinea Agent")),
+          history.join(" | "));
+          // Undo keeps the money: the owner reverts it with the payment
+          // callable.
+          await run("updateContainerLine", {lineId, action: "undo_delivery"});
+          const undone = await lineOf(lineId);
+          assert.equal(undone.paidCents, 4000);
+          assert.equal(undone.collectedAtDeliveryCents, 4000);
+          assert.equal((await paymentsOf(lineId)).length, 1);
+          // Delivered again, the rest collected: paid in full, no warning.
+          const again = await deliver(lineId, {collectedCents: 6000});
+          assert.equal(again.hasBalance, false);
+          assert.equal((await lineOf(lineId)).paidCents, 10000);
+          assert.equal((await paymentsOf(lineId)).length, 2);
+          // A part of a split package pays on its root.
+          const dropped = await run("addWaitingPackage",
+              priced([2500, 2500]));
+          const {containerId} = await run("createContainer",
+              {label: "Split box", ...GUINEA});
+          const split = await run("assignContainerLines", {containerId,
+            lineIds: [dropped.lineId], pieceCounts: {[dropped.lineId]: 1}});
+          await run("setContainerStatus", {containerId, status: "shipped"});
+          await run("setContainerStatus", {containerId, status: "arrived"});
+          await deliver(dropped.lineId, {collectedCents: 2500,
+            acknowledgeBalance: true});
+          assert.equal((await lineOf(dropped.lineId)).paidCents, 2500);
+          assert.equal((await paymentsOf(dropped.lineId)).length, 1);
+          assert.equal((await paymentsOf(split.parts[0].partLineId)).length,
+              0);
+          // Nothing collected: no payment, nothing on the line.
+          const {lineIds: [free]} = await arrivedBox([barrels(1)]);
+          await deliver(free, {collectedCents: 0});
+          assert.equal((await lineOf(free)).collectedAtDeliveryCents,
+              undefined);
+          assert.deepEqual(await paymentsOf(free), []);
+        });
+  });
+
+  describe("the loading warning", () => {
+    const problem = {senderConfirmation: {status: "problem",
+      answeredAtMs: Date.now()}};
+    it("warns about a sender's problem until acknowledged, by list and by " +
+        "scan", async () => {
+      await switches({});
+      const flagged = await run("addWaitingPackage", barrels(1));
+      const fine = await run("addWaitingPackage", barrels(1));
+      await db.collection("containerLines").doc(flagged.lineId)
+          .update(problem);
+      const {containerId} = await run("createContainer",
+          {label: "Warn box", ...GUINEA});
+      await assert.rejects(run("assignContainerLines", {containerId,
+        lineIds: [flagged.lineId, fine.lineId]}), (error) =>
+        error.code === "failed-precondition" &&
+        error.details?.reason === "sender_problem" &&
+        JSON.stringify(error.details?.warnings) === JSON.stringify(
+            [{lineId: flagged.lineId, reason: "sender_problem"}]) &&
+        JSON.stringify(error.details?.lineIds) ===
+          JSON.stringify([flagged.lineId]));
+      assert.equal((await lineOf(flagged.lineId)).containerId, "");
+      const placed = await run("assignContainerLines", {containerId,
+        lineIds: [flagged.lineId, fine.lineId], acknowledgeProblems: true});
+      assert.equal(placed.assigned, 2);
+      assert.deepEqual(placed.warnings,
+          [{lineId: flagged.lineId, reason: "sender_problem"}]);
+      // No problem: no warnings key at all.
+      const clean = await run("assignContainerLines", {containerId,
+        lineIds: [(await run("addWaitingPackage", barrels(1))).lineId]});
+      assert.equal("warnings" in clean, false);
+      // By scan, the same.
+      const scanned = await run("addWaitingPackage", barrels(2));
+      await db.collection("containerLines").doc(scanned.lineId)
+          .update(problem);
+      let scans = 0;
+      const scan = (extra = {}) => run("assignContainerLines", {containerId,
+        action: "scan", code: scanned.trackingCode,
+        scanId: `proof-scan-${String(++scans).padStart(4, "0")}`, ...extra});
+      await assert.rejects(scan(), refused("sender_problem"));
+      const loaded = await scan({acknowledgeProblems: true});
+      assert.equal(loaded.result, "loaded");
+      assert.deepEqual(loaded.warnings,
+          [{lineId: scanned.lineId, reason: "sender_problem"}]);
+      // Counting one more piece of it warns no more.
+      const counted = await scan();
+      assert.equal(counted.result, "counted");
+      assert.equal("warnings" in counted, false);
+    });
+  });
+
+  describe("the photo link", () => {
+    const proof = require("../package_proof");
+    // Enough of an Express response for the onRequest wrapper and the
+    // handler (as test/whatsapp-conversations.test.js fakes it).
+    function fakeRes() {
+      const res = {statusCode: 0, body: "", headers: {}, headersSent: false,
+        on: () => res, once: () => res, emit: () => true};
+      res.set = (k, v) => {
+        res.headers[k.toLowerCase()] = v;
+        return res;
+      };
+      res.setHeader = res.set;
+      res.getHeader = (k) => res.headers[k.toLowerCase()];
+      res.status = (code) => {
+        res.statusCode = code;
+        return res;
+      };
+      res.send = (value) => {
+        res.body = value;
+        res.headersSent = true;
+        return res;
+      };
+      res.end = (value) => {
+        if (value !== undefined) res.body = value;
+        res.headersSent = true;
+        return res;
+      };
+      return res;
+    }
+    async function open(link) {
+      const query = Object.fromEntries(new URL(link, "https://x.test")
+          .searchParams.entries());
+      const res = fakeRes();
+      await functions.parkingDocument({method: "GET", query, headers: {},
+        url: "/d", body: {}, rawBody: Buffer.from(""),
+        on: () => {}, once: () => {},
+        get: () => "", header: () => ""}, res);
+      return res;
+    }
+    it("serves a line's own photo on a signed, unexpired link; 404 " +
+        "otherwise", async () => {
+      await switches({});
+      const own = await photo(P_STAFF);
+      const dropped = await run("addWaitingPackage",
+          barrels(1, {photoPaths: [own]}), P_STAFF);
+      const token = crypto.randomBytes(24).toString("base64url");
+      const handover = await photo(P_AGENT);
+      await db.collection("containerLines").doc(dropped.lineId).update({
+        documentToken: token, deliveredPhotoPath: handover,
+        customerPhotos: [{path: await photo(P_STAFF, {folder: "wa"}),
+          phone: "+224620000000", atMs: Date.now(), caseId: "c1"}]});
+      const line = await lineOf(dropped.lineId);
+      const link = (path, expiresMs = Date.now() + proof.PHOTO_LINK_MS) =>
+        proof.photoLink({base: "/d", token, path, expiresMs});
+      for (const path of [own, handover, line.customerPhotos[0].path]) {
+        const res = await open(link(path));
+        assert.equal(res.statusCode, 200, path);
+        assert.equal(res.headers["content-type"], "image/jpeg");
+        assert.equal(res.headers["cache-control"], "private, max-age=3600");
+        assert.equal(Buffer.isBuffer(res.body), true);
+        assert.equal(res.body.length, 2048);
+      }
+      // Expired, a tampered path, a bad signature, a path the line does
+      // not carry, another line's token.
+      assert.equal((await open(link(own, Date.now() - 1000))).statusCode,
+          404);
+      assert.equal((await open(link(own).replace(encodeURIComponent(own),
+          encodeURIComponent(await photo(P_STAFF))))).statusCode, 404);
+      assert.equal((await open(link(own).replace(/&s=[0-9a-f]+/,
+          "&s=000000000000000000000000"))).statusCode, 404);
+      assert.equal((await open(link(await photo(P_STAFF)))).statusCode, 404);
+      const other = crypto.randomBytes(24).toString("base64url");
+      assert.equal((await open(proof.photoLink({base: "/d", token: other,
+        path: own, expiresMs: Date.now() + 1000}))).statusCode, 404);
+    });
+  });
+
+  describe("the 12-month sweep", () => {
+    it("deletes the files of lines delivered a year ago and keeps the " +
+        "record", async () => {
+      await switches({});
+      const year = 366 * 24 * 60 * 60 * 1000;
+      const old = await photo(P_STAFF);
+      const customer = await photo(P_STAFF, {folder: "wa"});
+      const handover = await photo(P_AGENT);
+      const recent = await photo(P_STAFF);
+      const aged = await run("addWaitingPackage", barrels(1, {
+        photoPaths: [old], contents: [{label: "Phones", quantity: 2,
+          serial: "IMEI-9"}]}), P_STAFF);
+      const fresh = await run("addWaitingPackage",
+          barrels(1, {photoPaths: [recent]}), P_STAFF);
+      const bare = await run("addWaitingPackage", barrels(1), P_STAFF);
+      const ago = admin.firestore.Timestamp.fromMillis(Date.now() - year);
+      await db.collection("containerLines").doc(aged.lineId).update({
+        deliveredAt: ago, deliveredPhotoPath: handover,
+        customerPhotos: [{path: customer, phone: "+224620000000",
+          atMs: Date.now() - year, caseId: "c1"}]});
+      await db.collection("containerLines").doc(bare.lineId).update({
+        deliveredAt: ago});
+      await db.collection("containerLines").doc(fresh.lineId).update({
+        deliveredAt: admin.firestore.Timestamp.fromMillis(
+            Date.now() - year / 2)});
+      await functions.sweepPackageRequests.run({});
+      const swept = await lineOf(aged.lineId);
+      assert.deepEqual(swept.photoPaths, []);
+      assert.equal(swept.deliveredPhotoPath, "");
+      assert.equal(swept.customerPhotos[0].path, "");
+      assert.equal(swept.customerPhotos[0].phone, "+224620000000");
+      assert.ok(swept.photosDeletedAtMs > 0);
+      assert.deepEqual(swept.contents,
+          [{label: "Phones", quantity: 2, serial: "IMEI-9"}]);
+      assert.ok(swept.deliveredAt);
+      for (const path of [old, customer, handover]) {
+        assert.equal((await bucket.file(path).exists())[0], false, path);
+      }
+      // A line with nothing to delete is passed over; a recent one waits.
+      assert.equal((await lineOf(bare.lineId)).photosDeletedAtMs, undefined);
+      const kept = await lineOf(fresh.lineId);
+      assert.deepEqual(kept.photoPaths, [recent]);
+      assert.equal(kept.photosDeletedAtMs, undefined);
+      assert.equal((await bucket.file(recent).exists())[0], true);
+      // The cursor moved past what was visited: a second run re-reads
+      // nothing and deletes nothing more.
+      const cursor = (await db.collection("platformConfig")
+          .doc("packagePhotoSweep").get()).data();
+      assert.ok(cursor.afterDeliveredAt);
+      await functions.sweepPackageRequests.run({});
+      assert.equal((await lineOf(aged.lineId)).photosDeletedAtMs,
+          swept.photosDeletedAtMs);
+    });
   });
 });

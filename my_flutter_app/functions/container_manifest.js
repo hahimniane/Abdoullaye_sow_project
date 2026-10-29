@@ -36,6 +36,7 @@ const {
   linePriceRecord,
 } = require("./container_payments");
 const {OCEAN_CARRIERS} = require("./ocean_carrier_catalog");
+const {validateProofFields} = require("./package_proof");
 const {
   lineCounts,
   lineHasPieces,
@@ -397,6 +398,10 @@ function validateContainerLine(input, paidCents = 0) {
     errors.push(...sizeErrors(input));
     errors.push(...priceErrors(input?.priceCents, paidCents));
   }
+  // Proof on the package (docs/AIR_PACKAGES.md §2): photos, what is
+  // inside, weight and declared value - one code for the first problem.
+  const proof = validateProofFields(input).error;
+  if (proof) errors.push(proof);
   return errors;
 }
 
@@ -672,6 +677,20 @@ function containerLineContactsUpdate(input, current) {
 }
 
 /**
+ * The proof fields a line stores, as validateProofFields normalises them;
+ * the empties (no photos, nothing listed, no weight, no value) when the
+ * input fails the rules - the validator has refused it by then.
+ *
+ * @param {object} input Raw line fields.
+ * @return {object} {photoPaths, contents, weightLb, declaredValueCents}.
+ */
+function proofFieldsOf(input) {
+  const {fields, error} = validateProofFields(input);
+  return error ? {photoPaths: [], contents: [], weightLb: null,
+    declaredValueCents: null} : fields;
+}
+
+/**
  * @param {object} input Validated callable data.
  * @param {object} opts { containerId, containerStatus, addedByStaffId }.
  * @return {object} The line body.
@@ -704,6 +723,10 @@ function containerLineRecord(input, opts = {}) {
     widthIn: dimensionOf(input.widthIn),
     heightIn: dimensionOf(input.heightIn),
     ...linePriceRecord(input),
+    // Proof on the package (docs/AIR_PACKAGES.md §2): drop-off photos,
+    // what is inside, weight and declared value. Validated already
+    // (validateContainerLine); an invalid value here stores the empties.
+    ...proofFieldsOf(input),
     // What has been paid is the server's to keep (the sum of the payments
     // that were not reverted), never something a request can set.
     paidCents: 0,
@@ -944,8 +967,14 @@ const LINE_SUBSTANCE_FIELDS = Object.freeze([
 // pieces (an edit that leaves it out keeps the stored one).
 const LINE_PRICE_FIELDS = Object.freeze(
     ["priceCents", "payOnArrival", "piecePrices", "pickupFeeCents"]);
+// Proof on the package (docs/AIR_PACKAGES.md §2). Correctable in every
+// state, like the price: a photo is added or the item list fixed after the
+// box has sailed as often as before, and none of it changes what went in.
+const LINE_PROOF_FIELDS = Object.freeze(
+    ["photoPaths", "contents", "weightLb", "declaredValueCents"]);
 const LINE_EDIT_FIELDS = Object.freeze(
-    [...LINE_SUBSTANCE_FIELDS, ...LINE_PRICE_FIELDS, ...LINE_CONTACT_FIELDS]);
+    [...LINE_SUBSTANCE_FIELDS, ...LINE_PRICE_FIELDS, ...LINE_PROOF_FIELDS,
+      ...LINE_CONTACT_FIELDS]);
 
 // How the history names a field, instead of its Firestore key.
 const CONTACT_FIELD_LABELS = Object.freeze({
@@ -976,6 +1005,10 @@ const LINE_FIELD_LABELS = Object.freeze({
   payOnArrival: "pay on arrival",
   piecePrices: "piece prices",
   pickupFeeCents: "pickup fee",
+  photoPaths: "photos",
+  contents: "contents",
+  weightLb: "weight",
+  declaredValueCents: "declared value",
   ...CONTACT_FIELD_LABELS,
 });
 
@@ -1041,6 +1074,9 @@ function editComparable(key, value) {
   }
   if (key === "piecePrices") {
     return Array.isArray(value) ? JSON.stringify(value) : "";
+  }
+  if (key === "photoPaths" || key === "contents") {
+    return JSON.stringify(Array.isArray(value) ? value : []);
   }
   return String(value ?? "");
 }
@@ -1120,17 +1156,19 @@ function lineEditIsContactsOnly(changes) {
 }
 
 /**
- * Whether an edit may land on a line in this container. Contacts and the
- * price may change in every state; anything else only while the box is
- * loading, the same as adding, moving or removing a line. A waiting line has
- * no container (null), which is as open as a loading one.
+ * Whether an edit may land on a line in this container. Contacts, the
+ * price and the proof fields may change in every state; anything else
+ * only while the box is loading, the same as adding, moving or removing a
+ * line. A waiting line has no container (null), which is as open as a
+ * loading one.
  *
  * @param {object|null} container The line's container, null while waiting.
  * @param {string[]} changes Changed field keys.
  * @return {string|null} A refusal code, or null when allowed.
  */
 function containerLineEditRefusal(container, changes) {
-  const always = [...LINE_CONTACT_FIELDS, ...LINE_PRICE_FIELDS];
+  const always = [...LINE_CONTACT_FIELDS, ...LINE_PRICE_FIELDS,
+    ...LINE_PROOF_FIELDS];
   if ((Array.isArray(changes) ? changes : [])
       .every((key) => always.includes(key))) {
     return null;
@@ -1435,6 +1473,10 @@ const CONTAINER_MESSAGES = Object.freeze({
   scan_line_not_found: "No package of yours has that code.",
   line_delivered: "This package was already delivered.",
   line_in_other_container: "This package is on another container.",
+  // Loading warning (docs/AIR_PACKAGES.md §4.8).
+  sender_problem:
+    "The sender reported a problem with this package. Confirm to load it " +
+    "anyway.",
 });
 
 module.exports = {
@@ -1484,6 +1526,7 @@ module.exports = {
   containerCounts,
   containerCountsDelta,
   LINE_CONTACT_FIELDS,
+  LINE_PROOF_FIELDS,
   LINE_SUBSTANCE_FIELDS,
   LINE_PRICE_FIELDS,
   LINE_EDIT_FIELDS,

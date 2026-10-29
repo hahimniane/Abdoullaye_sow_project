@@ -159,6 +159,8 @@ describe("what a delivery records", () => {
       deliveredByName: "Awa Barry",
       collectedBy: "Ibrahima",
       deliveredBalanceCents: 4000,
+      deliveredWithoutCode: false,
+      deliveredPhotoPath: "",
     });
     assert.equal(deliveryRecord({}).deliveredBalanceCents, 0);
   });
@@ -337,5 +339,116 @@ describe("the server wiring", () => {
     const body = section("async function refreshContainerCounts(",
         "\n}\n");
     assert.match(body, /deliveredCount: deliveredLineCount\(rows\)/);
+  });
+
+  // Handover with the pickup code (docs/AIR_PACKAGES.md §4.7).
+  it("checks the code, the override photo and records the money with the " +
+      "payment helpers", () => {
+    const body = section("async function containerLineDelivery(",
+        "\n}\n");
+    assert.match(body, /deliveryHandover\(proofSettings, row, data\)/);
+    assert.match(body, /collectedCentsOf\(data\.collectedCents\)/);
+    assert.match(body, /deliveryPaymentInput\(collectedCents, uid\)/);
+    // The same judge and record as recordContainerLinePayment, on the
+    // root, with paidCents recomputed from the live payments.
+    assert.match(body, /validateContainerLinePayment\(payment,/);
+    assert.match(body, /containerLinePaymentRecord\(payment, uid\)/);
+    assert.match(body, /sumContainerLivePayments\(/);
+    assert.match(body, /lineId: group\.rootId,/);
+    assert.match(body, /paidCents: paidAfter,/);
+    assert.match(body,
+        /collectedAtDeliveryCents: paymentRecord\.amountCents/);
+    assert.match(body,
+        /photoAttachable\(overridePhoto, \{businessId, uid\}\)/);
+    // The override photo is checked before the delivery is written.
+    assert.ok(body.indexOf("throw deliveryError(\"photo_invalid\")") <
+      body.indexOf("...deliveryRecord({staffId: uid"));
+  });
+});
+
+// Handover with the pickup code (docs/AIR_PACKAGES.md §4.7): the code, the
+// override, the money collected, and what the line and History record.
+describe("the pickup code at handover", () => {
+  const {
+    DELIVERY_PAYMENT_METHOD,
+    DELIVERY_PAYMENT_NOTE,
+    deliveryHandover,
+    collectedCentsOf,
+    deliveryPaymentInput,
+  } = require("../container_delivery");
+  const on = {pickupCode: true};
+  const PHOTO = "packagePhotos/biz1/agent1/abcd1234efgh.jpg";
+
+  it("delivers on the code, refuses a wrong one, takes the override", () => {
+    const coded = line({pickupCode: "4821"});
+    assert.deepEqual(deliveryHandover(on, coded, {pickupCode: "4821"}),
+        {refusal: "", withoutCode: false});
+    assert.deepEqual(deliveryHandover(on, coded, {pickupCode: "48 21"}),
+        {refusal: "", withoutCode: false});
+    assert.deepEqual(deliveryHandover(on, coded, {pickupCode: "1111"}),
+        {refusal: "pickup_code_invalid", withoutCode: false});
+    assert.deepEqual(deliveryHandover(on, coded, {}),
+        {refusal: "pickup_code_invalid", withoutCode: false});
+    assert.deepEqual(deliveryHandover(on, coded,
+        {override: {collectedBy: "Ibrahima Sow", photoPath: PHOTO}}),
+    {refusal: "", withoutCode: true});
+    assert.deepEqual(deliveryHandover(on, coded,
+        {override: {collectedBy: "I", photoPath: PHOTO}}),
+    {refusal: "override_incomplete", withoutCode: false});
+    assert.deepEqual(deliveryHandover(on, coded,
+        {override: {collectedBy: "Ibrahima Sow"}}),
+    {refusal: "override_incomplete", withoutCode: false});
+    assert.deepEqual(deliveryHandover(on, coded, {override: "yes"}),
+        {refusal: "pickup_code_invalid", withoutCode: false});
+    // The switch off, or a line minted before it: no code asked.
+    assert.deepEqual(deliveryHandover({}, coded, {}),
+        {refusal: "", withoutCode: false});
+    assert.deepEqual(deliveryHandover(on, line(), {}),
+        {refusal: "", withoutCode: false});
+    assert.ok(DELIVERY_MESSAGES.pickup_code_invalid);
+    assert.ok(DELIVERY_MESSAGES.override_incomplete);
+    assert.ok(DELIVERY_MESSAGES.collected_cents_invalid);
+  });
+
+  it("records the override on the line and clears it on undo", () => {
+    const record = deliveryRecord({staffId: "u1", staffName: "Awa",
+      collectedBy: "Ibrahima Sow", balanceCents: 0, withoutCode: true,
+      photoPath: PHOTO});
+    assert.equal(record.deliveredWithoutCode, true);
+    assert.equal(record.deliveredPhotoPath, PHOTO);
+    const plain = deliveryRecord({staffId: "u1", withoutCode: false,
+      photoPath: PHOTO});
+    assert.equal(plain.deliveredWithoutCode, false);
+    assert.equal(plain.deliveredPhotoPath, "");
+    assert.ok(DELIVERY_FIELDS.includes("deliveredWithoutCode"));
+    assert.ok(DELIVERY_FIELDS.includes("deliveredPhotoPath"));
+    assert.ok(!DELIVERY_FIELDS.includes("collectedAtDeliveryCents"));
+  });
+
+  it("takes USD collected as whole cents, zero or more", () => {
+    assert.equal(collectedCentsOf(undefined), 0);
+    assert.equal(collectedCentsOf(""), 0);
+    assert.equal(collectedCentsOf(0), 0);
+    assert.equal(collectedCentsOf(4000), 4000);
+    assert.equal(collectedCentsOf("4000"), 4000);
+    for (const bad of [-1, 12.5, "forty", {}]) {
+      assert.ok(Number.isNaN(collectedCentsOf(bad)), String(bad));
+    }
+    assert.deepEqual(deliveryPaymentInput(4000, "agent1"), {
+      amountCents: 4000, method: DELIVERY_PAYMENT_METHOD,
+      note: DELIVERY_PAYMENT_NOTE, receivedByStaffId: "agent1"});
+    assert.equal(DELIVERY_PAYMENT_METHOD, "cash");
+    assert.equal(DELIVERY_PAYMENT_NOTE, "At pickup");
+  });
+
+  it("says so in History", () => {
+    assert.equal(deliveryAuditSummary({what: "3 barrels for Fatou Diallo",
+      collectedBy: "Ibrahima Sow", withoutCode: true,
+      collectedText: "$40.00", balanceText: "$20.00"}),
+    "Delivered 3 barrels for Fatou Diallo, collected by Ibrahima Sow " +
+      "without a pickup code, $40.00 collected, with $20.00 still owed");
+    assert.equal(deliveryAuditSummary({what: "3 barrels",
+      collectedBy: "Mariama Bah"}),
+    "Delivered 3 barrels, collected by Mariama Bah");
   });
 });

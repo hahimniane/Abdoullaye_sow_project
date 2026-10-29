@@ -227,7 +227,8 @@ function receivedTotalCents(pieces, pickupFeeCents = 0) {
  * @param {object} args {lineId, requestId, pieces (from cleanReceivePieces;
  *   default: the request's at their prefilled prices), pickupFeeCents
  *   (default: the prefilled one), payOnArrival, staffUid, receivedAt (a
- *   Timestamp or server-timestamp sentinel)}.
+ *   Timestamp or server-timestamp sentinel), photoPaths, contents,
+ *   weightLb, declaredValueCents (the proof fields staff typed)}.
  * @return {object} The line, ready to write (the caller adds trackingCode,
  *   paidCents, createdAt, updatedAt and businessId).
  */
@@ -258,6 +259,12 @@ function requestLineRecord(request, args) {
     destinationCountryId: request?.destinationCountryId,
     destinationCountryName: request?.destinationCountryName,
     payOnArrival: args.payOnArrival === true,
+    // Proof on the package (docs/AIR_PACKAGES.md §4.2): what staff typed
+    // at the counter; the request's own photos are copied in by index.js.
+    photoPaths: args.photoPaths,
+    contents: args.contents,
+    weightLb: args.weightLb,
+    declaredValueCents: args.declaredValueCents,
   }, {
     containerId: "",
     containerStatus: LINE_STATUS_WAITING,

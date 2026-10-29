@@ -30,6 +30,7 @@ const {
 } = require("./container_manifest");
 const {lineIsDelivered} = require("./container_delivery");
 const {lineCounts} = require("./line_pieces");
+const {CONFIRMATION, senderConfirmationOf} = require("./package_proof");
 
 const LOAD_ACTION = Object.freeze({
   SCAN: "scan",
@@ -103,6 +104,12 @@ const wholeCount = (value) => {
   const n = Number(value);
   return Number.isInteger(n) && n > 0 ? n : 0;
 };
+
+// The loading warning (docs/AIR_PACKAGES.md §4.8): a package whose sender
+// tapped "Something's wrong" goes on only once the loader has seen that
+// and confirmed, the way a delivery with a balance does (the same shape:
+// refused with the warnings until `acknowledgeProblems: true`).
+const LOAD_WARNING = Object.freeze({SENDER_PROBLEM: "sender_problem"});
 
 /**
  * @param {*} value The request's `action`.
@@ -370,6 +377,35 @@ function undoScanDecision(args) {
 }
 
 /**
+ * The warnings loading these lines raises: one per line whose sender
+ * reported a problem. Nothing else warns.
+ *
+ * @param {object[]} entries [{id, line}] about to go on.
+ * @return {object[]} [{lineId, reason: "sender_problem"}], in order.
+ */
+function senderProblemWarnings(entries) {
+  return (Array.isArray(entries) ? entries : [])
+      .map((entry) => asRow(entry))
+      .filter((entry) => text(entry.id) &&
+        senderConfirmationOf(entry.line).status === CONFIRMATION.PROBLEM)
+      .map((entry) => ({lineId: text(entry.id),
+        reason: LOAD_WARNING.SENDER_PROBLEM}));
+}
+
+/**
+ * The warning step: lines with a problem go on only once the caller has
+ * seen the warnings and confirmed. Never a refusal of the package itself.
+ *
+ * @param {object[]} warnings senderProblemWarnings.
+ * @param {boolean} acknowledged The request's `acknowledgeProblems`.
+ * @return {string|null} "sender_problem" until confirmed, else null.
+ */
+function loadingProblemRefusal(warnings, acknowledged) {
+  if (!Array.isArray(warnings) || warnings.length === 0) return null;
+  return acknowledged === true ? null : LOAD_WARNING.SENDER_PROBLEM;
+}
+
+/**
  * What "Leave N waiting" does: split off the unscanned pieces when some,
  * not all, were scanned; answer with the part already made when a retried
  * request finds every remaining piece scanned and a part on record.
@@ -544,7 +580,10 @@ module.exports = {
   MIN_LOAD_SCAN_IDS,
   MAX_LOAD_SCAN_IDS,
   LOAD_SUMMARY_WAITING_LIMIT,
+  LOAD_WARNING,
   loadActionOf,
+  senderProblemWarnings,
+  loadingProblemRefusal,
   scanCodeFrom,
   scanIdOf,
   linePieceCount,

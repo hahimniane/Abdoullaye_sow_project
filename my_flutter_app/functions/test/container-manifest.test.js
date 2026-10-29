@@ -32,6 +32,7 @@ const {
   LINE_CONTACT_FIELDS,
   LINE_SUBSTANCE_FIELDS,
   LINE_PRICE_FIELDS,
+  LINE_PROOF_FIELDS,
   LINE_EDIT_FIELDS,
   CONTACT_FIELD_LABELS,
   LINE_FIELD_LABELS,
@@ -592,7 +593,8 @@ describe("editing a line after it was added", () => {
         assert.equal(lineEditIsContactsOnly(["customerName", "quantity"]),
             false);
         assert.deepEqual([...LINE_CONTACT_FIELDS, ...LINE_SUBSTANCE_FIELDS,
-          ...LINE_PRICE_FIELDS].sort(), [...LINE_EDIT_FIELDS].sort());
+          ...LINE_PRICE_FIELDS, ...LINE_PROOF_FIELDS].sort(),
+        [...LINE_EDIT_FIELDS].sort());
       });
 
   it("hands the VIN lock over only when the car changes", () => {
@@ -1508,4 +1510,113 @@ describe("the shipping line and when tracking is tried again", () => {
             update.indexOf("const changed"));
         assert.doesNotMatch(structural, /carrierScac/);
       });
+});
+
+// Proof on the package (docs/AIR_PACKAGES.md §2, §4.2): the four fields a
+// line stores through package_proof.validateProofFields, edited and
+// audited like the price.
+describe("package proof fields", () => {
+  const {
+    containerLineEditRefusal,
+    containerLineEditTarget,
+    containerLineEditChanges,
+    containerLineEditAudit,
+    containerLineEditLabels,
+    validateContainerLineEdit,
+  } = require("../container_manifest");
+  const PHOTO = "packagePhotos/biz/staff1/abcd1234efgh.jpg";
+  const proof = {
+    photoPaths: [PHOTO],
+    contents: [{label: "Phones", quantity: 2, serial: "IMEI 1"},
+      {label: "Tablet"}],
+    weightLb: "4.26",
+    declaredValueCents: 125000,
+  };
+  const dropped = (extra = {}) => ({kind: "barrels", quantity: 3,
+    ownerKind: "customer", customerName: "Fatou Diallo",
+    customerPhone: "+16465550100", receiverName: "Mariama Bah",
+    receiverPhone: "+224620000000", destinationCountryId: "gn",
+    destinationCountryName: "Guinea", ...extra});
+
+  it("accepts and stores photos, contents, weight and declared value",
+      () => {
+        assert.deepEqual(validateContainerLine(dropped(proof)), []);
+        assert.deepEqual(validateWaitingPackage(dropped(proof)), []);
+        const line = containerLineRecord(dropped(proof));
+        assert.deepEqual(line.photoPaths, [PHOTO]);
+        assert.deepEqual(line.contents, [
+          {label: "Phones", quantity: 2, serial: "IMEI 1"},
+          {label: "Tablet", quantity: 1, serial: ""}]);
+        assert.equal(line.weightLb, 4.3);
+        assert.equal(line.declaredValueCents, 125000);
+        // Nothing given: the empties, on every line.
+        const bare = containerLineRecord(dropped());
+        assert.deepEqual(bare.photoPaths, []);
+        assert.deepEqual(bare.contents, []);
+        assert.equal(bare.weightLb, null);
+        assert.equal(bare.declaredValueCents, null);
+      });
+
+  it("refuses each field with its own code", () => {
+    assert.deepEqual(validateContainerLine(dropped({photoPaths:
+      ["packageRequestPhotos/biz/staff1/abcd1234efgh.jpg"]})),
+    ["photo_invalid"]);
+    assert.deepEqual(validateContainerLine(dropped({photoPaths: "x"})),
+        ["photo_invalid"]);
+    assert.deepEqual(validateContainerLine(dropped({contents:
+      [{label: "x".repeat(61)}]})), ["contents_invalid"]);
+    assert.deepEqual(validateContainerLine(dropped({contents:
+      [{label: "Phones", quantity: 100}]})), ["contents_invalid"]);
+    assert.deepEqual(validateContainerLine(dropped({weightLb: 0})),
+        ["weight_invalid"]);
+    assert.deepEqual(validateContainerLine(dropped({weightLb: "heavy"})),
+        ["weight_invalid"]);
+    assert.deepEqual(validateContainerLine(dropped({declaredValueCents:
+      -1})), ["declared_value_invalid"]);
+    assert.deepEqual(validateContainerLine(dropped({declaredValueCents:
+      12.5})), ["declared_value_invalid"]);
+    // The first problem is named; the rest of the line is still checked.
+    assert.deepEqual(validateContainerLine(dropped({quantity: 0,
+      weightLb: 0})), ["quantity_required", "weight_invalid"]);
+  });
+
+  it("edits all four, in every state, and names them in History", () => {
+    const current = {businessId: "biz", ...containerLineRecord(
+        dropped(proof), {containerId: "box1", containerStatus: "shipped"})};
+    const asked = {...dropped(proof), photoPaths: [],
+      contents: [{label: "Phones", quantity: 3}], weightLb: 5,
+      declaredValueCents: 0};
+    assert.deepEqual(validateContainerLineEdit(current, asked, false), []);
+    const next = containerLineEditTarget(current, asked, false);
+    const changes = containerLineEditChanges(current, next);
+    assert.deepEqual(changes, [...LINE_PROOF_FIELDS]);
+    for (const status of ["loading", "shipped", "arrived"]) {
+      assert.equal(containerLineEditRefusal({status}, changes), null,
+          status);
+    }
+    assert.deepEqual(containerLineEditLabels(changes),
+        ["photos", "contents", "weight", "declared value"]);
+    assert.deepEqual(containerLineEditAudit(current, next, changes), {
+      action: "line_edited",
+      summary: "Edited 3 barrels: photos, contents, weight, declared " +
+        "value for Fatou Diallo",
+    });
+    // An edit that leaves them out keeps them; the same values change
+    // nothing.
+    const kept = containerLineEditTarget(current, dropped(), false);
+    assert.deepEqual(containerLineEditChanges(current, kept), []);
+    assert.deepEqual(containerLineEditChanges(current,
+        containerLineEditTarget(current, dropped(proof), false)), []);
+    // A bad value on an edit is refused as on a new line.
+    assert.deepEqual(validateContainerLineEdit(current,
+        {...dropped(), weightLb: 9999}, false), ["weight_invalid"]);
+    // A contacts-only edit never touches them.
+    const contacts = containerLineEditTarget(current,
+        {receiverName: "Aissatou Bah", photoPaths: []}, true);
+    assert.deepEqual(contacts.photoPaths, [PHOTO]);
+  });
+
+  it("names the loading warning", () => {
+    assert.match(CONTAINER_MESSAGES.sender_problem, /reported a problem/);
+  });
 });
