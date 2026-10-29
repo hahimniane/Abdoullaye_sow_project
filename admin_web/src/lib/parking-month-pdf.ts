@@ -28,6 +28,7 @@ const COPY = {
     due: "Due", none: "Nobody owes anything for this month.", soFar: "so far",
     car: "Car", amount: "Amount", to: "to", activities: "Activities", date: "Date", activity: "Activity", item: "item", items: "items", paidToward: "Paid toward", dueLabel: "due", paidLabel: "paid", olderItems: "Unpaid from before", registeredTo: "registered to", monthTotal: "Total for the month", cars: "cars",
     footer: "Issued through Laawol Digital · laawoldigital.com",
+    estimate: "Estimate · whole month",
   },
   fr: {
     bill: "FACTURE MENSUELLE", summary: "FIN DE MOIS", billedTo: "Facturé à", vehicle: "Véhicule",
@@ -38,6 +39,7 @@ const COPY = {
     due: "Dû", none: "Personne ne doit rien pour ce mois.", soFar: "à ce jour",
     car: "Voiture", amount: "Montant", to: "au", activities: "Activités", date: "Date", activity: "Activité", item: "élément", items: "éléments", paidToward: "Payé pour", dueLabel: "dû", paidLabel: "payé", olderItems: "Impayé des mois précédents", registeredTo: "enregistrée au nom de", monthTotal: "Total du mois", cars: "voitures",
     footer: "Émis via Laawol Digital · laawoldigital.com",
+    estimate: "Estimation · mois entier",
   },
 } as const;
 
@@ -92,14 +94,15 @@ function row(doc: Doc, y: number, label: string, value: string, opts: { bold?: b
   doc.text(value, R, y, { align: "right" });
 }
 
-export async function buildParkingMonthBillPdf(input: { business: Row; customer: ParkingMonthCustomer; language: Lang }): Promise<Blob> {
+export async function buildParkingMonthBillPdf(input: { business: Row; customer: ParkingMonthCustomer; language: Lang; estimate?: boolean }): Promise<Blob> {
   const { jsPDF } = await import("jspdf");
   const t = COPY[input.language];
   const day = (key: string) => formatDayKey(key, input.language);
   const c = input.customer;
   const doc = new jsPDF({ unit: "pt", format: "letter" });
   const items = c.cars.length + c.activities.length;
-  let y = await header(doc, input.business, t.bill, monthLabel(c.monthKey, input.language), `${items} ${items === 1 ? t.item : t.items}`);
+  const billTitle = monthLabel(c.monthKey, input.language) + (input.estimate ? ` · ${t.estimate}` : "");
+  let y = await header(doc, input.business, t.bill, billTitle, `${items} ${items === 1 ? t.item : t.items}`);
 
   doc.setFont("helvetica", "bold").setFontSize(8).setTextColor(...MUTED).text(t.billedTo.toUpperCase(), M, y);
   doc.setFontSize(13).setTextColor(...INK).text(c.customerName || "—", M, y + 16);
@@ -202,12 +205,13 @@ export async function buildParkingMonthBillPdf(input: { business: Row; customer:
   return doc.output("blob");
 }
 
-export async function buildParkingMonthSummaryPdf(input: { business: Row; summary: ParkingMonthSummary; language: Lang }): Promise<Blob> {
+export async function buildParkingMonthSummaryPdf(input: { business: Row; summary: ParkingMonthSummary; language: Lang; estimate?: boolean }): Promise<Blob> {
   const { jsPDF } = await import("jspdf");
   const t = COPY[input.language];
   const s = input.summary;
   const doc = new jsPDF({ unit: "pt", format: "letter" });
-  let y = await header(doc, input.business, t.summary, monthLabel(s.monthKey, input.language), t.parking);
+  const summaryTitle = monthLabel(s.monthKey, input.language) + (input.estimate ? ` · ${t.estimate}` : "");
+  let y = await header(doc, input.business, t.summary, summaryTitle, t.parking);
 
   const stats: Array<[string, string, [number, number, number]]> = [
     [t.carsOnLot, String(s.carsOnLot), INK],

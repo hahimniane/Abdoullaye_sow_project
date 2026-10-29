@@ -64,6 +64,34 @@ export function monthDays(monthKey: string): { first: number; last: number } | n
   };
 }
 
+/**
+ * Whether a month can be seen as a whole-month estimate: it is the month
+ * `now` falls in and it is not over yet (a past month is already whole).
+ */
+export function parkingMonthCanEstimate(monthKey: string, now: Date = new Date()): boolean {
+  const month = monthDays(monthKey);
+  const today = dayNumber(now);
+  return Boolean(month) && today !== null && today >= month!.first && today < month!.last;
+}
+
+/**
+ * The moment a month is counted up to. Normally now; for a whole-month
+ * estimate of the current month, its last day (noon UTC), so cars still
+ * parked run up to the end of the month. Nothing is saved: it only changes
+ * what the report shows. Mirrors `parkingMonthAsOf` in the app.
+ */
+export function parkingMonthAsOf(monthKey: string, wholeMonth: boolean, now: Date = new Date()): Date {
+  if (!wholeMonth || !parkingMonthCanEstimate(monthKey, now)) return now;
+  const month = monthDays(monthKey)!;
+  return new Date(month.last * DAY_MS + 12 * 60 * 60 * 1000);
+}
+
+/** "Oct 31, 2026": the last day a whole-month estimate counts to. */
+export function parkingMonthLastDayLabel(monthKey: string): string {
+  const month = monthDays(monthKey);
+  return month ? dayLabel(dayKeyOf(month.last)) : "";
+}
+
 export function previousMonthKey(now: Date = new Date()): string {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1)).toISOString().slice(0, 7);
 }

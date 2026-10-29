@@ -38,7 +38,18 @@ test("the view is worked out from the cars and activities, and records only thro
   assert.match(view, /receivedByStaffId: settleBy/, "who received the money is always sent");
   assert.match(view, /if \(!settleBy\) \{/, "and required before anything is recorded");
   // Cars and the ledger's activities, both read, never written.
-  assert.match(view, /parkingMonthSummary\(rows, monthKey, new Date\(\), activities\)/);
+  // Counted up to now, or - the whole-month estimate - the month's last day.
+  assert.match(view, /parkingMonthSummary\(rows, monthKey, parkingMonthAsOf\(monthKey, wholeMonth\), activities\)/);
+});
+
+test("the whole-month estimate is a preview: only for the current month, nothing collected", () => {
+  assert.match(view, /const canEstimate = parkingMonthCanEstimate\(monthKey\)/);
+  assert.match(view, /\{canEstimate && \(/, "the switch shows only for the unfinished month");
+  assert.match(view, /!estimating && customer\.dueCents > 0/, "no Mark all paid on an estimate");
+  assert.match(view, /estimate: estimating/, "the PDFs say Estimate");
+  for (const english of ["So far", "Whole month (estimate)", "estimate, whole month"]) {
+    assert.notEqual(translateValue(english, "fr"), english, `no French for "${english}"`);
+  }
 });
 
 test("its words read in French", () => {

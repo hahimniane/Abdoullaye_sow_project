@@ -310,3 +310,30 @@ test("how it was paid reads in the console's own words", () => {
   assert.equal(parkingPaidViaLabel("barter"), "Another method");
 });
 
+
+test("a whole-month estimate counts cars still parked to the month's last day", async () => {
+  const m = await import("./parking-month-statement.ts");
+  const now = new Date("2026-10-29T15:00:00Z");
+  assert.equal(m.parkingMonthCanEstimate("2026-10", now), true);
+  assert.equal(m.parkingMonthCanEstimate("2026-09", now), false, "a past month is already whole");
+  assert.equal(m.parkingMonthCanEstimate("2026-10", new Date("2026-10-31T15:00:00Z")), false, "nothing left to estimate on the last day");
+  assert.equal(m.parkingMonthAsOf("2026-10", false, now), now);
+  assert.equal(m.parkingMonthAsOf("2026-09", true, now), now);
+  assert.equal(m.parkingMonthAsOf("2026-10", true, now).toISOString(), "2026-10-31T12:00:00.000Z");
+  assert.equal(m.parkingMonthLastDayLabel("2026-10"), "Oct 31, 2026");
+
+  const open = { id: "a", parkingDate: new Date("2026-10-01T15:00:00Z"), dailyRate: 12, customerName: "Abdoulaye Sow", customerPhone: "3475628973" };
+  const left = { ...open, id: "b", parkingEndDate: new Date("2026-10-03T15:00:00Z"), amountDueCents: 3600 };
+  const soFar = m.parkingMonthStatement(open, "2026-10", now)!;
+  const whole = m.parkingMonthStatement(open, "2026-10", m.parkingMonthAsOf("2026-10", true, now))!;
+  assert.equal(soFar.days, 29);
+  assert.equal(soFar.monthCents, 34800);
+  assert.equal(whole.days, 31);
+  assert.equal(whole.monthCents, 37200);
+  assert.equal(whole.periodTo, "2026-10-31");
+  assert.equal(m.parkingMonthStatement(left, "2026-10", m.parkingMonthAsOf("2026-10", true, now))!.monthCents, 3600, "a car that left is unchanged");
+  const paid = { ...open, id: "c", amountPaidCents: 10000 };
+  const paidWhole = m.parkingMonthStatement(paid, "2026-10", m.parkingMonthAsOf("2026-10", true, now))!;
+  assert.equal(paidWhole.monthPaidCents, 10000, "payments already recorded still count");
+  assert.equal(paidWhole.dueCents, 27200);
+});

@@ -7324,6 +7324,18 @@ Object.assign(ATTRIBUTE_TRANSLATIONS, {
   "e.g. iPhone 13": "ex. iPhone 13",
 });
 
+// Parking month end: the whole-month estimate of the current month.
+Object.assign(TEXT_TRANSLATIONS, {
+  "So far": "Jusqu’à aujourd’hui",
+  "Whole month (estimate)": "Mois entier (estimation)",
+  "estimate, whole month": "estimation, mois entier",
+  "Estimate for the whole month: cars still parked are counted to the month's last day, at their daily rate. Nothing is saved, and payments are recorded on the real bill.":
+    "Estimation pour le mois entier : les voitures encore garées sont comptées jusqu’au dernier jour du mois, à leur tarif journalier. Rien n’est enregistré, et les paiements se notent sur la vraie facture.",
+});
+Object.assign(ATTRIBUTE_TRANSLATIONS, {
+  "Count up to": "Compter jusqu’à",
+});
+
 const englishDictionary = { ...TEXT_TRANSLATIONS, ...ATTRIBUTE_TRANSLATIONS };
 const frenchDictionary = buildReverseDictionary([
   TEXT_TRANSLATIONS,

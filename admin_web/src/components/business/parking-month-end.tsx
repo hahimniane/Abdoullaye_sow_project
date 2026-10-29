@@ -20,7 +20,10 @@ import {
   monthBillPaymentPlan,
   monthLabel,
   moneyText,
+  parkingMonthAsOf,
+  parkingMonthCanEstimate,
   parkingMonthCustomerText,
+  parkingMonthLastDayLabel,
   parkingPaidViaLabel,
   parkingMonthSummary,
   previousMonthKey,
@@ -59,6 +62,10 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
   const activities = inputs.activities;
   // Which customers: who still owes, who has paid for the month, everyone.
   const [view, setView] = useState<"owing" | "paid" | "all">("owing");
+  // "Whole month": the current month counted to its last day, so cars still
+  // parked run up to the end of the month. A preview: nothing is saved and
+  // nothing can be collected for days that have not happened.
+  const [wholeMonth, setWholeMonth] = useState(false);
   // Customers whose already-paid lines are unfolded on their card.
   const [openPaid, setOpenPaid] = useState<Set<string>>(() => new Set());
   const [busyId, setBusyId] = useState("");
@@ -80,7 +87,13 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
   const orgName = text(business?.name, "") || businessName;
   const identity = useMemo(() => ({ ...(business ?? {}), name: orgName }), [business, orgName]);
 
-  const summary = useMemo(() => parkingMonthSummary(rows, monthKey, new Date(), activities), [rows, activities, monthKey]);
+  const canEstimate = parkingMonthCanEstimate(monthKey);
+  const estimating = wholeMonth && canEstimate;
+  const lastDay = parkingMonthLastDayLabel(monthKey);
+  const summary = useMemo(
+    () => parkingMonthSummary(rows, monthKey, parkingMonthAsOf(monthKey, wholeMonth), activities),
+    [rows, activities, monthKey, wholeMonth],
+  );
   const thisMonth = new Date().toISOString().slice(0, 7);
   // One row per customer (grouped by phone), their cars underneath.
   const listed = view === "all" ? summary.customers : view === "paid" ? summary.customersPaid : summary.customersOwing;
@@ -94,7 +107,7 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
     setBusyId("summary");
     setFlash("");
     try {
-      const blob = await buildParkingMonthSummaryPdf({ business: identity, summary, language: lang });
+      const blob = await buildParkingMonthSummaryPdf({ business: identity, summary, language: lang, estimate: estimating });
       setPreview({ blob, fileName: parkingMonthFileName("summary", monthKey, "", orgName), title: `Month end — ${monthLabel(monthKey, lang)}` });
     } catch {
       setFlash("The PDF could not be made. Try again.");
@@ -107,7 +120,7 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
     setBusyId(customer.key);
     setFlash("");
     try {
-      const blob = await buildParkingMonthBillPdf({ business: identity, customer, language: lang });
+      const blob = await buildParkingMonthBillPdf({ business: identity, customer, language: lang, estimate: estimating });
       setPreview({ blob, fileName: parkingMonthFileName("bill", monthKey, customer.customerName, orgName), title: `${customer.customerName || "Parking bill"} — ${monthLabel(monthKey, lang)}` });
     } catch {
       setFlash("The PDF could not be made. Try again.");
@@ -172,7 +185,12 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
 
   async function copyBill(customer: ParkingMonthCustomer) {
     try {
-      await navigator.clipboard.writeText(parkingMonthCustomerText(customer, orgName));
+      const bill = parkingMonthCustomerText(customer, orgName);
+      // The bill text mirrors the server's month-end message; an estimate
+      // only gets a first line saying so.
+      await navigator.clipboard.writeText(estimating
+        ? `ESTIMATE — whole month, cars still parked counted to ${lastDay}\n\n${bill}`
+        : bill);
       setFlash(`Copied ${customer.customerName}'s bill — paste it into WhatsApp.`);
     } catch {
       setFlash("Copy is blocked here. Use Save as PDF instead.");
@@ -184,16 +202,26 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
       <div className="pk-month-head">
         <button className="ghost-button" type="button" onClick={onClose}><ArrowLeft size={14} /> Parked cars</button>
         <div className="pk-month-picker" role="group" aria-label="Month">
-          <button className="lst-icon-btn" type="button" aria-label="Previous month" onClick={() => setMonthKey((m) => shiftMonthKey(m, -1))}><ChevronLeft size={18} /></button>
+          <button className="lst-icon-btn" type="button" aria-label="Previous month" onClick={() => { setWholeMonth(false); setMonthKey((m) => shiftMonthKey(m, -1)); }}><ChevronLeft size={18} /></button>
           <strong>{monthLabel(monthKey, lang)}</strong>
-          <button className="lst-icon-btn" type="button" aria-label="Next month" disabled={monthKey >= thisMonth} onClick={() => setMonthKey((m) => shiftMonthKey(m, 1))}><ChevronRight size={18} /></button>
+          <button className="lst-icon-btn" type="button" aria-label="Next month" disabled={monthKey >= thisMonth} onClick={() => { setWholeMonth(false); setMonthKey((m) => shiftMonthKey(m, 1)); }}><ChevronRight size={18} /></button>
         </div>
         <button className="lst-btn ghost" type="button" disabled={busyId !== ""} onClick={() => void saveSummary()}>
           {busyId === "summary" ? <RefreshCw className="spin" size={14} /> : <FileDown size={14} />} View the month as PDF
         </button>
       </div>
+      {canEstimate && (
+        <div className="pk-month-tools">
+          <div className="pk-view" role="group" aria-label="Count up to">
+            <button type="button" className={!wholeMonth ? "on" : ""} aria-pressed={!wholeMonth} onClick={() => setWholeMonth(false)}>So far</button>
+            <button type="button" className={wholeMonth ? "on" : ""} aria-pressed={wholeMonth} onClick={() => setWholeMonth(true)}>Whole month (estimate)</button>
+          </div>
+        </div>
+      )}
       <p className="panel-lede">
-        {monthKey === thisMonth
+        {estimating
+          ? "Estimate for the whole month: cars still parked are counted to the month's last day, at their daily rate. Nothing is saved, and payments are recorded on the real bill."
+          : monthKey === thisMonth
           ? "This month so far. Each car's bill is that month's days at its rate; payments recorded on the car pay the oldest month first."
           : "Each car's bill is that month's days at its rate, plus anything still unpaid from before. Payments recorded on the car pay the oldest month first, so a bill turns to paid by itself."}
       </p>
@@ -210,7 +238,7 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
 
       <div className="pk-scoreboard" role="group" aria-label="Month totals">
         <div className="pk-stat"><span>Cars on the lot</span><b>{summary.carsOnLot}</b><small>{summary.customersOwing.length} customers still owe</small></div>
-        <div className="pk-stat"><span>Billed</span><b>{moneyText(summary.billedCents)}</b><small>for the month</small></div>
+        <div className="pk-stat"><span>Billed</span><b>{moneyText(summary.billedCents)}</b><small>{estimating ? "estimate, whole month" : "for the month"}</small></div>
         <div className="pk-stat"><span>Collected</span><b>{moneyText(summary.collectedCents)}</b><small>toward the month</small></div>
         <div className="pk-stat"><span>Paid in full</span><b>{summary.customersPaid.length}</b><small>customers this month</small></div>
         <div className="pk-stat"><span>Still owed</span><b className={summary.dueCents > 0 ? "owed" : ""}>{moneyText(summary.dueCents)}</b>
@@ -247,7 +275,7 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
                     {busyId === customer.key ? <RefreshCw className="spin" size={14} /> : <FileDown size={14} />} View bill
                   </button>
                   <button className="lst-btn ghost" type="button" onClick={() => void copyBill(customer)}><Copy size={14} /> Copy text</button>
-                  {customer.dueCents > 0 && monthBillPaymentPlan(customer).items.length > 0 && (
+                  {!estimating && customer.dueCents > 0 && monthBillPaymentPlan(customer).items.length > 0 && (
                     <button className="lst-btn" type="button" disabled={busyId !== ""} onClick={() => openSettle(customer)}><Banknote size={14} /> Mark all paid</button>
                   )}
                 </div>
