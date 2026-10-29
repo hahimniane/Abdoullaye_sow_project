@@ -72,7 +72,7 @@ instead of the ocean fields.
 ### `containerLines/{id}` — new fields
 | Field | Meaning |
 |---|---|
-| `photoPaths` | `string[]`, ≤ 5, staff drop-off photos under `packagePhotos/{businessId}/{lineId}/{fileId}` |
+| `photoPaths` | `string[]`, ≤ 5, drop-off photos under `packagePhotos/{businessId}/{uid}/{fileId}` (the uploader's folder), or `.../req/...` copied from a request |
 | `contents` | `[{label, quantity, serial}]`, ≤ 10 items; `label` ≤ 60, `quantity` 1–99, `serial` ≤ 40 (IMEI/serial, optional) |
 | `weightLb` | number, 0.1–2000, one decimal. Printed on the label. |
 | `declaredValueCents` | integer ≥ 0. Never printed. |
@@ -80,7 +80,7 @@ instead of the ocean fields.
 | `pickupCode` | 4 digits, minted with the line when the business switch is on (never `0000`) |
 | `customerPhotos` | `[{path, phone, atMs, caseId}]`, ≤ 10, photos sent on WhatsApp with the code |
 | `deliveredWithoutCode` | `true` when the override was used |
-| `deliveredPhotoPath` | the override photo (`packagePhotos/.../delivered_{fileId}`) |
+| `deliveredPhotoPath` | the override photo (same root, the agent's folder) |
 | `collectedAtDeliveryCents` | USD collected at handover, also written as a `containerLinePayments` row (`method: "cash"`, `note: "At pickup"`) |
 
 Derived (never stored): the three ticks — `photo` = `photoPaths.length > 0`,
@@ -88,24 +88,31 @@ Derived (never stored): the three ticks — `photo` = `photoPaths.length > 0`,
 
 ### `businesses/{id}.packageProofSettings`
 `{photosRequired: bool, senderConfirm: bool, pickupCode: bool}`; missing = all
-false. Saved by the existing owner-only `setPackageRequestSettings` callable
+false (`package_proof.proofSettingsOf` / `validateProofSettings`). Saved by the existing owner-only `setPackageRequestSettings` callable
 with an extra `proof` key (no new export: the CPU budget is full).
 
 ### Storage
-`packagePhotos/{businessId}/{lineId}/{fileId}.(jpg|jpeg|png|webp)`, ≤ 2 MB,
-`fileId` `[A-Za-z0-9_-]{8,64}`. Upload: owner, or staff with `containers` or
-`deliveries`. Read: the same, plus platform ops admins. Update/delete denied
-(the server deletes). **Add `deliveries` to `canReadBusinessContainers` in
+`packagePhotos/{businessId}/{uid}/{fileId}.(jpg|jpeg|png|webp)`, ≤ 2 MB,
+`fileId` `[A-Za-z0-9_-]{8,64}`. Upload: the owner or staff with `containers`
+or `deliveries`, into their **own uid folder** only (the line does not exist
+yet when the photo is taken). Read: the same, plus platform ops admins.
+Update/delete denied (the server deletes). The folders `wa` and `req` are
+written by the server only. All rules are in `package_proof.js`
+(`photoPathAllowed`, `photoMetadataValid`). **Add `deliveries` to `canReadBusinessContainers` in
 storage.rules** — a deliveries-only agent must see the drop-off photos.
 
 Customer WhatsApp photos are copied by the server from the support case media
-to `packagePhotos/{businessId}/{lineId}/wa_{sha1(wamid)[0..24]}.{ext}`.
+to `packagePhotos/{businessId}/wa/{sha1(wamid)[0..24]}.{ext}`; request photos
+to `packagePhotos/{businessId}/req/{requestId}_{n}.jpg`.
 
 ### Photo links (30-day expiry)
 Served by the existing `/d` document endpoint (`parkingDocument`), new view:
-`/d?view=photo&t={line.documentToken}&f={fileId}&e={expiresMs}&s={sig}` where
-`sig = sha256(token + "|" + fileId + "|" + expiresMs).hex[0..24]`. Expired or
-bad signature → 404. The same link is used as the template image header.
+`/d?view=photo&t={line.documentToken}&p={path}&e={expiresMs}&s={sig}` where
+`sig = sha256(token + "|" + path + "|" + expiresMs).hex[0..24]`
+(`package_proof.photoLink` / `photoLinkValid`). Expired or bad signature →
+404; the endpoint streams the file with its content type and
+`Cache-Control: private, max-age=3600`. The same link is the template image
+header.
 
 ### Collections touched for messages
 - `containerUpdates/{lineId}_sender_confirm` — the confirmation row,
@@ -203,9 +210,10 @@ bad signature → 404. The same link is used as the template image header.
     `photos: [{url, kind: "dropoff"|"customer"|"delivered"}]` **only** when the
     caller is signed in as the line's sender or receiver (30-day links).
 
-Refusal codes added: `photo_invalid`, `photo_required`, `pickup_code_invalid`,
-`override_incomplete`, `air_waybill_invalid`, `contents_invalid`,
-`weight_invalid`, `declared_value_invalid`. Mirror them in the console and app
+Refusal codes added (`package_proof.REFUSAL` holds the texts of the first
+seven): `photo_invalid`, `photo_required`, `pickup_code_invalid`,
+`override_incomplete`, `contents_invalid`, `weight_invalid`,
+`declared_value_invalid`, `proof_settings_invalid`, `air_waybill_invalid`. Mirror them in the console and app
 refusal maps (parity tests).
 
 ## 5. Clients
