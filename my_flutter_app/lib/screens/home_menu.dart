@@ -34,7 +34,7 @@ import 'business_assistant_screen.dart';
 import 'business_reviews_screen.dart';
 import 'business_transport_screen.dart';
 import 'containers_screen.dart';
-import 'package_scan_screen.dart';
+import 'deliveries_home_screen.dart';
 import 'inventory_screen.dart';
 import 'invoices_screen.dart';
 import 'parking_month_end_screen.dart';
@@ -1391,11 +1391,13 @@ List<_Destination> _businessDestinations(
         title: l10n.dlvTitle,
         subtitle: l10n.dlvSubtitle,
         onTap: () {
+          // The Deliveries home (docs/AIR_PACKAGES.md §5): what is ready
+          // to hand over, Scan, Enter a code - every package in the
+          // access this person holds.
           Navigator.of(context).push(
             MaterialPageRoute<void>(
-              builder: (_) => PackageScanScreen(
+              builder: (_) => DeliveriesHomeScreen(
                 businessId: ledgerBusinessId,
-                deliveries: true,
                 access: auth.packageAccess,
               ),
             ),

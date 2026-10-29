@@ -18,6 +18,7 @@ import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
 
+import '../utils/callable_data.dart' show callableMap;
 import '../utils/money_input.dart' show parseMoneyCents;
 import 'eastern_clock.dart';
 import 'line_pieces.dart' as lp;
@@ -1852,6 +1853,100 @@ String newRequestPhotoId([Random? random]) {
 /// business keeps no separate locations.
 const requestDefaultLocationId = 'default';
 
+/// The business's three proof switches (docs/AIR_PACKAGES.md §1.3, §2
+/// `businesses/{id}.packageProofSettings`): anything missing is off.
+/// Mirrors `package_proof.proofSettingsOf` / `validateProofSettings`.
+/// Saved through `setPackageRequestSettings` as its `proof` key and echoed
+/// back as `proof`.
+class PackageProofSettings {
+  const PackageProofSettings({
+    this.photosRequired = false,
+    this.senderConfirm = false,
+    this.pickupCode = false,
+  });
+
+  /// From the stored map (`packageProofSettings`) or the callable's echo.
+  factory PackageProofSettings.fromMap(Object? value) {
+    final m = _map(value);
+    return PackageProofSettings(
+      photosRequired: _bool(m['photosRequired']),
+      senderConfirm: _bool(m['senderConfirm']),
+      pickupCode: _bool(m['pickupCode']),
+    );
+  }
+
+  /// From the `businesses/{id}` document.
+  factory PackageProofSettings.fromBusiness(Map<String, dynamic> business) =>
+      PackageProofSettings.fromMap(business['packageProofSettings']);
+
+  /// Photos required at drop-off (counter packages only).
+  final bool photosRequired;
+
+  /// Ask the sender to confirm by WhatsApp right after drop-off.
+  final bool senderConfirm;
+
+  /// A pickup code is minted per package and asked at delivery.
+  final bool pickupCode;
+
+  bool get anyOn => photosRequired || senderConfirm || pickupCode;
+
+  /// The `proof` key of `setPackageRequestSettings`: every switch named.
+  Map<String, Object?> toMap() => {
+    'photosRequired': photosRequired,
+    'senderConfirm': senderConfirm,
+    'pickupCode': pickupCode,
+  };
+
+  PackageProofSettings copyWith({
+    bool? photosRequired,
+    bool? senderConfirm,
+    bool? pickupCode,
+  }) => PackageProofSettings(
+    photosRequired: photosRequired ?? this.photosRequired,
+    senderConfirm: senderConfirm ?? this.senderConfirm,
+    pickupCode: pickupCode ?? this.pickupCode,
+  );
+
+  @override
+  bool operator ==(Object other) =>
+      other is PackageProofSettings &&
+      other.photosRequired == photosRequired &&
+      other.senderConfirm == senderConfirm &&
+      other.pickupCode == pickupCode;
+
+  @override
+  int get hashCode => Object.hash(photosRequired, senderConfirm, pickupCode);
+}
+
+/// A request code as the counter types or scans it (docs/AIR_PACKAGES.md
+/// §4.10): "r k7m4p", "RK7M4P", "R-K7M4P" all mean "R-K7M4P". "" when what
+/// was typed is not five code characters. Mirrors `normalizeRequestCode`.
+String normalizeRequestCode(String raw) {
+  final body = raw
+      .toUpperCase()
+      .replaceAll(RegExp(r'[\s-]+'), '')
+      .replaceFirst(RegExp('^R'), '');
+  return RegExp(r'^[A-Z0-9]{5}$').hasMatch(body) ? 'R-$body' : '';
+}
+
+/// `receivePackageRequest` with `action: lookup_code` (§4.10): the
+/// counter's look-up of a request by the code the customer brought.
+Map<String, Object?> lookupRequestCodePayload({
+  required String businessId,
+  required String code,
+}) => {
+  'businessId': businessId,
+  'action': 'lookup_code',
+  'code': normalizeRequestCode(code),
+};
+
+/// The request the look-up answers (`{success, request: {id, ...}}`), the
+/// stored document's shape with callable timestamps.
+PackageRequest requestFromLookup(Object? data) {
+  final request = callableMap(callableMap(data)['request']);
+  return PackageRequest.fromMap(_text(request['id']), request);
+}
+
 class PackageRequestSettings {
   const PackageRequestSettings({
     this.acceptRequests = false,
@@ -1862,6 +1957,7 @@ class PackageRequestSettings {
     this.timeZone = requestDefaultTimeZone,
     this.requestSlug = '',
     this.requestSlugEdits = 0,
+    this.proof = const PackageProofSettings(),
   });
 
   /// From the `businesses/{id}` document.
@@ -1881,6 +1977,7 @@ class PackageRequestSettings {
       timeZone: zone.isEmpty ? requestDefaultTimeZone : zone,
       requestSlug: _text(business['requestSlug']),
       requestSlugEdits: _int(business['requestSlugEdits']),
+      proof: PackageProofSettings.fromBusiness(business),
     );
   }
 
@@ -1892,6 +1989,9 @@ class PackageRequestSettings {
   final String timeZone;
   final String requestSlug;
   final int requestSlugEdits;
+
+  /// The proof switches, kept on the business beside these settings.
+  final PackageProofSettings proof;
 
   /// The owner may change the slug once.
   bool get slugEditable => requestSlug.isEmpty || requestSlugEdits < 1;
@@ -1940,6 +2040,7 @@ Map<String, Object?> requestSettingsPayload({
   required bool cardBarrelBooking,
   String slug = '',
   String currentSlug = '',
+  PackageProofSettings? proof,
 }) {
   final s = slug.trim().toLowerCase();
   return {
@@ -1951,5 +2052,7 @@ Map<String, Object?> requestSettingsPayload({
     'pickup': {'enabled': pickupEnabled, 'areas': pickupAreas.trim()},
     'cardBarrelBooking': cardBarrelBooking,
     if (s.isNotEmpty && s != currentSlug) 'requestSlug': s,
+    // Left out, the server keeps the switches as they are.
+    if (proof != null) 'proof': proof.toMap(),
   };
 }

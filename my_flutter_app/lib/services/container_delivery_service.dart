@@ -37,12 +37,19 @@ class ContainerDeliveryService {
   }
 
   /// Marks the whole line delivered. [acknowledgeBalance] once the person
-  /// has seen the unpaid-balance warning.
+  /// has seen the unpaid-balance warning. [pickupCode] is what the agent
+  /// typed when the business asks for one; [overrideCollectedBy] +
+  /// [overridePhotoPath] deliver without a code (docs/AIR_PACKAGES.md
+  /// §4.7); [collectedCents] is the USD collected at handover.
   Future<DeliveryResult> deliver(
     String businessId,
     String lineId, {
     String collectedBy = '',
     bool acknowledgeBalance = false,
+    String pickupCode = '',
+    String overrideCollectedBy = '',
+    String overridePhotoPath = '',
+    int collectedCents = 0,
   }) async => DeliveryResult.fromCallable(
     await _call(
       deliverLineRequest(
@@ -50,6 +57,10 @@ class ContainerDeliveryService {
         lineId,
         collectedBy: collectedBy,
         acknowledgeBalance: acknowledgeBalance,
+        pickupCode: pickupCode,
+        overrideCollectedBy: overrideCollectedBy,
+        overridePhotoPath: overridePhotoPath,
+        collectedCents: collectedCents,
       ),
     ),
   );

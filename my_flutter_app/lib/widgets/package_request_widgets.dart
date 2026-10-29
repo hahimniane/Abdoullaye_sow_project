@@ -15,6 +15,7 @@ import '../theme/app_spacing.dart';
 import '../utils/date_display.dart';
 import 'app_back_button.dart';
 import 'lot_sheets.dart';
+import 'proof_refusal_text.dart';
 
 // ---------------------------------------------------------------------------
 // Words.
@@ -190,7 +191,8 @@ String requestRefusalText(AppLocalizations l10n, RequestRefusal refusal) {
     return l10n.prqLockedBy(refusal.lockedByName);
   }
   for (final reason in refusal.reasons) {
-    final text = requestReasonText(l10n, reason);
+    final text =
+        requestReasonText(l10n, reason) ?? proofRefusalText(l10n, reason);
     if (text != null) return text;
   }
   return switch (requestFailureKind(refusal.code)) {
