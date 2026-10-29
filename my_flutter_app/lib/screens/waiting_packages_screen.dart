@@ -33,6 +33,8 @@ import 'receive_request_sheet.dart';
 import '../services/whatsapp_conversations.dart' show messageCustomerTargets;
 import '../widgets/whatsapp_widgets.dart'
     show PackageUpdateTicks, openWhatsAppForLine;
+import '../services/package_proof.dart' show PackageProofSettings;
+import '../widgets/proof_ticks.dart';
 
 /// The way into the waiting list from the containers screen: how many
 /// packages have been dropped off with no container yet, one tap from the
@@ -118,10 +120,15 @@ class WaitingPackagesScreen extends StatefulWidget {
     this.caller = callContainerCallable,
     this.labelOpener = openContainerLabels,
     this.requestFeed,
+    this.proofSettings = PackageProofSettings.off,
   });
 
   final String businessId;
   final ContainerFeed feed;
+
+  /// The business's proof switches (docs/AIR_PACKAGES.md §1.3): the register
+  /// form requires a photo when `photosRequired` is on.
+  final PackageProofSettings proofSettings;
 
   /// The business's open package requests: the confirmed ones show as
   /// Expected above the packages already in the shop.
@@ -146,6 +153,10 @@ class WaitingPackagesScreen extends StatefulWidget {
 class _WaitingPackagesScreenState extends State<WaitingPackagesScreen> {
   final _filter = TextEditingController();
   String _busy = '';
+
+  /// "Missing proof" (docs/AIR_PACKAGES.md §1.11): only the packages with
+  /// no drop-off photo or no OK from the sender.
+  bool _missingOnly = false;
 
   @override
   void initState() {
@@ -290,6 +301,7 @@ class _WaitingPackagesScreenState extends State<WaitingPackagesScreen> {
       onLineAdded: widget.onCustomerRecorded,
       caller: widget.caller,
       staff: widget.staff,
+      proofSettings: widget.proofSettings,
     );
     if (saved == null || !mounted) return;
     final line = saved.line;
@@ -311,6 +323,7 @@ class _WaitingPackagesScreenState extends State<WaitingPackagesScreen> {
       onLineAdded: widget.onCustomerRecorded,
       caller: widget.caller,
       staff: widget.staff,
+      proofSettings: widget.proofSettings,
     );
   }
 
@@ -480,7 +493,10 @@ class _WaitingPackagesScreenState extends State<WaitingPackagesScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final all = _waiting;
-    final shown = filterWaitingPackages(all, _filter.text);
+    final matched = filterWaitingPackages(all, _filter.text);
+    final shown = _missingOnly
+        ? [for (final l in matched) if (l.proofTicks.missing) l]
+        : matched;
     final searching = _filter.text.trim().length >= 2;
 
     return Scaffold(
@@ -551,6 +567,27 @@ class _WaitingPackagesScreenState extends State<WaitingPackagesScreen> {
                         ),
                       ),
                     ),
+                    // One list shows the packages missing a tick (§1.11).
+                    Padding(
+                      padding: const EdgeInsets.only(
+                          left: AppSpacing.md, top: AppSpacing.sm),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: FilterChip(
+                          key: const Key('waiting-missing-proof'),
+                          label: Text(l10n.proofMissingFilter),
+                          selected: _missingOnly,
+                          avatar: _missingOnly
+                              ? null
+                              : const Icon(Icons.rule, size: 16),
+                          visualDensity: VisualDensity.compact,
+                          onSelected: (on) {
+                            AppHaptics.selection();
+                            setState(() => _missingOnly = on);
+                          },
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -567,7 +604,7 @@ class _WaitingPackagesScreenState extends State<WaitingPackagesScreen> {
                     groups: widget.feed.groups,
                     staff: widget.staff,
                     anyAtAll: all.isNotEmpty,
-                    searching: searching,
+                    searching: searching || _missingOnly,
                     onTap: _busy.isNotEmpty ? null : _actions,
                     onPrint: _busy.isNotEmpty ? null : _printLabel,
                     expected: _expected(_filter.text),
@@ -1064,6 +1101,13 @@ class WaitingPackageCard extends StatelessWidget {
                     ),
                   // How far the last update got on WhatsApp (decision 15).
                   PackageUpdateTicks(line: line),
+                  // Drop-off photo · sender OK · delivered (AIR_PACKAGES §1.11).
+                  PackageProofTicks(ticks: line.proofTicks),
+                  SenderProblemBanner(
+                    line: line,
+                    dense: true,
+                    onOpenConversation: () => openWhatsAppForLine(context, line),
+                  ),
                   if (where.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 3),

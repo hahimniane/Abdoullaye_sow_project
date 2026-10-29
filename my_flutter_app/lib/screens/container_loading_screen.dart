@@ -9,6 +9,7 @@ import '../services/container_loading.dart';
 import '../services/container_manifest.dart';
 import '../services/lot_ledger.dart' show LotStaff;
 import '../services/package_codes.dart';
+import '../services/package_proof.dart' show loadWarningSenderProblem;
 import '../services/waiting_package_service.dart'
     show ContainerCallableCaller, callContainerCallable;
 import '../services/waiting_packages.dart' show unassignLineRequest;
@@ -250,6 +251,7 @@ class _ContainerLoadingScreenState extends State<ContainerLoadingScreen> {
     bool move = false,
     int? key,
     String? scanId,
+    bool acknowledgeProblems = false,
   }) async {
     final rowKey = key ?? _nextKey++;
     final id = scanId ?? newLoadScanId();
@@ -273,6 +275,7 @@ class _ContainerLoadingScreenState extends State<ContainerLoadingScreen> {
                 code: code,
                 scanId: id,
                 move: move,
+                acknowledgeProblems: acknowledgeProblems,
               ),
             )
             .timeout(widget.callTimeout);
@@ -293,8 +296,41 @@ class _ContainerLoadingScreenState extends State<ContainerLoadingScreen> {
       if (!mounted) return;
       if (loadShouldAutoRetry(failure, attempt)) continue;
       _failed(code, sending, failure);
+      // The sender said "Something's wrong" (docs/AIR_PACKAGES.md §4.8): a
+      // warning, never a block - ask, and scan again with the
+      // acknowledgement.
+      if (failure.reason == loadWarningSenderProblem && !acknowledgeProblems) {
+        unawaited(_askLoadAnyway(code, rowKey, id, move: move));
+      }
       return;
     }
+  }
+
+  Future<void> _askLoadAnyway(
+    String code,
+    int key,
+    String scanId, {
+    required bool move,
+  }) async {
+    final l10n = AppLocalizations.of(context)!;
+    await _pauseFor(() async {
+      final load = await confirmMajorAction(
+        context,
+        title: l10n.proofLoadAnywayTitle,
+        message: l10n.proofLoadAnywayMessage(code),
+        confirmLabel: l10n.proofLoadAnyway,
+        icon: Icons.error_outline,
+      );
+      if (load && mounted) {
+        unawaited(_scan(
+          code,
+          move: move,
+          key: key,
+          scanId: scanId,
+          acknowledgeProblems: true,
+        ));
+      }
+    });
   }
 
   void _failed(String code, LoadRow row, LoadFailure failure) {

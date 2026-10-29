@@ -11,8 +11,39 @@ library;
 
 import 'line_pieces.dart';
 import 'lot_ledger.dart' show lotDateOf;
+import 'package_proof.dart';
 import 'phone_accounts.dart'
     show RecordPhoneFlags, recordPhoneFieldList, recordPhoneFlags;
+
+// ---------------------------------------------------------------------------
+// Sea or air (docs/AIR_PACKAGES.md §1).
+// ---------------------------------------------------------------------------
+
+/// A flight is a container marked air: the same list, labels, statuses and
+/// messages, named by an air waybill instead of a container number. "sea" is
+/// what every container was before the field.
+const containerShipModeSea = 'sea';
+const containerShipModeAir = 'air';
+const containerShipModes = <String>[containerShipModeSea, containerShipModeAir];
+
+/// An air waybill as stored: letters, digits and dashes, 6-20 of them, upper
+/// case ("176-12345678"). Mirrors `AIR_WAYBILL`.
+final RegExp airWaybillPattern = RegExp(r'^[A-Z0-9-]{6,20}$');
+const containerMaxAirline = 60;
+
+/// "air", or "sea" for anything else. Mirrors `shipModeOf`.
+String containerShipModeOf(Object? value) =>
+    (value ?? '').toString().trim().toLowerCase() == containerShipModeAir
+        ? containerShipModeAir
+        : containerShipModeSea;
+
+/// An air waybill as the server stores it: upper case, spaces dropped.
+/// Mirrors `airWaybillOf`.
+String airWaybillOf(Object? value) {
+  final s = (value ?? '').toString().trim();
+  final cut = s.length > 40 ? s.substring(0, 40) : s;
+  return cut.toUpperCase().replaceAll(RegExp(r'\s+'), '');
+}
 
 // ---------------------------------------------------------------------------
 // Vocabulary shared with the server.
@@ -133,6 +164,12 @@ const containerRefusalCodes = <String>[
   'payment_already_reverted',
   // A shipping line outside lib/data/ocean_carrier_catalog.dart.
   'carrier_invalid',
+  // An air waybill that is not 6-20 letters, digits or dashes
+  // (docs/AIR_PACKAGES.md §2).
+  'air_waybill_invalid',
+  // Loading a package whose sender said "Something's wrong": a warning the
+  // caller confirms with acknowledgeProblems (docs/AIR_PACKAGES.md §4.8).
+  'sender_problem',
   // Pieces on lines (docs/WAITING_PACKAGES.md "Pieces", "Split across
   // containers"); the rules are lib/services/line_pieces.dart.
   'pieces_required',
@@ -252,6 +289,9 @@ class ContainerDraft {
     this.destinationCountryId = '',
     this.destinationCountryName = '',
     this.notes = '',
+    this.shipMode = containerShipModeSea,
+    this.airWaybill = '',
+    this.airline = '',
   });
 
   final String label;
@@ -260,21 +300,36 @@ class ContainerDraft {
   final String destinationCountryId;
   final String destinationCountryName;
   final String notes;
+
+  /// Sea or air; a flight carries its waybill and airline and no container
+  /// number, a box the other way round.
+  final String shipMode;
+  final String airWaybill;
+  final String airline;
+
+  bool get isAir => containerShipModeOf(shipMode) == containerShipModeAir;
 }
 
 /// Error codes, every problem at once. Mirrors `validateContainer`.
 List<String> validateContainer(ContainerDraft input) {
   final errors = <String>[];
-  final number = _text(input.containerNumber, 20).toUpperCase();
+  final air = input.isAir;
+  // A flight has no container number: the box is the plane's.
+  final number = air ? '' : _text(input.containerNumber, 20).toUpperCase();
+  final waybill = air ? airWaybillOf(input.airWaybill) : '';
   // The working name is for the box that has no number yet; a container or
-  // booking number is a name enough.
+  // booking number (or the airline's waybill) is a name enough.
   if (_text(input.label, containerMaxLabel).isEmpty &&
       number.isEmpty &&
+      waybill.isEmpty &&
       _text(input.bookingReference, 60).isEmpty) {
     errors.add('container_label_required');
   }
   if (number.isNotEmpty && !isoContainerNumber.hasMatch(number)) {
     errors.add('container_number_invalid');
+  }
+  if (waybill.isNotEmpty && !airWaybillPattern.hasMatch(waybill)) {
+    errors.add('air_waybill_invalid');
   }
   return errors;
 }
@@ -282,9 +337,14 @@ List<String> validateContainer(ContainerDraft input) {
 /// The fields a business may set on a container, normalised the way the
 /// server will store them. Mirrors `containerRecord`.
 Map<String, String> containerRecord(ContainerDraft input) {
+  final air = input.isAir;
   return {
     'label': _text(input.label, containerMaxLabel),
-    'containerNumber': _text(input.containerNumber, 20).toUpperCase(),
+    'shipMode': air ? containerShipModeAir : containerShipModeSea,
+    'containerNumber':
+        air ? '' : _text(input.containerNumber, 20).toUpperCase(),
+    'airWaybill': air ? airWaybillOf(input.airWaybill) : '',
+    'airline': air ? _text(input.airline, containerMaxAirline) : '',
     'bookingReference': _text(input.bookingReference, 60).toUpperCase(),
     'destinationCountryId': _text(input.destinationCountryId, 60),
     'destinationCountryName':
@@ -322,6 +382,9 @@ class ShippingContainer {
     this.carrierTrackingFailedFor = '',
     this.trackingProvider = '',
     this.trackedContainerNumber = '',
+    this.shipMode = containerShipModeSea,
+    this.airWaybill = '',
+    this.airline = '',
   });
 
   final String id;
@@ -333,6 +396,15 @@ class ShippingContainer {
   final String destinationCountryName;
   final String status;
   final String notes;
+
+  /// Sea or air (docs/AIR_PACKAGES.md §2): a flight is named by its air
+  /// waybill and airline, never tracked on the ocean carrier feed, and
+  /// called a "Shipment" on every screen.
+  final String shipMode;
+  final String airWaybill;
+  final String airline;
+
+  bool get isAir => shipMode == containerShipModeAir;
 
   /// The shipping line's SCAC: chosen by staff, or filled in by carrier
   /// tracking once it found the box. "" when neither.
@@ -395,6 +467,13 @@ class ShippingContainer {
       carrierTrackingFailedFor: _text(d['carrierTrackingFailedFor'], 20),
       trackingProvider: _text(d['trackingProvider'], 40),
       trackedContainerNumber: _text(d['trackedContainerNumber'], 20),
+      shipMode: containerShipModeOf(d['shipMode']),
+      airWaybill: containerShipModeOf(d['shipMode']) == containerShipModeAir
+          ? airWaybillOf(d['airWaybill'])
+          : '',
+      airline: containerShipModeOf(d['shipMode']) == containerShipModeAir
+          ? _text(d['airline'], containerMaxAirline)
+          : '',
     );
   }
 
@@ -402,12 +481,20 @@ class ShippingContainer {
   bool get isShipped => status == containerStatusShipped;
   bool get isArrived => status == containerStatusArrived;
 
-  /// The number once the line has sent it, the working name until then.
-  /// "MSKU1234567" is what a tracking site wants; "Sailing 3 Oct, box 2" is
-  /// what the yard calls it.
-  String get displayName => containerNumber.isNotEmpty
-      ? containerNumber
-      : (label.isNotEmpty ? label : bookingReference);
+  /// The number once the line has sent it (a flight: its waybill), the
+  /// working name until then. "MSKU1234567" is what a tracking site wants;
+  /// "Sailing 3 Oct, box 2" is what the yard calls it.
+  String get displayName => isAir
+      ? (airWaybill.isNotEmpty
+          ? airWaybill
+          : (label.isNotEmpty ? label : bookingReference))
+      : containerNumber.isNotEmpty
+          ? containerNumber
+          : (label.isNotEmpty ? label : bookingReference);
+
+  /// The identity a flight or a box carries beside its working name: the
+  /// waybill or the container number, once there is one.
+  String get reference => isAir ? airWaybill : containerNumber;
 
   bool get isEmpty => lineCount <= 0;
 }
@@ -426,6 +513,8 @@ String containerCarrierScac(Object? value) {
 /// Mirrors the console's `containerCarrierNeedsChoice`.
 bool containerCarrierNeedsChoice(ShippingContainer? container) {
   if (container == null) return false;
+  // A flight is never on the ocean carrier feed (docs/AIR_PACKAGES.md §2).
+  if (container.isAir) return false;
   final number = container.containerNumber;
   if (number.isEmpty || container.isArrived) return false;
   if (container.trackingProvider == 'carrier_api' &&
@@ -507,7 +596,13 @@ class ContainerLineDraft {
     this.pieces,
     this.pickupFeeCents,
     this.pickupFeeInvalid = false,
+    this.proof,
   });
+
+  /// Proof on the package (docs/AIR_PACKAGES.md §2): photos, what is
+  /// inside, weight and declared value. Null leaves the fields out of the
+  /// request (an older form, a contacts-only edit).
+  final PackageProofDraft? proof;
 
   final String kind;
   final String vinNumber;
@@ -640,6 +735,12 @@ List<String> validateContainerLine(
       input.heightIn,
     ));
     errors.addAll(packagePriceErrors(input.priceCents));
+  }
+  // Proof on the package (docs/AIR_PACKAGES.md §2): one code for the first
+  // problem, as the server's validateContainerLine pushes it.
+  if (input.proof != null) {
+    final proof = validateProofFields(input.proof!).error;
+    if (proof.isNotEmpty) errors.add(proof);
   }
   return errors;
 }
@@ -812,10 +913,17 @@ String lineCustomerPhone(ContainerLine line) => lineCustomer(line).phone;
 /// size and the price from the pieces themselves.
 Map<String, dynamic> containerLineRecord(ContainerLineDraft input) {
   final owner = _text(input.ownerKind, 20);
+  // The proof fields ride every line body (docs/AIR_PACKAGES.md §4.2), as
+  // the validator normalised them; a draft without them sends none, so an
+  // edit from an older form leaves what the line has.
+  final proof = input.proof == null
+      ? const <String, Object?>{}
+      : validateProofFields(input.proof!).fields.toPayload();
   if (input.usesPieces) {
     final pieces = normalizePieces(input.pieces);
     final summary = piecesSummaryFields(pieces);
     return {
+      ...proof,
       'kind': summary.kind,
       'vinNumber': '',
       'carMake': '',
@@ -843,6 +951,7 @@ Map<String, dynamic> containerLineRecord(ContainerLineDraft input) {
   final isCar = kind == containerLineKindCar;
   final quantity = _positiveInt(input.quantity);
   return {
+    ...proof,
     'kind': kind,
     'vinNumber':
         isCar ? _text(input.vinNumber, containerMaxVin).toUpperCase() : '',
@@ -1012,11 +1121,64 @@ class ContainerLine {
     this.containerAssignedAt,
     this.containerAssignedByStaffId = '',
     this.containerAssignedVia = '',
+    this.photoPaths = const [],
+    this.contents = const [],
+    this.weightLb,
+    this.declaredValueCents,
+    this.senderConfirmation = SenderConfirmation.none,
+    this.pickupCode = '',
+    this.customerPhotoPaths = const [],
+    this.deliveredWithoutCode = false,
+    this.deliveredPhotoPath = '',
+    this.collectedAtDeliveryCents = 0,
   });
 
   final String id;
   final String businessId;
   final String containerId;
+
+  /// Proof on the package (docs/AIR_PACKAGES.md §2): drop-off photos
+  /// (Storage paths; the server's `req/` and `wa/` folders included), what
+  /// is inside, weight (lb, one decimal) and declared value (cents, never
+  /// printed). Empty / null when nothing was recorded.
+  final List<String> photoPaths;
+  final List<PackageContent> contents;
+  final double? weightLb;
+  final int? declaredValueCents;
+
+  /// The sender's WhatsApp answer to "is this right?".
+  final SenderConfirmation senderConfirmation;
+
+  /// Four digits the receiver gives at handover; minted when the business
+  /// switch is on. Shown to staff with the containers permission only.
+  final String pickupCode;
+
+  /// Photos the customer sent on WhatsApp with the code (`customerPhotos[]
+  /// .path`), and the handover record when the code was not given.
+  final List<String> customerPhotoPaths;
+  final bool deliveredWithoutCode;
+  final String deliveredPhotoPath;
+  final int collectedAtDeliveryCents;
+
+  /// The three ticks (§1.11). Mirrors `proofTicks`.
+  ProofTicks get proofTicks => ProofTicks(
+        photo: photoPaths.isNotEmpty,
+        senderOk: senderConfirmation.status,
+        delivered: deliveredAt != null,
+        deliveredWithoutCode: deliveredWithoutCode,
+      );
+
+  /// The sender tapped "Something's wrong": a red flag on the package, and
+  /// a warning (never a block) when it is loaded.
+  bool get senderReportedProblem => senderConfirmation.isProblem;
+
+  /// The proof fields as the edit form opens on them.
+  PackageProofDraft get proofDraft => PackageProofDraft(
+        photoPaths: photoPaths,
+        contents: contents,
+        weightLb: weightLb,
+        declaredValueCents: declaredValueCents,
+      );
 
   /// Loading lists (docs/WAITING_PACKAGES.md "Loading lists"): when, by
   /// whom and how the package went onto its current container
@@ -1234,8 +1396,32 @@ class ContainerLine {
       containerAssignedAt: lotDateOf(d['containerAssignedAt']),
       containerAssignedByStaffId: _text(d['containerAssignedByStaffId'], 128),
       containerAssignedVia: _text(d['containerAssignedVia'], 20),
+      photoPaths: _photoPathList(d['photoPaths']),
+      contents: packageContentsOf(d['contents']),
+      weightLb: normalizeWeightLb(d['weightLb']).value,
+      declaredValueCents: normalizeDeclaredValueCents(d['declaredValueCents']).value,
+      senderConfirmation: senderConfirmationOf(d),
+      pickupCode: _text(d['pickupCode'], 8),
+      customerPhotoPaths: _photoPathList([
+        if (d['customerPhotos'] is Iterable)
+          for (final p in d['customerPhotos'] as Iterable)
+            if (p is Map) p['path'],
+      ]),
+      deliveredWithoutCode: d['deliveredWithoutCode'] == true,
+      deliveredPhotoPath: photoPathParts(d['deliveredPhotoPath']) == null
+          ? ''
+          : d['deliveredPhotoPath'].toString(),
+      collectedAtDeliveryCents: _paidCents(d['collectedAtDeliveryCents']),
     );
   }
+
+  /// Stored photo paths, read leniently: anything that is not one of our
+  /// paths is dropped, nothing is refused.
+  static List<String> _photoPathList(Object? raw) => [
+        if (raw is Iterable)
+          for (final p in raw)
+            if (photoPathParts(p) != null) p.toString(),
+      ];
 
   /// The fields `lineGroupSummary` reads, as the server would hold them.
   Map<String, Object?> get groupFields => {

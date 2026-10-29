@@ -103,6 +103,7 @@ Map<String, Object?> loadScanRequest({
   required String code,
   required String scanId,
   bool move = false,
+  bool acknowledgeProblems = false,
 }) => {
   'businessId': businessId,
   'containerId': containerId,
@@ -110,6 +111,9 @@ Map<String, Object?> loadScanRequest({
   'code': code,
   'scanId': scanId,
   if (move) 'move': true,
+  // The sender said "Something's wrong" (docs/AIR_PACKAGES.md §4.8): the
+  // server refuses once with `sender_problem`; confirmed, the scan counts.
+  if (acknowledgeProblems) 'acknowledgeProblems': true,
 };
 
 /// Takes back [scanId]'s scan of the package: a double tap or a retry after

@@ -17089,4 +17089,263 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get waHandOverNoOptions => 'Il n’y a nulle part où la transférer.';
+
+  @override
+  String get proofSectionTitle => 'Preuves';
+
+  @override
+  String proofPhotosOfMax(int count, int max) {
+    return 'Photos · $count sur $max';
+  }
+
+  @override
+  String get proofTakePhoto => 'Appareil photo';
+
+  @override
+  String get proofChoosePhoto => 'Galerie';
+
+  @override
+  String get proofRemovePhoto => 'Retirer la photo';
+
+  @override
+  String get proofPhotoUploading => 'Envoi…';
+
+  @override
+  String get proofPhotoRequiredNote =>
+      'Une photo du colis est obligatoire au dépôt.';
+
+  @override
+  String proofPhotoOptionalNote(int max) {
+    return 'Jusqu’à $max photos du colis.';
+  }
+
+  @override
+  String get proofPhotoFailed => 'La photo n’a pas pu être envoyée. Réessayez.';
+
+  @override
+  String get proofPhotoTooLarge => 'La photo est trop lourde (2 Mo au plus).';
+
+  @override
+  String get proofPhotoNotImage =>
+      'Ce fichier n’est pas une photo (JPEG, PNG ou WebP).';
+
+  @override
+  String get proofPhotoNoPermission =>
+      'Vous ne pouvez pas ajouter de photos ici.';
+
+  @override
+  String proofPhotoLimit(int max) {
+    return '$max photos au plus.';
+  }
+
+  @override
+  String get proofPhotoOpenFailed => 'La photo n’a pas pu être ouverte.';
+
+  @override
+  String get proofContentsTitle => 'Contenu';
+
+  @override
+  String get proofContentsNote =>
+      'Facultatif. L’expéditeur confirme cette liste et la douane la lit.';
+
+  @override
+  String get proofItemLabel => 'Article';
+
+  @override
+  String get proofItemQuantity => 'Qté';
+
+  @override
+  String get proofItemSerial => 'N° de série / IMEI (facultatif)';
+
+  @override
+  String get proofAddItem => 'Ajouter un article';
+
+  @override
+  String get proofRemoveItem => 'Retirer l’article';
+
+  @override
+  String get proofWeight => 'Poids';
+
+  @override
+  String get proofDeclaredValue => 'Valeur déclarée';
+
+  @override
+  String get proofDeclaredValueNote => 'Jamais imprimée sur l’étiquette.';
+
+  @override
+  String get proofErrPhotoInvalid =>
+      'Une des photos n’a pas pu être utilisée. Ajoutez-la à nouveau.';
+
+  @override
+  String get proofErrPhotoRequired => 'Ajoutez au moins une photo du colis.';
+
+  @override
+  String get proofErrContents =>
+      'Vérifiez la liste : un nom de 60 caractères au plus, une quantité de 1 à 99 et un numéro de série facultatif.';
+
+  @override
+  String get proofErrWeight => 'Entrez un poids entre 0,1 et 2000 lb.';
+
+  @override
+  String get proofErrDeclaredValue =>
+      'Entrez une valeur déclarée de 0 \$ ou plus.';
+
+  @override
+  String get proofErrPickupCode =>
+      'Le code de retrait ne correspond pas. Demandez au destinataire le code reçu dans son message, ou livrez sans code.';
+
+  @override
+  String get proofErrOverride =>
+      'Livrer sans code demande le nom de la personne qui retire et une photo.';
+
+  @override
+  String get proofErrSettings =>
+      'Les réglages de preuve n’ont pas pu être enregistrés.';
+
+  @override
+  String get proofTickPhoto => 'Photo au dépôt';
+
+  @override
+  String get proofTickPhotoNone => 'Pas de photo au dépôt';
+
+  @override
+  String get proofTickSenderNone => 'Expéditeur non sollicité';
+
+  @override
+  String get proofTickSenderAsked => 'Expéditeur sollicité, sans réponse';
+
+  @override
+  String get proofTickSenderConfirmed => 'Expéditeur : confirmé';
+
+  @override
+  String get proofTickSenderProblem => 'L’expéditeur a signalé un problème';
+
+  @override
+  String get proofTickDelivered => 'Livré';
+
+  @override
+  String get proofTickDeliveredWithoutCode => 'Livré sans code';
+
+  @override
+  String get proofTickNotDelivered => 'Pas encore livré';
+
+  @override
+  String get proofMissingFilter => 'Preuve manquante';
+
+  @override
+  String get proofNoneMissing =>
+      'Chaque colis ici a sa photo et l’accord de l’expéditeur.';
+
+  @override
+  String get proofProblemBanner => 'L’expéditeur a signalé un problème';
+
+  @override
+  String get proofOpenConversation => 'Ouvrir la conversation';
+
+  @override
+  String get proofLoadAnywayTitle => 'Charger quand même ?';
+
+  @override
+  String proofLoadAnywayMessage(String codes) {
+    return 'L’expéditeur a signalé un problème avec $codes. Charger quand même ?';
+  }
+
+  @override
+  String get proofLoadAnyway => 'Charger quand même';
+
+  @override
+  String proofWeightFact(String weight) {
+    return 'Poids : $weight';
+  }
+
+  @override
+  String proofValueFact(String value) {
+    return 'Valeur déclarée : $value';
+  }
+
+  @override
+  String get proofCustomerPhotos => 'Photos du client';
+
+  @override
+  String get proofDeliveredPhoto => 'Photo de remise';
+
+  @override
+  String proofPickupCodeFact(String code) {
+    return 'Code de retrait : $code';
+  }
+
+  @override
+  String get airModeTitle => 'Mer ou air';
+
+  @override
+  String get airModeSea => 'Mer';
+
+  @override
+  String get airModeAir => 'Air';
+
+  @override
+  String get airWaybill => 'Lettre de transport aérien (AWB)';
+
+  @override
+  String get airWaybillHint =>
+      'Lettres, chiffres et tirets, comme 176-12345678';
+
+  @override
+  String get airAirline => 'Compagnie aérienne (facultatif)';
+
+  @override
+  String get airLabelOptionalNote =>
+      'Facultatif dès qu’il y a une lettre de transport aérien.';
+
+  @override
+  String get airErrWaybill =>
+      'Une lettre de transport aérien compte 6 à 20 lettres, chiffres ou tirets, comme 176-12345678.';
+
+  @override
+  String get airNewShipment => 'Nouvel envoi';
+
+  @override
+  String get airEditShipment => 'Modifier l’envoi';
+
+  @override
+  String get airCreated => 'Envoi créé.';
+
+  @override
+  String get airShipTitle => 'Marquer cet envoi comme parti ?';
+
+  @override
+  String get airArriveTitle => 'Marquer cet envoi prêt à récupérer ?';
+
+  @override
+  String get airArriveMessage =>
+      'Les clients sont prévenus sur WhatsApp de l’endroit où récupérer leurs marchandises.';
+
+  @override
+  String get airDeleteTitle => 'Supprimer cet envoi ?';
+
+  @override
+  String get airDelete => 'Supprimer l’envoi';
+
+  @override
+  String get airDeleteMessage =>
+      'Seul un envoi vide encore en chargement peut être supprimé.';
+
+  @override
+  String get airAddLine => 'Ajouter à l’envoi';
+
+  @override
+  String get airPkgSection => 'Envoi';
+
+  @override
+  String get airOpenShipment => 'Ouvrir l’envoi';
+
+  @override
+  String get airChip => 'Aérien';
+
+  @override
+  String get airLockedNote =>
+      'Parti. La liste est le relevé de ce qui est parti ; seules les notes restent modifiables.';
+
+  @override
+  String get airCustomsList => 'Liste douane';
 }

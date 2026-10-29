@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../l10n/app_localizations.dart';
 import '../services/invoice_ledger.dart' show invoicePaymentMethods;
 import '../services/lot_ledger.dart' show LotStaff;
+import '../services/package_proof.dart' show validateProofFields;
 import '../services/package_request_service.dart';
 import '../services/package_requests.dart';
 import '../services/waiting_packages.dart'
@@ -17,6 +18,7 @@ import '../theme/app_spacing.dart';
 import '../widgets/lot_sheets.dart';
 import '../widgets/package_request_widgets.dart';
 import '../widgets/pieces_editor.dart';
+import '../widgets/proof_fields.dart';
 import '../widgets/waiting_package_fields.dart';
 import 'containers_screen.dart' show containerErrorText;
 import 'package_payment_sheet.dart' show containerPaymentMethodLabel;
@@ -53,12 +55,18 @@ class ReceiveRequestSheet extends StatefulWidget {
     required this.request,
     required this.service,
     this.staff = const [],
+    this.proofController,
   });
 
   final String businessId;
   final PackageRequest request;
   final PackageRequestService service;
   final List<LotStaff> staff;
+
+  /// The proof editor's state (docs/AIR_PACKAGES.md §2), when a test hands
+  /// one in with fakes for the camera and the upload; the sheet makes (and
+  /// owns) its own otherwise.
+  final ProofFieldsController? proofController;
 
   @override
   State<ReceiveRequestSheet> createState() => _ReceiveRequestSheetState();
@@ -91,6 +99,13 @@ class _ReceiveRequestSheetState extends State<ReceiveRequestSheet> {
   String _banner = '';
   bool _busy = false;
 
+  /// Photos staff take now, what is inside, weight and declared value
+  /// (docs/AIR_PACKAGES.md §4.2). Never required here: a received request
+  /// is not a counter drop-off, and the request's own photos are copied by
+  /// the server ahead of these.
+  late final ProofFieldsController _proof = widget.proofController ??
+      ProofFieldsController(businessId: widget.businessId);
+
   bool get _card => widget.request.isCardOrder;
 
   @override
@@ -105,6 +120,7 @@ class _ReceiveRequestSheetState extends State<ReceiveRequestSheet> {
     _total.dispose();
     _amount.dispose();
     _note.dispose();
+    if (widget.proofController == null) _proof.dispose();
     super.dispose();
   }
 
@@ -178,10 +194,22 @@ class _ReceiveRequestSheetState extends State<ReceiveRequestSheet> {
             staffIds: [for (final s in widget.staff) s.id],
           )
         : const <String>[];
-    if (!check.ok || paymentErrors.isNotEmpty) {
+    // A photo still uploading is not a path yet; the proof fields are checked
+    // as the server checks them (one code for the first problem).
+    final proof = validateProofFields(_proof.draft);
+    if (_proof.uploading) {
+      AppHaptics.refuse();
+      setState(() => _banner = l10n.proofPhotoUploading);
+      return;
+    }
+    if (!check.ok || paymentErrors.isNotEmpty || proof.error.isNotEmpty) {
       AppHaptics.refuse();
       setState(() {
-        _errors = {...check.reasons, ...paymentErrors};
+        _errors = {
+          ...check.reasons,
+          ...paymentErrors,
+          if (proof.error.isNotEmpty) proof.error,
+        };
         _showPieceErrors = check.reasons.isNotEmpty;
         _banner = check.reasons.isEmpty
             ? ''
@@ -203,6 +231,7 @@ class _ReceiveRequestSheetState extends State<ReceiveRequestSheet> {
           check: check,
           payOnArrival: !_card && _payOnArrival,
           payment: takesMoney ? intakePaymentRecord(_payment) : null,
+          proof: proof.fields.toPayload(),
         ),
       );
       if (!mounted) return;
@@ -230,6 +259,13 @@ class _ReceiveRequestSheetState extends State<ReceiveRequestSheet> {
   String? _paymentError(AppLocalizations l10n, List<String> codes) {
     for (final c in codes) {
       if (_errors.contains(c)) return containerErrorText(l10n, c);
+    }
+    return null;
+  }
+
+  String? _proofError(AppLocalizations l10n, List<String> codes) {
+    for (final c in codes) {
+      if (_errors.contains(c)) return proofErrorText(l10n, c);
     }
     return null;
   }
@@ -276,6 +312,25 @@ class _ReceiveRequestSheetState extends State<ReceiveRequestSheet> {
                 color: AppColors.errorRed,
               ),
             ),
+          const SizedBox(height: AppSpacing.md),
+          // Proof on the package (docs/AIR_PACKAGES.md §2): photos staff
+          // take now, what is inside, weight and declared value.
+          ProofFields(
+            controller: _proof,
+            enabled: !_busy,
+            onEdited: () {
+              if (_banner.isNotEmpty || _errors.isNotEmpty) {
+                setState(() {
+                  _banner = '';
+                  _errors = {};
+                });
+              }
+            },
+            photoError: _proofError(l10n, const ['photo_invalid', 'photo_required']),
+            contentsError: _proofError(l10n, const ['contents_invalid']),
+            weightError: _proofError(l10n, const ['weight_invalid']),
+            valueError: _proofError(l10n, const ['declared_value_invalid']),
+          ),
           const SizedBox(height: AppSpacing.md),
           if (_card)
             RequestBanner(

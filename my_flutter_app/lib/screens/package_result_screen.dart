@@ -10,8 +10,10 @@ import '../services/container_delivery_service.dart';
 import '../services/container_manifest.dart';
 import '../services/container_packages.dart';
 import '../services/line_pieces.dart' show LineGroupSummary;
-import '../services/lot_ledger.dart' show LotStaff;
+import '../services/lot_ledger.dart' show LotStaff, formatLotCents;
 import '../services/package_codes.dart';
+import '../services/package_proof.dart'
+    show contentsText, weightText;
 import '../services/phone_accounts.dart'
     show RecordPhoneField, RecordPhoneFlags;
 import '../services/waiting_packages.dart';
@@ -26,6 +28,9 @@ import '../widgets/lot_sheets.dart';
 import '../widgets/package_delivery_widgets.dart';
 import '../widgets/package_money.dart';
 import '../widgets/phone_account_widgets.dart' show RecordPhoneFlagNotes;
+import '../widgets/proof_fields.dart'
+    show PackagePhotoStrip, ProofPhotoUrlResolver;
+import '../widgets/proof_ticks.dart';
 import '../services/whatsapp_conversations.dart'
     show PackageUpdateTick, messageCustomerTargets, packageUpdateTickOf;
 import '../widgets/whatsapp_widgets.dart'
@@ -527,6 +532,7 @@ class PackageResultView extends StatelessWidget {
     this.onMarkDelivered,
     this.onUndoDelivery,
     this.undoingDelivery = false,
+    this.photoUrlOf,
   });
 
   final ContainerLine line;
@@ -534,6 +540,10 @@ class PackageResultView extends StatelessWidget {
   /// What the person may see and do. Restricted (deliveries only): no
   /// money, edits, labels or container page.
   final PackageAccess access;
+
+  /// Download URLs for the package's photos; Firebase Storage unless a test
+  /// hands in its own.
+  final ProofPhotoUrlResolver? photoUrlOf;
 
   /// Opens the Mark delivered sheet; null when the package cannot be handed
   /// over now (not ready for pickup, already delivered, or not allowed).
@@ -646,6 +656,122 @@ class PackageResultView extends StatelessWidget {
             ],
           ),
         ),
+        // Proof on the package (docs/AIR_PACKAGES.md §1.11): the three
+        // ticks, the drop-off photos, what is inside, weight and value. The
+        // declared value and the pickup code are for the containers
+        // permission only; a deliveries-only agent sees neither.
+        _Section(
+          title: l10n.proofSectionTitle,
+          child: Column(
+            key: const Key('pkg-proof'),
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  PackageProofTicks(ticks: line.proofTicks, size: 18),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      [
+                        proofTickLabels(l10n, line.proofTicks).photo,
+                        proofTickLabels(l10n, line.proofTicks).sender,
+                        proofTickLabels(l10n, line.proofTicks).delivered,
+                      ].join(' · '),
+                      key: const Key('pkg-proof-ticks-text'),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        height: 1.35,
+                        color: AppColors.muted,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              SenderProblemBanner(
+                line: line,
+                onOpenConversation: onMessageCustomer,
+              ),
+              if (line.photoPaths.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.sm),
+                PackagePhotoStrip(
+                  key: const Key('pkg-proof-photos'),
+                  paths: line.photoPaths,
+                  urlOf: photoUrlOf,
+                ),
+              ],
+              if (line.contents.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                for (final item in line.contents)
+                  _Fact(
+                    key: ValueKey('pkg-content:${item.label}:${item.serial}'),
+                    icon: Icons.inventory_2_outlined,
+                    text: [
+                      contentsText([item]),
+                      if (item.serial.isNotEmpty) item.serial,
+                    ].join(' · '),
+                  ),
+              ],
+              if (line.weightLb != null)
+                _Fact(
+                  key: const Key('pkg-weight'),
+                  icon: Icons.scale_outlined,
+                  text: l10n.proofWeightFact(
+                    weightText(line.weightLb, dateLocaleOf(context)),
+                  ),
+                ),
+              if (access.canSeeMoney && line.declaredValueCents != null)
+                _Fact(
+                  key: const Key('pkg-declared-value'),
+                  icon: Icons.request_quote_outlined,
+                  text: l10n.proofValueFact(
+                    formatLotCents(line.declaredValueCents!),
+                  ),
+                ),
+              if (!restricted && line.pickupCode.isNotEmpty)
+                _Fact(
+                  key: const Key('pkg-pickup-code'),
+                  icon: Icons.password_outlined,
+                  text: l10n.proofPickupCodeFact(line.pickupCode),
+                ),
+              if (line.customerPhotoPaths.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  l10n.proofCustomerPhotos,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.muted,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                PackagePhotoStrip(
+                  key: const Key('pkg-customer-photos'),
+                  paths: line.customerPhotoPaths,
+                  urlOf: photoUrlOf,
+                  size: 60,
+                ),
+              ],
+              if (line.deliveredPhotoPath.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  l10n.proofDeliveredPhoto,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.muted,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                PackagePhotoStrip(
+                  key: const Key('pkg-delivered-photo'),
+                  paths: [line.deliveredPhotoPath],
+                  urlOf: photoUrlOf,
+                  size: 60,
+                ),
+              ],
+            ],
+          ),
+        ),
         _Section(
           title: l10n.pkgOwner,
           child: line.isStock
@@ -685,7 +811,7 @@ class PackageResultView extends StatelessWidget {
                 ),
         ),
         _Section(
-          title: l10n.pkgContainer,
+          title: c?.isAir == true ? l10n.airPkgSection : l10n.pkgContainer,
           child: c == null && line.isWaiting
               // Dropped off, no container yet: say so, and where it is going.
               ? Column(
@@ -883,8 +1009,12 @@ class PackageResultView extends StatelessWidget {
               Expanded(
                 child: ContainerActionButton(
                   key: const Key('pkg-open-container'),
-                  icon: Icons.view_in_ar_outlined,
-                  label: l10n.pkgOpenContainer,
+                  icon: c?.isAir == true
+                      ? Icons.flight
+                      : Icons.view_in_ar_outlined,
+                  label: c?.isAir == true
+                      ? l10n.airOpenShipment
+                      : l10n.pkgOpenContainer,
                   enabled: line.containerId.isNotEmpty,
                   onTap: onOpenContainer,
                 ),
@@ -1336,10 +1466,14 @@ Widget packageResultViewForTesting({
   PackageAccess access = PackageAccess.full,
   VoidCallback? onMarkDelivered,
   VoidCallback? onUndoDelivery,
+  ProofPhotoUrlResolver? photoUrlOf,
+  VoidCallback? onMessageCustomer,
 }) =>
     PackageResultView(
       group: group,
       access: access,
+      photoUrlOf: photoUrlOf,
+      onMessageCustomer: onMessageCustomer,
       onMarkDelivered: onMarkDelivered,
       onUndoDelivery: onUndoDelivery,
       line: line,

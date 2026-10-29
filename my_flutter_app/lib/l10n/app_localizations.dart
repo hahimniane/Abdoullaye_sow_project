@@ -28423,6 +28423,462 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'There is nowhere else to hand it.'**
   String get waHandOverNoOptions;
+
+  /// No description provided for @proofSectionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Proof'**
+  String get proofSectionTitle;
+
+  /// No description provided for @proofPhotosOfMax.
+  ///
+  /// In en, this message translates to:
+  /// **'Photos · {count} of {max}'**
+  String proofPhotosOfMax(int count, int max);
+
+  /// No description provided for @proofTakePhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Camera'**
+  String get proofTakePhoto;
+
+  /// No description provided for @proofChoosePhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Gallery'**
+  String get proofChoosePhoto;
+
+  /// No description provided for @proofRemovePhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove photo'**
+  String get proofRemovePhoto;
+
+  /// No description provided for @proofPhotoUploading.
+  ///
+  /// In en, this message translates to:
+  /// **'Uploading…'**
+  String get proofPhotoUploading;
+
+  /// No description provided for @proofPhotoRequiredNote.
+  ///
+  /// In en, this message translates to:
+  /// **'A photo of the package is required at drop-off.'**
+  String get proofPhotoRequiredNote;
+
+  /// No description provided for @proofPhotoOptionalNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Up to {max} photos of the package.'**
+  String proofPhotoOptionalNote(int max);
+
+  /// No description provided for @proofPhotoFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The photo could not be uploaded. Try again.'**
+  String get proofPhotoFailed;
+
+  /// No description provided for @proofPhotoTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'The photo is too large (2 MB at most).'**
+  String get proofPhotoTooLarge;
+
+  /// No description provided for @proofPhotoNotImage.
+  ///
+  /// In en, this message translates to:
+  /// **'That file is not a photo (JPEG, PNG or WebP).'**
+  String get proofPhotoNotImage;
+
+  /// No description provided for @proofPhotoNoPermission.
+  ///
+  /// In en, this message translates to:
+  /// **'You can’t add photos here.'**
+  String get proofPhotoNoPermission;
+
+  /// No description provided for @proofPhotoLimit.
+  ///
+  /// In en, this message translates to:
+  /// **'At most {max} photos.'**
+  String proofPhotoLimit(int max);
+
+  /// No description provided for @proofPhotoOpenFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The photo could not be opened.'**
+  String get proofPhotoOpenFailed;
+
+  /// No description provided for @proofContentsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'What’s inside'**
+  String get proofContentsTitle;
+
+  /// No description provided for @proofContentsNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Optional. The sender confirms this list and customs reads it.'**
+  String get proofContentsNote;
+
+  /// No description provided for @proofItemLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Item'**
+  String get proofItemLabel;
+
+  /// No description provided for @proofItemQuantity.
+  ///
+  /// In en, this message translates to:
+  /// **'Qty'**
+  String get proofItemQuantity;
+
+  /// No description provided for @proofItemSerial.
+  ///
+  /// In en, this message translates to:
+  /// **'Serial / IMEI (optional)'**
+  String get proofItemSerial;
+
+  /// No description provided for @proofAddItem.
+  ///
+  /// In en, this message translates to:
+  /// **'Add an item'**
+  String get proofAddItem;
+
+  /// No description provided for @proofRemoveItem.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove item'**
+  String get proofRemoveItem;
+
+  /// No description provided for @proofWeight.
+  ///
+  /// In en, this message translates to:
+  /// **'Weight'**
+  String get proofWeight;
+
+  /// No description provided for @proofDeclaredValue.
+  ///
+  /// In en, this message translates to:
+  /// **'Declared value'**
+  String get proofDeclaredValue;
+
+  /// No description provided for @proofDeclaredValueNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Never printed on the label.'**
+  String get proofDeclaredValueNote;
+
+  /// No description provided for @proofErrPhotoInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'One of the photos could not be used. Add it again.'**
+  String get proofErrPhotoInvalid;
+
+  /// No description provided for @proofErrPhotoRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Add at least one photo of the package.'**
+  String get proofErrPhotoRequired;
+
+  /// No description provided for @proofErrContents.
+  ///
+  /// In en, this message translates to:
+  /// **'Check the item list: a name up to 60 characters, a quantity from 1 to 99, and an optional serial number.'**
+  String get proofErrContents;
+
+  /// No description provided for @proofErrWeight.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a weight between 0.1 and 2000 lb.'**
+  String get proofErrWeight;
+
+  /// No description provided for @proofErrDeclaredValue.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a declared value of \$0 or more.'**
+  String get proofErrDeclaredValue;
+
+  /// No description provided for @proofErrPickupCode.
+  ///
+  /// In en, this message translates to:
+  /// **'The pickup code does not match. Ask the receiver for the code in their message, or deliver without a code.'**
+  String get proofErrPickupCode;
+
+  /// No description provided for @proofErrOverride.
+  ///
+  /// In en, this message translates to:
+  /// **'Delivering without a code needs the name of the person collecting and a photo.'**
+  String get proofErrOverride;
+
+  /// No description provided for @proofErrSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'The proof settings could not be saved.'**
+  String get proofErrSettings;
+
+  /// No description provided for @proofTickPhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Drop-off photo'**
+  String get proofTickPhoto;
+
+  /// No description provided for @proofTickPhotoNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No drop-off photo'**
+  String get proofTickPhotoNone;
+
+  /// No description provided for @proofTickSenderNone.
+  ///
+  /// In en, this message translates to:
+  /// **'Sender not asked'**
+  String get proofTickSenderNone;
+
+  /// No description provided for @proofTickSenderAsked.
+  ///
+  /// In en, this message translates to:
+  /// **'Sender asked, no answer yet'**
+  String get proofTickSenderAsked;
+
+  /// No description provided for @proofTickSenderConfirmed.
+  ///
+  /// In en, this message translates to:
+  /// **'Sender confirmed'**
+  String get proofTickSenderConfirmed;
+
+  /// No description provided for @proofTickSenderProblem.
+  ///
+  /// In en, this message translates to:
+  /// **'Sender reported a problem'**
+  String get proofTickSenderProblem;
+
+  /// No description provided for @proofTickDelivered.
+  ///
+  /// In en, this message translates to:
+  /// **'Delivered'**
+  String get proofTickDelivered;
+
+  /// No description provided for @proofTickDeliveredWithoutCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Delivered without code'**
+  String get proofTickDeliveredWithoutCode;
+
+  /// No description provided for @proofTickNotDelivered.
+  ///
+  /// In en, this message translates to:
+  /// **'Not delivered yet'**
+  String get proofTickNotDelivered;
+
+  /// No description provided for @proofMissingFilter.
+  ///
+  /// In en, this message translates to:
+  /// **'Missing proof'**
+  String get proofMissingFilter;
+
+  /// No description provided for @proofNoneMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'Every package here has its photo and the sender’s OK.'**
+  String get proofNoneMissing;
+
+  /// No description provided for @proofProblemBanner.
+  ///
+  /// In en, this message translates to:
+  /// **'Sender reported a problem'**
+  String get proofProblemBanner;
+
+  /// No description provided for @proofOpenConversation.
+  ///
+  /// In en, this message translates to:
+  /// **'Open conversation'**
+  String get proofOpenConversation;
+
+  /// No description provided for @proofLoadAnywayTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Load anyway?'**
+  String get proofLoadAnywayTitle;
+
+  /// No description provided for @proofLoadAnywayMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Sender reported a problem with {codes}. Load anyway?'**
+  String proofLoadAnywayMessage(String codes);
+
+  /// No description provided for @proofLoadAnyway.
+  ///
+  /// In en, this message translates to:
+  /// **'Load anyway'**
+  String get proofLoadAnyway;
+
+  /// No description provided for @proofWeightFact.
+  ///
+  /// In en, this message translates to:
+  /// **'Weight: {weight}'**
+  String proofWeightFact(String weight);
+
+  /// No description provided for @proofValueFact.
+  ///
+  /// In en, this message translates to:
+  /// **'Declared value: {value}'**
+  String proofValueFact(String value);
+
+  /// No description provided for @proofCustomerPhotos.
+  ///
+  /// In en, this message translates to:
+  /// **'Photos from the customer'**
+  String get proofCustomerPhotos;
+
+  /// No description provided for @proofDeliveredPhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Handover photo'**
+  String get proofDeliveredPhoto;
+
+  /// No description provided for @proofPickupCodeFact.
+  ///
+  /// In en, this message translates to:
+  /// **'Pickup code: {code}'**
+  String proofPickupCodeFact(String code);
+
+  /// No description provided for @airModeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sea or air'**
+  String get airModeTitle;
+
+  /// No description provided for @airModeSea.
+  ///
+  /// In en, this message translates to:
+  /// **'Sea'**
+  String get airModeSea;
+
+  /// No description provided for @airModeAir.
+  ///
+  /// In en, this message translates to:
+  /// **'Air'**
+  String get airModeAir;
+
+  /// No description provided for @airWaybill.
+  ///
+  /// In en, this message translates to:
+  /// **'Air waybill'**
+  String get airWaybill;
+
+  /// No description provided for @airWaybillHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Letters, digits and dashes, like 176-12345678'**
+  String get airWaybillHint;
+
+  /// No description provided for @airAirline.
+  ///
+  /// In en, this message translates to:
+  /// **'Airline (optional)'**
+  String get airAirline;
+
+  /// No description provided for @airLabelOptionalNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Optional once there is an air waybill.'**
+  String get airLabelOptionalNote;
+
+  /// No description provided for @airErrWaybill.
+  ///
+  /// In en, this message translates to:
+  /// **'An air waybill is 6 to 20 letters, digits or dashes, like 176-12345678.'**
+  String get airErrWaybill;
+
+  /// No description provided for @airNewShipment.
+  ///
+  /// In en, this message translates to:
+  /// **'New shipment'**
+  String get airNewShipment;
+
+  /// No description provided for @airEditShipment.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit shipment'**
+  String get airEditShipment;
+
+  /// No description provided for @airCreated.
+  ///
+  /// In en, this message translates to:
+  /// **'Shipment created.'**
+  String get airCreated;
+
+  /// No description provided for @airShipTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark this shipment departed?'**
+  String get airShipTitle;
+
+  /// No description provided for @airArriveTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark this shipment ready for pickup?'**
+  String get airArriveTitle;
+
+  /// No description provided for @airArriveMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Customers are told on WhatsApp where to collect their goods.'**
+  String get airArriveMessage;
+
+  /// No description provided for @airDeleteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this shipment?'**
+  String get airDeleteTitle;
+
+  /// No description provided for @airDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete shipment'**
+  String get airDelete;
+
+  /// No description provided for @airDeleteMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Only an empty shipment that is still loading can be deleted.'**
+  String get airDeleteMessage;
+
+  /// No description provided for @airAddLine.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to the shipment'**
+  String get airAddLine;
+
+  /// No description provided for @airPkgSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Shipment'**
+  String get airPkgSection;
+
+  /// No description provided for @airOpenShipment.
+  ///
+  /// In en, this message translates to:
+  /// **'Open shipment'**
+  String get airOpenShipment;
+
+  /// No description provided for @airChip.
+  ///
+  /// In en, this message translates to:
+  /// **'Air'**
+  String get airChip;
+
+  /// No description provided for @airLockedNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Departed. The list is the record of what went; only the notes stay open.'**
+  String get airLockedNote;
+
+  /// No description provided for @airCustomsList.
+  ///
+  /// In en, this message translates to:
+  /// **'Customs list'**
+  String get airCustomsList;
 }
 
 class _AppLocalizationsDelegate
