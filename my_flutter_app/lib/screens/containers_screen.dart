@@ -26,6 +26,7 @@ import '../services/label_printer.dart' show LabelPrinterController;
 import '../services/lot_customers.dart';
 import '../services/lot_ledger.dart';
 import '../services/package_labels.dart' show PackageLabelsTarget;
+import '../services/package_proof.dart';
 import '../services/package_request_feed.dart';
 import '../services/package_request_service.dart';
 import '../services/phone_accounts.dart'
@@ -50,6 +51,8 @@ import '../widgets/package_delivery_widgets.dart';
 import '../widgets/package_money.dart';
 import '../widgets/phone_account_widgets.dart' show RecordPhoneFlagNotes;
 import '../widgets/pieces_editor.dart';
+import '../widgets/proof_fields.dart';
+import '../widgets/proof_ticks.dart';
 import '../widgets/waiting_package_fields.dart';
 import 'add_waiting_packages_sheet.dart';
 import 'bank_check_sheet.dart';
@@ -587,6 +590,10 @@ class _ContainersScreenState extends State<ContainersScreen> {
   /// starts there. Empty until known.
   String _businessCountryCode = '';
 
+  /// The business's proof switches (docs/AIR_PACKAGES.md §1.3), read from
+  /// its document: photos required at the counter, and the rest.
+  PackageProofSettings _proofSettings = const PackageProofSettings();
+
   String _filter = containerStatusLoading;
   String _search = '';
 
@@ -662,6 +669,7 @@ class _ContainersScreenState extends State<ContainersScreen> {
               (data['country'] ?? '').toString(),
             ) ??
             '';
+        _proofSettings = proofSettingsOf(data);
       });
     }, onError: (_) {}));
 
@@ -745,6 +753,7 @@ class _ContainersScreenState extends State<ContainersScreen> {
           destinations: _destinations,
           businessCountryCode: _businessCountryCode,
           onCustomerRecorded: _loadCustomers,
+          proofSettings: _proofSettings,
         ),
       ),
     );
@@ -781,6 +790,7 @@ class _ContainersScreenState extends State<ContainersScreen> {
           businessCountryCode: _businessCountryCode,
           onCustomerRecorded: _loadCustomers,
           requestFeed: _requests,
+          proofSettings: _proofSettings,
         ),
       ),
     );
@@ -1292,7 +1302,10 @@ class _ContainerCard extends StatelessWidget {
     final c = container;
     final counts = _countsText(l10n, c.carCount, c.barrelCount, c.otherCount);
     final second = [
-      if (c.containerNumber.isNotEmpty) c.label,
+      // A flight says so, and its airline; the working name once the
+      // waybill or the number has become the title.
+      if (c.isAir) [l10n.airChip, if (c.airline.isNotEmpty) c.airline].join(' '),
+      if (c.reference.isNotEmpty) c.label,
       if (c.destinationCountryName.isNotEmpty) c.destinationCountryName,
     ].join(' · ');
     final when = c.isArrived && c.arrivedAt != null
@@ -1321,6 +1334,13 @@ class _ContainerCard extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (c.isAir) ...[
+                  const Padding(
+                    key: Key('container-card-air'),
+                    padding: EdgeInsets.only(top: 1, right: 6),
+                    child: Icon(Icons.flight, size: 16, color: AppColors.cobaltDeep),
+                  ),
+                ],
                 Expanded(
                   child: Text(
                     c.displayName,
@@ -1557,10 +1577,15 @@ class ContainerDetailScreen extends StatefulWidget {
     required this.onCustomerRecorded,
     this.feed,
     this.deliveryService = const ContainerDeliveryService(),
+    this.proofSettings = const PackageProofSettings(),
   });
 
   final String businessId;
   final String containerId;
+
+  /// The business's proof switches: the add-line form requires a photo when
+  /// `photosRequired` is on.
+  final PackageProofSettings proofSettings;
 
   /// Marks a package delivered and undoes that.
   final ContainerDeliveryService deliveryService;
@@ -1708,6 +1733,7 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
         customerCountryCode: _customerCountryCode,
         receiverCountryCode: _receiverCountryCode(container),
         onLineAdded: widget.onCustomerRecorded,
+        proofSettings: widget.proofSettings,
       ),
     );
     if (added == true) widget.onCustomerRecorded();
@@ -1782,10 +1808,12 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
     if (refusal != null) return _refuse(refusal);
     final ok = await confirmMajorAction(
       context,
-      title: l10n.ctrShipTitle,
+      title: container.isAir ? l10n.airShipTitle : l10n.ctrShipTitle,
       message: l10n.ctrShipMessage,
       confirmLabel: l10n.ctrShip,
-      icon: Icons.directions_boat_outlined,
+      icon: container.isAir
+          ? Icons.flight_takeoff
+          : Icons.directions_boat_outlined,
     );
     if (!ok || !mounted) return;
     await _run('ship', () async {
@@ -1808,8 +1836,8 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
     if (refusal != null) return _refuse(refusal);
     final ok = await confirmMajorAction(
       context,
-      title: l10n.ctrArriveTitle,
-      message: l10n.ctrArriveMessage,
+      title: container.isAir ? l10n.airArriveTitle : l10n.ctrArriveTitle,
+      message: container.isAir ? l10n.airArriveMessage : l10n.ctrArriveMessage,
       confirmLabel: l10n.ctrArrive,
       icon: Icons.flag_outlined,
     );
@@ -1833,9 +1861,9 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
     if (refusal != null) return _refuse(refusal);
     final ok = await confirmMajorAction(
       context,
-      title: l10n.ctrDeleteTitle,
-      message: l10n.ctrDeleteMessage,
-      confirmLabel: l10n.ctrDelete,
+      title: container.isAir ? l10n.airDeleteTitle : l10n.ctrDeleteTitle,
+      message: container.isAir ? l10n.airDeleteMessage : l10n.ctrDeleteMessage,
+      confirmLabel: container.isAir ? l10n.airDelete : l10n.ctrDelete,
       destructive: true,
     );
     if (!ok || !mounted) return;
@@ -1859,6 +1887,29 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
           .call<Object?>({
         'businessId': widget.businessId,
         'containerId': widget.containerId,
+      });
+      final data = response.data;
+      final url = data is Map ? (data['url'] ?? '').toString() : '';
+      final uri = url.isEmpty ? null : Uri.tryParse(url);
+      if (uri == null) throw StateError('no url');
+      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!opened) throw StateError('not opened');
+    }, failure: l10n.lotDocumentCouldNotBeOpened);
+  }
+
+  /// The customs list (docs/AIR_PACKAGES.md §4.9): code, sender, receiver,
+  /// contents with serials, weight and declared value of every package on
+  /// this container, printable. Money is on it, so the containers
+  /// permission (the button is hidden from a restricted view).
+  Future<void> _openCustoms() async {
+    final l10n = AppLocalizations.of(context)!;
+    await _run('customs', () async {
+      final response = await FirebaseFunctions.instance
+          .httpsCallable('getContainerDocumentUrl')
+          .call<Object?>({
+        'businessId': widget.businessId,
+        'containerId': widget.containerId,
+        'view': 'customs',
       });
       final data = response.data;
       final url = data is Map ? (data['url'] ?? '').toString() : '';
@@ -2070,6 +2121,7 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
         parkedCarRows: widget.parkedCarRows,
         businessCountryCode: widget.businessCountryCode,
         destinations: widget.destinations,
+        proofSettings: widget.proofSettings,
       );
       if (saved) widget.onCustomerRecorded();
       return;
@@ -2217,7 +2269,9 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
                       onPressed: busy ? null : _edit,
                       icon: const Icon(Icons.edit_outlined, size: 20),
                       color: AppColors.muted,
-                      tooltip: l10n.ctrEditContainer,
+                      tooltip: container.isAir
+                          ? l10n.airEditShipment
+                          : l10n.ctrEditContainer,
                     ),
                     IconButton(
                       key: const Key('container-history'),
@@ -2232,7 +2286,7 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
                         onPressed: busy ? null : _delete,
                         icon: const Icon(Icons.delete_outline, size: 20),
                         color: AppColors.muted,
-                        tooltip: l10n.ctrDelete,
+                        tooltip: container.isAir ? l10n.airDelete : l10n.ctrDelete,
                       ),
                   ],
                 ),
@@ -2277,6 +2331,19 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
                         ),
                       ],
                     ),
+                    // The customs list (docs/AIR_PACKAGES.md §4.9): money is
+                    // on it, so the containers permission only.
+                    if (!access.restricted) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      ContainerActionButton(
+                        key: const Key('container-customs'),
+                        icon: Icons.fact_check_outlined,
+                        label: l10n.airCustomsList,
+                        busy: _busy == 'customs',
+                        enabled: !busy && lines.isNotEmpty,
+                        onTap: _openCustoms,
+                      ),
+                    ],
                     // Scan to load: every label scanned goes onto this box.
                     // The same people who may add waiting packages by hand.
                     if (container.isLoading && !access.restricted) ...[
@@ -2469,7 +2536,26 @@ class _DetailFacts extends StatelessWidget {
               label: l10n.ctrBookingReference,
               value: c.bookingReference,
             ),
-          if (c.carrierScac.isNotEmpty)
+          // A flight: its airline and waybill; no shipping line, no carrier
+          // tracking (docs/AIR_PACKAGES.md §2).
+          if (c.isAir) ...[
+            _FactRow(
+              key: const Key('container-air-chip'),
+              icon: Icons.flight,
+              label: l10n.airModeTitle,
+              value: [
+                l10n.airChip,
+                if (c.airline.isNotEmpty) c.airline,
+              ].join(' · '),
+            ),
+            if (c.airWaybill.isNotEmpty && c.label.isNotEmpty)
+              _FactRow(
+                icon: Icons.confirmation_number_outlined,
+                label: l10n.airWaybill,
+                value: c.airWaybill,
+              ),
+          ],
+          if (!c.isAir && c.carrierScac.isNotEmpty)
             _FactRow(
               icon: Icons.directions_boat_outlined,
               label: l10n.ctrShippingLine,
@@ -2484,7 +2570,7 @@ class _DetailFacts extends StatelessWidget {
           if (!c.isLoading) ...[
             const SizedBox(height: AppSpacing.sm),
             Text(
-              l10n.ctrLockedNote,
+              c.isAir ? l10n.airLockedNote : l10n.ctrLockedNote,
               style: const TextStyle(
                 fontSize: 12,
                 height: 1.35,
@@ -2519,6 +2605,7 @@ class _DetailFacts extends StatelessWidget {
 
 class _FactRow extends StatelessWidget {
   const _FactRow({
+    super.key,
     required this.icon,
     required this.label,
     required this.value,
@@ -2958,6 +3045,13 @@ class _LineCard extends StatelessWidget {
                     ),
                   // How far the last update got on WhatsApp (decision 15).
                   PackageUpdateTicks(line: line, indent: 20),
+                  // Drop-off photo · sender OK · delivered (AIR_PACKAGES §1.11).
+                  PackageProofTicks(ticks: line.proofTicks, indent: 20),
+                  SenderProblemBanner(
+                    line: line,
+                    dense: true,
+                    onOpenConversation: () => openWhatsAppForLine(context, line),
+                  ),
                   for (final warning in unreachable)
                     _LineNote(
                       key: ValueKey('line-phone-warning:$warning'),
@@ -3241,8 +3335,15 @@ class _ContainerFormSheetState extends State<_ContainerFormSheet> {
   final _number = TextEditingController();
   final _reference = TextEditingController();
   final _notes = TextEditingController();
+  final _waybill = TextEditingController();
+  final _airline = TextEditingController();
   String _destinationId = '';
   String _destinationName = '';
+
+  /// Sea (the default) or air (docs/AIR_PACKAGES.md §1): a flight is named
+  /// by its waybill and airline and has no container number or shipping
+  /// line. Locked after departure, like the number.
+  String _shipMode = containerShipModeSea;
 
   /// The shipping line's SCAC; '' lets tracking guess it from the number.
   String _carrierScac = '';
@@ -3253,6 +3354,7 @@ class _ContainerFormSheetState extends State<_ContainerFormSheet> {
   String _serverNote = '';
 
   bool get _editing => widget.existing != null;
+  bool get _air => _shipMode == containerShipModeAir;
 
   /// Once shipped the identity is the record: only the notes stay open, and
   /// the form offers only what the server will accept.
@@ -3270,11 +3372,14 @@ class _ContainerFormSheetState extends State<_ContainerFormSheet> {
     _destinationId = existing.destinationCountryId;
     _destinationName = existing.destinationCountryName;
     _carrierScac = existing.carrierScac;
+    _shipMode = existing.shipMode;
+    _waybill.text = existing.airWaybill;
+    _airline.text = existing.airline;
   }
 
   @override
   void dispose() {
-    for (final c in [_label, _number, _reference, _notes]) {
+    for (final c in [_label, _number, _reference, _notes, _waybill, _airline]) {
       c.dispose();
     }
     super.dispose();
@@ -3318,6 +3423,9 @@ class _ContainerFormSheetState extends State<_ContainerFormSheet> {
       destinationCountryId: _destinationId,
       destinationCountryName: _destinationName,
       notes: _notes.text,
+      shipMode: _shipMode,
+      airWaybill: _waybill.text,
+      airline: _airline.text,
     );
     final errors = _open ? validateContainer(draft) : const <String>[];
     if (errors.isNotEmpty) {
@@ -3343,14 +3451,15 @@ class _ContainerFormSheetState extends State<_ContainerFormSheet> {
           // shipping line always (carrier tracking needs it after sailing).
           'changes': {
             ...(_open ? record : {'notes': record['notes']}),
-            'carrierScac': _carrierScac,
+            // A flight has no shipping line at all.
+            if (!_air) 'carrierScac': _carrierScac,
           },
         });
       } else {
         final result = await functions.httpsCallable('createContainer').call<Object?>({
           'businessId': widget.businessId,
           ...record,
-          'carrierScac': _carrierScac,
+          if (!_air) 'carrierScac': _carrierScac,
         });
         final data = result.data;
         id = data is Map ? (data['containerId'] ?? '').toString() : '';
@@ -3358,15 +3467,21 @@ class _ContainerFormSheetState extends State<_ContainerFormSheet> {
       if (!mounted) return;
       AppHaptics.commit();
       Navigator.of(context).pop(id);
-      showSuccessSnackBar(context, _editing ? l10n.ctrUpdated : l10n.ctrCreated);
+      showSuccessSnackBar(
+        context,
+        _editing ? l10n.ctrUpdated : (_air ? l10n.airCreated : l10n.ctrCreated),
+      );
     } on FirebaseFunctionsException catch (error) {
       if (!mounted) return;
       AppHaptics.refuse();
       final refusal = parseContainerRefusal(error.details, error.message);
       // A code that names a field lands on the field; the rest is said
-      // above the button, where the person who pressed it is looking.
-      final fieldCodes = refusal.codes.where(_fieldCodes.contains).toSet();
-      final rest = refusal.codes.where((c) => !_fieldCodes.contains(c));
+      // above the button, where the person who pressed it is looking. The
+      // waybill's code is read off the details itself (package_proof).
+      final proofCode = proofRefusalCode(error.details);
+      final codes = {...refusal.codes, if (proofCode.isNotEmpty) proofCode};
+      final fieldCodes = codes.where(_fieldCodes.contains).toSet();
+      final rest = codes.where((c) => !_fieldCodes.contains(c));
       setState(() {
         _errors = fieldCodes;
         _serverNote = rest.isNotEmpty
@@ -3391,17 +3506,21 @@ class _ContainerFormSheetState extends State<_ContainerFormSheet> {
     'container_number_invalid',
     'destination_required',
     'carrier_invalid',
+    'air_waybill_invalid',
   };
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    String? errorFor(String code) =>
-        _errors.contains(code) ? containerErrorText(l10n, code) : null;
+    String? errorFor(String code) => _errors.contains(code)
+        ? (proofErrorText(l10n, code) ?? containerErrorText(l10n, code))
+        : null;
 
     return LotSheetShell(
-      title: _editing ? l10n.ctrEditContainer : l10n.ctrNewContainer,
-      subtitle: _open ? null : l10n.ctrLockedNote,
+      title: _editing
+          ? (_air ? l10n.airEditShipment : l10n.ctrEditContainer)
+          : (_air ? l10n.airNewShipment : l10n.ctrNewContainer),
+      subtitle: _open ? null : (_air ? l10n.airLockedNote : l10n.ctrLockedNote),
       footer: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
@@ -3421,6 +3540,49 @@ class _ContainerFormSheetState extends State<_ContainerFormSheet> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // Sea or air (docs/AIR_PACKAGES.md §1): the same container either
+          // way; a flight is named by its waybill. Locked with the number.
+          Text(
+            l10n.airModeTitle,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.2,
+              color: AppColors.ink,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          SegmentedButton<String>(
+            key: const Key('container-ship-mode'),
+            segments: [
+              ButtonSegment(
+                value: containerShipModeSea,
+                label: Text(l10n.airModeSea),
+                icon: const Icon(Icons.directions_boat_outlined, size: 18),
+              ),
+              ButtonSegment(
+                value: containerShipModeAir,
+                label: Text(l10n.airModeAir),
+                icon: const Icon(Icons.flight, size: 18),
+              ),
+            ],
+            selected: {_shipMode},
+            showSelectedIcon: false,
+            onSelectionChanged: !_open
+                ? null
+                : (picked) {
+                    AppHaptics.selection();
+                    setState(() {
+                      _shipMode = picked.first;
+                      _errors = {..._errors}
+                        ..remove('container_number_invalid')
+                        ..remove('air_waybill_invalid')
+                        ..remove('carrier_invalid');
+                      _serverNote = '';
+                    });
+                  },
+          ),
+          const SizedBox(height: AppSpacing.md),
           TextField(
             key: const Key('container-label'),
             controller: _label,
@@ -3430,25 +3592,55 @@ class _ContainerFormSheetState extends State<_ContainerFormSheet> {
             decoration: InputDecoration(
               labelText: l10n.ctrLabel,
               hintText: l10n.ctrLabelHint,
-              helperText: l10n.ctrLabelOptionalNote,
+              helperText:
+                  _air ? l10n.airLabelOptionalNote : l10n.ctrLabelOptionalNote,
               errorText: errorFor('container_label_required'),
             ),
           ),
           const SizedBox(height: AppSpacing.md),
-          TextField(
-            key: const Key('container-number'),
-            controller: _number,
-            enabled: _open,
-            textCapitalization: TextCapitalization.characters,
-            onChanged: (_) => _clearError('container_number_invalid'),
-            decoration: InputDecoration(
-              labelText: l10n.ctrNumber,
-              helperText: l10n.ctrNumberHint,
-              helperMaxLines: 2,
-              errorText: errorFor('container_number_invalid'),
-              errorMaxLines: 3,
+          if (_air) ...[
+            TextField(
+              key: const Key('container-air-waybill'),
+              controller: _waybill,
+              enabled: _open,
+              textCapitalization: TextCapitalization.characters,
+              onChanged: (_) => _clearError('air_waybill_invalid'),
+              decoration: InputDecoration(
+                labelText: l10n.airWaybill,
+                helperText: l10n.airWaybillHint,
+                helperMaxLines: 2,
+                errorText: errorFor('air_waybill_invalid'),
+                errorMaxLines: 3,
+              ),
             ),
-          ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              key: const Key('container-airline'),
+              controller: _airline,
+              enabled: _open,
+              textCapitalization: TextCapitalization.words,
+              maxLength: containerMaxAirline,
+              onChanged: (_) => _clearError('server'),
+              decoration: InputDecoration(
+                labelText: l10n.airAirline,
+                counterText: '',
+              ),
+            ),
+          ] else
+            TextField(
+              key: const Key('container-number'),
+              controller: _number,
+              enabled: _open,
+              textCapitalization: TextCapitalization.characters,
+              onChanged: (_) => _clearError('container_number_invalid'),
+              decoration: InputDecoration(
+                labelText: l10n.ctrNumber,
+                helperText: l10n.ctrNumberHint,
+                helperMaxLines: 2,
+                errorText: errorFor('container_number_invalid'),
+                errorMaxLines: 3,
+              ),
+            ),
           const SizedBox(height: AppSpacing.md),
           TextField(
             key: const Key('container-reference'),
@@ -3484,22 +3676,25 @@ class _ContainerFormSheetState extends State<_ContainerFormSheet> {
           // Optional, and open in every state: empty lets carrier tracking
           // guess the line from the number, which fails for leasing
           // prefixes such as TCKU - then this is how tracking starts.
-          if (containerCarrierNeedsChoice(widget.existing) &&
-              _carrierScac.isEmpty) ...[
-            _CarrierNeededNote(text: l10n.ctrShippingLineNeeded),
-            const SizedBox(height: AppSpacing.sm),
+          // A flight has no shipping line and is never tracked by one.
+          if (!_air) ...[
+            if (containerCarrierNeedsChoice(widget.existing) &&
+                _carrierScac.isEmpty) ...[
+              _CarrierNeededNote(text: l10n.ctrShippingLineNeeded),
+              const SizedBox(height: AppSpacing.sm),
+            ],
+            LotPickerField(
+              key: const Key('container-carrier'),
+              label: l10n.ctrShippingLine,
+              value: _carrierScac.isEmpty
+                  ? null
+                  : oceanCarrierLabel(_carrierScac),
+              placeholder: l10n.ctrShippingLineGuess,
+              onTap: _pickCarrier,
+              error: errorFor('carrier_invalid'),
+            ),
+            const SizedBox(height: AppSpacing.md),
           ],
-          LotPickerField(
-            key: const Key('container-carrier'),
-            label: l10n.ctrShippingLine,
-            value: _carrierScac.isEmpty
-                ? null
-                : oceanCarrierLabel(_carrierScac),
-            placeholder: l10n.ctrShippingLineGuess,
-            onTap: _pickCarrier,
-            error: errorFor('carrier_invalid'),
-          ),
-          const SizedBox(height: AppSpacing.md),
           TextField(
             key: const Key('container-notes'),
             controller: _notes,
@@ -3536,11 +3731,21 @@ class _LineFormSheet extends StatefulWidget {
     this.defaultDestination,
     this.caller = callContainerCallable,
     this.staff = const [],
+    this.proofSettings = const PackageProofSettings(),
+    this.proofController,
   }) : assert(waiting || container != null);
 
   /// Everyone in the business - the owner and every staff member - offered
   /// as "received by" when money is taken as a package is registered.
   final List<LotStaff> staff;
+
+  /// The business's proof switches (docs/AIR_PACKAGES.md §1.3): with
+  /// `photosRequired` on, a counter drop-off needs at least one photo.
+  final PackageProofSettings proofSettings;
+
+  /// The proof editor's state, when a test hands one in with fakes for the
+  /// camera and the upload; the sheet makes (and owns) its own otherwise.
+  final ProofFieldsController? proofController;
 
   final String businessId;
 
@@ -3604,6 +3809,12 @@ class _LineFormSheetState extends State<_LineFormSheet> {
 
   /// What a package that is not a car holds, piece by piece.
   late final PiecesEditorController _pieceEditor;
+
+  /// Proof on the package (docs/AIR_PACKAGES.md §2): photos, what is
+  /// inside, weight and declared value. The sheet's own unless a test gave
+  /// one; disposed here only when it is ours.
+  late final ProofFieldsController _proof;
+  bool _ownsProof = false;
 
   /// Each piece says what is wrong with it once a save was refused.
   bool _showPieceErrors = false;
@@ -3685,6 +3896,15 @@ class _LineFormSheetState extends State<_LineFormSheet> {
           ? line.pickupFeeCents
           : null,
     )..addListener(_onPiecesEdited);
+    // An edit opens on the line's stored photos, items, weight and value;
+    // a new line on nothing.
+    final given = widget.proofController;
+    _ownsProof = given == null;
+    _proof = given ??
+        ProofFieldsController(
+          businessId: widget.businessId,
+          initial: line?.proofDraft ?? PackageProofDraft.empty,
+        );
     if (line == null) {
       // At the counter most packages are barrels and boxes; on a container
       // the yard starts with a car, as it always has.
@@ -3746,6 +3966,7 @@ class _LineFormSheetState extends State<_LineFormSheet> {
     _pieceEditor
       ..removeListener(_onPiecesEdited)
       ..dispose();
+    if (_ownsProof) _proof.dispose();
     for (final c in [
       _vin, _make, _model, _year, _customer, _phone,
       _receiver, _receiverPhone, _lotFilter, _length, _width, _height, _price,
@@ -4120,6 +4341,7 @@ class _LineFormSheetState extends State<_LineFormSheet> {
         priceCents:
             _waiting && _isCar ? readPackagePrice(_price.text).cents : null,
         payOnArrival: _waiting && _payOnArrival,
+        proof: _proof.draft,
       );
   }
 
@@ -4169,6 +4391,13 @@ class _LineFormSheetState extends State<_LineFormSheet> {
     bool printLabel = false,
   }) async {
     final l10n = AppLocalizations.of(context)!;
+    // A photo still on its way up is not a path yet: wait for it rather
+    // than save the line without it.
+    if (_proof.uploading) {
+      AppHaptics.refuse();
+      setState(() => _serverNote = l10n.proofPhotoUploading);
+      return;
+    }
     final draft = _draft;
     // An edited line saved before the receiver's name was required is only
     // asked for it when its people change (the server's rule).
@@ -4194,6 +4423,14 @@ class _LineFormSheetState extends State<_LineFormSheet> {
     if (_kind == containerLineKindCar && _errors.contains('vin_already_loaded')) {
       errors.add('vin_already_loaded');
     }
+    // Photos required at drop-off (docs/AIR_PACKAGES.md §4.2): counter
+    // lines only, new or edited, as the server judges them.
+    final photoRefusal = photoRequirementRefusal(
+      widget.proofSettings,
+      source: widget.existing?.source ?? 'counter',
+      photoPaths: _proof.photoPaths,
+    );
+    if (photoRefusal.isNotEmpty) errors.add(photoRefusal);
     if (errors.isNotEmpty) {
       AppHaptics.refuse();
       setState(() {
@@ -4263,6 +4500,7 @@ class _LineFormSheetState extends State<_LineFormSheet> {
           _notifyReceiver = true;
           _senderIsReceiver = false;
           _suggestions = const [];
+          _proof.reset();
         });
         return;
       }
@@ -4272,8 +4510,12 @@ class _LineFormSheetState extends State<_LineFormSheet> {
       if (!mounted) return;
       AppHaptics.refuse();
       final refusal = parseContainerRefusal(error.details, error.message);
-      final fieldCodes = refusal.codes.where(_fieldCodes.contains).toSet();
-      final rest = refusal.codes.where((c) => !_fieldCodes.contains(c));
+      // A proof refusal is read off the details itself (package_proof), so
+      // it lands under its block whatever the shared code list knows.
+      final proofCode = proofRefusalCode(error.details);
+      final codes = {...refusal.codes, if (proofCode.isNotEmpty) proofCode};
+      final fieldCodes = codes.where(_fieldCodes.contains).toSet();
+      final rest = codes.where((c) => !_fieldCodes.contains(c));
       setState(() {
         _errors = fieldCodes;
         if (fieldCodes.any(_pieceCodes.contains)) _showPieceErrors = true;
@@ -4408,6 +4650,7 @@ class _LineFormSheetState extends State<_LineFormSheet> {
         _conflictWaiting = false;
         _payOnArrival = false;
         _resetMoney();
+        _proof.reset();
       });
       return;
     }
@@ -4438,18 +4681,29 @@ class _LineFormSheetState extends State<_LineFormSheet> {
     'price_below_paid',
     ..._paymentCodes,
     ..._pieceCodes,
+    ..._proofCodes,
+  };
+
+  /// Proof refusals, each shown under its own block of the editor.
+  static const _proofCodes = {
+    'photo_invalid',
+    'photo_required',
+    'contents_invalid',
+    'weight_invalid',
+    'declared_value_invalid',
   };
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     String? errorFor(String code) => _errors.contains(code)
-        ? containerErrorText(
-            l10n,
-            code,
-            conflictName: _conflictName,
-            conflictWaiting: _conflictWaiting,
-          )
+        ? (proofErrorText(l10n, code) ??
+            containerErrorText(
+              l10n,
+              code,
+              conflictName: _conflictName,
+              conflictWaiting: _conflictWaiting,
+            ))
         : null;
     final isCar = _isCar;
     // A car's fields (and whose it is) appear once the lot question is
@@ -4462,7 +4716,9 @@ class _LineFormSheetState extends State<_LineFormSheet> {
     return LotSheetShell(
       title: _waiting
           ? (_editing ? l10n.wpkEditPackage : l10n.wpkRegister)
-          : (_editing ? l10n.ctrEditLine : l10n.ctrAddLine),
+          : (_editing
+              ? l10n.ctrEditLine
+              : (widget.container!.isAir ? l10n.airAddLine : l10n.ctrAddLine)),
       subtitle: _waiting
           ? l10n.wpkRegisterSubtitle
           : widget.container!.displayName,
@@ -4736,6 +4992,33 @@ class _LineFormSheetState extends State<_LineFormSheet> {
               priceError:
                   errorFor('price_invalid') ?? errorFor('price_below_paid'),
             ),
+          // Proof on the package (docs/AIR_PACKAGES.md §2): photos, what is
+          // inside, weight and declared value - every line, car or pieces.
+          if (showOwner) ...[
+            const SizedBox(height: AppSpacing.lg),
+            ProofFields(
+              controller: _proof,
+              photosRequired: photoRequirementRefusal(
+                    widget.proofSettings,
+                    source: widget.existing?.source ?? 'counter',
+                  ).isNotEmpty,
+              enabled: !_busy,
+              onEdited: () {
+                if (_serverNote.isNotEmpty ||
+                    _errors.any(_proofCodes.contains)) {
+                  setState(() {
+                    _serverNote = '';
+                    _errors = {..._errors}..removeAll(_proofCodes);
+                  });
+                }
+              },
+              photoError:
+                  errorFor('photo_required') ?? errorFor('photo_invalid'),
+              contentsError: errorFor('contents_invalid'),
+              weightError: errorFor('weight_invalid'),
+              valueError: errorFor('declared_value_invalid'),
+            ),
+          ],
           if (_asksForMoney && showOwner)
             IntakePaymentFields(
               // Judged against the pieces' total, or a car's price.
@@ -5969,6 +6252,8 @@ String containerErrorText(
     'payment_not_found' => l10n.wpkErrPaymentNotFound,
     'payment_already_reverted' => l10n.wpkErrPaymentReverted,
     'carrier_invalid' => l10n.ctrErrCarrierInvalid,
+    'air_waybill_invalid' => l10n.airErrWaybill,
+    'sender_problem' => l10n.proofProblemBanner,
     // Pieces on lines: copy in lib/l10n (pcsErr*), the server's own words.
     'pieces_required' => l10n.pcsErrPiecesRequired,
     'pieces_too_many' => l10n.pcsErrPiecesTooMany,
@@ -6170,6 +6455,7 @@ Future<bool> editContainerLine(
   List<Map<String, dynamic>> parkedCarRows = const [],
   String businessCountryCode = '',
   List<DestinationCountry> destinations = const [],
+  PackageProofSettings proofSettings = const PackageProofSettings(),
 }) async {
   final saved = await showLotSheet<bool>(
     context,
@@ -6188,6 +6474,7 @@ Future<bool> editContainerLine(
         businessCountryCode: businessCountryCode,
       ),
       existing: line,
+      proofSettings: proofSettings,
     ),
   );
   return saved == true;
@@ -6211,6 +6498,8 @@ Future<WaitingPackageSaved?> showWaitingPackageSheet(
   VoidCallback? onLineAdded,
   ContainerCallableCaller caller = callContainerCallable,
   List<LotStaff> staff = const [],
+  PackageProofSettings proofSettings = const PackageProofSettings(),
+  ProofFieldsController? proofController,
 }) {
   final start = existing == null
       ? defaultWaitingDestination(destinations)
@@ -6234,6 +6523,8 @@ Future<WaitingPackageSaved?> showWaitingPackageSheet(
       defaultDestination: start,
       caller: caller,
       staff: staff,
+      proofSettings: proofSettings,
+      proofController: proofController,
     ),
   );
 }
@@ -6316,6 +6607,8 @@ Widget containerLineFormSheetForTesting({
   String receiverCountryCode = 'US',
   ContainerLine? existing,
   List<ContainerLine> lines = const [],
+  PackageProofSettings proofSettings = const PackageProofSettings(),
+  ProofFieldsController? proofController,
 }) =>
     _LineFormSheet(
       businessId: container.businessId,
@@ -6327,6 +6620,8 @@ Widget containerLineFormSheetForTesting({
       customerCountryCode: customerCountryCode,
       receiverCountryCode: receiverCountryCode,
       existing: existing,
+      proofSettings: proofSettings,
+      proofController: proofController,
     );
 
 /// The register-a-waiting-package sheet, on its own. [caller] stands in for
@@ -6340,6 +6635,8 @@ Widget waitingPackageSheetForTesting({
   List<ContainerLine> lines = const [],
   List<LotCustomer> customers = const [],
   List<LotStaff> staff = const [],
+  PackageProofSettings proofSettings = const PackageProofSettings(),
+  ProofFieldsController? proofController,
 }) =>
     _LineFormSheet(
       businessId: 'b1',
@@ -6355,6 +6652,8 @@ Widget waitingPackageSheetForTesting({
       destinations: destinations,
       defaultDestination: defaultDestination,
       caller: caller,
+      proofSettings: proofSettings,
+      proofController: proofController,
     );
 
 /// The contacts sheet for [line], on its own.

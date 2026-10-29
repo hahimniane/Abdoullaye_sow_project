@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 
 import '../l10n/app_localizations.dart';
 import '../services/container_manifest.dart';
+import '../services/package_proof.dart' show senderProblemLineIds;
 import '../services/waiting_package_service.dart';
 import '../services/waiting_packages.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_motion.dart';
 import '../theme/app_spacing.dart';
+import '../utils/action_confirmation.dart';
 import '../widgets/lot_sheets.dart';
 import 'containers_screen.dart';
 
@@ -128,7 +130,7 @@ class _AddWaitingPackagesSheetState extends State<AddWaitingPackagesSheet> {
     });
   }
 
-  Future<void> _assign() async {
+  Future<void> _assign({bool acknowledgeProblems = false}) async {
     final l10n = AppLocalizations.of(context)!;
     if (_selected.isEmpty) {
       AppHaptics.refuse();
@@ -157,6 +159,7 @@ class _AddWaitingPackagesSheetState extends State<AddWaitingPackagesSheet> {
           pieceTotals: {
             for (final line in widget.packages) line.id: line.pieceCount,
           },
+          acknowledgeProblems: acknowledgeProblems,
         ),
       );
       if (!mounted) return;
@@ -167,6 +170,32 @@ class _AddWaitingPackagesSheetState extends State<AddWaitingPackagesSheet> {
     } on FirebaseFunctionsException catch (error) {
       if (!mounted) return;
       AppHaptics.refuse();
+      // A sender's "Something's wrong" (docs/AIR_PACKAGES.md §4.8) warns,
+      // never blocks: name the packages, ask, and send again confirmed.
+      final problems = senderProblemLineIds(error.details);
+      if (problems.isNotEmpty && !acknowledgeProblems) {
+        setState(() {
+          _busy = false;
+          _flagged = problems.toSet();
+        });
+        final codes = [
+          for (final id in problems)
+            widget.packages
+                    .where((l) => l.id == id)
+                    .firstOrNull
+                    ?.trackingCode ??
+                id,
+        ].where((c) => c.isNotEmpty).join(', ');
+        final load = await confirmMajorAction(
+          context,
+          title: l10n.proofLoadAnywayTitle,
+          message: l10n.proofLoadAnywayMessage(codes),
+          confirmLabel: l10n.proofLoadAnyway,
+          icon: Icons.error_outline,
+        );
+        if (load && mounted) await _assign(acknowledgeProblems: true);
+        return;
+      }
       final refused = parseContainerRefusal(error.details, error.message);
       setState(() {
         _flagged = refused.lineIds.toSet();

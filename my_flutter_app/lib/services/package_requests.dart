@@ -1560,6 +1560,7 @@ Map<String, Object?> receivePayload({
   required ReceiveCheck check,
   bool payOnArrival = false,
   Map<String, Object?>? payment,
+  Map<String, Object?> proof = const {},
 }) => {
   'businessId': businessId,
   'requestId': requestId,
@@ -1567,6 +1568,11 @@ Map<String, Object?> receivePayload({
   'pickupFeeCents': ?check.pickupFeeCents,
   if (payOnArrival) 'payOnArrival': true,
   'payment': ?payment,
+  // Proof on the package (docs/AIR_PACKAGES.md §4.2): photos staff took,
+  // what is inside, weight and declared value, at the top level as
+  // receivePackageRequest reads them. The request's own photos are copied
+  // by the server ahead of these.
+  ...proof,
 };
 
 class RequestReceived {

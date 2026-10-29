@@ -16825,6 +16825,260 @@ class AppLocalizationsEn extends AppLocalizations {
   String get waHandOverNoOptions => 'There is nowhere else to hand it.';
 
   @override
+  String get proofSectionTitle => 'Proof';
+
+  @override
+  String proofPhotosOfMax(int count, int max) {
+    return 'Photos · $count of $max';
+  }
+
+  @override
+  String get proofTakePhoto => 'Camera';
+
+  @override
+  String get proofChoosePhoto => 'Gallery';
+
+  @override
+  String get proofRemovePhoto => 'Remove photo';
+
+  @override
+  String get proofPhotoUploading => 'Uploading…';
+
+  @override
+  String get proofPhotoRequiredNote =>
+      'A photo of the package is required at drop-off.';
+
+  @override
+  String proofPhotoOptionalNote(int max) {
+    return 'Up to $max photos of the package.';
+  }
+
+  @override
+  String get proofPhotoFailed => 'The photo could not be uploaded. Try again.';
+
+  @override
+  String get proofPhotoTooLarge => 'The photo is too large (2 MB at most).';
+
+  @override
+  String get proofPhotoNotImage =>
+      'That file is not a photo (JPEG, PNG or WebP).';
+
+  @override
+  String get proofPhotoNoPermission => 'You can’t add photos here.';
+
+  @override
+  String proofPhotoLimit(int max) {
+    return 'At most $max photos.';
+  }
+
+  @override
+  String get proofPhotoOpenFailed => 'The photo could not be opened.';
+
+  @override
+  String get proofContentsTitle => 'What’s inside';
+
+  @override
+  String get proofContentsNote =>
+      'Optional. The sender confirms this list and customs reads it.';
+
+  @override
+  String get proofItemLabel => 'Item';
+
+  @override
+  String get proofItemQuantity => 'Qty';
+
+  @override
+  String get proofItemSerial => 'Serial / IMEI (optional)';
+
+  @override
+  String get proofAddItem => 'Add an item';
+
+  @override
+  String get proofRemoveItem => 'Remove item';
+
+  @override
+  String get proofWeight => 'Weight';
+
+  @override
+  String get proofDeclaredValue => 'Declared value';
+
+  @override
+  String get proofDeclaredValueNote => 'Never printed on the label.';
+
+  @override
+  String get proofErrPhotoInvalid =>
+      'One of the photos could not be used. Add it again.';
+
+  @override
+  String get proofErrPhotoRequired => 'Add at least one photo of the package.';
+
+  @override
+  String get proofErrContents =>
+      'Check the item list: a name up to 60 characters, a quantity from 1 to 99, and an optional serial number.';
+
+  @override
+  String get proofErrWeight => 'Enter a weight between 0.1 and 2000 lb.';
+
+  @override
+  String get proofErrDeclaredValue => 'Enter a declared value of \$0 or more.';
+
+  @override
+  String get proofErrPickupCode =>
+      'The pickup code does not match. Ask the receiver for the code in their message, or deliver without a code.';
+
+  @override
+  String get proofErrOverride =>
+      'Delivering without a code needs the name of the person collecting and a photo.';
+
+  @override
+  String get proofErrSettings => 'The proof settings could not be saved.';
+
+  @override
+  String get proofTickPhoto => 'Drop-off photo';
+
+  @override
+  String get proofTickPhotoNone => 'No drop-off photo';
+
+  @override
+  String get proofTickSenderNone => 'Sender not asked';
+
+  @override
+  String get proofTickSenderAsked => 'Sender asked, no answer yet';
+
+  @override
+  String get proofTickSenderConfirmed => 'Sender confirmed';
+
+  @override
+  String get proofTickSenderProblem => 'Sender reported a problem';
+
+  @override
+  String get proofTickDelivered => 'Delivered';
+
+  @override
+  String get proofTickDeliveredWithoutCode => 'Delivered without code';
+
+  @override
+  String get proofTickNotDelivered => 'Not delivered yet';
+
+  @override
+  String get proofMissingFilter => 'Missing proof';
+
+  @override
+  String get proofNoneMissing =>
+      'Every package here has its photo and the sender’s OK.';
+
+  @override
+  String get proofProblemBanner => 'Sender reported a problem';
+
+  @override
+  String get proofOpenConversation => 'Open conversation';
+
+  @override
+  String get proofLoadAnywayTitle => 'Load anyway?';
+
+  @override
+  String proofLoadAnywayMessage(String codes) {
+    return 'Sender reported a problem with $codes. Load anyway?';
+  }
+
+  @override
+  String get proofLoadAnyway => 'Load anyway';
+
+  @override
+  String proofWeightFact(String weight) {
+    return 'Weight: $weight';
+  }
+
+  @override
+  String proofValueFact(String value) {
+    return 'Declared value: $value';
+  }
+
+  @override
+  String get proofCustomerPhotos => 'Photos from the customer';
+
+  @override
+  String get proofDeliveredPhoto => 'Handover photo';
+
+  @override
+  String proofPickupCodeFact(String code) {
+    return 'Pickup code: $code';
+  }
+
+  @override
+  String get airModeTitle => 'Sea or air';
+
+  @override
+  String get airModeSea => 'Sea';
+
+  @override
+  String get airModeAir => 'Air';
+
+  @override
+  String get airWaybill => 'Air waybill';
+
+  @override
+  String get airWaybillHint => 'Letters, digits and dashes, like 176-12345678';
+
+  @override
+  String get airAirline => 'Airline (optional)';
+
+  @override
+  String get airLabelOptionalNote => 'Optional once there is an air waybill.';
+
+  @override
+  String get airErrWaybill =>
+      'An air waybill is 6 to 20 letters, digits or dashes, like 176-12345678.';
+
+  @override
+  String get airNewShipment => 'New shipment';
+
+  @override
+  String get airEditShipment => 'Edit shipment';
+
+  @override
+  String get airCreated => 'Shipment created.';
+
+  @override
+  String get airShipTitle => 'Mark this shipment departed?';
+
+  @override
+  String get airArriveTitle => 'Mark this shipment ready for pickup?';
+
+  @override
+  String get airArriveMessage =>
+      'Customers are told on WhatsApp where to collect their goods.';
+
+  @override
+  String get airDeleteTitle => 'Delete this shipment?';
+
+  @override
+  String get airDelete => 'Delete shipment';
+
+  @override
+  String get airDeleteMessage =>
+      'Only an empty shipment that is still loading can be deleted.';
+
+  @override
+  String get airAddLine => 'Add to the shipment';
+
+  @override
+  String get airPkgSection => 'Shipment';
+
+  @override
+  String get airOpenShipment => 'Open shipment';
+
+  @override
+  String get airChip => 'Air';
+
+  @override
+  String get airLockedNote =>
+      'Departed. The list is the record of what went; only the notes stay open.';
+
+  @override
+  String get airCustomsList => 'Customs list';
+
+  @override
   String get deliverRefusalAirWaybillInvalid =>
       'Enter an air waybill of 6 to 20 letters, digits or dashes.';
 

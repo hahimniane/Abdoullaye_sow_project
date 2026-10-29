@@ -721,6 +721,7 @@ Map<String, Object?> assignLinesRequest(
   Iterable<String> lineIds, {
   Map<String, int> pieceCounts = const {},
   Map<String, int> pieceTotals = const {},
+  bool acknowledgeProblems = false,
 }) {
   final ids = {
     for (final id in lineIds)
@@ -738,6 +739,10 @@ Map<String, Object?> assignLinesRequest(
     'containerId': containerId.trim(),
     'lineIds': ids,
     if (counts.isNotEmpty) 'pieceCounts': counts,
+    // A sender's "Something's wrong" warns, never blocks (docs/AIR_PACKAGES.md
+    // §4.8): the server refuses once with `sender_problem`, and loads when
+    // staff confirm.
+    if (acknowledgeProblems) 'acknowledgeProblems': true,
   };
 }
 
