@@ -12,7 +12,7 @@ import {
   type BusinessCollectionOptions,
 } from "@/lib/paged-query";
 import { transferReadOptions, type TransferRead } from "@/lib/inventory-transfers";
-import { parkingMonthQueryPlan } from "@/lib/parking-month-statement";
+import { parkingMonthBoundsMs, parkingMonthQueryPlan, shiftMonthKey } from "@/lib/parking-month-statement";
 import { useDocsWhereIn, usePagedQuery, type PagedRows } from "@/lib/use-paged-query";
 import type { FirestoreRow } from "@/types/admin";
 
@@ -451,6 +451,47 @@ export function useParkingMonthInputs(businessId: string, monthKey: string, enab
     loading: cars.loading || inMonth.loading || unsettled.loading || undated.loading,
     error: cars.error || inMonth.error || unsettled.error || undated.error,
   };
+}
+
+/**
+ * What staff expenses are netted from on the month's bills
+ * (docs/STAFF_EXPENSE_CREDIT.md): every lot expense and every paid-back
+ * record of the business. Both sides are cumulative ("every expense already
+ * recorded counts"), so each read is the whole collection, equality-only.
+ * `available` is false when either read failed (a team member without the
+ * ledger permission is refused): the bills are then shown without netting,
+ * never half-netted.
+ */
+export function useStaffExpenseCreditInputs(businessId: string, enabled: boolean): {
+  entries: FirestoreRow[];
+  repayments: FirestoreRow[];
+  loading: boolean;
+  available: boolean;
+} {
+  const complete = { pageSize: null, sort: "query" } as const;
+  const entries = useBusinessCollection("lotExpenseEntries", businessId, enabled, complete);
+  const repayments = useBusinessCollection("staffExpenseRepayments", businessId, enabled, complete);
+  return {
+    entries: entries.rows,
+    repayments: repayments.rows,
+    loading: entries.loading || repayments.loading,
+    available: enabled && !entries.error && !repayments.error,
+  };
+}
+
+/**
+ * The parked cars a staff member's parking bill can be linked to: every
+ * stay still on the lot or ended in the last twelve months (the same
+ * `occupancyEndMs >=` read the month's bills make, so it has its index).
+ * Only while the link picker is open.
+ */
+export function useParkingLinkCars(businessId: string, enabled: boolean): BusinessRowsResult {
+  const since = parkingMonthBoundsMs(shiftMonthKey(new Date().toISOString().slice(0, 7), -12))?.startMs ?? 0;
+  return useBusinessCollection("parkedCars", businessId, enabled, {
+    pageSize: null,
+    sort: "query",
+    where: [["occupancyEndMs", ">=", since]],
+  });
 }
 
 /** A business's team. Bounded by nature, so read whole. */

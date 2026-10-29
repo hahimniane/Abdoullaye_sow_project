@@ -7336,6 +7336,96 @@ Object.assign(ATTRIBUTE_TRANSLATIONS, {
   "Count up to": "Compter jusqu’à",
 });
 
+// Staff expenses come off their parking bill (docs/STAFF_EXPENSE_CREDIT.md):
+// month end's lines and "Business owes", Paid back, the People page's
+// Parking bill link, Today's titles and the server's refusals.
+Object.assign(TEXT_TRANSLATIONS, {
+  "Staff expenses are not taken off these bills: your account cannot see the lot's expenses.":
+    "Les dépenses du personnel ne sont pas déduites de ces factures : votre compte ne voit pas les dépenses du parc.",
+  "Less staff expenses": "Dépenses du personnel déduites",
+  "off staff parking bills": "des factures de parking du personnel",
+  "Less expenses": "Dépenses déduites",
+  "paid for the lot in earlier months": "payées pour le parc les mois précédents",
+  "paid for the lot": "payées pour le parc",
+  "expenses this month": "dépenses ce mois-ci",
+  "expense this month": "dépense ce mois-ci",
+  "before expenses": "avant les dépenses",
+  "Less expenses — covered by the staff member's lot expenses, not recorded":
+    "Dépenses déduites — couvertes par les dépenses du parc de l’employé, non enregistrées",
+  "Business owes": "L’entreprise doit",
+  "Lot expenses staff paid out of their own pocket, still owed after their parking bill.":
+    "Dépenses du parc payées par le personnel de sa poche, encore dues après sa facture de parking.",
+  "The business owes its staff nothing for this month.": "L’entreprise ne doit rien à son personnel pour ce mois.",
+  "Parking bill": "Facture de parking",
+  "No parking bill this month": "Pas de facture de parking ce mois-ci",
+  "no parking bill this month": "pas de facture de parking ce mois-ci",
+  "No parking bill": "Pas de facture de parking",
+  "credit bigger than the bill": "crédit supérieur à la facture",
+  "owed": "dû",
+  "Paid back in": "Remboursé en",
+  "Paid back on": "Remboursé le",
+  "Paid back": "Rembourser",
+  "Record paid back": "Enregistrer le remboursement",
+  "given by": "donné par",
+  "Given by": "Donné par",
+  "Who gave the money?": "Qui a donné l’argent ?",
+  "How it was given": "Comment il a été donné",
+  "Amount ($)": "Montant ($)",
+  "Record the money the business gave back for lot expenses. It lowers what the business owes; a mistake is voided, never deleted.":
+    "Enregistrez l’argent rendu par l’entreprise pour les dépenses du parc. Il réduit ce que l’entreprise doit ; une erreur est invalidée, jamais supprimée.",
+  "At most": "Au plus",
+  "what the business owes on this report.": "ce que l’entreprise doit sur ce rapport.",
+  "Void this paid-back record?": "Invalider ce remboursement ?",
+  "The business will owe this amount again. The record stays in the history, marked void.":
+    "L’entreprise devra de nouveau ce montant. L’enregistrement reste dans l’historique, marqué invalidé.",
+  "Paid-back record voided.": "Remboursement invalidé.",
+  "paid back to": "remboursés à",
+  "Recorded": "Enregistré",
+  "your team member": "votre employé",
+  "Say who gave the money.": "Indiquez qui a donné l’argent.",
+  // The People page: each person's parking bill.
+  "Not linked": "Non liée",
+  "Lot expenses this person pays come off this bill at month end.":
+    "Les dépenses du parc payées par cette personne sont déduites de cette facture en fin de mois.",
+  "Link": "Lier",
+  "Unlink": "Délier",
+  "Link a parking bill": "Lier une facture de parking",
+  "Choose the parking customer whose monthly bill this person pays. Their lot expenses come off that bill; whatever is left, the business owes them.":
+    "Choisissez le client du parking dont cette personne paie la facture mensuelle. Ses dépenses du parc y sont déduites ; le reste, l’entreprise le lui doit.",
+  "Find a customer": "Trouver un client",
+  "The parked cars could not be loaded.": "Les voitures garées n’ont pas pu être chargées.",
+  "No parking customer matches.": "Aucun client du parking ne correspond.",
+  "No car was parked in the last twelve months.": "Aucune voiture n’a été garée ces douze derniers mois.",
+  "Suggested": "Suggérés",
+  "Everyone else": "Tous les autres",
+  "parked cars": "voitures garées",
+  "parked car": "voiture garée",
+  "Linked": "Liée",
+  "Likely match": "Correspondance probable",
+  "Parking bill linked": "Facture de parking liée",
+  "Parking bill unlinked": "Facture de parking déliée",
+  // Today's titles for these ledger changes.
+  "Staff paid back for expenses": "Personnel remboursé de ses dépenses",
+  "Staff payback voided": "Remboursement du personnel invalidé",
+  // The server's refusals (staff-expense-console.ts STAFF_CREDIT_REFUSAL_COPY).
+  "That person is no longer on this business's team.": "Cette personne ne fait plus partie de l’équipe de cette entreprise.",
+  "That is more than the business owes this person.": "C’est plus que ce que l’entreprise doit à cette personne.",
+  "That paid-back record no longer exists.": "Ce remboursement n’existe plus.",
+  "That paid-back record was already voided.": "Ce remboursement a déjà été invalidé.",
+  "Choose how the money was given.": "Choisissez comment l’argent a été donné.",
+  "Choose the day it was paid back, today or earlier.": "Choisissez le jour du remboursement, aujourd’hui ou avant.",
+  "Only the business owner can link a parking bill.": "Seul le propriétaire de l’entreprise peut lier une facture de parking.",
+  "Choose the parking customer to link.": "Choisissez le client du parking à lier.",
+  "This console is out of date. Reload the page and try again.": "Cette console n’est plus à jour. Rechargez la page et réessayez.",
+  "It did not save. Check your connection and try again.": "Rien n’a été enregistré. Vérifiez votre connexion et réessayez.",
+});
+Object.assign(ATTRIBUTE_TRANSLATIONS, {
+  "Void this paid-back record": "Invalider ce remboursement",
+  "Amount paid back": "Montant remboursé",
+  "Find a parking customer": "Trouver un client du parking",
+  "Name or phone": "Nom ou téléphone",
+});
+
 const englishDictionary = { ...TEXT_TRANSLATIONS, ...ATTRIBUTE_TRANSLATIONS };
 const frenchDictionary = buildReverseDictionary([
   TEXT_TRANSLATIONS,

@@ -482,3 +482,45 @@ describe("who has paid for the month", () => {
     assert.equal(diop.owes, true, "only the older unpaid job");
   });
 });
+
+// docs/STAFF_EXPENSE_CREDIT.md: a customer netted by its linked staff's lot
+// expenses. The console's parking-month-staff-credit.test.ts runs the same
+// text against admin_web's copy, so the two stay byte for byte.
+describe("staff expenses on the bill", () => {
+  const netted = {
+    monthKey: "2026-10", customerName: "Abdoulaye Sow",
+    customerPhone: "(347) 562-8973", activities: [], olderActivities: [],
+    cars: [{id: "rav4", vehicle: "2015 Toyota RAV4", registeredTo: "",
+      periodFrom: "2026-10-01", periodTo: "2026-10-31", days: 31,
+      dayRateCents: 15942, monthCents: 494200, monthPaidCents: 0,
+      priorUnpaidCents: 0, dueCents: 494200, recordable: true,
+      paymentMethod: "direct"}],
+    monthCents: 494200, monthPaidCents: 0, priorUnpaidCents: 0,
+    dueBeforeExpensesCents: 494200, expenseCreditCents: 44831,
+    dueCents: 449369,
+    expenseLines: [{id: "e2", date: "2026-10-12", label: "Light bulbs",
+      amountCents: 24831}],
+  };
+
+  it("lists this month's expenses and takes the credit off", () => {
+    const text = parkingMonthCustomerText(netted, "Keren");
+    assert.match(text, /\nExpenses you paid for the lot\n/);
+    assert.match(text, /\nOct 12, 2026 · Light bulbs — -\$248\.31\n/);
+    assert.match(text,
+        /\nLess expenses — -\$448\.31\nBALANCE DUE: \$4,493\.69$/);
+  });
+
+  it("Mark all paid records only what is left after the credit", () => {
+    const plan = monthBillPaymentPlan(netted);
+    assert.deepEqual(plan.items.map((x) => x.amountCents), [449369]);
+    assert.equal(plan.totalCents, 449369);
+  });
+
+  it("a bill without the credit reads as it always did", () => {
+    const plain = {...netted, expenseCreditCents: 0, dueCents: 494200,
+      expenseLines: []};
+    assert.doesNotMatch(parkingMonthCustomerText(plain, "Keren"),
+        /expenses/i);
+    assert.equal(monthBillPaymentPlan(plain).totalCents, 494200);
+  });
+});

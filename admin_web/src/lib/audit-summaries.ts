@@ -179,7 +179,24 @@ function itemsFr(count: string) {
   return `${count} ${frPlural(count, "article", "articles")}`;
 }
 
+const REPAYMENT_METHODS_FR: Record<string, string> = {
+  cash: "espèces",
+  zelle: "Zelle",
+  check: "chèque",
+  other: "autre moyen",
+};
+
 const rules: Rule[] = [
+  // --- Staff expenses off their parking bill (docs/STAFF_EXPENSE_CREDIT.md;
+  // entityType staff_parking_link / staff_repayment) ---
+  [/^(.+)'s expenses come off (.+)'s parking bill$/, (m) =>
+    `Les dépenses de ${m[1]} sont déduites de la facture de parking de ${m[2]}`],
+  [/^(.+) unlinked from their parking bill$/, (m) => `${m[1]} n’est plus lié(e) à sa facture de parking`],
+  [/^(.+) unlinked from (.+)$/, (m) => `${m[1]} n’est plus lié(e) à ${m[2]}`],
+  [new RegExp(`^Paid back (${MONEY}) for expenses \\((\\w+)\\)(?: — (.+))?$`), (m) =>
+    `Remboursé ${m[1]} de dépenses (${REPAYMENT_METHODS_FR[m[2]] ?? m[2]})${m[3] ? ` — ${m[3]}` : ""}`],
+  [new RegExp(`^Voided a (${MONEY}) payback(?: — (.+))?$`), (m) =>
+    `Remboursement de ${m[1]} invalidé${m[2] ? ` — ${m[2]}` : ""}`],
   // --- A sale switched between paid and credit (inventory_sale, v6) ---
   [new RegExp(`^Switched to credit: (?:(${MONEY}) paid at the sale \\((\\w+)\\), )?(${MONEY}) owed(?: by (.+))?$`), (m, lookup) =>
     "Passée à crédit : " + (m[1] ? `${m[1]} payés à la vente (${via(m[2], lookup)}), ` : "") +
