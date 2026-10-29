@@ -1956,6 +1956,12 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
       group: lineGroupOf(line, _feed.groups),
       access: packageAccessOf(context),
       service: widget.deliveryService,
+      // A line has a pickup number only when the business switch was on
+      // (docs/AIR_PACKAGES.md §4.3); the server decides at handover.
+      askPickupCode: deliveryAsksPickupCode(
+        businessPickupCode: true,
+        linePickupCode: line.pickupCode,
+      ),
     );
   }
 

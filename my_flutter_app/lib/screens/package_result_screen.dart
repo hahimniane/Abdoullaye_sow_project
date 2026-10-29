@@ -312,6 +312,13 @@ class _PackageResultScreenState extends State<PackageResultScreen> {
       group: _group,
       access: _access,
       service: widget.deliveryService,
+      // The server mints a pickup number only when the business switch is
+      // on (docs/AIR_PACKAGES.md §4.3), so a line that has one asks for it;
+      // the server still decides at handover (handoverCheck).
+      askPickupCode: deliveryAsksPickupCode(
+        businessPickupCode: true,
+        linePickupCode: line.pickupCode,
+      ),
     );
   }
 
@@ -599,6 +606,8 @@ class PackageResultView extends StatelessWidget {
               canSeeMoney: access.canSeeMoney,
               onUndo: onUndoDelivery,
               undoing: undoingDelivery,
+              deliveredWithoutCode: line.deliveredWithoutCode,
+              deliveredPhotoPath: line.deliveredPhotoPath,
             ),
           )
         else if (onMarkDelivered != null)
