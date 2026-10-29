@@ -17292,4 +17292,20 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get lookupNotFound => 'No request with that code for this business.';
+
+  @override
+  String get pmeModeSoFar => 'So far';
+
+  @override
+  String get pmeModeWholeMonth => 'Whole month (estimate)';
+
+  @override
+  String pmeEstimateNote(String lastDay) {
+    return 'Estimate: cars still parked are counted to $lastDay. Nothing is saved.';
+  }
+
+  @override
+  String pmeEstimateHeader(String lastDay) {
+    return 'ESTIMATE — whole month, cars still parked counted to $lastDay';
+  }
 }

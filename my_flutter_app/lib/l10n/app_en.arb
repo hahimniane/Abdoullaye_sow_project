@@ -8562,5 +8562,23 @@
   "lookupCodeInvalid": "A request code has 5 letters or digits, like R-K7M4P.",
   "lookupFind": "Find the request",
   "lookupFinding": "Looking up…",
-  "lookupNotFound": "No request with that code for this business."
+  "lookupNotFound": "No request with that code for this business.",
+  "pmeModeSoFar": "So far",
+  "pmeModeWholeMonth": "Whole month (estimate)",
+  "pmeEstimateNote": "Estimate: cars still parked are counted to {lastDay}. Nothing is saved.",
+  "@pmeEstimateNote": {
+    "placeholders": {
+      "lastDay": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeEstimateHeader": "ESTIMATE — whole month, cars still parked counted to {lastDay}",
+  "@pmeEstimateHeader": {
+    "placeholders": {
+      "lastDay": {
+        "type": "String"
+      }
+    }
+  }
 }
