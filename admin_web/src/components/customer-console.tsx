@@ -211,7 +211,8 @@ export function CustomerConsole({
       ...tagRows(shipments.rows, "Barrel shipment", "barrelShipments", Ship),
       ...tagRows(freight.rows, "Freight shipment", "freightShipments", PackageSearch),
       ...tagRows(transports.rows, "Car transport", "transportRequests", Truck),
-      ...tagRows(parking.rows, "Car parking", "parkedCars", Car),
+      // A parked car the lot voided was a mistake, never the customer's.
+      ...tagRows(parking.rows.filter((row) => row.voided !== true), "Car parking", "parkedCars", Car),
       ...tagRows(purchases.rows, "Car purchase", "carPurchases", CircleDollarSign),
       ...tagRows(
         priceRequests.rows,

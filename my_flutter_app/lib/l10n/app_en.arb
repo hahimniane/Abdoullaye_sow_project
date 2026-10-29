@@ -8580,5 +8580,152 @@
         "type": "String"
       }
     }
+  },
+  "voidedNoteBy": "by {name}",
+  "@voidedNoteBy": {
+    "description": "Who voided a record, in the 'Voided · reason · by · date' note.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "lotVoidLine": "Void line",
+  "@lotVoidLine": {
+    "description": "Button on an expense line card that voids the line."
+  },
+  "lotVoidLineTitle": "Void this line",
+  "@lotVoidLineTitle": {
+    "description": "Title of the sheet confirming an expense line void."
+  },
+  "lotVoidLineExplain": "Void this line — it stays on the record (struck through) and drops out of every month's totals. It is never deleted.",
+  "@lotVoidLineExplain": {
+    "description": "Explains what voiding an expense line does."
+  },
+  "lotLineVoidedStatus": "Voided",
+  "@lotLineVoidedStatus": {
+    "description": "Status word on a voided expense line."
+  },
+  "lotVoidLineDone": "Line voided.",
+  "@lotVoidLineDone": {
+    "description": "Confirmation after an expense line is voided."
+  },
+  "lotErrLineHasPurchases": "Void this line's purchases first.",
+  "@lotErrLineHasPurchases": {
+    "description": "Refusal: an expense line with live purchases cannot be voided."
+  },
+  "lotErrLineVoided": "This line was already voided.",
+  "@lotErrLineVoided": {
+    "description": "Refusal: the expense line is already voided."
+  },
+  "lotErrLineNotFound": "This line no longer exists.",
+  "@lotErrLineNotFound": {
+    "description": "Refusal: the expense line was not found."
+  },
+  "parkingVoid": "Void",
+  "@parkingVoid": {
+    "description": "Button that voids a parked car record."
+  },
+  "parkingVoidTitle": "Void this car",
+  "@parkingVoidTitle": {
+    "description": "Title of the sheet confirming a parked car void."
+  },
+  "parkingVoidExplain": "Void this car — it stays on the record (struck through) and drops out of the totals; it is never deleted. Other staff see who voided it and why.",
+  "@parkingVoidExplain": {
+    "description": "Explains what voiding a parked car does."
+  },
+  "parkingVoidedStatus": "Voided",
+  "@parkingVoidedStatus": {
+    "description": "Status word on a voided parked car."
+  },
+  "parkingVoidDone": "Car voided.",
+  "@parkingVoidDone": {
+    "description": "Confirmation after a parked car is voided."
+  },
+  "parkingVoidedLocked": "This car was voided. It stays on the record but no longer counts anywhere, and it can no longer be changed.",
+  "@parkingVoidedLocked": {
+    "description": "Banner on a voided parked car's details."
+  },
+  "parkingErrCarVoided": "This car was voided and can no longer be changed.",
+  "@parkingErrCarVoided": {
+    "description": "Refusal: the parked car is voided."
+  },
+  "parkingErrCarNotFound": "This car could not be found.",
+  "@parkingErrCarNotFound": {
+    "description": "Refusal: the parked car was not found."
+  },
+  "parkingKindVoided": "Voided",
+  "@parkingKindVoided": {
+    "description": "Parking list filter chip for voided cars."
+  },
+  "lotStopAfterMonth": "Stop after this month",
+  "@lotStopAfterMonth": {
+    "description": "Button on an expense line card: the line stops counting after the month on screen."
+  },
+  "lotStopLineTitle": "Stop this line",
+  "@lotStopLineTitle": {
+    "description": "Title of the sheet confirming an expense line stop."
+  },
+  "lotStopLineExplain": "{line} stops after {month}. Earlier months stay as they are.",
+  "@lotStopLineExplain": {
+    "description": "Explains stopping an expense line after a month.",
+    "placeholders": {
+      "line": {
+        "type": "String"
+      },
+      "month": {
+        "type": "String"
+      }
+    }
+  },
+  "lotStopLineConfirm": "Stop",
+  "@lotStopLineConfirm": {
+    "description": "Confirm button that stops an expense line."
+  },
+  "lotStopLineDone": "Line stopped.",
+  "@lotStopLineDone": {
+    "description": "Confirmation after an expense line is stopped."
+  },
+  "lotStoppedAfter": "Stopped after {month}",
+  "@lotStoppedAfter": {
+    "description": "Badge on an expense line that stops after a month.",
+    "placeholders": {
+      "month": {
+        "type": "String"
+      }
+    }
+  },
+  "lotLineStoppedStatus": "Stopped",
+  "@lotLineStoppedStatus": {
+    "description": "State of an expense line in a month after it stopped."
+  },
+  "lotResumeLine": "Resume",
+  "@lotResumeLine": {
+    "description": "Button that removes an expense line's stop month."
+  },
+  "lotResumeLineTitle": "Resume this line",
+  "@lotResumeLineTitle": {
+    "description": "Title of the sheet confirming an expense line resume."
+  },
+  "lotResumeLineExplain": "{line} counts again every month, with no end.",
+  "@lotResumeLineExplain": {
+    "description": "Explains resuming a stopped expense line.",
+    "placeholders": {
+      "line": {
+        "type": "String"
+      }
+    }
+  },
+  "lotResumeLineDone": "Line resumed.",
+  "@lotResumeLineDone": {
+    "description": "Confirmation after an expense line is resumed."
+  },
+  "lotErrEndMonthInvalid": "Pick a valid month.",
+  "@lotErrEndMonthInvalid": {
+    "description": "Refusal: the stop month is not a valid month."
+  },
+  "lotErrEndMonthBeforePurchases": "This line has purchases after that month.",
+  "@lotErrEndMonthBeforePurchases": {
+    "description": "Refusal: the line has purchases after the stop month."
   }
 }

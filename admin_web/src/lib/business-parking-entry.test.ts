@@ -889,10 +889,11 @@ test("each list row carries the actions the card offers", () => {
   assert.match(body, /copyCheckoutUrl\(linkUrl\)/);
   assert.match(body, /editParking\(row\)/);
   // The copy button only exists where there is a link and money still owed.
-  assert.match(body, /\{linkUrl && tone !== "paid" &&/);
+  // A voided car has no link to copy either.
+  assert.match(body, /\{!voided && linkUrl && tone !== "paid" &&/);
   // A row is a div, not a button: a button inside a button is invalid, and
   // the row would swallow every action click.
-  assert.match(body, /<div className="pk-row" key=\{String\(row\.id\)\} role="row">/);
+  assert.match(body, /<div className=\{`pk-row\$\{voided \? " voided" : ""\}`\} key=\{String\(row\.id\)\} role="row">/);
   assert.ok(!/<button[^>]*className="pk-row"/.test(body), "the row must not be a button");
 });
 

@@ -315,6 +315,11 @@ const {
 const {
   BUSINESS_PARKING_EDIT_REFUSALS,
   BUSINESS_PARKING_PAYMENT_TYPE,
+  BUSINESS_PARKING_VOID_REFUSALS,
+  BUSINESS_PARKING_VOIDED_MESSAGE,
+  businessParkingVoided,
+  businessParkingVoidPlan,
+  parkingLinkCancelledFields,
   businessParkingEditChanges,
   businessParkingEditPlan,
   businessParkingEditSummary,
@@ -355,6 +360,10 @@ const {
   validateLotExpenseEntry,
   lotExpenseEntryRecord,
   validateLotExpenseLine,
+  LOT_EXPENSE_LINE_REFUSALS,
+  lotLineLiveIn,
+  lotLineVoidPlan,
+  lotLineEndMonthPlan,
   normalizeReceivedVia: lotNormalizeReceivedVia,
   lotVinKey,
   lotJobKey,
@@ -7322,7 +7331,9 @@ async function buildBusinessAdvisorSummary(db, businessId) {
   const shipmentRows = shipments.docs.map((doc) => doc.data() || {});
   const freightRows = freight.docs.map((doc) => doc.data() || {});
   const transportRows = transports.docs.map((doc) => doc.data() || {});
-  const parkedRows = parkedCars.docs.map((doc) => doc.data() || {});
+  // A voided parked car was entered by mistake: the advisor never counts it.
+  const parkedRows = parkedCars.docs.map((doc) => doc.data() || {})
+      .filter((row) => row.voided !== true);
   const supportRows = supportRequests.docs.map((doc) => doc.data() || {});
 
   return {
@@ -10754,6 +10765,7 @@ async function runBusinessAssistantReadTool(db, businessId, business, toolUse) {
           .limit(200)
           .get();
       let rows = snapshot.docs
+          .filter((doc) => doc.data()?.voided !== true)
           .map((doc) => shapeParkedCarRow(doc.id, doc.data() || {}));
       const paymentStatus = cleanText(input.paymentStatus, 40);
       if (paymentStatus) {
@@ -14048,28 +14060,109 @@ exports.cancelBusinessParkingPaymentLink = onCall(
         return {success: true, alreadyCancelled: true};
       }
 
-      // Expire the live Stripe session too, so a customer mid-checkout on an
-      // already-open tab cannot complete a payment the lot just cancelled.
-      const sessionId = String(entry.checkoutSessionId || "").trim();
-      if (sessionId) {
-        await expireStripeCheckoutSession(
-            sessionId,
-            String(entry.stripeConnectedAccountId || "").trim() || undefined,
-        ).catch((error) => {
-          logger.warn("Could not expire the parking checkout session", {
-            detail: error.message, entryId,
-          });
-        });
-      }
+      await expireParkingCheckoutSession(entry, entryId);
       await entryRef.update({
-        paymentLinkCancelledAt: FirestoreFieldValue.serverTimestamp(),
-        paymentLinkCancelledByUid: uid,
-        checkoutStatus: "cancelled",
+        ...parkingLinkCancelledFields(
+            uid, FirestoreFieldValue.serverTimestamp()),
         updatedAt: FirestoreFieldValue.serverTimestamp(),
       });
       return {success: true, alreadyCancelled: false};
     },
 );
+
+/**
+ * Expires the live Stripe session behind a parking payment link, so a
+ * customer mid-checkout on an already-open tab cannot complete a payment the
+ * lot just cancelled (Cancel link, or a void). Logged, never thrown: the
+ * durable link is already dead on our side.
+ *
+ * @param {object} entry The parkedCars document.
+ * @param {string} entryId Its id (for the log).
+ * @return {Promise<void>} Resolves once Stripe answered (or failed).
+ */
+async function expireParkingCheckoutSession(entry, entryId) {
+  const sessionId = String(entry?.checkoutSessionId || "").trim();
+  if (!sessionId) return;
+  await expireStripeCheckoutSession(
+      sessionId,
+      String(entry.stripeConnectedAccountId || "").trim() || undefined,
+  ).catch((error) => {
+    logger.warn("Could not expire the parking checkout session", {
+      detail: error.message, entryId,
+    });
+  });
+}
+
+/**
+ * Refuses any change to a voided parked car: it stays on the record, struck
+ * through, and is never edited, paid, closed or re-linked again.
+ *
+ * @param {object} entry The parkedCars document.
+ */
+function refuseVoidedParking(entry) {
+  if (businessParkingVoided(entry)) {
+    throw new HttpsError("failed-precondition",
+        BUSINESS_PARKING_VOIDED_MESSAGE, {reason: "car_voided"});
+  }
+}
+
+/**
+ * updateBusinessParkingEntry `action: "void"` (docs: voidLotActivity is the
+ * model). The car stays - records are never deleted - marked voided with who
+ * and why; an unpaid payment link is cancelled with it; it drops out of
+ * every total, bill and space count (each reader skips `voided`). Never
+ * un-voided: a car voided by mistake is recorded again.
+ *
+ * @param {object} args {db, uid, entryRef, entryId, entry, businessId,
+ *   reason}.
+ * @return {Promise<object>} {success, entryId, voided}.
+ */
+async function voidBusinessParkingEntry({db, uid, entryRef, entryId, entry,
+  businessId, reason}) {
+  const precheck = businessParkingVoidPlan({entry, reason, byStaffId: uid});
+  if (!precheck.ok) {
+    throw new HttpsError("failed-precondition",
+        BUSINESS_PARKING_VOID_REFUSALS[precheck.reason], {
+          reason: precheck.reason});
+  }
+  // The link dies before the record says so, like voidLotActivity: a
+  // customer on an open checkout tab can no longer pay it.
+  if (precheck.cancelLink) {
+    await expireParkingCheckoutSession(entry, entryId);
+  }
+  await db.runTransaction(async (tx) => {
+    const fresh = await tx.get(entryRef);
+    const plan = businessParkingVoidPlan({
+      entry: fresh.exists ? fresh.data() || {} : null,
+      reason, byStaffId: uid,
+    });
+    if (!plan.ok) {
+      throw new HttpsError(
+          plan.reason === "car_not_found" ? "not-found" :
+            "failed-precondition",
+          BUSINESS_PARKING_VOID_REFUSALS[plan.reason], {reason: plan.reason});
+    }
+    const now = FirestoreFieldValue.serverTimestamp();
+    tx.set(entryRef, {
+      ...plan.update,
+      voidedAt: now,
+      ...((plan.cancelLink || precheck.cancelLink) &&
+        parkingLinkCancelledFields(uid, now)),
+      updatedAt: now,
+    }, {merge: true});
+  });
+  const voidReason = precheck.update.voidReason;
+  await writeLotLedgerAudit({
+    businessId,
+    entityType: "parking",
+    entityId: entryId,
+    action: "voided",
+    byStaffId: uid,
+    summary: voidReason ? `Voided — ${voidReason}` : "Voided",
+    changes: [],
+  });
+  return {success: true, entryId, voided: true};
+}
 
 // The printable invoice / receipt. Shares the payment link's token so a
 // business can hand the same URL to a customer, and so both clients open one
@@ -14408,6 +14501,7 @@ exports.resendBusinessParkingPaymentLink = onCall(
       await requireBusinessPermission(
           uid, String(entry.businessId || ""), "parking",
       );
+      refuseVoidedParking(entry);
 
       const state = parkingPaymentLinkState(entry);
       if (state === PARKING_LINK_STATES.PAID) {
@@ -14508,11 +14602,20 @@ exports.updateBusinessParkingEntry = onCall(
       const entryRef = db.collection("parkedCars").doc(entryId);
       const existing = await entryRef.get();
       if (!existing.exists) {
-        throw new HttpsError("not-found", "Parking entry not found");
+        throw new HttpsError("not-found", "Parking entry not found",
+            {reason: "car_not_found"});
       }
       const before = existing.data() || {};
       const businessId = String(before.businessId || "");
       await requireBusinessPermission(uid, businessId, "parking");
+
+      // Void rides on this callable (no new export: the CPU budget). With
+      // no action, the edit below runs exactly as before.
+      if (String(request.data?.action || "") === "void") {
+        return voidBusinessParkingEntry({db, uid, entryRef, entryId,
+          entry: before, businessId, reason: request.data?.reason});
+      }
+      refuseVoidedParking(before);
 
       const plan = businessParkingEditPlan({
         entry: before,
@@ -15101,6 +15204,7 @@ exports.markBusinessParkingPaid = onCall(
           String(existing.data()?.businessId || ""),
           "parking",
       );
+      refuseVoidedParking(existing.data());
 
       // Re-read inside the transaction: two staff marking the same walk-up
       // paid at once must apply the payment once, not twice.
@@ -15190,6 +15294,7 @@ exports.revertBusinessParkingPaid = onCall(
       }
       const businessId = String(existing.data()?.businessId || "");
       await requireBusinessPermission(uid, businessId, "parking");
+      refuseVoidedParking(existing.data());
 
       let undoneCents = 0;
       await db.runTransaction(async (transaction) => {
@@ -15270,6 +15375,7 @@ exports.recordBusinessParkingPartialPayment = onCall(
       }
       const businessId = String(first.data()?.businessId || "");
       await requireBusinessPermission(uid, businessId, "parking");
+      refuseVoidedParking(first.data());
 
       const result = await db.runTransaction(async (transaction) => {
         const snap = await transaction.get(entryRef);
@@ -17276,6 +17382,79 @@ exports.setExpenseProofThreshold = onCall(
     },
 );
 
+/**
+ * A line action's refusal, carrying its reason for the clients.
+ *
+ * @param {string} reason A LOT_EXPENSE_LINE_REFUSALS key.
+ * @return {HttpsError} The error to throw.
+ */
+function lotLineRefusal(reason) {
+  return new HttpsError(
+      reason === "line_not_found" ? "not-found" : "failed-precondition",
+      LOT_EXPENSE_LINE_REFUSALS[reason] || "This line cannot be changed",
+      {reason});
+}
+
+/**
+ * The months of a line's purchases that still count (any month).
+ *
+ * @param {object} db Firestore.
+ * @param {string} businessId The business.
+ * @param {string} lineId The line.
+ * @return {Promise<string[]>} One "yyyy-mm" (or "") per live purchase.
+ */
+async function liveLotLinePurchaseMonths(db, businessId, lineId) {
+  const snap = await db.collection("lotExpenseEntries")
+      .where("businessId", "==", businessId)
+      .where("lineId", "==", lineId)
+      .get();
+  return snap.docs.map((doc) => doc.data() || {})
+      .filter((row) => row.voided !== true)
+      .map((row) => {
+        const month = String(row.month || "").slice(0, 7);
+        if (month) return month;
+        const at = row.spentAt?.toDate?.();
+        return at ? at.toISOString().slice(0, 7) : "";
+      });
+}
+
+/**
+ * upsertLotExpenseLine `action: "setEndMonth"`: "Stop after this month"
+ * (endMonth "yyyy-mm", the last month the line counts) or "Resume" ("").
+ * Only future months change, so this one can be undone.
+ *
+ * @param {object} args {db, uid, businessId, lineId, endMonth}.
+ * @return {Promise<object>} {success, lineId, endMonth}.
+ */
+async function setLotExpenseLineEndMonth({db, uid, businessId, lineId,
+  endMonth}) {
+  const ref = db.collection("lotExpenseLines").doc(lineId);
+  const snap = lineId ? await ref.get() : null;
+  const line = snap?.exists && snap.data()?.businessId === businessId ?
+    snap.data() : null;
+  const months = line ?
+    await liveLotLinePurchaseMonths(db, businessId, lineId) : [];
+  const plan = lotLineEndMonthPlan({line, endMonth, purchaseMonths: months});
+  if (!plan.ok) throw lotLineRefusal(plan.reason);
+  if (!plan.changed) return {success: true, lineId, endMonth: plan.endMonth};
+  await ref.set({
+    endMonth: plan.endMonth,
+    editedByStaffId: uid,
+    updatedAt: FirestoreFieldValue.serverTimestamp(),
+  }, {merge: true});
+  await writeLotLedgerAudit({
+    businessId,
+    entityType: "expense_line",
+    entityId: lineId,
+    action: plan.endMonth ? "stopped" : "resumed",
+    byStaffId: uid,
+    summary: plan.summary,
+    changes: [{field: "Last month", from: String(line.endMonth || ""),
+      to: plan.endMonth}],
+  });
+  return {success: true, lineId, endMonth: plan.endMonth};
+}
+
 exports.upsertLotExpenseLine = onCall(
     {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
     async (request) => {
@@ -17283,6 +17462,11 @@ exports.upsertLotExpenseLine = onCall(
       const data = request.data || {};
       const businessId = String(data.businessId || "").trim();
       await requireBusinessPermission(uid, businessId, "ledger");
+      if (String(data.action || "") === "setEndMonth") {
+        return setLotExpenseLineEndMonth({db: admin.firestore(), uid,
+          businessId, lineId: String(data.lineId || "").trim(),
+          endMonth: data.endMonth});
+      }
       const errors = validateLotExpenseLine(data);
       if (errors.length > 0) {
         throw new HttpsError("invalid-argument", lotLedgerMessage(errors));
@@ -17312,6 +17496,8 @@ exports.upsertLotExpenseLine = onCall(
           throw new HttpsError("not-found", "Expense line not found");
         }
         const before = existing.data() || {};
+        // A voided line is history: an edit would revive it (active).
+        if (before.voided === true) throw lotLineRefusal("line_voided");
         await ref.set({...record, editedByStaffId: uid}, {merge: true});
         // Editing a line is an audited change, the same as editing a purchase:
         // who changed what, kept for the record and shown behind History.
@@ -17363,6 +17549,18 @@ exports.createLotExpenseEntry = onCall(
         recordedByStaffId: uid,
         thresholdCents,
       });
+      if (record.lineId) {
+        const lineDoc = await db.collection("lotExpenseLines")
+            .doc(record.lineId).get();
+        const line = lineDoc.exists &&
+          lineDoc.data()?.businessId === businessId ? lineDoc.data() : null;
+        const month = record.month ||
+          (spentAt ? spentAt.toISOString().slice(0, 7) : "");
+        if (line?.voided === true) throw lotLineRefusal("line_voided");
+        if (line && !lotLineLiveIn(line, month)) {
+          throw lotLineRefusal("line_stopped");
+        }
+      }
       const now = FirestoreFieldValue.serverTimestamp();
       const ref = db.collection("lotExpenseEntries").doc();
       await ref.set({
@@ -25812,6 +26010,12 @@ exports.voidLotExpenseEntry = onCall(
       const entryId = String(data.entryId || "").trim();
       const reason = String(data.reason || "").trim().slice(0, 300);
       const db = admin.firestore();
+      // {lineId} voids the expense LINE itself (no new export: the CPU
+      // budget); {entryId} voids one purchase, exactly as before.
+      const lineId = String(data.lineId || "").trim();
+      if (!entryId && lineId) {
+        return voidLotExpenseLine({db, uid, lineId, reason});
+      }
       const ref = db.collection("lotExpenseEntries").doc(entryId);
       const doc = await ref.get();
       if (!doc.exists) throw new HttpsError("not-found", "Purchase not found");
@@ -25840,6 +26044,48 @@ exports.voidLotExpenseEntry = onCall(
       return {success: true, entryId};
     },
 );
+
+/**
+ * Voids an expense line (voidLotExpenseEntry with {lineId}): it stays on the
+ * record, struck through, and drops out of every month's totals. Refused
+ * while purchases still count against it, so a mistake never hides money.
+ *
+ * @param {object} args {db, uid, lineId, reason}.
+ * @return {Promise<object>} {success, lineId}.
+ */
+async function voidLotExpenseLine({db, uid, lineId, reason}) {
+  const ref = db.collection("lotExpenseLines").doc(lineId);
+  const doc = await ref.get();
+  if (!doc.exists) throw lotLineRefusal("line_not_found");
+  const line = doc.data() || {};
+  const businessId = String(line.businessId || "");
+  await requireBusinessPermission(uid, businessId, "ledger");
+  const months = await liveLotLinePurchaseMonths(db, businessId, lineId);
+  const plan = lotLineVoidPlan({line, livePurchases: months.length});
+  if (!plan.ok) throw lotLineRefusal(plan.reason);
+  await db.runTransaction(async (tx) => {
+    const fresh = await tx.get(ref);
+    if (fresh.data()?.voided === true) throw lotLineRefusal("line_voided");
+    tx.set(ref, {
+      voided: true,
+      active: false,
+      voidedByStaffId: uid,
+      voidReason: reason,
+      voidedAt: FirestoreFieldValue.serverTimestamp(),
+      updatedAt: FirestoreFieldValue.serverTimestamp(),
+    }, {merge: true});
+  });
+  await writeLotLedgerAudit({
+    businessId,
+    entityType: "expense_line",
+    entityId: lineId,
+    action: "voided",
+    byStaffId: uid,
+    summary: reason ? `Voided — ${reason}` : "Voided",
+    changes: [],
+  });
+  return {success: true, lineId};
+}
 
 exports.acknowledgeLotLedgerEvent = onCall(
     {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
@@ -25877,6 +26123,7 @@ exports.billParkingThroughToday = onCall(
       const car = doc.data() || {};
       const businessId = String(car.businessId || "");
       await requireBusinessPermission(uid, businessId, "parking");
+      refuseVoidedParking(car);
       const businessDoc =
           await db.collection("businesses").doc(businessId).get();
       const business = businessDoc.data() || {};
@@ -26029,6 +26276,7 @@ exports.recordParkingPaymentReceived = onCall(
       const car = doc.data() || {};
       await requireBusinessPermission(
           uid, String(car.businessId || ""), "parking");
+      refuseVoidedParking(car);
       if (!receivedByStaffId) {
         throw new HttpsError(
             "invalid-argument",
@@ -26073,6 +26321,7 @@ exports.closeParkingStay = onCall(
       const car = doc.data() || {};
       await requireBusinessPermission(
           uid, String(car.businessId || ""), "parking");
+      refuseVoidedParking(car);
       // Current clients send the user's local calendar day. The fallback
       // preserves the New York business day for older clients instead of
       // letting an evening close silently become tomorrow in UTC.

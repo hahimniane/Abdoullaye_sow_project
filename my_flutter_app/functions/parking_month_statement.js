@@ -241,7 +241,7 @@ function parkingMonthCustomerPaid(customer) {
  */
 function parkingMonthStatement(row, monthKey, now = new Date()) {
   const r = row && typeof row === "object" ? row : {};
-  if (text(r.status, 40) === "cancelled") return null;
+  if (text(r.status, 40) === "cancelled" || r.voided === true) return null;
   // "not_required" is not skipped: open stays were saved that way by
   // mistake while still running up days, and the parking list counts them as
   // owing - so must the bill. A truly free stay runs up $0 and drops out below.

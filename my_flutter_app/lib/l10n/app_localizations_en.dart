@@ -17308,4 +17308,110 @@ class AppLocalizationsEn extends AppLocalizations {
   String pmeEstimateHeader(String lastDay) {
     return 'ESTIMATE — whole month, cars still parked counted to $lastDay';
   }
+
+  @override
+  String voidedNoteBy(String name) {
+    return 'by $name';
+  }
+
+  @override
+  String get lotVoidLine => 'Void line';
+
+  @override
+  String get lotVoidLineTitle => 'Void this line';
+
+  @override
+  String get lotVoidLineExplain =>
+      'Void this line — it stays on the record (struck through) and drops out of every month\'s totals. It is never deleted.';
+
+  @override
+  String get lotLineVoidedStatus => 'Voided';
+
+  @override
+  String get lotVoidLineDone => 'Line voided.';
+
+  @override
+  String get lotErrLineHasPurchases => 'Void this line\'s purchases first.';
+
+  @override
+  String get lotErrLineVoided => 'This line was already voided.';
+
+  @override
+  String get lotErrLineNotFound => 'This line no longer exists.';
+
+  @override
+  String get parkingVoid => 'Void';
+
+  @override
+  String get parkingVoidTitle => 'Void this car';
+
+  @override
+  String get parkingVoidExplain =>
+      'Void this car — it stays on the record (struck through) and drops out of the totals; it is never deleted. Other staff see who voided it and why.';
+
+  @override
+  String get parkingVoidedStatus => 'Voided';
+
+  @override
+  String get parkingVoidDone => 'Car voided.';
+
+  @override
+  String get parkingVoidedLocked =>
+      'This car was voided. It stays on the record but no longer counts anywhere, and it can no longer be changed.';
+
+  @override
+  String get parkingErrCarVoided =>
+      'This car was voided and can no longer be changed.';
+
+  @override
+  String get parkingErrCarNotFound => 'This car could not be found.';
+
+  @override
+  String get parkingKindVoided => 'Voided';
+
+  @override
+  String get lotStopAfterMonth => 'Stop after this month';
+
+  @override
+  String get lotStopLineTitle => 'Stop this line';
+
+  @override
+  String lotStopLineExplain(String line, String month) {
+    return '$line stops after $month. Earlier months stay as they are.';
+  }
+
+  @override
+  String get lotStopLineConfirm => 'Stop';
+
+  @override
+  String get lotStopLineDone => 'Line stopped.';
+
+  @override
+  String lotStoppedAfter(String month) {
+    return 'Stopped after $month';
+  }
+
+  @override
+  String get lotLineStoppedStatus => 'Stopped';
+
+  @override
+  String get lotResumeLine => 'Resume';
+
+  @override
+  String get lotResumeLineTitle => 'Resume this line';
+
+  @override
+  String lotResumeLineExplain(String line) {
+    return '$line counts again every month, with no end.';
+  }
+
+  @override
+  String get lotResumeLineDone => 'Line resumed.';
+
+  @override
+  String get lotErrEndMonthInvalid => 'Pick a valid month.';
+
+  @override
+  String get lotErrEndMonthBeforePurchases =>
+      'This line has purchases after that month.';
 }

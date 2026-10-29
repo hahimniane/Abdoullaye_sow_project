@@ -122,8 +122,11 @@ class KnownCarLookup {
 }
 
 /// Raw parkedCars / lotActivities rows as known cars, skipping rows with no
-/// VIN (a car-less ledger activity names no vehicle).
+/// VIN (a car-less ledger activity names no vehicle) and voided rows (entered
+/// by mistake - a duplicate, the wrong customer - so nothing to suggest).
 List<LotKnownCar> knownCarsFromRows(Iterable<Map<String, dynamic>> rows) => [
   for (final row in rows)
-    if ('${row['vinNumber'] ?? ''}'.trim().isNotEmpty) LotKnownCar.fromMap(row),
+    if (row['voided'] != true &&
+        '${row['vinNumber'] ?? ''}'.trim().isNotEmpty)
+      LotKnownCar.fromMap(row),
 ];

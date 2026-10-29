@@ -2353,6 +2353,14 @@ button[data-loading="true"]::before {
 .lot-duplicates .lst-hint { margin: 4px 0 0; }
 .lot-duplicates .lot-row-actions { opacity: 1; }
 .lot-activity-table .mini-table-row.voided { opacity: 0.55; }
+/* Voided parked cars and expense lines read like voided activities: dimmed,
+   struck through, with "Voided · reason · by · date" under them. */
+.pk-row.voided,
+.pur-card.voided,
+.lot-expense-card.voided { opacity: 0.6; }
+/* An expense line stopped before the month on screen: owes nothing then. */
+.lot-expense-card.stopped { opacity: 0.7; }
+.voided-note { display: block; color: var(--muted); font-size: 12px; }
 
 .lot-activity-table .mini-table-row > span {
   display: flex;

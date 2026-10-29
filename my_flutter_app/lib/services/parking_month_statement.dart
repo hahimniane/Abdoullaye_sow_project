@@ -274,7 +274,7 @@ class ParkingMonthBill {
 /// One car's bill for one month, or null when it was not on the lot then.
 ParkingMonthBill? parkingMonthStatement(
     Map<String, dynamic> row, String monthKey, [DateTime? now]) {
-  if (_text(row['status'], 40) == 'cancelled') return null;
+  if (_text(row['status'], 40) == 'cancelled' || row['voided'] == true) return null;
   // "not_required" is not skipped: open stays were saved that way by mistake
   // while still running up days. A truly free stay runs up $0 and drops out.
   final month = parkingMonthDays(monthKey);

@@ -586,6 +586,11 @@ function hiddenDocId(key) {
  */
 function candidateShows(candidate, e164) {
   const data = candidate.data || {};
+  // A parked car the lot voided (entered by mistake) is gone for the
+  // customer too; the lot keeps it struck through on its own lists.
+  if (candidate.collection === "parkedCars" && data.voided === true) {
+    return false;
+  }
   const raw = pathValue(data, candidate.raw);
   if (candidate.collection === "packageRequests") {
     // A received request is a container line now; that line stands for it.

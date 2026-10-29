@@ -31,6 +31,7 @@ import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/container_link_chip.dart';
 import '../widgets/lot_sheets.dart';
+import '../widgets/void_record_sheet.dart';
 import 'vin_scanner_screen.dart';
 
 /// The lot ledger, yard-side.
@@ -74,7 +75,12 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
   /// or there is no way to switch it back on.
   List<LotActivityType> _allTypes = const [];
   List<LotActivity> _activities = const [];
+  /// The lines that count and take purchases: switched on, not voided.
   List<LotExpenseLine> _lines = const [];
+
+  /// Voided lines: shown at the end of the list, struck through, and in no
+  /// total. Never deleted.
+  List<LotExpenseLine> _voidedLines = const [];
   List<LotExpenseEntry> _entries = const [];
   List<LotStaff> _staff = const [];
   List<LotCustomer> _customers = const [];
@@ -274,7 +280,10 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
       final list = [
         for (final d in snap.docs) LotExpenseLine.fromMap(d.id, d.data()),
       ]..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
-      setState(() => _lines = list.where((l) => l.active).toList());
+      setState(() {
+        _lines = list.where((l) => l.live).toList();
+        _voidedLines = list.where((l) => l.voided).toList();
+      });
     }, onError: _keepWhatIsShown('lotExpenseLines')));
 
     _subs.add(_db
@@ -349,7 +358,12 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
     ], (entry) => entry.key);
     setState(() {
       _parkedCarRows = [for (final entry in rows) entry.value];
-      _parkedCars = [for (final row in _parkedCarRows) LotKnownCar.fromMap(row)];
+      // A voided car was a mistake: it is not a vehicle to suggest. Its row
+      // stays in _parkedCarRows, where every total skips it.
+      _parkedCars = [
+        for (final row in _parkedCarRows)
+          if (!businessParkingVoided(row)) LotKnownCar.fromMap(row),
+      ];
     });
   }
 
@@ -690,6 +704,7 @@ class _LotLedgerScreenState extends State<LotLedgerScreen> {
           monthLabel: _monthLabel(_month),
           math: math,
           lines: _lines,
+          voidedLines: _voidedLines,
           staff: _staff,
           proofThresholdCents: _proofThresholdCents,
         );
@@ -1447,10 +1462,11 @@ class _DuplicateGroupCard extends StatelessWidget {
                         foregroundColor: AppColors.errorRed),
                     onPressed: () => showLotSheet(
                       context,
-                      _VoidSheet(
-                        callable: 'voidLotActivity',
-                        idKey: 'activityId',
-                        id: activity.id,
+                      VoidRecordSheet(
+                        title: l10n.lotVoidTitle,
+                        explain: l10n.lotVoidExplain,
+                        onVoid: voidThroughCallable(
+                            'voidLotActivity', {'activityId': activity.id}),
                         onDone: onChanged,
                       ),
                     ),
@@ -3335,10 +3351,11 @@ class _ActivityDetailSheet extends StatelessWidget {
               destructive: true,
               onTap: () => showLotSheet(
                 context,
-                _VoidSheet(
-                  callable: 'voidLotActivity',
-                  idKey: 'activityId',
-                  id: activity.id,
+                VoidRecordSheet(
+                  title: l10n.lotVoidTitle,
+                  explain: l10n.lotVoidExplain,
+                  onVoid: voidThroughCallable(
+                      'voidLotActivity', {'activityId': activity.id}),
                   onDone: onChanged,
                 ),
               ),
@@ -4010,78 +4027,6 @@ class _ChaseSheetState extends State<_ChaseSheet> {
   }
 }
 
-/// Voiding is the one destructive act here, so it asks — and says exactly what
-/// happens, because "are you sure" teaches nothing.
-class _VoidSheet extends StatefulWidget {
-  const _VoidSheet({
-    required this.callable,
-    required this.idKey,
-    required this.id,
-    required this.onDone,
-  });
-
-  final String callable;
-  final String idKey;
-  final String id;
-  final VoidCallback onDone;
-
-  @override
-  State<_VoidSheet> createState() => _VoidSheetState();
-}
-
-class _VoidSheetState extends State<_VoidSheet> {
-  final _reason = TextEditingController();
-  bool _busy = false;
-
-  @override
-  void dispose() {
-    _reason.dispose();
-    super.dispose();
-  }
-
-  Future<void> _submit() async {
-    final l10n = AppLocalizations.of(context)!;
-    setState(() => _busy = true);
-    try {
-      await FirebaseFunctions.instance.httpsCallable(widget.callable).call<Object?>({
-        widget.idKey: widget.id,
-        'reason': _reason.text.trim(),
-      });
-      if (!mounted) return;
-      AppHaptics.commit();
-      widget.onDone();
-      Navigator.of(context).pop(true);
-      showSuccessSnackBar(context, l10n.lotVoidDone);
-    } on FirebaseFunctionsException catch (error) {
-      if (!mounted) return;
-      AppHaptics.refuse();
-      showErrorSnackBar(context, error.message ?? l10n.lotCouldNotSave);
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    return LotSheetShell(
-      title: l10n.lotVoidTitle,
-      subtitle: l10n.lotVoidExplain,
-      body: TextField(
-        controller: _reason,
-        decoration: InputDecoration(labelText: l10n.lotVoidReason),
-      ),
-      footer: LotSheetButton(
-        label: l10n.lotVoid,
-        tone: LotTone.warn,
-        busy: _busy,
-        busyLabel: l10n.lotSaving,
-        onTap: _submit,
-      ),
-    );
-  }
-}
-
 /// Undo a "received" mark when the money never actually came in. Off-platform
 /// only, and logged under whoever does it - the History sheet shows it.
 class _RevertSheet extends StatefulWidget {
@@ -4160,6 +4105,7 @@ class _ExpensesPanel extends StatelessWidget {
     required this.monthLabel,
     required this.math,
     required this.lines,
+    this.voidedLines = const [],
     required this.staff,
     required this.proofThresholdCents,
   });
@@ -4169,6 +4115,7 @@ class _ExpensesPanel extends StatelessWidget {
   final String monthLabel;
   final LotLedgerMath math;
   final List<LotExpenseLine> lines;
+  final List<LotExpenseLine> voidedLines;
   final List<LotStaff> staff;
   final int proofThresholdCents;
 
@@ -4202,20 +4149,61 @@ class _ExpensesPanel extends StatelessWidget {
                   ],
                 ),
               ),
-            if (lines.isEmpty)
+            if (lines.isEmpty && voidedLines.isEmpty)
               LotEmptyState(
                 icon: Icons.account_balance_wallet_outlined,
                 title: l10n.lotNoExpenseLines,
                 hint: l10n.lotNoExpenseLinesHint,
               )
             else
-              for (final line in lines)
-                _ExpenseLineCard(
+              // Running lines first; a line stopped before this month moves
+              // to the end beside the voided ones and takes no purchase.
+              for (final line in [
+                ...lines.where((l) => !l.stoppedIn(month)),
+                ...lines.where((l) => l.stoppedIn(month)),
+              ])
+                ExpenseLineCard(
                   line: line,
                   month: month,
                   monthLabel: monthLabel,
                   math: math,
-                  onTap: () => showLotSheet(
+                  onStop: line.hasEndMonth
+                      ? null
+                      : () => showLotSheet(
+                            context,
+                            VoidRecordSheet(
+                              title: l10n.lotStopLineTitle,
+                              explain:
+                                  l10n.lotStopLineExplain(line.label, monthLabel),
+                              actionLabel: l10n.lotStopLineConfirm,
+                              doneMessage: l10n.lotStopLineDone,
+                              askReason: false,
+                              onVoid: (_) => lotSetLineEndMonth(
+                                  businessId, line.id, month),
+                              refusalText: (reason) =>
+                                  lotLineStopRefusalText(l10n, reason),
+                            ),
+                          ),
+                  onResume: !line.hasEndMonth
+                      ? null
+                      : () => showLotSheet(
+                            context,
+                            VoidRecordSheet(
+                              title: l10n.lotResumeLineTitle,
+                              explain: l10n.lotResumeLineExplain(line.label),
+                              actionLabel: l10n.lotResumeLine,
+                              doneMessage: l10n.lotResumeLineDone,
+                              askReason: false,
+                              tone: LotTone.neutral,
+                              onVoid: (_) =>
+                                  lotSetLineEndMonth(businessId, line.id, ''),
+                              refusalText: (reason) =>
+                                  lotLineStopRefusalText(l10n, reason),
+                            ),
+                          ),
+                  onTap: line.stoppedIn(month)
+                      ? null
+                      : () => showLotSheet(
                     context,
                     _PurchasesSheet(
                       businessId: businessId,
@@ -4239,7 +4227,42 @@ class _ExpensesPanel extends StatelessWidget {
                       staff: staff,
                     ),
                   ),
+                  onVoid: () => showLotSheet(
+                    context,
+                    VoidRecordSheet(
+                      title: l10n.lotVoidLineTitle,
+                      explain: l10n.lotVoidLineExplain,
+                      actionLabel: l10n.lotVoidLine,
+                      doneMessage: l10n.lotVoidLineDone,
+                      onVoid: voidThroughCallable(
+                          'voidLotExpenseEntry', {'lineId': line.id}),
+                      refusalText: (reason) =>
+                          lotLineVoidRefusalText(l10n, reason),
+                    ),
+                  ),
                 ),
+            // A voided line stays on the record, at the end, struck through
+            // and out of every total. It takes no purchase and no edit.
+            for (final line in voidedLines)
+              ExpenseLineCard(
+                line: line,
+                month: month,
+                monthLabel: monthLabel,
+                math: math,
+                voidedByName: staff
+                        .where((m) => m.id == line.voidedByStaffId)
+                        .firstOrNull
+                        ?.name ??
+                    '',
+                onHistory: () => showLotSheet(
+                  context,
+                  LotHistorySheet(
+                    businessId: businessId,
+                    entityId: line.id,
+                    staff: staff,
+                  ),
+                ),
+              ),
           ],
         ),
         Positioned(
@@ -4260,36 +4283,111 @@ class _ExpensesPanel extends StatelessWidget {
   }
 }
 
-class _ExpenseLineCard extends StatelessWidget {
-  const _ExpenseLineCard({
+/// The refusal `voidLotExpenseEntry {lineId}` gives, in the reader's
+/// language; null for one this screen has no words for (the server's own
+/// message is shown).
+String? lotLineVoidRefusalText(AppLocalizations l10n, String reason) =>
+    switch (reason) {
+      'line_has_purchases' => l10n.lotErrLineHasPurchases,
+      'line_voided' => l10n.lotErrLineVoided,
+      'line_not_found' => l10n.lotErrLineNotFound,
+      _ => null,
+    };
+
+/// Sets (or, with '', clears) the last month an expense line counts, through
+/// `upsertLotExpenseLine` `action: 'setEndMonth'`. Earlier months are never
+/// touched; the server refuses a month before the line's own purchases.
+Future<void> lotSetLineEndMonth(
+  String businessId,
+  String lineId,
+  String endMonth,
+) async {
+  await FirebaseFunctions.instance
+      .httpsCallable('upsertLotExpenseLine')
+      .call<Object?>(<String, Object?>{
+    'businessId': businessId,
+    'lineId': lineId,
+    'action': 'setEndMonth',
+    'endMonth': endMonth,
+  });
+}
+
+/// The refusal a stop or resume gives, in the reader's language; null for
+/// one this screen has no words for (the server's own message is shown).
+String? lotLineStopRefusalText(AppLocalizations l10n, String reason) =>
+    switch (reason) {
+      'end_month_invalid' => l10n.lotErrEndMonthInvalid,
+      'end_month_before_purchases' => l10n.lotErrEndMonthBeforePurchases,
+      'line_voided' => l10n.lotErrLineVoided,
+      'line_not_found' => l10n.lotErrLineNotFound,
+      _ => null,
+    };
+
+/// One expense line on the Expenses tab. Public so a widget test can drive
+/// the void button and the struck-through voided state without Firebase.
+class ExpenseLineCard extends StatelessWidget {
+  const ExpenseLineCard({
+    super.key,
     required this.line,
     required this.month,
     required this.monthLabel,
     required this.math,
-    required this.onTap,
-    required this.onEditLine,
+    this.onTap,
+    this.onEditLine,
     required this.onHistory,
+    this.onVoid,
+    this.voidedByName = '',
+    this.onStop,
+    this.onResume,
   });
+
+  /// "Stop after this month" (the month on screen). Null when the line
+  /// already has a stop month, or is voided.
+  final VoidCallback? onStop;
+
+  /// Clears the stop month. Null when there is none.
+  final VoidCallback? onResume;
 
   final LotExpenseLine line;
   final String month;
   final String monthLabel;
   final LotLedgerMath math;
-  final VoidCallback onTap;
-  final VoidCallback onEditLine;
+
+  /// Opens the line's purchases. Null on a voided line: it takes none.
+  final VoidCallback? onTap;
+
+  /// Null on a voided line, which cannot be edited.
+  final VoidCallback? onEditLine;
   final VoidCallback onHistory;
+
+  /// Null on a voided line, which cannot be voided twice.
+  final VoidCallback? onVoid;
+  final String voidedByName;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final voided = line.voided;
+    final strike = voided ? TextDecoration.lineThrough : null;
+    // Past its stop month the line costs nothing and waits on no bill.
+    final stopped = !voided && line.stoppedIn(month);
+    final stoppedAfter = line.hasEndMonth && !voided
+        ? l10n.lotStoppedAfter(displayMonthYear(
+            lotMonthStart(line.endMonth), dateLocaleOf(context)))
+        : '';
     final entries = math.lineEntries(line.id, month);
-    final amount = math.lineMonthCents(line, month);
+    // A voided line is in no total, so its figure is what it was set up to
+    // cost, struck through - never this month's share.
+    final amount =
+        voided ? line.recurringCents : math.lineMonthCents(line, month);
     // A line that changes every month and has nothing logged yet is the one
     // thing on this screen that wants attention, so it is the only thing
     // marked.
-    final waiting = line.isMetered && entries.isEmpty;
+    final waiting = !voided && !stopped && line.isMetered && entries.isEmpty;
 
-    final subtitle = line.isMetered
+    final subtitle = stopped
+        ? l10n.lotLineStoppedStatus
+        : line.isMetered
         ? (entries.isEmpty
             ? l10n.lotWaitingOnBill
             : l10n.lotPurchasesCount(entries.length))
@@ -4298,7 +4396,9 @@ class _ExpenseLineCard extends StatelessWidget {
     return PressableScale(
       onTap: onTap,
       scale: 0.985,
-      child: Container(
+      child: Opacity(
+        opacity: voided || stopped ? 0.55 : 1,
+        child: Container(
         margin: const EdgeInsets.only(bottom: AppSpacing.sm),
         padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
@@ -4320,11 +4420,12 @@ class _ExpenseLineCard extends StatelessWidget {
                     line.label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
                       letterSpacing: -0.2,
                       color: AppColors.ink,
+                      decoration: strike,
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -4339,6 +4440,15 @@ class _ExpenseLineCard extends StatelessWidget {
                       color: AppColors.muted,
                     ),
                   ),
+                  if (voided) ...[
+                    const SizedBox(height: 4),
+                    VoidedNote(
+                      status: l10n.lotLineVoidedStatus,
+                      reason: line.voidReason,
+                      byName: voidedByName,
+                      at: line.voidedAt,
+                    ),
+                  ],
                   const SizedBox(height: 6),
                   Text(
                     line.isMetered
@@ -4351,34 +4461,76 @@ class _ExpenseLineCard extends StatelessWidget {
                       color: AppColors.muted,
                     ),
                   ),
+                  if (stoppedAfter.isNotEmpty || onStop != null) ...[
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: AppSpacing.sm,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        if (stoppedAfter.isNotEmpty)
+                          Container(
+                            key: ValueKey<String>('line-stopped-${line.id}'),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppColors.rule.withValues(alpha: 0.5),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              stoppedAfter,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.muted,
+                              ),
+                            ),
+                          ),
+                        if (onResume != null)
+                          _LineTextAction(
+                            key: ValueKey<String>('resume-line-${line.id}'),
+                            label: l10n.lotResumeLine,
+                            onTap: onResume!,
+                          ),
+                        if (onStop != null)
+                          _LineTextAction(
+                            key: ValueKey<String>('stop-line-${line.id}'),
+                            label: l10n.lotStopAfterMonth,
+                            onTap: onStop!,
+                          ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
             const SizedBox(width: AppSpacing.sm),
             Text(
               formatLotCents(amount),
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w800,
                 letterSpacing: -0.3,
                 color: AppColors.ink,
-                fontFeatures: [FontFeature.tabularFigures()],
+                decoration: strike,
+                fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
             const SizedBox(width: 2),
-            Semantics(
-              button: true,
-              label: l10n.lotEditLine,
-              child: PressableScale(
-                scale: 0.9,
-                onTap: onEditLine,
-                child: const Padding(
-                  padding: EdgeInsets.all(4),
-                  child: Icon(Icons.edit_outlined,
-                      size: 16, color: AppColors.muted),
+            if (onEditLine != null)
+              Semantics(
+                button: true,
+                label: l10n.lotEditLine,
+                child: PressableScale(
+                  scale: 0.9,
+                  onTap: onEditLine,
+                  child: const Padding(
+                    padding: EdgeInsets.all(4),
+                    child: Icon(Icons.edit_outlined,
+                        size: 16, color: AppColors.muted),
+                  ),
                 ),
               ),
-            ),
             Semantics(
               button: true,
               label: l10n.lotHistory,
@@ -4392,7 +4544,54 @@ class _ExpenseLineCard extends StatelessWidget {
                 ),
               ),
             ),
+            if (onVoid != null)
+              Semantics(
+                button: true,
+                label: l10n.lotVoidLine,
+                child: PressableScale(
+                  key: ValueKey<String>('void-line-${line.id}'),
+                  scale: 0.9,
+                  onTap: onVoid,
+                  child: const Padding(
+                    padding: EdgeInsets.all(4),
+                    child: Icon(Icons.block_outlined,
+                        size: 16, color: AppColors.errorRed),
+                  ),
+                ),
+              ),
           ],
+        ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A small text action under an expense line ("Stop after this month",
+/// "Resume"): reachable by thumb, quieter than the line's own figure.
+class _LineTextAction extends StatelessWidget {
+  const _LineTextAction({super.key, required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      child: PressableScale(
+        scale: 0.95,
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: AppColors.cobalt,
+            ),
+          ),
         ),
       ),
     );
@@ -4521,12 +4720,14 @@ class _PurchasesSheetState extends State<_PurchasesSheet> {
   }
 
   Future<void> _voidEntry(LotExpenseEntry entry) async {
+    final l10n = AppLocalizations.of(context)!;
     final voided = await showLotSheet<bool>(
       context,
-      _VoidSheet(
-        callable: 'voidLotExpenseEntry',
-        idKey: 'entryId',
-        id: entry.id,
+      VoidRecordSheet(
+        title: l10n.lotVoidTitle,
+        explain: l10n.lotVoidExplain,
+        onVoid: voidThroughCallable(
+            'voidLotExpenseEntry', {'entryId': entry.id}),
         onDone: () {},
       ),
     );

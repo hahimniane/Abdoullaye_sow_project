@@ -17581,4 +17581,111 @@ class AppLocalizationsFr extends AppLocalizations {
   String pmeEstimateHeader(String lastDay) {
     return 'ESTIMATION — mois entier, voitures encore garées comptées jusqu\'au $lastDay';
   }
+
+  @override
+  String voidedNoteBy(String name) {
+    return 'par $name';
+  }
+
+  @override
+  String get lotVoidLine => 'Annuler le poste';
+
+  @override
+  String get lotVoidLineTitle => 'Annuler ce poste';
+
+  @override
+  String get lotVoidLineExplain =>
+      'Annuler ce poste — il reste au registre (barré) et sort des totaux de chaque mois. Il n’est jamais supprimé.';
+
+  @override
+  String get lotLineVoidedStatus => 'Annulé';
+
+  @override
+  String get lotVoidLineDone => 'Poste annulé.';
+
+  @override
+  String get lotErrLineHasPurchases =>
+      'Annulez d’abord les achats de ce poste.';
+
+  @override
+  String get lotErrLineVoided => 'Ce poste a déjà été annulé.';
+
+  @override
+  String get lotErrLineNotFound => 'Ce poste n’existe plus.';
+
+  @override
+  String get parkingVoid => 'Invalider';
+
+  @override
+  String get parkingVoidTitle => 'Invalider cette voiture';
+
+  @override
+  String get parkingVoidExplain =>
+      'Invalider cette voiture — elle reste au registre (barrée) et sort des totaux ; elle n’est jamais supprimée. Les autres membres de l’équipe voient qui l’a invalidée et pourquoi.';
+
+  @override
+  String get parkingVoidedStatus => 'Invalidée';
+
+  @override
+  String get parkingVoidDone => 'Voiture invalidée.';
+
+  @override
+  String get parkingVoidedLocked =>
+      'Cette voiture a été invalidée. Elle reste au registre mais ne compte plus nulle part et ne peut plus être modifiée.';
+
+  @override
+  String get parkingErrCarVoided =>
+      'Cette voiture a été invalidée et ne peut plus être modifiée.';
+
+  @override
+  String get parkingErrCarNotFound => 'Cette voiture est introuvable.';
+
+  @override
+  String get parkingKindVoided => 'Invalidé';
+
+  @override
+  String get lotStopAfterMonth => 'Arrêter après ce mois';
+
+  @override
+  String get lotStopLineTitle => 'Arrêter ce poste';
+
+  @override
+  String lotStopLineExplain(String line, String month) {
+    return '$line s’arrête après $month. Les mois précédents restent tels quels.';
+  }
+
+  @override
+  String get lotStopLineConfirm => 'Arrêter';
+
+  @override
+  String get lotStopLineDone => 'Poste arrêté.';
+
+  @override
+  String lotStoppedAfter(String month) {
+    return 'Arrêté après $month';
+  }
+
+  @override
+  String get lotLineStoppedStatus => 'Arrêté';
+
+  @override
+  String get lotResumeLine => 'Reprendre';
+
+  @override
+  String get lotResumeLineTitle => 'Reprendre ce poste';
+
+  @override
+  String lotResumeLineExplain(String line) {
+    return '$line compte de nouveau chaque mois, sans fin.';
+  }
+
+  @override
+  String get lotResumeLineDone => 'Poste repris.';
+
+  @override
+  String get lotErrEndMonthInvalid => 'Choisissez un mois valide.';
+
+  @override
+  String get lotErrEndMonthBeforePurchases =>
+      'Ce poste a des achats après ce mois.';
 }

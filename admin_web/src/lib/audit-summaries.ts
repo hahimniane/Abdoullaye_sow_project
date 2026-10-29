@@ -169,6 +169,13 @@ const WRITE_OFF_REASONS_FR: Record<string, string> = {
 
 const TRANSFER_CODE = String.raw`TR-[A-Z0-9]+`;
 
+const MONTHS_FR: Record<string, string> = {
+  January: "janvier", February: "février", March: "mars", April: "avril",
+  May: "mai", June: "juin", July: "juillet", August: "août",
+  September: "septembre", October: "octobre", November: "novembre",
+  December: "décembre",
+};
+
 /** French reads 0 and 1 as singular. */
 function frPlural(count: string, one: string, many: string) {
   return Number(count) <= 1 ? one : many;
@@ -286,6 +293,11 @@ const rules: Rule[] = [
     `Marqué comme non reçu${m[1] ? ` — ${m[1]}` : ""}`],
   [/^Marked as received$/, () => "Marqué comme reçu"],
   [/^Voided(?: — (.+))?$/, (m) => `Invalidé${m[1] ? ` — ${m[1]}` : ""}`],
+  // An expense line stopped after a month ("Stop after this month"), or
+  // set running again.
+  [/^Stopped after (January|February|March|April|May|June|July|August|September|October|November|December) (\d{4})$/, (m) =>
+    `Arrêtée après ${MONTHS_FR[m[1]]} ${m[2]}`],
+  [/^Resumed$/, () => "Reprise"],
   [/^Edited — nothing changed$/, () => "Modifié — rien n’a changé"],
   [/^Edited — (.+)$/, (m) => `Modifié — ${m[1]}`],
   // Field diffs: "<field> <from> → <to> (+2 more)". Only the tail is wording.

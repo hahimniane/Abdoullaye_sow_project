@@ -33,6 +33,8 @@ import {
   Package,
   ParkingCircle,
   Ban,
+  CirclePause,
+  CirclePlay,
   History,
   Paperclip,
   FileText,
@@ -65,6 +67,8 @@ import {
 import { FieldInfo } from "@/components/field-info";
 import { ContainerTrackingCard } from "@/components/business/container-tracking-card";
 import { ParkingMonthEnd } from "@/components/business/parking-month-end";
+import { VoidRecordModal, VoidedNote } from "@/components/business/void-record";
+import { isVoidedRecord, voidedLast } from "@/lib/voided-record";
 import { previousMonthKey } from "@/lib/parking-month-statement";
 import { TrackingUpdatesSection } from "@/components/business/tracking-updates-section";
 import { SearchableSelect } from "@/components/searchable-select";
@@ -139,6 +143,11 @@ import {
   lotActivityListQuery,
   lotExpenseEntryQueries,
   lotExpenseByLine,
+  lotLineEndMonth,
+  lotLineStopSentence,
+  lotLineStoppedFor,
+  lotLineStoppedLabel,
+  lotLinesInOrder,
   lotActivityPaidCents,
   lotActivityRemainingCents,
   lotActivityPaymentBadge,
@@ -219,6 +228,8 @@ import {
   type ParkingPaymentClass,
   canMarkBusinessParkingPaid,
   canResendBusinessParkingLink,
+  canVoidBusinessParking,
+  isBusinessParkingVoided,
   emptyBusinessParkingEntryDraft,
   isBusinessEnteredParking,
   validateBusinessParkingEntryDraft,
@@ -5198,6 +5209,42 @@ export function ParkingPanel({
   // as a plain link the browser will honour.
   const [blockedDocument, setBlockedDocument] = useState<{ id: string; url: string } | null>(null);
   const setRowMessage = useTransientMessage(setMessage);
+  // Voiding a car entered by mistake (twice, wrong customer, a test). It is
+  // never deleted: it stays on the list struck through, keeps any payment it
+  // recorded, and drops out of every total, bill and space count.
+  const [voidCar, setVoidCar] = useState<FirestoreRow | null>(null);
+  const [voidCarReason, setVoidCarReason] = useState("");
+  const [voidCarError, setVoidCarError] = useState("");
+  const [voidCarBusy, setVoidCarBusy] = useState(false);
+  function openVoidCar(row: FirestoreRow) {
+    setVoidCar(row);
+    setVoidCarReason("");
+    setVoidCarError("");
+  }
+  function closeVoidCar() {
+    setVoidCar(null);
+    setVoidCarReason("");
+    setVoidCarError("");
+  }
+  async function confirmVoidCar() {
+    if (!voidCar) return;
+    setVoidCarBusy(true);
+    setVoidCarError("");
+    try {
+      await httpsCallable(functions, "updateBusinessParkingEntry")({
+        entryId: voidCar.id,
+        action: "void",
+        reason: voidCarReason.trim().slice(0, 300),
+      });
+      closeVoidCar();
+      setRowMessage("Car voided.");
+    } catch (error) {
+      // Said inside the modal: the banner would sit behind it.
+      setVoidCarError(error instanceof Error ? error.message : "The car could not be voided.");
+    } finally {
+      setVoidCarBusy(false);
+    }
+  }
   const focusedCardRef = useRef<HTMLElement | null>(null);
   const searched = useMemo(
     () => filterRows(parkedCars.rows, search, ["trackingCode", "ownerName", "customerName", "carMake", "carModel", "carYear", "vinNumber", "status"]),
@@ -5217,7 +5264,8 @@ export function ParkingPanel({
       : searched;
     // Status kind AND payment class, each an OR within itself. "In the lot"
     // plus "Not paid" keeps only unpaid walk-ups; no chips keeps everything.
-    return inRange.filter((row) => businessParkingMatchesFacets(row, facets));
+    // A voided car stays on the list, struck through, below the live ones.
+    return voidedLast(inRange.filter((row) => businessParkingMatchesFacets(row, facets)));
   }, [searched, facets, rangeFrom, rangeTo]);
   useEffect(() => {
     if (!focusRecordId) return;
@@ -5258,7 +5306,8 @@ export function ParkingPanel({
   const parkingTotalsPartial = parkingFiltered && pastStays.hasMore;
   // Running stays are read whole, so this count is exact.
   const inLotCount = activeStays.rows.filter(
-    (row) => text(row.status, "reserved") !== "cancelled" &&
+    (row) => !isBusinessParkingVoided(row) &&
+      text(row.status, "reserved") !== "cancelled" &&
       businessParkingEndLabel(row) !== "Ended",
   ).length;
 
@@ -5270,6 +5319,10 @@ export function ParkingPanel({
     lastDraftVinRef.current = "";
   }
   function editParking(row: FirestoreRow) {
+    if (isBusinessParkingVoided(row)) {
+      setMessage("This car was voided and can no longer be changed.");
+      return;
+    }
     setDraft({
       id: row.id,
       ownerName: text(row.customerName ?? row.ownerName, ""),
@@ -5331,6 +5384,10 @@ export function ParkingPanel({
     const existing = parkedCars.rows.find((row) => row.id === draft.id);
     if (existing && businessParkingPaymentTone(existing) === "paid") {
       setMessage("This parking has been paid for and can no longer be edited.");
+      return;
+    }
+    if (existing && isBusinessParkingVoided(existing)) {
+      setMessage("This car was voided and can no longer be changed.");
       return;
     }
 
@@ -5850,6 +5907,7 @@ export function ParkingPanel({
             ["pending", "Pending payment"],
             ["left", "Left"],
             ["cancelled", "Cancelled"],
+            ["voided", "Voided"],
           ] as [ParkingKind, string][]).map(([kind, label]) => (
             <button
               key={kind}
@@ -5976,22 +6034,26 @@ export function ParkingPanel({
               const linkUrl = text(row.paymentLinkUrl ?? row.checkoutUrl, "");
               const rowBusy = paidBusyId === row.id;
               const isReceipt = businessParkingDocumentType(row) === "receipt";
+              const voided = isBusinessParkingVoided(row);
               return (
-                <div className="pk-row" key={String(row.id)} role="row">
+                <div className={`pk-row${voided ? " voided" : ""}`} key={String(row.id)} role="row">
                   <span>
-                    <b>{vehicle}<CopyValue value={text(row.vinNumber, "")} label="Copy VIN" /></b>
+                    <b>{voided ? <s>{vehicle}</s> : vehicle}<CopyValue value={text(row.vinNumber, "")} label="Copy VIN" /></b>
                     <small data-no-translate>{text(row.vinNumber, "") || text(row.trackingCode, "")}</small>
                     {vinPlacements.has(text(row.vinNumber, "").toUpperCase()) && (
                       <small className="ctn-placement">{vinPlacementText(vinPlacements.get(text(row.vinNumber, "").toUpperCase()), placementLang)}</small>
                     )}
+                    {voided && <VoidedNote row={row} nameFor={nameForStaff} />}
                   </span>
                   <span><b><span data-no-translate>{text(row.customerName ?? row.ownerName, "—")}</span><CopyValue value={text(row.customerName ?? row.ownerName, "")} label="Copy name" /></b><small data-no-translate>{text(row.customerPhone, "")}</small><RecordPhoneFlags row={row} field="customerPhone" /></span>
                   <span>{formatDate(row.parkingDate) || "—"}</span>
                   <span className={openEnded ? "muted" : undefined}>{openEnded ? "Open" : formatDate(row.parkingEndDate)}</span>
                   <span className="num">{businessParkingStayDays(row)}</span>
                   <span className="num">{rate > 0 ? formatMoney(rate, "USD") : "—"}</span>
-                  <span className="num"><b>{total > 0 ? formatMoney(total, "USD") : "—"}</b></span>
-                  <span>{badge
+                  <span className="num"><b>{total > 0 ? (voided ? <s>{formatMoney(total, "USD")}</s> : formatMoney(total, "USD")) : "—"}</b></span>
+                  <span>{voided
+                    ? <em className="pk-pill">Voided</em>
+                    : badge
                     ? <em className={`pk-pill ${tone === "paid" ? "ok" : "warn"}`}>{badge}</em>
                     : <em className="pk-pill">{parkingStatusLabel(row)}</em>}</span>
                   <span>{text(row.enteredByUid, "")
@@ -6001,20 +6063,31 @@ export function ParkingPanel({
                     ? <small className={nameForStaff(row.receivedByStaffId ?? row.directPaymentMarkedByUid) ? undefined : "muted"} title={nameForStaff(row.receivedByStaffId ?? row.directPaymentMarkedByUid) ? undefined : STAFF_UNKNOWN}>{nameForStaff(row.receivedByStaffId ?? row.directPaymentMarkedByUid) || STAFF_UNKNOWN}</small>
                     : <small className="muted">—</small>}</span>
                   <span className="pk-acts">
-                    <button type="button" className="pk-act" disabled={rowBusy} title={isReceipt ? "Print receipt" : "Print invoice"} aria-label={isReceipt ? "Print receipt" : "Print invoice"} onClick={() => void openParkingDocument(row)}>
-                      {rowBusy ? <RefreshCw className="spin" size={13} /> : <Printer size={13} />}
-                    </button>
-                    {linkUrl && tone !== "paid" && (
+                    {/* A voided car is not edited, paid, billed or printed:
+                        only its history and the card stay reachable. */}
+                    {!voided && (
+                      <button type="button" className="pk-act" disabled={rowBusy} title={isReceipt ? "Print receipt" : "Print invoice"} aria-label={isReceipt ? "Print receipt" : "Print invoice"} onClick={() => void openParkingDocument(row)}>
+                        {rowBusy ? <RefreshCw className="spin" size={13} /> : <Printer size={13} />}
+                      </button>
+                    )}
+                    {!voided && linkUrl && tone !== "paid" && (
                       <button type="button" className="pk-act" title="Copy payment link" aria-label="Copy payment link" onClick={() => void copyCheckoutUrl(linkUrl)}>
                         <Copy size={13} />
                       </button>
                     )}
-                    <button type="button" className="pk-act" title="Edit this record" aria-label="Edit this record" onClick={() => editParking(row)}>
-                      <Pencil size={13} />
-                    </button>
+                    {!voided && (
+                      <button type="button" className="pk-act" title="Edit this record" aria-label="Edit this record" onClick={() => editParking(row)}>
+                        <Pencil size={13} />
+                      </button>
+                    )}
                     <button type="button" className="pk-act" title="Change history" aria-label="Change history" onClick={() => void openParkingHistory(String(row.id))}>
                       <History size={13} />
                     </button>
+                    {canVoidBusinessParking(row) && (
+                      <button type="button" className="pk-act" title="Void this car" aria-label="Void this car" onClick={() => openVoidCar(row)}>
+                        <Ban size={13} />
+                      </button>
+                    )}
                     {/* Settling money asks how it arrived, and that choice
                         lives on the card. This opens the card at this car so
                         the answer is deliberate rather than a default. */}
@@ -6040,16 +6113,18 @@ export function ParkingPanel({
           const businessEntered = isBusinessEnteredParking(row);
           const awaitingDirect = canMarkBusinessParkingPaid(row);
           const rowBusy = paidBusyId === row.id;
+          const voided = isBusinessParkingVoided(row);
           return (
             <article
-              className={`pur-card${(focusRecordId || openRowId) === row.id ? " focused" : ""}`}
+              className={`pur-card${(focusRecordId || openRowId) === row.id ? " focused" : ""}${voided ? " voided" : ""}`}
               key={row.id}
               ref={(focusRecordId || openRowId) === row.id ? focusedCardRef : undefined}
             >
               <div className="pur-head">
                 <div className="pur-title">
-                  <strong>{parkingTitle(row)}</strong>
+                  <strong>{voided ? <s>{parkingTitle(row)}</s> : parkingTitle(row)}</strong>
                   <span className="pur-kind">{text(row.trackingCode, "Parking")}</span>
+                  {voided && <VoidedNote row={row} nameFor={nameForStaff} />}
                 </div>
                 <span className="pur-badges">
                   {businessEntered && businessParkingPaymentBadge(row) && (
@@ -6057,7 +6132,9 @@ export function ParkingPanel({
                       {businessParkingPaymentBadge(row)}
                     </span>
                   )}
-                  <span className={`lst-badge ${status === "active" ? "warn" : status === "completed" ? "ok" : "muted"}`}>{statusLabel(status)}</span>
+                  {voided
+                    ? <span className="lst-badge muted">Voided</span>
+                    : <span className={`lst-badge ${status === "active" ? "warn" : status === "completed" ? "ok" : "muted"}`}>{statusLabel(status)}</span>}
                 </span>
               </div>
               <div className="pur-info">
@@ -6073,7 +6150,7 @@ export function ParkingPanel({
                 {businessEntered && <div><span>Payment status</span><b>{businessParkingPaymentLabel(row)}</b></div>}
                 {Boolean(row.parkingEndDate) && <div><span>{businessParkingEndLabel(row)}</span><b>{formatDate(row.parkingEndDate)}</b></div>}
               </div>
-              {businessEntered && text(row.paymentMethod, "") === "payment_link" && Boolean(text(row.checkoutUrl, "")) && (
+              {!voided && businessEntered && text(row.paymentMethod, "") === "payment_link" && Boolean(text(row.checkoutUrl, "")) && (
                 <div className="pur-info">
                   <div style={{gridColumn: "1 / -1", minWidth: 0}}>
                     <span>Payment link</span>
@@ -6143,13 +6220,15 @@ export function ParkingPanel({
                   </div>
                 </div>
               )}
-              <ParkingBillingActions row={row} staff={parkingStaff.rows} />
+              {!voided && <ParkingBillingActions row={row} staff={parkingStaff.rows} />}
               <div className="pur-actions">
-                <label className="bar-field"><span>Update status</span>
-                  <select value={status} disabled={busy} onChange={(event) => runPanelAction(setBusy, setMessage, "Parking status updated.", () => updateParkingStatus(row, event.target.value))}>
-                    {parkingSettableStatuses.map((option) => (<option key={option} value={option}>{statusLabel(option)}</option>))}
-                  </select>
-                </label>
+                {!voided && (
+                  <label className="bar-field"><span>Update status</span>
+                    <select value={status} disabled={busy} onChange={(event) => runPanelAction(setBusy, setMessage, "Parking status updated.", () => updateParkingStatus(row, event.target.value))}>
+                      {parkingSettableStatuses.map((option) => (<option key={option} value={option}>{statusLabel(option)}</option>))}
+                    </select>
+                  </label>
+                )}
                 {awaitingDirect && (
                   <label className="bar-field"><span>Received via</span>
                     <select value={receivedVia[row.id] || "zelle"} disabled={rowBusy} onChange={(event) => setReceivedVia((current) => ({...current, [row.id]: event.target.value}))}>
@@ -6166,7 +6245,7 @@ export function ParkingPanel({
                 {/* Paper for the owner: a receipt once the money is in, an
                     invoice while it is still owed. The document itself is
                     server-rendered and print-optimised. */}
-                {businessEntered && (
+                {businessEntered && !voided && (
                   <button
                     className="lst-btn ghost"
                     type="button"
@@ -6192,12 +6271,15 @@ export function ParkingPanel({
                     the platform fee taken and the payout sent. Editing it
                     here would rewrite the price of a completed sale with no
                     server check and no audit trail, so it is not offered. */}
-                {businessParkingPaymentTone(row) === "paid" ? (
+                {voided ? null : businessParkingPaymentTone(row) === "paid" ? (
                   <span className="lst-hint">Paid records cannot be edited</span>
                 ) : (
                   <button className="lst-btn ghost" type="button" disabled={busy} onClick={() => editParking(row)}><Pencil size={14} /> Edit</button>
                 )}
                 <button className="lst-btn ghost" type="button" onClick={() => void openParkingHistory(String(row.id))}><History size={14} /> History</button>
+                {canVoidBusinessParking(row) && (
+                  <button className="lst-btn ghost" type="button" onClick={() => openVoidCar(row)} title="Void this car"><Ban size={14} /> Void</button>
+                )}
               </div>
             </article>
           );
@@ -6207,6 +6289,21 @@ export function ParkingPanel({
       {/* Running stays are all here; ended ones come a page at a time. */}
       <LoadMoreButton hasMore={pastStays.hasMore} loading={pastStays.loadingMore} onLoadMore={pastStays.loadMore} />
       </div>
+
+      {voidCar && (
+        <VoidRecordModal
+          title="Void this car"
+          body="Void this car — it stays on the record (struck through) and drops out of the totals; it is never deleted. Other staff see who voided it and why."
+          label={[parkingTitle(voidCar), text(voidCar.trackingCode, ""), text(voidCar.customerName ?? voidCar.ownerName, "")].filter(Boolean).join(" · ")}
+          reason={voidCarReason}
+          onReason={setVoidCarReason}
+          busy={voidCarBusy}
+          error={voidCarError}
+          confirmLabel="Void car"
+          onCancel={closeVoidCar}
+          onConfirm={() => void confirmVoidCar()}
+        />
+      )}
 
       {historyId && (
         <div className="lst-modal-overlay" role="dialog" aria-modal="true" onClick={() => setHistoryId("")}>
@@ -7840,7 +7937,13 @@ export function LotLedgerPanel({ businessId, business, previewMode = false, focu
   const [directStaff, setDirectStaff] = useState("");
   const [editingThreshold, setEditingThreshold] = useState(false);
   const [thresholdInput, setThresholdInput] = useState("");
-  const [voidTarget, setVoidTarget] = useState<{ type: "activity" | "expense"; id: string; label: string } | null>(null);
+  const [voidTarget, setVoidTarget] = useState<{ type: "activity" | "expense" | "line"; id: string; label: string } | null>(null);
+  // "Stop after this month" on an expense line: which line is being stopped,
+  // and the one being resumed (each its own busy state).
+  const [stopLine, setStopLine] = useState<Record<string, unknown> | null>(null);
+  const [stopLineError, setStopLineError] = useState("");
+  const [stopLineBusy, setStopLineBusy] = useState(false);
+  const [resumeLineId, setResumeLineId] = useState("");
   const [voidReason, setVoidReason] = useState("");
   const [historyRows, setHistoryRows] = useState<FirestoreRow[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -7946,7 +8049,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false, focu
   // every record (getLotLedgerTotals). It asks again when a loaded job, an
   // expense or a type changes.
   const ledgerReload = useMemo(
-    () => [totalsReloadKey(activities.rows), totalsReloadKey(expenseEntries.rows, ["amountCents", "voided", "month", "updatedAt"]), totalsReloadKey(expenseLines.rows, ["amountCents", "kind", "active", "updatedAt"])].join("#"),
+    () => [totalsReloadKey(activities.rows), totalsReloadKey(expenseEntries.rows, ["amountCents", "voided", "month", "updatedAt"]), totalsReloadKey(expenseLines.rows, ["amountCents", "kind", "active", "voided", "endMonth", "updatedAt"])].join("#"),
     [activities.rows, expenseEntries.rows, expenseLines.rows],
   );
   const ledgerTotals = useServerTotals<ServerLedgerTotals>(
@@ -8498,14 +8601,75 @@ export function LotLedgerPanel({ businessId, business, previewMode = false, focu
     if (!voidTarget) return;
     const fn = voidTarget.type === "activity"
       ? "voidLotActivity" : "voidLotExpenseEntry";
+    const reason = voidReason.trim().slice(0, 300);
+    // A whole expense line goes through the purchase callable with `lineId`:
+    // the server refuses it while the line still has live purchases.
     const payload = voidTarget.type === "activity"
-      ? { activityId: voidTarget.id, reason: voidReason.trim() }
-      : { entryId: voidTarget.id, reason: voidReason.trim() };
+      ? { activityId: voidTarget.id, reason }
+      : voidTarget.type === "line"
+        ? { lineId: voidTarget.id, reason }
+        : { entryId: voidTarget.id, reason };
+    setDraftError("");
     await runPanelAction(setBusy, setFlash, "Voided.", async () => {
       await httpsCallable(functions, fn)(payload);
       setDupBump((value) => value + 1);
       closeModal();
+    }, setDraftError);
+  }
+
+  // The last month a line counts. Only that field moves: the server keeps
+  // every month up to it as it was, and refuses an end before a purchase.
+  async function setLineEndMonth(line: Record<string, unknown>, endMonth: string) {
+    await httpsCallable(functions, "upsertLotExpenseLine")({
+      businessId,
+      lineId: String(line.id ?? ""),
+      action: "setEndMonth",
+      endMonth,
     });
+  }
+
+  function openStopLine(line: Record<string, unknown>) {
+    setStopLine(line);
+    setStopLineError("");
+  }
+
+  async function confirmStopLine() {
+    if (!stopLine) return;
+    setStopLineBusy(true);
+    setStopLineError("");
+    try {
+      await setLineEndMonth(stopLine, month);
+      setStopLine(null);
+      setFlash("Line stopped.");
+    } catch (error) {
+      setStopLineError(error instanceof Error ? error.message : "The line could not be stopped.");
+    } finally {
+      setStopLineBusy(false);
+    }
+  }
+
+  async function resumeLine(line: Record<string, unknown>) {
+    setResumeLineId(String(line.id ?? ""));
+    setFlash("");
+    try {
+      await setLineEndMonth(line, "");
+      setFlash("Line resumed.");
+    } catch (error) {
+      setFlash(error instanceof Error ? error.message : "The line could not be resumed.");
+    } finally {
+      setResumeLineId("");
+    }
+  }
+
+  function voidLine(line: Record<string, unknown>) {
+    setVoidTarget({
+      type: "line",
+      id: String(line.id ?? ""),
+      label: text(line.label, "Expense line"),
+    });
+    setVoidReason("");
+    setDraftError("");
+    setModal("void");
   }
 
   async function openHistory(entityId: string) {
@@ -8538,6 +8702,8 @@ export function LotLedgerPanel({ businessId, business, previewMode = false, focu
   }
 
   function openEditLine(line: Record<string, unknown>) {
+    // A voided line is history: it is never edited back to life.
+    if (isVoidedRecord(line)) return;
     setEditLineId(String(line.id ?? ""));
     setLineDraft({
       label: text(line.label, ""),
@@ -8951,31 +9117,50 @@ export function LotLedgerPanel({ businessId, business, previewMode = false, focu
             <EmptyState text="No expense lines yet." />
           ) : (
             <div className="lot-expense-cards">
-              {expenseLines.rows.map((line) => {
+              {lotLinesInOrder(expenseLines.rows, month).map((line) => {
                 const l = line as Record<string, unknown>;
                 const metered = l.kind === "metered";
+                // A voided line stays, struck through, at the end: it counts
+                // in no month and takes no purchases.
+                const lineVoided = isVoidedRecord(l);
+                // A stopped line counts up to its last month; after it, it
+                // sits with the voided ones, owes nothing and takes no
+                // purchases. Earlier months show it as they always did.
+                const lineEndMonth = lineVoided ? "" : lotLineEndMonth(l);
+                const stoppedHere = Boolean(lineEndMonth) && lotLineStoppedFor(l, month);
+                const lineId = String(l.id ?? "");
                 const monthEntries = expenseEntries.rows.filter((e) => (e as Record<string, unknown>).voided !== true && String((e as Record<string, unknown>).lineId) === String(l.id) && lotExpenseEntryMonth(e as Record<string, unknown>) === month);
                 const entriesTotal = monthEntries.reduce((s, e) => s + (Number((e as Record<string, unknown>).amountCents) || 0), 0);
                 // A fixed line shows what the month actually cost: the purchase
                 // logged against it, else its standing amount — the same number
                 // the totals use.
-                const amount = metered || monthEntries.length > 0 ? entriesTotal : Number(l.recurringCents) || 0;
-                const missing = metered && monthEntries.length === 0;
+                const amount = metered || monthEntries.length > 0 || stoppedHere ? entriesTotal : Number(l.recurringCents) || 0;
+                const missing = metered && monthEntries.length === 0 && !stoppedHere;
                 return (
-                  <article className="lot-expense-card" key={String(l.id)}>
+                  <article className={`lot-expense-card${lineVoided ? " voided" : stoppedHere ? " stopped" : ""}`} key={String(l.id)}>
                     <div className="lot-expense-card-head">
                       <div className="lot-expense-card-title">
-                        <strong>{text(l.label, "")}</strong>
+                        <strong>{lineVoided ? <s>{text(l.label, "")}</s> : text(l.label, "")}</strong>
                         <span className={`lst-badge ${metered ? "warn" : "muted"} compact`}>{metered ? "Metered" : "Fixed"}</span>
+                        {lineVoided && <span className="status-pill danger compact">Voided</span>}
+                        {lineEndMonth && <span className="lst-badge muted compact" data-no-translate>{lotLineStoppedLabel(lineEndMonth, currentLanguage() === "fr" ? "fr" : "en")}</span>}
                         {text(l.detail, "") && <small>{text(l.detail, "")}</small>}
+                        {lineVoided && <VoidedNote row={l} nameFor={staffName} />}
                       </div>
                       <div className="lot-expense-card-amount">
-                        <b>{lotFormatCents(amount)}</b>
+                        <b>{lineVoided ? <s>{lotFormatCents(amount)}</s> : lotFormatCents(amount)}</b>
                         <small>{metered ? "this month" : `${lotFormatCents(Number(l.recurringCents) || 0)}/mo`}</small>
                       </div>
                       <div className="lot-expense-line-actions">
-                        <button className="ghost-button" type="button" onClick={() => openEditLine(l)} title="Edit this expense line"><Pencil size={14} /></button>
+                        {!lineVoided && <button className="ghost-button" type="button" onClick={() => openEditLine(l)} title="Edit this expense line"><Pencil size={14} /></button>}
                         <button className="ghost-button" type="button" onClick={() => openHistory(String(l.id))} title="Change history"><History size={14} /></button>
+                        {!lineVoided && !lineEndMonth && <button className="ghost-button" type="button" onClick={() => openStopLine(l)} title="Stop after this month"><CirclePause size={14} /></button>}
+                        {lineEndMonth && (
+                          <button className="ghost-button" type="button" disabled={resumeLineId === lineId} aria-busy={resumeLineId === lineId} onClick={() => void resumeLine(l)} title="Resume this line">
+                            {resumeLineId === lineId ? <RefreshCw className="spin" size={13} /> : <CirclePlay size={13} />} Resume
+                          </button>
+                        )}
+                        {!lineVoided && <button className="ghost-button" type="button" onClick={() => voidLine(l)} title="Void this line"><Ban size={14} /></button>}
                       </div>
                     </div>
                     {monthEntries.length > 0 && (
@@ -9005,8 +9190,8 @@ export function LotLedgerPanel({ businessId, business, previewMode = false, focu
                         })}
                       </div>
                     )}
-                    {missing && <p className="lot-expense-empty">Waiting on {lotMonthLabel(month)}&apos;s bill.</p>}
-                    {metered && (
+                    {missing && !lineVoided && <p className="lot-expense-empty">Waiting on {lotMonthLabel(month)}&apos;s bill.</p>}
+                    {metered && !lineVoided && !stoppedHere && (
                       <button className="ghost-button lot-expense-add" type="button" onClick={() => openAddPurchase(String(l.id))}><Plus size={13} /> Add purchase</button>
                     )}
                   </article>
@@ -9301,17 +9486,34 @@ export function LotLedgerPanel({ businessId, business, previewMode = false, focu
         </div>
       )}
 
+      {stopLine && (
+        <VoidRecordModal
+          title="Stop this line"
+          body={lotLineStopSentence(month, currentLanguage() === "fr" ? "fr" : "en")}
+          label={text(stopLine.label, "Expense line")}
+          busy={stopLineBusy}
+          error={stopLineError}
+          confirmLabel="Stop after this month"
+          onCancel={() => { setStopLine(null); setStopLineError(""); }}
+          onConfirm={() => void confirmStopLine()}
+        />
+      )}
+
       {modal === "void" && voidTarget && (
-        <div className="lst-modal-overlay" role="dialog" aria-modal="true" {...overlayDismiss(closeModal)}>
-          <div className="lst-modal" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
-            <header className="lst-modal-head"><div><h3>Void this entry</h3><p>It stays on the record (struck through) and drops out of the totals — it is never deleted. Other staff see who voided it and why.</p></div><button className="lst-icon-btn" type="button" onClick={closeModal} aria-label="Close"><X size={18} /></button></header>
-            <div className="lst-modal-body">
-              <p className="panel-lede">{voidTarget.label}</p>
-              <label className="lst-field wide"><span>Reason (optional)</span><input value={voidReason} onChange={(e) => setVoidReason(e.target.value)} placeholder="e.g. entered twice, wrong amount" /></label>
-            </div>
-            <footer className="lst-modal-foot"><button className="lst-btn ghost" type="button" disabled={busy} onClick={closeModal}>Cancel</button><button className="lst-add" type="button" disabled={busy} onClick={confirmVoid}>Void entry</button></footer>
-          </div>
-        </div>
+        <VoidRecordModal
+          title={voidTarget.type === "line" ? "Void this line" : "Void this entry"}
+          body={voidTarget.type === "line"
+            ? "Void this line — it stays on the record (struck through) and drops out of every month's totals. It is never deleted."
+            : "It stays on the record (struck through) and drops out of the totals — it is never deleted. Other staff see who voided it and why."}
+          label={voidTarget.label}
+          reason={voidReason}
+          onReason={setVoidReason}
+          busy={busy}
+          error={draftError}
+          confirmLabel={voidTarget.type === "line" ? "Void line" : "Void entry"}
+          onCancel={closeModal}
+          onConfirm={() => void confirmVoid()}
+        />
       )}
 
       {modal === "history" && (

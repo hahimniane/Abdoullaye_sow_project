@@ -537,6 +537,22 @@ export function lotLineFirstMonth(line: Row): string {
   return dateInputValue(line?.createdAt).slice(0, 7);
 }
 
+/**
+ * The last month a line counts ("yyyy-mm"), or "" when it runs on. Set by
+ * "Stop after this month" (`upsertLotExpenseLine` action "setEndMonth"); the
+ * months up to and including it stay exactly as they were.
+ */
+export function lotLineEndMonth(line: Row): string {
+  const end = String(line?.endMonth ?? "").trim();
+  return /^\d{4}-\d{2}$/.test(end) ? end : "";
+}
+
+/** Whether `month` falls after the line was stopped (so it is not owed). */
+export function lotLineStoppedFor(line: Row, month: string): boolean {
+  const end = lotLineEndMonth(line);
+  return Boolean(end) && month > end;
+}
+
 /** Whether a standing monthly charge is owed for `month`. */
 export function fixedLineAppliesTo(
   line: Row,
@@ -545,6 +561,12 @@ export function fixedLineAppliesTo(
 ): boolean {
   if (String(line?.kind ?? "") !== "fixed") return false;
   if (line?.active === false) return false;
+  // A voided line was a mistake: it owes nothing in any month.
+  if (line?.voided === true) return false;
+  // A stopped line owes nothing after its last month - the server's
+  // console_summaries.js fixedLineAppliesTo reads endMonth the same way.
+  const end = String(line?.endMonth ?? "").trim();
+  if (/^\d{4}-\d{2}$/.test(end) && month > end) return false;
   if (month > nowMonth) return false;
   const from = lotLineFirstMonth(line);
   if (from && month < from) return false;
@@ -1208,4 +1230,46 @@ export function lotExpenseEntryQueries(year: number): {
     inYear: [["month", ">=", `${year}-01`], ["month", "<=", `${year}-12`]],
     undated: [["month", "==", ""]],
   };
+}
+
+// ---------------------------------------------------------------------------
+// "Stop after this month": the sentences that carry a month, built in the
+// page's language (a dictionary entry cannot hold every month).
+// ---------------------------------------------------------------------------
+
+function lotMonthName(month: string, language: "en" | "fr", style: "long" | "short"): string {
+  const match = /^(\d{4})-(\d{2})$/.exec(String(month ?? "").trim());
+  if (!match) return String(month ?? "");
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, 1));
+  return new Intl.DateTimeFormat(language === "fr" ? "fr-FR" : "en-US", {
+    month: style, year: "numeric", timeZone: "UTC",
+  }).format(date);
+}
+
+/** The badge on a stopped line: "Stopped after Oct 2026". */
+export function lotLineStoppedLabel(endMonth: string, language: "en" | "fr" = "en"): string {
+  const name = lotMonthName(endMonth, language, "short");
+  return language === "fr" ? `Arrêtée après ${name}` : `Stopped after ${name}`;
+}
+
+/** The confirmation: what stopping after `month` does. */
+export function lotLineStopSentence(month: string, language: "en" | "fr" = "en"): string {
+  const name = lotMonthName(month, language, "long");
+  return language === "fr" ?
+    `Cette ligne s’arrête après ${name}. Les mois précédents restent tels quels.` :
+    `This line stops after ${name}. Earlier months stay as they are.`;
+}
+
+/**
+ * The Expenses page's line order for `month`: live lines, then lines stopped
+ * before it, then voided ones - each group in its stored order. Stopped and
+ * voided lines stay on the page, out of the way.
+ */
+export function lotLinesInOrder<T extends Row>(lines: readonly T[], month: string): T[] {
+  const rank = (line: T) =>
+    line?.voided === true ? 2 : lotLineStoppedFor(line, month) ? 1 : 0;
+  return lines
+      .map((line, index) => ({ line, index, rank: rank(line) }))
+      .sort((a, b) => a.rank - b.rank || a.index - b.index)
+      .map((entry) => entry.line);
 }

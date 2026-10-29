@@ -80,6 +80,11 @@ void main() {
       parkingMonthStatement(diallo({'status': 'cancelled'}), '2026-09', oct1),
       isNull,
     );
+    // Voided (entered by mistake) reads exactly like cancelled.
+    expect(
+      parkingMonthStatement(diallo({'voided': true}), '2026-09', oct1),
+      isNull,
+    );
   });
 
   test('a closed part-paid stay is paid in September and owed in October', () {

@@ -260,11 +260,13 @@ function earningsLineItems(input) {
         ["totalCost", "price", "quoteAmount", "amount"]));
   });
 
-  list(input.parkedCars).forEach((row) => {
-    push("carParking", row, row, centsOrDollars(row,
-        ["totalCostCents", "totalCents", "amountCents"],
-        ["totalCost", "price", "amount"]));
-  });
+  // A voided parked car keeps its record but earns nothing here.
+  list(input.parkedCars).filter((row) => row.voided !== true)
+      .forEach((row) => {
+        push("carParking", row, row, centsOrDollars(row,
+            ["totalCostCents", "totalCents", "amountCents"],
+            ["totalCost", "price", "amount"]));
+      });
 
   return items;
 }
@@ -667,7 +669,9 @@ function businessOverviewSummary(input = {}) {
   const shipments = list(input.shipments);
   const freightShipments = list(input.freightShipments);
   const transports = list(input.transports);
-  const parkedCars = list(input.parkedCars);
+  // Voided parked cars are history: in no count, breakdown or earning.
+  const parkedCars = list(input.parkedCars)
+      .filter((row) => row?.voided !== true);
   const support = list(input.support);
   const activeCars = cars.filter((row) =>
     String(row.status ?? "").trim() === "active");
@@ -744,6 +748,7 @@ function businessParkingAmountPaid(row, now = new Date()) {
 
 function businessParkingBalance(row, now = new Date()) {
   if (trimmed(row?.status, 40) === "cancelled") return 0;
+  if (row?.voided === true) return 0;
   const owed = businessParkingAccrued(row, now) -
     businessParkingAmountPaid(row, now);
   return owed > 0 ? Math.round(owed * 100) / 100 : 0;
@@ -788,6 +793,8 @@ function parkingSummaryPartial(rows, {now = new Date(), months = [],
     collectedByMonth: months.map(() => 0)};
   for (const row of Array.isArray(rows) ? rows : []) {
     partial.records += 1;
+    // Voided: on the record, in no figure (not in the lot, not collected).
+    if (row?.voided === true) continue;
     const cancelled = trimmed(row?.status, 40) === "cancelled";
     const ended = businessParkingEndLabel(row, now) === "Ended";
     if (!cancelled && !ended) {
@@ -951,6 +958,11 @@ function lotExpenseEntryMonth(entry, timeZone) {
 function fixedLineAppliesTo(line, month, nowMonth, timeZone) {
   if (String(line?.kind ?? "") !== "fixed") return false;
   if (line?.active === false) return false;
+  // A voided line was a mistake: it owes nothing in any month.
+  if (line?.voided === true) return false;
+  // A stopped line (a bill that ended) counts through its last month only.
+  const end = String(line?.endMonth ?? "").trim();
+  if (/^\d{4}-\d{2}$/.test(end) && month > end) return false;
   if (month > nowMonth) return false;
   const from = lotDateInputValue(line?.createdAt, timeZone).slice(0, 7);
   if (from && month < from) return false;

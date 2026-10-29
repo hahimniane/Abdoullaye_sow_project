@@ -265,7 +265,8 @@ export function earningsLineItems(input: Partial<EarningsRecordInput>): Earnings
     );
   });
 
-  list(input.parkedCars).forEach((row) => {
+  // A voided parked car keeps its record but earns nothing here.
+  list(input.parkedCars).filter((row) => row.voided !== true).forEach((row) => {
     push(
       "carParking",
       row,

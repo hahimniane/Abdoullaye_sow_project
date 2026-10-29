@@ -444,6 +444,11 @@ class LotExpenseLine {
     required this.active,
     required this.sortOrder,
     required this.createdAt,
+    this.voided = false,
+    this.voidReason = '',
+    this.voidedByStaffId = '',
+    this.voidedAt,
+    this.endMonth = '',
   });
 
   final String id;
@@ -456,6 +461,19 @@ class LotExpenseLine {
   final int sortOrder;
   final DateTime? createdAt;
 
+  /// Voided by `voidLotExpenseEntry` `{lineId}`: kept on the record, struck
+  /// through, and out of every month's totals. Never deleted, never revived.
+  final bool voided;
+  final String voidReason;
+  final String voidedByStaffId;
+  final DateTime? voidedAt;
+
+  /// The last month the line counts ("yyyy-mm"), set by "Stop after this
+  /// month" (`upsertLotExpenseLine` `action: 'setEndMonth'`). Empty: it
+  /// runs on. Months after it cost nothing and take no purchase; months up to
+  /// it are unchanged.
+  final String endMonth;
+
   factory LotExpenseLine.fromMap(String id, Map<String, dynamic> d) {
     return LotExpenseLine(
       id: id,
@@ -467,8 +485,27 @@ class LotExpenseLine {
       active: d['active'] != false,
       sortOrder: _cents(d['sortOrder']),
       createdAt: lotDateOf(d['createdAt']),
+      voided: d['voided'] == true,
+      voidReason: _s(d['voidReason'], 300),
+      voidedByStaffId: _s(d['voidedByStaffId'], 120),
+      voidedAt: lotDateOf(d['voidedAt']),
+      // Not cut to 7 characters: a malformed value must stay malformed, so it
+      // runs on here exactly as it does on the server.
+      endMonth: _s(d['endMonth'], 20),
     );
   }
+
+  /// Whether a valid stop month is set. Anything else reads as "runs on",
+  /// exactly as the server reads it.
+  bool get hasEndMonth => RegExp(r'^\d{4}-\d{2}$').hasMatch(endMonth);
+
+  /// Whether [month] ("yyyy-mm") falls after the stop month.
+  bool stoppedIn(String month) =>
+      hasEndMonth && month.compareTo(endMonth) > 0;
+
+  /// Counts toward totals and is offered for new purchases: switched on and
+  /// not voided.
+  bool get live => active && !voided;
 
   bool get isFixed => kind == lotExpenseKindFixed;
   bool get isMetered => kind == lotExpenseKindMetered;
@@ -706,7 +743,10 @@ class LotLedgerMath {
   /// is how a lot that spent \$2,092 in one month reported \$24,092 for the
   /// year, and a margin of -13989%.
   bool fixedLineAppliesTo(LotExpenseLine line, String month) {
-    if (!line.isFixed || !line.active) return false;
+    if (!line.isFixed || !line.live) return false;
+    // Stopped: nothing after its last month (mirrors the server's
+    // `month > end` check).
+    if (line.stoppedIn(month)) return false;
     if (month.compareTo(nowMonth) > 0) return false;
     final from = line.firstMonth;
     if (from.isNotEmpty && month.compareTo(from) < 0) return false;
@@ -729,7 +769,7 @@ class LotLedgerMath {
   /// same every month with nothing logged against it — its standing amount.
   int lineMonthCents(LotExpenseLine line, String month) {
     final logged = lineEntries(line.id, month);
-    if (logged.isNotEmpty || !line.isFixed) {
+    if (logged.isNotEmpty || !line.isFixed || line.stoppedIn(month)) {
       return logged.fold(0, (s, e) => s + e.amountCents);
     }
     return line.recurringCents;
