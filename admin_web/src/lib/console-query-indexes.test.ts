@@ -300,6 +300,11 @@ const SITES: Site[] = [
   { file: C("package-staff-view.tsx"), kind: "query", what: "package line by code", shapes: [raw("containerLines", [eq("businessId"), eq("trackingCode")]), raw("containerLines", [eq("trackingCode")])] },
   // A split package's other parts, for the group's money (payments on the root). Equalities only.
   { file: C("package-staff-view.tsx"), kind: "query", what: "a split package's parts", shapes: [raw("containerLines", [eq("businessId"), eq("rootLineId")])] },
+  // The Deliveries page's "Arrived · to hand over" list (docs/AIR_PACKAGES.md
+  // §5): the business's arrived containers and the lines on them (lines carry
+  // their container's status). Equalities only, no composite index.
+  { file: B("deliveries-panel.tsx"), kind: "query", what: "arrived containers", shapes: [raw("containers", [eq("businessId"), eq("status")])] },
+  { file: B("deliveries-panel.tsx"), kind: "query", what: "lines on arrived containers", shapes: [raw("containerLines", [eq("businessId"), eq("containerStatus")])] },
   { file: C("customer-parking-pools.tsx"), kind: "query", what: "open barrels", shapes: [raw("openBarrels", [eq("status")])] },
   { file: C("customer-console.tsx"), kind: "query", what: "my records", shapes: [] },
   { file: C("recipient-name-field.tsx"), kind: "query", what: "saved recipients", shapes: [raw("savedRecipients", [], { field: "lastUsedAt", direction: "desc" })] },

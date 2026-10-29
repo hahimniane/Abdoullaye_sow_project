@@ -7,7 +7,12 @@ import {
   GET_APP_URL,
   GUEST_CONTAINER_STAGES,
   GUEST_JOURNEY_STAGES,
+  GUEST_FLIGHT_FIELDS,
+  GUEST_PHOTO_KIND_LABEL,
+  GUEST_SHIPPING_COPY,
   GUEST_SHIPPING_FIELDS,
+  guestShippingMode,
+  parseGuestPhotos,
   parseGuestShipping,
   parseGuestContainerGroup,
   guestPiecesText,
@@ -246,9 +251,72 @@ test("the server's shipping fields are the ones this parser reads", () => {
     new URL("../../../my_flutter_app/functions/guest_tracking.js", import.meta.url),
     "utf8",
   );
-  for (const {key} of GUEST_SHIPPING_FIELDS) {
+  for (const {key} of [...GUEST_SHIPPING_FIELDS, ...GUEST_FLIGHT_FIELDS]) {
     assert.match(server, new RegExp(`\\.\\.\\.\\(${key} \\? \\{${key}\\} : \\{\\}\\)`), key);
   }
+  assert.match(server, /mode: "air",/);
+});
+
+test("a flight carries its airline and waybill under mode air; stage words are unchanged", () => {
+  const parsed = parseGuestTrackingResponse({
+    version: 1, found: true,
+    record: {
+      trackingCode: "CL-K7M4P2", service: "container", stage: "in_transit", updatedAtMs: 1,
+      shipping: { mode: "air", airline: " Air France ", airWaybill: "057-12345678", containerNumber: "must be ignored" },
+    },
+  });
+  assert.ok(parsed.found);
+  if (parsed.found) {
+    assert.deepEqual(parsed.record.shipping, { mode: "air", airline: "Air France", airWaybill: "057-12345678" });
+    assert.equal(guestShippingMode(parsed.record.shipping), "air");
+    assert.equal(guestStageLabel("container", "in_transit"), "At sea");
+  }
+  // A flight with nothing known yet still says it is a flight; a sea answer never carries the mode.
+  assert.deepEqual(parseGuestShipping("container", { mode: "air" }), { mode: "air" });
+  assert.deepEqual(parseGuestShipping("container", { mode: "sea", containerNumber: "MSKU1234565" }), { containerNumber: "MSKU1234565" });
+  assert.equal(guestShippingMode(parseGuestShipping("container", { containerNumber: "MSKU1234565" })), "sea");
+  assert.equal(guestShippingMode(undefined), "sea");
+  assert.deepEqual(GUEST_FLIGHT_FIELDS.map((f) => f.key), ["airline", "airWaybill"]);
+});
+
+test("photos come only as https links of a known kind, in order, and never for a guest without them", () => {
+  const photos = parseGuestPhotos([
+    { url: "https://customer.laawoldigital.com/d?view=photo&t=a&p=b&e=1&s=c", kind: "dropoff" },
+    { url: "https://customer.laawoldigital.com/d?view=photo&t=a&p=b2&e=1&s=c", kind: "customer" },
+    { url: "https://customer.laawoldigital.com/d?view=photo&t=a&p=b3&e=1&s=c", kind: "delivered" },
+    { url: "http://evil.example/x.jpg", kind: "dropoff" },
+    { url: "https://customer.laawoldigital.com/d?x", kind: "selfie" },
+    "nonsense",
+  ]);
+  assert.deepEqual(photos?.map((p) => p.kind), ["dropoff", "customer", "delivered"]);
+  assert.equal(parseGuestPhotos(undefined), undefined);
+  assert.equal(parseGuestPhotos([]), undefined);
+  assert.equal(parseGuestPhotos([{ url: "ftp://x", kind: "dropoff" }]), undefined);
+  const parsed = parseGuestTrackingResponse({
+    version: 1, found: true,
+    record: {
+      trackingCode: "CL-K7M4P2", service: "container", stage: "arrived", updatedAtMs: 1,
+      photos: [{ url: "https://customer.laawoldigital.com/d?view=photo", kind: "dropoff" }],
+    },
+  });
+  assert.ok(parsed.found);
+  if (parsed.found) assert.deepEqual(parsed.record.photos, [{ url: "https://customer.laawoldigital.com/d?view=photo", kind: "dropoff" }]);
+  const guest = parseGuestTrackingResponse({
+    version: 1, found: true,
+    record: { trackingCode: "CL-K7M4P2", service: "container", stage: "arrived", updatedAtMs: 1 },
+  });
+  assert.ok(guest.found);
+  if (guest.found) assert.equal("photos" in guest.record, false);
+  // Another service never carries photos, whatever the answer says.
+  const barrel = parseGuestTrackingResponse({
+    version: 1, found: true,
+    record: { trackingCode: "BS-K7M4P2", service: "barrel", stage: "booked", updatedAtMs: 1, photos: [{ url: "https://x.example/a", kind: "dropoff" }] },
+  });
+  assert.ok(barrel.found);
+  if (barrel.found) assert.equal("photos" in barrel.record, false);
+  assert.deepEqual(Object.keys(GUEST_PHOTO_KIND_LABEL), ["dropoff", "customer", "delivered"]);
+  const server = readFileSync(new URL("../../../my_flutter_app/functions/guest_tracking.js", import.meta.url), "utf8");
+  for (const kind of ["dropoff", "customer", "delivered"]) assert.match(server, new RegExp(`"${kind}"\\)`), kind);
 });
 
 test("every shipping-details string has French", () => {
@@ -259,6 +327,12 @@ test("every shipping-details string has French", () => {
     "For your privacy, only the shipment status and shipping details are shown here.",
     "Last update: received",
     ...GUEST_SHIPPING_FIELDS.map((f) => f.label),
+    ...GUEST_FLIGHT_FIELDS.map((f) => f.label),
+    ...Object.values(GUEST_SHIPPING_COPY).flatMap((copy) => [copy.title, copy.lede]),
+    "Photos of the package",
+    "Photos of this package: at drop-off, what was sent on WhatsApp, and at delivery.",
+    "Open full size",
+    ...Object.values(GUEST_PHOTO_KIND_LABEL),
   ];
   for (const english of strings) {
     const french = translateValue(english, "fr");

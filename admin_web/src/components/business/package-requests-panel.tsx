@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { httpsCallable } from "firebase/functions";
 import { getDownloadURL, ref } from "firebase/storage";
 import {
@@ -12,6 +12,7 @@ import {
   MapPin,
   Phone,
   RefreshCw,
+  Search,
   Settings,
   Store,
   Tag,
@@ -68,6 +69,10 @@ import {
   requestSettingsDraft,
   requestSettingsPayload,
   requestSettingsProblems,
+  lookupRequestCodePayload,
+  normalizeRequestCode,
+  PROOF_SETTING_COPY,
+  PROOF_SETTING_KEYS,
   requestStatus,
   receivedFlash,
   sendEstimatePayload,
@@ -625,13 +630,87 @@ export function ExpectedRequestsSection({ businessId, rows, staffOptions, onFlas
   const [receiving, setReceiving] = useState<Row | null>(null);
   const [cancelling, setCancelling] = useState("");
   const [labels, setLabels] = useState<Row | null>(null);
-  // The labels dialog outlives the list: receiving the last expected
-  // request empties it, and the labels for that package must still print.
+  // The counter's lookup by the customer's code (docs/AIR_PACKAGES.md §4.10):
+  // R-XXXXX typed or scanned, with or without the dash. A found request opens
+  // the same receive sheet as an Expected row, whatever its status.
+  const [codeTyped, setCodeTyped] = useState("");
+  const [codeBusy, setCodeBusy] = useState(false);
+  const [codeError, setCodeError] = useState("");
+
+  async function lookupCode(event: FormEvent) {
+    event.preventDefault();
+    const code = normalizeRequestCode(codeTyped);
+    if (!code) {
+      setCodeError("That is not a request code. Codes look like R-K7M4P.");
+      return;
+    }
+    setCodeError("");
+    setCodeBusy(true);
+    try {
+      const result = await callRequest<{ success: boolean; request: Row }>("receivePackageRequest", lookupRequestCodePayload(businessId, code));
+      const request = asRow(result.request);
+      if (!str(request.id)) throw new Error("request-missing");
+      setCodeTyped("");
+      setReceiving(request);
+    } catch (err) {
+      setCodeError(requestFailure(err).message);
+    } finally {
+      setCodeBusy(false);
+    }
+  }
+
+  const codeForm = enabled ? (
+    <form className="pkq-code-lookup" onSubmit={(event) => void lookupCode(event)}>
+      <label className="lst-field">
+        <span>Enter the customer&apos;s code</span>
+        <input
+          autoCapitalize="characters"
+          autoComplete="off"
+          data-no-translate
+          disabled={codeBusy}
+          onChange={(event) => setCodeTyped(event.target.value)}
+          placeholder="R-K7M4P"
+          spellCheck={false}
+          value={codeTyped}
+        />
+      </label>
+      <button className="lst-btn ghost" data-loading={codeBusy} disabled={codeBusy || !codeTyped.trim()} type="submit">
+        {codeBusy ? <RefreshCw className="spin" size={14} aria-hidden="true" /> : <Search size={14} aria-hidden="true" />} {codeBusy ? "Looking up…" : "Open request"}
+      </button>
+      {codeError && <span className="lst-form-error" role="alert">{codeError}</span>}
+    </form>
+  ) : null;
+  const dialogs = (
+    <>
+      {receiving && (
+        <ReceiveDialog
+          businessId={businessId}
+          onClose={() => setReceiving(null)}
+          onReceived={(line) => {
+            setReceiving(null);
+            setLabels(line);
+          }}
+          onFlash={onFlash}
+          row={receiving}
+          staffOptions={staffOptions}
+        />
+      )}
+      {/* The labels dialog outlives the list: receiving the last expected
+          request empties it, and the labels for that package must still print. */}
+      {labels && <ContainerLabelsDialog businessId={businessId} line={labels} lines={[labels]} onClose={() => setLabels(null)} />}
+    </>
+  );
   if (expected.length === 0) {
-    return labels ? <ContainerLabelsDialog businessId={businessId} line={labels} lines={[labels]} onClose={() => setLabels(null)} /> : null;
+    return codeForm || receiving || labels ? (
+      <section className="pkq-expected">
+        {codeForm}
+        {dialogs}
+      </section>
+    ) : null;
   }
   return (
     <section className="pkq-expected">
+      {codeForm}
       <h3><span>Expected</span> <b data-no-translate>· {expected.length}</b></h3>
       <div className="pkq-cards">
         {expected.map((row) => {
@@ -663,23 +742,10 @@ export function ExpectedRequestsSection({ businessId, rows, staffOptions, onFlas
         })}
       </div>
       <h3 className="pkq-in-shop">In the shop</h3>
-      {receiving && (
-        <ReceiveDialog
-          businessId={businessId}
-          onClose={() => setReceiving(null)}
-          onReceived={(line) => {
-            setReceiving(null);
-            setLabels(line);
-          }}
-          onFlash={onFlash}
-          row={receiving}
-          staffOptions={staffOptions}
-        />
-      )}
+      {dialogs}
       {cancelling && (
         <CloseRequestDialog businessId={businessId} kind="cancel" onClose={() => setCancelling("")} onDone={(message) => { onFlash(message); setCancelling(""); }} requestId={cancelling} />
       )}
-      {labels && <ContainerLabelsDialog businessId={businessId} line={labels} lines={[labels]} onClose={() => setLabels(null)} />}
     </section>
   );
 }
@@ -976,6 +1042,27 @@ function RequestSettingsDialog({ businessId, business, officeLocations, onClose,
               <span>Let customers pay barrels by card when they book</span>
             </label>
             <small className="lst-hint">Paid orders arrive in the Waiting list as Expected — paid online.</small>
+          </section>
+
+          {/* Proof on every package (docs/AIR_PACKAGES.md §1 decision 3):
+              three switches, all off until the owner turns them on. */}
+          <section className="pkq-settings-block">
+            <h4>Proof</h4>
+            {PROOF_SETTING_KEYS.map((key) => (
+              <div className="pkq-proof-switch" key={key}>
+                <label className="ctn-notify">
+                  <input
+                    checked={draft.proof[key]}
+                    disabled={!isOwner}
+                    onChange={(event) => setDraft((d) => ({ ...d, proof: { ...d.proof, [key]: event.target.checked } }))}
+                    role="switch"
+                    type="checkbox"
+                  />
+                  <span>{PROOF_SETTING_COPY[key].label}</span>
+                </label>
+                <small className="lst-hint">{PROOF_SETTING_COPY[key].hint}</small>
+              </div>
+            ))}
           </section>
           {error && <div className="lst-form-error" role="alert">{error}</div>}
         </div>

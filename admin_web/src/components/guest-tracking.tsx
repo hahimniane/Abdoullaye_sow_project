@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { Check, Clipboard, LogIn, PackageSearch, RefreshCw, Search } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Clipboard, LogIn, PackageSearch, RefreshCw, Search, X } from "lucide-react";
 import { httpsCallable } from "firebase/functions";
 import { signInAnonymously } from "firebase/auth";
 
@@ -22,7 +22,11 @@ import {
 import { currentLanguage, currentLocale } from "@/lib/format";
 import { moneyText } from "@/lib/invoice-ledger";
 import {
+  GUEST_FLIGHT_FIELDS,
+  GUEST_PHOTO_KIND_LABEL,
+  GUEST_SHIPPING_COPY,
   GUEST_SHIPPING_FIELDS,
+  guestShippingMode,
   guestJourneyStages,
   guestPiecesText,
   guestServiceLabel,
@@ -30,6 +34,7 @@ import {
   guestTrackingErrorKind,
   parseGuestTrackingResponse,
   validGuestTrackingIdentifier,
+  type GuestTrackingPhoto,
   type GuestTrackingRecord,
 } from "@/lib/guest-tracking";
 import { auth, db, functions } from "@/lib/firebase";
@@ -67,6 +72,66 @@ const ERROR_COPY: Record<Exclude<GuestTrackingError, "">, string> = {
   rate_limited: "Too many attempts. Wait a few minutes and try again.",
   unavailable: "Tracking is unavailable right now. Try again.",
 };
+
+/**
+ * One package photo full size, with Previous / Next and Escape. Opens in a
+ * new tab too (the link), for a phone that wants to save it.
+ */
+function GuestPhotoLightbox({
+  photos,
+  index,
+  onIndexChange,
+  onClose,
+}: {
+  photos: readonly GuestTrackingPhoto[];
+  index: number;
+  onIndexChange: (index: number) => void;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    function handleKey(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+      if (event.key === "ArrowLeft") onIndexChange((index - 1 + photos.length) % photos.length);
+      if (event.key === "ArrowRight") onIndexChange((index + 1) % photos.length);
+    }
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [photos.length, index, onClose, onIndexChange]);
+  const photo = photos[index];
+  return (
+    <div className="customer-car-lightbox guest-tracking-lightbox" onClick={onClose} role="presentation">
+      <button aria-label="Close" className="customer-car-lightbox-close" onClick={onClose} type="button"><X size={20} /></button>
+      {photos.length > 1 && (
+        <button
+          aria-label="Previous photo"
+          className="customer-car-lightbox-nav prev"
+          onClick={(event) => { event.stopPropagation(); onIndexChange((index - 1 + photos.length) % photos.length); }}
+          type="button"
+        >
+          <ChevronLeft size={26} />
+        </button>
+      )}
+      <figure onClick={(event) => event.stopPropagation()}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img alt="" className="customer-car-lightbox-image" src={photo.url} />
+        <figcaption>
+          <span>{GUEST_PHOTO_KIND_LABEL[photo.kind]}</span>
+          <a href={photo.url} rel="noopener noreferrer" target="_blank">Open full size</a>
+        </figcaption>
+      </figure>
+      {photos.length > 1 && (
+        <button
+          aria-label="Next photo"
+          className="customer-car-lightbox-nav next"
+          onClick={(event) => { event.stopPropagation(); onIndexChange((index + 1) % photos.length); }}
+          type="button"
+        >
+          <ChevronRight size={26} />
+        </button>
+      )}
+    </div>
+  );
+}
 
 export function GuestTracking({
   authenticated,
@@ -137,6 +202,8 @@ export function GuestTracking({
   }, []);
   const inputRef = useRef<HTMLInputElement>(null);
   const resultRef = useRef<HTMLElement>(null);
+  // Which package photo is open full size, or none.
+  const [lightbox, setLightbox] = useState<number | null>(null);
 
   async function lookup(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -159,6 +226,7 @@ export function GuestTracking({
     setLoading(true);
     setError("");
     setRecord(null);
+    setLightbox(null);
     setSigningInAs(null);
     setCopied(false);
     try {
@@ -196,6 +264,7 @@ export function GuestTracking({
   function trackAnother() {
     setIdentifier("");
     setRecord(null);
+    setLightbox(null);
     setSigningInAs(null);
     setError("");
     setCopied(false);
@@ -329,19 +398,62 @@ export function GuestTracking({
               aria-labelledby="guest-tracking-shipping-title"
               className="guest-tracking-shipping"
             >
-              <h3 id="guest-tracking-shipping-title">Shipping details</h3>
-              <p>You can also follow it with these on the shipping line’s website.</p>
+              {/* A flight (docs/AIR_PACKAGES.md §2) names the airline and the
+                  air waybill instead of the shipping line and the box. */}
+              <h3 id="guest-tracking-shipping-title">{GUEST_SHIPPING_COPY[guestShippingMode(record.shipping)].title}</h3>
+              <p>{GUEST_SHIPPING_COPY[guestShippingMode(record.shipping)].lede}</p>
               <dl>
-                {GUEST_SHIPPING_FIELDS.filter(({key}) => record.shipping?.[key]).map(
-                  ({key, label}) => (
-                    <div key={key}>
-                      <dt>{label}</dt>
-                      <dd data-no-translate>{record.shipping?.[key]}</dd>
-                    </div>
-                  ),
-                )}
+                {guestShippingMode(record.shipping) === "air"
+                  ? GUEST_FLIGHT_FIELDS.filter(({key}) => record.shipping?.[key]).map(
+                    ({key, label}) => (
+                      <div key={key}>
+                        <dt>{label}</dt>
+                        <dd data-no-translate>{record.shipping?.[key]}</dd>
+                      </div>
+                    ),
+                  )
+                  : GUEST_SHIPPING_FIELDS.filter(({key}) => record.shipping?.[key]).map(
+                    ({key, label}) => (
+                      <div key={key}>
+                        <dt>{label}</dt>
+                        <dd data-no-translate>{record.shipping?.[key]}</dd>
+                      </div>
+                    ),
+                  )}
               </dl>
             </section>
+          )}
+          {/* The photos filed on the package, only for the signed-in sender
+              or receiver (the server sends none to anyone else). */}
+          {record.photos && record.photos.length > 0 && (
+            <section aria-labelledby="guest-tracking-photos-title" className="guest-tracking-photos">
+              <h3 id="guest-tracking-photos-title">Photos of the package</h3>
+              <p>Photos of this package: at drop-off, what was sent on WhatsApp, and at delivery.</p>
+              <ul>
+                {record.photos.map((photo, index) => (
+                  <li key={photo.url}>
+                    <button
+                      aria-label={GUEST_PHOTO_KIND_LABEL[photo.kind]}
+                      className="guest-tracking-photo"
+                      onClick={() => setLightbox(index)}
+                      type="button"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img alt="" loading="lazy" src={photo.url} />
+                    </button>
+                    <small>{GUEST_PHOTO_KIND_LABEL[photo.kind]}</small>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+          {record.photos && lightbox !== null && record.photos[lightbox] && (
+            <GuestPhotoLightbox
+              onClose={() => setLightbox(null)}
+              onIndexChange={setLightbox}
+              index={lightbox}
+              photos={record.photos}
+            />
           )}
           {/* A package split across containers: each part has its own code
               and moves on its own; either code finds them all. */}

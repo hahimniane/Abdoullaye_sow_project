@@ -16776,3 +16776,46 @@ button.pkq-card:hover { border-color: var(--brand); }
 /* A package update's ticks on the lists ("Receiver ✓✓ Read"). */
 .ctn-wa-tick, .ctn-table .mini-table-row > span > small.ctn-wa-tick { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); }
 .wa-tick-label { letter-spacing: normal; font-weight: 600; }
+
+/* Air packages (W2): the Mark delivered dialog's pickup code, override and
+   photo; the Deliveries page's arrivals; the counter's request lookup; the
+   Proof switches; the tracking page's photos. */
+.dlv-code-input { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 22px; letter-spacing: 0.4em; text-align: center; max-width: 180px; }
+.dlv-override { margin: 12px 0 4px; }
+.dlv-override-toggle { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; padding: 0; }
+.dlv-override-fields { display: grid; gap: 10px; margin-top: 8px; padding: 10px 12px; border: 1px dashed var(--rule); border-radius: 10px; }
+.dlv-override-fields .lst-hint { margin: 0; }
+.dlv-photo-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 6px; }
+.dlv-photo { display: inline-flex; border-radius: 8px; overflow: hidden; border: 1px solid var(--rule); }
+.dlv-photo img { display: block; width: 56px; height: 56px; object-fit: cover; }
+.dlv-arrived .panel-header { align-items: center; }
+.dlv-arrived-list { display: grid; gap: 14px; padding: 0 16px 16px; }
+.dlv-arrived-box h3 { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 15px; margin: 0 0 6px; }
+.dlv-arrived-box h3 small { color: var(--muted); font-weight: 500; }
+.dlv-arrived-box ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.dlv-arrived-box li { display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--rule); border-radius: 10px; }
+.dlv-arrived-who { display: grid; gap: 1px; min-width: 0; }
+.dlv-arrived-who b { overflow-wrap: anywhere; }
+.dlv-arrived-who small, .dlv-arrived-box li > small { color: var(--muted); font-size: 12.5px; }
+@media (max-width: 640px) {
+  .dlv-arrived-list { padding: 0 12px 12px; }
+  .dlv-arrived-box li { grid-template-columns: 1fr auto; }
+  .dlv-arrived-box li .dlv-arrived-who { grid-column: 1 / -1; }
+}
+.pkq-code-lookup { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin: 0 0 12px; }
+.pkq-code-lookup .lst-field { flex: 1 1 220px; max-width: 320px; }
+.pkq-code-lookup .lst-field input { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.04em; text-transform: uppercase; }
+.pkq-code-lookup .lst-form-error { flex-basis: 100%; margin: 0; }
+.pkq-proof-switch { display: grid; gap: 4px; margin: 10px 0; }
+.pkq-proof-switch .lst-hint { margin: 0 0 0 24px; }
+.guest-tracking-photos { border: 1px solid var(--rule); border-radius: 8px; display: grid; gap: 8px; padding: 12px; }
+.guest-tracking-photos h3 { font-size: 15px; margin: 0; }
+.guest-tracking-photos p { color: var(--muted); line-height: 1.5; margin: 0; }
+.guest-tracking-photos ul { display: flex; flex-wrap: wrap; gap: 10px; list-style: none; margin: 0; padding: 0; }
+.guest-tracking-photos li { display: grid; gap: 4px; justify-items: center; }
+.guest-tracking-photos li small { color: var(--muted); font-size: 12px; }
+.guest-tracking-photo { padding: 0; border: 1px solid var(--rule); border-radius: 8px; background: none; cursor: pointer; overflow: hidden; width: 84px; height: 84px; }
+.guest-tracking-photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.guest-tracking-lightbox figure { margin: 0; display: grid; gap: 10px; justify-items: center; }
+.guest-tracking-lightbox figcaption { display: flex; gap: 14px; color: #fff; font-size: 14px; }
+.guest-tracking-lightbox figcaption a { color: #fff; text-decoration: underline; }

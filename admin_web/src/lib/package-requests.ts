@@ -684,6 +684,9 @@ export const REQUEST_ERROR_MESSAGES: Record<string, string> = {
   slug_locked: "The request link can only be changed once.",
   slug_missing: "Save the request settings first.",
   hours_invalid: "Opening hours need a start before the end.",
+  proof_settings_invalid: "Check the proof settings: each switch is on or off.",
+  // The counter's request lookup by code (receivePackageRequest action lookup_code).
+  not_found: "No request with that code for this business.",
   location_unknown: "That location is not one of yours.",
   pickup_areas_required: "Say which areas you pick up from.",
   price_required: "Price every piece, or none of them.",
@@ -1168,6 +1171,37 @@ export function requestLocationsFor(officeRows: readonly unknown[], business: un
   return [{ id: "default", label: text(biz.name, 120) || "Main office", address }];
 }
 
+/**
+ * The business's proof switches (docs/AIR_PACKAGES.md §1 decision 3, §2
+ * `packageProofSettings`): all off by default, saved with the request
+ * settings as `proof`, read back from the business document.
+ */
+export type ProofSettings = { photosRequired: boolean; senderConfirm: boolean; pickupCode: boolean };
+
+export const PROOF_SETTING_KEYS: readonly (keyof ProofSettings)[] = ["photosRequired", "senderConfirm", "pickupCode"];
+
+/** The switch labels and their one-line explanations (the contract's decisions). */
+export const PROOF_SETTING_COPY: Record<keyof ProofSettings, { label: string; hint: string }> = {
+  photosRequired: {
+    label: "Photos required at drop-off",
+    hint: "A package taken at the counter needs at least one photo before it is saved. A received request keeps the customer's photos.",
+  },
+  senderConfirm: {
+    label: "Ask the sender to confirm by WhatsApp",
+    hint: "Right after drop-off the sender gets the first photo and the item list with OK / Something's wrong. No answer ships the package as Not confirmed.",
+  },
+  pickupCode: {
+    label: "Pickup code at delivery",
+    hint: "Each package gets a 4-digit code, sent to the receiver when it is ready for pickup. Without it the agent must name who collected and take a photo.",
+  },
+};
+
+/** The business's switches as stored (`packageProofSettings`); anything missing is off (the server's proofSettingsOf). */
+export function proofSettingsOf(business: unknown): ProofSettings {
+  const raw = asRow(asRow(business).packageProofSettings);
+  return { photosRequired: raw.photosRequired === true, senderConfirm: raw.senderConfirm === true, pickupCode: raw.pickupCode === true };
+}
+
 export type RequestSettingsDraft = {
   acceptRequests: boolean;
   slug: string;
@@ -1175,6 +1209,7 @@ export type RequestSettingsDraft = {
   pickupEnabled: boolean;
   pickupAreas: string;
   cardBarrelBooking: boolean;
+  proof: ProofSettings;
 };
 
 export function requestSettingsDraft(business: unknown, locations: readonly SettingsLocation[]): RequestSettingsDraft {
@@ -1191,7 +1226,23 @@ export function requestSettingsDraft(business: unknown, locations: readonly Sett
     pickupEnabled: pickup.enabled === true,
     pickupAreas: text(pickup.areas, REQUEST_LIMITS.areas),
     cardBarrelBooking: settings.cardBarrelBooking === true,
+    proof: proofSettingsOf(business),
   };
+}
+
+/**
+ * "R-XXXXX" from what was typed or scanned at the counter - upper case,
+ * spaces and dashes dropped, with or without the R - or "" when it is not
+ * five code characters (the server's package_requests.normalizeRequestCode).
+ */
+export function normalizeRequestCode(raw: unknown): string {
+  const body = String(raw ?? "").toUpperCase().replace(/[\s-]+/g, "").replace(/^R/, "");
+  return /^[A-Z0-9]{5}$/.test(body) ? `R-${body}` : "";
+}
+
+/** The request lookup by code (docs/AIR_PACKAGES.md §4.10): the callable's body. */
+export function lookupRequestCodePayload(businessId: string, code: string) {
+  return { businessId, action: "lookup_code" as const, code: normalizeRequestCode(code) };
 }
 
 /** Whether the owner may still change the link (once, after it was assigned). */
@@ -1212,6 +1263,7 @@ export function requestSettingsProblems(draft: RequestSettingsDraft): string[] {
   if (draft.pickupAreas.trim().length > REQUEST_LIMITS.areas) errors.push("text_too_long");
   const slug = draft.slug.trim().toLowerCase();
   if (slug && (!/^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/.test(slug) || slug.includes("--"))) errors.push("slug_invalid");
+  if (PROOF_SETTING_KEYS.some((key) => typeof asRow(draft.proof)[key] !== "boolean")) errors.push("proof_settings_invalid");
   return errors;
 }
 
@@ -1227,6 +1279,13 @@ export function requestSettingsPayload(businessId: string, draft: RequestSetting
     openingHours,
     pickup: { enabled: draft.pickupEnabled, areas: draft.pickupEnabled ? draft.pickupAreas.trim() : "" },
     cardBarrelBooking: draft.cardBarrelBooking,
+    // Always sent: a save without `proof` keeps the stored switches, and the
+    // dialog always shows them, so what is shown is what is saved.
+    proof: {
+      photosRequired: draft.proof.photosRequired === true,
+      senderConfirm: draft.proof.senderConfirm === true,
+      pickupCode: draft.proof.pickupCode === true,
+    },
     ...(slug && slug !== currentSlug ? { requestSlug: slug } : {}),
   };
 }
