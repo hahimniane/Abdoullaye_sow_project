@@ -206,6 +206,28 @@ class FakePackageRequests implements PackageRequestService {
     return received;
   }
 
+  /// What a code look-up finds; null refuses with `not_found`.
+  PackageRequest? lookedUp;
+
+  @override
+  Future<PackageRequest> lookupByCode({
+    required String businessId,
+    required String code,
+  }) async {
+    await _record('receivePackageRequest', {
+      'businessId': businessId,
+      'action': 'lookup_code',
+      'code': normalizeRequestCode(code),
+    });
+    final found = lookedUp;
+    if (found == null) {
+      throw const RequestFailure(
+        RequestRefusal(code: 'not-found', reasons: ['not_found']),
+      );
+    }
+    return found;
+  }
+
   @override
   Stream<PackageRequestSettings> watchSettings(String businessId) =>
       Stream.value(settings);

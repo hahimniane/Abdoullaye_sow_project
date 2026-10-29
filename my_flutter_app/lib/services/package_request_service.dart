@@ -49,10 +49,14 @@ class RequestSettingsSaved {
   const RequestSettingsSaved({
     required this.requestSlug,
     required this.requestLink,
+    this.proof = const PackageProofSettings(),
   });
 
   final String requestSlug;
   final String requestLink;
+
+  /// The proof switches as the server stored them (echoed as `proof`).
+  final PackageProofSettings proof;
 }
 
 class RequestLinkQr {
@@ -122,6 +126,15 @@ abstract interface class PackageRequestService {
     required String reason,
   });
   Future<RequestReceived> receive(Map<String, Object?> payload);
+
+  /// The counter's look-up of a request by the code the customer brought
+  /// (docs/AIR_PACKAGES.md §4.10): the request whatever its status, or
+  /// a [RequestFailure] with reason `not_found` (also for another
+  /// business's code).
+  Future<PackageRequest> lookupByCode({
+    required String businessId,
+    required String code,
+  });
   Stream<PackageRequestSettings> watchSettings(String businessId);
   Future<RequestSettingsSaved> saveSettings(Map<String, Object?> payload);
   Future<RequestLinkQr> linkQr(String businessId);
@@ -396,6 +409,17 @@ class FirebasePackageRequestService implements PackageRequestService {
       );
 
   @override
+  Future<PackageRequest> lookupByCode({
+    required String businessId,
+    required String code,
+  }) async => requestFromLookup(
+    await _call(
+      'receivePackageRequest',
+      lookupRequestCodePayload(businessId: businessId, code: code),
+    ),
+  );
+
+  @override
   Stream<PackageRequestSettings> watchSettings(String businessId) => _db
       .collection('businesses')
       .doc(businessId)
@@ -413,6 +437,7 @@ class FirebasePackageRequestService implements PackageRequestService {
     return RequestSettingsSaved(
       requestSlug: (m['requestSlug'] ?? '').toString(),
       requestLink: (m['requestLink'] ?? '').toString(),
+      proof: PackageProofSettings.fromMap(m['proof']),
     );
   }
 

@@ -353,11 +353,24 @@ void main() {
       final block = source
           .split('const DELIVERY_MESSAGES = Object.freeze({')
           .last;
+      final body = block.substring(0, block.indexOf('});'));
       final keys = RegExp(r'^  ([a-z_]+):', multiLine: true)
-          .allMatches(block.substring(0, block.indexOf('});')))
+          .allMatches(body)
           .map((m) => m.group(1)!)
           .toSet();
+      // `...PROOF_REFUSAL` spreads package_proof.REFUSAL into the map
+      // (docs/AIR_PACKAGES.md §4): those keys are refusals too.
+      if (body.contains('...PROOF_REFUSAL')) {
+        final proof = File('functions/package_proof.js').readAsStringSync();
+        final proofBlock = proof.split('const REFUSAL = Object.freeze({').last;
+        keys.addAll(
+          RegExp(r'^  ([a-z_]+):', multiLine: true)
+              .allMatches(proofBlock.substring(0, proofBlock.indexOf('});')))
+              .map((m) => m.group(1)!),
+        );
+      }
       expect(keys, isNotEmpty);
+      expect(keys, contains('pickup_code_invalid'));
       expect(DeliveryReason.all.toSet(), keys);
       // And the server's section names are the app's permissions.
       expect(source, contains('const DELIVERIES_SECTION = "deliveries";'));
@@ -386,10 +399,13 @@ void main() {
           'auth.hasDeliveriesAccess &&\n      !auth.hasContainersAccess',
         ),
       );
-      // It is the package scan screen, in deliveries mode.
-      expect(menu, contains('PackageScanScreen('));
-      expect(menu, contains('deliveries: true,'));
+      // It is the Deliveries home (docs/AIR_PACKAGES.md §5), which opens
+      // the scan screen in deliveries mode, in the access the person holds.
+      expect(menu, contains('DeliveriesHomeScreen('));
       expect(menu, contains('access: auth.packageAccess,'));
+      final home = read('lib/screens/deliveries_home_screen.dart');
+      expect(home, contains('PackageScanScreen('));
+      expect(home, contains('deliveries: true,'));
     });
 
     test('a scanned label opens the package for deliveries staff too', () {

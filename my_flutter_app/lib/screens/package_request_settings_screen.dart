@@ -64,6 +64,7 @@ class _PackageRequestSettingsScreenState
   bool _pickup = false;
   final _areas = TextEditingController();
   bool _cardBarrels = false;
+  PackageProofSettings _proof = const PackageProofSettings();
   final _slug = TextEditingController();
 
   Set<String> _errors = {};
@@ -128,6 +129,7 @@ class _PackageRequestSettingsScreenState
         _pickup = settings.pickupEnabled;
         _areas.text = settings.pickupAreas;
         _cardBarrels = settings.cardBarrelBooking;
+        _proof = settings.proof;
         _slug.text = settings.requestSlug;
       } else if (_slug.text.isEmpty) {
         _slug.text = settings.requestSlug;
@@ -233,10 +235,13 @@ class _PackageRequestSettingsScreenState
           cardBarrelBooking: _cardBarrels,
           slug: slug,
           currentSlug: currentSlug,
+          proof: _proof,
         ),
       );
       if (!mounted) return;
       if (result.requestSlug.isNotEmpty) _slug.text = result.requestSlug;
+      // The switches as the server kept them.
+      _proof = result.proof;
       AppHaptics.commit();
       showSuccessSnackBar(context, l10n.prqSaved);
     } on RequestFailure catch (failure) {
@@ -591,6 +596,60 @@ class _PackageRequestSettingsScreenState
             ),
           ),
         ),
+        // Proof at every step (docs/AIR_PACKAGES.md §1.3): three switches,
+        // all off by default, saved with the rest as `proof`.
+        RequestSectionTitle(l10n.proofSettingTitle),
+        RequestCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _ProofSwitch(
+                key: const Key('settings-proof-photos'),
+                value: _proof.photosRequired,
+                title: l10n.proofSettingPhotosRequired,
+                note: l10n.proofSettingPhotosRequiredNote,
+                onChanged: edit
+                    ? (v) => setState(
+                        () => _proof = _proof.copyWith(photosRequired: v),
+                      )
+                    : null,
+              ),
+              _ProofSwitch(
+                key: const Key('settings-proof-sender'),
+                value: _proof.senderConfirm,
+                title: l10n.proofSettingSenderConfirm,
+                note: l10n.proofSettingSenderConfirmNote,
+                onChanged: edit
+                    ? (v) => setState(
+                        () => _proof = _proof.copyWith(senderConfirm: v),
+                      )
+                    : null,
+              ),
+              _ProofSwitch(
+                key: const Key('settings-proof-pickup-code'),
+                value: _proof.pickupCode,
+                title: l10n.proofSettingPickupCode,
+                note: l10n.proofSettingPickupCodeNote,
+                onChanged: edit
+                    ? (v) =>
+                          setState(() => _proof = _proof.copyWith(pickupCode: v))
+                    : null,
+              ),
+              if (_errors.contains('proof_settings_invalid'))
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    l10n.deliverRefusalProofSettingsInvalid,
+                    key: const Key('settings-proof-error'),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.errorRed,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
         if (widget.canEdit) ...[
           const SizedBox(height: AppSpacing.lg),
           RequestPrimaryButton(
@@ -602,6 +661,36 @@ class _PackageRequestSettingsScreenState
           ),
         ],
       ],
+    );
+  }
+}
+
+/// One proof switch with its one-line explanation.
+class _ProofSwitch extends StatelessWidget {
+  const _ProofSwitch({
+    super.key,
+    required this.value,
+    required this.title,
+    required this.note,
+    required this.onChanged,
+  });
+
+  final bool value;
+  final String title;
+  final String note;
+  final ValueChanged<bool>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SwitchListTile.adaptive(
+      contentPadding: EdgeInsets.zero,
+      value: value,
+      onChanged: onChanged,
+      title: Text(
+        title,
+        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+      ),
+      subtitle: Text(note, style: const TextStyle(fontSize: 12.5)),
     );
   }
 }
