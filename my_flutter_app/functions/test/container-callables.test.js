@@ -4217,7 +4217,9 @@ describe("the sender's confirmation at drop-off", () => {
     const [header, text, ok, problem] = body.template.components;
     assert.equal(header.type, "header");
     assert.match(header.parameters[0].image.link, new RegExp(
-        `^https://laawoldigital\\.com/d\\?view=photo&t=${line.documentToken}` +
+        // Straight at the function: Meta may not follow /d's redirect.
+        "^https://us-central1-demo-laawol-containers\\.cloudfunctions\\.net/" +
+        `parkingDocument\\?view=photo&t=${line.documentToken}` +
         `&p=${encodeURIComponent(PHOTO).replace(/\\./g, "\\.")}&e=\\d+&s=[0-9a-f]{24}$`));
     assert.deepEqual(text.parameters.map((p) => p.text), [
       "Fatou Diallo", "Dala Shipping", "2 phones, tablet", "4.2 lb",

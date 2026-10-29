@@ -21241,6 +21241,24 @@ async function loadPickupDestination(db, businessId, line, container) {
 // failure (network, timeout, 429, 5xx) marks the row `retrying` and throws,
 // and the platform delivers the event again with backoff, up to
 // WHATSAPP_MAX_ATTEMPTS sends; Meta refusing the message is final.
+/**
+ * Where Meta fetches the sender's confirmation photo (package_confirm_2lang
+ * header): the parkingDocument function itself. laawoldigital.com/d answers
+ * with a 302 to it, and Meta's media fetch is not documented to follow
+ * redirects. PARKING_DOCUMENT_BASE_URL still wins when set.
+ *
+ * @return {string} The /d endpoint's direct URL.
+ */
+function whatsappPhotoBase() {
+  const configured = String(process.env.PARKING_DOCUMENT_BASE_URL || "").trim();
+  if (configured) return configured;
+  const project = String(process.env.GCLOUD_PROJECT ||
+    process.env.GCP_PROJECT || "").trim();
+  return project ?
+    `https://us-central1-${project}.cloudfunctions.net/parkingDocument` :
+    "https://laawoldigital.com/d";
+}
+
 exports.deliverContainerCustomerUpdate = onDocumentWritten(
     {
       document: "containerUpdates/{messageId}",
@@ -21351,10 +21369,11 @@ exports.deliverContainerCustomerUpdate = onDocumentWritten(
         update: row.update,
         trackingCode: String(row.trackingCode || line.trackingCode || ""),
         // The pickup code goes to whoever collects; the confirmation's
-        // photo link is served by the /d endpoint.
+        // photo is fetched by Meta for the message header, so it points
+        // straight at the function: laawoldigital.com/d answers with a
+        // redirect, which Meta's media fetch may not follow.
         role: String(row.role || ""),
-        documentBase: String(process.env.PARKING_DOCUMENT_BASE_URL || "")
-            .trim() || "https://laawoldigital.com/d",
+        documentBase: whatsappPhotoBase(),
       });
       if (!message) {
         await recordContainerUpdateAttempt(db, rowRef, row, {
