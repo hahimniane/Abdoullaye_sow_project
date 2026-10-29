@@ -244,3 +244,52 @@ describe("what we send", () => {
     assert.equal(wa.conversationId("", "+1555"), "wa_laawol_1555");
   });
 });
+
+describe("the package confirmation's buttons and photos with a code", () => {
+  it("keeps a quick reply's payload apart from its text", () => {
+    const {messages} = wa.parseWebhook({object: "whatsapp_business_account", entry: [{changes: [{
+      field: "messages", value: {metadata: {phone_number_id: "1475234702329161"}, messages: [
+        {from: "224621000001", id: "wamid.E", timestamp: "1793200005", type: "button",
+          button: {text: "OK ✓", payload: "confirm_ok"}, context: {id: "wamid.CONFIRM"}},
+        {from: "224621000001", id: "wamid.F", timestamp: "1793200006", type: "interactive",
+          interactive: {type: "button_reply", button_reply: {id: "confirm_problem", title: "Something's wrong"}},
+          context: {id: "wamid.CONFIRM"}},
+        {from: "224621000001", id: "wamid.G", timestamp: "1793200007", type: "text", text: {body: "confirm_ok"}},
+      ]}}]}]});
+    assert.deepEqual(messages.map((m) => [m.type, m.text, m.buttonPayload, m.replyToWamid]), [
+      ["button", "OK ✓", "confirm_ok", "wamid.CONFIRM"],
+      ["interactive", "Something's wrong", "confirm_problem", "wamid.CONFIRM"],
+      // Typing the payload is not tapping the button.
+      ["text", "confirm_ok", "", ""],
+    ]);
+    const {confirmationFromPayload} = require("../package_proof");
+    assert.equal(confirmationFromPayload(messages[0].buttonPayload), "confirmed");
+    assert.equal(confirmationFromPayload(messages[1].buttonPayload), "problem");
+    assert.equal(confirmationFromPayload(messages[2].buttonPayload), "");
+  });
+
+  it("thanks the sender in their language", () => {
+    assert.equal(wa.autoReplyText({kind: "confirm_ok", lang: "en"}), "Thanks, noted.");
+    assert.equal(wa.autoReplyText({kind: "confirm_ok", lang: "fr"}), "Merci, c'est noté.");
+    assert.equal(wa.autoReplyText({kind: "confirm_problem", lang: "en", businessName: "Nensona"}),
+        "Sorry about that. Nensona will reply here.");
+    assert.equal(wa.autoReplyText({kind: "confirm_problem", lang: "fr", businessName: "Nensona"}),
+        "Désolé. Nensona vous répondra ici.");
+    assert.equal(wa.autoReplyText({kind: "confirm_problem", lang: "en"}),
+        "Sorry about that. Laawol will reply here.");
+  });
+
+  it("finds a package code in a message or a caption, however it is written", () => {
+    assert.equal(wa.codeInText("CL-K7M4P2 received"), "CL-K7M4P2");
+    assert.equal(wa.codeInText("voici le colis cl k7m4p2 merci"), "CL-K7M4P2");
+    assert.equal(wa.codeInText("CLK7M4P2"), "CL-K7M4P2");
+    assert.equal(wa.codeInText("https://customer.laawoldigital.com/t/CL-K7M4P2-2 arrived"), "CL-K7M4P2-2");
+    assert.equal(wa.codeInText("CL-K7M4P2-2"), "CL-K7M4P2-2");
+    // A zero for an O is not a code; neither is a barrel code or plain text.
+    assert.equal(wa.codeInText("CL-K7M4P0"), "");
+    assert.equal(wa.codeInText("BS-K7M4P2"), "");
+    assert.equal(wa.codeInText("hello"), "");
+    assert.equal(wa.codeInText(""), "");
+    assert.equal(wa.codeInText(null), "");
+  });
+});

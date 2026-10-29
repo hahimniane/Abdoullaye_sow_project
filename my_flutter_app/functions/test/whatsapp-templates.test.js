@@ -13,6 +13,7 @@ const {
   TEMPLATE_VARIABLES,
   TEMPLATE_BY_UPDATE,
   LEGACY_TEMPLATE_BY_UPDATE,
+  TEMPLATE_SHAPE,
   TEMPLATE_LANGUAGES,
   FALLBACK,
   whatsappTemplateSet,
@@ -20,6 +21,7 @@ const {
   templateComponents,
   templateMessage,
 } = require("../whatsapp_templates");
+const {CONFIRM_PAYLOAD} = require("../package_proof");
 
 const VALUES = Object.freeze({
   name: "Mariama Bah",
@@ -40,20 +42,32 @@ const VALUES = Object.freeze({
   deliveredOnFr: "21 octobre 2026",
   collectedByEn: "Mamadou Bah",
   collectedByFr: "Mamadou Bah",
+  contentsEn: "2 phones, 1 tablet",
+  contentsFr: "2 phones, 1 tablet",
+  weightEn: "4.2 lb",
+  weightFr: "4,2 lb",
+  pickupCode: "4821",
+  photoLink: "https://laawoldigital.com/d?view=photo&t=tok&p=p&e=1&s=sig",
 });
 
 const bodyOf = (template, values = VALUES, language = "en") =>
-  templateComponents(template, values, language)[0].parameters
-      .map((p) => p.text);
+  templateComponents(template, values, language)
+      .find((part) => part.type === "body").parameters.map((p) => p.text);
 const buttonOf = (template, values = VALUES, language = "en") =>
-  templateComponents(template, values, language)[1];
+  templateComponents(template, values, language)
+      .find((part) => part.type === "button");
 const ALL_TEMPLATES = [...BILINGUAL_TEMPLATES, ...LEGACY_TEMPLATES];
+// Every template but the confirmation carries the tracking URL button.
+const URL_BUTTON_TEMPLATES = ALL_TEMPLATES.filter((template) =>
+  template !== "package_confirm_2lang");
 
 describe("which template each update sends", () => {
   it("names the bilingual and the legacy templates exactly", () => {
     assert.deepEqual([...BILINGUAL_TEMPLATES].sort(), [
+      "package_confirm_2lang",
       "shipment_delivered_2lang", "shipment_departed_2lang",
-      "shipment_ready_pickup_2lang", "shipment_received_2lang"]);
+      "shipment_ready_pickup_2lang", "shipment_ready_pickup_code_2lang",
+      "shipment_received_2lang"]);
     assert.deepEqual([...LEGACY_TEMPLATES].sort(), [
       "container_arrived", "container_departed", "package_received"]);
     assert.deepEqual(Object.values(TEMPLATE).sort(),
@@ -83,10 +97,44 @@ describe("which template each update sends", () => {
         "shipment_ready_pickup_2lang");
     assert.deepEqual(TEMPLATE_BY_UPDATE, {
       received: "shipment_received_2lang",
+      confirm: "package_confirm_2lang",
       shipped: "shipment_departed_2lang",
       arrived: "shipment_ready_pickup_2lang",
       delivered: "shipment_delivered_2lang",
     });
+  });
+
+  // The pickup code goes in the ready-for-pickup message of a line that
+  // has one (docs/AIR_PACKAGES.md §3); a line without keeps the old
+  // template, and the legacy set has no code variant.
+  it("sends the pickup-code variant of ready for pickup only with a code",
+      () => {
+        assert.equal(templateForUpdate("arrived", "bilingual",
+            {pickupCode: "4821"}), "shipment_ready_pickup_code_2lang");
+        for (const values of [{}, {pickupCode: ""}, {pickupCode: "  "}]) {
+          assert.equal(templateForUpdate("arrived", "bilingual", values),
+              "shipment_ready_pickup_2lang");
+        }
+        assert.equal(templateForUpdate("arrived", "legacy",
+            {pickupCode: "4821"}), "container_arrived");
+        assert.equal(templateForUpdate("received", "bilingual",
+            {pickupCode: "4821"}), "shipment_received_2lang");
+        const body = templateMessage({update: "arrived",
+          phone: "+224620000000", language: "fr", values: VALUES,
+          templateSet: "bilingual"});
+        assert.equal(body.template.name, "shipment_ready_pickup_code_2lang");
+        assert.deepEqual(body.template.language, {code: "en"});
+      });
+
+  // The sender's confirmation has no legacy version either.
+  it("sends the confirmation in both sets", () => {
+    for (const set of ["bilingual", "legacy"]) {
+      assert.equal(templateForUpdate("confirm", set),
+          "package_confirm_2lang");
+      assert.equal(templateMessage({update: "confirm",
+        phone: "+224620000000", language: "fr", values: VALUES,
+        templateSet: set}).template.name, "package_confirm_2lang");
+    }
   });
 
   // Delivered has no legacy version: the bilingual message goes in both
@@ -192,6 +240,26 @@ describe("the bilingual variables, in the order Meta numbered them", () => {
     ]);
   });
 
+  it("fills shipment_ready_pickup_code_2lang: the ready-for-pickup " +
+      "variables, then the pickup code", () => {
+    assert.equal(TEMPLATE_VARIABLES.shipment_ready_pickup_code_2lang.length,
+        11);
+    assert.deepEqual(bodyOf("shipment_ready_pickup_code_2lang"), [
+      ...bodyOf("shipment_ready_pickup_2lang"), "4821",
+    ]);
+  });
+
+  it("fills package_confirm_2lang: name, business/contents/weight in " +
+      "English and French, then the code", () => {
+    assert.equal(TEMPLATE_VARIABLES.package_confirm_2lang.length, 8);
+    assert.deepEqual(bodyOf("package_confirm_2lang"), [
+      "Mariama Bah",
+      "Dala Shipping", "2 phones, 1 tablet", "4.2 lb",
+      "Dala Shipping", "2 phones, 1 tablet", "4,2 lb",
+      "CL-K7M4P2",
+    ]);
+  });
+
   it("fills shipment_delivered_2lang: name, business/what/day/collector " +
       "in English and French, then the code", () => {
     assert.equal(TEMPLATE_VARIABLES.shipment_delivered_2lang.length, 10);
@@ -204,7 +272,8 @@ describe("the bilingual variables, in the order Meta numbered them", () => {
   });
 
   it("fills both languages whoever reads it, in one 'en' message", () => {
-    for (const update of ["received", "shipped", "arrived", "delivered"]) {
+    for (const update of ["received", "confirm", "shipped", "arrived",
+      "delivered"]) {
       const forFr = templateMessage({update, phone: "+224620000000",
         language: "fr", values: VALUES, templateSet: "bilingual"});
       const forEn = templateMessage({update, phone: "+16465550100",
@@ -244,11 +313,14 @@ describe("the legacy variables, in the order Meta numbered them", () => {
 });
 
 describe("every template", () => {
-  it("has one URL button whose parameter is the code", () => {
-    for (const template of ALL_TEMPLATES) {
+  it("has one URL button whose parameter is the code, except the " +
+      "confirmation", () => {
+    assert.deepEqual(Object.keys(TEMPLATE_SHAPE), ["package_confirm_2lang"]);
+    for (const template of URL_BUTTON_TEMPLATES) {
       for (const language of TEMPLATE_LANGUAGES) {
         const parts = templateComponents(template, VALUES, language);
         assert.equal(parts.length, 2);
+        assert.equal(parts[0].type, "body");
         const button = buttonOf(template, VALUES, language);
         assert.equal(button.type, "button");
         assert.equal(button.sub_type, "url");
@@ -258,6 +330,45 @@ describe("every template", () => {
       }
     }
   });
+
+  // The confirmation (docs/AIR_PACKAGES.md §3): the first drop-off photo
+  // as the image header, eight body texts, and the two quick replies whose
+  // payloads come back in the sender's button reply. No tracking button.
+  it("sends the confirmation with an image header and two quick replies",
+      () => {
+        assert.deepEqual(CONFIRM_PAYLOAD,
+            {OK: "confirm_ok", PROBLEM: "confirm_problem"});
+        const body = templateMessage({update: "confirm",
+          phone: "+1 (646) 555-0100", language: "en", values: VALUES});
+        assert.deepEqual(body, {
+          messaging_product: "whatsapp",
+          to: "16465550100",
+          type: "template",
+          template: {
+            name: "package_confirm_2lang",
+            language: {code: "en"},
+            components: [
+              {type: "header", parameters: [{type: "image", image: {
+                link: "https://laawoldigital.com/d?view=photo&t=tok&p=p" +
+                  "&e=1&s=sig"}}]},
+              {type: "body", parameters: [
+                {type: "text", text: "Mariama Bah"},
+                {type: "text", text: "Dala Shipping"},
+                {type: "text", text: "2 phones, 1 tablet"},
+                {type: "text", text: "4.2 lb"},
+                {type: "text", text: "Dala Shipping"},
+                {type: "text", text: "2 phones, 1 tablet"},
+                {type: "text", text: "4,2 lb"},
+                {type: "text", text: "CL-K7M4P2"},
+              ]},
+              {type: "button", sub_type: "quick_reply", index: "0",
+                parameters: [{type: "payload", payload: "confirm_ok"}]},
+              {type: "button", sub_type: "quick_reply", index: "1",
+                parameters: [{type: "payload", payload: "confirm_problem"}]},
+            ],
+          },
+        });
+      });
 
   it("refuses a template it does not know rather than guessing", () => {
     for (const name of ["container_status_update",
@@ -279,7 +390,9 @@ describe("what fills a blank", () => {
           const parts = templateComponents(template, values, language);
           for (const part of parts) {
             for (const p of part.parameters) {
-              assert.equal(p.type, "text");
+              // The header image and the quick-reply payloads are not
+              // texts; the body and the URL button are.
+              if (p.type !== "text") continue;
               assert.ok(p.text.trim().length > 0,
                   `${template}/${language} sent an empty parameter`);
             }
@@ -290,6 +403,15 @@ describe("what fills a blank", () => {
   });
 
   it("uses words that read inside the bilingual sentences", () => {
+    // "received your package: your package (—)"
+    assert.deepEqual(bodyOf("package_confirm_2lang", {}), [
+      "Client",
+      "Laawol", "your package", "—",
+      "Laawol", "votre colis", "—",
+      "-",
+    ]);
+    assert.deepEqual(bodyOf("shipment_ready_pickup_code_2lang", {}).at(-1),
+        "—");
     assert.deepEqual(bodyOf("shipment_ready_pickup_2lang", {}), [
       // "Hello / Bonjour Client"
       "Client",

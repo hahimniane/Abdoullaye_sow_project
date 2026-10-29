@@ -25,6 +25,14 @@
 
 const crypto = require("crypto");
 const wa = require("./whatsapp_inbox");
+const {
+  CONFIRMATION,
+  MAX_CUSTOMER_PHOTOS,
+  PHOTO_MAX_BYTES,
+  confirmationFromPayload,
+  contentsText,
+  photoPath,
+} = require("./package_proof");
 
 const TRACK_URL = "https://customer.laawoldigital.com/t/";
 const MAX_MEDIA_BYTES = 25 * 1024 * 1024;
@@ -35,6 +43,11 @@ const CHOOSING_TTL_MS = 3 * 24 * 60 * 60 * 1000;
 const CLOSED_REPLY_GAP_MS = 12 * 60 * 60 * 1000;
 const RECEIVED_REPLY_GAP_MS = 3 * 24 * 60 * 60 * 1000;
 const STOPPED_ERROR_CODE = -131050;
+// A customer's photo is filed on a package as one of these (the same types
+// staff photos are held to, package_proof.PHOTO_TYPES).
+const PHOTO_EXTENSIONS = Object.freeze({
+  "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp",
+});
 
 /**
  * A short, Firestore-safe message id from a WhatsApp message id.
@@ -142,10 +155,13 @@ function createWhatsAppConversations(deps) {
    * @param {string} phone The number.
    * @param {object} contact Its whatsappContacts record.
    * @param {object} opts {allRecords}: also search every record type even
-   *   when contacts or conversations already name businesses (hand-over).
+   *   when contacts or conversations already name businesses (hand-over);
+   *   {codedBusinessId}: the business of a package the message names by
+   *   its code, used when nothing else knows the number.
    * @return {Promise<object[]>} Candidates for routeInbound.
    */
-  async function routingCandidates(phone, contact, {allRecords = false} = {}) {
+  async function routingCandidates(phone, contact,
+      {allRecords = false, codedBusinessId = ""} = {}) {
     const byId = new Map();
     const add = (businessId, name, atMs) => {
       if (!businessId) return;
@@ -187,6 +203,9 @@ function createWhatsAppConversations(deps) {
       for (const id of ids) {
         if (!byId.has(id)) add(id, await businessName(id), 0);
       }
+    }
+    if (byId.size === 0 && codedBusinessId) {
+      add(codedBusinessId, await businessName(codedBusinessId), 0);
     }
     return Array.from(byId.values());
   }
@@ -358,7 +377,137 @@ function createWhatsAppConversations(deps) {
       whatsappLang: lang, inbox: inboxId,
       businessId: isLaawol ? "" : inboxId, businessName: inboxName};
     return {caseRef, conv, isNew: result.isNew, previous: result.previous,
-      preview: content};
+      preview: content, media};
+  }
+
+  /**
+   * A note in the thread that is never sent to the customer.
+   *
+   * @param {object} caseRef The conversation.
+   * @param {string} content The note.
+   * @param {object} [extra] More metadata.
+   * @return {Promise<void>}
+   */
+  async function addSystemNote(caseRef, content, extra = {}) {
+    await caseRef.collection("messages").doc().set({
+      senderId: "whatsapp:system", senderRole: "system",
+      senderName: "Laawol", senderProfileImageUrl: "", content,
+      messageType: "system", metadata: {note: true, ...extra},
+      replyTo: null, visibility: "case", readBy: {}, deletedForUsers: {},
+      editHistory: [], createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  }
+
+  /**
+   * The sender's tap on the package confirmation (docs/AIR_PACKAGES.md
+   * §4.5): the button's payload names the answer and the message it replies
+   * to names the `confirm` row, so the line's `senderConfirmation` is
+   * written here. Anything else answers null.
+   *
+   * @param {object} event The received message.
+   * @return {Promise<object|null>} {status, businessId, businessName,
+   *   lineId, trackingCode, contents}.
+   */
+  async function confirmationAnswer(event) {
+    const status = confirmationFromPayload(event.buttonPayload);
+    if (!status || !event.replyToWamid) return null;
+    const rows = await db.collection("containerUpdates")
+        .where("whatsappMessageId", "==", event.replyToWamid).limit(1).get();
+    const row = rows.empty ? null : rows.docs[0].data() || {};
+    if (!row || row.update !== "confirm" || !row.lineId ||
+        wa.phoneFromWa(row.phone) !== event.from) {
+      return null;
+    }
+    const lineRef = db.collection("containerLines").doc(String(row.lineId));
+    const at = now();
+    let line = null;
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(lineRef);
+      if (!snap.exists) return;
+      line = snap.data() || {};
+      tx.set(lineRef, {senderConfirmation: {status, answeredAtMs: at,
+        wamid: event.wamid}}, {merge: true});
+    });
+    if (!line) return null;
+    await rows.docs[0].ref.set({confirmation: status, confirmationAtMs: at},
+        {merge: true});
+    return {
+      status,
+      businessId: String(row.businessId || line.businessId || ""),
+      businessName: String(row.businessName || ""),
+      lineId: String(row.lineId),
+      trackingCode: String(row.trackingCode || line.trackingCode || ""),
+      contents: contentsText(line.contents),
+    };
+  }
+
+  /**
+   * The package a message names by its tracking code, if any.
+   *
+   * @param {string} text The message's text or caption.
+   * @return {Promise<object|null>} {ref, id, businessId, trackingCode}.
+   */
+  async function lineForCode(text) {
+    const code = wa.codeInText(text);
+    if (!code) return null;
+    const snap = await db.collection("containerLines")
+        .where("trackingCode", "==", code).limit(1).get();
+    if (snap.empty) return null;
+    const doc = snap.docs[0];
+    return {ref: doc.ref, id: doc.id, trackingCode: code,
+      businessId: String(doc.data()?.businessId || "")};
+  }
+
+  /**
+   * Files a photo the customer sent with a package code on that package
+   * (docs/AIR_PACKAGES.md §4.6): the stored file is copied to
+   * `packagePhotos/{businessId}/wa/{sha1(wamid)}.{ext}`, the line's
+   * `customerPhotos` gains it (the oldest entry dropped past the cap; the
+   * files stay until the sweep), and the thread says so.
+   *
+   * @param {object} caseRef The conversation.
+   * @param {object} coded lineForCode's answer.
+   * @param {object} event The received message.
+   * @param {object|null} media storeMedia's answer.
+   * @return {Promise<string>} The photo's path, or "" when nothing was filed.
+   */
+  async function filePhotoOnLine(caseRef, coded, event, media) {
+    const mime = String(media?.mimeType || "").toLowerCase();
+    const ext = PHOTO_EXTENSIONS[mime];
+    if (!media?.filePath || !ext || !deps.bucket || !coded?.businessId ||
+        Number(media.fileSize) > PHOTO_MAX_BYTES) {
+      return "";
+    }
+    const fileId = crypto.createHash("sha1").update(String(event.wamid))
+        .digest("hex").slice(0, 24);
+    const path = photoPath(coded.businessId, "wa", `${fileId}.${ext}`);
+    if (!path) return "";
+    try {
+      const [buffer] = await deps.bucket.file(media.filePath).download();
+      await deps.bucket.file(path).save(buffer,
+          {contentType: mime, resumable: false});
+    } catch (error) {
+      logger?.warn?.("WhatsApp photo not filed on the package", {
+        wamid: event.wamid, lineId: coded.id,
+        error: String(error).slice(0, 300)});
+      return "";
+    }
+    const entry = {path, phone: event.from, atMs: event.timestampMs || now(),
+      caseId: caseRef.id};
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(coded.ref);
+      if (!snap.exists) return;
+      const photos = Array.isArray(snap.data()?.customerPhotos) ?
+        snap.data().customerPhotos : [];
+      const next = [...photos.filter((p) => p?.path !== path), entry]
+          .slice(-MAX_CUSTOMER_PHOTOS);
+      tx.update(coded.ref, {customerPhotos: next});
+    });
+    await addSystemNote(caseRef,
+        `Photo filed on package ${coded.trackingCode}.`,
+        {lineId: coded.id, photoPath: path});
+    return path;
   }
 
   /**
@@ -427,6 +576,21 @@ function createWhatsAppConversations(deps) {
       ...(event.profileName ? {profileName: event.profileName} : {}),
       updatedAt: FieldValue.serverTimestamp()}, {merge: true});
 
+    // A tap on the package confirmation: OK is thanked and opens nothing;
+    // Something's wrong goes on as a message to the package's business.
+    const answer = await confirmationAnswer(event);
+    if (answer?.status === CONFIRMATION.CONFIRMED) {
+      await deps.send(wa.freeFormBody({phone, text: wa.autoReplyText({
+        kind: "confirm_ok", lang})}));
+      return "confirmed";
+    }
+    const problem = answer?.status === CONFIRMATION.PROBLEM ? answer : null;
+    // A package named by its code: where an unknown number's message goes,
+    // and where a photo sent with it is filed.
+    const coded = await lineForCode(event.text);
+    const candidates = () => routingCandidates(phone, contact,
+        {codedBusinessId: coded?.businessId || ""});
+
     const mode = await inboxMode();
     // A pending "which business?" question.
     const choosing = contact.choosing && now() -
@@ -435,7 +599,16 @@ function createWhatsAppConversations(deps) {
     let inboxId = wa.LAAWOL_INBOX;
     let suggested = null;
     let outcome = "laawol";
-    if (choosing && !request) {
+    if (problem && problem.businessId) {
+      // The package's business answers (through Laawol in launch week).
+      outcome = "problem";
+      if (mode === wa.INBOX_MODE.BUSINESSES) {
+        inboxId = problem.businessId;
+      } else {
+        suggested = {businessId: problem.businessId,
+          businessName: await businessName(problem.businessId)};
+      }
+    } else if (choosing && !request) {
       const pick = wa.choiceFromReply(event.text, choosing.options);
       if (!pick && (Number(choosing.attempts) || 0) < 2) {
         const held = await appendInbound({inboxId: wa.LAAWOL_INBOX,
@@ -463,7 +636,7 @@ function createWhatsAppConversations(deps) {
       }
     } else if (mode === wa.INBOX_MODE.BUSINESSES) {
       const decision = wa.routeInbound({
-        candidates: await routingCandidates(phone, contact),
+        candidates: await candidates(),
         nowMs: now(), mode});
       if (decision.kind === "business") {
         inboxId = decision.businessId;
@@ -482,7 +655,7 @@ function createWhatsAppConversations(deps) {
     } else {
       // Launch week: everything to Laawol, remembering whose it would be.
       const decision = wa.routeInbound({
-        candidates: await routingCandidates(phone, contact),
+        candidates: await candidates(),
         nowMs: now(), mode});
       if (decision.kind === "business" &&
           decision.businessId !== wa.LAAWOL_INBOX) {
@@ -496,9 +669,20 @@ function createWhatsAppConversations(deps) {
     if (request) {
       await sendAuto(added.caseRef, added.conv, wa.autoReplyText({
         kind: request === "stop" ? "stopped" : "started", lang}));
+    } else if (problem) {
+      await addSystemNote(added.caseRef,
+          `Sender reported a problem with package ${problem.trackingCode}` +
+          `${problem.contents ? ` (${problem.contents})` : ""}.`,
+          {lineId: problem.lineId, senderProblem: true});
+      await sendAuto(added.caseRef, added.conv, wa.autoReplyText({
+        kind: "confirm_problem", lang,
+        businessName: problem.businessName || inboxName}));
     } else {
       await deliverAutos(added.caseRef, inboxId, phone, lang, {
         isNew: added.isNew, previous: added.previous});
+    }
+    if (coded && event.media) {
+      await filePhotoOnLine(added.caseRef, coded, event, added.media);
     }
     await flushWaiting(added.caseRef, added.conv);
     await notifyNew(added.caseRef, added.preview);

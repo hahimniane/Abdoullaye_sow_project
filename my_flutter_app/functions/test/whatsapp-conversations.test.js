@@ -424,3 +424,132 @@ describe("package updates", () => {
       {role: "receiver", status: "sent"}]);
   });
 });
+
+describe("the sender's confirmation and photos with a code (docs/AIR_PACKAGES.md)", () => {
+  const LINE = "line-confirm";
+  const CODE = "CL-K7M4P2";
+  const CONFIRM_WAMID = "wamid.confirm.1";
+  async function seedConfirm(extra = {}) {
+    await db.collection("containerLines").doc(LINE).set({businessId: BIZ, trackingCode: CODE,
+      kind: "other", description: "box", ownerKind: "customer", customerName: "Aissatou Bah",
+      customerPhone: P1, customerPhoneE164: P1, receiverPhone: P2,
+      contents: [{label: "phones", quantity: 2}],
+      senderConfirmation: {status: "asked", askedAtMs: 1000}, ...extra});
+    await db.collection("containerUpdates").doc(`${LINE}_sender_confirm`).set({businessId: BIZ,
+      businessName: "Nensona", phone: P1, lineId: LINE, update: "confirm", role: "sender",
+      status: "sent", whatsappMessageId: CONFIRM_WAMID, trackingCode: CODE});
+  }
+  const tap = (phone, payload, text, extra = {}) => inbound(phone, "", {...extra, message: {
+    type: "button", button: {text, payload}, context: {id: extra.replyTo || CONFIRM_WAMID}}});
+
+  it("OK marks the package confirmed, thanks the sender, and opens no conversation", async () => {
+    await seedConfirm();
+    const wamid = await tap(P1, "confirm_ok", "OK ✓");
+    const line = (await db.collection("containerLines").doc(LINE).get()).data();
+    assert.equal(line.senderConfirmation.status, "confirmed");
+    assert.equal(line.senderConfirmation.wamid, wamid);
+    assert.equal(line.senderConfirmation.askedAtMs, 1000);
+    assert.ok(line.senderConfirmation.answeredAtMs > 1000);
+    const row = (await db.collection("containerUpdates").doc(`${LINE}_sender_confirm`).get()).data();
+    assert.equal(row.confirmation, "confirmed");
+    // The thanks, in the customer's language (a Guinean number: French).
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].to, P1.slice(1));
+    assert.equal(lastSentText(), "Merci, c'est noté.");
+    assert.equal((await db.collection("supportCases").get()).size, 0);
+    assert.equal(await notificationCount(OWNER), 0);
+    // The contact is recorded, and Meta's redelivery changes nothing.
+    assert.equal((await db.collection("whatsappContacts").doc(P1).get()).data().lang, "fr");
+    await tap(P1, "confirm_ok", "OK ✓", {id: wamid});
+    assert.equal(sent.length, 1);
+  });
+
+  it("Something's wrong flags the package and opens the business's conversation as needs reply", async () => {
+    await seedConfirm();
+    const wamid = await tap(P1, "confirm_problem", "Something's wrong");
+    const line = (await db.collection("containerLines").doc(LINE).get()).data();
+    assert.equal(line.senderConfirmation.status, "problem");
+    assert.equal(line.senderConfirmation.wamid, wamid);
+    const conv = (await caseRef(BIZ, P1).get()).data();
+    assert.equal(conv.whatsappState, "needs_reply");
+    assert.equal(conv.businessId, BIZ);
+    assert.equal(conv.lastMessage, "Something's wrong");
+    const msgs = await messagesOf(caseRef(BIZ, P1));
+    const button = msgs.find((m) => m.senderRole === "customer");
+    assert.equal(button.content, "Something's wrong");
+    assert.equal(button.metadata.whatsapp.replyToWamid, CONFIRM_WAMID);
+    const note = msgs.find((m) => m.metadata?.senderProblem === true);
+    assert.equal(note.content, "Sender reported a problem with package CL-K7M4P2 (2 phones).");
+    assert.equal(note.metadata.note, true);
+    assert.equal(note.metadata.lineId, LINE);
+    assert.ok(msgs.some((m) => m.metadata?.auto === true && m.content === "Désolé. Nensona vous répondra ici."));
+    assert.equal(lastSentText(), "Désolé. Nensona vous répondra ici.");
+    assert.equal(sent.length, 1, "the thanks replaces the usual receipt");
+    assert.equal(await notificationCount(OWNER), 1);
+    // A second tap on a stale button, with the thread marked Done, reopens it.
+    await call("whatsappConversation", {action: "done", caseId: caseRef(BIZ, P1).id}, OWNER);
+    await tap(P1, "confirm_problem", "Something's wrong");
+    assert.equal((await caseRef(BIZ, P1).get()).data().whatsappState, "needs_reply");
+  });
+
+  it("in launch week the problem lands with Laawol, suggesting the business", async () => {
+    await setMode("laawol_only");
+    await seedConfirm();
+    await tap(P1, "confirm_problem", "Something's wrong");
+    const conv = (await caseRef("laawol", P1).get()).data();
+    assert.equal(conv.suggestedBusinessId, BIZ);
+    assert.equal(conv.whatsappState, "needs_reply");
+    assert.equal((await caseRef(BIZ, P1).get()).exists, false);
+    assert.ok((await messagesOf(caseRef("laawol", P1))).some((m) => m.metadata?.senderProblem === true));
+  });
+
+  it("ignores a button that answers nothing of ours, or another number's message", async () => {
+    await seedConfirm();
+    // Replying to an unknown message: an ordinary inbound (text "OK ✓").
+    await tap(P1, "confirm_ok", "OK ✓", {replyTo: "wamid.unknown"});
+    assert.equal((await db.collection("containerLines").doc(LINE).get()).data().senderConfirmation.status, "asked");
+    assert.equal((await caseRef(BIZ, P1).get()).exists, true);
+    // Another number cannot answer for the sender.
+    await tap(P3, "confirm_ok", "OK ✓");
+    assert.equal((await db.collection("containerLines").doc(LINE).get()).data().senderConfirmation.status, "asked");
+  });
+
+  it("files a photo sent with the package code on the package, and routes the number by it", async () => {
+    const {storageBucketName} = require("../project_config");
+    await db.collection("containerLines").doc("line-photo").set({businessId: BIZ, trackingCode: CODE,
+      customerPhoneE164: "+224621009999", customerPhone: "+224621009999"});
+    // P3 is unknown to everyone: the code names the business.
+    await inbound(P3, "", {message: {type: "image", image: {id: "media-1", mime_type: "image/jpeg",
+      caption: "Colis CL-K7M4P2 reçu"}}});
+    const conv = (await caseRef(BIZ, P3).get()).data();
+    assert.equal(conv.businessId, BIZ);
+    const line = (await db.collection("containerLines").doc("line-photo").get()).data();
+    assert.equal(line.customerPhotos.length, 1);
+    const [photo] = line.customerPhotos;
+    assert.match(photo.path, /^packagePhotos\/wa-test-biz\/wa\/[0-9a-f]{24}\.jpg$/);
+    assert.equal(photo.phone, P3);
+    assert.equal(photo.caseId, caseRef(BIZ, P3).id);
+    assert.ok(photo.atMs > 0);
+    const [exists] = await admin.storage().bucket(storageBucketName()).file(photo.path).exists();
+    assert.equal(exists, true);
+    const msgs = await messagesOf(caseRef(BIZ, P3));
+    const note = msgs.find((m) => m.content === "Photo filed on package CL-K7M4P2.");
+    assert.equal(note.metadata.note, true);
+    assert.equal(note.metadata.photoPath, photo.path);
+    assert.equal(msgs[0].messageType, "image");
+    // Past the cap the oldest entry leaves the list; the file stays.
+    await db.collection("containerLines").doc("line-photo").set({customerPhotos: Array.from({length: 10},
+        (_, i) => ({path: `packagePhotos/wa-test-biz/wa/old${String(i).padStart(21, "0")}.jpg`,
+          phone: P3, atMs: i + 1, caseId: "x"}))}, {merge: true});
+    await inbound(P3, "", {message: {type: "image", image: {id: "media-2", mime_type: "image/jpeg",
+      caption: CODE}}});
+    const capped = (await db.collection("containerLines").doc("line-photo").get()).data().customerPhotos;
+    assert.equal(capped.length, 10);
+    assert.ok(!capped.some((p) => p.path.endsWith("old000000000000000000000.jpg")));
+    assert.match(capped[9].path, /^packagePhotos\/wa-test-biz\/wa\/[0-9a-f]{24}\.jpg$/);
+    // A photo without a code, or a code nobody has, files nothing.
+    await inbound(P3, "", {message: {type: "image", image: {id: "media-3", mime_type: "image/jpeg",
+      caption: "CL-ZZZZZZ"}}});
+    assert.equal((await db.collection("containerLines").doc("line-photo").get()).data().customerPhotos.length, 10);
+  });
+});

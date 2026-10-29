@@ -940,3 +940,152 @@ describe("Meta's delivery ticks on a line's latest update", () => {
   });
 });
 /* eslint-enable max-len */
+
+/* eslint-disable max-len */
+describe("the sender's confirmation and the pickup code (docs/AIR_PACKAGES.md)", () => {
+  const {
+    askSenderToConfirm, rowUpdateFor, pickupCodeFor, confirmationPhotoLink,
+    summaryUpdate, updateRank, withDeliveryTick,
+  } = require("../container_updates");
+  const {photoLink, PHOTO_LINK_MS} = require("../package_proof");
+  const on = {packageProofSettings: {senderConfirm: true}};
+  const photo = "packagePhotos/biz-1/uid-1/abcdefgh.jpg";
+  const proofLine = (extra = {}) => line({
+    kind: "other", description: "box of clothes", quantity: 1,
+    photoPaths: [photo], documentToken: "tok-1",
+    contents: [{label: "phones", quantity: 2}, {label: "tablet", quantity: 1}],
+    weightLb: 4.2, pickupCode: "4821", ...extra,
+  });
+
+  it("asks the sender only with the switch on, a sender to message, and a photo", () => {
+    const people = recipientsForLine(proofLine());
+    assert.equal(askSenderToConfirm(on, proofLine(), people), true);
+    assert.equal(askSenderToConfirm({}, proofLine(), people), false);
+    assert.equal(askSenderToConfirm({packageProofSettings: {senderConfirm: false}}, proofLine(), people), false);
+    assert.equal(askSenderToConfirm(on, proofLine({photoPaths: []}), people), false);
+    assert.equal(askSenderToConfirm(on, proofLine({photoPaths: undefined}), people), false);
+    // The sender switched off, or no sender (the business's own goods).
+    assert.equal(askSenderToConfirm(on, proofLine(), recipientsForLine(proofLine({notifyCustomer: false}))), false);
+    assert.equal(askSenderToConfirm(on, proofLine(), recipientsForLine(proofLine({ownerKind: "stock"}))), false);
+    assert.equal(askSenderToConfirm(on, proofLine(), recipientsForLine(proofLine({senderIsReceiver: true}))), false);
+  });
+
+  it("turns the sender's received into confirm, and nothing else", () => {
+    assert.equal(rowUpdateFor("received", "sender", true), "confirm");
+    assert.equal(rowUpdateFor("received", "receiver", true), "received");
+    assert.equal(rowUpdateFor("received", "sender", false), "received");
+    assert.equal(rowUpdateFor("shipped", "sender", true), "shipped");
+    assert.equal(containerUpdateMessageId("line-1", "sender", rowUpdateFor("received", "sender", true)), "line-1_sender_confirm");
+  });
+
+  it("gives the pickup code to the receiver, and to the sender only when the sender collects", () => {
+    assert.equal(pickupCodeFor(proofLine(), "receiver"), "4821");
+    assert.equal(pickupCodeFor(proofLine(), "sender"), "");
+    assert.equal(pickupCodeFor(proofLine({senderIsReceiver: true}), "sender"), "4821");
+    assert.equal(pickupCodeFor(proofLine({receiverPhone: "+1 646 555 0100"}), "sender"), "4821");
+    assert.equal(pickupCodeFor(proofLine({pickupCode: ""}), "receiver"), "");
+    assert.equal(pickupCodeFor({}, "receiver"), "");
+  });
+
+  it("links the first photo for 30 days, signed with the line's token", () => {
+    const link = confirmationPhotoLink(proofLine(), "https://laawoldigital.com/d/", 1000);
+    assert.equal(link, photoLink({base: "https://laawoldigital.com/d", token: "tok-1", path: photo, expiresMs: 1000 + PHOTO_LINK_MS}));
+    assert.match(link, /^https:\/\/laawoldigital\.com\/d\?view=photo&t=tok-1&p=packagePhotos%2Fbiz-1%2Fuid-1%2Fabcdefgh\.jpg&e=2592001000&s=[0-9a-f]{24}$/);
+    assert.equal(confirmationPhotoLink(proofLine({photoPaths: []}), "https://laawoldigital.com/d", 1000), "");
+    assert.equal(confirmationPhotoLink(proofLine({documentToken: ""}), "https://laawoldigital.com/d", 1000), "");
+    assert.equal(confirmationPhotoLink(proofLine(), "", 1000), "");
+  });
+
+  it("sends package_confirm_2lang with the photo header, the contents and the weight", () => {
+    const body = whatsappUpdateMessage({
+      phone: "+16465550100", name: "Fatou Diallo", businessName: "Dala",
+      line: proofLine(), container: null, update: "confirm",
+      trackingCode: "CL-K7M4P2", role: "sender",
+      documentBase: "https://laawoldigital.com/d", nowMs: 1000,
+    });
+    assert.equal(body.to, "16465550100");
+    assert.equal(body.template.name, "package_confirm_2lang");
+    assert.deepEqual(body.template.language, {code: "en"});
+    const [header, text, ok, problem] = body.template.components;
+    assert.deepEqual(header, {type: "header", parameters: [{type: "image", image: {
+      link: confirmationPhotoLink(proofLine(), "https://laawoldigital.com/d", 1000)}}]});
+    assert.deepEqual(text.parameters.map((p) => p.text), [
+      "Fatou Diallo",
+      "Dala", "2 phones, tablet", "4.2 lb",
+      "Dala", "2 phones, tablet", "4,2 lb",
+      "CL-K7M4P2"]);
+    assert.deepEqual(ok, {type: "button", sub_type: "quick_reply", index: "0",
+      parameters: [{type: "payload", payload: "confirm_ok"}]});
+    assert.deepEqual(problem, {type: "button", sub_type: "quick_reply", index: "1",
+      parameters: [{type: "payload", payload: "confirm_problem"}]});
+    assert.equal(body.template.components.length, 4);
+  });
+
+  it("says what the line is when there is no item list, and — for no weight", () => {
+    const body = whatsappUpdateMessage({
+      phone: "+16465550100", name: "Fatou Diallo", businessName: "Dala",
+      line: proofLine({contents: [], weightLb: null, kind: "barrels", quantity: 3}),
+      container: null, update: "confirm", trackingCode: "CL-K7M4P2",
+      role: "sender", documentBase: "https://laawoldigital.com/d", nowMs: 1000,
+    });
+    assert.deepEqual(body.template.components[1].parameters.map((p) => p.text), [
+      "Fatou Diallo", "Dala", "3 barrels", "—", "Dala", "3 barils", "—", "CL-K7M4P2"]);
+  });
+
+  it("has no confirmation without a photo or a token (the row then fails, nothing sends)", () => {
+    for (const extra of [{photoPaths: []}, {documentToken: ""}]) {
+      assert.equal(whatsappUpdateMessage({
+        phone: "+16465550100", name: "Fatou Diallo", businessName: "Dala",
+        line: proofLine(extra), container: null, update: "confirm",
+        trackingCode: "CL-K7M4P2", role: "sender",
+        documentBase: "https://laawoldigital.com/d",
+      }), null);
+    }
+    // Other updates do not need the photo.
+    assert.equal(whatsappUpdateMessage({
+      phone: "+16465550100", name: "Fatou Diallo", businessName: "Dala",
+      line: proofLine({photoPaths: []}), container: null, update: "received",
+      trackingCode: "CL-K7M4P2", role: "sender",
+    }).template.name, "shipment_received_2lang");
+  });
+
+  it("sends ready for pickup with the code to the receiver, and without to the sender", () => {
+    const args = (role, phone) => ({
+      phone, name: "Mariama Bah", businessName: "Dala", line: proofLine(),
+      container: {destinationCountryId: "gn", destinationCountryName: "Guinea"},
+      update: "arrived", trackingCode: "CL-K7M4P2", role,
+    });
+    const receiver = whatsappUpdateMessage(args("receiver", "+224620000000"));
+    assert.equal(receiver.template.name, "shipment_ready_pickup_code_2lang");
+    assert.equal(receiver.template.components[0].parameters.length, 11);
+    assert.equal(receiver.template.components[0].parameters.at(-1).text, "4821");
+    assert.deepEqual(receiver.template.components[1].parameters, [{type: "text", text: "CL-K7M4P2"}]);
+    const sender = whatsappUpdateMessage(args("sender", "+16465550100"));
+    assert.equal(sender.template.name, "shipment_ready_pickup_2lang");
+    assert.equal(sender.template.components[0].parameters.length, 10);
+    // No code on the line: the old template for everyone.
+    const none = whatsappUpdateMessage({...args("receiver", "+224620000000"), line: proofLine({pickupCode: ""})});
+    assert.equal(none.template.name, "shipment_ready_pickup_2lang");
+    // The legacy set has no code variant.
+    assert.equal(whatsappUpdateMessage({...args("receiver", "+224620000000"), templateSet: "legacy"}).template.name, "container_arrived");
+  });
+
+  it("counts the sender's confirm as received on the line's summary", () => {
+    assert.equal(summaryUpdate("confirm"), "received");
+    assert.equal(summaryUpdate("received"), "received");
+    assert.equal(summaryUpdate("shipped"), "shipped");
+    assert.equal(updateRank("confirm"), updateRank("received"));
+    const receiver = mergeLastCustomerUpdate(null, "received", [{role: "receiver", status: "queued"}], 1);
+    const both = mergeLastCustomerUpdate(receiver, "confirm", [{role: "sender", status: "queued"}], 2);
+    assert.deepEqual(both, {update: "received", atMs: 2, results: [
+      {role: "receiver", status: "queued"}, {role: "sender", status: "queued"}]});
+    const sent = mergeLastCustomerUpdate(both, "confirm", [{role: "sender", status: "sent"}], 3);
+    assert.deepEqual(sent.results, [{role: "receiver", status: "queued"}, {role: "sender", status: "sent"}]);
+    // Meta's ticks for the confirm row land on the same summary.
+    const read = withDeliveryTick(sent, "confirm", "sender", "read");
+    assert.deepEqual(read.results[1], {role: "sender", status: "sent", delivery: "read"});
+    // A later update still replaces it.
+    assert.equal(mergeLastCustomerUpdate(sent, "shipped", [{role: "sender", status: "queued"}], 4).update, "shipped");
+  });
+});
+/* eslint-enable max-len */

@@ -12,6 +12,7 @@
  */
 
 const crypto = require("crypto");
+const {scanCodeFrom} = require("./container_loading");
 
 /** The inbox id of Laawol's own conversations (no business, or not yet). */
 const LAAWOL_INBOX = "laawol";
@@ -177,15 +178,20 @@ function parseWebhook(body) {
           text: "",
           media: null,
           replyToWamid: String(msg.context?.id || ""),
+          // A template quick reply's payload (package_proof.CONFIRM_PAYLOAD
+          // for the sender's confirmation); the button's text is `text`.
+          buttonPayload: "",
         };
         if (type === "text") {
           event.text = String(msg.text?.body || "");
         } else if (type === "button") {
           event.text = String(msg.button?.text || msg.button?.payload || "");
+          event.buttonPayload = String(msg.button?.payload || "");
         } else if (type === "interactive") {
           const reply = msg.interactive?.button_reply ||
             msg.interactive?.list_reply || {};
           event.text = String(reply.title || reply.id || "");
+          event.buttonPayload = String(reply.id || "");
         } else if (MEDIA_TYPES.includes(type)) {
           const media = msg[type] || {};
           event.media = {
@@ -407,10 +413,12 @@ function isOpenNow(openingHours, timeZone, nowMs = Date.now()) {
 
 /**
  * What the customer is told automatically. Sent inside the window they just
- * opened, so it is free-form text.
+ * opened, so it is free-form text. `confirm_ok` / `confirm_problem` answer
+ * the sender's tap on the package confirmation (docs/AIR_PACKAGES.md §3).
  *
  * @param {object} args {kind: received|closed|ask|ask_again|stopped|started|
- *   laawol, lang, businessName, trackingUrl, options}.
+ *   laawol|confirm_ok|confirm_problem, lang, businessName, trackingUrl,
+ *   options}.
  * @return {string} The message, or "" for an unknown kind.
  */
 function autoReplyText({kind, lang = "en", businessName = "", trackingUrl = "",
@@ -457,9 +465,36 @@ function autoReplyText({kind, lang = "en", businessName = "", trackingUrl = "",
       return fr ?
         "Les mises à jour sont réactivées. Merci !" :
         "Updates are back on. Thank you!";
+    case "confirm_ok":
+      return fr ? "Merci, c'est noté." : "Thanks, noted.";
+    case "confirm_problem":
+      return fr ?
+        `Désolé. ${name} vous répondra ici.` :
+        `Sorry about that. ${name} will reply here.`;
     default:
       return "";
   }
+}
+
+// A package code as a customer writes it inside a sentence: "CL-K7M4P2",
+// "cl k7m4p2", a split part "CL-K7M4P2-2", or the label's link.
+const CODE_IN_TEXT = /\bCL[\s-]?[A-Z0-9]{6}(?:-?[1-9]\d?)?\b/gi;
+
+/**
+ * The package code a message mentions, so a photo sent with it files
+ * itself on the package (docs/AIR_PACKAGES.md §4.6). The first code found
+ * wins; what looks like one but is not (a zero for an O) is no code.
+ *
+ * @param {string} text The message's text or caption.
+ * @return {string} "CL-XXXXXX" (or "CL-XXXXXX-n"), or "".
+ */
+function codeInText(text) {
+  const value = String(text ?? "");
+  for (const match of value.matchAll(CODE_IN_TEXT)) {
+    const code = scanCodeFrom(match[0]);
+    if (code) return code;
+  }
+  return "";
 }
 
 /**
@@ -655,6 +690,7 @@ module.exports = {
   withinWindow,
   isOpenNow,
   autoReplyText,
+  codeInText,
   firstName,
   senderLabel,
   signedText,
