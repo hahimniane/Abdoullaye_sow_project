@@ -1,0 +1,103 @@
+{
+  "_comment": "docs/STAFF_EXPENSE_CREDIT.md §3. Run by functions (staff-expense-credit.test.js), the console (staff-expense-credit.test.ts) and the app (staff_expense_credit_test.dart). Amounts in cents.",
+  "cases": [
+    {
+      "name": "Abdoulaye: expenses come off a bigger parking bill",
+      "monthKey": "2026-10",
+      "customers": [{"key": "3475628973", "dueCents": 494200}],
+      "entries": [
+        {"id": "e1", "paidByStaffId": "abd", "amountCents": 20000, "month": "2026-09"},
+        {"id": "e2", "paidByStaffId": "abd", "amountCents": 24831, "month": "2026-10"},
+        {"id": "e3", "paidByStaffId": "abd", "amountCents": 5000, "month": "2026-10", "voided": true},
+        {"id": "e4", "paidByStaffId": "abd", "amountCents": 9999, "month": "2026-11"}
+      ],
+      "repayments": [],
+      "links": {"abd": {"customerKey": "3475628973"}},
+      "staffNames": {"abd": "Abdoulaye Sow"},
+      "expect": {
+        "customers": [{"key": "3475628973", "dueBeforeExpensesCents": 494200, "expenseCreditCents": 44831, "dueCents": 449369, "linkedStaffIds": ["abd"]}],
+        "businessOwes": [],
+        "businessOwesCents": 0,
+        "expenseCreditCents": 44831
+      }
+    },
+    {
+      "name": "credit bigger than the bill: the rest is owed by the business",
+      "monthKey": "2026-10",
+      "customers": [{"key": "3472378209", "dueCents": 2000}],
+      "entries": [{"id": "e1", "paidByStaffId": "owner", "amountCents": 3500, "month": "2026-10"}],
+      "repayments": [],
+      "links": {"owner": {"customerKey": "3472378209"}},
+      "staffNames": {"owner": "Alhoussaine Barry"},
+      "expect": {
+        "customers": [{"key": "3472378209", "dueBeforeExpensesCents": 2000, "expenseCreditCents": 2000, "dueCents": 0, "linkedStaffIds": ["owner"]}],
+        "businessOwes": [{"staffId": "owner", "staffName": "Alhoussaine Barry", "customerKey": "3472378209", "owedCents": 1500}],
+        "businessOwesCents": 1500,
+        "expenseCreditCents": 2000
+      }
+    },
+    {
+      "name": "no link: whole credit owed; paid back lowers it; later repayments ignored",
+      "monthKey": "2026-10",
+      "customers": [{"key": "9175550100", "dueCents": 10000}],
+      "entries": [{"id": "e1", "paidByStaffId": "mo", "amountCents": 6000, "month": "2026-09"}],
+      "repayments": [
+        {"staffId": "mo", "amountCents": 1000, "month": "2026-10"},
+        {"staffId": "mo", "amountCents": 2000, "month": "2026-10", "voided": true},
+        {"staffId": "mo", "amountCents": 4000, "month": "2026-11"}
+      ],
+      "links": {},
+      "staffNames": {"mo": "Mohamed"},
+      "expect": {
+        "customers": [{"key": "9175550100", "dueBeforeExpensesCents": 10000, "expenseCreditCents": 0, "dueCents": 10000, "linkedStaffIds": []}],
+        "businessOwes": [{"staffId": "mo", "staffName": "Mohamed", "customerKey": "", "owedCents": 5000}],
+        "businessOwesCents": 5000,
+        "expenseCreditCents": 0
+      }
+    },
+    {
+      "name": "two staff on one bill share what is left in proportion",
+      "monthKey": "2026-10",
+      "customers": [{"key": "6465550000", "dueCents": 1000}],
+      "entries": [
+        {"id": "e1", "paidByStaffId": "a", "amountCents": 3000, "month": "2026-10"},
+        {"id": "e2", "paidByStaffId": "b", "amountCents": 1000, "month": "2026-10"}
+      ],
+      "repayments": [],
+      "links": {"a": {"customerKey": "6465550000"}, "b": {"customerKey": "6465550000"}},
+      "staffNames": {"a": "Aminata", "b": "Boubacar"},
+      "expect": {
+        "customers": [{"key": "6465550000", "dueBeforeExpensesCents": 1000, "expenseCreditCents": 1000, "dueCents": 0, "linkedStaffIds": ["a", "b"]}],
+        "businessOwes": [
+          {"staffId": "a", "staffName": "Aminata", "customerKey": "6465550000", "owedCents": 2250},
+          {"staffId": "b", "staffName": "Boubacar", "customerKey": "6465550000", "owedCents": 750}
+        ],
+        "businessOwesCents": 3000,
+        "expenseCreditCents": 1000
+      }
+    },
+    {
+      "name": "linked customer with no bill this month: whole credit owed",
+      "monthKey": "2026-10",
+      "customers": [],
+      "entries": [{"id": "e1", "paidByStaffId": "abd", "amountCents": 1234, "month": "2026-10"}],
+      "repayments": [],
+      "links": {"abd": {"customerKey": "3475628973"}},
+      "staffNames": {"abd": "Abdoulaye Sow"},
+      "expect": {
+        "customers": [],
+        "businessOwes": [{"staffId": "abd", "staffName": "Abdoulaye Sow", "customerKey": "3475628973", "owedCents": 1234}],
+        "businessOwesCents": 1234,
+        "expenseCreditCents": 0
+      }
+    }
+  ],
+  "itemsAfterCredit": [
+    {"items": [{"id": "c1", "amountCents": 3000}, {"id": "c2", "amountCents": 5000}], "creditCents": 4000,
+     "expect": [{"id": "c2", "amountCents": 4000}]},
+    {"items": [{"id": "c1", "amountCents": 3000}], "creditCents": 0,
+     "expect": [{"id": "c1", "amountCents": 3000}]},
+    {"items": [{"id": "c1", "amountCents": 3000}], "creditCents": 9000,
+     "expect": []}
+  ]
+}
