@@ -11,8 +11,17 @@ import {
   DELIVERY_REFUSAL_COPY,
   DELIVERY_RESULT_COPY,
   DELIVERY_SERVER_REASONS,
+  DELIVERED_WITHOUT_CODE_LABEL,
   MAX_COLLECTED_BY,
+  PROOF_REFUSAL_COPY,
+  arrivedContainerRows,
   collectedByError,
+  collectedDollarsToCents,
+  overrideError,
+  pickupCodeAsked,
+  pickupCodeComplete,
+  pickupCodeDigits,
+  proofPickupCodeOn,
   containerDeliveryProgress,
   defaultCollectedBy,
   deliverAnswerFrom,
@@ -42,9 +51,12 @@ const serverSource = read("../../../my_flutter_app/functions/container_delivery.
 // Mirror discipline: the server module is the authority.
 // ---------------------------------------------------------------------------
 
-function serverMessages(): Record<string, string> {
-  const block = serverSource.match(/const DELIVERY_MESSAGES = Object\.freeze\(\{([\s\S]*?)\}\);/);
-  assert.ok(block, "server DELIVERY_MESSAGES not found");
+const proofSource = read("../../../my_flutter_app/functions/package_proof.js");
+const manifestSource = read("../../../my_flutter_app/functions/container_manifest.js");
+
+function messagesIn(source: string, name: string): Record<string, string> {
+  const block = source.match(new RegExp(`const ${name} = Object\\.freeze\\(\\{([\\s\\S]*?)\\}\\);`));
+  assert.ok(block, `server ${name} not found`);
   const out: Record<string, string> = {};
   for (const [, key, raw] of block![1].matchAll(/(\w+):\s*((?:"[^"]*"\s*\+?\s*)+),/g)) {
     out[key] = [...raw.matchAll(/"([^"]*)"/g)].map((m) => m[1]).join("");
@@ -52,16 +64,61 @@ function serverMessages(): Record<string, string> {
   return out;
 }
 
+/**
+ * DELIVERY_MESSAGES spreads package_proof.REFUSAL (`...PROOF_REFUSAL`), so
+ * the server's vocabulary is both blocks together.
+ */
+function serverMessages(): Record<string, string> {
+  assert.match(serverSource, /\.\.\.PROOF_REFUSAL,/, "the server spreads the proof refusals");
+  return { ...messagesIn(serverSource, "DELIVERY_MESSAGES"), ...messagesIn(proofSource, "REFUSAL") };
+}
+
 test("every refusal reason the server raises has its sentence, word for word", () => {
   const server = serverMessages();
-  assert.ok(Object.keys(server).length >= 5, "expected the full server vocabulary");
+  assert.ok(Object.keys(server).length >= 12, "expected the full server vocabulary");
+  // The money collected at handover is judged as a payment: those two codes
+  // come from CONTAINER_MESSAGES (deliveryError falls back to containerMessage).
+  const payment = messagesIn(manifestSource, "CONTAINER_MESSAGES");
+  for (const key of ["payment_exceeds_balance", "price_required"]) server[key] = payment[key];
   assert.deepEqual([...DELIVERY_SERVER_REASONS].sort(), Object.keys(server).sort());
   for (const [key, sentence] of Object.entries(server)) {
     assert.equal(DELIVERY_REFUSAL_COPY[key as keyof typeof DELIVERY_REFUSAL_COPY], sentence, key);
   }
+  assert.deepEqual({ ...PROOF_REFUSAL_COPY }, messagesIn(proofSource, "REFUSAL"));
   // Plus the two the console adds: no permission, and anything else.
   assert.ok(DELIVERY_REFUSAL_COPY.permission_denied);
   assert.ok(DELIVERY_REFUSAL_COPY.unknown);
+});
+
+test("the handover rule mirrors package_proof.handoverCheck: the switch and a 4-digit code", () => {
+  assert.match(proofSource, /if \(!settings\?\.pickupCode \|\| !stored\)/);
+  assert.match(proofSource, /return a\.length === 4 && a === b;/);
+  assert.equal(pickupCodeAsked({ pickupCode: true }, { pickupCode: "4821" }), true);
+  assert.equal(pickupCodeAsked({ pickupCode: true }, { pickupCode: "" }), false, "no code minted: delivered normally");
+  assert.equal(pickupCodeAsked({ pickupCode: false }, { pickupCode: "4821" }), false, "switch off: delivered normally");
+  assert.equal(pickupCodeAsked(null, { pickupCode: "4821" }), false);
+  assert.equal(proofPickupCodeOn({ packageProofSettings: { pickupCode: true } }), true);
+  assert.equal(proofPickupCodeOn({ packageProofSettings: { pickupCode: "yes" } }), false);
+  assert.equal(proofPickupCodeOn({}), false);
+  assert.equal(pickupCodeDigits(" 48-21 "), "4821");
+  assert.equal(pickupCodeDigits("482199"), "4821");
+  assert.equal(pickupCodeComplete("482"), false);
+  assert.equal(pickupCodeComplete("4821"), true);
+  assert.equal(overrideError({ collectedBy: "Aw", photoPath: "packagePhotos/b/u/abcdefgh.jpg" }), null);
+  assert.equal(overrideError({ collectedBy: "A", photoPath: "packagePhotos/b/u/abcdefgh.jpg" }), "override_incomplete");
+  assert.equal(overrideError({ collectedBy: "Awa", photoPath: "" }), "override_incomplete");
+});
+
+test("collected now is whole dollars to cents: blank is nothing, nonsense is NaN", () => {
+  assert.equal(collectedDollarsToCents(""), null);
+  assert.equal(collectedDollarsToCents("  "), null);
+  assert.equal(collectedDollarsToCents("40"), 4000);
+  assert.equal(collectedDollarsToCents("$1,250"), 125000);
+  assert.equal(collectedDollarsToCents("12.5"), 1250);
+  assert.equal(collectedDollarsToCents("0"), 0);
+  assert.ok(Number.isNaN(collectedDollarsToCents("-4")));
+  assert.ok(Number.isNaN(collectedDollarsToCents("forty")));
+  assert.ok(Number.isNaN(collectedDollarsToCents("1.234")));
 });
 
 test("the actions, the length limit and the permission rules match the server", () => {
@@ -123,6 +180,20 @@ test("the deliver request sends the name on one line and acknowledges only when 
     businessId: "b1", lineId: "L1", action: "deliver", collectedBy: "", acknowledgeBalance: true,
   });
   assert.equal("acknowledgeBalance" in deliverRequest({ businessId: "b", lineId: "l", acknowledgeBalance: false }), false);
+  // The pickup code, the override and the money collected (docs/AIR_PACKAGES.md §4.7).
+  assert.deepEqual(deliverRequest({ businessId: "b1", lineId: "L1", collectedBy: "Awa", pickupCode: " 48 21", collectedCents: 4000 }), {
+    businessId: "b1", lineId: "L1", action: "deliver", collectedBy: "Awa", pickupCode: "4821", collectedCents: 4000,
+  });
+  const withOverride = deliverRequest({
+    businessId: "b1", lineId: "L1", collectedBy: "Awa",
+    override: { collectedBy: " Mamadou\nBah ", photoPath: "packagePhotos/b1/u1/abcdefgh.jpg" },
+    collectedCents: 0,
+  });
+  assert.deepEqual(withOverride.override, { collectedBy: "Mamadou Bah", photoPath: "packagePhotos/b1/u1/abcdefgh.jpg" });
+  assert.equal("pickupCode" in withOverride, false);
+  assert.equal("collectedCents" in withOverride, false, "nothing collected is not sent");
+  assert.equal("collectedCents" in deliverRequest({ businessId: "b", lineId: "l", collectedCents: null }), false);
+  assert.equal("override" in deliverRequest({ businessId: "b", lineId: "l", override: null }), false);
   assert.deepEqual(undoDeliveryRequest("b1", "L1"), { businessId: "b1", lineId: "L1", action: "undo_delivery" });
   assert.equal(collectedByError("x".repeat(MAX_COLLECTED_BY)), null);
   assert.equal(collectedByError("x".repeat(MAX_COLLECTED_BY + 1)), "collected_by_too_long");
@@ -159,10 +230,21 @@ test("a refusal is read from details.reason, never the message", () => {
 
 test("the answers read as the right sentence", () => {
   const fresh = deliverAnswerFrom({ success: true, delivered: true, alreadyDelivered: false, collectedBy: "Awa", hasBalance: false, balanceCents: 0 });
-  assert.deepEqual(fresh, { alreadyDelivered: false, collectedBy: "Awa", hasBalance: false, balanceCents: 0 });
+  assert.deepEqual(fresh, {
+    alreadyDelivered: false, collectedBy: "Awa", hasBalance: false, balanceCents: 0,
+    deliveredWithoutCode: false, collectedCents: 0, paymentId: "",
+  });
   assert.equal(deliverResultText(fresh), DELIVERY_RESULT_COPY.delivered);
   assert.equal(deliverResultText(deliverAnswerFrom({ alreadyDelivered: true, balanceCents: null })), DELIVERY_RESULT_COPY.alreadyDelivered);
   assert.equal(deliverAnswerFrom({ balanceCents: null }).balanceCents, null);
+  // Handed over without the code, with money collected: the answer says so.
+  const collected = deliverAnswerFrom({ alreadyDelivered: false, deliveredWithoutCode: true, collectedCents: 4000, paymentId: "pay1", balanceCents: 1000, hasBalance: true });
+  assert.equal(collected.deliveredWithoutCode, true);
+  assert.equal(collected.collectedCents, 4000);
+  assert.equal(collected.paymentId, "pay1");
+  assert.equal(deliverResultText(collected), "Delivered · $40.00 collected");
+  assert.equal(deliverResultText(collected, "fr"), "Livré · 40,00 $ encaissés");
+  assert.equal(deliverResultText({ alreadyDelivered: true, collectedCents: 4000 }), DELIVERY_RESULT_COPY.alreadyDelivered);
   assert.equal(undoResultText({ success: true, undone: true }), DELIVERY_RESULT_COPY.undone);
   assert.equal(undoResultText({ success: true, undone: false }), DELIVERY_RESULT_COPY.notDelivered);
 });
@@ -207,11 +289,48 @@ test("a line is delivered, ready to hand over, or not there yet", () => {
   assert.equal(deliveryStage(delivered, arrived), "delivered");
   assert.deepEqual(lineDelivery(delivered), {
     delivered: true, deliveredAt: at, deliveredByName: "Ibrahima", deliveredByStaffId: "u1", collectedBy: "Awa",
+    withoutCode: false, photoPath: "", collectedCents: 0,
   });
+  // Without the code: the override's photo and the money collected show.
+  const overridden = lineDelivery({ ...delivered, deliveredWithoutCode: true, deliveredPhotoPath: "packagePhotos/b/u/abcdefgh.jpg", collectedAtDeliveryCents: 2500 });
+  assert.equal(overridden.withoutCode, true);
+  assert.equal(overridden.photoPath, "packagePhotos/b/u/abcdefgh.jpg");
+  assert.equal(overridden.collectedCents, 2500);
+  assert.equal(lineDelivery({ deliveredWithoutCode: true, deliveredPhotoPath: "x" }).withoutCode, false, "undone: nothing lingers");
   assert.equal(lineDelivery({ deliveredAt: { seconds: 1_790_000_000 } }).deliveredAt?.getTime(), 1_790_000_000_000);
   // Undone: the server deleted the fields, leaving deliveryUndoneAt.
   assert.equal(lineDelivery({ collectedBy: "stale", deliveryUndoneAt: at }).delivered, false);
   assert.equal(lineDelivery({ collectedBy: "stale" }).collectedBy, "");
+});
+
+test("the Deliveries page lists arrived containers (air and sea) with what is still to hand over", () => {
+  const containers = [
+    { id: "SEA", status: "arrived", containerNumber: "MSKU1234565", arrivedAt: new Date("2026-10-20T10:00:00Z") },
+    { id: "AIR", status: "arrived", shipMode: "air", label: "Flight Oct 28", airWaybill: "176-12345678", arrivedAt: new Date("2026-10-28T10:00:00Z") },
+    { id: "AT_SEA", status: "shipped", containerNumber: "MSKU0000001" },
+    { id: "EMPTY", status: "arrived", label: "All handed over" },
+  ];
+  const lines = [
+    { id: "l1", containerId: "SEA", trackingCode: "CL-B00002", receiverName: "Awa", receiverPhone: "+224 622 00 00 01", pieces: [{}, {}] },
+    { id: "l2", containerId: "SEA", trackingCode: "CL-A00001", customerName: "Fatou", customerPhone: "+1 347 555 0100", quantity: 3 },
+    { id: "l3", containerId: "SEA", trackingCode: "CL-C00003", receiverName: "Done", deliveredAt: new Date() },
+    { id: "l4", containerId: "AIR", trackingCode: "CL-D00004", receiverName: "Mamadou", receiverPhone: "+224 622 00 00 02", pieces: [{}] },
+    { id: "l5", containerId: "EMPTY", trackingCode: "CL-E00005", deliveredAt: new Date() },
+    { id: "l6", containerId: "AT_SEA", trackingCode: "CL-F00006" },
+  ];
+  const rows = arrivedContainerRows(containers, lines);
+  assert.deepEqual(rows.map((row) => [row.id, row.title, row.air, row.lines.map((l) => l.trackingCode)]), [
+    ["AIR", "Flight Oct 28", true, ["CL-D00004"]],
+    ["SEA", "MSKU1234565", false, ["CL-A00001", "CL-B00002"]],
+  ]);
+  const awa = rows[1].lines[1];
+  assert.deepEqual([awa.receiverName, awa.receiverPhone, awa.pieceCount], ["Awa", "+224 622 00 00 01", 2]);
+  const fatou = rows[1].lines[0];
+  assert.deepEqual([fatou.receiverName, fatou.receiverPhone, fatou.pieceCount], ["Fatou", "+1 347 555 0100", 3]);
+  assert.equal(fatou.line.id, "l2", "the row keeps the line for the dialog");
+  assert.deepEqual(arrivedContainerRows([], lines), []);
+  // An air container with no working name is known by its waybill.
+  assert.equal(arrivedContainerRows([{ id: "A", status: "arrived", shipMode: "air", airWaybill: "176-12345678" }], [{ id: "x", containerId: "A" }])[0].title, "176-12345678");
 });
 
 test("\"X of Y delivered\" comes from the container's tallies, never above the total", () => {
@@ -296,6 +415,7 @@ test("the sentences the pure module builds have their French, and it converges",
     ...Object.values(DELIVERY_RESULT_COPY),
     ...Object.values(DELIVERY_PROGRESS_COPY),
     DELIVERY_NOT_ARRIVED_HINT,
+    DELIVERED_WITHOUT_CODE_LABEL,
     // Built in package-delivery.tsx from a variable, so the scan cannot see them.
     "Mark delivered", "Mark delivered anyway",
     // The tab and the permission (business-sidebar.ts, profile-support-people.tsx).

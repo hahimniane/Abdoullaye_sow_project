@@ -50,6 +50,12 @@ export type GuestTrackingRecord = {
    * number's role and its LAST TWO digits - never more.
    */
   signIn?: GuestSignInHint[];
+  /**
+   * Container lines only, and only for a caller signed in as the line's
+   * sender or receiver (docs/AIR_PACKAGES.md §4.12): the photos filed on
+   * the package, as 30-day links. A guest gets no `photos` key.
+   */
+  photos?: GuestTrackingPhoto[];
 };
 
 export type GuestTrackingPart = {
@@ -68,14 +74,18 @@ export type GuestTrackingPayment = {
 };
 
 export type GuestContainerShipping = {
+  /** "air" for a flight (docs/AIR_PACKAGES.md §2); absent or "sea" for a container ship. */
+  mode?: "air";
   shippingLine?: string;
   containerNumber?: string;
   bookingNumber?: string;
+  airline?: string;
+  airWaybill?: string;
 };
 
-/** The shipping details in the order the result card lists them. */
+/** The shipping details in the order the result card lists them (a sea container). */
 export const GUEST_SHIPPING_FIELDS: ReadonlyArray<{
-  key: keyof GuestContainerShipping;
+  key: "shippingLine" | "containerNumber" | "bookingNumber";
   label: string;
 }> = [
   {key: "shippingLine", label: "Shipping line"},
@@ -83,13 +93,41 @@ export const GUEST_SHIPPING_FIELDS: ReadonlyArray<{
   {key: "bookingNumber", label: "Booking number"},
 ];
 
+/** The flight details in the order the result card lists them (an air shipment). */
+export const GUEST_FLIGHT_FIELDS: ReadonlyArray<{
+  key: "airline" | "airWaybill";
+  label: string;
+}> = [
+  {key: "airline", label: "Airline"},
+  {key: "airWaybill", label: "Air waybill"},
+];
+
+/** The shipping block's words for each mode (French in french-dom.ts). */
+export const GUEST_SHIPPING_COPY = {
+  sea: {
+    title: "Shipping details",
+    lede: "You can also follow it with these on the shipping line’s website.",
+  },
+  air: {
+    title: "Flight",
+    lede: "Your package travels by air. Here is the flight it is on.",
+  },
+} as const;
+
+/** Which block the card shows for a record's shipping details. */
+export function guestShippingMode(shipping: GuestContainerShipping | undefined): "sea" | "air" {
+  return shipping?.mode === "air" ? "air" : "sea";
+}
+
 /** Where the result card's "Get the Laawol app" link goes. */
 export const GET_APP_URL = "https://laawoldigital.com/get-app.html";
 
 /**
- * The shipping details a container line's answer carries: only the three
- * known fields, only non-empty short text, and nothing at all for any other
- * service or when none is known.
+ * The shipping details a container line's answer carries: for a sea
+ * container the three known fields, for a flight (`mode: "air"`) the
+ * airline and the air waybill - only non-empty short text, and nothing at
+ * all for any other service or when none is known. An air answer with
+ * neither detail still says it is a flight.
  */
 export function parseGuestShipping(
   service: string,
@@ -100,11 +138,56 @@ export function parseGuestShipping(
   }
   const row = value as Record<string, unknown>;
   const shipping: GuestContainerShipping = {};
-  for (const {key} of GUEST_SHIPPING_FIELDS) {
+  const air = row.mode === "air";
+  if (air) shipping.mode = "air";
+  const fields: ReadonlyArray<{key: "shippingLine" | "containerNumber" | "bookingNumber" | "airline" | "airWaybill"}> =
+    air ? GUEST_FLIGHT_FIELDS : GUEST_SHIPPING_FIELDS;
+  for (const {key} of fields) {
     const text = typeof row[key] === "string" ? (row[key] as string).trim() : "";
     if (text) shipping[key] = text.slice(0, 60);
   }
   return Object.keys(shipping).length > 0 ? shipping : undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Photos on a package, for the signed-in sender or receiver (§4.12).
+// ---------------------------------------------------------------------------
+
+export type GuestPhotoKind = "dropoff" | "customer" | "delivered";
+
+export type GuestTrackingPhoto = {
+  /** A 30-day link served by the /d endpoint (view=photo); https only. */
+  url: string;
+  kind: GuestPhotoKind;
+};
+
+const PHOTO_KINDS = new Set<GuestPhotoKind>(["dropoff", "customer", "delivered"]);
+const MAX_GUEST_PHOTOS = 20;
+
+/** The label under each photo (French in french-dom.ts). */
+export const GUEST_PHOTO_KIND_LABEL: Record<GuestPhotoKind, string> = {
+  dropoff: "Drop-off",
+  customer: "Sent by WhatsApp",
+  delivered: "At delivery",
+};
+
+/**
+ * The photos an answer carries, kept in order: a known kind and an https
+ * link only, at most 20. Nothing (not an empty list) when the answer has
+ * none - a guest who is not signed in never sees a Photos block.
+ */
+export function parseGuestPhotos(value: unknown): GuestTrackingPhoto[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const out: GuestTrackingPhoto[] = [];
+  for (const item of value.slice(0, MAX_GUEST_PHOTOS)) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as Record<string, unknown>;
+    const url = typeof row.url === "string" ? row.url.trim() : "";
+    const kind = String(row.kind ?? "") as GuestPhotoKind;
+    if (!/^https:\/\//i.test(url) || url.length > 2000 || !PHOTO_KINDS.has(kind)) continue;
+    out.push({url, kind});
+  }
+  return out.length > 0 ? out : undefined;
 }
 
 const wholeCount = (value: unknown): number => {
@@ -227,6 +310,7 @@ export function parseGuestTrackingResponse(value: unknown): GuestTrackingRespons
   }
   const shipping = parseGuestShipping(service, row.shipping);
   const signIn = parseSignInHints(row.signIn);
+  const photos = service === "container" ? parseGuestPhotos(row.photos) : undefined;
   return {
     version: 1,
     found: true,
@@ -239,6 +323,7 @@ export function parseGuestTrackingResponse(value: unknown): GuestTrackingRespons
       ...(shipping ? {shipping} : {}),
       ...parseGuestContainerGroup(service, row),
       ...(signIn.length ? {signIn} : {}),
+      ...(photos ? {photos} : {}),
     },
   };
 }

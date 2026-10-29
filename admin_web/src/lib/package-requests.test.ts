@@ -51,6 +51,11 @@ import {
   requestLocationsFor,
   requestPathRedirect,
   requestSettingsDraft,
+  normalizeRequestCode,
+  lookupRequestCodePayload,
+  proofSettingsOf,
+  PROOF_SETTING_COPY,
+  PROOF_SETTING_KEYS,
   requestSettingsPayload,
   requestSettingsProblems,
   requestSlugFromLocation,
@@ -470,6 +475,41 @@ test("request settings: hours per location, slug once, areas when picking up", (
   assert.equal(slugEditable({}), true);
 });
 
+test("proof settings: three switches, off unless stored true, always sent as `proof`", () => {
+  const business = { packageProofSettings: { photosRequired: true, senderConfirm: "yes", pickupCode: false } };
+  assert.deepEqual(proofSettingsOf(business), { photosRequired: true, senderConfirm: false, pickupCode: false });
+  assert.deepEqual(proofSettingsOf({}), { photosRequired: false, senderConfirm: false, pickupCode: false });
+  assert.deepEqual(PROOF_SETTING_KEYS, ["photosRequired", "senderConfirm", "pickupCode"]);
+  const draft = requestSettingsDraft(business, []);
+  assert.deepEqual(draft.proof, { photosRequired: true, senderConfirm: false, pickupCode: false });
+  assert.deepEqual(requestSettingsProblems(draft), []);
+  assert.deepEqual(requestSettingsProblems({ ...draft, proof: { ...draft.proof, pickupCode: "on" as unknown as boolean } }), ["proof_settings_invalid"]);
+  const payload = requestSettingsPayload("dala", { ...draft, proof: { ...draft.proof, pickupCode: true } }, "");
+  assert.deepEqual(payload.proof, { photosRequired: true, senderConfirm: false, pickupCode: true });
+  // The server's keys, verbatim (package_proof.PROOF_SETTING_KEYS).
+  const server = readFileSync("../my_flutter_app/functions/package_proof.js", "utf8");
+  assert.match(server, /\["photosRequired", "senderConfirm", "pickupCode"\]/);
+  assert.match(readFileSync("../my_flutter_app/functions/index.js", "utf8"), /packageProof\.validateProofSettings\(data\.proof\)/);
+  for (const key of PROOF_SETTING_KEYS) {
+    assert.ok(PROOF_SETTING_COPY[key].label && PROOF_SETTING_COPY[key].hint, key);
+  }
+});
+
+test("the counter's request code is normalised as on the server, and looked up by action", () => {
+  for (const typed of ["R-K7M4P", "r-k7m4p", "RK7M4P", " k7 m4p ", "K7M4P", "r k7m4p"]) {
+    assert.equal(normalizeRequestCode(typed), "R-K7M4P", typed);
+  }
+  assert.equal(normalizeRequestCode("K7M4"), "");
+  assert.equal(normalizeRequestCode("CL-K7M4P2"), "");
+  assert.equal(normalizeRequestCode(""), "");
+  assert.deepEqual(lookupRequestCodePayload("dala", "k7m4p"), { businessId: "dala", action: "lookup_code", code: "R-K7M4P" });
+  const server = readFileSync("../my_flutter_app/functions/package_requests.js", "utf8");
+  assert.match(server, /\.toUpperCase\(\)\.replace\(\/\[\\s-\]\+\/g, ""\)\s*\.replace\(\/\^R\/, ""\)/);
+  assert.match(server, /\/\^\[A-Z0-9\]\{5\}\$\/\.test\(body\)/);
+  assert.match(readFileSync("../my_flutter_app/functions/index.js", "utf8"), /String\(data\.action \|\| ""\) === "lookup_code"/);
+  assert.equal(requestFailure({ code: "functions/not-found", details: { reason: "not_found" } }).message, "No request with that code for this business.");
+});
+
 // Every English string the request screens render must have a French entry
 // (guardrails §5). Pulled from the source, so a new string fails here.
 test("every request screen string has a French translation", () => {
@@ -495,7 +535,7 @@ test("every request screen string has a French translation", () => {
     for (const value of Object.values(table)) strings.add(value);
   }
   // Names, codes and units that read the same in both languages.
-  const same = new Set(["Total", "Containers", "History", "Pickup", "Estimate", "Expected", "Received", "Box", "Other", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "PM", "UTC", "your-business", "Reçu", "Saving...", "Sending...", "Loading…"]);
+  const same = new Set(["Total", "Containers", "History", "Pickup", "Estimate", "Expected", "Received", "Box", "Other", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "PM", "UTC", "your-business", "R-K7M4P", "Reçu", "Saving...", "Sending...", "Loading…"]);
   const missing = [...strings].filter((value) => !same.has(value) && translateValue(value, "fr") === value);
   assert.deepEqual(missing, []);
 });

@@ -21,7 +21,7 @@
  * it without a browser.
  */
 
-import { containerRowCounts, containerStatus, lineCustomerName } from "./container-manifest.ts";
+import { containerRowCounts, containerStatus, containerTitle, lineCustomerName } from "./container-manifest.ts";
 import { moneyText } from "./invoice-ledger.ts";
 import { packageCodeFrom } from "./package-staff.ts";
 import type { LineGroupSummary } from "./line-pieces.ts";
@@ -111,18 +111,30 @@ export type DeliverRequest = {
   action: "deliver";
   collectedBy: string;
   acknowledgeBalance?: true;
+  /** The 4-digit pickup code the receiver read out (docs/AIR_PACKAGES.md §4.7). */
+  pickupCode?: string;
+  /** Delivering without the code: who collected and the agent's photo of them. */
+  override?: { collectedBy: string; photoPath: string };
+  /** USD collected at handover, in cents; absent when nothing was. */
+  collectedCents?: number;
 };
 
 /**
  * Mark delivered. `collectedBy` is sent as typed on one line; blank lets the
  * server name the receiver. `acknowledgeBalance` only once the person has
- * seen the unpaid-balance warning and confirmed.
+ * seen the unpaid-balance warning and confirmed. `pickupCode` when the
+ * agent typed one; `override` instead when the receiver has no code (the
+ * server then records "delivered without code"); `collectedCents` for the
+ * money collected now (the one money action the deliveries permission has).
  */
 export function deliverRequest(input: {
   businessId: string;
   lineId: string;
   collectedBy?: unknown;
   acknowledgeBalance?: boolean;
+  pickupCode?: unknown;
+  override?: { collectedBy?: unknown; photoPath?: unknown } | null;
+  collectedCents?: number | null;
 }): DeliverRequest {
   const request: DeliverRequest = {
     businessId: text(input.businessId),
@@ -131,7 +143,59 @@ export function deliverRequest(input: {
     collectedBy: oneLine(input.collectedBy),
   };
   if (input.acknowledgeBalance === true) request.acknowledgeBalance = true;
+  const code = pickupCodeDigits(input.pickupCode);
+  if (code) request.pickupCode = code;
+  if (input.override) {
+    request.override = {
+      collectedBy: oneLine(input.override.collectedBy).slice(0, MAX_COLLECTED_BY),
+      photoPath: text(input.override.photoPath, 300),
+    };
+  }
+  const cents = Math.round(Number(input.collectedCents));
+  if (Number.isFinite(cents) && cents > 0) request.collectedCents = cents;
   return request;
+}
+
+/** The digits of a typed pickup code (spaces and dashes dropped), at most four. */
+export function pickupCodeDigits(raw: unknown): string {
+  return String(raw ?? "").replace(/\D/g, "").slice(0, 4);
+}
+
+/** A code the server could match: exactly four digits (package_proof.pickupCodeMatches). */
+export function pickupCodeComplete(raw: unknown): boolean {
+  return pickupCodeDigits(raw).length === 4;
+}
+
+/**
+ * Whether the Mark delivered dialog asks for a pickup code: the business
+ * switch is on and this line was minted one (the server's `handoverCheck`
+ * delivers normally otherwise). The code itself is never shown.
+ */
+export function pickupCodeAsked(proofSettings: { pickupCode?: unknown } | null | undefined, line: unknown): boolean {
+  return asRow(proofSettings).pickupCode === true && pickupCodeDigits(asRow(line).pickupCode).length === 4;
+}
+
+/** The business's switch, read from its document (`packageProofSettings.pickupCode`). */
+export function proofPickupCodeOn(business: unknown): boolean {
+  return asRow(asRow(business).packageProofSettings).pickupCode === true;
+}
+
+/**
+ * "Collected now" typed in whole dollars → cents, or null for blank, or NaN
+ * for anything that is not a whole amount of zero or more.
+ */
+export function collectedDollarsToCents(typed: unknown): number | null {
+  const raw = String(typed ?? "").trim().replace(/^\$/, "").replace(/,/g, "");
+  if (!raw) return null;
+  if (!/^\d{1,7}(\.\d{1,2})?$/.test(raw)) return NaN;
+  return Math.round(Number(raw) * 100);
+}
+
+/** What the override needs before asking the server (package_proof.handoverCheck). */
+export function overrideError(override: { collectedBy: unknown; photoPath: unknown }): "override_incomplete" | null {
+  const name = oneLine(override.collectedBy);
+  const photo = text(override.photoPath, 300);
+  return name.length >= 2 && photo ? null : "override_incomplete";
 }
 
 export function undoDeliveryRequest(businessId: string, lineId: string) {
@@ -171,13 +235,33 @@ export function deliveryCodeFrom(raw: unknown): string {
 // What the server answered.
 // ---------------------------------------------------------------------------
 
+/**
+ * The proof refusals (the server's package_proof.REFUSAL), spread into
+ * DELIVERY_MESSAGES on the server and raised by the deliver action and the
+ * line forms alike (docs/AIR_PACKAGES.md §4).
+ */
+export const PROOF_REFUSAL_COPY = {
+  photo_invalid: "One of the photos could not be used. Add it again.",
+  photo_required: "Add at least one photo of the package.",
+  contents_invalid: "Check the item list: a name up to 60 characters, a quantity from 1 to 99, and an optional serial number.",
+  weight_invalid: "Enter a weight between 0.1 and 2000 lb.",
+  declared_value_invalid: "Enter a declared value of $0 or more.",
+  pickup_code_invalid: "The pickup code does not match. Ask the receiver for the code in their message, or deliver without a code.",
+  override_incomplete: "Delivering without a code needs the name of the person collecting and a photo.",
+} as const;
+
 /** Every `details.reason` the delivery action raises (container_delivery.js DELIVERY_MESSAGES). */
 export const DELIVERY_SERVER_REASONS = [
   "delivery_action_invalid",
+  "collected_cents_invalid",
+  ...(Object.keys(PROOF_REFUSAL_COPY) as (keyof typeof PROOF_REFUSAL_COPY)[]),
   "delivery_not_arrived",
   "delivery_balance_due",
   "collected_by_too_long",
   "line_not_found",
+  // The money collected now is judged as a payment (container_payments.js).
+  "payment_exceeds_balance",
+  "price_required",
 ] as const;
 
 export type DeliveryRefusalReason =
@@ -188,10 +272,14 @@ export type DeliveryRefusalReason =
 /** The sentence for each refusal, as the console shows it (French in french-dom.ts). */
 export const DELIVERY_REFUSAL_COPY: Record<DeliveryRefusalReason, string> = {
   delivery_action_invalid: "That is not something a package delivery can do.",
+  collected_cents_invalid: "Enter the amount collected in dollars, zero or more.",
+  ...PROOF_REFUSAL_COPY,
   delivery_not_arrived: "A package can be marked delivered once its container is ready for pickup.",
   delivery_balance_due: "This package still has an unpaid balance. Confirm to mark it delivered anyway.",
   collected_by_too_long: "Keep the name of who collected it to 120 characters.",
   line_not_found: "That package no longer exists.",
+  payment_exceeds_balance: "That is more than what is still owed.",
+  price_required: "Set a price before recording a payment.",
   permission_denied: "Your account is not allowed to do this. Ask the business owner.",
   unknown: "The delivery did not save. Check your connection and try again.",
 };
@@ -239,16 +327,26 @@ export type DeliverAnswer = {
   collectedBy: string;
   hasBalance: boolean;
   balanceCents: number | null;
+  /** The override was used: no pickup code, a name and a photo instead. */
+  deliveredWithoutCode: boolean;
+  /** USD collected at handover, in cents (0 for none). */
+  collectedCents: number;
+  /** The payment row the collected money wrote, or "". */
+  paymentId: string;
 };
 
 export function deliverAnswerFrom(data: unknown): DeliverAnswer {
   const row = asRow(data);
   const cents = Number(row.balanceCents);
+  const collected = Math.round(Number(row.collectedCents));
   return {
     alreadyDelivered: row.alreadyDelivered === true,
     collectedBy: oneLine(row.collectedBy),
     hasBalance: row.hasBalance === true,
     balanceCents: row.balanceCents !== null && row.balanceCents !== undefined && Number.isFinite(cents) ? Math.round(cents) : null,
+    deliveredWithoutCode: row.deliveredWithoutCode === true,
+    collectedCents: Number.isFinite(collected) && collected > 0 ? collected : 0,
+    paymentId: text(row.paymentId, 128),
   };
 }
 
@@ -266,8 +364,18 @@ export const DELIVERY_PROGRESS_COPY = {
   undo: "Undoing…",
 } as const;
 
-export function deliverResultText(answer: Pick<DeliverAnswer, "alreadyDelivered">): string {
-  return answer.alreadyDelivered ? DELIVERY_RESULT_COPY.alreadyDelivered : DELIVERY_RESULT_COPY.delivered;
+/**
+ * "Marked delivered." or, when money was collected at handover,
+ * "Delivered · $40 collected" (built in the reader's language, rendered
+ * `data-no-translate` by the caller when it carries an amount).
+ */
+export function deliverResultText(answer: Pick<DeliverAnswer, "alreadyDelivered"> & Partial<Pick<DeliverAnswer, "collectedCents">>, lang: Lang = "en"): string {
+  if (answer.alreadyDelivered) return DELIVERY_RESULT_COPY.alreadyDelivered;
+  const collected = Math.round(Number(answer.collectedCents));
+  if (Number.isFinite(collected) && collected > 0) {
+    return lang === "fr" ? `Livré · ${moneyText(collected, "fr")} encaissés` : `Delivered · ${moneyText(collected, "en")} collected`;
+  }
+  return DELIVERY_RESULT_COPY.delivered;
 }
 
 export function undoResultText(data: unknown): string {
@@ -317,18 +425,95 @@ export type LineDelivery = {
   deliveredByStaffId: string;
   /** Who collected it: the receiver unless someone collected for them. */
   collectedBy: string;
+  /** Handed over without the pickup code (docs/AIR_PACKAGES.md §4.7). */
+  withoutCode: boolean;
+  /** The override photo's Storage path, or "" (the file is deleted a year after delivery). */
+  photoPath: string;
+  /** USD collected at handover, in cents (0 for none). */
+  collectedCents: number;
 };
 
 export function lineDelivery(line: unknown): LineDelivery {
   const row = asRow(line);
   const delivered = Boolean(row.deliveredAt);
+  const collected = Math.round(Number(row.collectedAtDeliveryCents));
   return {
     delivered,
     deliveredAt: delivered ? dateOf(row.deliveredAt) : null,
     deliveredByName: delivered ? oneLine(row.deliveredByName).slice(0, 120) : "",
     deliveredByStaffId: delivered ? text(row.deliveredByStaffId, 128) : "",
     collectedBy: delivered ? oneLine(row.collectedBy).slice(0, MAX_COLLECTED_BY) : "",
+    withoutCode: delivered && row.deliveredWithoutCode === true,
+    photoPath: delivered ? text(row.deliveredPhotoPath, 300) : "",
+    collectedCents: delivered && Number.isFinite(collected) && collected > 0 ? collected : 0,
   };
+}
+
+/** "Delivered without code" beside the chip (French in french-dom.ts). */
+export const DELIVERED_WITHOUT_CODE_LABEL = "Delivered without code";
+
+// ---------------------------------------------------------------------------
+// The Deliveries page: what arrived and is still to hand over.
+// ---------------------------------------------------------------------------
+
+export type ArrivedContainerRow = {
+  id: string;
+  /** "Shipment" for a flight, else the container's title (number or working name). */
+  title: string;
+  air: boolean;
+  lines: ArrivedLineRow[];
+};
+
+export type ArrivedLineRow = {
+  id: string;
+  trackingCode: string;
+  receiverName: string;
+  receiverPhone: string;
+  pieceCount: number;
+  line: Row;
+};
+
+/**
+ * The arrived containers (air and sea) with their undelivered lines, for
+ * the Deliveries page's "Arrived · to hand over" list. Precomputed once
+ * from two business-scoped queries (`containers` and `containerLines` where
+ * `containerStatus == "arrived"`): a container with nothing left to hand
+ * over is left out; containers come newest arrival first, lines by code.
+ */
+export function arrivedContainerRows(containers: readonly unknown[], lines: readonly unknown[]): ArrivedContainerRow[] {
+  const byContainer = new Map<string, ArrivedLineRow[]>();
+  for (const raw of lines) {
+    const line = asRow(raw);
+    if (line.deliveredAt) continue;
+    const containerId = text(line.containerId, 128);
+    if (!containerId) continue;
+    const pieces = Array.isArray(line.pieces) ? line.pieces.length : 0;
+    const row: ArrivedLineRow = {
+      id: text(line.id, 128),
+      trackingCode: text(line.trackingCode, 40),
+      receiverName: oneLine(line.receiverName).slice(0, 120) || oneLine(lineCustomerName(line)).slice(0, 120),
+      receiverPhone: text(line.receiverPhone || line.customerPhone, 40),
+      pieceCount: pieces > 0 ? pieces : Math.max(1, Math.round(Number(line.quantity)) || 1),
+      line,
+    };
+    const list = byContainer.get(containerId);
+    if (list) list.push(row);
+    else byContainer.set(containerId, [row]);
+  }
+  const out: ArrivedContainerRow[] = [];
+  for (const raw of containers) {
+    const box = asRow(raw);
+    if (containerStatus(box) !== "arrived") continue;
+    const list = byContainer.get(text(box.id, 128));
+    if (!list || list.length === 0) continue;
+    list.sort((a, b) => a.trackingCode.localeCompare(b.trackingCode));
+    const air = text(box.shipMode, 10) === "air";
+    out.push({ id: text(box.id, 128), title: air ? text(box.label, 80) || text(box.airWaybill, 20) : containerTitle(box), air, lines: list });
+  }
+  const arrivedMs = (raw: unknown) => dateOf(asRow(raw).arrivedAt)?.getTime() ?? dateOf(asRow(raw).updatedAt)?.getTime() ?? 0;
+  const order = new Map(containers.map((raw) => [text(asRow(raw).id, 128), arrivedMs(raw)] as const));
+  out.sort((a, b) => (order.get(b.id) ?? 0) - (order.get(a.id) ?? 0) || a.title.localeCompare(b.title));
+  return out;
 }
 
 /**

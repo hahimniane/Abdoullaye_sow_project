@@ -230,6 +230,7 @@ export function cleanVin(value: unknown): string {
 export type ContainerRefusal =
   | "container_label_required"
   | "container_number_invalid"
+  | "air_waybill_invalid"
   | "container_status_invalid"
   | "container_transition_invalid"
   | "destination_required"
@@ -288,13 +289,16 @@ export type ContainerRefusal =
   | "scan_id_invalid"
   | "scan_line_not_found"
   | "line_delivered"
-  | "line_in_other_container";
+  | "line_in_other_container"
+  // Loading warning (docs/AIR_PACKAGES.md §4.8).
+  | "sender_problem";
 
 export const CONTAINER_MESSAGES: Record<ContainerRefusal, string> = {
   container_label_required: "Give the container a working name, or its container or booking number.",
   container_number_invalid:
     "A container number is four letters and seven digits, like MSKU1234567. " +
     "Booking numbers and bills of lading go in the reference field.",
+  air_waybill_invalid: "An air waybill is 6 to 20 letters, digits or dashes, like 176-12345678.",
   container_status_invalid: "That is not a state a container can be in.",
   container_transition_invalid:
     "A container only moves forward: loading, then shipped, then arrived.",
@@ -374,6 +378,7 @@ export const CONTAINER_MESSAGES: Record<ContainerRefusal, string> = {
   scan_line_not_found: "No package of yours has that code.",
   line_delivered: "This package was already delivered.",
   line_in_other_container: "This package is on another container.",
+  sender_problem: "The sender reported a problem with this package. Confirm to load it anyway.",
 };
 
 export function containerMessage(codes: readonly ContainerRefusal[]): string {
