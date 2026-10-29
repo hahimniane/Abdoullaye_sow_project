@@ -40,6 +40,9 @@ const MAX_MEDIA_BYTES = 25 * 1024 * 1024;
 const WA_AUDIO_TYPES = ["audio/ogg", "audio/mpeg", "audio/mp4", "audio/aac",
   "audio/amr"];
 const CHOOSING_TTL_MS = 3 * 24 * 60 * 60 * 1000;
+// A business that wrote to a customer this recently and is waiting on them
+// gets the customer's next message, whatever the inbox mode.
+const AWAITING_REPLY_MS = 7 * 24 * 60 * 60 * 1000;
 const CLOSED_REPLY_GAP_MS = 12 * 60 * 60 * 1000;
 const RECEIVED_REPLY_GAP_MS = 3 * 24 * 60 * 60 * 1000;
 const STOPPED_ERROR_CODE = -131050;
@@ -592,6 +595,23 @@ function createWhatsAppConversations(deps) {
         {codedBusinessId: coded?.businessId || ""});
 
     const mode = await inboxMode();
+    // This number's other conversations: a business that wrote to the
+    // customer and is waiting on their answer gets it (in launch week too —
+    // Laawol still sees every conversation), and anything held for this
+    // number goes out once they write.
+    const threads = (await conversations()
+        .where("whatsappPhone", "==", phone)
+        .where("caseType", "==", "whatsapp").limit(20).get()).docs;
+    const awaiting = threads
+        .map((doc) => ({doc, data: doc.data() || {}}))
+        .filter(({data}) => data.inbox && data.inbox !== wa.LAAWOL_INBOX &&
+          data.whatsappState === wa.CONVERSATION_STATE.WAITING_CUSTOMER &&
+          now() - (Number(data.lastStaffMessageAtMs) ||
+            Number(data.lastActivityAtMs) || 0) < AWAITING_REPLY_MS)
+        .sort((a, b) => (Number(b.data.lastStaffMessageAtMs) ||
+          Number(b.data.lastActivityAtMs) || 0) -
+          (Number(a.data.lastStaffMessageAtMs) ||
+          Number(a.data.lastActivityAtMs) || 0))[0] || null;
     // A pending "which business?" question.
     const choosing = contact.choosing && now() -
       (Number(contact.choosing.askedAtMs) || 0) < CHOOSING_TTL_MS ?
@@ -608,6 +628,9 @@ function createWhatsAppConversations(deps) {
         suggested = {businessId: problem.businessId,
           businessName: await businessName(problem.businessId)};
       }
+    } else if (awaiting && !request) {
+      inboxId = awaiting.data.inbox;
+      outcome = "awaited";
     } else if (choosing && !request) {
       const pick = wa.choiceFromReply(event.text, choosing.options);
       if (!pick && (Number(choosing.attempts) || 0) < 2) {
@@ -685,6 +708,10 @@ function createWhatsAppConversations(deps) {
       await filePhotoOnLine(added.caseRef, coded, event, added.media);
     }
     await flushWaiting(added.caseRef, added.conv);
+    for (const doc of threads) {
+      if (doc.id === added.caseRef.id) continue;
+      await flushWaiting(doc.ref, doc.data() || {});
+    }
     await notifyNew(added.caseRef, added.preview);
     return outcome;
   }
@@ -855,7 +882,14 @@ function createWhatsAppConversations(deps) {
     const setStatus = (status, extra = {}) => messageRef.set({metadata: {
       channel: "whatsapp", whatsapp: {direction: "out", status, ...extra}}},
     {merge: true});
-    if (!wa.withinWindow(conv.lastCustomerMessageAtMs, now())) {
+    // WhatsApp's 24-hour window belongs to the customer's number, not to
+    // one conversation: a reply the customer sent in another thread (say
+    // Laawol's, in launch week) opens it for this one too.
+    const lastInboundAtMs = opts.flush ? now() : Math.max(
+        Number(conv.lastCustomerMessageAtMs) || 0,
+        Number((await db.collection("whatsappContacts").doc(phone).get())
+            .data()?.lastInboundAtMs) || 0);
+    if (!wa.withinWindow(lastInboundAtMs, now())) {
       await setStatus("waiting_for_reply");
       if (opts.flush) return "waiting";
       const t = now();
@@ -942,6 +976,7 @@ function createWhatsAppConversations(deps) {
     await caseRef.set({
       whatsappState: wa.CONVERSATION_STATE.WAITING_CUSTOMER,
       lastActivityAtMs: now(),
+      lastStaffMessageAtMs: now(),
       unreadCount: 0,
     }, {merge: true});
     return deliverThreadMessage(caseRef, conv, messageRef,

@@ -319,6 +319,9 @@ describe("staff answer", () => {
   it("outside 24 hours holds the reply, sends the template once, and delivers when the customer writes", async () => {
     const ref = await conversationWithMessage();
     await ref.set({lastCustomerMessageAtMs: Date.now() - 2 * DAY}, {merge: true});
+    // The window belongs to the number: it is closed only when the number has
+    // been silent everywhere.
+    await db.collection("whatsappContacts").doc(P1).set({lastInboundAtMs: Date.now() - 2 * DAY}, {merge: true});
     sent.length = 0;
     const first = await call("sendSupportMessage", {caseId: ref.id, content: "Your barrel arrived."}, OWNER);
     const second = await call("sendSupportMessage", {caseId: ref.id, content: "Come Monday."}, OWNER);
@@ -347,6 +350,7 @@ describe("staff answer", () => {
     assert.match(lastSentText(), /won't get more updates|ne recevrez plus/);
     assert.equal((await ref.get()).data().updatesStopped, true);
     await ref.set({lastCustomerMessageAtMs: Date.now() - 2 * DAY}, {merge: true});
+    await db.collection("whatsappContacts").doc(P1).set({lastInboundAtMs: Date.now() - 2 * DAY}, {merge: true});
     sent.length = 0;
     const result = await call("sendSupportMessage", {caseId: ref.id, content: "News"}, OWNER);
     assert.equal(result.delivery, "stopped");
@@ -379,6 +383,53 @@ describe("staff answer", () => {
     // The next message follows the hand-over.
     await inbound(P1, "still there?");
     assert.ok((await messagesOf(caseRef("laawol", P1))).some((m) => m.content === "still there?"));
+  });
+
+  it("launch week: a business thread uses the number's open window, and the customer's answer comes back to it", async () => {
+    // 2026-10-29: the customer answered a package update ("Ok thank u") —
+    // in launch week that lands with Laawol. A minute later the business
+    // opened its own thread and wrote: it must go out at once (WhatsApp's
+    // window is per number), and the customer's next message must come
+    // back to the business that is waiting on them, releasing anything held.
+    await setMode("laawol_only");
+    await db.collection("whatsappContacts").doc(P1).set({phone: P1, businesses: {
+      [BIZ]: {businessName: "Nensona", lastSentAtMs: Date.now(), trackingCode: "CL-4F7K"}}});
+    await inbound(P1, "Ok thank u");
+    assert.equal((await caseRef("laawol", P1).get()).exists, true);
+    const {caseId} = await call("whatsappConversation", {action: "open", phone: P1, name: "Aissatou Bah"}, OWNER);
+    const ref = db.collection("supportCases").doc(caseId);
+    sent.length = 0;
+    const hi = await call("sendSupportMessage", {caseId, content: "hi"}, OWNER);
+    assert.equal(hi.delivery, "sent");
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].type, "text");
+    assert.equal(lastSentText(), "*Ousmane (Nensona):* hi");
+    // A message held earlier (window closed) goes out when they answer,
+    // and their answer lands in the business's thread, not Laawol's.
+    await ref.collection("messages").doc("held-1").set({senderRole: "business", messageType: "text",
+      content: "Your barrel is in.", createdAt: new Date(),
+      metadata: {channel: "whatsapp", whatsappLabel: "Ousmane (Nensona)", whatsapp: {direction: "out", status: "waiting_for_reply"}}});
+    sent.length = 0;
+    await inbound(P1, "Ok");
+    const texts = sent.map((b) => b.text?.body || "");
+    assert.ok(texts.includes("*Ousmane (Nensona):* Your barrel is in."), texts.join(" | "));
+    const mine = await messagesOf(ref);
+    assert.ok(mine.some((m) => m.senderRole === "customer" && m.content === "Ok"));
+    assert.equal(mine.find((m) => m.id === "held-1").metadata.whatsapp.status, "sent");
+    const laawolCustomer = (await messagesOf(caseRef("laawol", P1))).filter((m) => m.senderRole === "customer");
+    assert.deepEqual(laawolCustomer.map((m) => m.content), ["Ok thank u"]);
+  });
+
+  it("a business that stopped waiting more than a week ago no longer captures the answer", async () => {
+    await setMode("laawol_only");
+    await db.collection("whatsappContacts").doc(P1).set({phone: P1, businesses: {}});
+    const {caseId} = await call("whatsappConversation", {action: "open", phone: P1, name: "Aissatou Bah"}, OWNER);
+    await db.collection("supportCases").doc(caseId).set({lastStaffMessageAtMs: Date.now() - 8 * DAY,
+      lastActivityAtMs: Date.now() - 8 * DAY}, {merge: true});
+    await inbound(P1, "hello?");
+    assert.equal((await caseRef("laawol", P1).get()).exists, true);
+    const theirs = await messagesOf(db.collection("supportCases").doc(caseId));
+    assert.equal(theirs.filter((m) => m.senderRole === "customer").length, 0);
   });
 
   it("opens a conversation from a package and lists the customer's packages", async () => {
