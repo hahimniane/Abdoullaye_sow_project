@@ -7,6 +7,7 @@ library;
 import 'package:intl/intl.dart';
 
 import 'lot_ledger.dart' show LotActivity, lotDateOf;
+import 'staff_expense_credit.dart';
 
 const _dayMs = 24 * 60 * 60 * 1000;
 
@@ -435,7 +436,11 @@ class ParkingMonthCustomer {
     required this.paid,
     required this.paidVia,
     required this.partialMonth,
-  });
+    int? dueBeforeExpensesCents,
+    this.expenseCreditCents = 0,
+    this.expenseLines = const [],
+    this.linkedStaffIds = const [],
+  }) : dueBeforeExpensesCents = dueBeforeExpensesCents ?? dueCents;
 
   final String key;
   final String monthKey;
@@ -464,6 +469,121 @@ class ParkingMonthCustomer {
   /// How this month's payments came in, method codes in first-seen order.
   final List<String> paidVia;
   final bool partialMonth;
+
+  /// What they owed on the lot before their expenses came off
+  /// (docs/STAFF_EXPENSE_CREDIT.md §3); the same as [dueCents] for anyone
+  /// who is not a linked staff member. [dueCents] is after expenses.
+  final int dueBeforeExpensesCents;
+
+  /// The staff expenses taken off this bill ("Less expenses").
+  final int expenseCreditCents;
+
+  /// This month's expenses of the linked staff, oldest first.
+  final List<ParkingMonthExpenseLine> expenseLines;
+
+  /// The staff members linked to this customer.
+  final List<String> linkedStaffIds;
+
+  /// The same customer with their staff expenses netted in.
+  ParkingMonthCustomer _withExpenses(
+    StaffNettedCustomer net,
+    List<ParkingMonthExpenseLine> lines,
+  ) =>
+      ParkingMonthCustomer(
+        key: key,
+        monthKey: monthKey,
+        customerName: customerName,
+        customerPhone: customerPhone,
+        customerEmail: customerEmail,
+        cars: cars,
+        registeredTo: registeredTo,
+        activities: activities,
+        olderActivities: olderActivities,
+        activityRegisteredTo: activityRegisteredTo,
+        olderRegisteredTo: olderRegisteredTo,
+        monthCents: monthCents,
+        monthPaidCents: monthPaidCents,
+        monthUnpaidCents: monthUnpaidCents,
+        priorUnpaidCents: priorUnpaidCents,
+        dueCents: net.dueCents,
+        owes: net.dueCents > 0,
+        paid: parkingMonthCustomerPaid(
+          monthCents: monthCents,
+          dueCents: net.dueCents,
+        ),
+        paidVia: paidVia,
+        partialMonth: partialMonth,
+        dueBeforeExpensesCents: net.dueBeforeExpensesCents,
+        expenseCreditCents: net.expenseCreditCents,
+        expenseLines: lines,
+        linkedStaffIds: net.linkedStaffIds,
+      );
+}
+
+/// One expense a linked staff member paid for the lot this month, as the
+/// bill lists it ("Expenses you paid for the lot").
+class ParkingMonthExpenseLine {
+  const ParkingMonthExpenseLine({
+    required this.id,
+    required this.date,
+    required this.label,
+    required this.amountCents,
+    required this.staffId,
+    required this.staffName,
+  });
+
+  final String id;
+
+  /// The day it was bought ("2026-10-03"), or '' when undated.
+  final String date;
+
+  /// The entry's note; '' when none (each client then says "Lot expense").
+  final String label;
+  final int amountCents;
+  final String staffId;
+  final String staffName;
+}
+
+/// One row of "Business owes" on the month end.
+class ParkingMonthStaffOwed {
+  const ParkingMonthStaffOwed({
+    required this.staffId,
+    required this.staffName,
+    required this.customerKey,
+    required this.customerName,
+    required this.owedCents,
+  });
+
+  final String staffId;
+  final String staffName;
+
+  /// The linked customer's key; '' when not linked ("No parking bill").
+  final String customerKey;
+
+  /// The linked customer's name (this month's bill, else the link's); ''
+  /// when not linked.
+  final String customerName;
+  final int owedCents;
+}
+
+/// What month end needs to net staff expenses into the bills
+/// (docs/STAFF_EXPENSE_CREDIT.md): every `lotExpenseEntries` row and every
+/// `staffExpenseRepayments` row of the business (both sides are cumulative),
+/// the business's `staffParkingLinks`, and the team's names.
+class ParkingMonthStaffExpenses {
+  const ParkingMonthStaffExpenses({
+    this.entries = const [],
+    this.repayments = const [],
+    this.links = const {},
+    this.staffNames = const {},
+  });
+
+  /// Rows with `id, paidByStaffId, amountCents, month, voided, note` and
+  /// `spentAt` (a Timestamp, DateTime or ISO string) or `spentAtMs`.
+  final List<Map<String, dynamic>> entries;
+  final List<Map<String, dynamic>> repayments;
+  final Map<String, dynamic> links;
+  final Map<String, String> staffNames;
 }
 
 String _normName(String v) => v.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
@@ -655,6 +775,9 @@ class ParkingMonthSummary {
     required this.dueCents,
     required this.owing,
     required this.bills,
+    this.expenseCreditCents = 0,
+    this.businessOwes = const [],
+    this.businessOwesCents = 0,
   });
 
   final String monthKey;
@@ -670,16 +793,29 @@ class ParkingMonthSummary {
   final int collectedCents;
   final int owedCents;
   final int olderOwedCents;
+  /// What customers still owe, after staff expenses came off.
   final int dueCents;
   final List<ParkingMonthBill> owing;
   final List<ParkingMonthBill> bills;
+
+  /// Σ staff expenses taken off this month's bills ("Less staff expenses").
+  final int expenseCreditCents;
+
+  /// The staff the business still owes for expenses, most owed first.
+  final List<ParkingMonthStaffOwed> businessOwes;
+  final int businessOwesCents;
 }
 
+/// The month's bills. With [staffExpenses], linked staff members' expenses
+/// come off their bills and the business's debts to its staff are listed
+/// (docs/STAFF_EXPENSE_CREDIT.md §3); without it, exactly the bills as they
+/// were before that feature.
 ParkingMonthSummary parkingMonthSummary(
   Iterable<Map<String, dynamic>> rows,
   String monthKey, [
   DateTime? now,
   Iterable<Map<String, dynamic>> activityRows = const [],
+  ParkingMonthStaffExpenses? staffExpenses,
 ]) {
   final bills = [
     for (final row in rows) parkingMonthStatement(row, monthKey, now),
@@ -687,15 +823,33 @@ ParkingMonthSummary parkingMonthSummary(
   final activities = [
     for (final row in activityRows) activityMonthItem(row, monthKey),
   ].whereType<ParkingMonthActivity>().toList();
-  final owing = bills.where((b) => b.owes).toList()
+  final inMonth = activities.where((a) => !a.prior).toList();
+  int sumBills(int Function(ParkingMonthBill) f) => bills.fold(0, (s, b) => s + f(b));
+  int sumActs(int Function(ParkingMonthActivity) f) => inMonth.fold(0, (s, a) => s + f(a));
+  var customers = parkingMonthCustomers(bills, activities);
+  var businessOwes = const <ParkingMonthStaffOwed>[];
+  var businessOwesCents = 0;
+  var expenseCreditCents = 0;
+  if (staffExpenses != null) {
+    final netted = _netStaffExpenses(customers, monthKey, staffExpenses);
+    customers = netted.customers;
+    businessOwes = netted.businessOwes;
+    businessOwesCents = netted.businessOwesCents;
+    expenseCreditCents = netted.expenseCreditCents;
+  }
+  // A car is owing while its customer still owes after expenses came off;
+  // without expenses that is every car with something unpaid this month.
+  final stillOwing = {
+    for (final c in customers)
+      if (c.owes) c.key,
+  };
+  final owing = bills
+      .where((b) => b.owes && stillOwing.contains(parkingCustomerKey(b)))
+      .toList()
     ..sort((a, b) {
       final byDue = b.dueCents.compareTo(a.dueCents);
       return byDue != 0 ? byDue : a.customerName.compareTo(b.customerName);
     });
-  final inMonth = activities.where((a) => !a.prior).toList();
-  int sumBills(int Function(ParkingMonthBill) f) => bills.fold(0, (s, b) => s + f(b));
-  int sumActs(int Function(ParkingMonthActivity) f) => inMonth.fold(0, (s, a) => s + f(a));
-  final customers = parkingMonthCustomers(bills, activities);
   final customersOwing = customers.where((c) => c.owes).toList();
   return ParkingMonthSummary(
     monthKey: monthKey,
@@ -712,6 +866,87 @@ ParkingMonthSummary parkingMonthSummary(
     dueCents: customersOwing.fold(0, (s, c) => s + c.dueCents),
     owing: owing,
     bills: bills,
+    expenseCreditCents: expenseCreditCents,
+    businessOwes: businessOwes,
+    businessOwesCents: businessOwesCents,
+  );
+}
+
+({
+  List<ParkingMonthCustomer> customers,
+  List<ParkingMonthStaffOwed> businessOwes,
+  int businessOwesCents,
+  int expenseCreditCents,
+}) _netStaffExpenses(
+  List<ParkingMonthCustomer> customers,
+  String monthKey,
+  ParkingMonthStaffExpenses input,
+) {
+  final entries = [
+    for (final row in input.entries)
+      {
+        ...row,
+        'spentAtMs': row['spentAtMs'] ??
+            lotDateOf(row['spentAt'])?.millisecondsSinceEpoch ??
+            0,
+      },
+  ];
+  final net = netStaffExpenses(
+    [for (final c in customers) (key: c.key, dueCents: c.dueCents)],
+    entries: entries,
+    repayments: input.repayments,
+    links: input.links,
+    monthKey: monthKey,
+    staffNames: input.staffNames,
+  );
+  String dayOf(int ms) {
+    if (ms <= 0) return '';
+    final day = parkingDayNumber(
+        DateTime.fromMillisecondsSinceEpoch(ms, isUtc: true));
+    return day == null ? '' : _dayKey(day);
+  }
+
+  final netted = [
+    for (var i = 0; i < customers.length; i++)
+      customers[i]._withExpenses(net.customers[i], [
+        for (final line in monthExpenseLines(
+            entries, monthKey, net.customers[i].linkedStaffIds))
+          ParkingMonthExpenseLine(
+            id: line.id,
+            date: dayOf(line.spentAtMs),
+            label: line.note,
+            amountCents: line.amountCents,
+            staffId: line.staffId,
+            staffName: _text(input.staffNames[line.staffId], 120),
+          ),
+      ]),
+  ]..sort((a, b) {
+      final byDue = b.dueCents.compareTo(a.dueCents);
+      return byDue != 0 ? byDue : a.customerName.compareTo(b.customerName);
+    });
+  final names = {for (final c in customers) c.key: c.customerName};
+  String linkedName(String staffId, String key) {
+    if (key.isEmpty) return '';
+    final billed = names[key] ?? '';
+    if (billed.isNotEmpty) return billed;
+    final link = input.links[staffId];
+    return link is Map ? _text(link['customerName'], 120) : '';
+  }
+
+  return (
+    customers: netted,
+    businessOwes: [
+      for (final row in net.businessOwes)
+        ParkingMonthStaffOwed(
+          staffId: row.staffId,
+          staffName: row.staffName,
+          customerKey: row.customerKey,
+          customerName: linkedName(row.staffId, row.customerKey),
+          owedCents: row.owedCents,
+        ),
+    ],
+    businessOwesCents: net.businessOwesCents,
+    expenseCreditCents: net.expenseCreditCents,
   );
 }
 
@@ -763,12 +998,21 @@ class MonthBillPaymentItem {
   final String id;
   final String label;
   final int amountCents;
+
+  MonthBillPaymentItem withAmount(int cents) => MonthBillPaymentItem(
+      kind: kind, id: id, label: label, amountCents: cents);
 }
 
 /// "Mark all paid": what to record against each line, through the payment
 /// each line already takes - a part payment on a car (what the bill shows
 /// due on it), an instalment on an activity (the rest of its fee). Payment-
 /// link cars are Stripe's to record and are skipped. Mirrors the server.
+///
+/// A linked staff member's expenses already cover part of the bill
+/// (`expenseCreditCents`): they cover the first items in order and only the
+/// rest is recorded (`itemsAfterCredit`, docs/STAFF_EXPENSE_CREDIT.md §3).
+/// The car rows keep that part "unpaid" on purpose - next month the same
+/// cumulative credit covers it again.
 ({List<MonthBillPaymentItem> items, List<MonthBillPaymentItem> skipped, int totalCents})
     monthBillPaymentPlan(ParkingMonthCustomer c) {
   final items = <MonthBillPaymentItem>[];
@@ -792,10 +1036,16 @@ class MonthBillPaymentItem {
       amountCents: a.dueCents,
     ));
   }
+  final toPay = itemsAfterCredit<MonthBillPaymentItem>(
+    items,
+    c.expenseCreditCents,
+    amountOf: (x) => x.amountCents,
+    withAmount: (x, cents) => x.withAmount(cents),
+  );
   return (
-    items: items,
+    items: toPay,
     skipped: skipped,
-    totalCents: items.fold(0, (s, x) => s + x.amountCents),
+    totalCents: toPay.fold(0, (s, x) => s + x.amountCents),
   );
 }
 

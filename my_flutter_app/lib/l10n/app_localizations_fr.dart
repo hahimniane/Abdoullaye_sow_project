@@ -17581,4 +17581,137 @@ class AppLocalizationsFr extends AppLocalizations {
   String pmeEstimateHeader(String lastDay) {
     return 'ESTIMATION — mois entier, voitures encore garées comptées jusqu\'au $lastDay';
   }
+
+  @override
+  String get pmeExpensesTitle => 'Dépenses que vous avez payées pour le parc';
+
+  @override
+  String get pmeLessExpenses => 'Moins les dépenses';
+
+  @override
+  String pmeLessExpensesAmount(String amount) {
+    return 'Moins les dépenses −$amount';
+  }
+
+  @override
+  String get pmeLessStaffExpenses => 'Moins les dépenses du personnel';
+
+  @override
+  String get pmeLotExpense => 'Dépense du parc';
+
+  @override
+  String pmeExpenseLinesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count dépenses ce mois-ci',
+      one: '1 dépense ce mois-ci',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pmeExpensesUnavailable =>
+      'Les dépenses du personnel n\'ont pas pu être chargées : les factures sont affichées avant dépenses.';
+
+  @override
+  String get pmeBusinessOwes => 'L\'entreprise doit';
+
+  @override
+  String get pmeBusinessOwesHint =>
+      'Dépenses payées par le personnel de sa poche, après ce qu\'il doit pour le stationnement.';
+
+  @override
+  String get pmeBusinessOwesNone =>
+      'L\'entreprise ne doit rien à son personnel.';
+
+  @override
+  String get pmeNoParkingBill => 'Pas de facture de stationnement';
+
+  @override
+  String get pmePaidBack => 'Remboursé';
+
+  @override
+  String pmePaidBackSubtitle(String name, String amount) {
+    return '$name · dû $amount';
+  }
+
+  @override
+  String get pmePaidBackHint =>
+      'Enregistrez l\'argent qui lui a été rendu. Il est déduit de ce que l\'entreprise doit.';
+
+  @override
+  String get pmePaidBackAmount => 'Montant remis';
+
+  @override
+  String get pmePaidBackGivenBy => 'Remis par';
+
+  @override
+  String get pmePaidBackWho => 'Qui a remis l\'argent';
+
+  @override
+  String get pmePaidBackSayWho => 'Indiquez qui a remis l\'argent.';
+
+  @override
+  String pmePaidBackAmountInvalid(String amount) {
+    return 'Saisissez un montant supérieur à 0,00 \$, jusqu\'à $amount.';
+  }
+
+  @override
+  String pmePaidBackDone(String amount) {
+    return 'Remboursement de $amount enregistré.';
+  }
+
+  @override
+  String get pmeRepaymentsThisMonth => 'Remboursé ce mois-ci';
+
+  @override
+  String pmeGivenByName(String name) {
+    return 'par $name';
+  }
+
+  @override
+  String get pmeVoidRepaymentTitle => 'Annuler ce remboursement ?';
+
+  @override
+  String pmeVoidRepaymentBody(String amount, String name) {
+    return '$amount remis à $name sera compté comme non remboursé. Rien n\'est supprimé.';
+  }
+
+  @override
+  String get pmeRepaymentVoided => 'Remboursement annulé.';
+
+  @override
+  String get pmeRefusalRepaymentAmountInvalid =>
+      'Saisissez un montant supérieur à 0,00 \$.';
+
+  @override
+  String get pmeRefusalRepaymentExceedsCredit =>
+      'C\'est plus que ce que l\'entreprise lui doit pour les dépenses.';
+
+  @override
+  String get pmeRefusalRepaymentNotFound => 'Ce remboursement est introuvable.';
+
+  @override
+  String get pmeRefusalRepaymentVoided => 'Ce remboursement a déjà été annulé.';
+
+  @override
+  String get pmeRefusalRepaymentMethodInvalid =>
+      'Choisissez comment l\'argent a été remis.';
+
+  @override
+  String get pmeRefusalRepaymentDateInvalid =>
+      'Cette date n\'est pas valide, ou elle est après aujourd\'hui.';
+
+  @override
+  String get pmeRefusalLinkCustomerInvalid =>
+      'Ce client du stationnement est introuvable.';
+
+  @override
+  String get pmeRefusalStaffActionInvalid =>
+      'Cette action n\'est pas disponible. Mettez l\'application à jour et réessayez.';
+
+  @override
+  String get pmeRefusalStaffNotMember =>
+      'Cette personne ne fait pas partie de l\'équipe de cette entreprise.';
 }

@@ -461,6 +461,25 @@ FirestoreQuerySpec lotExpenseEntriesForMonthsSpec(
   orderBy: 'month',
 );
 
+/// Every expense entry of the business, for month end's staff expense credit
+/// (docs/STAFF_EXPENSE_CREDIT.md §3). The credit is cumulative - every
+/// expense up to the month shown, September included - so this is the whole
+/// history on purpose: equality only, no index, the months filtered on the
+/// phone as the server does.
+FirestoreQuerySpec lotExpenseEntriesAllSpec(String businessId) =>
+    FirestoreQuerySpec(
+      collection: 'lotExpenseEntries',
+      filters: [_business(businessId)],
+    );
+
+/// Every "Paid back" of the business (`staffExpenseRepayments`), the other
+/// side of the same cumulative credit. Equality only, no index.
+FirestoreQuerySpec staffExpenseRepaymentsSpec(String businessId) =>
+    FirestoreQuerySpec(
+      collection: 'staffExpenseRepayments',
+      filters: [_business(businessId)],
+    );
+
 /// "2026-12" -> "2027-01". Unparsable keys come back unchanged.
 String nextMonthKey(String monthKey) {
   final m = RegExp(r'^(\d{4})-(\d{2})$').firstMatch(monthKey.trim());

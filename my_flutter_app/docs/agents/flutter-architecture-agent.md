@@ -492,3 +492,12 @@ Add future project conventions and repeated architectural decisions here.
   `getLotLedgerTotals` `action: 'vinDuplicates'` (every activity), never from
   the date-windowed list. Reading one activity by id uses
   `lotActivitiesCollection` (business_activity_queries.dart), not a query.
+- Staff expense credit (docs/STAFF_EXPENSE_CREDIT.md): the arithmetic is
+  `lib/services/staff_expense_credit.dart` (fixture-pinned mirror of the
+  server); month end nets it through the OPTIONAL last argument of
+  `parkingMonthSummary` (`ParkingMonthStaffExpenses`; absent = the old
+  bills) and `monthBillPaymentPlan` pays only `itemsAfterCredit`. Extra bill
+  text is added at the call site (`parkingMonthTextWithExpenses`), never in
+  the server-mirrored text builder. Paid back / Void go through
+  `StaffExpenseRepaymentService` (`updateLotExpenseEntry` actions,
+  injectable caller); a refused expense read means no netting plus a note.

@@ -29263,6 +29263,210 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'ESTIMATE — whole month, cars still parked counted to {lastDay}'**
   String pmeEstimateHeader(String lastDay);
+
+  /// No description provided for @pmeExpensesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Expenses you paid for the lot'**
+  String get pmeExpensesTitle;
+
+  /// No description provided for @pmeLessExpenses.
+  ///
+  /// In en, this message translates to:
+  /// **'Less expenses'**
+  String get pmeLessExpenses;
+
+  /// No description provided for @pmeLessExpensesAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Less expenses −{amount}'**
+  String pmeLessExpensesAmount(String amount);
+
+  /// No description provided for @pmeLessStaffExpenses.
+  ///
+  /// In en, this message translates to:
+  /// **'Less staff expenses'**
+  String get pmeLessStaffExpenses;
+
+  /// No description provided for @pmeLotExpense.
+  ///
+  /// In en, this message translates to:
+  /// **'Lot expense'**
+  String get pmeLotExpense;
+
+  /// No description provided for @pmeExpenseLinesCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 expense this month} other{{count} expenses this month}}'**
+  String pmeExpenseLinesCount(int count);
+
+  /// No description provided for @pmeExpensesUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Staff expenses could not be loaded, so bills are shown before expenses.'**
+  String get pmeExpensesUnavailable;
+
+  /// No description provided for @pmeBusinessOwes.
+  ///
+  /// In en, this message translates to:
+  /// **'Business owes'**
+  String get pmeBusinessOwes;
+
+  /// No description provided for @pmeBusinessOwesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Expenses staff paid out of their own pocket, after what they owe on parking.'**
+  String get pmeBusinessOwesHint;
+
+  /// No description provided for @pmeBusinessOwesNone.
+  ///
+  /// In en, this message translates to:
+  /// **'The business owes its staff nothing.'**
+  String get pmeBusinessOwesNone;
+
+  /// No description provided for @pmeNoParkingBill.
+  ///
+  /// In en, this message translates to:
+  /// **'No parking bill'**
+  String get pmeNoParkingBill;
+
+  /// No description provided for @pmePaidBack.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid back'**
+  String get pmePaidBack;
+
+  /// No description provided for @pmePaidBackSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} · owed {amount}'**
+  String pmePaidBackSubtitle(String name, String amount);
+
+  /// No description provided for @pmePaidBackHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Record the money given back to them. It comes off what the business owes.'**
+  String get pmePaidBackHint;
+
+  /// No description provided for @pmePaidBackAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount given'**
+  String get pmePaidBackAmount;
+
+  /// No description provided for @pmePaidBackGivenBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Given by'**
+  String get pmePaidBackGivenBy;
+
+  /// No description provided for @pmePaidBackWho.
+  ///
+  /// In en, this message translates to:
+  /// **'Who gave the money'**
+  String get pmePaidBackWho;
+
+  /// No description provided for @pmePaidBackSayWho.
+  ///
+  /// In en, this message translates to:
+  /// **'Say who gave the money.'**
+  String get pmePaidBackSayWho;
+
+  /// No description provided for @pmePaidBackAmountInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter an amount above \$0.00, up to {amount}.'**
+  String pmePaidBackAmountInvalid(String amount);
+
+  /// No description provided for @pmePaidBackDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid back {amount} recorded.'**
+  String pmePaidBackDone(String amount);
+
+  /// No description provided for @pmeRepaymentsThisMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid back this month'**
+  String get pmeRepaymentsThisMonth;
+
+  /// No description provided for @pmeGivenByName.
+  ///
+  /// In en, this message translates to:
+  /// **'by {name}'**
+  String pmeGivenByName(String name);
+
+  /// No description provided for @pmeVoidRepaymentTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Void this payment?'**
+  String get pmeVoidRepaymentTitle;
+
+  /// No description provided for @pmeVoidRepaymentBody.
+  ///
+  /// In en, this message translates to:
+  /// **'{amount} given to {name} will count as not paid back. Nothing is deleted.'**
+  String pmeVoidRepaymentBody(String amount, String name);
+
+  /// No description provided for @pmeRepaymentVoided.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment voided.'**
+  String get pmeRepaymentVoided;
+
+  /// No description provided for @pmeRefusalRepaymentAmountInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter an amount above \$0.00.'**
+  String get pmeRefusalRepaymentAmountInvalid;
+
+  /// No description provided for @pmeRefusalRepaymentExceedsCredit.
+  ///
+  /// In en, this message translates to:
+  /// **'That is more than the business owes them for expenses.'**
+  String get pmeRefusalRepaymentExceedsCredit;
+
+  /// No description provided for @pmeRefusalRepaymentNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'That payment could not be found.'**
+  String get pmeRefusalRepaymentNotFound;
+
+  /// No description provided for @pmeRefusalRepaymentVoided.
+  ///
+  /// In en, this message translates to:
+  /// **'That payment was already voided.'**
+  String get pmeRefusalRepaymentVoided;
+
+  /// No description provided for @pmeRefusalRepaymentMethodInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick how the money was given.'**
+  String get pmeRefusalRepaymentMethodInvalid;
+
+  /// No description provided for @pmeRefusalRepaymentDateInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'That date is not valid, or it is after today.'**
+  String get pmeRefusalRepaymentDateInvalid;
+
+  /// No description provided for @pmeRefusalLinkCustomerInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'That parking customer could not be found.'**
+  String get pmeRefusalLinkCustomerInvalid;
+
+  /// No description provided for @pmeRefusalStaffActionInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'That action is not available. Update the app and try again.'**
+  String get pmeRefusalStaffActionInvalid;
+
+  /// No description provided for @pmeRefusalStaffNotMember.
+  ///
+  /// In en, this message translates to:
+  /// **'That person is not on this business\'s team.'**
+  String get pmeRefusalStaffNotMember;
 }
 
 class _AppLocalizationsDelegate

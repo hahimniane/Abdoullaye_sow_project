@@ -8580,5 +8580,94 @@
         "type": "String"
       }
     }
-  }
+  },
+  "pmeExpensesTitle": "Expenses you paid for the lot",
+  "pmeLessExpenses": "Less expenses",
+  "pmeLessExpensesAmount": "Less expenses −{amount}",
+  "@pmeLessExpensesAmount": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeLessStaffExpenses": "Less staff expenses",
+  "pmeLotExpense": "Lot expense",
+  "pmeExpenseLinesCount": "{count, plural, =1{1 expense this month} other{{count} expenses this month}}",
+  "@pmeExpenseLinesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pmeExpensesUnavailable": "Staff expenses could not be loaded, so bills are shown before expenses.",
+  "pmeBusinessOwes": "Business owes",
+  "pmeBusinessOwesHint": "Expenses staff paid out of their own pocket, after what they owe on parking.",
+  "pmeBusinessOwesNone": "The business owes its staff nothing.",
+  "pmeNoParkingBill": "No parking bill",
+  "pmePaidBack": "Paid back",
+  "pmePaidBackSubtitle": "{name} · owed {amount}",
+  "@pmePaidBackSubtitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "pmePaidBackHint": "Record the money given back to them. It comes off what the business owes.",
+  "pmePaidBackAmount": "Amount given",
+  "pmePaidBackGivenBy": "Given by",
+  "pmePaidBackWho": "Who gave the money",
+  "pmePaidBackSayWho": "Say who gave the money.",
+  "pmePaidBackAmountInvalid": "Enter an amount above $0.00, up to {amount}.",
+  "@pmePaidBackAmountInvalid": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "pmePaidBackDone": "Paid back {amount} recorded.",
+  "@pmePaidBackDone": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeRepaymentsThisMonth": "Paid back this month",
+  "pmeGivenByName": "by {name}",
+  "@pmeGivenByName": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeVoidRepaymentTitle": "Void this payment?",
+  "pmeVoidRepaymentBody": "{amount} given to {name} will count as not paid back. Nothing is deleted.",
+  "@pmeVoidRepaymentBody": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeRepaymentVoided": "Payment voided.",
+  "pmeRefusalRepaymentAmountInvalid": "Enter an amount above $0.00.",
+  "pmeRefusalRepaymentExceedsCredit": "That is more than the business owes them for expenses.",
+  "pmeRefusalRepaymentNotFound": "That payment could not be found.",
+  "pmeRefusalRepaymentVoided": "That payment was already voided.",
+  "pmeRefusalRepaymentMethodInvalid": "Pick how the money was given.",
+  "pmeRefusalRepaymentDateInvalid": "That date is not valid, or it is after today.",
+  "pmeRefusalLinkCustomerInvalid": "That parking customer could not be found.",
+  "pmeRefusalStaffActionInvalid": "That action is not available. Update the app and try again.",
+  "pmeRefusalStaffNotMember": "That person is not on this business's team."
 }

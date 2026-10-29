@@ -61,6 +61,12 @@ class ParkingMonthPdfCopy {
     this.itemsLabel,
     this.locale = 'en',
     this.estimate = '',
+    this.expensesTitle = 'Expenses you paid for the lot',
+    this.lessExpenses = 'Less expenses',
+    this.lessStaffExpenses = 'Less staff expenses',
+    this.businessOwes = 'Business owes',
+    this.noParkingBill = 'No parking bill',
+    this.lotExpense = 'Lot expense',
   });
 
   final String bill;
@@ -113,6 +119,18 @@ class ParkingMonthPdfCopy {
   /// running: this line ("ESTIMATE — whole month, ...") runs under the
   /// header. Empty (the default) leaves the normal paper unchanged.
   final String estimate;
+
+  /// Staff expenses (docs/STAFF_EXPENSE_CREDIT.md §5): the bill's section of
+  /// this month's expenses and its "Less expenses" line; the summary's
+  /// "Less staff expenses" line and "Business owes" section.
+  final String expensesTitle;
+  final String lessExpenses;
+  final String lessStaffExpenses;
+  final String businessOwes;
+  final String noParkingBill;
+
+  /// An expense with no note.
+  final String lotExpense;
 }
 
 String _t(Object? v) => (v ?? '').toString().trim();
@@ -364,6 +382,24 @@ Future<Uint8List> buildParkingMonthBillPdf({
             ]),
         ]),
       ],
+      if (c.expenseLines.isNotEmpty) ...[
+        sectionTitle(copy.expensesTitle),
+        table([
+          pw.TableRow(children: [
+            headCell(copy.activity),
+            headCell(copy.date),
+            headCell(''),
+            headCell(copy.amount, right: true),
+          ]),
+          for (final e in c.expenseLines)
+            pw.TableRow(children: [
+              itemCell(e.label.isEmpty ? copy.lotExpense : e.label, e.staffName),
+              text(e.date.isEmpty ? '' : displayDay(e.date, copy.locale)),
+              text(''),
+              text(parkingMoney(e.amountCents), bold: true, align: pw.TextAlign.right),
+            ]),
+        ]),
+      ],
       pw.SizedBox(height: 10),
       _row(copy.monthTotal, parkingMoney(c.monthCents), color: _ink),
       if (c.priorUnpaidCents > 0)
@@ -376,6 +412,8 @@ Future<Uint8List> buildParkingMonthBillPdf({
       for (final a in c.activities)
         if (a.paidCents > 0)
           _row('${copy.paidToward} ${actTitle(a)} (${displayDay(a.date, copy.locale)})', '-${parkingMoney(a.paidCents)}', color: _ok),
+      if (c.expenseCreditCents > 0)
+        _row(copy.lessExpenses, '-${parkingMoney(c.expenseCreditCents)}', color: _ok),
       pw.Container(height: 1.2, color: _ink, margin: const pw.EdgeInsets.symmetric(vertical: 6)),
       c.dueCents > 0
           ? _row(copy.balanceDue, parkingMoney(c.dueCents), bold: true, color: _due)
@@ -414,6 +452,10 @@ Future<Uint8List> buildParkingMonthSummaryPdf({
         stat(copy.collected, parkingMoney(s.collectedCents), _ok),
         stat(copy.owed, parkingMoney(s.dueCents), s.dueCents > 0 ? _due : _ink),
       ]),
+      if (s.expenseCreditCents > 0) ...[
+        pw.SizedBox(height: 8),
+        _row(copy.lessStaffExpenses, '-${parkingMoney(s.expenseCreditCents)}', color: _ok),
+      ],
       pw.SizedBox(height: 20),
       _label('${copy.whoOwes} (${s.customersOwing.length})'),
       pw.Container(height: 1, color: _rule, margin: const pw.EdgeInsets.symmetric(vertical: 6)),
@@ -443,6 +485,38 @@ Future<Uint8List> buildParkingMonthSummaryPdf({
                 style: pw.TextStyle(fontSize: 10.5, fontWeight: pw.FontWeight.bold, color: _due)),
           ]),
         ),
+      if (s.businessOwes.isNotEmpty) ...[
+        pw.SizedBox(height: 20),
+        _label('${copy.businessOwes} (${s.businessOwes.length})'),
+        pw.Container(height: 1, color: _rule, margin: const pw.EdgeInsets.symmetric(vertical: 6)),
+        for (final o in s.businessOwes)
+          pw.Container(
+            padding: const pw.EdgeInsets.symmetric(vertical: 5),
+            decoration: const pw.BoxDecoration(
+              border: pw.Border(bottom: pw.BorderSide(color: _rule, width: 0.5)),
+            ),
+            child: pw.Row(children: [
+              pw.SizedBox(
+                width: 140,
+                child: pw.Text(o.staffName.isEmpty ? '—' : o.staffName,
+                    style: pw.TextStyle(fontSize: 10.5, fontWeight: pw.FontWeight.bold, color: _ink)),
+              ),
+              pw.Expanded(
+                child: pw.Text(
+                  o.customerKey.isEmpty
+                      ? copy.noParkingBill
+                      : (o.customerName.isEmpty ? '—' : o.customerName),
+                  maxLines: 1,
+                  overflow: pw.TextOverflow.clip,
+                  style: const pw.TextStyle(fontSize: 9, color: _muted),
+                ),
+              ),
+              pw.Text(parkingMoney(o.owedCents),
+                  style: pw.TextStyle(fontSize: 10.5, fontWeight: pw.FontWeight.bold, color: _ink)),
+            ]),
+          ),
+        _row(copy.businessOwes, parkingMoney(s.businessOwesCents), bold: true),
+      ],
     ],
   ));
   return doc.save();

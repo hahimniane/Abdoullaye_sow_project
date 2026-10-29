@@ -8583,5 +8583,94 @@
         "type": "String"
       }
     }
-  }
+  },
+  "pmeExpensesTitle": "Dépenses que vous avez payées pour le parc",
+  "pmeLessExpenses": "Moins les dépenses",
+  "pmeLessExpensesAmount": "Moins les dépenses −{amount}",
+  "@pmeLessExpensesAmount": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeLessStaffExpenses": "Moins les dépenses du personnel",
+  "pmeLotExpense": "Dépense du parc",
+  "pmeExpenseLinesCount": "{count, plural, =1{1 dépense ce mois-ci} other{{count} dépenses ce mois-ci}}",
+  "@pmeExpenseLinesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pmeExpensesUnavailable": "Les dépenses du personnel n'ont pas pu être chargées : les factures sont affichées avant dépenses.",
+  "pmeBusinessOwes": "L'entreprise doit",
+  "pmeBusinessOwesHint": "Dépenses payées par le personnel de sa poche, après ce qu'il doit pour le stationnement.",
+  "pmeBusinessOwesNone": "L'entreprise ne doit rien à son personnel.",
+  "pmeNoParkingBill": "Pas de facture de stationnement",
+  "pmePaidBack": "Remboursé",
+  "pmePaidBackSubtitle": "{name} · dû {amount}",
+  "@pmePaidBackSubtitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "pmePaidBackHint": "Enregistrez l'argent qui lui a été rendu. Il est déduit de ce que l'entreprise doit.",
+  "pmePaidBackAmount": "Montant remis",
+  "pmePaidBackGivenBy": "Remis par",
+  "pmePaidBackWho": "Qui a remis l'argent",
+  "pmePaidBackSayWho": "Indiquez qui a remis l'argent.",
+  "pmePaidBackAmountInvalid": "Saisissez un montant supérieur à 0,00 $, jusqu'à {amount}.",
+  "@pmePaidBackAmountInvalid": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "pmePaidBackDone": "Remboursement de {amount} enregistré.",
+  "@pmePaidBackDone": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeRepaymentsThisMonth": "Remboursé ce mois-ci",
+  "pmeGivenByName": "par {name}",
+  "@pmeGivenByName": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeVoidRepaymentTitle": "Annuler ce remboursement ?",
+  "pmeVoidRepaymentBody": "{amount} remis à {name} sera compté comme non remboursé. Rien n'est supprimé.",
+  "@pmeVoidRepaymentBody": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeRepaymentVoided": "Remboursement annulé.",
+  "pmeRefusalRepaymentAmountInvalid": "Saisissez un montant supérieur à 0,00 $.",
+  "pmeRefusalRepaymentExceedsCredit": "C'est plus que ce que l'entreprise lui doit pour les dépenses.",
+  "pmeRefusalRepaymentNotFound": "Ce remboursement est introuvable.",
+  "pmeRefusalRepaymentVoided": "Ce remboursement a déjà été annulé.",
+  "pmeRefusalRepaymentMethodInvalid": "Choisissez comment l'argent a été remis.",
+  "pmeRefusalRepaymentDateInvalid": "Cette date n'est pas valide, ou elle est après aujourd'hui.",
+  "pmeRefusalLinkCustomerInvalid": "Ce client du stationnement est introuvable.",
+  "pmeRefusalStaffActionInvalid": "Cette action n'est pas disponible. Mettez l'application à jour et réessayez.",
+  "pmeRefusalStaffNotMember": "Cette personne ne fait pas partie de l'équipe de cette entreprise."
 }

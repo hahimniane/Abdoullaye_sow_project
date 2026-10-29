@@ -17308,4 +17308,136 @@ class AppLocalizationsEn extends AppLocalizations {
   String pmeEstimateHeader(String lastDay) {
     return 'ESTIMATE — whole month, cars still parked counted to $lastDay';
   }
+
+  @override
+  String get pmeExpensesTitle => 'Expenses you paid for the lot';
+
+  @override
+  String get pmeLessExpenses => 'Less expenses';
+
+  @override
+  String pmeLessExpensesAmount(String amount) {
+    return 'Less expenses −$amount';
+  }
+
+  @override
+  String get pmeLessStaffExpenses => 'Less staff expenses';
+
+  @override
+  String get pmeLotExpense => 'Lot expense';
+
+  @override
+  String pmeExpenseLinesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count expenses this month',
+      one: '1 expense this month',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pmeExpensesUnavailable =>
+      'Staff expenses could not be loaded, so bills are shown before expenses.';
+
+  @override
+  String get pmeBusinessOwes => 'Business owes';
+
+  @override
+  String get pmeBusinessOwesHint =>
+      'Expenses staff paid out of their own pocket, after what they owe on parking.';
+
+  @override
+  String get pmeBusinessOwesNone => 'The business owes its staff nothing.';
+
+  @override
+  String get pmeNoParkingBill => 'No parking bill';
+
+  @override
+  String get pmePaidBack => 'Paid back';
+
+  @override
+  String pmePaidBackSubtitle(String name, String amount) {
+    return '$name · owed $amount';
+  }
+
+  @override
+  String get pmePaidBackHint =>
+      'Record the money given back to them. It comes off what the business owes.';
+
+  @override
+  String get pmePaidBackAmount => 'Amount given';
+
+  @override
+  String get pmePaidBackGivenBy => 'Given by';
+
+  @override
+  String get pmePaidBackWho => 'Who gave the money';
+
+  @override
+  String get pmePaidBackSayWho => 'Say who gave the money.';
+
+  @override
+  String pmePaidBackAmountInvalid(String amount) {
+    return 'Enter an amount above \$0.00, up to $amount.';
+  }
+
+  @override
+  String pmePaidBackDone(String amount) {
+    return 'Paid back $amount recorded.';
+  }
+
+  @override
+  String get pmeRepaymentsThisMonth => 'Paid back this month';
+
+  @override
+  String pmeGivenByName(String name) {
+    return 'by $name';
+  }
+
+  @override
+  String get pmeVoidRepaymentTitle => 'Void this payment?';
+
+  @override
+  String pmeVoidRepaymentBody(String amount, String name) {
+    return '$amount given to $name will count as not paid back. Nothing is deleted.';
+  }
+
+  @override
+  String get pmeRepaymentVoided => 'Payment voided.';
+
+  @override
+  String get pmeRefusalRepaymentAmountInvalid =>
+      'Enter an amount above \$0.00.';
+
+  @override
+  String get pmeRefusalRepaymentExceedsCredit =>
+      'That is more than the business owes them for expenses.';
+
+  @override
+  String get pmeRefusalRepaymentNotFound => 'That payment could not be found.';
+
+  @override
+  String get pmeRefusalRepaymentVoided => 'That payment was already voided.';
+
+  @override
+  String get pmeRefusalRepaymentMethodInvalid =>
+      'Pick how the money was given.';
+
+  @override
+  String get pmeRefusalRepaymentDateInvalid =>
+      'That date is not valid, or it is after today.';
+
+  @override
+  String get pmeRefusalLinkCustomerInvalid =>
+      'That parking customer could not be found.';
+
+  @override
+  String get pmeRefusalStaffActionInvalid =>
+      'That action is not available. Update the app and try again.';
+
+  @override
+  String get pmeRefusalStaffNotMember =>
+      'That person is not on this business\'s team.';
 }

@@ -2,20 +2,25 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_auth/firebase_auth.dart' show FirebaseAuth;
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/parked_car.dart';
+import '../providers/auth_provider.dart';
 import '../services/business_activity_queries.dart';
 import '../services/business_parking_entry.dart'
     show businessParkingReceivedViaValues;
 import '../services/firestore_query_spec.dart';
+import '../services/lot_ledger.dart' show lotDollarsToCents;
 import '../services/parking_month_statement.dart';
+import '../services/staff_expense_repayments.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_motion.dart';
 import '../theme/app_spacing.dart';
+import '../utils/business_permissions.dart';
 import '../utils/date_display.dart';
 import '../utils/parking_month_pdf.dart';
 import '../widgets/app_back_button.dart';
@@ -90,10 +95,31 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
   /// one).
   bool get _estimating => _wholeMonth && parkingMonthCanEstimate(_monthKey);
 
+  /// Staff expenses that come off their parking bill
+  /// (docs/STAFF_EXPENSE_CREDIT.md): every expense entry and every "Paid
+  /// back" of the business - both sides are cumulative, so not per month.
+  /// The links live on the business doc read below.
+  List<Map<String, dynamic>> _expenseRows = const [];
+  List<Map<String, dynamic>> _repaymentRows = const [];
+  bool _expensesLoaded = false;
+  bool _repaymentsLoaded = false;
+
+  /// A read was refused (no ledger access, or rules not there yet): the
+  /// bills show without expenses and a note says so - never a crash.
+  bool _creditError = false;
+  bool _creditTimedOut = false;
+  Timer? _creditSafety;
+
+  bool get _creditReady =>
+      _expensesLoaded && _repaymentsLoaded && !_creditError;
+  bool get _creditPending =>
+      !_creditError && !_creditTimedOut && !_creditReady;
+
   @override
   void initState() {
     super.initState();
     _subscribeMonth();
+    _subscribeStaffExpenses();
     _subs.add(
       _db
           .collection('users')
@@ -123,6 +149,45 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
       ) {
         if (mounted) setState(() => _business = doc.data() ?? const {});
       }, onError: (_) {}),
+    );
+  }
+
+  /// One query each, equality only. The spinner waits for them so a bill
+  /// never shows its pre-expense total first - but never longer than the
+  /// safety timer; a refused read means no netting and a note.
+  void _subscribeStaffExpenses() {
+    _creditSafety = Timer(const Duration(seconds: 20), () {
+      if (mounted && _creditPending) setState(() => _creditTimedOut = true);
+    });
+    List<Map<String, dynamic>> rows(QuerySnapshot<Map<String, dynamic>> snap) =>
+        [for (final d in snap.docs) {...d.data(), 'id': d.id}];
+    void refused(Object _) {
+      if (mounted) setState(() => _creditError = true);
+    }
+
+    _subs.add(
+      lotExpenseEntriesAllSpec(widget.businessId)
+          .build(_db)
+          .snapshots()
+          .listen((snap) {
+            if (!mounted) return;
+            setState(() {
+              _expenseRows = rows(snap);
+              _expensesLoaded = true;
+            });
+          }, onError: refused),
+    );
+    _subs.add(
+      staffExpenseRepaymentsSpec(widget.businessId)
+          .build(_db)
+          .snapshots()
+          .listen((snap) {
+            if (!mounted) return;
+            setState(() {
+              _repaymentRows = rows(snap);
+              _repaymentsLoaded = true;
+            });
+          }, onError: refused),
     );
   }
 
@@ -219,7 +284,19 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
 
   ParkingMonthSummary _summary() {
     final estimating = _estimating;
-    final key = (_docs, _activities, _monthKey, estimating);
+    final ready = _creditReady;
+    final links = _business['staffParkingLinks'];
+    final key = (
+      _docs,
+      _activities,
+      _monthKey,
+      estimating,
+      ready,
+      _expenseRows,
+      _repaymentRows,
+      links,
+      _staff,
+    );
     final cached = _summaryCache;
     if (cached != null && key == _summaryKey) return cached;
     _summaryKey = key;
@@ -230,7 +307,66 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
       _monthKey,
       parkingMonthAsOf(_monthKey, estimating),
       _activities,
+      ready
+          ? ParkingMonthStaffExpenses(
+              entries: _expenseRows,
+              repayments: _repaymentRows,
+              links: links is Map ? links.cast<String, dynamic>() : const {},
+              staffNames: {for (final s in _staff) s.id: s.name},
+            )
+          : null,
     );
+  }
+
+  /// This month's "Paid back" rows still standing, newest first.
+  List<StaffExpenseRepayment> _monthRepayments() {
+    final list = [
+      for (final row in _repaymentRows)
+        StaffExpenseRepayment.fromMap('${row['id'] ?? ''}', row),
+    ].where((r) => !r.voided && r.month == _monthKey).toList()
+      ..sort((a, b) {
+        final at = a.paidAt?.millisecondsSinceEpoch ?? 0;
+        final bt = b.paidAt?.millisecondsSinceEpoch ?? 0;
+        return bt.compareTo(at);
+      });
+    return list;
+  }
+
+  Future<void> _paidBack(ParkingMonthStaffOwed row) async {
+    await showLotSheet<bool>(
+      context,
+      StaffRepaymentSheet(
+        businessId: widget.businessId,
+        owed: row,
+        staff: _staff,
+        currentUid: FirebaseAuth.instance.currentUser?.uid ?? '',
+      ),
+    );
+  }
+
+  Future<void> _voidRepayment(StaffExpenseRepayment repayment) async {
+    final l10n = AppLocalizations.of(context)!;
+    final name = _staff.where((s) => s.id == repayment.staffId).firstOrNull?.name;
+    final confirmed = await confirmVoidStaffRepayment(
+      context,
+      amount: parkingMoney(repayment.amountCents),
+      name: name == null || name.isEmpty ? '—' : name,
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _busy = 'void:${repayment.id}');
+    try {
+      await const StaffExpenseRepaymentService().voidRepayment(
+        businessId: widget.businessId,
+        repaymentId: repayment.id,
+      );
+      if (mounted) showSuccessSnackBar(context, l10n.pmeRepaymentVoided);
+    } on StaffRepaymentFailure catch (failure) {
+      if (mounted) {
+        showErrorSnackBar(context, staffRepaymentRefusalText(l10n, failure));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = '');
+    }
   }
 
   /// The month's last day as the reader reads a date ("Oct 31, 2026").
@@ -246,6 +382,7 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
       s.cancel();
     }
     _loadingSafety?.cancel();
+    _creditSafety?.cancel();
     super.dispose();
   }
 
@@ -292,6 +429,12 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
         dueWord: l10n.pmeDueWord,
         locale: locale,
         estimate: _estimating ? l10n.pmeEstimateHeader(_lastDayLabel()) : '',
+        expensesTitle: l10n.pmeExpensesTitle,
+        lessExpenses: l10n.pmeLessExpenses,
+        lessStaffExpenses: l10n.pmeLessStaffExpenses,
+        businessOwes: l10n.pmeBusinessOwes,
+        noParkingBill: l10n.pmeNoParkingBill,
+        lotExpense: l10n.pmeLotExpense,
       );
 
   Future<void> _run(String key, Future<void> Function() work) async {
@@ -384,8 +527,15 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
         });
       case 'text':
         // The bill text mirrors the server byte for byte; an estimate only
-        // gets its one-line marker on top.
-        final text = parkingMonthCustomerText(customer, _businessName);
+        // gets its one-line marker on top, and a linked staff member's bill
+        // its expenses (added here, never in the shared builder).
+        final text = parkingMonthTextWithExpenses(
+          parkingMonthCustomerText(customer, _businessName),
+          customer,
+          title: l10n.pmeExpensesTitle,
+          less: l10n.pmeLessExpenses,
+          lotExpense: l10n.pmeLotExpense,
+        );
         await SharePlus.instance.share(
           ShareParams(
             text: estimating
@@ -432,6 +582,16 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
     final locale = Localizations.localeOf(context).toLanguageTag();
     final summary = _summary();
     final thisMonth = shiftParkingMonthKey(previousParkingMonthKey(), 1);
+    // "Business owes" and Paid back: the owner, or staff with the ledger.
+    final canSettleStaff = Provider.of<AuthProvider>(context)
+        .hasBusinessPermission(BusinessPermission.ledger);
+    final monthRepayments =
+        canSettleStaff ? _monthRepayments() : const <StaffExpenseRepayment>[];
+    final showOwes = canSettleStaff &&
+        _creditReady &&
+        (summary.businessOwes.isNotEmpty || monthRepayments.isNotEmpty);
+    final creditUnavailable =
+        _creditError || (_creditTimedOut && !_creditReady);
 
     return Scaffold(
       backgroundColor: AppColors.cream,
@@ -563,6 +723,18 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
                         ),
                       ],
                     ),
+                    if (creditUnavailable) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        l10n.pmeExpensesUnavailable,
+                        key: const Key('month-end-expenses-unavailable'),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          height: 1.3,
+                          color: AppColors.muted,
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: AppSpacing.md),
                     ParkingMonthViewTabs(
                       summary: summary,
@@ -575,13 +747,26 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
             ),
           ),
           Expanded(
-            child: _loading
+            child: _loading || _creditPending
                 ? const Center(child: CircularProgressIndicator())
                 : ParkingMonthCustomerList(
                     summary: summary,
                     view: _view,
                     busyKey: _busy,
                     onTap: _customerActions,
+                    leading: showOwes
+                        ? ParkingMonthBusinessOwes(
+                            summary: summary,
+                            repayments: monthRepayments,
+                            staffNames: {
+                              for (final s in _staff) s.id: s.name,
+                            },
+                            busyKey: _busy,
+                            // Never pay back against the estimate.
+                            onPaidBack: _estimating ? null : _paidBack,
+                            onVoid: _voidRepayment,
+                          )
+                        : null,
                   ),
           ),
         ],
@@ -751,6 +936,7 @@ class ParkingMonthCustomerList extends StatelessWidget {
     required this.view,
     required this.onTap,
     this.busyKey = '',
+    this.leading,
   });
 
   final ParkingMonthSummary summary;
@@ -758,20 +944,25 @@ class ParkingMonthCustomerList extends StatelessWidget {
   final ValueChanged<ParkingMonthCustomer> onTap;
   final String busyKey;
 
+  /// Shown above the customers in every view ("Business owes").
+  final Widget? leading;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final listed = parkingMonthListed(summary, view);
-    if (listed.isEmpty) {
-      return LotEmptyState(
-        icon: Icons.event_available_outlined,
-        title: summary.customers.isEmpty
-            ? l10n.pmeNoCars
-            : view == ParkingMonthView.paid
-            ? l10n.pmeNobodyPaid
-            : l10n.pmeNobodyOwes,
-      );
-    }
+    final empty = listed.isEmpty
+        ? LotEmptyState(
+            icon: Icons.event_available_outlined,
+            title: summary.customers.isEmpty
+                ? l10n.pmeNoCars
+                : view == ParkingMonthView.paid
+                ? l10n.pmeNobodyPaid
+                : l10n.pmeNobodyOwes,
+          )
+        : null;
+    if (empty != null && leading == null) return empty;
+    final head = leading == null ? 0 : 1;
     return ListView.builder(
       key: const Key('month-end-list'),
       padding: const EdgeInsets.fromLTRB(
@@ -780,14 +971,55 @@ class ParkingMonthCustomerList extends StatelessWidget {
         AppSpacing.lg,
         40,
       ),
-      itemCount: listed.length,
-      itemBuilder: (_, i) => _CustomerTile(
-        customer: listed[i],
-        busy: busyKey.isNotEmpty && busyKey == listed[i].key,
-        onTap: () => onTap(listed[i]),
-      ),
+      itemCount: head + (empty != null ? 1 : listed.length),
+      itemBuilder: (_, i) {
+        if (i < head) return leading!;
+        if (empty != null) return empty;
+        final customer = listed[i - head];
+        return _CustomerTile(
+          customer: customer,
+          busy: busyKey.isNotEmpty && busyKey == customer.key,
+          onTap: () => onTap(customer),
+        );
+      },
     );
   }
+}
+
+/// A linked staff member's bill as text: the shared text (which mirrors the
+/// server byte for byte) with this month's expenses listed before the totals
+/// and "Less expenses" just above the balance - added here, so the shared
+/// builder stays the server's. Unchanged when nothing came off.
+String parkingMonthTextWithExpenses(
+  String text,
+  ParkingMonthCustomer c, {
+  required String title,
+  required String less,
+  required String lotExpense,
+}) {
+  if (c.expenseCreditCents <= 0) return text;
+  final lines = text.split('\n');
+  // The totals are the last block; its last line is the balance.
+  final totalsStart = lines.lastIndexOf('');
+  if (totalsStart < 0 || lines.length < 2) return text;
+  final balance = lines.removeLast();
+  final expenses = [
+    if (c.expenseLines.isNotEmpty) ...[
+      title,
+      for (final e in c.expenseLines)
+        '${[
+          if (e.date.isNotEmpty) dayLabel(e.date),
+          e.label.isEmpty ? lotExpense : e.label,
+          if (e.staffName.isNotEmpty) e.staffName,
+        ].join(' · ')} — ${parkingMoney(e.amountCents)}',
+      '',
+    ],
+  ];
+  lines
+    ..insertAll(totalsStart + 1, expenses)
+    ..add('$less — -${parkingMoney(c.expenseCreditCents)}')
+    ..add(balance);
+  return lines.join('\n');
 }
 
 /// A payment method as the app names it: the "How it was paid" words, plus
@@ -923,6 +1155,7 @@ class _CustomerTile extends StatefulWidget {
 
 class _CustomerTileState extends State<_CustomerTile> {
   bool _showPaid = false;
+  bool _showExpenses = false;
 
   @override
   Widget build(BuildContext context) {
@@ -1135,8 +1368,567 @@ class _CustomerTileState extends State<_CustomerTile> {
                 ].join(' · '),
                 style: const TextStyle(fontSize: 12, color: AppColors.muted),
               ),
+            if (customer.expenseCreditCents > 0)
+              _ExpenseCredit(
+                customer: customer,
+                open: _showExpenses,
+                onToggle: () => setState(() => _showExpenses = !_showExpenses),
+              ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// "Less expenses −$X" on a linked staff member's card, with this month's
+/// expenses under one toggle.
+class _ExpenseCredit extends StatelessWidget {
+  const _ExpenseCredit({
+    required this.customer,
+    required this.open,
+    required this.onToggle,
+  });
+
+  final ParkingMonthCustomer customer;
+  final bool open;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    const small = TextStyle(fontSize: 12, color: AppColors.muted);
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            l10n.pmeLessExpensesAmount(
+              parkingMoney(customer.expenseCreditCents),
+            ),
+            key: const Key('month-end-less-expenses'),
+            style: const TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+              fontFeatures: [FontFeature.tabularFigures()],
+              color: AppColors.sage,
+            ),
+          ),
+          if (customer.expenseLines.isNotEmpty)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                key: const Key('month-end-toggle-expenses'),
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(0, 32),
+                  foregroundColor: AppColors.muted,
+                ),
+                onPressed: onToggle,
+                icon: Icon(open ? Icons.expand_less : Icons.expand_more, size: 18),
+                label: Text(
+                  l10n.pmeExpenseLinesCount(customer.expenseLines.length),
+                ),
+              ),
+            ),
+          if (open)
+            for (final e in customer.expenseLines)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        [
+                          e.label.isEmpty ? l10n.pmeLotExpense : e.label,
+                          if (e.staffName.isNotEmpty) e.staffName,
+                          if (e.date.isNotEmpty)
+                            displayDay(e.date, dateLocaleOf(context)),
+                        ].join(' · '),
+                        style: small,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Text(
+                      parkingMoney(e.amountCents),
+                      style: small.copyWith(
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Refusals of the Paid back actions in the reader's words
+/// (docs/STAFF_EXPENSE_CREDIT.md §4).
+String staffRepaymentRefusalText(
+  AppLocalizations l10n,
+  StaffRepaymentFailure failure,
+) {
+  if (failure.offline) return l10n.lotCouldNotSave;
+  return switch (failure.reason) {
+    'repayment_amount_invalid' => l10n.pmeRefusalRepaymentAmountInvalid,
+    'repayment_exceeds_credit' => l10n.pmeRefusalRepaymentExceedsCredit,
+    'repayment_not_found' => l10n.pmeRefusalRepaymentNotFound,
+    'repayment_voided' => l10n.pmeRefusalRepaymentVoided,
+    'repayment_method_invalid' => l10n.pmeRefusalRepaymentMethodInvalid,
+    'repayment_date_invalid' => l10n.pmeRefusalRepaymentDateInvalid,
+    'link_customer_invalid' => l10n.pmeRefusalLinkCustomerInvalid,
+    'staff_action_invalid' => l10n.pmeRefusalStaffActionInvalid,
+    'staff_not_member' => l10n.pmeRefusalStaffNotMember,
+    _ => l10n.lotCouldNotSave,
+  };
+}
+
+/// "Void this payment?" - it then counts as not paid back; nothing is
+/// deleted.
+Future<bool?> confirmVoidStaffRepayment(
+  BuildContext context, {
+  required String amount,
+  required String name,
+}) {
+  final l10n = AppLocalizations.of(context)!;
+  return showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: Text(l10n.pmeVoidRepaymentTitle),
+      content: Text(l10n.pmeVoidRepaymentBody(amount, name)),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(false),
+          child: Text(l10n.cancel),
+        ),
+        TextButton(
+          key: const Key('month-end-void-confirm'),
+          style: TextButton.styleFrom(foregroundColor: AppColors.errorRed),
+          onPressed: () => Navigator.of(dialogContext).pop(true),
+          child: Text(l10n.lotVoid),
+        ),
+      ],
+    ),
+  );
+}
+
+/// "Business owes": the staff the business still owes for lot expenses they
+/// paid themselves - not linked to a parking bill, or owed more than their
+/// bill - each with Paid back, and this month's paid-back amounts with Void.
+/// Shown to the owner and staff with the ledger only.
+class ParkingMonthBusinessOwes extends StatelessWidget {
+  const ParkingMonthBusinessOwes({
+    super.key,
+    required this.summary,
+    required this.repayments,
+    required this.staffNames,
+    required this.onPaidBack,
+    required this.onVoid,
+    this.busyKey = '',
+  });
+
+  final ParkingMonthSummary summary;
+
+  /// This month's repayments still standing.
+  final List<StaffExpenseRepayment> repayments;
+  final Map<String, String> staffNames;
+
+  /// Null hides Paid back (the whole-month estimate).
+  final ValueChanged<ParkingMonthStaffOwed>? onPaidBack;
+  final ValueChanged<StaffExpenseRepayment> onVoid;
+  final String busyKey;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    String named(String id) {
+      final n = staffNames[id] ?? '';
+      return n.isEmpty ? '—' : n;
+    }
+
+    const muted = TextStyle(fontSize: 12, color: AppColors.muted);
+    return Container(
+      key: const Key('month-end-business-owes'),
+      margin: const EdgeInsets.only(bottom: AppSpacing.md),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.paper,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        border: Border.all(color: AppColors.rule),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  l10n.pmeBusinessOwes,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.ink,
+                  ),
+                ),
+              ),
+              Text(
+                parkingMoney(summary.businessOwesCents),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  fontFeatures: [FontFeature.tabularFigures()],
+                  color: AppColors.ink,
+                ),
+              ),
+            ],
+          ),
+          Text(l10n.pmeBusinessOwesHint, style: muted),
+          const Divider(height: 16),
+          if (summary.businessOwes.isEmpty)
+            Text(l10n.pmeBusinessOwesNone, style: muted),
+          for (final row in summary.businessOwes)
+            Padding(
+              key: Key('month-end-owes-${row.staffId}'),
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          row.staffName.isEmpty ? '—' : row.staffName,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.ink,
+                          ),
+                        ),
+                        Text(
+                          row.customerKey.isEmpty
+                              ? l10n.pmeNoParkingBill
+                              : (row.customerName.isEmpty
+                                    ? '—'
+                                    : row.customerName),
+                          style: muted,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        parkingMoney(row.owedCents),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          fontFeatures: [FontFeature.tabularFigures()],
+                          color: AppColors.ink,
+                        ),
+                      ),
+                      if (onPaidBack != null)
+                        TextButton(
+                          key: Key('month-end-paid-back-${row.staffId}'),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            minimumSize: const Size(0, 32),
+                            foregroundColor: AppColors.cobalt,
+                          ),
+                          onPressed: busyKey.isNotEmpty
+                              ? null
+                              : () => onPaidBack!(row),
+                          child: Text(l10n.pmePaidBack),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          if (repayments.isNotEmpty) ...[
+            const Divider(height: 16),
+            Text(
+              l10n.pmeRepaymentsThisMonth.toUpperCase(),
+              style: const TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.5,
+                color: AppColors.muted,
+              ),
+            ),
+            const SizedBox(height: 4),
+            for (final r in repayments)
+              Padding(
+                key: Key('month-end-repayment-${r.id}'),
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        [
+                          named(r.staffId),
+                          if (r.paidAt != null)
+                            displayDate(r.paidAt!, dateLocaleOf(context)),
+                          _methodLabel(l10n, r.method),
+                          if (r.givenByStaffId.isNotEmpty)
+                            l10n.pmeGivenByName(named(r.givenByStaffId)),
+                        ].join(' · '),
+                        style: muted,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    // Amount over its Void, so a long French label never
+                    // squeezes the row.
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          parkingMoney(r.amountCents),
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                            fontFeatures: [FontFeature.tabularFigures()],
+                            color: AppColors.ink,
+                          ),
+                        ),
+                        busyKey == 'void:${r.id}'
+                            ? const Padding(
+                                padding: EdgeInsets.all(8),
+                                child: SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                              )
+                            : TextButton(
+                                key: Key('month-end-void-${r.id}'),
+                                style: TextButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                  ),
+                                  minimumSize: const Size(0, 32),
+                                  foregroundColor: AppColors.errorRed,
+                                ),
+                                onPressed: busyKey.isNotEmpty
+                                    ? null
+                                    : () => onVoid(r),
+                                child: Text(l10n.lotVoid),
+                              ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// "Paid back": the money given back to a staff member for their expenses -
+/// at most what the business owes them as shown, how, who gave it (the
+/// signed-in person by default) and a note - through
+/// `updateLotExpenseEntry({action: "record_staff_repayment"})`.
+class StaffRepaymentSheet extends StatefulWidget {
+  const StaffRepaymentSheet({
+    super.key,
+    required this.businessId,
+    required this.owed,
+    required this.staff,
+    required this.currentUid,
+    this.service = const StaffExpenseRepaymentService(),
+  });
+
+  final String businessId;
+  final ParkingMonthStaffOwed owed;
+  final List<({String id, String name})> staff;
+  final String currentUid;
+  final StaffExpenseRepaymentService service;
+
+  @override
+  State<StaffRepaymentSheet> createState() => _StaffRepaymentSheetState();
+}
+
+class _StaffRepaymentSheetState extends State<StaffRepaymentSheet> {
+  late final _amount = TextEditingController(
+    text: (widget.owed.owedCents / 100).toStringAsFixed(2),
+  );
+  final _note = TextEditingController();
+  String _method = 'cash';
+  late String _by = widget.currentUid;
+  bool _busy = false;
+  String _error = '';
+  bool _amountWrong = false;
+
+  @override
+  void dispose() {
+    _amount.dispose();
+    _note.dispose();
+    super.dispose();
+  }
+
+  String _byName(AppLocalizations l10n) {
+    if (_by.isEmpty) return '';
+    final name = widget.staff.where((s) => s.id == _by).firstOrNull?.name;
+    if (name != null && name.isNotEmpty) return name;
+    return _by == widget.currentUid ? l10n.you : '—';
+  }
+
+  Future<void> _pickMethod() async {
+    final l10n = AppLocalizations.of(context)!;
+    final picked = await pickLotOption<String>(
+      context,
+      title: l10n.invPayMethod,
+      selected: _method,
+      options: [
+        for (final m in staffRepaymentMethods) LotOption(m, _methodLabel(l10n, m)),
+      ],
+    );
+    if (picked != null && mounted) setState(() => _method = picked);
+  }
+
+  Future<void> _pickBy() async {
+    final l10n = AppLocalizations.of(context)!;
+    final picked = await pickLotOption<String>(
+      context,
+      title: l10n.pmePaidBackGivenBy,
+      selected: _by,
+      options: [for (final s in widget.staff) LotOption(s.id, s.name)],
+    );
+    if (picked != null && mounted) {
+      setState(() {
+        _by = picked;
+        _error = '';
+      });
+    }
+  }
+
+  Future<void> _save() async {
+    final l10n = AppLocalizations.of(context)!;
+    final cents = lotDollarsToCents(_amount.text) ?? 0;
+    final owed = widget.owed.owedCents;
+    if (cents <= 0 || cents > owed) {
+      AppHaptics.refuse();
+      setState(() {
+        _amountWrong = true;
+        _error = l10n.pmePaidBackAmountInvalid(parkingMoney(owed));
+      });
+      return;
+    }
+    if (_by.isEmpty) {
+      AppHaptics.refuse();
+      setState(() => _error = l10n.pmePaidBackSayWho);
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = '';
+      _amountWrong = false;
+    });
+    try {
+      await widget.service.record(
+        businessId: widget.businessId,
+        staffId: widget.owed.staffId,
+        amountCents: cents,
+        method: _method,
+        givenByStaffId: _by,
+        note: _note.text,
+      );
+      if (!mounted) return;
+      AppHaptics.commit();
+      Navigator.of(context).pop(true);
+      showSuccessSnackBar(context, l10n.pmePaidBackDone(parkingMoney(cents)));
+    } on StaffRepaymentFailure catch (failure) {
+      if (!mounted) return;
+      AppHaptics.refuse();
+      setState(() => _error = staffRepaymentRefusalText(l10n, failure));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final owed = parkingMoney(widget.owed.owedCents);
+    final name = widget.owed.staffName.isEmpty ? '—' : widget.owed.staffName;
+    final cents = lotDollarsToCents(_amount.text) ?? 0;
+    return LotSheetShell(
+      title: l10n.pmePaidBack,
+      subtitle: l10n.pmePaidBackSubtitle(name, owed),
+      footer: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_error.isNotEmpty) ...[
+            Text(
+              _error,
+              key: const Key('month-end-paid-back-error'),
+              style: const TextStyle(fontSize: 12.5, color: AppColors.errorRed),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+          ],
+          LotSheetButton(
+            key: const Key('month-end-paid-back-save'),
+            label: l10n.pmeRecordTotal(parkingMoney(cents)),
+            busy: _busy,
+            tone: LotTone.good,
+            onTap: _save,
+          ),
+        ],
+      ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            l10n.pmePaidBackHint,
+            style: const TextStyle(fontSize: 12.5, color: AppColors.muted),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            key: const Key('month-end-paid-back-amount'),
+            controller: _amount,
+            enabled: !_busy,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            onChanged: (_) => setState(() => _amountWrong = false),
+            decoration: InputDecoration(
+              labelText: l10n.pmePaidBackAmount,
+              prefixText: r'$ ',
+              errorText: _amountWrong
+                  ? l10n.pmePaidBackAmountInvalid(owed)
+                  : null,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          LotPickerField(
+            label: l10n.invPayMethod,
+            value: _methodLabel(l10n, _method),
+            placeholder: l10n.invPayMethod,
+            onTap: _busy ? () {} : _pickMethod,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          LotPickerField(
+            key: const Key('month-end-paid-back-by'),
+            label: l10n.pmePaidBackGivenBy,
+            value: _byName(l10n).isEmpty ? null : _byName(l10n),
+            placeholder: l10n.pmePaidBackWho,
+            onTap: _busy ? () {} : _pickBy,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            controller: _note,
+            enabled: !_busy,
+            decoration: InputDecoration(labelText: l10n.invPayNote),
+          ),
+        ],
       ),
     );
   }
