@@ -1000,6 +1000,40 @@ test("the card can record a part payment by days or amount, with who took it", (
   assert.match(panelSource, /if \(!partReceivedBy\)/);
 });
 
+test("closing a stay sends the viewer's local calendar day", () => {
+  const start = panelSource.indexOf("async function close()");
+  const end = panelSource.indexOf("// What the car still owes", start);
+  const body = panelSource.slice(start, end);
+  assert.ok(start > -1);
+  assert.match(body, /"closeParkingStay"/);
+  assert.match(body, /endDate:\s*localDateKey\(\)/);
+});
+
+test("a materialized cross-month part payment keeps its October balance", () => {
+  const day = (d: string) => new Date(`${d}T12:00:00Z`);
+  const now = day("2026-10-29");
+  const rows = [
+    {
+      source: "business", paymentMethod: "direct",
+      paymentStatus: "awaiting_direct_payment",
+      parkingDate: day("2026-09-16"), parkingEndDate: day("2026-10-13"),
+      dailyRate: 12, amountDueCents: 33600, amountPaidCents: 18000,
+    },
+    {
+      source: "business", paymentMethod: "direct",
+      paymentStatus: "awaiting_direct_payment",
+      parkingDate: day("2026-10-20"), dailyRate: 12,
+    },
+  ];
+  assert.equal(businessParkingStayDays(rows[0], now), 28);
+  assert.equal(businessParkingAccrued(rows[0], now), 336);
+  assert.equal(businessParkingBalance(rows[0], now), 156);
+  assert.equal(businessParkingPaymentBadge(rows[0]), "Part paid");
+  const totals = businessParkingTotals(rows, 100, now);
+  assert.equal(totals.collected, 180);
+  assert.equal(totals.owed, 276);
+});
+
 // The lot's spreadsheet kept totals in the margin (at the lot, left, collected,
 // accrued) with formulas that had rotted to #NAME?. The live version reads the
 // records instead.

@@ -8,6 +8,7 @@ const {
   BUSINESS_PARKING_PAYMENT_METHODS,
   BUSINESS_PARKING_PAYMENT_TYPE,
   buildBusinessParkingEntryRecord,
+  businessParkingClosePlan,
   businessParkingPaidUpdate,
   businessParkingPaymentPlan,
   directPaymentPayoutFields,
@@ -43,6 +44,99 @@ const OPTION = Object.freeze({
 
 const input = (overrides) => ({...VALID_INPUT, ...overrides});
 const codes = (raw) => normalizeBusinessParkingEntry(raw).errors.sort();
+
+describe("closing an open parking stay", () => {
+  const openStay = {
+    source: "business",
+    paymentMethod: "direct",
+    paymentStatus: "awaiting_direct_payment",
+    status: "reserved",
+    parkingDate: {toDate: () => new Date("2026-09-16T12:00:00Z")},
+    parkingEndDate: null,
+    dailyRate: 12,
+    minimumDays: 1,
+    amountDueCents: 0,
+    amountPaidCents: 18000,
+  };
+
+  it("materializes the accrued total without losing a part payment", () => {
+    const plan = businessParkingClosePlan({
+      entry: openStay,
+      endDate: new Date("2026-10-13T12:00:00Z"),
+    });
+
+    assert.equal(plan.ok, true);
+    assert.equal(plan.days, 28);
+    assert.equal(plan.amountDueCents, 33600);
+    assert.equal(plan.remainingCents, 15600);
+    assert.equal(plan.fullyCovered, false);
+    assert.equal(plan.update.amountDueCents, 33600);
+    assert.equal(plan.update.totalCostCents, 33600);
+    assert.equal(plan.update.paymentStatus, "awaiting_direct_payment");
+    assert.equal(plan.update.businessPayoutCents, 33600);
+    assert.equal(openStay.amountPaidCents, 18000);
+  });
+
+  it("marks a direct stay paid when payments cover the final total", () => {
+    const plan = businessParkingClosePlan({
+      entry: {...openStay, amountPaidCents: 33600},
+      endDate: new Date("2026-10-13T12:00:00Z"),
+    });
+
+    assert.equal(plan.fullyCovered, true);
+    assert.equal(plan.remainingCents, 0);
+    assert.equal(plan.update.paymentStatus, "paid");
+    assert.equal(plan.update.directPaymentReceived, true);
+  });
+
+  it("refuses to close a stay twice", () => {
+    const plan = businessParkingClosePlan({
+      entry: {...openStay, parkingEndDate: new Date("2026-10-13T12:00:00Z")},
+      endDate: new Date("2026-10-13T12:00:00Z"),
+    });
+    assert.equal(plan.ok, false);
+    assert.equal(plan.reason, "already_closed");
+    assert.equal(plan.update, null);
+  });
+
+  it("does not rewrite a Stripe-owned payment total", () => {
+    const plan = businessParkingClosePlan({
+      entry: {...openStay, paymentMethod: "payment_link"},
+      endDate: new Date("2026-10-13T12:00:00Z"),
+    });
+    assert.equal(plan.ok, false);
+    assert.equal(plan.reason, "payment_method_not_direct");
+    assert.equal(plan.update, null);
+  });
+
+  it("refuses an impossible leave day instead of erasing the balance", () => {
+    const plan = businessParkingClosePlan({
+      entry: openStay,
+      endDate: new Date("2026-09-15T12:00:00Z"),
+    });
+    assert.equal(plan.ok, false);
+    assert.equal(plan.reason, "end_before_start");
+    assert.equal(plan.update, null);
+  });
+
+  it("the callable persists the tested close plan transactionally", () => {
+    const {readFileSync} = require("node:fs");
+    const source = readFileSync(
+        require("node:path").join(__dirname, "..", "index.js"), "utf8");
+    const start = source.indexOf("exports.closeParkingStay = onCall");
+    const end = source.indexOf("\n/**", start + 1);
+    const body = source.slice(start, end);
+    assert.ok(start > -1);
+    assert.match(body, /db\.runTransaction/);
+    assert.match(
+        body,
+        /businessParkingClosePlan\(\{entry: current, endDate: end\}\)/,
+    );
+    assert.match(body, /\.\.\.\(plan\?\.update \|\| \{\}\)/);
+    assert.match(body, /parkingEndDate: FirestoreTimestamp\.fromDate\(end\)/);
+    assert.match(body, /occupancyEndMs/);
+  });
+});
 
 describe("business parking entry input", () => {
   it("accepts a complete walk-up entry and normalizes it", () => {

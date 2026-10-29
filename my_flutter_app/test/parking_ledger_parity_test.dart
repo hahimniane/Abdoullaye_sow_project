@@ -57,6 +57,14 @@ void main() {
       expect(screen, contains('businessParkingUnbilled(_paymentFields)'));
       expect(screen, contains('_buildAccrualPanel'));
     });
+
+    test('closing sends the phone local calendar day', () {
+      final start = screen.indexOf('Future<void> _closeStay()');
+      final end = screen.indexOf('Future<void> _recordPartPayment()', start);
+      final closeBody = screen.substring(start, end);
+      expect(start, greaterThanOrEqualTo(0));
+      expect(closeBody, contains('endDate: DateTime.now()'));
+    });
   });
 
   test('the parking edit form fills the vehicle from the VIN', () {
@@ -175,9 +183,13 @@ void main() {
     // activity is the other half of the same ledger.
     final model = read('lib/services/lot_ledger.dart');
     final screen = read('lib/screens/lot_ledger_screen.dart');
-    final panel =
-        read('../admin_web/src/components/business/operations-panels.tsx');
-    expect(model, contains("recordedByStaffId: _s(d['recordedByStaffId'], 120)"));
+    final panel = read(
+      '../admin_web/src/components/business/operations-panels.tsx',
+    );
+    expect(
+      model,
+      contains("recordedByStaffId: _s(d['recordedByStaffId'], 120)"),
+    );
     // On the row and in the detail, not one without the other.
     expect(screen, contains('activity.recordedByStaffId'));
     expect(screen, contains('l10n.lotRecordedBy'));
@@ -187,8 +199,9 @@ void main() {
   test('neither console hands back a uid when it cannot name someone', () {
     // A business may only read its own team, so an outsider is unnameable.
     // Both helpers used to answer with the raw key.
-    final panel =
-        read('../admin_web/src/components/business/operations-panels.tsx');
+    final panel = read(
+      '../admin_web/src/components/business/operations-panels.tsx',
+    );
     expect(panel, isNot(contains(r'`${key.slice(0, 6)}\u2026`')));
     // The panel names people through the shared lookup, which answers ""
     // for anyone it cannot name - never the raw key.
@@ -201,9 +214,13 @@ void main() {
 
   test('the console stops handing staff a cancelled payment link', () {
     final lib = read('../admin_web/src/lib/business-parking-entry.ts');
-    final panel =
-        read('../admin_web/src/components/business/operations-panels.tsx');
-    expect(lib, contains('export function isBusinessParkingPaymentLinkCancelled'));
+    final panel = read(
+      '../admin_web/src/components/business/operations-panels.tsx',
+    );
+    expect(
+      lib,
+      contains('export function isBusinessParkingPaymentLinkCancelled'),
+    );
     expect(panel, contains('isBusinessParkingPaymentLinkCancelled(row)'));
   });
 }

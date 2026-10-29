@@ -331,6 +331,7 @@ const {
   normalizeDirectPaymentMethod,
   normalizeBusinessParkingEntry,
   businessParkingPartialPaymentPlan,
+  businessParkingClosePlan,
   normalizeParkingRates,
 } = require("./business_parking_entry");
 const {
@@ -26053,18 +26054,68 @@ exports.closeParkingStay = onCall(
       const car = doc.data() || {};
       await requireBusinessPermission(
           uid, String(car.businessId || ""), "parking");
-      const endRaw = String(data.endDate || "").trim();
-      const end = endRaw ? new Date(`${endRaw}T12:00:00`) : new Date();
-      // Does not touch the money: an unpaid balance survives the car leaving.
-      await ref.update({
-        parkingEndDate: FirestoreTimestamp.fromDate(end),
-        occupancyEndMs: occupancyEndMs({
-          parkingDate: car.parkingDate, parkingEndDate: end,
-        }),
-        closedByStaffId: uid,
-        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      // Current clients send the user's local calendar day. The fallback
+      // preserves the New York business day for older clients instead of
+      // letting an evening close silently become tomorrow in UTC.
+      const localToday = () => {
+        const parts = new Intl.DateTimeFormat("en-US", {
+          timeZone: "America/New_York",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        }).formatToParts(new Date());
+        const part = (type) => parts.find((item) => item.type === type)?.value;
+        return `${part("year")}-${part("month")}-${part("day")}`;
+      };
+      const endRaw = String(data.endDate || localToday()).trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(endRaw)) {
+        throw new HttpsError("invalid-argument", "Leave date is invalid");
+      }
+      const end = new Date(`${endRaw}T12:00:00Z`);
+      if (Number.isNaN(end.getTime()) ||
+          end.toISOString().slice(0, 10) !== endRaw) {
+        throw new HttpsError("invalid-argument", "Leave date is invalid");
+      }
+
+      const result = await db.runTransaction(async (transaction) => {
+        const latest = await transaction.get(ref);
+        if (!latest.exists) {
+          throw new HttpsError("not-found", "Parking not found");
+        }
+        const current = latest.data() || {};
+        const materializesDirectAccrual =
+          (String(current.source || "") === "business" ||
+            current.enteredByBusiness === true) &&
+          String(current.paymentMethod || "") === "direct";
+        const plan = materializesDirectAccrual ?
+          businessParkingClosePlan({entry: current, endDate: end}) : null;
+        if (plan && !plan.ok) {
+          throw new HttpsError("failed-precondition",
+              plan.reason === "already_closed" ?
+                "This parking stay is already closed" :
+                "This parking stay cannot be closed", {reason: plan.reason});
+        }
+        transaction.update(ref, {
+          parkingEndDate: FirestoreTimestamp.fromDate(end),
+          occupancyEndMs: occupancyEndMs({
+            parkingDate: current.parkingDate, parkingEndDate: end,
+          }),
+          ...(plan?.update || {}),
+          ...(plan && {closedAccruedDays: plan.days}),
+          closedByStaffId: uid,
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        });
+        return plan || {days: 0, amountDueCents: 0, remainingCents: 0,
+          fullyCovered: false};
       });
-      return {success: true, parkedCarId};
+      return {
+        success: true,
+        parkedCarId,
+        days: result.days,
+        amountDueCents: result.amountDueCents,
+        remainingCents: result.remainingCents,
+        fullyCovered: result.fullyCovered,
+      };
     },
 );
 
