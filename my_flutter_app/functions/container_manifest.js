@@ -74,6 +74,16 @@ const CONTAINER_OWNER_KINDS = Object.freeze(["customer", "stock"]);
 // and are never mistaken for a container number.
 const ISO_CONTAINER_NUMBER = /^[A-Z]{4}\d{7}$/;
 
+// A flight is a container marked air (docs/AIR_PACKAGES.md §1): the same
+// list, labels, statuses and messages, named by an air waybill instead of a
+// container number. "sea" is what every container was before the field.
+const SHIP_MODE = Object.freeze({SEA: "sea", AIR: "air"});
+const SHIP_MODES = Object.freeze(Object.values(SHIP_MODE));
+// An air waybill as stored: letters, digits and dashes, 6-20 of them, upper
+// case ("176-12345678"). Spaces people type between the groups are dropped.
+const AIR_WAYBILL = /^[A-Z0-9-]{6,20}$/;
+const MAX_AIRLINE = 60;
+
 const MAX_TEXT = 200;
 const MAX_LABEL = 120;
 const MAX_NOTE = 500;
@@ -173,26 +183,79 @@ const positiveInt = (value) => {
 // -------------------------------------------------------------------------
 
 /**
+ * @param {*} value A stored or requested ship mode.
+ * @return {string} "air", or "sea" for anything else (every container from
+ *   before the field is a sea container).
+ */
+function shipModeOf(value) {
+  return text(value, 10).toLowerCase() === SHIP_MODE.AIR ?
+    SHIP_MODE.AIR : SHIP_MODE.SEA;
+}
+
+/**
+ * @param {object} container A stored or requested container.
+ * @return {boolean} Whether it flies.
+ */
+function isAirContainer(container) {
+  return shipModeOf(container?.shipMode) === SHIP_MODE.AIR;
+}
+
+/**
+ * An air waybill as stored: upper case, spaces dropped. Anything else is
+ * returned as typed so the validator can name it.
+ *
+ * @param {*} value Raw input.
+ * @return {string} The stored form, or "" for none.
+ */
+function airWaybillOf(value) {
+  return text(value, 40).toUpperCase().replace(/\s+/g, "");
+}
+
+/**
+ * What staff call a container of this mode: a flight is a "Shipment", a box
+ * a "Container" (docs/AIR_PACKAGES.md §1), on every screen and document.
+ *
+ * @param {object} container A stored or requested container.
+ * @param {string} [lang] "en" or "fr".
+ * @return {string} The word.
+ */
+function containerKindWord(container, lang = "en") {
+  const air = isAirContainer(container);
+  if (String(lang || "en").toLowerCase().startsWith("fr")) {
+    return air ? "Envoi" : "Conteneur";
+  }
+  return air ? "Shipment" : "Container";
+}
+
+/**
  * @param {object} input Raw callable data.
  * @return {string[]} Error codes, every problem at once.
  */
 function validateContainer(input) {
   const errors = [];
-  const number = text(input?.containerNumber, 20).toUpperCase();
+  const air = isAirContainer(input);
+  // A flight has no container number: the box is the plane's.
+  const number = air ? "" : text(input?.containerNumber, 20).toUpperCase();
+  const waybill = air ? airWaybillOf(input?.airWaybill) : "";
   // The working name is for the box that has no number yet. Once the
-  // shipping line has given a container or booking number, that is what
-  // everyone calls it, and inventing a name on top is a chore.
-  if (!text(input?.label, MAX_LABEL) && !number &&
+  // shipping line has given a container or booking number (or the airline
+  // its waybill), that is what everyone calls it, and inventing a name on
+  // top is a chore.
+  if (!text(input?.label, MAX_LABEL) && !number && !waybill &&
       !text(input?.bookingReference, 60)) {
     errors.push("container_label_required");
   }
   if (number && !ISO_CONTAINER_NUMBER.test(number)) {
     errors.push("container_number_invalid");
   }
+  if (waybill && !AIR_WAYBILL.test(waybill)) {
+    errors.push("air_waybill_invalid");
+  }
   // The shipping line is optional; when one is sent it must be a line the
-  // catalog knows, or "" to go back to guessing from the number.
-  if (input?.carrierScac !== undefined && input?.carrierScac !== null &&
-      carrierScacRefusal(input.carrierScac)) {
+  // catalog knows, or "" to go back to guessing from the number. A flight
+  // has no shipping line at all, so none is checked or kept.
+  if (!air && input?.carrierScac !== undefined &&
+      input?.carrierScac !== null && carrierScacRefusal(input.carrierScac)) {
     errors.push("carrier_invalid");
   }
   return errors;
@@ -244,6 +307,8 @@ function carrierScacRefusal(value) {
  */
 function shouldStartCarrierTracking(after) {
   const row = after && typeof after === "object" ? after : {};
+  // A flight is never on the ocean carrier feed (docs/AIR_PACKAGES.md §2).
+  if (isAirContainer(row)) return false;
   const number = String(row.containerNumber || "");
   if (!ISO_CONTAINER_NUMBER.test(number)) return false;
   if (row.status === CONTAINER_STATUS.ARRIVED) return false;
@@ -279,9 +344,15 @@ function carrierTrackingFailure(after, error) {
  * @return {object} The fields a business may set on a container.
  */
 function containerRecord(input) {
+  const air = isAirContainer(input);
   return {
     label: text(input.label, MAX_LABEL),
-    containerNumber: text(input.containerNumber, 20).toUpperCase(),
+    // Sea or air; a flight carries its waybill and airline and no container
+    // number, a box the other way round.
+    shipMode: air ? SHIP_MODE.AIR : SHIP_MODE.SEA,
+    containerNumber: air ? "" : text(input.containerNumber, 20).toUpperCase(),
+    airWaybill: air ? airWaybillOf(input.airWaybill) : "",
+    airline: air ? text(input.airline, MAX_AIRLINE) : "",
     bookingReference: text(input.bookingReference, 60).toUpperCase(),
     destinationCountryId: text(input.destinationCountryId, 60),
     destinationCountryName: text(input.destinationCountryName, MAX_LABEL),
@@ -1354,6 +1425,8 @@ const CONTAINER_MESSAGES = Object.freeze({
   container_number_invalid:
     "A container number is four letters and seven digits, like MSKU1234567. " +
     "Booking numbers and bills of lading go in the reference field.",
+  air_waybill_invalid:
+    "An air waybill is 6 to 20 letters, digits or dashes, like 176-12345678.",
   container_status_invalid: "That is not a state a container can be in.",
   container_transition_invalid:
     "A container only moves forward: loading, then shipped, then arrived.",
@@ -1448,7 +1521,14 @@ module.exports = {
   CONTAINER_LINE_KINDS,
   CONTAINER_OWNER_KINDS,
   ISO_CONTAINER_NUMBER,
+  SHIP_MODE,
+  SHIP_MODES,
+  AIR_WAYBILL,
   CONTAINER_MESSAGES,
+  shipModeOf,
+  isAirContainer,
+  airWaybillOf,
+  containerKindWord,
   validateContainer,
   containerRecord,
   containerCarrierScac,

@@ -327,3 +327,68 @@ test("the container is read only once sailed, and only the same business's",
       {businessId: "biz", containerNumber: "MSKU1234565"});
       assert.deepEqual(reads, ["containers/box1", "containers/box1"]);
     });
+
+test("a flight shows its airline and waybill instead of the ocean fields",
+    () => {
+      const flight = {shipMode: "air", airline: "Air France",
+        airWaybill: "176-12345678", carrierScac: "maeu",
+        containerNumber: "MSKU1234565", bookingReference: "bk-1"};
+      assert.deepEqual(publicContainerShipping("in_transit", flight),
+          {mode: "air", airline: "Air France", airWaybill: "176-12345678"});
+      assert.deepEqual(publicContainerShipping("arrived",
+          {shipMode: "air", airWaybill: "176-12345678"}),
+      {mode: "air", airWaybill: "176-12345678"});
+      // Even a flight with nothing else known says it flies.
+      assert.deepEqual(publicContainerShipping("in_transit",
+          {shipMode: "air"}), {mode: "air"});
+      // Not before it leaves.
+      assert.equal(publicContainerShipping("booked", flight), null);
+      // A box's shape is what it always was: no mode key.
+      assert.deepEqual(publicContainerShipping("in_transit",
+          {shipMode: "sea", containerNumber: "MSKU1234565"}),
+      {containerNumber: "MSKU1234565"});
+      const record = publicGuestTrackingRecord({id: "l", service: "container",
+        data: {trackingCode: "CL-K7M4P2", containerStatus: "shipped",
+          containerId: "f1", businessId: "biz"}, container: flight});
+      assert.deepEqual(record.shipping,
+          {mode: "air", airline: "Air France", airWaybill: "176-12345678"});
+      assert.ok(!JSON.stringify(record).includes("MSKU"));
+    });
+
+test("photos go only to the line's own sender or receiver", () => {
+  const {lineBelongsToPhone} = require("../guest_tracking");
+  const line = {customerPhone: "646 555 0100", receiverPhone: "+224620000000"};
+  assert.equal(lineBelongsToPhone(line, "+16465550100"), true);
+  assert.equal(lineBelongsToPhone(line, "+224620000000"), true);
+  assert.equal(lineBelongsToPhone(line, "+16465550101"), false);
+  assert.equal(lineBelongsToPhone(line, ""), false);
+  assert.equal(lineBelongsToPhone(line, "6465550100"), false);
+  assert.equal(lineBelongsToPhone(null, "+16465550100"), false);
+  // A number staff changed leaves the old account at once.
+  assert.equal(lineBelongsToPhone({customerPhone: "+16465550199",
+    customerPhoneE164: "+16465550100"}, "+16465550100"), false);
+});
+
+test("the photo list names each photo by kind, our paths only, once", () => {
+  const {linePhotoEntries} = require("../guest_tracking");
+  const p = (f) => `packagePhotos/biz/staffUid1/${f}.jpg`;
+  assert.deepEqual(linePhotoEntries({
+    photoPaths: [p("dropoff01"), "not/a/photo.jpg", p("dropoff01")],
+    customerPhotos: [{path: "packagePhotos/biz/wa/abcdef1234567890.jpg"},
+      {path: ""}, null],
+    deliveredPhotoPath: p("delivered1"),
+  }), [
+    {path: p("dropoff01"), kind: "dropoff"},
+    {path: "packagePhotos/biz/wa/abcdef1234567890.jpg", kind: "customer"},
+    {path: p("delivered1"), kind: "delivered"},
+  ]);
+  assert.deepEqual(linePhotoEntries({}), []);
+  assert.deepEqual(linePhotoEntries(null), []);
+  // The public record itself never carries them: the callable adds the
+  // links after checking who is asking.
+  const record = publicGuestTrackingRecord({id: "l", service: "container",
+    data: {trackingCode: "CL-K7M4P2", containerStatus: "waiting",
+      photoPaths: [p("dropoff01")]}});
+  assert.equal(record.photos, undefined);
+  assert.ok(!JSON.stringify(record).includes("packagePhotos"));
+});

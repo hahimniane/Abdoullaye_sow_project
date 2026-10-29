@@ -81,6 +81,17 @@ test("guest tracking is public-transport callable with a private projection",
           source,
           /receiverName|senderName|customerEmail|phone|address|price|payment/,
       );
+      // The one thing a signed-in caller gets on top (docs/AIR_PACKAGES.md
+      // §4.12): the package's photo links, and only as its own sender or
+      // receiver. The gate lives in the helper, never in the projection.
+      assert.match(source, /guestTrackingPhotoLinks\(db, request, /);
+      const helperAt = indexSource.indexOf(
+          "async function guestTrackingPhotoLinks(");
+      assert.ok(helperAt > -1, "guestTrackingPhotoLinks missing");
+      const links = indexSource.slice(helperAt,
+          indexSource.indexOf("\nasync function ", helperAt + 1));
+      assert.match(links, /if \(!lineBelongsToPhone\(found\.data, e164\)\)/);
+      assert.match(links, /packageProof\.photoLink\(/);
     });
 
 test("administrator and staff permissions fail closed", () => {

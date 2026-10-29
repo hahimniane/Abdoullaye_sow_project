@@ -233,3 +233,36 @@ describe("labels the phone prints itself", () => {
         assert.deepEqual(labelLineRows(null, null), []);
       });
 });
+
+describe("labels for a flight", () => {
+  const flight = {shipMode: "air", airWaybill: "176-12345678",
+    airline: "Air France", label: "Friday flight",
+    destinationCountryName: "Guinea"};
+  it("names the shipment by its waybill and never says Container", () => {
+    const m = containerLabelsModel({container: flight, lines, business});
+    assert.equal(m.reference, "176-12345678");
+    assert.equal(m.kindWord, "Shipment");
+    assert.equal(m.kindWordFr, "Envoi");
+    const page = renderContainerLabels(m, {});
+    assert.match(page, /176-12345678/);
+    assert.doesNotMatch(page, /Container/);
+    // No waybill yet: the working name, then the word.
+    assert.equal(containerLabelsModel({container: {shipMode: "air",
+      label: "Fri"}, lines, business}).reference, "Fri");
+    assert.equal(containerLabelsModel({container: {shipMode: "air"}, lines,
+      business}).reference, "Shipment");
+    assert.equal(containerLabelsModel({container: {}, lines, business})
+        .reference, "Container");
+  });
+
+  it("says shipment in the empty hint, in both languages", () => {
+    const page = renderContainerLabels(containerLabelsModel({
+      container: flight, lines: [], business}), {});
+    assert.match(page, /No packages on this shipment yet\./);
+    assert.match(page, /Aucun colis sur cet envoi/);
+    const box = renderContainerLabels(containerLabelsModel({
+      container, lines: [], business}), {});
+    assert.match(box, /No packages on this container yet\./);
+    assert.match(box, /Aucun colis sur ce conteneur/);
+  });
+});

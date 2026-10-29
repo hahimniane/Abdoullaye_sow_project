@@ -680,3 +680,14 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   the next boot ~30 s while Auth waits on its iframe. A real Google sign-in
   needs a human click on an authorized console domain; the Browser pane
   blocks the popup.
+- `security-contract.test.js` slices `exports.lookupGuestTracking` up to
+  `exports.resolveSignInIdentifier` and forbids `request.auth` and the word
+  `phone` in that slice: a helper that reads the caller (the photo links of
+  docs/AIR_PACKAGES.md §4.12 do) goes elsewhere in `index.js` (next to
+  `ensureLineDocumentToken`), and the gate it applies (`lineBelongsToPhone`)
+  is pinned in that same test. A new `/d` document view is exercised end to
+  end in `container-callables.test.js` by calling `functions.parkingDocument`
+  with a fake `res` (see "prints the customs list"); fields another agent's
+  callables will write (`contents`, `weightLb`, `declaredValueCents`,
+  `photoPaths`) are set on the line with `db.update` so the page test does not
+  wait on them.

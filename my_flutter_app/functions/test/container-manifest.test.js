@@ -1509,3 +1509,126 @@ describe("the shipping line and when tracking is tried again", () => {
         assert.doesNotMatch(structural, /carrierScac/);
       });
 });
+
+describe("air containers", () => {
+  const manifest = require("../container_manifest");
+  const {
+    AIR_WAYBILL,
+    SHIP_MODE,
+    SHIP_MODES,
+    airWaybillOf,
+    containerKindWord,
+    isAirContainer,
+    shipModeOf,
+  } = manifest;
+  const flight = (extra = {}) => ({shipMode: "air", airWaybill: "176-12345678",
+    airline: "Air France", destinationCountryId: "GN", ...extra});
+
+  it("is sea unless marked air (every box from before the field is sea)",
+      () => {
+        assert.deepEqual(SHIP_MODES, ["sea", "air"]);
+        assert.equal(shipModeOf(undefined), SHIP_MODE.SEA);
+        assert.equal(shipModeOf("AIR"), SHIP_MODE.AIR);
+        assert.equal(shipModeOf("plane"), SHIP_MODE.SEA);
+        assert.equal(isAirContainer({}), false);
+        assert.equal(isAirContainer({shipMode: "air"}), true);
+        assert.equal(isAirContainer(null), false);
+      });
+
+  it("stores the waybill upper case without spaces, 6-20 chars", () => {
+    assert.equal(airWaybillOf(" 176-1234 5678 "), "176-12345678");
+    assert.equal(airWaybillOf("abc123"), "ABC123");
+    assert.equal(airWaybillOf(null), "");
+    assert.ok(AIR_WAYBILL.test("176-12345678"));
+    assert.ok(!AIR_WAYBILL.test("12345"));
+    assert.ok(!AIR_WAYBILL.test("A".repeat(21)));
+    assert.ok(!AIR_WAYBILL.test("176/12345678"));
+  });
+
+  it("needs a working name or a waybill, and refuses a bad waybill", () => {
+    assert.deepEqual(validateContainer(flight()), []);
+    assert.deepEqual(validateContainer({shipMode: "air", label: "Fri flight"}),
+        []);
+    assert.deepEqual(validateContainer({shipMode: "air"}),
+        ["container_label_required"]);
+    assert.deepEqual(validateContainer(flight({airWaybill: "12345"})),
+        ["air_waybill_invalid"]);
+    assert.deepEqual(validateContainer(flight({airWaybill: "176/123456"})),
+        ["air_waybill_invalid"]);
+    // Typed with spaces between the groups: fine, they are dropped.
+    assert.deepEqual(validateContainer(flight({airWaybill: "176 1234 5678"})),
+        []);
+    assert.ok(CONTAINER_MESSAGES.air_waybill_invalid);
+    // A sea container never checks the waybill, an air one never the number
+    // (no ISO check) nor the shipping line.
+    assert.deepEqual(validateContainer({label: "x", airWaybill: "12"}), []);
+    assert.deepEqual(validateContainer(flight({containerNumber: "BOOK-99",
+      carrierScac: "NOPE"})), []);
+    assert.deepEqual(validateContainer({label: "x", containerNumber: "BOOK-99",
+      carrierScac: "NOPE"}), ["container_number_invalid", "carrier_invalid"]);
+  });
+
+  it("records a flight by its waybill and airline, with no number", () => {
+    const record = containerRecord(flight({label: " Fri ", containerNumber:
+      "msku1234567", airWaybill: "176-1234 5678", airline: " Air France "}));
+    assert.equal(record.shipMode, "air");
+    assert.equal(record.containerNumber, "");
+    assert.equal(record.airWaybill, "176-12345678");
+    assert.equal(record.airline, "Air France");
+    assert.equal(record.label, "Fri");
+    // And a box the other way round, "sea" written out.
+    const box = containerRecord({label: "Box", containerNumber: "msku1234567",
+      airWaybill: "176-12345678", airline: "Air France"});
+    assert.equal(box.shipMode, "sea");
+    assert.equal(box.containerNumber, "MSKU1234567");
+    assert.equal(box.airWaybill, "");
+    assert.equal(box.airline, "");
+    assert.equal(containerRecord(flight({airline: "x".repeat(80)})).airline
+        .length, 60);
+  });
+
+  it("never starts carrier tracking for a flight", () => {
+    // Even with a real ISO number left on the record.
+    assert.equal(shouldStartCarrierTracking({shipMode: "air",
+      containerNumber: "TCKU6418832", status: "loading"}), false);
+    assert.equal(shouldStartCarrierTracking({shipMode: "sea",
+      containerNumber: "TCKU6418832", status: "loading"}), true);
+    assert.equal(shouldStartCarrierTracking({
+      containerNumber: "TCKU6418832", status: "loading"}), true);
+  });
+
+  it("calls a flight a Shipment and a box a Container, in both languages",
+      () => {
+        assert.equal(containerKindWord({shipMode: "air"}), "Shipment");
+        assert.equal(containerKindWord({shipMode: "air"}, "fr"), "Envoi");
+        assert.equal(containerKindWord({}), "Container");
+        assert.equal(containerKindWord({containerNumber: "X"}, "fr"),
+            "Conteneur");
+        assert.equal(containerKindWord(null, "fr-FR"), "Conteneur");
+      });
+
+  const {readFileSync} = require("node:fs");
+  const path = require("node:path");
+  const source = readFileSync(path.join(__dirname, "..", "index.js"), "utf8");
+  const section = (start) => {
+    const at = source.indexOf(start);
+    assert.ok(at > -1, `${start} not found`);
+    const next = source.indexOf("\nexports.", at + 1);
+    return source.slice(at, next === -1 ? undefined : next);
+  };
+
+  it("locks the mode, waybill and airline with the rest once shipped, " +
+    "and keeps no shipping line on a flight", () => {
+    const update = section("exports.updateContainer =");
+    const structural = update.slice(update.indexOf("const structural"),
+        update.indexOf("const changed"));
+    for (const key of ["shipMode", "airWaybill", "airline"]) {
+      assert.match(structural, new RegExp(`"${key}"`));
+    }
+    // A box from before the field is sea, not "changed" to sea.
+    assert.match(update, /shipModeOf\(current\[key\]\)/);
+    assert.match(update, /isAirContainer\(merged\) \? ""/);
+    const create = section("exports.createContainer =");
+    assert.match(create, /isAirContainer\(record\) \? \{carrierScac: ""\}/);
+  });
+});

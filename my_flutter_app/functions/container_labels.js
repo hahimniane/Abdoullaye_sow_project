@@ -33,7 +33,11 @@
  */
 
 const {trackingLink} = require("./container_updates");
-const {lineSizeText} = require("./container_manifest");
+const {
+  containerKindWord,
+  isAirContainer,
+  lineSizeText,
+} = require("./container_manifest");
 const {
   lineHasPieces,
   linePieces,
@@ -114,10 +118,12 @@ function containerLabelsModel({container, lines, business, consoleUrl,
   const perPackage = labelCopies(copies);
   const c = container && typeof container === "object" ? container : {};
   const org = business && typeof business === "object" ? business : {};
-  // No container, no reference: the footer leaves it out.
+  // No container, no reference: the footer leaves it out. A flight is
+  // named by its air waybill, and is a "Shipment", never a "Container".
   const reference = !container ? "" :
-    text(c.containerNumber, 20) || text(c.label, 120) ||
-    text(c.bookingReference, 60) || "Container";
+    (isAirContainer(c) ? text(c.airWaybill, 20) :
+      text(c.containerNumber, 20)) || text(c.label, 120) ||
+    text(c.bookingReference, 60) || containerKindWord(c);
   const labels = [];
   const codes = [];
   for (const row of Array.isArray(lines) ? lines : []) {
@@ -166,6 +172,9 @@ function containerLabelsModel({container, lines, business, consoleUrl,
   return {
     reference,
     hasContainer: Boolean(container),
+    // "Shipment" for a flight, "Container" for a box, in the page's words.
+    kindWord: container ? containerKindWord(c) : "",
+    kindWordFr: container ? containerKindWord(c, "fr") : "",
     destination: text(c.destinationCountryName, 120),
     businessName: text(org.name, 160),
     businessPhone: text(org.phone, 40),
@@ -224,8 +233,13 @@ function renderContainerLabels(model, opts = {}) {
     ...(m.onlyCode ? {code: m.onlyCode} : {})};
   const link = (change) => escape(`${opts.query || ""}&${
     new URLSearchParams({...current, ...change}).toString()}`);
+  const kindWord = String(m.kindWord || "Container").toLowerCase();
+  const kindWordFr = String(m.kindWordFr || "Conteneur").toLowerCase();
   const empty = `<p class="hint">${m.hasContainer === false ?
-    "No packages to print." : "No packages on this container yet."}</p>`;
+    "No packages to print. / Aucun colis à imprimer." :
+    `No packages on this ${escape(kindWord)} yet. / Aucun colis sur ${
+      kindWordFr === "envoi" ? "cet" : "ce"} ${escape(kindWordFr)} ` +
+      "pour l'instant."}</p>`;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${escape(title)}</title>

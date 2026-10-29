@@ -3909,3 +3909,243 @@ describe("scan to load", () => {
     assert.match(entry.summary, /^Added 3 barrels for Fatou Diallo to /);
   });
 });
+
+describe("air containers (flights)", () => {
+  const packageProof = require("../package_proof");
+  const containerOf = async (id) =>
+    (await db.collection("containers").doc(id).get()).data();
+  const lineDataOf = async (id) =>
+    (await db.collection("containerLines").doc(id).get()).data();
+  const flight = (extra = {}) => ({shipMode: "air",
+    airWaybill: "176-1234 5678", airline: " Air France ",
+    destinationCountryId: "gn", destinationCountryName: "Guinea", ...extra});
+  // The /d page, answered as the platform would answer it.
+  const openDocument = async (query) => {
+    const sent = {};
+    const res = Object.assign(new EventEmitter(), {
+      set() {}, setHeader() {}, getHeader() {}, removeHeader() {},
+      status(code) {
+        sent.status = code;
+        return this;
+      }, send(body) {
+        sent.body = body;
+        return this;
+      },
+    });
+    await functions.parkingDocument(
+        {method: "GET", query, headers: {}}, res);
+    return sent;
+  };
+
+  it("creates a flight by its waybill, with no number and no shipping line",
+      async () => {
+        const {containerId} = await call("createContainer",
+            flight({containerNumber: "MSKU1234567", carrierScac: "MAEU"}));
+        const row = await containerOf(containerId);
+        assert.equal(row.shipMode, "air");
+        assert.equal(row.airWaybill, "176-12345678");
+        assert.equal(row.airline, "Air France");
+        assert.equal(row.containerNumber, "");
+        assert.equal(row.carrierScac, "");
+        // A box is written out as sea.
+        const sea = await newContainer({containerNumber: "msku1234567",
+          airWaybill: "176-12345678", airline: "Air France"});
+        const box = await containerOf(sea);
+        assert.equal(box.shipMode, "sea");
+        assert.equal(box.containerNumber, "MSKU1234567");
+        assert.equal(box.airWaybill, "");
+        assert.equal(box.airline, "");
+      });
+
+  it("refuses a bad waybill by name, and a flight with no name at all",
+      async () => {
+        await assert.rejects(call("createContainer",
+            flight({airWaybill: "12345"})),
+        (error) => error.code === "invalid-argument" &&
+          error.details?.reasons?.includes("air_waybill_invalid") &&
+          /air waybill/i.test(error.message));
+        await assert.rejects(call("createContainer",
+            {shipMode: "air", destinationCountryId: "gn"}),
+        (error) => error.details?.reasons?.includes(
+            "container_label_required"));
+        // A label is name enough; the waybill comes later.
+        const {containerId} = await call("createContainer",
+            {shipMode: "air", label: "Friday flight",
+              destinationCountryId: "gn"});
+        assert.equal((await containerOf(containerId)).airWaybill, "");
+      });
+
+  it("edits the waybill while loading, and locks it once departed",
+      async () => {
+        const {containerId} = await call("createContainer",
+            flight({airWaybill: "", label: "Fri"}));
+        await call("updateContainer", {containerId,
+          changes: {airWaybill: "176-99887766", airline: "Brussels"}});
+        let row = await containerOf(containerId);
+        assert.equal(row.airWaybill, "176-99887766");
+        assert.equal(row.airline, "Brussels");
+        await assert.rejects(call("updateContainer", {containerId,
+          changes: {airWaybill: "bad"}}),
+        (error) => error.details?.reasons?.includes("air_waybill_invalid"));
+        await call("addContainerLine", {containerId, line: barrelLine(1)});
+        await call("setContainerStatus", {containerId, status: "shipped"});
+        for (const changes of [{airWaybill: "176-11111111"},
+          {airline: "Other"}, {shipMode: "sea", containerNumber:
+            "MSKU1234567"}]) {
+          await assert.rejects(call("updateContainer", {containerId, changes}),
+              (error) => error.code === "failed-precondition" &&
+                error.message === CONTAINER_MESSAGES.container_locked);
+        }
+        // The notes stay open, as on a box.
+        await call("updateContainer", {containerId,
+          changes: {notes: "fragile"}});
+        row = await containerOf(containerId);
+        assert.equal(row.notes, "fragile");
+        assert.equal(row.airWaybill, "176-99887766");
+      });
+
+  it("does not read a box from before ship modes as changed to sea",
+      async () => {
+        const containerId = await newContainer({containerNumber:
+          "MSKU1234567"});
+        await db.collection("containers").doc(containerId).update({
+          shipMode: admin.firestore.FieldValue.delete()});
+        await call("addContainerLine", {containerId, line: barrelLine(1)});
+        await call("setContainerStatus", {containerId, status: "shipped"});
+        assert.equal((await containerOf(containerId)).shipMode, undefined);
+        // A note after sailing is still just a note.
+        await call("updateContainer", {containerId,
+          changes: {notes: "late note"}});
+        const row = await containerOf(containerId);
+        assert.equal(row.notes, "late note");
+        assert.equal(row.shipMode, "sea");
+        assert.equal(row.containerNumber, "MSKU1234567");
+      });
+
+  it("turns a loading box into a flight, dropping number and line",
+      async () => {
+        const containerId = await newContainer({containerNumber:
+          "MSKU1234567", carrierScac: "MAEU"});
+        await call("updateContainer", {containerId,
+          changes: {shipMode: "air", airWaybill: "176-55555555"}});
+        const row = await containerOf(containerId);
+        assert.equal(row.shipMode, "air");
+        assert.equal(row.containerNumber, "");
+        assert.equal(row.carrierScac, "");
+        assert.equal(row.airWaybill, "176-55555555");
+      });
+
+  it("shows the flight on the tracking page, and photos to its people only",
+      async () => {
+        const {containerId} = await call("createContainer", flight());
+        const {lineId} = await call("addContainerLine",
+            {containerId, line: barrelLine(2)});
+        await call("setContainerStatus", {containerId, status: "shipped"});
+        const line = await lineDataOf(lineId);
+        const lookup = (auth = null) => functions.lookupGuestTracking.run({
+          auth, data: {identifier: line.trackingCode},
+          rawRequest: {headers: {}}});
+        const guest = await lookup();
+        assert.deepEqual(guest.record.shipping, {mode: "air",
+          airline: "Air France", airWaybill: "176-12345678"});
+        assert.equal(guest.record.photos, undefined);
+        // Photos filed on the line (the proof fields other callables write).
+        const dropoff = `packagePhotos/${BIZ}/${OWNER}/dropoff00001.jpg`;
+        const fromChat = `packagePhotos/${BIZ}/wa/abcdef1234567890.jpg`;
+        const delivered = `packagePhotos/${BIZ}/agentUid1/delivered001.jpg`;
+        await db.collection("containerLines").doc(lineId).update({
+          photoPaths: [dropoff],
+          customerPhotos: [{path: fromChat, phone: "+16465550100", atMs: 1}],
+          deliveredPhotoPath: delivered,
+        });
+        assert.equal((await lookup()).record.photos, undefined);
+        // A stranger with a verified phone: nothing.
+        const stranger = await lookup({uid: "stranger-1",
+          token: {phone_number: "+16465550199"}});
+        assert.equal(stranger.record.photos, undefined);
+        // The sender (the line's number was typed without +1 formatting
+        // elsewhere; here it is the stored +16465550100).
+        const sender = await lookup({uid: "sender-1",
+          token: {phone_number: "+16465550100"}});
+        assert.deepEqual(sender.record.photos.map((p) => p.kind),
+            ["dropoff", "customer", "delivered"]);
+        const token = (await lineDataOf(lineId)).documentToken;
+        assert.ok(token && token.length >= 16, "a token was minted");
+        const url = new URL(sender.record.photos[0].url);
+        assert.equal(url.searchParams.get("view"), "photo");
+        assert.equal(url.searchParams.get("t"), token);
+        assert.equal(url.searchParams.get("p"), dropoff);
+        const expires = Number(url.searchParams.get("e"));
+        assert.ok(expires > Date.now() + packageProof.PHOTO_LINK_MS - 60000);
+        assert.ok(expires <= Date.now() + packageProof.PHOTO_LINK_MS);
+        assert.equal(packageProof.photoLinkValid(
+            Object.fromEntries(url.searchParams), token, Date.now()), true);
+        // The receiver too, on the same token; an anonymous session not.
+        const receiver = await lookup({uid: "receiver-1",
+          token: {phone_number: "+224620000000"}});
+        assert.equal(new URL(receiver.record.photos[2].url).searchParams
+            .get("t"), token);
+        assert.equal(receiver.record.photos[2].kind, "delivered");
+        const anonymous = await lookup({uid: "anon-1", token: {
+          phone_number: "+16465550100", firebase: {sign_in_provider:
+            "anonymous"}}});
+        assert.equal(anonymous.record.photos, undefined);
+        // Nothing of the paths leaks to the guest page.
+        assert.ok(!JSON.stringify(guest).includes("packagePhotos"));
+      });
+
+  it("prints the customs list for staff with the containers permission",
+      async () => {
+        const {containerId} = await call("createContainer", flight());
+        const {lineId} = await call("addContainerLine", {containerId,
+          line: {kind: "other", quantity: 2, description: "Phones",
+            ownerKind: "customer", customerName: "Fatou Diallo",
+            customerPhone: "+16465550100", receiverName: "Mariama Bah",
+            receiverPhone: "+224620000000", priceCents: 9000}});
+        const other = await call("addContainerLine", {containerId,
+          line: barrelLine(3)});
+        // The declarations (the proof fields other callables write).
+        await db.collection("containerLines").doc(lineId).update({
+          contents: [{label: "iPhone 13", quantity: 2,
+            serial: "356789012345678"}, {label: "clothes", quantity: 1,
+            serial: ""}],
+          weightLb: 4.2, declaredValueCents: 125000,
+        });
+        await db.collection("containerLines").doc(other.lineId).update({
+          weightLb: 60, declaredValueCents: 30000});
+        const {url} = await call("getContainerDocumentUrl",
+            {containerId, view: "customs"});
+        const query = Object.fromEntries(new URL(url).searchParams);
+        assert.equal(query.view, "customs");
+        assert.equal(query.t, (await containerOf(containerId)).documentToken);
+        // The same token as the loading list and the labels.
+        const plain = await call("getContainerDocumentUrl", {containerId});
+        assert.equal(new URL(plain.url).searchParams.get("t"), query.t);
+        await assert.rejects(call("getContainerDocumentUrl",
+            {containerId, view: "customs"}, NO_CONTAINERS),
+        (error) => error.code === "permission-denied");
+        const page = await openDocument(query);
+        assert.equal(page.status, 200);
+        const line = await lineDataOf(lineId);
+        assert.match(page.body, new RegExp(line.trackingCode));
+        assert.match(page.body, /Shipment 176-12345678/);
+        assert.match(page.body, /Air France/);
+        assert.match(page.body, /Guinea/);
+        assert.match(page.body, /Fatou Diallo/);
+        assert.match(page.body, /\+224620000000/);
+        assert.match(page.body,
+            /2 × iPhone 13 \(S\/N 356789012345678\), clothes/);
+        assert.match(page.body, /3 barrels/);
+        assert.match(page.body, /4\.2 lb/);
+        assert.match(page.body, /\$1,250\.00/);
+        assert.match(page.body, /64\.2 lb/);
+        assert.match(page.body, /\$1,550\.00/);
+        assert.match(page.body, /@page\{size:letter portrait;/);
+        // The business's price is not customs' business.
+        assert.doesNotMatch(page.body, /90\.00|9000/);
+        assert.doesNotMatch(page.body, /Container/);
+        // A made-up token opens nothing.
+        assert.equal((await openDocument({t: "x".repeat(32),
+          view: "customs"})).status, 404);
+      });
+});

@@ -38,12 +38,15 @@ const {
 const {
   GUEST_TRACKING_COLLECTIONS,
   containerLineGroup,
-  findGuestTrackingRecord,
+  findGuestTrackingRecordWithSource,
   findTrackingDocument,
   guestTrackingCandidates,
+  lineBelongsToPhone,
+  linePhotoEntries,
   publicGuestTrackingRecord,
   shippedContainerOf,
 } = require("./guest_tracking");
+const packageProof = require("./package_proof");
 const {createPhoneAccounts, notSignedInYet} = require("./phone_accounts");
 const whatsappInbox = require("./whatsapp_inbox");
 const {
@@ -368,6 +371,8 @@ const {
   WAITING_HOLDER,
   validateContainer,
   containerRecord,
+  isAirContainer,
+  shipModeOf,
   containerCarrierScac,
   carrierScacRefusal,
   shouldStartCarrierTracking,
@@ -525,6 +530,10 @@ const {
   containerDocumentModel,
   renderContainerDocument,
 } = require("./container_document");
+const {
+  containerCustomsModel,
+  renderContainerCustoms,
+} = require("./container_customs");
 const {
   labelFormat,
   labelCopies,
@@ -1175,13 +1184,18 @@ exports.lookupGuestTracking = onCall(
             "Enter a valid booking or tracking number",
         );
       }
-      const record = await findGuestTrackingRecord(
-          admin.firestore(),
-          candidates,
-      );
-      return record ?
-        {version: 1, found: true, record} :
-        {version: 1, found: false};
+      const db = admin.firestore();
+      const found = await findGuestTrackingRecordWithSource(db, candidates);
+      if (!found) return {version: 1, found: false};
+      const {record} = found;
+      // The photos on a package (docs/AIR_PACKAGES.md §4.12) are for the
+      // people on it: only a caller signed in as the line's sender or
+      // receiver gets them, as 30-day links. A guest gets no `photos` key.
+      if (found.found.service === "container") {
+        const photos = await guestTrackingPhotoLinks(db, request, found.found);
+        if (photos) record.photos = photos;
+      }
+      return {version: 1, found: true, record};
     },
 );
 
@@ -14072,6 +14086,13 @@ exports.parkingDocument = onRequest(
         res.set("Content-Type", "text/html; charset=utf-8");
         return res.status(200).send(page);
       }
+      // A container's customs list: its own token, one printable table.
+      if (String(req.query?.view || "") === "customs") {
+        const page = await containerCustomsPage(db, token);
+        if (!page) return notFound();
+        res.set("Content-Type", "text/html; charset=utf-8");
+        return res.status(200).send(page);
+      }
       // Several packages' labels in one link: tokens joined with ".". It can
       // only be a line link, and is too long to ask the other collections
       // about as one value.
@@ -17837,8 +17858,9 @@ exports.createContainer = onCall(
         businessId,
         ...record,
         // The shipping line staff chose ("" = guess it from the number);
-        // startContainerCarrierTracking reads it.
+        // startContainerCarrierTracking reads it. A flight has none.
         carrierScac: containerCarrierScac(data.carrierScac),
+        ...(isAirContainer(record) ? {carrierScac: ""} : {}),
         status: CONTAINER_STATUS.LOADING,
         lineCount: 0, carCount: 0, barrelCount: 0, otherCount: 0,
         createdByStaffId: uid,
@@ -17871,8 +17893,9 @@ exports.updateContainer = onCall(
       const carrierSent = changes.carrierScac !== undefined &&
         changes.carrierScac !== null;
       const carrierBefore = containerCarrierScac(current.carrierScac);
-      const carrierAfter = carrierSent ?
-        containerCarrierScac(changes.carrierScac) : carrierBefore;
+      // A flight has no shipping line: whatever was stored or sent goes.
+      const carrierAfter = isAirContainer(merged) ? "" : (carrierSent ?
+        containerCarrierScac(changes.carrierScac) : carrierBefore);
       const carrierChanged = carrierAfter !== carrierBefore;
       if (carrierChanged && carrierScacRefusal(carrierAfter)) {
         errors.push("carrier_invalid");
@@ -17884,9 +17907,14 @@ exports.updateContainer = onCall(
       // Once shipped, the list and its identity are the record of what was
       // declared. Only the notes stay open.
       const structural = ["label", "containerNumber", "bookingReference",
-        "destinationCountryId", "destinationCountryName"];
+        "destinationCountryId", "destinationCountryName", "shipMode",
+        "airWaybill", "airline"];
+      // A box from before ship modes has no shipMode stored: it is a sea
+      // container, not one being changed.
+      const before = (key) => key === "shipMode" ?
+        shipModeOf(current[key]) : String(current[key] || "");
       const changed = structural.filter((key) =>
-        String(current[key] || "") !== String(merged[key] || ""));
+        before(key) !== String(merged[key] || ""));
       if (changed.length > 0 && !containerIsOpen(current)) {
         throw new HttpsError(
             "failed-precondition", CONTAINER_MESSAGES.container_locked);
@@ -21735,20 +21763,7 @@ async function containerLineLabelsUrl(db, uid, businessId, data) {
   for (const group of inGroups(docs, 10)) {
     tokens.push(...await Promise.all(group.map(async (d) => {
       const known = String(d.data()?.documentToken || "").trim();
-      if (known) return known;
-      // Minted in a transaction that only fills an empty field, as a
-      // container's is: two first opens share one link.
-      const candidate = crypto.randomBytes(24).toString("base64url");
-      return db.runTransaction(async (tx) => {
-        const fresh = await tx.get(d.ref);
-        const {value, write} =
-          keepExisting(fresh.data()?.documentToken, candidate);
-        if (write) {
-          tx.update(d.ref, {documentToken: value,
-            updatedAt: FirestoreFieldValue.serverTimestamp()});
-        }
-        return value;
-      });
+      return known || ensureLineDocumentToken(db, d.ref);
     })));
   }
   const base = String(process.env.PARKING_DOCUMENT_BASE_URL || "").trim() ||
@@ -21889,6 +21904,105 @@ exports.setDestinationPickup = onCall(
     },
 );
 
+/**
+ * The signed-in caller's verified phone number, as My packages reads it
+ * (docs/PHONE_ACCOUNTS.md §6): the ID token's claim, else the Auth user's
+ * number. "" for a guest, an anonymous session or an account with none.
+ *
+ * @param {object} request The callable request.
+ * @return {Promise<string>} E.164 or "".
+ */
+async function callerVerifiedPhone(request) {
+  const auth = request?.auth;
+  if (!auth || !auth.uid) return "";
+  if (auth.token?.firebase?.sign_in_provider === "anonymous") return "";
+  const fromToken = strictE164(auth.token?.phone_number);
+  if (fromToken) return fromToken;
+  const user = await admin.auth().getUser(auth.uid).catch(() => null);
+  return strictE164(user?.phoneNumber);
+}
+
+/**
+ * The photo links a tracking lookup hands the line's own sender or
+ * receiver, or null (not signed in as one of them, or no photos). Each
+ * link is signed with the line's document token and expires in 30 days
+ * (package_proof.photoLink); a line with no token yet gets one.
+ *
+ * @param {object} db Firestore.
+ * @param {object} request The callable request.
+ * @param {object} found The stored line `{collection, id, data}`.
+ * @return {Promise<Array<{url: string, kind: string}>|null>} The links.
+ */
+async function guestTrackingPhotoLinks(db, request, found) {
+  const entries = linePhotoEntries(found.data);
+  if (entries.length === 0) return null;
+  const e164 = await callerVerifiedPhone(request);
+  if (!lineBelongsToPhone(found.data, e164)) return null;
+  const lineRef = db.collection(found.collection).doc(found.id);
+  const token = String(found.data.documentToken || "").trim() ||
+    await ensureLineDocumentToken(db, lineRef);
+  const base = String(process.env.PARKING_DOCUMENT_BASE_URL || "").trim() ||
+    "https://laawoldigital.com/d";
+  const expiresMs = Date.now() + packageProof.PHOTO_LINK_MS;
+  return entries.map(({path, kind}) => ({
+    url: packageProof.photoLink({base, token, path, expiresMs}),
+    kind,
+  }));
+}
+
+/**
+ * A line's document token, minted if it has none: the secret its labels
+ * link and its photo links (package_proof.photoLink) are signed with. Minted
+ * in a transaction that only fills an empty field, as a container's is: two
+ * first opens share one token instead of the second breaking the first's.
+ *
+ * @param {object} db Firestore.
+ * @param {object} lineRef The containerLines document.
+ * @return {Promise<string>} The token.
+ */
+async function ensureLineDocumentToken(db, lineRef) {
+  const candidate = crypto.randomBytes(24).toString("base64url");
+  return db.runTransaction(async (tx) => {
+    const fresh = await tx.get(lineRef);
+    const {value, write} =
+      keepExisting(fresh.data()?.documentToken, candidate);
+    if (write) {
+      tx.update(lineRef, {documentToken: value,
+        updatedAt: FirestoreFieldValue.serverTimestamp()});
+    }
+    return value;
+  });
+}
+
+/**
+ * The customs list of a container (docs/AIR_PACKAGES.md §4.9), opened by
+ * the container's own document token: every line's code, people, contents
+ * with serials, weight and declared value. Null when no container carries
+ * the token.
+ *
+ * @param {object} db Firestore.
+ * @param {string} token The `t` parameter.
+ * @return {Promise<string|null>} The page, or null.
+ */
+async function containerCustomsPage(db, token) {
+  const boxes = await db.collection("containers")
+      .where("documentToken", "==", token).limit(1).get();
+  if (boxes.empty) return null;
+  const box = boxes.docs[0];
+  const [lineDocs, business] = await Promise.all([
+    db.collection("containerLines").where("containerId", "==", box.id).get(),
+    db.collection("businesses").doc(String(box.data()?.businessId || ""))
+        .get().catch(() => null),
+  ]);
+  return renderContainerCustoms(containerCustomsModel({
+    container: box.data() || {},
+    lines: lineDocs.docs.map((d) => d.data() || {})
+        .sort((a, b) => (a.createdAt?.toMillis?.() || 0) -
+          (b.createdAt?.toMillis?.() || 0)),
+    business: business && business.exists ? business.data() : {},
+  }));
+}
+
 exports.getContainerDocumentUrl = onCall(
     {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
     async (request) => {
@@ -21922,6 +22036,11 @@ exports.getContainerDocumentUrl = onCall(
       const base = String(process.env.PARKING_DOCUMENT_BASE_URL || "").trim() ||
         "https://laawoldigital.com/d";
       const url = `${base}?t=${encodeURIComponent(token)}`;
+      // The customs list (docs/AIR_PACKAGES.md §4.9): money is on it, so it
+      // needs the containers permission, which loadContainerFor required.
+      if (String(data.view || "") === "customs") {
+        return {success: true, url: `${url}&view=customs`};
+      }
       if (String(data.view || "") !== "labels") return {success: true, url};
       // Labels need every line's code; lines from before codes existed get
       // theirs now rather than printing a sheet with gaps. One line's labels

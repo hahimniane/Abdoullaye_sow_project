@@ -2,7 +2,9 @@
 
 const {normalizeTrackingCode} = require("./tracking_code");
 const {oceanCarrierName} = require("./ocean_carrier_catalog");
-const {lastTwo, strictE164} = require("./phone_e164");
+const {isAirContainer} = require("./container_manifest");
+const {photoPathParts} = require("./package_proof");
+const {lastTwo, sameNumber, strictE164} = require("./phone_e164");
 const {
   groupRootId,
   lineCounts,
@@ -129,6 +131,17 @@ const CONTAINER_SHIPPING_STAGES = Object.freeze(["in_transit", "arrived"]);
 function publicContainerShipping(stage, container) {
   if (!CONTAINER_SHIPPING_STAGES.includes(stage)) return null;
   if (!container || typeof container !== "object") return null;
+  if (isAirContainer(container)) {
+    // A flight (docs/AIR_PACKAGES.md §2): the airline and the waybill, each
+    // only when known, under its mode so the page says "flight" not "ship".
+    const airline = cleanText(container.airline, 60);
+    const airWaybill = cleanText(container.airWaybill, 20).toUpperCase();
+    return {
+      mode: "air",
+      ...(airline ? {airline} : {}),
+      ...(airWaybill ? {airWaybill} : {}),
+    };
+  }
   const shippingLine = oceanCarrierName(container.carrierScac);
   const containerNumber = cleanText(
       container.containerNumber || container.trackedContainerNumber, 20)
@@ -200,6 +213,50 @@ function signInHints(row) {
     hints.push({role: "receiver", lastTwo: lastTwo(receiver)});
   }
   return hints;
+}
+
+/**
+ * Whether a signed-in phone account is this line's sender or receiver: the
+ * rule My packages uses (docs/PHONE_ACCOUNTS.md §6, `sameNumber` on the raw
+ * field, so a number staff changed leaves the old account at once).
+ *
+ * @param {object} line The containerLines row.
+ * @param {string} e164 The caller's verified number, or "".
+ * @return {boolean} True for the sender or the receiver.
+ */
+function lineBelongsToPhone(line, e164) {
+  const number = strictE164(e164);
+  if (!number || !line || typeof line !== "object") return false;
+  return [line.customerPhone, line.receiverPhone]
+      .some((raw) => sameNumber(raw, number));
+}
+
+/**
+ * The photos filed on a line, by kind (docs/AIR_PACKAGES.md §4.12): the
+ * drop-off photos, what the customer sent on WhatsApp, and the photo taken
+ * when it was delivered without a code. Paths only; the caller signs the
+ * links. Nothing that is not one of our photo paths is listed.
+ *
+ * @param {object} line The containerLines row.
+ * @return {Array<{path: string, kind: string}>} In that order.
+ */
+function linePhotoEntries(line) {
+  const row = line && typeof line === "object" ? line : {};
+  const out = [];
+  const seen = new Set();
+  const add = (path, kind) => {
+    const clean = String(path || "").trim();
+    if (!photoPathParts(clean) || seen.has(clean)) return;
+    seen.add(clean);
+    out.push({path: clean, kind});
+  };
+  for (const path of Array.isArray(row.photoPaths) ? row.photoPaths : []) {
+    add(path, "dropoff");
+  }
+  const sent = Array.isArray(row.customerPhotos) ? row.customerPhotos : [];
+  for (const photo of sent) add(photo && photo.path, "customer");
+  add(row.deliveredPhotoPath, "delivered");
+  return out;
 }
 
 function publicGuestTrackingRecord({id, service, data, container = null,
@@ -311,10 +368,24 @@ async function containerLineGroup(db, id, line) {
  * @return {!Promise<?Object>} Sanitized public record, or null.
  */
 async function findGuestTrackingRecord(db, candidates) {
+  const found = await findGuestTrackingRecordWithSource(db, candidates);
+  return found ? found.record : null;
+}
+
+/**
+ * findGuestTrackingRecord, with the stored document it was built from (for
+ * a caller that then checks the signed-in account against it - the source
+ * itself still never crosses to a client).
+ *
+ * @param {!FirebaseFirestore.Firestore} db Admin Firestore instance.
+ * @param {string[]} candidates Exact tracking-code candidates.
+ * @return {!Promise<?Object>} `{record, found}`, or null.
+ */
+async function findGuestTrackingRecordWithSource(db, candidates) {
   const found = await findTrackingDocument(db, candidates);
   if (!found) return null;
   const container = found.service === "container";
-  return publicGuestTrackingRecord({
+  const record = publicGuestTrackingRecord({
     id: found.id,
     service: found.service,
     data: found.data,
@@ -322,6 +393,7 @@ async function findGuestTrackingRecord(db, candidates) {
     group: container ? await containerLineGroup(db, found.id, found.data) :
       null,
   });
+  return {record, found};
 }
 
 /**
@@ -369,7 +441,10 @@ module.exports = {
   WAITING_STAGE,
   WAITING_STAGE_LABEL,
   findGuestTrackingRecord,
+  findGuestTrackingRecordWithSource,
   findTrackingDocument,
+  lineBelongsToPhone,
+  linePhotoEntries,
   signInHints,
   guestTrackingCandidates,
   publicGuestTrackingRecord,

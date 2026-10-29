@@ -15,6 +15,8 @@
 
 const {
   containerCounts,
+  containerKindWord,
+  isAirContainer,
   lineCustomerName,
   lineCustomerPhone,
 } = require("./container_manifest");
@@ -57,7 +59,9 @@ function containerStamp(c) {
   }
   if (status === "shipped") {
     const on = dateLabel(c.sailedAt);
-    return {text: on ? `SAILED ${on}` : "SAILED", tone: "sailed"};
+    // A flight departs; a box sails.
+    const word = isAirContainer(c) ? "DEPARTED" : "SAILED";
+    return {text: on ? `${word} ${on}` : word, tone: "sailed"};
   }
   return {text: "LOADING", tone: "loading"};
 }
@@ -71,7 +75,9 @@ function containerDocumentModel({container, lines, business}) {
   const c = container && typeof container === "object" ? container : {};
   const org = business && typeof business === "object" ? business : {};
   const rows = Array.isArray(lines) ? lines : [];
-  const number = text(c.containerNumber, 20);
+  const air = isAirContainer(c);
+  // A flight is known by its air waybill, a box by its container number.
+  const number = air ? text(c.airWaybill, 20) : text(c.containerNumber, 20);
   const label = text(c.label, 120);
   const booking = text(c.bookingReference, 60);
   return {
@@ -79,9 +85,14 @@ function containerDocumentModel({container, lines, business}) {
     // The number is what the port knows the box by; until there is one, the
     // working name stands in and the label line is left empty rather than
     // saying the same thing twice.
-    reference: number || label || booking || "Container",
+    reference: number || label || booking || containerKindWord(c),
     label: number && label ? label : "",
     bookingReference: booking,
+    // "Shipment" for a flight, "Container" for a box.
+    kindWord: containerKindWord(c),
+    air,
+    airline: air ? text(c.airline, 60) : "",
+    airWaybill: air ? text(c.airWaybill, 20) : "",
     logo: documentLogo(org),
     businessName: text(org.name, 160),
     businessAddress: formatBusinessAddress({business: org, entry: {}}),
@@ -155,6 +166,7 @@ function renderContainerDocument(model) {
   </tr>`).join("");
   const meta = [
     ["Destination", m.destination],
+    ["Airline", m.airline],
     ["Booking / BL", m.bookingReference],
     ["Started", m.startedOn],
     ["On board", onBoard],
@@ -243,7 +255,7 @@ function renderContainerDocument(model) {
     </div>
     <div class="doc-title">
       <h1>${escape(m.title || "Loading list")}</h1>
-      <p>${escape(m.reference)}</p>
+      <p>${m.kindWord ? `${escape(m.kindWord)} ` : ""}${escape(m.reference)}</p>
       ${m.label ? `<small>${escape(m.label)}</small>` : ""}
     </div>
   </header>

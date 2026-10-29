@@ -156,3 +156,33 @@ describe("a line with pieces on the loading list", () => {
         {lineCount: 3, carCount: 1, barrelCount: 10, otherCount: 1});
   });
 });
+
+describe("the loading list of a flight", () => {
+  const flight = (extra = {}) => box({shipMode: "air",
+    airWaybill: "176-12345678", airline: "Air France", ...extra});
+  it("is a Shipment named by its waybill, departing rather than sailing",
+      () => {
+        const model = containerDocumentModel({container: flight(), lines,
+          business});
+        assert.equal(model.reference, "176-12345678");
+        assert.equal(model.kindWord, "Shipment");
+        assert.equal(model.air, true);
+        assert.equal(model.airline, "Air France");
+        assert.equal(model.label, "Sailing 3 Oct, box 2");
+        const html = renderContainerDocument(model);
+        assert.match(html, /Shipment 176-12345678/);
+        assert.match(html, /<span>Airline<\/span><b>Air France<\/b>/);
+        assert.doesNotMatch(html, /MSKU1234567|Container/);
+        const departed = containerDocumentModel({container: flight({
+          status: "shipped", sailedAt: stamp("2026-10-03")}), lines, business});
+        assert.deepEqual(departed.stamp,
+            {text: "DEPARTED Oct 3, 2026", tone: "sailed"});
+      });
+
+  it("keeps calling a box a Container", () => {
+    const model = containerDocumentModel({container: box(), lines, business});
+    assert.equal(model.kindWord, "Container");
+    assert.equal(model.air, false);
+    assert.match(renderContainerDocument(model), /Container MSKU1234567/);
+  });
+});
