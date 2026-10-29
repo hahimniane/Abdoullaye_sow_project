@@ -603,7 +603,11 @@ service cloud.firestore {
       // dates and amount are edited only through the callable (which re-quotes
       // and reissues links); a raw write there would contradict a payment link
       // the customer already holds.
+      // A voided car (updateBusinessParkingEntry action "void") is history:
+      // no direct write may move it again, and `voided` is never a client
+      // field, so a client can neither void nor un-void.
       allow update: if request.auth != null &&
+        resource.data.get('voided', false) != true &&
         request.resource.data.businessId == resource.data.businessId &&
         request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(parkedCarClientEditableFields(resource.data)) &&

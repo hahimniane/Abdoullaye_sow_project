@@ -166,7 +166,7 @@ void main() {
       expect(screen, contains('l10n.lotOpenIt'));
       // The list's Void is the ledger's own void sheet.
       expect(
-          RegExp(r"_DuplicateGroupCard[\s\S]*_VoidSheet\(\s*callable: 'voidLotActivity'")
+          RegExp(r"_DuplicateGroupCard[\s\S]*VoidRecordSheet\([\s\S]*?voidThroughCallable\(\s*'voidLotActivity'")
               .hasMatch(screen),
           isTrue);
     });

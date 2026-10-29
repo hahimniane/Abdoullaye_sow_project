@@ -367,6 +367,16 @@ async function containerLineGroup(db, id, line) {
  * @param {string[]} candidates Exact tracking-code candidates.
  * @return {!Promise<?Object>} Sanitized public record, or null.
  */
+/**
+ * Whether a found tracking document is a parked car the lot voided.
+ *
+ * @param {?Object} found {collection, data} from findTrackingDocument.
+ * @return {boolean} True when the record must not be shown.
+ */
+function voidedTrackingRecord(found) {
+  return found?.collection === "parkedCars" && found?.data?.voided === true;
+}
+
 async function findGuestTrackingRecord(db, candidates) {
   const found = await findGuestTrackingRecordWithSource(db, candidates);
   return found ? found.record : null;
@@ -384,6 +394,8 @@ async function findGuestTrackingRecord(db, candidates) {
 async function findGuestTrackingRecordWithSource(db, candidates) {
   const found = await findTrackingDocument(db, candidates);
   if (!found) return null;
+  // A voided parked car tracks as nothing at all, as if it were removed.
+  if (voidedTrackingRecord(found)) return null;
   const container = found.service === "container";
   const record = publicGuestTrackingRecord({
     id: found.id,
@@ -430,6 +442,7 @@ async function findTrackingDocument(db, input) {
 }
 
 module.exports = {
+  voidedTrackingRecord,
   GUEST_TRACKING_COLLECTIONS,
   PUBLIC_STAGE_BY_STATUS,
   CONTAINER_STAGE_BY_STATUS,

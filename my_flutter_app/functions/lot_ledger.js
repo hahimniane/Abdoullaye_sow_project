@@ -950,7 +950,127 @@ function lotRepeatAlertCopy(activity, actorName, language) {
   };
 }
 
+// ---- Expense lines: void (a mistake) and stop (a bill that ended) ----
+//
+// Voiding a line mirrors voidLotActivity: the line stays on the record,
+// struck through, and drops out of every month's totals - so it is refused
+// while purchases still hang off it (a line voided as a mistake must never
+// hide real money). Stopping is different: a real monthly bill ended, so the
+// line keeps counting through its last month (`endMonth`, "yyyy-mm") and
+// stops after it. Stopping only changes future months, so it can be undone.
+
+/** Refusal reasons for the line actions, with the words the clients show. */
+const LOT_EXPENSE_LINE_REFUSALS = Object.freeze({
+  line_not_found: "Line not found",
+  line_voided: "Already voided.",
+  line_has_purchases: "Void this line's purchases first.",
+  end_month_invalid: "Pick a valid month.",
+  end_month_before_purchases: "This line has purchases after that month.",
+  line_stopped: "This line stopped before that month.",
+});
+
+const LOT_MONTH_NAMES = Object.freeze(["January", "February", "March",
+  "April", "May", "June", "July", "August", "September", "October",
+  "November", "December"]);
+
+/**
+ * @param {*} value A month key.
+ * @return {boolean} True for a real "yyyy-mm".
+ */
+function lotIsMonthKey(value) {
+  const match = /^(\d{4})-(\d{2})$/.exec(String(value ?? ""));
+  return Boolean(match) && Number(match[2]) >= 1 && Number(match[2]) <= 12;
+}
+
+/**
+ * @param {string} monthKey "yyyy-mm".
+ * @return {string} "October 2026".
+ */
+function lotMonthLabel(monthKey) {
+  if (!lotIsMonthKey(monthKey)) return String(monthKey ?? "");
+  const [year, month] = String(monthKey).split("-");
+  return `${LOT_MONTH_NAMES[Number(month) - 1]} ${year}`;
+}
+
+/**
+ * The last month a line counts, or "" when it runs on. A malformed stored
+ * value is read as "runs on" (never silently drops real months).
+ *
+ * @param {object} line A lotExpenseLines document.
+ * @return {string} "yyyy-mm" or "".
+ */
+function lotLineEndMonth(line) {
+  const end = String(line?.endMonth ?? "").trim();
+  return lotIsMonthKey(end) ? end : "";
+}
+
+/**
+ * Whether a line counts in (and takes purchases for) a month: not voided,
+ * and not a month after it stopped.
+ *
+ * @param {object} line A lotExpenseLines document.
+ * @param {string} month "yyyy-mm".
+ * @return {boolean} True when the line is live that month.
+ */
+function lotLineLiveIn(line, month) {
+  if (!line || line.voided === true) return false;
+  const end = lotLineEndMonth(line);
+  return !end || !lotIsMonthKey(month) || month <= end;
+}
+
+/**
+ * Whether a line may be voided.
+ *
+ * @param {{line: ?object, livePurchases: number}} input The stored line
+ *   (null when missing) and how many non-voided purchases point at it.
+ * @return {{ok: boolean, reason: string}} The decision.
+ */
+function lotLineVoidPlan({line, livePurchases}) {
+  if (!line) return {ok: false, reason: "line_not_found"};
+  if (line.voided === true) return {ok: false, reason: "line_voided"};
+  if (Number(livePurchases) > 0) {
+    return {ok: false, reason: "line_has_purchases"};
+  }
+  return {ok: true, reason: ""};
+}
+
+/**
+ * What "Stop after this month" (or "Resume", with "") does to a line.
+ *
+ * @param {{line: ?object, endMonth: *, purchaseMonths: string[]}} input The
+ *   stored line, the requested last month ("" resumes) and the months of
+ *   its non-voided purchases.
+ * @return {{ok: boolean, reason: string, endMonth: string,
+ *   summary: string, changed: boolean}} The decision and its History line.
+ */
+function lotLineEndMonthPlan({line, endMonth, purchaseMonths}) {
+  const refuse = (reason) => ({ok: false, reason, endMonth: "",
+    summary: "", changed: false});
+  if (!line) return refuse("line_not_found");
+  if (line.voided === true) return refuse("line_voided");
+  const wanted = String(endMonth ?? "").trim();
+  if (wanted && !lotIsMonthKey(wanted)) return refuse("end_month_invalid");
+  if (wanted && (purchaseMonths || []).some((m) =>
+    lotIsMonthKey(m) && m > wanted)) {
+    return refuse("end_month_before_purchases");
+  }
+  return {
+    ok: true,
+    reason: "",
+    endMonth: wanted,
+    summary: wanted ? `Stopped after ${lotMonthLabel(wanted)}` : "Resumed",
+    changed: wanted !== lotLineEndMonth(line),
+  };
+}
+
 module.exports = {
+  LOT_EXPENSE_LINE_REFUSALS,
+  lotIsMonthKey,
+  lotMonthLabel,
+  lotLineEndMonth,
+  lotLineLiveIn,
+  lotLineVoidPlan,
+  lotLineEndMonthPlan,
   LOT_ACTIVITY_PAYMENT_METHODS,
   LOT_CUSTOM_ACTIVITY_ID,
   LOT_DIRECT_METHODS,

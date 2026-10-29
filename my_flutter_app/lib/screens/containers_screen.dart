@@ -15,6 +15,7 @@ import '../models/destination_country.dart';
 import '../services/business_activity_queries.dart';
 import '../services/container_delivery.dart';
 import '../services/container_delivery_service.dart';
+import '../services/business_parking_entry.dart' show businessParkingVoided;
 import '../services/container_lot_cars.dart';
 import '../services/business_volume.dart' show volumeFeedSignature;
 import '../services/container_feed_plan.dart';
@@ -648,8 +649,10 @@ class _ContainersScreenState extends State<ContainersScreen> {
         .snapshots()
         .listen((snap) {
       if (!mounted) return;
+      // A voided car holds no space and is no car to load.
       setState(() => _parkedCarRows = [
-            for (final d in snap.docs) {...d.data(), 'id': d.id},
+            for (final d in snap.docs)
+              if (!businessParkingVoided(d.data())) {...d.data(), 'id': d.id},
           ]);
     }, onError: (_) {}));
 

@@ -79,6 +79,10 @@ const parkedCars = rows([
     totalCostCents: 20000, amountPaidCents: 5000, businessId: "biz" },
   { status: "cancelled", dailyRate: 10, parkingDate: at("2026-09-01"), businessId: "biz" },
   { status: "reserved", source: "customer", dailyRate: 12, parkingDate: at("2026-10-10"), parkingEndDate: at("2026-10-20"), businessId: "biz" },
+  // Voided (entered by mistake): ended, part paid, still "owing" - and in no
+  // figure on either side.
+  { status: "parked", source: "business", dailyRate: 25, parkingDate: at("2026-08-01"), parkingEndDate: at("2026-08-10"), paymentStatus: "awaiting_direct_payment",
+    totalCostCents: 25000, amountPaidCents: 4000, parkingPayments: [{ amountCents: 4000, at: at("2026-08-05") }], voided: true, businessId: "biz" },
 ]);
 const support = rows([{ status: "open" }, { status: "resolved" }, { status: "" }, {}]);
 const businesses = rows([{ id: "biz", name: "Atlantic" }, { id: "other", name: "Other" }]);
@@ -148,6 +152,10 @@ test("the lot ledger's totals are the same on both sides", () => {
   const expenseLines = rows([
     { id: "rent", kind: "fixed", amountCents: 100000, createdAt: at("2026-01-01"), active: true },
     { id: "fuel", kind: "variable" },
+    // A voided fixed line owes nothing in any month.
+    { id: "mistake", kind: "fixed", recurringCents: 2000, createdAt: at("2026-01-01"), voided: true },
+    // Stopped after August: counts through August, nothing after.
+    { id: "ended", kind: "fixed", recurringCents: 3000, createdAt: at("2026-01-01"), endMonth: "2026-08" },
   ]);
   const expenseEntries = rows([
     { lineId: "fuel", amountCents: 4500, month: "2026-09" },

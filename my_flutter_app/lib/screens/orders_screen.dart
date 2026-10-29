@@ -168,6 +168,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
       addSafely('transportRequests', doc.id, () => CustomerOrder.fromTransport(doc));
     }
     for (final doc in _parking ?? const []) {
+      // A car the lot voided (entered by mistake) is not the customer's
+      // order: it drops out, as the server's own customer reads do.
+      if (doc.data()?['voided'] == true) continue;
       addSafely('parkedCars', doc.id, () => CustomerOrder.fromParking(doc));
     }
     for (final doc in _priceRequests ?? const []) {

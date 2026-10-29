@@ -2163,7 +2163,13 @@ export function AdminConsole() {
   const transportRows = previewMode
     ? previewData.transportRequests
     : transportRequests.rows;
-  const parkedRows = previewMode ? previewData.parkedCars : parkedCars.rows;
+  // A voided parked car is history: out of every platform count and list.
+  // Memoized: a fresh array every render would re-run every memo below.
+  const liveParkedRows = useMemo(
+    () => parkedCars.rows.filter((row) => row.voided !== true),
+    [parkedCars.rows],
+  );
+  const parkedRows = previewMode ? previewData.parkedCars : liveParkedRows;
   const purchaseRows = previewMode ? previewData.purchases : purchases.rows;
   const barrelPoolBalanceRows = previewMode ? [] : barrelPoolBalances.rows;
   const flaggedReviewRows = previewMode ? [] : flaggedReviews.rows;

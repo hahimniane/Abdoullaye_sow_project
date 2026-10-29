@@ -1267,6 +1267,8 @@ export function parkedCarsInLot(rows: readonly unknown[], now: Date = new Date()
   return (Array.isArray(rows) ? rows : [])
     .map(asRow)
     .filter((row) => text(row.status, 40) !== "cancelled")
+    // A voided car was entered by mistake: it is not in the yard to load.
+    .filter((row) => row.voided !== true)
     // A booking whose checkout never completed has no car in the yard. The
     // app draws the same line, so both pickers offer the same cars.
     .filter((row) => text(row.status, 40) !== "pending_payment")

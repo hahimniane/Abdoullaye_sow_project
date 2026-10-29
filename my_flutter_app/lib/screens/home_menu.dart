@@ -9,6 +9,7 @@ import '../models/barrel_shipment.dart';
 import '../models/transport_request.dart';
 import '../models/business_service.dart' as business_services;
 import '../providers/auth_provider.dart';
+import '../widgets/void_record_sheet.dart';
 import '../widgets/language_toggle.dart';
 import '../widgets/async_action_button.dart';
 import '../widgets/app_snackbars.dart';
@@ -624,7 +625,15 @@ class _HomeMenuState extends State<HomeMenu> {
       );
     }
 
-    combined.sort((a, b) => b.date.compareTo(a.date));
+    // Newest first, and a voided car after everything else: it stays on the
+    // record, struck through, but it is no longer work.
+    bool voided(ActivityRecord record) =>
+        record.payload is ParkedCar &&
+        businessParkingVoided((record.payload as ParkedCar).paymentFields);
+    combined.sort((a, b) {
+      final byVoid = (voided(a) ? 1 : 0) - (voided(b) ? 1 : 0);
+      return byVoid != 0 ? byVoid : b.date.compareTo(a.date);
+    });
 
     setState(() {
       _parkedCars
@@ -755,6 +764,8 @@ class _HomeMenuState extends State<HomeMenu> {
     return _tilesCache = businessServiceOverviewTiles(
       services: auth.businessServices,
       hasPermission: auth.hasBusinessPermission,
+      // A voided car reads as BusinessParkingPaymentTone.none, so it never
+      // counts as unpaid here.
       parkedCarFields: _parkedCars.map((car) => car.paymentFields),
       barrelStatuses: _barrelShipments.map((shipment) => shipment.status),
       freightStatuses: _freightStatuses,
@@ -1914,6 +1925,8 @@ class _ActivitySection extends StatelessWidget {
         return l10n.parkingScoreLeft;
       case ParkingKind.cancelled:
         return l10n.parkingKindCancelled;
+      case ParkingKind.voided:
+        return l10n.parkingKindVoided;
     }
   }
 
@@ -2267,6 +2280,16 @@ class _ActivityRecordTile extends StatelessWidget {
               record.payload is ParkedCar
           ? (record.payload as ParkedCar).paymentFields
           : null,
+      voidedNote:
+          record.category == ServiceCategory.parking &&
+              record.payload is ParkedCar &&
+              businessParkingVoided((record.payload as ParkedCar).paymentFields)
+          ? _parkedCarVoidedNote(
+              l10n,
+              (record.payload as ParkedCar).paymentFields,
+              staffNames,
+            )
+          : null,
     );
 
     void Function()? onTap;
@@ -2471,6 +2494,16 @@ class _ParkingViewToggle extends StatelessWidget {
 /// table does: what the car is and what it costs, who left it and what it has
 /// run up, then the dates, the standing, and the two names. Money sits hard
 /// right on its own line so a column of totals still scans down the page.
+/// The parking list row, for a widget test (the row itself stays private to
+/// this screen).
+@visibleForTesting
+Widget parkingListRowForTest({
+  required AppLocalizations l10n,
+  required ParkedCar car,
+  Map<String, String> staffNames = const {},
+}) =>
+    _ParkingListRow(l10n: l10n, car: car, staffNames: staffNames, onTap: () {});
+
 class _ParkingListRow extends StatelessWidget {
   const _ParkingListRow({
     required this.l10n,
@@ -2526,128 +2559,142 @@ class _ParkingListRow extends StatelessWidget {
     final receivedBy = _staff(
       fields['receivedByStaffId'] ?? fields['directPaymentMarkedByUid'],
     );
+    // A voided car stays in the list, at the end, struck through.
+    final voided = businessParkingVoided(fields);
+    final strike = voided ? TextDecoration.lineThrough : null;
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: PressableScale(
-        onTap: () {
-          AppHaptics.selection();
-          onTap();
-        },
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
-          decoration: BoxDecoration(
-            color: AppColors.paper,
-            border: Border.all(color: AppColors.rule),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            vehicle.isEmpty ? car.trackingCode : vehicle,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+    return Opacity(
+      opacity: voided ? 0.6 : 1,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: PressableScale(
+          onTap: () {
+            AppHaptics.selection();
+            onTap();
+          },
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+            decoration: BoxDecoration(
+              color: AppColors.paper,
+              border: Border.all(color: AppColors.rule),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              vehicle.isEmpty ? car.trackingCode : vehicle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.ink,
+                                decoration: strike,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            total > 0 ? currency.format(total) : '—',
+                            style: TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w800,
                               color: AppColors.ink,
+                              decoration: strike,
+                              // Digits line up down the column.
+                              fontFeatures: const [
+                                FontFeature.tabularFigures(),
+                              ],
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          total > 0 ? currency.format(total) : '—',
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.ink,
-                            // Digits line up down the column.
-                            fontFeatures: [FontFeature.tabularFigures()],
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              [
+                                if (depositor.isNotEmpty) depositor,
+                                if (phone.isNotEmpty) phone,
+                                identifier,
+                              ].join(' · '),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.muted,
+                              ),
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 3),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            [
-                              if (depositor.isNotEmpty) depositor,
-                              if (phone.isNotEmpty) phone,
-                              identifier,
-                            ].join(' · '),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                          const SizedBox(width: 8),
+                          Text(
+                            rate > 0
+                                ? l10n.parkingDaysAtRate(
+                                    days,
+                                    currency.format(rate),
+                                  )
+                                : l10n.parkingUnbilledDays(days),
                             style: const TextStyle(
                               fontSize: 12,
                               color: AppColors.muted,
+                              fontFeatures: [FontFeature.tabularFigures()],
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          rate > 0
-                              ? l10n.parkingDaysAtRate(
-                                  days,
-                                  currency.format(rate),
-                                )
-                              : l10n.parkingUnbilledDays(days),
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppColors.muted,
-                            fontFeatures: [FontFeature.tabularFigures()],
-                          ),
-                        ),
+                        ],
+                      ),
+                      if (voided) ...[
+                        const SizedBox(height: 4),
+                        _parkedCarVoidedNote(l10n, fields, staffNames),
                       ],
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 6,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        if (car.isBusinessEntered)
-                          BusinessParkingPaymentBadge(paymentFields: fields)
-                        else
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          if (car.isBusinessEntered)
+                            BusinessParkingPaymentBadge(paymentFields: fields)
+                          else
+                            _rowMeta(
+                              businessParkingPaymentStatusLabel(l10n, fields),
+                            ),
+                          if (containerLink != null)
+                            ContainerLinkChip(link: containerLink!),
                           _rowMeta(
-                            businessParkingPaymentStatusLabel(l10n, fields),
+                            '${dates.format(car.parkingDate)} → '
+                            '${openEnded ? l10n.parkingOpenEnded : dates.format(car.parkingEndDate!)}',
                           ),
-                        if (containerLink != null)
-                          ContainerLinkChip(link: containerLink!),
-                        _rowMeta(
-                          '${dates.format(car.parkingDate)} → '
-                          '${openEnded ? l10n.parkingOpenEnded : dates.format(car.parkingEndDate!)}',
-                        ),
-                        if (registeredBy.isNotEmpty)
-                          _rowMeta(
-                            '${l10n.parkingRegisteredBy}: $registeredBy',
-                          ),
-                        if (receivedBy.isNotEmpty)
-                          _rowMeta('${l10n.parkingReceivedBy}: $receivedBy'),
-                      ],
-                    ),
-                  ],
+                          if (registeredBy.isNotEmpty)
+                            _rowMeta(
+                              '${l10n.parkingRegisteredBy}: $registeredBy',
+                            ),
+                          if (receivedBy.isNotEmpty)
+                            _rowMeta('${l10n.parkingReceivedBy}: $receivedBy'),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const Padding(
-                padding: EdgeInsets.only(left: 6, top: 2),
-                child: Icon(
-                  Icons.arrow_forward_ios,
-                  color: AppColors.muted,
-                  size: 14,
+                const Padding(
+                  padding: EdgeInsets.only(left: 6, top: 2),
+                  child: Icon(
+                    Icons.arrow_forward_ios,
+                    color: AppColors.muted,
+                    size: 14,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -2662,6 +2709,22 @@ class _ParkingListRow extends StatelessWidget {
   }
 }
 
+/// The "Voided · reason · by · date" line under a voided parked car.
+Widget _parkedCarVoidedNote(
+  AppLocalizations l10n,
+  Map<String, dynamic> fields,
+  Map<String, String> staffNames,
+) {
+  final by = '${fields['voidedByStaffId'] ?? ''}'.trim();
+  final at = fields['voidedAt'];
+  return VoidedNote(
+    status: l10n.parkingVoidedStatus,
+    reason: '${fields['voidReason'] ?? ''}',
+    byName: by.isEmpty ? '' : staffNames[by] ?? '',
+    at: at is Timestamp ? at.toDate() : (at is DateTime ? at : null),
+  );
+}
+
 class _RecordCard extends StatelessWidget {
   const _RecordCard({
     required this.title,
@@ -2671,7 +2734,11 @@ class _RecordCard extends StatelessWidget {
     required this.categoryIcon,
     this.paymentFields,
     this.containerLink,
+    this.voidedNote,
   });
+
+  /// Set for a voided record: the card is struck through and says why.
+  final Widget? voidedNote;
 
   final String title;
   final String subtitle;
@@ -2689,8 +2756,9 @@ class _RecordCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final locale = Localizations.localeOf(context).toLanguageTag();
+    final strike = voidedNote != null ? TextDecoration.lineThrough : null;
 
-    return Container(
+    final card = Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -2767,17 +2835,26 @@ class _RecordCard extends StatelessWidget {
                 const SizedBox(height: 12),
                 Text(
                   title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
                     color: AppColors.ink,
+                    decoration: strike,
                   ),
                 ),
                 const SizedBox(height: 6),
                 Text(
                   subtitle,
-                  style: TextStyle(fontSize: 14, color: AppColors.muted),
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: AppColors.muted,
+                    decoration: strike,
+                  ),
                 ),
+                if (voidedNote != null) ...[
+                  const SizedBox(height: 6),
+                  voidedNote!,
+                ],
               ],
             ),
           ),
@@ -2786,6 +2863,7 @@ class _RecordCard extends StatelessWidget {
         ],
       ),
     );
+    return voidedNote == null ? card : Opacity(opacity: 0.6, child: card);
   }
 }
 

@@ -7424,6 +7424,45 @@ Object.assign(ATTRIBUTE_TRANSLATIONS, {
   "Amount paid back": "Montant remboursé",
   "Find a parking customer": "Trouver un client du parking",
   "Name or phone": "Nom ou téléphone",
+// Voiding a parked car or a whole expense line (void-record.tsx): the record
+// stays, struck through, and drops out of the totals. The reason and the
+// name in "Voided · reason · by · date" are user data, never translated.
+Object.assign(TEXT_TRANSLATIONS, {
+  "Void this car": "Invalider cette voiture",
+  "Void this car — it stays on the record (struck through) and drops out of the totals; it is never deleted. Other staff see who voided it and why.":
+    "Invalider cette voiture — elle reste dans le registre (barrée) et sort des totaux ; elle n’est jamais supprimée. Les autres membres voient qui l’a invalidée et pourquoi.",
+  "Void car": "Invalider la voiture",
+  "Car voided.": "Voiture invalidée.",
+  "The car could not be voided.": "La voiture n’a pas pu être invalidée.",
+  "This car was voided and can no longer be changed.":
+    "Cette voiture a été invalidée et ne peut plus être modifiée.",
+  "Void this line": "Invalider cette ligne",
+  "Void this line — it stays on the record (struck through) and drops out of every month's totals. It is never deleted.":
+    "Invalider cette ligne — elle reste dans le registre (barrée) et sort des totaux de chaque mois. Elle n’est jamais supprimée.",
+  "Void line": "Invalider la ligne",
+  "Void this line's purchases first.":
+    "Invalidez d’abord les achats de cette ligne.",
+  "Already voided.": "Déjà invalidé.",
+  "Voided.": "Invalidé.",
+  // "Stop after this month" on an expense line. The sentences that carry a
+  // month are built in the page's language (lot-ledger.ts).
+  "Stop this line": "Arrêter cette ligne",
+  "Stop after this month": "Arrêter après ce mois",
+  "Resume": "Remettre en route",
+  "Line stopped.": "Ligne arrêtée.",
+  "Line resumed.": "Ligne reprise.",
+  "The line could not be stopped.": "La ligne n’a pas pu être arrêtée.",
+  "The line could not be resumed.": "La ligne n’a pas pu être reprise.",
+  "Pick a valid month.": "Choisissez un mois valide.",
+  "This line has purchases after that month.":
+    "Cette ligne a des achats après ce mois.",
+});
+Object.assign(ATTRIBUTE_TRANSLATIONS, {
+  "Void this car": "Invalider cette voiture",
+  "Void this line": "Invalider cette ligne",
+  "Stop after this month": "Arrêter après ce mois",
+  "Resume this line": "Remettre cette ligne en route",
+  "e.g. entered twice, wrong amount": "ex. saisi deux fois, mauvais montant",
 });
 
 const englishDictionary = { ...TEXT_TRANSLATIONS, ...ATTRIBUTE_TRANSLATIONS };

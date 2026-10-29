@@ -5855,7 +5855,11 @@
   "invCreditPaidNowReceivedBy": "Who received the {amount} paid now",
   "@invCreditPaidNowReceivedBy": {
     "description": "Credit sale: picker for the person who took the part paid now.",
-    "placeholders": {"amount": {"type": "String"}}
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
   },
   "invCreditCustomerName": "Customer name",
   "invCreditCustomerPhone": "Customer phone (optional)",
@@ -7962,15 +7966,57 @@
   "invSwitchHowPaid": "How it was paid",
   "invSwitchConfirmCreditTitle": "Put this sale on credit?",
   "invSwitchConfirmCreditMessage": "{name} will owe {owed}. {paid} stays paid at the time. The collector is told.",
-  "@invSwitchConfirmCreditMessage": {"placeholders": {"name": {"type": "String"}, "owed": {"type": "String"}, "paid": {"type": "String"}}},
+  "@invSwitchConfirmCreditMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "owed": {
+        "type": "String"
+      },
+      "paid": {
+        "type": "String"
+      }
+    }
+  },
   "invSwitchConfirmPaidTitle": "Mark this sale as paid?",
   "invSwitchConfirmPaidMessage": "The whole {total} was paid at the time of the sale. Nobody owes anything on it any more.",
   "invSwitchedToCredit": "Switched to credit: {owed} owed",
   "invSwitchedToPaid": "Switched to paid",
   "invSwitchLineCredit": "Switched to credit by {who} · {when} · {paid} paid, {owed} owed",
-  "@invSwitchLineCredit": {"placeholders": {"who": {"type": "String"}, "when": {"type": "String"}, "paid": {"type": "String"}, "owed": {"type": "String"}}},
+  "@invSwitchLineCredit": {
+    "placeholders": {
+      "who": {
+        "type": "String"
+      },
+      "when": {
+        "type": "String"
+      },
+      "paid": {
+        "type": "String"
+      },
+      "owed": {
+        "type": "String"
+      }
+    }
+  },
   "invSwitchLinePaid": "Switched to paid by {who} · {when} · {total} paid ({method})",
-  "@invSwitchLinePaid": {"placeholders": {"who": {"type": "String"}, "when": {"type": "String"}, "total": {"type": "String"}, "method": {"type": "String"}}},
+  "@invSwitchLinePaid": {
+    "placeholders": {
+      "who": {
+        "type": "String"
+      },
+      "when": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      },
+      "method": {
+        "type": "String"
+      }
+    }
+  },
   "invSwitchFailAlreadyCredit": "This sale is already on credit.",
   "invSwitchFailAlreadyPaid": "This sale is already paid in full.",
   "invSwitchFailPaymentsRecorded": "Money was already collected on this credit, so it can't become a paid sale. Use Record a payment for what is still owed.",
@@ -8107,7 +8153,16 @@
   "stiInvitationsFailed": "Couldn’t load the invitations.",
   "stiScreenTitle": "Staff invitation",
   "stiInvitedYou": "{inviter} invited you to join {business} on Laawol as staff.",
-  "@stiInvitedYou": {"placeholders": {"inviter": {"type": "String"}, "business": {"type": "String"}}},
+  "@stiInvitedYou": {
+    "placeholders": {
+      "inviter": {
+        "type": "String"
+      },
+      "business": {
+        "type": "String"
+      }
+    }
+  },
   "stiInvitedYouNoInviter": "You are invited to join {business} on Laawol as staff.",
   "stiAcceptWithNumber": "Accept with the number ending in ••{lastTwo}",
   "stiAcceptWithNumberHelp": "We send a code to that number on WhatsApp.",
@@ -8140,7 +8195,16 @@
   "stiErrNotAllowed": "You don’t have access to do that.",
   "stiPendingTitle": "You have an invitation",
   "stiPendingInvited": "{inviter} invited you to join {business} as staff.",
-  "@stiPendingInvited": {"placeholders": {"inviter": {"type": "String"}, "business": {"type": "String"}}},
+  "@stiPendingInvited": {
+    "placeholders": {
+      "inviter": {
+        "type": "String"
+      },
+      "business": {
+        "type": "String"
+      }
+    }
+  },
   "stiPendingInvitedNoInviter": "You are invited to join {business} as staff.",
   "stiPlatformName": "Laawol Digital administration",
   "stiJoin": "Join {business}",
@@ -8158,7 +8222,16 @@
   "dlvMarkDelivered": "Mark delivered",
   "dlvMarking": "Marking delivered…",
   "dlvSheetSubtitle": "{what} for {receiver}",
-  "@dlvSheetSubtitle": {"placeholders": {"what": {"type": "String"}, "receiver": {"type": "String"}}},
+  "@dlvSheetSubtitle": {
+    "placeholders": {
+      "what": {
+        "type": "String"
+      },
+      "receiver": {
+        "type": "String"
+      }
+    }
+  },
   "dlvCollectedByLabel": "Collected by",
   "dlvCollectedByHelper": "The receiver, or whoever collects it for them.",
   "dlvCollectedByTooLong": "Keep the name of who collected it to 120 characters.",
@@ -8179,7 +8252,16 @@
   "dlvUndone": "Delivery undone.",
   "dlvNotUndone": "This package was not marked delivered.",
   "dlvProgress": "{delivered} of {total} delivered",
-  "@dlvProgress": {"placeholders": {"delivered": {"type": "int"}, "total": {"type": "int"}}},
+  "@dlvProgress": {
+    "placeholders": {
+      "delivered": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
   "dlvErrAction": "That is not something a package delivery can do.",
   "dlvErrNotArrived": "A package can be marked delivered once its container is ready for pickup.",
   "dlvErrBalanceDue": "This package still has an unpaid balance. Confirm to mark it delivered anyway.",
@@ -8190,11 +8272,29 @@
   "pkgMomentDelivered": "delivered",
   "ldgStart": "Start loading",
   "ldgHeaderTo": "To {destination}",
-  "@ldgHeaderTo": {"placeholders": {"destination": {"type": "String"}}},
+  "@ldgHeaderTo": {
+    "placeholders": {
+      "destination": {
+        "type": "String"
+      }
+    }
+  },
   "ldgTotalPackages": "{count, plural, =1{1 package} other{{count} packages}}",
-  "@ldgTotalPackages": {"placeholders": {"count": {"type": "int"}}},
+  "@ldgTotalPackages": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "ldgTotalPieces": "{count, plural, =1{1 piece scanned} other{{count} pieces scanned}}",
-  "@ldgTotalPieces": {"placeholders": {"count": {"type": "int"}}},
+  "@ldgTotalPieces": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "ldgCameraUnavailable": "The camera is unavailable. Type the code printed on each label below.",
   "ldgTypeCode": "Type a code",
   "ldgTypeHint": "CL-K7M4P2",
@@ -8204,16 +8304,49 @@
   "ldgSending": "Sending…",
   "ldgLoaded": "Loaded",
   "ldgLoadedOf": "Loaded · {scanned} of {total}",
-  "@ldgLoadedOf": {"placeholders": {"scanned": {"type": "int"}, "total": {"type": "int"}}},
+  "@ldgLoadedOf": {
+    "placeholders": {
+      "scanned": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
   "ldgMovedHere": "Moved here",
   "ldgCountedOf": "{scanned} of {total}",
-  "@ldgCountedOf": {"placeholders": {"scanned": {"type": "int"}, "total": {"type": "int"}}},
+  "@ldgCountedOf": {
+    "placeholders": {
+      "scanned": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
   "ldgAllIn": "{count, plural, =1{Already in} other{All {count} already in}}",
-  "@ldgAllIn": {"placeholders": {"count": {"type": "int"}}},
+  "@ldgAllIn": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "ldgUndo": "Undo",
   "ldgUndoneBack": "Undone · back to waiting",
   "ldgUndoneOf": "Undone · {scanned} of {total}",
-  "@ldgUndoneOf": {"placeholders": {"scanned": {"type": "int"}, "total": {"type": "int"}}},
+  "@ldgUndoneOf": {
+    "placeholders": {
+      "scanned": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
   "ldgUndoFailed": "Couldn’t undo. Try again.",
   "ldgErrOffline": "No connection - scan again",
   "ldgErrNotAllowed": "You don’t have access to load containers.",
@@ -8223,74 +8356,227 @@
   "ldgErrDestinationMismatch": "This package goes to another country.",
   "ldgErrDelivered": "This package was already delivered.",
   "ldgErrOtherContainer": "This package is on {container}.",
-  "@ldgErrOtherContainer": {"placeholders": {"container": {"type": "String"}}},
+  "@ldgErrOtherContainer": {
+    "placeholders": {
+      "container": {
+        "type": "String"
+      }
+    }
+  },
   "ldgErrShippedContainer": "This package already left on {container}.",
-  "@ldgErrShippedContainer": {"placeholders": {"container": {"type": "String"}}},
+  "@ldgErrShippedContainer": {
+    "placeholders": {
+      "container": {
+        "type": "String"
+      }
+    }
+  },
   "ldgErrCodeInvalid": "That is not a package code.",
   "ldgErrScanId": "The scan didn’t go through. Scan again.",
   "ldgErrPieceCount": "Only a package with some of its pieces scanned can be left waiting.",
   "ldgErrGeneric": "Couldn’t scan this label. Scan again.",
   "ldgMoveTitle": "Move it here?",
   "ldgMoveMessage": "This package is on {container}. Move it here?",
-  "@ldgMoveMessage": {"placeholders": {"container": {"type": "String"}}},
+  "@ldgMoveMessage": {
+    "placeholders": {
+      "container": {
+        "type": "String"
+      }
+    }
+  },
   "ldgMoveConfirm": "Move here",
   "ldgDone": "Done loading",
   "ldgSummaryTitle": "Before you finish",
   "ldgSummaryFailed": "Couldn’t get the summary.",
   "ldgIncompleteTitle": "Not every piece was scanned",
   "ldgIncompleteOf": "{scanned} of {total} pieces scanned",
-  "@ldgIncompleteOf": {"placeholders": {"scanned": {"type": "int"}, "total": {"type": "int"}}},
+  "@ldgIncompleteOf": {
+    "placeholders": {
+      "scanned": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
   "ldgLoadAll": "Load all",
   "ldgLeaveWaiting": "{count, plural, =1{Leave 1 waiting} other{Leave {count} waiting}}",
-  "@ldgLeaveWaiting": {"placeholders": {"count": {"type": "int"}}},
+  "@ldgLeaveWaiting": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "ldgGoesWhole": "All of it goes",
   "ldgLeftWaiting": "{count, plural, =1{1 left waiting as {code}} other{{count} left waiting as {code}}}",
-  "@ldgLeftWaiting": {"placeholders": {"count": {"type": "int"}, "code": {"type": "String"}}},
+  "@ldgLeftWaiting": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "code": {
+        "type": "String"
+      }
+    }
+  },
   "ldgUnscanned": "{count, plural, =1{1 package on the container was never scanned} other{{count} packages on the container were never scanned}}",
-  "@ldgUnscanned": {"placeholders": {"count": {"type": "int"}}},
+  "@ldgUnscanned": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "ldgUnscannedNote": "Put on by hand, or before scanning started.",
   "ldgWaitingNotScanned": "{count, plural, =1{1 waiting package for {destination} was not scanned} other{{count} waiting packages for {destination} were not scanned}}",
-  "@ldgWaitingNotScanned": {"placeholders": {"count": {"type": "int"}, "destination": {"type": "String"}}},
+  "@ldgWaitingNotScanned": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "destination": {
+        "type": "String"
+      }
+    }
+  },
   "ldgThisDestination": "this destination",
   "ldgWaitingMore": "and {count} more",
-  "@ldgWaitingMore": {"placeholders": {"count": {"type": "int"}}},
+  "@ldgWaitingMore": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "ldgAllClear": "Every package on the container was scanned in full.",
   "ldgKeepScanning": "Keep scanning",
   "ldgErrAction": "That is not something loading can do.",
   "ldgErrInAnotherContainer": "This package is on another container.",
   "ldgOnContainer": "On the container: {packages} · {pieces}",
-  "@ldgOnContainer": {"placeholders": {"packages": {"type": "String"}, "pieces": {"type": "String"}}},
+  "@ldgOnContainer": {
+    "placeholders": {
+      "packages": {
+        "type": "String"
+      },
+      "pieces": {
+        "type": "String"
+      }
+    }
+  },
   "ldgPieces": "{count, plural, =1{1 piece} other{{count} pieces}}",
-  "@ldgPieces": {"placeholders": {"count": {"type": "int"}}},
+  "@ldgPieces": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "ldgErrNotOnContainer": "This package is no longer on this container.",
   "ldgUndoneMovedBack": "Moved back to {container}",
-  "@ldgUndoneMovedBack": {"placeholders": {"container": {"type": "String"}}},
+  "@ldgUndoneMovedBack": {
+    "placeholders": {
+      "container": {
+        "type": "String"
+      }
+    }
+  },
   "ldgAlreadyUndone": "Already undone",
   "ldgMoveScannedWarning": "{count, plural, =1{1 of its pieces was already scanned into {container}.} other{{count} of its pieces were already scanned into {container}.}}",
-  "@ldgMoveScannedWarning": {"placeholders": {"count": {"type": "int"}, "container": {"type": "String"}}},
+  "@ldgMoveScannedWarning": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "container": {
+        "type": "String"
+      }
+    }
+  },
   "ldgRestWaiting": "The rest stays waiting.",
   "lotDuplicatesTitle": "Possible duplicates",
   "lotDuplicatesBanner": "{count, plural, =1{1 car has the same job twice} other{{count} cars have the same job twice}}",
-  "@lotDuplicatesBanner": {"placeholders": {"count": {"type": "int"}}},
+  "@lotDuplicatesBanner": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "lotDuplicatesBannerNote": "Tap to review and void the one entered by mistake.",
   "lotDuplicatesExplain": "The same car with the same job more than once. Void the one entered by mistake — it stays on the record, struck through.",
   "lotDuplicateSameCustomer": "Same customer — likely entered twice",
   "lotDuplicateDifferentCustomers": "Different customers — may be a resale; void only if entered by mistake",
   "lotDuplicatesNone": "No possible duplicates.",
   "lotVinTail": "VIN {tail}",
-  "@lotVinTail": {"placeholders": {"tail": {"type": "String"}}},
+  "@lotVinTail": {
+    "placeholders": {
+      "tail": {
+        "type": "String"
+      }
+    }
+  },
   "lotVinDuplicateNotice": "This car already has {article, select, an{an} other{a}} {job} for this customer: {code} ({date})",
-  "@lotVinDuplicateNotice": {"placeholders": {"article": {"type": "String"}, "job": {"type": "String"}, "code": {"type": "String"}, "date": {"type": "String"}}},
+  "@lotVinDuplicateNotice": {
+    "placeholders": {
+      "article": {
+        "type": "String"
+      },
+      "job": {
+        "type": "String"
+      },
+      "code": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "lotOpenIt": "Open it",
   "lotRepeatConfirmTitle": "Record it again?",
   "lotRepeatConfirmItem": "on {date} for {customer} ({code})",
-  "@lotRepeatConfirmItem": {"placeholders": {"date": {"type": "String"}, "customer": {"type": "String"}, "code": {"type": "String"}}},
+  "@lotRepeatConfirmItem": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "customer": {
+        "type": "String"
+      },
+      "code": {
+        "type": "String"
+      }
+    }
+  },
   "lotRepeatConfirmBody": "This car already had {article, select, an{an} other{a}} {job} {items}. Record another for this customer?",
-  "@lotRepeatConfirmBody": {"placeholders": {"article": {"type": "String"}, "job": {"type": "String"}, "items": {"type": "String"}}},
+  "@lotRepeatConfirmBody": {
+    "placeholders": {
+      "article": {
+        "type": "String"
+      },
+      "job": {
+        "type": "String"
+      },
+      "items": {
+        "type": "String"
+      }
+    }
+  },
   "lotRecordAnother": "Record another",
   "lotEntryNotFound": "That entry could not be opened.",
   "ldgAlreadyOnContainer": "{scanned, plural, one{Already on this container · {scanned} of {total} scanned} other{Already on this container · {scanned} of {total} scanned}}",
-  "@ldgAlreadyOnContainer": {"placeholders": {"scanned": {"type": "int"}, "total": {"type": "int"}}},
+  "@ldgAlreadyOnContainer": {
+    "placeholders": {
+      "scanned": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
   "ldgTabOnContainer": "On this container",
   "ldgTabStillToLoad": "Still to load",
   "ldgFilterRecent": "Recently added",
@@ -8298,12 +8584,33 @@
   "ldgFilterNotScanned": "Not scanned yet",
   "ldgSearchHint": "Search code, name or phone",
   "ldgScannedOfPieces": "{scanned} of {total} {total, plural, one{piece} other{pieces}} scanned",
-  "@ldgScannedOfPieces": {"placeholders": {"scanned": {"type": "int"}, "total": {"type": "int"}}},
+  "@ldgScannedOfPieces": {
+    "placeholders": {
+      "scanned": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
   "ldgNoCustomerName": "No name",
   "ldgPackagesWaiting": "{count, plural, one{{count} package waiting} other{{count} packages waiting}}",
-  "@ldgPackagesWaiting": {"placeholders": {"count": {"type": "int"}}},
+  "@ldgPackagesWaiting": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "ldgAddedBy": "Added by {name}",
-  "@ldgAddedBy": {"placeholders": {"name": {"type": "String"}}},
+  "@ldgAddedBy": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "ldgViaScan": "By scan",
   "ldgViaHand": "By hand",
   "ldgViaMove": "Moved",
@@ -8311,15 +8618,39 @@
   "ldgTakeOff": "Take off",
   "ldgTakeOffTitle": "Take it off?",
   "ldgTakeOffMessage": "Take {code} off {container}? It goes back to waiting.",
-  "@ldgTakeOffMessage": {"placeholders": {"code": {"type": "String"}, "container": {"type": "String"}}},
+  "@ldgTakeOffMessage": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      },
+      "container": {
+        "type": "String"
+      }
+    }
+  },
   "ldgLoadIt": "Load",
   "ldgStillWaitingFor": "{count} still waiting for {destination}",
-  "@ldgStillWaitingFor": {"placeholders": {"count": {"type": "int"}, "destination": {"type": "String"}}},
+  "@ldgStillWaitingFor": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "destination": {
+        "type": "String"
+      }
+    }
+  },
   "ldgNothingOnContainer": "Nothing on this container yet.",
   "ldgNoMatches": "No package matches.",
   "ldgAllScannedHere": "Every package here has been scanned.",
   "ldgNothingToLoad": "No package is waiting for {destination}.",
-  "@ldgNothingToLoad": {"placeholders": {"destination": {"type": "String"}}},
+  "@ldgNothingToLoad": {
+    "placeholders": {
+      "destination": {
+        "type": "String"
+      }
+    }
+  },
   "waWhatsApp": "WhatsApp",
   "waListSupport": "Support cases",
   "waFilterAll": "All",
@@ -8332,7 +8663,13 @@
   "waStateDone": "Done",
   "waStoppedUpdates": "Stopped updates",
   "waSuggestedFor": "For {business}",
-  "@waSuggestedFor": {"placeholders": {"business": {"type": "String"}}},
+  "@waSuggestedFor": {
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
   "waHandedOverPill": "Handed over",
   "waEmptyTitle": "No WhatsApp conversations",
   "waEmptySubtitle": "When a customer writes to Laawol’s WhatsApp number about a package, the conversation appears here.",
@@ -8361,7 +8698,13 @@
   "waHandOverNote": "Note for them (optional)",
   "waHandingOver": "Handing over…",
   "waHandedOverTo": "Handed over to {name}.",
-  "@waHandedOverTo": {"placeholders": {"name": {"type": "String"}}},
+  "@waHandedOverTo": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "waPickBusiness": "Pick a business",
   "waRefusalNotThisCustomer": "That business has no shipment for this customer.",
   "waRefusalPickAnother": "It’s already in that inbox. Pick another one.",
@@ -8378,7 +8721,13 @@
   "waTickRead": "Read",
   "waTickFailed": "Not delivered",
   "waTickFailedReason": "Not delivered: {reason}",
-  "@waTickFailedReason": {"placeholders": {"reason": {"type": "String"}}},
+  "@waTickFailedReason": {
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
   "waTickWaiting": "Waiting: goes out when the customer replies",
   "waTickStopped": "Waiting: the customer stopped updates",
   "waPlay": "Play",
@@ -8391,7 +8740,13 @@
   "waWriteMessage": "Message on WhatsApp",
   "waRecordVoice": "Record a voice note",
   "waRecording": "Recording {time}",
-  "@waRecording": {"placeholders": {"time": {"type": "String"}}},
+  "@waRecording": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
   "waSendVoice": "Send voice note",
   "waDiscardVoice": "Discard voice note",
   "waMicDenied": "Allow the microphone in Settings to record voice notes.",
@@ -8407,32 +8762,83 @@
   "waNotifStaff": "When a customer writes on WhatsApp. Off for staff until you switch it on.",
   "waDisplayNameTitle": "Name customers see on WhatsApp",
   "waDisplayNameHelp": "Your replies are signed {example}. Leave it empty to use your first name.",
-  "@waDisplayNameHelp": {"placeholders": {"example": {"type": "String"}}},
+  "@waDisplayNameHelp": {
+    "placeholders": {
+      "example": {
+        "type": "String"
+      }
+    }
+  },
   "waDisplayNameSave": "Save name",
   "waDisplayNameSaved": "Name saved.",
   "waNotifAdmin": "When a customer writes to Laawol on WhatsApp. On unless you switch it off.",
   "waPackageTick": "{who} {mark} {status}",
-  "@waPackageTick": {"placeholders": {"who": {"type": "String"}, "mark": {"type": "String"}, "status": {"type": "String"}}},
+  "@waPackageTick": {
+    "placeholders": {
+      "who": {
+        "type": "String"
+      },
+      "mark": {
+        "type": "String"
+      },
+      "status": {
+        "type": "String"
+      }
+    }
+  },
   "waPackageTickFailed": "{who} {mark} Not delivered: {reason}",
-  "@waPackageTickFailed": {"placeholders": {"who": {"type": "String"}, "mark": {"type": "String"}, "reason": {"type": "String"}}},
+  "@waPackageTickFailed": {
+    "placeholders": {
+      "who": {
+        "type": "String"
+      },
+      "mark": {
+        "type": "String"
+      },
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
   "waHandOverLoading": "Loading where it can go…",
   "waHandOverNoOptions": "There is nowhere else to hand it.",
   "proofSectionTitle": "Proof",
   "proofPhotosOfMax": "Photos · {count} of {max}",
-  "@proofPhotosOfMax": {"placeholders": {"count": {"type": "int"}, "max": {"type": "int"}}},
+  "@proofPhotosOfMax": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      }
+    }
+  },
   "proofTakePhoto": "Camera",
   "proofChoosePhoto": "Gallery",
   "proofRemovePhoto": "Remove photo",
   "proofPhotoUploading": "Uploading…",
   "proofPhotoRequiredNote": "A photo of the package is required at drop-off.",
   "proofPhotoOptionalNote": "Up to {max} photos of the package.",
-  "@proofPhotoOptionalNote": {"placeholders": {"max": {"type": "int"}}},
+  "@proofPhotoOptionalNote": {
+    "placeholders": {
+      "max": {
+        "type": "int"
+      }
+    }
+  },
   "proofPhotoFailed": "The photo could not be uploaded. Try again.",
   "proofPhotoTooLarge": "The photo is too large (2 MB at most).",
   "proofPhotoNotImage": "That file is not a photo (JPEG, PNG or WebP).",
   "proofPhotoNoPermission": "You can’t add photos here.",
   "proofPhotoLimit": "At most {max} photos.",
-  "@proofPhotoLimit": {"placeholders": {"max": {"type": "int"}}},
+  "@proofPhotoLimit": {
+    "placeholders": {
+      "max": {
+        "type": "int"
+      }
+    }
+  },
   "proofPhotoOpenFailed": "The photo could not be opened.",
   "proofContentsTitle": "What’s inside",
   "proofContentsNote": "Optional. The sender confirms this list and customs reads it.",
@@ -8467,16 +8873,40 @@
   "proofOpenConversation": "Open conversation",
   "proofLoadAnywayTitle": "Load anyway?",
   "proofLoadAnywayMessage": "Sender reported a problem with {codes}. Load anyway?",
-  "@proofLoadAnywayMessage": {"placeholders": {"codes": {"type": "String"}}},
+  "@proofLoadAnywayMessage": {
+    "placeholders": {
+      "codes": {
+        "type": "String"
+      }
+    }
+  },
   "proofLoadAnyway": "Load anyway",
   "proofWeightFact": "Weight: {weight}",
-  "@proofWeightFact": {"placeholders": {"weight": {"type": "String"}}},
+  "@proofWeightFact": {
+    "placeholders": {
+      "weight": {
+        "type": "String"
+      }
+    }
+  },
   "proofValueFact": "Declared value: {value}",
-  "@proofValueFact": {"placeholders": {"value": {"type": "String"}}},
+  "@proofValueFact": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
   "proofCustomerPhotos": "Photos from the customer",
   "proofDeliveredPhoto": "Handover photo",
   "proofPickupCodeFact": "Pickup code: {code}",
-  "@proofPickupCodeFact": {"placeholders": {"code": {"type": "String"}}},
+  "@proofPickupCodeFact": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
   "airModeTitle": "Sea or air",
   "airModeSea": "Sea",
   "airModeAir": "Air",
@@ -8526,10 +8956,22 @@
   "deliverCollectedNowLabel": "Collected now (USD)",
   "deliverCollectedNowHelper": "Optional. Whole dollars collected at handover.",
   "deliverOwes": "Owes {amount}",
-  "@deliverOwes": {"placeholders": {"amount": {"type": "String"}}},
+  "@deliverOwes": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "deliverCollectedNowInvalid": "Enter whole dollars, zero or more.",
   "deliverDoneCollected": "Delivered · {amount} collected",
-  "@deliverDoneCollected": {"placeholders": {"amount": {"type": "String"}}},
+  "@deliverDoneCollected": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "deliverWithoutCodePill": "Delivered without code",
   "deliverPhotoOfCollector": "Photo of the person who collected it",
   "deliverHomeTitle": "Deliveries",
@@ -8545,7 +8987,13 @@
   "deliverShipment": "Shipment",
   "deliverContainer": "Container",
   "deliverPieces": "{count, plural, =1{1 piece} other{{count} pieces}}",
-  "@deliverPieces": {"placeholders": {"count": {"type": "int"}}},
+  "@deliverPieces": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "deliverCouldNotLoad": "Couldn’t load the deliveries. Check your connection and try again.",
   "deliverRetry": "Retry",
   "deliverDetails": "Details",
@@ -8669,5 +9117,152 @@
   "pmeRefusalRepaymentDateInvalid": "That date is not valid, or it is after today.",
   "pmeRefusalLinkCustomerInvalid": "That parking customer could not be found.",
   "pmeRefusalStaffActionInvalid": "That action is not available. Update the app and try again.",
-  "pmeRefusalStaffNotMember": "That person is not on this business's team."
+  "pmeRefusalStaffNotMember": "That person is not on this business's team.",
+  "voidedNoteBy": "by {name}",
+  "@voidedNoteBy": {
+    "description": "Who voided a record, in the 'Voided · reason · by · date' note.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "lotVoidLine": "Void line",
+  "@lotVoidLine": {
+    "description": "Button on an expense line card that voids the line."
+  },
+  "lotVoidLineTitle": "Void this line",
+  "@lotVoidLineTitle": {
+    "description": "Title of the sheet confirming an expense line void."
+  },
+  "lotVoidLineExplain": "Void this line — it stays on the record (struck through) and drops out of every month's totals. It is never deleted.",
+  "@lotVoidLineExplain": {
+    "description": "Explains what voiding an expense line does."
+  },
+  "lotLineVoidedStatus": "Voided",
+  "@lotLineVoidedStatus": {
+    "description": "Status word on a voided expense line."
+  },
+  "lotVoidLineDone": "Line voided.",
+  "@lotVoidLineDone": {
+    "description": "Confirmation after an expense line is voided."
+  },
+  "lotErrLineHasPurchases": "Void this line's purchases first.",
+  "@lotErrLineHasPurchases": {
+    "description": "Refusal: an expense line with live purchases cannot be voided."
+  },
+  "lotErrLineVoided": "This line was already voided.",
+  "@lotErrLineVoided": {
+    "description": "Refusal: the expense line is already voided."
+  },
+  "lotErrLineNotFound": "This line no longer exists.",
+  "@lotErrLineNotFound": {
+    "description": "Refusal: the expense line was not found."
+  },
+  "parkingVoid": "Void",
+  "@parkingVoid": {
+    "description": "Button that voids a parked car record."
+  },
+  "parkingVoidTitle": "Void this car",
+  "@parkingVoidTitle": {
+    "description": "Title of the sheet confirming a parked car void."
+  },
+  "parkingVoidExplain": "Void this car — it stays on the record (struck through) and drops out of the totals; it is never deleted. Other staff see who voided it and why.",
+  "@parkingVoidExplain": {
+    "description": "Explains what voiding a parked car does."
+  },
+  "parkingVoidedStatus": "Voided",
+  "@parkingVoidedStatus": {
+    "description": "Status word on a voided parked car."
+  },
+  "parkingVoidDone": "Car voided.",
+  "@parkingVoidDone": {
+    "description": "Confirmation after a parked car is voided."
+  },
+  "parkingVoidedLocked": "This car was voided. It stays on the record but no longer counts anywhere, and it can no longer be changed.",
+  "@parkingVoidedLocked": {
+    "description": "Banner on a voided parked car's details."
+  },
+  "parkingErrCarVoided": "This car was voided and can no longer be changed.",
+  "@parkingErrCarVoided": {
+    "description": "Refusal: the parked car is voided."
+  },
+  "parkingErrCarNotFound": "This car could not be found.",
+  "@parkingErrCarNotFound": {
+    "description": "Refusal: the parked car was not found."
+  },
+  "parkingKindVoided": "Voided",
+  "@parkingKindVoided": {
+    "description": "Parking list filter chip for voided cars."
+  },
+  "lotStopAfterMonth": "Stop after this month",
+  "@lotStopAfterMonth": {
+    "description": "Button on an expense line card: the line stops counting after the month on screen."
+  },
+  "lotStopLineTitle": "Stop this line",
+  "@lotStopLineTitle": {
+    "description": "Title of the sheet confirming an expense line stop."
+  },
+  "lotStopLineExplain": "{line} stops after {month}. Earlier months stay as they are.",
+  "@lotStopLineExplain": {
+    "description": "Explains stopping an expense line after a month.",
+    "placeholders": {
+      "line": {
+        "type": "String"
+      },
+      "month": {
+        "type": "String"
+      }
+    }
+  },
+  "lotStopLineConfirm": "Stop",
+  "@lotStopLineConfirm": {
+    "description": "Confirm button that stops an expense line."
+  },
+  "lotStopLineDone": "Line stopped.",
+  "@lotStopLineDone": {
+    "description": "Confirmation after an expense line is stopped."
+  },
+  "lotStoppedAfter": "Stopped after {month}",
+  "@lotStoppedAfter": {
+    "description": "Badge on an expense line that stops after a month.",
+    "placeholders": {
+      "month": {
+        "type": "String"
+      }
+    }
+  },
+  "lotLineStoppedStatus": "Stopped",
+  "@lotLineStoppedStatus": {
+    "description": "State of an expense line in a month after it stopped."
+  },
+  "lotResumeLine": "Resume",
+  "@lotResumeLine": {
+    "description": "Button that removes an expense line's stop month."
+  },
+  "lotResumeLineTitle": "Resume this line",
+  "@lotResumeLineTitle": {
+    "description": "Title of the sheet confirming an expense line resume."
+  },
+  "lotResumeLineExplain": "{line} counts again every month, with no end.",
+  "@lotResumeLineExplain": {
+    "description": "Explains resuming a stopped expense line.",
+    "placeholders": {
+      "line": {
+        "type": "String"
+      }
+    }
+  },
+  "lotResumeLineDone": "Line resumed.",
+  "@lotResumeLineDone": {
+    "description": "Confirmation after an expense line is resumed."
+  },
+  "lotErrEndMonthInvalid": "Pick a valid month.",
+  "@lotErrEndMonthInvalid": {
+    "description": "Refusal: the stop month is not a valid month."
+  },
+  "lotErrEndMonthBeforePurchases": "This line has purchases after that month.",
+  "@lotErrEndMonthBeforePurchases": {
+    "description": "Refusal: the line has purchases after the stop month."
+  }
 }

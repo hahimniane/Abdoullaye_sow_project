@@ -59,6 +59,9 @@ function parkingRangeOverlaps(row, start, end) {
 }
 
 function isActiveParkingRow(row) {
+  // A voided car (entered by mistake) never holds a space, whatever its
+  // status still says.
+  if (row?.voided === true) return false;
   return ACTIVE_STATUS_SET.has(String(row?.status || "reserved"));
 }
 

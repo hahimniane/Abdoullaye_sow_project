@@ -691,6 +691,8 @@ function parkingPaymentLinkState(entry) {
     return PARKING_LINK_STATES.PAID;
   }
   if (record.paymentLinkCancelledAt) return PARKING_LINK_STATES.CANCELLED;
+  // A voided car's link died with it (businessParkingVoidPlan).
+  if (record.voided === true) return PARKING_LINK_STATES.CANCELLED;
   if (text(record.status, 40) === "cancelled") {
     return PARKING_LINK_STATES.CANCELLED;
   }
@@ -1037,7 +1039,87 @@ function parkingRateSelection(business, rateId) {
   };
 }
 
+// Voiding a parked car (entered twice, wrong customer, a test): the record
+// stays - records are never deleted - struck through, with who voided it and
+// why, and it drops out of every total, bill and space count. Mirrors
+// voidLotActivity: never un-voided ("record a new one"), an unpaid payment
+// link dies with it, a payment already recorded stays on the record.
+
+/** Refusal reasons a void (or any change to a voided car) answers with. */
+const BUSINESS_PARKING_VOID_REFUSALS = Object.freeze({
+  car_voided: "Already voided.",
+  car_not_found: "Parking entry not found",
+});
+
+/** What every edit, payment, close or link action says to a voided car. */
+const BUSINESS_PARKING_VOIDED_MESSAGE =
+  "This car was voided and can no longer be changed.";
+
+/** Longest void reason kept, as voidLotActivity. */
+const BUSINESS_PARKING_VOID_REASON_MAX = 300;
+
+/**
+ * @param {*} entry A parkedCars document.
+ * @return {boolean} True once the car was voided.
+ */
+function businessParkingVoided(entry) {
+  return Boolean(entry && typeof entry === "object") && entry.voided === true;
+}
+
+/**
+ * What voiding a parked car writes, or why it may not.
+ *
+ * @param {{entry: ?Object, reason: *, byStaffId: string}} params The stored
+ *   car (null when missing), the optional reason and who voids it.
+ * @return {{ok: boolean, reason: string, update: ?Object,
+ *   cancelLink: boolean}} `update` lacks the server timestamps (voidedAt,
+ *   updatedAt), which the caller adds; `cancelLink` says an unpaid payment
+ *   link must be cancelled with it.
+ */
+function businessParkingVoidPlan({entry, reason, byStaffId}) {
+  if (!entry || typeof entry !== "object") {
+    return {ok: false, reason: "car_not_found", update: null,
+      cancelLink: false};
+  }
+  if (businessParkingVoided(entry)) {
+    return {ok: false, reason: "car_voided", update: null, cancelLink: false};
+  }
+  return {
+    ok: true,
+    reason: "",
+    update: {
+      voided: true,
+      voidedByStaffId: text(byStaffId, 180),
+      voidReason: text(reason, BUSINESS_PARKING_VOID_REASON_MAX),
+    },
+    cancelLink:
+      parkingPaymentLinkState(entry) === PARKING_LINK_STATES.PAYABLE,
+  };
+}
+
+/**
+ * The fields that mark a durable parking payment link cancelled - one shape
+ * for "Cancel link" and for a void, so the /p page answers the same way.
+ *
+ * @param {string} uid Who cancelled it.
+ * @param {*} at The cancel time (a server timestamp sentinel).
+ * @return {!Object} Fields to merge into the parkedCars document.
+ */
+function parkingLinkCancelledFields(uid, at) {
+  return {
+    paymentLinkCancelledAt: at,
+    paymentLinkCancelledByUid: uid,
+    checkoutStatus: "cancelled",
+  };
+}
+
 module.exports = {
+  BUSINESS_PARKING_VOID_REASON_MAX,
+  BUSINESS_PARKING_VOID_REFUSALS,
+  BUSINESS_PARKING_VOIDED_MESSAGE,
+  businessParkingVoided,
+  businessParkingVoidPlan,
+  parkingLinkCancelledFields,
   businessParkingEditChanges,
   businessParkingEditSummary,
   businessParkingOwnRateCents,

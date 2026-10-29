@@ -33,6 +33,8 @@ import '../widgets/async_action_button.dart';
 import '../widgets/business_parking_payment_badge.dart';
 import '../widgets/container_link_chip.dart';
 import '../widgets/phone_account_widgets.dart' show RecordPhoneFlagNotes;
+import '../widgets/lot_sheets.dart' show showLotSheet;
+import '../widgets/void_record_sheet.dart';
 import '../services/phone_accounts.dart'
     show RecordPhoneField, recordPhoneFlagsOf;
 
@@ -197,6 +199,11 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
 
   /// A walk-up the lot entered itself, rather than a customer's own booking.
   bool get _isBusinessEntry => isBusinessEnteredParking(_paymentFields);
+
+  /// Voided: kept on the record, struck through, out of every total. The
+  /// server refuses every edit, payment and close on it (`car_voided`), so
+  /// the screen offers none.
+  bool get _isVoided => businessParkingVoided(_paymentFields);
 
   /// Settled money. The server refuses every edit on such a record, so the
   /// screen must not offer one.
@@ -955,14 +962,22 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
         authProvider.hasBusinessPermission(BusinessPermission.parking);
     final bool isBusinessEntry = _isBusinessEntry;
     final bool isPaidEntry = _isPaidEntry;
+    final bool isVoided = _isVoided;
     // A walk-up is the lot's own record, taken at its own window, so its staff
     // correct it under the same permission that records the payment - and the
     // callable enforces that permission anyway. A PAID record is frozen: the
     // charge was taken, the platform cut split and the payout sent, so the
     // server refuses every edit and an editable field would be a lie.
-    final bool canEdit = isBusinessEntry
-        ? (canRecordPayment && !isPaidEntry)
-        : (isAdmin && _persistedStatus != 'completed');
+    final bool canEdit =
+        !isVoided &&
+        (isBusinessEntry
+            ? (canRecordPayment && !isPaidEntry)
+            : (isAdmin && _persistedStatus != 'completed'));
+    // Voiding is a parking-permission act, like taking the money: the lot's
+    // own staff are the ones who catch the duplicate. The callable enforces
+    // the same permission.
+    final bool canVoid =
+        canRecordPayment && canVoidBusinessParking(_paymentFields);
 
     return Scaffold(
       body: Container(
@@ -1076,7 +1091,10 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                           // The record is frozen rather than silently
                           // unsaveable: a form that accepts typing and then
                           // refuses to save is how a lot loses an afternoon.
-                          if (isBusinessEntry && isPaidEntry) ...[
+                          if (isVoided) ...[
+                            _buildVoidedBanner(l10n),
+                            const SizedBox(height: 16),
+                          ] else if (isBusinessEntry && isPaidEntry) ...[
                             Container(
                               key: const ValueKey<String>(
                                 'parking-edit-locked',
@@ -1103,14 +1121,18 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                             l10n,
                             canEdit,
                             isBusinessEntry,
-                            canRecordPayment,
+                            canRecordPayment && !isVoided,
                           ),
-                          if (isBusinessEntry) ...[
+                          // A voided car takes no money and offers no link:
+                          // the whole payment card goes with it.
+                          if (isBusinessEntry && !isVoided) ...[
                             const SizedBox(height: 24),
                             _buildBusinessPaymentCard(l10n, canRecordPayment),
                           ],
                           const SizedBox(height: 24),
-                          if (isBusinessEntry)
+                          if (isVoided)
+                            const SizedBox.shrink()
+                          else if (isBusinessEntry)
                             // One button, and only while the record can still
                             // be changed. The printable document for a walk-up
                             // is the server's - it is offered in the payment
@@ -1162,6 +1184,23 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                                 ),
                               ],
                             ),
+                          if (canVoid) ...[
+                            const SizedBox(height: 16),
+                            Center(
+                              child: TextButton.icon(
+                                key: const ValueKey<String>('parking-void'),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: AppColors.errorRed,
+                                ),
+                                onPressed: _confirmVoid,
+                                icon: const Icon(
+                                  Icons.block_outlined,
+                                  size: 18,
+                                ),
+                                label: Text(l10n.parkingVoid),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -1173,6 +1212,70 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
         ),
       ),
     );
+  }
+
+  /// "Voided · reason · by · date", and that nothing here can change any
+  /// more. Replaces the paid banner: a voided car is past being paid.
+  Widget _buildVoidedBanner(AppLocalizations l10n) {
+    final by = '${_paymentFields['voidedByStaffId'] ?? ''}'.trim();
+    final at = _paymentFields['voidedAt'];
+    return Container(
+      key: const ValueKey<String>('parking-voided'),
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.85),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.errorRed.withValues(alpha: 0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          VoidedNote(
+            status: l10n.parkingVoidedStatus,
+            reason: '${_paymentFields['voidReason'] ?? ''}',
+            byName: by.isEmpty ? '' : (_staffNames[by] ?? ''),
+            at: at is Timestamp ? at.toDate() : (at is DateTime ? at : null),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            l10n.parkingVoidedLocked,
+            style: TextStyle(fontSize: 13, color: Colors.grey.shade800),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Asks, then voids through `updateBusinessParkingEntry` `action: "void"`,
+  /// then re-reads the car so the banner shows who voided it and why.
+  Future<void> _confirmVoid() async {
+    final l10n = AppLocalizations.of(context)!;
+    final voided = await showLotSheet<bool>(
+      context,
+      VoidRecordSheet(
+        title: l10n.parkingVoidTitle,
+        explain: l10n.parkingVoidExplain,
+        actionLabel: l10n.parkingVoid,
+        doneMessage: l10n.parkingVoidDone,
+        onVoid: (reason) => _businessParkingService.voidEntry(
+          entryId: widget.parkedCar.id,
+          reason: reason,
+        ),
+        refusalText: (reason) => parkingVoidRefusalText(l10n, reason),
+      ),
+    );
+    if (voided != true || !mounted) return;
+    setState(() {
+      // Optimistic, so every action hides at once; the re-read below brings
+      // the server's stamp (who, when).
+      _paymentFields = <String, dynamic>{..._paymentFields, 'voided': true};
+    });
+    try {
+      await _refreshFromRecord();
+    } catch (_) {
+      // The void stands; the note fills in on the next open.
+    }
   }
 
   /// The day the car leaves. It lives beside the arrival date on a walk-up
@@ -2860,3 +2963,13 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     );
   }
 }
+
+/// The refusal `updateBusinessParkingEntry` gives a void (or any change to a
+/// voided car), in the reader's language; null for one this screen has no
+/// words for, so the server's own message is shown.
+String? parkingVoidRefusalText(AppLocalizations l10n, String reason) =>
+    switch (businessParkingVoidRefusal({'reason': reason})) {
+      'car_voided' => l10n.parkingErrCarVoided,
+      'car_not_found' => l10n.parkingErrCarNotFound,
+      _ => null,
+    };

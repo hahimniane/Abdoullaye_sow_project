@@ -39,7 +39,8 @@ export async function findBusinessVehicleRecord(
         where("vinNumber", "==", wanted),
         limit(1),
       ));
-      const doc = snap.docs[0];
+      // A voided record (entered by mistake) never prefills a form.
+      const doc = snap.docs.find((d) => d.data()?.voided !== true);
       if (doc) return { id: doc.id, ...doc.data() };
     } catch {
       // Not readable for this account, or offline: try the next source.

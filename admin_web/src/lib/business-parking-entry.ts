@@ -287,6 +287,7 @@ export function businessParkingResendMessage(emailed: boolean, texted: boolean) 
  * @return True when the link is still live.
  */
 export function canResendBusinessParkingLink(row: ParkingRowLike) {
+  if (isBusinessParkingVoided(row)) return false;
   if (businessParkingPaymentTone(row) === "paid") return false;
   return !row?.paymentLinkCancelledAt;
 }
@@ -341,6 +342,27 @@ export function isBusinessEnteredParking(row: ParkingRowLike) {
 }
 
 /**
+ * A parked car the lot voided (entered twice, wrong customer, a test). It is
+ * never deleted: it stays on the list struck through, keeps any payment it
+ * recorded, and counts in no total, no bill and no space. The server refuses
+ * every edit, payment and link action on it (`car_voided`).
+ *
+ * @param row A parkedCars document.
+ * @return True once `updateBusinessParkingEntry` action "void" ran.
+ */
+export function isBusinessParkingVoided(row: ParkingRowLike) {
+  return (row as { voided?: unknown } | null | undefined)?.voided === true;
+}
+
+/**
+ * Whether the Void action is offered: any car not already voided. The
+ * server decides permission (`parking`), like every other parking action.
+ */
+export function canVoidBusinessParking(row: ParkingRowLike) {
+  return Boolean(row) && !isBusinessParkingVoided(row);
+}
+
+/**
  * Whether "Mark payment received" applies. Mirrors the server's refusals so
  * the button is absent rather than present-and-rejected: a payment_link entry
  * is Stripe's to settle, and a paid entry must not invite a second marking.
@@ -350,6 +372,7 @@ export function isBusinessEnteredParking(row: ParkingRowLike) {
  */
 export function canMarkBusinessParkingPaid(row: ParkingRowLike) {
   if (!isBusinessEnteredParking(row)) return false;
+  if (isBusinessParkingVoided(row)) return false;
   if (trimmed(row?.paymentMethod, 40) !== "direct") return false;
   if (trimmed(row?.status, 40) === "cancelled") return false;
   return trimmed(row?.paymentStatus, 40) === "awaiting_direct_payment";
@@ -398,6 +421,8 @@ export function businessParkingPaymentTone(
   row: ParkingRowLike,
 ): "paid" | "awaiting" | "none" {
   if (!isBusinessEnteredParking(row)) return "none";
+  // A voided car is collected from by nobody: it is no longer chased.
+  if (isBusinessParkingVoided(row)) return "none";
   const paymentStatus = trimmed(row?.paymentStatus, 40);
   if (paymentStatus === "succeeded" || paymentStatus === "paid") return "paid";
   if (paymentStatus === "not_required") return "none";
@@ -529,6 +554,8 @@ export function businessParkingCollectedByMonth(
   const index = new Map(months.map((m, i) => [m, i] as const));
   const out = months.map(() => 0);
   for (const row of rows) {
+    // A voided car's money stays on its record but out of the chart.
+    if (isBusinessParkingVoided(row)) continue;
     // What the record says was collected is the ceiling. Reverting a payment
     // zeroes the running total but leaves the instalment list in place, so
     // counting every listed instalment would put money on the chart that the
@@ -693,6 +720,7 @@ export function businessParkingBalance(
   now: Date = new Date(),
 ): number {
   if (trimmed((row as { status?: unknown })?.status, 40) === "cancelled") return 0;
+  if (isBusinessParkingVoided(row)) return 0;
   const owed =
     businessParkingAccrued(row, now) - businessParkingAmountPaid(row, now);
   return owed > 0 ? Math.round(owed * 100) / 100 : 0;
@@ -725,6 +753,8 @@ export function businessParkingTotals(
   let collected = 0;
   let owed = 0;
   for (const row of rows) {
+    // Voided: on the record, in no figure (not in the lot, not collected).
+    if (isBusinessParkingVoided(row)) continue;
     const cancelled = trimmed((row as { status?: unknown })?.status, 40) === "cancelled";
     const ended = businessParkingEndLabel(row, now) === "Ended";
     // A staff walk-up stands in the yard the moment it is recorded; a customer
@@ -777,6 +807,7 @@ export function businessParkingOverdue(
   let amount = 0;
   for (const row of rows) {
     if (trimmed((row as { status?: unknown })?.status, 40) === "cancelled") continue;
+    if (isBusinessParkingVoided(row)) continue;
     if (businessParkingEndLabel(row, now) !== "Ended") continue;
     const balance = businessParkingBalance(row, now);
     if (balance > 0) {
@@ -796,7 +827,8 @@ export type ParkingKind =
   | "reserved"
   | "pending"
   | "left"
-  | "cancelled";
+  | "cancelled"
+  | "voided";
 export type ParkingPaymentClass = "paid" | "part" | "unpaid" | "none";
 export type ParkingFacets = {
   kinds: ParkingKind[];
@@ -813,6 +845,7 @@ export function parkingRowKind(
   row: ParkingRowLike,
   now: Date = new Date(),
 ): ParkingKind {
+  if (isBusinessParkingVoided(row)) return "voided";
   if (trimmed((row as { status?: unknown })?.status, 40) === "cancelled") return "cancelled";
   if (businessParkingEndLabel(row, now) === "Ended") return "left";
   if (trimmed((row as { status?: unknown })?.status, 40) === "pending_payment") return "pending";

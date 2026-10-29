@@ -29467,6 +29467,192 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'That person is not on this business\'s team.'**
   String get pmeRefusalStaffNotMember;
+
+  /// Who voided a record, in the 'Voided · reason · by · date' note.
+  ///
+  /// In en, this message translates to:
+  /// **'by {name}'**
+  String voidedNoteBy(String name);
+
+  /// Button on an expense line card that voids the line.
+  ///
+  /// In en, this message translates to:
+  /// **'Void line'**
+  String get lotVoidLine;
+
+  /// Title of the sheet confirming an expense line void.
+  ///
+  /// In en, this message translates to:
+  /// **'Void this line'**
+  String get lotVoidLineTitle;
+
+  /// Explains what voiding an expense line does.
+  ///
+  /// In en, this message translates to:
+  /// **'Void this line — it stays on the record (struck through) and drops out of every month\'s totals. It is never deleted.'**
+  String get lotVoidLineExplain;
+
+  /// Status word on a voided expense line.
+  ///
+  /// In en, this message translates to:
+  /// **'Voided'**
+  String get lotLineVoidedStatus;
+
+  /// Confirmation after an expense line is voided.
+  ///
+  /// In en, this message translates to:
+  /// **'Line voided.'**
+  String get lotVoidLineDone;
+
+  /// Refusal: an expense line with live purchases cannot be voided.
+  ///
+  /// In en, this message translates to:
+  /// **'Void this line\'s purchases first.'**
+  String get lotErrLineHasPurchases;
+
+  /// Refusal: the expense line is already voided.
+  ///
+  /// In en, this message translates to:
+  /// **'This line was already voided.'**
+  String get lotErrLineVoided;
+
+  /// Refusal: the expense line was not found.
+  ///
+  /// In en, this message translates to:
+  /// **'This line no longer exists.'**
+  String get lotErrLineNotFound;
+
+  /// Button that voids a parked car record.
+  ///
+  /// In en, this message translates to:
+  /// **'Void'**
+  String get parkingVoid;
+
+  /// Title of the sheet confirming a parked car void.
+  ///
+  /// In en, this message translates to:
+  /// **'Void this car'**
+  String get parkingVoidTitle;
+
+  /// Explains what voiding a parked car does.
+  ///
+  /// In en, this message translates to:
+  /// **'Void this car — it stays on the record (struck through) and drops out of the totals; it is never deleted. Other staff see who voided it and why.'**
+  String get parkingVoidExplain;
+
+  /// Status word on a voided parked car.
+  ///
+  /// In en, this message translates to:
+  /// **'Voided'**
+  String get parkingVoidedStatus;
+
+  /// Confirmation after a parked car is voided.
+  ///
+  /// In en, this message translates to:
+  /// **'Car voided.'**
+  String get parkingVoidDone;
+
+  /// Banner on a voided parked car's details.
+  ///
+  /// In en, this message translates to:
+  /// **'This car was voided. It stays on the record but no longer counts anywhere, and it can no longer be changed.'**
+  String get parkingVoidedLocked;
+
+  /// Refusal: the parked car is voided.
+  ///
+  /// In en, this message translates to:
+  /// **'This car was voided and can no longer be changed.'**
+  String get parkingErrCarVoided;
+
+  /// Refusal: the parked car was not found.
+  ///
+  /// In en, this message translates to:
+  /// **'This car could not be found.'**
+  String get parkingErrCarNotFound;
+
+  /// Parking list filter chip for voided cars.
+  ///
+  /// In en, this message translates to:
+  /// **'Voided'**
+  String get parkingKindVoided;
+
+  /// Button on an expense line card: the line stops counting after the month on screen.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop after this month'**
+  String get lotStopAfterMonth;
+
+  /// Title of the sheet confirming an expense line stop.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop this line'**
+  String get lotStopLineTitle;
+
+  /// Explains stopping an expense line after a month.
+  ///
+  /// In en, this message translates to:
+  /// **'{line} stops after {month}. Earlier months stay as they are.'**
+  String lotStopLineExplain(String line, String month);
+
+  /// Confirm button that stops an expense line.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop'**
+  String get lotStopLineConfirm;
+
+  /// Confirmation after an expense line is stopped.
+  ///
+  /// In en, this message translates to:
+  /// **'Line stopped.'**
+  String get lotStopLineDone;
+
+  /// Badge on an expense line that stops after a month.
+  ///
+  /// In en, this message translates to:
+  /// **'Stopped after {month}'**
+  String lotStoppedAfter(String month);
+
+  /// State of an expense line in a month after it stopped.
+  ///
+  /// In en, this message translates to:
+  /// **'Stopped'**
+  String get lotLineStoppedStatus;
+
+  /// Button that removes an expense line's stop month.
+  ///
+  /// In en, this message translates to:
+  /// **'Resume'**
+  String get lotResumeLine;
+
+  /// Title of the sheet confirming an expense line resume.
+  ///
+  /// In en, this message translates to:
+  /// **'Resume this line'**
+  String get lotResumeLineTitle;
+
+  /// Explains resuming a stopped expense line.
+  ///
+  /// In en, this message translates to:
+  /// **'{line} counts again every month, with no end.'**
+  String lotResumeLineExplain(String line);
+
+  /// Confirmation after an expense line is resumed.
+  ///
+  /// In en, this message translates to:
+  /// **'Line resumed.'**
+  String get lotResumeLineDone;
+
+  /// Refusal: the stop month is not a valid month.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a valid month.'**
+  String get lotErrEndMonthInvalid;
+
+  /// Refusal: the line has purchases after the stop month.
+  ///
+  /// In en, this message translates to:
+  /// **'This line has purchases after that month.'**
+  String get lotErrEndMonthBeforePurchases;
 }
 
 class _AppLocalizationsDelegate

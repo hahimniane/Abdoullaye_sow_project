@@ -29,7 +29,9 @@ export function findVehicleRecordByVin(
 ): Row | undefined {
   const wanted = s(vin, 17).toUpperCase();
   if (!wanted) return undefined;
-  return rows.find((row) => s(row.vinNumber, 17).toUpperCase() === wanted);
+  // A voided record (wrong customer, entered twice) never prefills a form.
+  return rows.find((row) => row.voided !== true &&
+    s(row.vinNumber, 17).toUpperCase() === wanted);
 }
 
 export type VinDecodeResult = {

@@ -91,7 +91,8 @@ export function businessOverviewSummary(input: BusinessOverviewInput = {}): Busi
   const shipments = list(input.shipments);
   const freightShipments = list(input.freightShipments);
   const transports = list(input.transports);
-  const parkedCars = list(input.parkedCars);
+  // Voided parked cars are history: in no count, breakdown or earning.
+  const parkedCars = list(input.parkedCars).filter((row) => row.voided !== true);
   const support = list(input.support);
   const activeCars = cars.filter((row) => trimmedText(row.status) === "active");
   return {

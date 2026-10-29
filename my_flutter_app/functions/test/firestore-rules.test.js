@@ -3867,6 +3867,27 @@ describe("parkedCars direct updates are limited to client fields", () => {
     );
   });
 
+  it("never lets a client void, un-void or move a voided car", async () => {
+    const staffDb = firestoreFor("staff-parking-a");
+    await assertFails(staffDb.doc("parkedCars/park_entry_a").update({
+      voided: true,
+    }));
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await context.firestore().doc("parkedCars/park_entry_a").set({
+        voided: true, voidedByStaffId: "staff-parking-a", voidReason: "test",
+      }, {merge: true});
+    });
+    await assertFails(staffDb.doc("parkedCars/park_entry_a").update({
+      status: "cancelled",
+      updatedAt: new Date(),
+    }));
+    await assertFails(staffDb.doc("parkedCars/park_entry_a").update({
+      voided: false,
+    }));
+    // Still readable: a voided car stays on the record.
+    await assertSucceeds(staffDb.doc("parkedCars/park_entry_a").get());
+  });
+
   it("keeps a server-priced entry's dates and amount callable-only",
       async () => {
         const ownerDb = firestoreFor("owner-a");

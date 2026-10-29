@@ -312,6 +312,37 @@ class BusinessParkingCancelLinkResult {
   final bool alreadyCancelled;
 }
 
+/// Was this car voided (`updateBusinessParkingEntry` `action: "void"`)?
+///
+/// A voided car stays on the record, struck through, and reads everywhere
+/// as though it had been removed: it holds no space, owes nothing, counts in
+/// no total or month end, and takes no edit, payment or close - the server
+/// refuses those with `car_voided`. Its status is left as it was, so this flag
+/// is the only signal; mirrors the server's and the console's checks.
+bool businessParkingVoided(Map<String, dynamic> row) => row['voided'] == true;
+
+/// Cancelled or voided: either way the record no longer holds a space or
+/// invites money.
+bool _parkingRowGone(Map<String, dynamic> row) =>
+    businessParkingVoided(row) || _trimmed(row['status'], 40) == 'cancelled';
+
+/// Whether "Void" applies: any car not already voided. Never-deleted records
+/// cannot be un-voided either - the lot records a new one instead.
+bool canVoidBusinessParking(Map<String, dynamic> row) =>
+    !businessParkingVoided(row);
+
+/// The server's void-related refusal reasons (`details.reason`), as the keys
+/// the screens translate. Anything else is shown as the server wrote it.
+const businessParkingVoidRefusals = <String>{'car_voided', 'car_not_found'};
+
+/// The refusal reason a callable error carries, when it is one of
+/// [businessParkingVoidRefusals]; '' otherwise.
+String businessParkingVoidRefusal(Object? details) {
+  if (details is! Map) return '';
+  final reason = '${details['reason'] ?? ''}'.trim();
+  return businessParkingVoidRefusals.contains(reason) ? reason : '';
+}
+
 /// Is this a walk-up the lot entered itself, rather than a customer booking?
 bool isBusinessEnteredParking(Map<String, dynamic> row) =>
     _trimmed(row['source'], 40) == 'business' ||
@@ -323,7 +354,7 @@ bool isBusinessEnteredParking(Map<String, dynamic> row) =>
 bool canMarkBusinessParkingPaid(Map<String, dynamic> row) {
   if (!isBusinessEnteredParking(row)) return false;
   if (_trimmed(row['paymentMethod'], 40) != 'direct') return false;
-  if (_trimmed(row['status'], 40) == 'cancelled') return false;
+  if (_parkingRowGone(row)) return false;
   return _trimmed(row['paymentStatus'], 40) == 'awaiting_direct_payment';
 }
 
@@ -363,6 +394,9 @@ BusinessParkingPaymentTone businessParkingPaymentTone(
   Map<String, dynamic> row,
 ) {
   if (!isBusinessEnteredParking(row)) return BusinessParkingPaymentTone.none;
+  // A voided car has dropped out of everything, its money included: no badge
+  // asks anyone to chase it or reads it as takings.
+  if (businessParkingVoided(row)) return BusinessParkingPaymentTone.none;
   // Paid is checked BEFORE cancelled, matching the web console: money that
   // arrived is a fact the cancellation does not undo, and hiding the badge on
   // a cancelled-but-paid record made the two clients disagree about the same
@@ -422,6 +456,7 @@ bool businessParkingIsPartlyPaid(Map<String, dynamic> row) {
 /// has one.
 bool canCancelBusinessParkingPaymentLink(Map<String, dynamic> row) {
   if (!isBusinessEnteredParking(row)) return false;
+  if (businessParkingVoided(row)) return false;
   if (_trimmed(row['checkoutUrl'], 2048).isEmpty) return false;
   if (isBusinessParkingPaymentLinkCancelled(row)) return false;
   if (businessParkingPaymentTone(row) == BusinessParkingPaymentTone.paid) {
@@ -468,6 +503,7 @@ bool canCheckBusinessParkingPayment(Map<String, dynamic> row) {
   if (!isBusinessEnteredParking(row)) return false;
   if (_trimmed(row['paymentMethod'], 40) != 'payment_link') return false;
   if (_trimmed(row['checkoutUrl'], 2048).isEmpty) return false;
+  if (businessParkingVoided(row)) return false;
   return businessParkingPaymentTone(row) != BusinessParkingPaymentTone.paid;
 }
 
@@ -740,6 +776,7 @@ List<int> businessParkingCollectedByMonth(
   };
   final out = List<int>.filled(months.length, 0);
   for (final row in rows) {
+    if (businessParkingVoided(row)) continue;
     // What the record says was collected is the ceiling. Reverting a payment
     // zeroes the running total but leaves the instalment list in place, so
     // counting every listed instalment would put money on the chart that the
@@ -1072,7 +1109,7 @@ double businessParkingAccrued(Map<String, dynamic> row, {DateTime? now}) {
 /// has been paid (part payments included); a cancelled record owes nothing.
 /// Mirrors the console's `businessParkingBalance`.
 double businessParkingBalance(Map<String, dynamic> row, {DateTime? now}) {
-  if (_trimmed(row['status'], 40) == 'cancelled') return 0;
+  if (_parkingRowGone(row)) return 0;
   final owed =
       businessParkingAccrued(row, now: now) -
       businessParkingAmountPaid(row, now: now);
@@ -1161,7 +1198,7 @@ bool canBillBusinessParkingThroughToday(
   Map<String, dynamic> row, {
   DateTime? now,
 }) {
-  if (_trimmed(row['status'], 40) == 'cancelled') return false;
+  if (_parkingRowGone(row)) return false;
   if (_businessParkingSettled(row)) return false;
   return businessParkingUnbilled(row, now: now).hasSomethingToBill;
 }
@@ -1169,7 +1206,7 @@ bool canBillBusinessParkingThroughToday(
 /// "They paid it in person" settles a link the lot has already sent. Nothing
 /// has been billed yet means there is no invoice to settle — bill it first.
 bool canRecordBusinessParkingPaymentReceived(Map<String, dynamic> row) {
-  if (_trimmed(row['status'], 40) == 'cancelled') return false;
+  if (_parkingRowGone(row)) return false;
   if (_businessParkingSettled(row)) return false;
   return _toDateOrNull(row['billedThroughDate']) != null;
 }
@@ -1178,7 +1215,7 @@ bool canRecordBusinessParkingPaymentReceived(Map<String, dynamic> row) {
 /// leave date has nothing to close, and a cancelled record released its space
 /// long ago. Closing never touches the money: an unpaid balance survives it.
 bool canCloseBusinessParkingStay(Map<String, dynamic> row) {
-  if (_trimmed(row['status'], 40) == 'cancelled') return false;
+  if (_parkingRowGone(row)) return false;
   return _toDateOrNull(row['parkingEndDate']) == null;
 }
 
@@ -1187,7 +1224,7 @@ bool canCloseBusinessParkingStay(Map<String, dynamic> row) {
 bool canPartPayBusinessParking(Map<String, dynamic> row) {
   if (!isBusinessEnteredParking(row)) return false;
   if (_trimmed(row['paymentMethod'], 40) != 'direct') return false;
-  if (_trimmed(row['status'], 40) == 'cancelled') return false;
+  if (_parkingRowGone(row)) return false;
   return !_businessParkingSettled(row);
 }
 
@@ -1257,6 +1294,8 @@ BusinessParkingTotals businessParkingTotals(
   var collected = 0.0;
   var owed = 0.0;
   for (final row in rows) {
+    // A voided car is out of every figure, money it once took included.
+    if (businessParkingVoided(row)) continue;
     final cancelled = _trimmed(row['status'], 40) == 'cancelled';
     final ended =
         businessParkingEndLabel(row, now: now) == BusinessParkingEndLabel.ended;
@@ -1308,7 +1347,7 @@ BusinessParkingOverdue businessParkingOverdue(
   var count = 0;
   var amount = 0.0;
   for (final row in rows) {
-    if (_trimmed(row['status'], 40) == 'cancelled') continue;
+    if (_parkingRowGone(row)) continue;
     if (businessParkingEndLabel(row, now: now) !=
         BusinessParkingEndLabel.ended) {
       continue;
@@ -1329,7 +1368,7 @@ BusinessParkingOverdue businessParkingOverdue(
 /// `parkingRowKind`: cancelled or departed first (whatever it once was), then a
 /// booking still in checkout, then the live split - a staff walk-up stands in
 /// the lot, a customer booking is reserved.
-enum ParkingKind { inLot, reserved, pending, left, cancelled }
+enum ParkingKind { inLot, reserved, pending, left, cancelled, voided }
 
 /// How a row sits on money. Mirrors the console's `parkingRowPayment`.
 enum ParkingPaymentClass { paid, part, unpaid, none }
@@ -1359,6 +1398,8 @@ class ParkingFacets {
 
 /// Which status kind [row] is, in precedence order. Mirrors the console.
 ParkingKind parkingRowKind(Map<String, dynamic> row, {DateTime? now}) {
+  // Voided before anything else: whatever the car once was, it is out.
+  if (businessParkingVoided(row)) return ParkingKind.voided;
   if (_trimmed(row['status'], 40) == 'cancelled') return ParkingKind.cancelled;
   if (businessParkingEndLabel(row, now: now) == BusinessParkingEndLabel.ended) {
     return ParkingKind.left;
@@ -1547,6 +1588,23 @@ class BusinessParkingService {
           'changes': changes,
         });
     return BusinessParkingUpdateResult.fromCallable(response.data);
+  }
+
+  /// Voids a car entered by mistake (a duplicate, the wrong customer, a
+  /// test). The record stays, struck through, and drops out of every total;
+  /// an unpaid payment link dies with it. Never deleted, never un-voided.
+  ///
+  /// The same callable as an edit, with `action: "void"`: refusals arrive as
+  /// `FirebaseFunctionsException` with `details.reason` `car_voided` or
+  /// `car_not_found` (see [businessParkingVoidRefusal]).
+  Future<void> voidEntry({required String entryId, String reason = ''}) async {
+    await _functions.httpsCallable('updateBusinessParkingEntry').call<Object?>(
+      <String, dynamic>{
+        'entryId': entryId,
+        'action': 'void',
+        'reason': reason.trim(),
+      },
+    );
   }
 
   /// Sends the customer their existing payment link again.

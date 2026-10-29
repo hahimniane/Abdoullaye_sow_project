@@ -59,6 +59,7 @@ test("left mid-month, priced stays across months, and the exclusions", () => {
   assert.equal(parkingMonthStatement(across, "2026-09", OCT1)!.monthCents, 12000);
   assert.equal(parkingMonthStatement({ ...diallo, paymentStatus: "paid" }, "2026-09", OCT1)!.owes, false);
   assert.equal(parkingMonthStatement({ ...diallo, status: "cancelled" }, "2026-09", OCT1), null);
+  assert.equal(parkingMonthStatement({ ...diallo, voided: true }, "2026-09", OCT1), null, "a voided car is on no bill");
   assert.equal(parkingMonthStatement({ ...diallo, dailyRate: 0, paymentStatus: "not_required" }, "2026-09", OCT1), null, "a free stay runs up nothing");
   assert.equal(parkingMonthStatement({ ...diallo, paymentStatus: "not_required" }, "2026-09", OCT1)!.dueCents, 45000, "a mislabelled open stay still owes");
 });
