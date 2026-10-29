@@ -32,6 +32,16 @@ test("one car's month: that month's days at the rate", () => {
   assert.equal(bill.stillParked, true);
 });
 
+test("an open stay remains labelled still parked during the current month", () => {
+  const bill = parkingMonthStatement(
+    { ...diallo, parkingDate: at("2026-10-20") },
+    "2026-10",
+    new Date("2026-10-29T15:00:00Z"),
+  )!;
+  assert.equal(bill.periodTo, "2026-10-29");
+  assert.equal(bill.stillParked, true);
+});
+
 test("earlier months are their own line, paid oldest first", () => {
   const since = { ...diallo, parkingDate: at("2026-08-22") };
   assert.equal(parkingMonthStatement(since, "2026-09", OCT1)!.priorUnpaidCents, 15000);

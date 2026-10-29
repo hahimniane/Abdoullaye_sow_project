@@ -283,7 +283,7 @@ function parkingMonthStatement(row, monthKey, now = new Date()) {
     priorUnpaidCents,
     dueCents: priorUnpaidCents + monthUnpaidCents,
     owes: monthUnpaidCents > 0,
-    stillParked: lastDay > month.last,
+    stillParked: leave === null || lastDay > month.last,
     // The month is not over yet when its last day is still ahead.
     partialMonth: month.last > today,
     customerName: text(r.customerName) || text(r.ownerName),

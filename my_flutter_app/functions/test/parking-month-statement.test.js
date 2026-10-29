@@ -144,6 +144,7 @@ describe("one car's month", () => {
     assert.equal(mid.days, 5);
     assert.equal(mid.partialMonth, true);
     assert.equal(mid.priorUnpaidCents, 45000);
+    assert.equal(mid.stillParked, true);
   });
 });
 

@@ -28,6 +28,16 @@ void main() {
     expect(b.stillParked, isTrue);
   });
 
+  test('an open stay remains still parked during the current month', () {
+    final b = parkingMonthStatement(
+      diallo({'parkingDate': at('2026-10-20')}),
+      '2026-10',
+      DateTime.parse('2026-10-29T15:00:00Z'),
+    )!;
+    expect(b.periodTo, '2026-10-29');
+    expect(b.stillParked, isTrue);
+  });
+
   test('earlier months are their own line, paid oldest first', () {
     final since = diallo({'parkingDate': at('2026-08-22')});
     expect(

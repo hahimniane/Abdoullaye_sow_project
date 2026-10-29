@@ -285,7 +285,7 @@ ParkingMonthBill? parkingMonthStatement(
     priorUnpaidCents: priorUnpaid,
     dueCents: priorUnpaid + monthUnpaid,
     owes: monthUnpaid > 0,
-    stillParked: lastDay > month.last,
+    stillParked: leave == null || lastDay > month.last,
     partialMonth: month.last > today,
     customerName: customer,
     customerPhone: _text(row['customerPhone'], 40),

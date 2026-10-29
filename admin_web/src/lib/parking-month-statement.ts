@@ -244,7 +244,7 @@ export function parkingMonthStatement(row: Row, monthKey: string, now: Date = ne
     priorUnpaidCents,
     dueCents: priorUnpaidCents + monthUnpaidCents,
     owes: monthUnpaidCents > 0,
-    stillParked: lastDay > month.last,
+    stillParked: leave === null || lastDay > month.last,
     partialMonth: month.last > today,
     customerName: text(row.customerName) || text(row.ownerName),
     customerPhone: text(row.customerPhone, 40),
