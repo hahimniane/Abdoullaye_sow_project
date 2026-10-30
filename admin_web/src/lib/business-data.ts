@@ -465,6 +465,27 @@ export function useParkingMonthInputs(businessId: string, monthKey: string, enab
 }
 
 /**
+ * The month's bill payments (docs/PARKING_BILL_PAYMENTS.md): each part of a
+ * month bill paid at once, shown on the customer's Month end card. One
+ * complete read - two equalities (business, month), so no composite index.
+ * `available` is false when the read failed: the card then says the payments
+ * could not be loaded, and the rest of the page is unaffected.
+ */
+export function useParkingBillPayments(businessId: string, monthKey: string, enabled: boolean): {
+  rows: FirestoreRow[];
+  loading: boolean;
+  available: boolean;
+} {
+  const active = enabled && parkingMonthQueryPlan(monthKey) !== null;
+  const read = useBusinessCollection("parkingBillPayments", businessId, active, {
+    pageSize: null,
+    sort: "query",
+    where: [["monthKey", "==", monthKey]],
+  });
+  return { rows: read.rows, loading: read.loading, available: active && !read.error };
+}
+
+/**
  * What staff expenses are netted from on the month's bills
  * (docs/STAFF_EXPENSE_CREDIT.md): every lot expense and every paid-back
  * record of the business. Both sides are cumulative ("every expense already

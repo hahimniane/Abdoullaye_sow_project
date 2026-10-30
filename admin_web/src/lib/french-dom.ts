@@ -7696,6 +7696,49 @@ Object.assign(TEXT_TRANSLATIONS, {
     "L’argent détenu par l’équipe n’a pas pu être vérifié ; seules les dépenses sont affichées.",
 });
 
+// Part of a month bill paid at once (docs/PARKING_BILL_PAYMENTS.md): Record
+// a payment on the Month end card, the payments listed on it, Undo, and the
+// server's refusals (parking-bill-payment.ts BILL_PAYMENT_MESSAGES). Money,
+// names and dates sit in their own elements, so the sentences are split
+// around them.
+Object.assign(TEXT_TRANSLATIONS, {
+  "Payments recorded on bills could not be loaded.":
+    "Les paiements enregistrés sur les factures n’ont pas pu être chargés.",
+  "Payments on this bill": "Paiements sur cette facture",
+  "Undone": "Annulé",
+  "Covered:": "Couvert :",
+  "received by": "reçu par",
+  "Undo payment": "Annuler ce paiement",
+  "Undo this payment?": "Annuler ce paiement ?",
+  "It comes off every car and job it paid.": "Il est retiré de chaque voiture et de chaque tâche qu’il a payées.",
+  "Payment recorded": "Paiement enregistré",
+  "Payment undone.": "Le paiement a été annulé.",
+  "Left on the bill:": "Reste sur la facture :",
+  "Receipt sent on WhatsApp.": "Reçu envoyé sur WhatsApp.",
+  "The WhatsApp receipt could not be sent.": "Le reçu WhatsApp n’a pas pu être envoyé.",
+  "It pays the oldest charges first, and is kept as one payment you can undo.":
+    "Il paie d’abord les frais les plus anciens, et reste un seul paiement que vous pouvez annuler.",
+  "Most you can record:": "Maximum à enregistrer :",
+  "Type the amount received to see what it pays off.": "Saisissez le montant reçu pour voir ce qu’il paie.",
+  "Pays off:": "Paie :",
+  // The server's refusals.
+  "That is more than this bill owes": "C’est plus que ce que cette facture doit",
+  "Record what is owed and give the rest back.": "Enregistrez ce qui est dû et rendez le reste.",
+  "That is more than this bill owes. Record what is owed and give the rest back.":
+    "C’est plus que ce que cette facture doit. Enregistrez ce qui est dû et rendez le reste.",
+  "Nothing on this bill can be paid here.": "Rien sur cette facture ne peut être payé ici.",
+  "This customer has no bill for this month.": "Ce client n’a pas de facture pour ce mois.",
+  "The bill changed while you were on it. Refresh and try again.":
+    "La facture a changé pendant que vous la consultiez. Actualisez et réessayez.",
+  "Say who took the money so it can be reconciled.": "Indiquez qui a pris l’argent pour qu’il puisse être rapproché.",
+  "Pick a month that has started.": "Choisissez un mois commencé.",
+  "This payment was not found.": "Nous n’avons pas trouvé ce paiement.",
+  "This payment was already undone.": "Ce paiement est déjà annulé.",
+  "A car or job in this payment was marked paid in full afterwards. Undo that first.":
+    "Une voiture ou une tâche de ce paiement a été marquée payée en totalité ensuite. Annulez d’abord cela.",
+  "This payment covers lot activities: it needs the ledger permission.":
+    "Ce paiement couvre des activités du parc : il faut la permission du registre.",
+});
 const englishDictionary = { ...TEXT_TRANSLATIONS, ...ATTRIBUTE_TRANSLATIONS };
 const frenchDictionary = buildReverseDictionary([
   TEXT_TRANSLATIONS,

@@ -4,6 +4,7 @@ import test from "node:test";
 
 import { businessTargetForNotification } from "./notification-routing.ts";
 import { translateValue } from "./french-dom.ts";
+import { BILL_PAYMENT_FALLBACK_MESSAGES, BILL_PAYMENT_MESSAGES, billPaymentFor } from "./parking-bill-payment.ts";
 
 // Month end sits inside Parking: a button in the panel's header, the view it
 // opens, and the 1st-of-month notification landing on the right month.
@@ -34,7 +35,9 @@ test("the view is worked out from the cars and activities, and records only thro
   // exactly as a hand-recorded payment would (received by, history, reports).
   assert.doesNotMatch(view, /setDoc\(|updateDoc\(|addDoc\(|deleteDoc\(/);
   const callables = [...view.matchAll(/httpsCallable\(functions, "(\w+)"\)/g)].map((m) => m[1]).sort();
-  assert.deepEqual([...new Set(callables)], ["recordBusinessParkingPartialPayment", "recordLotActivityInstalment"]);
+  // ...and a part of the bill paid at once goes through updateBusinessParkingEntry's
+  // bill_payment_* actions (docs/PARKING_BILL_PAYMENTS.md), never a write of its own.
+  assert.deepEqual([...new Set(callables)], ["recordBusinessParkingPartialPayment", "recordLotActivityInstalment", "updateBusinessParkingEntry"]);
   assert.match(view, /receivedByStaffId: settleBy/, "who received the money is always sent");
   assert.match(view, /if \(!settleBy\) \{/, "and required before anything is recorded");
   // Cars and the ledger's activities, both read, never written.
@@ -143,3 +146,42 @@ test("a paid line folds away on the card; only what is left to collect leads", (
   assert.match(view, /already paid/);
 });
 
+
+test("Record a payment: one amount, the shared plan, one request, undone as a whole", () => {
+  // The same gate as Mark all paid; the plan is the shared mirror's, never a second definition.
+  assert.match(view, /!estimating && customer\.dueCents > 0 && \(payableByCustomer\.get\(customer\.key\) \?\? 0\) > 0 && \(/);
+  assert.match(view, /new Map\(summary\.customers\.map\(\(c\) => \[c\.key, billPaymentPlan\(c, 1\)\.payableCents\]\)\)/, "precomputed once per statement, not per render");
+  assert.match(view, /const paymentsByCustomer = useMemo\(\(\) => billPaymentsByCustomer\(billPays\.rows\), \[billPays\.rows\]\)/);
+  assert.match(view, /httpsCallable\(functions, "updateBusinessParkingEntry"\)\(billPaymentRecordRequest\(\{/);
+  assert.match(view, /expectedPayableCents: plan\.payableCents/, "the preview's payable total rides along");
+  assert.match(view, /receivedByStaffId: payBy/, "who received the money is always sent");
+  assert.match(view, /if \(!payBy\) \{/, "and required before anything is recorded");
+  assert.match(view, /billPaymentUndoRequest\(businessId, undoTarget\.id\)/);
+  assert.match(view, /billPaymentRefusalText\(failure\)/, "a refusal is the console's words, never the raw error");
+  assert.match(view, /<h3>Undo this payment\?<\/h3>/, "undo is confirmed");
+  assert.match(view, /billPaymentFor\(p\.parts, lang\)/, "what it paid");
+  assert.match(view, /p\.status === "recorded" && \(/, "only a payment that stands can be undone");
+  assert.match(view, /pk-bill-payment-undone/, "an undone one stays on the card, greyed");
+  // A failed read of the payments only says so; the rest of the page is unaffected.
+  assert.match(view, /!billPays\.available && !billPays\.loading && \(/);
+  const data = read("./business-data.ts");
+  assert.match(data, /useBusinessCollection\("parkingBillPayments", businessId, active, \{[\s\S]*?where: \[\["monthKey", "==", monthKey\]\]/);
+  assert.match(data, /available: active && !read\.error \}/);
+});
+
+test("Record a payment's words read in French", () => {
+  const english = [
+    "Record a payment", "Record payment", "Payments on this bill", "Undone", "Covered:", "Undo payment", "Undo this payment?",
+    "It comes off every car and job it paid.", "Payment recorded", "Payment undone.", "Left on the bill:", "Pays off:", "Most you can record:",
+    "Type the amount received to see what it pays off.", "Receipt sent on WhatsApp.", "The WhatsApp receipt could not be sent.",
+    "Payments recorded on bills could not be loaded.", "That is more than this bill owes", "Record what is owed and give the rest back.",
+    "It pays the oldest charges first, and is kept as one payment you can undo.",
+    ...Object.values(BILL_PAYMENT_MESSAGES), ...Object.values(BILL_PAYMENT_FALLBACK_MESSAGES),
+  ];
+  for (const word of english) assert.notEqual(translateValue(word, "fr"), word, `no French for "${word}"`);
+  // A split sentence keeps its money and its names as they are.
+  assert.equal(translateValue("Left on the bill: $70.00", "fr"), "Reste sur la facture : $70.00");
+  assert.equal(translateValue("Undone", "fr"), "Annulé");
+  // The French and English pages read the same two-name label.
+  assert.equal(billPaymentFor([{ label: "A" }, { label: "B" }], "fr"), "A et B");
+});

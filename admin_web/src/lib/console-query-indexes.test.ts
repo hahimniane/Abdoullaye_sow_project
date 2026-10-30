@@ -177,6 +177,7 @@ const SITES: Site[] = [
   { file: L("business-data.ts"), kind: "useBusinessCollection", what: "month activities in month", shapes: [bc("lotActivities", { pageSize: null, where: monthPlan.inMonth.where, orderBy: "activityDate", direction: "desc" })] },
   { file: L("business-data.ts"), kind: "useBusinessCollection", what: "month activities unsettled", shapes: [bc("lotActivities", { pageSize: null, where: monthPlan.unsettled.where })] },
   { file: L("business-data.ts"), kind: "useBusinessCollection", what: "month activities undated", shapes: [bc("lotActivities", { pageSize: null, where: monthPlan.undated.where })] },
+  { file: L("business-data.ts"), kind: "useBusinessCollection", what: "useParkingBillPayments: the month's bill payments", shapes: [bc("parkingBillPayments", { pageSize: null, where: [["monthKey", "==", "2026-09"]] })] },
   { file: L("business-data.ts"), kind: "useBusinessCollection", what: "useStaffExpenseCreditInputs: every lot expense", shapes: [bc("lotExpenseEntries", { pageSize: null })] },
   { file: L("business-data.ts"), kind: "useBusinessCollection", what: "useStaffExpenseCreditInputs: every paid-back record", shapes: [bc("staffExpenseRepayments", { pageSize: null })] },
   { file: L("business-data.ts"), kind: "useBusinessCollection", what: "useStaffExpenseCreditInputs: expense lines (names on the bill)", shapes: [bc("lotExpenseLines", { pageSize: null })] },

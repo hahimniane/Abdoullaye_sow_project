@@ -1,21 +1,34 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { httpsCallable } from "firebase/functions";
-import { ArrowLeft, Banknote, ChevronDown, ChevronLeft, ChevronRight, Copy, FileDown, RefreshCw, SquarePen, X } from "lucide-react";
+import { ArrowLeft, Banknote, ChevronDown, ChevronLeft, ChevronRight, Copy, FileDown, RefreshCw, SquarePen, Undo2, X } from "lucide-react";
 
 import { BUSINESS_ACCOUNT_RECEIVER, businessAccountName } from "@/lib/staff-balances";
 import { ReceivedByOptions } from "@/components/business/received-by-options";
 import { auth, functions } from "@/lib/firebase";
-import { useParkingMonthInputs, useStaffExpenseCreditInputs } from "@/lib/business-data";
+import { useParkingBillPayments, useParkingMonthInputs, useStaffExpenseCreditInputs } from "@/lib/business-data";
 import { BUSINESS_PARKING_RECEIVED_VIA_OPTIONS } from "@/lib/business-parking-entry";
 import { overlayDismiss } from "@/lib/overlay-dismiss";
 
-import { currentLanguage, formatDayKey, text } from "@/lib/format";
+import { currentLanguage, formatDateTime, formatDayKey, text } from "@/lib/format";
 import { PdfPreview, type PdfPreviewFile } from "@/components/pdf-preview";
 import { BusinessOwesSection } from "@/components/business/business-owes-section";
 import { InvoiceMessageStatus, ParkingInvoicesPanel, useParkingInvoiceMessages } from "@/components/business/parking-invoices";
 import { invoicesOfferedFor } from "@/lib/parking-invoices";
+import {
+  BILL_PAYMENT_MESSAGES,
+  BILL_PAYMENT_REFUSAL,
+  billPaymentFor,
+  billPaymentPlan,
+  billPaymentRecordRequest,
+  billPaymentRefusalText,
+  billPaymentsByCustomer,
+  billPaymentUndoRequest,
+  type BillPaymentRecord,
+  type BillPaymentRefusal,
+} from "@/lib/parking-bill-payment";
+import { dollarsToCents } from "@/lib/staff-expense-console";
 import { parkingWhatsAppEnabled, parkingWhatsAppEverEnabled } from "@/lib/parking-whatsapp";
 import {
   buildParkingMonthBillPdf,
@@ -83,7 +96,7 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
   // Customers whose already-paid lines are unfolded on their card.
   const [openPaid, setOpenPaid] = useState<Set<string>>(() => new Set());
   const [busyId, setBusyId] = useState("");
-  const [flash, setFlash] = useState("");
+  const [flash, setFlash] = useState<ReactNode>("");
   const [preview, setPreview] = useState<PdfPreviewFile | null>(null);
   // "Mark all paid": which customer, and the same details any payment takes.
   const [settleKey, setSettleKey] = useState("");
@@ -93,6 +106,19 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
   const [settleBusy, setSettleBusy] = useState("");
   const [settleError, setSettleError] = useState("");
   const [settleFailed, setSettleFailed] = useState<{ id: string; label: string; reason: string }[]>([]);
+  // "Record a payment": part of a customer's bill, paid oldest first
+  // (docs/PARKING_BILL_PAYMENTS.md). One amount, one payment, one receipt.
+  const [payKey, setPayKey] = useState("");
+  const [payAmount, setPayAmount] = useState("");
+  const [payVia, setPayVia] = useState("cash");
+  const [payBy, setPayBy] = useState("");
+  const [payNote, setPayNote] = useState("");
+  const [payBusy, setPayBusy] = useState(false);
+  const [payError, setPayError] = useState("");
+  // "Undo": a whole payment at once, after a confirm.
+  const [undoTarget, setUndoTarget] = useState<BillPaymentRecord | null>(null);
+  const [undoBusy, setUndoBusy] = useState(false);
+  const [undoError, setUndoError] = useState("");
   const staffOptions = useMemo(() => staff.map((s) => ({
     id: String(s.id),
     name: text(s.fullName, "") || text(s.name, "") || text(s.email, ""),
@@ -133,6 +159,15 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
   const summary = useMemo(
     () => parkingMonthSummary(rows, monthKey, parkingMonthAsOf(monthKey, wholeMonth), activities, staffCredit),
     [rows, activities, monthKey, wholeMonth, staffCredit],
+  );
+  // The month's recorded payments, grouped by customer once per data change
+  // (a failed read leaves the rest of the page as it was), and what each
+  // customer's bill can take as a payment here - the statement's own figures.
+  const billPays = useParkingBillPayments(businessId, monthKey, Boolean(businessId));
+  const paymentsByCustomer = useMemo(() => billPaymentsByCustomer(billPays.rows), [billPays.rows]);
+  const payableByCustomer = useMemo(
+    () => new Map(summary.customers.map((c) => [c.key, billPaymentPlan(c, 1).payableCents])),
+    [summary],
   );
   const thisMonth = new Date().toISOString().slice(0, 7);
   // One row per customer (grouped by phone), their cars underneath.
@@ -223,6 +258,75 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
     }
   }
 
+  function receiverName(id: string): string {
+    if (id === BUSINESS_ACCOUNT_RECEIVER) return businessAccountName(lang);
+    return staffNames[id] ?? "";
+  }
+
+  function openPay(customer: ParkingMonthCustomer) {
+    setPayKey(customer.key);
+    setPayAmount("");
+    setPayVia("cash");
+    const me = auth.currentUser?.uid ?? "";
+    setPayBy(staffOptions.some((s) => s.id === me) ? me : "");
+    setPayNote(`Month end — ${monthLabel(monthKey)}`);
+    setPayError("");
+  }
+
+  // One request: the server splits the amount oldest first, records each part
+  // the way a hand-recorded payment lands, and sends one receipt. The preview's
+  // payable total rides along, so a bill that moved is refused, not guessed.
+  async function runPay(customer: ParkingMonthCustomer) {
+    if (payBusy) return;
+    if (!payBy) {
+      setPayError("Say who received the money.");
+      return;
+    }
+    const amountCents = dollarsToCents(payAmount);
+    const plan = billPaymentPlan(customer, Number.isFinite(amountCents) ? amountCents : 0);
+    if (!plan.ok) {
+      setPayError(BILL_PAYMENT_MESSAGES[plan.reason as BillPaymentRefusal]);
+      return;
+    }
+    setPayBusy(true);
+    setPayError("");
+    try {
+      const result = await httpsCallable(functions, "updateBusinessParkingEntry")(billPaymentRecordRequest({
+        businessId, monthKey, customerKey: customer.key, amountCents, receivedVia: payVia,
+        receivedByStaffId: payBy, note: payNote, expectedPayableCents: plan.payableCents,
+      }));
+      const data = (result.data && typeof result.data === "object" ? result.data : {}) as { leftCents?: number; receipt?: string };
+      const left = Number.isFinite(Number(data.leftCents)) ? Number(data.leftCents) : plan.leftCents;
+      setPayKey("");
+      setFlash(
+        <>
+          <span>Payment recorded</span> — <b data-no-translate>{customer.customerName || "—"}</b> · <b data-no-translate>{moneyText(amountCents)}</b> · <span>Left on the bill:</span> <b data-no-translate>{moneyText(left)}</b>
+          {data.receipt === "sent" && <> · <span>Receipt sent on WhatsApp.</span></>}
+          {data.receipt === "failed" && <> · <span>The WhatsApp receipt could not be sent.</span></>}
+        </>,
+      );
+    } catch (failure) {
+      setPayError(billPaymentRefusalText(failure));
+    } finally {
+      setPayBusy(false);
+    }
+  }
+
+  async function runUndo() {
+    if (!undoTarget || undoBusy) return;
+    setUndoBusy(true);
+    setUndoError("");
+    try {
+      await httpsCallable(functions, "updateBusinessParkingEntry")(billPaymentUndoRequest(businessId, undoTarget.id));
+      setUndoTarget(null);
+      setFlash(<span>Payment undone.</span>);
+    } catch (failure) {
+      setUndoError(billPaymentRefusalText(failure));
+    } finally {
+      setUndoBusy(false);
+    }
+  }
+
   async function copyBill(customer: ParkingMonthCustomer) {
     try {
       const bill = parkingMonthCustomerText(customer, orgName);
@@ -275,6 +379,9 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
       {!credit.available && !credit.loading && (
         <p className="lst-hint" role="status">Staff expenses are not taken off these bills: your account cannot see the lot's expenses.</p>
       )}
+      {!billPays.available && !billPays.loading && (
+        <p className="lst-hint" role="status">Payments recorded on bills could not be loaded.</p>
+      )}
       {inputs.loading && (
         <div className="empty-state"><RefreshCw className="spin" size={16} /> Loading…</div>
       )}
@@ -326,6 +433,9 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
                   <button className="lst-btn ghost" type="button" onClick={() => void copyBill(customer)}><Copy size={14} /> Copy text</button>
                   {!estimating && customer.dueCents > 0 && monthBillPaymentPlan(customer).items.length > 0 && (
                     <button className="lst-btn" type="button" disabled={busyId !== ""} onClick={() => openSettle(customer)}><Banknote size={14} /> Mark all paid</button>
+                  )}
+                  {!estimating && customer.dueCents > 0 && (payableByCustomer.get(customer.key) ?? 0) > 0 && (
+                    <button className="lst-btn" type="button" disabled={busyId !== "" || payBusy} onClick={() => openPay(customer)}><Banknote size={14} /> Record a payment</button>
                   )}
                 </div>
               </header>
@@ -431,7 +541,35 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
                     <span aria-hidden="true"></span>
                   </li>
                 );
+                const payments = paymentsByCustomer.get(customer.key) ?? [];
+                const paymentsList = payments.length > 0 && (
+                  <section className="pk-bill-payments" aria-label="Payments on this bill">
+                    <h4>Payments on this bill</h4>
+                    <ul>
+                      {payments.map((p) => {
+                        const by = receiverName(p.receivedByStaffId);
+                        return (
+                          <li key={p.id} className={p.status === "undone" ? "pk-bill-payment pk-bill-payment-undone" : "pk-bill-payment"}>
+                            <span className="pk-bill-payment-main">
+                              <strong>{moneyText(p.amountCents)}</strong>
+                              <small>
+                                {p.status === "undone" && <><span>Undone</span>{p.undoneAtMs > 0 && <> · <span data-no-translate>{formatDateTime(p.undoneAtMs)}</span></>} · </>}
+                                <span>{parkingPaidViaLabel(p.receivedVia)}</span> · <span data-no-translate>{p.atMs > 0 ? formatDateTime(p.atMs) : "—"}</span>
+                                {by && <> · <span>received by</span> <span data-no-translate>{by}</span></>}
+                              </small>
+                              <small><span>Covered:</span> <span data-no-translate>{billPaymentFor(p.parts, lang)}</span></small>
+                            </span>
+                            {p.status === "recorded" && (
+                              <button className="ghost-button" type="button" disabled={undoBusy} onClick={() => { setUndoTarget(p); setUndoError(""); }}><Undo2 size={14} /> Undo payment</button>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </section>
+                );
                 return (
+                  <>
                   <ul>
                     {owingLines}
                     {expenseRow}
@@ -451,6 +589,8 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
                     )}
                     {showPaid && paidLines}
                   </ul>
+                  {paymentsList}
+                  </>
                 );
               })()}
             </article>
@@ -522,13 +662,101 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
                 {settleBusy && <span className="lst-hint" role="status" style={{ marginRight: "auto" }}><RefreshCw className="spin" size={13} /> {settleBusy}</span>}
                 <button className="lst-btn ghost" type="button" disabled={Boolean(settleBusy)} onClick={() => setSettleKey("")}>Cancel</button>
                 <button className="lst-add" type="button" disabled={Boolean(settleBusy) || !settleBy} onClick={() => void runSettle(customer, retry)}>
-                  <Banknote size={16} /> {retry ? `Try the ${settleFailed.length} again` : `Record ${moneyText(plan.totalCents)}`}
+                  <Banknote size={16} /> {retry ? `Try the ${settleFailed.length} again` : <><span>Record payment</span> · <span data-no-translate>{moneyText(plan.totalCents)}</span></>}
                 </button>
               </footer>
             </div>
           </div>
         );
       })()}
+      {(() => {
+        const customer = summary.customers.find((c) => c.key === payKey);
+        if (!customer) return null;
+        const typed = payAmount.trim() !== "";
+        const amountCents = dollarsToCents(payAmount);
+        const plan = billPaymentPlan(customer, Number.isFinite(amountCents) ? amountCents : 0);
+        return (
+          <div className="lst-modal-overlay" role="dialog" aria-modal="true" {...overlayDismiss(() => { if (!payBusy) setPayKey(""); })}>
+            <div className="lst-modal" style={{ maxWidth: 600 }} onClick={(e) => e.stopPropagation()}>
+              <header className="lst-modal-head">
+                <div><h3>Record a payment</h3><p><span data-no-translate>{customer.customerName || "—"}</span> · {monthLabel(monthKey, lang)}</p></div>
+                <button className="lst-icon-btn" type="button" disabled={payBusy} onClick={() => setPayKey("")} aria-label="Close"><X size={18} /></button>
+              </header>
+              <div className="lst-modal-body">
+                {payError && <div className="lst-form-error" role="alert">{payError}</div>}
+                <p className="lst-hint" style={{ marginTop: 0 }}>
+                  <span>It pays the oldest charges first, and is kept as one payment you can undo.</span> <span>Most you can record:</span> <b data-no-translate>{moneyText(plan.payableCents)}</b>
+                </p>
+                <div className="lst-form-grid">
+                  <label className="lst-field"><span>Amount received ($)</span>
+                    <input value={payAmount} inputMode="decimal" autoComplete="off" placeholder="0.00" aria-label="Amount received" disabled={payBusy} onChange={(e) => { setPayAmount(e.target.value); setPayError(""); }} />
+                  </label>
+                  <label className="lst-field"><span>How it was paid</span>
+                    <select value={payVia} disabled={payBusy} onChange={(e) => setPayVia(e.target.value)}>
+                      {BUSINESS_PARKING_RECEIVED_VIA_OPTIONS.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
+                    </select>
+                  </label>
+                  <label className="lst-field"><span>Received by</span>
+                    <select value={payBy} disabled={payBusy} onChange={(e) => setPayBy(e.target.value)} aria-label="Received by">
+                      <ReceivedByOptions staffOptions={staffOptions} placeholder="Who took the money?" />
+                    </select>
+                  </label>
+                  <label className="lst-field wide"><span>Note</span><input value={payNote} disabled={payBusy} onChange={(e) => setPayNote(e.target.value)} /></label>
+                </div>
+                <div aria-live="polite">
+                  {!typed ? (
+                    <p className="lst-hint">Type the amount received to see what it pays off.</p>
+                  ) : plan.ok ? (
+                    <>
+                      <p className="lst-hint" style={{ marginBottom: 0 }}>Pays off:</p>
+                      <ul className="pk-settle-list">
+                        {plan.parts.map((x) => (
+                          <li key={`${x.kind}:${x.id}`}>
+                            <span><span data-no-translate>{x.label}</span>{x.full && <> · <span>paid in full</span></>}</span><strong>{moneyText(x.amountCents)}</strong>
+                          </li>
+                        ))}
+                        <li className="pk-settle-total"><span>Left on the bill:</span><strong>{moneyText(plan.leftCents)}</strong></li>
+                      </ul>
+                    </>
+                  ) : (
+                    <div className="lst-form-error" role="alert">
+                      {plan.reason === BILL_PAYMENT_REFUSAL.MORE_THAN_OWED
+                        ? <><span>That is more than this bill owes</span> (<span data-no-translate>{moneyText(plan.payableCents)}</span>). <span>Record what is owed and give the rest back.</span></>
+                        : BILL_PAYMENT_MESSAGES[plan.reason as BillPaymentRefusal]}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <footer className="lst-modal-foot">
+                {payBusy && <span className="lst-hint" role="status" style={{ marginRight: "auto" }}><RefreshCw className="spin" size={13} /> Saving…</span>}
+                <button className="lst-btn ghost" type="button" disabled={payBusy} onClick={() => setPayKey("")}>Cancel</button>
+                <button className="lst-add" type="button" disabled={payBusy || !payBy || !plan.ok} onClick={() => void runPay(customer)}>
+                  <Banknote size={16} /> Record payment
+                </button>
+              </footer>
+            </div>
+          </div>
+        );
+      })()}
+      {undoTarget && (
+        <div className="lst-modal-overlay" role="dialog" aria-modal="true" {...overlayDismiss(() => { if (!undoBusy) setUndoTarget(null); })}>
+          <div className="lst-modal" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
+            <header className="lst-modal-head">
+              <div><h3>Undo this payment?</h3><p><b data-no-translate>{moneyText(undoTarget.amountCents)}</b>{receiverName(undoTarget.receivedByStaffId) && <> · <span data-no-translate>{receiverName(undoTarget.receivedByStaffId)}</span></>}</p></div>
+              <button className="lst-icon-btn" type="button" disabled={undoBusy} onClick={() => setUndoTarget(null)} aria-label="Close"><X size={18} /></button>
+            </header>
+            <div className="lst-modal-body">
+              {undoError && <div className="lst-form-error" role="alert">{undoError}</div>}
+              <p className="lst-hint" style={{ marginTop: 0 }}>It comes off every car and job it paid.</p>
+            </div>
+            <footer className="lst-modal-foot">
+              {undoBusy && <span className="lst-hint" role="status" style={{ marginRight: "auto" }}><RefreshCw className="spin" size={13} /> Saving…</span>}
+              <button className="lst-btn ghost" type="button" disabled={undoBusy} onClick={() => setUndoTarget(null)}>Cancel</button>
+              <button className="lst-btn danger" type="button" disabled={undoBusy} onClick={() => void runUndo()}><Undo2 size={14} /> Undo payment</button>
+            </footer>
+          </div>
+        </div>
+      )}
       {preview && <PdfPreview {...preview} onClose={() => setPreview(null)} />}
     </div>
   );

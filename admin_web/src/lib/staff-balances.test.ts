@@ -328,7 +328,7 @@ const PICKERS: Record<string, { names: number; me?: number }> = {
   "package-requests-panel.tsx": { names: 1 }, // receiving a package request, with a payment
   "inventory-sale-switch-dialog.tsx": { names: 1 }, // inventory sale: normal <-> credit
   "inventory-credit-payment-dialog.tsx": { names: 1 }, // an inventory credit payment
-  "parking-month-end.tsx": { names: 1 }, // marking a whole month bill paid
+  "parking-month-end.tsx": { names: 2 }, // marking a whole month bill paid; recording part of it
   "operations-panels.tsx": { names: 6 }, // parking entry, lot ledger payment, instalment (chase), parking paid / part / settle
   "invoices-panel.tsx": { names: 0, me: 1 }, // an invoice payment (the signed-in person, or the Business account)
   "package-delivery.tsx": { names: 0, me: 1 }, // cash collected at a handover
