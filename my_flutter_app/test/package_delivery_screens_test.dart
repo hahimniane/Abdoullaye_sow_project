@@ -2,6 +2,8 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_flutter_app/l10n/app_localizations.dart';
+import 'package:my_flutter_app/services/package_requests.dart'
+    show PackageProofSettings;
 import 'package:my_flutter_app/models/destination_country.dart';
 import 'package:my_flutter_app/screens/containers_screen.dart';
 import 'package:my_flutter_app/screens/package_result_screen.dart';
@@ -92,6 +94,10 @@ class _Repo implements ContainerPackageRepository {
 
   @override
   Future<String> businessCountryCode(String businessId) async => 'US';
+
+  @override
+  Future<PackageProofSettings> proofSettings(String businessId) async =>
+      const PackageProofSettings();
 
   @override
   Future<List<DestinationCountry>> destinations(String businessId) async =>
@@ -621,7 +627,13 @@ void main() {
       expect(find.text('Remis par Kofi Mensah'), findsOneWidget);
       expect(find.text('Récupéré par Mamadou Bah'), findsOneWidget);
       expect(find.text('Annuler la livraison'), findsOneWidget);
-      expect(find.text('Livré'), findsOneWidget);
+      // The status chip, and a sea package's proof line, which has only
+      // its delivered tick (docs/AIR_PACKAGES.md §7).
+      expect(find.text('Livré'), findsNWidgets(2));
+      expect(
+        tester.widget<Text>(find.byKey(const Key('pkg-proof-ticks-text'))).data,
+        'Livré',
+      );
     });
 
     testWidgets('a refusal in French', (tester) async {

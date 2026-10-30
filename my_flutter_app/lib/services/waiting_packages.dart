@@ -427,6 +427,23 @@ String? destinationMismatch(ContainerLine line, ShippingContainer? container) {
   return going == wanted ? null : 'destination_mismatch';
 }
 
+/// Whether a container may take a package by how each ships: a package
+/// marked to fly goes on a flight, one marked for sea on a sea container
+/// (docs/AIR_PACKAGES.md §7). "ship_mode_mismatch", or null when allowed.
+/// Mirrors `shipModeMismatch`.
+String? shipModeMismatch(ContainerLine line, ShippingContainer? container) {
+  final going = containerShipModeOf(container?.shipMode);
+  return containerShipModeOf(line.shipMode) == going
+      ? null
+      : 'ship_mode_mismatch';
+}
+
+/// Every reason a container may not take a waiting package, the more basic
+/// first (the destination, then how it ships), as the server judges it.
+String? assignmentRefusal(ContainerLine line, ShippingContainer container) =>
+    destinationMismatch(line, container) ??
+    shipModeMismatch(line, container);
+
 /// One waiting package against one container: the reason it cannot go on it,
 /// or null when it can.
 class AssignableLine {
@@ -444,7 +461,7 @@ List<AssignableLine> assignableLines(
 ) =>
     [
       for (final line in waiting)
-        AssignableLine(line, destinationMismatch(line, container)),
+        AssignableLine(line, assignmentRefusal(line, container)),
     ];
 
 /// The packages dropped off and not on any container yet, newest first.
@@ -478,6 +495,22 @@ List<ContainerLine> filterWaitingPackages(
   return [
     for (final line in list)
       if (hits.contains(line.id)) line,
+  ];
+}
+
+/// The packages that ship by [mode] ("sea" or "air"; a line from before
+/// "Ships by" is sea), in the list's own order; the whole list for "".
+/// The Waiting list's Sea / Air filter (docs/AIR_PACKAGES.md §7).
+List<ContainerLine> filterWaitingByShipMode(
+  Iterable<ContainerLine> lines,
+  String mode,
+) {
+  final list = lines.toList();
+  if (mode.trim().isEmpty) return list;
+  final wanted = containerShipModeOf(mode);
+  return [
+    for (final line in list)
+      if (containerShipModeOf(line.shipMode) == wanted) line,
   ];
 }
 
@@ -542,16 +575,21 @@ Map<String, Object?> _packageExtras(
   final price = draft.priceCents;
   // A line with pieces carries its sizes and prices in them; the server
   // works the line's own out from the pieces.
+  // "Ships by" (docs/AIR_PACKAGES.md §7): sent when the form chose one.
+  final mode = draft.shipMode;
+  final shipMode = mode == null ? null : containerShipModeOf(mode);
   if (draft.usesPieces) {
     return {
       'destinationCountryId': draft.destinationCountryId.trim(),
       'destinationCountryName': draft.destinationCountryName.trim(),
+      'shipMode': ?shipMode,
       'payOnArrival': draft.payOnArrival,
     };
   }
   return {
     'destinationCountryId': draft.destinationCountryId.trim(),
     'destinationCountryName': draft.destinationCountryName.trim(),
+    'shipMode': ?shipMode,
     if (complete) ...{
       'lengthIn': sides[0],
       'widthIn': sides[1],

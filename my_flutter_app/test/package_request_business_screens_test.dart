@@ -481,6 +481,7 @@ void main() {
       PackageRequest request, {
       Locale locale = const Locale('en'),
       double width = 430,
+      bool shipsByAir = false,
     }) async {
       final fake = FakePackageRequests();
       final results = <RequestReceived?>[];
@@ -497,6 +498,7 @@ void main() {
                   request: request,
                   service: fake,
                   staff: staff,
+                  shipsByAir: shipsByAir,
                 ),
               ),
               child: const Text('open'),
@@ -546,6 +548,52 @@ void main() {
         'receivedByStaffId': 's1',
       });
       expect(opened.results.single?.trackingCode, 'CL-K7M4P2');
+    });
+
+    // "Ships by: Sea · Air" (docs/AIR_PACKAGES.md §7).
+    testWidgets('offers Ships by only to a business that ships by air',
+        (tester) async {
+      final opened = await open(
+        tester,
+        _req('d', 'confirmed', {'estimate': _estimate(1, 16500)}),
+      );
+      expect(find.byKey(const Key('ship-mode-choice')), findsNothing);
+      expect(find.byKey(const Key('proof-weight')), findsNothing);
+      await _tap(tester, 'receive-save');
+      final body = opened.fake.of('receivePackageRequest').single;
+      expect(body.containsKey('shipMode'), isFalse);
+      expect(body.containsKey('photoPaths'), isFalse);
+    });
+
+    testWidgets('Sea hides the proof fields, Air shows and sends them',
+        (tester) async {
+      final opened = await open(
+        tester,
+        _req('d', 'confirmed', {'estimate': _estimate(1, 16500)}),
+        shipsByAir: true,
+      );
+      expect(find.byKey(const Key('ship-mode-choice')), findsOneWidget);
+      expect(find.byKey(const Key('proof-weight')), findsNothing);
+      await _tap(tester, 'ship-mode-air');
+      expect(find.byKey(const Key('proof-weight')), findsOneWidget);
+      await _type(tester, 'proof-weight', '12');
+      await _tap(tester, 'receive-save');
+      final body = opened.fake.of('receivePackageRequest').single;
+      expect(body['shipMode'], 'air');
+      expect(body['weightLb'], 12);
+    });
+
+    testWidgets('sends sea with no proof when Sea stays chosen',
+        (tester) async {
+      final opened = await open(
+        tester,
+        _req('d', 'confirmed', {'estimate': _estimate(1, 16500)}),
+        shipsByAir: true,
+      );
+      await _tap(tester, 'receive-save');
+      final body = opened.fake.of('receivePackageRequest').single;
+      expect(body['shipMode'], 'sea');
+      expect(body.containsKey('weightLb'), isFalse);
     });
 
     testWidgets('adds a piece the customer brought and drops one that did '

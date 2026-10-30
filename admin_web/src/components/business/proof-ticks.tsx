@@ -13,7 +13,8 @@ type Row = Record<string, unknown>;
 
 /**
  * The three ticks a package shows (docs/AIR_PACKAGES.md decision 11):
- * drop-off photo · sender OK · delivered. Compact, with the words in a
+ * drop-off photo · sender OK · delivered. A sea package shows only the
+ * delivered tick (§7: it never needs a photo or a sender's answer). Compact, with the words in a
  * tooltip, on the Waiting rows, the container lines and the staff view.
  * Grey is "not yet"; the sender's tick is amber while asked, green when
  * confirmed, red when they reported a problem; a delivery without the
@@ -29,12 +30,16 @@ export function ProofTicks({ line, ticks }: { line: Row; ticks?: ProofTickState 
   const sender = state.senderOk;
   return (
     <span className="prf-ticks" data-no-translate role="group" aria-label={lang === "fr" ? "Preuves" : "Proof"}>
-      <span className={`prf-tick${state.photo ? " on" : ""}`} title={labels.photo} aria-label={labels.photo} role="img">
-        <Camera size={12} aria-hidden="true" />
-      </span>
-      <span className={`prf-tick prf-sender-${sender}`} title={labels.sender} aria-label={labels.sender} role="img">
-        {sender === "problem" ? <AlertTriangle size={12} aria-hidden="true" /> : <Check size={12} aria-hidden="true" />}
-      </span>
+      {state.air && (
+        <span className={`prf-tick${state.photo ? " on" : ""}`} title={labels.photo} aria-label={labels.photo} role="img">
+          <Camera size={12} aria-hidden="true" />
+        </span>
+      )}
+      {state.air && (
+        <span className={`prf-tick prf-sender-${sender}`} title={labels.sender} aria-label={labels.sender} role="img">
+          {sender === "problem" ? <AlertTriangle size={12} aria-hidden="true" /> : <Check size={12} aria-hidden="true" />}
+        </span>
+      )}
       <span
         className={`prf-tick${state.delivered ? (state.deliveredWithoutCode ? " on without-code" : " on") : ""}`}
         title={labels.delivered}

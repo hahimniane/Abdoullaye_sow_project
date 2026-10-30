@@ -409,13 +409,16 @@ function validateProofSettings(raw) {
 }
 
 /**
- * Whether a counter drop-off may be saved without a photo.
+ * Whether a counter drop-off may be saved without a photo. The switch is
+ * for packages that fly: a sea package (the default, and every line from
+ * before "Ships by") never needs one.
  * @param {object} settings `{photosRequired}`
- * @param {object} line `{source, photoPaths}`
+ * @param {object} line `{source, photoPaths, shipMode}`
  * @return {string} "" or the refusal code.
  */
 function photoRequirementRefusal(settings, line) {
   if (!settings?.photosRequired) return "";
+  if (String(line?.shipMode || "").toLowerCase() !== "air") return "";
   const source = String(line?.source || "counter");
   if (source !== "counter") return "";
   const photos = Array.isArray(line?.photoPaths) ? line.photoPaths : [];
@@ -453,19 +456,25 @@ function confirmationFromPayload(payload) {
 }
 
 /**
- * The three ticks a package shows.
+ * The ticks a package shows. An air package has three (drop-off photo,
+ * sender OK, delivered); a sea package - the default, and every line from
+ * before "Ships by" - only the delivered one: it never needs a photo or a
+ * sender's confirmation, so it is complete once delivered.
  * @param {object} line
- * @return {object} `{photo, senderOk, delivered, complete}`
+ * @return {object} `{air, photo, senderOk, delivered, complete}`
  */
 function proofTicks(line) {
+  const air = String(line?.shipMode || "").toLowerCase() === "air";
   const photo = Array.isArray(line?.photoPaths) && line.photoPaths.length > 0;
   const senderOk = senderConfirmationOf(line).status;
   const delivered = Boolean(line?.deliveredAt);
   return {
+    air,
     photo,
     senderOk,
     delivered,
-    complete: photo && senderOk === CONFIRMATION.CONFIRMED && delivered,
+    complete: air ?
+      photo && senderOk === CONFIRMATION.CONFIRMED && delivered : delivered,
   };
 }
 

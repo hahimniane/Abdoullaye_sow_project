@@ -111,9 +111,11 @@ import {
   loadAnywayText,
   proofDraftFromLine,
   proofDraftProblems,
-  proofPayload,
+  proofPayloadFor,
   proofProblemText,
+  proofSectionShown,
   proofSettingsOf,
+  shipsByAirOf,
   withProblemAcknowledgement,
   type ProofDraft,
 } from "@/lib/package-proof";
@@ -448,6 +450,9 @@ export function ContainersPanel({
   // The business's proof switches (photos required at drop-off, sender
   // confirmation, pickup code), read from the business document.
   const proofSettings = useMemo(() => proofSettingsOf(business), [business]);
+  // The business ships by air once it has started a flight (set by the
+  // server): its package forms then offer "Ships by: Sea · Air".
+  const shipsByAir = shipsByAirOf(business);
 
   const containerById = useMemo(() => {
     const map = new Map<string, FirestoreRow>();
@@ -1027,15 +1032,19 @@ export function ContainersPanel({
     }
     // The proof fields, checked as the server will: a photo is required at
     // the counter when the business says so (a received request never is).
-    const proofProblems = proofDraftProblems(lineProof, {
+    // A line on a sea container has no proof section: nothing to check.
+    const proofProblems = proofSectionShown(selected.shipMode) ? proofDraftProblems(lineProof, {
       photosRequired: proofSettings.photosRequired && text(editing?.source, "counter") === "counter",
-    });
+    }) : [];
     if (proofProblems.length) {
       setDraftError(proofProblemText(proofProblems[0]));
       setLineTried(true);
       return;
     }
-    const proof = proofPayload(lineProof);
+    // A line added onto a container goes the way the container goes (the
+    // server sets its mode); only a flight's line sends the proof fields, so
+    // an edit on a sea container keeps whatever is stored.
+    const proof = proofPayloadFor(selected.shipMode, lineProof);
     const line = { ...containerLinePayload(lineDraft), ...proof };
     // The same refusal the server gives, without the round trip: the rows are
     // already here, so a car on another open container is caught as typed.
@@ -1493,6 +1502,7 @@ export function ContainersPanel({
               staffOptions={staffOptions}
               onFlash={setFlash}
               enabled={enabled}
+              shipsByAir={shipsByAir}
             />
           }
           businessId={businessId}
@@ -1509,6 +1519,7 @@ export function ContainersPanel({
           staffOptions={staffOptions}
           groups={lineGroups}
           proofSettings={proofSettings}
+          shipsByAir={shipsByAir}
           onFlash={setFlash}
           enabled={enabled}
           focusLineId={lineFocusView === "waiting" ? focusLineId : ""}
@@ -1916,7 +1927,7 @@ export function ContainersPanel({
                   />
                 </div>
               )}
-              {ownerVisible && (
+              {ownerVisible && selectedAir && (
                 <ProofFields
                   id="ctn-proof"
                   businessId={businessId}

@@ -188,6 +188,21 @@ void main() {
       expect(find.byTooltip('L’expéditeur a signalé un problème'), findsOneWidget);
       expect(find.byTooltip('Livré'), findsOneWidget);
     });
+
+    // "Ships by" (docs/AIR_PACKAGES.md §7): a sea package needs no photo
+    // and no sender answer, so only its delivered tick shows.
+    testWidgets('a sea package shows only the delivered tick', (tester) async {
+      await pump(
+        tester,
+        const PackageProofTicks(
+          ticks: ProofTicks(
+              photo: false, senderOk: 'none', delivered: true, air: false),
+        ),
+      );
+      expect(find.byKey(const Key('proof-tick-photo')), findsNothing);
+      expect(find.byKey(const Key('proof-tick-sender')), findsNothing);
+      expect(iconColor(tester, 'proof-tick-delivered'), AppColors.sage);
+    });
   });
 
   group('SenderProblemBanner', () {
@@ -412,7 +427,10 @@ void main() {
               waitingPackageSheetForTesting(
                 caller: caller(log),
                 proofController: c,
-                proofSettings: const PackageProofSettings(photosRequired: true),
+                proofSettings: const PackageProofSettings(
+                  photosRequired: true,
+                  shipsByAir: true,
+                ),
                 defaultDestination: const DestinationRef('guinea', 'Guinea'),
               ),
             ),
@@ -421,6 +439,8 @@ void main() {
         ),
       );
       await tap(tester, 'open');
+      // The proof section is for a package that flies (§7).
+      await tap(tester, 'ship-mode-air');
       await type(tester, 'line-customer', 'Fatou Diallo');
       await type(tester, 'line-receiver', 'Mariama Bah');
       expect(find.byKey(const Key('proof-photos-required')), findsOneWidget);
@@ -452,6 +472,7 @@ void main() {
       ]);
       expect(sent['weightLb'], 4.3);
       expect(sent['declaredValueCents'], 25000);
+      expect(sent['shipMode'], 'air');
     });
   });
 

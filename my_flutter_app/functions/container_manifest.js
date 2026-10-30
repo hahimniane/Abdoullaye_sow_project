@@ -202,6 +202,49 @@ function isAirContainer(container) {
 }
 
 /**
+ * How a package ships (docs/AIR_PACKAGES.md, "Ships by"): "air" or "sea".
+ * A line from before the choice is a sea package.
+ *
+ * @param {object} line A stored or requested line.
+ * @return {string} "air" or "sea".
+ */
+function lineShipModeOf(line) {
+  return shipModeOf(line?.shipMode);
+}
+
+/**
+ * Whether a line may ride a container by how each ships: a package marked
+ * to fly goes on a flight, one marked for sea on a sea container. The
+ * line's own mode is what it says, or - for a line already on a container
+ * (a move) - that container's, so a line from before the choice moves
+ * like the box it is on.
+ *
+ * @param {object} line The line.
+ * @param {object} container The container it would ride.
+ * @param {object|null} [onContainer] The container it is on now, if any.
+ * @return {string|null} "ship_mode_mismatch", or null when allowed.
+ */
+function shipModeMismatch(line, container, onContainer = null) {
+  const lineMode = onContainer && typeof onContainer === "object" ?
+    shipModeOf(onContainer.shipMode) : lineShipModeOf(line);
+  return lineMode === shipModeOf(container?.shipMode) ? null :
+    "ship_mode_mismatch";
+}
+
+/**
+ * The refusal sentence for a package going the wrong way: it names how the
+ * package goes and what the container is.
+ *
+ * @param {string} lineMode The package's ship mode.
+ * @return {string} The sentence.
+ */
+function shipModeMismatchMessage(lineMode) {
+  return shipModeOf(lineMode) === SHIP_MODE.AIR ?
+    CONTAINER_MESSAGES.ship_mode_mismatch_air :
+    CONTAINER_MESSAGES.ship_mode_mismatch;
+}
+
+/**
  * An air waybill as stored: upper case, spaces dropped. Anything else is
  * returned as typed so the validator can name it.
  *
@@ -468,6 +511,12 @@ function validateContainerLine(input, paidCents = 0) {
   } else {
     errors.push(...sizeErrors(input));
     errors.push(...priceErrors(input?.priceCents, paidCents));
+  }
+  // How it ships: sea or air; nothing sent is sea.
+  const mode = input?.shipMode;
+  if (mode !== undefined && mode !== null && mode !== "" &&
+      !SHIP_MODES.includes(text(mode, 10).toLowerCase())) {
+    errors.push("ship_mode_invalid");
   }
   // Proof on the package (docs/AIR_PACKAGES.md §2): photos, what is
   // inside, weight and declared value - one code for the first problem.
@@ -790,6 +839,12 @@ function containerLineRecord(input, opts = {}) {
     // place (destinationMismatch); older lines carry none and ride anywhere.
     destinationCountryId: text(input.destinationCountryId, 60),
     destinationCountryName: text(input.destinationCountryName, MAX_LABEL),
+    // How it ships ("Ships by"): a line added straight onto a container
+    // takes the container's (the caller passes opts.shipMode); a waiting
+    // package the one chosen, sea when none was. Only a line of the same
+    // mode rides a container (shipModeMismatch).
+    shipMode: shipModeOf(opts.shipMode === undefined ?
+      input.shipMode : opts.shipMode),
     lengthIn: dimensionOf(input.lengthIn),
     widthIn: dimensionOf(input.widthIn),
     heightIn: dimensionOf(input.heightIn),
@@ -982,6 +1037,12 @@ function containerAssignRefusal(container, entries, businessId) {
     const ids = refusals.filter((r) => r.code === code).map((r) => r.id);
     if (ids.length > 0) return {code, lineIds: ids};
   }
+  // A package marked to fly goes on a flight; one for sea on a sea box.
+  const wrongWay = named(({line}) => shipModeMismatch(line, container));
+  if (wrongWay.length > 0) {
+    return {code: "ship_mode_mismatch", lineIds: wrongWay,
+      shipMode: lineShipModeOf(rows.find((r) => r.id === wrongWay[0]).line)};
+  }
   return null;
 }
 
@@ -1029,6 +1090,8 @@ const LINE_SUBSTANCE_FIELDS = Object.freeze([
   "kind", "vinNumber", "carMake", "carModel", "carYear", "quantity",
   "description", "ownerKind", "destinationCountryId",
   "destinationCountryName", "lengthIn", "widthIn", "heightIn", "pieces",
+  // "Ships by": only while the package waits (containerLineEditRefusal).
+  "shipMode",
 ]);
 // What the customer owes. Correctable in every state, like the contacts: a
 // price is agreed or changed after the box has sailed as often as before.
@@ -1072,6 +1135,7 @@ const LINE_FIELD_LABELS = Object.freeze({
   widthIn: "size",
   heightIn: "size",
   pieces: "pieces",
+  shipMode: "ships by",
   priceCents: "price",
   payOnArrival: "pay on arrival",
   piecePrices: "piece prices",
@@ -1240,8 +1304,10 @@ function lineEditIsContactsOnly(changes) {
 function containerLineEditRefusal(container, changes) {
   const always = [...LINE_CONTACT_FIELDS, ...LINE_PRICE_FIELDS,
     ...LINE_PROOF_FIELDS];
-  if ((Array.isArray(changes) ? changes : [])
-      .every((key) => always.includes(key))) {
+  const list = Array.isArray(changes) ? changes : [];
+  // On a container, a package goes the way the container goes.
+  if (container && list.includes("shipMode")) return "ship_mode_locked";
+  if (list.every((key) => always.includes(key))) {
     return null;
   }
   return containerIsOpen(container) ? null : "container_locked";
@@ -1497,6 +1563,20 @@ const CONTAINER_MESSAGES = Object.freeze({
   package_destination_required: "Choose where this package is going.",
   destination_mismatch:
     "A package can only go on a container headed to the same country.",
+  // "Ships by" (docs/AIR_PACKAGES.md §7): the package's mode against the
+  // container's. `ship_mode_mismatch` is a sea package on a flight;
+  // `_air` the sentence for an air package on a sea container (the
+  // refusal's code is ship_mode_mismatch either way, with `shipMode`).
+  ship_mode_mismatch:
+    "This package is marked to go by sea; this is a flight. Change the " +
+    "package's Ships by first.",
+  ship_mode_mismatch_air:
+    "This package is marked to go by air; this is a sea container. Change " +
+    "the package's Ships by first.",
+  ship_mode_locked:
+    "This package is on a container already, so it goes the way that one " +
+    "goes. Take it off first to change Ships by.",
+  ship_mode_invalid: "Choose how the package ships: sea or air.",
   container_destination_required:
     "Choose where this container is going before adding packages to it.",
   size_invalid:
@@ -1568,6 +1648,9 @@ module.exports = {
   AIR_WAYBILL,
   CONTAINER_MESSAGES,
   shipModeOf,
+  lineShipModeOf,
+  shipModeMismatch,
+  shipModeMismatchMessage,
   isAirContainer,
   airWaybillOf,
   containerKindWord,

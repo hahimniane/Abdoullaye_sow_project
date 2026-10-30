@@ -25,6 +25,8 @@ const {
   containerAssignRefusal,
   containerIsOpen,
   destinationMismatch,
+  shipModeMismatch,
+  shipModeOf,
   lineCustomerName,
   lineCustomerPhone,
 } = require("./container_manifest");
@@ -299,7 +301,10 @@ function scanDecision(args) {
     // Waiting: the same judgement as adding it from the waiting list.
     const refusal = containerAssignRefusal(args.container,
         [{id: lineId, line}], businessId);
-    if (refusal) return {refusal: refusal.code};
+    if (refusal) {
+      return refusal.shipMode ? {refusal: refusal.code,
+        details: {shipMode: refusal.shipMode}} : {refusal: refusal.code};
+    }
     return {result: SCAN_RESULT.LOADED, change: "load"};
   }
   const other = args.otherContainer && typeof args.otherContainer ===
@@ -309,6 +314,11 @@ function scanDecision(args) {
   // offer a move that would be refused.
   const clash = canMove ? destinationMismatch(line, args.container) : null;
   if (clash) return {refusal: clash};
+  // Or going another way: a package on a sea box does not move to a flight.
+  if (canMove && shipModeMismatch(line, args.container, other)) {
+    return {refusal: "ship_mode_mismatch",
+      details: {shipMode: shipModeOf(other.shipMode)}};
+  }
   if (!canMove || args.move !== true) {
     return {refusal: "line_in_other_container", details: {
       otherContainerId: on,
@@ -368,7 +378,8 @@ function undoScanDecision(args) {
     args.origin : null;
   if (next === 0 && from && from !== text(containerId) && origin &&
       text(origin.businessId) === text(businessId) &&
-      containerIsOpen(origin) && !destinationMismatch(line, origin)) {
+      containerIsOpen(origin) && !destinationMismatch(line, origin) &&
+      !shipModeMismatch(line, origin, args.container)) {
     return {result: UNDO_RESULT.MOVED_BACK, change: "move_back",
       scannedPieces: 0, scanIds: [], movedBackTo: from};
   }

@@ -24,7 +24,16 @@ import {
 import { ContainerLabelsDialog } from "@/components/business/container-labels-dialog";
 import { PiecesEditor } from "@/components/business/pieces-editor";
 import { ProofFields } from "@/components/business/proof-fields";
-import { emptyProofDraft, proofDraftProblems, proofPayload, proofProblemText, type ProofDraft } from "@/lib/package-proof";
+import {
+  emptyProofDraft,
+  proofDraftProblems,
+  proofPayloadFor,
+  proofProblemText,
+  proofSectionShown,
+  type PackageShipMode,
+  type ProofDraft,
+} from "@/lib/package-proof";
+import { ShipsByChoice } from "@/components/business/ships-by";
 import { CONTAINER_MESSAGES } from "@/lib/container-manifest";
 import type { PieceDraft } from "@/lib/piece-drafts";
 import { CopyValue } from "@/components/copy-value";
@@ -621,13 +630,15 @@ type ExpectedProps = {
   staffOptions: readonly { id: string; name: string }[];
   onFlash: (message: string) => void;
   enabled: boolean;
+  /** The business ships by air: Received offers "Ships by: Sea · Air". */
+  shipsByAir?: boolean;
 };
 
 /**
  * The confirmed requests, above "In the shop": what customers said they will
  * bring (or the business will collect). "Received" turns one into a line.
  */
-export function ExpectedRequestsSection({ businessId, rows, staffOptions, onFlash, enabled }: ExpectedProps) {
+export function ExpectedRequestsSection({ businessId, rows, staffOptions, onFlash, enabled, shipsByAir = false }: ExpectedProps) {
   const expected = useMemo(() => expectedRequests(rows), [rows]);
   const [receiving, setReceiving] = useState<Row | null>(null);
   const [cancelling, setCancelling] = useState("");
@@ -695,6 +706,7 @@ export function ExpectedRequestsSection({ businessId, rows, staffOptions, onFlas
           onFlash={onFlash}
           row={receiving}
           staffOptions={staffOptions}
+          shipsByAir={shipsByAir}
         />
       )}
       {/* The labels dialog outlives the list: receiving the last expected
@@ -752,13 +764,14 @@ export function ExpectedRequestsSection({ businessId, rows, staffOptions, onFlas
   );
 }
 
-function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onFlash }: {
+function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onFlash, shipsByAir = false }: {
   businessId: string;
   row: Row;
   staffOptions: readonly { id: string; name: string }[];
   onClose: () => void;
   onReceived: (line: Row) => void;
   onFlash: (message: string) => void;
+  shipsByAir?: boolean;
 }) {
   const l = lang();
   const card = asRow(row.payment).timing === "card";
@@ -775,6 +788,9 @@ function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onF
   // what is inside, weight and declared value. The server copies the
   // request's own photos ahead of these; a received request never needs one.
   const [proof, setProof] = useState<ProofDraft>(() => emptyProofDraft());
+  // "Ships by" (docs/AIR_PACKAGES.md §7): sea unless air is chosen; only
+  // an air package carries the proof section.
+  const [shipMode, setShipMode] = useState<PackageShipMode>("sea");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const collect = str(row.handoff) === "collect";
@@ -789,7 +805,7 @@ function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onF
       setError(REQUEST_ERROR_MESSAGES[problem] ?? CONTAINER_MESSAGES[problem as keyof typeof CONTAINER_MESSAGES] ?? REQUEST_ERROR_MESSAGES.price_invalid);
       return;
     }
-    const proofProblems = proofDraftProblems(proof);
+    const proofProblems = proofSectionShown(shipMode) ? proofDraftProblems(proof) : [];
     if (proofProblems.length) {
       setShowErrors(true);
       setError(proofProblemText(proofProblems[0]));
@@ -818,7 +834,8 @@ function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onF
         ...(pickupFeeCents !== undefined ? { pickupFeeCents } : {}),
         payOnArrival,
         ...(payment ? { payment } : {}),
-        ...proofPayload(proof),
+        ...proofPayloadFor(shipMode, proof),
+        shipMode,
       });
       onFlash(receivedFlash(result.trackingCode, result.alreadyReceived, l));
       onReceived(receivedLineStub(result, payloadPieces, pickupFeeCents ?? null));
@@ -840,6 +857,7 @@ function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onF
           <button aria-label="Close" className="lst-icon-btn" onClick={onClose} type="button"><X size={18} /></button>
         </header>
         <div className="lst-modal-body">
+          {shipsByAir && <ShipsByChoice id="pkq-receive-ships-by" value={shipMode} onChange={setShipMode} disabled={busy} />}
           <div className="pkq-detail"><PersonLines row={row} /><WhenLine row={row} /></div>
           <PiecesEditor
             disabled={busy}
@@ -850,15 +868,17 @@ function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onF
             showErrors={showErrors}
             {...(collect ? { pickupFee, onPickupFeeChange: setPickupFee } : {})}
           />
-          <ProofFields
-            id="pkq-receive-proof"
-            businessId={businessId}
-            draft={proof}
-            onChange={setProof}
-            showErrors={showErrors}
-            disabled={busy}
-            lang={l}
-          />
+          {proofSectionShown(shipMode) && (
+            <ProofFields
+              id="pkq-receive-proof"
+              businessId={businessId}
+              draft={proof}
+              onChange={setProof}
+              showErrors={showErrors}
+              disabled={busy}
+              lang={l}
+            />
+          )}
           {card ? (
             <p className="lst-hint"><CreditCard size={14} aria-hidden="true" /> <span>Paid online by card</span> <span data-no-translate>{moneyText(Number(asRow(row.payment).paidCents) || 0, l)}</span></p>
           ) : (

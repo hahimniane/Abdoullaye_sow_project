@@ -7,7 +7,8 @@ import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 
 /// The three ticks a package shows (docs/AIR_PACKAGES.md §1.11): drop-off
-/// photo · sender OK · delivered. Compact, with a tooltip each; pure
+/// photo · sender OK · delivered (a sea package shows only the delivered
+/// tick, §7). Compact, with a tooltip each; pure
 /// rendering over [ProofTicks], so it is tested without Firebase.
 ///
 /// Colours: grey for "none", amber for "asked", green for done, red for a
@@ -36,29 +37,31 @@ class PackageProofTicks extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _Tick(
-            key: const Key('proof-tick-photo'),
-            icon: ticks.photo
-                ? Icons.photo_camera
-                : Icons.photo_camera_outlined,
-            color: ticks.photo ? AppColors.sage : AppColors.muted,
-            label: labels.photo,
-            size: size,
-          ),
-          SizedBox(width: size * 0.6),
-          _Tick(
-            key: const Key('proof-tick-sender'),
-            icon: switch (ticks.senderOk) {
-              senderConfirmationConfirmed => Icons.check_circle,
-              senderConfirmationProblem => Icons.error,
-              senderConfirmationAsked => Icons.schedule,
-              _ => Icons.check_circle_outline,
-            },
-            color: proofSenderTickColor(ticks.senderOk),
-            label: labels.sender,
-            size: size,
-          ),
-          SizedBox(width: size * 0.6),
+          if (ticks.air) ...[
+            _Tick(
+              key: const Key('proof-tick-photo'),
+              icon: ticks.photo
+                  ? Icons.photo_camera
+                  : Icons.photo_camera_outlined,
+              color: ticks.photo ? AppColors.sage : AppColors.muted,
+              label: labels.photo,
+              size: size,
+            ),
+            SizedBox(width: size * 0.6),
+            _Tick(
+              key: const Key('proof-tick-sender'),
+              icon: switch (ticks.senderOk) {
+                senderConfirmationConfirmed => Icons.check_circle,
+                senderConfirmationProblem => Icons.error,
+                senderConfirmationAsked => Icons.schedule,
+                _ => Icons.check_circle_outline,
+              },
+              color: proofSenderTickColor(ticks.senderOk),
+              label: labels.sender,
+              size: size,
+            ),
+            SizedBox(width: size * 0.6),
+          ],
           _Tick(
             key: const Key('proof-tick-delivered'),
             icon: ticks.delivered

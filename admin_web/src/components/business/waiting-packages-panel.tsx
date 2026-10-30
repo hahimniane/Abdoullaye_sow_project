@@ -80,13 +80,18 @@ import {
   PROOF_SETTINGS_OFF,
   emptyProofDraft,
   lineMissingProof,
+  packageShipModeOf,
   proofDraftFromLine,
   proofDraftProblems,
-  proofPayload,
+  proofPayloadFor,
   proofProblemText,
+  proofSectionShown,
+  shipsByChoiceShown,
+  type PackageShipMode,
   type ProofDraft,
   type ProofSettings,
 } from "@/lib/package-proof";
+import { AirPackageBadge, ShipsByChoice } from "@/components/business/ships-by";
 import { MessageCustomerButton } from "@/components/support/message-customer";
 import { unflaggedLineWarnings } from "@/lib/phone-accounts";
 import type { FirestoreRow } from "@/types/admin";
@@ -151,6 +156,11 @@ type WaitingPackagesPanelProps = {
   groups: ReadonlyMap<string, LineGroupSummary>;
   /** The business's proof switches (docs/AIR_PACKAGES.md §2): photos required at the counter, sender confirmation. */
   proofSettings?: ProofSettings;
+  /**
+   * The business ships by air (`businesses/{id}.shipsByAir`): the form offers
+   * "Ships by: Sea · Air" and the list an Air/Sea filter (docs/AIR_PACKAGES.md §7).
+   */
+  shipsByAir?: boolean;
   onFlash: (message: string) => void;
   /** Counters stay off while the business is a preview. */
   enabled: boolean;
@@ -184,6 +194,7 @@ export function WaitingPackagesPanel({
   staffOptions,
   groups,
   proofSettings = PROOF_SETTINGS_OFF,
+  shipsByAir = false,
   onFlash,
   enabled,
   expected = null,
@@ -196,6 +207,10 @@ export function WaitingPackagesPanel({
   // "Missing proof": the packages without a drop-off photo, or whose sender
   // has not said OK when the business asks for it.
   const [proofFilter, setProofFilter] = useState<"all" | "missing">("all");
+  // Air or sea packages only, when the business ships by air.
+  const [modeFilter, setModeFilter] = useState<"all" | PackageShipMode>("all");
+  // "Ships by" of the package in the form: sea unless air is chosen.
+  const [shipMode, setShipMode] = useState<PackageShipMode>("sea");
   const [modal, setModal] = useState<Modal>("");
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState<WaitingPackageDraft>(() => emptyWaitingPackageDraft(defaultDestination));
@@ -226,10 +241,13 @@ export function WaitingPackagesPanel({
   }, [focusLineId, rows]);
   const searched = useMemo(() => filterWaitingPackages(sorted, filter), [sorted, filter]);
   // Both computed once per change of the rows, never per row render.
-  const shown = useMemo(
-    () => (proofFilter === "missing" ? searched.filter((row) => lineMissingProof(row, proofSettings)) : searched),
-    [searched, proofFilter, proofSettings],
-  );
+  const shown = useMemo(() => {
+    const proofed = proofFilter === "missing" ? searched.filter((row) => lineMissingProof(row, proofSettings)) : searched;
+    return shipsByAir && modeFilter !== "all"
+      ? proofed.filter((row) => packageShipModeOf(row.shipMode) === modeFilter)
+      : proofed;
+  }, [searched, proofFilter, proofSettings, shipsByAir, modeFilter]);
+  const airCount = useMemo(() => sorted.filter((row) => packageShipModeOf(row.shipMode) === "air").length, [sorted]);
   const missingCount = useMemo(() => sorted.filter((row) => lineMissingProof(row, proofSettings)).length, [sorted, proofSettings]);
   const searching = text(filter, "").length >= 2;
   const paymentLine = paymentLineId ? sorted.find((row) => text(row.id, "") === paymentLineId) : undefined;
@@ -287,6 +305,7 @@ export function WaitingPackagesPanel({
   function openRegister() {
     setDraft(emptyWaitingPackageDraft(defaultDestination));
     setProof(emptyProofDraft());
+    setShipMode("sea");
     setEditingId("");
     setAddedThisSitting([]);
     resetFormState();
@@ -297,6 +316,7 @@ export function WaitingPackagesPanel({
     const next = waitingPackageDraftFromRow(row);
     setDraft(next);
     setProof(proofDraftFromLine(row));
+    setShipMode(packageShipModeOf(row.shipMode));
     setEditingId(text(row.id, ""));
     setAddedThisSitting([]);
     resetFormState();
@@ -382,16 +402,18 @@ export function WaitingPackagesPanel({
     }
     // The proof fields, checked as the server will: a photo is required at
     // the counter when the business says so (never on a received request).
-    const proofProblems = proofDraftProblems(proof, {
+    // A sea package has no proof section: nothing to check, nothing sent.
+    const proofProblems = proofSectionShown(shipMode) ? proofDraftProblems(proof, {
       photosRequired: proofSettings.photosRequired && text(editingRow?.source, "counter") === "counter",
-    });
+    }) : [];
     if (proofProblems.length) {
       setDraftError(proofProblemText(proofProblems[0]));
       setTriedSave(true);
       window.requestAnimationFrame(() => revealField(document.getElementById("wpk-proof")));
       return;
     }
-    const proofFields = proofPayload(proof);
+    // "Ships by" rides with the package (sea when the choice is not offered).
+    const proofFields = { ...proofPayloadFor(shipMode, proof), shipMode };
     const fail = (failure: { message: string }) => setDraftError(failure.message);
 
     if (editingId) {
@@ -429,7 +451,8 @@ export function WaitingPackagesPanel({
       const whom = draft.receiverName || draft.customerName || "—";
       setAddedThisSitting((list) => [...list, `${containerLineTitle(stub, lang)} → ${whom}${code ? ` (${code})` : ""}`]);
       setDraft(nextPackageForSameSender(draft, defaultDestination));
-      // The next package has its own photos and contents.
+      // The next package has its own photos and contents (and ships the
+      // same way as the one before).
       setProof(emptyProofDraft());
       resetFormState();
     }, fail);
@@ -476,6 +499,23 @@ export function WaitingPackagesPanel({
             </span>
           ))}
         </div>
+        {shipsByAir && (
+          <div className="service-segments wpk-proof-chips" role="group" aria-label="Filter by how packages ship">
+            {([["all", "All", rows.length], ["air", "Air", airCount], ["sea", "Sea", rows.length - airCount]] as const).map(([id, label, count]) => (
+              <span
+                key={id}
+                role="button"
+                tabIndex={0}
+                className={`segment ${modeFilter === id ? "active" : ""}`}
+                aria-pressed={modeFilter === id}
+                onClick={() => setModeFilter(id)}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setModeFilter(id); } }}
+              >
+                {label}<b>{count}</b>
+              </span>
+            ))}
+          </div>
+        )}
       </div>
       <p className="panel-lede">Packages customers dropped off before a container was chosen. Print the label now; add them to a container that goes to the same country when it is loading.</p>
       {error && <div className="lst-form-error" role="alert">{error}</div>}
@@ -486,7 +526,7 @@ export function WaitingPackagesPanel({
       ) : rows.length === 0 ? (
         <div className="empty-state">No packages are waiting. Register one when a customer drops it off.</div>
       ) : shown.length === 0 ? (
-        <div className="empty-state">{proofFilter === "missing" && !searching ? "Every waiting package has its proof." : searching ? "No waiting package matches that search." : "No packages are waiting."}</div>
+        <div className="empty-state">{proofFilter === "missing" && !searching ? "Every waiting package has its proof." : searching ? "No waiting package matches that search." : modeFilter !== "all" ? "No waiting package ships that way." : "No packages are waiting."}</div>
       ) : (
         <div className="mini-table">
           <div className="ctn-table wpk-table">
@@ -510,6 +550,7 @@ export function WaitingPackagesPanel({
                     <strong data-no-translate={containerLineTitleIsCopy(row) ? undefined : true}>{title}</strong>
                     {vin && vin !== title && <small data-no-translate>{vin}</small>}
                     <PackageSize line={row} />
+                    {packageShipModeOf(row.shipMode) === "air" && <AirPackageBadge />}
                     {line.trackingCode && (
                       <small className="ctn-code-row">
                         <code className="ctn-code" data-no-translate>{line.trackingCode}</code>
@@ -583,6 +624,9 @@ export function WaitingPackagesPanel({
               <button className="lst-icon-btn" type="button" onClick={closeModal} aria-label="Close"><X size={18} /></button>
             </header>
             <div className="lst-modal-body">
+              {shipsByChoiceShown(shipsByAir, editingRow) && (
+                <ShipsByChoice id="wpk-ships-by" value={shipMode} onChange={setShipMode} disabled={busy} />
+              )}
               <fieldset className="lst-fieldset">
                 <label className="lst-radio"><input type="radio" name="wpkkind" checked={piecesMode} onChange={() => setKind("barrels")} /><span>Barrels, boxes or other things</span></label>
                 <label className="lst-radio"><input type="radio" name="wpkkind" checked={draft.kind === "car"} onChange={() => setKind("car")} /><span>A car</span></label>
@@ -635,16 +679,20 @@ export function WaitingPackagesPanel({
               </div>
               )}
 
-              <ProofFields
-                id="wpk-proof"
-                businessId={businessId}
-                draft={proof}
-                onChange={setProof}
-                showErrors={triedSave}
-                disabled={busy}
-                lang={lang}
-                photosRequired={proofSettings.photosRequired && text(editingRow?.source, "counter") === "counter"}
-              />
+              {/* Sea is the form as it always was; only a package that flies
+                  carries photos, what is inside, weight and declared value. */}
+              {proofSectionShown(shipMode) && (
+                <ProofFields
+                  id="wpk-proof"
+                  businessId={businessId}
+                  draft={proof}
+                  onChange={setProof}
+                  showErrors={triedSave}
+                  disabled={busy}
+                  lang={lang}
+                  photosRequired={proofSettings.photosRequired && text(editingRow?.source, "counter") === "counter"}
+                />
+              )}
 
               <div className="lst-form-grid">
                 <label className="lst-field"><span>Destination</span>

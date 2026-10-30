@@ -6,7 +6,8 @@ import { Minus, Plus, RefreshCw, Tag, X } from "lucide-react";
 
 import { ContainerLabelsDialog } from "@/components/business/container-labels-dialog";
 import { confirmImportantAction } from "@/lib/action-confirmation";
-import { loadAnywayText, withProblemAcknowledgement } from "@/lib/package-proof";
+import { loadAnywayText, packageShipModeOf, withProblemAcknowledgement } from "@/lib/package-proof";
+import { AirPackageBadge } from "@/components/business/ships-by";
 import {
   MAX_ASSIGN_LINES,
   CONTAINER_MESSAGES,
@@ -252,6 +253,7 @@ export function AddWaitingPackagesDialog({
                             <small data-no-translate>
                               {[lineCustomer(line).name, lineCustomer(line).phone].filter(Boolean).join(" · ")}
                             </small>
+                            {packageShipModeOf(line.shipMode) === "air" && <AirPackageBadge />}
                             {blocked && reason && <small className="wpk-block-reason">{reason}</small>}
                           </span>
                           <span className="wpk-pick-side">

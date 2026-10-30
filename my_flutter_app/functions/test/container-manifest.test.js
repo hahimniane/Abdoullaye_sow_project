@@ -1743,3 +1743,92 @@ describe("package proof fields", () => {
     assert.match(CONTAINER_MESSAGES.sender_problem, /reported a problem/);
   });
 });
+
+// "Ships by" (docs/AIR_PACKAGES.md §7): a package marked sea or air rides
+// only a container of the same mode; set while it waits, fixed on a box.
+describe("ships by: sea or air", () => {
+  const manifest = require("../container_manifest");
+  const {lineShipModeOf, shipModeMismatch, shipModeMismatchMessage} =
+    manifest;
+  const waiting = (extra = {}) => ({kind: "barrels", quantity: 3,
+    ownerKind: "customer", customerName: "Fatou Diallo",
+    customerPhone: "+16465550100", receiverName: "Mariama Bah",
+    receiverPhone: "+224620000000", destinationCountryId: "gn",
+    destinationCountryName: "Guinea", ...extra});
+  const stored = (extra = {}) => ({businessId: "biz",
+    ...containerLineRecord(waiting(extra),
+        {containerId: "", containerStatus: LINE_STATUS_WAITING})});
+  const sea = {status: "loading", destinationCountryId: "gn"};
+  const air = {...sea, shipMode: "air"};
+
+  it("is sea by default, air when chosen", () => {
+    assert.equal(stored().shipMode, "sea");
+    assert.equal(stored({shipMode: "air"}).shipMode, "air");
+    assert.equal(stored({shipMode: "AIR"}).shipMode, "air");
+    // A line from before the choice reads as sea.
+    assert.equal(lineShipModeOf({}), "sea");
+    assert.deepEqual(validateWaitingPackage(waiting({shipMode: "air"})), []);
+    assert.deepEqual(validateWaitingPackage(waiting({shipMode: "rail"})),
+        ["ship_mode_invalid"]);
+  });
+
+  it("takes the container's mode when added straight onto one", () => {
+    const line = containerLineRecord(waiting({shipMode: "sea"}),
+        {containerId: "c1", shipMode: "air"});
+    assert.equal(line.shipMode, "air");
+    assert.equal(containerLineRecord(waiting({shipMode: "air"}),
+        {containerId: "c1", shipMode: "sea"}).shipMode, "sea");
+  });
+
+  it("refuses a package going the other way, both ways", () => {
+    assert.equal(shipModeMismatch(stored(), sea), null);
+    assert.equal(shipModeMismatch(stored({shipMode: "air"}), air), null);
+    assert.equal(shipModeMismatch(stored(), air), "ship_mode_mismatch");
+    assert.equal(shipModeMismatch(stored({shipMode: "air"}), sea),
+        "ship_mode_mismatch");
+    // A line on a box (a move) goes the way that box goes.
+    assert.equal(shipModeMismatch({}, air, air), null);
+    assert.equal(shipModeMismatch({shipMode: "air"}, air, sea),
+        "ship_mode_mismatch");
+    const entries = [{id: "a", line: stored()},
+      {id: "b", line: stored({shipMode: "air"})}];
+    assert.deepEqual(containerAssignRefusal(air, entries, "biz"),
+        {code: "ship_mode_mismatch", lineIds: ["a"], shipMode: "sea"});
+    assert.deepEqual(containerAssignRefusal(sea, entries, "biz"),
+        {code: "ship_mode_mismatch", lineIds: ["b"], shipMode: "air"});
+    // The destination still wins: it is the more basic thing wrong.
+    assert.equal(containerAssignRefusal({...air, destinationCountryId: "sn"},
+        entries, "biz").code, "destination_mismatch");
+  });
+
+  it("says which way the package goes and what the container is", () => {
+    assert.equal(shipModeMismatchMessage("sea"),
+        "This package is marked to go by sea; this is a flight. Change " +
+        "the package's Ships by first.");
+    assert.equal(shipModeMismatchMessage("air"),
+        "This package is marked to go by air; this is a sea container. " +
+        "Change the package's Ships by first.");
+    for (const code of ["ship_mode_mismatch", "ship_mode_mismatch_air",
+      "ship_mode_locked", "ship_mode_invalid"]) {
+      assert.ok(CONTAINER_MESSAGES[code], code);
+    }
+  });
+
+  it("is edited while waiting, fixed once on a container", () => {
+    const row = stored();
+    const next = containerLineEditTarget(row, {shipMode: "air"}, false);
+    const changes = containerLineEditChanges(row, next);
+    assert.deepEqual(changes, ["shipMode"]);
+    assert.equal(containerLineEditRefusal(null, changes), null);
+    for (const status of ["loading", "shipped", "arrived"]) {
+      assert.equal(containerLineEditRefusal({status}, changes),
+          "ship_mode_locked", status);
+    }
+    assert.deepEqual(containerLineEditLabels(changes), ["ships by"]);
+    // An edit that leaves it out keeps it.
+    const flying = stored({shipMode: "air"});
+    assert.deepEqual(containerLineEditChanges(flying,
+        containerLineEditTarget(flying, {receiverName: "Aissatou"}, false)),
+    ["receiverName"]);
+  });
+});

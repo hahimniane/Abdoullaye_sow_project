@@ -29917,6 +29917,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Paid in full'**
   String get parkingTrackPaidInFull;
+
+  /// Label above the Sea / Air choice on a package form (docs/AIR_PACKAGES.md §7).
+  ///
+  /// In en, this message translates to:
+  /// **'Ships by'**
+  String get shipsByLabel;
+
+  /// Small badge on a waiting package marked to fly.
+  ///
+  /// In en, this message translates to:
+  /// **'Air'**
+  String get shipsByAirBadge;
+
+  /// Refusal: a package marked sea put on an air shipment.
+  ///
+  /// In en, this message translates to:
+  /// **'This package is marked to go by sea; this is a flight. Change the package\'s Ships by first.'**
+  String get wpkErrShipModeMismatch;
+
+  /// Refusal: a package marked air put on a sea container.
+  ///
+  /// In en, this message translates to:
+  /// **'This package is marked to go by air; this is a sea container. Change the package\'s Ships by first.'**
+  String get wpkErrShipModeMismatchAir;
+
+  /// Refusal: Ships by changed on a package already on a container.
+  ///
+  /// In en, this message translates to:
+  /// **'This package is on a container already, so it goes the way that one goes. Take it off first to change Ships by.'**
+  String get wpkErrShipModeLocked;
+
+  /// Refusal: the ship mode sent is neither sea nor air.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose how the package ships: sea or air.'**
+  String get wpkErrShipModeInvalid;
+
+  /// Why a waiting package cannot go on this air shipment (row note).
+  ///
+  /// In en, this message translates to:
+  /// **'Ships by sea; this is a flight'**
+  String get wpkBlockedShipsBySea;
+
+  /// Why a waiting package cannot go on this sea container (row note).
+  ///
+  /// In en, this message translates to:
+  /// **'Ships by air; this is a sea container'**
+  String get wpkBlockedShipsByAir;
 }
 
 class _AppLocalizationsDelegate

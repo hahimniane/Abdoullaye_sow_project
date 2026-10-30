@@ -17698,4 +17698,32 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get parkingTrackPaidInFull => 'Paid in full';
+
+  @override
+  String get shipsByLabel => 'Ships by';
+
+  @override
+  String get shipsByAirBadge => 'Air';
+
+  @override
+  String get wpkErrShipModeMismatch =>
+      'This package is marked to go by sea; this is a flight. Change the package\'s Ships by first.';
+
+  @override
+  String get wpkErrShipModeMismatchAir =>
+      'This package is marked to go by air; this is a sea container. Change the package\'s Ships by first.';
+
+  @override
+  String get wpkErrShipModeLocked =>
+      'This package is on a container already, so it goes the way that one goes. Take it off first to change Ships by.';
+
+  @override
+  String get wpkErrShipModeInvalid =>
+      'Choose how the package ships: sea or air.';
+
+  @override
+  String get wpkBlockedShipsBySea => 'Ships by sea; this is a flight';
+
+  @override
+  String get wpkBlockedShipsByAir => 'Ships by air; this is a sea container';
 }

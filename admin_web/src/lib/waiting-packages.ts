@@ -28,7 +28,10 @@ import {
   editKeepsLegacyForm,
   editedLinePayload,
   lineDraftHasPieces,
+  lineShipModeOf,
   searchContainerLines,
+  shipModeMismatch,
+  shipModeMismatchMessage,
   validateContainerLineDraft,
   type ContainerCallableFailure,
   type ContainerLine,
@@ -231,7 +234,7 @@ export function mainDestinationChanges(rows: readonly unknown[], id: string): Ar
   return changes;
 }
 
-export type AssignmentRefusal = "container_destination_required" | "destination_mismatch";
+export type AssignmentRefusal = "container_destination_required" | "destination_mismatch" | "ship_mode_mismatch";
 
 /**
  * Whether a container may take a waiting package - the server's rule
@@ -242,10 +245,14 @@ export type AssignmentRefusal = "container_destination_required" | "destination_
  */
 export function assignmentRefusal(line: unknown, container: unknown): AssignmentRefusal | null {
   const wanted = text(asRow(line).destinationCountryId, 60);
-  if (!wanted) return null;
-  const going = text(asRow(container).destinationCountryId, 60);
-  if (!going) return "container_destination_required";
-  return going === wanted ? null : "destination_mismatch";
+  if (wanted) {
+    const going = text(asRow(container).destinationCountryId, 60);
+    if (!going) return "container_destination_required";
+    if (going !== wanted) return "destination_mismatch";
+  }
+  // "Ships by": a package marked to fly goes on a flight, one for sea on a
+  // sea container (the server's `shipModeMismatch`, a hard block too).
+  return shipModeMismatch(line, container);
 }
 
 /**
@@ -257,6 +264,7 @@ export function assignmentBlockText(line: unknown, container: unknown, lang: Lan
   const refusal = assignmentRefusal(line, container);
   if (!refusal) return "";
   if (refusal === "container_destination_required") return CONTAINER_MESSAGES.container_destination_required;
+  if (refusal === "ship_mode_mismatch") return shipModeMismatchMessage(lineShipModeOf(line));
   const l = containerLineFromRow(line);
   const c = asRow(container);
   const from = destinationPlace(l.destinationCountryId, l.destinationCountryName, lang);

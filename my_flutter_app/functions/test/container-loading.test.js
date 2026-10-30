@@ -552,3 +552,29 @@ describe("the sender's problem warns, never blocks", () => {
     assert.match(refusal, /warnings\}/);
   });
 });
+
+// "Ships by" (docs/AIR_PACKAGES.md §7): a scan is refused like the list.
+describe("scanDecision and ships by", () => {
+  const flight = {...loading, shipMode: "air"};
+
+  it("refuses a waiting package going the other way, both ways", () => {
+    assert.deepEqual(scan(waiting(), {container: flight}),
+        {refusal: "ship_mode_mismatch", details: {shipMode: "sea"}});
+    assert.deepEqual(scan(waiting({shipMode: "air"})),
+        {refusal: "ship_mode_mismatch", details: {shipMode: "air"}});
+    assert.deepEqual(scan(waiting({shipMode: "air"}), {container: flight}),
+        {result: "loaded", change: "load"});
+  });
+
+  it("refuses a move between a sea box and a flight", () => {
+    const line = waiting({containerId: OTHER, containerStatus: "loading"});
+    const otherSea = {businessId: BIZ, status: "loading", label: "Box 2"};
+    assert.deepEqual(scan(line, {container: flight, otherContainer: otherSea,
+      move: true}), {refusal: "ship_mode_mismatch",
+      details: {shipMode: "sea"}});
+    // Flight to flight moves, even for a line from before the choice.
+    assert.deepEqual(scan(line, {container: flight,
+      otherContainer: {...otherSea, shipMode: "air"}, move: true}),
+    {result: "loaded", change: "move"});
+  });
+});

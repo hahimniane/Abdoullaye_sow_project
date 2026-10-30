@@ -211,27 +211,41 @@ describe("proof settings and ticks", () => {
       pickupCode: false});
   });
 
-  it("requires a photo only for counter drop-offs when switched on", () => {
+  it("requires a photo only for air counter drop-offs when on", () => {
     const on = {photosRequired: true};
-    assert.equal(proof.photoRequirementRefusal(on, {photoPaths: []}),
-        "photo_required");
+    assert.equal(proof.photoRequirementRefusal(on, {photoPaths: [],
+      shipMode: "air"}), "photo_required");
     assert.equal(proof.photoRequirementRefusal(on, {source: "counter",
-      photoPaths: [PATH]}), "");
+      photoPaths: [PATH], shipMode: "air"}), "");
     assert.equal(proof.photoRequirementRefusal(on, {source: "request",
-      photoPaths: []}), "");
+      photoPaths: [], shipMode: "air"}), "");
     assert.equal(proof.photoRequirementRefusal({photosRequired: false},
-        {photoPaths: []}), "");
+        {photoPaths: [], shipMode: "air"}), "");
+    // A sea package (or one from before "Ships by") never needs a photo.
+    assert.equal(proof.photoRequirementRefusal(on, {source: "counter",
+      photoPaths: [], shipMode: "sea"}), "");
+    assert.equal(proof.photoRequirementRefusal(on, {photoPaths: []}), "");
   });
 
   it("maps button payloads and shows the three ticks", () => {
     assert.equal(proof.confirmationFromPayload("confirm_ok"), "confirmed");
     assert.equal(proof.confirmationFromPayload("CONFIRM_PROBLEM"), "problem");
     assert.equal(proof.confirmationFromPayload("hello"), "");
-    assert.deepEqual(proof.proofTicks({photoPaths: [PATH], senderConfirmation:
-      {status: "confirmed"}, deliveredAt: {}}),
-    {photo: true, senderOk: "confirmed", delivered: true, complete: true});
+    assert.deepEqual(proof.proofTicks({shipMode: "air", photoPaths: [PATH],
+      senderConfirmation: {status: "confirmed"}, deliveredAt: {}}),
+    {air: true, photo: true, senderOk: "confirmed", delivered: true,
+      complete: true});
+    assert.deepEqual(proof.proofTicks({shipMode: "air"}), {air: true,
+      photo: false, senderOk: "none", delivered: false, complete: false});
+    assert.equal(proof.proofTicks({shipMode: "air", deliveredAt: {}})
+        .complete, false);
+    // A sea package (or one from before "Ships by") has only the delivered
+    // tick: complete once delivered, with no photo or sender answer.
     assert.deepEqual(proof.proofTicks({}),
-        {photo: false, senderOk: "none", delivered: false, complete: false});
+        {air: false, photo: false, senderOk: "none", delivered: false,
+          complete: false});
+    assert.equal(proof.proofTicks({shipMode: "sea", deliveredAt: {}})
+        .complete, true);
     assert.equal(proof.senderConfirmationOf({senderConfirmation:
       {status: "weird"}}).status, "none");
   });
