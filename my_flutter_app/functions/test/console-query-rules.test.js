@@ -87,7 +87,8 @@ before(async () => {
       put(`parkedCars/${biz}-active`, {businessId: biz, status: "parked",
         parkingDate: ts("2026-09-01"), occupancyEndMs: 8.64e15});
       put(`parkedCars/${biz}-ended`, {businessId: biz, status: "parked",
-        parkingDate: ts("2026-07-01"), occupancyEndMs: Date.UTC(2026, 7, 1)});
+        parkingDate: ts("2026-07-01"), occupancyEndMs: Date.UTC(2026, 7, 1),
+        paymentStatus: "awaiting_direct_payment"});
       put(`containers/${biz}-open`, {businessId: biz, status: "loading"});
       put(`containers/${biz}-arrived`, {businessId: biz, status: "arrived",
         arrivedAt: ts("2026-08-01")});
