@@ -116,7 +116,8 @@ test("a car that has left reads Left on / Days parked / Total, in French too", (
 test("the server's block and the console's own balance helper agree on the same car", () => {
   const car = { parkingDate: "2026-10-27", dailyRate: 12, amountPaidCents: 1200 };
   const mine = parkingBalanceNow(car, new Date("2026-10-29T15:00:00Z"));
-  assert.deepEqual(mine, OWING);
+  // The server's shape: no leave day is null; the page reads it as "".
+  assert.deepEqual(mine, { ...OWING, leftDayKey: null });
   assert.deepEqual(parseGuestParking("parking", mine), OWING);
 });
 
