@@ -22,6 +22,7 @@ import '../services/vin_decoder_service.dart';
 import '../services/business_parking_entry.dart';
 import '../services/parking_rates.dart';
 import '../services/parking_service.dart';
+import '../services/business_account_receiver.dart';
 import '../services/payment_flow_safety.dart';
 import '../widgets/language_toggle.dart';
 import '../l10n/app_localizations.dart';
@@ -1401,10 +1402,15 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                               ? null
                               : _receivedByStaffId,
                           items: [
+                            // Money paid straight to the business comes first.
+                            businessAccountReceiver,
                             for (final c in _staffCustomers)
                               c.id.replaceFirst('staff:', ''),
                           ],
                           itemLabel: (id) {
+                            if (isBusinessAccountReceiver(id)) {
+                              return l10n.sbalBusinessAccount;
+                            }
                             for (final c in _staffCustomers) {
                               if (c.id.replaceFirst('staff:', '') == id) {
                                 return c.name;

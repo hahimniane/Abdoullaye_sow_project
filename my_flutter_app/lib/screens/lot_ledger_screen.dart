@@ -31,6 +31,7 @@ import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/container_link_chip.dart';
 import '../widgets/lot_sheets.dart';
+import '../widgets/received_by_options.dart';
 import '../widgets/void_record_sheet.dart';
 import 'vin_scanner_screen.dart';
 
@@ -3077,10 +3078,15 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
               const SizedBox(height: AppSpacing.md),
               LotPickerField(
                 label: l10n.lotReceivedBy,
-                value: widget.staff
-                    .where((s) => s.id == _receivedBy)
-                    .firstOrNull
-                    ?.name,
+                value: receivedByName(
+                  l10n,
+                  _receivedBy,
+                  widget.staff
+                          .where((s) => s.id == _receivedBy)
+                          .firstOrNull
+                          ?.name ??
+                      '',
+                ),
                 placeholder: l10n.lotReceivedBy,
                 error: errorFor('received_by_required'),
                 onTap: () async {
@@ -3088,9 +3094,9 @@ class _ActivityFormSheetState extends State<_ActivityFormSheet> {
                     context,
                     title: l10n.lotReceivedBy,
                     selected: _receivedBy,
-                    options: [
+                    options: receivedByOptions(l10n, [
                       for (final s in widget.staff) LotOption(s.id, s.name),
-                    ],
+                    ]),
                   );
                   if (picked != null && mounted) {
                     setState(() {
@@ -3246,10 +3252,18 @@ class _ActivityDetailSheet extends StatelessWidget {
               label: l10n.lotHowItWasPaid,
               value: _receivedViaLabel(l10n, activity.receivedVia),
             ),
-            if (_staffName(activity.receivedByStaffId).isNotEmpty)
+            if (receivedByName(
+              l10n,
+              activity.receivedByStaffId,
+              _staffName(activity.receivedByStaffId),
+            ).isNotEmpty)
               _DetailRow(
                 label: l10n.lotReceivedBy,
-                value: _staffName(activity.receivedByStaffId),
+                value: receivedByName(
+                  l10n,
+                  activity.receivedByStaffId,
+                  _staffName(activity.receivedByStaffId),
+                ),
               ),
           ],
           if (activity.auctionHouse.isNotEmpty)
@@ -3630,11 +3644,15 @@ class _PaymentRow extends StatelessWidget {
     // shown, the same call every other list on this screen makes.
     final takenBy = payment.receivedByStaffId.isEmpty
         ? ''
-        : staff
-                .where((member) => member.id == payment.receivedByStaffId)
-                .firstOrNull
-                ?.name ??
-            '';
+        : receivedByName(
+            l10n,
+            payment.receivedByStaffId,
+            staff
+                    .where((member) => member.id == payment.receivedByStaffId)
+                    .firstOrNull
+                    ?.name ??
+                '',
+          );
     final detail = [
       _paymentSourceLabel(l10n, payment),
       if (payment.isCash && payment.receivedVia.isNotEmpty)
@@ -3863,20 +3881,25 @@ class _InstalmentSheetState extends State<_InstalmentSheet> {
           const SizedBox(height: AppSpacing.md),
           LotPickerField(
             label: l10n.lotReceivedBy,
-            value: widget.staff
-                .where((member) => member.id == _receivedBy)
-                .firstOrNull
-                ?.name,
+            value: receivedByName(
+              l10n,
+              _receivedBy,
+              widget.staff
+                      .where((member) => member.id == _receivedBy)
+                      .firstOrNull
+                      ?.name ??
+                  '',
+            ),
             placeholder: l10n.lotReceivedBy,
             onTap: () async {
               final picked = await pickLotOption<String>(
                 context,
                 title: l10n.lotReceivedBy,
                 selected: _receivedBy,
-                options: [
+                options: receivedByOptions(l10n, [
                   for (final member in widget.staff)
                     LotOption(member.id, member.name),
-                ],
+                ]),
               );
               if (picked != null && mounted) {
                 setState(() => _receivedBy = picked);
@@ -3981,19 +4004,24 @@ class _ChaseSheetState extends State<_ChaseSheet> {
           const SizedBox(height: AppSpacing.md),
           LotPickerField(
             label: l10n.lotReceivedBy,
-            value: widget.staff
-                .where((s) => s.id == _receivedBy)
-                .firstOrNull
-                ?.name,
+            value: receivedByName(
+              l10n,
+              _receivedBy,
+              widget.staff
+                      .where((s) => s.id == _receivedBy)
+                      .firstOrNull
+                      ?.name ??
+                  '',
+            ),
             placeholder: l10n.lotReceivedBy,
             onTap: () async {
               final picked = await pickLotOption<String>(
                 context,
                 title: l10n.lotReceivedBy,
                 selected: _receivedBy,
-                options: [
+                options: receivedByOptions(l10n, [
                   for (final s in widget.staff) LotOption(s.id, s.name),
-                ],
+                ]),
               );
               if (picked != null && mounted) {
                 setState(() => _receivedBy = picked);

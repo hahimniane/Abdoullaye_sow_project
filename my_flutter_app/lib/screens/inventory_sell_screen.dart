@@ -6,6 +6,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../l10n/app_localizations.dart';
 import '../services/invoice_ledger.dart' show invoiceCentsToInput;
+import '../services/business_account_receiver.dart';
 import '../services/eastern_clock.dart';
 import '../services/inventory.dart';
 import '../services/inventory_context.dart';
@@ -22,6 +23,7 @@ import '../theme/app_spacing.dart';
 import '../widgets/inventory_credit_fields.dart';
 import '../widgets/inventory_widgets.dart';
 import '../widgets/lot_sheets.dart';
+import '../widgets/received_by_options.dart';
 import '../widgets/scanner_camera_view.dart';
 import '../widgets/zelle_check_widgets.dart';
 import 'zelle_check_sheet.dart';
@@ -398,6 +400,7 @@ class _InventorySellScreenState extends State<InventorySellScreen> {
     final id = _checkout.receivedByStaffId.isEmpty
         ? _me
         : _checkout.receivedByStaffId;
+    if (isBusinessAccountReceiver(id)) return l10n.sbalBusinessAccount;
     final name = _personName(id);
     if (name.isEmpty) return id == _me ? l10n.invCreditMe('').trim() : id;
     return _optionLabel(l10n, id, name);
@@ -412,10 +415,10 @@ class _InventorySellScreenState extends State<InventorySellScreen> {
       context,
       title: l10n.lotReceivedBy,
       selected: selected,
-      options: [
+      options: receivedByOptions(l10n, [
         for (final p in _team.people)
           LotOption(p.id, _optionLabel(l10n, p.id, p.name)),
-      ],
+      ]),
     );
     if (picked == null || !mounted) return;
     setState(() => _checkout = _checkout.copyWith(

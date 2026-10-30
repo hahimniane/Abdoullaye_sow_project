@@ -16,6 +16,7 @@ import '../utils/callable_data.dart';
 import '../utils/date_display.dart' show parseDayKey;
 import '../utils/money_input.dart';
 import '../utils/phone_number_validator.dart';
+import 'business_account_receiver.dart';
 import 'inventory.dart';
 import 'lot_ledger.dart' show lotDateOf;
 import 'zelle_check.dart' show BankCheck;
@@ -148,6 +149,8 @@ List<String> validateInventoryCheckout(
 }) {
   final codes = <String>[];
   final known = {for (final id in staffIds) id.trim()}..remove('');
+  // Money paid straight to the business is always a valid receiver.
+  if (known.isNotEmpty) known.add(businessAccountReceiver);
   bool unknown(String id) => known.isNotEmpty && !known.contains(id.trim());
 
   final receiver = draft.receivedByStaffId.trim();
@@ -606,6 +609,7 @@ List<String> validateInventorySwitchToPaid({
   }
   final receiver = receivedByStaffId.trim();
   final known = {for (final id in staffIds) id.trim()}..remove('');
+  if (known.isNotEmpty) known.add(businessAccountReceiver);
   if (receiver.isEmpty) {
     codes.add('received_by_required');
   } else if (known.isNotEmpty && !known.contains(receiver)) {

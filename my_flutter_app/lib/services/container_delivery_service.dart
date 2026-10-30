@@ -50,6 +50,7 @@ class ContainerDeliveryService {
     String overrideCollectedBy = '',
     String overridePhotoPath = '',
     int collectedCents = 0,
+    String receivedByStaffId = '',
   }) async => DeliveryResult.fromCallable(
     await _call(
       deliverLineRequest(
@@ -61,6 +62,7 @@ class ContainerDeliveryService {
         overrideCollectedBy: overrideCollectedBy,
         overridePhotoPath: overridePhotoPath,
         collectedCents: collectedCents,
+        receivedByStaffId: receivedByStaffId,
       ),
     ),
   );

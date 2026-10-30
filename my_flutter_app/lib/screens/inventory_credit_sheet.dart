@@ -24,6 +24,7 @@ import '../widgets/app_snackbars.dart';
 import '../widgets/day_picker.dart';
 import '../widgets/inventory_widgets.dart';
 import '../widgets/lot_sheets.dart';
+import '../widgets/received_by_options.dart';
 import 'package_payment_sheet.dart'
     show RecordedPaymentRow, containerPaymentMethodLabel;
 import 'zelle_check_sheet.dart';
@@ -187,7 +188,11 @@ class _InventoryCreditSheetState extends State<InventoryCreditSheet> {
     super.dispose();
   }
 
-  String _name(String id) => inventoryStaffName(widget.staff, id);
+  String _name(String id) => receivedByName(
+    AppLocalizations.of(context)!,
+    id,
+    inventoryStaffName(widget.staff, id),
+  );
 
   String _personLabel(AppLocalizations l10n, String id) {
     final name = _name(id);
@@ -352,15 +357,22 @@ class _InventoryCreditSheetState extends State<InventoryCreditSheet> {
     setState(() => _method = picked);
   }
 
-  Future<String?> _pickPerson(String title, String? selected) {
+  /// [receiver] adds the Business account first: who took money, not who
+  /// collects the debt.
+  Future<String?> _pickPerson(
+    String title,
+    String? selected, {
+    bool receiver = false,
+  }) {
     final l10n = AppLocalizations.of(context)!;
+    final people = [
+      for (final p in widget.staff) LotOption(p.id, _personLabel(l10n, p.id)),
+    ];
     return pickLotOption<String>(
       context,
       title: title,
       selected: selected,
-      options: [
-        for (final p in widget.staff) LotOption(p.id, _personLabel(l10n, p.id)),
-      ],
+      options: receiver ? receivedByOptions(l10n, people) : people,
     );
   }
 
@@ -625,6 +637,7 @@ class _InventoryCreditSheetState extends State<InventoryCreditSheet> {
                       final picked = await _pickPerson(
                         l10n.lotReceivedBy,
                         _receivedBy,
+                        receiver: true,
                       );
                       if (picked == null || !mounted) return;
                       setState(() {

@@ -2,11 +2,13 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart' show FirebaseAuth;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../l10n/app_localizations.dart';
+import '../services/business_account_receiver.dart';
 import '../services/business_activity_queries.dart';
 import '../services/firestore_query_spec.dart' show mergeById;
 import '../services/invoice_ledger.dart';
@@ -25,6 +27,7 @@ import 'pdf_preview_screen.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/lot_sheets.dart';
+import '../widgets/received_by_options.dart';
 import 'vin_scanner_screen.dart';
 
 /// Invoices and receipts the business writes by hand: what it sold to
@@ -1104,6 +1107,14 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     }
   }
 
+  String _currentUid() {
+    try {
+      return FirebaseAuth.instance.currentUser?.uid ?? '';
+    } catch (_) {
+      return '';
+    }
+  }
+
   Future<void> _recordPayment() async {
     final invoice = _invoice;
     if (invoice == null) return;
@@ -1115,6 +1126,8 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
         invoice: invoice,
         lines: _lines,
         balanceCents: totals.balanceCents,
+        staff: widget.staff,
+        currentUid: _currentUid(),
       ),
     );
   }
@@ -1459,7 +1472,11 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                   for (final p in _payments)
                     _PaymentTile(
                       payment: p,
-                      receivedBy: _staffName(p.receivedByStaffId),
+                      receivedBy: receivedByName(
+                        l10n,
+                        p.receivedByStaffId,
+                        _staffName(p.receivedByStaffId),
+                      ),
                       onRevert: busy || p.reverted ? null : () => _revertPayment(p),
                     ),
               ],
@@ -2396,12 +2413,18 @@ class _PaymentFormSheet extends StatefulWidget {
     required this.invoice,
     required this.balanceCents,
     this.lines = const [],
+    this.staff = const [],
+    this.currentUid = '',
   });
 
   final String businessId;
   final Invoice invoice;
   final int balanceCents;
   final List<InvoiceLine> lines;
+
+  /// The team, for "Received by"; empty when it could not be read.
+  final List<LotStaff> staff;
+  final String currentUid;
 
   @override
   State<_PaymentFormSheet> createState() => _PaymentFormSheetState();
@@ -2413,6 +2436,10 @@ class _PaymentFormSheetState extends State<_PaymentFormSheet> {
   String _method = 'cash';
   String _paidOn = invoiceTodayKey();
   String _forLineId = '';
+
+  /// Who took the money: '' is the person recording it (the server's default),
+  /// [businessAccountReceiver] money paid straight to the business.
+  String _receivedBy = '';
   Set<String> _errors = {};
   String _serverNote = '';
   bool _busy = false;
@@ -2422,6 +2449,31 @@ class _PaymentFormSheetState extends State<_PaymentFormSheet> {
     _amount.dispose();
     _note.dispose();
     super.dispose();
+  }
+
+  String _receivedByLabel(AppLocalizations l10n) {
+    if (_receivedBy.isEmpty) return l10n.you;
+    return receivedByName(
+      l10n,
+      _receivedBy,
+      widget.staff.where((s) => s.id == _receivedBy).firstOrNull?.name ?? '',
+    );
+  }
+
+  Future<void> _pickReceivedBy() async {
+    final l10n = AppLocalizations.of(context)!;
+    final picked = await pickLotOption<String>(
+      context,
+      title: l10n.lotReceivedBy,
+      selected: _receivedBy,
+      options: receivedByOptions(l10n, [
+        LotOption('', l10n.you),
+        for (final s in widget.staff)
+          if (s.id != widget.currentUid) LotOption(s.id, s.name),
+      ]),
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _receivedBy = picked);
   }
 
   InvoicePaymentDraft get _draft => InvoicePaymentDraft(
@@ -2494,6 +2546,7 @@ class _PaymentFormSheetState extends State<_PaymentFormSheet> {
         'businessId': widget.businessId,
         'invoiceId': widget.invoice.id,
         'payment': invoicePaymentPayload(draft),
+        if (_receivedBy.isNotEmpty) 'receivedByStaffId': _receivedBy,
       });
       if (!mounted) return;
       AppHaptics.commit();
@@ -2577,6 +2630,14 @@ class _PaymentFormSheetState extends State<_PaymentFormSheet> {
             placeholder: l10n.invPayMethod,
             onTap: _pickMethod,
             error: errorFor('payment_method_invalid'),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          LotPickerField(
+            key: const Key('payment-received-by'),
+            label: l10n.lotReceivedBy,
+            value: _receivedByLabel(l10n),
+            placeholder: l10n.lotReceivedBy,
+            onTap: _busy ? () {} : _pickReceivedBy,
           ),
           const SizedBox(height: AppSpacing.md),
           LotPickerField(

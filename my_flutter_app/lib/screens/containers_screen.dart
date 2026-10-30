@@ -48,6 +48,7 @@ import '../widgets/container_volume_card.dart';
 import '../widgets/country_phone_field.dart';
 import '../widgets/label_print_sheet.dart';
 import '../widgets/lot_sheets.dart';
+import '../widgets/received_by_options.dart';
 import '../widgets/package_delivery_widgets.dart';
 import '../widgets/package_money.dart';
 import '../widgets/phone_account_widgets.dart' show RecordPhoneFlagNotes;
@@ -4107,9 +4108,9 @@ class _LineFormSheetState extends State<_LineFormSheet> {
       context,
       title: l10n.lotReceivedBy,
       selected: _payReceivedBy,
-      options: [
+      options: receivedByOptions(l10n, [
         for (final member in widget.staff) LotOption(member.id, member.name),
-      ],
+      ]),
     );
     if (picked == null || !mounted) return;
     setState(() {
@@ -5083,11 +5084,15 @@ class _LineFormSheetState extends State<_LineFormSheet> {
               note: _payNote,
               methodLabel: containerPaymentMethodLabel(l10n, _payMethod),
               onPickMethod: _pickPayMethod,
-              receiverName: widget.staff
-                      .where((s) => s.id == _payReceivedBy)
-                      .firstOrNull
-                      ?.name ??
-                  '',
+              receiverName: receivedByName(
+                l10n,
+                _payReceivedBy,
+                widget.staff
+                        .where((s) => s.id == _payReceivedBy)
+                        .firstOrNull
+                        ?.name ??
+                    '',
+              ),
               onPickReceiver: _pickPayReceiver,
               enabled: !_busy,
               onEdited: () {

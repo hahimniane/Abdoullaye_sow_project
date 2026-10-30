@@ -18004,4 +18004,296 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get wpkBlockedShipsByAir =>
       'Par avion ; ceci est un conteneur maritime';
+
+  @override
+  String get sbalTitle => 'Soldes du personnel';
+
+  @override
+  String get sbalMenuSubtitle =>
+      'Qui détient de l\'argent, qui doit, à qui on doit';
+
+  @override
+  String get sbalBusinessAccount => 'Compte de l\'entreprise';
+
+  @override
+  String sbalWaitingBadge(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count en attente de vous',
+      one: '1 en attente de vous',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get sbalIntro =>
+      'Ce que chaque personne détient de l\'argent de l\'entreprise, ce qu\'elle doit pour le parking et ce que l\'entreprise lui doit pour ses dépenses.';
+
+  @override
+  String get sbalHolds => 'Détient';
+
+  @override
+  String get sbalParking => 'Parking';
+
+  @override
+  String get sbalExpensesOwed => 'Dépenses dues';
+
+  @override
+  String get sbalNet => 'Solde';
+
+  @override
+  String sbalOwes(Object amount) {
+    return 'doit $amount';
+  }
+
+  @override
+  String sbalIsOwed(Object amount) {
+    return 'on lui doit $amount';
+  }
+
+  @override
+  String get sbalSettled => 'à jour';
+
+  @override
+  String get sbalLoadFailed =>
+      'Impossible de charger les soldes. Vérifiez votre connexion et réessayez.';
+
+  @override
+  String get sbalTryAgain => 'Réessayer';
+
+  @override
+  String get sbalEmpty => 'Personne dans l\'équipe pour l\'instant.';
+
+  @override
+  String sbalAsOf(Object time) {
+    return 'Au $time';
+  }
+
+  @override
+  String get sbalWaitingOnYou => 'En attente de vous';
+
+  @override
+  String get sbalOtherPending => 'Autres remises en attente';
+
+  @override
+  String get sbalHandOver => 'Remettre de l\'argent';
+
+  @override
+  String get sbalOpening => 'Montant d\'ouverture';
+
+  @override
+  String get sbalConfirm => 'Confirmer la réception';
+
+  @override
+  String get sbalDecline => 'Refuser';
+
+  @override
+  String get sbalVoid => 'Annuler';
+
+  @override
+  String sbalHandedLine(Object from, Object amount, Object to) {
+    return '$from a remis $amount à $to';
+  }
+
+  @override
+  String sbalOpeningLine(Object name, Object amount) {
+    return '$name · montant d\'ouverture $amount';
+  }
+
+  @override
+  String get sbalStatusPending => 'En attente de confirmation';
+
+  @override
+  String get sbalStatusConfirmed => 'Confirmé';
+
+  @override
+  String get sbalStatusDeclined => 'Refusé';
+
+  @override
+  String get sbalStatusVoided => 'Annulé';
+
+  @override
+  String get sbalMethodCash => 'Espèces';
+
+  @override
+  String get sbalMethodZelle => 'Zelle';
+
+  @override
+  String get sbalMethodCheck => 'Chèque';
+
+  @override
+  String get sbalMethodDeposit => 'Dépôt';
+
+  @override
+  String get sbalMethodOther => 'Autre';
+
+  @override
+  String get sbalViewPhoto => 'Voir la photo';
+
+  @override
+  String get sbalPhotoOpenFailed => 'La photo n\'a pas pu être ouverte.';
+
+  @override
+  String get sbalDetailCollected => 'Encaissé auprès des clients';
+
+  @override
+  String get sbalDetailHandedOut => 'Remis';
+
+  @override
+  String get sbalDetailReceived => 'Reçu d\'autres personnes';
+
+  @override
+  String get sbalDetailPendingOut => 'Remis, pas encore confirmé';
+
+  @override
+  String get sbalDetailPendingIn => 'À recevoir, pas encore confirmé';
+
+  @override
+  String get sbalDetailHolds => 'Détient maintenant';
+
+  @override
+  String get sbalDetailParking => 'Facture de parking (après dépenses)';
+
+  @override
+  String get sbalDetailExpensesApplied =>
+      'Dépenses déduites de la facture de parking';
+
+  @override
+  String get sbalDetailExpensesOwed => 'Dépenses que l\'entreprise leur doit';
+
+  @override
+  String get sbalHistory => 'Historique';
+
+  @override
+  String get sbalHistoryEmpty => 'Rien d\'enregistré pour l\'instant.';
+
+  @override
+  String sbalBusinessAccountReceived(Object amount) {
+    return 'Reçu jusqu\'ici : $amount';
+  }
+
+  @override
+  String sbalBusinessAccountComing(Object amount) {
+    return 'En route : $amount';
+  }
+
+  @override
+  String get sbalTo => 'Remis à';
+
+  @override
+  String get sbalChoosePerson => 'Choisir qui';
+
+  @override
+  String get sbalAmount => 'Montant (dollars US)';
+
+  @override
+  String get sbalMethod => 'Comment vous l\'avez remis';
+
+  @override
+  String get sbalNote => 'Note (facultatif)';
+
+  @override
+  String get sbalAddPhoto => 'Ajouter une photo du reçu';
+
+  @override
+  String get sbalRetakePhoto => 'Reprendre la photo';
+
+  @override
+  String get sbalPhotoAdded => 'Photo ajoutée';
+
+  @override
+  String get sbalPhotoFailed => 'La photo n\'a pas pu être ajoutée. Réessayez.';
+
+  @override
+  String get sbalSendForConfirmation => 'Envoyer pour confirmation';
+
+  @override
+  String get sbalHandOverHint =>
+      'Reste en attente jusqu\'à ce que la personne qui la reçoit confirme.';
+
+  @override
+  String sbalHandOverDone(Object amount, Object to) {
+    return 'Remise de $amount envoyée à $to. Elle doit être confirmée.';
+  }
+
+  @override
+  String get sbalAmountInvalid => 'Saisissez un montant supérieur à 0,00 \$.';
+
+  @override
+  String get sbalSayWho => 'Choisissez à qui vous l\'avez remis.';
+
+  @override
+  String get sbalOpeningHint =>
+      'Ce que cette personne avait déjà remis avant les soldes du personnel. Enregistré et confirmé en une étape.';
+
+  @override
+  String get sbalOpeningPerson => 'Personne';
+
+  @override
+  String get sbalOpeningSave => 'Enregistrer le montant d\'ouverture';
+
+  @override
+  String sbalOpeningDone(Object amount, Object name) {
+    return 'Montant d\'ouverture de $amount enregistré pour $name.';
+  }
+
+  @override
+  String get sbalConfirmDone => 'Marqué comme reçu.';
+
+  @override
+  String get sbalDeclineTitle => 'Refuser cette remise ?';
+
+  @override
+  String sbalDeclineBody(Object from, Object amount) {
+    return '$from verra que vous n\'avez pas reçu $amount.';
+  }
+
+  @override
+  String get sbalDeclineNote => 'Pourquoi (facultatif)';
+
+  @override
+  String get sbalDeclineDone => 'Remise refusée.';
+
+  @override
+  String get sbalVoidTitle => 'Annuler cette remise ?';
+
+  @override
+  String sbalVoidBody(Object amount) {
+    return 'La remise de $amount comptera comme jamais effectuée. Rien n\'est supprimé.';
+  }
+
+  @override
+  String get sbalVoidReason => 'Motif (facultatif)';
+
+  @override
+  String get sbalVoidDone => 'Remise annulée.';
+
+  @override
+  String get sbalRefusalToSelf =>
+      'Vous ne pouvez pas vous remettre de l\'argent à vous-même.';
+
+  @override
+  String get sbalRefusalAmountInvalid =>
+      'Ce montant n\'est pas valide. Saisissez un montant supérieur à 0,00 \$.';
+
+  @override
+  String get sbalRefusalMethodInvalid =>
+      'Choisissez comment l\'argent a été remis.';
+
+  @override
+  String get sbalRefusalReceiverInvalid =>
+      'Cette personne ne fait pas partie de l\'équipe de cette entreprise.';
+
+  @override
+  String get sbalRefusalNotReceiver =>
+      'Seule la personne qui reçoit cette remise (ou le propriétaire, pour le compte de l\'entreprise) peut y répondre.';
+
+  @override
+  String get sbalRefusalNotPending =>
+      'Cette remise a déjà reçu une réponse. Actualisez pour voir où elle en est.';
+
+  @override
+  String get sbalRefusalOpeningOwnerOnly =>
+      'Seul le propriétaire peut enregistrer un montant d\'ouverture.';
 }

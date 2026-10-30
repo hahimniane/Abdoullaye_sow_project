@@ -9487,5 +9487,381 @@
   "wpkBlockedShipsByAir": "Par avion ; ceci est un conteneur maritime",
   "@wpkBlockedShipsByAir": {
     "description": "Why a waiting package cannot go on this sea container (row note)."
+  },
+  "sbalTitle": "Soldes du personnel",
+  "@sbalTitle": {
+    "description": "Title of the Staff balances page and its menu entry."
+  },
+  "sbalMenuSubtitle": "Qui détient de l'argent, qui doit, à qui on doit",
+  "@sbalMenuSubtitle": {
+    "description": "Subtitle of the Staff balances entry in the business menu."
+  },
+  "sbalBusinessAccount": "Compte de l'entreprise",
+  "@sbalBusinessAccount": {
+    "description": "The \"Received by\" choice for money paid straight to the business, and the business account row."
+  },
+  "sbalWaitingBadge": "{count, plural, =1{1 en attente de vous} other{{count} en attente de vous}}",
+  "@sbalWaitingBadge": {
+    "description": "Badge on the Staff balances menu entry: handovers waiting for the viewer to confirm.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "sbalIntro": "Ce que chaque personne détient de l'argent de l'entreprise, ce qu'elle doit pour le parking et ce que l'entreprise lui doit pour ses dépenses.",
+  "@sbalIntro": {
+    "description": "Short explanation at the top of the Staff balances page."
+  },
+  "sbalHolds": "Détient",
+  "@sbalHolds": {
+    "description": "Column: money the person holds for the business."
+  },
+  "sbalParking": "Parking",
+  "@sbalParking": {
+    "description": "Column: the person's own parking bill."
+  },
+  "sbalExpensesOwed": "Dépenses dues",
+  "@sbalExpensesOwed": {
+    "description": "Column: expenses the business owes the person."
+  },
+  "sbalNet": "Solde",
+  "@sbalNet": {
+    "description": "Label of the one net number per person."
+  },
+  "sbalOwes": "doit {amount}",
+  "@sbalOwes": {
+    "description": "Net result: the person owes the business this amount.",
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "sbalIsOwed": "on lui doit {amount}",
+  "@sbalIsOwed": {
+    "description": "Net result: the business owes the person this amount.",
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "sbalSettled": "à jour",
+  "@sbalSettled": {
+    "description": "Net result: nothing owed either way."
+  },
+  "sbalLoadFailed": "Impossible de charger les soldes. Vérifiez votre connexion et réessayez.",
+  "@sbalLoadFailed": {
+    "description": "Shown when the balances did not load."
+  },
+  "sbalTryAgain": "Réessayer",
+  "@sbalTryAgain": {
+    "description": "Button to load the balances again."
+  },
+  "sbalEmpty": "Personne dans l'équipe pour l'instant.",
+  "@sbalEmpty": {
+    "description": "Shown when the business has no staff rows."
+  },
+  "sbalAsOf": "Au {time}",
+  "@sbalAsOf": {
+    "description": "When the balances were worked out.",
+    "placeholders": {
+      "time": {}
+    }
+  },
+  "sbalWaitingOnYou": "En attente de vous",
+  "@sbalWaitingOnYou": {
+    "description": "Section: handovers the viewer has to confirm or decline."
+  },
+  "sbalOtherPending": "Autres remises en attente",
+  "@sbalOtherPending": {
+    "description": "Section: pending handovers waiting on someone else."
+  },
+  "sbalHandOver": "Remettre de l'argent",
+  "@sbalHandOver": {
+    "description": "Button and sheet title: record handing money to a person or the business account."
+  },
+  "sbalOpening": "Montant d'ouverture",
+  "@sbalOpening": {
+    "description": "Owner-only button and sheet title: what a person handed over before Staff balances existed."
+  },
+  "sbalConfirm": "Confirmer la réception",
+  "@sbalConfirm": {
+    "description": "Button: the receiver confirms they got the money."
+  },
+  "sbalDecline": "Refuser",
+  "@sbalDecline": {
+    "description": "Button: the receiver says they did not get the money."
+  },
+  "sbalVoid": "Annuler",
+  "@sbalVoid": {
+    "description": "Button: cancel a pending handover."
+  },
+  "sbalHandedLine": "{from} a remis {amount} à {to}",
+  "@sbalHandedLine": {
+    "description": "One handover as a sentence.",
+    "placeholders": {
+      "from": {},
+      "amount": {},
+      "to": {}
+    }
+  },
+  "sbalOpeningLine": "{name} · montant d'ouverture {amount}",
+  "@sbalOpeningLine": {
+    "description": "One opening amount as a sentence.",
+    "placeholders": {
+      "name": {},
+      "amount": {}
+    }
+  },
+  "sbalStatusPending": "En attente de confirmation",
+  "@sbalStatusPending": {
+    "description": "Handover status."
+  },
+  "sbalStatusConfirmed": "Confirmé",
+  "@sbalStatusConfirmed": {
+    "description": "Handover status."
+  },
+  "sbalStatusDeclined": "Refusé",
+  "@sbalStatusDeclined": {
+    "description": "Handover status."
+  },
+  "sbalStatusVoided": "Annulé",
+  "@sbalStatusVoided": {
+    "description": "Handover status."
+  },
+  "sbalMethodCash": "Espèces",
+  "@sbalMethodCash": {
+    "description": "Handover method."
+  },
+  "sbalMethodZelle": "Zelle",
+  "@sbalMethodZelle": {
+    "description": "Handover method."
+  },
+  "sbalMethodCheck": "Chèque",
+  "@sbalMethodCheck": {
+    "description": "Handover method."
+  },
+  "sbalMethodDeposit": "Dépôt",
+  "@sbalMethodDeposit": {
+    "description": "Handover method."
+  },
+  "sbalMethodOther": "Autre",
+  "@sbalMethodOther": {
+    "description": "Handover method."
+  },
+  "sbalViewPhoto": "Voir la photo",
+  "@sbalViewPhoto": {
+    "description": "Opens the slip photo of a handover."
+  },
+  "sbalPhotoOpenFailed": "La photo n'a pas pu être ouverte.",
+  "@sbalPhotoOpenFailed": {
+    "description": "Shown when the slip photo cannot be loaded."
+  },
+  "sbalDetailCollected": "Encaissé auprès des clients",
+  "@sbalDetailCollected": {
+    "description": "Breakdown line."
+  },
+  "sbalDetailHandedOut": "Remis",
+  "@sbalDetailHandedOut": {
+    "description": "Breakdown line."
+  },
+  "sbalDetailReceived": "Reçu d'autres personnes",
+  "@sbalDetailReceived": {
+    "description": "Breakdown line."
+  },
+  "sbalDetailPendingOut": "Remis, pas encore confirmé",
+  "@sbalDetailPendingOut": {
+    "description": "Breakdown line."
+  },
+  "sbalDetailPendingIn": "À recevoir, pas encore confirmé",
+  "@sbalDetailPendingIn": {
+    "description": "Breakdown line."
+  },
+  "sbalDetailHolds": "Détient maintenant",
+  "@sbalDetailHolds": {
+    "description": "Breakdown line."
+  },
+  "sbalDetailParking": "Facture de parking (après dépenses)",
+  "@sbalDetailParking": {
+    "description": "Breakdown line."
+  },
+  "sbalDetailExpensesApplied": "Dépenses déduites de la facture de parking",
+  "@sbalDetailExpensesApplied": {
+    "description": "Breakdown line."
+  },
+  "sbalDetailExpensesOwed": "Dépenses que l'entreprise leur doit",
+  "@sbalDetailExpensesOwed": {
+    "description": "Breakdown line."
+  },
+  "sbalHistory": "Historique",
+  "@sbalHistory": {
+    "description": "Heading of the handover history."
+  },
+  "sbalHistoryEmpty": "Rien d'enregistré pour l'instant.",
+  "@sbalHistoryEmpty": {
+    "description": "Shown when a person has no handovers."
+  },
+  "sbalBusinessAccountReceived": "Reçu jusqu'ici : {amount}",
+  "@sbalBusinessAccountReceived": {
+    "description": "Business account row.",
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "sbalBusinessAccountComing": "En route : {amount}",
+  "@sbalBusinessAccountComing": {
+    "description": "Business account row: handovers waiting for the owner.",
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "sbalTo": "Remis à",
+  "@sbalTo": {
+    "description": "Field label in the hand over sheet."
+  },
+  "sbalChoosePerson": "Choisir qui",
+  "@sbalChoosePerson": {
+    "description": "Placeholder of a person picker."
+  },
+  "sbalAmount": "Montant (dollars US)",
+  "@sbalAmount": {
+    "description": "Field label."
+  },
+  "sbalMethod": "Comment vous l'avez remis",
+  "@sbalMethod": {
+    "description": "Field label in the hand over sheet."
+  },
+  "sbalNote": "Note (facultatif)",
+  "@sbalNote": {
+    "description": "Field label."
+  },
+  "sbalAddPhoto": "Ajouter une photo du reçu",
+  "@sbalAddPhoto": {
+    "description": "Button to take a photo of a slip or screenshot."
+  },
+  "sbalRetakePhoto": "Reprendre la photo",
+  "@sbalRetakePhoto": {
+    "description": "Button once a photo was added."
+  },
+  "sbalPhotoAdded": "Photo ajoutée",
+  "@sbalPhotoAdded": {
+    "description": "Shown once the photo is uploaded."
+  },
+  "sbalPhotoFailed": "La photo n'a pas pu être ajoutée. Réessayez.",
+  "@sbalPhotoFailed": {
+    "description": "Shown when the camera or upload failed."
+  },
+  "sbalSendForConfirmation": "Envoyer pour confirmation",
+  "@sbalSendForConfirmation": {
+    "description": "Button that records the handover as pending."
+  },
+  "sbalHandOverHint": "Reste en attente jusqu'à ce que la personne qui la reçoit confirme.",
+  "@sbalHandOverHint": {
+    "description": "Hint in the hand over sheet."
+  },
+  "sbalHandOverDone": "Remise de {amount} envoyée à {to}. Elle doit être confirmée.",
+  "@sbalHandOverDone": {
+    "description": "Success message after recording a handover.",
+    "placeholders": {
+      "amount": {},
+      "to": {}
+    }
+  },
+  "sbalAmountInvalid": "Saisissez un montant supérieur à 0,00 $.",
+  "@sbalAmountInvalid": {
+    "description": "Validation message."
+  },
+  "sbalSayWho": "Choisissez à qui vous l'avez remis.",
+  "@sbalSayWho": {
+    "description": "Validation message."
+  },
+  "sbalOpeningHint": "Ce que cette personne avait déjà remis avant les soldes du personnel. Enregistré et confirmé en une étape.",
+  "@sbalOpeningHint": {
+    "description": "Hint in the opening amount sheet."
+  },
+  "sbalOpeningPerson": "Personne",
+  "@sbalOpeningPerson": {
+    "description": "Field label in the opening amount sheet."
+  },
+  "sbalOpeningSave": "Enregistrer le montant d'ouverture",
+  "@sbalOpeningSave": {
+    "description": "Button in the opening amount sheet."
+  },
+  "sbalOpeningDone": "Montant d'ouverture de {amount} enregistré pour {name}.",
+  "@sbalOpeningDone": {
+    "description": "Success message.",
+    "placeholders": {
+      "amount": {},
+      "name": {}
+    }
+  },
+  "sbalConfirmDone": "Marqué comme reçu.",
+  "@sbalConfirmDone": {
+    "description": "Success message after confirming."
+  },
+  "sbalDeclineTitle": "Refuser cette remise ?",
+  "@sbalDeclineTitle": {
+    "description": "Dialog title."
+  },
+  "sbalDeclineBody": "{from} verra que vous n'avez pas reçu {amount}.",
+  "@sbalDeclineBody": {
+    "description": "Dialog body.",
+    "placeholders": {
+      "from": {},
+      "amount": {}
+    }
+  },
+  "sbalDeclineNote": "Pourquoi (facultatif)",
+  "@sbalDeclineNote": {
+    "description": "Field label in the decline dialog."
+  },
+  "sbalDeclineDone": "Remise refusée.",
+  "@sbalDeclineDone": {
+    "description": "Success message after declining."
+  },
+  "sbalVoidTitle": "Annuler cette remise ?",
+  "@sbalVoidTitle": {
+    "description": "Dialog title."
+  },
+  "sbalVoidBody": "La remise de {amount} comptera comme jamais effectuée. Rien n'est supprimé.",
+  "@sbalVoidBody": {
+    "description": "Dialog body.",
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "sbalVoidReason": "Motif (facultatif)",
+  "@sbalVoidReason": {
+    "description": "Field label in the void dialog."
+  },
+  "sbalVoidDone": "Remise annulée.",
+  "@sbalVoidDone": {
+    "description": "Success message after voiding."
+  },
+  "sbalRefusalToSelf": "Vous ne pouvez pas vous remettre de l'argent à vous-même.",
+  "@sbalRefusalToSelf": {
+    "description": "Server refusal handover_to_self."
+  },
+  "sbalRefusalAmountInvalid": "Ce montant n'est pas valide. Saisissez un montant supérieur à 0,00 $.",
+  "@sbalRefusalAmountInvalid": {
+    "description": "Server refusal handover_amount_invalid."
+  },
+  "sbalRefusalMethodInvalid": "Choisissez comment l'argent a été remis.",
+  "@sbalRefusalMethodInvalid": {
+    "description": "Server refusal handover_method_invalid."
+  },
+  "sbalRefusalReceiverInvalid": "Cette personne ne fait pas partie de l'équipe de cette entreprise.",
+  "@sbalRefusalReceiverInvalid": {
+    "description": "Server refusal handover_receiver_invalid."
+  },
+  "sbalRefusalNotReceiver": "Seule la personne qui reçoit cette remise (ou le propriétaire, pour le compte de l'entreprise) peut y répondre.",
+  "@sbalRefusalNotReceiver": {
+    "description": "Server refusal handover_not_receiver."
+  },
+  "sbalRefusalNotPending": "Cette remise a déjà reçu une réponse. Actualisez pour voir où elle en est.",
+  "@sbalRefusalNotPending": {
+    "description": "Server refusal handover_not_pending."
+  },
+  "sbalRefusalOpeningOwnerOnly": "Seul le propriétaire peut enregistrer un montant d'ouverture.",
+  "@sbalRefusalOpeningOwnerOnly": {
+    "description": "Server refusal opening_owner_only."
   }
 }

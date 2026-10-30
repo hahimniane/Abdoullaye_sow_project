@@ -710,3 +710,14 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   French and assert `tester.takeException()` is null. Never run `dart format`
   on a whole directory (`test`, `lib/widgets`): it rewrites dozens of untouched
   files; format only the files you changed.
+- Staff balances (`test/staff_balances_test.dart`) lessons: a `Row` with
+  `CrossAxisAlignment.stretch` inside a `ListView` has unbounded height and
+  throws on layout, so drop `stretch` (or use `IntrinsicHeight`); a dialog that
+  owns a `TextEditingController` must be its own `StatefulWidget` (disposing
+  the controller in `showDialog(...).whenComplete` crashes the closing
+  animation); `formatLotCents` follows the global `setMoneyDisplayLanguage`,
+  not the pumped locale, so a French money assertion sets it (and resets it in
+  `addTearDown`); a call that never answers is tested by pumping past the
+  service timeout. Every "Received by" picker builds its options with
+  `receivedByOptions` (Business account first), and a validator that checks
+  `staffIds` must accept `business_account`.

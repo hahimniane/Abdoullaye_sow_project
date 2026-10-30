@@ -22,6 +22,7 @@ import '../utils/money_input.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/lot_sheets.dart';
 import '../widgets/package_money.dart';
+import '../widgets/received_by_options.dart';
 import '../widgets/zelle_check_widgets.dart';
 import 'containers_screen.dart';
 import 'zelle_check_sheet.dart';
@@ -206,8 +207,11 @@ class _PackagePaymentSheetState extends State<PackagePaymentSheet> {
     super.dispose();
   }
 
-  String _staffName(String id) =>
-      widget.staff.where((s) => s.id == id).firstOrNull?.name ?? '';
+  String _staffName(String id) => receivedByName(
+    AppLocalizations.of(context)!,
+    id,
+    widget.staff.where((s) => s.id == id).firstOrNull?.name ?? '',
+  );
 
   /// One shape for every action: refuse what the phone can see, show progress
   /// on the button pressed, say what the server refused, and always release.
@@ -389,9 +393,9 @@ class _PackagePaymentSheetState extends State<PackagePaymentSheet> {
       context,
       title: l10n.lotReceivedBy,
       selected: _receivedBy,
-      options: [
+      options: receivedByOptions(l10n, [
         for (final member in widget.staff) LotOption(member.id, member.name),
-      ],
+      ]),
     );
     if (picked == null || !mounted) return;
     setState(() {

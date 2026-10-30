@@ -21,6 +21,7 @@ import '../utils/date_display.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/inventory_widgets.dart';
 import '../widgets/lot_sheets.dart';
+import '../widgets/received_by_options.dart';
 import '../widgets/zelle_check_widgets.dart';
 import 'inventory_credit_sheet.dart';
 import 'inventory_sale_switch_sheet.dart';
@@ -676,7 +677,11 @@ class InventorySaleCard extends StatelessWidget {
         ? ''
         : displayDateTime(sale.createdAt!, locale);
     final soldBy = inventoryStaffName(staff, sale.soldByStaffId);
-    final receivedBy = inventoryStaffName(staff, sale.moneyReceivedBy);
+    final receivedBy = receivedByName(
+      l10n,
+      sale.moneyReceivedBy,
+      inventoryStaffName(staff, sale.moneyReceivedBy),
+    );
     final voidedBy = inventoryStaffName(staff, sale.voidedByStaffId);
     final voidedWhen = sale.voidedAt == null
         ? ''

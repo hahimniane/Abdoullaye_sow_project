@@ -21,6 +21,7 @@ library;
 import '../models/destination_country.dart';
 import '../utils/callable_data.dart';
 import '../utils/money_input.dart';
+import 'business_account_receiver.dart';
 import 'container_manifest.dart';
 import 'invoice_ledger.dart' show invoiceCentsToInput, invoicePaymentMethods;
 import 'line_pieces.dart';
@@ -293,6 +294,8 @@ List<String> validatePackagePayment({
     errors.add('received_by_required');
   } else {
     final known = {for (final id in staffIds) id.trim()}..remove('');
+    // Money paid straight to the business is always a valid receiver.
+    if (known.isNotEmpty) known.add(businessAccountReceiver);
     if (known.isNotEmpty && !known.contains(receiver)) {
       errors.add('received_by_invalid');
     }

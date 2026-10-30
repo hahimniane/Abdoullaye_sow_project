@@ -15,6 +15,7 @@ import '../models/parked_car.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../data/car_catalog.dart';
+import '../services/business_account_receiver.dart';
 import '../services/business_parking_entry.dart';
 import '../services/container_manifest.dart';
 import '../services/parking_whatsapp.dart' show ParkingMessage;
@@ -1659,6 +1660,9 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
   String _staffLabel(Object? id) {
     final key = (id ?? '').toString().trim();
     if (key.isEmpty) return '';
+    if (isBusinessAccountReceiver(key)) {
+      return AppLocalizations.of(context)!.sbalBusinessAccount;
+    }
     return _staffNames[key] ?? '';
   }
 
@@ -2741,6 +2745,17 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     return null;
   }
 
+  /// Who can have taken the money: the business account first (paid straight
+  /// to the business), then the team.
+  List<DropdownMenuItem<String>> _receivedByItems(AppLocalizations l10n) => [
+    DropdownMenuItem<String>(
+      value: businessAccountReceiver,
+      child: Text(l10n.sbalBusinessAccount),
+    ),
+    for (final entry in _staffNames.entries)
+      DropdownMenuItem<String>(value: entry.key, child: Text(entry.value)),
+  ];
+
   /// The "who took it" picker, asked wherever money is recorded as received.
   Widget _receivedByPicker({
     required AppLocalizations l10n,
@@ -2753,10 +2768,7 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
       initialValue: value.isEmpty ? null : value,
       decoration: InputDecoration(labelText: l10n.parkingReceivedBy),
       isExpanded: true,
-      items: [
-        for (final entry in _staffNames.entries)
-          DropdownMenuItem<String>(value: entry.key, child: Text(entry.value)),
-      ],
+      items: _receivedByItems(l10n),
       onChanged: _isMarkingPaid
           ? null
           : (next) {
@@ -2809,13 +2821,7 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
           initialValue: _partReceivedBy.isEmpty ? null : _partReceivedBy,
           decoration: InputDecoration(labelText: l10n.parkingReceivedBy),
           isExpanded: true,
-          items: [
-            for (final entry in _staffNames.entries)
-              DropdownMenuItem<String>(
-                value: entry.key,
-                child: Text(entry.value),
-              ),
-          ],
+          items: _receivedByItems(l10n),
           onChanged: _isMarkingPaid
               ? null
               : (value) {
