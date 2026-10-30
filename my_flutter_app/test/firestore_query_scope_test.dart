@@ -232,6 +232,8 @@ void main() {
       for (final spec in knownCarVinSpecs(_business, '1HGCM82633A004352'))
         'VIN memory: exact ${spec.collection}': spec,
       'month end: stays': parkedCarsEndingFromSpec(_business, 1),
+      'month end: unpaid stays carried in':
+          parkedCarsUnpaidCarriedSpec(_business),
       'ledger: activities in a window': lotActivitiesBetweenSpec(
         _business,
         Timestamp.fromMillisecondsSinceEpoch(1),
@@ -603,6 +605,9 @@ void main() {
         'dailyRate': 10,
         'totalCostCents': 9000,
         'status': 'parked',
+        // Every stored car carries a paymentStatus (the unpaid-cars read
+        // relies on it: not-in skips rows without the field).
+        'paymentStatus': 'awaiting_direct_payment',
         ...fields,
       };
       return {...row, 'occupancyEndMs': occupancyEndMs(row)};
@@ -623,6 +628,22 @@ void main() {
       car('ended-day-before', {
         'parkingDate': ts('2026-08-01'),
         'parkingEndDate': ts('2026-08-31'),
+      }),
+      // Left before the month: unpaid / part paid / paid. The first two come
+      // along as "unpaid from before" (docs/PARKING_CARRYOVER.md).
+      car('left-earlier-unpaid', {
+        'parkingDate': ts('2026-07-01'),
+        'parkingEndDate': ts('2026-07-10'),
+      }),
+      car('left-earlier-part-paid', {
+        'parkingDate': ts('2026-06-01'),
+        'parkingEndDate': ts('2026-06-03'),
+        'amountPaidCents': 4000,
+      }),
+      car('left-earlier-paid', {
+        'parkingDate': ts('2026-05-01'),
+        'parkingEndDate': ts('2026-05-02'),
+        'paymentStatus': 'paid',
       }),
       car('ends-first-day', {
         'parkingDate': ts('2026-08-25'),
@@ -691,6 +712,12 @@ void main() {
       run(lotActivitiesUndatedSpec(_business), activities),
     ], (row) => '${row['id']}');
 
+    // The month end's two car reads, merged by id like the screen does.
+    List<Map<String, dynamic>> narrowCars() => mergeById<Map<String, dynamic>>([
+      run(parkedCarsEndingFromSpec(_business, startMs), cars),
+      run(parkedCarsUnpaidCarriedSpec(_business), cars),
+    ], (row) => '${row['id']}');
+
     ({int billed, int collected, int owed, int older, int due, int cars,
         int owing, int acts, String bills}) shape(ParkingMonthSummary s) => (
       billed: s.billedCents,
@@ -707,22 +734,34 @@ void main() {
     test('the narrow reads give exactly the whole-history summary', () {
       final full = parkingMonthSummary(cars, month, nowUtc, activities);
       final narrow = parkingMonthSummary(
-        run(parkedCarsEndingFromSpec(_business, startMs), cars),
+        narrowCars(),
         month,
         nowUtc,
         narrowActivities(),
       );
       expect(shape(narrow), shape(full));
+      expect(
+        narrow.customers.map((c) => c.dueCents),
+        full.customers.map((c) => c.dueCents),
+      );
+      String carriedOf(ParkingMonthSummary s) =>
+          ([for (final c in s.carried) '${c.id}:${c.dueCents}']..sort())
+              .join(',');
+      expect(
+        carriedOf(full),
+        'ended-day-before:9000,left-earlier-part-paid:5000,'
+        'left-earlier-unpaid:9000',
+      );
+      expect(carriedOf(narrow), carriedOf(full));
       expect(full.customersOwing, isNotEmpty);
       expect(full.bills.map((b) => b.id), contains('old-open'));
       expect(full.bills.map((b) => b.id), contains('ends-first-day'));
     });
 
     test('while reading far less than the history', () {
-      final read = run(parkedCarsEndingFromSpec(_business, startMs), cars)
-          .map((r) => r['id']);
+      final read = narrowCars().map((r) => r['id']);
       expect(read, isNot(contains('old-closed-paid')));
-      expect(read, isNot(contains('ended-day-before')));
+      expect(read, isNot(contains('left-earlier-paid')));
       expect(narrowActivities().map((r) => r['id']), isNot(contains('old-paid')));
     });
   });

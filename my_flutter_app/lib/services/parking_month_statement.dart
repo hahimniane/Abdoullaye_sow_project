@@ -419,6 +419,100 @@ ParkingMonthActivity? activityMonthItem(Map<String, dynamic> row, String monthKe
   );
 }
 
+/// A car that left the lot BEFORE the month and still owes: it comes along
+/// on the month's bill as "unpaid from before", like an older unpaid activity
+/// (docs/PARKING_CARRYOVER.md). Mirrors the server's `carriedCarItem`.
+class ParkingCarriedCar {
+  const ParkingCarriedCar({
+    required this.id,
+    required this.monthKey,
+    required this.periodFrom,
+    required this.periodTo,
+    required this.days,
+    required this.accruedCents,
+    required this.dueCents,
+    required this.customerName,
+    required this.customerPhone,
+    required this.customerEmail,
+    required this.vehicle,
+    required this.vinNumber,
+    required this.trackingCode,
+    this.paymentMethod = '',
+    this.recordable = false,
+  });
+
+  final String id;
+
+  /// The month whose bill it comes along on.
+  final String monthKey;
+
+  /// The whole stay: parking day and leave day ("2026-09-06").
+  final String periodFrom;
+  final String periodTo;
+  final int days;
+  final int accruedCents;
+
+  /// What the whole stay ran up minus what was paid: always above 0.
+  final int dueCents;
+  final String customerName;
+  final String customerPhone;
+  final String customerEmail;
+  final String vehicle;
+  final String vinNumber;
+  final String trackingCode;
+  final String paymentMethod;
+
+  /// A payment can be recorded by hand: a direct car the business entered.
+  final bool recordable;
+}
+
+/// The car as unpaid from before [monthKey], or null when it was on the lot
+/// during the month (its bill carries its earlier days), has not left, left
+/// paid up, or was voided or cancelled. Mirrors the server.
+ParkingCarriedCar? carriedCarItem(Map<String, dynamic> row, String monthKey,
+    [DateTime? now]) {
+  if (_text(row['status'], 40) == 'cancelled' || row['voided'] == true) {
+    return null;
+  }
+  final month = parkingMonthDays(monthKey);
+  final start = parkingDayNumber(row['parkingDate']);
+  final leave = parkingDayNumber(row['parkingEndDate']);
+  final today = parkingDayNumber(now ?? DateTime.now());
+  if (month == null || start == null || leave == null || today == null) {
+    return null;
+  }
+  if (leave >= month.first || leave < start) return null;
+  final accrued = parkingAccruedThroughCents(row, leave, today);
+  final paid = _paidCents(row, today);
+  final due = accrued - paid > 0 ? accrued - paid : 0;
+  if (due <= 0) return null;
+  final customer = _text(row['customerName']).isNotEmpty
+      ? _text(row['customerName'])
+      : _text(row['ownerName']);
+  return ParkingCarriedCar(
+    id: _text(row['id']),
+    monthKey: monthKey,
+    periodFrom: _dayKey(start),
+    periodTo: _dayKey(leave),
+    days: leave - start + 1,
+    accruedCents: accrued,
+    dueCents: due,
+    customerName: customer,
+    customerPhone: _text(row['customerPhone'], 40),
+    customerEmail: _text(row['customerEmail'], 180),
+    vehicle: [row['carYear'], row['carMake'], row['carModel']]
+        .map((v) => _text(v, 80))
+        .where((v) => v.isNotEmpty)
+        .join(' '),
+    vinNumber: _text(row['vinNumber'], 17).toUpperCase(),
+    trackingCode: _text(row['trackingCode'], 40),
+    paymentMethod: _text(row['paymentMethod'], 40),
+    recordable: _text(row['paymentMethod'], 40) == 'direct' &&
+        (_text(row['source'], 40) == 'business' ||
+            row['enteredByBusiness'] == true),
+  );
+}
+
 /// One customer for the month: every car on their phone with its dates,
 /// every activity with its date.
 class ParkingMonthCustomer {
@@ -448,6 +542,8 @@ class ParkingMonthCustomer {
     this.expenseLines = const [],
     this.earlierExpenseCents = 0,
     this.linkedStaffIds = const [],
+    this.olderCars = const [],
+    this.olderCarsRegisteredTo = const [],
   }) : dueBeforeExpensesCents = dueBeforeExpensesCents ?? dueCents;
 
   final String key;
@@ -464,6 +560,12 @@ class ParkingMonthCustomer {
   final List<ParkingMonthActivity> olderActivities;
   final List<String> activityRegisteredTo;
   final List<String> olderRegisteredTo;
+
+  /// Cars that left before the month and still owe ("Unpaid from before"),
+  /// oldest first; [olderCarsRegisteredTo] is per car, same order. Their
+  /// dues are inside [priorUnpaidCents].
+  final List<ParkingCarriedCar> olderCars;
+  final List<String> olderCarsRegisteredTo;
   final int monthCents;
   final int monthPaidCents;
   final int monthUnpaidCents;
@@ -535,6 +637,8 @@ class ParkingMonthCustomer {
           lines.map((l) => l.amountCents),
         ),
         linkedStaffIds: net.linkedStaffIds,
+        olderCars: olderCars,
+        olderCarsRegisteredTo: olderCarsRegisteredTo,
       );
 }
 
@@ -652,16 +756,23 @@ String mostUsedName(Iterable<String> names) {
 List<ParkingMonthCustomer> parkingMonthCustomers(
   Iterable<ParkingMonthBill> bills, [
   Iterable<ParkingMonthActivity> activities = const [],
+  Iterable<ParkingCarriedCar> carried = const [],
 ]) {
   final carGroups = <String, List<ParkingMonthBill>>{};
   final actGroups = <String, List<ParkingMonthActivity>>{};
+  final carriedGroups = <String, List<ParkingCarriedCar>>{};
   for (final b in bills) {
     carGroups.putIfAbsent(parkingCustomerKey(b), () => []).add(b);
   }
   for (final a in activities) {
     actGroups.putIfAbsent(parkingCustomerKeyOf(a.customerPhone, a.customerName), () => []).add(a);
   }
-  final keys = {...carGroups.keys, ...actGroups.keys};
+  for (final c in carried) {
+    carriedGroups
+        .putIfAbsent(parkingCustomerKeyOf(c.customerPhone, c.customerName), () => [])
+        .add(c);
+  }
+  final keys = {...carGroups.keys, ...actGroups.keys, ...carriedGroups.keys};
   final customers = <ParkingMonthCustomer>[];
   for (final key in keys) {
     final cars = [...?carGroups[key]]
@@ -674,9 +785,15 @@ List<ParkingMonthCustomer> parkingMonthCustomers(
         final byDate = a.date.compareTo(b.date);
         return byDate != 0 ? byDate : a.label.compareTo(b.label);
       });
+    final olderCars = [...?carriedGroups[key]]
+      ..sort((a, b) {
+        final byFrom = a.periodFrom.compareTo(b.periodFrom);
+        return byFrom != 0 ? byFrom : a.vehicle.compareTo(b.vehicle);
+      });
     final name = mostUsedName([
       ...cars.map((b) => b.customerName),
       ...acts.map((a) => a.customerName),
+      ...olderCars.map((c) => c.customerName),
     ]);
     // Every line says whose name it was registered under, also when it is
     // the name at the top of the bill, so a line never looks unnamed.
@@ -689,7 +806,8 @@ List<ParkingMonthCustomer> parkingMonthCustomers(
     final monthCents = sumCars((b) => b.monthCents) + sumActs(inMonth, (a) => a.feeCents);
     final monthPaid = sumCars((b) => b.monthPaidCents) + sumActs(inMonth, (a) => a.paidCents);
     final monthUnpaid = sumCars((b) => b.monthUnpaidCents) + sumActs(inMonth, (a) => a.dueCents);
-    final priorUnpaid = sumCars((b) => b.priorUnpaidCents) + sumActs(older, (a) => a.dueCents);
+    final priorUnpaid = sumCars((b) => b.priorUnpaidCents) + sumActs(older, (a) => a.dueCents) +
+        olderCars.fold<int>(0, (s, c) => s + c.dueCents);
     final due = monthUnpaid + priorUnpaid;
     final paidVia = <String>[];
     for (final codes in [
@@ -706,10 +824,12 @@ List<ParkingMonthCustomer> parkingMonthCustomers(
         values.firstWhere((v) => v.isNotEmpty, orElse: () => '');
     customers.add(ParkingMonthCustomer(
       key: key,
-      monthKey: cars.isNotEmpty ? cars.first.monthKey : acts.first.monthKey,
+      monthKey: cars.isNotEmpty
+          ? cars.first.monthKey
+          : (acts.isNotEmpty ? acts.first.monthKey : olderCars.first.monthKey),
       customerName: name,
-      customerPhone: firstNonEmpty([...cars.map((b) => b.customerPhone), ...acts.map((a) => a.customerPhone)]),
-      customerEmail: firstNonEmpty([...cars.map((b) => b.customerEmail), ...acts.map((a) => a.customerEmail)]),
+      customerPhone: firstNonEmpty([...cars.map((b) => b.customerPhone), ...acts.map((a) => a.customerPhone), ...olderCars.map((c) => c.customerPhone)]),
+      customerEmail: firstNonEmpty([...cars.map((b) => b.customerEmail), ...acts.map((a) => a.customerEmail), ...olderCars.map((c) => c.customerEmail)]),
       cars: cars,
       registeredTo: [for (final b in cars) reg(b.customerName)],
       activities: inMonth,
@@ -725,6 +845,8 @@ List<ParkingMonthCustomer> parkingMonthCustomers(
       paid: parkingMonthCustomerPaid(monthCents: monthCents, dueCents: due),
       paidVia: paidVia,
       partialMonth: cars.any((b) => b.partialMonth),
+      olderCars: olderCars,
+      olderCarsRegisteredTo: [for (final c in olderCars) reg(c.customerName)],
     ));
   }
   customers.sort((a, b) {
@@ -765,8 +887,14 @@ String parkingMonthCustomerText(ParkingMonthCustomer c, String businessName) {
         '${named(c.activityRegisteredTo[i])} — ${parkingMoney(a.feeCents)}');
     if (a.paidCents > 0) lines.add('  Paid — -${parkingMoney(a.paidCents)}');
   }
-  if (c.olderActivities.isNotEmpty) {
+  if (c.olderCars.isNotEmpty || c.olderActivities.isNotEmpty) {
     lines..add('')..add('Unpaid from before');
+    for (var i = 0; i < c.olderCars.length; i++) {
+      final b = c.olderCars[i];
+      lines.add('${dayLabel(b.periodFrom)} to ${dayLabel(b.periodTo)} · '
+          'Parking · ${b.vehicle.isEmpty ? 'Car' : b.vehicle}'
+          '${named(c.olderCarsRegisteredTo[i])} — ${parkingMoney(b.dueCents)}');
+    }
     for (var i = 0; i < c.olderActivities.length; i++) {
       final a = c.olderActivities[i];
       lines.add('${dayLabel(a.date)} · ${a.label}${a.vehicle.isNotEmpty ? ' · ${a.vehicle}' : ''}'
@@ -800,6 +928,7 @@ class ParkingMonthSummary {
     required this.dueCents,
     required this.owing,
     required this.bills,
+    this.carried = const [],
     this.expenseCreditCents = 0,
     this.businessOwes = const [],
     this.businessOwesCents = 0,
@@ -822,6 +951,9 @@ class ParkingMonthSummary {
   final int dueCents;
   final List<ParkingMonthBill> owing;
   final List<ParkingMonthBill> bills;
+
+  /// Cars that left before the month still owing (unpaid from before).
+  final List<ParkingCarriedCar> carried;
 
   /// Σ staff expenses taken off this month's bills ("Less staff expenses").
   final int expenseCreditCents;
@@ -851,7 +983,11 @@ ParkingMonthSummary parkingMonthSummary(
   final inMonth = activities.where((a) => !a.prior).toList();
   int sumBills(int Function(ParkingMonthBill) f) => bills.fold(0, (s, b) => s + f(b));
   int sumActs(int Function(ParkingMonthActivity) f) => inMonth.fold(0, (s, a) => s + f(a));
-  var customers = parkingMonthCustomers(bills, activities);
+  // Cars that left before the month still owing (PARKING_CARRYOVER.md).
+  final carried = [
+    for (final row in rows) carriedCarItem(row, monthKey, now),
+  ].whereType<ParkingCarriedCar>().toList();
+  var customers = parkingMonthCustomers(bills, activities, carried);
   var businessOwes = const <ParkingMonthStaffOwed>[];
   var businessOwesCents = 0;
   var expenseCreditCents = 0;
@@ -891,6 +1027,7 @@ ParkingMonthSummary parkingMonthSummary(
     dueCents: customersOwing.fold(0, (s, c) => s + c.dueCents),
     owing: owing,
     bills: bills,
+    carried: carried,
     expenseCreditCents: expenseCreditCents,
     businessOwes: businessOwes,
     businessOwesCents: businessOwesCents,
@@ -1043,7 +1180,14 @@ class MonthBillPaymentItem {
     monthBillPaymentPlan(ParkingMonthCustomer c) {
   final items = <MonthBillPaymentItem>[];
   final skipped = <MonthBillPaymentItem>[];
-  for (final b in c.cars) {
+  // A car that left before the month still owing pays off the same way
+  // (docs/PARKING_CARRYOVER.md); it comes first - it is the oldest money.
+  for (final b in <({String id, String vehicle, int dueCents, bool recordable})>[
+    for (final o in c.olderCars)
+      (id: o.id, vehicle: o.vehicle, dueCents: o.dueCents, recordable: o.recordable),
+    for (final o in c.cars)
+      (id: o.id, vehicle: o.vehicle, dueCents: o.dueCents, recordable: o.recordable),
+  ]) {
     if (b.dueCents <= 0) continue;
     final entry = MonthBillPaymentItem(
         kind: 'car', id: b.id, label: b.vehicle.isEmpty ? 'Car' : b.vehicle, amountCents: b.dueCents);

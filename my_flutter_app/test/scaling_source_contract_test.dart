@@ -116,6 +116,7 @@ void main() {
       final screen = read('lib/screens/parking_month_end_screen.dart');
       for (final spec in [
         'parkedCarsEndingFromSpec(id, startMs)',
+        'parkedCarsUnpaidCarriedSpec(id)',
         'lotActivitiesBetweenSpec(',
         'lotActivitiesUnsettledSpec(id)',
         'lotActivitiesUndatedSpec(id)',

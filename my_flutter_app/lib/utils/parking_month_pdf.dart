@@ -364,7 +364,7 @@ Future<Uint8List> buildParkingMonthBillPdf({
             ]),
         ]),
       ],
-      if (c.olderActivities.isNotEmpty) ...[
+      if (c.olderCars.isNotEmpty || c.olderActivities.isNotEmpty) ...[
         sectionTitle(copy.priorUnpaid),
         table([
           pw.TableRow(children: [
@@ -373,6 +373,23 @@ Future<Uint8List> buildParkingMonthBillPdf({
             headCell(''),
             headCell(copy.amount, right: true),
           ]),
+          // Cars that left before the month still owing come first
+          // (docs/PARKING_CARRYOVER.md): the whole stay, what is still due.
+          for (var i = 0; i < c.olderCars.length; i++)
+            pw.TableRow(children: [
+              itemCell(
+                c.olderCars[i].vehicle.isEmpty ? copy.car : c.olderCars[i].vehicle,
+                sub([
+                  copy.parkingTitle,
+                  if (c.olderCars[i].vinNumber.isNotEmpty) 'VIN ${c.olderCars[i].vinNumber}',
+                  if (c.olderCarsRegisteredTo[i].isNotEmpty) '${copy.registeredTo} ${c.olderCarsRegisteredTo[i]}',
+                ]),
+              ),
+              text('${displayDay(c.olderCars[i].periodFrom, copy.locale)} ${copy.to} '
+                  '${displayDay(c.olderCars[i].periodTo, copy.locale)}'),
+              text(''),
+              text(parkingMoney(c.olderCars[i].dueCents), bold: true, align: pw.TextAlign.right),
+            ]),
           for (var i = 0; i < c.olderActivities.length; i++)
             pw.TableRow(children: [
               itemCell(actTitle(c.olderActivities[i]), sub([
@@ -489,7 +506,7 @@ Future<Uint8List> buildParkingMonthSummaryPdf({
             ),
             pw.Expanded(
               child: pw.Text(
-                '${b.customerPhone}${b.customerPhone.isNotEmpty ? ' · ' : ''}${[...b.cars.map((car) => car.vehicle), ...b.activities.map((x) => x.label), ...b.olderActivities.map((x) => x.label)].join(', ')}',
+                '${b.customerPhone}${b.customerPhone.isNotEmpty ? ' · ' : ''}${[...b.olderCars.map((car) => car.vehicle), ...b.cars.map((car) => car.vehicle), ...b.activities.map((x) => x.label), ...b.olderActivities.map((x) => x.label)].join(', ')}',
                 maxLines: 1,
                 overflow: pw.TextOverflow.clip,
                 style: const pw.TextStyle(fontSize: 9, color: _muted),
