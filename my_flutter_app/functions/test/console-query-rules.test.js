@@ -169,6 +169,8 @@ before(async () => {
         lastSeenAt: ts("2026-09-01")});
       put(`invoices/${biz}-1`, {businessId: biz, status: "open",
         issuedOn: "2026-09-01", dueOn: "2026-09-15"});
+      put(`parkingBillPayments/${biz}-1`, {businessId: biz,
+        monthKey: "2026-10", amountCents: 5000, status: "recorded"});
       put(`lotLedgerAudit/${biz}-1`, {businessId: biz, acknowledged: false,
         at: ts("2026-09-01"), entityId: "x"});
       put(`supportCases/${biz}-1`, {businessId: biz,
@@ -216,6 +218,10 @@ const SHAPES = [
         .where("occupancyEndMs", ">=", Date.UTC(2026, 9, 5))],
   // Month end: cars not paid up, for those that left before the month
   // still owing (docs/PARKING_CARRYOVER.md).
+  // Month end: the month's bill payments (docs/PARKING_BILL_PAYMENTS.md).
+  ["month end: bill payments", (db, b) =>
+    db.collection("parkingBillPayments").where("businessId", "==", b)
+        .where("monthKey", "==", "2026-10")],
   ["unpaid stays carried into month end", (db, b) =>
     db.collection("parkedCars").where("businessId", "==", b)
         .where("paymentStatus", "not-in", ["paid", "succeeded"])],

@@ -183,6 +183,96 @@ function receiptModel(args) {
   };
 }
 
+// How many charges a bill receipt lists one by one before "and N more".
+const BILL_RECEIPT_MAX_LINES = 12;
+
+/**
+ * The receipt of one month bill payment (docs/PARKING_BILL_PAYMENTS.md):
+ * the same page as a car's receipt, listing what the money paid, oldest
+ * first, with the bill's balance afterwards.
+ *
+ * @param {object} args `{business, payment, timeZone}`; `payment` is the
+ *   parkingBillPayments document (`customerName, customerPhone, monthKey,
+ *   amountCents, receivedVia, receivedByStaffId, receivedByName, atMs,
+ *   number, parts: [{label, trackingCode, amountCents, full}], leftCents`).
+ * @return {object} The model renderReceiptPdf draws.
+ */
+function billReceiptModel(args) {
+  const payment = args?.payment || {};
+  const business = args?.business || {};
+  const zone = args?.timeZone || "America/New_York";
+  const parts = Array.isArray(payment.parts) ? payment.parts : [];
+  const method = METHOD_LABEL[text(payment.receivedVia, 40).toLowerCase()] ||
+    METHOD_LABEL.other;
+  const [year, month] = text(payment.monthKey, 7).split("-").map(Number);
+  const monthText = year && month >= 1 && month <= 12 ?
+    `${MONTHS[month - 1]} ${year}` : "";
+  const rows = [
+    ["Customer / Client", text(payment.customerName, 120)],
+    ["Phone / Téléphone", text(payment.customerPhone, 40)],
+    ["Bill / Facture", monthText],
+    ["Payment method / Mode de paiement", method],
+    ["Payment received / Paiement reçu le", usDate(payment.atMs, zone)],
+  ];
+  const received = text(payment.receivedByStaffId, 120) ===
+    BUSINESS_ACCOUNT_RECEIVER ?
+    "Business account / Compte de l'entreprise" :
+    text(payment.receivedByName, 120);
+  rows.push(["Received by / Reçu par", received]);
+  const shown = parts.length > BILL_RECEIPT_MAX_LINES ?
+    parts.slice(0, BILL_RECEIPT_MAX_LINES - 1) : parts;
+  for (const part of shown) {
+    const code = text(part.trackingCode, 40);
+    const label = text(part.label, 80) || "Parking";
+    rows.push([`${label}${code ? ` · ${code}` : ""}`,
+      `${money(part.amountCents)}${part.full ?
+        " · paid / payé" : ""}`]);
+  }
+  if (shown.length < parts.length) {
+    const rest = parts.slice(shown.length);
+    rows.push([`And ${rest.length} more / Et ${rest.length} autres`,
+      money(rest.reduce((sum, p) => sum + (Number(p.amountCents) || 0), 0))]);
+  }
+  const leftCents = Math.max(0, Math.round(Number(payment.leftCents) || 0));
+  const paidInFull = leftCents === 0;
+  const number = Math.max(1, Math.round(Number(payment.number) || 1));
+  const id = text(payment.id, 80);
+  const name = text(business.name, 160) || "Laawol";
+  return {
+    title: "RECEIPT / REÇU",
+    reference: `REC-${text(payment.monthKey, 7).replace("-", "")}-${
+      id.slice(0, 6).toUpperCase()}`,
+    receiptNumber: `${number}`,
+    businessName: name,
+    businessAddress: formatBusinessAddress({business, entry: {}}),
+    businessContact: [text(business.phone, 40), text(business.email, 180)]
+        .filter(Boolean).join("  |  "),
+    logoUrl: documentLogo(business).url,
+    status: {
+      label: paidInFull ? "PAID / PAYÉ" : "PARTLY PAID / PAYÉ EN PARTIE",
+      paidInFull,
+    },
+    rows: rows.filter(([, value]) => value)
+        .map(([label, value]) => ({label, value})),
+    amount: {label: "AMOUNT PAID / MONTANT PAYÉ",
+      value: money(payment.amountCents)},
+    totals: [
+      {label: "Bill before this payment / Facture avant ce paiement",
+        value: money(leftCents + (Number(payment.amountCents) || 0))},
+      paidInFull ?
+        {label: "Balance / Solde", value: "Paid in full / Payé en totalité",
+          tone: "paid"} :
+        {label: "Balance owed / Solde à payer", value: money(leftCents),
+          tone: "due"},
+    ],
+    footer: [
+      "Thank you — this receipt confirms your payment. / " +
+        "Merci — ce reçu confirme votre paiement.",
+      "Issued through Laawol Digital · laawoldigital.com",
+    ],
+  };
+}
+
 /**
  * Fetches a logo's bytes: https only, PNG or JPEG (all pdfkit can draw),
  * small, and quick. Resolves to null on any failure.
@@ -491,6 +581,7 @@ function draw(doc, model, logo) {
 
 module.exports = {
   METHOD_LABEL,
+  billReceiptModel,
   drawFooter,
   drawHeader,
   drawLogo,

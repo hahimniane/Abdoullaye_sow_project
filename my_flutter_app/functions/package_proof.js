@@ -249,6 +249,54 @@ function receiptLinkValid(query, token, nowMs) {
 }
 
 /**
+ * What a bill receipt link signs in the path's place ("bill:" keeps a car
+ * receipt's, an invoice's or a photo's signature from opening it).
+ * @param {string} paymentId The parkingBillPayments id.
+ * @return {string}
+ */
+function billReceiptSigningPath(paymentId) {
+  return `bill:${String(paymentId || "")}`;
+}
+
+/**
+ * A time-limited link to a month bill payment's receipt PDF
+ * (docs/PARKING_BILL_PAYMENTS.md), served by the /d document endpoint
+ * (view=billReceiptPdf). Signed with the payment's own document token, its
+ * id and the expiry.
+ * @param {object} o `{base, token, paymentId, expiresMs}`
+ * @return {string}
+ */
+function billReceiptLink(o) {
+  const expires = Math.floor(Number(o.expiresMs));
+  const sig = photoSignature(o.token, billReceiptSigningPath(o.paymentId),
+      expires);
+  const q = new URLSearchParams({
+    view: "billReceiptPdf", t: String(o.token), p: String(o.paymentId),
+    e: String(expires), s: sig,
+  });
+  return `${o.base}?${q.toString()}`;
+}
+
+/**
+ * Whether a /d?view=billReceiptPdf query is genuine and still valid.
+ * @param {object} query `{t, p, e, s}`
+ * @param {string} token The payment's stored document token.
+ * @param {number} nowMs
+ * @return {boolean}
+ */
+function billReceiptLinkValid(query, token, nowMs) {
+  const expires = Number(query?.e);
+  if (!token || !Number.isFinite(expires) || expires <= nowMs) return false;
+  const paymentId = String(query?.p || "");
+  if (!/^[A-Za-z0-9_-]{1,80}$/.test(paymentId)) return false;
+  const expected = photoSignature(token, billReceiptSigningPath(paymentId),
+      expires);
+  const given = String(query?.s || "");
+  if (given.length !== expected.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(given), Buffer.from(expected));
+}
+
+/**
  * What an invoice link signs in the path's place (the "invoice:" prefix keeps
  * a receipt's or a photo's signature from ever opening an invoice).
  * @param {string} phoneDigits The customer's number, digits only.
@@ -599,6 +647,8 @@ module.exports = {
   photoPathParts,
   photoRequirementRefusal,
   photoSignature,
+  billReceiptLink,
+  billReceiptLinkValid,
   invoiceLink,
   invoiceLinkValid,
   receiptLink,

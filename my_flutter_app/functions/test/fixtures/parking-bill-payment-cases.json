@@ -1,0 +1,634 @@
+{
+  "about": "docs/PARKING_BILL_PAYMENTS.md - billPaymentPlan / billPaymentFor; server, console and app must agree. Fake data.",
+  "cases": [
+    {
+      "name": "oldest first: older car, older job, the car's earlier days, then the month",
+      "customer": {
+        "key": "phone:2015550101",
+        "customerName": "Fatou Camara",
+        "dueCents": 13000,
+        "expenseCreditCents": 0,
+        "olderCars": [
+          {
+            "recordable": true,
+            "priorUnpaidCents": 0,
+            "trackingCode": "PK-OLD001",
+            "id": "old1",
+            "vehicle": "2014 Toyota Corolla",
+            "periodFrom": "2026-08-03",
+            "dueCents": 3000
+          }
+        ],
+        "cars": [
+          {
+            "recordable": true,
+            "priorUnpaidCents": 2000,
+            "trackingCode": "PK-CIV002",
+            "id": "c1",
+            "vehicle": "2016 Honda Civic",
+            "periodFrom": "2026-09-01",
+            "dueCents": 5000
+          }
+        ],
+        "activities": [
+          {
+            "id": "a1",
+            "label": "Towing",
+            "vehicle": "2016 Honda Civic",
+            "date": "2026-09-05",
+            "dueCents": 4000
+          }
+        ],
+        "olderActivities": [
+          {
+            "id": "a0",
+            "label": "Wash",
+            "vehicle": "",
+            "date": "2026-08-20",
+            "dueCents": 1000
+          }
+        ]
+      },
+      "amountCents": 6500,
+      "expect": {
+        "ok": true,
+        "reason": "",
+        "payableCents": 13000,
+        "leftCents": 6500,
+        "parts": [
+          {
+            "kind": "car",
+            "id": "old1",
+            "label": "2014 Toyota Corolla",
+            "amountCents": 3000,
+            "full": true
+          },
+          {
+            "kind": "activity",
+            "id": "a0",
+            "label": "Wash",
+            "amountCents": 1000,
+            "full": true
+          },
+          {
+            "kind": "car",
+            "id": "c1",
+            "label": "2016 Honda Civic",
+            "amountCents": 2500,
+            "full": false
+          }
+        ]
+      }
+    },
+    {
+      "name": "the exact payable total pays everything",
+      "customer": {
+        "key": "phone:2015550101",
+        "customerName": "Fatou Camara",
+        "dueCents": 13000,
+        "expenseCreditCents": 0,
+        "olderCars": [
+          {
+            "recordable": true,
+            "priorUnpaidCents": 0,
+            "trackingCode": "PK-OLD001",
+            "id": "old1",
+            "vehicle": "2014 Toyota Corolla",
+            "periodFrom": "2026-08-03",
+            "dueCents": 3000
+          }
+        ],
+        "cars": [
+          {
+            "recordable": true,
+            "priorUnpaidCents": 2000,
+            "trackingCode": "PK-CIV002",
+            "id": "c1",
+            "vehicle": "2016 Honda Civic",
+            "periodFrom": "2026-09-01",
+            "dueCents": 5000
+          }
+        ],
+        "activities": [
+          {
+            "id": "a1",
+            "label": "Towing",
+            "vehicle": "2016 Honda Civic",
+            "date": "2026-09-05",
+            "dueCents": 4000
+          }
+        ],
+        "olderActivities": [
+          {
+            "id": "a0",
+            "label": "Wash",
+            "vehicle": "",
+            "date": "2026-08-20",
+            "dueCents": 1000
+          }
+        ]
+      },
+      "amountCents": 13000,
+      "expect": {
+        "ok": true,
+        "reason": "",
+        "payableCents": 13000,
+        "leftCents": 0,
+        "parts": [
+          {
+            "kind": "car",
+            "id": "old1",
+            "label": "2014 Toyota Corolla",
+            "amountCents": 3000,
+            "full": true
+          },
+          {
+            "kind": "activity",
+            "id": "a0",
+            "label": "Wash",
+            "amountCents": 1000,
+            "full": true
+          },
+          {
+            "kind": "car",
+            "id": "c1",
+            "label": "2016 Honda Civic",
+            "amountCents": 5000,
+            "full": true
+          },
+          {
+            "kind": "activity",
+            "id": "a1",
+            "label": "Towing · 2016 Honda Civic",
+            "amountCents": 4000,
+            "full": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "one cent more than owed is refused",
+      "customer": {
+        "key": "phone:2015550101",
+        "customerName": "Fatou Camara",
+        "dueCents": 13000,
+        "expenseCreditCents": 0,
+        "olderCars": [
+          {
+            "recordable": true,
+            "priorUnpaidCents": 0,
+            "trackingCode": "PK-OLD001",
+            "id": "old1",
+            "vehicle": "2014 Toyota Corolla",
+            "periodFrom": "2026-08-03",
+            "dueCents": 3000
+          }
+        ],
+        "cars": [
+          {
+            "recordable": true,
+            "priorUnpaidCents": 2000,
+            "trackingCode": "PK-CIV002",
+            "id": "c1",
+            "vehicle": "2016 Honda Civic",
+            "periodFrom": "2026-09-01",
+            "dueCents": 5000
+          }
+        ],
+        "activities": [
+          {
+            "id": "a1",
+            "label": "Towing",
+            "vehicle": "2016 Honda Civic",
+            "date": "2026-09-05",
+            "dueCents": 4000
+          }
+        ],
+        "olderActivities": [
+          {
+            "id": "a0",
+            "label": "Wash",
+            "vehicle": "",
+            "date": "2026-08-20",
+            "dueCents": 1000
+          }
+        ]
+      },
+      "amountCents": 13001,
+      "expect": {
+        "ok": false,
+        "reason": "bill_payment_more_than_owed",
+        "payableCents": 13000,
+        "leftCents": 13000,
+        "parts": []
+      }
+    },
+    {
+      "name": "no amount",
+      "customer": {
+        "key": "phone:2015550101",
+        "customerName": "Fatou Camara",
+        "dueCents": 13000,
+        "expenseCreditCents": 0,
+        "olderCars": [
+          {
+            "recordable": true,
+            "priorUnpaidCents": 0,
+            "trackingCode": "PK-OLD001",
+            "id": "old1",
+            "vehicle": "2014 Toyota Corolla",
+            "periodFrom": "2026-08-03",
+            "dueCents": 3000
+          }
+        ],
+        "cars": [
+          {
+            "recordable": true,
+            "priorUnpaidCents": 2000,
+            "trackingCode": "PK-CIV002",
+            "id": "c1",
+            "vehicle": "2016 Honda Civic",
+            "periodFrom": "2026-09-01",
+            "dueCents": 5000
+          }
+        ],
+        "activities": [
+          {
+            "id": "a1",
+            "label": "Towing",
+            "vehicle": "2016 Honda Civic",
+            "date": "2026-09-05",
+            "dueCents": 4000
+          }
+        ],
+        "olderActivities": [
+          {
+            "id": "a0",
+            "label": "Wash",
+            "vehicle": "",
+            "date": "2026-08-20",
+            "dueCents": 1000
+          }
+        ]
+      },
+      "amountCents": 0,
+      "expect": {
+        "ok": false,
+        "reason": "bill_payment_no_amount",
+        "payableCents": 13000,
+        "leftCents": 13000,
+        "parts": []
+      }
+    },
+    {
+      "name": "a negative amount",
+      "customer": {
+        "key": "phone:2015550101",
+        "customerName": "Fatou Camara",
+        "dueCents": 13000,
+        "expenseCreditCents": 0,
+        "olderCars": [
+          {
+            "recordable": true,
+            "priorUnpaidCents": 0,
+            "trackingCode": "PK-OLD001",
+            "id": "old1",
+            "vehicle": "2014 Toyota Corolla",
+            "periodFrom": "2026-08-03",
+            "dueCents": 3000
+          }
+        ],
+        "cars": [
+          {
+            "recordable": true,
+            "priorUnpaidCents": 2000,
+            "trackingCode": "PK-CIV002",
+            "id": "c1",
+            "vehicle": "2016 Honda Civic",
+            "periodFrom": "2026-09-01",
+            "dueCents": 5000
+          }
+        ],
+        "activities": [
+          {
+            "id": "a1",
+            "label": "Towing",
+            "vehicle": "2016 Honda Civic",
+            "date": "2026-09-05",
+            "dueCents": 4000
+          }
+        ],
+        "olderActivities": [
+          {
+            "id": "a0",
+            "label": "Wash",
+            "vehicle": "",
+            "date": "2026-08-20",
+            "dueCents": 1000
+          }
+        ]
+      },
+      "amountCents": -500,
+      "expect": {
+        "ok": false,
+        "reason": "bill_payment_no_amount",
+        "payableCents": 13000,
+        "leftCents": 13000,
+        "parts": []
+      }
+    },
+    {
+      "name": "a Stripe car is skipped and does not count toward the cap",
+      "customer": {
+        "key": "phone:2015550102",
+        "customerName": "Ibrahima Sow",
+        "dueCents": 7000,
+        "expenseCreditCents": 0,
+        "olderCars": [],
+        "olderActivities": [],
+        "activities": [],
+        "cars": [
+          {
+            "recordable": false,
+            "priorUnpaidCents": 0,
+            "trackingCode": "",
+            "id": "link1",
+            "vehicle": "2018 Nissan Altima",
+            "periodFrom": "2026-09-02",
+            "dueCents": 5000
+          },
+          {
+            "recordable": true,
+            "priorUnpaidCents": 0,
+            "trackingCode": "",
+            "id": "c2",
+            "vehicle": "2012 Ford Focus",
+            "periodFrom": "2026-09-10",
+            "dueCents": 2000
+          }
+        ]
+      },
+      "amountCents": 2000,
+      "expect": {
+        "ok": true,
+        "reason": "",
+        "payableCents": 2000,
+        "leftCents": 5000,
+        "parts": [
+          {
+            "kind": "car",
+            "id": "c2",
+            "label": "2012 Ford Focus",
+            "amountCents": 2000,
+            "full": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "paying a Stripe car's share here is more than owed",
+      "customer": {
+        "key": "phone:2015550102",
+        "customerName": "Ibrahima Sow",
+        "dueCents": 7000,
+        "expenseCreditCents": 0,
+        "olderCars": [],
+        "olderActivities": [],
+        "activities": [],
+        "cars": [
+          {
+            "recordable": false,
+            "priorUnpaidCents": 0,
+            "trackingCode": "",
+            "id": "link1",
+            "vehicle": "2018 Nissan Altima",
+            "periodFrom": "2026-09-02",
+            "dueCents": 5000
+          },
+          {
+            "recordable": true,
+            "priorUnpaidCents": 0,
+            "trackingCode": "",
+            "id": "c2",
+            "vehicle": "2012 Ford Focus",
+            "periodFrom": "2026-09-10",
+            "dueCents": 2000
+          }
+        ]
+      },
+      "amountCents": 2500,
+      "expect": {
+        "ok": false,
+        "reason": "bill_payment_more_than_owed",
+        "payableCents": 2000,
+        "leftCents": 7000,
+        "parts": []
+      }
+    },
+    {
+      "name": "expense credit covers the first items, as in Mark all paid",
+      "customer": {
+        "key": "phone:2015550103",
+        "customerName": "Aissatou Bah",
+        "dueCents": 3500,
+        "expenseCreditCents": 1500,
+        "olderCars": [
+          {
+            "recordable": true,
+            "priorUnpaidCents": 0,
+            "trackingCode": "",
+            "id": "old2",
+            "vehicle": "2010 Kia Rio",
+            "periodFrom": "2026-07-01",
+            "dueCents": 3000
+          }
+        ],
+        "cars": [
+          {
+            "recordable": true,
+            "priorUnpaidCents": 0,
+            "trackingCode": "",
+            "id": "c3",
+            "vehicle": "2019 Jeep Cherokee",
+            "periodFrom": "2026-09-01",
+            "dueCents": 2000
+          }
+        ],
+        "activities": [],
+        "olderActivities": []
+      },
+      "amountCents": 2000,
+      "expect": {
+        "ok": true,
+        "reason": "",
+        "payableCents": 3500,
+        "leftCents": 1500,
+        "parts": [
+          {
+            "kind": "car",
+            "id": "old2",
+            "label": "2010 Kia Rio",
+            "amountCents": 1500,
+            "full": true
+          },
+          {
+            "kind": "car",
+            "id": "c3",
+            "label": "2019 Jeep Cherokee",
+            "amountCents": 500,
+            "full": false
+          }
+        ]
+      }
+    },
+    {
+      "name": "a bill with only Stripe cars has nothing to pay here",
+      "customer": {
+        "key": "phone:2015550104",
+        "customerName": "Ibrahima Sow",
+        "dueCents": 5000,
+        "expenseCreditCents": 0,
+        "olderCars": [],
+        "olderActivities": [],
+        "activities": [],
+        "cars": [
+          {
+            "recordable": false,
+            "priorUnpaidCents": 0,
+            "trackingCode": "",
+            "id": "link1",
+            "vehicle": "2018 Nissan Altima",
+            "periodFrom": "2026-09-02",
+            "dueCents": 5000
+          }
+        ]
+      },
+      "amountCents": 100,
+      "expect": {
+        "ok": false,
+        "reason": "bill_payment_nothing_to_pay",
+        "payableCents": 0,
+        "leftCents": 5000,
+        "parts": []
+      }
+    },
+    {
+      "name": "same day: the car comes before the job (month cars, then activities)",
+      "customer": {
+        "key": "phone:2015550105",
+        "customerName": "Moussa Kaba",
+        "dueCents": 3000,
+        "expenseCreditCents": 0,
+        "olderCars": [],
+        "olderActivities": [],
+        "cars": [
+          {
+            "recordable": true,
+            "priorUnpaidCents": 0,
+            "trackingCode": "",
+            "id": "c5",
+            "vehicle": "2015 BMW X5",
+            "periodFrom": "2026-09-01",
+            "dueCents": 2000
+          }
+        ],
+        "activities": [
+          {
+            "id": "a5",
+            "label": "Jump start",
+            "vehicle": "",
+            "date": "2026-09-01",
+            "dueCents": 1000
+          }
+        ]
+      },
+      "amountCents": 2500,
+      "expect": {
+        "ok": true,
+        "reason": "",
+        "payableCents": 3000,
+        "leftCents": 500,
+        "parts": [
+          {
+            "kind": "car",
+            "id": "c5",
+            "label": "2015 BMW X5",
+            "amountCents": 2000,
+            "full": true
+          },
+          {
+            "kind": "activity",
+            "id": "a5",
+            "label": "Jump start",
+            "amountCents": 500,
+            "full": false
+          }
+        ]
+      }
+    }
+  ],
+  "labels": [
+    {
+      "parts": [
+        {
+          "label": "2014 Toyota Corolla"
+        }
+      ],
+      "en": "2014 Toyota Corolla",
+      "fr": "2014 Toyota Corolla"
+    },
+    {
+      "parts": [
+        {
+          "label": "A"
+        },
+        {
+          "label": "B"
+        }
+      ],
+      "en": "A and B",
+      "fr": "A et B"
+    },
+    {
+      "parts": [
+        {
+          "label": "A"
+        },
+        {
+          "label": "B"
+        },
+        {
+          "label": "A"
+        },
+        {
+          "label": "C"
+        }
+      ],
+      "en": "A, B and 1 more",
+      "fr": "A, B et 1 autre"
+    },
+    {
+      "parts": [
+        {
+          "label": "A"
+        },
+        {
+          "label": "B"
+        },
+        {
+          "label": "C"
+        },
+        {
+          "label": "D"
+        }
+      ],
+      "en": "A, B and 2 more",
+      "fr": "A, B et 2 autres"
+    },
+    {
+      "parts": [],
+      "en": "parking",
+      "fr": "stationnement"
+    }
+  ]
+}

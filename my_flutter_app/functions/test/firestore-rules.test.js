@@ -4523,6 +4523,65 @@ describe("phone account rules", () => {
   });
 });
 
+// Month bill payments (docs/PARKING_BILL_PAYMENTS.md): the lot's team reads
+// them on Month end (by business and month); only the server writes them.
+describe("parking bill payment rules", () => {
+  async function seedBillPayments() {
+    const {doc, setDoc} = require("firebase/firestore");
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, "parkingBillPayments/bp_a"), {
+        businessId: "biz_a", monthKey: "2026-10", amountCents: 50000,
+        status: "recorded", parts: []});
+      await setDoc(doc(db, "parkingBillPayments/bp_b"), {
+        businessId: "biz_b", monthKey: "2026-10", amountCents: 100,
+        status: "recorded", parts: []});
+    });
+  }
+
+  it("lets the lot's owner and staff read its month's payments, as a query",
+      async () => {
+        await seedBillPayments();
+        const {query, collection, where, getDocs, getDoc, doc} =
+            require("firebase/firestore");
+        for (const uid of ["owner-a", "staff-parking-a", "super-admin"]) {
+          const db = firestoreFor(uid);
+          await assertSucceeds(getDoc(doc(db, "parkingBillPayments/bp_a")));
+          const rows = await assertSucceeds(getDocs(query(
+              collection(db, "parkingBillPayments"),
+              where("businessId", "==", "biz_a"),
+              where("monthKey", "==", "2026-10"))));
+          assert.equal(rows.size, 1, uid);
+        }
+      });
+
+  it("keeps another lot, customers and the signed-out out", async () => {
+    await seedBillPayments();
+    const {query, collection, where, getDocs, getDoc, doc} =
+        require("firebase/firestore");
+    for (const uid of ["owner-b", "staff-transport-b", "customer-owner",
+      "support-admin", null]) {
+      const db = firestoreFor(uid);
+      await assertFails(getDoc(doc(db, "parkingBillPayments/bp_a")));
+      await assertFails(getDocs(query(collection(db, "parkingBillPayments"),
+          where("businessId", "==", "biz_a"))));
+    }
+  });
+
+  it("never lets any client write one", async () => {
+    await seedBillPayments();
+    const {doc, setDoc, updateDoc, deleteDoc} = require("firebase/firestore");
+    for (const uid of ["owner-a", "staff-parking-a", "super-admin", null]) {
+      const db = firestoreFor(uid);
+      await assertFails(setDoc(doc(db, "parkingBillPayments/forged"),
+          {businessId: "biz_a", amountCents: 1}));
+      await assertFails(updateDoc(doc(db, "parkingBillPayments/bp_a"),
+          {status: "undone"}));
+      await assertFails(deleteDoc(doc(db, "parkingBillPayments/bp_a")));
+    }
+  });
+});
+
 // Parking customers on WhatsApp (docs/PARKING_WHATSAPP.md §2): the message
 // rows are the business's to read and the server's alone to write, and the
 // receipt PDFs in Storage are nobody's but the server's.

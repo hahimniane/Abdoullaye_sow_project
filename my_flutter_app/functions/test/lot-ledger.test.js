@@ -488,7 +488,12 @@ describe("settling and unsettling keep the balance honest", () => {
 
   it("an instalment settles the job only when it clears the balance", () => {
     const body = callable("recordLotActivityInstalment");
-    assert.match(body, /if \(plan\.fullyCovered\)/);
+    // The writes are shared with month bill payments
+    // (docs/PARKING_BILL_PAYMENTS.md): one helper, settled only when covered.
+    assert.match(body, /lotInstalmentWrites\(tx, \{/);
+    const start = source.indexOf("function lotInstalmentWrites(");
+    const helper = source.slice(start, source.indexOf("\n}\n", start));
+    assert.match(helper, /if \(plan\.fullyCovered\)/);
     assert.match(body, /runTransaction/);
     // Taking cash closes the window in which the customer could still pay a
     // balance that has just stopped being owed.

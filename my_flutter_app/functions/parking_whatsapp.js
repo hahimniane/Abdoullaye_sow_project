@@ -25,12 +25,16 @@ const {
   phoneWithBusinessCountry,
 } = require("./container_manifest");
 const {PARKING_TEMPLATE} = require("./whatsapp_templates");
+const {billPaymentFor} = require("./parking_bill_payment");
 
 const KIND = Object.freeze({
   PARKED: "parked",
   INVOICE: "invoice",
   RECEIPT: "receipt",
   WELCOME: "welcome",
+  // One receipt for a payment on a whole month bill
+  // (docs/PARKING_BILL_PAYMENTS.md), instead of one per car it touched.
+  BILL_RECEIPT: "bill_receipt",
 });
 
 const STATUS = Object.freeze({
@@ -220,22 +224,30 @@ function newPayments({businessId, carId, before, after, eventMs, now}) {
   const known = new Set((Array.isArray(before.parkingPayments) ?
     before.parkingPayments : []).map((payment) =>
     paymentIdOf({businessId, carId, payment})));
+  // A month bill payment's car parts are announced once, by the bill
+  // payment's own receipt - not one receipt per car, and not as a car
+  // just settled either (docs/PARKING_BILL_PAYMENTS.md).
+  const added = (Array.isArray(after.parkingPayments) ?
+    after.parkingPayments : []).filter((payment) => payment &&
+    typeof payment === "object" &&
+    !known.has(paymentIdOf({businessId, carId, payment})));
+  if (added.some((payment) => text(payment.billPaymentId, 80))) return [];
   const live = livePayments({businessId, carId, car: after});
   const fresh = live.filter((payment) => !known.has(payment.id));
   if (fresh.length > 0) return fresh;
   if (!isSettled(after) || isSettled(before)) return [];
-  const added = settledCents(after, now) -
+  const settled = settledCents(after, now) -
     Math.max(0, Math.round(Number(before.amountPaidCents) || 0));
-  if (added <= 0) return [];
+  if (settled <= 0) return [];
   const atMs = msOf(after.directPaymentReceivedAt) || msOf(after.paidAt) ||
     msOf(after.lastPaymentAt) || Math.round(Number(eventMs) || 0);
   const via = text(after.directPaymentMethod, 40).toLowerCase() ||
     (text(after.paymentMethod, 40) === "payment_link" ? "card_link" :
       "online");
-  const synthetic = {amountCents: added, at: atMs};
+  const synthetic = {amountCents: settled, at: atMs};
   return [{
     id: paymentIdOf({businessId, carId, payment: synthetic}),
-    amountCents: added,
+    amountCents: settled,
     receivedVia: via,
     receivedByStaffId: text(after.receivedByStaffId, 180),
     atMs,
@@ -291,6 +303,7 @@ const phoneDigits = (phone) => text(phone, 40).replace(/\D/g, "");
 function messageRowId(kind, {carId, paymentId, businessId, phone}) {
   if (kind === KIND.PARKED) return `${carId}_parked`;
   if (kind === KIND.RECEIPT) return `${carId}_pay_${paymentId}`;
+  if (kind === KIND.BILL_RECEIPT) return `bill_${paymentId}`;
   return `welcome_${businessId}_${phoneDigits(phone)}`;
 }
 
@@ -470,6 +483,37 @@ function receiptValues(car, business, payment, balance) {
   };
 }
 
+/**
+ * The values of `parking_receipt_2lang` for a month bill payment: the
+ * amount, what it paid ("2014 Toyota Corolla, 2016 RAV4 and 2 more"), what
+ * was paid toward the bill, and what the whole bill still owes.
+ *
+ * @param {object} payment The parkingBillPayments document.
+ * @param {object} business A businesses document.
+ * @return {object} By VARIABLE name (without the document header).
+ */
+function billReceiptValues(payment, business) {
+  const parts = Array.isArray(payment?.parts) ? payment.parts : [];
+  const left = Math.max(0, Math.round(Number(payment?.leftCents) || 0));
+  const balance = {paidInFull: left === 0, balanceCents: left};
+  const code = parts.map((p) => text(p?.trackingCode, 40)).find(Boolean) ||
+    "";
+  return {
+    name: text(payment?.customerName, 60),
+    business: text(business?.name, 80),
+    businessPhone: text(business?.phone, 40),
+    trackingCode: code,
+    amountEn: moneyEn(payment?.amountCents),
+    amountFr: moneyFr(payment?.amountCents),
+    carEn: billPaymentFor(parts, "en"),
+    carFr: billPaymentFor(parts, "fr"),
+    paidTotalEn: moneyEn(payment?.billPaidCents),
+    paidTotalFr: moneyFr(payment?.billPaidCents),
+    balanceEn: balanceLine(balance, "en"),
+    balanceFr: balanceLine(balance, "fr"),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // The welcome to cars already parked
 // ---------------------------------------------------------------------------
@@ -574,6 +618,7 @@ function welcomeValues(recipient, business) {
 }
 
 module.exports = {
+  billReceiptValues,
   KIND,
   STATUS,
   REFUSAL,

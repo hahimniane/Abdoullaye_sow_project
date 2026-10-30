@@ -244,6 +244,7 @@ const parkingWhatsApp = require("./parking_whatsapp");
 const parkingReceiptPdf = require("./parking_receipt_pdf");
 // Monthly parking invoices on WhatsApp (docs/PARKING_INVOICES.md).
 const parkingInvoices = require("./parking_invoices");
+const parkingBillPayment = require("./parking_bill_payment");
 const parkingInvoicePdf = require("./parking_invoice_pdf");
 const {parkingBalanceNow} = require("./parking_month_statement");
 const {
@@ -610,6 +611,7 @@ const {
 const {
   mergeRowsById: mergeParkingMonthRows,
   monthBoundsMs: parkingMonthBoundsMs,
+  paymentCents: parkingPaymentCents,
 } = require("./parking_month_statement");
 const {lotCustomerKey, mergeLotCustomer} = require("./lot_customers");
 const {staffCredits} = require("./staff_expense_credit");
@@ -15386,6 +15388,504 @@ async function parkingInvoicesAction(request, uid, action) {
   return {success: true, monthKey, ...tally};
 }
 
+// ---------------------------------------------------------------------------
+// Month bill payments (docs/PARKING_BILL_PAYMENTS.md): one amount on a
+// customer's Month end card pays the bill oldest first, as one payment with
+// one receipt that is undone as one.
+// ---------------------------------------------------------------------------
+
+const PARKING_BILL_PAYMENT_ACTIONS = Object.freeze(
+    ["bill_payment_record", "bill_payment_undo"]);
+
+/**
+ * A refusal a client can name: the code in `details.reason`.
+ *
+ * @param {string} reason A BILL_PAYMENT_REFUSAL value.
+ * @param {string} [code] The HttpsError code.
+ * @return {HttpsError} The error.
+ */
+function parkingBillPaymentRefusal(reason, code = "failed-precondition") {
+  return new HttpsError(code,
+      parkingBillPayment.BILL_PAYMENT_MESSAGES[reason] ||
+        "This payment cannot be recorded.", {reason});
+}
+
+/**
+ * Where a bill payment's receipt PDF is kept (server only).
+ *
+ * @param {string} businessId The lot.
+ * @param {string} paymentId The parkingBillPayments id.
+ * @return {string} The Storage path.
+ */
+function parkingBillReceiptStoragePath(businessId, paymentId) {
+  return `parkingBillReceipts/${businessId}/${paymentId}.pdf`;
+}
+
+/**
+ * The customer's bill for the month, as Month end shows it: the month's
+ * statement with linked staff's expenses taken off. Strict: never worked
+ * out from bills whose staff expenses could not be read.
+ *
+ * @param {object} db Firestore.
+ * @param {object} businessDoc The business's snapshot.
+ * @param {string} monthKey "YYYY-MM".
+ * @param {string} customerKey parkingCustomerKey of the customer.
+ * @param {Date} now The moment.
+ * @return {Promise<?object>} The customer, or null.
+ */
+async function parkingBillCustomer(db, businessDoc, monthKey, customerKey,
+    now) {
+  const data = await parkingMonthEndData(db, businessDoc, monthKey, now,
+      true);
+  if (!data) return null;
+  const credit = data.netting ?
+    await parkingInvoiceCredit(db, businessDoc, data.netting) : null;
+  const customers = parkingInvoices.nettedCustomers(data.summary.customers,
+      monthKey, credit);
+  return customers.find((c) => c.key === customerKey) || null;
+}
+
+/**
+ * Records one payment on a customer's month bill: every part in one
+ * transaction, each written exactly as a hand-recorded part payment on its
+ * car (parkingPartPaymentUpdate) or activity (lotInstalmentWrites), all
+ * tagged with the bill payment's id.
+ *
+ * @param {object} db Firestore.
+ * @param {object} args {businessDoc, user, uid, data, now}.
+ * @return {Promise<object>} The client's answer.
+ */
+async function recordParkingBillPayment(db, args) {
+  const {businessDoc, user, uid, data, now} = args;
+  const businessId = businessDoc.id;
+  const R = parkingBillPayment.BILL_PAYMENT_REFUSAL;
+  const monthKey = cleanText(data.monthKey, 7);
+  const bounds = parkingMonthBoundsMs(monthKey);
+  if (!bounds || bounds.startMs > now.getTime()) {
+    throw parkingBillPaymentRefusal(R.MONTH_INVALID, "invalid-argument");
+  }
+  const receivedByStaffId = cleanText(data.receivedByStaffId, 180);
+  if (!receivedByStaffId) {
+    throw parkingBillPaymentRefusal(R.RECEIVER_REQUIRED, "invalid-argument");
+  }
+  const receivedVia = normalizeDirectPaymentMethod(
+      cleanText(data.receivedVia, 40));
+  const note = cleanText(data.note, 500);
+  const customerKey = cleanText(data.customerKey, 200);
+  const customer = await parkingBillCustomer(db, businessDoc, monthKey,
+      customerKey, now);
+  if (!customer) throw parkingBillPaymentRefusal(R.CUSTOMER_NOT_FOUND);
+  const plan = parkingBillPayment.billPaymentPlan(customer,
+      Number(data.amountCents));
+  if (!plan.ok) throw parkingBillPaymentRefusal(plan.reason);
+  // The preview the person confirmed must be the bill paid: if a payment
+  // landed since, the oldest-first split may differ.
+  const expected = Math.round(Number(data.expectedPayableCents));
+  if (Number.isFinite(expected) && expected !== plan.payableCents) {
+    throw parkingBillPaymentRefusal(R.BILL_CHANGED);
+  }
+  const hasActivity = plan.parts.some((p) => p.kind === "activity");
+  if (hasActivity && !hasBusinessPermission(user, "ledger")) {
+    throw parkingBillPaymentRefusal(R.LEDGER_REQUIRED, "permission-denied");
+  }
+
+  const billRef = db.collection("parkingBillPayments").doc();
+  const billPaymentId = billRef.id;
+  const at = FirestoreTimestamp.now();
+  const sessions = [];
+  const parts = plan.parts.map((p) => ({...p}));
+  await db.runTransaction(async (tx) => {
+    const refs = parts.map((p) => db.collection(
+        p.kind === "car" ? "parkedCars" : "lotActivities").doc(p.id));
+    const snaps = await Promise.all(refs.map((ref) => tx.get(ref)));
+    const writes = [];
+    snaps.forEach((snap, i) => {
+      const part = parts[i];
+      const row = snap.exists ? snap.data() || {} : null;
+      if (!row || String(row.businessId || "") !== businessId ||
+          row.voided === true) {
+        throw parkingBillPaymentRefusal(R.BILL_CHANGED);
+      }
+      if (part.kind === "car") {
+        const dailyRateCents = Math.max(0, Math.round(
+            centsFromDollars(row.dailyRate) ||
+            Number(row.dailyRateCents) || 0));
+        const carPlan = businessParkingPartialPaymentPlan({entry: row,
+          amountCents: part.amountCents, dailyRateCents});
+        if (!carPlan.ok || carPlan.appliedCents !== part.amountCents) {
+          throw parkingBillPaymentRefusal(R.BILL_CHANGED);
+        }
+        writes.push(() => tx.update(refs[i], parkingPartPaymentUpdate({
+          plan: carPlan, receivedVia, receivedByStaffId, uid, note,
+          extra: {billPaymentId}})));
+      } else {
+        const actPlan = lotActivityPaymentPlan({activity: row,
+          amountCents: part.amountCents, source: "cash"});
+        if (!actPlan.ok || actPlan.appliedCents !== part.amountCents) {
+          throw parkingBillPaymentRefusal(R.BILL_CHANGED);
+        }
+        const paymentRef = db.collection("lotActivityPayments").doc();
+        part.paymentRecordId = paymentRef.id;
+        part.remainingCents = actPlan.remainingCents;
+        if (actPlan.fullyCovered && row.checkoutSessionId) {
+          sessions.push({id: String(row.checkoutSessionId),
+            account: String(row.stripeConnectedAccountId || "")});
+        }
+        writes.push(() => lotInstalmentWrites(tx, {ref: refs[i], paymentRef,
+          plan: actPlan, businessId, activityId: part.id, receivedVia,
+          receivedByStaffId, uid, note, now, extra: {billPaymentId}}));
+      }
+    });
+    for (const write of writes) write();
+    tx.set(billRef, {
+      businessId,
+      monthKey,
+      customerKey,
+      customerName: String(customer.customerName || "").slice(0, 120),
+      customerPhone: String(customer.customerPhone || "").slice(0, 40),
+      amountCents: Math.round(Number(data.amountCents)),
+      receivedVia,
+      receivedByStaffId,
+      recordedByUid: uid,
+      note,
+      parts: parts.map((p) => ({kind: p.kind, id: p.id, label: p.label,
+        trackingCode: p.trackingCode, amountCents: p.amountCents,
+        full: p.full === true,
+        ...(p.paymentRecordId ? {paymentRecordId: p.paymentRecordId} : {}),
+      })),
+      // What the whole bill owed before, and still owes after.
+      dueBeforeCents: customer.dueCents,
+      leftCents: plan.leftCents,
+      billPaidCents: (Number(customer.monthPaidCents) || 0) +
+        Math.round(Number(data.amountCents)),
+      status: "recorded",
+      documentToken: crypto.randomBytes(24).toString("base64url"),
+      at,
+      atMs: at.toMillis(),
+      createdAt: FirestoreFieldValue.serverTimestamp(),
+    });
+  });
+
+  // Outside the transaction, as recordLotActivityInstalment does.
+  for (const session of sessions) {
+    if (SIMULATE_PAYMENTS) break;
+    await expireStripeCheckoutSession(session.id, session.account || undefined)
+        .catch(() => null);
+  }
+  for (const part of parts.filter((p) => p.kind === "activity")) {
+    await writeLotLedgerAudit({
+      businessId, entityType: "activity", entityId: part.id,
+      action: "payment_received", byStaffId: uid,
+      summary: part.full ?
+        `Final payment of ${lotMoney(part.amountCents)} - settled ` +
+          "(month bill payment)" :
+        `Part payment of ${lotMoney(part.amountCents)}, ` +
+          `${lotMoney(part.remainingCents)} still owed (month bill payment)`,
+      changes: [],
+    }).catch(() => null);
+  }
+  const receipt = await sendParkingBillReceipt(db, {businessDoc,
+    billPaymentId, now}).catch((error) => {
+    logger.warn("Bill payment receipt failed", {billPaymentId,
+      error: String(error?.message || error).slice(0, 300)});
+    return parkingWhatsApp.STATUS.FAILED;
+  });
+  return {
+    success: true,
+    billPaymentId,
+    amountCents: Math.round(Number(data.amountCents)),
+    leftCents: plan.leftCents,
+    parts: parts.map((p) => ({kind: p.kind, id: p.id, label: p.label,
+      amountCents: p.amountCents, full: p.full === true})),
+    receipt: receipt || "",
+  };
+}
+
+/**
+ * Undoes a whole bill payment: every part leaves its car or activity at
+ * once (a car's entries move to `revertedParkingPayments`, as the car's own
+ * undo does; an activity's instalment is flagged `reverted`), a settled one
+ * goes back to awaiting payment, and the payment itself stays, `undone`.
+ * Refused when a part was settled afterwards by a mark-paid that left no
+ * entry - undoing would leave that total wrong.
+ *
+ * @param {object} db Firestore.
+ * @param {object} args {businessDoc, user, uid, data}.
+ * @return {Promise<object>} The client's answer.
+ */
+async function undoParkingBillPayment(db, args) {
+  const {businessDoc, user, uid, data} = args;
+  const businessId = businessDoc.id;
+  const R = parkingBillPayment.BILL_PAYMENT_REFUSAL;
+  const billRef = db.collection("parkingBillPayments")
+      .doc(cleanText(data.billPaymentId, 120) || "-");
+  const undone = [];
+  await db.runTransaction(async (tx) => {
+    const billSnap = await tx.get(billRef);
+    const bill = billSnap.exists ? billSnap.data() || {} : null;
+    if (!bill || String(bill.businessId || "") !== businessId) {
+      throw parkingBillPaymentRefusal(R.NOT_FOUND, "not-found");
+    }
+    if (bill.status === "undone") {
+      throw parkingBillPaymentRefusal(R.ALREADY_UNDONE);
+    }
+    const parts = Array.isArray(bill.parts) ? bill.parts : [];
+    if (parts.some((p) => p.kind === "activity") &&
+        !hasBusinessPermission(user, "ledger")) {
+      throw parkingBillPaymentRefusal(R.LEDGER_REQUIRED, "permission-denied");
+    }
+    const refs = parts.map((p) => db.collection(
+        p.kind === "car" ? "parkedCars" : "lotActivities").doc(String(p.id)));
+    const snaps = await Promise.all(refs.map((ref) => tx.get(ref)));
+    const instalments = await Promise.all(parts.map((p) =>
+      p.kind === "activity" ?
+        tx.get(db.collection("lotActivityPayments")
+            .where("activityId", "==", String(p.id))) : null));
+    const writes = [];
+    const nowTs = FirestoreTimestamp.now();
+    snaps.forEach((snap, i) => {
+      const part = parts[i];
+      if (!snap.exists) return;
+      const row = snap.data() || {};
+      if (part.kind === "car") {
+        const list = Array.isArray(row.parkingPayments) ?
+          row.parkingPayments : [];
+        const mine = list.filter((p) => p?.billPaymentId === billRef.id);
+        // Already taken off by the car's own undo: nothing left to do here.
+        if (mine.length === 0) return;
+        const listed = list.reduce((sum, p) => sum + parkingPaymentCents(p), 0);
+        const stored = Math.round(Number(row.amountPaidCents) || 0);
+        if (stored !== listed) throw parkingBillPaymentRefusal(R.SETTLED_SINCE);
+        const removed = mine.reduce((sum, p) => sum + parkingPaymentCents(p),
+            0);
+        const newPaid = Math.max(0, stored - removed);
+        const earlier = Array.isArray(row.revertedParkingPayments) ?
+          row.revertedParkingPayments : [];
+        const update = {
+          parkingPayments: list.filter((p) =>
+            p?.billPaymentId !== billRef.id),
+          revertedParkingPayments: [...earlier, ...mine.map((p) => ({
+            ...p, reverted: true, revertedByUid: uid, revertedAt: nowTs}))],
+          amountPaidCents: newPaid,
+          amountPaid: dollarsFromCents(newPaid),
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        };
+        if (String(row.paymentStatus || "") === "paid") {
+          Object.assign(update, {
+            paymentStatus: "awaiting_direct_payment",
+            directPaymentReceived: false,
+            directPaymentMethod: "",
+            directPaymentMarkedByUid: "",
+            ...directPaymentPayoutFields(newPaid),
+          });
+        }
+        writes.push(() => tx.update(refs[i], update));
+        undone.push({kind: "car", id: part.id, amountCents: removed});
+      } else {
+        const docs = instalments[i]?.docs || [];
+        const live = docs.filter((d) => d.data()?.reverted !== true);
+        const mine = live.filter((d) => d.data()?.billPaymentId === billRef.id);
+        if (mine.length === 0) return;
+        const listed = live.reduce((sum, d) =>
+          sum + Math.max(0, Math.round(Number(d.data()?.amountCents) || 0)),
+        0);
+        const stored = lotActivityPaidCents(row);
+        if (stored !== listed) throw parkingBillPaymentRefusal(R.SETTLED_SINCE);
+        const removed = mine.reduce((sum, d) =>
+          sum + Math.max(0, Math.round(Number(d.data()?.amountCents) || 0)),
+        0);
+        const newPaid = Math.max(0, stored - removed);
+        for (const d of mine) {
+          writes.push(() => tx.set(d.ref, {reverted: true,
+            revertedByStaffId: uid,
+            revertedAt: FirestoreFieldValue.serverTimestamp()},
+          {merge: true}));
+        }
+        const update = {
+          amountPaidCents: newPaid,
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        };
+        if (String(row.paymentStatus || "") ===
+            LOT_ACTIVITY_PAYMENT_STATUS.SUCCEEDED) {
+          Object.assign(update, {
+            paymentStatus: LOT_ACTIVITY_PAYMENT_STATUS.AWAITING_DIRECT,
+            paymentRevertedByStaffId: uid,
+            paymentRevertedAt: FirestoreFieldValue.serverTimestamp(),
+          });
+        }
+        writes.push(() => tx.set(refs[i], update, {merge: true}));
+        undone.push({kind: "activity", id: part.id, amountCents: removed});
+      }
+    });
+    for (const write of writes) write();
+    tx.update(billRef, {
+      status: "undone",
+      undoneByUid: uid,
+      undoneAt: FirestoreFieldValue.serverTimestamp(),
+      undoneAtMs: nowTs.toMillis(),
+    });
+  });
+  for (const part of undone.filter((p) => p.kind === "activity")) {
+    await writeLotLedgerAudit({
+      businessId, entityType: "activity", entityId: part.id,
+      action: "payment_reverted", byStaffId: uid,
+      summary: `Month bill payment of ${lotMoney(part.amountCents)} undone`,
+      changes: [],
+    }).catch(() => null);
+  }
+  return {success: true, billPaymentId: billRef.id, undone};
+}
+
+/**
+ * The one WhatsApp receipt of a bill payment, when the business switched
+ * parking messages on: the PDF kept in Storage, a 30-day signed link to it
+ * in the approved `parking_receipt_2lang`. Its row in parkingMessages
+ * (`bill_{id}`) makes a second send impossible.
+ *
+ * @param {object} db Firestore.
+ * @param {object} args {businessDoc, billPaymentId, now}.
+ * @return {Promise<string>} The row's status ("" when the switch is off).
+ */
+async function sendParkingBillReceipt(db, args) {
+  const {businessDoc, billPaymentId, now} = args;
+  const business = businessDoc.data() || {};
+  if (!parkingWhatsApp.switchAllows(business, now.getTime())) return "";
+  const billRef = db.collection("parkingBillPayments").doc(billPaymentId);
+  const bill = (await billRef.get()).data() || {};
+  const reach = parkingWhatsApp.reachablePhone(
+      {customerPhone: bill.customerPhone}, business);
+  const values = parkingWhatsApp.billReceiptValues(bill, business);
+  const ref = db.collection("parkingMessages").doc(parkingWhatsApp
+      .messageRowId(parkingWhatsApp.KIND.BILL_RECEIPT,
+          {paymentId: billPaymentId}));
+  // The template's button opens a car's Track page: a payment on
+  // activities alone has no car code to put there.
+  const error = reach.error || (values.trackingCode ? "" : "no_car");
+  const row = {
+    businessId: businessDoc.id,
+    parkedCarId: "",
+    billPaymentId,
+    kind: parkingWhatsApp.KIND.BILL_RECEIPT,
+    template: parkingWhatsApp.PARKING_TEMPLATE.RECEIPT,
+    phone: reach.phone || String(bill.customerPhone || "").slice(0, 40),
+    name: String(bill.customerName || "").slice(0, 120),
+    trackingCode: values.trackingCode,
+    amountCents: Number(bill.amountCents) || 0,
+    status: error ? parkingWhatsApp.STATUS.SKIPPED :
+      parkingWhatsApp.STATUS.QUEUED,
+    error,
+  };
+  if (!await createParkingMessageRow(ref, row)) return "";
+  if (error) return parkingWhatsApp.STATUS.SKIPPED;
+  let body;
+  try {
+    const zone = String(business?.packageRequestSettings?.timeZone || "")
+        .trim() || "America/New_York";
+    const bytes = await parkingReceiptPdf.renderReceiptPdf(
+        parkingReceiptPdf.billReceiptModel({
+          business,
+          payment: {...bill, id: billPaymentId,
+            receivedByName: await staffNameForReceipt(db,
+                bill.receivedByStaffId)},
+          timeZone: zone,
+        }));
+    const filename = `Receipt ${String(bill.customerName || "").trim()} ${
+      parkingReceiptPdf.shortDay(Number(bill.atMs) || now.getTime(), zone)
+    }.pdf`.replace(/["\\\r\n]/g, "");
+    await requestPhotoBucket()
+        .file(parkingBillReceiptStoragePath(businessDoc.id, billPaymentId))
+        .save(bytes, {contentType: "application/pdf", resumable: false,
+          metadata: {metadata: {filename}}});
+    body = parkingTemplateMessage({
+      template: parkingWhatsApp.PARKING_TEMPLATE.RECEIPT,
+      phone: reach.phone,
+      values: {
+        ...values,
+        documentLink: packageProof.billReceiptLink({
+          base: whatsappPhotoBase(),
+          token: bill.documentToken,
+          paymentId: billPaymentId,
+          expiresMs: now.getTime() + packageProof.PHOTO_LINK_MS,
+        }),
+        documentFilename: filename,
+      },
+    });
+  } catch (error) {
+    await ref.update({status: parkingWhatsApp.STATUS.FAILED, attempts: 1,
+      error: String(error?.message || error).slice(0, 300),
+      updatedAt: FirestoreFieldValue.serverTimestamp()});
+    return parkingWhatsApp.STATUS.FAILED;
+  }
+  return deliverParkingMessage(ref, {...row, phone: reach.phone}, body,
+      String(business.name || ""));
+}
+
+/**
+ * The bill receipt PDF a /d?view=billReceiptPdf link points at, when the
+ * link is genuine (package_proof.billReceiptLinkValid) and the payment was
+ * not undone.
+ *
+ * @param {object} db Firestore.
+ * @param {object} req The request ({t, p, e, s}).
+ * @param {string} token The payment's document token.
+ * @return {Promise<object|null>} {bytes, filename}, or null for 404.
+ */
+async function parkingBillReceiptPdfFile(db, req, token) {
+  if (!packageProof.billReceiptLinkValid(req.query, token, Date.now())) {
+    return null;
+  }
+  const found = await db.collection("parkingBillPayments")
+      .where("documentToken", "==", token).limit(1).get();
+  if (found.empty) return null;
+  const bill = found.docs[0].data() || {};
+  if (found.docs[0].id !== String(req.query?.p || "") ||
+      bill.status === "undone") {
+    return null;
+  }
+  try {
+    const file = requestPhotoBucket().file(parkingBillReceiptStoragePath(
+        String(bill.businessId || ""), found.docs[0].id));
+    const [meta] = await file.getMetadata();
+    const [bytes] = await file.download();
+    const kept = String(meta?.metadata?.filename || "")
+        .replace(/["\\\r\n]/g, "");
+    return {bytes, filename: kept || "Receipt.pdf"};
+  } catch (error) {
+    return null;
+  }
+}
+
+/**
+ * updateBusinessParkingEntry's bill payment actions: who may, then record
+ * or undo. Anyone with the parking permission (and ledger, when the
+ * payment touches lot activities) - the same people as Mark all paid.
+ *
+ * @param {object} request The callable request.
+ * @param {string} uid The caller.
+ * @param {string} action A PARKING_BILL_PAYMENT_ACTIONS value.
+ * @return {Promise<object>} The answer.
+ */
+async function parkingBillPaymentAction(request, uid, action) {
+  const data = request.data || {};
+  const businessId = cleanText(data.businessId, 180);
+  if (!businessId) {
+    throw new HttpsError("invalid-argument", "Business is required",
+        {reason: "business_required"});
+  }
+  const user = await requireBusinessPermission(uid, businessId, "parking");
+  const db = admin.firestore();
+  const businessDoc = await db.collection("businesses").doc(businessId).get();
+  if (!businessDoc.exists) {
+    throw new HttpsError("not-found", "Business not found",
+        {reason: "business_not_found"});
+  }
+  if (action === "bill_payment_record") {
+    return recordParkingBillPayment(db, {businessDoc, user, uid, data,
+      now: new Date()});
+  }
+  return undoParkingBillPayment(db, {businessDoc, user, uid, data});
+}
+
 const PARKING_INVOICE_ACTIONS = Object.freeze(
     ["set_payment_instructions", "invoices_preview", "invoices_send"]);
 
@@ -15536,6 +16036,17 @@ exports.parkingDocument = onRequest(
       // A customer's monthly parking invoice PDF (docs/PARKING_INVOICES.md):
       // the month's own token, the customer's number, a signed expiry; the
       // PDF itself, or 404.
+      // One receipt for a payment on a whole month bill
+      // (docs/PARKING_BILL_PAYMENTS.md): the payment's own token.
+      if (String(req.query?.view || "") === "billReceiptPdf") {
+        const receipt = await parkingBillReceiptPdfFile(db, req, token);
+        if (!receipt) return notFound();
+        res.set("Content-Type", "application/pdf");
+        res.set("Content-Disposition",
+            `inline; filename="${receipt.filename}"`);
+        res.set("Cache-Control", "private, max-age=3600");
+        return res.status(200).send(receipt.bytes);
+      }
       if (String(req.query?.view || "") === "invoicePdf") {
         const invoice = await parkingInvoicePdfFile(db, req, token);
         if (!invoice) return notFound();
@@ -15923,6 +16434,9 @@ exports.updateBusinessParkingEntry = onCall(
       }
       if (PARKING_INVOICE_ACTIONS.includes(businessAction)) {
         return parkingInvoicesAction(request, uid, businessAction);
+      }
+      if (PARKING_BILL_PAYMENT_ACTIONS.includes(businessAction)) {
+        return parkingBillPaymentAction(request, uid, businessAction);
       }
       const entryId = cleanText(
           request.data?.entryId || request.data?.reservationId, 180,
@@ -16679,6 +17193,53 @@ exports.revertBusinessParkingPaid = onCall(
  * total moves; when a fixed stay's payments reach its total the record flips
  * to fully paid, on the same transition markBusinessParkingPaid uses.
  */
+/**
+ * The write one part payment makes on a parked car: the payment appended
+ * to `parkingPayments`, the running total, and - when it covers the stay -
+ * the same settled shape as a full mark-paid. Shared by the per-car part
+ * payment and a month bill payment's car parts (PARKING_BILL_PAYMENTS.md).
+ *
+ * @param {object} args {plan (businessParkingPartialPaymentPlan's answer),
+ *   receivedVia, receivedByStaffId, uid, note, extra (more fields on the
+ *   payment entry)}.
+ * @return {object} The update for the car.
+ */
+function parkingPartPaymentUpdate(args) {
+  const {plan, receivedVia, receivedByStaffId, uid, note} = args;
+  const payment = {
+    amountCents: plan.appliedCents,
+    amount: dollarsFromCents(plan.appliedCents),
+    receivedVia: normalizeDirectPaymentMethod(receivedVia),
+    receivedByStaffId,
+    recordedByUid: uid,
+    note: note || "",
+    at: FirestoreTimestamp.now(),
+    ...(args.extra || {}),
+  };
+  const update = {
+    amountPaidCents: plan.newPaidCents,
+    amountPaid: dollarsFromCents(plan.newPaidCents),
+    parkingPayments: FirestoreFieldValue.arrayUnion(payment),
+    receivedByStaffId,
+    recordedByStaffId: uid,
+    updatedAt: FirestoreFieldValue.serverTimestamp(),
+  };
+  if (plan.fullyCovered) {
+    // Same settled shape as a full mark-paid, so a record that reached
+    // its total by instalments is indistinguishable from one paid once.
+    Object.assign(update, {
+      paymentStatus: "paid",
+      status: "reserved",
+      directPaymentReceived: true,
+      directPaymentMethod: normalizeDirectPaymentMethod(receivedVia),
+      directPaymentMarkedByUid: uid,
+      directPaymentReceivedAt: FirestoreFieldValue.serverTimestamp(),
+      ...directPaymentPayoutFields(plan.newPaidCents),
+    });
+  }
+  return update;
+}
+
 exports.recordBusinessParkingPartialPayment = onCall(
     {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
     async (request) => {
@@ -16733,37 +17294,8 @@ exports.recordBusinessParkingPartialPayment = onCall(
                 "This payment cannot be recorded",
           );
         }
-        const payment = {
-          amountCents: plan.appliedCents,
-          amount: dollarsFromCents(plan.appliedCents),
-          receivedVia: normalizeDirectPaymentMethod(receivedVia),
-          receivedByStaffId,
-          recordedByUid: uid,
-          note,
-          at: FirestoreTimestamp.now(),
-        };
-        const update = {
-          amountPaidCents: plan.newPaidCents,
-          amountPaid: dollarsFromCents(plan.newPaidCents),
-          parkingPayments: FirestoreFieldValue.arrayUnion(payment),
-          receivedByStaffId,
-          recordedByStaffId: uid,
-          updatedAt: FirestoreFieldValue.serverTimestamp(),
-        };
-        if (plan.fullyCovered) {
-          // Same settled shape as a full mark-paid, so a record that reached
-          // its total by instalments is indistinguishable from one paid once.
-          Object.assign(update, {
-            paymentStatus: "paid",
-            status: "reserved",
-            directPaymentReceived: true,
-            directPaymentMethod: normalizeDirectPaymentMethod(receivedVia),
-            directPaymentMarkedByUid: uid,
-            directPaymentReceivedAt: FirestoreFieldValue.serverTimestamp(),
-            ...directPaymentPayoutFields(plan.newPaidCents),
-          });
-        }
-        transaction.update(entryRef, update);
+        transaction.update(entryRef, parkingPartPaymentUpdate({
+          plan, receivedVia, receivedByStaffId, uid, note}));
         return {
           appliedCents: plan.appliedCents,
           newPaidCents: plan.newPaidCents,
@@ -18497,6 +19029,59 @@ exports.recordLotActivityDirectPayment = onCall(
 // Taking cash also expires the live Stripe session. The customer reopens the
 // link, sees the new balance, and pays that - rather than completing a
 // checkout for an amount that stopped being owed while they were typing.
+/**
+ * The writes one cash instalment makes on a lot activity: its
+ * lotActivityPayments record and the activity's running total - settled
+ * when it covers the fee. Shared by recordLotActivityInstalment and a month
+ * bill payment's activity parts (PARKING_BILL_PAYMENTS.md).
+ *
+ * @param {object} tx The transaction.
+ * @param {object} args {ref, paymentRef, plan (lotActivityPaymentPlan's
+ *   answer), businessId, activityId, receivedVia, receivedByStaffId, uid,
+ *   note, now, extra (more fields on the payment record)}.
+ */
+function lotInstalmentWrites(tx, args) {
+  const {ref, paymentRef, plan, businessId, activityId, receivedVia,
+    receivedByStaffId, uid, note, now} = args;
+  tx.set(paymentRef, {
+    ...lotActivityPaymentRecord({
+      businessId,
+      activityId,
+      amountCents: plan.appliedCents,
+      overpaidCents: 0,
+      source: "cash",
+      receivedVia,
+      receivedByStaffId,
+      recordedByStaffId: uid,
+      paidAtMonth: lotMonthKeyOf(now),
+      note,
+    }),
+    ...(args.extra || {}),
+    createdAt: FirestoreFieldValue.serverTimestamp(),
+  });
+
+  const update = {
+    amountPaidCents: plan.newPaidCents,
+    lastPaymentAt: FirestoreFieldValue.serverTimestamp(),
+    updatedAt: FirestoreFieldValue.serverTimestamp(),
+  };
+  if (plan.fullyCovered) {
+    // The last instalment settles the job. `receivedVia` and
+    // `receivedByStaffId` name whoever closed it out; the per-payment
+    // records hold who took each of the earlier ones.
+    update.paymentStatus = LOT_ACTIVITY_PAYMENT_STATUS.SUCCEEDED;
+    update.paymentMethod = "direct";
+    update.receivedVia = lotNormalizeReceivedVia(receivedVia);
+    update.receivedByStaffId = receivedByStaffId;
+    update.paidAt = FirestoreFieldValue.serverTimestamp();
+    update.paymentLinkToken = FirestoreFieldValue.delete();
+    update.checkoutStatus = "cancelled";
+    update.paymentRevertedByStaffId = FirestoreFieldValue.delete();
+    update.paymentRevertedAt = FirestoreFieldValue.delete();
+  }
+  tx.set(ref, update, {merge: true});
+}
+
 exports.recordLotActivityInstalment = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK, cors: true,
@@ -18551,42 +19136,9 @@ exports.recordLotActivityInstalment = onCall(
         connectedAccount =
           String(current.stripeConnectedAccountId || "").trim();
 
-        tx.set(paymentRef, {
-          ...lotActivityPaymentRecord({
-            businessId,
-            activityId,
-            amountCents: plan.appliedCents,
-            overpaidCents: 0,
-            source: "cash",
-            receivedVia: data.receivedVia,
-            receivedByStaffId,
-            recordedByStaffId: uid,
-            paidAtMonth: lotMonthKeyOf(now),
-            note: data.note,
-          }),
-          createdAt: FirestoreFieldValue.serverTimestamp(),
-        });
-
-        const update = {
-          amountPaidCents: plan.newPaidCents,
-          lastPaymentAt: FirestoreFieldValue.serverTimestamp(),
-          updatedAt: FirestoreFieldValue.serverTimestamp(),
-        };
-        if (plan.fullyCovered) {
-          // The last instalment settles the job. `receivedVia` and
-          // `receivedByStaffId` name whoever closed it out; the per-payment
-          // records hold who took each of the earlier ones.
-          update.paymentStatus = LOT_ACTIVITY_PAYMENT_STATUS.SUCCEEDED;
-          update.paymentMethod = "direct";
-          update.receivedVia = lotNormalizeReceivedVia(data.receivedVia);
-          update.receivedByStaffId = receivedByStaffId;
-          update.paidAt = FirestoreFieldValue.serverTimestamp();
-          update.paymentLinkToken = FirestoreFieldValue.delete();
-          update.checkoutStatus = "cancelled";
-          update.paymentRevertedByStaffId = FirestoreFieldValue.delete();
-          update.paymentRevertedAt = FirestoreFieldValue.delete();
-        }
-        tx.set(ref, update, {merge: true});
+        lotInstalmentWrites(tx, {ref, paymentRef, plan, businessId,
+          activityId, receivedVia: data.receivedVia, receivedByStaffId, uid,
+          note: data.note, now});
       });
 
       // Outside the transaction: Stripe is not transactional, and a network
