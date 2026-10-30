@@ -5402,6 +5402,12 @@ abstract class AppLocalizations {
   /// **'Enter a valid booking or tracking number.'**
   String get guestTrackingInvalid;
 
+  /// Shown when a tapped tracking link opens the app but its tracking code cannot be read.
+  ///
+  /// In en, this message translates to:
+  /// **'This tracking link isn\'t valid.'**
+  String get trackingLinkInvalid;
+
   /// No description provided for @guestTrackingSubmit.
   ///
   /// In en, this message translates to:

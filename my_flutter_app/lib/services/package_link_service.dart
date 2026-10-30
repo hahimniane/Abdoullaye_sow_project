@@ -11,10 +11,13 @@ import '../screens/inventory_sell_screen.dart';
 import '../screens/package_request_detail_screen.dart';
 import '../screens/package_request_form_screen.dart';
 import '../screens/package_result_screen.dart';
+import '../l10n/app_localizations.dart';
 import '../screens/staff_invite_screen.dart';
 import '../utils/business_permissions.dart';
+import '../widgets/app_snackbars.dart';
 import '../widgets/guest_tracking_lookup.dart';
 import 'container_packages.dart';
+import 'guest_tracking_service.dart';
 import 'inventory.dart';
 import 'package_codes.dart';
 import 'package_requests.dart';
@@ -28,7 +31,13 @@ Widget packageRequestLinkPage(PackageRequestLink link) => switch (link) {
 };
 
 /// Tracking links that open the app: `https://customer.laawoldigital.com/t/
-/// CL-XXXXXX`, from a scanned package label or a WhatsApp update.
+/// CL-XXXXXX`, from a scanned package label or a WhatsApp update. Every
+/// Laawol tracking code rides this (`PK-` parked car, `BS-` barrel, `FR-`
+/// freight, ...; [laawolTrackingPrefixes]): all of them open the public
+/// tracking lookup with the code filled in, the same page the website's
+/// Track box shows, signed in or not. Only a `CL-` package code can open
+/// the staff package view. A tracking link whose code cannot be read says
+/// so in a message instead of doing nothing.
 ///
 /// The link can arrive before anything is ready - it can be what launched
 /// the app - so it is parked until the splash screen has settled auth and
@@ -56,6 +65,7 @@ class PackageLinkService {
   String? _pendingInventoryCode;
   PackageRequestLink? _pendingRequestLink;
   String? _pendingStaffInvite;
+  bool _pendingInvalidTracking = false;
   bool _appReady = false;
   bool _routing = false;
   Uri? _lastLink;
@@ -70,6 +80,10 @@ class PackageLinkService {
 
   @visibleForTesting
   DateTime Function() clock = DateTime.now;
+
+  /// For tests: the lookup the tracking page uses instead of the callable.
+  @visibleForTesting
+  GuestTrackingLookupService? lookupServiceOverride;
 
   /// Links taken (not dropped as a repeat); for tests.
   @visibleForTesting
@@ -92,8 +106,8 @@ class PackageLinkService {
     }
   }
 
-  /// Takes one incoming link. Anything that is not a package tracking link
-  /// is ignored.
+  /// Takes one incoming link. Anything that is not a Laawol link we handle is
+  /// ignored; a tracking link with an unreadable code is reported.
   void handleLink(Uri uri) {
     final now = clock();
     final last = _lastLinkAt;
@@ -134,8 +148,11 @@ class PackageLinkService {
       unawaited(_routeInventory(tag));
       return;
     }
-    final code = packageCodeFromLink(uri);
-    if (code == null) return;
+    final code = trackingCodeFromLink(uri);
+    if (code == null) {
+      if (isTrackingLinkAttempt(uri)) _reportInvalidTracking();
+      return;
+    }
     if (!_appReady || rootNavigatorKey.currentState == null) {
       _pendingCode = code;
       return;
@@ -148,6 +165,10 @@ class PackageLinkService {
   /// of home.
   void markAppReady() {
     _appReady = true;
+    if (_pendingInvalidTracking) {
+      _pendingInvalidTracking = false;
+      _reportInvalidTracking();
+    }
     final invite = _pendingStaffInvite;
     _pendingStaffInvite = null;
     if (invite != null) _routeStaffInvite(invite);
@@ -176,6 +197,20 @@ class PackageLinkService {
     );
   }
 
+  /// "This tracking link isn't valid." - over whatever is showing, or once
+  /// the app is ready when the link was what launched it.
+  void _reportInvalidTracking() {
+    final context = rootNavigatorKey.currentContext;
+    if (!_appReady || context == null || !context.mounted) {
+      _pendingInvalidTracking = true;
+      return;
+    }
+    showErrorSnackBar(
+      context,
+      AppLocalizations.of(context)!.trackingLinkInvalid,
+    );
+  }
+
   void _routeStaffInvite(String token) {
     final navigator = rootNavigatorKey.currentState;
     if (navigator == null) {
@@ -197,6 +232,9 @@ class PackageLinkService {
   String? get pendingCode => _pendingCode;
 
   @visibleForTesting
+  bool get pendingInvalidTracking => _pendingInvalidTracking;
+
+  @visibleForTesting
   String? get pendingInventoryCode => _pendingInventoryCode;
 
   @visibleForTesting
@@ -207,6 +245,8 @@ class PackageLinkService {
     _pendingInventoryCode = null;
     _pendingRequestLink = null;
     _pendingStaffInvite = null;
+    _pendingInvalidTracking = false;
+    lookupServiceOverride = null;
     _appReady = false;
     _routing = false;
     _lastLink = null;
@@ -232,22 +272,27 @@ class PackageLinkService {
       final auth = context.read<AuthProvider>();
       await _settled(auth);
       final businessId = auth.businessId ?? '';
-      final eligible = packageLinkStaffEligible(
-        signedIn: auth.isAuthenticated,
-        isAnonymous: auth.user?.isAnonymous ?? false,
-        hasBusinessDashboardAccess: auth.hasBusinessDashboardAccess,
-        // The containers OR the deliveries permission (destination staff
-        // scan labels to hand packages over) AND a shipping service: a
-        // business that does not ship has no containers, so its scans fall
-        // through to the public tracking page like any other. The package
-        // page itself then shows what that person may see.
-        hasContainersPermission: auth.hasDeliveriesAccess,
-        businessId: businessId,
-      );
+      // Only a container-line code has a staff package view; every other
+      // Laawol code opens the public tracking page.
+      final eligible =
+          isPackageTrackingCode(code) &&
+          packageLinkStaffEligible(
+            signedIn: auth.isAuthenticated,
+            isAnonymous: auth.user?.isAnonymous ?? false,
+            hasBusinessDashboardAccess: auth.hasBusinessDashboardAccess,
+            // The containers OR the deliveries permission (destination staff
+            // scan labels to hand packages over) AND a shipping service: a
+            // business that does not ship has no containers, so its scans fall
+            // through to the public tracking page like any other. The package
+            // page itself then shows what that person may see.
+            hasContainersPermission: auth.hasDeliveriesAccess,
+            businessId: businessId,
+          );
       var inBusiness = false;
       if (eligible) {
         try {
-          inBusiness = await FirestoreContainerPackageRepository()
+          inBusiness =
+              await FirestoreContainerPackageRepository()
                   .findLineByCode(businessId, code)
                   .timeout(const Duration(seconds: 10)) !=
               null;
@@ -267,6 +312,7 @@ class PackageLinkService {
           builder: (_) => destination == PackageLinkDestination.staffPackage
               ? PackageResultScreen(businessId: businessId, code: code)
               : GuestTrackingLookupPage(
+                  service: lookupServiceOverride,
                   initialCode: code,
                   onSignIn: signedInForReal
                       ? null
@@ -304,13 +350,15 @@ class PackageLinkService {
       final auth = context.read<AuthProvider>();
       await _settled(auth);
       final businessId = auth.businessId ?? '';
-      final eligible = auth.isAuthenticated &&
+      final eligible =
+          auth.isAuthenticated &&
           !(auth.user?.isAnonymous ?? false) &&
           auth.hasBusinessDashboardAccess &&
           inventoryAvailable(
             services: auth.businessServices,
-            hasPermission:
-                auth.hasBusinessPermission(BusinessPermission.inventory),
+            hasPermission: auth.hasBusinessPermission(
+              BusinessPermission.inventory,
+            ),
             businessId: businessId,
           );
       if (!eligible) return;

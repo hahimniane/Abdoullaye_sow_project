@@ -2961,6 +2961,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'Enter a valid booking or tracking number.';
 
   @override
+  String get trackingLinkInvalid => 'This tracking link isn\'t valid.';
+
+  @override
   String get guestTrackingSubmit => 'Track';
 
   @override
