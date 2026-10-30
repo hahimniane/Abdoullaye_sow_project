@@ -29659,6 +29659,264 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This line has purchases after that month.'**
   String get lotErrEndMonthBeforePurchases;
+
+  /// Title of the owner's switch in business settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Send WhatsApp messages to parking customers'**
+  String get parkingWaSwitchTitle;
+
+  /// Explains what the parking WhatsApp switch does.
+  ///
+  /// In en, this message translates to:
+  /// **'Customers get a message when their car is parked and a receipt with every payment. Nothing is sent while this is off.'**
+  String get parkingWaSwitchHelp;
+
+  /// Error when saving the parking WhatsApp switch failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not change this setting. Try again.'**
+  String get parkingWaSwitchFailed;
+
+  /// Refusal: the parking WhatsApp switch is owner-only.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the business owner can change this.'**
+  String get parkingWaErrOwnerOnly;
+
+  /// Button on the parking list that opens the one-time welcome.
+  ///
+  /// In en, this message translates to:
+  /// **'Send welcome to current customers'**
+  String get parkingWaWelcomeButton;
+
+  /// Title of the welcome sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Welcome current customers'**
+  String get parkingWaWelcomeTitle;
+
+  /// Explains the one-time welcome in the preview sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'One WhatsApp message per phone number, listing that number\'s cars. It goes once and never automatically.'**
+  String get parkingWaWelcomeIntro;
+
+  /// Shown while the welcome preview loads.
+  ///
+  /// In en, this message translates to:
+  /// **'Finding your customers…'**
+  String get parkingWaWelcomeLoading;
+
+  /// Empty state of the welcome preview.
+  ///
+  /// In en, this message translates to:
+  /// **'No customers have a car in the lot right now.'**
+  String get parkingWaWelcomeEmpty;
+
+  /// Error when the welcome preview fails or times out.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load your customers. Try again.'**
+  String get parkingWaWelcomeLoadFailed;
+
+  /// Error when the welcome send fails or times out.
+  ///
+  /// In en, this message translates to:
+  /// **'The welcome could not be sent. Try again.'**
+  String get parkingWaWelcomeSendFailed;
+
+  /// Tag on a number that was already sent a parked or welcome message.
+  ///
+  /// In en, this message translates to:
+  /// **'Already welcomed'**
+  String get parkingWaWelcomeAlready;
+
+  /// Selects every number in the welcome preview.
+  ///
+  /// In en, this message translates to:
+  /// **'Select all'**
+  String get parkingWaWelcomeSelectAll;
+
+  /// Clears the selection in the welcome preview.
+  ///
+  /// In en, this message translates to:
+  /// **'Select none'**
+  String get parkingWaWelcomeSelectNone;
+
+  /// Send button of the welcome sheet with the number of selected customers.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Send to 1 customer} other{Send to {count} customers}}'**
+  String parkingWaWelcomeSendCount(int count);
+
+  /// Send button label while the welcome goes out.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending…'**
+  String get parkingWaWelcomeSending;
+
+  /// Title after the welcome send finished.
+  ///
+  /// In en, this message translates to:
+  /// **'Welcome sent'**
+  String get parkingWaWelcomeResultTitle;
+
+  /// Counts after a welcome send.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent {sent} · Skipped {skipped} · Failed {failed}'**
+  String parkingWaWelcomeResult(int sent, int skipped, int failed);
+
+  /// Refusal: the parking WhatsApp switch is off.
+  ///
+  /// In en, this message translates to:
+  /// **'WhatsApp messages are switched off for this business.'**
+  String get parkingWaErrSwitchOff;
+
+  /// Refusal: the welcome is owner-only.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the business owner can send the welcome.'**
+  String get parkingWaErrWelcomeOwnerOnly;
+
+  /// Section of a parked car's details listing the WhatsApp messages sent for it.
+  ///
+  /// In en, this message translates to:
+  /// **'WhatsApp messages'**
+  String get parkingWaMessagesTitle;
+
+  /// Kind of WhatsApp message: sent when the car was parked.
+  ///
+  /// In en, this message translates to:
+  /// **'Car parked'**
+  String get parkingWaKindParked;
+
+  /// Kind of WhatsApp message: receipt for a payment.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment receipt'**
+  String get parkingWaKindReceipt;
+
+  /// Kind of WhatsApp message: one-time welcome to current customers.
+  ///
+  /// In en, this message translates to:
+  /// **'Welcome'**
+  String get parkingWaKindWelcome;
+
+  /// Status of a WhatsApp message not yet sent.
+  ///
+  /// In en, this message translates to:
+  /// **'Queued'**
+  String get parkingWaStatusQueued;
+
+  /// Status of a WhatsApp message that was sent.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent'**
+  String get parkingWaStatusSent;
+
+  /// Status of a WhatsApp message delivered to the phone.
+  ///
+  /// In en, this message translates to:
+  /// **'Delivered'**
+  String get parkingWaStatusDelivered;
+
+  /// Status of a WhatsApp message the customer read.
+  ///
+  /// In en, this message translates to:
+  /// **'Read'**
+  String get parkingWaStatusRead;
+
+  /// Status of a WhatsApp message that failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed'**
+  String get parkingWaStatusFailed;
+
+  /// Status of a WhatsApp message not sent because the customer opted out.
+  ///
+  /// In en, this message translates to:
+  /// **'Stopped by the customer'**
+  String get parkingWaStatusStopped;
+
+  /// Status of a WhatsApp message that was skipped.
+  ///
+  /// In en, this message translates to:
+  /// **'Skipped'**
+  String get parkingWaStatusSkipped;
+
+  /// Title of the money block on a parked car's tracking page.
+  ///
+  /// In en, this message translates to:
+  /// **'Parking balance'**
+  String get parkingTrackMoneyTitle;
+
+  /// Tracking page: the car's daily rate.
+  ///
+  /// In en, this message translates to:
+  /// **'Daily rate'**
+  String get parkingTrackDailyRate;
+
+  /// Tracking page: the day the car was parked.
+  ///
+  /// In en, this message translates to:
+  /// **'Parked since'**
+  String get parkingTrackSince;
+
+  /// Tracking page: the day the car left.
+  ///
+  /// In en, this message translates to:
+  /// **'Left on'**
+  String get parkingTrackLeft;
+
+  /// Tracking page: days counted so far for a car still parked.
+  ///
+  /// In en, this message translates to:
+  /// **'Days so far'**
+  String get parkingTrackDaysSoFar;
+
+  /// Tracking page: total days of a car that left.
+  ///
+  /// In en, this message translates to:
+  /// **'Days parked'**
+  String get parkingTrackDays;
+
+  /// Tracking page: what a car still parked has run up.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount so far'**
+  String get parkingTrackAmountSoFar;
+
+  /// Tracking page: the total of a car that left.
+  ///
+  /// In en, this message translates to:
+  /// **'Total amount'**
+  String get parkingTrackAmount;
+
+  /// Tracking page: what was paid on the car.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid'**
+  String get parkingTrackPaid;
+
+  /// Tracking page: what a car still parked owes today.
+  ///
+  /// In en, this message translates to:
+  /// **'Balance owed now'**
+  String get parkingTrackBalanceNow;
+
+  /// Tracking page: what a car that left still owes.
+  ///
+  /// In en, this message translates to:
+  /// **'Balance owed'**
+  String get parkingTrackBalance;
+
+  /// Tracking page: nothing is owed on the car.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid in full'**
+  String get parkingTrackPaidInFull;
 }
 
 class _AppLocalizationsDelegate

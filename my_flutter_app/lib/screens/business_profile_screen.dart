@@ -28,6 +28,7 @@ import '../utils/phone_number_validator.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/country_phone_field.dart';
 import '../widgets/language_toggle.dart';
+import '../widgets/parking_whatsapp_switch.dart';
 import '../widgets/pickup_plan_editor.dart';
 import '../widgets/staff_invite_widgets.dart' show BusinessInvitationsSection;
 import '../services/parking_rates.dart';
@@ -737,6 +738,8 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
                 _BusinessForm(
                   formKey: _formKey,
                   canEdit: canEdit,
+                  businessId: business.id,
+                  parkingWhatsAppEnabled: business.parkingWhatsAppEnabled,
                   detailsSectionKey: _detailsSectionKey,
                   headquartersSectionKey: _headquartersSectionKey,
                   paidHoldPricingSectionKey: _paidHoldPricingSectionKey,
@@ -1521,6 +1524,8 @@ class _BusinessForm extends StatelessWidget {
   const _BusinessForm({
     required this.formKey,
     required this.canEdit,
+    required this.businessId,
+    required this.parkingWhatsAppEnabled,
     required this.detailsSectionKey,
     required this.headquartersSectionKey,
     required this.paidHoldPricingSectionKey,
@@ -1570,6 +1575,10 @@ class _BusinessForm extends StatelessWidget {
 
   final GlobalKey<FormState> formKey;
   final bool canEdit;
+  final String businessId;
+
+  /// `parkingWhatsApp.enabled` on the business record.
+  final bool parkingWhatsAppEnabled;
   final GlobalKey detailsSectionKey;
   final GlobalKey headquartersSectionKey;
   final GlobalKey paidHoldPricingSectionKey;
@@ -2047,6 +2056,12 @@ class _BusinessForm extends StatelessWidget {
                       : null,
                   title: Text(l10n.parkingAcceptReservations),
                   subtitle: Text(l10n.parkingAcceptReservationsHelp),
+                ),
+                // The owner's (or a platform admin's) alone; hidden for staff.
+                ParkingWhatsAppSwitch(
+                  businessId: businessId,
+                  enabled: parkingWhatsAppEnabled,
+                  canEdit: canEdit,
                 ),
               ],
             ),

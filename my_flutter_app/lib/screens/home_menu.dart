@@ -39,6 +39,7 @@ import 'deliveries_home_screen.dart';
 import 'inventory_screen.dart';
 import 'invoices_screen.dart';
 import 'parking_month_end_screen.dart';
+import '../widgets/parking_welcome_sheet.dart';
 import 'office_locations_screen.dart';
 import 'park_car_screen.dart';
 import 'lot_ledger_screen.dart';
@@ -2044,6 +2045,22 @@ class _ActivitySection extends StatelessWidget {
                 onChanged: onDenseListChanged,
               ),
             ],
+          ),
+          // One-time WhatsApp welcome to the customers already parked. The
+          // owner's (or a platform admin's) alone, and only while the
+          // business's WhatsApp switch is on - the entry hides itself
+          // otherwise.
+          Builder(
+            builder: (context) {
+              final auth = context.read<AuthProvider>();
+              return Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: ParkingWelcomeEntry(
+                  businessId: auth.businessId ?? '',
+                  canSend: auth.isBusinessOwner || auth.isAdmin,
+                ),
+              );
+            },
           ),
           // Tracking code, owner, car, VIN - the same fields the console
           // searches, in the same order, so the same query finds the same car

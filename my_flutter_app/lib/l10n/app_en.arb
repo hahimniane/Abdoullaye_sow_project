@@ -9268,5 +9268,193 @@
   "lotErrEndMonthBeforePurchases": "This line has purchases after that month.",
   "@lotErrEndMonthBeforePurchases": {
     "description": "Refusal: the line has purchases after the stop month."
+  },
+  "parkingWaSwitchTitle": "Send WhatsApp messages to parking customers",
+  "@parkingWaSwitchTitle": {
+    "description": "Title of the owner's switch in business settings."
+  },
+  "parkingWaSwitchHelp": "Customers get a message when their car is parked and a receipt with every payment. Nothing is sent while this is off.",
+  "@parkingWaSwitchHelp": {
+    "description": "Explains what the parking WhatsApp switch does."
+  },
+  "parkingWaSwitchFailed": "Could not change this setting. Try again.",
+  "@parkingWaSwitchFailed": {
+    "description": "Error when saving the parking WhatsApp switch failed."
+  },
+  "parkingWaErrOwnerOnly": "Only the business owner can change this.",
+  "@parkingWaErrOwnerOnly": {
+    "description": "Refusal: the parking WhatsApp switch is owner-only."
+  },
+  "parkingWaWelcomeButton": "Send welcome to current customers",
+  "@parkingWaWelcomeButton": {
+    "description": "Button on the parking list that opens the one-time welcome."
+  },
+  "parkingWaWelcomeTitle": "Welcome current customers",
+  "@parkingWaWelcomeTitle": {
+    "description": "Title of the welcome sheet."
+  },
+  "parkingWaWelcomeIntro": "One WhatsApp message per phone number, listing that number's cars. It goes once and never automatically.",
+  "@parkingWaWelcomeIntro": {
+    "description": "Explains the one-time welcome in the preview sheet."
+  },
+  "parkingWaWelcomeLoading": "Finding your customers…",
+  "@parkingWaWelcomeLoading": {
+    "description": "Shown while the welcome preview loads."
+  },
+  "parkingWaWelcomeEmpty": "No customers have a car in the lot right now.",
+  "@parkingWaWelcomeEmpty": {
+    "description": "Empty state of the welcome preview."
+  },
+  "parkingWaWelcomeLoadFailed": "Could not load your customers. Try again.",
+  "@parkingWaWelcomeLoadFailed": {
+    "description": "Error when the welcome preview fails or times out."
+  },
+  "parkingWaWelcomeSendFailed": "The welcome could not be sent. Try again.",
+  "@parkingWaWelcomeSendFailed": {
+    "description": "Error when the welcome send fails or times out."
+  },
+  "parkingWaWelcomeAlready": "Already welcomed",
+  "@parkingWaWelcomeAlready": {
+    "description": "Tag on a number that was already sent a parked or welcome message."
+  },
+  "parkingWaWelcomeSelectAll": "Select all",
+  "@parkingWaWelcomeSelectAll": {
+    "description": "Selects every number in the welcome preview."
+  },
+  "parkingWaWelcomeSelectNone": "Select none",
+  "@parkingWaWelcomeSelectNone": {
+    "description": "Clears the selection in the welcome preview."
+  },
+  "parkingWaWelcomeSendCount": "{count, plural, =1{Send to 1 customer} other{Send to {count} customers}}",
+  "@parkingWaWelcomeSendCount": {
+    "description": "Send button of the welcome sheet with the number of selected customers.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "parkingWaWelcomeSending": "Sending…",
+  "@parkingWaWelcomeSending": {
+    "description": "Send button label while the welcome goes out."
+  },
+  "parkingWaWelcomeResultTitle": "Welcome sent",
+  "@parkingWaWelcomeResultTitle": {
+    "description": "Title after the welcome send finished."
+  },
+  "parkingWaWelcomeResult": "Sent {sent} · Skipped {skipped} · Failed {failed}",
+  "@parkingWaWelcomeResult": {
+    "description": "Counts after a welcome send.",
+    "placeholders": {
+      "sent": {
+        "type": "int"
+      },
+      "skipped": {
+        "type": "int"
+      },
+      "failed": {
+        "type": "int"
+      }
+    }
+  },
+  "parkingWaErrSwitchOff": "WhatsApp messages are switched off for this business.",
+  "@parkingWaErrSwitchOff": {
+    "description": "Refusal: the parking WhatsApp switch is off."
+  },
+  "parkingWaErrWelcomeOwnerOnly": "Only the business owner can send the welcome.",
+  "@parkingWaErrWelcomeOwnerOnly": {
+    "description": "Refusal: the welcome is owner-only."
+  },
+  "parkingWaMessagesTitle": "WhatsApp messages",
+  "@parkingWaMessagesTitle": {
+    "description": "Section of a parked car's details listing the WhatsApp messages sent for it."
+  },
+  "parkingWaKindParked": "Car parked",
+  "@parkingWaKindParked": {
+    "description": "Kind of WhatsApp message: sent when the car was parked."
+  },
+  "parkingWaKindReceipt": "Payment receipt",
+  "@parkingWaKindReceipt": {
+    "description": "Kind of WhatsApp message: receipt for a payment."
+  },
+  "parkingWaKindWelcome": "Welcome",
+  "@parkingWaKindWelcome": {
+    "description": "Kind of WhatsApp message: one-time welcome to current customers."
+  },
+  "parkingWaStatusQueued": "Queued",
+  "@parkingWaStatusQueued": {
+    "description": "Status of a WhatsApp message not yet sent."
+  },
+  "parkingWaStatusSent": "Sent",
+  "@parkingWaStatusSent": {
+    "description": "Status of a WhatsApp message that was sent."
+  },
+  "parkingWaStatusDelivered": "Delivered",
+  "@parkingWaStatusDelivered": {
+    "description": "Status of a WhatsApp message delivered to the phone."
+  },
+  "parkingWaStatusRead": "Read",
+  "@parkingWaStatusRead": {
+    "description": "Status of a WhatsApp message the customer read."
+  },
+  "parkingWaStatusFailed": "Failed",
+  "@parkingWaStatusFailed": {
+    "description": "Status of a WhatsApp message that failed."
+  },
+  "parkingWaStatusStopped": "Stopped by the customer",
+  "@parkingWaStatusStopped": {
+    "description": "Status of a WhatsApp message not sent because the customer opted out."
+  },
+  "parkingWaStatusSkipped": "Skipped",
+  "@parkingWaStatusSkipped": {
+    "description": "Status of a WhatsApp message that was skipped."
+  },
+  "parkingTrackMoneyTitle": "Parking balance",
+  "@parkingTrackMoneyTitle": {
+    "description": "Title of the money block on a parked car's tracking page."
+  },
+  "parkingTrackDailyRate": "Daily rate",
+  "@parkingTrackDailyRate": {
+    "description": "Tracking page: the car's daily rate."
+  },
+  "parkingTrackSince": "Parked since",
+  "@parkingTrackSince": {
+    "description": "Tracking page: the day the car was parked."
+  },
+  "parkingTrackLeft": "Left on",
+  "@parkingTrackLeft": {
+    "description": "Tracking page: the day the car left."
+  },
+  "parkingTrackDaysSoFar": "Days so far",
+  "@parkingTrackDaysSoFar": {
+    "description": "Tracking page: days counted so far for a car still parked."
+  },
+  "parkingTrackDays": "Days parked",
+  "@parkingTrackDays": {
+    "description": "Tracking page: total days of a car that left."
+  },
+  "parkingTrackAmountSoFar": "Amount so far",
+  "@parkingTrackAmountSoFar": {
+    "description": "Tracking page: what a car still parked has run up."
+  },
+  "parkingTrackAmount": "Total amount",
+  "@parkingTrackAmount": {
+    "description": "Tracking page: the total of a car that left."
+  },
+  "parkingTrackPaid": "Paid",
+  "@parkingTrackPaid": {
+    "description": "Tracking page: what was paid on the car."
+  },
+  "parkingTrackBalanceNow": "Balance owed now",
+  "@parkingTrackBalanceNow": {
+    "description": "Tracking page: what a car still parked owes today."
+  },
+  "parkingTrackBalance": "Balance owed",
+  "@parkingTrackBalance": {
+    "description": "Tracking page: what a car that left still owes."
+  },
+  "parkingTrackPaidInFull": "Paid in full",
+  "@parkingTrackPaidInFull": {
+    "description": "Tracking page: nothing is owed on the car."
   }
 }
