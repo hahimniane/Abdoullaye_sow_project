@@ -4,6 +4,7 @@ import { useState } from "react";
 import { httpsCallable } from "firebase/functions";
 import { Banknote, RefreshCw, Undo2, X } from "lucide-react";
 
+import { ReceivedByOptions } from "@/components/business/received-by-options";
 import { confirmImportantAction } from "@/lib/action-confirmation";
 import { useBusinessCollection } from "@/lib/business-data";
 import { containerLineTitle } from "@/lib/container-manifest";
@@ -224,8 +225,7 @@ export function PackagePaymentDialog({
                 </label>
                 <label className="lst-field"><span>Received by</span>
                   <select value={draft.receivedByStaffId} disabled={busy} onChange={(e) => setDraft((d) => ({ ...d, receivedByStaffId: e.target.value }))}>
-                    <option value="">Choose staff</option>
-                    {staffOptions.map((s) => (<option key={s.id} value={s.id} data-no-translate>{s.name}</option>))}
+                    <ReceivedByOptions staffOptions={staffOptions} placeholder="Choose staff" />
                   </select>
                 </label>
                 <label className="lst-field wide"><span>Note</span>

@@ -24,6 +24,7 @@
 import { containerRowCounts, containerStatus, containerTitle, lineCustomerName } from "./container-manifest.ts";
 import { moneyText } from "./invoice-ledger.ts";
 import { packageCodeFrom } from "./package-staff.ts";
+import { BUSINESS_ACCOUNT_RECEIVER } from "./staff-balances.ts";
 import type { LineGroupSummary } from "./line-pieces.ts";
 import { groupPayment } from "./waiting-packages.ts";
 
@@ -117,6 +118,8 @@ export type DeliverRequest = {
   override?: { collectedBy: string; photoPath: string };
   /** USD collected at handover, in cents; absent when nothing was. */
   collectedCents?: number;
+  /** Who holds that money when it is not the agent: only ever "business_account" (docs/STAFF_BALANCES.md). */
+  receivedByStaffId?: string;
 };
 
 /**
@@ -135,6 +138,8 @@ export function deliverRequest(input: {
   pickupCode?: unknown;
   override?: { collectedBy?: unknown; photoPath?: unknown } | null;
   collectedCents?: number | null;
+  /** "business_account" when the money went straight to the business; anything else is the agent (the default). */
+  receivedByStaffId?: string;
 }): DeliverRequest {
   const request: DeliverRequest = {
     businessId: text(input.businessId),
@@ -152,7 +157,11 @@ export function deliverRequest(input: {
     };
   }
   const cents = Math.round(Number(input.collectedCents));
-  if (Number.isFinite(cents) && cents > 0) request.collectedCents = cents;
+  if (Number.isFinite(cents) && cents > 0) {
+    request.collectedCents = cents;
+    // Only said when it is not the agent: the server defaults to them.
+    if (input.receivedByStaffId === BUSINESS_ACCOUNT_RECEIVER) request.receivedByStaffId = BUSINESS_ACCOUNT_RECEIVER;
+  }
   return request;
 }
 

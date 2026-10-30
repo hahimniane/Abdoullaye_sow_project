@@ -21,6 +21,7 @@ import {
   XCircle,
 } from "lucide-react";
 
+import { ReceivedByOptions } from "@/components/business/received-by-options";
 import { ContainerLabelsDialog } from "@/components/business/container-labels-dialog";
 import { PiecesEditor } from "@/components/business/pieces-editor";
 import { ProofFields } from "@/components/business/proof-fields";
@@ -901,8 +902,7 @@ function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onF
                   </label>
                   <label className="lst-field"><span>Received by</span>
                     <select onChange={(event) => setReceivedBy(event.target.value)} value={receivedBy}>
-                      <option value="">Choose staff</option>
-                      {staffOptions.map((s) => (<option data-no-translate key={s.id} value={s.id}>{s.name}</option>))}
+                      <ReceivedByOptions staffOptions={staffOptions} placeholder="Choose staff" />
                     </select>
                   </label>
                 </div>

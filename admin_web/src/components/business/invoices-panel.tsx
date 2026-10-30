@@ -25,6 +25,8 @@ import {
   X,
 } from "lucide-react";
 
+import { BUSINESS_ACCOUNT_RECEIVER } from "@/lib/staff-balances";
+import { ReceivedByMeOptions } from "@/components/business/received-by-options";
 import { runPanelAction } from "@/components/business/operations-panels";
 import { confirmImportantAction } from "@/lib/action-confirmation";
 import { useBusinessCollection, useBusinessStaff, useLiveDoc } from "@/lib/business-data";
@@ -159,6 +161,8 @@ export function InvoicesPanel({ businessId, businessName = "", business = null, 
   const [lineDraft, setLineDraft] = useState<InvoiceLineDraft>(emptyInvoiceLineDraft);
   const [editingLineId, setEditingLineId] = useState("");
   const [paymentDraft, setPaymentDraft] = useState<InvoicePaymentDraft>(emptyInvoicePaymentDraft);
+  // Who holds the money: me ("") or the Business account (docs/STAFF_BALANCES.md).
+  const [paymentReceiver, setPaymentReceiver] = useState("");
   const [customerPick, setCustomerPick] = useState<LotCustomer | null>(null);
   const [customerMenuOpen, setCustomerMenuOpen] = useState(false);
   const [vinHint, setVinHint] = useState("");
@@ -464,6 +468,7 @@ export function InvoicesPanel({ businessId, businessName = "", business = null, 
 
   function openPayment() {
     setPaymentDraft({ ...emptyInvoicePaymentDraft, paidOn: todayKey() });
+    setPaymentReceiver("");
     setDraftError("");
     setModal("payment");
   }
@@ -477,7 +482,12 @@ export function InvoicesPanel({ businessId, businessName = "", business = null, 
     }
     const payment = invoicePaymentPayload(paymentDraft);
     await runPanelAction(setBusy, setFlash, "Payment recorded.", async () => {
-      const response = await httpsCallable(functions, "recordInvoicePayment")({ businessId, invoiceId: selectedId, payment });
+      const response = await httpsCallable(functions, "recordInvoicePayment")({
+        businessId,
+        invoiceId: selectedId,
+        payment,
+        ...(paymentReceiver === BUSINESS_ACCOUNT_RECEIVER ? { receivedByStaffId: BUSINESS_ACCOUNT_RECEIVER } : {}),
+      });
       const data = (response.data ?? {}) as Row;
       closeModal();
       if (text(data.status, "") === "paid") setFlash("Payment recorded — paid in full. This is now a receipt.");
@@ -808,6 +818,11 @@ export function InvoicesPanel({ businessId, businessName = "", business = null, 
                 <label className="lst-field"><span>How it arrived</span>
                   <select value={paymentDraft.method} onChange={(e) => setPaymentDraft((d) => ({ ...d, method: e.target.value as InvoicePaymentMethod }))}>
                     {INVOICE_PAYMENT_METHODS.map((m) => (<option key={m} value={m}>{INVOICE_PAYMENT_METHOD_LABELS[m]}</option>))}
+                  </select>
+                </label>
+                <label className="lst-field"><span>Received by</span>
+                  <select value={paymentReceiver} onChange={(e) => setPaymentReceiver(e.target.value)}>
+                    <ReceivedByMeOptions />
                   </select>
                 </label>
                 <label className="lst-field"><span>Date</span><input type="date" value={paymentDraft.paidOn} onChange={(e) => setPaymentDraft((d) => ({ ...d, paidOn: e.target.value }))} /></label>

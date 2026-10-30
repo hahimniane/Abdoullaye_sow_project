@@ -3,8 +3,9 @@
 import { ref, uploadBytes } from "firebase/storage";
 
 import { auth, storage } from "@/lib/firebase";
-import { MAX_PHOTOS, PACKAGE_PHOTO_ROOT, packagePhotoParts, packagePhotoPath } from "@/lib/package-proof";
+import { MAX_PHOTOS, PACKAGE_PHOTO_ROOT, packagePhotoParts, packagePhotoPath, photoPathUnder } from "@/lib/package-proof";
 import { compressRequestPhoto } from "@/lib/request-photo";
+import { STAFF_HANDOVER_PROOF_ROOT } from "@/lib/staff-balances";
 
 /**
  * Staff photos on a package (docs/AIR_PACKAGES.md §2 "Storage"): drop-off
@@ -29,10 +30,24 @@ function randomFileId(): string {
  * Throws "no-session", "not-an-image", "image-unreadable" or "image-too-large".
  */
 export async function uploadPackagePhoto(businessId: string, file: File): Promise<string> {
+  return uploadStaffPhotoUnder(PACKAGE_PHOTO_ROOT, businessId, file);
+}
+
+/**
+ * A photo of a hand-over slip or screenshot (docs/STAFF_BALANCES.md §2),
+ * compressed and uploaded the same way under
+ * `staffHandoverProofs/{businessId}/{uid}/{fileId}.jpg`; returns the path
+ * for `record_handover`'s `proofPath`. Same errors as uploadPackagePhoto.
+ */
+export async function uploadStaffHandoverProof(businessId: string, file: File): Promise<string> {
+  return uploadStaffPhotoUnder(STAFF_HANDOVER_PROOF_ROOT, businessId, file);
+}
+
+async function uploadStaffPhotoUnder(root: string, businessId: string, file: File): Promise<string> {
   const uid = auth.currentUser?.uid;
   if (!uid) throw new Error("no-session");
   const blob = await compressRequestPhoto(file);
-  const path = packagePhotoPath(businessId, uid, randomFileId());
+  const path = photoPathUnder(root, businessId, uid, randomFileId());
   if (!path) throw new Error("no-session");
   await uploadBytes(ref(storage, path), blob, { contentType: "image/jpeg" });
   return path;

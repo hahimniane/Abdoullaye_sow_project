@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import { httpsCallable } from "firebase/functions";
 import { ArrowLeft, Banknote, ChevronDown, ChevronLeft, ChevronRight, Copy, FileDown, RefreshCw, SquarePen, X } from "lucide-react";
 
+import { BUSINESS_ACCOUNT_RECEIVER, businessAccountName } from "@/lib/staff-balances";
+import { ReceivedByOptions } from "@/components/business/received-by-options";
 import { auth, functions } from "@/lib/firebase";
 import { useParkingMonthInputs, useStaffExpenseCreditInputs } from "@/lib/business-data";
 import { BUSINESS_PARKING_RECEIVED_VIA_OPTIONS } from "@/lib/business-parking-entry";
@@ -204,7 +206,7 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
     setSettleFailed(failed);
     if (failed.length === 0) {
       setSettleKey("");
-      setFlash(`Recorded ${moneyText(recordedCents)} for ${customer.customerName} — ${items.length} item${items.length === 1 ? "" : "s"}, received by ${staffOptions.find((s) => s.id === settleBy)?.name ?? "your team"}.`);
+      setFlash(`Recorded ${moneyText(recordedCents)} for ${customer.customerName} — ${items.length} item${items.length === 1 ? "" : "s"}, received by ${settleBy === BUSINESS_ACCOUNT_RECEIVER ? businessAccountName() : staffOptions.find((s) => s.id === settleBy)?.name ?? "your team"}.`);
     } else {
       setSettleError(`${items.length - failed.length} of ${items.length} recorded. These did not save:`);
     }
@@ -478,8 +480,7 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
                   </label>
                   <label className="lst-field"><span>Received by</span>
                     <select value={settleBy} onChange={(e) => setSettleBy(e.target.value)} aria-label="Received by">
-                      <option value="">Who took the money?</option>
-                      {staffOptions.map((o) => (<option key={o.id} value={o.id}>{o.name}</option>))}
+                      <ReceivedByOptions staffOptions={staffOptions} placeholder="Who took the money?" />
                     </select>
                   </label>
                   <label className="lst-field wide"><span>Note</span><input value={settleNote} onChange={(e) => setSettleNote(e.target.value)} /></label>

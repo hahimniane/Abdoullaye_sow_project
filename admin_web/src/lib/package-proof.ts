@@ -32,14 +32,24 @@ export const MAX_PHOTOS = 5;
 
 /** `packagePhotos/{businessId}/{uid}/{fileId}`, or "" when the parts are not ours. */
 export function packagePhotoPath(businessId: string, uid: string, fileId: string): string {
-  const path = `${PACKAGE_PHOTO_ROOT}/${businessId}/${uid}/${fileId}`;
-  return packagePhotoParts(path) ? path : "";
+  return photoPathUnder(PACKAGE_PHOTO_ROOT, businessId, uid, fileId);
+}
+
+/** `{root}/{businessId}/{uid}/{fileId}`, or "" - the one shape every staff photo folder shares (packages, hand-over slips). */
+export function photoPathUnder(root: string, businessId: string, uid: string, fileId: string): string {
+  const path = `${root}/${businessId}/${uid}/${fileId}`;
+  return photoPathPartsUnder(root, path) ? path : "";
 }
 
 /** The parts of a package photo path, or null for anything else (the server's `photoPathParts`). */
 export function packagePhotoParts(path: string): { businessId: string; folder: string; fileId: string } | null {
+  return photoPathPartsUnder(PACKAGE_PHOTO_ROOT, path);
+}
+
+/** The parts of a photo path under `root`, or null for anything else. */
+export function photoPathPartsUnder(root: string, path: string): { businessId: string; folder: string; fileId: string } | null {
   const parts = String(path || "").split("/");
-  if (parts.length !== 4 || parts[0] !== PACKAGE_PHOTO_ROOT) return null;
+  if (parts.length !== 4 || parts[0] !== root) return null;
   const [, businessId, folder, fileId] = parts;
   if (!/^[A-Za-z0-9_-]{1,128}$/.test(businessId) || !PHOTO_FOLDER.test(folder)) return null;
   if (!PHOTO_FILE.test(fileId)) return null;

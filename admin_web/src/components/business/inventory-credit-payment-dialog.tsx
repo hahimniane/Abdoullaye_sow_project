@@ -4,6 +4,7 @@ import { useState } from "react";
 import { httpsCallable } from "firebase/functions";
 import { Banknote, RefreshCw, X } from "lucide-react";
 
+import { ReceivedByOptions } from "@/components/business/received-by-options";
 import { functions } from "@/lib/firebase";
 import { currentLanguage } from "@/lib/format";
 import { INVOICE_PAYMENT_METHODS, INVOICE_PAYMENT_METHOD_LABELS, moneyText, type InvoicePaymentMethod } from "@/lib/invoice-ledger";
@@ -87,8 +88,7 @@ export function InventoryCreditPaymentDialog({
             </label>
             <label className="lst-field"><span>Received by</span>
               <select value={draft.receivedByStaffId} disabled={busy} onChange={(e) => setDraft((d) => ({ ...d, receivedByStaffId: e.target.value }))}>
-                <option value="">Choose staff</option>
-                {staffOptions.map((s) => (<option key={s.id} value={s.id} data-no-translate>{s.name}</option>))}
+                <ReceivedByOptions staffOptions={staffOptions} placeholder="Choose staff" />
               </select>
             </label>
             <label className="lst-field wide"><span>Note</span>
