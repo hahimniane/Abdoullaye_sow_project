@@ -722,6 +722,14 @@ service cloud.firestore {
       allow read: if lotLedgerRead(resource.data.businessId);
       allow write: if false;
     }
+    // One row per WhatsApp message to a parked car's customer (parked,
+    // receipt, welcome; docs/PARKING_WHATSAPP.md): sent, stopped, skipped or
+    // failed. Server-written only; the business that parked the car reads it.
+    match /parkingMessages/{messageId} {
+      allow read: if request.auth != null &&
+        canManageBusiness(request.auth.uid, resource.data.businessId);
+      allow write: if false;
+    }
     match /containerLines/{lineId} {
       allow read: if lotLedgerRead(resource.data.businessId);
       allow write: if false;

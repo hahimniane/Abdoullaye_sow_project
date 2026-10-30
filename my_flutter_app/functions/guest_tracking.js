@@ -5,6 +5,7 @@ const {oceanCarrierName} = require("./ocean_carrier_catalog");
 const {isAirContainer} = require("./container_manifest");
 const {photoPathParts} = require("./package_proof");
 const {lastTwo, sameNumber, strictE164} = require("./phone_e164");
+const {parkingBalanceNow} = require("./parking_month_statement");
 const {
   groupRootId,
   lineCounts,
@@ -259,8 +260,25 @@ function linePhotoEntries(line) {
   return out;
 }
 
+/**
+ * What anyone holding a parked car's code sees of its money
+ * (docs/PARKING_WHATSAPP.md §1.5): the rate, since when, the days and
+ * amount so far, what was paid and what is owed right now - the same
+ * numbers a container line's page shows for its payments. Nothing about
+ * the people.
+ *
+ * @param {object} car The parkedCars row.
+ * @param {Date} now The moment the page is read.
+ * @return {object} `{parking: {...}}`, or `{}` for a car with no balance
+ *   (voided or cancelled).
+ */
+function publicParkingMoney(car, now) {
+  const balance = parkingBalanceNow(car, now);
+  return balance ? {parking: balance} : {};
+}
+
 function publicGuestTrackingRecord({id, service, data, container = null,
-  group = null}) {
+  group = null, now = new Date()}) {
   const row = data || {};
   const status = service === "transport" ?
     cleanText(row.fulfillmentStatus || row.status, 60).toLowerCase() :
@@ -288,6 +306,7 @@ function publicGuestTrackingRecord({id, service, data, container = null,
     ...(shipping ? {shipping} : {}),
     ...(service === "container" ?
       publicContainerGroup(row, group, id) : {}),
+    ...(service === "parking" ? publicParkingMoney(row, now) : {}),
     ...(signInHints(row).length ? {signIn: signInHints(row)} : {}),
     updatedAtMs: Math.max(
         timestampMillis(row.updatedAt),

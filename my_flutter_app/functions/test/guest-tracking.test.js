@@ -392,3 +392,45 @@ test("the photo list names each photo by kind, our paths only, once", () => {
   assert.equal(record.photos, undefined);
   assert.ok(!JSON.stringify(record).includes("packagePhotos"));
 });
+
+// The parked-car Track page's money block (docs/PARKING_WHATSAPP.md §2).
+test("a parked car's public record carries its money and no people", () => {
+  const now = new Date("2026-10-29T15:00:00Z");
+  const car = {
+    trackingCode: "PK-K7M4P2", status: "reserved",
+    customerName: "Alimou Barry", customerEmail: "a@example.test",
+    customerPhone: "+12015551234", vinNumber: "1HGCM82633A004352",
+    parkingDate: "2026-10-20T12:00:00Z", dailyRate: 10,
+    amountPaidCents: 3000, parkingPayments: [{amountCents: 3000}],
+    paymentMethod: "direct", documentToken: "secret-token-value",
+  };
+  const record = publicGuestTrackingRecord({id: "doc-id", service: "parking",
+    data: car, now});
+  assert.deepEqual(record.parking, {
+    dailyRateCents: 1000, sinceDayKey: "2026-10-20", leftDayKey: null,
+    days: 10, accruedCents: 10000, paidCents: 3000, balanceCents: 7000,
+    paidInFull: false, stillParked: true,
+  });
+  const serialized = JSON.stringify(record);
+  for (const secret of ["Alimou", "a@example.test", "2015551234",
+    "1HGCM82633A004352", "secret-token-value", "doc-id"]) {
+    assert.ok(!serialized.includes(secret), `leaked ${secret}`);
+  }
+});
+
+test("a paid-up parked car tracks as paid in full, and only cars do", () => {
+  const now = new Date("2026-10-29T15:00:00Z");
+  const paid = publicGuestTrackingRecord({id: "x", service: "parking",
+    data: {trackingCode: "PK-1", parkingDate: "2026-10-27T12:00:00Z",
+      dailyRate: 10, amountPaidCents: 3000}, now});
+  assert.equal(paid.parking.paidInFull, true);
+  assert.equal(paid.parking.balanceCents, 0);
+  // A voided car has no balance: no block at all.
+  const voided = publicGuestTrackingRecord({id: "x", service: "parking",
+    data: {trackingCode: "PK-1", parkingDate: "2026-10-27T12:00:00Z",
+      dailyRate: 10, voided: true}, now});
+  assert.equal(voided.parking, undefined);
+  const barrel = publicGuestTrackingRecord({id: "x", service: "barrel",
+    data: {trackingCode: "BS-1", status: "pending"}, now});
+  assert.equal(barrel.parking, undefined);
+});

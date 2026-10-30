@@ -120,6 +120,27 @@ const VARIABLE = Object.freeze({
   HOURS_FR: "hoursFr",
   REQUEST_CODE: "requestCode",
   TOKEN: "token",
+  // Parked cars (docs/PARKING_WHATSAPP.md): the car ("2014 Toyota
+  // Corolla"), the day it was parked, its daily rate, a payment's amount,
+  // what has been paid in all, the balance sentence ("Balance owed: $45.00"
+  // / "Paid in full") and the list of a customer's cars. The document
+  // header's link and file name ride on DOCUMENT_LINK / DOCUMENT_FILENAME.
+  CAR_EN: "carEn",
+  CAR_FR: "carFr",
+  CARS_EN: "carsEn",
+  CARS_FR: "carsFr",
+  PARKED_ON_EN: "parkedOnEn",
+  PARKED_ON_FR: "parkedOnFr",
+  RATE_EN: "rateEn",
+  RATE_FR: "rateFr",
+  AMOUNT_EN: "amountEn",
+  AMOUNT_FR: "amountFr",
+  PAID_TOTAL_EN: "paidTotalEn",
+  PAID_TOTAL_FR: "paidTotalFr",
+  BALANCE_EN: "balanceEn",
+  BALANCE_FR: "balanceFr",
+  DOCUMENT_LINK: "documentLink",
+  DOCUMENT_FILENAME: "documentFilename",
 });
 
 // A variable that is always written in one language, whatever the template
@@ -145,6 +166,20 @@ const VARIABLE_LANGUAGE = Object.freeze({
   [VARIABLE.PIECES_FR]: "fr",
   [VARIABLE.HOURS_EN]: "en",
   [VARIABLE.HOURS_FR]: "fr",
+  [VARIABLE.CAR_EN]: "en",
+  [VARIABLE.CAR_FR]: "fr",
+  [VARIABLE.CARS_EN]: "en",
+  [VARIABLE.CARS_FR]: "fr",
+  [VARIABLE.PARKED_ON_EN]: "en",
+  [VARIABLE.PARKED_ON_FR]: "fr",
+  [VARIABLE.RATE_EN]: "en",
+  [VARIABLE.RATE_FR]: "fr",
+  [VARIABLE.AMOUNT_EN]: "en",
+  [VARIABLE.AMOUNT_FR]: "fr",
+  [VARIABLE.PAID_TOTAL_EN]: "en",
+  [VARIABLE.PAID_TOTAL_FR]: "fr",
+  [VARIABLE.BALANCE_EN]: "en",
+  [VARIABLE.BALANCE_FR]: "fr",
 });
 
 // {{1}}, {{2}}, ... in the order the approved body uses them.
@@ -290,6 +325,8 @@ const FALLBACK = Object.freeze({
   [VARIABLE.BUSINESS_PHONE]: {
     en: "the number on your receipt",
     fr: "numéro indiqué sur votre reçu",
+    // The parking messages print the phone on a line of its own.
+    both: "—",
   },
   [VARIABLE.TRACKING_CODE]: {en: "-", fr: "-", both: "-"},
   // "your estimate of to be confirmed" never reads; a request always has a
@@ -302,6 +339,22 @@ const FALLBACK = Object.freeze({
   [VARIABLE.HOURS_FR]: {fr: "aux heures d'ouverture"},
   [VARIABLE.REQUEST_CODE]: {en: "-", fr: "-", both: "-"},
   [VARIABLE.TOKEN]: {en: "-", fr: "-", both: "-"},
+  // Never reached in practice: a parked car always has a make, a day and a
+  // rate. These keep a blank from being refused.
+  [VARIABLE.CAR_EN]: {en: "car"},
+  [VARIABLE.CAR_FR]: {fr: "voiture"},
+  [VARIABLE.CARS_EN]: {en: "your car"},
+  [VARIABLE.CARS_FR]: {fr: "votre voiture"},
+  [VARIABLE.PARKED_ON_EN]: {en: "the day it arrived"},
+  [VARIABLE.PARKED_ON_FR]: {fr: "le jour de son arrivée"},
+  [VARIABLE.RATE_EN]: {en: "the daily rate"},
+  [VARIABLE.RATE_FR]: {fr: "le tarif journalier"},
+  [VARIABLE.AMOUNT_EN]: {en: "$0.00"},
+  [VARIABLE.AMOUNT_FR]: {fr: "0,00 $"},
+  [VARIABLE.PAID_TOTAL_EN]: {en: "$0.00"},
+  [VARIABLE.PAID_TOTAL_FR]: {fr: "0,00 $"},
+  [VARIABLE.BALANCE_EN]: {en: "Balance owed: $0.00"},
+  [VARIABLE.BALANCE_FR]: {fr: "Solde à payer : 0,00 $"},
 });
 
 const MAX_PARAMETER = {
@@ -336,6 +389,21 @@ const MAX_PARAMETER = {
   [VARIABLE.HOURS_FR]: 200,
   [VARIABLE.REQUEST_CODE]: 20,
   [VARIABLE.TOKEN]: 80,
+  [VARIABLE.CAR_EN]: 100,
+  [VARIABLE.CAR_FR]: 100,
+  [VARIABLE.CARS_EN]: 160,
+  [VARIABLE.CARS_FR]: 160,
+  [VARIABLE.PARKED_ON_EN]: 40,
+  [VARIABLE.PARKED_ON_FR]: 40,
+  [VARIABLE.RATE_EN]: 40,
+  [VARIABLE.RATE_FR]: 40,
+  [VARIABLE.AMOUNT_EN]: 30,
+  [VARIABLE.AMOUNT_FR]: 30,
+  [VARIABLE.PAID_TOTAL_EN]: 30,
+  [VARIABLE.PAID_TOTAL_FR]: 30,
+  [VARIABLE.BALANCE_EN]: 60,
+  [VARIABLE.BALANCE_FR]: 60,
+  [VARIABLE.DOCUMENT_FILENAME]: 100,
 };
 
 // WhatsApp also refuses a parameter with a newline, a tab, or more than
@@ -410,22 +478,18 @@ function variableText(variable, values, language) {
 }
 
 /**
- * The template's `components` for one person: the image header when the
- * template has one, the body's variables in the approved order, and its
- * buttons - the tracking URL button, or the quick replies (TEMPLATE_SHAPE).
+ * The parts of one template message: the header when the shape has one
+ * (an image or a document, filled from the values' links), the body's
+ * variables in the approved order, and the buttons - the tracking URL
+ * button, or the quick replies.
  *
- * @param {string} template A TEMPLATE name.
- * @param {object} values By VARIABLE name; blanks fall back. `photoLink`
- *   fills an image header.
- * @param {"en"|"fr"} language The reader's language (ignored by a bilingual
- *   template, which fills both).
+ * @param {string[]} order The body's variables, in {{n}} order.
+ * @param {object} shape TEMPLATE_SHAPE-like {header, buttons}.
+ * @param {object} values By VARIABLE name; blanks fall back.
+ * @param {"en"|"fr"|"both"} lang The reader's language, or "both".
  * @return {object[]} The Cloud API components.
  */
-function templateComponents(template, values, language) {
-  const order = TEMPLATE_VARIABLES[template];
-  if (!order) throw new Error(`Unknown WhatsApp template: ${template}`);
-  const shape = TEMPLATE_SHAPE[template] || {header: "", buttons: "url"};
-  const lang = isBilingualTemplate(template) ? "both" : language;
+function componentParts(order, shape, values, lang) {
   const parameter = (text) => ({type: "text", text});
   const parts = [];
   if (shape.header === "image") {
@@ -433,6 +497,15 @@ function templateComponents(template, values, language) {
       type: "header",
       parameters: [{type: "image", image: {
         link: String(values?.[VARIABLE.PHOTO_LINK] ?? "").trim(),
+      }}],
+    });
+  } else if (shape.header === "document") {
+    parts.push({
+      type: "header",
+      parameters: [{type: "document", document: {
+        link: String(values?.[VARIABLE.DOCUMENT_LINK] ?? "").trim(),
+        filename: clean(values?.[VARIABLE.DOCUMENT_FILENAME],
+            MAX_PARAMETER[VARIABLE.DOCUMENT_FILENAME]) || "Receipt.pdf",
       }}],
     });
   }
@@ -459,6 +532,26 @@ function templateComponents(template, values, language) {
     });
   }
   return parts;
+}
+
+/**
+ * The template's `components` for one person: the image header when the
+ * template has one, the body's variables in the approved order, and its
+ * buttons - the tracking URL button, or the quick replies (TEMPLATE_SHAPE).
+ *
+ * @param {string} template A TEMPLATE name.
+ * @param {object} values By VARIABLE name; blanks fall back. `photoLink`
+ *   fills an image header.
+ * @param {"en"|"fr"} language The reader's language (ignored by a bilingual
+ *   template, which fills both).
+ * @return {object[]} The Cloud API components.
+ */
+function templateComponents(template, values, language) {
+  const order = TEMPLATE_VARIABLES[template];
+  if (!order) throw new Error(`Unknown WhatsApp template: ${template}`);
+  const shape = TEMPLATE_SHAPE[template] || {header: "", buttons: "url"};
+  const lang = isBilingualTemplate(template) ? "both" : language;
+  return componentParts(order, shape, values, lang);
 }
 
 /**
@@ -570,6 +663,88 @@ function requestTemplateMessage(args) {
               "both"))],
         },
       ],
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Parked cars (docs/PARKING_WHATSAPP.md §2). Three bilingual Utility
+// templates (language "en"), each with the tracking URL button
+// https://customer.laawoldigital.com/t/{{1}} (the car's tracking code). Like
+// the package requests', they are not part of TEMPLATE: that set is the
+// container updates', and its rows are about lines.
+//   parking_parked_2lang   - the car was parked.
+//   parking_receipt_2lang  - a payment was recorded; the receipt PDF rides
+//                            as a DOCUMENT header (link + file name).
+//   parking_welcome_2lang  - the one-time welcome to a customer already
+//                            parked, one message per phone listing the cars.
+// ---------------------------------------------------------------------------
+
+const PARKING_TEMPLATE = Object.freeze({
+  PARKED: "parking_parked_2lang",
+  RECEIPT: "parking_receipt_2lang",
+  WELCOME: "parking_welcome_2lang",
+});
+
+const PARKING_TEMPLATE_VARIABLES = Object.freeze({
+  // 1 name, 2 business, 3 car EN, 4 date EN, 5 rate EN, 6 business,
+  // 7 car FR, 8 date FR, 9 rate FR, 10 business phone, 11 tracking code.
+  [PARKING_TEMPLATE.PARKED]: Object.freeze([
+    VARIABLE.NAME,
+    VARIABLE.BUSINESS, VARIABLE.CAR_EN, VARIABLE.PARKED_ON_EN,
+    VARIABLE.RATE_EN,
+    VARIABLE.BUSINESS, VARIABLE.CAR_FR, VARIABLE.PARKED_ON_FR,
+    VARIABLE.RATE_FR,
+    VARIABLE.BUSINESS_PHONE, VARIABLE.TRACKING_CODE,
+  ]),
+  // 1 name, 2 business, 3 amount EN, 4 car EN, 5 total paid EN,
+  // 6 balance line EN, 7 business, 8 amount FR, 9 car FR, 10 total paid FR,
+  // 11 balance line FR, 12 tracking code.
+  [PARKING_TEMPLATE.RECEIPT]: Object.freeze([
+    VARIABLE.NAME,
+    VARIABLE.BUSINESS, VARIABLE.AMOUNT_EN, VARIABLE.CAR_EN,
+    VARIABLE.PAID_TOTAL_EN, VARIABLE.BALANCE_EN,
+    VARIABLE.BUSINESS, VARIABLE.AMOUNT_FR, VARIABLE.CAR_FR,
+    VARIABLE.PAID_TOTAL_FR, VARIABLE.BALANCE_FR,
+    VARIABLE.TRACKING_CODE,
+  ]),
+  // 1 name, 2 business, 3 cars EN, 4 business, 5 cars FR, 6 business phone.
+  [PARKING_TEMPLATE.WELCOME]: Object.freeze([
+    VARIABLE.NAME,
+    VARIABLE.BUSINESS, VARIABLE.CARS_EN,
+    VARIABLE.BUSINESS, VARIABLE.CARS_FR,
+    VARIABLE.BUSINESS_PHONE,
+  ]),
+});
+
+const PARKING_TEMPLATE_SHAPE = Object.freeze({
+  [PARKING_TEMPLATE.RECEIPT]: Object.freeze({
+    header: "document", buttons: "url",
+  }),
+});
+
+/**
+ * The /messages body for one parked-car message.
+ *
+ * @param {{template: string, phone: string, values: object}} args A
+ *   PARKING_TEMPLATE name, the number and the values by VARIABLE name
+ *   (`documentLink` / `documentFilename` fill the receipt's header;
+ *   `trackingCode` the button).
+ * @return {object|null} The request body, or null for an unknown template.
+ */
+function parkingTemplateMessage(args) {
+  const order = PARKING_TEMPLATE_VARIABLES[args?.template];
+  if (!order) return null;
+  const shape = PARKING_TEMPLATE_SHAPE[args.template] ||
+    {header: "", buttons: "url"};
+  return {
+    messaging_product: "whatsapp",
+    to: String(args.phone ?? "").replace(/\D/g, ""),
+    type: "template",
+    template: {
+      name: args.template,
+      language: {code: BILINGUAL_TEMPLATE_LANGUAGE},
+      components: componentParts(order, shape, args.values || {}, "both"),
     },
   };
 }
@@ -734,6 +909,10 @@ module.exports = {
   variableText,
   templateComponents,
   templateMessage,
+  PARKING_TEMPLATE,
+  PARKING_TEMPLATE_VARIABLES,
+  PARKING_TEMPLATE_SHAPE,
+  parkingTemplateMessage,
   REQUEST_TEMPLATE,
   REQUEST_TEMPLATE_VARIABLES,
   requestTemplateForUpdate,

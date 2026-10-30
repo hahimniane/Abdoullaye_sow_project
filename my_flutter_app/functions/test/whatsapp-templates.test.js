@@ -535,3 +535,129 @@ describe("the sign-in code template", () => {
     assert.match(doc, /create_login_template\.py/);
   });
 });
+
+// Parked cars (docs/PARKING_WHATSAPP.md §2): three bilingual templates, the
+// receipt with the PDF as a DOCUMENT header. The approved wording lives in
+// ~/laawol-deploy-logs/create_parking_templates.py.
+describe("the parking templates", () => {
+  const {
+    PARKING_TEMPLATE,
+    PARKING_TEMPLATE_VARIABLES,
+    PARKING_TEMPLATE_SHAPE,
+    parkingTemplateMessage,
+  } = require("../whatsapp_templates");
+
+  const PARKING = Object.freeze({
+    name: "Alimou Barry",
+    business: "Dala Parking",
+    businessPhone: "+13475550100",
+    trackingCode: "PK-K7M4P2",
+    carEn: "2014 Toyota Corolla", carFr: "2014 Toyota Corolla",
+    carsEn: "2014 Toyota Corolla, 2016 RAV4 and 3 more",
+    carsFr: "2014 Toyota Corolla, 2016 RAV4 et 3 autres",
+    parkedOnEn: "October 29, 2026", parkedOnFr: "29 octobre 2026",
+    rateEn: "$12.00 a day", rateFr: "12,00 $ par jour",
+    amountEn: "$30.00", amountFr: "30,00 $",
+    paidTotalEn: "$60.00", paidTotalFr: "60,00 $",
+    balanceEn: "Balance owed: $40.00", balanceFr: "Solde à payer : 40,00 $",
+    documentLink: "https://us-central1-p.cloudfunctions.net/parkingDocument" +
+      "?view=receiptPdf&t=tok&p=p_1&e=1&s=sig",
+    documentFilename: "Receipt PK-K7M4P2 Oct 29.pdf",
+  });
+  const message = (template, values = PARKING) =>
+    parkingTemplateMessage({template, phone: "+1 (347) 555-0199", values});
+  const tracking = {type: "button", sub_type: "url", index: "0",
+    parameters: [{type: "text", text: "PK-K7M4P2"}]};
+  const text = (value) => ({type: "text", text: value});
+
+  it("names the three templates, bilingual and registered under en", () => {
+    assert.deepEqual(Object.values(PARKING_TEMPLATE), [
+      "parking_parked_2lang", "parking_receipt_2lang",
+      "parking_welcome_2lang"]);
+    for (const name of Object.values(PARKING_TEMPLATE)) {
+      assert.equal(message(name).template.language.code, "en");
+      assert.equal(message(name).to, "13475550199");
+    }
+    assert.equal(parkingTemplateMessage({template: "nope", phone: "1"}),
+        null);
+  });
+
+  it("fills parking_parked_2lang: 11 variables, a tracking button", () => {
+    assert.equal(PARKING_TEMPLATE_VARIABLES.parking_parked_2lang.length, 11);
+    assert.deepEqual(message("parking_parked_2lang").template.components, [
+      {type: "body", parameters: [
+        text("Alimou Barry"),
+        text("Dala Parking"), text("2014 Toyota Corolla"),
+        text("October 29, 2026"), text("$12.00 a day"),
+        text("Dala Parking"), text("2014 Toyota Corolla"),
+        text("29 octobre 2026"), text("12,00 $ par jour"),
+        text("+13475550100"), text("PK-K7M4P2"),
+      ]},
+      tracking,
+    ]);
+  });
+
+  it("fills parking_receipt_2lang: a document header, 12 variables", () => {
+    assert.equal(PARKING_TEMPLATE_VARIABLES.parking_receipt_2lang.length,
+        12);
+    assert.deepEqual(PARKING_TEMPLATE_SHAPE, {
+      parking_receipt_2lang: {header: "document", buttons: "url"}});
+    assert.deepEqual(message("parking_receipt_2lang").template.components, [
+      {type: "header", parameters: [{type: "document", document: {
+        link: PARKING.documentLink,
+        filename: "Receipt PK-K7M4P2 Oct 29.pdf"}}]},
+      {type: "body", parameters: [
+        text("Alimou Barry"),
+        text("Dala Parking"), text("$30.00"), text("2014 Toyota Corolla"),
+        text("$60.00"), text("Balance owed: $40.00"),
+        text("Dala Parking"), text("30,00 $"), text("2014 Toyota Corolla"),
+        text("60,00 $"), text("Solde à payer : 40,00 $"),
+        text("PK-K7M4P2"),
+      ]},
+      tracking,
+    ]);
+  });
+
+  it("names the receipt file when it is not given one", () => {
+    const header = message("parking_receipt_2lang",
+        {...PARKING, documentFilename: " "}).template.components[0];
+    assert.equal(header.parameters[0].document.filename, "Receipt.pdf");
+  });
+
+  it("fills parking_welcome_2lang: 6 variables", () => {
+    assert.equal(PARKING_TEMPLATE_VARIABLES.parking_welcome_2lang.length, 6);
+    assert.deepEqual(message("parking_welcome_2lang").template.components, [
+      {type: "body", parameters: [
+        text("Alimou Barry"),
+        text("Dala Parking"),
+        text("2014 Toyota Corolla, 2016 RAV4 and 3 more"),
+        text("Dala Parking"),
+        text("2014 Toyota Corolla, 2016 RAV4 et 3 autres"),
+        text("+13475550100"),
+      ]},
+      tracking,
+    ]);
+  });
+
+  it("never sends an empty parameter", () => {
+    for (const name of Object.values(PARKING_TEMPLATE)) {
+      for (const values of [{}, {name: " ", business: "\n",
+        businessPhone: "", trackingCode: null}]) {
+        for (const part of message(name, values).template.components) {
+          for (const p of part.parameters) {
+            if (p.type !== "text") continue;
+            assert.ok(p.text.trim().length > 0, `${name} sent an empty text`);
+          }
+        }
+      }
+    }
+    // "Phone / Téléphone : —" when the lot has no phone.
+    assert.equal(message("parking_parked_2lang", {})
+        .template.components[0].parameters[9].text, "—");
+  });
+
+  it("does not change what the container templates send", () => {
+    assert.equal(TEMPLATE_VARIABLES.package_confirm_2lang.length, 8);
+    assert.deepEqual(Object.keys(TEMPLATE_SHAPE), ["package_confirm_2lang"]);
+  });
+});

@@ -4417,3 +4417,91 @@ describe("phone account rules", () => {
     await assertFails(deleteDoc(doc(firestoreFor("phone-customer"), path)));
   });
 });
+
+// Parking customers on WhatsApp (docs/PARKING_WHATSAPP.md §2): the message
+// rows are the business's to read and the server's alone to write, and the
+// receipt PDFs in Storage are nobody's but the server's.
+describe("parking WhatsApp rules", () => {
+  async function seedParkingMessages() {
+    const {doc, setDoc} = require("firebase/firestore");
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, "parkingMessages/car_a_parked"), {
+        businessId: "biz_a", parkedCarId: "car_a", kind: "parked",
+        phone: "+12015551234", status: "sent", wamid: "wamid.1"});
+      await setDoc(doc(db, "parkingMessages/car_a_pay_p_1"), {
+        businessId: "biz_a", parkedCarId: "car_a", kind: "receipt",
+        paymentId: "p_1", status: "failed"});
+      await setDoc(doc(db, "parkingMessages/car_b_parked"), {
+        businessId: "biz_b", parkedCarId: "car_b", kind: "parked",
+        status: "sent"});
+    });
+  }
+
+  it("lets the lot's owner and staff read its message rows, as a query",
+      async () => {
+        await seedParkingMessages();
+        const {query, collection, where, getDocs, getDoc, doc} =
+            require("firebase/firestore");
+        for (const uid of ["owner-a", "staff-parking-a", "super-admin"]) {
+          const db = firestoreFor(uid);
+          await assertSucceeds(getDoc(doc(db, "parkingMessages/car_a_parked")));
+          const rows = await assertSucceeds(getDocs(query(
+              collection(db, "parkingMessages"),
+              where("businessId", "==", "biz_a"),
+              where("parkedCarId", "==", "car_a"))));
+          assert.equal(rows.size, 2, uid);
+        }
+      });
+
+  it("keeps another lot's rows, customers and the signed-out out",
+      async () => {
+        await seedParkingMessages();
+        const {query, collection, where, getDocs, getDoc, doc} =
+            require("firebase/firestore");
+        for (const uid of ["owner-b", "staff-transport-b", "customer-owner",
+          "support-admin", null]) {
+          const db = firestoreFor(uid);
+          await assertFails(getDoc(doc(db, "parkingMessages/car_a_parked")));
+          await assertFails(getDocs(query(collection(db, "parkingMessages"),
+              where("businessId", "==", "biz_a"))));
+        }
+        // Not even your own lot's, without saying which lot.
+        await assertFails(getDocs(query(collection(firestoreFor("owner-a"),
+            "parkingMessages"))));
+      });
+
+  it("never lets any client write a message row", async () => {
+    await seedParkingMessages();
+    const {doc, setDoc, updateDoc, deleteDoc} = require("firebase/firestore");
+    for (const uid of ["owner-a", "staff-parking-a", "super-admin",
+      "customer-owner", null]) {
+      const db = firestoreFor(uid);
+      await assertFails(setDoc(doc(db, "parkingMessages/forged"),
+          {businessId: "biz_a", status: "sent"}));
+      await assertFails(updateDoc(doc(db, "parkingMessages/car_a_parked"),
+          {status: "failed"}));
+      await assertFails(deleteDoc(doc(db, "parkingMessages/car_a_parked")));
+    }
+  });
+
+  it("keeps the receipt PDFs from every client, read and write", async () => {
+    const path = "parkingReceipts/biz_a/car_a/p_1.pdf";
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await context.storage().ref(path).put(
+          Buffer.from("%PDF-1.4 receipt"), {contentType: "application/pdf"});
+    });
+    for (const uid of ["owner-a", "staff-parking-a", "super-admin",
+      "platform-admin", "customer-owner", null]) {
+      const storage = storageFor(uid);
+      await assertFails(storage.ref(path).getMetadata());
+      await assertFails(storage.ref(path).getDownloadURL());
+      await assertFails(storage.ref(path).put(Buffer.from("%PDF-1.4 x"),
+          {contentType: "application/pdf"}));
+      await assertFails(storage.ref(
+          "parkingReceipts/biz_a/car_a/p_2.pdf").put(
+          Buffer.from("%PDF-1.4 x"), {contentType: "application/pdf"}));
+      await assertFails(storage.ref(path).delete());
+    }
+  });
+});

@@ -181,6 +181,86 @@ function paidCents(row, today) {
 }
 
 /**
+ * What a payment entry on a car is worth, in cents.
+ *
+ * @param {*} payment One `parkingPayments` entry.
+ * @return {number} Whole cents, 0 when it holds no amount.
+ */
+function paymentCents(payment) {
+  const cents = Math.round(Number(payment?.amountCents));
+  if (Number.isFinite(cents) && cents > 0) return cents;
+  const dollars = Number(payment?.amount);
+  return Number.isFinite(dollars) && dollars > 0 ?
+    Math.round(dollars * 100) : 0;
+}
+
+/**
+ * What has been paid on the car NOW, for the balance a customer sees. The
+ * recorded payments that were not reverted, or what the record says was
+ * paid (paidCents) when that is more - a part-paid car later marked paid in
+ * full carries the whole amount on the record while its list still holds
+ * only the instalments. A list that marks a payment `reverted` is the
+ * authority on its own: the record's total may still include that payment.
+ *
+ * @param {object} row A parkedCars document.
+ * @param {number} today Today's day number.
+ * @return {number} Cents.
+ */
+function paidNowCents(row, today) {
+  const list = Array.isArray(row?.parkingPayments) ?
+    row.parkingPayments.filter((p) => p && typeof p === "object") : [];
+  const live = list.filter((p) => p.reverted !== true);
+  const liveCents = live.reduce((sum, p) => sum + paymentCents(p), 0);
+  if (live.length < list.length) return liveCents;
+  return Math.max(liveCents, paidCents(row, today));
+}
+
+/**
+ * The money on a parked car today: what the stay has run up so far, what
+ * was paid, and what is still owed. The one rule behind the parked-car
+ * Track page and the WhatsApp receipt; the console and the app mirror it
+ * and `test/fixtures/parking-balance-cases.json` pins the three.
+ *
+ * An open stay runs at its daily rate through today; a stay with a leave
+ * date is its total once that day has passed (before it, the days so far).
+ * Overpaying never shows a negative balance.
+ *
+ * @param {object} car A parkedCars document.
+ * @param {Date} [now] The moment.
+ * @return {?{dailyRateCents: number, sinceDayKey: string,
+ *   leftDayKey: ?string, days: number, accruedCents: number,
+ *   paidCents: number, balanceCents: number, paidInFull: boolean,
+ *   stillParked: boolean}} null for a voided or cancelled car, or one with
+ *   no arrival day.
+ */
+function parkingBalanceNow(car, now = new Date()) {
+  const r = car && typeof car === "object" ? car : {};
+  if (r.voided === true || text(r.status, 40) === "cancelled") return null;
+  const start = dayNumber(r.parkingDate);
+  const today = dayNumber(now);
+  if (start === null || today === null) return null;
+  const leave = dayNumber(r.parkingEndDate);
+  const through = leave === null ? today : Math.min(today, leave);
+  const accruedCents = accruedThroughCents(r, today, today);
+  const paid = paidNowCents(r, today);
+  const dailyDollars = Number(r.dailyRate);
+  const dailyRateCents = Number.isFinite(dailyDollars) && dailyDollars > 0 ?
+    Math.round(dailyDollars * 100) :
+    Math.max(0, Math.round(Number(r.dailyRateCents) || 0));
+  return {
+    dailyRateCents,
+    sinceDayKey: dayKeyOf(start),
+    leftDayKey: leave === null ? null : dayKeyOf(leave),
+    days: Math.max(0, through - start + 1),
+    accruedCents,
+    paidCents: paid,
+    balanceCents: Math.max(0, accruedCents - paid),
+    paidInFull: accruedCents > 0 && paid >= accruedCents,
+    stillParked: leave === null || leave >= today,
+  };
+}
+
+/**
  * How money came in on a car, as method codes: each recorded payment's
  * `receivedVia`, else the method that settled it, else "card_link" for a
  * payment-link car and "online" for one booked and paid online. Codes, not
@@ -718,12 +798,18 @@ module.exports = {
   parkingCustomerKey,
   parkingMonthCustomers,
   parkingMonthCustomerText,
+  dayKeyOf,
   dayLabel,
   dayNumber,
+  mostUsedName,
   monthDays,
   previousMonthKey,
   monthLabel,
   accruedThroughCents,
+  paidCents,
+  paidNowCents,
+  paymentCents,
+  parkingBalanceNow,
   parkingMonthStatement,
   parkingMonthSummary,
   parkingMonthBillText,

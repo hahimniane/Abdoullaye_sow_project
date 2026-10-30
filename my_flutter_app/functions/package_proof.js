@@ -183,6 +183,55 @@ function photoLinkValid(query, token, nowMs) {
 }
 
 /**
+ * What a receipt link signs in the path's place. A photo path never starts
+ * with "receipt:" (photoPathParts refuses the colon), so a photo link's
+ * signature can never open a receipt, nor the other way round.
+ * @param {string} paymentId
+ * @return {string}
+ */
+function receiptSigningPath(paymentId) {
+  return `receipt:${String(paymentId || "")}`;
+}
+
+/**
+ * A time-limited link to a parked car's receipt PDF
+ * (docs/PARKING_WHATSAPP.md §2), served by the /d document endpoint
+ * (view=receiptPdf). Signed like a photo link with the car's document
+ * token, the payment id and the expiry.
+ * @param {object} o `{base, token, paymentId, expiresMs}`
+ * @return {string}
+ */
+function receiptLink(o) {
+  const expires = Math.floor(Number(o.expiresMs));
+  const sig = photoSignature(o.token, receiptSigningPath(o.paymentId),
+      expires);
+  const q = new URLSearchParams({
+    view: "receiptPdf", t: String(o.token), p: String(o.paymentId),
+    e: String(expires), s: sig,
+  });
+  return `${o.base}?${q.toString()}`;
+}
+
+/**
+ * Whether a /d?view=receiptPdf query is genuine and still valid.
+ * @param {object} query `{t, p, e, s}`
+ * @param {string} token The car's stored document token.
+ * @param {number} nowMs
+ * @return {boolean}
+ */
+function receiptLinkValid(query, token, nowMs) {
+  const expires = Number(query?.e);
+  if (!token || !Number.isFinite(expires) || expires <= nowMs) return false;
+  const paymentId = String(query?.p || "");
+  if (!/^[A-Za-z0-9_-]{1,80}$/.test(paymentId)) return false;
+  const expected = photoSignature(token, receiptSigningPath(paymentId),
+      expires);
+  const given = String(query?.s || "");
+  if (given.length !== expected.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(given), Buffer.from(expected));
+}
+
+/**
  * Four digits, never 0000, from random bytes the caller supplies.
  * @param {Buffer|Uint8Array} bytes At least 2 bytes.
  * @return {string}
@@ -474,6 +523,9 @@ module.exports = {
   photoPathParts,
   photoRequirementRefusal,
   photoSignature,
+  receiptLink,
+  receiptLinkValid,
+  receiptSigningPath,
   pickupCodeFrom,
   pickupCodeMatches,
   proofSettingsOf,

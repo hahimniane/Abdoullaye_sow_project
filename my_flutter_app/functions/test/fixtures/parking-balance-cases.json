@@ -1,0 +1,247 @@
+{
+  "now": "2026-10-29T15:00:00Z",
+  "cases": [
+    {
+      "name": "open stay, nothing paid",
+      "car": {
+        "parkingDate": "2026-10-20T12:00:00Z",
+        "dailyRate": 10,
+        "status": "reserved",
+        "paymentStatus": "awaiting_direct_payment"
+      },
+      "expected": {
+        "dailyRateCents": 1000,
+        "sinceDayKey": "2026-10-20",
+        "leftDayKey": null,
+        "days": 10,
+        "accruedCents": 10000,
+        "paidCents": 0,
+        "balanceCents": 10000,
+        "paidInFull": false,
+        "stillParked": true
+      }
+    },
+    {
+      "name": "closed stay is its total",
+      "car": {
+        "parkingDate": "2026-10-01T12:00:00Z",
+        "parkingEndDate": "2026-10-10T12:00:00Z",
+        "dailyRate": 10,
+        "amountDueCents": 10000,
+        "status": "reserved",
+        "paymentStatus": "awaiting_direct_payment"
+      },
+      "expected": {
+        "dailyRateCents": 1000,
+        "sinceDayKey": "2026-10-01",
+        "leftDayKey": "2026-10-10",
+        "days": 10,
+        "accruedCents": 10000,
+        "paidCents": 0,
+        "balanceCents": 10000,
+        "paidInFull": false,
+        "stillParked": false
+      }
+    },
+    {
+      "name": "part-paid open stay",
+      "car": {
+        "parkingDate": "2026-10-20T12:00:00Z",
+        "dailyRate": 10,
+        "amountPaidCents": 3000,
+        "parkingPayments": [
+          {
+            "amountCents": 3000,
+            "receivedVia": "cash"
+          }
+        ]
+      },
+      "expected": {
+        "dailyRateCents": 1000,
+        "sinceDayKey": "2026-10-20",
+        "leftDayKey": null,
+        "days": 10,
+        "accruedCents": 10000,
+        "paidCents": 3000,
+        "balanceCents": 7000,
+        "paidInFull": false,
+        "stillParked": true
+      }
+    },
+    {
+      "name": "overpaid never goes negative",
+      "car": {
+        "parkingDate": "2026-10-01T12:00:00Z",
+        "parkingEndDate": "2026-10-03T12:00:00Z",
+        "dailyRate": 10,
+        "amountDueCents": 3000,
+        "amountPaidCents": 5000,
+        "parkingPayments": [
+          {
+            "amountCents": 5000,
+            "receivedVia": "zelle"
+          }
+        ]
+      },
+      "expected": {
+        "dailyRateCents": 1000,
+        "sinceDayKey": "2026-10-01",
+        "leftDayKey": "2026-10-03",
+        "days": 3,
+        "accruedCents": 3000,
+        "paidCents": 5000,
+        "balanceCents": 0,
+        "paidInFull": true,
+        "stillParked": false
+      }
+    },
+    {
+      "name": "a reverted payment is ignored",
+      "car": {
+        "parkingDate": "2026-10-25T12:00:00Z",
+        "dailyRate": 10,
+        "amountPaidCents": 3000,
+        "parkingPayments": [
+          {
+            "amountCents": 2000
+          },
+          {
+            "amountCents": 1000,
+            "reverted": true
+          }
+        ]
+      },
+      "expected": {
+        "dailyRateCents": 1000,
+        "sinceDayKey": "2026-10-25",
+        "leftDayKey": null,
+        "days": 5,
+        "accruedCents": 5000,
+        "paidCents": 2000,
+        "balanceCents": 3000,
+        "paidInFull": false,
+        "stillParked": true
+      }
+    },
+    {
+      "name": "marked paid in full without amounts",
+      "car": {
+        "parkingDate": "2026-10-25T12:00:00Z",
+        "dailyRate": 10,
+        "paymentStatus": "paid"
+      },
+      "expected": {
+        "dailyRateCents": 1000,
+        "sinceDayKey": "2026-10-25",
+        "leftDayKey": null,
+        "days": 5,
+        "accruedCents": 5000,
+        "paidCents": 5000,
+        "balanceCents": 0,
+        "paidInFull": true,
+        "stillParked": true
+      }
+    },
+    {
+      "name": "part payments then marked paid in full",
+      "car": {
+        "parkingDate": "2026-10-01T12:00:00Z",
+        "parkingEndDate": "2026-10-10T12:00:00Z",
+        "dailyRate": 10,
+        "amountDueCents": 10000,
+        "amountPaidCents": 10000,
+        "paymentStatus": "paid",
+        "parkingPayments": [
+          {
+            "amountCents": 2000
+          }
+        ]
+      },
+      "expected": {
+        "dailyRateCents": 1000,
+        "sinceDayKey": "2026-10-01",
+        "leftDayKey": "2026-10-10",
+        "days": 10,
+        "accruedCents": 10000,
+        "paidCents": 10000,
+        "balanceCents": 0,
+        "paidInFull": true,
+        "stillParked": false
+      }
+    },
+    {
+      "name": "arriving in the future owes nothing yet",
+      "car": {
+        "parkingDate": "2026-11-05T12:00:00Z",
+        "dailyRate": 10
+      },
+      "expected": {
+        "dailyRateCents": 1000,
+        "sinceDayKey": "2026-11-05",
+        "leftDayKey": null,
+        "days": 0,
+        "accruedCents": 0,
+        "paidCents": 0,
+        "balanceCents": 0,
+        "paidInFull": false,
+        "stillParked": true
+      }
+    },
+    {
+      "name": "no daily rate runs up nothing",
+      "car": {
+        "parkingDate": "2026-10-20T12:00:00Z",
+        "dailyRate": 0
+      },
+      "expected": {
+        "dailyRateCents": 0,
+        "sinceDayKey": "2026-10-20",
+        "leftDayKey": null,
+        "days": 10,
+        "accruedCents": 0,
+        "paidCents": 0,
+        "balanceCents": 0,
+        "paidInFull": false,
+        "stillParked": true
+      }
+    },
+    {
+      "name": "a stay that ends later is pro-rated so far",
+      "car": {
+        "parkingDate": "2026-10-27T12:00:00Z",
+        "parkingEndDate": "2026-11-05T12:00:00Z",
+        "dailyRate": 10,
+        "amountDueCents": 10000
+      },
+      "expected": {
+        "dailyRateCents": 1000,
+        "sinceDayKey": "2026-10-27",
+        "leftDayKey": "2026-11-05",
+        "days": 3,
+        "accruedCents": 3000,
+        "paidCents": 0,
+        "balanceCents": 3000,
+        "paidInFull": false,
+        "stillParked": true
+      }
+    },
+    {
+      "name": "voided car has no balance",
+      "car": {
+        "parkingDate": "2026-10-20T12:00:00Z",
+        "dailyRate": 10,
+        "voided": true
+      },
+      "expected": null
+    },
+    {
+      "name": "cancelled car has no balance",
+      "car": {
+        "parkingDate": "2026-10-20T12:00:00Z",
+        "dailyRate": 10,
+        "status": "cancelled"
+      },
+      "expected": null
+    }
+  ]
+}

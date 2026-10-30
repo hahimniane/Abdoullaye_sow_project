@@ -1008,8 +1008,16 @@ function createWhatsAppConversations(deps) {
       });
       return "thread";
     }
-    const rows = await db.collection("containerUpdates")
+    let rows = await db.collection("containerUpdates")
         .where("whatsappMessageId", "==", st.wamid).limit(1).get();
+    // A parked car's message (docs/PARKING_WHATSAPP.md) ticks the same way,
+    // on its own row; it has no package line to mirror the tick onto.
+    let parkingRow = false;
+    if (rows.empty) {
+      rows = await db.collection("parkingMessages")
+          .where("whatsappMessageId", "==", st.wamid).limit(1).get();
+      parkingRow = !rows.empty;
+    }
     if (rows.empty) return "unknown";
     const rowRef = rows.docs[0].ref;
     let changed = null;
@@ -1028,7 +1036,8 @@ function createWhatsAppConversations(deps) {
       });
       changed = {row, next};
     });
-    if (changed && changed.next !== "sent" && deps.recordUpdateDelivery) {
+    if (changed && !parkingRow && changed.next !== "sent" &&
+        deps.recordUpdateDelivery) {
       await deps.recordUpdateDelivery(rowRef, changed.row, changed.next,
           st.errorTitle || (st.errorCode ? `Error ${st.errorCode}` : ""));
     }

@@ -391,6 +391,13 @@ service firebase.storage {
       allow update, delete: if false;
     }
 
+    // Receipt PDFs of parked cars (docs/PARKING_WHATSAPP.md): written and
+    // served by the server only (the /d receiptPdf link, signed). No client,
+    // staff or admin reads or writes them.
+    match /parkingReceipts/{allPaths=**} {
+      allow read, write: if false;
+    }
+
     // Optional: allow read-only access for other files if needed
     match /{allPaths=**} {
       allow read: if false;

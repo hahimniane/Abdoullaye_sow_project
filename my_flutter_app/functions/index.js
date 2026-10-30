@@ -236,8 +236,13 @@ const packageRequests = require("./package_requests");
 const requestReceive = require("./request_receive");
 const {
   loginCodeTemplateMessage,
+  parkingTemplateMessage,
   requestTemplateMessage,
 } = require("./whatsapp_templates");
+// Parking customers on WhatsApp (docs/PARKING_WHATSAPP.md).
+const parkingWhatsApp = require("./parking_whatsapp");
+const parkingReceiptPdf = require("./parking_receipt_pdf");
+const {parkingBalanceNow} = require("./parking_month_statement");
 const {
   buildOpenBarrelMirrorPayload,
   isValidStripeSecretKey,
@@ -12759,8 +12764,16 @@ async function availabilityQueryFor(db, businessId, start, end) {
 // trigger just to find the phone stamp still missing (2026-10 incident: two
 // runs at once made two accounts for one number, and bursts on old rows
 // doubled their writes).
+//
+// It also tells the customer on WhatsApp (docs/PARKING_WHATSAPP.md): a car
+// just created, and every payment just added, when the business switched
+// that on. That step runs last, never throws, and leaves the occupancy work
+// above it exactly as it was.
 exports.syncParkedCarOccupancy = onDocumentWritten(
-    "parkedCars/{parkedCarId}",
+    {
+      document: "parkedCars/{parkedCarId}",
+      secrets: [whatsappAccessToken, whatsappPhoneNumberId],
+    },
     async (event) => {
       const after = event.data?.after;
       if (!after?.exists) return;
@@ -12771,15 +12784,305 @@ exports.syncParkedCarOccupancy = onDocumentWritten(
           event.params.parkedCarId, {after: data, before});
       const update = {...(occupancyPatch(data) || {}),
         ...(phones.update || {})};
-      if (!Object.keys(update).length) return;
       try {
-        await after.ref.update(update, {lastUpdateTime: after.updateTime});
+        if (Object.keys(update).length) {
+          await after.ref.update(update, {lastUpdateTime: after.updateTime});
+        }
       } catch (error) {
         // A newer write landed: its own event redoes both.
         if (!isBenignRace(error)) throw error;
+      } finally {
+        await tellParkedCarCustomer(event, before, data);
       }
     },
 );
+
+// ---------------------------------------------------------------------------
+// Parking customers on WhatsApp (docs/PARKING_WHATSAPP.md §2). The rules of
+// who is told what live in parking_whatsapp.js; these are the reads, the
+// sends and the writes. One parkingMessages row per message, created with
+// `.create()` so a message goes out once however often its event arrives.
+// ---------------------------------------------------------------------------
+
+/**
+ * @param {*} error A Firestore error.
+ * @return {boolean} Whether it says the document already exists.
+ */
+function isAlreadyExistsError(error) {
+  return error?.code === 6 || error?.code === "already-exists" ||
+    /ALREADY_EXISTS|already exists/i.test(String(error?.message || ""));
+}
+
+/**
+ * Writes a car's message row if there is none yet.
+ *
+ * @param {object} ref The parkingMessages document.
+ * @param {object} fields The row (businessId, parkedCarId, kind, phone,
+ *   status, ...).
+ * @return {Promise<boolean>} True when this call made the row; false when
+ *   it was already there (the message was already handled).
+ */
+async function createParkingMessageRow(ref, fields) {
+  try {
+    await ref.create({
+      error: "",
+      ...fields,
+      wamid: "",
+      whatsappMessageId: "",
+      attempts: 0,
+      createdAt: FirestoreFieldValue.serverTimestamp(),
+      sentAt: null,
+    });
+    return true;
+  } catch (error) {
+    if (isAlreadyExistsError(error)) return false;
+    throw error;
+  }
+}
+
+/**
+ * Sends one parking message and records how it went on its row: the wamid
+ * (the delivery ticks and the customer's reply are matched by it), and the
+ * customer's number as a contact of this business so a reply lands with it.
+ *
+ * @param {object} ref The row.
+ * @param {object} row The row as created.
+ * @param {object} body The /messages request body.
+ * @param {string} businessName The business, for the contact.
+ * @return {Promise<string>} The row's final status.
+ */
+async function deliverParkingMessage(ref, row, body, businessName) {
+  const result = containerWhatsAppConfigured() ?
+    await sendWhatsAppMessage(body) :
+    {ok: false, httpStatus: 0, messageId: "",
+      error: "WhatsApp is not connected yet."};
+  const status = result.ok ? parkingWhatsApp.STATUS.SENT :
+    (result.errorCode === WHATSAPP_STOPPED_ERROR_CODE ?
+      parkingWhatsApp.STATUS.STOPPED : parkingWhatsApp.STATUS.FAILED);
+  await ref.update({
+    status,
+    attempts: 1,
+    wamid: result.messageId || "",
+    whatsappMessageId: result.messageId || "",
+    error: result.ok ? "" : String(result.error || "").slice(0, 300),
+    ...(result.errorCode ? {errorCode: Number(result.errorCode)} : {}),
+    ...(result.ok ? {sentAt: FirestoreFieldValue.serverTimestamp()} : {}),
+    updatedAt: FirestoreFieldValue.serverTimestamp(),
+  });
+  if (result.ok) {
+    await whatsappConversations().recordContact({
+      phone: row.phone, businessId: row.businessId, businessName,
+      trackingCode: row.trackingCode, name: row.name,
+      template: row.template,
+    }).catch((error) => logger.warn("WhatsApp contact not recorded", {
+      error: String(error).slice(0, 200)}));
+  }
+  return status;
+}
+
+/**
+ * Makes one message's row and, when there is a number to reach, sends it.
+ *
+ * @param {object} args {db, carId, car, business, kind, template, paymentId,
+ *   extra, buildBody}: `buildBody()` returns the /messages body for the
+ *   number it is given (and may throw: the row then says why it failed).
+ * @return {Promise<?string>} The row's status, or null when the message was
+ *   already handled by an earlier event.
+ */
+async function sendParkingMessage(args) {
+  const {db, carId, car, business, kind, template, paymentId = ""} = args;
+  const reach = parkingWhatsApp.reachablePhone(car, business);
+  const ref = db.collection("parkingMessages").doc(
+      parkingWhatsApp.messageRowId(kind, {carId, paymentId}));
+  const row = {
+    businessId: String(car.businessId || ""),
+    parkedCarId: carId,
+    kind,
+    template,
+    phone: reach.phone || String(car.customerPhone || "").trim().slice(0, 40),
+    name: String(car.customerName || car.ownerName || "").trim().slice(0, 120),
+    trackingCode: String(car.trackingCode || ""),
+    ...(paymentId ? {paymentId} : {}),
+    ...(args.extra || {}),
+    status: reach.phone ? parkingWhatsApp.STATUS.QUEUED :
+      parkingWhatsApp.STATUS.SKIPPED,
+    error: reach.error,
+  };
+  if (!await createParkingMessageRow(ref, row)) return null;
+  if (!reach.phone) return parkingWhatsApp.STATUS.SKIPPED;
+  let body;
+  try {
+    body = await args.buildBody(reach.phone);
+  } catch (error) {
+    await ref.update({status: parkingWhatsApp.STATUS.FAILED, attempts: 1,
+      error: String(error?.message || error).slice(0, 300),
+      updatedAt: FirestoreFieldValue.serverTimestamp()});
+    return parkingWhatsApp.STATUS.FAILED;
+  }
+  return deliverParkingMessage(ref, {...row, phone: reach.phone}, body,
+      String(car.businessName || business.name || ""));
+}
+
+/**
+ * A parked car's document token, minted when it has none: the secret its
+ * receipt links are signed with. Only an empty field is filled, in a
+ * transaction, so two receipts at once share one token (the same
+ * first-write-wins rule as ensureLineDocumentToken).
+ *
+ * @param {object} db Firestore.
+ * @param {object} carRef The parkedCars document.
+ * @return {Promise<string>} The token.
+ */
+async function ensureParkedCarDocumentToken(db, carRef) {
+  const candidate = crypto.randomBytes(24).toString("base64url");
+  return db.runTransaction(async (tx) => {
+    const fresh = await tx.get(carRef);
+    const {value, write} =
+      keepExisting(fresh.data()?.documentToken, candidate);
+    if (write) tx.update(carRef, {documentToken: value});
+    return value;
+  });
+}
+
+/**
+ * @param {string} businessId The lot.
+ * @param {string} carId The parked car.
+ * @param {string} paymentId The payment.
+ * @return {string} Where the receipt PDF is kept in Storage (server only).
+ */
+function parkingReceiptStoragePath(businessId, carId, paymentId) {
+  return `parkingReceipts/${businessId}/${carId}/${paymentId}.pdf`;
+}
+
+/**
+ * @param {object} db Firestore.
+ * @param {string} uid A staff member's uid ("" for nobody).
+ * @return {Promise<string>} Their name, "" when unknown.
+ */
+async function staffNameForReceipt(db, uid) {
+  if (!uid) return "";
+  try {
+    const doc = await db.collection("users").doc(uid).get();
+    const data = doc.exists ? doc.data() || {} : {};
+    return String(data.fullName || data.displayName || "").trim()
+        .slice(0, 120);
+  } catch (error) {
+    return "";
+  }
+}
+
+/**
+ * The receipt of one payment: renders the PDF, keeps it in Storage and
+ * builds the WhatsApp message carrying a 30-day signed link to it.
+ *
+ * @param {object} args {db, carId, car, business, payment, phone, now}.
+ * @return {Promise<object>} The /messages body.
+ */
+async function buildParkingReceiptMessage(args) {
+  const {db, carId, car, business, payment, phone, now} = args;
+  const balance = parkingBalanceNow(car, now);
+  if (!balance) throw new Error("The car has no balance (voided).");
+  const businessId = String(car.businessId || "");
+  const zone = String(business?.packageRequestSettings?.timeZone || "")
+      .trim() || "America/New_York";
+  const atMs = payment.atMs || now.getTime();
+  const token = await ensureParkedCarDocumentToken(db,
+      db.collection("parkedCars").doc(carId));
+  const bytes = await parkingReceiptPdf.renderReceiptPdf(
+      parkingReceiptPdf.receiptModel({
+        business: {name: car.businessName || business.name,
+          phone: business.phone},
+        car,
+        payment: {amountCents: payment.amountCents,
+          method: payment.receivedVia, atMs, number: payment.number,
+          receivedByName: await staffNameForReceipt(db,
+              payment.receivedByStaffId)},
+        balance,
+        timeZone: zone,
+      }));
+  const filename = `Receipt ${String(car.trackingCode || "").trim()} ${
+    parkingReceiptPdf.shortDay(atMs, zone)}.pdf`.replace(/["\\\r\n]/g, "");
+  await requestPhotoBucket()
+      .file(parkingReceiptStoragePath(businessId, carId, payment.id))
+      .save(bytes, {contentType: "application/pdf", resumable: false,
+        metadata: {metadata: {filename}}});
+  const link = packageProof.receiptLink({
+    base: whatsappPhotoBase(),
+    token,
+    paymentId: payment.id,
+    expiresMs: now.getTime() + packageProof.PHOTO_LINK_MS,
+  });
+  return parkingTemplateMessage({
+    template: parkingWhatsApp.PARKING_TEMPLATE.RECEIPT,
+    phone,
+    values: {
+      ...parkingWhatsApp.receiptValues(car, business, payment, balance),
+      documentLink: link,
+      documentFilename: filename,
+    },
+  });
+}
+
+/**
+ * The messages one parkedCars write calls for, sent right away: "parked"
+ * when the car was just created, and a receipt for every payment just
+ * added - each only when the business switched parking messages on. Never
+ * throws: a messaging failure must not break the occupancy work it runs
+ * after, and a failed message stays on its row for staff to see.
+ *
+ * @param {object} event The onDocumentWritten event.
+ * @param {?object} before The car before the write (null: just created).
+ * @param {object} after The car after the write.
+ * @return {Promise<void>}
+ */
+async function tellParkedCarCustomer(event, before, after) {
+  try {
+    const carId = String(event?.params?.parkedCarId || "");
+    const businessId = String(after?.businessId || "");
+    if (!carId || !businessId) return;
+    const now = new Date();
+    const eventMs = Date.parse(String(event?.time || "")) || 0;
+    const plan = parkingWhatsApp.plannedMessages(
+        {businessId, carId, before, after, eventMs, now});
+    if (!plan.parked && plan.receipts.length === 0) return;
+    const db = admin.firestore();
+    const businessDoc = await db.collection("businesses").doc(businessId)
+        .get();
+    const business = businessDoc.exists ? businessDoc.data() || {} : {};
+    if (!parkingWhatsApp.switchAllows(business, eventMs)) return;
+    const car = {...after};
+    const common = {db, carId, car, business};
+    const attempt = (what, work) => work().catch((error) =>
+      logger.warn(`Parking WhatsApp ${what} failed`, {
+        carId, error: String(error?.message || error).slice(0, 300)}));
+    if (plan.parked) {
+      await attempt("welcome", () => sendParkingMessage({
+        ...common,
+        kind: parkingWhatsApp.KIND.PARKED,
+        template: parkingWhatsApp.PARKING_TEMPLATE.PARKED,
+        buildBody: async (phone) => parkingTemplateMessage({
+          template: parkingWhatsApp.PARKING_TEMPLATE.PARKED, phone,
+          values: parkingWhatsApp.parkedValues(car, business, now)}),
+      }));
+    }
+    for (const payment of plan.receipts) {
+      await attempt("receipt", () => sendParkingMessage({
+        ...common,
+        kind: parkingWhatsApp.KIND.RECEIPT,
+        template: parkingWhatsApp.PARKING_TEMPLATE.RECEIPT,
+        paymentId: payment.id,
+        extra: {amountCents: payment.amountCents,
+          receiptNumber: payment.number},
+        buildBody: (phone) => buildParkingReceiptMessage(
+            {...common, payment, phone, now}),
+      }));
+    }
+  } catch (error) {
+    logger.warn("Parking WhatsApp step failed", {
+      carId: event?.params?.parkedCarId,
+      error: String(error?.message || error).slice(0, 300)});
+  }
+}
 
 // How many lots one parking search prices at once. Each lot is one small
 // query; a cap keeps a search for "everything" from opening one query per lot
@@ -14187,6 +14490,231 @@ async function voidBusinessParkingEntry({db, uid, entryRef, entryId, entry,
   return {success: true, entryId, voided: true};
 }
 
+/**
+ * @param {string} code A parkingWhatsApp.REFUSAL.
+ * @param {string} [kind] The HttpsError code.
+ * @return {HttpsError} The refusal, with its reason.
+ */
+function parkingWhatsAppRefusal(code, kind = "failed-precondition") {
+  return new HttpsError(kind, parkingWhatsApp.REFUSAL_MESSAGE[code],
+      {reason: code});
+}
+
+/**
+ * The digits of every number the lot has already sent a `parked` or
+ * `welcome` message (sent, or being sent), so a welcome never goes twice.
+ *
+ * @param {object} db Firestore.
+ * @param {string} businessId The lot.
+ * @return {Promise<Set<string>>} Phone digits.
+ */
+async function welcomedParkingPhones(db, businessId) {
+  const snap = await db.collection("parkingMessages")
+      .where("businessId", "==", businessId)
+      .where("kind", "in", [parkingWhatsApp.KIND.PARKED,
+        parkingWhatsApp.KIND.WELCOME])
+      .limit(5000).get();
+  const welcomed = new Set();
+  for (const doc of snap.docs) {
+    const row = doc.data() || {};
+    if (row.status === parkingWhatsApp.STATUS.SENT ||
+        row.status === parkingWhatsApp.STATUS.QUEUED) {
+      welcomed.add(parkingWhatsApp.phoneDigits(row.phone));
+    }
+  }
+  return welcomed;
+}
+
+/**
+ * The cars a lot has on it right now, each with its id.
+ *
+ * @param {object} db Firestore.
+ * @param {string} businessId The lot.
+ * @param {Date} now The moment.
+ * @return {Promise<Array<object>>} The parkedCars documents.
+ */
+async function carsParkedNow(db, businessId, now) {
+  const query = await availabilityQueryFor(db, businessId, now, now);
+  const snap = await query.get();
+  return snap.docs.map((doc) => ({...doc.data(), id: doc.id}))
+      .filter((car) => car.businessId === businessId &&
+        parkingWhatsApp.carIsParkedNow(car, now));
+}
+
+/**
+ * Sends the welcome to one number: claims its row (a number already
+ * welcomed, or being welcomed, is left alone; a failed, stopped or skipped
+ * one is tried again) and sends `parking_welcome_2lang`.
+ *
+ * @param {object} db Firestore.
+ * @param {string} businessId The lot.
+ * @param {object} business The lot's record.
+ * @param {object} recipient From welcomeRecipients.
+ * @param {string} uid Who pressed Send.
+ * @return {Promise<string>} The row's status, or "already_welcomed".
+ */
+async function sendParkingWelcome(db, businessId, business, recipient, uid) {
+  const ref = db.collection("parkingMessages").doc(parkingWhatsApp
+      .messageRowId(parkingWhatsApp.KIND.WELCOME,
+          {businessId, phone: recipient.phone}));
+  const nowMs = Date.now();
+  const row = {
+    businessId,
+    parkedCarId: recipient.cars[0]?.id || "",
+    parkedCarIds: recipient.cars.map((car) => car.id),
+    kind: parkingWhatsApp.KIND.WELCOME,
+    template: parkingWhatsApp.PARKING_TEMPLATE.WELCOME,
+    phone: recipient.phone,
+    name: recipient.name,
+    trackingCode: recipient.trackingCode,
+    status: parkingWhatsApp.STATUS.QUEUED,
+    error: "",
+    sentByUid: uid,
+    claimedAtMs: nowMs,
+  };
+  const claimed = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const old = snap.exists ? snap.data() || {} : null;
+    if (old) {
+      const sent = old.status === parkingWhatsApp.STATUS.SENT;
+      // A claim older than ten minutes is a send that died.
+      const inFlight = old.status === parkingWhatsApp.STATUS.QUEUED &&
+        nowMs - (Number(old.claimedAtMs) || 0) < 10 * 60 * 1000;
+      if (sent || inFlight) return false;
+    }
+    tx.set(ref, {
+      ...row,
+      wamid: "",
+      whatsappMessageId: "",
+      attempts: Math.max(0, Number(old?.attempts) || 0),
+      createdAt: old?.createdAt || FirestoreFieldValue.serverTimestamp(),
+      sentAt: null,
+    });
+    return true;
+  });
+  if (!claimed) return "already_welcomed";
+  let body;
+  try {
+    body = parkingTemplateMessage({
+      template: parkingWhatsApp.PARKING_TEMPLATE.WELCOME,
+      phone: recipient.phone,
+      values: parkingWhatsApp.welcomeValues(recipient, business),
+    });
+  } catch (error) {
+    await ref.update({status: parkingWhatsApp.STATUS.FAILED, attempts: 1,
+      error: String(error?.message || error).slice(0, 300)});
+    return parkingWhatsApp.STATUS.FAILED;
+  }
+  return deliverParkingMessage(ref, row, body, String(business.name || ""));
+}
+
+/**
+ * updateBusinessParkingEntry's WhatsApp actions, which are about the whole
+ * business rather than one car: `set_parking_whatsapp` (the switch),
+ * `welcome_preview` and `welcome_send` (docs/PARKING_WHATSAPP.md §2). Owner
+ * (or platform admin) only; the welcome needs the switch on.
+ *
+ * @param {object} request The callable request.
+ * @param {string} uid The caller.
+ * @param {string} action One of PARKING_WHATSAPP_ACTIONS.
+ * @return {Promise<object>} The action's answer.
+ */
+async function parkingWhatsAppAction(request, uid, action) {
+  const data = request.data || {};
+  const businessId = cleanText(data.businessId, 180);
+  if (!businessId) {
+    throw new HttpsError("invalid-argument", "Business is required",
+        {reason: "business_required"});
+  }
+  const user = await requireBusinessPermission(uid, businessId, "parking");
+  const owner = user.role === "businessOwner" || user.role === "admin";
+  const isSwitch = action === "set_parking_whatsapp";
+  if (!owner) {
+    throw parkingWhatsAppRefusal(isSwitch ?
+      parkingWhatsApp.REFUSAL.SWITCH_OWNER_ONLY :
+      parkingWhatsApp.REFUSAL.WELCOME_OWNER_ONLY, "permission-denied");
+  }
+  const db = admin.firestore();
+  const businessRef = db.collection("businesses").doc(businessId);
+  const businessDoc = await businessRef.get();
+  if (!businessDoc.exists) {
+    throw new HttpsError("not-found", "Business not found",
+        {reason: "business_not_found"});
+  }
+  const business = businessDoc.data() || {};
+  if (isSwitch) {
+    const enabled = data.enabled === true;
+    const previous = business.parkingWhatsApp || {};
+    const nowMs = Date.now();
+    const next = enabled ? {
+      enabled: true, enabledAtMs: nowMs, enabledByUid: uid,
+    } : {
+      enabled: false,
+      enabledAtMs: Math.max(0, Number(previous.enabledAtMs) || 0),
+      enabledByUid: String(previous.enabledByUid || ""),
+      disabledAtMs: nowMs,
+      disabledByUid: uid,
+    };
+    // A switch that is already in the asked state keeps its first moment: a
+    // second "on" must not make the cars parked since count as new.
+    const keep = enabled && previous.enabled === true;
+    await businessRef.update({
+      parkingWhatsApp: keep ? previous : next,
+      updatedAt: FirestoreFieldValue.serverTimestamp(),
+    });
+    return {success: true, enabled,
+      enabledAtMs: (keep ? previous : next).enabledAtMs};
+  }
+  if (!parkingWhatsApp.parkingWhatsAppEnabled(business)) {
+    throw parkingWhatsAppRefusal(parkingWhatsApp.REFUSAL.OFF);
+  }
+  const now = new Date();
+  const cars = await carsParkedNow(db, businessId, now);
+  const welcomed = await welcomedParkingPhones(db, businessId);
+  const {recipients, skipped} = parkingWhatsApp.welcomeRecipients(
+      {cars, business, welcomed, now});
+  if (action === "welcome_preview") {
+    return {success: true, recipients, skipped};
+  }
+  // welcome_send: the numbers asked for, or everyone not yet welcomed.
+  const asked = Array.isArray(data.phones) ?
+    new Set(data.phones.map(parkingWhatsApp.phoneDigits).filter(Boolean)) :
+    null;
+  const chosen = recipients.filter((recipient) => !asked ||
+    asked.has(parkingWhatsApp.phoneDigits(recipient.phone)));
+  const tally = {sent: 0, failed: 0, stopped: 0, skipped: skipped.length,
+    alreadyWelcomed: 0, remaining: 0};
+  const deadline = Date.now() + 240 * 1000;
+  let handled = 0;
+  for (const recipient of chosen) {
+    if (recipient.alreadyWelcomed) {
+      tally.alreadyWelcomed += 1;
+      continue;
+    }
+    if (handled >= parkingWhatsApp.WELCOME_MAX_PER_CALL ||
+        Date.now() > deadline) {
+      tally.remaining += 1;
+      continue;
+    }
+    handled += 1;
+    const status = await sendParkingWelcome(
+        db, businessId, business, recipient, uid)
+        .catch((error) => {
+          logger.warn("Parking welcome failed", {businessId,
+            error: String(error?.message || error).slice(0, 300)});
+          return parkingWhatsApp.STATUS.FAILED;
+        });
+    if (status === parkingWhatsApp.STATUS.SENT) tally.sent += 1;
+    else if (status === parkingWhatsApp.STATUS.STOPPED) tally.stopped += 1;
+    else if (status === "already_welcomed") tally.alreadyWelcomed += 1;
+    else tally.failed += 1;
+  }
+  return {success: true, ...tally};
+}
+
+const PARKING_WHATSAPP_ACTIONS = Object.freeze(
+    ["set_parking_whatsapp", "welcome_preview", "welcome_send"]);
+
 // The printable invoice / receipt. Shares the payment link's token so a
 // business can hand the same URL to a customer, and so both clients open one
 // implementation instead of each rendering their own document.
@@ -14228,6 +14756,41 @@ async function packagePhotoFile(db, req, token) {
   }
 }
 
+/**
+ * The receipt PDF a /d?view=receiptPdf link points at, when the link is
+ * genuine (package_proof.receiptLinkValid: the car's document token, the
+ * payment id and the expiry signed together), the car still stands, and the
+ * server kept that payment's receipt (docs/PARKING_WHATSAPP.md §2). A voided
+ * car's receipts are gone as far as the link goes.
+ *
+ * @param {object} db Firestore.
+ * @param {object} req The request ({t, p, e, s}).
+ * @param {string} token The car's document token.
+ * @return {Promise<object|null>} {bytes, filename}, or null for 404.
+ */
+async function parkingReceiptPdfFile(db, req, token) {
+  if (!packageProof.receiptLinkValid(req.query, token, Date.now())) {
+    return null;
+  }
+  const cars = await db.collection("parkedCars")
+      .where("documentToken", "==", token).limit(1).get();
+  if (cars.empty) return null;
+  const car = cars.docs[0].data() || {};
+  if (car.voided === true) return null;
+  const path = parkingReceiptStoragePath(String(car.businessId || ""),
+      cars.docs[0].id, String(req.query?.p || ""));
+  try {
+    const file = requestPhotoBucket().file(path);
+    const [meta] = await file.getMetadata();
+    const [bytes] = await file.download();
+    const kept = String(meta?.metadata?.filename || "")
+        .replace(/["\\\r\n]/g, "");
+    return {bytes, filename: kept || "Receipt.pdf"};
+  } catch (error) {
+    return null;
+  }
+}
+
 exports.parkingDocument = onRequest(
     {cors: false, maxInstances: 10},
     async (req, res) => {
@@ -14249,6 +14812,17 @@ exports.parkingDocument = onRequest(
         res.set("Content-Type", photo.contentType);
         res.set("Cache-Control", "private, max-age=3600");
         return res.status(200).send(photo.bytes);
+      }
+      // A parked car's receipt PDF (docs/PARKING_WHATSAPP.md §2): the car's
+      // own token, the payment, a signed expiry; the PDF itself, or 404.
+      if (String(req.query?.view || "") === "receiptPdf") {
+        const receipt = await parkingReceiptPdfFile(db, req, token);
+        if (!receipt) return notFound();
+        res.set("Content-Type", "application/pdf");
+        res.set("Content-Disposition",
+            `inline; filename="${receipt.filename}"`);
+        res.set("Cache-Control", "private, max-age=3600");
+        return res.status(200).send(receipt.bytes);
       }
       // A product's QR tags have a view of their own: only the item's own
       // token opens them, and nothing else is looked up for that view.
@@ -14606,15 +15180,26 @@ exports.updateBusinessParkingEntry = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
+      // The welcome to current customers sends up to 300 WhatsApp messages
+      // one after the other.
+      timeoutSeconds: 300,
       secrets: [
         stripeSecretKey,
         twilioAccountSid,
         twilioAuthToken,
         twilioFromNumber,
+        whatsappAccessToken,
+        whatsappPhoneNumberId,
       ],
     },
     async (request) => {
       const uid = requireAuth(request);
+      // The WhatsApp switch and welcome are about the business, not one
+      // car: no entryId (docs/PARKING_WHATSAPP.md §2).
+      const businessAction = String(request.data?.action || "");
+      if (PARKING_WHATSAPP_ACTIONS.includes(businessAction)) {
+        return parkingWhatsAppAction(request, uid, businessAction);
+      }
       const entryId = cleanText(
           request.data?.entryId || request.data?.reservationId, 180,
       );
