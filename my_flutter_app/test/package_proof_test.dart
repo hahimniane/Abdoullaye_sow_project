@@ -221,12 +221,35 @@ void main() {
       );
     });
 
-    test('requires a photo only for counter drop-offs when switched on', () {
+    test('requires a photo only for air counter drop-offs when on', () {
       const on = PackageProofSettings(photosRequired: true);
-      expect(photoRequirementRefusal(on), 'photo_required');
-      expect(photoRequirementRefusal(on, photoPaths: [path]), '');
-      expect(photoRequirementRefusal(on, source: 'request'), '');
-      expect(photoRequirementRefusal(const PackageProofSettings()), '');
+      expect(photoRequirementRefusal(on, shipMode: 'air'), 'photo_required');
+      expect(
+        photoRequirementRefusal(on, photoPaths: [path], shipMode: 'air'),
+        '',
+      );
+      expect(
+        photoRequirementRefusal(on, source: 'request', shipMode: 'air'),
+        '',
+      );
+      expect(
+        photoRequirementRefusal(const PackageProofSettings(), shipMode: 'air'),
+        '',
+      );
+      // A sea package (the default, and every line from before "Ships
+      // by") never needs a photo.
+      expect(photoRequirementRefusal(on), '');
+      expect(photoRequirementRefusal(on, shipMode: 'sea'), '');
+    });
+
+    test('reads shipsByAir off the business, never into the switches', () {
+      expect(proofSettingsOf({'shipsByAir': true}).shipsByAir, isTrue);
+      expect(proofSettingsOf({'shipsByAir': 'yes'}).shipsByAir, isFalse);
+      expect(proofSettingsOf(null).shipsByAir, isFalse);
+      expect(
+        const PackageProofSettings(shipsByAir: true).toMap().keys,
+        isNot(contains('shipsByAir')),
+      );
     });
 
     test('shows the three ticks', () {

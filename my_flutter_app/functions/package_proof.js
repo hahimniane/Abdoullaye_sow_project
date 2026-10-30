@@ -360,13 +360,16 @@ function validateProofSettings(raw) {
 }
 
 /**
- * Whether a counter drop-off may be saved without a photo.
+ * Whether a counter drop-off may be saved without a photo. The switch is
+ * for packages that fly: a sea package (the default, and every line from
+ * before "Ships by") never needs one.
  * @param {object} settings `{photosRequired}`
- * @param {object} line `{source, photoPaths}`
+ * @param {object} line `{source, photoPaths, shipMode}`
  * @return {string} "" or the refusal code.
  */
 function photoRequirementRefusal(settings, line) {
   if (!settings?.photosRequired) return "";
+  if (String(line?.shipMode || "").toLowerCase() !== "air") return "";
   const source = String(line?.source || "counter");
   if (source !== "counter") return "";
   const photos = Array.isArray(line?.photoPaths) ? line.photoPaths : [];

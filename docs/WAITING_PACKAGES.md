@@ -136,7 +136,9 @@ container not open (`container_locked`); a line missing or another business's
 (`line_not_waiting`); container with **no destination** while a line has one
 (`container_destination_required` - set the container's destination first);
 any line to a different country (`destination_mismatch`,
-`details.lineIds` = every offending line). Moves lines to the container
+`details.lineIds` = every offending line); any line whose `shipMode` differs
+from the container's (`ship_mode_mismatch`, `details.shipMode` = the
+package's; see docs/AIR_PACKAGES.md §7). Moves lines to the container
 (`containerStatus` = the container's, `loading`), moves the cars' VIN locks
 (`containerId`), increments the container's tallies once. Writes no timeline
 moment and no WhatsApp row.

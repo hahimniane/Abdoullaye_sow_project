@@ -435,13 +435,17 @@ PackageProofSettings proofSettingsOf(Map<String, dynamic>? business) =>
     PackageProofSettings.fromBusiness(business ?? const {});
 
 /// Whether a counter drop-off may be saved without a photo: "" or
-/// "photo_required". Mirrors `photoRequirementRefusal`.
+/// "photo_required". The switch is for packages that fly: a sea package
+/// ([shipMode] "sea", the default, and every line from before "Ships by")
+/// never needs one. Mirrors `photoRequirementRefusal`.
 String photoRequirementRefusal(
   PackageProofSettings settings, {
   String source = 'counter',
   List<String> photoPaths = const [],
+  String shipMode = 'sea',
 }) {
   if (!settings.photosRequired) return '';
+  if (shipMode.trim().toLowerCase() != 'air') return '';
   if ((source.isEmpty ? 'counter' : source) != 'counter') return '';
   return photoPaths.isEmpty ? 'photo_required' : '';
 }

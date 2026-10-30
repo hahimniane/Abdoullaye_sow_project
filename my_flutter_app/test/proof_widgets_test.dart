@@ -412,7 +412,10 @@ void main() {
               waitingPackageSheetForTesting(
                 caller: caller(log),
                 proofController: c,
-                proofSettings: const PackageProofSettings(photosRequired: true),
+                proofSettings: const PackageProofSettings(
+                  photosRequired: true,
+                  shipsByAir: true,
+                ),
                 defaultDestination: const DestinationRef('guinea', 'Guinea'),
               ),
             ),
@@ -421,6 +424,8 @@ void main() {
         ),
       );
       await tap(tester, 'open');
+      // The proof section is for a package that flies (§7).
+      await tap(tester, 'ship-mode-air');
       await type(tester, 'line-customer', 'Fatou Diallo');
       await type(tester, 'line-receiver', 'Mariama Bah');
       expect(find.byKey(const Key('proof-photos-required')), findsOneWidget);
@@ -452,6 +457,7 @@ void main() {
       ]);
       expect(sent['weightLb'], 4.3);
       expect(sent['declaredValueCents'], 25000);
+      expect(sent['shipMode'], 'air');
     });
   });
 

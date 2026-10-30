@@ -211,16 +211,20 @@ describe("proof settings and ticks", () => {
       pickupCode: false});
   });
 
-  it("requires a photo only for counter drop-offs when switched on", () => {
+  it("requires a photo only for air counter drop-offs when on", () => {
     const on = {photosRequired: true};
-    assert.equal(proof.photoRequirementRefusal(on, {photoPaths: []}),
-        "photo_required");
+    assert.equal(proof.photoRequirementRefusal(on, {photoPaths: [],
+      shipMode: "air"}), "photo_required");
     assert.equal(proof.photoRequirementRefusal(on, {source: "counter",
-      photoPaths: [PATH]}), "");
+      photoPaths: [PATH], shipMode: "air"}), "");
     assert.equal(proof.photoRequirementRefusal(on, {source: "request",
-      photoPaths: []}), "");
+      photoPaths: [], shipMode: "air"}), "");
     assert.equal(proof.photoRequirementRefusal({photosRequired: false},
-        {photoPaths: []}), "");
+        {photoPaths: [], shipMode: "air"}), "");
+    // A sea package (or one from before "Ships by") never needs a photo.
+    assert.equal(proof.photoRequirementRefusal(on, {source: "counter",
+      photoPaths: [], shipMode: "sea"}), "");
+    assert.equal(proof.photoRequirementRefusal(on, {photoPaths: []}), "");
   });
 
   it("maps button payloads and shows the three ticks", () => {

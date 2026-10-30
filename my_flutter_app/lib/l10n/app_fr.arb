@@ -9263,5 +9263,37 @@
   "lotErrEndMonthBeforePurchases": "Ce poste a des achats après ce mois.",
   "@lotErrEndMonthBeforePurchases": {
     "description": "Refusal: the line has purchases after the stop month."
+  },
+  "shipsByLabel": "Expédié par",
+  "@shipsByLabel": {
+    "description": "Label above the Sea / Air choice on a package form (docs/AIR_PACKAGES.md \u00a77)."
+  },
+  "shipsByAirBadge": "Avion",
+  "@shipsByAirBadge": {
+    "description": "Small badge on a waiting package marked to fly."
+  },
+  "wpkErrShipModeMismatch": "Ce colis est prévu par mer ; ceci est un envoi aérien. Changez d'abord « Expédié par » du colis.",
+  "@wpkErrShipModeMismatch": {
+    "description": "Refusal: a package marked sea put on an air shipment."
+  },
+  "wpkErrShipModeMismatchAir": "Ce colis est prévu par avion ; ceci est un conteneur maritime. Changez d'abord « Expédié par » du colis.",
+  "@wpkErrShipModeMismatchAir": {
+    "description": "Refusal: a package marked air put on a sea container."
+  },
+  "wpkErrShipModeLocked": "Ce colis est déjà sur un conteneur : il part comme lui. Retirez-le d'abord pour changer « Expédié par ».",
+  "@wpkErrShipModeLocked": {
+    "description": "Refusal: Ships by changed on a package already on a container."
+  },
+  "wpkErrShipModeInvalid": "Choisissez comment le colis est expédié : mer ou avion.",
+  "@wpkErrShipModeInvalid": {
+    "description": "Refusal: the ship mode sent is neither sea nor air."
+  },
+  "wpkBlockedShipsBySea": "Par mer ; ceci est un envoi aérien",
+  "@wpkBlockedShipsBySea": {
+    "description": "Why a waiting package cannot go on this air shipment (row note)."
+  },
+  "wpkBlockedShipsByAir": "Par avion ; ceci est un conteneur maritime",
+  "@wpkBlockedShipsByAir": {
+    "description": "Why a waiting package cannot go on this sea container (row note)."
   }
 }

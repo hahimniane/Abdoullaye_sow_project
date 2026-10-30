@@ -383,6 +383,9 @@ const {
   containerRecord,
   isAirContainer,
   shipModeOf,
+  lineShipModeOf,
+  shipModeMismatch,
+  shipModeMismatchMessage,
   containerCarrierScac,
   carrierScacRefusal,
   shouldStartCarrierTracking,
@@ -18314,12 +18317,13 @@ async function photoAttachable(path, {businessId, uid, keep = []}) {
  *
  * @param {object} db Firestore.
  * @param {object} args {businessId, uid, photoPaths (validated), source
- *   (the line's), keep (the paths the line already has, on an edit)}.
+ *   (the line's), shipMode (the line's: only an air package needs a
+ *   photo), keep (the paths the line already has, on an edit)}.
  * @return {Promise<object>} The business's proof settings
  *   (package_proof.proofSettingsOf), for the pickup code.
  */
 async function lineProofChecks(db, args) {
-  const {businessId, uid, source} = args;
+  const {businessId, uid, source, shipMode} = args;
   const photoPaths = Array.isArray(args.photoPaths) ? args.photoPaths : [];
   const keep = Array.isArray(args.keep) ? args.keep : [];
   for (const path of photoPaths) {
@@ -18330,7 +18334,7 @@ async function lineProofChecks(db, args) {
   const business = await db.collection("businesses").doc(businessId).get();
   const settings = packageProof.proofSettingsOf(business.data() || {});
   const refusal = packageProof.photoRequirementRefusal(settings,
-      {source, photoPaths});
+      {source, photoPaths, shipMode: shipModeOf(shipMode)});
   if (refusal) throw proofRefusal(refusal);
   return settings;
 }
@@ -18412,6 +18416,20 @@ function groupWith(group, lineId, next) {
   return lineGroupSummary(entries, group.rootId);
 }
 
+/**
+ * Marks the business as one that ships by air (`shipsByAir`), the first
+ * time it starts (or turns a container into) a flight. Its package forms
+ * then offer "Ships by: Sea · Air". Never unset by the server.
+ *
+ * @param {object} db Firestore.
+ * @param {string} businessId The business.
+ * @return {Promise<void>}
+ */
+async function markBusinessShipsByAir(db, businessId) {
+  await db.collection("businesses").doc(businessId)
+      .set({shipsByAir: true}, {merge: true});
+}
+
 exports.createContainer = onCall(
     {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
     async (request) => {
@@ -18440,6 +18458,9 @@ exports.createContainer = onCall(
         createdAt: FirestoreFieldValue.serverTimestamp(),
         updatedAt: FirestoreFieldValue.serverTimestamp(),
       });
+      if (isAirContainer(record)) {
+        await markBusinessShipsByAir(db, businessId);
+      }
       await containerAudit(businessId, ref.id, "created", uid,
           `Started ${record.label}`);
       return {success: true, containerId: ref.id};
@@ -18512,6 +18533,14 @@ exports.updateContainer = onCall(
         editedByStaffId: uid,
         updatedAt: FirestoreFieldValue.serverTimestamp(),
       }, {merge: true});
+      if (changed.includes("shipMode")) {
+        if (isAirContainer(merged)) {
+          await markBusinessShipsByAir(db, businessId);
+        }
+        // A package on a box goes the way the box goes: the lines already
+        // on it (still loading - a shipped box cannot change) follow.
+        await restampLinesShipMode(db, ref.id, shipModeOf(merged.shipMode));
+      }
       const touched = [...changed,
         ...(String(current.notes || "") !== merged.notes ? ["notes"] : []),
         ...(carrierChanged ? ["carrierScac"] : [])];
@@ -18522,6 +18551,30 @@ exports.updateContainer = onCall(
       return {success: true, containerId: ref.id};
     },
 );
+
+/**
+ * Writes a container's ship mode on every line on it that says otherwise,
+ * after the container's mode was changed while loading.
+ *
+ * @param {object} db Firestore.
+ * @param {string} containerId The container.
+ * @param {string} mode Its ship mode now.
+ * @return {Promise<number>} How many lines changed.
+ */
+async function restampLinesShipMode(db, containerId, mode) {
+  const onBox = await db.collection("containerLines")
+      .where("containerId", "==", containerId).get();
+  const stale = onBox.docs.filter((d) => d.data()?.shipMode !== mode);
+  for (const group of inGroups(stale, 400)) {
+    const batch = db.batch();
+    for (const d of group) {
+      batch.update(d.ref, {shipMode: mode,
+        updatedAt: FirestoreFieldValue.serverTimestamp()});
+    }
+    await batch.commit();
+  }
+  return stale.length;
+}
 
 exports.deleteContainer = onCall(
     {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
@@ -18582,11 +18635,15 @@ exports.addContainerLine = onCall(
         containerId: ref.id,
         containerStatus: String(current.status || CONTAINER_STATUS.LOADING),
         addedByStaffId: uid,
+        // Added straight onto a container, it goes the way that one goes.
+        shipMode: shipModeOf(current.shipMode),
       });
       // The photos must be the caller's own uploads, and a business that
-      // requires one at the counter gets one (docs/AIR_PACKAGES.md §4.2).
+      // requires one at the counter gets one for a package that flies
+      // (docs/AIR_PACKAGES.md §4.2).
       const proofSettings = await lineProofChecks(db, {businessId, uid,
-        photoPaths: record.photoPaths, source: "counter"});
+        photoPaths: record.photoPaths, source: "counter",
+        shipMode: record.shipMode});
       const lineRef = db.collection("containerLines").doc();
       // What the customer types to follow it and what the package label
       // carries - the same short code every other service uses. Minted
@@ -18892,13 +18949,19 @@ exports.moveContainerLine = onCall(
               CONTAINER_MESSAGES[clash],
               {reason: clash, lineIds: [lineRef.id]});
         }
+        // And going the same way: a sea box's package does not fly.
+        if (shipModeMismatch(row, toBox.data(), fromBox.data())) {
+          throw containerRefusal("ship_mode_mismatch", [lineRef.id],
+              shipModeOf(fromBox.data()?.shipMode));
+        }
         const lockRef = row.kind === "car" ?
           containerVinLockRef(db, businessId, row.vinNumber) : null;
         const lock = lockRef ? await tx.get(lockRef) : null;
         // Scanning's marks were for the box it leaves.
         txWriteMove(tx, {lineRef, row, fromRef: from.ref, toRef: to.ref, uid,
           toStatus: String(toBox.data()?.status || CONTAINER_STATUS.LOADING),
-          lockRef, lock, lineFields: clearedLoadFields()});
+          lockRef, lock, lineFields: {...clearedLoadFields(),
+            shipMode: shipModeOf(toBox.data()?.shipMode)}});
       });
       await moveAudits({businessId, uid, line,
         from: {id: from.ref.id, label: String(from.data.label || from.ref.id)},
@@ -18946,6 +19009,7 @@ async function editContainerLine(db, args) {
     if (error) throw proofRefusal(error);
     await lineProofChecks(db, {businessId, uid,
       photoPaths: fields.photoPaths, source: row.source,
+      shipMode: lineShipModeOf({...row, ...input}),
       keep: Array.isArray(row.photoPaths) ? row.photoPaths : []});
   }
   const edit = () => db.runTransaction(async (tx) => {
@@ -19391,10 +19455,17 @@ exports.updateContainerLineContacts = onCall(
  *
  * @param {string} code A CONTAINER_MESSAGES key.
  * @param {string[]} lineIds The lines the refusal names.
+ * @param {string} shipMode For `ship_mode_mismatch`: how the packages go
+ *   ("air" or "sea"), which picks the sentence and rides in the details.
  * @return {HttpsError} The error to throw.
  */
-function containerRefusal(code, lineIds = []) {
+function containerRefusal(code, lineIds = [], shipMode = "") {
   const gone = ["line_not_found", "payment_not_found"].includes(code);
+  if (code === "ship_mode_mismatch") {
+    return new HttpsError("failed-precondition",
+        shipModeMismatchMessage(shipMode),
+        {reason: code, lineIds, shipMode: shipModeOf(shipMode)});
+  }
   return new HttpsError(gone ? "not-found" : "failed-precondition",
       CONTAINER_MESSAGES[code] || code,
       {reason: code, lineIds});
@@ -19432,15 +19503,19 @@ exports.addWaitingPackage = onCall(
           db, businessId, payment.receivedByStaffId)) {
         throw receivedByInvalid();
       }
+      // "Ships by" is the one chosen (sea when none was): it decides
+      // which containers the package may go on (shipModeMismatch).
       const record = containerLineRecord(data, {
         containerId: "",
         containerStatus: LINE_STATUS_WAITING,
         addedByStaffId: uid,
       });
       // The photos must be the caller's own uploads, and a business that
-      // requires one at the counter gets one (docs/AIR_PACKAGES.md §4.2).
+      // requires one at the counter gets one for a package that flies
+      // (docs/AIR_PACKAGES.md §4.2).
       const proofSettings = await lineProofChecks(db, {businessId, uid,
-        photoPaths: record.photoPaths, source: "counter"});
+        photoPaths: record.photoPaths, source: "counter",
+        shipMode: record.shipMode});
       const paymentRecord = payment ?
         containerLinePaymentRecord(payment, uid) : null;
       const paidCents = paymentRecord ? paymentRecord.amountCents : 0;
@@ -19719,6 +19794,8 @@ function txSplitLine(tx, db, args) {
     senderIsReceiver: line.senderIsReceiver === true,
     destinationCountryId: String(line.destinationCountryId || ""),
     destinationCountryName: String(line.destinationCountryName || ""),
+    // It ships the way the package was going to.
+    shipMode: lineShipModeOf(line),
     payOnArrival: line.payOnArrival === true,
     ...staying,
     // The drop-off photos show the whole drop-off: the part keeps them.
@@ -19857,6 +19934,9 @@ function txWriteUnassign(tx, args) {
   tx.update(lineRef, {
     containerId: "",
     containerStatus: LINE_STATUS_WAITING,
+    // Back on the waiting list it keeps going the way its box went (a line
+    // from before "Ships by" learns it here).
+    ...(args.shipMode ? {shipMode: shipModeOf(args.shipMode)} : {}),
     ...clearedLoadFields(),
     updatedAt: FirestoreFieldValue.serverTimestamp(),
   });
@@ -19945,6 +20025,9 @@ function loadingRefusal(code, lineId = "", details = {}) {
     return new HttpsError("not-found", lineId ?
       CONTAINER_MESSAGES.line_not_found :
       CONTAINER_MESSAGES.scan_line_not_found, {reason: code, lineIds});
+  }
+  if (code === "ship_mode_mismatch") {
+    return containerRefusal(code, lineIds, details?.shipMode);
   }
   return new HttpsError("failed-precondition",
       CONTAINER_MESSAGES[code] || code, {reason: code, lineIds, ...details});
@@ -20068,7 +20151,8 @@ async function scanToLoad(db, {uid, businessId, ref, data}) {
     const lock = lockRef ? await tx.get(lockRef) : null;
     txWriteMove(tx, {lineRef, row, fromRef: otherRef, toRef: ref, uid,
       toStatus: String(boxData.status || CONTAINER_STATUS.LOADING),
-      lockRef, lock, lineFields: marks});
+      lockRef, lock, lineFields: {...marks,
+        shipMode: shipModeOf(boxData.shipMode)}});
     return {decision, row: after, boxData, delta, warnings,
       from: {id: onId, label: String(other.label || onId)}};
   });
@@ -20160,7 +20244,8 @@ async function undoLoadScan(db, {uid, businessId, ref, data}) {
           ...assignmentFields(uid, ASSIGN_VIA.MOVE, new Date())}),
         origin: {containerId: fromId, label: String(origin.label || "")}};
     }
-    txWriteUnassign(tx, {lineRef, row, boxRef: ref, lockRef, lock});
+    txWriteUnassign(tx, {lineRef, row, boxRef: ref, lockRef, lock,
+      shipMode: shipModeOf(boxData.shipMode)});
     return {decision, boxData, delta,
       row: lineAfterUpdate({...row, containerId: "",
         containerStatus: LINE_STATUS_WAITING}, clearedLoadFields())};
@@ -20406,7 +20491,10 @@ exports.assignContainerLines = onCall(
         const entries = all.filter((entry) => !already.includes(entry));
         const refusal = entries.length === 0 ? null :
           containerAssignRefusal(boxData, entries, businessId);
-        if (refusal) throw containerRefusal(refusal.code, refusal.lineIds);
+        if (refusal) {
+          throw containerRefusal(refusal.code, refusal.lineIds,
+              refusal.shipMode);
+        }
         // A sender who reported a problem warns, never blocks: the caller
         // confirms with `acknowledgeProblems` (docs/AIR_PACKAGES.md §4.8).
         const warnings = senderProblemWarnings(entries);
@@ -20494,7 +20582,8 @@ exports.unassignContainerLine = onCall(
         const lockRef = row.kind === "car" ?
           containerVinLockRef(db, businessId, row.vinNumber) : null;
         const lock = lockRef ? await tx.get(lockRef) : null;
-        txWriteUnassign(tx, {lineRef, row, boxRef, lockRef, lock});
+        txWriteUnassign(tx, {lineRef, row, boxRef, lockRef, lock,
+          shipMode: shipModeOf(box.data()?.shipMode)});
         return {row, box: box.data() || {}, boxId};
       });
       const label = String(placed.box.label || placed.boxId);
@@ -45681,6 +45770,13 @@ exports.receivePackageRequest = onCall(
       // at the counter, checked as on any new line.
       const proof = packageProof.validateProofFields(data);
       if (proof.error) errors.push(proof.error);
+      // "Ships by": sea unless air was chosen.
+      if (data.shipMode !== undefined && data.shipMode !== null &&
+          data.shipMode !== "" && !["sea", "air"].includes(
+          String(data.shipMode).trim().toLowerCase())) {
+        errors.push("ship_mode_invalid");
+      }
+      const shipMode = shipModeOf(data.shipMode);
       if (errors.length > 0) {
         throw new HttpsError("invalid-argument",
             packageRequests.REQUEST_MESSAGES[errors[0]] ||
@@ -45694,7 +45790,7 @@ exports.receivePackageRequest = onCall(
       // The photos staff attached must be their own uploads; the
       // requirement never applies (the line's source is the request).
       await lineProofChecks(db, {businessId, uid,
-        photoPaths: proof.fields.photoPaths, source: "request"});
+        photoPaths: proof.fields.photoPaths, source: "request", shipMode});
       const trackingCode = await generateTrackingCode(
           CONTAINER_LINE_CODE_PREFIX, "containerLines");
       const lineRef = db.collection("containerLines").doc();
@@ -45753,6 +45849,7 @@ exports.receivePackageRequest = onCall(
           contents: proof.fields.contents,
           weightLb: proof.fields.weightLb,
           declaredValueCents: proof.fields.declaredValueCents,
+          shipMode,
         });
         const paidCents = paymentRecord ? paymentRecord.amountCents : 0;
         tx.set(lineRef, {

@@ -276,3 +276,48 @@ drop-off. ARB keys in both languages.
 - The confirmation replaces the sender's `received` message rather than adding
   one, so the sender gets one message at drop-off, not two.
 - The pickup code goes to the receiver because the receiver collects.
+
+## 7. Ships by: Sea · Air (owner, 2026-10-29, decision A)
+
+The proof fields were shown on every package, even a barrel going by sea,
+because a waiting package did not know whether it would fly or sail. Now
+each package says how it ships.
+
+- **`containerLines.shipMode`** — `"sea"` | `"air"`; missing = sea (every
+  line from before). `addWaitingPackage` and `receivePackageRequest` take
+  the chosen value (default sea; anything else is refused
+  `ship_mode_invalid`). A line added straight onto a container
+  (`addContainerLine`) takes the container's mode — no choice is shown.
+  A split part keeps its line's mode.
+- **Edit:** `updateContainerLine` (edit) changes `shipMode` only while the
+  package waits; on a container it is refused `ship_mode_locked`. Clients
+  never send `shipMode` for a line on a container.
+- **`businesses/{id}.shipsByAir: true`** — set by `createContainer` /
+  `updateContainer` the first time the business has an air container;
+  never unset. There is no backfill: a business that created an air
+  container before this field needs one more air create/update (or a
+  one-off write) before its forms show the choice.
+- **Forms** (console waiting form, receive-request dialog; app waiting
+  sheet, receive sheet): with `shipsByAir`, a segmented **Ships by: Sea ·
+  Air** on top (default Sea). Sea = the form without Photos / What's inside
+  / Weight / Declared value; Air = the proof section. Without the flag: no
+  choice, sea form. The container-line form shows the proof section only
+  for an air container.
+- **Photos required** (`packageProofSettings.photosRequired`) applies only
+  to air counter drop-offs (`package_proof.photoRequirementRefusal` takes
+  the line's `shipMode`). Sender confirmation needs a photo, so it follows;
+  the pickup code is unchanged (any mode).
+- **Loading:** `assignContainerLines` (list and scan), `moveContainerLine`
+  and a scan move refuse a package whose mode differs from the container's:
+  `ship_mode_mismatch`, `details: {reason, lineIds, shipMode}` (`shipMode`
+  = the package's). Texts: sea package → "This package is marked to go by
+  sea; this is a flight. Change the package's Ships by first."
+  (`CONTAINER_MESSAGES.ship_mode_mismatch`); air package → "…by air; this
+  is a sea container…" (`ship_mode_mismatch_air`). Checked after the
+  destination. On a move, a line's mode is its container's.
+- **Container mode change** (`updateContainer`, while loading): the lines
+  on it take the new mode. A line sent back to waiting
+  (`unassignContainerLine`, an undone scan) keeps its box's mode.
+- **Lists:** waiting rows show an "Air" badge (plane) for air packages; the
+  Waiting list has an Air/Sea filter only with `shipsByAir`. Labels and the
+  customs list are unchanged.

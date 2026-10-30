@@ -16,7 +16,7 @@ import 'dart:math';
 import '../utils/callable_data.dart';
 import 'container_manifest.dart';
 import 'lot_ledger.dart' show LotStaff;
-import 'waiting_packages.dart' show destinationMismatch;
+import 'waiting_packages.dart' show assignmentRefusal;
 
 /// The callable every loading action rides on (no new export).
 const loadCallable = 'assignContainerLines';
@@ -59,6 +59,10 @@ abstract final class LoadReason {
   static const containerLocked = 'container_locked';
   static const destinationRequired = 'container_destination_required';
   static const destinationMismatch = 'destination_mismatch';
+
+  /// "Ships by" (docs/AIR_PACKAGES.md §7): a package marked sea scanned
+  /// onto a flight, or air onto a sea container (`details.shipMode`).
+  static const shipModeMismatch = 'ship_mode_mismatch';
   static const lineDelivered = 'line_delivered';
   static const lineInOtherContainer = 'line_in_other_container';
   static const scanCodeInvalid = 'scan_code_invalid';
@@ -71,6 +75,7 @@ abstract final class LoadReason {
     containerLocked,
     destinationRequired,
     destinationMismatch,
+    shipModeMismatch,
     lineDelivered,
     lineInOtherContainer,
     scanCodeInvalid,
@@ -385,7 +390,12 @@ class LoadFailure implements Exception {
     this.otherStatus = '',
     this.canMove = false,
     this.otherScannedPieces = 0,
+    this.shipMode = '',
   });
+
+  /// On `ship_mode_mismatch`: how the package goes ("air" or "sea"), which
+  /// picks the sentence.
+  final String shipMode;
 
   /// On `line_in_other_container`: how many of its pieces were already
   /// scanned into the other container (the move question warns of them).
@@ -431,6 +441,7 @@ LoadFailure parseLoadFailure(String code, Object? details) {
     otherStatus: callableString(m['otherStatus']),
     canMove: callableBool(m['canMove']),
     otherScannedPieces: max(0, callableInt(m['otherScannedPieces'])),
+    shipMode: callableString(m['shipMode']),
   );
 }
 
@@ -457,6 +468,8 @@ enum LoadMessage {
   containerLocked,
   destinationRequired,
   destinationMismatch,
+  shipModeMismatch,
+  shipModeMismatchAir,
   lineDelivered,
   inOtherContainer,
   inShippedContainer,
@@ -477,6 +490,10 @@ LoadMessage loadRefusalMessage(LoadFailure failure) {
       return LoadMessage.destinationRequired;
     case LoadReason.destinationMismatch:
       return LoadMessage.destinationMismatch;
+    case LoadReason.shipModeMismatch:
+      return failure.shipMode == containerShipModeAir
+          ? LoadMessage.shipModeMismatchAir
+          : LoadMessage.shipModeMismatch;
     case LoadReason.lineDelivered:
       return LoadMessage.lineDelivered;
     case LoadReason.lineInOtherContainer:
@@ -863,14 +880,15 @@ List<ContainerLine> loadOnContainerLines(
 ];
 
 /// Waiting packages of the business going where [container] goes: the ones
-/// "Still to load" offers. Mirrors `destinationMismatch`, the rule the server
-/// applies to a scan, so a tap is never refused for the destination.
+/// "Still to load" offers. Mirrors `destinationMismatch` and
+/// `shipModeMismatch`, the rules the server applies to a scan, so a tap is
+/// never refused for the destination or for how the package ships.
 List<ContainerLine> loadStillToLoadLines(
   Iterable<ContainerLine> lines,
   ShippingContainer container,
 ) => [
   for (final l in lines)
-    if (l.isWaiting && destinationMismatch(l, container) == null) l,
+    if (l.isWaiting && assignmentRefusal(l, container) == null) l,
 ];
 
 /// Letters and digits only, lower case: "CL K7M4-P2", "cl-k7m4p2" and

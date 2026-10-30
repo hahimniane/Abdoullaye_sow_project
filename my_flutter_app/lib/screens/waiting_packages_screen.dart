@@ -35,6 +35,7 @@ import '../services/whatsapp_conversations.dart' show messageCustomerTargets;
 import '../widgets/whatsapp_widgets.dart'
     show PackageUpdateTicks, openWhatsAppForLine;
 import '../widgets/proof_ticks.dart';
+import '../widgets/ship_mode_choice.dart';
 
 /// The way into the waiting list from the containers screen: how many
 /// packages have been dropped off with no container yet, one tap from the
@@ -158,6 +159,10 @@ class _WaitingPackagesScreenState extends State<WaitingPackagesScreen> {
   /// no drop-off photo or no OK from the sender.
   bool _missingOnly = false;
 
+  /// The Sea / Air filter (docs/AIR_PACKAGES.md §7): "" shows both. Offered
+  /// only to a business that ships by air.
+  String _shipModeFilter = '';
+
   @override
   void initState() {
     super.initState();
@@ -214,6 +219,7 @@ class _WaitingPackagesScreenState extends State<WaitingPackagesScreen> {
       request: request,
       service: service,
       staff: widget.staff,
+      shipsByAir: widget.proofSettings.shipsByAir,
     );
     if (received == null || !mounted) return;
     showSuccessSnackBar(
@@ -507,11 +513,28 @@ class _WaitingPackagesScreenState extends State<WaitingPackagesScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final all = _waiting;
-    final matched = filterWaitingPackages(all, _filter.text);
+    final shipsByAir = widget.proofSettings.shipsByAir;
+    final matched = filterWaitingByShipMode(
+      filterWaitingPackages(all, _filter.text),
+      shipsByAir ? _shipModeFilter : '',
+    );
     final shown = _missingOnly
         ? [for (final l in matched) if (l.proofTicks.missing) l]
         : matched;
-    final searching = _filter.text.trim().length >= 2;
+    final searching = _filter.text.trim().length >= 2 ||
+        (shipsByAir && _shipModeFilter.isNotEmpty);
+
+    Widget modeChip(String mode, String label, IconData icon) => FilterChip(
+          key: Key('waiting-ship-mode-$mode'),
+          label: Text(label),
+          selected: _shipModeFilter == mode,
+          avatar: _shipModeFilter == mode ? null : Icon(icon, size: 16),
+          visualDensity: VisualDensity.compact,
+          onSelected: (on) {
+            AppHaptics.selection();
+            setState(() => _shipModeFilter = on ? mode : '');
+          },
+        );
 
     return Scaffold(
       backgroundColor: AppColors.cream,
@@ -587,18 +610,31 @@ class _WaitingPackagesScreenState extends State<WaitingPackagesScreen> {
                           left: AppSpacing.md, top: AppSpacing.sm),
                       child: Align(
                         alignment: Alignment.centerLeft,
-                        child: FilterChip(
-                          key: const Key('waiting-missing-proof'),
-                          label: Text(l10n.proofMissingFilter),
-                          selected: _missingOnly,
-                          avatar: _missingOnly
-                              ? null
-                              : const Icon(Icons.rule, size: 16),
-                          visualDensity: VisualDensity.compact,
-                          onSelected: (on) {
-                            AppHaptics.selection();
-                            setState(() => _missingOnly = on);
-                          },
+                        child: Wrap(
+                          spacing: AppSpacing.sm,
+                          runSpacing: AppSpacing.xs,
+                          children: [
+                            FilterChip(
+                              key: const Key('waiting-missing-proof'),
+                              label: Text(l10n.proofMissingFilter),
+                              selected: _missingOnly,
+                              avatar: _missingOnly
+                                  ? null
+                                  : const Icon(Icons.rule, size: 16),
+                              visualDensity: VisualDensity.compact,
+                              onSelected: (on) {
+                                AppHaptics.selection();
+                                setState(() => _missingOnly = on);
+                              },
+                            ),
+                            // Sea / Air (docs/AIR_PACKAGES.md §7).
+                            if (shipsByAir) ...[
+                              modeChip(containerShipModeSea, l10n.airModeSea,
+                                  Icons.directions_boat_outlined),
+                              modeChip(containerShipModeAir, l10n.airModeAir,
+                                  Icons.flight),
+                            ],
+                          ],
                         ),
                       ),
                     ),
@@ -1102,16 +1138,27 @@ class WaitingPackageCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    containerLineTitle(l10n, line),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.2,
-                      color: AppColors.ink,
-                    ),
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          containerLineTitle(l10n, line),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.2,
+                            color: AppColors.ink,
+                          ),
+                        ),
+                      ),
+                      // Marked to fly (docs/AIR_PACKAGES.md §7).
+                      if (line.isAirPackage) ...[
+                        const SizedBox(width: AppSpacing.sm),
+                        const AirPackageBadge(),
+                      ],
+                    ],
                   ),
                   if (line.isCar &&
                       line.vinNumber.isNotEmpty &&

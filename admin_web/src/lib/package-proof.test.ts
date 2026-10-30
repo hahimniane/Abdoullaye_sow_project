@@ -11,10 +11,13 @@ import {
   normalizeDeclaredValueCents,
   normalizePhotoPaths,
   normalizeWeightLb,
+  packageShipModeOf,
   photoRequirementRefusal,
   proofDraftFromLine,
   proofDraftProblems,
   proofPayload,
+  proofPayloadFor,
+  proofSectionShown,
   proofRefusalText,
   proofSettingsOf,
   proofTickLabels,
@@ -22,6 +25,8 @@ import {
   readDeclaredValue,
   senderConfirmationOf,
   senderProblemRefusalFrom,
+  shipsByAirOf,
+  shipsByChoiceShown,
   validateProofFields,
   weightText,
   withProblemAcknowledgement,
@@ -123,12 +128,35 @@ test("reads the three switches, missing means off", () => {
   });
 });
 
-test("requires a photo only for counter drop-offs when switched on", () => {
+test("requires a photo only for air counter drop-offs when switched on", () => {
   const on = { photosRequired: true };
-  assert.equal(photoRequirementRefusal(on, { photoPaths: [] }), "photo_required");
-  assert.equal(photoRequirementRefusal(on, { source: "counter", photoPaths: [PATH] }), "");
-  assert.equal(photoRequirementRefusal(on, { source: "request", photoPaths: [] }), "");
-  assert.equal(photoRequirementRefusal({ photosRequired: false }, { photoPaths: [] }), "");
+  assert.equal(photoRequirementRefusal(on, { photoPaths: [], shipMode: "air" }), "photo_required");
+  assert.equal(photoRequirementRefusal(on, { source: "counter", photoPaths: [PATH], shipMode: "air" }), "");
+  assert.equal(photoRequirementRefusal(on, { source: "request", photoPaths: [], shipMode: "air" }), "");
+  assert.equal(photoRequirementRefusal({ photosRequired: false }, { photoPaths: [], shipMode: "air" }), "");
+  // A sea package, or one from before "Ships by", never needs one.
+  assert.equal(photoRequirementRefusal(on, { source: "counter", photoPaths: [], shipMode: "sea" }), "");
+  assert.equal(photoRequirementRefusal(on, { photoPaths: [] }), "");
+});
+
+test("ships by: the choice, the proof section and what is sent", () => {
+  assert.equal(packageShipModeOf("AIR"), "air");
+  assert.equal(packageShipModeOf(undefined), "sea");
+  assert.equal(packageShipModeOf("rail"), "sea");
+  assert.equal(shipsByAirOf({ shipsByAir: true }), true);
+  assert.equal(shipsByAirOf({ shipsByAir: "yes" }), false);
+  assert.equal(shipsByAirOf(null), false);
+  // Offered when the business flies, or the package being edited does.
+  assert.equal(shipsByChoiceShown(false), false);
+  assert.equal(shipsByChoiceShown(true), true);
+  assert.equal(shipsByChoiceShown(false, { shipMode: "air" }), true);
+  assert.equal(shipsByChoiceShown(false, { shipMode: "sea" }), false);
+  // Sea is the form as it was: no proof section, nothing of it sent.
+  assert.equal(proofSectionShown("sea"), false);
+  assert.equal(proofSectionShown("air"), true);
+  const draft = { ...emptyProofDraft(), weightLb: "4.2" };
+  assert.deepEqual(proofPayloadFor("sea", draft), {});
+  assert.equal(proofPayloadFor("air", draft).weightLb, 4.2);
 });
 
 test("shows the three ticks, and the delivered-without-code variant", () => {

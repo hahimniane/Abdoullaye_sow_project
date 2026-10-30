@@ -167,6 +167,15 @@ const containerRefusalCodes = <String>[
   // An air waybill that is not 6-20 letters, digits or dashes
   // (docs/AIR_PACKAGES.md §2).
   'air_waybill_invalid',
+  // "Ships by" (docs/AIR_PACKAGES.md §7): a package marked sea on a flight
+  // (`ship_mode_mismatch`), or marked air on a sea container (the server
+  // sends `ship_mode_mismatch` with `shipMode: "air"`; read as
+  // `ship_mode_mismatch_air` by [parseContainerRefusal]); Ships by changed
+  // on a package already on a container; a mode that is neither.
+  'ship_mode_mismatch',
+  'ship_mode_mismatch_air',
+  'ship_mode_locked',
+  'ship_mode_invalid',
   // Loading a package whose sender said "Something's wrong": a warning the
   // caller confirms with acknowledgeProblems (docs/AIR_PACKAGES.md §4.8).
   'sender_problem',
@@ -597,12 +606,18 @@ class ContainerLineDraft {
     this.pickupFeeCents,
     this.pickupFeeInvalid = false,
     this.proof,
+    this.shipMode,
   });
 
   /// Proof on the package (docs/AIR_PACKAGES.md §2): photos, what is
   /// inside, weight and declared value. Null leaves the fields out of the
   /// request (an older form, a contacts-only edit).
   final PackageProofDraft? proof;
+
+  /// "Ships by" (docs/AIR_PACKAGES.md §7) of a waiting package: "sea" or
+  /// "air", sent with the package's own fields. Null sends none: a line
+  /// on a container goes the way its container goes.
+  final String? shipMode;
 
   final String kind;
   final String vinNumber;
@@ -1121,6 +1136,7 @@ class ContainerLine {
     this.containerAssignedAt,
     this.containerAssignedByStaffId = '',
     this.containerAssignedVia = '',
+    this.shipMode = containerShipModeSea,
     this.photoPaths = const [],
     this.contents = const [],
     this.weightLb,
@@ -1143,6 +1159,14 @@ class ContainerLine {
   /// printed). Empty / null when nothing was recorded.
   final List<String> photoPaths;
   final List<PackageContent> contents;
+
+  /// "Ships by" (docs/AIR_PACKAGES.md §7): "air" or "sea"; a line from
+  /// before the choice is sea. A waiting package rides only a container of
+  /// the same mode ([shipModeMismatch] in waiting_packages.dart).
+  final String shipMode;
+
+  /// Whether the package is marked to fly.
+  bool get isAirPackage => shipMode == containerShipModeAir;
   final double? weightLb;
   final int? declaredValueCents;
 
@@ -1396,6 +1420,7 @@ class ContainerLine {
       containerAssignedAt: lotDateOf(d['containerAssignedAt']),
       containerAssignedByStaffId: _text(d['containerAssignedByStaffId'], 128),
       containerAssignedVia: _text(d['containerAssignedVia'], 20),
+      shipMode: containerShipModeOf(d['shipMode']),
       photoPaths: _photoPathList(d['photoPaths']),
       contents: packageContentsOf(d['contents']),
       weightLb: normalizeWeightLb(d['weightLb']).value,
@@ -1985,6 +2010,15 @@ ContainerRefusal parseContainerRefusal(Object? details, String? message) {
     for (final word in text.split(RegExp(r'\s+'))) {
       addCode(word.replaceAll(RegExp(r'[^a-z_]'), ''));
     }
+  }
+  // A wrong-way package names its own mode: an air one on a sea container
+  // has its own sentence.
+  if (codes.contains('ship_mode_mismatch') &&
+      details is Map &&
+      containerShipModeOf(details['shipMode']) == containerShipModeAir) {
+    codes
+      ..remove('ship_mode_mismatch')
+      ..add('ship_mode_mismatch_air');
   }
   return ContainerRefusal(
     codes: codes.toList(),

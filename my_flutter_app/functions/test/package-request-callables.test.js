@@ -943,6 +943,25 @@ describe("Received", () => {
         }
       });
 
+  // "Ships by" (docs/AIR_PACKAGES.md §7): sea unless air was chosen.
+  it("ships by sea unless air is chosen at the counter", async () => {
+    const sea = await submit({pieces: [{kind: "barrel"}]});
+    const bySea = await staff("receivePackageRequest",
+        {requestId: sea.requestId, pieces: []}, MARIAMA);
+    const seaLine = (await db.collection("containerLines")
+        .doc(bySea.lineId).get()).data();
+    assert.equal(seaLine.shipMode, "sea");
+    const air = await submit({pieces: [{kind: "barrel"}]});
+    assert.equal(await reasonOf(staff("receivePackageRequest",
+        {requestId: air.requestId, pieces: [], shipMode: "boat"}, MARIAMA)),
+    "ship_mode_invalid");
+    const byAir = await staff("receivePackageRequest",
+        {requestId: air.requestId, pieces: [], shipMode: "air"}, MARIAMA);
+    const airLine = (await db.collection("containerLines")
+        .doc(byAir.lineId).get()).data();
+    assert.equal(airLine.shipMode, "air");
+  });
+
   it("is refused on a closed request", async () => {
     const {requestId} = await submit();
     await staff("cancelPackageRequest", {requestId, reason: "No"}, MARIAMA);

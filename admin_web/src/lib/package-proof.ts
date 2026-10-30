@@ -222,14 +222,59 @@ export function proofSettingsOf(business: unknown): ProofSettings {
   };
 }
 
-/** Whether a counter drop-off may be saved without a photo: "" or the refusal. */
+/**
+ * Whether a counter drop-off may be saved without a photo: "" or the refusal.
+ * The switch is for packages that fly: a sea package (the default, and every
+ * line from before "Ships by") never needs one.
+ */
 export function photoRequirementRefusal(settings: Pick<ProofSettings, "photosRequired">, line: unknown): "" | "photo_required" {
   if (!settings?.photosRequired) return "";
   const row = asRow(line);
+  if (String(row.shipMode || "").toLowerCase() !== "air") return "";
   const source = String(row.source || "counter");
   if (source !== "counter") return "";
   const photos = Array.isArray(row.photoPaths) ? row.photoPaths : [];
   return photos.length ? "" : "photo_required";
+}
+
+// ---------------------------------------------------------------------------
+// "Ships by: Sea · Air" (docs/AIR_PACKAGES.md §7). A waiting package says how
+// it ships; only an air package carries the proof section (photos, what is
+// inside, weight, declared value). The choice is offered once the business
+// has started a flight (`businesses/{id}.shipsByAir`, set by the server).
+// ---------------------------------------------------------------------------
+
+export type PackageShipMode = "sea" | "air";
+
+/** A line's (or a typed) ship mode: "air", or "sea" for anything else. */
+export function packageShipModeOf(value: unknown): PackageShipMode {
+  return String(value ?? "").trim().toLowerCase() === "air" ? "air" : "sea";
+}
+
+/** Whether the business ships by air: the flag the server sets on its first flight. */
+export function shipsByAirOf(business: unknown): boolean {
+  return asRow(business).shipsByAir === true;
+}
+
+/**
+ * Whether a package form offers "Ships by": when the business flies, or when
+ * the package being edited already flies (so it can be set back to sea).
+ */
+export function shipsByChoiceShown(shipsByAir: boolean, line: unknown = null): boolean {
+  return shipsByAir === true || packageShipModeOf(asRow(line).shipMode) === "air";
+}
+
+/** Whether the form shows the proof section: only for a package that flies. */
+export function proofSectionShown(shipMode: unknown): boolean {
+  return packageShipModeOf(shipMode) === "air";
+}
+
+/**
+ * What a package form sends for the proof section: the four fields for an
+ * air package; nothing for a sea one (an edit then keeps what is stored).
+ */
+export function proofPayloadFor(shipMode: unknown, draft: ProofDraft): Partial<ProofFields> {
+  return proofSectionShown(shipMode) ? proofPayload(draft) : {};
 }
 
 // ---------------------------------------------------------------------------

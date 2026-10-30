@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import '../l10n/app_localizations.dart';
 import '../services/invoice_ledger.dart' show invoicePaymentMethods;
 import '../services/lot_ledger.dart' show LotStaff;
-import '../services/package_proof.dart' show validateProofFields;
+import '../services/container_manifest.dart'
+    show containerShipModeAir, containerShipModeSea;
+import '../services/package_proof.dart'
+    show PackageProofDraft, validateProofFields;
 import '../services/package_request_service.dart';
 import '../services/package_requests.dart';
 import '../services/waiting_packages.dart'
@@ -19,6 +22,7 @@ import '../widgets/lot_sheets.dart';
 import '../widgets/package_request_widgets.dart';
 import '../widgets/pieces_editor.dart';
 import '../widgets/proof_fields.dart';
+import '../widgets/ship_mode_choice.dart';
 import '../widgets/waiting_package_fields.dart';
 import 'containers_screen.dart' show containerErrorText;
 import 'package_payment_sheet.dart' show containerPaymentMethodLabel;
@@ -31,6 +35,7 @@ Future<RequestReceived?> showReceiveRequestSheet(
   required PackageRequest request,
   required PackageRequestService service,
   List<LotStaff> staff = const [],
+  bool shipsByAir = false,
 }) => showLotSheet<RequestReceived>(
   context,
   ReceiveRequestSheet(
@@ -38,6 +43,7 @@ Future<RequestReceived?> showReceiveRequestSheet(
     request: request,
     service: service,
     staff: staff,
+    shipsByAir: shipsByAir,
   ),
 );
 
@@ -56,7 +62,13 @@ class ReceiveRequestSheet extends StatefulWidget {
     required this.service,
     this.staff = const [],
     this.proofController,
+    this.shipsByAir = false,
   });
+
+  /// `businesses/{id}.shipsByAir` (docs/AIR_PACKAGES.md §7): the sheet
+  /// offers "Ships by: Sea · Air" at the top, and the proof section only
+  /// for Air. Without it the package ships by sea, with the sea form.
+  final bool shipsByAir;
 
   final String businessId;
   final PackageRequest request;
@@ -103,10 +115,15 @@ class _ReceiveRequestSheetState extends State<ReceiveRequestSheet> {
   /// (docs/AIR_PACKAGES.md §4.2). Never required here: a received request
   /// is not a counter drop-off, and the request's own photos are copied by
   /// the server ahead of these.
-  late final ProofFieldsController _proof = widget.proofController ??
+  late final ProofFieldsController _proof =
+      widget.proofController ??
       ProofFieldsController(businessId: widget.businessId);
 
   bool get _card => widget.request.isCardOrder;
+
+  /// "Ships by": sea unless Air is picked.
+  String _shipMode = containerShipModeSea;
+  bool get _air => widget.shipsByAir && _shipMode == containerShipModeAir;
 
   @override
   void initState() {
@@ -196,8 +213,10 @@ class _ReceiveRequestSheetState extends State<ReceiveRequestSheet> {
         : const <String>[];
     // A photo still uploading is not a path yet; the proof fields are checked
     // as the server checks them (one code for the first problem).
-    final proof = validateProofFields(_proof.draft);
-    if (_proof.uploading) {
+    final proof = _air
+        ? validateProofFields(_proof.draft)
+        : validateProofFields(PackageProofDraft.empty);
+    if (_air && _proof.uploading) {
       AppHaptics.refuse();
       setState(() => _banner = l10n.proofPhotoUploading);
       return;
@@ -231,7 +250,9 @@ class _ReceiveRequestSheetState extends State<ReceiveRequestSheet> {
           check: check,
           payOnArrival: !_card && _payOnArrival,
           payment: takesMoney ? intakePaymentRecord(_payment) : null,
-          proof: proof.fields.toPayload(),
+          // A sea package sends no proof fields: the sea form as it was.
+          proof: _air ? proof.fields.toPayload() : const {},
+          shipMode: widget.shipsByAir ? _shipMode : null,
         ),
       );
       if (!mounted) return;
@@ -291,6 +312,19 @@ class _ReceiveRequestSheetState extends State<ReceiveRequestSheet> {
           ),
           RequestPickupNote(request: request),
           const SizedBox(height: AppSpacing.md),
+          // "Ships by: Sea · Air" (docs/AIR_PACKAGES.md §7).
+          if (widget.shipsByAir) ...[
+            ShipModeChoice(
+              value: _shipMode,
+              enabled: !_busy,
+              onChanged: (mode) => setState(() {
+                _shipMode = mode;
+                _banner = '';
+                _errors = {};
+              }),
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
           PiecesEditor(
             controller: _pieces,
             describe: (code) => containerErrorText(l10n, code),
@@ -314,24 +348,30 @@ class _ReceiveRequestSheetState extends State<ReceiveRequestSheet> {
             ),
           const SizedBox(height: AppSpacing.md),
           // Proof on the package (docs/AIR_PACKAGES.md §2): photos staff
-          // take now, what is inside, weight and declared value.
-          ProofFields(
-            controller: _proof,
-            enabled: !_busy,
-            onEdited: () {
-              if (_banner.isNotEmpty || _errors.isNotEmpty) {
-                setState(() {
-                  _banner = '';
-                  _errors = {};
-                });
-              }
-            },
-            photoError: _proofError(l10n, const ['photo_invalid', 'photo_required']),
-            contentsError: _proofError(l10n, const ['contents_invalid']),
-            weightError: _proofError(l10n, const ['weight_invalid']),
-            valueError: _proofError(l10n, const ['declared_value_invalid']),
-          ),
-          const SizedBox(height: AppSpacing.md),
+          // take now, what is inside, weight and declared value - for a
+          // package that flies (§7).
+          if (_air) ...[
+            ProofFields(
+              controller: _proof,
+              enabled: !_busy,
+              onEdited: () {
+                if (_banner.isNotEmpty || _errors.isNotEmpty) {
+                  setState(() {
+                    _banner = '';
+                    _errors = {};
+                  });
+                }
+              },
+              photoError: _proofError(l10n, const [
+                'photo_invalid',
+                'photo_required',
+              ]),
+              contentsError: _proofError(l10n, const ['contents_invalid']),
+              weightError: _proofError(l10n, const ['weight_invalid']),
+              valueError: _proofError(l10n, const ['declared_value_invalid']),
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
           if (_card)
             RequestBanner(
               key: const Key('receive-paid-online'),

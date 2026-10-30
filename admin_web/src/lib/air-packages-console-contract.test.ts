@@ -54,7 +54,7 @@ test("every line form carries the proof fields and sends them to its callable", 
   assert.match(waiting, /httpsCallable\(functions, "updateContainerLine"\)\(\{ \.\.\.request, line: \{ \.\.\.request\.line, \.\.\.proofFields \} \}\)/);
   assert.equal((waiting.match(/<ProofFields\s/g) ?? []).length, 1);
   // The received request: top level, never required (its source is the request).
-  assert.match(requests, /\.\.\.\(payment \? \{ payment \} : \{\}\),\s*\.\.\.proofPayload\(proof\),\s*\}\);/);
+  assert.match(requests, /\.\.\.\(payment \? \{ payment \} : \{\}\),\s*\.\.\.proofPayloadFor\(shipMode, proof\),\s*shipMode,\s*\}\);/);
   assert.equal((requests.match(/<ProofFields\s/g) ?? []).length, 1);
   assert.doesNotMatch(requests.slice(requests.indexOf("function ReceiveDialog")), /photosRequired/);
   // The business switch decides the counter's requirement, from the business document.
