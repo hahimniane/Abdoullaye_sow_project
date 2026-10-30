@@ -500,11 +500,16 @@ test("the counter's request code is normalised as on the server, and looked up b
     assert.equal(normalizeRequestCode(typed), "R-K7M4P", typed);
   }
   assert.equal(normalizeRequestCode("K7M4"), "");
+  // R is a code letter too: a code starting with R typed without its prefix stays itself.
+  for (const typed of ["RK7M4", "rk7m4", "R-RK7M4", "rrk7m4"]) {
+    assert.equal(normalizeRequestCode(typed), "R-RK7M4", typed);
+  }
   assert.equal(normalizeRequestCode("CL-K7M4P2"), "");
   assert.equal(normalizeRequestCode(""), "");
   assert.deepEqual(lookupRequestCodePayload("dala", "k7m4p"), { businessId: "dala", action: "lookup_code", code: "R-K7M4P" });
   const server = readFileSync("../my_flutter_app/functions/package_requests.js", "utf8");
-  assert.match(server, /\.toUpperCase\(\)\.replace\(\/\[\\s-\]\+\/g, ""\)\s*\.replace\(\/\^R\/, ""\)/);
+  assert.match(server, /\.toUpperCase\(\)\.replace\(\/\[\\s-\]\+\/g, ""\)/);
+  assert.match(server, /typed\.length === 6 && typed\.startsWith\("R"\)/);
   assert.match(server, /\/\^\[A-Z0-9\]\{5\}\$\/\.test\(body\)/);
   assert.match(readFileSync("../my_flutter_app/functions/index.js", "utf8"), /String\(data\.action \|\| ""\) === "lookup_code"/);
   assert.equal(requestFailure({ code: "functions/not-found", details: { reason: "not_found" } }).message, "No request with that code for this business.");

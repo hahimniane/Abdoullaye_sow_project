@@ -314,15 +314,20 @@ function slugValid(slug) {
 
 /**
  * A request code as the counter types or scans it (docs/AIR_PACKAGES.md
- * §4.10): "r k7m4p", "RK7M4P", "R-K7M4P" all mean "R-K7M4P". "" when
+ * §4.10): "r k7m4p", "RK7M4P", "R-K7M4P" all mean "R-K7M4P", and "RK7M4"
+ * means "R-RK7M4" (R is a code letter too). "" when
  * what was typed is not five code characters.
  *
  * @param {*} raw What was typed or scanned.
  * @return {string} "R-XXXXX" or "".
  */
 function normalizeRequestCode(raw) {
-  const body = String(raw ?? "").toUpperCase().replace(/[\s-]+/g, "")
-      .replace(/^R/, "");
+  // "R" is also a code letter: drop the prefix only when six characters
+  // were typed, so "RK7M4" (a code that starts with R, typed without its
+  // prefix) stays itself.
+  const typed = String(raw ?? "").toUpperCase().replace(/[\s-]+/g, "");
+  const body = typed.length === 6 && typed.startsWith("R") ?
+    typed.slice(1) : typed;
   return /^[A-Z0-9]{5}$/.test(body) ? `R-${body}` : "";
 }
 

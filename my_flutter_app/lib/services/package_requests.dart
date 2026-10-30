@@ -1943,10 +1943,12 @@ class PackageProofSettings {
 /// §4.10): "r k7m4p", "RK7M4P", "R-K7M4P" all mean "R-K7M4P". "" when what
 /// was typed is not five code characters. Mirrors `normalizeRequestCode`.
 String normalizeRequestCode(String raw) {
-  final body = raw
-      .toUpperCase()
-      .replaceAll(RegExp(r'[\s-]+'), '')
-      .replaceFirst(RegExp('^R'), '');
+  // "R" is also a code letter: drop the prefix only when six characters
+  // were typed, so "RK7M4" stays "R-RK7M4".
+  final typed = raw.toUpperCase().replaceAll(RegExp(r'[\s-]+'), '');
+  final body = typed.length == 6 && typed.startsWith('R')
+      ? typed.substring(1)
+      : typed;
   return RegExp(r'^[A-Z0-9]{5}$').hasMatch(body) ? 'R-$body' : '';
 }
 

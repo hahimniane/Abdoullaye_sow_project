@@ -974,6 +974,15 @@ describe("the request code at the counter", () => {
     }
   });
 
+  it("keeps a code that starts with R when typed without its prefix", () => {
+    // R is a code letter too; stripping it from "RK7M4" lost 1 code in 28.
+    for (const typed of ["RK7M4", "rk7m4", "R-RK7M4", "rrk7m4", " r rk7m4 "]) {
+      assert.equal(pr.normalizeRequestCode(typed), "R-RK7M4", typed);
+    }
+    assert.equal(pr.normalizeRequestCode("RRRRR"), "R-RRRRR");
+    assert.equal(pr.normalizeRequestCode("R-RRRRR"), "R-RRRRR");
+  });
+
   it("writes the proof fields staff typed on the received line", () => {
     const request = {
       handoff: "bring_in",

@@ -1236,7 +1236,9 @@ export function requestSettingsDraft(business: unknown, locations: readonly Sett
  * five code characters (the server's package_requests.normalizeRequestCode).
  */
 export function normalizeRequestCode(raw: unknown): string {
-  const body = String(raw ?? "").toUpperCase().replace(/[\s-]+/g, "").replace(/^R/, "");
+  // "R" is also a code letter: drop the prefix only when six characters were typed.
+  const typed = String(raw ?? "").toUpperCase().replace(/[\s-]+/g, "");
+  const body = typed.length === 6 && typed.startsWith("R") ? typed.slice(1) : typed;
   return /^[A-Z0-9]{5}$/.test(body) ? `R-${body}` : "";
 }
 

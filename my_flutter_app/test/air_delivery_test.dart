@@ -406,6 +406,11 @@ void main() {
         expect(normalizeRequestCode(typed), 'R-K7M4P', reason: typed);
       }
       expect(normalizeRequestCode('K7M4'), '');
+      // R is a code letter too: a code starting with R typed without its
+      // prefix stays itself.
+      for (final typed in ['RK7M4', 'rk7m4', 'R-RK7M4', 'rrk7m4']) {
+        expect(normalizeRequestCode(typed), 'R-RK7M4', reason: typed);
+      }
       expect(normalizeRequestCode('R-K7M4P2'), '');
       expect(normalizeRequestCode(''), '');
       expect(
