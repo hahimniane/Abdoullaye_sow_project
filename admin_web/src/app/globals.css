@@ -14457,6 +14457,19 @@ html[data-lang-pending] body {
 @media (hover: none) {
   .ctn-table .ctn-row-actions { opacity: 1; }
 }
+/* The base `.mini-table-row span { align-self: center }` reaches every span
+   inside a cell, so the proof ticks, "Message customer" and other inline
+   groups drifted to the middle of the column. Inside a stacked cell they
+   start on the left like the text above them. */
+.ctn-table .mini-table-row > span > span { align-self: flex-start; max-width: 100%; }
+/* The actions cell is a row of icon buttons, not a stacked cell (the
+   stacked-cell rule above outranks `.ctn-table .ctn-row-actions`). */
+.ctn-table .mini-table-row > span.ctn-row-actions {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  align-self: center;
+}
 .ctn-table .mini-table-row.ctn-clickable { cursor: pointer; }
 .ctn-table .mini-table-row.ctn-clickable:hover { background: rgba(13, 148, 136, 0.055); }
 .ctn-table .mini-table-row.ctn-clickable:focus-visible {
