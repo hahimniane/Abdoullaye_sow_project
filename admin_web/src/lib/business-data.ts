@@ -460,20 +460,25 @@ export function useParkingMonthInputs(businessId: string, monthKey: string, enab
  * recorded counts"), so each read is the whole collection, equality-only.
  * `available` is false when either read failed (a team member without the
  * ledger permission is refused): the bills are then shown without netting,
- * never half-netted.
+ * never half-netted. The expense lines (`lotExpenseLines`, a short list)
+ * only name each expense on the bill ("grosseries · tissu, cups"); without
+ * them an expense reads as its note.
  */
 export function useStaffExpenseCreditInputs(businessId: string, enabled: boolean): {
   entries: FirestoreRow[];
   repayments: FirestoreRow[];
+  lines: FirestoreRow[];
   loading: boolean;
   available: boolean;
 } {
   const complete = { pageSize: null, sort: "query" } as const;
   const entries = useBusinessCollection("lotExpenseEntries", businessId, enabled, complete);
   const repayments = useBusinessCollection("staffExpenseRepayments", businessId, enabled, complete);
+  const lines = useBusinessCollection("lotExpenseLines", businessId, enabled, complete);
   return {
     entries: entries.rows,
     repayments: repayments.rows,
+    lines: lines.rows,
     loading: entries.loading || repayments.loading,
     available: enabled && !entries.error && !repayments.error,
   };

@@ -30,6 +30,7 @@ const COPY = {
     footer: "Issued through Laawol Digital · laawoldigital.com",
     estimate: "Estimate · whole month",
     expensesPaid: "Expenses you paid for the lot", expense: "Expense", lessExpenses: "Less expenses",
+    earlierExpenses: "Expenses from earlier months",
     lessStaffExpenses: "Less staff expenses", businessOwes: "Business owes",
     parkingBill: "Parking bill", noParkingBill: "No parking bill",
   },
@@ -44,6 +45,7 @@ const COPY = {
     footer: "Émis via Laawol Digital · laawoldigital.com",
     estimate: "Estimation · mois entier",
     expensesPaid: "Dépenses que vous avez payées pour le parc", expense: "Dépense", lessExpenses: "Moins les dépenses",
+    earlierExpenses: "Dépenses des mois précédents",
     lessStaffExpenses: "Dépenses équipe", businessOwes: "L’entreprise doit",
     parkingBill: "Facture de parking", noParkingBill: "Pas de facture de parking",
   },
@@ -93,11 +95,68 @@ function footer(doc: Doc, lang: Lang) {
   doc.setFont("helvetica", "normal").setFontSize(8).setTextColor(...MUTED).text(COPY[lang].footer, W / 2, 792 - 30, { align: "center" });
 }
 
-function row(doc: Doc, y: number, label: string, value: string, opts: { bold?: boolean; color?: [number, number, number] } = {}) {
-  doc.setFont("helvetica", opts.bold ? "bold" : "normal").setFontSize(opts.bold ? 12 : 10.5)
-    .setTextColor(...(opts.color ?? (opts.bold ? INK : MUTED)));
-  doc.text(label, M, y);
-  doc.text(value, R, y, { align: "right" });
+type RGB = [number, number, number];
+
+/** One line of the bill's totals block: its label on the left and its
+ * amount on the right, both drawn on the same baseline `y`. */
+export type BillTotalRow = { label: string; value: string; y: number; color: RGB; bold: boolean };
+
+/** Where the totals block draws, from `top` down: each row's baseline, the
+ * rule above the balance, and where the block ends. */
+export type BillTotalsLayout = { rows: BillTotalRow[]; ruleY: number; endY: number };
+
+/**
+ * The bill's totals block, laid out from `top` (pure; no page breaks - the
+ * caller makes room for `endY - top` first). Total for the month, Unpaid
+ * from before, what each payment went toward, Less expenses, the rule,
+ * then Balance due (or Paid in full). Every amount shares its label's y.
+ */
+export function billTotalsLayout(c: ParkingMonthCustomer, language: Lang, top: number): BillTotalsLayout {
+  const t = COPY[language];
+  const day = (key: string) => formatDayKey(key, language);
+  const rows: BillTotalRow[] = [];
+  let y = top;
+  const add = (label: string, value: string, color: RGB, step: number) => {
+    rows.push({ label, value, y, color, bold: false });
+    y += step;
+  };
+  add(t.monthTotal, moneyText(c.monthCents), INK, 18);
+  if (c.priorUnpaidCents > 0) add(t.priorUnpaid, moneyText(c.priorUnpaidCents), DUE, 18);
+  // Which item each payment went toward, not just a lump sum.
+  for (const b of c.cars) {
+    if (b.monthPaidCents > 0) add(`${t.paidToward} ${b.vehicle || t.car}`, `-${moneyText(b.monthPaidCents)}`, OK, 16);
+  }
+  for (const a of c.activities) {
+    if (a.paidCents > 0) add(`${t.paidToward} ${a.label}${a.vehicle ? ` · ${a.vehicle}` : ""} (${day(a.date)})`, `-${moneyText(a.paidCents)}`, OK, 16);
+  }
+  if ((c.expenseCreditCents || 0) > 0) add(t.lessExpenses, `-${moneyText(c.expenseCreditCents)}`, OK, 16);
+  const ruleY = y - 4;
+  y += 14;
+  rows.push(c.dueCents > 0
+    ? { label: t.balanceDue, value: moneyText(c.dueCents), y, color: DUE, bold: true }
+    : { label: t.paidInFull, value: moneyText(0), y, color: OK, bold: true });
+  return { rows, ruleY, endY: y + 6 };
+}
+
+/** The slice of jsPDF the totals block draws with (a fake in tests). */
+export type TotalsDoc = {
+  setFont(name: string, style: string): TotalsDoc;
+  setFontSize(size: number): TotalsDoc;
+  setTextColor(r: number, g: number, b: number): TotalsDoc;
+  setDrawColor(r: number, g: number, b: number): TotalsDoc;
+  setLineWidth(w: number): TotalsDoc;
+  line(x1: number, y1: number, x2: number, y2: number): TotalsDoc;
+  text(text: string, x: number, y: number, options?: { align?: "right" }): TotalsDoc;
+};
+
+/** Draws a laid-out totals block: label and amount of a row at the row's y. */
+export function drawBillTotals(doc: TotalsDoc, layout: BillTotalsLayout): void {
+  for (const r of layout.rows) {
+    if (r.bold) doc.setDrawColor(...INK).setLineWidth(1.2).line(M, layout.ruleY, R, layout.ruleY);
+    doc.setFont("helvetica", r.bold ? "bold" : "normal").setFontSize(r.bold ? 12 : 10.5).setTextColor(...r.color);
+    doc.text(r.label, M, r.y);
+    doc.text(r.value, R, r.y, { align: "right" });
+  }
 }
 
 export async function buildParkingMonthBillPdf(input: { business: Row; customer: ParkingMonthCustomer; language: Lang; estimate?: boolean }): Promise<Blob> {
@@ -182,44 +241,27 @@ export async function buildParkingMonthBillPdf(input: { business: Row; customer:
   }
 
   // A linked staff member's lot expenses (docs/STAFF_EXPENSE_CREDIT.md).
+  // This month's, each as its expense line's name then its note, and the
+  // earlier months' part of the credit, so the lines add up to "Less
+  // expenses".
   const credited = (c.expenseCreditCents || 0) > 0;
-  if (credited && (c.expenseLines || []).length) {
+  const earlier = credited ? c.earlierExpenseCents || 0 : 0;
+  if (credited && ((c.expenseLines || []).length || earlier > 0)) {
     section(t.expensesPaid, t.expense, t.date, "");
-    for (const l of c.expenseLines) {
-      line(l.note || t.expense, l.date ? day(l.date) : "", "", `-${moneyText(l.amountCents)}`, l.staffName);
+    for (const l of c.expenseLines || []) {
+      line(l.label || t.expense, l.date ? day(l.date) : "", "", `-${moneyText(l.amountCents)}`, l.staffName);
     }
+    if (earlier > 0) line(t.earlierExpenses, "", "", `-${moneyText(earlier)}`, "");
   }
 
-  room(120);
-  y += 4;
-  row(doc, y, t.monthTotal, moneyText(c.monthCents), { color: INK });
-  y += 18;
-  if (c.priorUnpaidCents > 0) {
-    row(doc, y, t.priorUnpaid, moneyText(c.priorUnpaidCents), { color: DUE });
-    y += 18;
+  // The totals block is laid out whole (each amount on its label's line)
+  // and kept on one page.
+  let totals = billTotalsLayout(c, input.language, y + 4);
+  if (totals.endY > 792 - 70) {
+    room(totals.endY - y);
+    totals = billTotalsLayout(c, input.language, y + 4);
   }
-  // Which item each payment went toward, not just a lump sum.
-  for (const b of c.cars) {
-    if (b.monthPaidCents <= 0) continue;
-    room(20);
-    row(doc, y, `${t.paidToward} ${b.vehicle || t.car}`, `-${moneyText(b.monthPaidCents)}`, { color: OK });
-    y += 16;
-  }
-  for (const a of c.activities) {
-    if (a.paidCents <= 0) continue;
-    room(20);
-    row(doc, y, `${t.paidToward} ${a.label}${a.vehicle ? ` · ${a.vehicle}` : ""} (${day(a.date)})`, `-${moneyText(a.paidCents)}`, { color: OK });
-    y += 16;
-  }
-  if (credited) {
-    room(20);
-    row(doc, y, t.lessExpenses, `-${moneyText(c.expenseCreditCents)}`, { color: OK });
-    y += 16;
-  }
-  doc.setDrawColor(...INK).setLineWidth(1.2).line(M, y - 4, R, y - 4);
-  y += 14;
-  if (c.dueCents > 0) row(doc, y, t.balanceDue, moneyText(c.dueCents), { bold: true, color: DUE });
-  else row(doc, y, t.paidInFull, moneyText(0), { bold: true, color: OK });
+  drawBillTotals(doc as unknown as TotalsDoc, totals);
 
   footer(doc, input.language);
   return doc.output("blob");

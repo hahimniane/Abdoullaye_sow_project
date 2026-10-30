@@ -177,6 +177,7 @@ const SITES: Site[] = [
   { file: L("business-data.ts"), kind: "useBusinessCollection", what: "month activities undated", shapes: [bc("lotActivities", { pageSize: null, where: monthPlan.undated.where })] },
   { file: L("business-data.ts"), kind: "useBusinessCollection", what: "useStaffExpenseCreditInputs: every lot expense", shapes: [bc("lotExpenseEntries", { pageSize: null })] },
   { file: L("business-data.ts"), kind: "useBusinessCollection", what: "useStaffExpenseCreditInputs: every paid-back record", shapes: [bc("staffExpenseRepayments", { pageSize: null })] },
+  { file: L("business-data.ts"), kind: "useBusinessCollection", what: "useStaffExpenseCreditInputs: expense lines (names on the bill)", shapes: [bc("lotExpenseLines", { pageSize: null })] },
   { file: L("business-data.ts"), kind: "useBusinessCollection", what: "useParkingLinkCars (last twelve months)", shapes: [bc("parkedCars", { pageSize: null, where: [["occupancyEndMs", ">=", 0]] })] },
   { file: L("business-data.ts"), kind: "useBusinessCollection", what: "useBusinessStaff", shapes: [bc("users", { pageSize: null })] },
   { file: L("business-data.ts"), kind: "usePagedQuery", what: "useBusinessCollection itself", shapes: [] },

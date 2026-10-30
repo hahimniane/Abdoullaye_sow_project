@@ -179,26 +179,85 @@ export function netStaffExpenses<C extends { key: string; dueCents: number }>(
   };
 }
 
-export type MonthExpenseLine = { id: string; staffId: string; amountCents: number; note: string; spentAtMs: number };
+export type MonthExpenseLine = {
+  id: string;
+  staffId: string;
+  amountCents: number;
+  note: string;
+  lineId: string;
+  /** The expense line's name, "" when unknown. */
+  lineLabel: string;
+  /** expenseLabel(lineLabel, note). */
+  label: string;
+  spentAtMs: number;
+};
+
+/** The expense lines' names (`lotExpenseLines.label`) by line id; unnamed lines left out. */
+export function expenseLineLabels(lines: readonly Row[] | null | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const l of lines || []) {
+    const id = text(l?.id, 128);
+    const label = text(l?.label, 120);
+    if (id && label) out[id] = label;
+  }
+  return out;
+}
+
+/**
+ * What an expense reads as on a bill: its line's name, then its note
+ * ("grosseries · tissu, cups"); one alone when the other is empty or the
+ * same; "" when neither (each client then says "Expense").
+ */
+export function expenseLabel(lineLabel: unknown, note: unknown): string {
+  const a = text(lineLabel, 120);
+  const b = text(note, 200);
+  if (a && b && a.toLowerCase() === b.toLowerCase()) return a;
+  return [a, b].filter(Boolean).join(" · ");
+}
 
 /** This month's expenses of the given staff, for the bill's lines, oldest first. */
 export function monthExpenseLines(
   entries: readonly Row[] | null | undefined,
   monthKey: string,
   staffIds: readonly string[] | null | undefined,
+  lineLabels?: Record<string, string> | null,
 ): MonthExpenseLine[] {
   const wanted = new Set(staffIds || []);
+  const names = lineLabels || {};
   return (entries || [])
     .filter((e) => e && e.voided !== true && wanted.has(e.paidByStaffId as string) &&
       text(e.month, 7) === monthKey && cents(e.amountCents) > 0)
-    .map((e) => ({
-      id: text(e.id, 128),
-      staffId: e.paidByStaffId as string,
-      amountCents: cents(e.amountCents),
-      note: text(e.note, 200),
-      spentAtMs: Number(e.spentAtMs) || 0,
-    }))
+    .map((e) => {
+      const lineId = text(e.lineId, 128);
+      const lineLabel = text(names[lineId], 120);
+      const note = text(e.note, 200);
+      return {
+        id: text(e.id, 128),
+        staffId: e.paidByStaffId as string,
+        amountCents: cents(e.amountCents),
+        note,
+        lineId,
+        lineLabel,
+        label: expenseLabel(lineLabel, note),
+        spentAtMs: Number(e.spentAtMs) || 0,
+      };
+    })
     .sort((a, b) => a.spentAtMs - b.spentAtMs || a.id.localeCompare(b.id));
+}
+
+/**
+ * The part of "Less expenses" that came from expenses of earlier months:
+ * what was taken off the bill beyond this month's listed lines. With it
+ * listed, the lines add up to "Less expenses" whenever the credit covered
+ * them (when it did not, the rest of the credit is in Business owes).
+ */
+export function earlierExpenseCents(
+  appliedCents: number,
+  lines: readonly { amountCents: number }[] | null | undefined,
+): number {
+  const applied = cents(appliedCents);
+  const listed = (lines || []).reduce((s, l) => s + cents(l?.amountCents), 0);
+  return applied - Math.min(applied, listed);
 }
 
 /**

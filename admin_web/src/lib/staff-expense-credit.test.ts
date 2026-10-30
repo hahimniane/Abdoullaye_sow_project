@@ -7,6 +7,9 @@ import { createRequire } from "node:module";
 import test from "node:test";
 
 import {
+  earlierExpenseCents,
+  expenseLabel,
+  expenseLineLabels,
   itemsAfterCredit,
   monthExpenseLines,
   netStaffExpenses,
@@ -33,6 +36,23 @@ const fixture = JSON.parse(readFileSync(fixtureUrl, "utf8")) as {
     };
   }[];
   itemsAfterCredit: { items: { id: string; amountCents: number }[]; creditCents: number; expect: unknown[] }[];
+  bills: {
+    name: string;
+    monthKey: string;
+    customers: { key: string; dueCents: number }[];
+    lines: Record<string, unknown>[];
+    entries: Record<string, unknown>[];
+    repayments: Record<string, unknown>[];
+    links: Record<string, { customerKey: string }>;
+    staffNames: Record<string, string>;
+    expect: {
+      lines: { id: string; label: string; amountCents: number }[];
+      linesCents: number;
+      expenseCreditCents: number;
+      earlierExpenseCents: number;
+      dueCents: number;
+    };
+  }[];
 };
 
 const require = createRequire(import.meta.url);
@@ -71,6 +91,34 @@ for (const c of fixture.cases) {
     );
   });
 }
+
+for (const c of fixture.bills) {
+  test(`fixture bill lines: ${c.name}`, () => {
+    const net = netStaffExpenses(c.customers, c).customers[0];
+    const labels = expenseLineLabels(c.lines);
+    const lines = monthExpenseLines(c.entries, c.monthKey, net.linkedStaffIds, labels);
+    assert.deepEqual(lines.map((l) => ({ id: l.id, label: l.label, amountCents: l.amountCents })), c.expect.lines);
+    const listed = lines.reduce((s, l) => s + l.amountCents, 0);
+    assert.equal(listed, c.expect.linesCents);
+    assert.equal(net.expenseCreditCents, c.expect.expenseCreditCents);
+    assert.equal(net.dueCents, c.expect.dueCents);
+    const earlier = earlierExpenseCents(net.expenseCreditCents, lines);
+    assert.equal(earlier, c.expect.earlierExpenseCents);
+    if (listed <= net.expenseCreditCents) assert.equal(listed + earlier, net.expenseCreditCents, "the lines add up to Less expenses");
+    // The server's module agrees, field for field.
+    assert.deepEqual(lines, server.monthExpenseLines(c.entries, c.monthKey, net.linkedStaffIds, server.expenseLineLabels(c.lines)));
+    assert.equal(earlier, server.earlierExpenseCents(net.expenseCreditCents, lines));
+  });
+}
+
+test("an expense reads as its line's name, then its note", () => {
+  assert.equal(expenseLabel("grosseries", "tissu, cups"), "grosseries · tissu, cups");
+  assert.equal(expenseLabel("grosseries", ""), "grosseries");
+  assert.equal(expenseLabel("", " tissu "), "tissu");
+  assert.equal(expenseLabel("Grosseries", "grosseries"), "Grosseries");
+  assert.equal(expenseLabel(null, undefined), "");
+  for (const [a, b] of [["x", "y"], ["", ""], ["A", "a"]]) assert.equal(expenseLabel(a, b), server.expenseLabel(a, b));
+});
 
 fixture.itemsAfterCredit.forEach((c, i) => {
   test(`fixture: items after credit #${i + 1}`, () => {

@@ -45,20 +45,24 @@ test("the view is worked out from the cars and activities, and records only thro
 
 test("staff expenses: read whole, netted only when both reads answered, never half-netted", () => {
   assert.match(view, /const credit = useStaffExpenseCreditInputs\(businessId, Boolean\(businessId\)\);/);
-  assert.match(view, /credit\.available \? \{ entries: credit\.entries, repayments: credit\.repayments, links, staffNames \} : null/);
+  assert.match(view, /credit\.available \? \{ entries: credit\.entries, repayments: credit\.repayments, lines: credit\.lines, links, staffNames \} : null/);
   assert.match(view, /business\.staffParkingLinks/, "the owner's links come from the business already loaded");
   assert.match(view, /!credit\.available && !credit\.loading && \(/, "a team member who cannot read the ledger gets a note");
   const data = read("./business-data.ts");
   assert.match(data, /useBusinessCollection\("lotExpenseEntries", businessId, enabled, complete\)/);
   assert.match(data, /useBusinessCollection\("staffExpenseRepayments", businessId, enabled, complete\)/);
-  assert.match(data, /available: enabled && !entries\.error && !repayments\.error/);
+  // The expense lines only name each expense: a refused read never blocks the netting.
+  assert.match(data, /useBusinessCollection\("lotExpenseLines", businessId, enabled, complete\)/);
+  assert.match(data, /available: enabled && !entries\.error && !repayments\.error,/);
 });
 
 test("the customer card shows what came off; Business owes follows the list", () => {
   assert.match(view, /customer\.expenseCreditCents > 0 && <small className="pk-month-paid-via">Less expenses -\{moneyText\(customer\.expenseCreditCents\)\}<\/small>/);
   assert.match(view, /<li className="pk-month-expense">/);
   assert.match(view, /customer\.expenseLines\.map\(\(l\) =>/);
-  assert.match(view, /\{l\.note \? <strong data-no-translate>\{l\.note\}<\/strong> : <strong>Expense<\/strong>\}/, "a note is typed, not copy");
+  assert.match(view, /\{l\.label \? <strong data-no-translate>\{l\.label\}<\/strong> : <strong>Expense<\/strong>\}/, "the line's name and note are typed, not copy");
+  assert.match(view, /customer\.earlierExpenseCents > 0 && \(/, "the earlier months' part of the credit is listed");
+  assert.match(view, /<strong>Expenses from earlier months<\/strong>/);
   const list = view.indexOf('<div className="pk-month-list">');
   const owes = view.indexOf("<BusinessOwesSection");
   assert.ok(list > 0 && owes > list, "Business owes comes after the customer list");

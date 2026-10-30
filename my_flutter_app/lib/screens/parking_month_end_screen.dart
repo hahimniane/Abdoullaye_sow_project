@@ -101,6 +101,10 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
   /// The links live on the business doc read below.
   List<Map<String, dynamic>> _expenseRows = const [];
   List<Map<String, dynamic>> _repaymentRows = const [];
+
+  /// `lotExpenseLines`: only names each expense on the bill; a refused read
+  /// leaves the expenses reading as their notes, never blocks the netting.
+  List<Map<String, dynamic>> _expenseLineRows = const [];
   bool _expensesLoaded = false;
   bool _repaymentsLoaded = false;
 
@@ -188,6 +192,15 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
               _repaymentsLoaded = true;
             });
           }, onError: refused),
+    );
+    _subs.add(
+      lotExpenseLinesSpec(widget.businessId)
+          .build(_db)
+          .snapshots()
+          .listen((snap) {
+            if (!mounted) return;
+            setState(() => _expenseLineRows = rows(snap));
+          }, onError: (_) {}),
     );
   }
 
@@ -294,6 +307,7 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
       ready,
       _expenseRows,
       _repaymentRows,
+      _expenseLineRows,
       links,
       _staff,
     );
@@ -311,6 +325,7 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
           ? ParkingMonthStaffExpenses(
               entries: _expenseRows,
               repayments: _repaymentRows,
+              lines: _expenseLineRows,
               links: links is Map ? links.cast<String, dynamic>() : const {},
               staffNames: {for (final s in _staff) s.id: s.name},
             )
@@ -435,6 +450,7 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
         businessOwes: l10n.pmeBusinessOwes,
         noParkingBill: l10n.pmeNoParkingBill,
         lotExpense: l10n.pmeLotExpense,
+        earlierExpenses: l10n.pmeEarlierExpenses,
       );
 
   Future<void> _run(String key, Future<void> Function() work) async {
@@ -535,6 +551,7 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
           title: l10n.pmeExpensesTitle,
           less: l10n.pmeLessExpenses,
           lotExpense: l10n.pmeLotExpense,
+          earlier: l10n.pmeEarlierExpenses,
         );
         await SharePlus.instance.share(
           ShareParams(
@@ -996,6 +1013,7 @@ String parkingMonthTextWithExpenses(
   required String title,
   required String less,
   required String lotExpense,
+  required String earlier,
 }) {
   if (c.expenseCreditCents <= 0) return text;
   final lines = text.split('\n');
@@ -1003,8 +1021,10 @@ String parkingMonthTextWithExpenses(
   final totalsStart = lines.lastIndexOf('');
   if (totalsStart < 0 || lines.length < 2) return text;
   final balance = lines.removeLast();
+  // This month's expenses, then the earlier months' part of the credit, so
+  // the lines add up to "Less expenses".
   final expenses = [
-    if (c.expenseLines.isNotEmpty) ...[
+    if (c.expenseLines.isNotEmpty || c.earlierExpenseCents > 0) ...[
       title,
       for (final e in c.expenseLines)
         '${[
@@ -1012,6 +1032,8 @@ String parkingMonthTextWithExpenses(
           e.label.isEmpty ? lotExpense : e.label,
           if (e.staffName.isNotEmpty) e.staffName,
         ].join(' · ')} — ${parkingMoney(e.amountCents)}',
+      if (c.earlierExpenseCents > 0)
+        '$earlier — ${parkingMoney(c.earlierExpenseCents)}',
       '',
     ],
   ];
@@ -1460,6 +1482,27 @@ class _ExpenseCredit extends StatelessWidget {
                   ],
                 ),
               ),
+          // The earlier months' part of the credit, so the lines add up to
+          // "Less expenses"; shown by itself when there is nothing this month.
+          if (customer.earlierExpenseCents > 0 &&
+              (open || customer.expenseLines.isEmpty))
+            Padding(
+              key: const Key('month-end-earlier-expenses'),
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: Text(l10n.pmeEarlierExpenses, style: small)),
+                  const SizedBox(width: AppSpacing.sm),
+                  Text(
+                    parkingMoney(customer.earlierExpenseCents),
+                    style: small.copyWith(
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );

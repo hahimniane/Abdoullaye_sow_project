@@ -17327,6 +17327,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pmeLotExpense => 'Lot expense';
 
   @override
+  String get pmeEarlierExpenses => 'Expenses from earlier months';
+
+  @override
   String pmeExpenseLinesCount(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,

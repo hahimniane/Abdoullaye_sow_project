@@ -99,5 +99,80 @@
      "expect": [{"id": "c1", "amountCents": 3000}]},
     {"items": [{"id": "c1", "amountCents": 3000}], "creditCents": 9000,
      "expect": []}
+  ],
+  "_billsComment": "The bill's expense lines: netStaffExpenses, then monthExpenseLines(entries, monthKey, linkedStaffIds, expenseLineLabels(lines)), then earlierExpenseCents(applied, lines). Each line reads as its expense line's name, then its note. Lines + earlier = applied whenever the credit covers this month's lines.",
+  "bills": [
+    {
+      "name": "Abdoulaye, Oct 2026: 4 October purchases listed, September's $212.76 as earlier months",
+      "monthKey": "2026-10",
+      "customers": [{"key": "phone:3475628973", "dueCents": 494200}],
+      "lines": [{"id": "L1", "label": "grosseries"}, {"id": "L2", "label": "abdoulaye sow"}, {"id": "L3", "label": ""}],
+      "entries": [
+        {"id": "s1", "paidByStaffId": "abd", "amountCents": 5000, "month": "2026-09", "lineId": "L1", "spentAtMs": 1757000000000},
+        {"id": "s2", "paidByStaffId": "abd", "amountCents": 4500, "month": "2026-09", "lineId": "L1", "spentAtMs": 1757100000000},
+        {"id": "s3", "paidByStaffId": "abd", "amountCents": 4276, "month": "2026-09", "lineId": "L2", "spentAtMs": 1757200000000},
+        {"id": "s4", "paidByStaffId": "abd", "amountCents": 4000, "month": "2026-09", "lineId": "L1", "spentAtMs": 1757300000000},
+        {"id": "s5", "paidByStaffId": "abd", "amountCents": 3500, "month": "2026-09", "lineId": "L2", "spentAtMs": 1757400000000},
+        {"id": "o1", "paidByStaffId": "abd", "amountCents": 8999, "month": "2026-10", "lineId": "L1", "note": "tissu, cups", "spentAtMs": 1759500000000},
+        {"id": "o2", "paidByStaffId": "abd", "amountCents": 6250, "month": "2026-10", "lineId": "L2", "spentAtMs": 1759600000000},
+        {"id": "o3", "paidByStaffId": "abd", "amountCents": 4806, "month": "2026-10", "lineId": "L1", "note": "Grosseries", "spentAtMs": 1759700000000},
+        {"id": "o4", "paidByStaffId": "abd", "amountCents": 3500, "month": "2026-10", "lineId": "L3", "spentAtMs": 1759800000000},
+        {"id": "o5", "paidByStaffId": "abd", "amountCents": 1000, "month": "2026-10", "lineId": "L1", "voided": true, "spentAtMs": 1759900000000}
+      ],
+      "repayments": [],
+      "links": {"abd": {"customerKey": "phone:3475628973"}},
+      "staffNames": {"abd": "Abdoulaye Sow"},
+      "expect": {
+        "lines": [
+          {"id": "o1", "label": "grosseries · tissu, cups", "amountCents": 8999},
+          {"id": "o2", "label": "abdoulaye sow", "amountCents": 6250},
+          {"id": "o3", "label": "grosseries", "amountCents": 4806},
+          {"id": "o4", "label": "", "amountCents": 3500}
+        ],
+        "linesCents": 23555,
+        "expenseCreditCents": 44831,
+        "earlierExpenseCents": 21276,
+        "dueCents": 449369
+      }
+    },
+    {
+      "name": "bill smaller than this month's expenses: nothing earlier, the rest is owed by the business",
+      "monthKey": "2026-10",
+      "customers": [{"key": "phone:3475628973", "dueCents": 10000}],
+      "lines": [{"id": "L1", "label": "grosseries"}],
+      "entries": [
+        {"id": "s1", "paidByStaffId": "abd", "amountCents": 21276, "month": "2026-09", "lineId": "L1", "spentAtMs": 1757000000000},
+        {"id": "o1", "paidByStaffId": "abd", "amountCents": 23555, "month": "2026-10", "lineId": "L1", "spentAtMs": 1759500000000}
+      ],
+      "repayments": [],
+      "links": {"abd": {"customerKey": "phone:3475628973"}},
+      "staffNames": {"abd": "Abdoulaye Sow"},
+      "expect": {
+        "lines": [{"id": "o1", "label": "grosseries", "amountCents": 23555}],
+        "linesCents": 23555,
+        "expenseCreditCents": 10000,
+        "earlierExpenseCents": 0,
+        "dueCents": 0
+      }
+    },
+    {
+      "name": "no expenses this month: the whole credit is from earlier months",
+      "monthKey": "2026-11",
+      "customers": [{"key": "phone:3475628973", "dueCents": 494200}],
+      "lines": [],
+      "entries": [
+        {"id": "s1", "paidByStaffId": "abd", "amountCents": 21276, "month": "2026-09", "lineId": "gone", "spentAtMs": 1757000000000}
+      ],
+      "repayments": [],
+      "links": {"abd": {"customerKey": "phone:3475628973"}},
+      "staffNames": {"abd": "Abdoulaye Sow"},
+      "expect": {
+        "lines": [],
+        "linesCents": 0,
+        "expenseCreditCents": 21276,
+        "earlierExpenseCents": 21276,
+        "dueCents": 472924
+      }
+    }
   ]
 }

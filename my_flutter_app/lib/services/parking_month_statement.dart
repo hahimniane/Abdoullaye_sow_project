@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 
 import 'lot_ledger.dart' show LotActivity, lotDateOf;
 import 'staff_expense_credit.dart';
+import 'staff_expense_credit.dart' as credit show earlierExpenseCents;
 
 const _dayMs = 24 * 60 * 60 * 1000;
 
@@ -439,6 +440,7 @@ class ParkingMonthCustomer {
     int? dueBeforeExpensesCents,
     this.expenseCreditCents = 0,
     this.expenseLines = const [],
+    this.earlierExpenseCents = 0,
     this.linkedStaffIds = const [],
   }) : dueBeforeExpensesCents = dueBeforeExpensesCents ?? dueCents;
 
@@ -481,6 +483,12 @@ class ParkingMonthCustomer {
   /// This month's expenses of the linked staff, oldest first.
   final List<ParkingMonthExpenseLine> expenseLines;
 
+  /// The part of [expenseCreditCents] beyond this month's lines - expenses
+  /// of earlier months ("Expenses from earlier months"); 0 when none. The
+  /// lines plus this add up to "Less expenses" whenever the credit covered
+  /// this month's lines.
+  final int earlierExpenseCents;
+
   /// The staff members linked to this customer.
   final List<String> linkedStaffIds;
 
@@ -516,6 +524,10 @@ class ParkingMonthCustomer {
         dueBeforeExpensesCents: net.dueBeforeExpensesCents,
         expenseCreditCents: net.expenseCreditCents,
         expenseLines: lines,
+        earlierExpenseCents: credit.earlierExpenseCents(
+          net.expenseCreditCents,
+          lines.map((l) => l.amountCents),
+        ),
         linkedStaffIds: net.linkedStaffIds,
       );
 }
@@ -537,7 +549,8 @@ class ParkingMonthExpenseLine {
   /// The day it was bought ("2026-10-03"), or '' when undated.
   final String date;
 
-  /// The entry's note; '' when none (each client then says "Lot expense").
+  /// Its expense line's name, then its note ("grosseries · tissu, cups");
+  /// '' when neither (each client then says "Lot expense").
   final String label;
   final int amountCents;
   final String staffId;
@@ -576,11 +589,17 @@ class ParkingMonthStaffExpenses {
     this.repayments = const [],
     this.links = const {},
     this.staffNames = const {},
+    this.lines = const [],
   });
 
-  /// Rows with `id, paidByStaffId, amountCents, month, voided, note` and
-  /// `spentAt` (a Timestamp, DateTime or ISO string) or `spentAtMs`.
+  /// Rows with `id, paidByStaffId, amountCents, month, voided, note,
+  /// lineId` and `spentAt` (a Timestamp, DateTime or ISO string) or
+  /// `spentAtMs`.
   final List<Map<String, dynamic>> entries;
+
+  /// `lotExpenseLines` rows (`id, label`): each expense reads as its line's
+  /// name, then its note. Without them it reads as its note.
+  final List<Map<String, dynamic>> lines;
   final List<Map<String, dynamic>> repayments;
   final Map<String, dynamic> links;
   final Map<String, String> staffNames;
@@ -906,15 +925,16 @@ ParkingMonthSummary parkingMonthSummary(
     return day == null ? '' : _dayKey(day);
   }
 
+  final lineLabels = expenseLineLabels(input.lines);
   final netted = [
     for (var i = 0; i < customers.length; i++)
       customers[i]._withExpenses(net.customers[i], [
         for (final line in monthExpenseLines(
-            entries, monthKey, net.customers[i].linkedStaffIds))
+            entries, monthKey, net.customers[i].linkedStaffIds, lineLabels))
           ParkingMonthExpenseLine(
             id: line.id,
             date: dayOf(line.spentAtMs),
-            label: line.note,
+            label: line.label,
             amountCents: line.amountCents,
             staffId: line.staffId,
             staffName: _text(input.staffNames[line.staffId], 120),

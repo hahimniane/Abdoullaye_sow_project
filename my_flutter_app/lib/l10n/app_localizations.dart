@@ -29294,6 +29294,12 @@ abstract class AppLocalizations {
   /// **'Lot expense'**
   String get pmeLotExpense;
 
+  /// On a staff member's month-end parking bill: the part of the expenses taken off that they paid in earlier months, listed after this month's expenses so the lines add up to 'Less expenses'.
+  ///
+  /// In en, this message translates to:
+  /// **'Expenses from earlier months'**
+  String get pmeEarlierExpenses;
+
   /// No description provided for @pmeExpenseLinesCount.
   ///
   /// In en, this message translates to:

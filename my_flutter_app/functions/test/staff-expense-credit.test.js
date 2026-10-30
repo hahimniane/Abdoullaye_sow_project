@@ -24,6 +24,26 @@ describe("staff expenses netted against parking (shared fixture)", () => {
       assert.equal(out.expenseCreditCents, c.expect.expenseCreditCents);
     });
   }
+  for (const c of fixture.bills) {
+    it(`bill lines: ${c.name}`, () => {
+      const net = credit.netStaffExpenses(c.customers, c).customers[0];
+      const lines = credit.monthExpenseLines(c.entries, c.monthKey,
+          net.linkedStaffIds, credit.expenseLineLabels(c.lines));
+      assert.deepEqual(lines.map((l) => ({id: l.id, label: l.label,
+        amountCents: l.amountCents})), c.expect.lines);
+      const listed = lines.reduce((s, l) => s + l.amountCents, 0);
+      assert.equal(listed, c.expect.linesCents);
+      assert.equal(net.expenseCreditCents, c.expect.expenseCreditCents);
+      assert.equal(net.dueCents, c.expect.dueCents);
+      const earlier = credit.earlierExpenseCents(net.expenseCreditCents,
+          lines);
+      assert.equal(earlier, c.expect.earlierExpenseCents);
+      if (listed <= net.expenseCreditCents) {
+        assert.equal(listed + earlier, net.expenseCreditCents,
+            "the lines add up to Less expenses");
+      }
+    });
+  }
   for (const [i, c] of fixture.itemsAfterCredit.entries()) {
     it(`Mark all paid pays only what the credit leaves (${i + 1})`, () => {
       assert.deepEqual(credit.itemsAfterCredit(c.items, c.creditCents),

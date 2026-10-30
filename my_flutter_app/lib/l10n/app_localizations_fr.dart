@@ -17600,6 +17600,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get pmeLotExpense => 'Dépense du parc';
 
   @override
+  String get pmeEarlierExpenses => 'Dépenses des mois précédents';
+
+  @override
   String pmeExpenseLinesCount(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,

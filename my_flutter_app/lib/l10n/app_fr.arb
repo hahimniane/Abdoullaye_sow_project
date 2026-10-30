@@ -9040,6 +9040,10 @@
   },
   "pmeLessStaffExpenses": "Moins les dépenses du personnel",
   "pmeLotExpense": "Dépense du parc",
+  "pmeEarlierExpenses": "Dépenses des mois précédents",
+  "@pmeEarlierExpenses": {
+    "description": "On a staff member's month-end parking bill: the part of the expenses taken off that they paid in earlier months, listed after this month's expenses so the lines add up to 'Less expenses'."
+  },
   "pmeExpenseLinesCount": "{count, plural, =1{1 dépense ce mois-ci} other{{count} dépenses ce mois-ci}}",
   "@pmeExpenseLinesCount": {
     "placeholders": {

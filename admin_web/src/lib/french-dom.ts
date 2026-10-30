@@ -7467,6 +7467,12 @@ Object.assign(ATTRIBUTE_TRANSLATIONS, {
   "e.g. entered twice, wrong amount": "ex. saisi deux fois, mauvais montant",
 });
 
+// A staff member's bill lists the earlier months' part of the expenses that
+// came off it, so the lines add up to "Less expenses".
+Object.assign(TEXT_TRANSLATIONS, {
+  "Expenses from earlier months": "Dépenses des mois précédents",
+});
+
 const englishDictionary = { ...TEXT_TRANSLATIONS, ...ATTRIBUTE_TRANSLATIONS };
 const frenchDictionary = buildReverseDictionary([
   TEXT_TRANSLATIONS,

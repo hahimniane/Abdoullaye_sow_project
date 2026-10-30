@@ -510,6 +510,25 @@ describe("staff expenses on the bill", () => {
         /\nLess expenses — -\$448\.31\nBALANCE DUE: \$4,493\.69$/);
   });
 
+  it("lists earlier months' expenses so the lines add up", () => {
+    const text = parkingMonthCustomerText({...netted,
+      earlierExpenseCents: 20000}, "Keren");
+    assert.match(text, new RegExp(
+        "\\nOct 12, 2026 · Light bulbs — -\\$248\\.31\\n" +
+        "Expenses from earlier months — -\\$200\\.00\\n\\n" +
+        "Total for October"));
+    // Only earlier months' expenses: the section still shows them.
+    const onlyEarlier = parkingMonthCustomerText({...netted,
+      expenseLines: [], earlierExpenseCents: 44831}, "Keren");
+    assert.match(onlyEarlier, new RegExp(
+        "\\n\\nExpenses you paid for the lot\\n" +
+        "Expenses from earlier months — -\\$448\\.31\\n\\n"));
+    // An un-netted bill never shows it.
+    assert.doesNotMatch(parkingMonthCustomerText({...netted,
+      expenseCreditCents: 0, earlierExpenseCents: 500}, "Keren"),
+    /earlier months/);
+  });
+
   it("Mark all paid records only what is left after the credit", () => {
     const plan = monthBillPaymentPlan(netted);
     assert.deepEqual(plan.items.map((x) => x.amountCents), [449369]);

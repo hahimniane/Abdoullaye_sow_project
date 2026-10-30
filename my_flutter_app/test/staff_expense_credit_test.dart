@@ -76,6 +76,69 @@ void main() {
     }
   });
 
+  group('bill lines, the shared cases', () {
+    final bills = (fixture['bills'] as List).cast<Map<String, dynamic>>();
+    test(
+      'there are bill cases',
+      () => expect(bills.length, greaterThanOrEqualTo(3)),
+    );
+    for (final c in bills) {
+      test(c['name'], () {
+        final want = (c['expect'] as Map).cast<String, dynamic>();
+        final net = netStaffExpenses(
+          [
+            for (final x in rows(c['customers']))
+              (
+                key: x['key'] as String,
+                dueCents: (x['dueCents'] as num).toInt(),
+              ),
+          ],
+          entries: rows(c['entries']),
+          repayments: rows(c['repayments']),
+          links: (c['links'] as Map).cast<String, dynamic>(),
+          monthKey: c['monthKey'] as String,
+          staffNames: (c['staffNames'] as Map).cast<String, String>(),
+        ).customers.first;
+        final lines = monthExpenseLines(
+          rows(c['entries']),
+          c['monthKey'] as String,
+          net.linkedStaffIds,
+          expenseLineLabels(rows(c['lines'])),
+        );
+        expect([
+          for (final l in lines)
+            {'id': l.id, 'label': l.label, 'amountCents': l.amountCents},
+        ], want['lines']);
+        final listed = lines.fold<int>(0, (s, l) => s + l.amountCents);
+        expect(listed, want['linesCents']);
+        expect(net.expenseCreditCents, want['expenseCreditCents']);
+        expect(net.dueCents, want['dueCents']);
+        final earlier = earlierExpenseCents(
+          net.expenseCreditCents,
+          lines.map((l) => l.amountCents),
+        );
+        expect(earlier, want['earlierExpenseCents']);
+        if (listed <= net.expenseCreditCents) {
+          expect(
+            listed + earlier,
+            net.expenseCreditCents,
+            reason: 'the lines add up to Less expenses',
+          );
+        }
+      });
+    }
+    test('an expense reads as its line, then its note', () {
+      expect(
+        expenseLabel('grosseries', 'tissu, cups'),
+        'grosseries · tissu, cups',
+      );
+      expect(expenseLabel('grosseries', ''), 'grosseries');
+      expect(expenseLabel('', ' tissu '), 'tissu');
+      expect(expenseLabel('Grosseries', 'grosseries'), 'Grosseries');
+      expect(expenseLabel(null, null), '');
+    });
+  });
+
   group('itemsAfterCredit, the shared cases', () {
     for (var i = 0; i < itemCases.length; i++) {
       final c = itemCases[i];

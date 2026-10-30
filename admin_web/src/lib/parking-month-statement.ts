@@ -8,6 +8,8 @@
 import { BUSINESS_PARKING_RECEIVED_VIA_OPTIONS } from "./business-parking-entry.ts";
 import { lotActivityPaidCents } from "./lot-ledger.ts";
 import {
+  earlierExpenseCents,
+  expenseLineLabels,
   itemsAfterCredit,
   monthExpenseLines,
   netStaffExpenses,
@@ -325,6 +327,11 @@ export type ParkingMonthCustomer = {
   expenseCreditCents: number;
   /** This month's expenses of the linked staff, oldest first. */
   expenseLines: ParkingMonthExpenseLine[];
+  /** The part of `expenseCreditCents` beyond this month's lines - expenses
+   * of earlier months ("Expenses from earlier months"); 0 when none. The
+   * lines plus this add up to "Less expenses" whenever the credit covered
+   * this month's lines. */
+  earlierExpenseCents: number;
   /** The staff linked to this customer (their parking bill). */
   linkedStaffIds: string[];
 };
@@ -334,8 +341,11 @@ export type ParkingMonthExpenseLine = {
   id: string;
   /** "yyyy-mm-dd" (UTC day of spentAt), or "" when undated. */
   date: string;
-  /** The note, else "Expense". */
+  /** Its expense line's name, then its note ("grosseries · tissu, cups");
+   * "" when neither (each place then says "Expense"). */
   label: string;
+  /** The expense line's name (`lotExpenseLines.label`), "" when unknown. */
+  lineLabel: string;
   note: string;
   amountCents: number;
   staffId: string;
@@ -348,6 +358,9 @@ export type ParkingMonthStaffCredit = {
   entries: readonly Row[];
   /** staffExpenseRepayments rows: `staffId, amountCents, month, voided`. */
   repayments: readonly Row[];
+  /** lotExpenseLines rows (`id, label`): each expense reads as its line's
+   * name, then its note. Optional - without them it reads as its note. */
+  lines?: readonly Row[] | null;
   /** businesses/{id}.staffParkingLinks. */
   links?: StaffParkingLinks | null;
   /** `{[staffId]: name}`. */
@@ -440,6 +453,7 @@ export function parkingMonthCustomers(
       dueBeforeExpensesCents: dueCents,
       expenseCreditCents: 0,
       expenseLines: [],
+      earlierExpenseCents: 0,
       linkedStaffIds: [],
     });
   }
@@ -590,13 +604,15 @@ export function withStaffExpenseCredit(
     monthKey,
     staffNames: names,
   });
+  const lineLabels = expenseLineLabels(credit.lines ?? []);
   const netted = net.customers.map((c) => {
-    const expenseLines = monthExpenseLines(entries, monthKey, c.linkedStaffIds).map((l) => {
+    const expenseLines = monthExpenseLines(entries, monthKey, c.linkedStaffIds, lineLabels).map((l) => {
       const day = l.spentAtMs > 0 ? dayNumber(new Date(l.spentAtMs)) : null;
       return {
         id: l.id,
         date: day === null ? "" : dayKeyOf(day),
-        label: l.note || "Expense",
+        label: l.label,
+        lineLabel: l.lineLabel,
         note: l.note,
         amountCents: l.amountCents,
         staffId: l.staffId,
@@ -606,6 +622,7 @@ export function withStaffExpenseCredit(
     return {
       ...c,
       expenseLines,
+      earlierExpenseCents: earlierExpenseCents(c.expenseCreditCents, expenseLines),
       owes: c.dueCents > 0,
       paid: parkingMonthCustomerPaid(c),
     };
@@ -697,13 +714,16 @@ export function parkingMonthCustomerText(c: ParkingMonthCustomer, businessName: 
     }
   }
   // A linked staff member's lot expenses (docs/STAFF_EXPENSE_CREDIT.md):
-  // this month's, then what came off the bill in all.
+  // this month's, then the earlier months' part of the credit, then what
+  // came off the bill in all.
   const credited = (c.expenseCreditCents || 0) > 0;
-  if (credited && (c.expenseLines || []).length) {
+  const earlier = credited ? c.earlierExpenseCents || 0 : 0;
+  if (credited && ((c.expenseLines || []).length || earlier > 0)) {
     lines.push("", "Expenses you paid for the lot");
-    for (const l of c.expenseLines) {
+    for (const l of c.expenseLines || []) {
       lines.push(`${[l.date ? dayLabel(l.date) : "", l.label || "Expense"].filter(Boolean).join(" · ")} — -${moneyText(l.amountCents)}`);
     }
+    if (earlier > 0) lines.push(`Expenses from earlier months — -${moneyText(earlier)}`);
   }
   lines.push("", `Total for ${month} — ${moneyText(c.monthCents)}`);
   if (c.priorUnpaidCents > 0) lines.push(`Unpaid from before — ${moneyText(c.priorUnpaidCents)}`);

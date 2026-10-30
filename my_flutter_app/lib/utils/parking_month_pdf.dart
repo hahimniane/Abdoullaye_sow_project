@@ -67,6 +67,7 @@ class ParkingMonthPdfCopy {
     this.businessOwes = 'Business owes',
     this.noParkingBill = 'No parking bill',
     this.lotExpense = 'Lot expense',
+    this.earlierExpenses = 'Expenses from earlier months',
   });
 
   final String bill;
@@ -129,8 +130,11 @@ class ParkingMonthPdfCopy {
   final String businessOwes;
   final String noParkingBill;
 
-  /// An expense with no note.
+  /// An expense with no line name and no note.
   final String lotExpense;
+
+  /// The earlier months' part of the expenses taken off the bill.
+  final String earlierExpenses;
 }
 
 String _t(Object? v) => (v ?? '').toString().trim();
@@ -382,7 +386,8 @@ Future<Uint8List> buildParkingMonthBillPdf({
             ]),
         ]),
       ],
-      if (c.expenseLines.isNotEmpty) ...[
+      if (c.expenseCreditCents > 0 &&
+          (c.expenseLines.isNotEmpty || c.earlierExpenseCents > 0)) ...[
         sectionTitle(copy.expensesTitle),
         table([
           pw.TableRow(children: [
@@ -397,6 +402,15 @@ Future<Uint8List> buildParkingMonthBillPdf({
               text(e.date.isEmpty ? '' : displayDay(e.date, copy.locale)),
               text(''),
               text(parkingMoney(e.amountCents), bold: true, align: pw.TextAlign.right),
+            ]),
+          // The earlier months' part of the credit, so the lines add up to
+          // "Less expenses".
+          if (c.earlierExpenseCents > 0)
+            pw.TableRow(children: [
+              itemCell(copy.earlierExpenses, ''),
+              text(''),
+              text(''),
+              text(parkingMoney(c.earlierExpenseCents), bold: true, align: pw.TextAlign.right),
             ]),
         ]),
       ],

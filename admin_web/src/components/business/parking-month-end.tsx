@@ -101,8 +101,8 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
   );
   const staffNames = useMemo(() => Object.fromEntries(staffOptions.map((s) => [s.id, s.name])), [staffOptions]);
   const staffCredit = useMemo<ParkingMonthStaffCredit | null>(
-    () => (credit.available ? { entries: credit.entries, repayments: credit.repayments, links, staffNames } : null),
-    [credit.available, credit.entries, credit.repayments, links, staffNames],
+    () => (credit.available ? { entries: credit.entries, repayments: credit.repayments, lines: credit.lines, links, staffNames } : null),
+    [credit.available, credit.entries, credit.repayments, credit.lines, links, staffNames],
   );
   const linkedCustomerNames = useMemo(() => {
     const out: Record<string, string> = {};
@@ -377,7 +377,7 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
                 const expenseLines = showExpenses ? customer.expenseLines.map((l) => (
                   <li key={`exp-${l.id}`} className="pk-month-expense-line">
                     <span className="pk-month-car">
-                      {l.note ? <strong data-no-translate>{l.note}</strong> : <strong>Expense</strong>}
+                      {l.label ? <strong data-no-translate>{l.label}</strong> : <strong>Expense</strong>}
                       {l.staffName && <small><span>paid by</span> <span data-no-translate>{l.staffName}</span></small>}
                     </span>
                     <span className="pk-month-period">{l.date ? formatDayKey(l.date) : ""}</span>
@@ -386,11 +386,23 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
                     <span aria-hidden="true"></span>
                   </li>
                 )) : null;
+                // The earlier months' part of the credit, so the lines add
+                // up to "Less expenses".
+                const earlierLine = showExpenses && customer.earlierExpenseCents > 0 && (
+                  <li key="exp-earlier" className="pk-month-expense-line">
+                    <span className="pk-month-car"><strong>Expenses from earlier months</strong></span>
+                    <span className="pk-month-period"></span>
+                    <span className="pk-month-calc"></span>
+                    <span className="pk-month-amount"><strong>-{moneyText(customer.earlierExpenseCents)}</strong></span>
+                    <span aria-hidden="true"></span>
+                  </li>
+                );
                 return (
                   <ul>
                     {owingLines}
                     {expenseRow}
                     {expenseLines}
+                    {earlierLine}
                     {paidLines.length > 0 && (
                       <li className="pk-month-paid-toggle">
                         <button className="ghost-button" type="button" aria-expanded={showPaid} onClick={() => setOpenPaid((current) => {

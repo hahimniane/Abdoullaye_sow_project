@@ -73,8 +73,13 @@ month, appear in "Business owes" with their whole credit.
 
 Customer fields added to `ParkingMonthCustomer`:
 `dueBeforeExpensesCents`, `expenseCreditCents`, `expenseLines` (this month's
-entries of the linked staff: `{id, date, label, amountCents, staffName}`),
-`linkedStaffIds`. `owes` = `dueCents > 0`; `paid` as before but on the
+entries of the linked staff: `{id, date, label, lineLabel, note, amountCents,
+staffName}`; `label` = the expense line's name (`lotExpenseLines.label`) then
+the note, "grosseries · tissu, cups", via `expenseLabel`),
+`earlierExpenseCents` (= applied − min(applied, Σ this month's lines), via
+`earlierExpenseCents`; listed as "Expenses from earlier months" after the
+lines so they add up to "Less expenses" whenever the credit covers this
+month's lines), `linkedStaffIds`. `owes` = `dueCents > 0`; `paid` as before but on the
 netted `dueCents`.
 
 Summary fields added: `expenseCreditCents` (Σ applied), `businessOwes:

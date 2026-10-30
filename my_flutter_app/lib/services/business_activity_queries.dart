@@ -480,6 +480,15 @@ FirestoreQuerySpec staffExpenseRepaymentsSpec(String businessId) =>
       filters: [_business(businessId)],
     );
 
+/// The business's expense lines (`lotExpenseLines`, a short list): their
+/// names label each expense on a staff member's bill. Equality only, no
+/// index.
+FirestoreQuerySpec lotExpenseLinesSpec(String businessId) =>
+    FirestoreQuerySpec(
+      collection: 'lotExpenseLines',
+      filters: [_business(businessId)],
+    );
+
 /// "2026-12" -> "2027-01". Unparsable keys come back unchanged.
 String nextMonthKey(String monthKey) {
   final m = RegExp(r'^(\d{4})-(\d{2})$').firstMatch(monthKey.trim());

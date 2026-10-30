@@ -70,10 +70,12 @@ test("Abdoulaye: $4,942.00 due, $448.31 of expenses → $4,493.69", () => {
   assert.deepEqual(sow.linkedStaffIds, ["abd"]);
   assert.equal(sow.owes, true);
   assert.equal(sow.paid, false);
-  // Only October's own expense is a line; September's still counts in the credit.
+  // Only October's own expense is a line; September's still counts in the
+  // credit, and is listed as one "Expenses from earlier months" amount.
   assert.deepEqual(sow.expenseLines, [
-    { id: "e2", date: "2026-10-12", label: "Light bulbs", note: "Light bulbs", amountCents: 24831, staffId: "abd", staffName: "Abdoulaye Sow" },
+    { id: "e2", date: "2026-10-12", label: "Light bulbs", lineLabel: "", note: "Light bulbs", amountCents: 24831, staffId: "abd", staffName: "Abdoulaye Sow" },
   ]);
+  assert.equal(sow.earlierExpenseCents, 20000);
   // Still owed is after expenses; Billed and Collected are unchanged.
   assert.equal(s.dueCents, 449369);
   assert.equal(s.billedCents, 494200);
@@ -99,11 +101,40 @@ test("the bill text lists the expenses and takes them off, the same as the serve
     "",
     "Expenses you paid for the lot",
     "Oct 12, 2026 · Light bulbs — -$248.31",
+    "Expenses from earlier months — -$200.00",
     "",
     "Total for October — $4,942.00",
     "Less expenses — -$448.31",
     "BALANCE DUE: $4,493.69",
   ].join("\n"));
+});
+
+test("Keren, October: each expense reads as its line's name, earlier months add up to Less expenses", () => {
+  // The real case: $212.76 over five September purchases, $235.55 over four
+  // October ones, most with no note.
+  const sept = [5000, 4500, 4276, 4000, 3500].map((amountCents, i) => ({
+    id: `s${i}`, paidByStaffId: "abd", amountCents, month: "2026-09", spentAt: at(`2026-09-1${i}`), lineId: "groc",
+  }));
+  const real = parkingMonthSummary(cars, "2026-10", NOV1, [], {
+    ...credit,
+    entries: [
+      ...sept,
+      { id: "o1", paidByStaffId: "abd", amountCents: 8999, month: "2026-10", spentAt: at("2026-10-02"), lineId: "groc", note: "tissu, cups" },
+      { id: "o2", paidByStaffId: "abd", amountCents: 6250, month: "2026-10", spentAt: at("2026-10-09"), lineId: "abd-line" },
+      { id: "o3", paidByStaffId: "abd", amountCents: 4806, month: "2026-10", spentAt: at("2026-10-16"), lineId: "groc" },
+      { id: "o4", paidByStaffId: "abd", amountCents: 3500, month: "2026-10", spentAt: at("2026-10-23") },
+    ],
+    lines: [{ id: "groc", label: "grosseries" }, { id: "abd-line", label: "abdoulaye sow" }],
+  });
+  const sow = real.customers[0];
+  assert.deepEqual(sow.expenseLines.map((l) => l.label), ["grosseries · tissu, cups", "abdoulaye sow", "grosseries", ""]);
+  assert.equal(sow.expenseLines.reduce((s, l) => s + l.amountCents, 0), 23555);
+  assert.equal(sow.earlierExpenseCents, 21276);
+  assert.equal(sow.expenseCreditCents, 44831);
+  assert.equal(sow.dueCents, 449369);
+  const text = parkingMonthCustomerText(sow, "Keren Auto Sales");
+  assert.equal(text, server.parkingMonthCustomerText(JSON.parse(JSON.stringify(sow)), "Keren Auto Sales"));
+  assert.match(text, /\nExpenses you paid for the lot\nOct 2, 2026 · grosseries · tissu, cups — -\$89\.99\nOct 9, 2026 · abdoulaye sow — -\$62\.50\nOct 16, 2026 · grosseries — -\$48\.06\nOct 23, 2026 · Expense — -\$35\.00\nExpenses from earlier months — -\$212\.76\n\nTotal for October — \$4,942\.00\nLess expenses — -\$448\.31\nBALANCE DUE: \$4,493\.69$/);
 });
 
 test("Mark all paid records only what is left after the credit", () => {

@@ -271,6 +271,9 @@ class StaffExpenseLine {
     required this.amountCents,
     required this.note,
     required this.spentAtMs,
+    this.lineId = '',
+    this.lineLabel = '',
+    this.label = '',
   });
 
   final String id;
@@ -278,29 +281,83 @@ class StaffExpenseLine {
   final int amountCents;
   final String note;
   final int spentAtMs;
+  final String lineId;
+
+  /// The expense line's name (`lotExpenseLines.label`), '' when unknown.
+  final String lineLabel;
+
+  /// [expenseLabel] of [lineLabel] and [note].
+  final String label;
+}
+
+/// The expense lines' names (`lotExpenseLines.label`) by line id; unnamed
+/// lines left out.
+Map<String, String> expenseLineLabels(Iterable<Map<String, dynamic>>? lines) {
+  final out = <String, String>{};
+  for (final l in lines ?? const <Map<String, dynamic>>[]) {
+    final id = _text(l['id'], 128);
+    final label = _text(l['label'], 120);
+    if (id.isNotEmpty && label.isNotEmpty) out[id] = label;
+  }
+  return out;
+}
+
+/// What an expense reads as on a bill: its line's name, then its note
+/// ("grosseries · tissu, cups"); one alone when the other is empty or the
+/// same; '' when neither (each client then says "Lot expense").
+String expenseLabel(Object? lineLabel, Object? note) {
+  final a = _text(lineLabel, 120);
+  final b = _text(note, 200);
+  if (a.isNotEmpty && b.isNotEmpty && a.toLowerCase() == b.toLowerCase()) {
+    return a;
+  }
+  return [a, b].where((s) => s.isNotEmpty).join(' · ');
+}
+
+/// The part of "Less expenses" that came from expenses of earlier months:
+/// what was taken off the bill beyond this month's listed lines. With it
+/// listed, the lines add up to "Less expenses" whenever the credit covered
+/// them (when it did not, the rest of the credit is in Business owes).
+int earlierExpenseCents(int appliedCents, Iterable<int> lineCents) {
+  final applied = _cents(appliedCents);
+  final listed = lineCents.fold<int>(0, (s, c) => s + _cents(c));
+  return applied - (listed < applied ? listed : applied);
 }
 
 /// This month's expenses of the given staff, for the bill's lines, oldest
-/// first. Entries carry `spentAtMs` (milliseconds).
+/// first. Entries carry `spentAtMs` (milliseconds). [lineLabels] names each
+/// expense by its line ([expenseLineLabels]).
 List<StaffExpenseLine> monthExpenseLines(
   Iterable<Map<String, dynamic>>? entries,
   String monthKey,
-  Iterable<String>? staffIds,
-) {
+  Iterable<String>? staffIds, [
+  Map<String, String>? lineLabels,
+]) {
   final wanted = {...?staffIds};
+  final names = lineLabels ?? const <String, String>{};
+  StaffExpenseLine lineOf(Map<String, dynamic> e) {
+    final lineId = _text(e['lineId'], 128);
+    final lineLabel = _text(names[lineId], 120);
+    final note = _text(e['note'], 200);
+    return StaffExpenseLine(
+      id: _text(e['id'], 128),
+      staffId: '${e['paidByStaffId']}',
+      amountCents: _cents(e['amountCents']),
+      note: note,
+      spentAtMs: (num.tryParse('${e['spentAtMs'] ?? ''}') ?? 0).toInt(),
+      lineId: lineId,
+      lineLabel: lineLabel,
+      label: expenseLabel(lineLabel, note),
+    );
+  }
+
   final out = [
     for (final e in entries ?? const <Map<String, dynamic>>[])
       if (e['voided'] != true &&
           wanted.contains(e['paidByStaffId']) &&
           _text(e['month'], 7) == monthKey &&
           _cents(e['amountCents']) > 0)
-        StaffExpenseLine(
-          id: _text(e['id'], 128),
-          staffId: '${e['paidByStaffId']}',
-          amountCents: _cents(e['amountCents']),
-          note: _text(e['note'], 200),
-          spentAtMs: (num.tryParse('${e['spentAtMs'] ?? ''}') ?? 0).toInt(),
-        ),
+        lineOf(e),
   ];
   out.sort((a, b) {
     final byTime = a.spentAtMs.compareTo(b.spentAtMs);

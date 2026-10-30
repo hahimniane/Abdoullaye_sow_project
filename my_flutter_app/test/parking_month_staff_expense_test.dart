@@ -157,6 +157,8 @@ void main() {
       expect(c.expenseLines.single.date, '2026-10-03');
       expect(c.expenseLines.single.label, 'Snow salt');
       expect(c.expenseLines.single.staffName, 'Abdoulaye Sow');
+      // September's is listed as one "Expenses from earlier months" amount.
+      expect(c.earlierExpenseCents, 20000);
       expect(s.dueCents, 449369, reason: 'Still owed is after expenses');
       expect(s.billedCents, 494200, reason: 'Billed is unchanged');
       expect(s.collectedCents, 0, reason: 'Collected is unchanged');
@@ -164,6 +166,101 @@ void main() {
       expect(s.businessOwes, isEmpty);
       expect(s.customersOwing.single.key, c.key);
       expect(s.owing.single.id, 'abd-car');
+    });
+
+    test('Keren, October: each expense by its line, earlier months add up', () {
+      final s = parkingMonthSummary(
+        [abdoulayeCar],
+        '2026-10',
+        nov1,
+        const [],
+        ParkingMonthStaffExpenses(
+          entries: [
+            for (final (i, cents) in [5000, 4500, 4276, 4000, 3500].indexed)
+              {
+                'id': 's$i',
+                'paidByStaffId': 'abd',
+                'amountCents': cents,
+                'month': '2026-09',
+                'lineId': 'groc',
+                'spentAt': Timestamp.fromDate(at('2026-09-1$i')),
+              },
+            {
+              'id': 'o1',
+              'paidByStaffId': 'abd',
+              'amountCents': 8999,
+              'month': '2026-10',
+              'lineId': 'groc',
+              'note': 'tissu, cups',
+              'spentAt': Timestamp.fromDate(at('2026-10-02')),
+            },
+            {
+              'id': 'o2',
+              'paidByStaffId': 'abd',
+              'amountCents': 6250,
+              'month': '2026-10',
+              'lineId': 'abd-line',
+              'spentAt': Timestamp.fromDate(at('2026-10-09')),
+            },
+            {
+              'id': 'o3',
+              'paidByStaffId': 'abd',
+              'amountCents': 4806,
+              'month': '2026-10',
+              'lineId': 'groc',
+              'spentAt': Timestamp.fromDate(at('2026-10-16')),
+            },
+            {
+              'id': 'o4',
+              'paidByStaffId': 'abd',
+              'amountCents': 3500,
+              'month': '2026-10',
+              'spentAt': Timestamp.fromDate(at('2026-10-23')),
+            },
+          ],
+          lines: const [
+            {'id': 'groc', 'label': 'grosseries'},
+            {'id': 'abd-line', 'label': 'abdoulaye sow'},
+          ],
+          links: abdoulayeExpenses.links,
+          staffNames: abdoulayeExpenses.staffNames,
+        ),
+      );
+      final c = s.customers.single;
+      expect(c.expenseLines.map((l) => l.label), [
+        'grosseries · tissu, cups',
+        'abdoulaye sow',
+        'grosseries',
+        '',
+      ]);
+      final listed = c.expenseLines.fold<int>(0, (t, l) => t + l.amountCents);
+      expect(listed, 23555);
+      expect(c.earlierExpenseCents, 21276);
+      expect(listed + c.earlierExpenseCents, c.expenseCreditCents);
+      expect(c.expenseCreditCents, 44831);
+      expect(c.dueCents, 449369);
+      final text = parkingMonthTextWithExpenses(
+        parkingMonthCustomerText(c, 'Keren Auto Sales'),
+        c,
+        title: 'Expenses you paid for the lot',
+        less: 'Less expenses',
+        lotExpense: 'Lot expense',
+        earlier: 'Expenses from earlier months',
+      );
+      expect(
+        text,
+        contains(
+          'Oct 2, 2026 · grosseries · tissu, cups · Abdoulaye Sow — \$89.99\n'
+          'Oct 9, 2026 · abdoulaye sow · Abdoulaye Sow — \$62.50\n'
+          'Oct 16, 2026 · grosseries · Abdoulaye Sow — \$48.06\n'
+          'Oct 23, 2026 · Lot expense · Abdoulaye Sow — \$35.00\n'
+          'Expenses from earlier months — \$212.76\n\n',
+        ),
+      );
+      expect(
+        text,
+        endsWith('Less expenses — -\$448.31\nBALANCE DUE: \$4,493.69'),
+      );
     });
 
     test('Mark all paid records only what is left after expenses', () {
@@ -272,13 +369,15 @@ void main() {
         title: 'Expenses you paid for the lot',
         less: 'Less expenses',
         lotExpense: 'Lot expense',
+        earlier: 'Expenses from earlier months',
       );
       expect(text, startsWith(base.substring(0, base.lastIndexOf('\n\n'))));
       expect(
         text,
         contains(
           '\n\nExpenses you paid for the lot\n'
-          'Oct 3, 2026 · Snow salt · Abdoulaye Sow — \$248.31\n\n'
+          'Oct 3, 2026 · Snow salt · Abdoulaye Sow — \$248.31\n'
+          'Expenses from earlier months — \$200.00\n\n'
           'Total for October — \$4,942.00',
         ),
       );
@@ -300,6 +399,7 @@ void main() {
           title: 't',
           less: 'l',
           lotExpense: 'x',
+          earlier: 'e',
         ),
         plainText,
       );
@@ -373,6 +473,7 @@ void main() {
       for (final spec in [
         lotExpenseEntriesAllSpec('keren'),
         staffExpenseRepaymentsSpec('keren'),
+        lotExpenseLinesSpec('keren'),
       ]) {
         expect(spec.businessId, 'keren');
         expect(spec.filters.every((f) => f.op == QueryFilterOp.equal), isTrue);
@@ -383,6 +484,7 @@ void main() {
       ).readAsStringSync();
       expect(screen, contains('lotExpenseEntriesAllSpec(widget.businessId)'));
       expect(screen, contains('staffExpenseRepaymentsSpec(widget.businessId)'));
+      expect(screen, contains('lotExpenseLinesSpec(widget.businessId)'));
       expect(screen, contains('_creditSafety = Timer('));
     },
   );

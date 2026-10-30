@@ -605,14 +605,19 @@ function parkingMonthCustomerText(customer, businessName) {
     }
   }
   // A linked staff member's lot expenses (docs/STAFF_EXPENSE_CREDIT.md):
-  // this month's, then what came off the bill in all. Only on a netted
-  // customer (expenseCreditCents > 0); every other bill reads as before.
+  // this month's, then the earlier months' part of the credit, then what
+  // came off the bill in all. Only on a netted customer
+  // (expenseCreditCents > 0); every other bill reads as before.
   const credited = (Number(c.expenseCreditCents) || 0) > 0;
-  if (credited && (c.expenseLines || []).length) {
+  const earlier = credited ? Number(c.earlierExpenseCents) || 0 : 0;
+  if (credited && ((c.expenseLines || []).length || earlier > 0)) {
     lines.push("", "Expenses you paid for the lot");
-    for (const l of c.expenseLines) {
+    for (const l of c.expenseLines || []) {
       lines.push(`${[l.date ? dayLabel(l.date) : "", l.label || "Expense"]
           .filter(Boolean).join(" · ")} — -${moneyText(l.amountCents)}`);
+    }
+    if (earlier > 0) {
+      lines.push(`Expenses from earlier months — -${moneyText(earlier)}`);
     }
   }
   lines.push("", `Total for ${month} — ${moneyText(c.monthCents)}`);
