@@ -155,7 +155,10 @@ describe("carrier polling is bounded", () => {
 
 describe("scheduled sweeps filter and order in the query", () => {
   it("month-end reads only the month", () => {
-    const fn = block("async function notifyParkingMonthEndFor(");
+    // The reads live in one helper the 1st's push and the invoices share.
+    assert.match(block("async function notifyParkingMonthEndFor("),
+        /await parkingMonthEndData\(db, businessDoc, monthKey, now\)/);
+    const fn = block("async function parkingMonthEndData(");
     assert.match(fn, /where\("occupancyEndMs", ">=", bounds\.startMs\)/);
     assert.match(fn, /where\("paymentStatus", "!=", "succeeded"\)/);
     assert.ok(!fn.includes("collection(\"parkedCars\")" +

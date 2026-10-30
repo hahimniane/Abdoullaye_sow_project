@@ -425,6 +425,13 @@ service firebase.storage {
       allow read, write: if false;
     }
 
+    // Monthly invoice PDFs of parking customers (docs/PARKING_INVOICES.md):
+    // written and served by the server only (the /d invoicePdf link,
+    // signed). No client, staff or admin reads or writes them.
+    match /parkingInvoices/{allPaths=**} {
+      allow read, write: if false;
+    }
+
     // Optional: allow read-only access for other files if needed
     match /{allPaths=**} {
       allow read: if false;

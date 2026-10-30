@@ -560,6 +560,9 @@ describe("the parking templates", () => {
     amountEn: "$30.00", amountFr: "30,00 $",
     paidTotalEn: "$60.00", paidTotalFr: "60,00 $",
     balanceEn: "Balance owed: $40.00", balanceFr: "Solde à payer : 40,00 $",
+    monthEn: "October 2026", monthFr: "octobre 2026",
+    dueEn: "$45.00", dueFr: "45,00 $",
+    paymentInstructions: "Pay at the office, or Zelle 347-559-6214.",
     documentLink: "https://us-central1-p.cloudfunctions.net/parkingDocument" +
       "?view=receiptPdf&t=tok&p=p_1&e=1&s=sig",
     documentFilename: "Receipt PK-K7M4P2 Oct 29.pdf",
@@ -570,10 +573,10 @@ describe("the parking templates", () => {
     parameters: [{type: "text", text: "PK-K7M4P2"}]};
   const text = (value) => ({type: "text", text: value});
 
-  it("names the three templates, bilingual and registered under en", () => {
+  it("names the four templates, bilingual and registered under en", () => {
     assert.deepEqual(Object.values(PARKING_TEMPLATE), [
       "parking_parked_2lang", "parking_receipt_2lang",
-      "parking_welcome_2lang"]);
+      "parking_welcome_2lang", "parking_invoice_2lang"]);
     for (const name of Object.values(PARKING_TEMPLATE)) {
       assert.equal(message(name).template.language.code, "en");
       assert.equal(message(name).to, "13475550199");
@@ -601,7 +604,9 @@ describe("the parking templates", () => {
     assert.equal(PARKING_TEMPLATE_VARIABLES.parking_receipt_2lang.length,
         12);
     assert.deepEqual(PARKING_TEMPLATE_SHAPE, {
-      parking_receipt_2lang: {header: "document", buttons: "url"}});
+      parking_receipt_2lang: {header: "document", buttons: "url"},
+      parking_invoice_2lang: {header: "document", buttons: "url",
+        documentName: "Invoice.pdf"}});
     assert.deepEqual(message("parking_receipt_2lang").template.components, [
       {type: "header", parameters: [{type: "document", document: {
         link: PARKING.documentLink,
@@ -622,6 +627,53 @@ describe("the parking templates", () => {
     const header = message("parking_receipt_2lang",
         {...PARKING, documentFilename: " "}).template.components[0];
     assert.equal(header.parameters[0].document.filename, "Receipt.pdf");
+  });
+
+  it("fills parking_invoice_2lang: a document header, 9 variables, the " +
+      "month in both languages, how to pay", () => {
+    assert.equal(PARKING_TEMPLATE_VARIABLES.parking_invoice_2lang.length, 9);
+    // 1 name, 2 business, 3 month EN, 4 due EN, 5 business, 6 month FR,
+    // 7 due FR, 8 how to pay, 9 business phone.
+    assert.deepEqual(PARKING_TEMPLATE_VARIABLES.parking_invoice_2lang, [
+      "name", "business", "monthEn", "dueEn", "business", "monthFr",
+      "dueFr", "paymentInstructions", "businessPhone"]);
+    const values = {...PARKING, documentFilename:
+      "Invoice INV-202610-1234-1.pdf"};
+    assert.deepEqual(message("parking_invoice_2lang", values)
+        .template.components, [
+      {type: "header", parameters: [{type: "document", document: {
+        link: PARKING.documentLink,
+        filename: "Invoice INV-202610-1234-1.pdf"}}]},
+      {type: "body", parameters: [
+        text("Alimou Barry"),
+        text("Dala Parking"), text("October 2026"), text("$45.00"),
+        text("Dala Parking"), text("octobre 2026"), text("45,00 $"),
+        text("Pay at the office, or Zelle 347-559-6214."),
+        text("+13475550100"),
+      ]},
+      tracking,
+    ]);
+  });
+
+  it("names the invoice file when it is not given one, and keeps the " +
+      "receipt's name", () => {
+    const header = (template) => message(template,
+        {...PARKING, documentFilename: " "}).template.components[0]
+        .parameters[0].document.filename;
+    assert.equal(header("parking_invoice_2lang"), "Invoice.pdf");
+    assert.equal(header("parking_receipt_2lang"), "Receipt.pdf");
+  });
+
+  it("sends a dash for missing payment instructions, and cleans them into " +
+      "one line", () => {
+    const body = (instructions) => message("parking_invoice_2lang",
+        {...PARKING, paymentInstructions: instructions})
+        .template.components[1].parameters[7].text;
+    assert.equal(body(""), "—");
+    assert.equal(body(undefined), "—");
+    assert.equal(body("Zelle\n347-559-6214\n\n(Keren)"),
+        "Zelle 347-559-6214 (Keren)");
+    assert.equal(body("x".repeat(400)).length, 300);
   });
 
   it("fills parking_welcome_2lang: 6 variables", () => {

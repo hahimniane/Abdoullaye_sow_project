@@ -739,6 +739,16 @@ service cloud.firestore {
         canManageBusiness(request.auth.uid, resource.data.businessId);
       allow write: if false;
     }
+    // One document per business and month for the monthly parking invoices
+    // (docs/PARKING_INVOICES.md): ready, sending or sent, with the counts.
+    // Server-written only; the business's owner and staff read it (it also
+    // holds the secret the invoice PDF links are signed with, which the
+    // same people can already read on each parked car).
+    match /parkingInvoiceRuns/{runId} {
+      allow read: if request.auth != null &&
+        canManageBusiness(request.auth.uid, resource.data.businessId);
+      allow write: if false;
+    }
     match /containerLines/{lineId} {
       allow read: if lotLedgerRead(resource.data.businessId);
       allow write: if false;

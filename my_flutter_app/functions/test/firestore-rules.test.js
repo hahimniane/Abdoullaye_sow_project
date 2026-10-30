@@ -4610,3 +4610,88 @@ describe("parking WhatsApp rules", () => {
     }
   });
 });
+
+// Monthly parking invoices (docs/PARKING_INVOICES.md §2): the month's run is
+// the business's to read and the server's alone to write; the invoice PDFs
+// in Storage are nobody's but the server's.
+describe("parking invoice rules", () => {
+  async function seedRuns() {
+    const {doc, setDoc} = require("firebase/firestore");
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, "parkingInvoiceRuns/biz_a_2026-10"), {
+        businessId: "biz_a", monthKey: "2026-10", status: "ready",
+        recipients: 4, totalDueCents: 12000, documentToken: "secret"});
+      await setDoc(doc(db, "parkingInvoiceRuns/biz_b_2026-10"), {
+        businessId: "biz_b", monthKey: "2026-10", status: "sent"});
+    });
+  }
+
+  it("lets the lot's owner and staff read its runs, as a query", async () => {
+    await seedRuns();
+    const {query, collection, where, getDocs, getDoc, doc} =
+        require("firebase/firestore");
+    for (const uid of ["owner-a", "staff-parking-a", "super-admin"]) {
+      const db = firestoreFor(uid);
+      await assertSucceeds(getDoc(doc(db, "parkingInvoiceRuns/biz_a_2026-10")));
+      const rows = await assertSucceeds(getDocs(query(
+          collection(db, "parkingInvoiceRuns"),
+          where("businessId", "==", "biz_a"),
+          where("monthKey", "==", "2026-10"))));
+      assert.equal(rows.size, 1, uid);
+    }
+  });
+
+  it("keeps another lot's runs, customers and the signed-out out",
+      async () => {
+        await seedRuns();
+        const {query, collection, where, getDocs, getDoc, doc} =
+            require("firebase/firestore");
+        for (const uid of ["owner-b", "staff-transport-b", "customer-owner",
+          "support-admin", null]) {
+          const db = firestoreFor(uid);
+          await assertFails(getDoc(doc(db,
+              "parkingInvoiceRuns/biz_a_2026-10")));
+          await assertFails(getDocs(query(
+              collection(db, "parkingInvoiceRuns"),
+              where("businessId", "==", "biz_a"))));
+        }
+        await assertFails(getDocs(query(collection(firestoreFor("owner-a"),
+            "parkingInvoiceRuns"))));
+      });
+
+  it("never lets any client write or delete a run", async () => {
+    await seedRuns();
+    const {doc, setDoc, updateDoc, deleteDoc} = require("firebase/firestore");
+    for (const uid of ["owner-a", "staff-parking-a", "super-admin",
+      "customer-owner", null]) {
+      const db = firestoreFor(uid);
+      await assertFails(setDoc(doc(db, "parkingInvoiceRuns/forged"),
+          {businessId: "biz_a", status: "sent"}));
+      await assertFails(updateDoc(doc(db, "parkingInvoiceRuns/biz_a_2026-10"),
+          {status: "sent"}));
+      await assertFails(deleteDoc(doc(db,
+          "parkingInvoiceRuns/biz_a_2026-10")));
+    }
+  });
+
+  it("keeps the invoice PDFs from every client, read and write", async () => {
+    const path = "parkingInvoices/biz_a/2026-10/12015551234.pdf";
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await context.storage().ref(path).put(
+          Buffer.from("%PDF-1.4 invoice"), {contentType: "application/pdf"});
+    });
+    for (const uid of ["owner-a", "staff-parking-a", "super-admin",
+      "platform-admin", "customer-owner", null]) {
+      const storage = storageFor(uid);
+      await assertFails(storage.ref(path).getMetadata());
+      await assertFails(storage.ref(path).getDownloadURL());
+      await assertFails(storage.ref(path).put(Buffer.from("%PDF-1.4 x"),
+          {contentType: "application/pdf"}));
+      await assertFails(storage.ref(
+          "parkingInvoices/biz_a/2026-10/12015550000.pdf").put(
+          Buffer.from("%PDF-1.4 x"), {contentType: "application/pdf"}));
+      await assertFails(storage.ref(path).delete());
+    }
+  });
+});

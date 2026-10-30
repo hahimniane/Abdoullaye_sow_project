@@ -249,6 +249,54 @@ function receiptLinkValid(query, token, nowMs) {
 }
 
 /**
+ * What an invoice link signs in the path's place (the "invoice:" prefix keeps
+ * a receipt's or a photo's signature from ever opening an invoice).
+ * @param {string} phoneDigits The customer's number, digits only.
+ * @return {string}
+ */
+function invoiceSigningPath(phoneDigits) {
+  return `invoice:${String(phoneDigits || "")}`;
+}
+
+/**
+ * A time-limited link to one customer's monthly invoice PDF
+ * (docs/PARKING_INVOICES.md §2), served by the /d document endpoint
+ * (view=invoicePdf). Signed like a receipt link, with the month's run
+ * token (`parkingInvoiceRuns.{id}.documentToken`), the customer's number
+ * and the expiry, so a link opens that one customer's invoice only.
+ * @param {object} o `{base, token, phoneDigits, expiresMs}`
+ * @return {string}
+ */
+function invoiceLink(o) {
+  const expires = Math.floor(Number(o.expiresMs));
+  const sig = photoSignature(o.token, invoiceSigningPath(o.phoneDigits),
+      expires);
+  const q = new URLSearchParams({
+    view: "invoicePdf", t: String(o.token), p: String(o.phoneDigits),
+    e: String(expires), s: sig,
+  });
+  return `${o.base}?${q.toString()}`;
+}
+
+/**
+ * Whether a /d?view=invoicePdf query is genuine and still valid.
+ * @param {object} query `{t, p, e, s}`
+ * @param {string} token The run's stored document token.
+ * @param {number} nowMs
+ * @return {boolean}
+ */
+function invoiceLinkValid(query, token, nowMs) {
+  const expires = Number(query?.e);
+  if (!token || !Number.isFinite(expires) || expires <= nowMs) return false;
+  const digits = String(query?.p || "");
+  if (!/^\d{6,20}$/.test(digits)) return false;
+  const expected = photoSignature(token, invoiceSigningPath(digits), expires);
+  const given = String(query?.s || "");
+  if (given.length !== expected.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(given), Buffer.from(expected));
+}
+
+/**
  * Four digits, never 0000, from random bytes the caller supplies.
  * @param {Buffer|Uint8Array} bytes At least 2 bytes.
  * @return {string}
@@ -551,6 +599,8 @@ module.exports = {
   photoPathParts,
   photoRequirementRefusal,
   photoSignature,
+  invoiceLink,
+  invoiceLinkValid,
   receiptLink,
   receiptLinkValid,
   receiptSigningPath,

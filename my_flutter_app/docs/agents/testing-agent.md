@@ -721,3 +721,11 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   service timeout. Every "Received by" picker builds its options with
   `receivedByOptions` (Business account first), and a validator that checks
   `staffIds` must accept `business_account`.
+- Time-dependent server suites (the 3rd-of-the-month invoice send,
+  `test/parking-invoices-callables.test.js`) freeze the clock with node:test's
+  mock Date: `mock.timers.enable({apis: ["Date"], now})` once in `before`, then
+  `mock.timers.setTime(ms)` to move it, `mock.timers.reset()` in `after`. It
+  works against the Firestore/Auth/Storage emulators (timers are untouched), so
+  a scheduled function's `new Date()` can be set to 11:59:59 pm vs midnight New
+  York without an injected clock or a test-only export. Prove a guard like this
+  by deleting it once and watching the test fail (the 3rd check was).

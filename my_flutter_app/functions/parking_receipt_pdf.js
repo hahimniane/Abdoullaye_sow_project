@@ -233,28 +233,33 @@ async function logoWithin(fetchLogo, url, timeoutMs) {
 }
 
 /**
- * Draws a receipt.
+ * Draws a document on the shared page (Letter, 48 pt margins, the logo
+ * fetched under a hard deadline): the one place a PDF of this family is
+ * started, so the receipt and the invoice cannot drift apart.
  *
- * @param {object} model From receiptModel.
+ * @param {object} head {title, author, logoUrl}: the PDF's info and the
+ *   logo to fetch.
+ * @param {function(object, ?Buffer): void} paint Draws on the PDFDocument,
+ *   given the logo bytes (or null).
  * @param {object} [options] {compress}: `compress: false` leaves the page
  *   content readable (tests). {fetchLogo(url)}: replaces the logo download.
  *   {logoTimeoutMs}: the logo deadline (3 seconds).
  * @return {Promise<Buffer>} The PDF.
  */
-async function renderReceiptPdf(model, {
+async function renderPdf(head, paint, {
   compress = true, fetchLogo = fetchLogoBytes,
   logoTimeoutMs = LOGO_TIMEOUT_MS,
 } = {}) {
-  const logo = model.logoUrl ?
-    await logoWithin(fetchLogo, model.logoUrl, logoTimeoutMs) : null;
+  const logo = head.logoUrl ?
+    await logoWithin(fetchLogo, head.logoUrl, logoTimeoutMs) : null;
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
       size: "LETTER",
       margin: 48,
       compress,
       info: {
-        Title: `Receipt ${model.reference}`,
-        Author: model.businessName,
+        Title: head.title,
+        Author: head.author,
         Producer: "Laawol Digital",
       },
     });
@@ -263,12 +268,27 @@ async function renderReceiptPdf(model, {
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
     try {
-      draw(doc, model, logo);
+      paint(doc, logo);
       doc.end();
     } catch (error) {
       reject(error);
     }
   });
+}
+
+/**
+ * Draws a receipt.
+ *
+ * @param {object} model From receiptModel.
+ * @param {object} [options] See renderPdf.
+ * @return {Promise<Buffer>} The PDF.
+ */
+function renderReceiptPdf(model, options) {
+  return renderPdf({
+    title: `Receipt ${model.reference}`,
+    author: model.businessName,
+    logoUrl: model.logoUrl,
+  }, (doc, logo) => draw(doc, model, logo), options);
 }
 
 /**
@@ -304,6 +324,129 @@ function drawLogo(doc, model, logo, x, y, size) {
 }
 
 /**
+ * The header every document of the family starts with: the business's logo,
+ * name, address and contact on the left, the document's title and number on
+ * the right, then the thin teal rule.
+ *
+ * @param {object} doc A PDFDocument.
+ * @param {object} model {businessName, businessAddress, businessContact,
+ *   title, reference}.
+ * @param {?Buffer} logo The logo bytes, if any.
+ * @return {number} The y just below the rule.
+ */
+function drawHeader(doc, model, logo) {
+  const left = doc.page.margins.left;
+  const width = doc.page.width - left - doc.page.margins.right;
+  const right = left + width;
+  const top = doc.page.margins.top;
+
+  // The business on the left, the document on the right.
+  const logoSize = 46;
+  drawLogo(doc, model, logo, left, top, logoSize);
+  const brandX = left + logoSize + 12;
+  const titleWidth = 210;
+  const brandWidth = width - logoSize - 12 - titleWidth - 12;
+  let by = top + 2;
+  doc.font("Helvetica-Bold").fontSize(15).fillColor(COLORS.ink)
+      .text(model.businessName, brandX, by, {width: brandWidth});
+  by = doc.y + 1;
+  for (const line of [model.businessAddress, model.businessContact]) {
+    if (!line) continue;
+    doc.font("Helvetica").fontSize(9).fillColor(COLORS.muted)
+        .text(line, brandX, by, {width: brandWidth});
+    by = doc.y + 1;
+  }
+  doc.font("Helvetica-Bold").fontSize(19).fillColor(COLORS.teal)
+      .text(model.title, right - titleWidth, top + 2,
+          {width: titleWidth, align: "right"});
+  doc.font("Helvetica").fontSize(10).fillColor(COLORS.muted)
+      .text(model.reference, right - titleWidth, doc.y + 3,
+          {width: titleWidth, align: "right"});
+  const y = Math.max(by, doc.y, top + logoSize) + 14;
+  doc.moveTo(left, y).lineTo(right, y)
+      .lineWidth(2).strokeColor(COLORS.teal).stroke();
+  return y;
+}
+
+/**
+ * The status pill under the header.
+ *
+ * @param {object} doc A PDFDocument.
+ * @param {number} y Where the pill starts (below the rule).
+ * @param {{label: string, paidInFull: boolean}} status The pill.
+ * @return {number} The y below it, ready for the next block.
+ */
+function drawStatusPill(doc, y, status) {
+  const left = doc.page.margins.left;
+  const top = y + 18;
+  const paid = status.paidInFull;
+  doc.font("Helvetica-Bold").fontSize(10);
+  const pillWidth = doc.widthOfString(status.label) + 28;
+  doc.roundedRect(left, top, pillWidth, 22, 11)
+      .fill(paid ? COLORS.paidBg : COLORS.dueBg);
+  doc.fillColor(paid ? COLORS.paidInk : COLORS.dueInk)
+      .text(status.label, left, top + 6, {width: pillWidth,
+        align: "center", lineBreak: false});
+  return top + 22 + 12;
+}
+
+/**
+ * Label / value rows with a hairline under each.
+ *
+ * @param {object} doc A PDFDocument.
+ * @param {Array<{label: string, value: string}>} rows The rows.
+ * @param {number} y Where the first row starts.
+ * @return {number} The y below the last hairline.
+ */
+function drawRows(doc, rows, y) {
+  const left = doc.page.margins.left;
+  const width = doc.page.width - left - doc.page.margins.right;
+  const right = left + width;
+  const labelWidth = 250;
+  const valueX = left + labelWidth + 12;
+  const valueWidth = right - valueX;
+  for (const row of rows) {
+    doc.font("Helvetica-Bold").fontSize(9.5);
+    const labelHeight = doc.heightOfString(row.label, {width: labelWidth});
+    doc.font("Helvetica").fontSize(11);
+    const valueHeight = doc.heightOfString(row.value, {width: valueWidth});
+    const height = Math.max(labelHeight, valueHeight);
+    doc.font("Helvetica-Bold").fontSize(9.5).fillColor(COLORS.muted)
+        .text(row.label, left, y + 8 + (height - labelHeight) / 2,
+            {width: labelWidth});
+    doc.font("Helvetica").fontSize(11).fillColor(COLORS.ink)
+        .text(row.value, valueX, y + 7 + (height - valueHeight) / 2,
+            {width: valueWidth, align: "right"});
+    y += height + 15;
+    doc.moveTo(left, y).lineTo(right, y)
+        .lineWidth(0.75).strokeColor(COLORS.hairline).stroke();
+  }
+  return y;
+}
+
+/**
+ * The footer: a hairline, then the notes.
+ *
+ * @param {object} doc A PDFDocument.
+ * @param {string[]} lines The notes.
+ * @param {number} y Where the hairline goes.
+ * @return {number} The y below the last note.
+ */
+function drawFooter(doc, lines, y) {
+  const left = doc.page.margins.left;
+  const width = doc.page.width - left - doc.page.margins.right;
+  doc.moveTo(left, y).lineTo(left + width, y)
+      .lineWidth(0.75).strokeColor(COLORS.hairline).stroke();
+  y += 12;
+  doc.font("Helvetica").fontSize(9).fillColor(COLORS.muted);
+  for (const line of lines) {
+    doc.text(line, left, y, {width});
+    y = doc.y + 3;
+  }
+  return y;
+}
+
+/**
  * @param {object} doc A PDFDocument.
  * @param {object} model From receiptModel.
  * @param {?Buffer} logo The logo bytes, if any.
@@ -311,69 +454,12 @@ function drawLogo(doc, model, logo, x, y, size) {
 function draw(doc, model, logo) {
   const left = doc.page.margins.left;
   const width = doc.page.width - left - doc.page.margins.right;
-  const right = left + width;
-  const top = doc.page.margins.top;
   const ink = COLORS.ink;
   const muted = COLORS.muted;
 
-  // Header: the business on the left, the document on the right.
-  const logoSize = 46;
-  drawLogo(doc, model, logo, left, top, logoSize);
-  const brandX = left + logoSize + 12;
-  const titleWidth = 210;
-  const brandWidth = width - logoSize - 12 - titleWidth - 12;
-  let by = top + 2;
-  doc.font("Helvetica-Bold").fontSize(15).fillColor(ink)
-      .text(model.businessName, brandX, by, {width: brandWidth});
-  by = doc.y + 1;
-  for (const line of [model.businessAddress, model.businessContact]) {
-    if (!line) continue;
-    doc.font("Helvetica").fontSize(9).fillColor(muted)
-        .text(line, brandX, by, {width: brandWidth});
-    by = doc.y + 1;
-  }
-  doc.font("Helvetica-Bold").fontSize(19).fillColor(COLORS.teal)
-      .text(model.title, right - titleWidth, top + 2,
-          {width: titleWidth, align: "right"});
-  doc.font("Helvetica").fontSize(10).fillColor(muted)
-      .text(model.reference, right - titleWidth, doc.y + 3,
-          {width: titleWidth, align: "right"});
-  let y = Math.max(by, doc.y, top + logoSize) + 14;
-  doc.moveTo(left, y).lineTo(right, y)
-      .lineWidth(2).strokeColor(COLORS.teal).stroke();
-
-  // The status pill.
-  y += 18;
-  const paid = model.status.paidInFull;
-  doc.font("Helvetica-Bold").fontSize(10);
-  const pillWidth = doc.widthOfString(model.status.label) + 28;
-  doc.roundedRect(left, y, pillWidth, 22, 11)
-      .fill(paid ? COLORS.paidBg : COLORS.dueBg);
-  doc.fillColor(paid ? COLORS.paidInk : COLORS.dueInk)
-      .text(model.status.label, left, y + 6, {width: pillWidth,
-        align: "center", lineBreak: false});
-  y += 22 + 12;
-
-  // Label / value rows with hairlines.
-  const labelWidth = 250;
-  const valueX = left + labelWidth + 12;
-  const valueWidth = right - valueX;
-  for (const row of model.rows) {
-    doc.font("Helvetica-Bold").fontSize(9.5);
-    const labelHeight = doc.heightOfString(row.label, {width: labelWidth});
-    doc.font("Helvetica").fontSize(11);
-    const valueHeight = doc.heightOfString(row.value, {width: valueWidth});
-    const height = Math.max(labelHeight, valueHeight);
-    doc.font("Helvetica-Bold").fontSize(9.5).fillColor(muted)
-        .text(row.label, left, y + 8 + (height - labelHeight) / 2,
-            {width: labelWidth});
-    doc.font("Helvetica").fontSize(11).fillColor(ink)
-        .text(row.value, valueX, y + 7 + (height - valueHeight) / 2,
-            {width: valueWidth, align: "right"});
-    y += height + 15;
-    doc.moveTo(left, y).lineTo(right, y)
-        .lineWidth(0.75).strokeColor(COLORS.hairline).stroke();
-  }
+  let y = drawHeader(doc, model, logo);
+  y = drawStatusPill(doc, y, model.status);
+  y = drawRows(doc, model.rows, y);
 
   // The shaded amount box.
   y += 22;
@@ -400,23 +486,22 @@ function draw(doc, model, logo) {
   }
   y += boxHeight + 28;
 
-  // Footer: a hairline, the thank-you and who issued it.
-  doc.moveTo(left, y).lineTo(right, y)
-      .lineWidth(0.75).strokeColor(COLORS.hairline).stroke();
-  y += 12;
-  doc.font("Helvetica").fontSize(9).fillColor(muted);
-  for (const line of model.footer) {
-    doc.text(line, left, y, {width});
-    y = doc.y + 3;
-  }
+  drawFooter(doc, model.footer, y);
 }
 
 module.exports = {
   METHOD_LABEL,
+  drawFooter,
+  drawHeader,
+  drawLogo,
+  drawRows,
+  drawStatusPill,
   fetchLogoBytes,
   money,
   receiptModel,
+  renderPdf,
   renderReceiptPdf,
   shortDay,
   usDate,
+  usDayKey,
 };

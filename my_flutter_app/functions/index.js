@@ -242,6 +242,9 @@ const {
 // Parking customers on WhatsApp (docs/PARKING_WHATSAPP.md).
 const parkingWhatsApp = require("./parking_whatsapp");
 const parkingReceiptPdf = require("./parking_receipt_pdf");
+// Monthly parking invoices on WhatsApp (docs/PARKING_INVOICES.md).
+const parkingInvoices = require("./parking_invoices");
+const parkingInvoicePdf = require("./parking_invoice_pdf");
 const {parkingBalanceNow} = require("./parking_month_statement");
 const {
   buildOpenBarrelMirrorPayload,
@@ -9344,15 +9347,28 @@ exports.chargeMonthlySubscriptions = onSchedule(
     },
 );
 
-// Settling the books: on the 1st, every lot whose cars still owe for the
-// month just ended hears about it once - the owner and the staff who work
-// parking - with a tap straight to that month's bills. A month nobody owes
-// on stays quiet. The bills themselves are worked out live from the cars
-// (parking_month_statement.js); nothing is stored here.
-async function notifyParkingMonthEndFor(db, businessDoc, monthKey, now) {
+/**
+ * The month's bills as the month-end report works them out: the cars and
+ * ledger activities that can land on the month (four narrow queries, not the
+ * lot's whole history) and the staff expenses to net off their parking bill
+ * (docs/STAFF_EXPENSE_CREDIT.md). Nothing is stored; both the 1st's push and
+ * the invoices are worked out from this.
+ *
+ * @param {object} db Firestore.
+ * @param {object} businessDoc The business's snapshot.
+ * @param {string} monthKey "YYYY-MM".
+ * @param {Date} now The moment the bills are worked out.
+ * @param {boolean} [strict] A failed expenses read throws instead of
+ *   falling back to the bills as they are: a push may round, an invoice a
+ *   customer receives may not overcharge.
+ * @return {Promise<?object>} `{summary, netting, nettingFailed}`, or null
+ *   for a month that is not one. `netting` is null without staff links.
+ */
+async function parkingMonthEndData(db, businessDoc, monthKey, now,
+    strict = false) {
   const businessId = businessDoc.id;
   const bounds = parkingMonthBoundsMs(monthKey);
-  if (!bounds) return {businessId, notified: 0};
+  if (!bounds) return null;
   // Only what can land on this month's bills, not the lot's whole history:
   //  - stays that end on or after the month starts (occupancyEndMs; the
   //    statement drops the ones that start after it);
@@ -9384,11 +9400,11 @@ async function notifyParkingMonthEndFor(db, businessDoc, monthKey, now) {
   const summary = parkingMonthSummary(
       rows(cars), monthKey, now,
       mergeParkingMonthRows(rows(inMonth), rows(unsettled), rows(undated)));
-  // Staff expenses come off their own parking bill (STAFF_EXPENSE_CREDIT.md):
-  // the push counts what is still owed after them. Unlinked lots read
-  // nothing more; a failed read falls back to the bills as they are.
+  // Staff expenses come off their own parking bill (STAFF_EXPENSE_CREDIT.md).
+  // Unlinked lots read nothing more.
   const links = businessDoc.data()?.staffParkingLinks || {};
   let netting = null;
+  let nettingFailed = false;
   if (Object.keys(links).length > 0) {
     try {
       const [entries, repayments] = await Promise.all([
@@ -9400,20 +9416,54 @@ async function notifyParkingMonthEndFor(db, businessDoc, monthKey, now) {
       netting = {entries: rows(entries), repayments: rows(repayments), links,
         monthKey};
     } catch (error) {
+      if (strict) throw error;
+      nettingFailed = true;
       logger.warn("Month-end staff expenses not netted", {businessId,
         error: String(error?.message || error)});
     }
   }
+  return {summary, netting, nettingFailed};
+}
+
+// Settling the books: on the 1st, every lot whose cars still owe for the
+// month just ended hears about it once - the owner and the staff who work
+// parking - with a tap straight to that month's bills. A month nobody owes
+// on stays quiet. The bills themselves are worked out live from the cars
+// (parking_month_statement.js); nothing is stored here, except that a lot
+// with parking messages on gets its month's invoices prepared (a
+// parkingInvoiceRuns document, `ready`) and the owner's push says so
+// (docs/PARKING_INVOICES.md).
+async function notifyParkingMonthEndFor(db, businessDoc, monthKey, now) {
+  const businessId = businessDoc.id;
+  // A failed expenses read falls back to the bills as they are.
+  const data = await parkingMonthEndData(db, businessDoc, monthKey, now);
+  if (!data) return {businessId, notified: 0};
+  const {summary, netting} = data;
   const {customersOwing: owing, dueCents} =
     staffExpenseLedger.monthEndOwing(summary.customers, netting);
-  if (owing === 0) return {businessId, notified: 0};
+  // The month's invoices, prepared for the owner to review. Never lets a
+  // failure here silence the push below.
+  const invoices = await prepareParkingInvoiceRun(db, businessDoc, monthKey,
+      now, data).catch((error) => {
+    logger.warn("Parking invoices not prepared", {businessId, monthKey,
+      error: String(error?.message || error).slice(0, 300)});
+    return null;
+  });
+  const invoicesText = invoices ? parkingInvoices.invoicesReadyText(
+      monthKey, invoices.count, invoices.dueCents) : "";
+  if (owing === 0 && !invoicesText) return {businessId, notified: 0};
   const recipients = new Set();
+  const owners = new Set();
   const ownerUid = String(businessDoc.data()?.ownerUid || "").trim();
-  if (ownerUid) recipients.add(ownerUid);
+  if (ownerUid) {
+    recipients.add(ownerUid);
+    owners.add(ownerUid);
+  }
   const team = await db.collection("users")
       .where("businessId", "==", businessId).get();
   for (const doc of team.docs) {
     const user = {id: doc.id, ...doc.data()};
+    if (user.role === "businessOwner") owners.add(doc.id);
     if (user.role === "businessOwner" ||
         (user.role === "staff" && hasBusinessPermission(user, "parking"))) {
       recipients.add(doc.id);
@@ -9423,17 +9473,26 @@ async function notifyParkingMonthEndFor(db, businessDoc, monthKey, now) {
   // Counted by customer (one per phone), the way the bills go out.
   const owingText = owing === 1 ? "1 customer still owes" :
     `${owing} customers still owe`;
-  await Promise.all([...recipients].map((uid) =>
-    safeSendPreferenceNotification({
+  const billsText = owing > 0 ?
+    `${owingText} ${parkingMoneyText(dueCents)}. Send their bills.` : "";
+  const pushData = (extra) => ({type: "parking_month_end", businessId,
+    monthKey, ...extra});
+  // The invoices are the owner's to review and send: only they hear of
+  // them. A month nobody owes on but with invoices ready tells only them.
+  const targets = owing > 0 ? recipients : owners;
+  await Promise.all([...targets].map((uid) => {
+    const forOwner = owners.has(uid) && Boolean(invoicesText);
+    return safeSendPreferenceNotification({
       uid,
       preferenceKey: "businessActivity",
-      title: `${month} is over`,
-      body: `${owingText} ${parkingMoneyText(dueCents)}. ` +
-        "Send their bills.",
-      data: {type: "parking_month_end", businessId, monthKey},
-    })));
-  return {businessId, notified: recipients.size,
-    customersOwing: owing, dueCents};
+      title: owing > 0 ? `${month} is over` : `${month}'s invoices are ready`,
+      body: [billsText, forOwner ? invoicesText : ""].filter(Boolean)
+          .join(" "),
+      data: pushData(forOwner ? {invoices: String(invoices.count)} : {}),
+    });
+  }));
+  return {businessId, notified: targets.size,
+    customersOwing: owing, dueCents, invoices: invoices?.count || 0};
 }
 
 exports.notifyParkingMonthEnd = onSchedule(
@@ -14721,6 +14780,609 @@ async function parkingWhatsAppAction(request, uid, action) {
 const PARKING_WHATSAPP_ACTIONS = Object.freeze(
     ["set_parking_whatsapp", "welcome_preview", "welcome_send"]);
 
+// ---------------------------------------------------------------------------
+// Monthly parking invoices on WhatsApp (docs/PARKING_INVOICES.md). The rules
+// of who gets one and what it says live in parking_invoices.js, the drawing
+// in parking_invoice_pdf.js; these are the reads, the sends and the writes.
+// One `parkingInvoiceRuns` document per business and month (ready -> sending
+// -> sent, server-write only) and one `parkingMessages` row per customer per
+// month. The PDF is rendered when the message is sent and kept in Storage
+// (`parkingInvoices/{businessId}/{yyyy-mm}/{phoneDigits}.pdf`, server only):
+// what the customer was sent is what the link shows, whenever it is opened.
+// ---------------------------------------------------------------------------
+
+/**
+ * @param {string} code A parkingInvoices.REFUSAL or a parkingWhatsApp one.
+ * @param {string} [kind] The HttpsError code.
+ * @return {HttpsError} The refusal, with its reason.
+ */
+function parkingInvoicesRefusal(code, kind = "failed-precondition") {
+  return new HttpsError(kind, parkingInvoices.REFUSAL_MESSAGE[code] ||
+    parkingWhatsApp.REFUSAL_MESSAGE[code] || code, {reason: code});
+}
+
+/**
+ * @param {object} db Firestore.
+ * @param {string} businessId The lot.
+ * @param {string} monthKey "YYYY-MM".
+ * @return {object} The month's parkingInvoiceRuns document reference.
+ */
+function parkingInvoiceRunRef(db, businessId, monthKey) {
+  return db.collection("parkingInvoiceRuns")
+      .doc(parkingInvoices.runId(businessId, monthKey));
+}
+
+/**
+ * The month's staff expense netting with what the invoice prints about it:
+ * the linked staff's names and the expense lines' names.
+ *
+ * @param {object} db Firestore.
+ * @param {object} businessDoc The business's snapshot.
+ * @param {object} netting parkingMonthEndData's `netting`.
+ * @return {Promise<object>} The credit invoiceRecipients nets with.
+ */
+async function parkingInvoiceCredit(db, businessDoc, netting) {
+  const businessId = businessDoc.id;
+  const [team, lines] = await Promise.all([
+    db.collection("users").where("businessId", "==", businessId).get(),
+    db.collection("lotExpenseLines").where("businessId", "==", businessId)
+        .get(),
+  ]);
+  const staffNames = {};
+  for (const doc of team.docs) {
+    staffNames[doc.id] = staffDisplayName(doc.data());
+  }
+  const missing = Object.keys(netting.links || {})
+      .filter((id) => !(id in staffNames) && !id.includes("/")).slice(0, 50);
+  if (missing.length > 0) {
+    const docs = await db.getAll(
+        ...missing.map((id) => db.collection("users").doc(id)));
+    docs.forEach((doc, i) => {
+      staffNames[missing[i]] = doc.exists ? staffDisplayName(doc.data()) : "";
+    });
+  }
+  return {...netting, staffNames,
+    lines: lines.docs.map((doc) => ({id: doc.id, ...doc.data()}))};
+}
+
+/**
+ * The month's invoice message rows, each with its id.
+ *
+ * @param {object} db Firestore.
+ * @param {string} businessId The lot.
+ * @param {string} monthKey "YYYY-MM".
+ * @return {Promise<Array<object>>} The rows.
+ */
+async function parkingInvoiceRows(db, businessId, monthKey) {
+  const snap = await db.collection("parkingMessages")
+      .where("businessId", "==", businessId)
+      .where("kind", "==", parkingWhatsApp.KIND.INVOICE)
+      .where("monthKey", "==", monthKey)
+      .get();
+  return snap.docs.map((doc) => ({id: doc.id, ...doc.data()}));
+}
+
+/**
+ * A row's claim older than ten minutes is a send that died.
+ *
+ * @param {object} row A parkingMessages row.
+ * @param {number} nowMs The moment.
+ * @return {boolean} Whether the invoice is sent or being sent right now.
+ */
+function parkingInvoiceHandled(row, nowMs) {
+  if (row?.status === parkingWhatsApp.STATUS.SENT) return true;
+  return row?.status === parkingWhatsApp.STATUS.QUEUED &&
+    nowMs - (Number(row.claimedAtMs) || 0) < parkingInvoices.SENDING_LEASE_MS;
+}
+
+/**
+ * Who gets the month's invoices, from the month-end data.
+ *
+ * @param {object} db Firestore.
+ * @param {object} businessDoc The business's snapshot.
+ * @param {string} monthKey "YYYY-MM".
+ * @param {Date} now The moment.
+ * @param {object} data parkingMonthEndData's answer.
+ * @return {Promise<object>} invoiceRecipients' answer plus the month's
+ *   message `rows`.
+ */
+async function parkingInvoiceBookFrom(db, businessDoc, monthKey, now, data) {
+  const credit = data.netting ?
+    await parkingInvoiceCredit(db, businessDoc, data.netting) : null;
+  const rows = await parkingInvoiceRows(db, businessDoc.id, monthKey);
+  const sent = new Set(rows.filter((row) =>
+    parkingInvoiceHandled(row, now.getTime()))
+      .map((row) => parkingWhatsApp.phoneDigits(row.phone)));
+  const book = parkingInvoices.invoiceRecipients(data.summary, credit, now,
+      {business: businessDoc.data() || {}, sent});
+  return {...book, rows};
+}
+
+/**
+ * Like parkingInvoiceBookFrom, reading the month first - strictly: an
+ * invoice is never worked out from bills whose staff expenses could not be
+ * read.
+ *
+ * @param {object} db Firestore.
+ * @param {object} businessDoc The business's snapshot.
+ * @param {string} monthKey "YYYY-MM".
+ * @param {Date} now The moment.
+ * @return {Promise<object>} See parkingInvoiceBookFrom.
+ */
+async function parkingInvoiceBook(db, businessDoc, monthKey, now) {
+  const data = await parkingMonthEndData(db, businessDoc, monthKey, now,
+      true);
+  if (!data) {
+    throw parkingInvoicesRefusal(parkingInvoices.REFUSAL.MONTH_INVALID);
+  }
+  return parkingInvoiceBookFrom(db, businessDoc, monthKey, now, data);
+}
+
+/**
+ * Makes the month's run, `ready`, when there is none (a second call leaves
+ * the one that is there alone).
+ *
+ * @param {object} db Firestore.
+ * @param {string} businessId The lot.
+ * @param {string} monthKey "YYYY-MM".
+ * @param {object} book parkingInvoiceBookFrom's answer.
+ * @param {number} nowMs The moment.
+ * @return {Promise<object>} `{ref, run, created}`.
+ */
+async function ensureParkingInvoiceRun(db, businessId, monthKey, book, nowMs) {
+  const ref = parkingInvoiceRunRef(db, businessId, monthKey);
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (snap.exists) return {ref, run: snap.data() || {}, created: false};
+    const run = parkingInvoices.newRun({
+      businessId, monthKey, nowMs,
+      recipients: book.recipients.length,
+      totalDueCents: book.totalDueCents,
+      documentToken: crypto.randomBytes(24).toString("base64url"),
+    });
+    tx.create(ref, {...run, createdAt: FirestoreFieldValue.serverTimestamp()});
+    return {ref, run, created: true};
+  });
+}
+
+/**
+ * The 1st's step: a lot with parking messages on gets its month's invoices
+ * prepared for the owner to review - a `ready` run, when anybody is to be
+ * invoiced.
+ *
+ * @param {object} db Firestore.
+ * @param {object} businessDoc The business's snapshot.
+ * @param {string} monthKey "YYYY-MM", the month just ended.
+ * @param {Date} now The moment.
+ * @param {object} data parkingMonthEndData's answer.
+ * @return {Promise<?{count: number, dueCents: number}>} Null when the lot
+ *   has the switch off, or its staff expenses could not be netted.
+ */
+async function prepareParkingInvoiceRun(db, businessDoc, monthKey, now, data) {
+  if (!parkingWhatsApp.parkingWhatsAppEnabled(businessDoc.data()) ||
+      data.nettingFailed) return null;
+  const book = await parkingInvoiceBookFrom(db, businessDoc, monthKey, now,
+      data);
+  if (book.recipients.length === 0) return {count: 0, dueCents: 0};
+  await ensureParkingInvoiceRun(db, businessDoc.id, monthKey, book,
+      now.getTime());
+  return {count: book.recipients.length, dueCents: book.totalDueCents};
+}
+
+/**
+ * Takes the month's run for sending: `ready` (or, for the owner, `sent`)
+ * becomes `sending` in one transaction, so two sends - an owner's tap and
+ * an hourly sweep - never both start. A claim older than ten minutes is a
+ * send that died and may be taken over.
+ *
+ * @param {object} db Firestore.
+ * @param {object} ref The run's reference.
+ * @param {{by: string, nowMs: number, onlyReady: boolean}} args Who sends
+ *   (a uid, or "auto"), the moment, and whether only a `ready` run may be
+ *   taken (the automatic send).
+ * @return {Promise<{run: ?object, reason: string}>} The run as it was, or
+ *   null with why (`missing`, `not_ready`, `sending`).
+ */
+async function claimParkingInvoiceRun(db, ref, {by, nowMs, onlyReady}) {
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return {run: null, reason: "missing"};
+    const run = snap.data() || {};
+    const stale = run.status === parkingInvoices.RUN_STATUS.SENDING &&
+      parkingInvoices.runClaimable(run, nowMs);
+    if (onlyReady && run.status !== parkingInvoices.RUN_STATUS.READY &&
+        !stale) {
+      return {run: null, reason: "not_ready"};
+    }
+    if (!parkingInvoices.runClaimable(run, nowMs)) {
+      return {run: null, reason: "sending"};
+    }
+    const documentToken = run.documentToken ||
+      crypto.randomBytes(24).toString("base64url");
+    tx.update(ref, {
+      status: parkingInvoices.RUN_STATUS.SENDING,
+      sendingAtMs: nowMs,
+      sendingBy: by,
+      documentToken,
+      updatedAt: FirestoreFieldValue.serverTimestamp(),
+    });
+    return {run: {...run, documentToken}, reason: ""};
+  });
+}
+
+/**
+ * One logo download for a whole batch of invoices.
+ *
+ * @return {function(string): Promise<?Buffer>} A logo fetcher that asks
+ *   each address once.
+ */
+function cachedLogoFetcher() {
+  const seen = new Map();
+  return (url) => {
+    if (!seen.has(url)) seen.set(url, parkingReceiptPdf.fetchLogoBytes(url));
+    return seen.get(url);
+  };
+}
+
+/**
+ * Sends one customer's invoice: claims the month's row (an invoice already
+ * sent, or being sent, is left alone; a failed, stopped or skipped one is
+ * tried again), draws the PDF, keeps it in Storage and sends
+ * `parking_invoice_2lang` with a 30-day signed link to it.
+ *
+ * @param {object} db Firestore.
+ * @param {object} args {businessId, business, run, monthKey, recipient, by,
+ *   now, fetchLogo}.
+ * @return {Promise<string>} The row's status, or "already_sent".
+ */
+async function sendParkingInvoice(db, args) {
+  const {businessId, business, run, monthKey, recipient, by, now} = args;
+  const ref = db.collection("parkingMessages").doc(
+      parkingInvoices.messageRowId(businessId, monthKey, recipient.phone));
+  const nowMs = now.getTime();
+  const pdfPath = parkingInvoices.storagePath(businessId, monthKey,
+      recipient.phone);
+  const row = {
+    businessId,
+    parkedCarId: recipient.cars[0]?.id || "",
+    parkedCarIds: recipient.cars.map((car) => car.id),
+    kind: parkingWhatsApp.KIND.INVOICE,
+    template: parkingWhatsApp.PARKING_TEMPLATE.INVOICE,
+    phone: recipient.phone,
+    name: recipient.name,
+    trackingCode: recipient.trackingCode,
+    monthKey,
+    totalDueCents: recipient.totalDueCents,
+    invoiceNumber: recipient.invoiceNumber,
+    pdfPath,
+    status: parkingWhatsApp.STATUS.QUEUED,
+    error: "",
+    sentByUid: by,
+    claimedAtMs: nowMs,
+  };
+  const claimed = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const old = snap.exists ? snap.data() || {} : null;
+    if (old && parkingInvoiceHandled(old, nowMs)) return false;
+    tx.set(ref, {
+      ...row,
+      wamid: "",
+      whatsappMessageId: "",
+      attempts: Math.max(0, Number(old?.attempts) || 0),
+      createdAt: old?.createdAt || FirestoreFieldValue.serverTimestamp(),
+      sentAt: null,
+    });
+    return true;
+  });
+  if (!claimed) return "already_sent";
+  let body;
+  try {
+    const zone = String(business?.packageRequestSettings?.timeZone || "")
+        .trim() || "America/New_York";
+    const model = parkingInvoicePdf.invoiceModel({
+      business, recipient, monthKey, issuedMs: nowMs,
+      paymentInstructions: business.paymentInstructions, timeZone: zone});
+    const bytes = await parkingInvoicePdf.renderInvoicePdf(model,
+        args.fetchLogo ? {fetchLogo: args.fetchLogo} : undefined);
+    const filename = parkingInvoices.invoiceFilename(recipient.invoiceNumber);
+    await requestPhotoBucket().file(pdfPath).save(bytes,
+        {contentType: "application/pdf", resumable: false,
+          metadata: {metadata: {filename}}});
+    const link = packageProof.invoiceLink({
+      base: whatsappPhotoBase(),
+      token: run.documentToken,
+      phoneDigits: recipient.phoneDigits,
+      expiresMs: nowMs + packageProof.PHOTO_LINK_MS,
+    });
+    body = parkingTemplateMessage({
+      template: parkingWhatsApp.PARKING_TEMPLATE.INVOICE,
+      phone: recipient.phone,
+      values: {
+        ...parkingInvoices.invoiceMessageValues(recipient, business),
+        documentLink: link,
+        documentFilename: filename,
+      },
+    });
+  } catch (error) {
+    await ref.update({status: parkingWhatsApp.STATUS.FAILED, attempts: 1,
+      error: String(error?.message || error).slice(0, 300),
+      updatedAt: FirestoreFieldValue.serverTimestamp()});
+    return parkingWhatsApp.STATUS.FAILED;
+  }
+  return deliverParkingMessage(ref, row, body, String(business.name || ""));
+}
+
+/**
+ * Sends a month's invoices, for the owner's tap or the automatic send on
+ * the 3rd. The run is taken for the send first (a transaction, ready ->
+ * sending); then each customer's invoice goes out one after the other, each
+ * once (its message row is the guard), until the call's count or time runs
+ * out; then the run is closed with what the rows say.
+ *
+ * @param {object} db Firestore.
+ * @param {object} args {businessDoc, monthKey, by: uid or "auto", now,
+ *   deadlineMs, phones?: the numbers asked for (digits; all when omitted),
+ *   auto: true for the automatic send}.
+ * @return {Promise<?object>} `{sent, failed, stopped, skipped, alreadySent,
+ *   remaining}`; null when the automatic send found nothing to take.
+ */
+async function sendParkingInvoiceRun(db, args) {
+  const {businessDoc, monthKey, by, now, deadlineMs, phones, auto} = args;
+  const businessId = businessDoc.id;
+  const business = businessDoc.data() || {};
+  const nowMs = now.getTime();
+  const ref = parkingInvoiceRunRef(db, businessId, monthKey);
+  let book = null;
+  if (!auto) {
+    book = await parkingInvoiceBook(db, businessDoc, monthKey, now);
+    await ensureParkingInvoiceRun(db, businessId, monthKey, book, nowMs);
+  }
+  const claim = await claimParkingInvoiceRun(db, ref,
+      {by, nowMs, onlyReady: auto === true});
+  if (!claim.run) {
+    if (auto) return null;
+    throw parkingInvoicesRefusal(parkingInvoices.REFUSAL.SENDING);
+  }
+  const before = claim.run.status === parkingInvoices.RUN_STATUS.SENT ?
+    parkingInvoices.RUN_STATUS.SENT : parkingInvoices.RUN_STATUS.READY;
+  try {
+    book = book || await parkingInvoiceBook(db, businessDoc, monthKey, now);
+    const asked = Array.isArray(phones) ?
+      new Set(phones.map(parkingWhatsApp.phoneDigits).filter(Boolean)) : null;
+    const chosen = book.recipients.filter((recipient) =>
+      !asked || asked.has(recipient.phoneDigits));
+    const tally = {sent: 0, failed: 0, stopped: 0, alreadySent: 0,
+      remaining: 0, skipped: book.skipped.length};
+    const fetchLogo = cachedLogoFetcher();
+    let handled = 0;
+    for (const recipient of chosen) {
+      if (recipient.alreadySent) {
+        tally.alreadySent += 1;
+        continue;
+      }
+      if (handled >= parkingInvoices.INVOICES_MAX_PER_CALL ||
+          Date.now() > deadlineMs) {
+        tally.remaining += 1;
+        continue;
+      }
+      handled += 1;
+      const status = await sendParkingInvoice(db, {
+        businessId, business, run: claim.run, monthKey, recipient, by, now,
+        fetchLogo,
+      }).catch((error) => {
+        logger.warn("Parking invoice failed", {businessId, monthKey,
+          error: String(error?.message || error).slice(0, 300)});
+        return parkingWhatsApp.STATUS.FAILED;
+      });
+      if (status === parkingWhatsApp.STATUS.SENT) tally.sent += 1;
+      else if (status === parkingWhatsApp.STATUS.STOPPED) tally.stopped += 1;
+      else if (status === "already_sent") tally.alreadySent += 1;
+      else tally.failed += 1;
+    }
+    const rows = await parkingInvoiceRows(db, businessId, monthKey);
+    const totals = parkingInvoices.tallyRows(rows);
+    // Left over only because of the call's limits, and the owner did not
+    // pick who: the automatic send carries on. A deliberate choice of
+    // customers is final: whoever was left out is not sent by itself.
+    const carryOn = tally.remaining > 0 && (auto === true || !asked);
+    await ref.update({
+      status: carryOn ? parkingInvoices.RUN_STATUS.READY :
+        parkingInvoices.RUN_STATUS.SENT,
+      sentAtMs: nowMs,
+      sentBy: by,
+      sent: totals.sent,
+      failed: totals.failed + totals.stopped,
+      skipped: tally.skipped,
+      remaining: tally.remaining,
+      sendingAtMs: 0,
+      sendingBy: "",
+      updatedAt: FirestoreFieldValue.serverTimestamp(),
+    });
+    return tally;
+  } catch (error) {
+    await ref.update({status: before, sendingAtMs: 0, sendingBy: "",
+      updatedAt: FirestoreFieldValue.serverTimestamp()})
+        .catch(() => {});
+    throw error;
+  }
+}
+
+/**
+ * The hourly sweep's step: from the 3rd (New York) on, every lot whose run
+ * for the month just ended is still `ready` - nobody sent it - is sent.
+ * Bounded: at most 50 runs and the sweep's time budget; a run it did not
+ * reach is still `ready` for the next hour. Each lot is isolated, and the
+ * run's claim means two sweeps never send the same invoices twice.
+ *
+ * @param {object} db Firestore.
+ * @param {Date} now The moment.
+ * @param {number} deadlineMs Stop starting sends after this time.
+ * @return {Promise<object>} `{monthKey, runs, sent, failed}`.
+ */
+async function autoSendParkingInvoices(db, now, deadlineMs) {
+  const none = {monthKey: "", runs: 0, sent: 0, failed: 0};
+  if (!parkingInvoices.autoSendDue(now)) return none;
+  const monthKey = parkingInvoices.justEndedMonthKey(now);
+  const runs = db.collection("parkingInvoiceRuns")
+      .where("monthKey", "==", monthKey);
+  const [ready, sending] = await Promise.all([
+    runs.where("status", "==", parkingInvoices.RUN_STATUS.READY)
+        .limit(50).get(),
+    // A send that died holds its claim for ten minutes, then it is ours.
+    runs.where("status", "==", parkingInvoices.RUN_STATUS.SENDING)
+        .limit(50).get(),
+  ]);
+  const tally = {...none, monthKey};
+  for (const doc of [...ready.docs, ...sending.docs]) {
+    if (Date.now() >= deadlineMs) break;
+    const run = doc.data() || {};
+    if (!parkingInvoices.runClaimable(run, now.getTime())) continue;
+    try {
+      const businessDoc = await db.collection("businesses")
+          .doc(String(run.businessId || "")).get();
+      // Switched off since the 1st: nothing goes out by itself.
+      if (!businessDoc.exists ||
+          !parkingWhatsApp.parkingWhatsAppEnabled(businessDoc.data())) {
+        continue;
+      }
+      const result = await sendParkingInvoiceRun(db, {businessDoc, monthKey,
+        by: "auto", now, deadlineMs, auto: true});
+      if (!result) continue;
+      tally.runs += 1;
+      tally.sent += result.sent;
+      tally.failed += result.failed + result.stopped;
+    } catch (error) {
+      logger.warn("Automatic parking invoices failed", {
+        businessId: run.businessId, monthKey,
+        error: String(error?.message || error).slice(0, 300)});
+    }
+  }
+  return tally;
+}
+
+/**
+ * The run as the console shows it: no link secret, with who sent it.
+ *
+ * @param {object} db Firestore.
+ * @param {?object} run The stored run.
+ * @return {Promise<?object>} The run, or null.
+ */
+async function parkingInvoiceRunView(db, run) {
+  if (!run) return null;
+  const by = String(run.sentBy || "");
+  return {
+    status: String(run.status || ""),
+    preparedAtMs: Number(run.preparedAtMs) || 0,
+    sentAtMs: Number(run.sentAtMs) || 0,
+    sentBy: by,
+    sentByName: by && by !== "auto" ? await staffNameForReceipt(db, by) : "",
+    recipients: Number(run.recipients) || 0,
+    totalDueCents: Number(run.totalDueCents) || 0,
+    sent: Number(run.sent) || 0,
+    failed: Number(run.failed) || 0,
+    skipped: Number(run.skipped) || 0,
+    remaining: Number(run.remaining) || 0,
+  };
+}
+
+/**
+ * updateBusinessParkingEntry's invoice actions, which are about the whole
+ * business rather than one car (docs/PARKING_INVOICES.md §2): owner (or
+ * platform admin) only.
+ *   set_payment_instructions {businessId, text}
+ *   invoices_preview {businessId, monthKey?}
+ *   invoices_send {businessId, monthKey, phones?}
+ * The invoices need the parking WhatsApp switch on and are only for the
+ * month that just ended; the instructions are the lot's own and need
+ * neither.
+ *
+ * @param {object} request The callable request.
+ * @param {string} uid The caller.
+ * @param {string} action One of PARKING_INVOICE_ACTIONS.
+ * @return {Promise<object>} The action's answer.
+ */
+async function parkingInvoicesAction(request, uid, action) {
+  const data = request.data || {};
+  const businessId = cleanText(data.businessId, 180);
+  if (!businessId) {
+    throw new HttpsError("invalid-argument", "Business is required",
+        {reason: "business_required"});
+  }
+  const user = await requireBusinessPermission(uid, businessId, "parking");
+  if (user.role !== "businessOwner" && user.role !== "admin") {
+    throw parkingInvoicesRefusal(parkingInvoices.REFUSAL.OWNER_ONLY,
+        "permission-denied");
+  }
+  const db = admin.firestore();
+  const businessRef = db.collection("businesses").doc(businessId);
+  const businessDoc = await businessRef.get();
+  if (!businessDoc.exists) {
+    throw new HttpsError("not-found", "Business not found",
+        {reason: "business_not_found"});
+  }
+  if (action === "set_payment_instructions") {
+    const cleaned = parkingInvoices.cleanPaymentInstructions(data.text);
+    if (!cleaned.ok) {
+      throw parkingInvoicesRefusal(
+          parkingInvoices.REFUSAL.INSTRUCTIONS_INVALID, "invalid-argument");
+    }
+    await businessRef.update({
+      paymentInstructions: cleaned.text,
+      updatedAt: FirestoreFieldValue.serverTimestamp(),
+    });
+    return {success: true, paymentInstructions: cleaned.text};
+  }
+  if (!parkingWhatsApp.parkingWhatsAppEnabled(businessDoc.data())) {
+    throw parkingInvoicesRefusal(parkingWhatsApp.REFUSAL.OFF);
+  }
+  const now = new Date();
+  const monthKey = cleanText(data.monthKey, 7) ||
+    (action === "invoices_preview" ? parkingInvoices.justEndedMonthKey(now) :
+      "");
+  if (!parkingInvoices.invoiceMonthAllowed(monthKey, now)) {
+    throw parkingInvoicesRefusal(parkingInvoices.REFUSAL.MONTH_INVALID);
+  }
+  if (action === "invoices_preview") {
+    const book = await parkingInvoiceBook(db, businessDoc, monthKey, now);
+    const runSnap = await parkingInvoiceRunRef(db, businessId, monthKey).get();
+    const statusOf = new Map(book.rows.map((row) =>
+      [parkingWhatsApp.phoneDigits(row.phone), String(row.status || "")]));
+    return {
+      success: true,
+      monthKey,
+      run: await parkingInvoiceRunView(db,
+          runSnap.exists ? runSnap.data() : null),
+      recipients: book.recipients.map((r) => ({
+        phone: r.phone,
+        name: r.name,
+        cars: r.cars.map((car) => ({id: car.id, label: car.label})),
+        totalDueCents: r.totalDueCents,
+        stillParked: r.stillParked,
+        alreadySent: r.alreadySent,
+        invoiceNumber: r.invoiceNumber,
+        messageStatus: statusOf.get(r.phoneDigits) || "",
+      })),
+      skipped: book.skipped.map((r) => ({
+        phone: r.phone, name: r.name, reason: r.reason,
+        totalDueCents: r.totalDueCents,
+        cars: r.cars.map((car) => ({id: car.id, label: car.label})),
+      })),
+      totalDueCents: book.totalDueCents,
+    };
+  }
+  // invoices_send
+  const tally = await sendParkingInvoiceRun(db, {
+    businessDoc, monthKey, by: uid, now,
+    deadlineMs: Date.now() + parkingInvoices.INVOICES_CALL_BUDGET_MS,
+    phones: Array.isArray(data.phones) ? data.phones : null,
+  });
+  return {success: true, monthKey, ...tally};
+}
+
+const PARKING_INVOICE_ACTIONS = Object.freeze(
+    ["set_payment_instructions", "invoices_preview", "invoices_send"]);
+
+
 // The printable invoice / receipt. Shares the payment link's token so a
 // business can hand the same URL to a customer, and so both clients open one
 // implementation instead of each rendering their own document.
@@ -14797,6 +15459,40 @@ async function parkingReceiptPdfFile(db, req, token) {
   }
 }
 
+/**
+ * The invoice PDF a /d?view=invoicePdf link points at, when the link is
+ * genuine (package_proof.invoiceLinkValid: the month's run token, the
+ * customer's number and the expiry signed together) and the server kept
+ * that customer's invoice (docs/PARKING_INVOICES.md §2).
+ *
+ * @param {object} db Firestore.
+ * @param {object} req The request ({t, p, e, s}).
+ * @param {string} token The run's document token.
+ * @return {Promise<object|null>} {bytes, filename}, or null for 404.
+ */
+async function parkingInvoicePdfFile(db, req, token) {
+  const runs = await db.collection("parkingInvoiceRuns")
+      .where("documentToken", "==", token).limit(1).get();
+  if (runs.empty) return null;
+  const run = runs.docs[0].data() || {};
+  if (!packageProof.invoiceLinkValid(req.query, run.documentToken,
+      Date.now())) {
+    return null;
+  }
+  const path = parkingInvoices.storagePath(String(run.businessId || ""),
+      String(run.monthKey || ""), String(req.query?.p || ""));
+  try {
+    const file = requestPhotoBucket().file(path);
+    const [meta] = await file.getMetadata();
+    const [bytes] = await file.download();
+    const kept = String(meta?.metadata?.filename || "")
+        .replace(/["\\\r\n]/g, "");
+    return {bytes, filename: kept || "Invoice.pdf"};
+  } catch (error) {
+    return null;
+  }
+}
+
 exports.parkingDocument = onRequest(
     {cors: false, maxInstances: 10},
     async (req, res) => {
@@ -14829,6 +15525,18 @@ exports.parkingDocument = onRequest(
             `inline; filename="${receipt.filename}"`);
         res.set("Cache-Control", "private, max-age=3600");
         return res.status(200).send(receipt.bytes);
+      }
+      // A customer's monthly parking invoice PDF (docs/PARKING_INVOICES.md):
+      // the month's own token, the customer's number, a signed expiry; the
+      // PDF itself, or 404.
+      if (String(req.query?.view || "") === "invoicePdf") {
+        const invoice = await parkingInvoicePdfFile(db, req, token);
+        if (!invoice) return notFound();
+        res.set("Content-Type", "application/pdf");
+        res.set("Content-Disposition",
+            `inline; filename="${invoice.filename}"`);
+        res.set("Cache-Control", "private, max-age=3600");
+        return res.status(200).send(invoice.bytes);
       }
       // A product's QR tags have a view of their own: only the item's own
       // token opens them, and nothing else is looked up for that view.
@@ -15186,8 +15894,8 @@ exports.updateBusinessParkingEntry = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
-      // The welcome to current customers sends up to 300 WhatsApp messages
-      // one after the other.
+      // The welcome to current customers and the month's invoices each send
+      // up to 300 WhatsApp messages one after the other.
       timeoutSeconds: 300,
       secrets: [
         stripeSecretKey,
@@ -15205,6 +15913,9 @@ exports.updateBusinessParkingEntry = onCall(
       const businessAction = String(request.data?.action || "");
       if (PARKING_WHATSAPP_ACTIONS.includes(businessAction)) {
         return parkingWhatsAppAction(request, uid, businessAction);
+      }
+      if (PARKING_INVOICE_ACTIONS.includes(businessAction)) {
+        return parkingInvoicesAction(request, uid, businessAction);
       }
       const entryId = cleanText(
           request.data?.entryId || request.data?.reservationId, 180,
@@ -47272,6 +47983,19 @@ exports.sweepPackageRequests = onSchedule(
         if (swept.cleaned > 0) logger.info("Old package photos deleted", swept);
       } catch (error) {
         logger.warn("Package photo sweep failed",
+            {error: String(error?.message || error)});
+      }
+      // From the 3rd (New York), monthly parking invoices nobody sent go out
+      // by themselves (docs/PARKING_INVOICES.md). Bounded to two minutes
+      // and never fails the package sweep; before the 3rd it reads nothing.
+      try {
+        const invoices = await autoSendParkingInvoices(db, new Date(),
+            startedMs + parkingInvoices.AUTO_SEND_BUDGET_MS);
+        if (invoices.runs > 0) {
+          logger.info("Parking invoices sent automatically", invoices);
+        }
+      } catch (error) {
+        logger.warn("Automatic parking invoices failed",
             {error: String(error?.message || error)});
       }
       const deadlineMs = startedMs + 240 * 1000;

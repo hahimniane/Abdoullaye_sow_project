@@ -28,6 +28,7 @@ const {PARKING_TEMPLATE} = require("./whatsapp_templates");
 
 const KIND = Object.freeze({
   PARKED: "parked",
+  INVOICE: "invoice",
   RECEIPT: "receipt",
   WELCOME: "welcome",
 });

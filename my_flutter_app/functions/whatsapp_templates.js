@@ -139,6 +139,14 @@ const VARIABLE = Object.freeze({
   PAID_TOTAL_FR: "paidTotalFr",
   BALANCE_EN: "balanceEn",
   BALANCE_FR: "balanceFr",
+  // Monthly parking invoices (docs/PARKING_INVOICES.md): the month
+  // ("October 2026" / "octobre 2026"), the balance due as money ("$45.00" /
+  // "45,00 $") and the owner's "how to pay" text.
+  MONTH_EN: "monthEn",
+  MONTH_FR: "monthFr",
+  DUE_EN: "dueEn",
+  DUE_FR: "dueFr",
+  PAYMENT_INSTRUCTIONS: "paymentInstructions",
   DOCUMENT_LINK: "documentLink",
   DOCUMENT_FILENAME: "documentFilename",
 });
@@ -180,6 +188,10 @@ const VARIABLE_LANGUAGE = Object.freeze({
   [VARIABLE.PAID_TOTAL_FR]: "fr",
   [VARIABLE.BALANCE_EN]: "en",
   [VARIABLE.BALANCE_FR]: "fr",
+  [VARIABLE.MONTH_EN]: "en",
+  [VARIABLE.MONTH_FR]: "fr",
+  [VARIABLE.DUE_EN]: "en",
+  [VARIABLE.DUE_FR]: "fr",
 });
 
 // {{1}}, {{2}}, ... in the order the approved body uses them.
@@ -355,6 +367,13 @@ const FALLBACK = Object.freeze({
   [VARIABLE.PAID_TOTAL_FR]: {fr: "0,00 $"},
   [VARIABLE.BALANCE_EN]: {en: "Balance owed: $0.00"},
   [VARIABLE.BALANCE_FR]: {fr: "Solde à payer : 0,00 $"},
+  // An invoice always has its month and its total; these keep a blank from
+  // being refused. No "how to pay" text: a dash, the way a missing phone is.
+  [VARIABLE.MONTH_EN]: {en: "last month"},
+  [VARIABLE.MONTH_FR]: {fr: "le mois dernier"},
+  [VARIABLE.DUE_EN]: {en: "$0.00"},
+  [VARIABLE.DUE_FR]: {fr: "0,00 $"},
+  [VARIABLE.PAYMENT_INSTRUCTIONS]: {en: "—", fr: "—", both: "—"},
 });
 
 const MAX_PARAMETER = {
@@ -403,6 +422,11 @@ const MAX_PARAMETER = {
   [VARIABLE.PAID_TOTAL_FR]: 30,
   [VARIABLE.BALANCE_EN]: 60,
   [VARIABLE.BALANCE_FR]: 60,
+  [VARIABLE.MONTH_EN]: 30,
+  [VARIABLE.MONTH_FR]: 30,
+  [VARIABLE.DUE_EN]: 30,
+  [VARIABLE.DUE_FR]: 30,
+  [VARIABLE.PAYMENT_INSTRUCTIONS]: 300,
   [VARIABLE.DOCUMENT_FILENAME]: 100,
 };
 
@@ -505,7 +529,8 @@ function componentParts(order, shape, values, lang) {
       parameters: [{type: "document", document: {
         link: String(values?.[VARIABLE.DOCUMENT_LINK] ?? "").trim(),
         filename: clean(values?.[VARIABLE.DOCUMENT_FILENAME],
-            MAX_PARAMETER[VARIABLE.DOCUMENT_FILENAME]) || "Receipt.pdf",
+            MAX_PARAMETER[VARIABLE.DOCUMENT_FILENAME]) ||
+          shape.documentName || "Receipt.pdf",
       }}],
     });
   }
@@ -668,7 +693,7 @@ function requestTemplateMessage(args) {
 }
 
 // ---------------------------------------------------------------------------
-// Parked cars (docs/PARKING_WHATSAPP.md §2). Three bilingual Utility
+// Parked cars (docs/PARKING_WHATSAPP.md §2). Four bilingual Utility
 // templates (language "en"), each with the tracking URL button
 // https://customer.laawoldigital.com/t/{{1}} (the car's tracking code). Like
 // the package requests', they are not part of TEMPLATE: that set is the
@@ -678,12 +703,15 @@ function requestTemplateMessage(args) {
 //                            as a DOCUMENT header (link + file name).
 //   parking_welcome_2lang  - the one-time welcome to a customer already
 //                            parked, one message per phone listing the cars.
+//   parking_invoice_2lang  - the month's invoice (docs/PARKING_INVOICES.md):
+//                            the invoice PDF rides as a DOCUMENT header.
 // ---------------------------------------------------------------------------
 
 const PARKING_TEMPLATE = Object.freeze({
   PARKED: "parking_parked_2lang",
   RECEIPT: "parking_receipt_2lang",
   WELCOME: "parking_welcome_2lang",
+  INVOICE: "parking_invoice_2lang",
 });
 
 const PARKING_TEMPLATE_VARIABLES = Object.freeze({
@@ -715,11 +743,22 @@ const PARKING_TEMPLATE_VARIABLES = Object.freeze({
     VARIABLE.BUSINESS, VARIABLE.CARS_FR,
     VARIABLE.BUSINESS_PHONE,
   ]),
+  // 1 name, 2 business, 3 month EN, 4 balance due EN, 5 business,
+  // 6 month FR, 7 balance due FR, 8 how to pay, 9 business phone.
+  [PARKING_TEMPLATE.INVOICE]: Object.freeze([
+    VARIABLE.NAME,
+    VARIABLE.BUSINESS, VARIABLE.MONTH_EN, VARIABLE.DUE_EN,
+    VARIABLE.BUSINESS, VARIABLE.MONTH_FR, VARIABLE.DUE_FR,
+    VARIABLE.PAYMENT_INSTRUCTIONS, VARIABLE.BUSINESS_PHONE,
+  ]),
 });
 
 const PARKING_TEMPLATE_SHAPE = Object.freeze({
   [PARKING_TEMPLATE.RECEIPT]: Object.freeze({
     header: "document", buttons: "url",
+  }),
+  [PARKING_TEMPLATE.INVOICE]: Object.freeze({
+    header: "document", buttons: "url", documentName: "Invoice.pdf",
   }),
 });
 
@@ -728,7 +767,8 @@ const PARKING_TEMPLATE_SHAPE = Object.freeze({
  *
  * @param {{template: string, phone: string, values: object}} args A
  *   PARKING_TEMPLATE name, the number and the values by VARIABLE name
- *   (`documentLink` / `documentFilename` fill the receipt's header;
+ *   (`documentLink` / `documentFilename` fill the receipt's and the
+ *   invoice's header;
  *   `trackingCode` the button).
  * @return {object|null} The request body, or null for an unknown template.
  */

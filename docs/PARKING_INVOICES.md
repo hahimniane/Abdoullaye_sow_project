@@ -103,3 +103,54 @@ no invoice / staff netted / voided car), PDF renders (INVOICE, rows,
 balance, instructions), template body exact, run lifecycle (ready on the
 1st, owner send, auto on the 3rd once, never twice), owner-only, switch
 off, rules. Clients: panel wiring, settings field, French.
+
+## 5. As built (server, `invoices/server`)
+
+Where the build chose within the contract:
+
+- **PDF link:** the PDF is rendered when the message is sent and **stored**
+  in Storage `parkingInvoices/{businessId}/{yyyy-mm}/{phoneDigits}.pdf`
+  (server only; storage rules deny clients). What the customer was sent is
+  what the link shows, whenever it is opened. The WhatsApp header link is
+  `whatsappPhotoBase()` + `?view=invoicePdf&t={runToken}&p={phoneDigits}&e=
+  {expiresMs}&s={sig}`, 30 days, signed by `package_proof.invoiceLink`
+  (`photoSignature` over `invoice:{phoneDigits}`, so a receipt's or photo's
+  signature never opens an invoice). The secret `t` is the run's own
+  `documentToken` (minted with the run), not a car's, so a customer with only
+  an activity (no car) is covered and a later-voided car cannot kill the link.
+- **Run doc** adds `documentToken`, `remaining`, `sendingAtMs`, `sendingBy`.
+  A send takes the run in a transaction (`ready`, or the owner's `sent`, ->
+  `sending`); a claim older than 10 minutes is a send that died and is taken
+  over. After the loop the run is `sent`, or back to `ready` when a call's
+  limit left customers over and nobody picked who (the automatic send
+  continues them); an owner who picked customers (`phones`) closes the run:
+  whoever was left out is not sent by itself.
+- **Rows** are claimed in a transaction (not `.create()`) so a `failed`,
+  `stopped` or `skipped` invoice is tried again when the owner presses Send
+  again; one already `sent`, or `queued` within 10 minutes, is never sent
+  twice. Extra fields: `invoiceNumber`, `totalDueCents`, `monthKey`,
+  `parkedCarIds`, `pdfPath`, `sentByUid` (uid or `auto`).
+- **Invoice number** `INV-{YYYYMM}-{last 4 of the phone}-{n}`: `n` tells apart
+  customers of the month whose numbers end in the same four digits (phone
+  order, over every customer of the month), so it never moves when others pay.
+- **Actions** (all on `updateBusinessParkingEntry`, no new export):
+  `invoices_preview {businessId, monthKey?}` -> `{success, monthKey, run,
+  recipients: [{phone, name, cars: [{id, label}], totalDueCents,
+  stillParked, alreadySent, invoiceNumber, messageStatus}], skipped: [{phone,
+  name, reason, totalDueCents, cars}], totalDueCents}`; `invoices_send
+  {businessId, monthKey, phones?}` -> `{success, monthKey, sent, failed,
+  stopped, alreadySent, skipped, remaining}`; `set_payment_instructions
+  {businessId, text}` -> `{success, paymentInstructions}` (empty clears; needs
+  no switch). Refusals (reason): `invoices_owner_only` (permission-denied),
+  `parking_whatsapp_off`, `invoice_month_invalid`, `invoices_sending`
+  (failed-precondition), `payment_instructions_invalid` (invalid-argument).
+  "The month just ended" is New York's calendar, not UTC's.
+- **The 1st** (`notifyParkingMonthEndFor`) reads the month through
+  `parkingMonthEndData` (the same four narrow queries); a lot with the switch
+  on gets a `ready` run when anybody is to be invoiced, and its owner's push
+  adds "October's invoices are ready: N customers, $X. Review and send." (staff
+  keep the old text; with nobody owing but invoices ready, only the owner is
+  told). Invoices are never worked out from bills whose staff expenses could
+  not be read (the push still falls back; the preview/send refuse by error).
+- **Not covered by an invoice:** a customer whose number has no country code
+  (or no number at all) is listed under `skipped`; no row is made.
