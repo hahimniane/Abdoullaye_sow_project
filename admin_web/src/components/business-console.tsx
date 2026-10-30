@@ -836,6 +836,9 @@ export function BusinessConsole({
               focusRecordId={notificationFocusId}
               focusView={notificationFocusView}
               canManageLedger={hasBusinessPermission(profile, "ledger")}
+              canSendParkingWelcome={
+                (profile.role === "businessOwner" || profile.role === "admin") && !previewMode
+              }
             />
           )}
           {activeTab === "ledger" && (
@@ -928,6 +931,9 @@ export function BusinessConsole({
                 businessId={businessId}
                 business={business}
                 canManage={profile.role === "businessOwner" && !previewMode}
+                canSetParkingWhatsApp={
+                  (profile.role === "businessOwner" || profile.role === "admin") && !previewMode
+                }
               />
               <div className="service-settings-summary coverage-summary">
                 <div>

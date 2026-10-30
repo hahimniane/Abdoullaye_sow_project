@@ -383,7 +383,7 @@ test("the merge proof signs in on a secondary app that is always signed out and 
 
 test("the tracking page is app-first for everyone but staff, whose page is unchanged", () => {
   const guest = read("../components/guest-tracking.tsx");
-  assert.match(guest, /\{offerApp \? \(\s*<>[\s\S]*?<GetAppBanner variant=\{arrivedWithCode \? "track" : "follow"\} \/>\s*\{resultSection\}\s*\{lookupSection\}\s*<\/>\s*\) : \(\s*<>\s*\{lookupSection\}\s*\{resultSection\}\s*<\/>\s*\)\}/);
+  assert.match(guest, /\{offerApp \? \(\s*<>[\s\S]*?(?:\{!record\?\.parking && )?<GetAppBanner variant=\{arrivedWithCode \? "track" : "follow"\} \/>\}?\s*\{resultSection\}\s*\{lookupSection\}\s*<\/>\s*\) : \(\s*<>\s*\{lookupSection\}\s*\{resultSection\}\s*<\/>\s*\)\}/);
   assert.match(guest, /onSignedIn=\{\(\) => window\.location\.assign\(MY_PACKAGES_PATH\)\}/);
   assert.match(guest, /\{!authenticated && record\.signIn && record\.signIn\.length > 0 && \(/);
 });

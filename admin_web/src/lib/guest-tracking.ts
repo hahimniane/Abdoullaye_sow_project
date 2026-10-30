@@ -1,3 +1,6 @@
+import { formatDayKey } from "./format.ts";
+import { moneyText } from "./invoice-ledger.ts";
+import type { ParkingBalance } from "./parking-balance.ts";
 import { parseSignInHints, type GuestSignInHint } from "./phone-accounts.ts";
 
 export type GuestTrackingService =
@@ -56,7 +59,17 @@ export type GuestTrackingRecord = {
    * the package, as 30-day links. A guest gets no `photos` key.
    */
   photos?: GuestTrackingPhoto[];
+  /**
+   * Parked cars only (docs/PARKING_WHATSAPP.md §2): what the stay costs so
+   * far, what was paid and the balance owed right now, worked out by the
+   * server's `parkingBalanceNow`. Anyone with the code sees it, like the
+   * payment on a container line.
+   */
+  parking?: GuestTrackingParking;
 };
+
+/** The parked car's money, exactly as `parkingBalanceNow` answers it. */
+export type GuestTrackingParking = ParkingBalance;
 
 export type GuestTrackingPart = {
   trackingCode: string;
@@ -243,6 +256,108 @@ export function parseGuestContainerGroup(
   return out;
 }
 
+const DAY_KEY = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * A parked car's money block as the page shows it. Every figure must be a
+ * whole number of cents or days; a record that is missing the parked-since
+ * day or any figure carries no block at all (an older server, or a car the
+ * server could not price) rather than a half-true one. Nothing for any
+ * other service.
+ */
+export function parseGuestParking(service: string, value: unknown): GuestTrackingParking | undefined {
+  if (service !== "parking" || !value || typeof value !== "object") return undefined;
+  const row = value as Record<string, unknown>;
+  const whole = (v: unknown): number | null => {
+    if (v === null || v === undefined || v === "") return null;
+    const n = Number(v);
+    return Number.isInteger(n) && n >= 0 ? n : null;
+  };
+  const dailyRateCents = whole(row.dailyRateCents);
+  const days = whole(row.days);
+  const accruedCents = whole(row.accruedCents);
+  const paidCents = whole(row.paidCents);
+  const balanceCents = whole(row.balanceCents);
+  const sinceDayKey = typeof row.sinceDayKey === "string" ? row.sinceDayKey.trim() : "";
+  const leftRaw = typeof row.leftDayKey === "string" ? row.leftDayKey.trim() : "";
+  if (
+    dailyRateCents === null || days === null || accruedCents === null ||
+    paidCents === null || balanceCents === null ||
+    !DAY_KEY.test(sinceDayKey) || (leftRaw !== "" && !DAY_KEY.test(leftRaw))
+  ) {
+    return undefined;
+  }
+  return {
+    dailyRateCents,
+    sinceDayKey,
+    leftDayKey: leftRaw,
+    days,
+    accruedCents,
+    paidCents,
+    balanceCents,
+    paidInFull: typeof row.paidInFull === "boolean" ? row.paidInFull : balanceCents === 0 && accruedCents > 0,
+    stillParked: typeof row.stillParked === "boolean" ? row.stillParked : leftRaw === "",
+  };
+}
+
+/** The parking block's words (French in french-dom.ts). */
+export const GUEST_PARKING_COPY = {
+  title: "Parking balance",
+  paidInFull: "Paid in full",
+  balanceOwed: "Balance owed now",
+  dailyRate: "Daily rate",
+  parkedSince: "Parked since",
+  leftOn: "Left on",
+  daysSoFar: "Days so far",
+  daysParked: "Days parked",
+  amountSoFar: "Amount so far",
+  amountTotal: "Total",
+  paid: "Paid",
+} as const;
+
+export type GuestParkingRow = {
+  key: "rate" | "since" | "left" | "days" | "amount" | "paid" | "balance";
+  label: string;
+  value: string;
+  /** The line the eye should land on: the balance owed, or "Paid in full". */
+  emphasis?: "owed" | "settled";
+};
+
+/**
+ * The rows of the money block, in the order a customer reads them: daily
+ * rate, parked since, days so far, amount so far, paid, then the balance
+ * owed right now - or "Paid in full" when nothing is owed. A car that has
+ * left says "Left on", "Days parked" and "Total" instead of "so far".
+ * Values are text already in the page's language (dates month-first in
+ * English, money as $12.00 / 12,00 $).
+ */
+export function guestParkingRows(parking: GuestTrackingParking, lang: "en" | "fr" = "en"): GuestParkingRow[] {
+  const c = GUEST_PARKING_COPY;
+  const rows: GuestParkingRow[] = [
+    {key: "rate", label: c.dailyRate, value: moneyText(parking.dailyRateCents, lang)},
+    {key: "since", label: c.parkedSince, value: formatDayKey(parking.sinceDayKey, lang)},
+  ];
+  if (!parking.stillParked && parking.leftDayKey) {
+    rows.push({key: "left", label: c.leftOn, value: formatDayKey(parking.leftDayKey, lang)});
+  }
+  rows.push(
+    {key: "days", label: parking.stillParked ? c.daysSoFar : c.daysParked, value: String(parking.days)},
+    {key: "amount", label: parking.stillParked ? c.amountSoFar : c.amountTotal, value: moneyText(parking.accruedCents, lang)},
+    {key: "paid", label: c.paid, value: moneyText(parking.paidCents, lang)},
+  );
+  if (parking.balanceCents === 0 && parking.paidInFull) {
+    rows.push({key: "balance", label: c.balanceOwed, value: c.paidInFull, emphasis: "settled"});
+  } else {
+    rows.push({
+      key: "balance",
+      label: c.balanceOwed,
+      value: moneyText(parking.balanceCents, lang),
+      emphasis: parking.balanceCents > 0 ? "owed" : "settled",
+    });
+  }
+  return rows;
+}
+
 /** "3 pieces" / "3 colis" on the result card. */
 export function guestPiecesText(count: number, lang: "en" | "fr" = "en"): string {
   if (lang === "fr") return `${count} colis`;
@@ -311,6 +426,7 @@ export function parseGuestTrackingResponse(value: unknown): GuestTrackingRespons
   const shipping = parseGuestShipping(service, row.shipping);
   const signIn = parseSignInHints(row.signIn);
   const photos = service === "container" ? parseGuestPhotos(row.photos) : undefined;
+  const parking = parseGuestParking(service, row.parking);
   return {
     version: 1,
     found: true,
@@ -324,6 +440,7 @@ export function parseGuestTrackingResponse(value: unknown): GuestTrackingRespons
       ...parseGuestContainerGroup(service, row),
       ...(signIn.length ? {signIn} : {}),
       ...(photos ? {photos} : {}),
+      ...(parking ? {parking} : {}),
     },
   };
 }
