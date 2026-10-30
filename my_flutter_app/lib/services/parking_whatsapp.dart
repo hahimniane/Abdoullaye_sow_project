@@ -11,6 +11,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
 import '../utils/callable_data.dart';
+import 'parking_month_statement.dart' show parkingCustomerKeyOf;
 
 /// The refusals `updateBusinessParkingEntry` gives the WhatsApp actions
 /// (`details.reason`).
@@ -23,6 +24,16 @@ enum ParkingWhatsAppRefusal {
 
   /// The switch is the owner's (or a platform admin's) to flip.
   switchOwnerOnly,
+
+  /// Invoices are the owner's (or a platform admin's) to send
+  /// (docs/PARKING_INVOICES.md §2).
+  invoicesOwnerOnly,
+
+  /// Only the month that just ended may be invoiced.
+  invoiceMonthInvalid,
+
+  /// The server refused the payment instructions text.
+  paymentInstructionsInvalid,
 }
 
 /// The refusal a callable error carries in `details.reason`, or null for
@@ -33,6 +44,10 @@ ParkingWhatsAppRefusal? parkingWhatsAppRefusal(Object? details) {
     'parking_whatsapp_off' => ParkingWhatsAppRefusal.switchOff,
     'welcome_owner_only' => ParkingWhatsAppRefusal.welcomeOwnerOnly,
     'parking_whatsapp_owner_only' => ParkingWhatsAppRefusal.switchOwnerOnly,
+    'invoices_owner_only' => ParkingWhatsAppRefusal.invoicesOwnerOnly,
+    'invoice_month_invalid' => ParkingWhatsAppRefusal.invoiceMonthInvalid,
+    'payment_instructions_invalid' =>
+      ParkingWhatsAppRefusal.paymentInstructionsInvalid,
     _ => null,
   };
 }
@@ -134,6 +149,193 @@ class ParkingWelcomeResult {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Monthly invoices (docs/PARKING_INVOICES.md §2-§3).
+// ---------------------------------------------------------------------------
+
+/// The longest payment instructions the server accepts.
+const int parkingPaymentInstructionsMaxLength = 300;
+
+int _wireCount(Object? v) => v is num && v.isFinite && v > 0 ? v.toInt() : 0;
+
+/// A time the server wrote as epoch milliseconds (or a Firestore timestamp).
+DateTime? _wireTime(Object? v) {
+  if (v is DateTime) return v;
+  if (v is Timestamp) return v.toDate();
+  if (v is num && v.isFinite && v > 0) {
+    return DateTime.fromMillisecondsSinceEpoch(v.toInt());
+  }
+  return null;
+}
+
+enum ParkingInvoiceRunStatus { ready, sending, sent }
+
+/// The month's batch (`parkingInvoiceRuns/{businessId}_{yyyy-mm}`): prepared
+/// on the 1st, then sent by the owner or automatically on the 3rd.
+class ParkingInvoiceRun {
+  const ParkingInvoiceRun({
+    required this.status,
+    this.preparedAt,
+    this.sentAt,
+    this.sentBy = '',
+    this.recipients = 0,
+    this.totalDueCents = 0,
+    this.sent = 0,
+    this.failed = 0,
+    this.skipped = 0,
+  });
+
+  final ParkingInvoiceRunStatus status;
+  final DateTime? preparedAt;
+  final DateTime? sentAt;
+
+  /// The sender's uid, or "auto" for the 3rd-of-the-month send.
+  final String sentBy;
+  final int recipients;
+  final int totalDueCents;
+  final int sent;
+  final int failed;
+  final int skipped;
+
+  bool get sentAutomatically => sentBy == 'auto';
+
+  /// Null for anything that is not a run this app can read.
+  static ParkingInvoiceRun? fromWire(Object? value) {
+    if (value is! Map) return null;
+    final status = switch ('${value['status'] ?? ''}'.trim()) {
+      'ready' => ParkingInvoiceRunStatus.ready,
+      'sending' => ParkingInvoiceRunStatus.sending,
+      'sent' => ParkingInvoiceRunStatus.sent,
+      _ => null,
+    };
+    if (status == null) return null;
+    return ParkingInvoiceRun(
+      status: status,
+      preparedAt: _wireTime(value['preparedAtMs'] ?? value['preparedAt']),
+      sentAt: _wireTime(value['sentAtMs'] ?? value['sentAt']),
+      sentBy: '${value['sentBy'] ?? ''}'.trim(),
+      recipients: _wireCount(value['recipients']),
+      totalDueCents: _wireCount(value['totalDueCents']),
+      sent: _wireCount(value['sent']),
+      failed: _wireCount(value['failed']),
+      skipped: _wireCount(value['skipped']),
+    );
+  }
+}
+
+/// One customer in the invoice preview.
+class ParkingInvoiceRecipient {
+  const ParkingInvoiceRecipient({
+    required this.phone,
+    required this.name,
+    required this.cars,
+    required this.totalDueCents,
+    required this.stillParked,
+    required this.alreadySent,
+  });
+
+  final String phone;
+  final String name;
+  final List<ParkingWelcomeCar> cars;
+  final int totalDueCents;
+  final bool stillParked;
+
+  /// An invoice for this month already went to this number.
+  final bool alreadySent;
+
+  String get carsText => cars
+      .map((car) => car.label.trim())
+      .where((label) => label.isNotEmpty)
+      .join(', ');
+
+  static ParkingInvoiceRecipient? fromWire(Object? value) {
+    if (value is! Map) return null;
+    final phone = '${value['phone'] ?? ''}'.trim();
+    if (phone.isEmpty) return null;
+    final rawCars = value['cars'];
+    return ParkingInvoiceRecipient(
+      phone: phone,
+      name: '${value['name'] ?? ''}'.trim(),
+      cars: [
+        if (rawCars is List)
+          for (final car in rawCars)
+            if (car is Map)
+              ParkingWelcomeCar(
+                id: '${car['id'] ?? ''}'.trim(),
+                label: '${car['label'] ?? ''}'.trim(),
+                trackingCode: '${car['trackingCode'] ?? ''}'.trim(),
+              ),
+      ],
+      totalDueCents: _wireCount(value['totalDueCents']),
+      stillParked: value['stillParked'] == true,
+      alreadySent: value['alreadySent'] == true,
+    );
+  }
+}
+
+/// `invoices_preview`: the month, its run (null before one is prepared) and
+/// who would get an invoice, in the server's order.
+class ParkingInvoicePreview {
+  const ParkingInvoicePreview({
+    required this.monthKey,
+    required this.run,
+    required this.recipients,
+  });
+
+  final String monthKey;
+  final ParkingInvoiceRun? run;
+  final List<ParkingInvoiceRecipient> recipients;
+
+  factory ParkingInvoicePreview.fromWire(Object? data) {
+    final map = data is Map ? data : const {};
+    final raw = map['recipients'];
+    return ParkingInvoicePreview(
+      monthKey: '${map['monthKey'] ?? ''}'.trim(),
+      run: ParkingInvoiceRun.fromWire(map['run']),
+      recipients: [
+        if (raw is List)
+          for (final item in raw) ?ParkingInvoiceRecipient.fromWire(item),
+      ],
+    );
+  }
+}
+
+/// What `invoices_send` did. [remaining] is what the server did not get to
+/// (it stops at 240 s); send again to continue.
+class ParkingInvoiceResult {
+  const ParkingInvoiceResult({
+    this.sent = 0,
+    this.failed = 0,
+    this.skipped = 0,
+    this.remaining = 0,
+  });
+
+  final int sent;
+  final int failed;
+  final int skipped;
+  final int remaining;
+
+  factory ParkingInvoiceResult.fromWire(Object? data) {
+    final map = data is Map ? data : const {};
+    return ParkingInvoiceResult(
+      sent: _wireCount(map['sent']),
+      failed: _wireCount(map['failed']),
+      skipped: _wireCount(map['skipped']),
+      remaining: _wireCount(map['remaining']),
+    );
+  }
+}
+
+/// Whether the "Send invoices" card is offered: the switch is on, the viewer
+/// is the owner (or a platform admin) and the month on screen is the month
+/// just ended - the only one the server will send.
+bool parkingInvoicesOffered({
+  required bool switchOn,
+  required bool canSend,
+  required String monthKey,
+  required String currentMonthKey,
+}) => switchOn && canSend && monthKey.isNotEmpty && monthKey == currentMonthKey;
+
 /// What the app asks the server about parking and WhatsApp. An interface so
 /// widget tests answer without Firebase.
 abstract interface class ParkingWhatsAppService {
@@ -148,6 +350,25 @@ abstract interface class ParkingWhatsAppService {
     required String businessId,
     List<String>? phones,
   });
+
+  /// Saves the text printed on invoices and sent with them (owner or admin).
+  Future<void> setPaymentInstructions({
+    required String businessId,
+    required String text,
+  });
+
+  /// Who the month's invoices would go to, and the month's run.
+  Future<ParkingInvoicePreview> invoicesPreview({
+    required String businessId,
+    String? monthKey,
+  });
+
+  /// Sends the month's invoices to [phones] (all not-yet-sent when null).
+  Future<ParkingInvoiceResult> invoicesSend({
+    required String businessId,
+    required String monthKey,
+    List<String>? phones,
+  });
 }
 
 class FirebaseParkingWhatsAppService implements ParkingWhatsAppService {
@@ -159,9 +380,17 @@ class FirebaseParkingWhatsAppService implements ParkingWhatsAppService {
   FirebaseFunctions get _functions =>
       _functionsOverride ?? FirebaseFunctions.instance;
 
-  Future<Object?> _call(Map<String, dynamic> payload) async {
+  Future<Object?> _call(
+    Map<String, dynamic> payload, {
+    Duration? timeout,
+  }) async {
     final response = await _functions
-        .httpsCallable('updateBusinessParkingEntry')
+        .httpsCallable(
+          'updateBusinessParkingEntry',
+          options: timeout == null
+              ? null
+              : HttpsCallableOptions(timeout: timeout),
+        )
         .call<Object?>(payload);
     final data = response.data;
     return data is Map ? callableMap(data) : data;
@@ -200,13 +429,55 @@ class FirebaseParkingWhatsAppService implements ParkingWhatsAppService {
       'phones': ?phones,
     }),
   );
+
+  @override
+  Future<void> setPaymentInstructions({
+    required String businessId,
+    required String text,
+  }) async {
+    await _call(<String, dynamic>{
+      'businessId': businessId,
+      'action': 'set_payment_instructions',
+      'text': text,
+    });
+  }
+
+  @override
+  Future<ParkingInvoicePreview> invoicesPreview({
+    required String businessId,
+    String? monthKey,
+  }) async => ParkingInvoicePreview.fromWire(
+    await _call(<String, dynamic>{
+      'businessId': businessId,
+      'action': 'invoices_preview',
+      if (monthKey != null && monthKey.isNotEmpty) 'monthKey': monthKey,
+    }, timeout: const Duration(seconds: 120)),
+  );
+
+  @override
+  Future<ParkingInvoiceResult> invoicesSend({
+    required String businessId,
+    required String monthKey,
+    List<String>? phones,
+  }) async => ParkingInvoiceResult.fromWire(
+    await _call(
+      <String, dynamic>{
+        'businessId': businessId,
+        'action': 'invoices_send',
+        'monthKey': monthKey,
+        'phones': ?phones,
+      },
+      // The server sends one by one and stops at 240 s.
+      timeout: const Duration(seconds: 300),
+    ),
+  );
 }
 
 // ---------------------------------------------------------------------------
 // The messages on one parked car.
 // ---------------------------------------------------------------------------
 
-enum ParkingMessageKind { parked, receipt, welcome }
+enum ParkingMessageKind { parked, receipt, welcome, invoice }
 
 enum ParkingMessageStatus { queued, sent, failed, stopped, skipped }
 
@@ -219,6 +490,7 @@ class ParkingMessage {
     this.deliveryStatus = '',
     this.error = '',
     this.phone = '',
+    this.monthKey = '',
     this.at,
   });
 
@@ -232,6 +504,9 @@ class ParkingMessage {
   final String error;
   final String phone;
 
+  /// "YYYY-MM" of an invoice; '' for every other kind.
+  final String monthKey;
+
   /// When it went out, else when it was queued.
   final DateTime? at;
 
@@ -241,6 +516,7 @@ class ParkingMessage {
       'parked' => ParkingMessageKind.parked,
       'receipt' => ParkingMessageKind.receipt,
       'welcome' => ParkingMessageKind.welcome,
+      'invoice' => ParkingMessageKind.invoice,
       _ => null,
     };
     final status = switch ('${data['status'] ?? ''}') {
@@ -268,6 +544,7 @@ class ParkingMessage {
       deliveryStatus: '${data['deliveryStatus'] ?? ''}'.trim().toLowerCase(),
       error: '${data['error'] ?? ''}'.trim(),
       phone: '${data['phone'] ?? ''}'.trim(),
+      monthKey: '${data['monthKey'] ?? ''}'.trim(),
       at: at(data['sentAt']) ?? at(data['createdAt']),
     );
   }
@@ -307,4 +584,59 @@ Stream<List<ParkingMessage>> parkingMessagesStream({
       for (final doc in snapshot.docs) (id: doc.id, data: doc.data()),
     ]),
   );
+}
+
+// ---------------------------------------------------------------------------
+// The month's invoices: the run and each customer's invoice message.
+// ---------------------------------------------------------------------------
+
+/// Live `parkingInvoiceRuns/{businessId}_{monthKey}`: null until the server
+/// prepares the month. Business managers may read it.
+Stream<ParkingInvoiceRun?> parkingInvoiceRunStream({
+  required String businessId,
+  required String monthKey,
+  FirebaseFirestore? firestore,
+}) => (firestore ?? FirebaseFirestore.instance)
+    .collection('parkingInvoiceRuns')
+    .doc('${businessId}_$monthKey')
+    .snapshots()
+    .map((doc) => ParkingInvoiceRun.fromWire(doc.data()));
+
+/// Live invoice rows of one month: `parkingMessages` by equality on the
+/// business, the kind and the month (the rules let managers read these).
+Stream<List<ParkingMessage>> parkingInvoiceMessagesStream({
+  required String businessId,
+  required String monthKey,
+  FirebaseFirestore? firestore,
+}) => (firestore ?? FirebaseFirestore.instance)
+    .collection('parkingMessages')
+    .where('businessId', isEqualTo: businessId)
+    .where('kind', isEqualTo: 'invoice')
+    .where('monthKey', isEqualTo: monthKey)
+    .snapshots()
+    .map(
+      (snapshot) => parkingMessagesOf([
+        for (final doc in snapshot.docs) (id: doc.id, data: doc.data()),
+      ]),
+    );
+
+/// The month's invoice rows by customer key (`ParkingMonthCustomer.key`): a
+/// row's phone is read the way the month-end statement keys a customer (its
+/// last ten digits). When a number has more than one row the newest wins.
+Map<String, ParkingMessage> parkingInvoiceStatusByCustomer(
+  Iterable<ParkingMessage> rows,
+) {
+  final newestFirst = [...rows]
+    ..sort(
+      (a, b) => (b.at?.millisecondsSinceEpoch ?? 0).compareTo(
+        a.at?.millisecondsSinceEpoch ?? 0,
+      ),
+    );
+  final byKey = <String, ParkingMessage>{};
+  for (final row in newestFirst) {
+    if (row.kind != ParkingMessageKind.invoice) continue;
+    final key = parkingCustomerKeyOf(row.phone, '');
+    if (key.startsWith('phone:')) byKey.putIfAbsent(key, () => row);
+  }
+  return byKey;
 }

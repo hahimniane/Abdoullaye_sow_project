@@ -16,6 +16,7 @@ import '../services/business_parking_entry.dart'
 import '../services/firestore_query_spec.dart';
 import '../services/lot_ledger.dart' show lotDollarsToCents;
 import '../services/parking_month_statement.dart';
+import '../services/parking_whatsapp.dart';
 import '../services/staff_expense_repayments.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_motion.dart';
@@ -26,6 +27,9 @@ import '../utils/parking_month_pdf.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/lot_sheets.dart';
+import '../widgets/parking_invoices_card.dart';
+import '../widgets/parking_messages_section.dart'
+    show parkingMessageIsProblem, parkingMessageStatusText;
 import '../widgets/received_by_options.dart';
 import 'parked_car_details_screen.dart';
 import 'pdf_preview_screen.dart';
@@ -70,6 +74,12 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
   /// one month.
   final List<StreamSubscription<Object?>> _monthSubs = [];
   String _subscribedMonth = '';
+
+  /// This month's invoice WhatsApp rows by customer
+  /// (docs/PARKING_INVOICES.md §3). A refused read just means no status on
+  /// the cards.
+  StreamSubscription<List<ParkingMessage>>? _invoiceSub;
+  Map<String, ParkingMessage> _invoices = const {};
   List<Map<String, dynamic>> _inMonth = const [];
   List<Map<String, dynamic>> _unsettled = const [];
   List<Map<String, dynamic>> _undated = const [];
@@ -214,6 +224,7 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
       s.cancel();
     }
     _monthSubs.clear();
+    _subscribeInvoices(monthKey);
     final days = parkingMonthDays(monthKey);
     if (days == null) {
       _docs = const [];
@@ -288,12 +299,41 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
     );
   }
 
+  void _subscribeInvoices(String monthKey) {
+    _invoiceSub?.cancel();
+    _invoiceSub = null;
+    _invoices = const {};
+    if (parkingMonthDays(monthKey) == null) return;
+    try {
+      _invoiceSub =
+          parkingInvoiceMessagesStream(
+            businessId: widget.businessId,
+            monthKey: monthKey,
+          ).listen(
+            (rows) {
+              if (!mounted) return;
+              setState(() => _invoices = parkingInvoiceStatusByCustomer(rows));
+            },
+            onError: (Object error) {
+              debugPrint('Parking invoice rows read failed: $error');
+              if (mounted && _invoices.isNotEmpty) {
+                setState(() => _invoices = const {});
+              }
+            },
+          );
+    } catch (error) {
+      debugPrint('Parking invoice rows read failed: $error');
+    }
+  }
+
   void _showMonth(String monthKey) {
     setState(() {
       _monthKey = monthKey;
       _wholeMonth = false;
     });
     _subscribeMonth();
+    // The reads above reset the month's rows; show that now.
+    if (mounted) setState(() {});
   }
 
   ParkingMonthSummary _summary() {
@@ -397,6 +437,7 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
     for (final s in _monthSubs) {
       s.cancel();
     }
+    _invoiceSub?.cancel();
     _loadingSafety?.cancel();
     _creditSafety?.cancel();
     super.dispose();
@@ -610,6 +651,28 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
         (summary.businessOwes.isNotEmpty || monthRepayments.isNotEmpty);
     final creditUnavailable =
         _creditError || (_creditTimedOut && !_creditReady);
+    // "Send invoices": the owner (or a platform admin) only, with the switch
+    // on, for the month just ended (the card hides itself otherwise).
+    final auth = Provider.of<AuthProvider>(context);
+    final parkingWhatsApp = _business['parkingWhatsApp'];
+    final invoicesCard = ParkingInvoicesCard(
+      businessId: widget.businessId,
+      monthKey: _monthKey,
+      switchOn: parkingWhatsApp is Map && parkingWhatsApp['enabled'] == true,
+      canSend: auth.isBusinessOwner || auth.isAdmin,
+      staffNames: {for (final s in _staff) s.id: s.name},
+    );
+    final owes = showOwes
+        ? ParkingMonthBusinessOwes(
+            summary: summary,
+            repayments: monthRepayments,
+            staffNames: {for (final s in _staff) s.id: s.name},
+            busyKey: _busy,
+            // Never pay back against the estimate.
+            onPaidBack: _estimating ? null : _paidBack,
+            onVoid: _voidRepayment,
+          )
+        : null;
 
     return Scaffold(
       backgroundColor: AppColors.cream,
@@ -772,19 +835,11 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
                     view: _view,
                     busyKey: _busy,
                     onTap: _customerActions,
-                    leading: showOwes
-                        ? ParkingMonthBusinessOwes(
-                            summary: summary,
-                            repayments: monthRepayments,
-                            staffNames: {
-                              for (final s in _staff) s.id: s.name,
-                            },
-                            busyKey: _busy,
-                            // Never pay back against the estimate.
-                            onPaidBack: _estimating ? null : _paidBack,
-                            onVoid: _voidRepayment,
-                          )
-                        : null,
+                    invoices: _invoices,
+                    leading: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [invoicesCard, ?owes],
+                    ),
                   ),
           ),
         ],
@@ -955,12 +1010,17 @@ class ParkingMonthCustomerList extends StatelessWidget {
     required this.onTap,
     this.busyKey = '',
     this.leading,
+    this.invoices = const {},
   });
 
   final ParkingMonthSummary summary;
   final ParkingMonthView view;
   final ValueChanged<ParkingMonthCustomer> onTap;
   final String busyKey;
+
+  /// The month's invoice WhatsApp row of each customer (by
+  /// `ParkingMonthCustomer.key`): shown as that card's invoice status.
+  final Map<String, ParkingMessage> invoices;
 
   /// Shown above the customers in every view ("Business owes").
   final Widget? leading;
@@ -997,6 +1057,7 @@ class ParkingMonthCustomerList extends StatelessWidget {
         return _CustomerTile(
           customer: customer,
           busy: busyKey.isNotEmpty && busyKey == customer.key,
+          invoice: invoices[customer.key],
           onTap: () => onTap(customer),
         );
       },
@@ -1166,11 +1227,15 @@ class _CustomerTile extends StatefulWidget {
     required this.customer,
     required this.busy,
     required this.onTap,
+    this.invoice,
   });
 
   final ParkingMonthCustomer customer;
   final bool busy;
   final VoidCallback onTap;
+
+  /// This month's invoice message to the customer, when one exists.
+  final ParkingMessage? invoice;
 
   @override
   State<_CustomerTile> createState() => _CustomerTileState();
@@ -1265,6 +1330,8 @@ class _CustomerTileState extends State<_CustomerTile> {
                   ),
               ],
             ),
+            if (widget.invoice case final invoice?)
+              _InvoiceStatus(customer: customer, invoice: invoice),
             const Divider(height: 16),
             for (var i = 0; i < customer.cars.length; i++)
               if (customer.cars[i].dueCents > 0 || _showPaid)
@@ -1399,6 +1466,53 @@ class _CustomerTileState extends State<_CustomerTile> {
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// "Invoice: Delivered" under a customer's name: how the month's WhatsApp
+/// invoice to them went (sent / delivered / read / failed ...).
+class _InvoiceStatus extends StatelessWidget {
+  const _InvoiceStatus({required this.customer, required this.invoice});
+
+  final ParkingMonthCustomer customer;
+  final ParkingMessage invoice;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final problem = parkingMessageIsProblem(invoice);
+    final sent = invoice.status == ParkingMessageStatus.sent;
+    final color = problem
+        ? AppColors.errorRed
+        : sent
+        ? AppColors.sage
+        : AppColors.muted;
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Row(
+        key: Key('month-end-invoice-${customer.key}'),
+        children: [
+          Icon(
+            problem ? Icons.error_outline : Icons.receipt_long_outlined,
+            size: 15,
+            color: color,
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              l10n.parkingInvCustomerStatus(
+                parkingMessageStatusText(l10n, invoice),
+              ),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: color,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -721,3 +721,9 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   service timeout. Every "Received by" picker builds its options with
   `receivedByOptions` (Business account first), and a validator that checks
   `staffIds` must accept `business_account`.
+- Widgets fed by a `Stream` in tests (e.g. the monthly-invoices card's run
+  stream): use `StreamController.broadcast(sync: true)`; with the default async
+  controller `tester.pump()` does not deliver the event. Some screens are
+  guarded by source-contract tests (`parking_month_staff_expense_test.dart`
+  greps `parking_month_end_screen.dart`), so never run `dart format` over a
+  whole screen file you only touched in places.
