@@ -3029,6 +3029,9 @@ class AppLocalizationsFr extends AppLocalizations {
       'Saisissez un numéro de réservation ou de suivi valide.';
 
   @override
+  String get trackingLinkInvalid => 'Ce lien de suivi n\'est pas valide.';
+
+  @override
   String get guestTrackingSubmit => 'Suivre';
 
   @override

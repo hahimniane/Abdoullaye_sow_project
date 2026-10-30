@@ -17,14 +17,32 @@ const packageCodePrefix = 'CL';
 /// Where package labels and WhatsApp updates point.
 const packageLinkHost = 'customer.laawoldigital.com';
 
-final RegExp _packageCode =
-    RegExp('^$packageCodePrefix([$packageTrackingAlphabet]{6})\$');
+/// Every prefix a Laawol tracking code can carry: barrel (BS), freight (FR),
+/// transport (TR), parked car (PK), shared barrel (BP), freight quote (FQ)
+/// and container line (CL). Mirrors `GUEST_TRACKING_COLLECTIONS` in
+/// `functions/guest_tracking.js` (`tracking_code_links_test.dart` fails when
+/// the two drift), so a tracking link the server can answer is a link the
+/// app opens.
+const laawolTrackingPrefixes = <String>[
+  'BS',
+  'FR',
+  'TR',
+  'PK',
+  'BP',
+  'FQ',
+  packageCodePrefix,
+];
+
+final RegExp _anyTrackingCode = RegExp(
+  '^(${laawolTrackingPrefixes.join('|')})([$packageTrackingAlphabet]{6})\$',
+);
 
 /// A part of a package split across containers: the root's code and its
 /// part number, `CL-K7M4P2-2` (docs/WAITING_PACKAGES.md "Split across
 /// containers"). Mirrors the part branch of `normalizeTrackingCode`.
-final RegExp _packagePartCode =
-    RegExp('^$packageCodePrefix([$packageTrackingAlphabet]{6})([1-9][0-9]?)\$');
+final RegExp _packagePartCode = RegExp(
+  '^$packageCodePrefix([$packageTrackingAlphabet]{6})([1-9][0-9]?)\$',
+);
 
 /// [raw] - a QR payload, a typed code, a pasted link - as "CL-XXXXXX", or
 /// null when it holds no container-line code.
@@ -37,6 +55,21 @@ final RegExp _packagePartCode =
 /// Normalising mirrors `normalizeTrackingCode` on the server, narrowed to
 /// the CL prefix and the short alphabet, so "CL-K7M4P0" (a zero) is null.
 String? packageCodeFromScan(String? raw) {
+  final code = trackingCodeFromScan(raw);
+  return code != null && isPackageTrackingCode(code) ? code : null;
+}
+
+/// Whether [code] (already normalised) is a container-line code, the one
+/// kind with a staff package view of its own.
+bool isPackageTrackingCode(String code) =>
+    code.startsWith('$packageCodePrefix-');
+
+/// [packageCodeFromScan] for every Laawol prefix: "PK-2KF3H9" from a parked
+/// car's WhatsApp Track button, "BS-K7M4P2" from a barrel booking, and so on.
+/// Same reading rules (case, separators, the label link, the older
+/// `?code=` form, other sites refused); null when [raw] holds no code the
+/// server could look up.
+String? trackingCodeFromScan(String? raw) {
   final text = (raw ?? '').trim();
   if (text.isEmpty) return null;
   final link = _linkCandidate(text);
@@ -49,17 +82,40 @@ String? packageCodeFromScan(String? raw) {
 /// package tracking link. Only the label host, and only `/t/<code>` or the
 /// older `?service=tracking&code=` form.
 String? packageCodeFromLink(Uri? uri) {
-  if (uri == null) return null;
+  final code = trackingCodeFromLink(uri);
+  return code != null && isPackageTrackingCode(code) ? code : null;
+}
+
+/// [packageCodeFromLink] for every Laawol prefix: the code an incoming app
+/// link carries, or null when it is not a tracking link we can read.
+String? trackingCodeFromLink(Uri? uri) {
+  if (!_isLaawolLink(uri)) return null;
+  return trackingCodeFromScan(uri.toString());
+}
+
+/// Whether [uri] is aimed at the tracking page - the label host and `/t/...`
+/// or the older `?service=tracking` form - whether or not the code in it
+/// is readable. A link that is this but yields no [trackingCodeFromLink] is
+/// a damaged one, and the app says so instead of staying silent.
+bool isTrackingLinkAttempt(Uri? uri) {
+  if (!_isLaawolLink(uri)) return false;
+  final segments = uri!.pathSegments.where((s) => s.isNotEmpty).toList();
+  if (segments.isNotEmpty && segments.first.toLowerCase() == 't') return true;
+  return segments.isEmpty &&
+      (uri.queryParameters['service'] ?? '').toLowerCase() == 'tracking';
+}
+
+bool _isLaawolLink(Uri? uri) {
+  if (uri == null) return false;
   final scheme = uri.scheme.toLowerCase();
-  if (scheme != 'https' && scheme != 'http') return null;
-  if (uri.host.toLowerCase() != packageLinkHost) return null;
-  return packageCodeFromScan(uri.toString());
+  if (scheme != 'https' && scheme != 'http') return false;
+  return uri.host.toLowerCase() == packageLinkHost;
 }
 
 String? _normalize(String value) {
   final stripped = value.toUpperCase().replaceAll(RegExp('[^A-Z0-9]'), '');
-  final match = _packageCode.firstMatch(stripped);
-  if (match != null) return '$packageCodePrefix-${match.group(1)}';
+  final any = _anyTrackingCode.firstMatch(stripped);
+  if (any != null) return '${any.group(1)}-${any.group(2)}';
   final part = _packagePartCode.firstMatch(stripped);
   return part == null
       ? null
@@ -70,7 +126,8 @@ String? _normalize(String value) {
 String? _linkCandidate(String text) {
   final lower = text.toLowerCase();
   final hasScheme = lower.startsWith('http://') || lower.startsWith('https://');
-  if (!hasScheme && !lower.startsWith('$packageLinkHost/') &&
+  if (!hasScheme &&
+      !lower.startsWith('$packageLinkHost/') &&
       !lower.startsWith('$packageLinkHost?')) {
     return null;
   }
@@ -95,7 +152,10 @@ Uri? packagePhoneCallUri(String phone) {
   final trimmed = phone.trim();
   final digits = trimmed.replaceAll(RegExp(r'\D'), '');
   if (digits.length < 5) return null;
-  return Uri(scheme: 'tel', path: trimmed.startsWith('+') ? '+$digits' : digits);
+  return Uri(
+    scheme: 'tel',
+    path: trimmed.startsWith('+') ? '+$digits' : digits,
+  );
 }
 
 /// `https://wa.me/<digits>` for [phone]. WhatsApp needs the full number
@@ -145,10 +205,9 @@ bool packageLinkStaffEligible({
 PackageLinkDestination packageLinkDestination({
   required bool staffEligible,
   required bool lineInBusiness,
-}) =>
-    staffEligible && lineInBusiness
-        ? PackageLinkDestination.staffPackage
-        : PackageLinkDestination.guestTracking;
+}) => staffEligible && lineInBusiness
+    ? PackageLinkDestination.staffPackage
+    : PackageLinkDestination.guestTracking;
 
 // ---------------------------------------------------------------------------
 // Printing labels.
@@ -161,18 +220,15 @@ const labelFormatThermal = 'thermal';
 /// one or two per package. Two is the default (two sides of a barrel); one
 /// is for replacing a single torn label.
 class LabelPrintChoice {
-  const LabelPrintChoice({
-    this.format = labelFormatSheet,
-    this.copies = 2,
-  });
+  const LabelPrintChoice({this.format = labelFormatSheet, this.copies = 2});
 
   final String format;
   final int copies;
 
   LabelPrintChoice copyWith({String? format, int? copies}) => LabelPrintChoice(
-        format: format ?? this.format,
-        copies: copies ?? this.copies,
-      );
+    format: format ?? this.format,
+    copies: copies ?? this.copies,
+  );
 
   @override
   bool operator ==(Object other) =>
@@ -207,8 +263,9 @@ Map<String, Object> containerLabelsRequest({
     'businessId': businessId,
     'containerId': containerId,
     'view': 'labels',
-    'format':
-        choice.format == labelFormatThermal ? labelFormatThermal : labelFormatSheet,
+    'format': choice.format == labelFormatThermal
+        ? labelFormatThermal
+        : labelFormatSheet,
     'copies': choice.copies == 1 ? 1 : 2,
     if (byLines && ids.isNotEmpty) 'lineIds': ids,
     if (!byLines && lineId.trim().isNotEmpty) 'lineId': lineId.trim(),

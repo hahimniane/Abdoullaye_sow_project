@@ -1237,6 +1237,10 @@
   "guestTrackingIdentifierHint": "For example, BS-K7M4P2",
   "guestTrackingRequired": "Enter your booking or tracking number.",
   "guestTrackingInvalid": "Enter a valid booking or tracking number.",
+  "trackingLinkInvalid": "This tracking link isn't valid.",
+  "@trackingLinkInvalid": {
+    "description": "Shown when a tapped tracking link opens the app but its tracking code cannot be read."
+  },
   "guestTrackingSubmit": "Track",
   "guestTrackingLoading": "Checking status…",
   "guestTrackingSuccessTitle": "Tracking found",
