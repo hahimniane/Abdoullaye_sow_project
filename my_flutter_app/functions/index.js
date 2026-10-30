@@ -12994,11 +12994,13 @@ async function buildParkingReceiptMessage(args) {
       db.collection("parkedCars").doc(carId));
   const bytes = await parkingReceiptPdf.renderReceiptPdf(
       parkingReceiptPdf.receiptModel({
-        business: {name: car.businessName || business.name,
-          phone: business.phone},
+        // The whole profile: the receipt draws the same header (logo,
+        // address, phone, email) as the printable parking document.
+        business: {...business, name: car.businessName || business.name},
         car,
         payment: {amountCents: payment.amountCents,
           method: payment.receivedVia, atMs, number: payment.number,
+          receivedByStaffId: payment.receivedByStaffId,
           receivedByName: await staffNameForReceipt(db,
               payment.receivedByStaffId)},
         balance,

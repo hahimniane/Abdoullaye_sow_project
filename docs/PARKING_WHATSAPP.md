@@ -58,6 +58,13 @@ on the car's Track page, which also offers the Laawol app.
 - **Contacts:** every send calls the WhatsApp contact recorder (as container
   updates do: `whatsappContacts/{e164}.businesses[businessId]`, with the car's
   tracking code) so the customer's reply routes to this business.
+- **Receipt PDF design (2026-10-30):** the PDF is drawn to look exactly like
+  the printable parking document (`parking_document.js`, `/d`): logo + name +
+  address/contact left, "RECEIPT / REÇU" in teal + `REC-{trackingCode}-{n}`
+  right, teal rule, PAID / PARTLY PAID pill, label/value rows with hairlines,
+  shaded "AMOUNT PAID" box (total paid so far, balance owed or paid in full),
+  footer. Colours come from `COLORS` in `parking_document.js`; the logo is
+  fetched with a 3 s timeout and falls back to the business initial.
 - **Receipt PDF:** a pure renderer `parking_receipt_pdf.js` (add `pdfkit` to
   functions dependencies) → bytes for one payment: business name/logo text,
   "RECEIPT", receipt number (`{trackingCode}-{n}`), date (US, month-first),

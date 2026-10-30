@@ -13,6 +13,22 @@
 // The decision of WHICH document a record should produce is pure and tested
 // here; the HTML is a plain template with print CSS.
 
+// The document's palette, shared with the receipt PDF
+// (parking_receipt_pdf.js) so the two look like one family.
+const COLORS = Object.freeze({
+  teal: "#0D9488",
+  muted: "#5b6b68",
+  ink: "#12211f",
+  hairline: "#eceeed",
+  box: "#f6f8f8",
+  paidBg: "#dcfce7",
+  paidInk: "#166534",
+  dueBg: "#fef3c7",
+  dueInk: "#92400e",
+});
+
+const C = COLORS;
+
 const LOGO_URL = "https://laawoldigital.com/assets/logo.png";
 
 /**
@@ -336,37 +352,37 @@ function renderParkingDocument(model) {
 <title>${escapeHtml(model.title)} ${escapeHtml(model.reference)}</title>
 <style>
   *{box-sizing:border-box}
-  body{margin:0;background:#eef1f0;color:#12211f;
+  body{margin:0;background:#eef1f0;color:${C.ink};
     font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
     padding:24px}
   .sheet{background:#fff;max-width:720px;margin:0 auto;padding:40px;
     border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.08)}
   header{display:flex;align-items:center;justify-content:space-between;
-    gap:16px;border-bottom:2px solid #0D9488;padding-bottom:18px}
+    gap:16px;border-bottom:2px solid ${C.teal};padding-bottom:18px}
   .brand{display:flex;align-items:center;gap:12px}
   .brand img{width:44px;height:44px;border-radius:9px;display:block}
   .brand b{font-size:19px;letter-spacing:.2px}
-  .brand span{display:block;color:#5b6b68;font-size:12px;font-weight:500;
+  .brand span{display:block;color:${C.muted};font-size:12px;font-weight:500;
     line-height:1.5}
   .brand div{min-width:0}
   .doc-title{text-align:right}
   .doc-title h1{margin:0;font-size:24px;letter-spacing:.5px;
-    text-transform:uppercase;color:#0D9488}
-  .doc-title p{margin:4px 0 0;color:#5b6b68;font-size:13px}
+    text-transform:uppercase;color:${C.teal}}
+  .doc-title p{margin:4px 0 0;color:${C.muted};font-size:13px}
   .stamp{display:inline-block;margin:20px 0 0;padding:6px 14px;
     border-radius:999px;font-weight:700;font-size:13px;letter-spacing:.6px}
-  .stamp.paid{background:#dcfce7;color:#166534}
-  .stamp.due{background:#fef3c7;color:#92400e}
+  .stamp.paid{background:${C.paidBg};color:${C.paidInk}}
+  .stamp.due{background:${C.dueBg};color:${C.dueInk}}
   table{width:100%;border-collapse:collapse;margin-top:22px}
-  th,td{text-align:left;padding:9px 0;border-bottom:1px solid #eceeed;
+  th,td{text-align:left;padding:9px 0;border-bottom:1px solid ${C.hairline};
     font-size:14px;vertical-align:top}
-  th{width:190px;color:#5b6b68;font-weight:600}
+  th{width:190px;color:${C.muted};font-weight:600}
   .total{margin-top:26px;display:flex;justify-content:space-between;
-    align-items:center;background:#f6f8f8;border-radius:10px;padding:16px 20px}
-  .total span{color:#5b6b68;font-size:13px;font-weight:600;
+    align-items:center;background:${C.box};border-radius:10px;padding:16px 20px}
+  .total span{color:${C.muted};font-size:13px;font-weight:600;
     text-transform:uppercase;letter-spacing:.5px}
   .total b{font-size:26px}
-  .pay{margin-top:24px;border:1px dashed #0D9488;border-radius:10px;
+  .pay{margin-top:24px;border:1px dashed ${C.teal};border-radius:10px;
     padding:16px 20px;background:#f2fbfa;display:flex;align-items:center;
     gap:18px}
   .pay-body{flex:1;min-width:0}
@@ -374,15 +390,15 @@ function renderParkingDocument(model) {
   .qr svg{width:104px;height:104px;display:block;background:#fff;
     border-radius:6px;padding:6px}
   .qr span{display:block;margin-top:6px;font-size:11px;font-weight:600;
-    color:#0D9488;letter-spacing:.3px}
+    color:${C.teal};letter-spacing:.3px}
   .pay-title{margin:0 0 6px;font-weight:700;font-size:14px}
   .pay-link{margin:0;font-size:12px;word-break:break-all}
-  .pay-link a{color:#0D9488}
-  .pay-note{margin:8px 0 0;color:#5b6b68;font-size:12px}
-  footer{margin-top:30px;border-top:1px solid #eceeed;padding-top:14px;
-    color:#5b6b68;font-size:12px;line-height:1.6}
+  .pay-link a{color:${C.teal}}
+  .pay-note{margin:8px 0 0;color:${C.muted};font-size:12px}
+  footer{margin-top:30px;border-top:1px solid ${C.hairline};padding-top:14px;
+    color:${C.muted};font-size:12px;line-height:1.6}
   .actions{max-width:720px;margin:0 auto 16px;text-align:right}
-  .actions button{background:#0D9488;color:#fff;border:0;border-radius:8px;
+  .actions button{background:${C.teal};color:#fff;border:0;border-radius:8px;
     padding:10px 18px;font-size:14px;font-weight:600;cursor:pointer}
   @media print{
     body{background:#fff;padding:0}
@@ -427,6 +443,7 @@ function renderParkingDocument(model) {
 }
 
 module.exports = {
+  COLORS,
   PARKING_DOCUMENT_TYPES,
   documentLogo,
   formatBusinessAddress,

@@ -2,16 +2,25 @@
 
 /**
  * The receipt PDF a parked car's customer gets with every payment
- * (docs/PARKING_WHATSAPP.md §2): the business, a receipt number, the day,
- * the customer and car, this payment, what has been paid in all and what is
- * still owed (or PAID IN FULL). Every label is English / French, like the
- * WhatsApp messages it rides with. Dates are US style, month first.
+ * (docs/PARKING_WHATSAPP.md §2). It is drawn to match the printable parking
+ * document (`parking_document.js`, served by `/d`): the same header (the
+ * business's logo, name, address and contact on the left; the document type
+ * in brand teal and its number on the right), the thin teal rule, a status
+ * pill, label / value rows with hairlines, the shaded amount box and the
+ * footer note, in the same colours. Every label is English / French, like
+ * the WhatsApp messages it rides with. Dates are US style, month first.
  *
- * Pure: `receiptModel` turns records into the lines to print and
- * `renderReceiptPdf` draws them; no Firestore, Storage or network.
+ * `receiptModel` turns records into the lines to print and is pure;
+ * `renderReceiptPdf` draws them. The only network use is the logo, fetched
+ * with a short timeout and never allowed to fail a receipt.
  */
 
 const PDFDocument = require("pdfkit");
+const {
+  COLORS,
+  documentLogo,
+  formatBusinessAddress,
+} = require("./parking_document");
 
 const MONTHS = Object.freeze([
   "Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -30,6 +39,12 @@ const METHOD_LABEL = Object.freeze({
   online: "Online / En ligne",
   other: "Other / Autre",
 });
+
+// Money counted into the business's own account, not a staff member's hands.
+const BUSINESS_ACCOUNT_RECEIVER = "business_account";
+
+const LOGO_TIMEOUT_MS = 3000;
+const LOGO_MAX_BYTES = 2 * 1024 * 1024;
 
 const text = (value, max = 200) => String(value ?? "").trim().slice(0, max);
 
@@ -72,14 +87,30 @@ function shortDay(ms, timeZone) {
 }
 
 /**
- * The lines of one receipt.
+ * A "YYYY-MM-DD" day key as a US date.
  *
- * @param {object} args {business: {name, phone}, car, payment: {amountCents,
- *   method, receivedByName, atMs, number}, balance: parkingBalanceNow's
- *   answer, timeZone?}.
- * @return {object} What to print: {title, businessName, businessPhone,
- *   receiptNumber, rows: [{label, value, strong?}], balanceRow: {label,
- *   value, paidInFull}, footer}.
+ * @param {*} key The day key.
+ * @return {string} "Oct 20, 2026", or "" for anything else.
+ */
+function usDayKey(key) {
+  const value = text(key, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return "";
+  return `${MONTHS[Number(value.slice(5, 7)) - 1]} ` +
+    `${Number(value.slice(8, 10))}, ${value.slice(0, 4)}`;
+}
+
+/**
+ * The lines of one receipt, the same rows the web document prints plus
+ * what is particular to a payment.
+ *
+ * @param {object} args {business: {name, phone, email, logoUrl,
+ *   profileImageUrl, address fields}, car, payment: {amountCents, method,
+ *   receivedByName, receivedByStaffId, atMs, number}, balance:
+ *   parkingBalanceNow's answer, timeZone?}.
+ * @return {object} What to print: {title, reference, receiptNumber,
+ *   businessName, businessAddress, businessContact, logoUrl, status:
+ *   {label, paidInFull}, rows: [{label, value}], amount: {label, value},
+ *   totals: [{label, value, tone}], footer: string[]}.
  */
 function receiptModel(args) {
   const car = args?.car && typeof args.car === "object" ? args.car : {};
@@ -90,56 +121,115 @@ function receiptModel(args) {
   const code = text(car.trackingCode, 40);
   const number = Math.max(1, Math.round(Number(payment.number) || 1));
   const vehicle = [car.carYear, car.carMake, car.carModel]
-      .map((v) => text(v, 80)).filter(Boolean).join(" ");
-  const vin = text(car.vinNumber, 17).toUpperCase();
+      .map((v) => text(v, 60)).filter(Boolean).join(" ");
   const method = METHOD_LABEL[text(payment.method, 40).toLowerCase()] ||
     METHOD_LABEL.other;
-  const sinceKey = text(balance.sinceDayKey, 10);
-  const since = /^\d{4}-\d{2}-\d{2}$/.test(sinceKey) ?
-    `${MONTHS[Number(sinceKey.slice(5, 7)) - 1]} ` +
-      `${Number(sinceKey.slice(8, 10))}, ${sinceKey.slice(0, 4)}` : "";
+  const since = usDayKey(balance.sinceDayKey);
+  const until = usDayKey(balance.leftDayKey);
+  const customer = text(car.customerName || car.ownerName, 120);
   const rows = [
-    {label: "Receipt no. / N° de reçu", value: `${code}-${number}`},
-    {label: "Date / Date", value: usDate(payment.atMs, zone)},
-    {label: "Customer / Client", value: text(car.customerName, 120) || "—"},
-    {label: "Car / Voiture", value: vehicle || "—"},
+    ["Customer / Client", customer],
+    ["Phone / Téléphone", text(car.customerPhone, 40)],
+    ["Vehicle / Véhicule", vehicle],
+    ["VIN / NIV", text(car.vinNumber, 17).toUpperCase()],
+    ["Parked from / Stationné depuis", since],
+    ["Parked until / Stationné jusqu'au", since ?
+      (until || "Still parked / Toujours stationné") : ""],
+    ["Tracking code / Code de suivi", code],
+    ["Payment method / Mode de paiement", method],
+    ["Payment received / Paiement reçu le", usDate(payment.atMs, zone)],
+    ["Amount of this payment / Montant de ce paiement",
+      money(payment.amountCents)],
   ];
-  if (vin) rows.push({label: "VIN / NIV", value: vin});
-  if (since) {
-    rows.push({label: "Parked since / Stationné depuis", value: since});
-  }
-  if (Number(balance.dailyRateCents) > 0) {
-    rows.push({label: "Daily rate / Tarif par jour",
-      value: money(balance.dailyRateCents)});
-  }
-  rows.push(
-      {label: "Days so far / Jours à ce jour",
-        value: String(Math.max(0, Math.round(Number(balance.days) || 0)))},
-      {label: "Parking to date / Stationnement à ce jour",
-        value: money(balance.accruedCents)},
-      {label: "This payment / Ce paiement", value: money(payment.amountCents),
-        strong: true},
-      {label: "Method / Mode de paiement", value: method},
-  );
-  const by = text(payment.receivedByName, 120);
-  if (by) rows.push({label: "Received by / Reçu par", value: by});
-  rows.push({label: "Total paid / Total payé",
-    value: money(balance.paidCents)});
+  const byName = text(payment.receivedByName, 120);
+  const received = text(payment.receivedByStaffId, 120) ===
+    BUSINESS_ACCOUNT_RECEIVER ?
+    "Business account / Compte de l'entreprise" : byName;
+  rows.push(["Received by / Reçu par", received]);
+
   const paidInFull = balance.paidInFull === true;
+  const name = text(business.name, 160) || "Laawol";
   return {
     title: "RECEIPT / REÇU",
-    businessName: text(business.name, 120) || "Laawol",
-    businessPhone: text(business.phone, 40),
+    reference: `REC-${code}-${number}`,
     receiptNumber: `${code}-${number}`,
-    rows,
-    balanceRow: {
-      label: paidInFull ? "Status / Statut" : "Balance owed / Solde à payer",
-      value: paidInFull ? "PAID IN FULL / PAYÉ EN TOTALITÉ" :
-        money(balance.balanceCents),
+    businessName: name,
+    businessAddress: formatBusinessAddress({business, entry: car}),
+    businessContact: [text(business.phone, 40), text(business.email, 180)]
+        .filter(Boolean).join("  |  "),
+    logoUrl: documentLogo(business).url,
+    status: {
+      label: paidInFull ? "PAID / PAYÉ" : "PARTLY PAID / PAYÉ EN PARTIE",
       paidInFull,
     },
-    footer: "Issued through Laawol Digital · laawoldigital.com",
+    rows: rows.filter(([, value]) => value)
+        .map(([label, value]) => ({label, value})),
+    amount: {label: "AMOUNT PAID / MONTANT PAYÉ",
+      value: money(payment.amountCents)},
+    totals: [
+      {label: "Total paid so far / Total payé à ce jour",
+        value: money(balance.paidCents)},
+      paidInFull ?
+        {label: "Balance / Solde", value: "Paid in full / Payé en totalité",
+          tone: "paid"} :
+        {label: "Balance owed / Solde à payer",
+          value: money(balance.balanceCents), tone: "due"},
+    ],
+    footer: [
+      "Thank you — this receipt confirms your payment. / " +
+        "Merci — ce reçu confirme votre paiement.",
+      "Issued through Laawol Digital · laawoldigital.com",
+    ],
   };
+}
+
+/**
+ * Fetches a logo's bytes: https only, PNG or JPEG (all pdfkit can draw),
+ * small, and quick. Resolves to null on any failure.
+ *
+ * @param {string} url The logo.
+ * @param {number} timeoutMs Give up after this long.
+ * @return {Promise<?Buffer>} The image, or null.
+ */
+async function fetchLogoBytes(url, timeoutMs = LOGO_TIMEOUT_MS) {
+  if (!/^https:\/\//i.test(String(url || ""))) return null;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {signal: controller.signal});
+    if (!response.ok) return null;
+    const bytes = Buffer.from(await response.arrayBuffer());
+    return bytes.length > 0 && bytes.length <= LOGO_MAX_BYTES ? bytes : null;
+  } catch (error) {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Runs the logo fetch under a hard deadline, whatever the fetcher does.
+ *
+ * @param {function(string): Promise<?Buffer>} fetchLogo The fetcher.
+ * @param {string} url The logo.
+ * @param {number} timeoutMs The deadline.
+ * @return {Promise<?Buffer>} The image, or null on failure or timeout.
+ */
+async function logoWithin(fetchLogo, url, timeoutMs) {
+  let timer;
+  const deadline = new Promise((resolve) => {
+    timer = setTimeout(() => resolve(null), timeoutMs);
+  });
+  try {
+    const bytes = await Promise.race([
+      Promise.resolve().then(() => fetchLogo(url)), deadline,
+    ]);
+    return Buffer.isBuffer(bytes) && bytes.length > 0 ? bytes : null;
+  } catch (error) {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /**
@@ -147,17 +237,23 @@ function receiptModel(args) {
  *
  * @param {object} model From receiptModel.
  * @param {object} [options] {compress}: `compress: false` leaves the page
- *   content readable (tests).
+ *   content readable (tests). {fetchLogo(url)}: replaces the logo download.
+ *   {logoTimeoutMs}: the logo deadline (3 seconds).
  * @return {Promise<Buffer>} The PDF.
  */
-function renderReceiptPdf(model, {compress = true} = {}) {
+async function renderReceiptPdf(model, {
+  compress = true, fetchLogo = fetchLogoBytes,
+  logoTimeoutMs = LOGO_TIMEOUT_MS,
+} = {}) {
+  const logo = model.logoUrl ?
+    await logoWithin(fetchLogo, model.logoUrl, logoTimeoutMs) : null;
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
       size: "LETTER",
-      margin: 54,
+      margin: 48,
       compress,
       info: {
-        Title: `Receipt ${model.receiptNumber}`,
+        Title: `Receipt ${model.reference}`,
         Author: model.businessName,
         Producer: "Laawol Digital",
       },
@@ -167,7 +263,7 @@ function renderReceiptPdf(model, {compress = true} = {}) {
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
     try {
-      draw(doc, model);
+      draw(doc, model, logo);
       doc.end();
     } catch (error) {
       reject(error);
@@ -176,49 +272,148 @@ function renderReceiptPdf(model, {compress = true} = {}) {
 }
 
 /**
+ * The business's mark: its logo in a rounded square, or, when there is no
+ * usable image, the business's initial on a brand-teal square.
+ *
  * @param {object} doc A PDFDocument.
  * @param {object} model From receiptModel.
+ * @param {?Buffer} logo The image bytes, if any.
+ * @param {number} x Left.
+ * @param {number} y Top.
+ * @param {number} size Side of the square.
  */
-function draw(doc, model) {
+function drawLogo(doc, model, logo, x, y, size) {
+  const radius = size * 0.2;
+  if (logo) {
+    try {
+      doc.save();
+      doc.roundedRect(x, y, size, size, radius).clip();
+      doc.image(logo, x, y, {cover: [size, size], align: "center",
+        valign: "center"});
+      doc.restore();
+      return;
+    } catch (error) {
+      doc.restore();
+    }
+  }
+  doc.roundedRect(x, y, size, size, radius).fill(COLORS.teal);
+  const initial = Array.from(model.businessName)[0]?.toUpperCase() || "L";
+  doc.font("Helvetica-Bold").fontSize(size * 0.5).fillColor("#ffffff")
+      .text(initial, x, y + size * 0.25, {width: size, align: "center",
+        lineBreak: false});
+}
+
+/**
+ * @param {object} doc A PDFDocument.
+ * @param {object} model From receiptModel.
+ * @param {?Buffer} logo The logo bytes, if any.
+ */
+function draw(doc, model, logo) {
   const left = doc.page.margins.left;
   const width = doc.page.width - left - doc.page.margins.right;
-  doc.font("Helvetica-Bold").fontSize(20).fillColor("#111827")
-      .text(model.businessName, left, 54, {width});
-  if (model.businessPhone) {
-    doc.font("Helvetica").fontSize(10).fillColor("#6b7280")
-        .text(model.businessPhone, left, doc.y + 2, {width});
+  const right = left + width;
+  const top = doc.page.margins.top;
+  const ink = COLORS.ink;
+  const muted = COLORS.muted;
+
+  // Header: the business on the left, the document on the right.
+  const logoSize = 46;
+  drawLogo(doc, model, logo, left, top, logoSize);
+  const brandX = left + logoSize + 12;
+  const titleWidth = 210;
+  const brandWidth = width - logoSize - 12 - titleWidth - 12;
+  let by = top + 2;
+  doc.font("Helvetica-Bold").fontSize(15).fillColor(ink)
+      .text(model.businessName, brandX, by, {width: brandWidth});
+  by = doc.y + 1;
+  for (const line of [model.businessAddress, model.businessContact]) {
+    if (!line) continue;
+    doc.font("Helvetica").fontSize(9).fillColor(muted)
+        .text(line, brandX, by, {width: brandWidth});
+    by = doc.y + 1;
   }
-  doc.font("Helvetica-Bold").fontSize(26).fillColor("#111827")
-      .text(model.title, left, doc.y + 18, {width});
-  doc.moveTo(left, doc.y + 8).lineTo(left + width, doc.y + 8)
-      .lineWidth(1).strokeColor("#d1d5db").stroke();
-  let y = doc.y + 22;
-  const labelWidth = 230;
+  doc.font("Helvetica-Bold").fontSize(19).fillColor(COLORS.teal)
+      .text(model.title, right - titleWidth, top + 2,
+          {width: titleWidth, align: "right"});
+  doc.font("Helvetica").fontSize(10).fillColor(muted)
+      .text(model.reference, right - titleWidth, doc.y + 3,
+          {width: titleWidth, align: "right"});
+  let y = Math.max(by, doc.y, top + logoSize) + 14;
+  doc.moveTo(left, y).lineTo(right, y)
+      .lineWidth(2).strokeColor(COLORS.teal).stroke();
+
+  // The status pill.
+  y += 18;
+  const paid = model.status.paidInFull;
+  doc.font("Helvetica-Bold").fontSize(10);
+  const pillWidth = doc.widthOfString(model.status.label) + 28;
+  doc.roundedRect(left, y, pillWidth, 22, 11)
+      .fill(paid ? COLORS.paidBg : COLORS.dueBg);
+  doc.fillColor(paid ? COLORS.paidInk : COLORS.dueInk)
+      .text(model.status.label, left, y + 6, {width: pillWidth,
+        align: "center", lineBreak: false});
+  y += 22 + 12;
+
+  // Label / value rows with hairlines.
+  const labelWidth = 250;
+  const valueX = left + labelWidth + 12;
+  const valueWidth = right - valueX;
   for (const row of model.rows) {
-    doc.font("Helvetica").fontSize(11).fillColor("#6b7280")
-        .text(row.label, left, y, {width: labelWidth});
-    doc.font(row.strong ? "Helvetica-Bold" : "Helvetica").fontSize(11)
-        .fillColor("#111827")
-        .text(row.value, left + labelWidth + 10, y,
-            {width: width - labelWidth - 10, align: "right"});
-    y = Math.max(doc.y, y + 14) + 7;
+    doc.font("Helvetica-Bold").fontSize(9.5);
+    const labelHeight = doc.heightOfString(row.label, {width: labelWidth});
+    doc.font("Helvetica").fontSize(11);
+    const valueHeight = doc.heightOfString(row.value, {width: valueWidth});
+    const height = Math.max(labelHeight, valueHeight);
+    doc.font("Helvetica-Bold").fontSize(9.5).fillColor(muted)
+        .text(row.label, left, y + 8 + (height - labelHeight) / 2,
+            {width: labelWidth});
+    doc.font("Helvetica").fontSize(11).fillColor(ink)
+        .text(row.value, valueX, y + 7 + (height - valueHeight) / 2,
+            {width: valueWidth, align: "right"});
+    y += height + 15;
+    doc.moveTo(left, y).lineTo(right, y)
+        .lineWidth(0.75).strokeColor(COLORS.hairline).stroke();
   }
-  doc.moveTo(left, y).lineTo(left + width, y)
-      .lineWidth(1).strokeColor("#d1d5db").stroke();
-  y += 14;
-  const paid = model.balanceRow.paidInFull;
-  doc.font("Helvetica-Bold").fontSize(13).fillColor("#111827")
-      .text(model.balanceRow.label, left, y, {width: labelWidth});
-  doc.font("Helvetica-Bold").fontSize(13)
-      .fillColor(paid ? "#047857" : "#b91c1c")
-      .text(model.balanceRow.value, left + labelWidth + 10, y,
-          {width: width - labelWidth - 10, align: "right"});
-  doc.font("Helvetica").fontSize(9).fillColor("#6b7280")
-      .text(model.footer, left, doc.page.height - 80, {width, align: "center"});
+
+  // The shaded amount box.
+  y += 22;
+  const boxHeight = 118;
+  doc.roundedRect(left, y, width, boxHeight, 9).fill(COLORS.box);
+  const pad = 18;
+  doc.font("Helvetica-Bold").fontSize(10).fillColor(muted)
+      .text(model.amount.label, left + pad, y + 24,
+          {width: width / 2 - pad, lineBreak: false});
+  doc.font("Helvetica-Bold").fontSize(26).fillColor(ink)
+      .text(model.amount.value, left + width / 2, y + 14,
+          {width: width / 2 - pad, align: "right", lineBreak: false});
+  let ty = y + 58;
+  for (const total of model.totals) {
+    doc.font("Helvetica").fontSize(10.5).fillColor(muted)
+        .text(total.label, left + pad, ty,
+            {width: width / 2, lineBreak: false});
+    const tone = total.tone === "paid" ? COLORS.paidInk :
+      total.tone === "due" ? COLORS.dueInk : ink;
+    doc.font("Helvetica-Bold").fontSize(10.5).fillColor(tone)
+        .text(total.value, left + width / 2, ty,
+            {width: width / 2 - pad, align: "right", lineBreak: false});
+    ty += 25;
+  }
+  y += boxHeight + 28;
+
+  // Footer: a hairline, the thank-you and who issued it.
+  doc.moveTo(left, y).lineTo(right, y)
+      .lineWidth(0.75).strokeColor(COLORS.hairline).stroke();
+  y += 12;
+  doc.font("Helvetica").fontSize(9).fillColor(muted);
+  for (const line of model.footer) {
+    doc.text(line, left, y, {width});
+    y = doc.y + 3;
+  }
 }
 
 module.exports = {
   METHOD_LABEL,
+  fetchLogoBytes,
   money,
   receiptModel,
   renderReceiptPdf,
