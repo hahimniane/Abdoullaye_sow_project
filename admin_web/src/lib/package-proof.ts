@@ -305,6 +305,11 @@ export function senderConfirmationOf(line: unknown): SenderConfirmation {
 }
 
 export type ProofTicks = {
+  /**
+   * An air package shows all three ticks; a sea package (the default, and
+   * every line from before "Ships by") only the delivered one.
+   */
+  air: boolean;
   photo: boolean;
   senderOk: SenderConfirmationStatus;
   delivered: boolean;
@@ -313,28 +318,36 @@ export type ProofTicks = {
   complete: boolean;
 };
 
-/** The three ticks a package shows (derived, never stored). */
+/**
+ * The ticks a package shows (derived, never stored; the server's
+ * `proofTicks`). A sea package never needs a photo or a sender's answer:
+ * it is complete once delivered.
+ */
 export function proofTicks(line: unknown): ProofTicks {
   const row = asRow(line);
+  const air = packageShipModeOf(row.shipMode) === "air";
   const photo = Array.isArray(row.photoPaths) && row.photoPaths.length > 0;
   const senderOk = senderConfirmationOf(row).status;
   const delivered = Boolean(row.deliveredAt);
   return {
+    air,
     photo,
     senderOk,
     delivered,
     deliveredWithoutCode: delivered && row.deliveredWithoutCode === true,
-    complete: photo && senderOk === "confirmed" && delivered,
+    complete: air ? photo && senderOk === "confirmed" && delivered : delivered,
   };
 }
 
 /**
- * "Missing proof" on the Waiting list: no drop-off photo, or - when the
- * business asks senders to confirm - a sender who has not said OK yet
- * (asked, none) or said something is wrong.
+ * "Missing proof" on the Waiting list: an AIR package with no drop-off
+ * photo, or - when the business asks senders to confirm - whose sender has
+ * not said OK yet (asked, none) or said something is wrong. A sea package
+ * is never missing proof.
  */
 export function lineMissingProof(line: unknown, settings: Pick<ProofSettings, "senderConfirm">): boolean {
   const ticks = proofTicks(line);
+  if (!ticks.air) return false;
   if (!ticks.photo) return true;
   return Boolean(settings?.senderConfirm) && ticks.senderOk !== "confirmed";
 }

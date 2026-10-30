@@ -188,6 +188,21 @@ void main() {
       expect(find.byTooltip('L’expéditeur a signalé un problème'), findsOneWidget);
       expect(find.byTooltip('Livré'), findsOneWidget);
     });
+
+    // "Ships by" (docs/AIR_PACKAGES.md §7): a sea package needs no photo
+    // and no sender answer, so only its delivered tick shows.
+    testWidgets('a sea package shows only the delivered tick', (tester) async {
+      await pump(
+        tester,
+        const PackageProofTicks(
+          ticks: ProofTicks(
+              photo: false, senderOk: 'none', delivered: true, air: false),
+        ),
+      );
+      expect(find.byKey(const Key('proof-tick-photo')), findsNothing);
+      expect(find.byKey(const Key('proof-tick-sender')), findsNothing);
+      expect(iconColor(tester, 'proof-tick-delivered'), AppColors.sage);
+    });
   });
 
   group('SenderProblemBanner', () {

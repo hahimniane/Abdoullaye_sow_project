@@ -231,11 +231,21 @@ describe("proof settings and ticks", () => {
     assert.equal(proof.confirmationFromPayload("confirm_ok"), "confirmed");
     assert.equal(proof.confirmationFromPayload("CONFIRM_PROBLEM"), "problem");
     assert.equal(proof.confirmationFromPayload("hello"), "");
-    assert.deepEqual(proof.proofTicks({photoPaths: [PATH], senderConfirmation:
-      {status: "confirmed"}, deliveredAt: {}}),
-    {photo: true, senderOk: "confirmed", delivered: true, complete: true});
+    assert.deepEqual(proof.proofTicks({shipMode: "air", photoPaths: [PATH],
+      senderConfirmation: {status: "confirmed"}, deliveredAt: {}}),
+    {air: true, photo: true, senderOk: "confirmed", delivered: true,
+      complete: true});
+    assert.deepEqual(proof.proofTicks({shipMode: "air"}), {air: true,
+      photo: false, senderOk: "none", delivered: false, complete: false});
+    assert.equal(proof.proofTicks({shipMode: "air", deliveredAt: {}})
+        .complete, false);
+    // A sea package (or one from before "Ships by") has only the delivered
+    // tick: complete once delivered, with no photo or sender answer.
     assert.deepEqual(proof.proofTicks({}),
-        {photo: false, senderOk: "none", delivered: false, complete: false});
+        {air: false, photo: false, senderOk: "none", delivered: false,
+          complete: false});
+    assert.equal(proof.proofTicks({shipMode: "sea", deliveredAt: {}})
+        .complete, true);
     assert.equal(proof.senderConfirmationOf({senderConfirmation:
       {status: "weird"}}).status, "none");
   });

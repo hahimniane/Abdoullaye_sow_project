@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_flutter_app/l10n/app_localizations.dart';
+import 'package:my_flutter_app/services/package_requests.dart'
+    show PackageProofSettings;
 import 'package:my_flutter_app/models/destination_country.dart';
 import 'package:my_flutter_app/screens/containers_screen.dart';
 import 'package:my_flutter_app/screens/package_result_screen.dart';
@@ -86,6 +88,10 @@ class _FakeRepo implements ContainerPackageRepository {
 
   @override
   Future<String> businessCountryCode(String businessId) async => 'US';
+
+  @override
+  Future<PackageProofSettings> proofSettings(String businessId) async =>
+      const PackageProofSettings();
 
   @override
   Future<List<DestinationCountry>> destinations(String businessId) async =>

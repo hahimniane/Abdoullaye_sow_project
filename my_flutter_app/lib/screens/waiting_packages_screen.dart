@@ -398,6 +398,7 @@ class _WaitingPackagesScreenState extends State<WaitingPackagesScreen> {
           destinations: widget.destinations,
           labelOpener: widget.labelOpener,
           staff: widget.staff,
+          proofSettings: widget.proofSettings,
           groupLines: widget.feed.lines,
         ),
       ),

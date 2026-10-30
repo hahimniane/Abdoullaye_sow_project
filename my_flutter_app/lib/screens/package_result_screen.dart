@@ -13,7 +13,7 @@ import '../services/line_pieces.dart' show LineGroupSummary;
 import '../services/lot_ledger.dart' show LotStaff, formatLotCents;
 import '../services/package_codes.dart';
 import '../services/package_proof.dart'
-    show contentsText, weightText;
+    show PackageProofSettings, contentsText, weightText;
 import '../services/phone_accounts.dart'
     show RecordPhoneField, RecordPhoneFlags;
 import '../services/waiting_packages.dart';
@@ -68,6 +68,7 @@ class PackageResultScreen extends StatefulWidget {
     this.groupLines = const [],
     this.access,
     this.deliveryService = const ContainerDeliveryService(),
+    this.proofSettings,
   }) : assert(code != '' || lineId != '');
 
   final String businessId;
@@ -105,6 +106,10 @@ class PackageResultScreen extends StatefulWidget {
   /// Marks it delivered and undoes that; a fake in widget tests.
   final ContainerDeliveryService deliveryService;
 
+  /// The business's package switches, incl. `shipsByAir` (the edit form's
+  /// "Ships by" choice); null reads them from the business document.
+  final PackageProofSettings? proofSettings;
+
   @override
   State<PackageResultScreen> createState() => _PackageResultScreenState();
 }
@@ -127,6 +132,8 @@ class _PackageResultScreenState extends State<PackageResultScreen> {
 
   late String _businessCountryCode = widget.businessCountryCode;
   late List<DestinationCountry> _destinations = widget.destinations;
+  late PackageProofSettings _proofSettings =
+      widget.proofSettings ?? const PackageProofSettings();
 
   /// The undo call is in flight (after its confirm dialog closed).
   bool _undoing = false;
@@ -211,6 +218,10 @@ class _PackageResultScreenState extends State<PackageResultScreen> {
       final list = await _repo.destinations(widget.businessId);
       if (mounted && list.isNotEmpty) setState(() => _destinations = list);
     }
+    if (widget.proofSettings == null) {
+      final settings = await _repo.proofSettings(widget.businessId);
+      if (mounted) setState(() => _proofSettings = settings);
+    }
   }
 
   @override
@@ -262,6 +273,8 @@ class _PackageResultScreenState extends State<PackageResultScreen> {
         destinations: _destinations,
         existing: line,
         staff: widget.staff,
+        // "Ships by" and the proof switches, as on the Waiting list.
+        proofSettings: _proofSettings,
       );
       return;
     }
@@ -273,6 +286,7 @@ class _PackageResultScreenState extends State<PackageResultScreen> {
       container: container,
       businessCountryCode: _businessCountryCode,
       destinations: _destinations,
+      proofSettings: _proofSettings,
     );
   }
 
@@ -682,8 +696,11 @@ class PackageResultView extends StatelessWidget {
                   Expanded(
                     child: Text(
                       [
-                        proofTickLabels(l10n, line.proofTicks).photo,
-                        proofTickLabels(l10n, line.proofTicks).sender,
+                        // A sea package has only the delivered tick (§7).
+                        if (line.proofTicks.air) ...[
+                          proofTickLabels(l10n, line.proofTicks).photo,
+                          proofTickLabels(l10n, line.proofTicks).sender,
+                        ],
                         proofTickLabels(l10n, line.proofTicks).delivered,
                       ].join(' · '),
                       key: const Key('pkg-proof-ticks-text'),

@@ -813,6 +813,7 @@ class _ContainersScreenState extends State<ContainersScreen> {
           onOpenContainer: _openDetail,
           staff: _staff,
           groupLines: _lines,
+          proofSettings: _proofSettings,
         ),
       ),
     );

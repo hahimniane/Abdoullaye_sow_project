@@ -100,3 +100,13 @@ test("the server's refusal marks the offending rows and reads in French", () => 
     assert.ok(french && french !== attribute, `${attribute} has a French translation`);
   }
 });
+
+test("a sea package shows only the delivered tick and never counts as missing proof", () => {
+  const ticks = read("../components/business/proof-ticks.tsx");
+  const staff = read("../components/package-staff-view.tsx");
+  // The photo and sender ticks render only for an air package.
+  assert.match(ticks, /\{state\.air && \(\s*<span className=\{`prf-tick\$\{state\.photo/);
+  assert.match(ticks, /\{state\.air && \(\s*<span className=\{`prf-tick prf-sender-/);
+  assert.match(staff, /ticks\.air \? `\$\{tickLabels\.photo\} · \$\{tickLabels\.sender\} · \$\{tickLabels\.delivered\}` : tickLabels\.delivered/);
+  assert.match(staff, /: ticks\.air \? <p className="pkg-staff-muted">No drop-off photo\.<\/p> : null/);
+});

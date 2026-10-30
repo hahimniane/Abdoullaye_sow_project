@@ -255,6 +255,7 @@ void main() {
     test('shows the three ticks', () {
       expect(
         proofTicksOf({
+          'shipMode': 'air',
           'photoPaths': [path],
           'senderConfirmation': {'status': 'confirmed'},
           'deliveredAt': DateTime(2026, 10, 29),
@@ -265,10 +266,29 @@ void main() {
           delivered: true,
         ),
       );
-      expect(proofTicksOf({}),
+      expect(proofTicksOf({'shipMode': 'air'}),
           const ProofTicks(photo: false, senderOk: 'none', delivered: false));
+      expect(proofTicksOf({'shipMode': 'air'}).complete, isFalse);
+      expect(proofTicksOf({'shipMode': 'air'}).missing, isTrue);
+      // A sea package (or one from before "Ships by") has only the
+      // delivered tick: never missing proof, complete once delivered.
+      expect(
+        proofTicksOf({}),
+        const ProofTicks(
+            photo: false, senderOk: 'none', delivered: false, air: false),
+      );
+      expect(proofTicksOf({}).missing, isFalse);
+      expect(proofTicksOf({'shipMode': 'sea', 'senderConfirmation': {
+        'status': 'problem',
+      }}).missing, isFalse);
       expect(proofTicksOf({}).complete, isFalse);
-      expect(proofTicksOf({}).missing, isTrue);
+      expect(
+          proofTicksOf({'deliveredAt': DateTime(2026, 10, 29)}).complete,
+          isTrue);
+      expect(
+          ContainerLine.fromMap('x', {'shipMode': 'air'}).proofTicks.air,
+          isTrue);
+      expect(ContainerLine.fromMap('x', {}).proofTicks.missing, isFalse);
       expect(
         senderConfirmationOf({
           'senderConfirmation': {'status': 'weird'},

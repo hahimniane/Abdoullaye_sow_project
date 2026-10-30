@@ -1190,6 +1190,7 @@ class ContainerLine {
         senderOk: senderConfirmation.status,
         delivered: deliveredAt != null,
         deliveredWithoutCode: deliveredWithoutCode,
+        air: isAirPackage,
       );
 
   /// The sender tapped "Something's wrong": a red flag on the package, and

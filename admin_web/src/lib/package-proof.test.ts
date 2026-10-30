@@ -160,14 +160,19 @@ test("ships by: the choice, the proof section and what is sent", () => {
 });
 
 test("shows the three ticks, and the delivered-without-code variant", () => {
-  assert.deepEqual(proofTicks({ photoPaths: [PATH], senderConfirmation: { status: "confirmed" }, deliveredAt: {} }), {
+  assert.deepEqual(proofTicks({ shipMode: "air", photoPaths: [PATH], senderConfirmation: { status: "confirmed" }, deliveredAt: {} }), {
+    air: true,
     photo: true,
     senderOk: "confirmed",
     delivered: true,
     deliveredWithoutCode: false,
     complete: true,
   });
-  assert.deepEqual(proofTicks({}), { photo: false, senderOk: "none", delivered: false, deliveredWithoutCode: false, complete: false });
+  assert.deepEqual(proofTicks({ shipMode: "air" }), { air: true, photo: false, senderOk: "none", delivered: false, deliveredWithoutCode: false, complete: false });
+  assert.equal(proofTicks({ shipMode: "air", deliveredAt: {} }).complete, false);
+  // A sea package (or one from before "Ships by") has only the delivered tick: complete once delivered.
+  assert.deepEqual(proofTicks({}), { air: false, photo: false, senderOk: "none", delivered: false, deliveredWithoutCode: false, complete: false });
+  assert.equal(proofTicks({ shipMode: "sea", deliveredAt: {} }).complete, true);
   assert.equal(proofTicks({ deliveredAt: {}, deliveredWithoutCode: true }).deliveredWithoutCode, true);
   // The override flag means nothing on a package not delivered (a delivery undone).
   assert.equal(proofTicks({ deliveredWithoutCode: true }).deliveredWithoutCode, false);
@@ -180,15 +185,19 @@ test("shows the three ticks, and the delivered-without-code variant", () => {
   assert.equal(proofTickLabels(proofTicks({}), "fr").photo, "Pas de photo");
 });
 
-test("'Missing proof' is no photo, or an unconfirmed sender when the business asks", () => {
+test("'Missing proof' is an air package with no photo, or an unconfirmed sender when the business asks", () => {
   const off = { senderConfirm: false };
   const on = { senderConfirm: true };
-  assert.equal(lineMissingProof({}, off), true);
-  assert.equal(lineMissingProof({ photoPaths: [PATH] }, off), false);
-  assert.equal(lineMissingProof({ photoPaths: [PATH] }, on), true, "never asked");
-  assert.equal(lineMissingProof({ photoPaths: [PATH], senderConfirmation: { status: "asked" } }, on), true);
-  assert.equal(lineMissingProof({ photoPaths: [PATH], senderConfirmation: { status: "problem" } }, on), true);
-  assert.equal(lineMissingProof({ photoPaths: [PATH], senderConfirmation: { status: "confirmed" } }, on), false);
+  const air = { shipMode: "air" };
+  assert.equal(lineMissingProof(air, off), true);
+  assert.equal(lineMissingProof({ ...air, photoPaths: [PATH] }, off), false);
+  assert.equal(lineMissingProof({ ...air, photoPaths: [PATH] }, on), true, "never asked");
+  assert.equal(lineMissingProof({ ...air, photoPaths: [PATH], senderConfirmation: { status: "asked" } }, on), true);
+  assert.equal(lineMissingProof({ ...air, photoPaths: [PATH], senderConfirmation: { status: "problem" } }, on), true);
+  assert.equal(lineMissingProof({ ...air, photoPaths: [PATH], senderConfirmation: { status: "confirmed" } }, on), false);
+  // A sea package (or one from before "Ships by") is never missing proof.
+  assert.equal(lineMissingProof({}, on), false);
+  assert.equal(lineMissingProof({ shipMode: "sea", senderConfirmation: { status: "problem" } }, on), false);
 });
 
 test("the form: a stored line round-trips, the rules apply before the call, blanks are null", () => {

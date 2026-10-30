@@ -321,3 +321,11 @@ each package says how it ships.
 - **Lists:** waiting rows show an "Air" badge (plane) for air packages; the
   Waiting list has an Air/Sea filter only with `shipsByAir`. Labels and the
   customs list are unchanged.
+- **Ticks:** `proofTicks` (server, console, app `proofTicksOf`) carries
+  `air`. A sea package shows only the delivered tick (photo and sender
+  ticks hidden), is `complete` once delivered, and never counts in the
+  "Missing proof" filter, which considers air packages only.
+- **Package page (app):** its edit sheet gets the business's proof
+  settings (incl. `shipsByAir`), passed in by the list that opened it or
+  read from the business document, so it offers Ships by like the Waiting
+  list.
