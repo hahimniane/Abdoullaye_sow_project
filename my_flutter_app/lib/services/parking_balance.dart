@@ -40,8 +40,8 @@ class ParkingBalance {
   /// "YYYY-MM-DD" (UTC calendar day), '' when the car has no start day.
   final String sinceDayKey;
 
-  /// "YYYY-MM-DD" of the day the car leaves / left, '' when none is set.
-  final String leftDayKey;
+  /// "YYYY-MM-DD" of the day the car leaves / left; null while open-ended.
+  final String? leftDayKey;
 
   /// Days counted so far (a stay stops at today or its leave day, whichever
   /// is first), 0 before it starts.
@@ -54,7 +54,7 @@ class ParkingBalance {
   final bool paidInFull;
   final bool stillParked;
 
-  Map<String, Object> toJson() => {
+  Map<String, Object?> toJson() => {
     'dailyRateCents': dailyRateCents,
     'sinceDayKey': sinceDayKey,
     'leftDayKey': leftDayKey,
@@ -77,38 +77,59 @@ int _wholeCents(Object? value) {
   return n != null && n.isFinite && n > 0 ? n.round() : 0;
 }
 
-/// What [car] (a `parkedCars` document's fields) owes as of [now].
-ParkingBalance parkingBalanceNow(Map<String, dynamic> car, DateTime now) {
-  final today = parkingDayNumber(now) ?? 0;
-  final start = parkingDayNumber(car['parkingDate']);
-  final leave = parkingDayNumber(car['parkingEndDate']);
-  // The accrual below reads the rate in dollars (`dailyRate`), as the
-  // month-end statement does; the cents field is only a fallback to show.
-  final dailyRateCents =
-      _wholeCents((num.tryParse('${car['dailyRate'] ?? ''}') ?? 0) * 100) > 0
-      ? _wholeCents((num.tryParse('${car['dailyRate'] ?? ''}') ?? 0) * 100)
-      : _wholeCents(car['dailyRateCents']);
-
-  var days = 0;
-  if (start != null) {
-    final end = leave != null && leave < today ? leave : today;
-    days = end >= start ? end - start + 1 : 0;
+int _paymentCents(Map<dynamic, dynamic> payment) {
+  final cents = num.tryParse('${payment['amountCents'] ?? ''}');
+  if (cents != null && cents.isFinite && cents.round() > 0) {
+    return cents.round();
   }
-  final accrued = start == null
-      ? 0
-      : parkingAccruedThroughCents(car, today, today);
-  final paid = parkingPaidCentsOf(car, today);
-  final balance = accrued > paid ? accrued - paid : 0;
+  final dollars = num.tryParse('${payment['amount'] ?? ''}');
+  return dollars != null && dollars.isFinite && dollars > 0
+      ? (dollars * 100).round()
+      : 0;
+}
+
+/// What is paid now: the live instalments, or the record's total when it is
+/// larger. Once any instalment is reverted, only the live list counts.
+/// Mirrors the server's `paidNowCents`.
+int _paidNowCents(Map<String, dynamic> car, int today) {
+  final raw = car['parkingPayments'];
+  final list = raw is List ? raw.whereType<Map>().toList() : const <Map>[];
+  final live = list.where((p) => p['reverted'] != true).toList();
+  final liveCents = live.fold<int>(0, (sum, p) => sum + _paymentCents(p));
+  if (live.length < list.length) return liveCents;
+  final recorded = parkingPaidCentsOf(car, today);
+  return liveCents > recorded ? liveCents : recorded;
+}
+
+/// What [car] (a `parkedCars` document's fields) owes as of [now]. Mirrors
+/// the server's `parkingBalanceNow` line for line; null for a voided or
+/// cancelled car, or one with no arrival day.
+ParkingBalance? parkingBalanceNow(Map<String, dynamic> car, DateTime now) {
+  if (car['voided'] == true ||
+      '${car['status'] ?? ''}'.trim() == 'cancelled') {
+    return null;
+  }
+  final start = parkingDayNumber(car['parkingDate']);
+  final today = parkingDayNumber(now);
+  if (start == null || today == null) return null;
+  final leave = parkingDayNumber(car['parkingEndDate']);
+  final through = leave == null ? today : (today < leave ? today : leave);
+  final accrued = parkingAccruedThroughCents(car, today, today);
+  final paid = _paidNowCents(car, today);
+  final dollars = num.tryParse('${car['dailyRate'] ?? ''}');
+  final dailyRateCents = dollars != null && dollars.isFinite && dollars > 0
+      ? (dollars * 100).round()
+      : _wholeCents(car['dailyRateCents']);
+  final days = through - start + 1;
   return ParkingBalance(
     dailyRateCents: dailyRateCents,
-    sinceDayKey: start == null ? '' : _dayKey(start),
-    leftDayKey: leave == null ? '' : _dayKey(leave),
-    days: days,
+    sinceDayKey: _dayKey(start),
+    leftDayKey: leave == null ? null : _dayKey(leave),
+    days: days > 0 ? days : 0,
     accruedCents: accrued,
     paidCents: paid,
-    balanceCents: balance,
-    paidInFull: balance == 0 && (accrued > 0 || paid > 0),
-    // A booked leave day still ahead is not "left" yet.
-    stillParked: leave == null || leave > today,
+    balanceCents: accrued > paid ? accrued - paid : 0,
+    paidInFull: accrued > 0 && paid >= accrued,
+    stillParked: leave == null || leave >= today,
   );
 }
