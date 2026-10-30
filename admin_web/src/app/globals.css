@@ -16995,6 +16995,11 @@ button.pkq-card:hover { border-color: var(--brand); }
 
 /* Staff balances (docs/STAFF_BALANCES.md): who holds, owes and is owed. */
 .sb-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.sb-counted { border: 1px solid var(--line, #e5e7eb); border-radius: 10px; margin: 0 18px 18px; padding: 10px 14px 12px; }
+.sb-counted legend { font-weight: 600; font-size: 0.85rem; padding: 0 6px; }
+.sb-counted-options { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 4px 0 6px; }
+.sb-counted-options label { align-items: center; display: inline-flex; gap: 6px; }
+.sb-counted:disabled .sb-counted-options { opacity: 0.75; }
 .sb-tiles { display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 12px 18px 18px; }
 .sb-tile { min-height: 0; }
 .sb-table { display: grid; padding: 0 18px 10px; }

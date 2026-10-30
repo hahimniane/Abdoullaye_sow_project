@@ -19988,6 +19988,8 @@ async function staffBalancesAnswer(uid, data) {
     sources: {parkedCars, lotActivities, lotActivityPayments,
       containerLinePayments, inventorySales, inventoryCreditPayments,
       invoicePayments},
+    // What the business counts as its money (STAFF_BALANCES.md §7).
+    counted: business.staffBalanceSources,
     handovers: handoverRows.map((row) => ({...row,
       createdAtMs: row.createdAt?.toMillis?.() || 0})),
     netting: {monthKey, customers: summary.customers, entries, repayments,
@@ -20011,6 +20013,28 @@ async function staffBalancesAnswer(uid, data) {
 }
 
 /**
+ * The owner chooses which kinds of money count as the business's in Staff
+ * balances (STAFF_BALANCES.md §7): parking, lot jobs, packages, shop sales,
+ * invoices. Owner (or platform admin) only; the full choice is stored.
+ *
+ * @param {string} uid The caller.
+ * @param {object} data `{businessId, sources}`.
+ * @return {Promise<object>} `{success, counted}`.
+ */
+async function setCountedSources(uid, data) {
+  const {db, businessId, isOwner} = await staffBalanceContext(uid, data);
+  if (!isOwner) throw staffBalanceError("counted_sources_owner_only");
+  const counted = staffBalances.cleanCountedSources(data.sources);
+  if (!counted) throw staffBalanceError("counted_sources_invalid");
+  await db.collection("businesses").doc(businessId).update({
+    staffBalanceSources: counted,
+    staffBalanceSourcesBy: uid,
+    staffBalanceSourcesAt: FirestoreFieldValue.serverTimestamp(),
+  });
+  return {success: true, counted};
+}
+
+/**
  * updateLotExpenseEntry's staff balance branches (STAFF_BALANCES.md §3).
  *
  * @param {string} uid The caller.
@@ -20026,6 +20050,7 @@ async function staffBalanceAction(uid, action, data) {
   if (action === "decline_handover") return answerHandover(uid, data, false);
   if (action === "void_handover") return voidHandover(uid, data);
   if (action === "record_opening") return recordOpening(uid, data);
+  if (action === "set_counted_sources") return setCountedSources(uid, data);
   throw staffBalanceError("staff_balances_action_invalid");
 }
 

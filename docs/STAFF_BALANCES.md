@@ -160,3 +160,29 @@ excluded, handovers in/out, pending not counted, opening, net with
 parking/expense), every action's refusals, rules. Console/app: rendering
 from a recorded `staff_balances` answer, the hand-over flow, confirm /
 decline, the Business account option in a "Received by" picker, French.
+
+## 7. What counts as the business's money (2026-10-30)
+
+Each business decides which kinds of money count toward Staff balances
+(owner's words: car sales are individual; containers and packages depend on
+the business). Stored on the business as `staffBalanceSources`:
+
+| key | money | default |
+| --- | --- | --- |
+| `parking` | parked cars' payments | on |
+| `activity` | lot jobs (instalments and settlements) | on |
+| `package` | package / container line payments | on |
+| `shop` | inventory sales and their credit payments | on |
+| `invoice` | invoice payments | **off** — staff's own car sales |
+
+- `staff_balances` filters receipts by it (`collectReceipts(sources, now,
+  counted)`; missing keys take the defaults) and answers `counted` (every
+  key filled). Handovers are never filtered.
+- `set_counted_sources {businessId, sources}` on `updateLotExpenseEntry`:
+  owner (or platform admin) only (`counted_sources_owner_only`,
+  permission-denied); only booleans for known keys (`counted_sources_invalid`).
+  Writes `staffBalanceSources` (full choice), `staffBalanceSourcesBy`, `…At`.
+- Month end's "Business owes" follows automatically (it uses the answer's
+  net).
+- Console: Staff balances → "What counts" (owner edits; everyone sees).
+  The app reads the server's answer, so its numbers follow the choice.

@@ -622,16 +622,18 @@ describe("staff_balances: the answer end to end", () => {
       async () => {
         const out = await balances();
         assert.deepEqual(Object.keys(out).sort(),
-            ["asOfMs", "businessAccount", "pending", "staff"]);
+            ["asOfMs", "businessAccount", "counted", "pending", "staff"]);
+        // Invoices are staff's own sales unless the owner says otherwise.
+        assert.equal(out.counted.invoice, false);
         assert.ok(Math.abs(out.asOfMs - Date.now()) < 60000);
         assert.deepEqual(out.staff.map((r) => r.staffId),
             [E_OWNER, E_LIMITED, E_FA, E_MO]);
         assert.deepEqual(out.staff.map((r) => r.name), ["Alhoussaine Barry",
           "Barrels Only", "Fatou Ba", "Mamadou Diallo"]);
         const mo = rowOf(out, E_MO);
-        assert.equal(mo.collectedCents, 10500);
-        assert.deepEqual(mo.collectedByMethod, {cash: 9500, check: 1000});
-        assert.equal(mo.heldCents, 10500);
+        assert.equal(mo.collectedCents, 9500);
+        assert.deepEqual(mo.collectedByMethod, {cash: 9500});
+        assert.equal(mo.heldCents, 9500);
         const fa = rowOf(out, E_FA);
         assert.equal(fa.collectedCents, 8000);
         assert.deepEqual(fa.collectedByMethod, {zelle: 5000, cash: 3000});
@@ -643,6 +645,29 @@ describe("staff_balances: the answer end to end", () => {
           assert.equal(rowOf(out, id).netCents, 0);
         }
       });
+
+  it("the owner chooses what counts; staff cannot", async () => {
+    await assert.rejects(eAct(E_MO, "set_counted_sources",
+        {sources: {invoice: true}}), (error) =>
+      error.code === "permission-denied" &&
+      error.details?.reason === "counted_sources_owner_only");
+    await assert.rejects(eAct(E_OWNER, "set_counted_sources",
+        {sources: {invoice: "yes"}}), (error) =>
+      error.details?.reason === "counted_sources_invalid");
+    const set = await eAct(E_OWNER, "set_counted_sources",
+        {sources: {invoice: true, shop: false}});
+    assert.deepEqual(set.counted, {parking: true, activity: true,
+      package: true, shop: false, invoice: true});
+    const on = await balances();
+    assert.deepEqual(rowOf(on, E_MO).collectedByMethod,
+        {cash: 9500, check: 1000});
+    assert.equal(rowOf(on, E_FA).collectedByMethod.cash, undefined,
+        "Fatou's shop sale no longer counts");
+    // Back to the defaults for the tests that follow.
+    await eAct(E_OWNER, "set_counted_sources", {sources: {invoice: false,
+      shop: true}});
+    assert.equal((await balances()).counted.invoice, false);
+  });
 
   it("nets Fatou's parking bill with the expenses she paid", async () => {
     const out = await balances();

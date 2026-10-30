@@ -62,6 +62,9 @@ const HANDOVER_MESSAGES = Object.freeze({
   opening_amount_invalid: "Enter the amount already handed over.",
   staff_not_member: "This person is not on this business's staff.",
   staff_balances_action_invalid: "Unknown action.",
+  counted_sources_owner_only:
+    "Only the owner can choose what counts as the business's money.",
+  counted_sources_invalid: "Choose what counts as the business's money.",
 });
 
 const REFUSAL_KIND = Object.freeze({
@@ -79,6 +82,8 @@ const REFUSAL_KIND = Object.freeze({
   opening_amount_invalid: "invalid-argument",
   staff_not_member: "failed-precondition",
   staff_balances_action_invalid: "invalid-argument",
+  counted_sources_owner_only: "permission-denied",
+  counted_sources_invalid: "invalid-argument",
 });
 
 const STAFF_BALANCE_ACTIONS = Object.freeze([
@@ -88,7 +93,56 @@ const STAFF_BALANCE_ACTIONS = Object.freeze([
   "decline_handover",
   "void_handover",
   "record_opening",
+  "set_counted_sources",
 ]);
+
+// Which kinds of money count as the business's (docs/STAFF_BALANCES.md §7):
+// each business decides. Invoices are off unless the owner turns them on -
+// at Keren they are staff's own car sales, not the business's money.
+const COUNTED_SOURCE_KEYS = Object.freeze(
+    ["parking", "activity", "package", "shop", "invoice"]);
+const COUNTED_SOURCE_DEFAULTS = Object.freeze({
+  parking: true, activity: true, package: true, shop: true, invoice: false,
+});
+// A receipt's `source` and the setting that decides it.
+const RECEIPT_SOURCE_KEY = Object.freeze({
+  parking: "parking",
+  activity: "activity",
+  package: "package",
+  inventory: "shop",
+  inventory_credit: "shop",
+  invoice: "invoice",
+});
+
+/**
+ * The business's choice, every key filled from the defaults.
+ *
+ * @param {*} stored `businesses.staffBalanceSources`.
+ * @return {object} `{parking, activity, package, shop, invoice}` booleans.
+ */
+function countedSources(stored) {
+  const given = stored && typeof stored === "object" ? stored : {};
+  const out = {};
+  for (const key of COUNTED_SOURCE_KEYS) {
+    out[key] = typeof given[key] === "boolean" ? given[key] :
+      COUNTED_SOURCE_DEFAULTS[key];
+  }
+  return out;
+}
+
+/**
+ * A new choice as sent by the owner: only the known keys, only booleans.
+ *
+ * @param {*} value The request's `sources`.
+ * @return {?object} The full choice, or null when nothing valid was sent.
+ */
+function cleanCountedSources(value) {
+  if (!value || typeof value !== "object") return null;
+  const keys = COUNTED_SOURCE_KEYS.filter((k) =>
+    typeof value[k] === "boolean");
+  if (keys.length === 0) return null;
+  return countedSources(Object.fromEntries(keys.map((k) => [k, value[k]])));
+}
 
 const text = (value, max = 200) => String(value ?? "").trim().slice(0, max);
 const cents = (value) => {
@@ -436,16 +490,19 @@ function packageAndInvoiceReceipts(payments, invoicePayments) {
  *   containerLinePayments, inventorySales, inventoryCreditPayments,
  *   invoicePayments}`, each an array of rows (with `id`).
  * @param {Date} [now] The moment (an open parking stay is worked out to it).
+ * @param {object} [counted] `businesses.staffBalanceSources`: kinds of money
+ *   the business switched off are left out (countedSources' defaults).
  * @return {object[]} Receipts.
  */
-function collectReceipts(sources, now = new Date()) {
+function collectReceipts(sources, now = new Date(), counted = undefined) {
   const s = sources && typeof sources === "object" ? sources : {};
+  const on = countedSources(counted);
   return [
     ...parkingReceipts(s.parkedCars, now),
     ...activityReceipts(s.lotActivities, s.lotActivityPayments),
     ...inventoryReceipts(s.inventorySales, s.inventoryCreditPayments),
     ...packageAndInvoiceReceipts(s.containerLinePayments, s.invoicePayments),
-  ];
+  ].filter((r) => on[RECEIPT_SOURCE_KEY[r.source]] !== false);
 }
 
 /**
@@ -651,8 +708,9 @@ function pendingHandovers(handovers, names) {
  * The `staff_balances` answer (docs/STAFF_BALANCES.md §3).
  *
  * @param {object} input `{now (Date or ms), staffNames, sources
- *   (collectReceipts), handovers, netting (parkingNetting)}`.
- * @return {object} `{asOfMs, staff, businessAccount, pending}`.
+ *   (collectReceipts), counted (businesses.staffBalanceSources), handovers,
+ *   netting (parkingNetting)}`.
+ * @return {object} `{asOfMs, counted, staff, businessAccount, pending}`.
  */
 function staffBalances(input) {
   const now = input?.now instanceof Date ? input.now :
@@ -660,10 +718,11 @@ function staffBalances(input) {
   const names = input?.staffNames && typeof input.staffNames === "object" ?
     input.staffNames : {};
   const handovers = objects(input?.handovers);
-  const receipts = collectReceipts(input?.sources, now);
+  const receipts = collectReceipts(input?.sources, now, input?.counted);
   const applied = applyHandovers(receipts, handovers);
   return {
     asOfMs: now.getTime(),
+    counted: countedSources(input?.counted),
     staff: netBalances(applied, parkingNetting(input?.netting), names),
     businessAccount: applied.businessAccount,
     pending: pendingHandovers(handovers, names),
@@ -672,6 +731,8 @@ function staffBalances(input) {
 
 module.exports = {
   BUSINESS_ACCOUNT_RECEIVER,
+  COUNTED_SOURCE_DEFAULTS,
+  COUNTED_SOURCE_KEYS,
   HANDOVER_KIND,
   HANDOVER_MESSAGES,
   HANDOVER_METHODS,
@@ -679,8 +740,10 @@ module.exports = {
   MAX_HANDOVER_CENTS,
   STAFF_BALANCE_ACTIONS,
   applyHandovers,
+  cleanCountedSources,
   cleanHandoverCents,
   collectReceipts,
+  countedSources,
   handoverAnswerRefusal,
   handoverRecord,
   handoverRefusal,

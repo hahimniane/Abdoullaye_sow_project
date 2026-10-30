@@ -1,229 +1,880 @@
 {
-  "_comment": "docs/STAFF_BALANCES.md §3. Run by functions (staff-balances.test.js). `expect` is exactly the staff_balances callable answer; the console and the app render it (they do not recompute it). Amounts in cents; nowMs is 2026-10-29T16:00:00Z.",
+  "_comment": "docs/STAFF_BALANCES.md §3. Run by functions (staff-balances.test.js). `expect` is exactly the staff_balances callable answer; the console and the app render it (they do not recompute it). Amounts in cents; nowMs is 2026-10-29T16:00:00Z. Each case names what the business counts (`counted`, businesses.staffBalanceSources); these were written with invoices counted.",
   "cases": [
     {
       "name": "collected by method: Business account, reverted, voided and online payments hold nothing",
       "nowMs": 1793289600000,
-      "staffNames": {"mo": "Mamadou Diallo", "fa": "Fatou Ba", "owner": "Alhoussaine Barry"},
+      "staffNames": {
+        "mo": "Mamadou Diallo",
+        "fa": "Fatou Ba",
+        "owner": "Alhoussaine Barry"
+      },
       "sources": {
         "parkedCars": [
-          {"id": "p1", "parkingDate": "2026-10-01", "amountPaidCents": 10000, "receivedByStaffId": "mo",
+          {
+            "id": "p1",
+            "parkingDate": "2026-10-01",
+            "amountPaidCents": 10000,
+            "receivedByStaffId": "mo",
             "parkingPayments": [
-              {"amountCents": 5000, "receivedVia": "cash", "receivedByStaffId": "mo"},
-              {"amountCents": 3000, "receivedVia": "zelle", "receivedByStaffId": "business_account"},
-              {"amountCents": 2000, "receivedVia": "cash", "receivedByStaffId": "mo", "reverted": true}
-            ]},
-          {"id": "p2", "parkingDate": "2026-10-01", "parkingEndDate": "2026-10-10", "amountDueCents": 20000,
-            "amountPaidCents": 20000, "paymentStatus": "paid", "receivedByStaffId": "fa", "directPaymentMethod": "zelle"},
-          {"id": "p3", "parkingDate": "2026-10-01", "amountPaidCents": 9000, "receivedByStaffId": "mo", "voided": true},
-          {"id": "p4", "parkingDate": "2026-10-01", "amountPaidCents": 7000, "paymentMethod": "payment_link",
-            "parkingPayments": [{"amountCents": 7000, "receivedVia": ""}]},
-          {"id": "p5", "parkingDate": "2026-10-01", "amountPaidCents": 10000, "paymentStatus": "paid",
-            "receivedByStaffId": "fa", "directPaymentMethod": "zelle",
-            "parkingPayments": [{"amountCents": 4000, "receivedVia": "cash", "receivedByStaffId": "mo"}]}
+              {
+                "amountCents": 5000,
+                "receivedVia": "cash",
+                "receivedByStaffId": "mo"
+              },
+              {
+                "amountCents": 3000,
+                "receivedVia": "zelle",
+                "receivedByStaffId": "business_account"
+              },
+              {
+                "amountCents": 2000,
+                "receivedVia": "cash",
+                "receivedByStaffId": "mo",
+                "reverted": true
+              }
+            ]
+          },
+          {
+            "id": "p2",
+            "parkingDate": "2026-10-01",
+            "parkingEndDate": "2026-10-10",
+            "amountDueCents": 20000,
+            "amountPaidCents": 20000,
+            "paymentStatus": "paid",
+            "receivedByStaffId": "fa",
+            "directPaymentMethod": "zelle"
+          },
+          {
+            "id": "p3",
+            "parkingDate": "2026-10-01",
+            "amountPaidCents": 9000,
+            "receivedByStaffId": "mo",
+            "voided": true
+          },
+          {
+            "id": "p4",
+            "parkingDate": "2026-10-01",
+            "amountPaidCents": 7000,
+            "paymentMethod": "payment_link",
+            "parkingPayments": [
+              {
+                "amountCents": 7000,
+                "receivedVia": ""
+              }
+            ]
+          },
+          {
+            "id": "p5",
+            "parkingDate": "2026-10-01",
+            "amountPaidCents": 10000,
+            "paymentStatus": "paid",
+            "receivedByStaffId": "fa",
+            "directPaymentMethod": "zelle",
+            "parkingPayments": [
+              {
+                "amountCents": 4000,
+                "receivedVia": "cash",
+                "receivedByStaffId": "mo"
+              }
+            ]
+          }
         ],
         "lotActivities": [
-          {"id": "a1", "feeCents": 5000, "paymentMethod": "direct", "paymentStatus": "succeeded", "receivedVia": "cash", "receivedByStaffId": "mo"},
-          {"id": "a2", "feeCents": 8000, "paymentMethod": "direct", "paymentStatus": "succeeded", "amountPaidCents": 8000, "receivedVia": "cash", "receivedByStaffId": "mo"},
-          {"id": "a3", "feeCents": 4000, "voided": true},
-          {"id": "a4", "feeCents": 2500, "paymentMethod": "direct", "paymentStatus": "awaiting_direct", "amountPaidCents": 0},
-          {"id": "a5", "feeCents": 6000, "paymentMethod": "payment_link", "paymentStatus": "succeeded", "amountPaidCents": 6000}
+          {
+            "id": "a1",
+            "feeCents": 5000,
+            "paymentMethod": "direct",
+            "paymentStatus": "succeeded",
+            "receivedVia": "cash",
+            "receivedByStaffId": "mo"
+          },
+          {
+            "id": "a2",
+            "feeCents": 8000,
+            "paymentMethod": "direct",
+            "paymentStatus": "succeeded",
+            "amountPaidCents": 8000,
+            "receivedVia": "cash",
+            "receivedByStaffId": "mo"
+          },
+          {
+            "id": "a3",
+            "feeCents": 4000,
+            "voided": true
+          },
+          {
+            "id": "a4",
+            "feeCents": 2500,
+            "paymentMethod": "direct",
+            "paymentStatus": "awaiting_direct",
+            "amountPaidCents": 0
+          },
+          {
+            "id": "a5",
+            "feeCents": 6000,
+            "paymentMethod": "payment_link",
+            "paymentStatus": "succeeded",
+            "amountPaidCents": 6000
+          }
         ],
         "lotActivityPayments": [
-          {"id": "ap1", "activityId": "a2", "amountCents": 3000, "source": "cash", "receivedVia": "zelle", "receivedByStaffId": "fa"},
-          {"id": "ap2", "activityId": "a2", "amountCents": 5000, "source": "cash", "receivedVia": "cash", "receivedByStaffId": "mo"},
-          {"id": "ap3", "activityId": "a3", "amountCents": 4000, "source": "cash", "receivedVia": "cash", "receivedByStaffId": "fa"},
-          {"id": "ap4", "activityId": "a4", "amountCents": 2500, "source": "cash", "receivedVia": "cash", "receivedByStaffId": "mo", "reverted": true},
-          {"id": "ap5", "activityId": "a5", "amountCents": 6000, "source": "card", "receivedVia": "", "receivedByStaffId": ""}
+          {
+            "id": "ap1",
+            "activityId": "a2",
+            "amountCents": 3000,
+            "source": "cash",
+            "receivedVia": "zelle",
+            "receivedByStaffId": "fa"
+          },
+          {
+            "id": "ap2",
+            "activityId": "a2",
+            "amountCents": 5000,
+            "source": "cash",
+            "receivedVia": "cash",
+            "receivedByStaffId": "mo"
+          },
+          {
+            "id": "ap3",
+            "activityId": "a3",
+            "amountCents": 4000,
+            "source": "cash",
+            "receivedVia": "cash",
+            "receivedByStaffId": "fa"
+          },
+          {
+            "id": "ap4",
+            "activityId": "a4",
+            "amountCents": 2500,
+            "source": "cash",
+            "receivedVia": "cash",
+            "receivedByStaffId": "mo",
+            "reverted": true
+          },
+          {
+            "id": "ap5",
+            "activityId": "a5",
+            "amountCents": 6000,
+            "source": "card",
+            "receivedVia": "",
+            "receivedByStaffId": ""
+          }
         ],
         "containerLinePayments": [
-          {"id": "c1", "amountCents": 10000, "method": "cash", "receivedByStaffId": "fa"},
-          {"id": "c2", "amountCents": 3500, "method": "zelle", "receivedByStaffId": "business_account"},
-          {"id": "c3", "amountCents": 1200, "method": "cash", "receivedByStaffId": "mo", "reverted": true},
-          {"id": "c4", "amountCents": 9000, "method": "other", "receivedByStaffId": "mo", "source": "card_order"}
+          {
+            "id": "c1",
+            "amountCents": 10000,
+            "method": "cash",
+            "receivedByStaffId": "fa"
+          },
+          {
+            "id": "c2",
+            "amountCents": 3500,
+            "method": "zelle",
+            "receivedByStaffId": "business_account"
+          },
+          {
+            "id": "c3",
+            "amountCents": 1200,
+            "method": "cash",
+            "receivedByStaffId": "mo",
+            "reverted": true
+          },
+          {
+            "id": "c4",
+            "amountCents": 9000,
+            "method": "other",
+            "receivedByStaffId": "mo",
+            "source": "card_order"
+          }
         ],
         "inventorySales": [
-          {"id": "s1", "totalCents": 12000, "paidNowCents": 12000, "paymentMethod": "cash", "receivedByStaffId": "mo"},
-          {"id": "s2", "totalCents": 30000, "paidNowCents": 10000, "creditCents": 20000, "paymentMethod": "zelle", "receivedByStaffId": "fa"},
-          {"id": "s3", "totalCents": 5000, "paidNowCents": 5000, "paymentMethod": "cash", "receivedByStaffId": "mo", "voided": true},
-          {"id": "s4", "totalCents": 4000, "paymentMethod": "Cash", "receivedByStaffId": "mo"}
+          {
+            "id": "s1",
+            "totalCents": 12000,
+            "paidNowCents": 12000,
+            "paymentMethod": "cash",
+            "receivedByStaffId": "mo"
+          },
+          {
+            "id": "s2",
+            "totalCents": 30000,
+            "paidNowCents": 10000,
+            "creditCents": 20000,
+            "paymentMethod": "zelle",
+            "receivedByStaffId": "fa"
+          },
+          {
+            "id": "s3",
+            "totalCents": 5000,
+            "paidNowCents": 5000,
+            "paymentMethod": "cash",
+            "receivedByStaffId": "mo",
+            "voided": true
+          },
+          {
+            "id": "s4",
+            "totalCents": 4000,
+            "paymentMethod": "Cash",
+            "receivedByStaffId": "mo"
+          }
         ],
         "inventoryCreditPayments": [
-          {"id": "ic1", "saleId": "s2", "amountCents": 5000, "method": "cash", "receivedByStaffId": "owner"},
-          {"id": "ic2", "saleId": "s2", "amountCents": 2000, "method": "cash", "receivedByStaffId": "owner", "reverted": true},
-          {"id": "ic3", "saleId": "s3", "amountCents": 700, "method": "cash", "receivedByStaffId": "mo"}
+          {
+            "id": "ic1",
+            "saleId": "s2",
+            "amountCents": 5000,
+            "method": "cash",
+            "receivedByStaffId": "owner"
+          },
+          {
+            "id": "ic2",
+            "saleId": "s2",
+            "amountCents": 2000,
+            "method": "cash",
+            "receivedByStaffId": "owner",
+            "reverted": true
+          },
+          {
+            "id": "ic3",
+            "saleId": "s3",
+            "amountCents": 700,
+            "method": "cash",
+            "receivedByStaffId": "mo"
+          }
         ],
         "invoicePayments": [
-          {"id": "ip1", "amountCents": 15000, "method": "check", "receivedByStaffId": "owner"},
-          {"id": "ip2", "amountCents": 800, "method": "cash", "receivedByStaffId": "owner", "reverted": true}
+          {
+            "id": "ip1",
+            "amountCents": 15000,
+            "method": "check",
+            "receivedByStaffId": "owner"
+          },
+          {
+            "id": "ip2",
+            "amountCents": 800,
+            "method": "cash",
+            "receivedByStaffId": "owner",
+            "reverted": true
+          }
         ]
       },
       "handovers": [],
       "netting": null,
       "expect": {
         "asOfMs": 1793289600000,
+        "counted": {
+          "parking": true,
+          "activity": true,
+          "package": true,
+          "shop": true,
+          "invoice": true
+        },
         "staff": [
-          {"staffId": "owner", "name": "Alhoussaine Barry", "collectedCents": 20000, "collectedByMethod": {"cash": 5000, "check": 15000},
-            "handedOutCents": 0, "receivedFromOthersCents": 0, "pendingOutCents": 0, "pendingInCents": 0, "heldCents": 20000,
-            "parkingDueCents": 0, "expenseCreditCents": 0, "expenseOwedToThemCents": 0, "netCents": 20000},
-          {"staffId": "fa", "name": "Fatou Ba", "collectedCents": 49000, "collectedByMethod": {"zelle": 39000, "cash": 10000},
-            "handedOutCents": 0, "receivedFromOthersCents": 0, "pendingOutCents": 0, "pendingInCents": 0, "heldCents": 49000,
-            "parkingDueCents": 0, "expenseCreditCents": 0, "expenseOwedToThemCents": 0, "netCents": 49000},
-          {"staffId": "mo", "name": "Mamadou Diallo", "collectedCents": 35000, "collectedByMethod": {"cash": 35000},
-            "handedOutCents": 0, "receivedFromOthersCents": 0, "pendingOutCents": 0, "pendingInCents": 0, "heldCents": 35000,
-            "parkingDueCents": 0, "expenseCreditCents": 0, "expenseOwedToThemCents": 0, "netCents": 35000}
+          {
+            "staffId": "owner",
+            "name": "Alhoussaine Barry",
+            "collectedCents": 20000,
+            "collectedByMethod": {
+              "cash": 5000,
+              "check": 15000
+            },
+            "handedOutCents": 0,
+            "receivedFromOthersCents": 0,
+            "pendingOutCents": 0,
+            "pendingInCents": 0,
+            "heldCents": 20000,
+            "parkingDueCents": 0,
+            "expenseCreditCents": 0,
+            "expenseOwedToThemCents": 0,
+            "netCents": 20000
+          },
+          {
+            "staffId": "fa",
+            "name": "Fatou Ba",
+            "collectedCents": 49000,
+            "collectedByMethod": {
+              "zelle": 39000,
+              "cash": 10000
+            },
+            "handedOutCents": 0,
+            "receivedFromOthersCents": 0,
+            "pendingOutCents": 0,
+            "pendingInCents": 0,
+            "heldCents": 49000,
+            "parkingDueCents": 0,
+            "expenseCreditCents": 0,
+            "expenseOwedToThemCents": 0,
+            "netCents": 49000
+          },
+          {
+            "staffId": "mo",
+            "name": "Mamadou Diallo",
+            "collectedCents": 35000,
+            "collectedByMethod": {
+              "cash": 35000
+            },
+            "handedOutCents": 0,
+            "receivedFromOthersCents": 0,
+            "pendingOutCents": 0,
+            "pendingInCents": 0,
+            "heldCents": 35000,
+            "parkingDueCents": 0,
+            "expenseCreditCents": 0,
+            "expenseOwedToThemCents": 0,
+            "netCents": 35000
+          }
         ],
-        "businessAccount": {"receivedCents": 6500, "pendingInCents": 0},
+        "businessAccount": {
+          "receivedCents": 6500,
+          "pendingInCents": 0
+        },
         "pending": []
+      },
+      "counted": {
+        "invoice": true
       }
     },
     {
       "name": "handovers: confirmed ones move money between people and to the Business account; pending, declined and voided do not",
       "nowMs": 1793289600000,
-      "staffNames": {"mo": "Mamadou Diallo", "fa": "Fatou Ba", "owner": "Alhoussaine Barry"},
+      "staffNames": {
+        "mo": "Mamadou Diallo",
+        "fa": "Fatou Ba",
+        "owner": "Alhoussaine Barry"
+      },
       "sources": {
         "containerLinePayments": [
-          {"id": "c1", "amountCents": 50000, "method": "cash", "receivedByStaffId": "mo"},
-          {"id": "c2", "amountCents": 20000, "method": "zelle", "receivedByStaffId": "mo"},
-          {"id": "c3", "amountCents": 30000, "method": "cash", "receivedByStaffId": "fa"}
+          {
+            "id": "c1",
+            "amountCents": 50000,
+            "method": "cash",
+            "receivedByStaffId": "mo"
+          },
+          {
+            "id": "c2",
+            "amountCents": 20000,
+            "method": "zelle",
+            "receivedByStaffId": "mo"
+          },
+          {
+            "id": "c3",
+            "amountCents": 30000,
+            "method": "cash",
+            "receivedByStaffId": "fa"
+          }
         ]
       },
       "handovers": [
-        {"id": "h1", "kind": "handover", "fromStaffId": "mo", "toId": "fa", "amountCents": 20000, "method": "cash", "status": "confirmed", "createdAtMs": 500},
-        {"id": "h2", "kind": "handover", "fromStaffId": "mo", "toId": "business_account", "amountCents": 15000, "method": "deposit", "status": "confirmed", "createdAtMs": 600},
-        {"id": "h3", "kind": "handover", "fromStaffId": "fa", "toId": "owner", "amountCents": 10000, "method": "cash", "note": "for the week", "proofPath": "staffHandoverProofs/biz/fa/slip0001.jpg", "status": "pending", "createdByUid": "fa", "createdAtMs": 1000},
-        {"id": "h4", "kind": "handover", "fromStaffId": "mo", "toId": "fa", "amountCents": 9000, "method": "cash", "status": "declined", "createdAtMs": 700},
-        {"id": "h5", "kind": "handover", "fromStaffId": "fa", "toId": "business_account", "amountCents": 8000, "method": "zelle", "status": "voided", "createdAtMs": 800},
-        {"id": "h6", "kind": "opening", "fromStaffId": "fa", "toId": "business_account", "amountCents": 5000, "method": "other", "status": "confirmed", "createdAtMs": 900},
-        {"id": "h7", "kind": "handover", "fromStaffId": "mo", "toId": "business_account", "amountCents": 4000, "method": "check", "status": "pending", "createdByUid": "mo", "createdAtMs": 2000}
+        {
+          "id": "h1",
+          "kind": "handover",
+          "fromStaffId": "mo",
+          "toId": "fa",
+          "amountCents": 20000,
+          "method": "cash",
+          "status": "confirmed",
+          "createdAtMs": 500
+        },
+        {
+          "id": "h2",
+          "kind": "handover",
+          "fromStaffId": "mo",
+          "toId": "business_account",
+          "amountCents": 15000,
+          "method": "deposit",
+          "status": "confirmed",
+          "createdAtMs": 600
+        },
+        {
+          "id": "h3",
+          "kind": "handover",
+          "fromStaffId": "fa",
+          "toId": "owner",
+          "amountCents": 10000,
+          "method": "cash",
+          "note": "for the week",
+          "proofPath": "staffHandoverProofs/biz/fa/slip0001.jpg",
+          "status": "pending",
+          "createdByUid": "fa",
+          "createdAtMs": 1000
+        },
+        {
+          "id": "h4",
+          "kind": "handover",
+          "fromStaffId": "mo",
+          "toId": "fa",
+          "amountCents": 9000,
+          "method": "cash",
+          "status": "declined",
+          "createdAtMs": 700
+        },
+        {
+          "id": "h5",
+          "kind": "handover",
+          "fromStaffId": "fa",
+          "toId": "business_account",
+          "amountCents": 8000,
+          "method": "zelle",
+          "status": "voided",
+          "createdAtMs": 800
+        },
+        {
+          "id": "h6",
+          "kind": "opening",
+          "fromStaffId": "fa",
+          "toId": "business_account",
+          "amountCents": 5000,
+          "method": "other",
+          "status": "confirmed",
+          "createdAtMs": 900
+        },
+        {
+          "id": "h7",
+          "kind": "handover",
+          "fromStaffId": "mo",
+          "toId": "business_account",
+          "amountCents": 4000,
+          "method": "check",
+          "status": "pending",
+          "createdByUid": "mo",
+          "createdAtMs": 2000
+        }
       ],
       "netting": null,
       "expect": {
         "asOfMs": 1793289600000,
+        "counted": {
+          "parking": true,
+          "activity": true,
+          "package": true,
+          "shop": true,
+          "invoice": true
+        },
         "staff": [
-          {"staffId": "owner", "name": "Alhoussaine Barry", "collectedCents": 0, "collectedByMethod": {},
-            "handedOutCents": 0, "receivedFromOthersCents": 0, "pendingOutCents": 0, "pendingInCents": 10000, "heldCents": 0,
-            "parkingDueCents": 0, "expenseCreditCents": 0, "expenseOwedToThemCents": 0, "netCents": 0},
-          {"staffId": "fa", "name": "Fatou Ba", "collectedCents": 30000, "collectedByMethod": {"cash": 30000},
-            "handedOutCents": 5000, "receivedFromOthersCents": 20000, "pendingOutCents": 10000, "pendingInCents": 0, "heldCents": 45000,
-            "parkingDueCents": 0, "expenseCreditCents": 0, "expenseOwedToThemCents": 0, "netCents": 45000},
-          {"staffId": "mo", "name": "Mamadou Diallo", "collectedCents": 70000, "collectedByMethod": {"cash": 50000, "zelle": 20000},
-            "handedOutCents": 35000, "receivedFromOthersCents": 0, "pendingOutCents": 4000, "pendingInCents": 0, "heldCents": 35000,
-            "parkingDueCents": 0, "expenseCreditCents": 0, "expenseOwedToThemCents": 0, "netCents": 35000}
+          {
+            "staffId": "owner",
+            "name": "Alhoussaine Barry",
+            "collectedCents": 0,
+            "collectedByMethod": {},
+            "handedOutCents": 0,
+            "receivedFromOthersCents": 0,
+            "pendingOutCents": 0,
+            "pendingInCents": 10000,
+            "heldCents": 0,
+            "parkingDueCents": 0,
+            "expenseCreditCents": 0,
+            "expenseOwedToThemCents": 0,
+            "netCents": 0
+          },
+          {
+            "staffId": "fa",
+            "name": "Fatou Ba",
+            "collectedCents": 30000,
+            "collectedByMethod": {
+              "cash": 30000
+            },
+            "handedOutCents": 5000,
+            "receivedFromOthersCents": 20000,
+            "pendingOutCents": 10000,
+            "pendingInCents": 0,
+            "heldCents": 45000,
+            "parkingDueCents": 0,
+            "expenseCreditCents": 0,
+            "expenseOwedToThemCents": 0,
+            "netCents": 45000
+          },
+          {
+            "staffId": "mo",
+            "name": "Mamadou Diallo",
+            "collectedCents": 70000,
+            "collectedByMethod": {
+              "cash": 50000,
+              "zelle": 20000
+            },
+            "handedOutCents": 35000,
+            "receivedFromOthersCents": 0,
+            "pendingOutCents": 4000,
+            "pendingInCents": 0,
+            "heldCents": 35000,
+            "parkingDueCents": 0,
+            "expenseCreditCents": 0,
+            "expenseOwedToThemCents": 0,
+            "netCents": 35000
+          }
         ],
-        "businessAccount": {"receivedCents": 20000, "pendingInCents": 4000},
+        "businessAccount": {
+          "receivedCents": 20000,
+          "pendingInCents": 4000
+        },
         "pending": [
-          {"id": "h3", "kind": "handover", "fromStaffId": "fa", "fromName": "Fatou Ba", "toId": "owner", "toName": "Alhoussaine Barry",
-            "amountCents": 10000, "method": "cash", "note": "for the week", "proofPath": "staffHandoverProofs/biz/fa/slip0001.jpg",
-            "status": "pending", "createdByUid": "fa", "createdAtMs": 1000},
-          {"id": "h7", "kind": "handover", "fromStaffId": "mo", "fromName": "Mamadou Diallo", "toId": "business_account", "toName": "",
-            "amountCents": 4000, "method": "check", "note": "", "proofPath": "",
-            "status": "pending", "createdByUid": "mo", "createdAtMs": 2000}
+          {
+            "id": "h3",
+            "kind": "handover",
+            "fromStaffId": "fa",
+            "fromName": "Fatou Ba",
+            "toId": "owner",
+            "toName": "Alhoussaine Barry",
+            "amountCents": 10000,
+            "method": "cash",
+            "note": "for the week",
+            "proofPath": "staffHandoverProofs/biz/fa/slip0001.jpg",
+            "status": "pending",
+            "createdByUid": "fa",
+            "createdAtMs": 1000
+          },
+          {
+            "id": "h7",
+            "kind": "handover",
+            "fromStaffId": "mo",
+            "fromName": "Mamadou Diallo",
+            "toId": "business_account",
+            "toName": "",
+            "amountCents": 4000,
+            "method": "check",
+            "note": "",
+            "proofPath": "",
+            "status": "pending",
+            "createdByUid": "mo",
+            "createdAtMs": 2000
+          }
         ]
+      },
+      "counted": {
+        "invoice": true
       }
     },
     {
       "name": "net: held plus parking after expenses, minus what the business owes for expenses",
       "nowMs": 1793289600000,
-      "staffNames": {"abd": "Abdoulaye Sow", "owner": "Alhoussaine Barry", "fa": "Fatou Ba", "mo": "Mamadou Diallo"},
+      "staffNames": {
+        "abd": "Abdoulaye Sow",
+        "owner": "Alhoussaine Barry",
+        "fa": "Fatou Ba",
+        "mo": "Mamadou Diallo"
+      },
       "sources": {
         "containerLinePayments": [
-          {"id": "c1", "amountCents": 10000, "method": "cash", "receivedByStaffId": "mo"}
+          {
+            "id": "c1",
+            "amountCents": 10000,
+            "method": "cash",
+            "receivedByStaffId": "mo"
+          }
         ]
       },
       "handovers": [],
       "netting": {
         "monthKey": "2026-10",
         "customers": [
-          {"key": "phone:3475628973", "dueCents": 494200},
-          {"key": "phone:2015550101", "dueCents": 2000}
+          {
+            "key": "phone:3475628973",
+            "dueCents": 494200
+          },
+          {
+            "key": "phone:2015550101",
+            "dueCents": 2000
+          }
         ],
         "entries": [
-          {"id": "e1", "paidByStaffId": "abd", "amountCents": 20000, "month": "2026-09"},
-          {"id": "e2", "paidByStaffId": "abd", "amountCents": 24831, "month": "2026-10"},
-          {"id": "e3", "paidByStaffId": "abd", "amountCents": 5000, "month": "2026-10", "voided": true},
-          {"id": "e4", "paidByStaffId": "owner", "amountCents": 3500, "month": "2026-10"},
-          {"id": "e5", "paidByStaffId": "mo", "amountCents": 6000, "month": "2026-09"}
+          {
+            "id": "e1",
+            "paidByStaffId": "abd",
+            "amountCents": 20000,
+            "month": "2026-09"
+          },
+          {
+            "id": "e2",
+            "paidByStaffId": "abd",
+            "amountCents": 24831,
+            "month": "2026-10"
+          },
+          {
+            "id": "e3",
+            "paidByStaffId": "abd",
+            "amountCents": 5000,
+            "month": "2026-10",
+            "voided": true
+          },
+          {
+            "id": "e4",
+            "paidByStaffId": "owner",
+            "amountCents": 3500,
+            "month": "2026-10"
+          },
+          {
+            "id": "e5",
+            "paidByStaffId": "mo",
+            "amountCents": 6000,
+            "month": "2026-09"
+          }
         ],
         "repayments": [
-          {"staffId": "mo", "amountCents": 1000, "month": "2026-10"},
-          {"staffId": "mo", "amountCents": 2000, "month": "2026-10", "voided": true}
+          {
+            "staffId": "mo",
+            "amountCents": 1000,
+            "month": "2026-10"
+          },
+          {
+            "staffId": "mo",
+            "amountCents": 2000,
+            "month": "2026-10",
+            "voided": true
+          }
         ],
         "links": {
-          "abd": {"customerKey": "phone:3475628973"},
-          "owner": {"customerKey": "phone:2015550101"}
+          "abd": {
+            "customerKey": "phone:3475628973"
+          },
+          "owner": {
+            "customerKey": "phone:2015550101"
+          }
         }
       },
       "expect": {
         "asOfMs": 1793289600000,
+        "counted": {
+          "parking": true,
+          "activity": true,
+          "package": true,
+          "shop": true,
+          "invoice": true
+        },
         "staff": [
-          {"staffId": "abd", "name": "Abdoulaye Sow", "collectedCents": 0, "collectedByMethod": {},
-            "handedOutCents": 0, "receivedFromOthersCents": 0, "pendingOutCents": 0, "pendingInCents": 0, "heldCents": 0,
-            "parkingDueCents": 449369, "expenseCreditCents": 44831, "expenseOwedToThemCents": 0, "netCents": 449369},
-          {"staffId": "owner", "name": "Alhoussaine Barry", "collectedCents": 0, "collectedByMethod": {},
-            "handedOutCents": 0, "receivedFromOthersCents": 0, "pendingOutCents": 0, "pendingInCents": 0, "heldCents": 0,
-            "parkingDueCents": 0, "expenseCreditCents": 2000, "expenseOwedToThemCents": 1500, "netCents": -1500},
-          {"staffId": "fa", "name": "Fatou Ba", "collectedCents": 0, "collectedByMethod": {},
-            "handedOutCents": 0, "receivedFromOthersCents": 0, "pendingOutCents": 0, "pendingInCents": 0, "heldCents": 0,
-            "parkingDueCents": 0, "expenseCreditCents": 0, "expenseOwedToThemCents": 0, "netCents": 0},
-          {"staffId": "mo", "name": "Mamadou Diallo", "collectedCents": 10000, "collectedByMethod": {"cash": 10000},
-            "handedOutCents": 0, "receivedFromOthersCents": 0, "pendingOutCents": 0, "pendingInCents": 0, "heldCents": 10000,
-            "parkingDueCents": 0, "expenseCreditCents": 0, "expenseOwedToThemCents": 5000, "netCents": 5000}
+          {
+            "staffId": "abd",
+            "name": "Abdoulaye Sow",
+            "collectedCents": 0,
+            "collectedByMethod": {},
+            "handedOutCents": 0,
+            "receivedFromOthersCents": 0,
+            "pendingOutCents": 0,
+            "pendingInCents": 0,
+            "heldCents": 0,
+            "parkingDueCents": 449369,
+            "expenseCreditCents": 44831,
+            "expenseOwedToThemCents": 0,
+            "netCents": 449369
+          },
+          {
+            "staffId": "owner",
+            "name": "Alhoussaine Barry",
+            "collectedCents": 0,
+            "collectedByMethod": {},
+            "handedOutCents": 0,
+            "receivedFromOthersCents": 0,
+            "pendingOutCents": 0,
+            "pendingInCents": 0,
+            "heldCents": 0,
+            "parkingDueCents": 0,
+            "expenseCreditCents": 2000,
+            "expenseOwedToThemCents": 1500,
+            "netCents": -1500
+          },
+          {
+            "staffId": "fa",
+            "name": "Fatou Ba",
+            "collectedCents": 0,
+            "collectedByMethod": {},
+            "handedOutCents": 0,
+            "receivedFromOthersCents": 0,
+            "pendingOutCents": 0,
+            "pendingInCents": 0,
+            "heldCents": 0,
+            "parkingDueCents": 0,
+            "expenseCreditCents": 0,
+            "expenseOwedToThemCents": 0,
+            "netCents": 0
+          },
+          {
+            "staffId": "mo",
+            "name": "Mamadou Diallo",
+            "collectedCents": 10000,
+            "collectedByMethod": {
+              "cash": 10000
+            },
+            "handedOutCents": 0,
+            "receivedFromOthersCents": 0,
+            "pendingOutCents": 0,
+            "pendingInCents": 0,
+            "heldCents": 10000,
+            "parkingDueCents": 0,
+            "expenseCreditCents": 0,
+            "expenseOwedToThemCents": 5000,
+            "netCents": 5000
+          }
         ],
-        "businessAccount": {"receivedCents": 0, "pendingInCents": 0},
+        "businessAccount": {
+          "receivedCents": 0,
+          "pendingInCents": 0
+        },
         "pending": []
+      },
+      "counted": {
+        "invoice": true
       }
     },
     {
       "name": "two staff on one parking customer split the bill left after expenses, the odd cent to the first",
       "nowMs": 1793289600000,
-      "staffNames": {"x": "Xavier", "y": "Yaya"},
+      "staffNames": {
+        "x": "Xavier",
+        "y": "Yaya"
+      },
       "sources": {},
       "handovers": [],
       "netting": {
         "monthKey": "2026-10",
-        "customers": [{"key": "phone:9175550100", "dueCents": 10001}],
+        "customers": [
+          {
+            "key": "phone:9175550100",
+            "dueCents": 10001
+          }
+        ],
         "entries": [],
         "repayments": [],
-        "links": {"x": {"customerKey": "phone:9175550100"}, "y": {"customerKey": "phone:9175550100"}}
+        "links": {
+          "x": {
+            "customerKey": "phone:9175550100"
+          },
+          "y": {
+            "customerKey": "phone:9175550100"
+          }
+        }
       },
       "expect": {
         "asOfMs": 1793289600000,
+        "counted": {
+          "parking": true,
+          "activity": true,
+          "package": true,
+          "shop": true,
+          "invoice": true
+        },
         "staff": [
-          {"staffId": "x", "name": "Xavier", "collectedCents": 0, "collectedByMethod": {},
-            "handedOutCents": 0, "receivedFromOthersCents": 0, "pendingOutCents": 0, "pendingInCents": 0, "heldCents": 0,
-            "parkingDueCents": 5001, "expenseCreditCents": 0, "expenseOwedToThemCents": 0, "netCents": 5001},
-          {"staffId": "y", "name": "Yaya", "collectedCents": 0, "collectedByMethod": {},
-            "handedOutCents": 0, "receivedFromOthersCents": 0, "pendingOutCents": 0, "pendingInCents": 0, "heldCents": 0,
-            "parkingDueCents": 5000, "expenseCreditCents": 0, "expenseOwedToThemCents": 0, "netCents": 5000}
+          {
+            "staffId": "x",
+            "name": "Xavier",
+            "collectedCents": 0,
+            "collectedByMethod": {},
+            "handedOutCents": 0,
+            "receivedFromOthersCents": 0,
+            "pendingOutCents": 0,
+            "pendingInCents": 0,
+            "heldCents": 0,
+            "parkingDueCents": 5001,
+            "expenseCreditCents": 0,
+            "expenseOwedToThemCents": 0,
+            "netCents": 5001
+          },
+          {
+            "staffId": "y",
+            "name": "Yaya",
+            "collectedCents": 0,
+            "collectedByMethod": {},
+            "handedOutCents": 0,
+            "receivedFromOthersCents": 0,
+            "pendingOutCents": 0,
+            "pendingInCents": 0,
+            "heldCents": 0,
+            "parkingDueCents": 5000,
+            "expenseCreditCents": 0,
+            "expenseOwedToThemCents": 0,
+            "netCents": 5000
+          }
         ],
-        "businessAccount": {"receivedCents": 0, "pendingInCents": 0},
+        "businessAccount": {
+          "receivedCents": 0,
+          "pendingInCents": 0
+        },
         "pending": []
+      },
+      "counted": {
+        "invoice": true
       }
     },
     {
       "name": "an opening bigger than what was collected leaves a negative held; nothing recorded yet is all zeros",
       "nowMs": 1793289600000,
-      "staffNames": {"mo": "Mamadou Diallo", "fa": "Fatou Ba"},
+      "staffNames": {
+        "mo": "Mamadou Diallo",
+        "fa": "Fatou Ba"
+      },
       "sources": {
-        "invoicePayments": [{"id": "ip1", "amountCents": 2500, "method": "cash", "receivedByStaffId": "mo"}]
+        "invoicePayments": [
+          {
+            "id": "ip1",
+            "amountCents": 2500,
+            "method": "cash",
+            "receivedByStaffId": "mo"
+          }
+        ]
       },
       "handovers": [
-        {"id": "h1", "kind": "opening", "fromStaffId": "mo", "toId": "business_account", "amountCents": 4000, "method": "other", "status": "confirmed", "createdAtMs": 100}
+        {
+          "id": "h1",
+          "kind": "opening",
+          "fromStaffId": "mo",
+          "toId": "business_account",
+          "amountCents": 4000,
+          "method": "other",
+          "status": "confirmed",
+          "createdAtMs": 100
+        }
       ],
       "netting": null,
       "expect": {
         "asOfMs": 1793289600000,
+        "counted": {
+          "parking": true,
+          "activity": true,
+          "package": true,
+          "shop": true,
+          "invoice": true
+        },
         "staff": [
-          {"staffId": "fa", "name": "Fatou Ba", "collectedCents": 0, "collectedByMethod": {},
-            "handedOutCents": 0, "receivedFromOthersCents": 0, "pendingOutCents": 0, "pendingInCents": 0, "heldCents": 0,
-            "parkingDueCents": 0, "expenseCreditCents": 0, "expenseOwedToThemCents": 0, "netCents": 0},
-          {"staffId": "mo", "name": "Mamadou Diallo", "collectedCents": 2500, "collectedByMethod": {"cash": 2500},
-            "handedOutCents": 4000, "receivedFromOthersCents": 0, "pendingOutCents": 0, "pendingInCents": 0, "heldCents": -1500,
-            "parkingDueCents": 0, "expenseCreditCents": 0, "expenseOwedToThemCents": 0, "netCents": -1500}
+          {
+            "staffId": "fa",
+            "name": "Fatou Ba",
+            "collectedCents": 0,
+            "collectedByMethod": {},
+            "handedOutCents": 0,
+            "receivedFromOthersCents": 0,
+            "pendingOutCents": 0,
+            "pendingInCents": 0,
+            "heldCents": 0,
+            "parkingDueCents": 0,
+            "expenseCreditCents": 0,
+            "expenseOwedToThemCents": 0,
+            "netCents": 0
+          },
+          {
+            "staffId": "mo",
+            "name": "Mamadou Diallo",
+            "collectedCents": 2500,
+            "collectedByMethod": {
+              "cash": 2500
+            },
+            "handedOutCents": 4000,
+            "receivedFromOthersCents": 0,
+            "pendingOutCents": 0,
+            "pendingInCents": 0,
+            "heldCents": -1500,
+            "parkingDueCents": 0,
+            "expenseCreditCents": 0,
+            "expenseOwedToThemCents": 0,
+            "netCents": -1500
+          }
         ],
-        "businessAccount": {"receivedCents": 4000, "pendingInCents": 0},
+        "businessAccount": {
+          "receivedCents": 4000,
+          "pendingInCents": 0
+        },
         "pending": []
+      },
+      "counted": {
+        "invoice": true
       }
     }
   ]

@@ -36,6 +36,9 @@ import {
   openingProblem,
   recordHandoverRequest,
   recordOpeningRequest,
+  setCountedSourcesRequest,
+  COUNTED_SOURCE_KEYS,
+  COUNTED_SOURCE_LABELS,
   sortedBalanceRows,
   staffBalancesFrom,
   staffBalancesRefusalText,
@@ -46,12 +49,13 @@ import {
   type Handover,
   type HandoverDraft,
   type OpeningDraft,
+  type CountedSources,
   type StaffBalanceRow,
   type StaffBalancesAnswer,
 } from "@/lib/staff-balances";
 import { statusPillClass } from "@/lib/status-pill";
 
-type Busy = "" | "load" | "record" | "opening" | "confirm" | "decline" | "void";
+type Busy = "" | "load" | "record" | "opening" | "confirm" | "decline" | "void" | "counted";
 
 const PHOTO_ERRORS: Record<string, string> = {
   "not-an-image": "That file is not a photo.",
@@ -209,6 +213,10 @@ export function StaffBalancesPanel({
       onDismissFlash={() => setFlash("")}
       onHandover={(draft) => act("record", recordHandoverRequest(businessId, draft), "Hand-over recorded. It waits for the receiver to confirm.")}
       onOpening={(draft) => act("opening", recordOpeningRequest(businessId, draft), "Opening amount recorded.")}
+      onCounted={async (sources) => {
+        const problem = await act("counted", setCountedSourcesRequest(businessId, sources), "Saved. The balances now count only what is ticked.");
+        if (problem) setFlash(problem);
+      }}
       onRefresh={() => void load()}
       onVoid={(id, reason) => act("void", voidHandoverRequest(businessId, id, reason), "Hand-over voided.")}
       previewMode={previewMode}
@@ -237,6 +245,7 @@ export function StaffBalancesView({
   onDismissFlash,
   onHandover,
   onOpening,
+  onCounted,
   onConfirm,
   onDecline,
   onVoid,
@@ -256,6 +265,7 @@ export function StaffBalancesView({
   onDismissFlash: () => void;
   onHandover: (draft: HandoverDraft) => Promise<string>;
   onOpening: (draft: OpeningDraft) => Promise<string>;
+  onCounted: (sources: CountedSources) => Promise<void>;
   onConfirm: (handoverId: string) => Promise<void>;
   onDecline: (handoverId: string, note: string) => Promise<string>;
   onVoid: (handoverId: string, reason: string) => Promise<string>;
@@ -317,6 +327,28 @@ export function StaffBalancesView({
             <div className="metric sb-tile"><span>Team owes the business</span><b data-no-translate>{moneyText(totals.owedToBusinessCents)}</b></div>
             <div className="metric sb-tile"><span>The business owes the team</span><b data-no-translate>{moneyText(totals.owedToStaffCents)}</b></div>
           </div>
+        )}
+        {answer && (
+          <fieldset className="sb-counted" disabled={!viewer.isOwner || previewMode || busy !== ""}>
+            <legend>What counts as the business&apos;s money</legend>
+            <div className="sb-counted-options">
+              {COUNTED_SOURCE_KEYS.map((key) => (
+                <label key={key}>
+                  <input
+                    checked={answer.counted[key]}
+                    onChange={(event) => void onCounted({ ...answer.counted, [key]: event.target.checked })}
+                    type="checkbox"
+                  />
+                  <span>{COUNTED_SOURCE_LABELS[key]}</span>
+                </label>
+              ))}
+            </div>
+            <small className="lst-hint">
+              {viewer.isOwner
+                ? "Untick money that belongs to the person who took it, like their own car sales."
+                : "The business owner chooses what counts."}
+            </small>
+          </fieldset>
         )}
       </article>
 

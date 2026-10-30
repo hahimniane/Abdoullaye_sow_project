@@ -15,6 +15,7 @@ describe("staff balances (shared fixture)", () => {
         sources: c.sources,
         handovers: c.handovers,
         netting: c.netting,
+        counted: c.counted,
       });
       assert.deepEqual(out, c.expect);
     });
@@ -46,7 +47,7 @@ describe("staff balances: the pieces", () => {
         {id: "b", amountCents: 0, method: "cash", receivedByStaffId: "mo"},
         {id: "c", amountCents: 50, method: "cash", receivedByStaffId: ""},
       ],
-    }, NOW);
+    }, NOW, {invoice: true});
     assert.deepEqual(receipts.map((r) => r.method), ["other"]);
   });
 
@@ -73,8 +74,9 @@ describe("staff balances: the pieces", () => {
 
   it("garbage input answers zeros, never throws", () => {
     const out = balances.staffBalances({});
-    assert.deepEqual(out, {asOfMs: 0, staff: [],
-      businessAccount: {receivedCents: 0, pendingInCents: 0}, pending: []});
+    assert.deepEqual(out, {asOfMs: 0, counted: {parking: true,
+      activity: true, package: true, shop: true, invoice: false}, staff: [],
+    businessAccount: {receivedCents: 0, pendingInCents: 0}, pending: []});
     assert.doesNotThrow(() => balances.staffBalances(null));
   });
 });
@@ -165,5 +167,57 @@ describe("staff balances: handover rules", () => {
       assert.ok(r.message && r.message !== code, code);
       assert.ok(r.kind, code);
     }
+  });
+});
+
+describe("what counts as the business's money (STAFF_BALANCES.md §7)", () => {
+  const NOW = new Date("2026-10-29T16:00:00Z");
+  const sources = {
+    parkedCars: [{id: "p", parkingDate: "2026-10-27",
+      parkingEndDate: "2026-10-27", dailyRate: 10, paymentStatus: "paid",
+      amountPaidCents: 1000, receivedByStaffId: "mo"}],
+    lotActivityPayments: [{id: "a", activityId: "x", amountCents: 2000,
+      receivedVia: "cash", receivedByStaffId: "mo"}],
+    containerLinePayments: [{id: "k", amountCents: 3000, method: "cash",
+      receivedByStaffId: "mo"}],
+    inventorySales: [{id: "s", totalCents: 4000, paymentMethod: "cash",
+      soldByStaffId: "mo", receivedByStaffId: "mo"}],
+    invoicePayments: [{id: "i", amountCents: 650000, method: "cash",
+      receivedByStaffId: "mo"}],
+  };
+  const kinds = (counted) => balances.collectReceipts(sources, NOW, counted)
+      .map((r) => r.source).sort();
+
+  it("by default, invoices (staff's own car sales) do not count", () => {
+    assert.ok(!kinds(undefined).includes("invoice"));
+    assert.ok(kinds(undefined).includes("parking"));
+    assert.ok(kinds(undefined).includes("package"));
+    assert.ok(kinds({invoice: true}).includes("invoice"));
+  });
+
+  it("each kind the business switches off is left out", () => {
+    assert.ok(!kinds({parking: false}).includes("parking"));
+    assert.ok(!kinds({activity: false}).includes("activity"));
+    assert.ok(!kinds({package: false}).includes("package"));
+    const shopOff = kinds({shop: false});
+    assert.ok(!shopOff.includes("inventory") &&
+      !shopOff.includes("inventory_credit"));
+  });
+
+  it("the answer says what counted, every key filled", () => {
+    const out = balances.staffBalances({now: NOW, sources,
+      counted: {package: false}});
+    assert.deepEqual(out.counted, {parking: true, activity: true,
+      package: false, shop: true, invoice: false});
+    const mo = out.staff.find((r) => r.staffId === "mo");
+    assert.ok(mo.heldCents < 650000, "the car sale is not held money");
+  });
+
+  it("only real choices are stored", () => {
+    assert.equal(balances.cleanCountedSources(null), null);
+    assert.equal(balances.cleanCountedSources({invoice: "yes"}), null);
+    assert.deepEqual(balances.cleanCountedSources({invoice: true,
+      junk: false}), {parking: true, activity: true, package: true,
+      shop: true, invoice: true});
   });
 });

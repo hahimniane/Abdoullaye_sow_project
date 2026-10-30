@@ -103,8 +103,36 @@ export type StaffBalanceRow = {
   netCents: number;
 };
 
+/** Which kinds of money count as the business's (docs/STAFF_BALANCES.md §7). */
+export type CountedSourceKey = "parking" | "activity" | "package" | "shop" | "invoice";
+export type CountedSources = Record<CountedSourceKey, boolean>;
+export const COUNTED_SOURCE_KEYS: readonly CountedSourceKey[] = ["parking", "activity", "package", "shop", "invoice"];
+/** Invoices are off unless the owner turns them on: staff's own car sales. */
+export const COUNTED_SOURCE_DEFAULTS: CountedSources = { parking: true, activity: true, package: true, shop: true, invoice: false };
+export const COUNTED_SOURCE_LABELS: Record<CountedSourceKey, string> = {
+  parking: "Parking",
+  activity: "Lot jobs",
+  package: "Packages and containers",
+  shop: "Shop sales",
+  invoice: "Invoices",
+};
+
+/** The business's choice, every key filled from the defaults (the server's countedSources). */
+export function countedSourcesFrom(value: unknown): CountedSources {
+  const given = rowOf(value);
+  const out = { ...COUNTED_SOURCE_DEFAULTS };
+  for (const key of COUNTED_SOURCE_KEYS) {
+    if (typeof given[key] === "boolean") out[key] = given[key] as boolean;
+  }
+  return out;
+}
+
+export const setCountedSourcesRequest = (businessId: string, sources: CountedSources) =>
+  ({ action: "set_counted_sources", businessId, sources: { ...sources } });
+
 export type StaffBalancesAnswer = {
   asOfMs: number;
+  counted: CountedSources;
   staff: StaffBalanceRow[];
   businessAccount: { receivedCents: number; pendingInCents: number };
   pending: Handover[];
@@ -185,6 +213,7 @@ export function staffBalancesFrom(data: unknown): StaffBalancesAnswer {
   const account = rowOf(r.businessAccount);
   return {
     asOfMs: timeMs(r.asOfMs),
+    counted: countedSourcesFrom(r.counted),
     staff: (Array.isArray(r.staff) ? r.staff : []).map(balanceRowFrom).filter((s) => s.staffId),
     businessAccount: { receivedCents: cents(account.receivedCents), pendingInCents: cents(account.pendingInCents) },
     pending: (Array.isArray(r.pending) ? r.pending : []).map(handoverFrom).filter((h) => h.id),
@@ -360,7 +389,9 @@ export type HandoverRefusal =
   | "handover_receiver_invalid"
   | "handover_not_receiver"
   | "handover_not_pending"
-  | "opening_owner_only";
+  | "opening_owner_only"
+  | "counted_sources_owner_only"
+  | "counted_sources_invalid";
 
 /** The server's refusals in the console's words (French in french-dom.ts). */
 export const STAFF_BALANCES_REFUSAL_COPY: Record<HandoverRefusal, string> = {
@@ -371,6 +402,8 @@ export const STAFF_BALANCES_REFUSAL_COPY: Record<HandoverRefusal, string> = {
   handover_not_receiver: "Only the person this money was handed to can confirm or decline it. For the Business account, that is the business owner.",
   handover_not_pending: "This hand-over was already answered or voided. Refresh the page.",
   opening_owner_only: "Only the business owner can set an opening amount.",
+  counted_sources_owner_only: "Only the business owner can choose what counts as the business's money.",
+  counted_sources_invalid: "Choose what counts as the business's money.",
 };
 
 /** What is wrong with a hand-over before it is sent, or "". `memberIds`: the people it may go to. */
