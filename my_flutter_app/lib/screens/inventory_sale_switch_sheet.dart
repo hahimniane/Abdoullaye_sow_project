@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../l10n/app_localizations.dart';
+import '../services/business_account_receiver.dart';
 import '../services/eastern_clock.dart';
 import '../services/inventory.dart';
 import '../services/inventory_credit.dart';
@@ -15,6 +16,7 @@ import '../utils/date_display.dart';
 import '../widgets/inventory_credit_fields.dart';
 import '../widgets/inventory_widgets.dart';
 import '../widgets/lot_sheets.dart';
+import '../widgets/received_by_options.dart';
 import 'package_payment_sheet.dart' show containerPaymentMethodLabel;
 
 /// Switches a recorded sale between paid and credit (docs/INVENTORY.md v6):
@@ -118,6 +120,7 @@ class _InventorySaleSwitchSheetState extends State<InventorySaleSwitchSheet> {
   String _name(String id) => inventoryStaffName(widget.staff, id);
 
   String _personLabel(AppLocalizations l10n, String id) {
+    if (isBusinessAccountReceiver(id)) return l10n.sbalBusinessAccount;
     final name = _name(id);
     return inventoryPersonOptionLabel(
       l10n,
@@ -174,12 +177,22 @@ class _InventorySaleSwitchSheetState extends State<InventorySaleSwitchSheet> {
 
   Future<void> _pickReceiver() async {
     final l10n = AppLocalizations.of(context)!;
-    final picked = await pickInventoryPerson(
+    final picked = await pickLotOption<String>(
       context,
       title: l10n.lotReceivedBy,
-      people: widget.staff,
-      me: widget.currentUserId,
       selected: _receivedBy,
+      options: receivedByOptions(l10n, [
+        for (final p in widget.staff)
+          LotOption(
+            p.id,
+            inventoryPersonOptionLabel(
+              l10n,
+              p.id,
+              p.name,
+              widget.currentUserId,
+            ),
+          ),
+      ]),
     );
     if (picked == null || !mounted) return;
     setState(() => _receivedBy = picked);

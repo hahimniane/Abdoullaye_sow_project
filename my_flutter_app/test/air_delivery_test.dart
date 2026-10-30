@@ -520,6 +520,31 @@ void main() {
       });
     });
 
+    testWidgets('money collected can be received by the Business account', (
+      tester,
+    ) async {
+      final calls = _Calls();
+      await _pump(tester, _sheet(calls));
+      // Nothing collected: no question about who received it.
+      expect(find.byKey(const Key('delivery-received-by')), findsNothing);
+      await tester.enterText(
+        find.byKey(const Key('delivery-pickup-code')),
+        '4821',
+      );
+      await tester.enterText(
+        find.byKey(const Key('delivery-collected-now')),
+        '40',
+      );
+      await tester.pump();
+      expect(find.byKey(const Key('delivery-received-by')), findsOneWidget);
+      await _tap(tester, 'delivery-received-by');
+      await tester.tap(find.text('Business account'));
+      await tester.pumpAndSettle();
+      await _tap(tester, 'delivery-confirm');
+      expect(calls.payloads.single['collectedCents'], 4000);
+      expect(calls.payloads.single['receivedByStaffId'], 'business_account');
+    });
+
     testWidgets('a wrong code opens "Deliver without a code"', (tester) async {
       final uploads = <String>[];
       final calls = _Calls()

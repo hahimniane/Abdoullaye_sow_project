@@ -39,6 +39,8 @@ import 'deliveries_home_screen.dart';
 import 'inventory_screen.dart';
 import 'invoices_screen.dart';
 import 'parking_month_end_screen.dart';
+import 'staff_balances_screen.dart';
+import '../widgets/received_by_options.dart';
 import '../widgets/parking_welcome_sheet.dart';
 import 'office_locations_screen.dart';
 import 'park_car_screen.dart';
@@ -1333,6 +1335,9 @@ List<_Destination> _businessDestinations(
       ledgerBusinessId.isNotEmpty;
   // Invoices and receipts: `ledger` OR the narrower `invoices` permission.
   final canUseInvoices = auth.hasInvoicesAccess && ledgerBusinessId.isNotEmpty;
+  // Staff balances: every member of the business sees every balance.
+  final canUseStaffBalances =
+      auth.hasBusinessDashboardAccess && ledgerBusinessId.isNotEmpty;
   // Containers - what the business loaded into each box - is its own
   // permission, mirroring the console's `containers` tab, and is offered
   // only to a business that ships (barrels, freight, car transport/parking).
@@ -1447,6 +1452,32 @@ List<_Destination> _businessDestinations(
           Navigator.of(context).push(
             MaterialPageRoute<void>(
               builder: (_) => InvoicesScreen(businessId: ledgerBusinessId),
+            ),
+          );
+        },
+      ),
+    // Who holds the business's money, who owes it and who is owed - for
+    // every member of the team (docs/STAFF_BALANCES.md §1.6), with a count of
+    // the handovers waiting on this person.
+    if (canUseStaffBalances)
+      _Destination(
+        rowKey: const Key('open-staff-balances'),
+        icon: Icons.account_balance_wallet_outlined,
+        title: l10n.sbalTitle,
+        subtitle: l10n.sbalMenuSubtitle,
+        trailing: StaffBalancesBadge(
+          businessId: ledgerBusinessId,
+          uid: auth.user?.uid ?? '',
+          isOwner: auth.isBusinessOwner || auth.isAdmin,
+        ),
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => StaffBalancesScreen(
+                businessId: ledgerBusinessId,
+                currentUid: auth.user?.uid ?? '',
+                isOwner: auth.isBusinessOwner || auth.isAdmin,
+              ),
             ),
           );
         },
@@ -2542,7 +2573,7 @@ class _ParkingListRow extends StatelessWidget {
   String _staff(Object? uid) {
     final key = (uid ?? '').toString().trim();
     if (key.isEmpty) return '';
-    return staffNames[key] ?? '';
+    return receivedByName(l10n, key, staffNames[key] ?? '');
   }
 
   @override
@@ -2961,11 +2992,15 @@ class _Destination {
     required this.title,
     this.subtitle = '',
     required this.onTap,
+    this.trailing,
   });
 
   final Key rowKey;
   final IconData icon;
   final String title;
+
+  /// A badge before the chevron (a count of things waiting), if any.
+  final Widget? trailing;
 
   /// What is inside, under the title; '' for a place whose name says it.
   final String subtitle;
@@ -3067,6 +3102,10 @@ class _DestinationRow extends StatelessWidget {
               ),
             ),
             const SizedBox(width: AppSpacing.sm),
+            if (row.trailing != null) ...[
+              row.trailing!,
+              const SizedBox(width: AppSpacing.xs),
+            ],
             const Icon(Icons.chevron_right, size: 20, color: AppColors.muted),
           ],
         ),

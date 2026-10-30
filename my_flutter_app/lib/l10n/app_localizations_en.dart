@@ -17726,4 +17726,293 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get wpkBlockedShipsByAir => 'Ships by air; this is a sea container';
+
+  @override
+  String get sbalTitle => 'Staff balances';
+
+  @override
+  String get sbalMenuSubtitle => 'Who holds money, who owes, who is owed';
+
+  @override
+  String get sbalBusinessAccount => 'Business account';
+
+  @override
+  String sbalWaitingBadge(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count waiting on you',
+      one: '1 waiting on you',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get sbalIntro =>
+      'What each person holds of the business\'s money, what they owe for parking, and what the business owes them for expenses.';
+
+  @override
+  String get sbalHolds => 'Holds';
+
+  @override
+  String get sbalParking => 'Parking';
+
+  @override
+  String get sbalExpensesOwed => 'Expenses owed';
+
+  @override
+  String get sbalNet => 'Net';
+
+  @override
+  String sbalOwes(Object amount) {
+    return 'owes $amount';
+  }
+
+  @override
+  String sbalIsOwed(Object amount) {
+    return 'is owed $amount';
+  }
+
+  @override
+  String get sbalSettled => 'all square';
+
+  @override
+  String get sbalLoadFailed =>
+      'The balances could not be loaded. Check your connection and try again.';
+
+  @override
+  String get sbalTryAgain => 'Try again';
+
+  @override
+  String get sbalEmpty => 'No one on the team yet.';
+
+  @override
+  String sbalAsOf(Object time) {
+    return 'As of $time';
+  }
+
+  @override
+  String get sbalWaitingOnYou => 'Waiting on you';
+
+  @override
+  String get sbalOtherPending => 'Other handovers waiting';
+
+  @override
+  String get sbalHandOver => 'Hand over money';
+
+  @override
+  String get sbalOpening => 'Opening amount';
+
+  @override
+  String get sbalConfirm => 'Confirm received';
+
+  @override
+  String get sbalDecline => 'Decline';
+
+  @override
+  String get sbalVoid => 'Void';
+
+  @override
+  String sbalHandedLine(Object from, Object amount, Object to) {
+    return '$from handed $amount to $to';
+  }
+
+  @override
+  String sbalOpeningLine(Object name, Object amount) {
+    return '$name · opening amount $amount';
+  }
+
+  @override
+  String get sbalStatusPending => 'Waiting for confirmation';
+
+  @override
+  String get sbalStatusConfirmed => 'Confirmed';
+
+  @override
+  String get sbalStatusDeclined => 'Declined';
+
+  @override
+  String get sbalStatusVoided => 'Voided';
+
+  @override
+  String get sbalMethodCash => 'Cash';
+
+  @override
+  String get sbalMethodZelle => 'Zelle';
+
+  @override
+  String get sbalMethodCheck => 'Check';
+
+  @override
+  String get sbalMethodDeposit => 'Deposit';
+
+  @override
+  String get sbalMethodOther => 'Other';
+
+  @override
+  String get sbalViewPhoto => 'View photo';
+
+  @override
+  String get sbalPhotoOpenFailed => 'The photo could not be opened.';
+
+  @override
+  String get sbalDetailCollected => 'Collected from customers';
+
+  @override
+  String get sbalDetailHandedOut => 'Handed over';
+
+  @override
+  String get sbalDetailReceived => 'Received from others';
+
+  @override
+  String get sbalDetailPendingOut => 'Handed over, not confirmed yet';
+
+  @override
+  String get sbalDetailPendingIn => 'Coming in, not confirmed yet';
+
+  @override
+  String get sbalDetailHolds => 'Holds now';
+
+  @override
+  String get sbalDetailParking => 'Parking bill (after expenses)';
+
+  @override
+  String get sbalDetailExpensesApplied => 'Expenses taken off the parking bill';
+
+  @override
+  String get sbalDetailExpensesOwed => 'Expenses the business owes them';
+
+  @override
+  String get sbalHistory => 'History';
+
+  @override
+  String get sbalHistoryEmpty => 'Nothing recorded yet.';
+
+  @override
+  String sbalBusinessAccountReceived(Object amount) {
+    return 'Received so far: $amount';
+  }
+
+  @override
+  String sbalBusinessAccountComing(Object amount) {
+    return 'On the way: $amount';
+  }
+
+  @override
+  String get sbalTo => 'Handed to';
+
+  @override
+  String get sbalChoosePerson => 'Choose who';
+
+  @override
+  String get sbalAmount => 'Amount (US dollars)';
+
+  @override
+  String get sbalMethod => 'How you gave it';
+
+  @override
+  String get sbalNote => 'Note (optional)';
+
+  @override
+  String get sbalAddPhoto => 'Add a photo of the slip';
+
+  @override
+  String get sbalRetakePhoto => 'Retake photo';
+
+  @override
+  String get sbalPhotoAdded => 'Photo added';
+
+  @override
+  String get sbalPhotoFailed => 'The photo could not be added. Try again.';
+
+  @override
+  String get sbalSendForConfirmation => 'Send for confirmation';
+
+  @override
+  String get sbalHandOverHint =>
+      'It stays pending until the person who receives it confirms.';
+
+  @override
+  String sbalHandOverDone(Object amount, Object to) {
+    return 'Handover of $amount sent to $to. They need to confirm it.';
+  }
+
+  @override
+  String get sbalAmountInvalid => 'Enter an amount above \$0.00.';
+
+  @override
+  String get sbalSayWho => 'Choose who you handed it to.';
+
+  @override
+  String get sbalOpeningHint =>
+      'What this person already handed over before Staff balances existed. It is recorded and confirmed in one step.';
+
+  @override
+  String get sbalOpeningPerson => 'Person';
+
+  @override
+  String get sbalOpeningSave => 'Record opening amount';
+
+  @override
+  String sbalOpeningDone(Object amount, Object name) {
+    return 'Opening amount of $amount recorded for $name.';
+  }
+
+  @override
+  String get sbalConfirmDone => 'Marked as received.';
+
+  @override
+  String get sbalDeclineTitle => 'Decline this handover?';
+
+  @override
+  String sbalDeclineBody(Object from, Object amount) {
+    return '$from will see that you did not receive $amount.';
+  }
+
+  @override
+  String get sbalDeclineNote => 'Why (optional)';
+
+  @override
+  String get sbalDeclineDone => 'Handover declined.';
+
+  @override
+  String get sbalVoidTitle => 'Void this handover?';
+
+  @override
+  String sbalVoidBody(Object amount) {
+    return 'The $amount handover will count as never given. Nothing is deleted.';
+  }
+
+  @override
+  String get sbalVoidReason => 'Reason (optional)';
+
+  @override
+  String get sbalVoidDone => 'Handover voided.';
+
+  @override
+  String get sbalRefusalToSelf => 'You cannot hand money to yourself.';
+
+  @override
+  String get sbalRefusalAmountInvalid =>
+      'That amount is not valid. Enter an amount above \$0.00.';
+
+  @override
+  String get sbalRefusalMethodInvalid =>
+      'Choose how the money was handed over.';
+
+  @override
+  String get sbalRefusalReceiverInvalid =>
+      'That person is not on this business\'s team.';
+
+  @override
+  String get sbalRefusalNotReceiver =>
+      'Only the person receiving this (or the owner, for the business account) can answer it.';
+
+  @override
+  String get sbalRefusalNotPending =>
+      'This handover was already answered. Refresh to see where it stands.';
+
+  @override
+  String get sbalRefusalOpeningOwnerOnly =>
+      'Only the owner can record an opening amount.';
 }

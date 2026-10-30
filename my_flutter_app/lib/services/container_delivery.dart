@@ -339,6 +339,7 @@ Map<String, Object?> deliverLineRequest(
   String overrideCollectedBy = '',
   String overridePhotoPath = '',
   int collectedCents = 0,
+  String receivedByStaffId = '',
 }) {
   final code = pickupCodeDigits(pickupCode);
   final overrideName = deliveryOneLine(overrideCollectedBy);
@@ -353,6 +354,10 @@ Map<String, Object?> deliverLineRequest(
     if (overrideName.isNotEmpty || overridePhoto.isNotEmpty)
       'override': {'collectedBy': overrideName, 'photoPath': overridePhoto},
     if (collectedCents > 0) 'collectedCents': collectedCents,
+    // Only to say the money went to the business account; otherwise the
+    // server names the person delivering.
+    if (collectedCents > 0 && receivedByStaffId.trim().isNotEmpty)
+      'receivedByStaffId': receivedByStaffId.trim(),
   };
 }
 

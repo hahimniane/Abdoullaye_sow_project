@@ -19,6 +19,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_motion.dart';
 import '../theme/app_spacing.dart';
 import '../widgets/lot_sheets.dart';
+import '../widgets/received_by_options.dart';
 import '../widgets/package_request_widgets.dart';
 import '../widgets/pieces_editor.dart';
 import '../widgets/proof_fields.dart';
@@ -190,7 +191,9 @@ class _ReceiveRequestSheetState extends State<ReceiveRequestSheet> {
       context,
       title: l10n.lotReceivedBy,
       selected: _receivedBy,
-      options: [for (final s in widget.staff) LotOption(s.id, s.name)],
+      options: receivedByOptions(l10n, [
+        for (final s in widget.staff) LotOption(s.id, s.name),
+      ]),
     );
     if (picked == null || !mounted) return;
     setState(() {
@@ -411,12 +414,15 @@ class _ReceiveRequestSheetState extends State<ReceiveRequestSheet> {
               note: _note,
               methodLabel: containerPaymentMethodLabel(l10n, _method),
               onPickMethod: _pickMethod,
-              receiverName:
-                  widget.staff
-                      .where((s) => s.id == _receivedBy)
-                      .firstOrNull
-                      ?.name ??
-                  '',
+              receiverName: receivedByName(
+                l10n,
+                _receivedBy,
+                widget.staff
+                        .where((s) => s.id == _receivedBy)
+                        .firstOrNull
+                        ?.name ??
+                    '',
+              ),
               onPickReceiver: _pickReceiver,
               enabled: !_busy,
               onEdited: () => setState(() => _errors = {}),

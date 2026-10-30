@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../screens/containers_screen.dart' show containerLineTitle;
+import '../services/business_account_receiver.dart';
 import '../services/container_delivery.dart';
 import '../services/container_delivery_service.dart';
 import '../services/container_manifest.dart';
@@ -19,6 +20,7 @@ import '../utils/action_confirmation.dart';
 import '../utils/date_display.dart';
 import 'app_snackbars.dart';
 import 'lot_sheets.dart';
+import 'received_by_options.dart';
 import 'proof_refusal_text.dart';
 
 /// The words and shared pieces of a package delivery (docs/WAITING_PACKAGES.md
@@ -289,6 +291,11 @@ class _MarkDeliveredSheetState extends State<MarkDeliveredSheet> {
   final TextEditingController _pickupCode = TextEditingController();
   final TextEditingController _collectedNow = TextEditingController();
 
+  /// Who took the money collected now: '' is the person delivering (the
+  /// server's default), [businessAccountReceiver] money paid straight to the
+  /// business.
+  String _receivedBy = '';
+
   /// Worked out once from the group the caller holds; replaced by the
   /// server's answer when it saw a balance the phone did not.
   late DeliveryBalanceNotice _notice = deliveryBalanceNotice(
@@ -409,6 +416,7 @@ class _MarkDeliveredSheetState extends State<MarkDeliveredSheet> {
         overrideCollectedBy: _withoutCode ? typed : '',
         overridePhotoPath: _withoutCode ? _photoPath : '',
         collectedCents: collectedCents,
+        receivedByStaffId: collectedCents > 0 ? _receivedBy : '',
       );
       if (!mounted) return;
       Navigator.of(context).pop(result);
@@ -439,6 +447,17 @@ class _MarkDeliveredSheetState extends State<MarkDeliveredSheet> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<void> _pickReceivedBy() async {
+    final l10n = AppLocalizations.of(context)!;
+    final picked = await pickLotOption<String>(
+      context,
+      title: l10n.lotReceivedBy,
+      selected: _receivedBy,
+      options: receivedByOptions(l10n, [LotOption('', l10n.you)]),
+    );
+    if (picked != null && mounted) setState(() => _receivedBy = picked);
   }
 
   void _openWithoutCode() {
@@ -560,9 +579,7 @@ class _MarkDeliveredSheetState extends State<MarkDeliveredSheet> {
             inputFormatters: [
               FilteringTextInputFormatter.allow(RegExp(r'[0-9$,\s]')),
             ],
-            onChanged: (_) {
-              if (_amountError != null) setState(() => _amountError = null);
-            },
+            onChanged: (_) => setState(() => _amountError = null),
             decoration: InputDecoration(
               labelText: l10n.deliverCollectedNowLabel,
               helperText: owes ?? l10n.deliverCollectedNowHelper,
@@ -575,6 +592,18 @@ class _MarkDeliveredSheetState extends State<MarkDeliveredSheet> {
               ),
             ),
           ),
+          if ((collectedCentsFromInput(_collectedNow.text) ?? 0) > 0) ...[
+            const SizedBox(height: AppSpacing.md),
+            LotPickerField(
+              key: const Key('delivery-received-by'),
+              label: l10n.lotReceivedBy,
+              value: isBusinessAccountReceiver(_receivedBy)
+                  ? l10n.sbalBusinessAccount
+                  : l10n.you,
+              placeholder: l10n.lotReceivedBy,
+              onTap: _busy ? () {} : _pickReceivedBy,
+            ),
+          ],
           if (_notice.warns) ...[
             const SizedBox(height: AppSpacing.md),
             _BalanceWarning(notice: _notice),

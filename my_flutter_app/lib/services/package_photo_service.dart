@@ -22,12 +22,17 @@ String packagePhotoPath({
   required String businessId,
   required String uploaderUid,
   required String fileId,
+  String root = packagePhotoRoot,
 }) {
   if (businessId.isEmpty || uploaderUid.isEmpty || !_fileId.hasMatch(fileId)) {
     return '';
   }
-  return '$packagePhotoRoot/$businessId/$uploaderUid/$fileId';
+  return '$root/$businessId/$uploaderUid/$fileId';
 }
+
+/// Handover slips and screenshots (docs/STAFF_BALANCES.md §2) live beside the
+/// package photos under their own root, with the same file rules.
+const staffHandoverProofRoot = 'staffHandoverProofs';
 
 String newPackagePhotoId(String contentType, [Random? random]) {
   const alphabet =
@@ -66,6 +71,7 @@ class PackagePhotoService {
   Future<String> upload({
     required String businessId,
     required List<int> bytes,
+    String root = packagePhotoRoot,
   }) async {
     final problem = packagePhotoProblem(bytes);
     if (problem != null) throw PackagePhotoFailure(problem);
@@ -76,6 +82,7 @@ class PackagePhotoService {
       businessId: businessId,
       uploaderUid: uid,
       fileId: newPackagePhotoId(contentType),
+      root: root,
     );
     try {
       await _storage

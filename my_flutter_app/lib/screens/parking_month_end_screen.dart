@@ -26,6 +26,7 @@ import '../utils/parking_month_pdf.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/lot_sheets.dart';
+import '../widgets/received_by_options.dart';
 import 'parked_car_details_screen.dart';
 import 'pdf_preview_screen.dart';
 
@@ -2083,7 +2084,9 @@ class _SettleSheetState extends State<_SettleSheet> {
       context,
       title: l10n.lotReceivedBy,
       selected: _by,
-      options: [for (final s in widget.staff) LotOption(s.id, s.name)],
+      options: receivedByOptions(l10n, [
+        for (final s in widget.staff) LotOption(s.id, s.name),
+      ]),
     );
     if (picked != null && mounted) {
       setState(() {
@@ -2177,7 +2180,13 @@ class _SettleSheetState extends State<_SettleSheet> {
     final l10n = AppLocalizations.of(context)!;
     final plan = monthBillPaymentPlan(widget.customer);
     final retry = _failed.isEmpty ? null : {for (final f in _failed) f.key};
-    final byName = widget.staff.where((s) => s.id == _by).firstOrNull?.name;
+    final byName = _by.isEmpty
+        ? null
+        : receivedByName(
+            l10n,
+            _by,
+            widget.staff.where((s) => s.id == _by).firstOrNull?.name ?? '',
+          );
     return LotSheetShell(
       title: l10n.pmeMarkAllPaid,
       subtitle: '${widget.customer.customerName} · ${widget.monthLabel}',

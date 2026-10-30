@@ -502,6 +502,28 @@ void main() {
       expect(find.text('Switched to paid'), findsOneWidget);
     });
 
+    testWidgets('Received by offers Business account first and sends it', (
+      tester,
+    ) async {
+      final calls = _Calls()
+        ..respond = (name, _) => {'success': true, 'to': 'paid'};
+      await _pump(tester, [_credit('s2')], calls);
+      await _tapKey(tester, 'inv-switch-s2');
+      await _tapKey(tester, 'inv-switch-received-by');
+      // The picker lists the business account before the team.
+      final business = tester.getTopLeft(find.text('Business account'));
+      final first = tester.getTopLeft(find.text('Ama (me)').last);
+      expect(business.dy, lessThan(first.dy));
+      await _tapText(tester, 'Business account');
+      expect(find.text('Business account'), findsOneWidget);
+      await _tapKey(tester, 'inv-switch-submit');
+      await _tapText(tester, 'Switch to paid');
+      expect(
+        calls.named('switchInventorySalePayment').single['receivedByStaffId'],
+        'business_account',
+      );
+    });
+
     testWidgets('a refusal reads in words and points to Record payment', (
       tester,
     ) async {

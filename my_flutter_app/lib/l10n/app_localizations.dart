@@ -29965,6 +29965,504 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Ships by air; this is a sea container'**
   String get wpkBlockedShipsByAir;
+
+  /// Title of the Staff balances page and its menu entry.
+  ///
+  /// In en, this message translates to:
+  /// **'Staff balances'**
+  String get sbalTitle;
+
+  /// Subtitle of the Staff balances entry in the business menu.
+  ///
+  /// In en, this message translates to:
+  /// **'Who holds money, who owes, who is owed'**
+  String get sbalMenuSubtitle;
+
+  /// The "Received by" choice for money paid straight to the business, and the business account row.
+  ///
+  /// In en, this message translates to:
+  /// **'Business account'**
+  String get sbalBusinessAccount;
+
+  /// Badge on the Staff balances menu entry: handovers waiting for the viewer to confirm.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 waiting on you} other{{count} waiting on you}}'**
+  String sbalWaitingBadge(int count);
+
+  /// Short explanation at the top of the Staff balances page.
+  ///
+  /// In en, this message translates to:
+  /// **'What each person holds of the business\'s money, what they owe for parking, and what the business owes them for expenses.'**
+  String get sbalIntro;
+
+  /// Column: money the person holds for the business.
+  ///
+  /// In en, this message translates to:
+  /// **'Holds'**
+  String get sbalHolds;
+
+  /// Column: the person's own parking bill.
+  ///
+  /// In en, this message translates to:
+  /// **'Parking'**
+  String get sbalParking;
+
+  /// Column: expenses the business owes the person.
+  ///
+  /// In en, this message translates to:
+  /// **'Expenses owed'**
+  String get sbalExpensesOwed;
+
+  /// Label of the one net number per person.
+  ///
+  /// In en, this message translates to:
+  /// **'Net'**
+  String get sbalNet;
+
+  /// Net result: the person owes the business this amount.
+  ///
+  /// In en, this message translates to:
+  /// **'owes {amount}'**
+  String sbalOwes(Object amount);
+
+  /// Net result: the business owes the person this amount.
+  ///
+  /// In en, this message translates to:
+  /// **'is owed {amount}'**
+  String sbalIsOwed(Object amount);
+
+  /// Net result: nothing owed either way.
+  ///
+  /// In en, this message translates to:
+  /// **'all square'**
+  String get sbalSettled;
+
+  /// Shown when the balances did not load.
+  ///
+  /// In en, this message translates to:
+  /// **'The balances could not be loaded. Check your connection and try again.'**
+  String get sbalLoadFailed;
+
+  /// Button to load the balances again.
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get sbalTryAgain;
+
+  /// Shown when the business has no staff rows.
+  ///
+  /// In en, this message translates to:
+  /// **'No one on the team yet.'**
+  String get sbalEmpty;
+
+  /// When the balances were worked out.
+  ///
+  /// In en, this message translates to:
+  /// **'As of {time}'**
+  String sbalAsOf(Object time);
+
+  /// Section: handovers the viewer has to confirm or decline.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting on you'**
+  String get sbalWaitingOnYou;
+
+  /// Section: pending handovers waiting on someone else.
+  ///
+  /// In en, this message translates to:
+  /// **'Other handovers waiting'**
+  String get sbalOtherPending;
+
+  /// Button and sheet title: record handing money to a person or the business account.
+  ///
+  /// In en, this message translates to:
+  /// **'Hand over money'**
+  String get sbalHandOver;
+
+  /// Owner-only button and sheet title: what a person handed over before Staff balances existed.
+  ///
+  /// In en, this message translates to:
+  /// **'Opening amount'**
+  String get sbalOpening;
+
+  /// Button: the receiver confirms they got the money.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm received'**
+  String get sbalConfirm;
+
+  /// Button: the receiver says they did not get the money.
+  ///
+  /// In en, this message translates to:
+  /// **'Decline'**
+  String get sbalDecline;
+
+  /// Button: cancel a pending handover.
+  ///
+  /// In en, this message translates to:
+  /// **'Void'**
+  String get sbalVoid;
+
+  /// One handover as a sentence.
+  ///
+  /// In en, this message translates to:
+  /// **'{from} handed {amount} to {to}'**
+  String sbalHandedLine(Object from, Object amount, Object to);
+
+  /// One opening amount as a sentence.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} · opening amount {amount}'**
+  String sbalOpeningLine(Object name, Object amount);
+
+  /// Handover status.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for confirmation'**
+  String get sbalStatusPending;
+
+  /// Handover status.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirmed'**
+  String get sbalStatusConfirmed;
+
+  /// Handover status.
+  ///
+  /// In en, this message translates to:
+  /// **'Declined'**
+  String get sbalStatusDeclined;
+
+  /// Handover status.
+  ///
+  /// In en, this message translates to:
+  /// **'Voided'**
+  String get sbalStatusVoided;
+
+  /// Handover method.
+  ///
+  /// In en, this message translates to:
+  /// **'Cash'**
+  String get sbalMethodCash;
+
+  /// Handover method.
+  ///
+  /// In en, this message translates to:
+  /// **'Zelle'**
+  String get sbalMethodZelle;
+
+  /// Handover method.
+  ///
+  /// In en, this message translates to:
+  /// **'Check'**
+  String get sbalMethodCheck;
+
+  /// Handover method.
+  ///
+  /// In en, this message translates to:
+  /// **'Deposit'**
+  String get sbalMethodDeposit;
+
+  /// Handover method.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get sbalMethodOther;
+
+  /// Opens the slip photo of a handover.
+  ///
+  /// In en, this message translates to:
+  /// **'View photo'**
+  String get sbalViewPhoto;
+
+  /// Shown when the slip photo cannot be loaded.
+  ///
+  /// In en, this message translates to:
+  /// **'The photo could not be opened.'**
+  String get sbalPhotoOpenFailed;
+
+  /// Breakdown line.
+  ///
+  /// In en, this message translates to:
+  /// **'Collected from customers'**
+  String get sbalDetailCollected;
+
+  /// Breakdown line.
+  ///
+  /// In en, this message translates to:
+  /// **'Handed over'**
+  String get sbalDetailHandedOut;
+
+  /// Breakdown line.
+  ///
+  /// In en, this message translates to:
+  /// **'Received from others'**
+  String get sbalDetailReceived;
+
+  /// Breakdown line.
+  ///
+  /// In en, this message translates to:
+  /// **'Handed over, not confirmed yet'**
+  String get sbalDetailPendingOut;
+
+  /// Breakdown line.
+  ///
+  /// In en, this message translates to:
+  /// **'Coming in, not confirmed yet'**
+  String get sbalDetailPendingIn;
+
+  /// Breakdown line.
+  ///
+  /// In en, this message translates to:
+  /// **'Holds now'**
+  String get sbalDetailHolds;
+
+  /// Breakdown line.
+  ///
+  /// In en, this message translates to:
+  /// **'Parking bill (after expenses)'**
+  String get sbalDetailParking;
+
+  /// Breakdown line.
+  ///
+  /// In en, this message translates to:
+  /// **'Expenses taken off the parking bill'**
+  String get sbalDetailExpensesApplied;
+
+  /// Breakdown line.
+  ///
+  /// In en, this message translates to:
+  /// **'Expenses the business owes them'**
+  String get sbalDetailExpensesOwed;
+
+  /// Heading of the handover history.
+  ///
+  /// In en, this message translates to:
+  /// **'History'**
+  String get sbalHistory;
+
+  /// Shown when a person has no handovers.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing recorded yet.'**
+  String get sbalHistoryEmpty;
+
+  /// Business account row.
+  ///
+  /// In en, this message translates to:
+  /// **'Received so far: {amount}'**
+  String sbalBusinessAccountReceived(Object amount);
+
+  /// Business account row: handovers waiting for the owner.
+  ///
+  /// In en, this message translates to:
+  /// **'On the way: {amount}'**
+  String sbalBusinessAccountComing(Object amount);
+
+  /// Field label in the hand over sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Handed to'**
+  String get sbalTo;
+
+  /// Placeholder of a person picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose who'**
+  String get sbalChoosePerson;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount (US dollars)'**
+  String get sbalAmount;
+
+  /// Field label in the hand over sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'How you gave it'**
+  String get sbalMethod;
+
+  /// Field label.
+  ///
+  /// In en, this message translates to:
+  /// **'Note (optional)'**
+  String get sbalNote;
+
+  /// Button to take a photo of a slip or screenshot.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a photo of the slip'**
+  String get sbalAddPhoto;
+
+  /// Button once a photo was added.
+  ///
+  /// In en, this message translates to:
+  /// **'Retake photo'**
+  String get sbalRetakePhoto;
+
+  /// Shown once the photo is uploaded.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo added'**
+  String get sbalPhotoAdded;
+
+  /// Shown when the camera or upload failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The photo could not be added. Try again.'**
+  String get sbalPhotoFailed;
+
+  /// Button that records the handover as pending.
+  ///
+  /// In en, this message translates to:
+  /// **'Send for confirmation'**
+  String get sbalSendForConfirmation;
+
+  /// Hint in the hand over sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'It stays pending until the person who receives it confirms.'**
+  String get sbalHandOverHint;
+
+  /// Success message after recording a handover.
+  ///
+  /// In en, this message translates to:
+  /// **'Handover of {amount} sent to {to}. They need to confirm it.'**
+  String sbalHandOverDone(Object amount, Object to);
+
+  /// Validation message.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter an amount above \$0.00.'**
+  String get sbalAmountInvalid;
+
+  /// Validation message.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose who you handed it to.'**
+  String get sbalSayWho;
+
+  /// Hint in the opening amount sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'What this person already handed over before Staff balances existed. It is recorded and confirmed in one step.'**
+  String get sbalOpeningHint;
+
+  /// Field label in the opening amount sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Person'**
+  String get sbalOpeningPerson;
+
+  /// Button in the opening amount sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Record opening amount'**
+  String get sbalOpeningSave;
+
+  /// Success message.
+  ///
+  /// In en, this message translates to:
+  /// **'Opening amount of {amount} recorded for {name}.'**
+  String sbalOpeningDone(Object amount, Object name);
+
+  /// Success message after confirming.
+  ///
+  /// In en, this message translates to:
+  /// **'Marked as received.'**
+  String get sbalConfirmDone;
+
+  /// Dialog title.
+  ///
+  /// In en, this message translates to:
+  /// **'Decline this handover?'**
+  String get sbalDeclineTitle;
+
+  /// Dialog body.
+  ///
+  /// In en, this message translates to:
+  /// **'{from} will see that you did not receive {amount}.'**
+  String sbalDeclineBody(Object from, Object amount);
+
+  /// Field label in the decline dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Why (optional)'**
+  String get sbalDeclineNote;
+
+  /// Success message after declining.
+  ///
+  /// In en, this message translates to:
+  /// **'Handover declined.'**
+  String get sbalDeclineDone;
+
+  /// Dialog title.
+  ///
+  /// In en, this message translates to:
+  /// **'Void this handover?'**
+  String get sbalVoidTitle;
+
+  /// Dialog body.
+  ///
+  /// In en, this message translates to:
+  /// **'The {amount} handover will count as never given. Nothing is deleted.'**
+  String sbalVoidBody(Object amount);
+
+  /// Field label in the void dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason (optional)'**
+  String get sbalVoidReason;
+
+  /// Success message after voiding.
+  ///
+  /// In en, this message translates to:
+  /// **'Handover voided.'**
+  String get sbalVoidDone;
+
+  /// Server refusal handover_to_self.
+  ///
+  /// In en, this message translates to:
+  /// **'You cannot hand money to yourself.'**
+  String get sbalRefusalToSelf;
+
+  /// Server refusal handover_amount_invalid.
+  ///
+  /// In en, this message translates to:
+  /// **'That amount is not valid. Enter an amount above \$0.00.'**
+  String get sbalRefusalAmountInvalid;
+
+  /// Server refusal handover_method_invalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose how the money was handed over.'**
+  String get sbalRefusalMethodInvalid;
+
+  /// Server refusal handover_receiver_invalid.
+  ///
+  /// In en, this message translates to:
+  /// **'That person is not on this business\'s team.'**
+  String get sbalRefusalReceiverInvalid;
+
+  /// Server refusal handover_not_receiver.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the person receiving this (or the owner, for the business account) can answer it.'**
+  String get sbalRefusalNotReceiver;
+
+  /// Server refusal handover_not_pending.
+  ///
+  /// In en, this message translates to:
+  /// **'This handover was already answered. Refresh to see where it stands.'**
+  String get sbalRefusalNotPending;
+
+  /// Server refusal opening_owner_only.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the owner can record an opening amount.'**
+  String get sbalRefusalOpeningOwnerOnly;
 }
 
 class _AppLocalizationsDelegate
