@@ -38,6 +38,14 @@ import { auth, db, functions } from "@/lib/firebase";
 import { useFrenchDomTranslation } from "@/lib/french-dom-runtime";
 import { isValidPhone } from "@/lib/phone";
 import { createSessionGate } from "@/lib/auth-session-gate";
+import {
+  PROFILE_ATTEMPTS,
+  PROFILE_ATTEMPT_TIMEOUT_MS,
+  PROFILE_RETRY_DELAY_MS,
+  refreshTokenSoftly,
+  withRetries,
+  withTimeout,
+} from "@/lib/console-boot";
 import type { FirestoreRow, UserProfile } from "@/types/admin";
 
 // The three consoles are split out of the entry bundle. Each one is reachable
@@ -207,28 +215,20 @@ const previewBusiness: FirestoreRow = {
   },
 };
 
-const PROFILE_LOAD_TIMEOUT_MS = 15_000;
-
 /** Signed in with a phone (a code or a text) and no email on the account. */
 function phoneOnlyAccount(user: User) {
   return !user.isAnonymous && Boolean(user.phoneNumber) && !user.email;
 }
 
-async function loadProfile(uid: string) {
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await Promise.race([
-      getDoc(doc(db, "users", uid)),
-      new Promise<never>((_, reject) => {
-        timeoutId = setTimeout(
-          () => reject(new Error("profile-load-timeout")),
-          PROFILE_LOAD_TIMEOUT_MS,
-        );
-      }),
-    ]);
-  } finally {
-    if (timeoutId) clearTimeout(timeoutId);
-  }
+/**
+ * The profile, read once - retried quietly on a slow or failed first try
+ * (console-boot.ts), each try bounded so the spinner always resolves.
+ */
+async function loadProfile(uid: string, keepGoing: () => boolean) {
+  return withRetries(
+    () => withTimeout(getDoc(doc(db, "users", uid)), PROFILE_ATTEMPT_TIMEOUT_MS, "profile-load-timeout"),
+    {attempts: PROFILE_ATTEMPTS, delayMs: PROFILE_RETRY_DELAY_MS, keepGoing},
+  );
 }
 
 type PreviewStripeState = "none" | "pending" | "ready";
@@ -341,8 +341,12 @@ export function ConsoleRouter() {
         // whenever the Firestore profile changes, but a cached token doesn't
         // pick that up until it naturally expires (~1hr). Force a refresh on
         // every session load so a stale token never causes storage/unauthorized.
-        await user.getIdToken(true);
-        let snap = await loadProfile(user.uid);
+        // A refresh that fails or is slow no longer stops the console: the
+        // current token still reads the profile (console-boot.ts).
+        await refreshTokenSoftly(user);
+        if (!active || !isCurrent()) return;
+        const keepGoing = () => active && isCurrent();
+        let snap = await loadProfile(user.uid, keepGoing);
         if (!active || !isCurrent()) return;
         // A first sign-in by text: the profile is written by
         // completePhoneSignIn (docs/PHONE_ACCOUNTS.md §5.3), which the
@@ -352,7 +356,7 @@ export function ConsoleRouter() {
         if (!snap.exists() && phoneOnlyAccount(user)) {
           await completePhoneSignInOnce(user.uid).catch(() => undefined);
           if (!active || !isCurrent()) return;
-          snap = await loadProfile(user.uid);
+          snap = await loadProfile(user.uid, keepGoing);
           if (!active || !isCurrent()) return;
         }
         // A first Google sign-in: the server makes a customer profile (never
@@ -369,7 +373,7 @@ export function ConsoleRouter() {
             return;
           }
           if (!active || !isCurrent()) return;
-          snap = await loadProfile(user.uid);
+          snap = await loadProfile(user.uid, keepGoing);
           if (!active || !isCurrent()) return;
         }
         if (!snap.exists()) {
@@ -423,6 +427,17 @@ export function ConsoleRouter() {
       } catch {
         if (!active || !isCurrent()) return;
         setAuthError("The connection is slow. We could not safely load your account role.");
+        // Keep listening behind the message: the moment the profile answers,
+        // open the console by itself - the same as pressing Retry.
+        const heal = onSnapshot(
+          doc(db, "users", user.uid),
+          (live) => {
+            if (!active || !isCurrent() || !live.exists()) return;
+            setProfileRetry((value) => value + 1);
+          },
+          () => undefined,
+        );
+        gate.follow(isCurrent, heal);
       } finally {
         if (active && isCurrent()) setBooting(false);
       }
@@ -673,7 +688,7 @@ function AccessInvitationSetup({
       onActivated();
     } catch (activationError) {
       try {
-        const recoveredProfile = await loadProfile(firebaseUser.uid);
+        const recoveredProfile = await loadProfile(firebaseUser.uid, () => true);
         if (recoveredProfile.exists()) {
           onActivated();
           return;

@@ -7,8 +7,15 @@ import { translateValue } from "./french-dom.ts";
 const source = readFileSync("src/components/console-router.tsx", "utf8");
 
 test("console profile loading has a timeout and session-preserving retry", () => {
-  assert.match(source, /PROFILE_LOAD_TIMEOUT_MS = 15_000/);
-  assert.match(source, /Promise\.race/);
+  // Each try is bounded and a failed first try is retried quietly
+  // (console-boot.ts), so the spinner always resolves.
+  assert.match(source, /withTimeout\(getDoc\(doc\(db, "users", uid\)\), PROFILE_ATTEMPT_TIMEOUT_MS/);
+  assert.match(source, /attempts: PROFILE_ATTEMPTS/);
+  // A failed token refresh never stops the console.
+  assert.match(source, /await refreshTokenSoftly\(user\);/);
+  assert.doesNotMatch(source, /await user\.getIdToken\(true\);\n\s*let snap/);
+  // Behind the error, the console keeps listening and opens by itself.
+  assert.match(source, /setAuthError\("The connection is slow\. We could not safely load your account role\."\);\n\s*\/\/ Keep listening[\s\S]*?setProfileRetry\(\(value\) => value \+ 1\);[\s\S]*?gate\.follow\(isCurrent, heal\);/);
   assert.match(source, /setProfileRetry\(\(value\) => value \+ 1\)/);
   assert.match(source, /Retry without signing out or losing your session\./);
   assert.match(source, /if \(firebaseUser && authError\)/);
