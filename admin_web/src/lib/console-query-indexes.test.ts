@@ -279,6 +279,8 @@ const SITES: Site[] = [
   { file: B("operations-panels.tsx"), kind: "useDocsWhereIn", what: "cars of the purchases on screen", shapes: [raw("cars", [eq("businessId"), ["__name__", "in", ["a"]]])] },
   { file: B("operations-panels.tsx"), kind: "query", what: "parking history", shapes: [raw("lotLedgerAudit", [eq("businessId"), eq("entityId")], { field: "at", direction: "desc" })] },
   { file: B("operations-panels.tsx"), kind: "query", what: "ledger history", shapes: [raw("lotLedgerAudit", [eq("businessId"), eq("entityId")], { field: "at", direction: "desc" })] },
+  // A parked car's WhatsApp messages (docs/PARKING_WHATSAPP.md §3): equalities only, no composite index.
+  { file: B("parking-whatsapp.tsx"), kind: "query", what: "a parked car's WhatsApp messages", shapes: [raw("parkingMessages", [eq("businessId"), eq("parkedCarId")])] },
   { file: B("tracking-updates-section.tsx"), kind: "query", what: "tracking events", shapes: [raw("trackingEvents", [], { field: "timestamp", direction: "desc" })] },
   // --- support --------------------------------------------------------------
   {

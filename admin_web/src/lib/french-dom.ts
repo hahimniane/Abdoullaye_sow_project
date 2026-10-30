@@ -7473,6 +7473,60 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Expenses from earlier months": "Dépenses des mois précédents",
 });
 
+// Parking customers on WhatsApp (docs/PARKING_WHATSAPP.md §3): the switch in
+// the parking settings, the welcome to current customers, a car's WhatsApp
+// messages, and the money block + app offer on the Track page. The sentences
+// that carry a number or a date are built in the page's language
+// (parking-whatsapp.ts, guest-tracking.ts).
+Object.assign(TEXT_TRANSLATIONS, {
+  "Send WhatsApp messages to parking customers":
+    "Envoyer des messages WhatsApp aux clients du stationnement",
+  "The owner of a car hears from you on WhatsApp when it is parked and gets a receipt for every payment. Nothing is sent while this is off.":
+    "Le propriétaire d’une voiture reçoit un message WhatsApp de votre part quand elle est garée, et un reçu pour chaque paiement. Rien n’est envoyé tant que ceci est désactivé.",
+  "Only the business owner can change this.":
+    "Seul le propriétaire de l’entreprise peut modifier ceci.",
+  "Saved.": "Enregistré.",
+  "Send welcome to current customers":
+    "Envoyer le message de bienvenue aux clients actuels",
+  "Each phone number gets one WhatsApp message that lists its cars, with a link to follow them. Numbers that were already welcomed are not selected.":
+    "Chaque numéro de téléphone reçoit un seul message WhatsApp qui liste ses voitures, avec un lien pour les suivre. Les numéros déjà accueillis ne sont pas sélectionnés.",
+  "Loading customers…": "Chargement des clients…",
+  "No customer is parked in the lot right now.":
+    "Aucun client n’a de voiture dans le parking pour le moment.",
+  "Already welcomed": "Déjà accueilli",
+  "Select all": "Tout sélectionner",
+  "Select none": "Tout désélectionner",
+  "Turn on WhatsApp messages for parking customers first.":
+    "Activez d’abord les messages WhatsApp pour les clients du stationnement.",
+  "Only the business owner can send the welcome.":
+    "Seul le propriétaire de l’entreprise peut envoyer le message de bienvenue.",
+  "That did not work. Try again.": "Cela n’a pas fonctionné. Réessayez.",
+  "WhatsApp messages": "Messages WhatsApp",
+  "No WhatsApp message has been sent for this car.":
+    "Aucun message WhatsApp n’a été envoyé pour cette voiture.",
+  "Loading messages…": "Chargement des messages…",
+  "The messages could not be loaded.": "Les messages n’ont pas pu être chargés.",
+  "Car parked message": "Message de voiture garée",
+  "Payment receipt": "Reçu de paiement",
+  "Welcome message": "Message de bienvenue",
+  "Waiting to be sent": "En attente d’envoi",
+  "Not sent": "Non envoyé",
+  "Paused: the customer asked to stop":
+    "En pause : le client a demandé l’arrêt",
+  "Skipped": "Ignoré",
+  "Parking balance": "Solde du stationnement",
+  "Balance owed now": "Solde dû maintenant",
+  "Parked since": "Garée depuis",
+  "Left on": "Partie le",
+  "Days so far": "Jours jusqu’à présent",
+  "Days parked": "Jours de stationnement",
+  "Amount so far": "Montant jusqu’à présent",
+  "See your car, what you owe and every receipt in the app. Sign in with your WhatsApp number.":
+    "Voyez votre voiture, ce que vous devez et chaque reçu dans l’application. Connectez-vous avec votre numéro WhatsApp.",
+  "For your privacy, only the booking status and the parking balance are shown here.":
+    "Pour votre confidentialité, seuls le statut de la réservation et le solde du stationnement sont affichés ici.",
+});
+
 const englishDictionary = { ...TEXT_TRANSLATIONS, ...ATTRIBUTE_TRANSLATIONS };
 const frenchDictionary = buildReverseDictionary([
   TEXT_TRANSLATIONS,

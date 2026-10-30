@@ -36,7 +36,7 @@ function StoreGlyph({ store }: { store: StoreLink["store"] }) {
  * (docs/PHONE_ACCOUNTS.md §10): the app is offered first, the status stays
  * right below it, and nobody is made to install anything.
  */
-export function GetAppBanner({ variant = "follow" }: { variant?: "follow" | "track" } = {}) {
+export function GetAppBanner({ variant = "follow" }: { variant?: "follow" | "track" | "parking" } = {}) {
   const [links] = useState(() =>
     storeLinksFor(
       typeof navigator === "undefined"
@@ -56,6 +56,11 @@ export function GetAppBanner({ variant = "follow" }: { variant?: "follow" | "tra
         <div>
           <strong id="get-app-banner-title-track">Track it in the Laawol app</strong>
           <p>After installing, tap Track in WhatsApp again.</p>
+        </div>
+      ) : variant === "parking" ? (
+        <div>
+          <strong id="get-app-banner-title-parking">Get the Laawol app</strong>
+          <p>See your car, what you owe and every receipt in the app. Sign in with your WhatsApp number.</p>
         </div>
       ) : (
         <div>

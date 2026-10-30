@@ -30,6 +30,7 @@ import {
   Copy,
   Download,
   MapPinned,
+  MessageCircle,
   Package,
   ParkingCircle,
   Ban,
@@ -66,7 +67,9 @@ import {
 } from "@/lib/destination-pickup";
 import { FieldInfo } from "@/components/field-info";
 import { ContainerTrackingCard } from "@/components/business/container-tracking-card";
+import { parkingWhatsAppEnabled, parkingWhatsAppEverEnabled } from "@/lib/parking-whatsapp";
 import { ParkingMonthEnd } from "@/components/business/parking-month-end";
+import { ParkingCarMessages, ParkingWelcomeDialog } from "@/components/business/parking-whatsapp";
 import { VoidRecordModal, VoidedNote } from "@/components/business/void-record";
 import { isVoidedRecord, voidedLast } from "@/lib/voided-record";
 import { previousMonthKey } from "@/lib/parking-month-statement";
@@ -345,6 +348,10 @@ type PanelProps = {
   /** The signed-in person may work the lot ledger (owner, admin, or the
    * `ledger` permission): month end's Paid back. */
   canManageLedger?: boolean;
+  /** The signed-in person is the business owner or a platform admin: the
+   * one-time WhatsApp welcome to current parking customers
+   * (docs/PARKING_WHATSAPP.md §2). */
+  canSendParkingWelcome?: boolean;
 };
 
 type DestinationDraft = {
@@ -5039,6 +5046,7 @@ export function ParkingPanel({
   focusRecordId = "",
   focusView = "",
   canManageLedger = false,
+  canSendParkingWelcome = false,
 }: PanelProps) {
   // Loads the make/model/year catalog on demand; re-renders when it is in.
   useCarCatalog();
@@ -5160,6 +5168,9 @@ export function ParkingPanel({
   };
   const STAFF_UNKNOWN = "Not on your team";
   const [parkingView, setParkingView] = useState<"list" | "cards">("list");
+  // "Send welcome to current customers": the one-time WhatsApp welcome.
+  const [welcomeOpen, setWelcomeOpen] = useState(false);
+  const whatsappOn = parkingWhatsAppEnabled(business);
   // Which card the list sent us to, so opening a row lands on that car
   // rather than at the top of thirty of them.
   const [openRowId, setOpenRowId] = useState("");
@@ -5877,6 +5888,9 @@ export function ParkingPanel({
               payment system could not settle. "Record a parked car" goes
               through createBusinessParkingEntry and does all of it. */}
           <button className="lst-btn ghost" type="button" aria-pressed={Boolean(monthEndKey)} onClick={() => setMonthEndKey(monthEndKey ? "" : previousMonthKey())}><CalendarCheck size={16} /> Month end</button>
+          {canSendParkingWelcome && whatsappOn && (
+            <button className="lst-btn ghost" type="button" onClick={() => setWelcomeOpen(true)}><MessageCircle size={16} /> Send welcome to current customers</button>
+          )}
           <button className="lst-add" type="button" onClick={openEntry}><Plus size={17} /> Record a parked car</button>
         </div>
       </header>
@@ -6286,6 +6300,11 @@ export function ParkingPanel({
                   <button className="lst-btn ghost" type="button" onClick={() => openVoidCar(row)} title="Void this car"><Ban size={14} /> Void</button>
                 )}
               </div>
+              {/* The WhatsApp messages sent for this car (parked, receipts):
+                  listed once the business has used the switch. */}
+              {!voided && parkingWhatsAppEverEnabled(business) && (
+                <ParkingCarMessages businessId={businessId} parkedCarId={String(row.id)} />
+              )}
             </article>
           );
         })}
@@ -6294,6 +6313,10 @@ export function ParkingPanel({
       {/* Running stays are all here; ended ones come a page at a time. */}
       <LoadMoreButton hasMore={pastStays.hasMore} loading={pastStays.loadingMore} onLoadMore={pastStays.loadMore} />
       </div>
+
+      {welcomeOpen && canSendParkingWelcome && whatsappOn && (
+        <ParkingWelcomeDialog businessId={businessId} onClose={() => setWelcomeOpen(false)} />
+      )}
 
       {voidCar && (
         <VoidRecordModal

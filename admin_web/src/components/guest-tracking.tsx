@@ -26,6 +26,8 @@ import {
   GUEST_PHOTO_KIND_LABEL,
   GUEST_SHIPPING_COPY,
   GUEST_SHIPPING_FIELDS,
+  GUEST_PARKING_COPY,
+  guestParkingRows,
   guestShippingMode,
   guestJourneyStages,
   guestPiecesText,
@@ -486,6 +488,23 @@ export function GuestTracking({
               </dl>
             </section>
           )}
+          {/* A parked car: what it costs so far, what was paid and what is
+              owed right now (docs/PARKING_WHATSAPP.md §2). The app is offered
+              right after it, in this order, not above the status. */}
+          {record.parking && (
+            <section aria-labelledby="guest-tracking-parking-title" className="guest-tracking-payment guest-tracking-parking">
+              <h3 id="guest-tracking-parking-title">{GUEST_PARKING_COPY.title}</h3>
+              <dl>
+                {guestParkingRows(record.parking, lang).map((row) => (
+                  <div className={row.emphasis ? `guest-parking-${row.emphasis}` : undefined} data-row={row.key} key={row.key}>
+                    <dt>{row.label}</dt>
+                    <dd data-no-translate={row.value === GUEST_PARKING_COPY.paidInFull ? undefined : true}>{row.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+          )}
+          {record.parking && offerApp && <GetAppBanner variant="parking" />}
           {record.service === "freight_quote" && claimedRequest && (
             <div className="guest-quote-state guest-quote-open">
               <CustomerFreightQuotes request={claimedRequest} />
@@ -563,7 +582,9 @@ export function GuestTracking({
             <strong>Updated</strong> <time>{updated}</time>
           </p>
           <p className="guest-tracking-privacy">
-            {record.payment
+            {record.parking
+              ? "For your privacy, only the booking status and the parking balance are shown here."
+              : record.payment
               ? "For your privacy, only the shipment status, its payment and shipping details are shown here."
               : record.shipping
                 ? "For your privacy, only the shipment status and shipping details are shown here."
@@ -650,7 +671,8 @@ export function GuestTracking({
           {/* App first: a link from WhatsApp or a label lands here when the
               app is not installed. The app is offered first and the status
               sits right below it - nobody has to install anything. */}
-          <GetAppBanner variant={arrivedWithCode ? "track" : "follow"} />
+          {/* A parked car's page offers the app below its money block instead. */}
+          {!record?.parking && <GetAppBanner variant={arrivedWithCode ? "track" : "follow"} />}
           {resultSection}
           {lookupSection}
         </>

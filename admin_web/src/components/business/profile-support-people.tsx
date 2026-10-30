@@ -45,6 +45,7 @@ import {
   InviteMethodSwitch,
 } from "@/components/staff-invite-fields";
 import { SearchableSelect } from "@/components/searchable-select";
+import { ParkingWhatsAppSwitch } from "@/components/business/parking-whatsapp";
 import { StaffParkingBillField, StaffParkingLinkPicker } from "@/components/business/staff-parking-link";
 import {
   staffCreditRefusalText,
@@ -694,9 +695,10 @@ export function BusinessServicesPanel({
   businessId,
   business,
   canManage = false,
+  canSetParkingWhatsApp = false,
   runAction,
   toast,
-}: BusinessProfilePanelProps & { canManage?: boolean }) {
+}: BusinessProfilePanelProps & { canManage?: boolean; canSetParkingWhatsApp?: boolean }) {
   const [draft, setDraft] = useState<BusinessServiceSettingsDraft>(() =>
     businessServiceSettingsFromRow(business),
   );
@@ -1623,6 +1625,14 @@ export function BusinessServicesPanel({
                       </span>
                     </label>
                   </div>
+                  {/* Saves on its own (updateBusinessParkingEntry), not with
+                      the form below: messages start or stop the moment the
+                      owner decides. docs/PARKING_WHATSAPP.md §1. */}
+                  <ParkingWhatsAppSwitch
+                    businessId={businessId}
+                    business={business}
+                    canChange={canSetParkingWhatsApp}
+                  />
                 </div>
               </article>
             )}
