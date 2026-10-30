@@ -60,7 +60,14 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final List<StreamSubscription<Object?>> _subs = [];
   late String _monthKey = widget.monthKey ?? previousParkingMonthKey();
+  /// The month's cars: [_stayDocs] (stays ending on or after the month
+  /// starts) merged with [_unpaidDocs] (cars not paid up, which carries a
+  /// car that left before the month still owing, docs/PARKING_CARRYOVER.md).
   List<DocumentSnapshot<Map<String, dynamic>>> _docs = const [];
+  List<DocumentSnapshot<Map<String, dynamic>>> _stayDocs = const [];
+  List<DocumentSnapshot<Map<String, dynamic>>> _unpaidDocs = const [];
+  bool _staysAnswered = false;
+  bool _unpaidAnswered = false;
 
   /// Ledger activities: those dated in the month, and older ones still
   /// unpaid, go on the same bills as the cars.
@@ -227,7 +234,7 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
     _subscribeInvoices(monthKey);
     final days = parkingMonthDays(monthKey);
     if (days == null) {
-      _docs = const [];
+      _docs = _stayDocs = _unpaidDocs = const [];
       _inMonth = _unsettled = _undated = const [];
       _activities = const [];
       _loading = false;
@@ -238,6 +245,8 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
     final endMs = (days.last + 1) * dayMs;
     final id = widget.businessId;
     _loading = true;
+    _staysAnswered = _unpaidAnswered = false;
+    _stayDocs = _unpaidDocs = _docs = const [];
     _loadingSafety?.cancel();
     // The spinner always resolves, even if a read never answers.
     _loadingSafety = Timer(const Duration(seconds: 20), () {
@@ -245,6 +254,17 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
     });
     List<Map<String, dynamic>> rows(QuerySnapshot<Map<String, dynamic>> snap) =>
         [for (final d in snap.docs) {...d.data(), 'id': d.id}];
+    // The summary waits for both car reads (an error counts as an answer, the
+    // safety timer covers a read that never comes) so the bill never shows
+    // without the cars carried in from before.
+    void mergeCars() {
+      _docs = mergeById<DocumentSnapshot<Map<String, dynamic>>>(
+        [_stayDocs, _unpaidDocs],
+        (doc) => doc.id,
+      );
+      _loading = !(_staysAnswered && _unpaidAnswered);
+    }
+
     void mergeActivities() {
       _activities = mergeById<Map<String, dynamic>>(
         [_inMonth, _unsettled, _undated],
@@ -257,12 +277,36 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
         (snap) {
           if (!mounted) return;
           setState(() {
-            _docs = snap.docs;
-            _loading = false;
+            _stayDocs = snap.docs;
+            _staysAnswered = true;
+            mergeCars();
           });
         },
         onError: (_) {
-          if (mounted) setState(() => _loading = false);
+          if (!mounted) return;
+          setState(() {
+            _staysAnswered = true;
+            mergeCars();
+          });
+        },
+      ),
+    );
+    _monthSubs.add(
+      parkedCarsUnpaidCarriedSpec(id).build(_db).snapshots().listen(
+        (snap) {
+          if (!mounted) return;
+          setState(() {
+            _unpaidDocs = snap.docs;
+            _unpaidAnswered = true;
+            mergeCars();
+          });
+        },
+        onError: (_) {
+          if (!mounted) return;
+          setState(() {
+            _unpaidAnswered = true;
+            mergeCars();
+          });
         },
       ),
     );
@@ -607,17 +651,25 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
         );
       case 'open':
         // A customer with several cars: say which one the payment is for.
-        var carId = customer.cars.first.id;
-        if (customer.cars.length > 1) {
+        // Cars carried in from before the month are openable too.
+        final openable = [
+          for (final b in customer.olderCars)
+            (id: b.id, vehicle: b.vehicle, vin: b.vinNumber, due: b.dueCents),
+          for (final b in customer.cars)
+            (id: b.id, vehicle: b.vehicle, vin: b.vinNumber, due: b.dueCents),
+        ];
+        if (openable.isEmpty) return;
+        var carId = openable.first.id;
+        if (openable.length > 1) {
           final picked = await pickLotOption<String>(
             context,
             title: l10n.pmePickCar,
             options: [
-              for (final b in customer.cars)
+              for (final b in openable)
                 LotOption(
                   b.id,
-                  b.vehicle.isEmpty ? b.vinNumber : b.vehicle,
-                  detail: parkingMoney(b.dueCents),
+                  b.vehicle.isEmpty ? b.vin : b.vehicle,
+                  detail: parkingMoney(b.due),
                 ),
             ],
           );
@@ -862,7 +914,7 @@ List<LotOption<String>> parkingMonthCustomerOptions(
       customer.dueCents > 0 &&
       monthBillPaymentPlan(customer).items.isNotEmpty)
     LotOption('settle', l10n.pmeMarkAllPaid),
-  if (!estimate && customer.cars.isNotEmpty)
+  if (!estimate && (customer.cars.isNotEmpty || customer.olderCars.isNotEmpty))
     LotOption('open', l10n.pmeOpenCar),
 ];
 
@@ -1294,8 +1346,11 @@ class _CustomerTileState extends State<_CustomerTile> {
                       Text(
                         [
                           customer.customerPhone,
-                          if (customer.cars.isNotEmpty)
-                            l10n.pmeCars(customer.cars.length),
+                          if (customer.cars.isNotEmpty ||
+                              customer.olderCars.isNotEmpty)
+                            l10n.pmeCars(
+                              customer.cars.length + customer.olderCars.length,
+                            ),
                           if (customer.activities.length +
                                   customer.olderActivities.length >
                               0)
@@ -1382,6 +1437,55 @@ class _CustomerTileState extends State<_CustomerTile> {
                     ],
                   ),
                 ),
+            // Cars that left before the month and still owe: "unpaid from
+            // before", the whole stay, what is still due (PARKING_CARRYOVER).
+            for (var i = 0; i < customer.olderCars.length; i++)
+              Padding(
+                key: Key('month-end-carried-${customer.olderCars[i].id}'),
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            customer.olderCars[i].vehicle.isEmpty
+                                ? l10n.pmeCar
+                                : customer.olderCars[i].vehicle,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.ink,
+                            ),
+                          ),
+                          Text(
+                            [
+                              '${displayDay(customer.olderCars[i].periodFrom, dateLocaleOf(context))} → '
+                                  '${displayDay(customer.olderCars[i].periodTo, dateLocaleOf(context))}',
+                              l10n.pmeFromBefore.toLowerCase(),
+                              if (customer.olderCars[i].vinNumber.isNotEmpty)
+                                'VIN ${customer.olderCars[i].vinNumber}',
+                              if (customer.olderCarsRegisteredTo[i].isNotEmpty)
+                                '${l10n.pmeRegisteredTo} ${customer.olderCarsRegisteredTo[i]}',
+                            ].join(' · '),
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              color: AppColors.muted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    _Amount(
+                      amount: customer.olderCars[i].dueCents,
+                      paid: 0,
+                      due: customer.olderCars[i].dueCents,
+                    ),
+                  ],
+                ),
+              ),
             for (final a in [
               ...customer.activities,
               ...customer.olderActivities,

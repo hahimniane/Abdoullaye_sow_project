@@ -398,6 +398,34 @@ FirestoreQuerySpec parkedCarsEndingFromSpec(String businessId, int startMs) =>
       ],
     );
 
+/// Stays not paid up, however long ago they ended: the month end merges them
+/// with [parkedCarsEndingFromSpec] so a car that left before the month still
+/// owing comes along as "unpaid from before" (docs/PARKING_CARRYOVER.md).
+/// On the existing `(businessId, paymentStatus)` index, exactly the server's
+/// `parkingMonthEndData` query: `paymentStatus not-in [paid, succeeded]`.
+/// Not [parkedCarsUnsettledSpec] (the home tile), which also leaves out
+/// `not_required`: a bill still counts the days of a stay saved that way by
+/// mistake, so month end must read it.
+FirestoreQuerySpec parkedCarsUnpaidCarriedSpec(String businessId) =>
+    FirestoreQuerySpec(
+      collection: 'parkedCars',
+      filters: [
+        _business(businessId),
+        const QueryFilterSpec(
+          'paymentStatus',
+          QueryFilterOp.notIn,
+          parkingCarriedExcludedPaymentStatuses,
+        ),
+      ],
+    );
+
+/// The payment statuses a stay owes nothing under; every other stay is read
+/// by [parkedCarsUnpaidCarriedSpec].
+const List<String> parkingCarriedExcludedPaymentStatuses = <String>[
+  'paid',
+  'succeeded',
+];
+
 /// The ledger's activities collection, for reading ONE record by id - the one
 /// a notification or a duplicate refusal names. A single document, never a
 /// query: lists of activities go through the specs below.
