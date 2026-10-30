@@ -175,6 +175,12 @@ int _paidCents(Map<String, dynamic> row, int today) {
   return 0;
 }
 
+/// What has been paid on the car, in cents, as of day number [today]: the
+/// recorded total, or the whole accrual when the record is marked paid
+/// without amounts. Public for `parking_balance.dart`.
+int parkingPaidCentsOf(Map<String, dynamic> row, int today) =>
+    _paidCents(row, today);
+
 /// How money came in on a car, as method codes: each recorded payment's
 /// `receivedVia`, else the method that settled it, else "card_link" for a
 /// payment-link car and "online" for one booked and paid online. Codes, not

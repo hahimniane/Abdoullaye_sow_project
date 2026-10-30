@@ -17824,4 +17824,155 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get lotErrEndMonthBeforePurchases =>
       'Ce poste a des achats après ce mois.';
+
+  @override
+  String get parkingWaSwitchTitle =>
+      'Envoyer des messages WhatsApp aux clients du parking';
+
+  @override
+  String get parkingWaSwitchHelp =>
+      'Les clients reçoivent un message quand leur voiture est garée et un reçu à chaque paiement. Rien n\'est envoyé tant que ce réglage est désactivé.';
+
+  @override
+  String get parkingWaSwitchFailed =>
+      'Impossible de modifier ce réglage. Réessayez.';
+
+  @override
+  String get parkingWaErrOwnerOnly =>
+      'Seul le propriétaire de l\'entreprise peut modifier ceci.';
+
+  @override
+  String get parkingWaWelcomeButton =>
+      'Envoyer un message de bienvenue aux clients actuels';
+
+  @override
+  String get parkingWaWelcomeTitle =>
+      'Souhaiter la bienvenue aux clients actuels';
+
+  @override
+  String get parkingWaWelcomeIntro =>
+      'Un message WhatsApp par numéro de téléphone, avec la liste des voitures de ce numéro. Il part une seule fois, jamais automatiquement.';
+
+  @override
+  String get parkingWaWelcomeLoading => 'Recherche de vos clients…';
+
+  @override
+  String get parkingWaWelcomeEmpty =>
+      'Aucun client n\'a de voiture dans le parking en ce moment.';
+
+  @override
+  String get parkingWaWelcomeLoadFailed =>
+      'Impossible de charger vos clients. Réessayez.';
+
+  @override
+  String get parkingWaWelcomeSendFailed =>
+      'Le message de bienvenue n\'a pas pu être envoyé. Réessayez.';
+
+  @override
+  String get parkingWaWelcomeAlready => 'Déjà accueilli';
+
+  @override
+  String get parkingWaWelcomeSelectAll => 'Tout sélectionner';
+
+  @override
+  String get parkingWaWelcomeSelectNone => 'Tout désélectionner';
+
+  @override
+  String parkingWaWelcomeSendCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Envoyer à $count clients',
+      one: 'Envoyer à 1 client',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get parkingWaWelcomeSending => 'Envoi en cours…';
+
+  @override
+  String get parkingWaWelcomeResultTitle => 'Bienvenue envoyé';
+
+  @override
+  String parkingWaWelcomeResult(int sent, int skipped, int failed) {
+    return 'Envoyés $sent · Ignorés $skipped · Échecs $failed';
+  }
+
+  @override
+  String get parkingWaErrSwitchOff =>
+      'Les messages WhatsApp sont désactivés pour cette entreprise.';
+
+  @override
+  String get parkingWaErrWelcomeOwnerOnly =>
+      'Seul le propriétaire de l\'entreprise peut envoyer le message de bienvenue.';
+
+  @override
+  String get parkingWaMessagesTitle => 'Messages WhatsApp';
+
+  @override
+  String get parkingWaKindParked => 'Voiture garée';
+
+  @override
+  String get parkingWaKindReceipt => 'Reçu de paiement';
+
+  @override
+  String get parkingWaKindWelcome => 'Bienvenue';
+
+  @override
+  String get parkingWaStatusQueued => 'En attente';
+
+  @override
+  String get parkingWaStatusSent => 'Envoyé';
+
+  @override
+  String get parkingWaStatusDelivered => 'Remis';
+
+  @override
+  String get parkingWaStatusRead => 'Lu';
+
+  @override
+  String get parkingWaStatusFailed => 'Échec';
+
+  @override
+  String get parkingWaStatusStopped => 'Arrêté par le client';
+
+  @override
+  String get parkingWaStatusSkipped => 'Ignoré';
+
+  @override
+  String get parkingTrackMoneyTitle => 'Solde du parking';
+
+  @override
+  String get parkingTrackDailyRate => 'Tarif par jour';
+
+  @override
+  String get parkingTrackSince => 'Garée depuis le';
+
+  @override
+  String get parkingTrackLeft => 'Partie le';
+
+  @override
+  String get parkingTrackDaysSoFar => 'Jours jusqu\'ici';
+
+  @override
+  String get parkingTrackDays => 'Jours de parking';
+
+  @override
+  String get parkingTrackAmountSoFar => 'Montant jusqu\'ici';
+
+  @override
+  String get parkingTrackAmount => 'Montant total';
+
+  @override
+  String get parkingTrackPaid => 'Payé';
+
+  @override
+  String get parkingTrackBalanceNow => 'Solde dû maintenant';
+
+  @override
+  String get parkingTrackBalance => 'Solde dû';
+
+  @override
+  String get parkingTrackPaidInFull => 'Payé en totalité';
 }

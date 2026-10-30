@@ -11,6 +11,7 @@ import '../screens/phone_sign_in_screen.dart';
 import '../services/guest_tracking_service.dart';
 import '../services/phone_accounts.dart';
 import '../utils/auth_navigation.dart';
+import '../utils/date_display.dart';
 import '../services/lot_ledger.dart' show formatLotCents;
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
@@ -455,6 +456,10 @@ class _GuestTrackingSuccess extends StatelessWidget {
             const SizedBox(height: AppSpacing.md),
             _GuestPayment(payment: record.payment!),
           ],
+          if (record.parking != null) ...[
+            const SizedBox(height: AppSpacing.md),
+            _GuestParkingMoney(parking: record.parking!),
+          ],
           if (record.shipping != null) ...[
             const SizedBox(height: AppSpacing.md),
             _GuestShippingDetails(shipping: record.shipping!),
@@ -847,6 +852,166 @@ class _GuestPayment extends StatelessWidget {
               ],
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+/// A parked car's money: daily rate, parked since, days, what it has run up,
+/// what was paid and what is owed right now - or that it is paid in full.
+class _GuestParkingMoney extends StatelessWidget {
+  const _GuestParkingMoney({required this.parking});
+
+  final GuestTrackingParking parking;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context).textTheme;
+    final locale = Localizations.localeOf(context).toLanguageTag();
+    final language = Localizations.localeOf(context).languageCode;
+    String money(int cents) => formatLotCents(cents, language: language);
+    final rows = <(String, String, Key)>[
+      (
+        l10n.parkingTrackDailyRate,
+        money(parking.dailyRateCents),
+        const Key('guest-parking-rate'),
+      ),
+      if (parking.sinceDayKey.isNotEmpty)
+        (
+          l10n.parkingTrackSince,
+          displayDay(parking.sinceDayKey, locale),
+          const Key('guest-parking-since'),
+        ),
+      if (!parking.stillParked && parking.leftDayKey.isNotEmpty)
+        (
+          l10n.parkingTrackLeft,
+          displayDay(parking.leftDayKey, locale),
+          const Key('guest-parking-left'),
+        ),
+      (
+        parking.stillParked
+            ? l10n.parkingTrackDaysSoFar
+            : l10n.parkingTrackDays,
+        '${parking.days}',
+        const Key('guest-parking-days'),
+      ),
+      (
+        parking.stillParked
+            ? l10n.parkingTrackAmountSoFar
+            : l10n.parkingTrackAmount,
+        money(parking.accruedCents),
+        const Key('guest-parking-amount'),
+      ),
+      (
+        l10n.parkingTrackPaid,
+        money(parking.paidCents),
+        const Key('guest-parking-paid'),
+      ),
+    ];
+    return Container(
+      key: const Key('guest-tracking-parking'),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.lightSurfaceVariant),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            l10n.parkingTrackMoneyTitle,
+            style: theme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+          ),
+          for (final (label, value, key) in rows) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    label,
+                    style: theme.bodySmall?.copyWith(
+                      color: AppColors.lightMuted,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Flexible(
+                  child: Text(
+                    value,
+                    key: key,
+                    textAlign: TextAlign.end,
+                    style: theme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: AppSpacing.md),
+          if (parking.paidInFull)
+            Container(
+              key: const Key('guest-parking-paid-in-full'),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: AppSpacing.sm,
+              ),
+              decoration: BoxDecoration(
+                color: AppColors.sage.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.check_circle_outline,
+                    color: AppColors.sage,
+                    size: 20,
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      l10n.parkingTrackPaidInFull,
+                      style: theme.titleSmall?.copyWith(
+                        color: AppColors.sage,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    parking.stillParked
+                        ? l10n.parkingTrackBalanceNow
+                        : l10n.parkingTrackBalance,
+                    style: theme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Flexible(
+                  child: Text(
+                    money(parking.balanceCents),
+                    key: const Key('guest-parking-balance'),
+                    textAlign: TextAlign.end,
+                    style: theme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.errorRed,
+                    ),
+                  ),
+                ),
+              ],
+            ),
         ],
       ),
     );

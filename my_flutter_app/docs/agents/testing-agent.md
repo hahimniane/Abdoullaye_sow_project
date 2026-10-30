@@ -701,3 +701,12 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   callables will write (`contents`, `weightLb`, `declaredValueCents`,
   `photoPaths`) are set on the line with `db.update` so the page test does not
   wait on them.
+- `AuthProvider` and `FirebaseFirestore.instance` throw without Firebase, so a
+  screen that reads them cannot be pumped in a test. New feature widgets take
+  plain flags (`canEdit`, `businessId`) and an injectable service or `Stream`
+  (see `ParkingWhatsAppSwitch`, `ParkingWelcomeEntry`, `ParkingMessagesSection`
+  and `test/parking_whatsapp_test.dart`); the screen only wires them. Pump at
+  360 px (`tester.view.physicalSize = Size(360, 800)`, ratio 1) in English and
+  French and assert `tester.takeException()` is null. Never run `dart format`
+  on a whole directory (`test`, `lib/widgets`): it rewrites dozens of untouched
+  files; format only the files you changed.

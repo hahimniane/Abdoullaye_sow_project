@@ -107,6 +107,63 @@ class GuestTrackingPayment {
   bool get isPriced => priceCents != null;
 }
 
+/// A parked car's money on its Track page (docs/PARKING_WHATSAPP.md §2):
+/// what the stay has run up to today, what was paid and what is owed right
+/// now. Worked out by the server (`parkingBalanceNow`); cents throughout.
+class GuestTrackingParking {
+  const GuestTrackingParking({
+    this.dailyRateCents = 0,
+    this.sinceDayKey = '',
+    this.leftDayKey = '',
+    this.days = 0,
+    this.accruedCents = 0,
+    this.paidCents = 0,
+    this.balanceCents = 0,
+    this.paidInFull = false,
+    this.stillParked = true,
+  });
+
+  final int dailyRateCents;
+
+  /// "YYYY-MM-DD"; '' when unknown.
+  final String sinceDayKey;
+
+  /// "YYYY-MM-DD" the car left; '' while it is still parked.
+  final String leftDayKey;
+  final int days;
+  final int accruedCents;
+  final int paidCents;
+  final int balanceCents;
+  final bool paidInFull;
+  final bool stillParked;
+
+  /// Null for anything that is not a map (an older server sends none).
+  static GuestTrackingParking? fromWire(Object? value) {
+    if (value is! Map) return null;
+    String day(Object? v) {
+      final text = v is String ? v.trim() : '';
+      return RegExp(r'^\d{4}-\d{2}-\d{2}').hasMatch(text)
+          ? text.substring(0, 10)
+          : '';
+    }
+
+    final leftDayKey = day(value['leftDayKey']);
+    return GuestTrackingParking(
+      dailyRateCents: _wholeCents(value['dailyRateCents']),
+      sinceDayKey: day(value['sinceDayKey']),
+      leftDayKey: leftDayKey,
+      days: _wholeCents(value['days']),
+      accruedCents: _wholeCents(value['accruedCents']),
+      paidCents: _wholeCents(value['paidCents']),
+      balanceCents: _wholeCents(value['balanceCents']),
+      paidInFull: value['paidInFull'] == true,
+      stillParked: value['stillParked'] is bool
+          ? value['stillParked'] as bool
+          : leftDayKey.isEmpty,
+    );
+  }
+}
+
 int _wholeCents(Object? value) =>
     value is num && value.isFinite && value > 0 ? value.round() : 0;
 
@@ -131,6 +188,7 @@ class GuestTrackingRecord {
     this.pieceCount = 0,
     this.parts = const [],
     this.payment,
+    this.parking,
     this.signIn = const [],
   });
 
@@ -155,6 +213,10 @@ class GuestTrackingRecord {
 
   /// Container lines: the whole package's price, paid and balance.
   final GuestTrackingPayment? payment;
+
+  /// Parked cars: the stay's money - rate, days, paid and balance owed now.
+  /// Null for any other service, or from an older server.
+  final GuestTrackingParking? parking;
 
   /// Who may sign in from this page (docs/PHONE_ACCOUNTS.md §10): a role
   /// and the last two digits of each valid number on the record - never
@@ -203,6 +265,9 @@ class GuestTrackingRecord {
               paidCents: _wholeCents(rawPayment['paidCents']),
               balanceCents: _wholeCents(rawPayment['balanceCents']),
             )
+          : null,
+      parking: service == GuestTrackingServiceType.parking
+          ? GuestTrackingParking.fromWire(data['parking'])
           : null,
       trackingCode: trackingCode.trim(),
       service: service,

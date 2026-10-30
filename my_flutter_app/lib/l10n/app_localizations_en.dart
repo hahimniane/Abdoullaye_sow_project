@@ -17549,4 +17549,153 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get lotErrEndMonthBeforePurchases =>
       'This line has purchases after that month.';
+
+  @override
+  String get parkingWaSwitchTitle =>
+      'Send WhatsApp messages to parking customers';
+
+  @override
+  String get parkingWaSwitchHelp =>
+      'Customers get a message when their car is parked and a receipt with every payment. Nothing is sent while this is off.';
+
+  @override
+  String get parkingWaSwitchFailed =>
+      'Could not change this setting. Try again.';
+
+  @override
+  String get parkingWaErrOwnerOnly =>
+      'Only the business owner can change this.';
+
+  @override
+  String get parkingWaWelcomeButton => 'Send welcome to current customers';
+
+  @override
+  String get parkingWaWelcomeTitle => 'Welcome current customers';
+
+  @override
+  String get parkingWaWelcomeIntro =>
+      'One WhatsApp message per phone number, listing that number\'s cars. It goes once and never automatically.';
+
+  @override
+  String get parkingWaWelcomeLoading => 'Finding your customers…';
+
+  @override
+  String get parkingWaWelcomeEmpty =>
+      'No customers have a car in the lot right now.';
+
+  @override
+  String get parkingWaWelcomeLoadFailed =>
+      'Could not load your customers. Try again.';
+
+  @override
+  String get parkingWaWelcomeSendFailed =>
+      'The welcome could not be sent. Try again.';
+
+  @override
+  String get parkingWaWelcomeAlready => 'Already welcomed';
+
+  @override
+  String get parkingWaWelcomeSelectAll => 'Select all';
+
+  @override
+  String get parkingWaWelcomeSelectNone => 'Select none';
+
+  @override
+  String parkingWaWelcomeSendCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Send to $count customers',
+      one: 'Send to 1 customer',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get parkingWaWelcomeSending => 'Sending…';
+
+  @override
+  String get parkingWaWelcomeResultTitle => 'Welcome sent';
+
+  @override
+  String parkingWaWelcomeResult(int sent, int skipped, int failed) {
+    return 'Sent $sent · Skipped $skipped · Failed $failed';
+  }
+
+  @override
+  String get parkingWaErrSwitchOff =>
+      'WhatsApp messages are switched off for this business.';
+
+  @override
+  String get parkingWaErrWelcomeOwnerOnly =>
+      'Only the business owner can send the welcome.';
+
+  @override
+  String get parkingWaMessagesTitle => 'WhatsApp messages';
+
+  @override
+  String get parkingWaKindParked => 'Car parked';
+
+  @override
+  String get parkingWaKindReceipt => 'Payment receipt';
+
+  @override
+  String get parkingWaKindWelcome => 'Welcome';
+
+  @override
+  String get parkingWaStatusQueued => 'Queued';
+
+  @override
+  String get parkingWaStatusSent => 'Sent';
+
+  @override
+  String get parkingWaStatusDelivered => 'Delivered';
+
+  @override
+  String get parkingWaStatusRead => 'Read';
+
+  @override
+  String get parkingWaStatusFailed => 'Failed';
+
+  @override
+  String get parkingWaStatusStopped => 'Stopped by the customer';
+
+  @override
+  String get parkingWaStatusSkipped => 'Skipped';
+
+  @override
+  String get parkingTrackMoneyTitle => 'Parking balance';
+
+  @override
+  String get parkingTrackDailyRate => 'Daily rate';
+
+  @override
+  String get parkingTrackSince => 'Parked since';
+
+  @override
+  String get parkingTrackLeft => 'Left on';
+
+  @override
+  String get parkingTrackDaysSoFar => 'Days so far';
+
+  @override
+  String get parkingTrackDays => 'Days parked';
+
+  @override
+  String get parkingTrackAmountSoFar => 'Amount so far';
+
+  @override
+  String get parkingTrackAmount => 'Total amount';
+
+  @override
+  String get parkingTrackPaid => 'Paid';
+
+  @override
+  String get parkingTrackBalanceNow => 'Balance owed now';
+
+  @override
+  String get parkingTrackBalance => 'Balance owed';
+
+  @override
+  String get parkingTrackPaidInFull => 'Paid in full';
 }

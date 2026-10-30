@@ -17,6 +17,7 @@ import '../providers/auth_provider.dart';
 import '../data/car_catalog.dart';
 import '../services/business_parking_entry.dart';
 import '../services/container_manifest.dart';
+import '../services/parking_whatsapp.dart' show ParkingMessage;
 import '../services/vin_catalog_matcher.dart';
 import '../services/vin_decoder_service.dart';
 import '../theme/app_colors.dart';
@@ -34,6 +35,7 @@ import '../widgets/business_parking_payment_badge.dart';
 import '../widgets/container_link_chip.dart';
 import '../widgets/phone_account_widgets.dart' show RecordPhoneFlagNotes;
 import '../widgets/lot_sheets.dart' show showLotSheet;
+import '../widgets/parking_messages_section.dart';
 import '../widgets/void_record_sheet.dart';
 import '../services/phone_accounts.dart'
     show RecordPhoneField, recordPhoneFlagsOf;
@@ -45,10 +47,15 @@ class ParkedCarDetailsScreen extends StatefulWidget {
   /// Firebase.
   final BusinessParkingService? businessParkingService;
 
+  /// Injectable so a widget test lists the car's WhatsApp messages without
+  /// Firebase.
+  final Stream<List<ParkingMessage>>? parkingMessages;
+
   const ParkedCarDetailsScreen({
     super.key,
     required this.parkedCar,
     this.businessParkingService,
+    this.parkingMessages,
   });
 
   @override
@@ -1129,6 +1136,17 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                             const SizedBox(height: 24),
                             _buildBusinessPaymentCard(l10n, canRecordPayment),
                           ],
+                          // What the customer was sent on WhatsApp. Only the lot's
+                          // own people can read these rows; the section hides
+                          // itself while there is nothing to show.
+                          if (canRecordPayment)
+                            ParkingMessagesSection(
+                              parkedCarId: widget.parkedCar.id,
+                              businessId:
+                                  '${_paymentFields['businessId'] ?? ''}'
+                                      .trim(),
+                              messages: widget.parkingMessages,
+                            ),
                           const SizedBox(height: 24),
                           if (isVoided)
                             const SizedBox.shrink()

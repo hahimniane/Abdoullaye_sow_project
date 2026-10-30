@@ -47,6 +47,7 @@ class BusinessProfile {
     this.parkingRates = const [],
     this.parkingPickupAvailable = false,
     this.parkingAcceptsReservations = true,
+    this.parkingWhatsAppEnabled = false,
     this.parkingPickupFee = 0,
     this.parkingInstructions,
     this.parkingLatitude,
@@ -116,6 +117,10 @@ class BusinessProfile {
   /// When false the lot is walk-in only: still listed and contactable, but it
   /// takes no online customer reservations. Absent means true.
   final bool parkingAcceptsReservations;
+
+  /// `parkingWhatsApp.enabled` (docs/PARKING_WHATSAPP.md): the lot's parking
+  /// customers hear from it on WhatsApp. Off until the owner switches it on.
+  final bool parkingWhatsAppEnabled;
   final double parkingPickupFee;
   final String? parkingInstructions;
   final double? parkingLatitude;
@@ -207,6 +212,8 @@ class BusinessProfile {
       parkingPickupAvailable: data['parkingPickupAvailable'] == true,
       parkingAcceptsReservations:
           data['parkingAcceptsReservations'] != false,
+      parkingWhatsAppEnabled: data['parkingWhatsApp'] is Map &&
+          (data['parkingWhatsApp'] as Map)['enabled'] == true,
       parkingPickupFee: _parseDouble(data['parkingPickupFee'], 0),
       parkingInstructions: data['parkingInstructions'] as String?,
       parkingLatitude: _parseNullableDouble(data['parkingLatitude']),
