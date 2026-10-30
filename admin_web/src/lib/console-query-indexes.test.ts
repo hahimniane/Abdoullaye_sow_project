@@ -286,6 +286,8 @@ const SITES: Site[] = [
   { file: B("operations-panels.tsx"), kind: "query", what: "ledger history", shapes: [raw("lotLedgerAudit", [eq("businessId"), eq("entityId")], { field: "at", direction: "desc" })] },
   // A parked car's WhatsApp messages (docs/PARKING_WHATSAPP.md §3): equalities only, no composite index.
   { file: B("parking-whatsapp.tsx"), kind: "query", what: "a parked car's WhatsApp messages", shapes: [raw("parkingMessages", [eq("businessId"), eq("parkedCarId")])] },
+  // A month's invoice messages (docs/PARKING_INVOICES.md §3): three equalities, no order, no composite index.
+  { file: B("parking-invoices.tsx"), kind: "query", what: "a month's invoice WhatsApp messages", shapes: [raw("parkingMessages", [eq("businessId"), eq("kind"), eq("monthKey")])] },
   { file: B("tracking-updates-section.tsx"), kind: "query", what: "tracking events", shapes: [raw("trackingEvents", [], { field: "timestamp", direction: "desc" })] },
   // --- support --------------------------------------------------------------
   {
