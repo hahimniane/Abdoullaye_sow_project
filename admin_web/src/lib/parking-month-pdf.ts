@@ -232,8 +232,14 @@ export async function buildParkingMonthBillPdf(input: { business: Row; customer:
         [a.vinNumber ? `VIN ${a.vinNumber}` : "", a.registeredTo ? `${t.registeredTo} ${a.registeredTo}` : "", standing(a.paidCents, a.dueCents)].filter(Boolean).join("  ·  "));
     }
   }
-  if (c.olderActivities.length) {
+  if (c.olderCars.length || c.olderActivities.length) {
     section(t.olderItems, t.activity, t.date, "");
+    // Cars that left before the month and still owe come first
+    // (docs/PARKING_CARRYOVER.md), then the older activities.
+    for (const b of c.olderCars) {
+      line(`${t.parking} · ${b.vehicle || t.car}`, `${day(b.periodFrom)} ${t.to} ${day(b.periodTo)}`, "", moneyText(b.dueCents),
+        [b.vinNumber ? `VIN ${b.vinNumber}` : "", b.registeredTo ? `${t.registeredTo} ${b.registeredTo}` : "", t.left].filter(Boolean).join("  ·  "));
+    }
     for (const a of c.olderActivities) {
       line(`${a.label}${a.vehicle ? ` · ${a.vehicle}` : ""}`, day(a.date), "", moneyText(a.dueCents),
         [a.vinNumber ? `VIN ${a.vinNumber}` : "", a.registeredTo ? `${t.registeredTo} ${a.registeredTo}` : "", standing(a.paidCents, a.dueCents)].filter(Boolean).join("  ·  "));
@@ -315,7 +321,7 @@ export async function buildParkingMonthSummaryPdf(input: {
     }
     doc.setFont("helvetica", "bold").setFontSize(10.5).setTextColor(...INK).text(b.customerName || "—", M, y);
     doc.setFont("helvetica", "normal").setFontSize(9).setTextColor(...MUTED)
-      .text((doc.splitTextToSize(`${b.customerPhone}${b.customerPhone ? " · " : ""}${[...b.cars.map((car) => car.vehicle), ...b.activities.map((x) => x.label), ...b.olderActivities.map((x) => x.label)].join(", ")}`, R - 80 - (M + 150)) as string[])[0], M + 150, y);
+      .text((doc.splitTextToSize(`${b.customerPhone}${b.customerPhone ? " · " : ""}${[...b.cars.map((car) => car.vehicle), ...b.activities.map((x) => x.label), ...b.olderCars.map((x) => x.vehicle), ...b.olderActivities.map((x) => x.label)].join(", ")}`, R - 80 - (M + 150)) as string[])[0], M + 150, y);
     doc.setFont("helvetica", "bold").setFontSize(10.5).setTextColor(...DUE).text(moneyText(b.dueCents), R, y, { align: "right" });
     y += 6;
     doc.setDrawColor(236, 238, 237).setLineWidth(0.5).line(M, y, R, y);

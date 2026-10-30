@@ -409,10 +409,13 @@ export function useInventoryMovements(businessId: string, itemId: string, enable
 }
 
 /**
- * What one month's parking bills are built from, live: the four narrow reads
+ * What one month's parking bills are built from, live: the five narrow reads
  * of parkingMonthQueryPlan (the server's month-end notice makes the same
- * ones), each complete and bounded by the month. A payment recorded on a car
- * flips its bill by itself, as it always did.
+ * ones), each complete and bounded by the month - or, for cars still unpaid,
+ * by the unpaid state: a car that left in an earlier month still owing comes
+ * along as "unpaid from before" (docs/PARKING_CARRYOVER.md), merged by id with
+ * the month's cars. A payment recorded on a car flips its bill by itself, as
+ * it always did.
  */
 export function useParkingMonthInputs(businessId: string, monthKey: string, enabled: boolean): {
   cars: FirestoreRow[];
@@ -426,6 +429,10 @@ export function useParkingMonthInputs(businessId: string, monthKey: string, enab
   const cars = useBusinessCollection("parkedCars", businessId, active, {
     ...complete,
     where: plan?.cars.where ?? [],
+  });
+  const unpaidCars = useBusinessCollection("parkedCars", businessId, active, {
+    ...complete,
+    where: plan?.unpaidCars.where ?? [],
   });
   const inMonth = useBusinessCollection("lotActivities", businessId, active, {
     ...complete,
@@ -445,11 +452,15 @@ export function useParkingMonthInputs(businessId: string, monthKey: string, enab
     () => mergePages([inMonth.rows, unsettled.rows, undated.rows]),
     [inMonth.rows, unsettled.rows, undated.rows],
   );
+  const allCars = useMemo(
+    () => mergePages([cars.rows, unpaidCars.rows]),
+    [cars.rows, unpaidCars.rows],
+  );
   return {
-    cars: cars.rows,
+    cars: allCars,
     activities,
-    loading: cars.loading || inMonth.loading || unsettled.loading || undated.loading,
-    error: cars.error || inMonth.error || unsettled.error || undated.error,
+    loading: cars.loading || unpaidCars.loading || inMonth.loading || unsettled.loading || undated.loading,
+    error: cars.error || unpaidCars.error || inMonth.error || unsettled.error || undated.error,
   };
 }
 

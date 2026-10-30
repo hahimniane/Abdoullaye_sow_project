@@ -46,6 +46,7 @@ function matches(row: Row, [field, op, value]: QueryFilterSpec): boolean {
     case "==": return a === b;
     case "!=": return a !== null && a !== b;
     case "in": return (value as unknown[]).map(comparable).includes(a);
+    case "not-in": return a !== null && !(value as unknown[]).map(comparable).includes(a);
     case "<": return typeof a === typeof b && (a as number) < (b as number);
     case "<=": return typeof a === typeof b && (a as number) <= (b as number);
     case ">": return typeof a === typeof b && (a as number) > (b as number);
@@ -126,7 +127,7 @@ test("the year's expense entries are every entry the year's months can count", (
 });
 
 // ---------------------------------------------------------------------------
-// Month-end parking bills: four narrow reads instead of the lot's history.
+// Month-end parking bills: five narrow reads instead of the lot's history.
 // ---------------------------------------------------------------------------
 
 test("the month-end reads give exactly the whole-history summary", () => {
@@ -136,10 +137,13 @@ test("the month-end reads give exactly the whole-history summary", () => {
   const car = (id: string, parkingDate: string, parkingEndDate?: string, extra: Record<string, unknown> = {}): Row => ({
     id, customerPhone: `555${id.length}`, customerName: id, dailyRate: 10, status: "parked",
     parkingDate: at(parkingDate), ...(parkingEndDate ? { parkingEndDate: at(parkingEndDate) } : {}),
-    occupancyEndMs: end(parkingEndDate), ...extra,
+    occupancyEndMs: end(parkingEndDate), paymentStatus: "awaiting_direct_payment", ...extra,
   });
   const cars = [
     car("old-closed", "2025-01-01T12:00:00Z", "2025-02-01T12:00:00Z", { paymentStatus: "succeeded", amountPaidCents: 31000 }),
+    // Left long before the month and still owing: only the unpaid read finds it.
+    car("left-earlier-unpaid", "2026-06-01T12:00:00Z", "2026-06-03T12:00:00Z", { amountDueCents: 3000 }),
+    car("left-earlier-paid", "2026-05-01T12:00:00Z", "2026-05-02T12:00:00Z", { amountDueCents: 2000, paymentStatus: "paid" }),
     car("old-open", "2024-05-01T12:00:00Z"),
     car("ends-in-month", "2026-08-20T12:00:00Z", "2026-09-05T12:00:00Z"),
     car("ended-before", "2026-08-01T12:00:00Z", "2026-08-31T12:00:00Z"),
@@ -156,14 +160,20 @@ test("the month-end reads give exactly the whole-history summary", () => {
     act("undated", { activityDate: null, createdAt: at("2026-09-08T12:00:00Z") }),
   ];
   const plan = parkingMonthQueryPlan("2026-09")!;
-  const narrowCars = replay(cars, plan.cars.where);
+  // The month's cars plus the unpaid ones (a car that left earlier still
+  // owing), merged by id - what useParkingMonthInputs hands the statement.
+  const carSeen = new Set<string>();
+  const narrowCars = [...replay(cars, plan.cars.where), ...replay(cars, plan.unpaidCars.where)]
+    .filter((row) => (carSeen.has(row.id) ? false : (carSeen.add(row.id), true)));
   const seen = new Set<string>();
   const narrowActs = [...replay(acts, plan.inMonth.where), ...replay(acts, plan.unsettled.where), ...replay(acts, plan.undated.where)]
     .filter((row) => (seen.has(row.id) ? false : (seen.add(row.id), true)));
   const full = parkingMonthSummary(cars, "2026-09", NOW, acts);
   assert.deepEqual(parkingMonthSummary(narrowCars, "2026-09", NOW, narrowActs), full);
   assert.ok(full.customersOwing.length > 0, "the fixture exercises something");
-  assert.ok(!ids(narrowCars).includes("old-closed") && !ids(narrowCars).includes("ended-before"), "and reads less than the history");
+  assert.deepEqual(full.carried.map((c) => c.id), ["left-earlier-unpaid"], "the fixture carries a car from before");
+  assert.ok(ids(narrowCars).includes("left-earlier-unpaid"), "found by the unpaid read alone");
+  assert.ok(!ids(narrowCars).includes("old-closed") && !ids(narrowCars).includes("left-earlier-paid"), "and reads less than the history");
   assert.ok(!ids(narrowActs).includes("old-paid"));
   assert.deepEqual(parkingMonthBoundsMs("2026-09"), { startMs: Date.UTC(2026, 8, 1), endMs: Date.UTC(2026, 9, 1) });
   assert.equal(parkingMonthQueryPlan("nope"), null);
