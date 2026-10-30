@@ -735,3 +735,8 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   guarded by source-contract tests (`parking_month_staff_expense_test.dart`
   greps `parking_month_end_screen.dart`), so never run `dart format` over a
   whole screen file you only touched in places.
+- Dart's `List.sort` is NOT stable, JavaScript's `Array.sort` is. When the app
+  mirrors a server/console sort that relies on stability (e.g.
+  `billPaymentItems` in `parking_bill_payment.dart`), decorate with the index
+  and break ties on it, and pin it with the shared fixture case that depends on
+  the order.

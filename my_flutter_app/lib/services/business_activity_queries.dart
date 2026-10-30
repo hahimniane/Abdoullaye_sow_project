@@ -517,6 +517,21 @@ FirestoreQuerySpec lotExpenseLinesSpec(String businessId) =>
       filters: [_business(businessId)],
     );
 
+/// The month's payments on customers' bills (`parkingBillPayments`,
+/// docs/PARKING_BILL_PAYMENTS.md): shown on each customer's Month end card.
+/// Two equalities (business and month), so no composite index; the rule
+/// authorises the read by business, so the query names it.
+FirestoreQuerySpec parkingBillPaymentsSpec(
+  String businessId,
+  String monthKey,
+) => FirestoreQuerySpec(
+  collection: 'parkingBillPayments',
+  filters: [
+    _business(businessId),
+    QueryFilterSpec('monthKey', QueryFilterOp.equal, monthKey.trim()),
+  ],
+);
+
 /// "2026-12" -> "2027-01". Unparsable keys come back unchanged.
 String nextMonthKey(String monthKey) {
   final m = RegExp(r'^(\d{4})-(\d{2})$').firstMatch(monthKey.trim());

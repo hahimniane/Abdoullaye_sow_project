@@ -18477,4 +18477,117 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get parkingWaKindInvoice => 'Facture mensuelle';
+
+  @override
+  String get pmeRecordPayment => 'Enregistrer un paiement';
+
+  @override
+  String get pmeBillPaymentHint =>
+      'Saisissez ce que le client a payé. Cela règle les voitures et les travaux de cette facture, du plus ancien au plus récent.';
+
+  @override
+  String get pmeBillPaymentAmount => 'Montant reçu';
+
+  @override
+  String pmeBillPaymentUpTo(String amount) {
+    return 'Cette facture peut recevoir jusqu\'à $amount ici.';
+  }
+
+  @override
+  String get pmeBillPaymentPaysOff => 'Règle';
+
+  @override
+  String get pmeBillPaymentFull => 'payé';
+
+  @override
+  String pmeBillPaymentLeft(String amount) {
+    return 'Reste sur la facture : $amount';
+  }
+
+  @override
+  String pmeBillPaymentRecorded(String amount, String left) {
+    return '$amount enregistrés. Reste $left sur la facture.';
+  }
+
+  @override
+  String pmeBillPaymentRecordedPaid(String amount) {
+    return '$amount enregistrés. La facture est payée en totalité.';
+  }
+
+  @override
+  String get pmeBillPaymentReceiptFailed =>
+      'Le reçu WhatsApp n\'a pas été envoyé.';
+
+  @override
+  String get pmeBillPaymentNoAmount => 'Saisissez le montant reçu.';
+
+  @override
+  String pmeBillPaymentMoreThanOwed(String amount) {
+    return 'C\'est plus que ce que cette facture doit ($amount). Enregistrez ce qui est dû et rendez le reste.';
+  }
+
+  @override
+  String get pmeBillPaymentNothingToPay =>
+      'Rien sur cette facture ne peut être payé ici.';
+
+  @override
+  String get pmeBillPaymentCustomerNotFound =>
+      'Ce client n\'a pas de facture ce mois-ci.';
+
+  @override
+  String get pmeBillPaymentBillChanged =>
+      'La facture a changé pendant que vous la consultiez. Vérifiez les nouveaux montants et réessayez.';
+
+  @override
+  String get pmeBillPaymentReceiverRequired =>
+      'Indiquez qui a pris l\'argent pour pouvoir le rapprocher.';
+
+  @override
+  String get pmeBillPaymentMonthInvalid => 'Choisissez un mois qui a commencé.';
+
+  @override
+  String get pmeBillPaymentNotFound => 'Ce paiement est introuvable.';
+
+  @override
+  String get pmeBillPaymentAlreadyUndone => 'Ce paiement a déjà été annulé.';
+
+  @override
+  String get pmeBillPaymentSettledSince =>
+      'Une voiture ou un travail de ce paiement a été marqué payé en totalité ensuite. Annulez d\'abord ce paiement.';
+
+  @override
+  String get pmeBillPaymentLedgerRequired =>
+      'Ce paiement couvre des activités du parc : il faut l\'autorisation du registre.';
+
+  @override
+  String get pmeBillPaymentsTitle => 'Paiements sur cette facture';
+
+  @override
+  String pmeBillPaymentReceivedBy(String name) {
+    return 'Reçu par $name';
+  }
+
+  @override
+  String pmeBillPaymentPaidFor(String what) {
+    return 'Payé : $what';
+  }
+
+  @override
+  String get pmeBillPaymentUndo => 'Annuler';
+
+  @override
+  String pmeBillPaymentUndone(String date) {
+    return 'Annulé · $date';
+  }
+
+  @override
+  String get pmeBillPaymentUndoTitle => 'Annuler ce paiement ?';
+
+  @override
+  String pmeBillPaymentUndoBody(String amount) {
+    return 'Annuler ce paiement de $amount ? Il est retiré de chaque voiture et de chaque travail qu\'il a payé.';
+  }
+
+  @override
+  String get pmeBillPaymentUndoDone => 'Paiement annulé.';
 }

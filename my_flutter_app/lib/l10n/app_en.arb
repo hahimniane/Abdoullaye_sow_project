@@ -10105,5 +10105,100 @@
   "parkingWaKindInvoice": "Monthly invoice",
   "@parkingWaKindInvoice": {
     "description": "Kind label of a monthly invoice WhatsApp message."
-  }
+  },
+  "pmeRecordPayment": "Record a payment",
+  "pmeBillPaymentHint": "Type what the customer paid. It pays this bill's cars and jobs oldest first.",
+  "pmeBillPaymentAmount": "Amount received",
+  "pmeBillPaymentUpTo": "This bill can take up to {amount} here.",
+  "@pmeBillPaymentUpTo": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeBillPaymentPaysOff": "Pays off",
+  "pmeBillPaymentFull": "paid",
+  "pmeBillPaymentLeft": "Left on the bill: {amount}",
+  "@pmeBillPaymentLeft": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeBillPaymentRecorded": "Recorded {amount}. {left} left on the bill.",
+  "@pmeBillPaymentRecorded": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      },
+      "left": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeBillPaymentRecordedPaid": "Recorded {amount}. The bill is paid in full.",
+  "@pmeBillPaymentRecordedPaid": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeBillPaymentReceiptFailed": "The WhatsApp receipt did not send.",
+  "pmeBillPaymentNoAmount": "Enter the amount received.",
+  "pmeBillPaymentMoreThanOwed": "That is more than this bill owes ({amount}). Record what is owed and give the rest back.",
+  "@pmeBillPaymentMoreThanOwed": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeBillPaymentNothingToPay": "Nothing on this bill can be paid here.",
+  "pmeBillPaymentCustomerNotFound": "This customer has no bill for this month.",
+  "pmeBillPaymentBillChanged": "The bill changed while you were on it. Check the new amounts and try again.",
+  "pmeBillPaymentReceiverRequired": "Say who took the money so it can be reconciled.",
+  "pmeBillPaymentMonthInvalid": "Pick a month that has started.",
+  "pmeBillPaymentNotFound": "This payment was not found.",
+  "pmeBillPaymentAlreadyUndone": "This payment was already undone.",
+  "pmeBillPaymentSettledSince": "A car or job in this payment was marked paid in full afterwards. Undo that first.",
+  "pmeBillPaymentLedgerRequired": "This payment covers lot activities: it needs the ledger permission.",
+  "pmeBillPaymentsTitle": "Payments on this bill",
+  "pmeBillPaymentReceivedBy": "Received by {name}",
+  "@pmeBillPaymentReceivedBy": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeBillPaymentPaidFor": "Paid: {what}",
+  "@pmeBillPaymentPaidFor": {
+    "placeholders": {
+      "what": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeBillPaymentUndo": "Undo",
+  "pmeBillPaymentUndone": "Undone · {date}",
+  "@pmeBillPaymentUndone": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeBillPaymentUndoTitle": "Undo this payment?",
+  "pmeBillPaymentUndoBody": "Undo this {amount} payment? It comes off every car and job it paid.",
+  "@pmeBillPaymentUndoBody": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeBillPaymentUndoDone": "Payment undone."
 }

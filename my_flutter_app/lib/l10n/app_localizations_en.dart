@@ -18193,4 +18193,117 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get parkingWaKindInvoice => 'Monthly invoice';
+
+  @override
+  String get pmeRecordPayment => 'Record a payment';
+
+  @override
+  String get pmeBillPaymentHint =>
+      'Type what the customer paid. It pays this bill\'s cars and jobs oldest first.';
+
+  @override
+  String get pmeBillPaymentAmount => 'Amount received';
+
+  @override
+  String pmeBillPaymentUpTo(String amount) {
+    return 'This bill can take up to $amount here.';
+  }
+
+  @override
+  String get pmeBillPaymentPaysOff => 'Pays off';
+
+  @override
+  String get pmeBillPaymentFull => 'paid';
+
+  @override
+  String pmeBillPaymentLeft(String amount) {
+    return 'Left on the bill: $amount';
+  }
+
+  @override
+  String pmeBillPaymentRecorded(String amount, String left) {
+    return 'Recorded $amount. $left left on the bill.';
+  }
+
+  @override
+  String pmeBillPaymentRecordedPaid(String amount) {
+    return 'Recorded $amount. The bill is paid in full.';
+  }
+
+  @override
+  String get pmeBillPaymentReceiptFailed =>
+      'The WhatsApp receipt did not send.';
+
+  @override
+  String get pmeBillPaymentNoAmount => 'Enter the amount received.';
+
+  @override
+  String pmeBillPaymentMoreThanOwed(String amount) {
+    return 'That is more than this bill owes ($amount). Record what is owed and give the rest back.';
+  }
+
+  @override
+  String get pmeBillPaymentNothingToPay =>
+      'Nothing on this bill can be paid here.';
+
+  @override
+  String get pmeBillPaymentCustomerNotFound =>
+      'This customer has no bill for this month.';
+
+  @override
+  String get pmeBillPaymentBillChanged =>
+      'The bill changed while you were on it. Check the new amounts and try again.';
+
+  @override
+  String get pmeBillPaymentReceiverRequired =>
+      'Say who took the money so it can be reconciled.';
+
+  @override
+  String get pmeBillPaymentMonthInvalid => 'Pick a month that has started.';
+
+  @override
+  String get pmeBillPaymentNotFound => 'This payment was not found.';
+
+  @override
+  String get pmeBillPaymentAlreadyUndone => 'This payment was already undone.';
+
+  @override
+  String get pmeBillPaymentSettledSince =>
+      'A car or job in this payment was marked paid in full afterwards. Undo that first.';
+
+  @override
+  String get pmeBillPaymentLedgerRequired =>
+      'This payment covers lot activities: it needs the ledger permission.';
+
+  @override
+  String get pmeBillPaymentsTitle => 'Payments on this bill';
+
+  @override
+  String pmeBillPaymentReceivedBy(String name) {
+    return 'Received by $name';
+  }
+
+  @override
+  String pmeBillPaymentPaidFor(String what) {
+    return 'Paid: $what';
+  }
+
+  @override
+  String get pmeBillPaymentUndo => 'Undo';
+
+  @override
+  String pmeBillPaymentUndone(String date) {
+    return 'Undone · $date';
+  }
+
+  @override
+  String get pmeBillPaymentUndoTitle => 'Undo this payment?';
+
+  @override
+  String pmeBillPaymentUndoBody(String amount) {
+    return 'Undo this $amount payment? It comes off every car and job it paid.';
+  }
+
+  @override
+  String get pmeBillPaymentUndoDone => 'Payment undone.';
 }

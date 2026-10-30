@@ -30709,6 +30709,180 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Monthly invoice'**
   String get parkingWaKindInvoice;
+
+  /// No description provided for @pmeRecordPayment.
+  ///
+  /// In en, this message translates to:
+  /// **'Record a payment'**
+  String get pmeRecordPayment;
+
+  /// No description provided for @pmeBillPaymentHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Type what the customer paid. It pays this bill\'s cars and jobs oldest first.'**
+  String get pmeBillPaymentHint;
+
+  /// No description provided for @pmeBillPaymentAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount received'**
+  String get pmeBillPaymentAmount;
+
+  /// No description provided for @pmeBillPaymentUpTo.
+  ///
+  /// In en, this message translates to:
+  /// **'This bill can take up to {amount} here.'**
+  String pmeBillPaymentUpTo(String amount);
+
+  /// No description provided for @pmeBillPaymentPaysOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Pays off'**
+  String get pmeBillPaymentPaysOff;
+
+  /// No description provided for @pmeBillPaymentFull.
+  ///
+  /// In en, this message translates to:
+  /// **'paid'**
+  String get pmeBillPaymentFull;
+
+  /// No description provided for @pmeBillPaymentLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'Left on the bill: {amount}'**
+  String pmeBillPaymentLeft(String amount);
+
+  /// No description provided for @pmeBillPaymentRecorded.
+  ///
+  /// In en, this message translates to:
+  /// **'Recorded {amount}. {left} left on the bill.'**
+  String pmeBillPaymentRecorded(String amount, String left);
+
+  /// No description provided for @pmeBillPaymentRecordedPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Recorded {amount}. The bill is paid in full.'**
+  String pmeBillPaymentRecordedPaid(String amount);
+
+  /// No description provided for @pmeBillPaymentReceiptFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The WhatsApp receipt did not send.'**
+  String get pmeBillPaymentReceiptFailed;
+
+  /// No description provided for @pmeBillPaymentNoAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the amount received.'**
+  String get pmeBillPaymentNoAmount;
+
+  /// No description provided for @pmeBillPaymentMoreThanOwed.
+  ///
+  /// In en, this message translates to:
+  /// **'That is more than this bill owes ({amount}). Record what is owed and give the rest back.'**
+  String pmeBillPaymentMoreThanOwed(String amount);
+
+  /// No description provided for @pmeBillPaymentNothingToPay.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing on this bill can be paid here.'**
+  String get pmeBillPaymentNothingToPay;
+
+  /// No description provided for @pmeBillPaymentCustomerNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'This customer has no bill for this month.'**
+  String get pmeBillPaymentCustomerNotFound;
+
+  /// No description provided for @pmeBillPaymentBillChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'The bill changed while you were on it. Check the new amounts and try again.'**
+  String get pmeBillPaymentBillChanged;
+
+  /// No description provided for @pmeBillPaymentReceiverRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Say who took the money so it can be reconciled.'**
+  String get pmeBillPaymentReceiverRequired;
+
+  /// No description provided for @pmeBillPaymentMonthInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a month that has started.'**
+  String get pmeBillPaymentMonthInvalid;
+
+  /// No description provided for @pmeBillPaymentNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'This payment was not found.'**
+  String get pmeBillPaymentNotFound;
+
+  /// No description provided for @pmeBillPaymentAlreadyUndone.
+  ///
+  /// In en, this message translates to:
+  /// **'This payment was already undone.'**
+  String get pmeBillPaymentAlreadyUndone;
+
+  /// No description provided for @pmeBillPaymentSettledSince.
+  ///
+  /// In en, this message translates to:
+  /// **'A car or job in this payment was marked paid in full afterwards. Undo that first.'**
+  String get pmeBillPaymentSettledSince;
+
+  /// No description provided for @pmeBillPaymentLedgerRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'This payment covers lot activities: it needs the ledger permission.'**
+  String get pmeBillPaymentLedgerRequired;
+
+  /// No description provided for @pmeBillPaymentsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Payments on this bill'**
+  String get pmeBillPaymentsTitle;
+
+  /// No description provided for @pmeBillPaymentReceivedBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Received by {name}'**
+  String pmeBillPaymentReceivedBy(String name);
+
+  /// No description provided for @pmeBillPaymentPaidFor.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid: {what}'**
+  String pmeBillPaymentPaidFor(String what);
+
+  /// No description provided for @pmeBillPaymentUndo.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo'**
+  String get pmeBillPaymentUndo;
+
+  /// No description provided for @pmeBillPaymentUndone.
+  ///
+  /// In en, this message translates to:
+  /// **'Undone · {date}'**
+  String pmeBillPaymentUndone(String date);
+
+  /// No description provided for @pmeBillPaymentUndoTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo this payment?'**
+  String get pmeBillPaymentUndoTitle;
+
+  /// No description provided for @pmeBillPaymentUndoBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo this {amount} payment? It comes off every car and job it paid.'**
+  String pmeBillPaymentUndoBody(String amount);
+
+  /// No description provided for @pmeBillPaymentUndoDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment undone.'**
+  String get pmeBillPaymentUndoDone;
 }
 
 class _AppLocalizationsDelegate

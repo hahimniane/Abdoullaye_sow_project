@@ -10104,5 +10104,100 @@
   "parkingWaKindInvoice": "Facture mensuelle",
   "@parkingWaKindInvoice": {
     "description": "Kind label of a monthly invoice WhatsApp message."
-  }
+  },
+  "pmeRecordPayment": "Enregistrer un paiement",
+  "pmeBillPaymentHint": "Saisissez ce que le client a payé. Cela règle les voitures et les travaux de cette facture, du plus ancien au plus récent.",
+  "pmeBillPaymentAmount": "Montant reçu",
+  "pmeBillPaymentUpTo": "Cette facture peut recevoir jusqu'à {amount} ici.",
+  "@pmeBillPaymentUpTo": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeBillPaymentPaysOff": "Règle",
+  "pmeBillPaymentFull": "payé",
+  "pmeBillPaymentLeft": "Reste sur la facture : {amount}",
+  "@pmeBillPaymentLeft": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeBillPaymentRecorded": "{amount} enregistrés. Reste {left} sur la facture.",
+  "@pmeBillPaymentRecorded": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      },
+      "left": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeBillPaymentRecordedPaid": "{amount} enregistrés. La facture est payée en totalité.",
+  "@pmeBillPaymentRecordedPaid": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeBillPaymentReceiptFailed": "Le reçu WhatsApp n'a pas été envoyé.",
+  "pmeBillPaymentNoAmount": "Saisissez le montant reçu.",
+  "pmeBillPaymentMoreThanOwed": "C'est plus que ce que cette facture doit ({amount}). Enregistrez ce qui est dû et rendez le reste.",
+  "@pmeBillPaymentMoreThanOwed": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeBillPaymentNothingToPay": "Rien sur cette facture ne peut être payé ici.",
+  "pmeBillPaymentCustomerNotFound": "Ce client n'a pas de facture ce mois-ci.",
+  "pmeBillPaymentBillChanged": "La facture a changé pendant que vous la consultiez. Vérifiez les nouveaux montants et réessayez.",
+  "pmeBillPaymentReceiverRequired": "Indiquez qui a pris l'argent pour pouvoir le rapprocher.",
+  "pmeBillPaymentMonthInvalid": "Choisissez un mois qui a commencé.",
+  "pmeBillPaymentNotFound": "Ce paiement est introuvable.",
+  "pmeBillPaymentAlreadyUndone": "Ce paiement a déjà été annulé.",
+  "pmeBillPaymentSettledSince": "Une voiture ou un travail de ce paiement a été marqué payé en totalité ensuite. Annulez d'abord ce paiement.",
+  "pmeBillPaymentLedgerRequired": "Ce paiement couvre des activités du parc : il faut l'autorisation du registre.",
+  "pmeBillPaymentsTitle": "Paiements sur cette facture",
+  "pmeBillPaymentReceivedBy": "Reçu par {name}",
+  "@pmeBillPaymentReceivedBy": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeBillPaymentPaidFor": "Payé : {what}",
+  "@pmeBillPaymentPaidFor": {
+    "placeholders": {
+      "what": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeBillPaymentUndo": "Annuler",
+  "pmeBillPaymentUndone": "Annulé · {date}",
+  "@pmeBillPaymentUndone": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeBillPaymentUndoTitle": "Annuler ce paiement ?",
+  "pmeBillPaymentUndoBody": "Annuler ce paiement de {amount} ? Il est retiré de chaque voiture et de chaque travail qu'il a payé.",
+  "@pmeBillPaymentUndoBody": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeBillPaymentUndoDone": "Paiement annulé."
 }

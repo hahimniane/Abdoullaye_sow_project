@@ -241,6 +241,7 @@ void main() {
       ),
       'month end: unsettled activities': lotActivitiesUnsettledSpec(_business),
       'month end: undated activities': lotActivitiesUndatedSpec(_business),
+      'month end: bill payments': parkingBillPaymentsSpec(_business, '2026-10'),
       'ledger: expenses in a window': lotExpenseEntriesForMonthsSpec(
         _business,
         '2026-01',

@@ -15,6 +15,8 @@ import '../services/business_parking_entry.dart'
     show businessParkingReceivedViaValues;
 import '../services/firestore_query_spec.dart';
 import '../services/lot_ledger.dart' show lotDollarsToCents;
+import '../services/parking_bill_payment.dart';
+import '../services/parking_bill_payment_service.dart';
 import '../services/parking_month_statement.dart';
 import '../services/parking_whatsapp.dart';
 import '../services/staff_balances.dart';
@@ -28,6 +30,7 @@ import '../utils/parking_month_pdf.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/lot_sheets.dart';
+import '../widgets/parking_bill_payment_widgets.dart';
 import '../widgets/parking_invoices_card.dart';
 import '../widgets/parking_messages_section.dart'
     show parkingMessageIsProblem, parkingMessageStatusText;
@@ -47,9 +50,13 @@ class ParkingMonthEndScreen extends StatefulWidget {
     required this.businessId,
     this.monthKey,
     this.balancesService = const StaffBalancesService(),
+    this.billPaymentService = const ParkingBillPaymentService(),
   });
 
   final String businessId;
+
+  /// Records and undoes a payment on a customer's bill.
+  final ParkingBillPaymentService billPaymentService;
 
   /// Staff balances, for the cash staff hold in "Business owes".
   final StaffBalancesService balancesService;
@@ -92,6 +99,11 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
   /// the cards.
   StreamSubscription<List<ParkingMessage>>? _invoiceSub;
   Map<String, ParkingMessage> _invoices = const {};
+
+  /// This month's payments on customers' bills, by customer key, newest
+  /// first (docs/PARKING_BILL_PAYMENTS.md). Grouped once per snapshot, not
+  /// per build. A refused read just means no payments listed on the cards.
+  Map<String, List<ParkingBillPayment>> _billPayments = const {};
   List<Map<String, dynamic>> _inMonth = const [];
   List<Map<String, dynamic>> _unsettled = const [];
   List<Map<String, dynamic>> _undated = const [];
@@ -268,6 +280,7 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
     }
     _monthSubs.clear();
     _subscribeInvoices(monthKey);
+    _billPayments = const {};
     final days = parkingMonthDays(monthKey);
     if (days == null) {
       _docs = _stayDocs = _unpaidDocs = const [];
@@ -376,6 +389,25 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
           mergeActivities();
         });
       }, onError: (_) {}),
+    );
+    _monthSubs.add(
+      parkingBillPaymentsSpec(id, monthKey).build(_db).snapshots().listen(
+        (snap) {
+          if (!mounted) return;
+          setState(
+            () => _billPayments = billPaymentsByCustomer([
+              for (final d in snap.docs)
+                ParkingBillPayment.fromMap(d.id, d.data()),
+            ]),
+          );
+        },
+        // A refused read must not break the screen: no payments listed.
+        onError: (_) {
+          if (mounted && _billPayments.isNotEmpty) {
+            setState(() => _billPayments = const {});
+          }
+        },
+      ),
     );
   }
 
@@ -511,6 +543,36 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
     }
   }
 
+  /// Undoes a whole payment on a customer's bill after asking: it comes off
+  /// every car and job it paid and stays on file as "Undone".
+  Future<void> _undoBillPayment(ParkingBillPayment payment) async {
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await confirmUndoBillPayment(
+      context,
+      amount: parkingMoney(payment.amountCents),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _busy = 'undo:${payment.id}');
+    try {
+      await widget.billPaymentService.undo(
+        businessId: widget.businessId,
+        billPaymentId: payment.id,
+      );
+      if (mounted) showSuccessSnackBar(context, l10n.pmeBillPaymentUndoDone);
+    } on ParkingBillPaymentFailure catch (failure) {
+      if (mounted) {
+        showErrorSnackBar(
+          context,
+          parkingBillPaymentFailureText(l10n, failure),
+        );
+      }
+    } catch (_) {
+      if (mounted) showErrorSnackBar(context, l10n.lotCouldNotSave);
+    } finally {
+      if (mounted) setState(() => _busy = '');
+    }
+  }
+
   /// The month's last day as the reader reads a date ("Oct 31, 2026").
   String _lastDayLabel() =>
       displayDay(parkingMonthLastDayKey(_monthKey), dateLocaleOf(context));
@@ -636,7 +698,7 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
     if (action == null || !mounted) return;
     switch (action) {
       // Never collect for days that have not happened yet.
-      case 'settle' || 'open' when estimating:
+      case 'settle' || 'record' || 'open' when estimating:
         return;
       case 'settle':
         await showLotSheet<bool>(
@@ -645,6 +707,18 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
             customer: customer,
             monthLabel: parkingMonthLabel(_monthKey, locale),
             staff: _staff,
+          ),
+        );
+      case 'record':
+        await showLotSheet<bool>(
+          context,
+          BillPaymentSheet(
+            businessId: widget.businessId,
+            monthKey: _monthKey,
+            monthLabel: parkingMonthLabel(_monthKey, locale),
+            customer: customer,
+            staff: _staff,
+            service: widget.billPaymentService,
           ),
         );
       case 'pdf':
@@ -937,6 +1011,9 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
                     busyKey: _busy,
                     onTap: _customerActions,
                     invoices: _invoices,
+                    billPayments: _billPayments,
+                    staffNames: {for (final s in _staff) s.id: s.name},
+                    onUndoPayment: _undoBillPayment,
                     leading: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [invoicesCard, ?owes],
@@ -963,6 +1040,9 @@ List<LotOption<String>> parkingMonthCustomerOptions(
       customer.dueCents > 0 &&
       monthBillPaymentPlan(customer).items.isNotEmpty)
     LotOption('settle', l10n.pmeMarkAllPaid),
+  // One typed amount, split oldest first (docs/PARKING_BILL_PAYMENTS.md).
+  if (!estimate && billPaymentPlan(customer, 1).payableCents > 0)
+    LotOption('record', l10n.pmeRecordPayment),
   if (!estimate && (customer.cars.isNotEmpty || customer.olderCars.isNotEmpty))
     LotOption('open', l10n.pmeOpenCar),
 ];
@@ -1112,12 +1192,22 @@ class ParkingMonthCustomerList extends StatelessWidget {
     this.busyKey = '',
     this.leading,
     this.invoices = const {},
+    this.billPayments = const {},
+    this.staffNames = const {},
+    this.onUndoPayment,
   });
 
   final ParkingMonthSummary summary;
   final ParkingMonthView view;
   final ValueChanged<ParkingMonthCustomer> onTap;
   final String busyKey;
+
+  /// The month's payments on each customer's bill (by
+  /// `ParkingMonthCustomer.key`), newest first; [staffNames] says who
+  /// received them. Null [onUndoPayment] hides Undo.
+  final Map<String, List<ParkingBillPayment>> billPayments;
+  final Map<String, String> staffNames;
+  final ValueChanged<ParkingBillPayment>? onUndoPayment;
 
   /// The month's invoice WhatsApp row of each customer (by
   /// `ParkingMonthCustomer.key`): shown as that card's invoice status.
@@ -1159,6 +1249,10 @@ class ParkingMonthCustomerList extends StatelessWidget {
           customer: customer,
           busy: busyKey.isNotEmpty && busyKey == customer.key,
           invoice: invoices[customer.key],
+          payments: billPayments[customer.key] ?? const [],
+          staffNames: staffNames,
+          busyKey: busyKey,
+          onUndoPayment: onUndoPayment,
           onTap: () => onTap(customer),
         );
       },
@@ -1206,20 +1300,6 @@ String parkingMonthTextWithExpenses(
     ..add(balance);
   return lines.join('\n');
 }
-
-/// A payment method as the app names it: the "How it was paid" words, plus
-/// the payment link and online payments a month's bill can also carry.
-String _methodLabel(AppLocalizations l10n, String m) => switch (m) {
-  'cash' => l10n.invMethodCash,
-  'zelle' => l10n.invMethodZelle,
-  'cashapp' => l10n.invMethodCashapp,
-  'venmo' => l10n.invMethodVenmo,
-  'check' => l10n.invMethodCheck,
-  'card_in_person' => l10n.invMethodCardInPerson,
-  'card_link' => l10n.paymentLinkLabel,
-  'online' => l10n.lotPaymentOnline,
-  _ => l10n.invMethodOther,
-};
 
 class _Stat extends StatelessWidget {
   const _Stat({required this.label, required this.value, this.tone});
@@ -1329,11 +1409,21 @@ class _CustomerTile extends StatefulWidget {
     required this.busy,
     required this.onTap,
     this.invoice,
+    this.payments = const [],
+    this.staffNames = const {},
+    this.busyKey = '',
+    this.onUndoPayment,
   });
 
   final ParkingMonthCustomer customer;
   final bool busy;
   final VoidCallback onTap;
+
+  /// "Payments on this bill": this customer's, newest first.
+  final List<ParkingBillPayment> payments;
+  final Map<String, String> staffNames;
+  final String busyKey;
+  final ValueChanged<ParkingBillPayment>? onUndoPayment;
 
   /// This month's invoice message to the customer, when one exists.
   final ParkingMessage? invoice;
@@ -1606,7 +1696,7 @@ class _CustomerTileState extends State<_CustomerTile> {
                   if (customer.monthPaidCents > 0 &&
                       customer.paidVia.isNotEmpty)
                     customer.paidVia
-                        .map((m) => _methodLabel(l10n, m))
+                        .map((m) => parkingMethodLabel(l10n, m))
                         .join(', '),
                 ].join(' · '),
                 style: const TextStyle(fontSize: 12, color: AppColors.muted),
@@ -1616,6 +1706,13 @@ class _CustomerTileState extends State<_CustomerTile> {
                 customer: customer,
                 open: _showExpenses,
                 onToggle: () => setState(() => _showExpenses = !_showExpenses),
+              ),
+            if (widget.payments.isNotEmpty)
+              ParkingBillPaymentsSection(
+                payments: widget.payments,
+                staffNames: widget.staffNames,
+                busyKey: widget.busyKey,
+                onUndo: widget.onUndoPayment,
               ),
           ],
         ),
@@ -2053,7 +2150,7 @@ class ParkingMonthBusinessOwes extends StatelessWidget {
                           named(r.staffId),
                           if (r.paidAt != null)
                             displayDate(r.paidAt!, dateLocaleOf(context)),
-                          _methodLabel(l10n, r.method),
+                          parkingMethodLabel(l10n, r.method),
                           if (r.givenByStaffId.isNotEmpty)
                             l10n.pmeGivenByName(named(r.givenByStaffId)),
                         ].join(' · '),
@@ -2174,7 +2271,7 @@ class _StaffRepaymentSheetState extends State<StaffRepaymentSheet> {
       title: l10n.invPayMethod,
       selected: _method,
       options: [
-        for (final m in staffRepaymentMethods) LotOption(m, _methodLabel(l10n, m)),
+        for (final m in staffRepaymentMethods) LotOption(m, parkingMethodLabel(l10n, m)),
       ],
     );
     if (picked != null && mounted) setState(() => _method = picked);
@@ -2295,7 +2392,7 @@ class _StaffRepaymentSheetState extends State<StaffRepaymentSheet> {
           const SizedBox(height: AppSpacing.md),
           LotPickerField(
             label: l10n.invPayMethod,
-            value: _methodLabel(l10n, _method),
+            value: parkingMethodLabel(l10n, _method),
             placeholder: l10n.invPayMethod,
             onTap: _busy ? () {} : _pickMethod,
           ),
@@ -2413,7 +2510,7 @@ class _SettleSheetState extends State<_SettleSheet> {
       selected: _via,
       options: [
         for (final m in businessParkingReceivedViaValues)
-          LotOption(m, _methodLabel(l10n, m)),
+          LotOption(m, parkingMethodLabel(l10n, m)),
       ],
     );
     if (picked != null && mounted) setState(() => _via = picked);
@@ -2630,7 +2727,7 @@ class _SettleSheetState extends State<_SettleSheet> {
           const SizedBox(height: AppSpacing.md),
           LotPickerField(
             label: l10n.invPayMethod,
-            value: _methodLabel(l10n, _via),
+            value: parkingMethodLabel(l10n, _via),
             placeholder: l10n.invPayMethod,
             onTap: _busy ? () {} : _pickVia,
           ),

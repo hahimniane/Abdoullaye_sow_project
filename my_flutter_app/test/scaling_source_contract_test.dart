@@ -120,6 +120,7 @@ void main() {
         'lotActivitiesBetweenSpec(',
         'lotActivitiesUnsettledSpec(id)',
         'lotActivitiesUndatedSpec(id)',
+        'parkingBillPaymentsSpec(id, monthKey)',
       ]) {
         expect(screen, contains(spec));
       }
