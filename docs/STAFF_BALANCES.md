@@ -96,6 +96,44 @@ actions; staff must be members of the business):
 - Audit rows (`lotLedgerAudit`, entityType `staff_handover`) for every
   handover action.
 
+### 3a. Server, as built (2026-10-29)
+
+- **Answers.** `record_handover` / `confirm_handover` / `decline_handover` /
+  `void_handover` / `record_opening` answer `{success, handoverId, status}`.
+  `staff_balances` answers exactly `{asOfMs, staff, businessAccount,
+  pending}` (no `success`); `pending` rows carry `{id, kind, fromStaffId,
+  fromName, toId, toName, amountCents, method, note, proofPath, status,
+  createdByUid, createdAtMs}` (`toName` is "" for `business_account`: the
+  client words it). The fixture `test/fixtures/staff-balances-cases.json`
+  holds recorded answers; clients render them and do not recompute.
+- **Refusals** (`details.reason`): `handover_to_self`,
+  `handover_amount_invalid`, `handover_method_invalid`,
+  `handover_receiver_invalid`, `handover_proof_invalid`, `staff_not_member`
+  (giver or opening person not on the team), `handover_not_found`,
+  `handover_not_receiver`, `handover_not_pending`, `handover_voided`,
+  `handover_void_not_allowed`, `opening_owner_only`,
+  `opening_amount_invalid`. A caller not on the business gets
+  `permission-denied`.
+- **Held** counts parking per payment entry (reverted ones out) plus what a
+  car carries beyond its entries (marked paid in full) under the record's
+  `receivedByStaffId`; activities likewise (instalments plus the unlisted
+  rest); inventory sales count `paidNowCents` (the whole total on a sale
+  from before credit); card orders and rows with no receiver hold nothing.
+  A sale from before `receivedByStaffId` existed has no holder.
+- **Parking due** is the month-end bill of the customer a person is linked
+  to, after expenses, as of today (cumulative); a customer linked to several
+  staff has it split evenly (odd cent to the first by id).
+- **Business account** `receivedCents` = payments received straight by it
+  plus confirmed handovers and openings into it.
+- Where `business_account` is accepted: every `receivedByStaffId` that was
+  validated (`addWaitingPackage` payment, `recordContainerLinePayment`,
+  `receivePackageRequest` payment, `recordInventorySale`,
+  `recordInventoryCreditPayment`, `switchInventorySalePayment`) and the
+  parking / ledger ones that store it as sent. Two callables gained the
+  optional field: `recordInvoicePayment` (`payment.receivedByStaffId`, else
+  the caller) and the delivery `deliver` action (`receivedByStaffId`, else
+  the agent). A credit's collector stays a person.
+
 ## 4. Clients
 
 - **Console** (Money → **Staff balances**, all staff of the business):

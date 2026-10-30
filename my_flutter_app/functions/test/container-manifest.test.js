@@ -1320,7 +1320,8 @@ describe("the container callables and their gates", () => {
         // Both ways of taking money refuse a stranger as the receiver.
         for (const name of ["addWaitingPackage",
           "recordContainerLinePayment"]) {
-          assert.match(callable(name), /businessPersonProfile\(/, name);
+          // The Business account passes the same check (STAFF_BALANCES.md).
+          assert.match(callable(name), /businessReceiverProfile\(/, name);
           assert.match(callable(name), /containerPaymentSummary\(/, name);
         }
       });

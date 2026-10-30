@@ -348,7 +348,7 @@ describe("the server wiring", () => {
         "\n}\n");
     assert.match(body, /deliveryHandover\(proofSettings, row, data\)/);
     assert.match(body, /collectedCentsOf\(data\.collectedCents\)/);
-    assert.match(body, /deliveryPaymentInput\(collectedCents, uid\)/);
+    assert.match(body, /deliveryPaymentInput\(collectedCents, receiverId\)/);
     // The same judge and record as recordContainerLinePayment, on the
     // root, with paidCents recomputed from the live payments.
     assert.match(body, /validateContainerLinePayment\(payment,/);

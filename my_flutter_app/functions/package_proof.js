@@ -13,6 +13,9 @@
 const crypto = require("node:crypto");
 
 const PHOTO_ROOT = "packagePhotos";
+// Staff handover slips (docs/STAFF_BALANCES.md §2): the same file, size and
+// type rules, under staffHandoverProofs/{businessId}/{uid}/{fileId}.
+const HANDOVER_PROOF_ROOT = "staffHandoverProofs";
 // packagePhotos/{businessId}/{folder}/{fileId}.{ext}. The folder is the
 // uploader's uid for staff photos, "wa" for photos copied from WhatsApp and
 // "req" for photos copied from a package request (both server-only).
@@ -77,11 +80,12 @@ function photoPath(businessId, folder, fileId) {
 /**
  * The parts of a photo path, or null when it is not one of ours.
  * @param {string} path
+ * @param {string} [root] The Storage root (packagePhotos by default).
  * @return {object|null} `{businessId, folder, fileId}`
  */
-function photoPathParts(path) {
+function photoPathParts(path, root = PHOTO_ROOT) {
   const parts = String(path || "").split("/");
-  if (parts.length !== 4 || parts[0] !== PHOTO_ROOT) return null;
+  if (parts.length !== 4 || parts[0] !== root) return null;
   const [, businessId, folder, fileId] = parts;
   if (!/^[A-Za-z0-9_-]{1,128}$/.test(businessId)) return null;
   if (!PHOTO_FOLDER.test(folder) || !PHOTO_FILE.test(fileId)) return null;
@@ -102,6 +106,19 @@ function photoPathAllowed(path, o) {
   if (parts.folder === String(o?.uid || "")) return true;
   return Boolean(o?.allowServerFolders) &&
     (parts.folder === "wa" || parts.folder === "req");
+}
+
+/**
+ * A staff handover slip this caller may attach: in this business, in the
+ * caller's own folder, named like any package photo.
+ * @param {string} path
+ * @param {object} o `{businessId, uid}`
+ * @return {boolean}
+ */
+function handoverProofAllowed(path, o) {
+  const parts = photoPathParts(path, HANDOVER_PROOF_ROOT);
+  return Boolean(parts) && parts.businessId === String(o?.businessId || "") &&
+    parts.folder === String(o?.uid || "");
 }
 
 /**
@@ -507,6 +524,7 @@ function handoverCheck(settings, line, input) {
 module.exports = {
   CONFIRMATION,
   CONFIRM_PAYLOAD,
+  HANDOVER_PROOF_ROOT,
   MAX_CONTENTS,
   MAX_CUSTOMER_PHOTOS,
   MAX_PHOTOS,
@@ -527,6 +545,7 @@ module.exports = {
   photoLink,
   photoLinkValid,
   photoMetadataValid,
+  handoverProofAllowed,
   photoPath,
   photoPathAllowed,
   photoPathParts,

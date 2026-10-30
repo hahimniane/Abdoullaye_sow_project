@@ -611,6 +611,7 @@ const {
 const {lotCustomerKey, mergeLotCustomer} = require("./lot_customers");
 const {staffCredits} = require("./staff_expense_credit");
 const staffExpenseLedger = require("./staff_expense_ledger");
+const staffBalances = require("./staff_balances");
 const {
   resolveBillingPlan,
   monthEndBillingAmount,
@@ -18399,7 +18400,361 @@ async function staffExpenseCreditAction(uid, action, data) {
     return recordStaffRepayment(uid, data);
   }
   if (action === "void_staff_repayment") return voidStaffRepayment(uid, data);
+  if (staffBalances.STAFF_BALANCE_ACTIONS.includes(action)) {
+    return staffBalanceAction(uid, action, data);
+  }
   throw staffCreditError("staff_action_invalid");
+}
+
+// ---- Staff balances: who holds or owes what (STAFF_BALANCES.md) -----------
+// The arithmetic is staff_balances.js (pure, shared fixture); this is the
+// gathering and the handover writes. Handovers are written here only, and a
+// row is never deleted: a mistake is voided.
+
+/**
+ * @param {string} code A staff_balances refusal code.
+ * @return {HttpsError} The refusal, `details.reason` = code.
+ */
+function staffBalanceError(code) {
+  const {kind, message} = staffBalances.handoverRefusal(code);
+  return new HttpsError(kind, message, {reason: code, reasons: [code]});
+}
+
+/**
+ * The caller, the business, and whether the caller is its owner (the
+ * business's owner, its `businessOwner` user, or a platform admin).
+ *
+ * @param {string} uid The caller.
+ * @param {object} data The request (`businessId`).
+ * @return {Promise<object>} `{db, businessId, user, business, isOwner}`.
+ */
+async function staffBalanceContext(uid, data) {
+  const businessId = String(data.businessId || "").trim();
+  const user = await requireBusinessManager(uid, businessId);
+  const db = admin.firestore();
+  const businessDoc = await db.collection("businesses").doc(businessId).get();
+  if (!businessDoc.exists) {
+    throw new HttpsError("not-found", "Business not found");
+  }
+  const business = businessDoc.data() || {};
+  return {db, businessId, user, business,
+    isOwner: zelleCheck.bankRoleOf({uid, user, businessId, business}) ===
+      "owner"};
+}
+
+/**
+ * Whether a stored handover slip may be attached: the caller's own folder
+ * in this business, and a stored image under the size the rule allows.
+ *
+ * @param {string} path The Storage path.
+ * @param {object} args `{businessId, uid}`.
+ * @return {Promise<boolean>} True when it may be attached.
+ */
+async function handoverProofAttachable(path, {businessId, uid}) {
+  if (!packageProof.handoverProofAllowed(path, {businessId, uid})) {
+    return false;
+  }
+  const meta = await requestPhotoBucket().file(path).getMetadata()
+      .then(([found]) => found).catch(() => null);
+  return packageProof.photoMetadataValid(meta);
+}
+
+/**
+ * A handover's History row, written with the change it describes.
+ *
+ * @param {object} args `{db, transaction, businessId, handoverId, action,
+ *   uid, summary, changes}`.
+ */
+function setHandoverAudit({db, transaction, businessId, handoverId, action,
+  uid, summary, changes = []}) {
+  transaction.set(db.collection("lotLedgerAudit").doc(),
+      lotLedgerAuditRecord({businessId, entityType: "staff_handover",
+        entityId: handoverId, action, byStaffId: uid, summary, changes}));
+}
+
+/**
+ * The giver hands money to a person of the business or the Business
+ * account. It waits, changing nobody's balance, until the receiver
+ * confirms.
+ *
+ * @param {string} uid The caller (the giver).
+ * @param {object} data businessId, toId, amountCents, method, note,
+ *   proofPath.
+ * @return {Promise<object>} `{success, handoverId, status}`.
+ */
+async function recordHandover(uid, data) {
+  const {db, businessId} = await staffBalanceContext(uid, data);
+  if (!await businessPersonProfile(db, businessId, uid)) {
+    throw staffBalanceError("staff_not_member");
+  }
+  const refusal = staffBalances.recordHandoverRefusal(
+      {...data, fromStaffId: uid});
+  if (refusal) throw staffBalanceError(refusal);
+  const toId = String(data.toId || "").trim();
+  if (!await businessReceiverProfile(db, businessId, toId)) {
+    throw staffBalanceError("handover_receiver_invalid");
+  }
+  const proofPath = String(data.proofPath || "").trim();
+  if (proofPath &&
+      !await handoverProofAttachable(proofPath, {businessId, uid})) {
+    throw staffBalanceError("handover_proof_invalid");
+  }
+  const record = staffBalances.handoverRecord({...data, proofPath},
+      {businessId, uid});
+  const toName = await businessStaffName(db, businessId, toId);
+  const ref = db.collection("staffHandovers").doc();
+  await db.runTransaction(async (transaction) => {
+    transaction.set(ref, {
+      ...record,
+      createdAt: FirestoreFieldValue.serverTimestamp(),
+      confirmedAt: null,
+      declinedAt: null,
+      voidedAt: null,
+    });
+    setHandoverAudit({db, transaction, businessId, handoverId: ref.id,
+      action: "recorded", uid,
+      summary: `Handed ${lotMoney(record.amountCents)} to ` +
+        `${toName || "a colleague"} (${record.method}) - waiting for ` +
+        `them to confirm${record.note ? ` — ${record.note}` : ""}`,
+      changes: [{field: "toId", from: "", to: toId}]});
+  });
+  return {success: true, handoverId: ref.id, status: record.status};
+}
+
+/**
+ * The receiver confirms or declines a pending handover. Confirming moves
+ * the money between their balances; declining leaves everything as it was.
+ * One transaction re-reads the row, so two taps answer it once.
+ *
+ * @param {string} uid The caller.
+ * @param {object} data businessId, handoverId, note (decline).
+ * @param {boolean} confirm True to confirm, false to decline.
+ * @return {Promise<object>} `{success, handoverId, status}`.
+ */
+async function answerHandover(uid, data, confirm) {
+  const {db, businessId, isOwner} = await staffBalanceContext(uid, data);
+  const handoverId = String(data.handoverId || "").trim();
+  if (!handoverId || handoverId.includes("/")) {
+    throw staffBalanceError("handover_not_found");
+  }
+  const note = String(data.note || "").trim().slice(0, 300);
+  const ref = db.collection("staffHandovers").doc(handoverId);
+  const status = confirm ? staffBalances.HANDOVER_STATUS.CONFIRMED :
+    staffBalances.HANDOVER_STATUS.DECLINED;
+  await db.runTransaction(async (transaction) => {
+    const doc = await transaction.get(ref);
+    const current = doc.exists ? doc.data() || {} : null;
+    const refusal = staffBalances.handoverAnswerRefusal(current,
+        {uid, businessId, isOwner});
+    if (refusal) throw staffBalanceError(refusal);
+    const now = FirestoreFieldValue.serverTimestamp();
+    transaction.update(ref, confirm ? {
+      status, confirmedByUid: uid, confirmedAt: now,
+    } : {
+      status, declinedByUid: uid, declinedAt: now, declineNote: note,
+    });
+    setHandoverAudit({db, transaction, businessId, handoverId,
+      action: confirm ? "confirmed" : "declined", uid,
+      summary: `${confirm ? "Confirmed" : "Declined"} ` +
+        `${lotMoney(current.amountCents)} handed over` +
+        `${!confirm && note ? ` — ${note}` : ""}`,
+      changes: [{field: "status", from: String(current.status || ""),
+        to: status}]});
+  });
+  return {success: true, handoverId, status};
+}
+
+/**
+ * Voids a handover: the giver while it waits, the owner any time. Never
+ * deleted - a confirmed one voided by the owner puts the money back where
+ * it was.
+ *
+ * @param {string} uid The caller.
+ * @param {object} data businessId, handoverId, reason.
+ * @return {Promise<object>} `{success, handoverId, status}`.
+ */
+async function voidHandover(uid, data) {
+  const {db, businessId, isOwner} = await staffBalanceContext(uid, data);
+  const handoverId = String(data.handoverId || "").trim();
+  if (!handoverId || handoverId.includes("/")) {
+    throw staffBalanceError("handover_not_found");
+  }
+  const reason = String(data.reason || "").trim().slice(0, 300);
+  const ref = db.collection("staffHandovers").doc(handoverId);
+  await db.runTransaction(async (transaction) => {
+    const doc = await transaction.get(ref);
+    const current = doc.exists ? doc.data() || {} : null;
+    const refusal = staffBalances.handoverVoidRefusal(current,
+        {uid, businessId, isOwner});
+    if (refusal) throw staffBalanceError(refusal);
+    transaction.update(ref, {
+      status: staffBalances.HANDOVER_STATUS.VOIDED,
+      voidedByUid: uid,
+      voidedAt: FirestoreFieldValue.serverTimestamp(),
+      voidReason: reason,
+    });
+    setHandoverAudit({db, transaction, businessId, handoverId,
+      action: "voided", uid,
+      summary: `Voided a ${lotMoney(current.amountCents)} handover` +
+        `${reason ? ` — ${reason}` : ""}`,
+      changes: [{field: "status", from: String(current.status || ""),
+        to: staffBalances.HANDOVER_STATUS.VOIDED}]});
+  });
+  return {success: true, handoverId,
+    status: staffBalances.HANDOVER_STATUS.VOIDED};
+}
+
+/**
+ * The owner clears what a person handed over before staff balances existed:
+ * one confirmed handover from them to the Business account.
+ *
+ * @param {string} uid The caller.
+ * @param {object} data businessId, staffId, amountCents, note.
+ * @return {Promise<object>} `{success, handoverId, status}`.
+ */
+async function recordOpening(uid, data) {
+  const {db, businessId, isOwner} = await staffBalanceContext(uid, data);
+  if (!isOwner) throw staffBalanceError("opening_owner_only");
+  if (staffBalances.cleanHandoverCents(data.amountCents) === null) {
+    throw staffBalanceError("opening_amount_invalid");
+  }
+  const staffId = String(data.staffId || "").trim();
+  if (!staffId || staffBalances.isBusinessAccount(staffId) ||
+      !await businessPersonProfile(db, businessId, staffId)) {
+    throw staffBalanceError("staff_not_member");
+  }
+  const record = staffBalances.openingRecord(data, {businessId, uid});
+  const name = await businessStaffName(db, businessId, staffId);
+  const ref = db.collection("staffHandovers").doc();
+  await db.runTransaction(async (transaction) => {
+    const now = FirestoreFieldValue.serverTimestamp();
+    transaction.set(ref, {
+      ...record,
+      createdAt: now,
+      confirmedAt: now,
+      declinedAt: null,
+      voidedAt: null,
+    });
+    setHandoverAudit({db, transaction, businessId, handoverId: ref.id,
+      action: "opening", uid,
+      summary: `Opening amount: ${name || "a colleague"} had already ` +
+        `handed over ${lotMoney(record.amountCents)}` +
+        `${record.note ? ` — ${record.note}` : ""}`,
+      changes: [{field: "staffId", from: "", to: staffId}]});
+  });
+  return {success: true, handoverId: ref.id, status: record.status};
+}
+
+/**
+ * @param {object} snap A query snapshot.
+ * @return {object[]} Its rows `{id, ...data}`.
+ */
+function snapshotRows(snap) {
+  return snap.docs.map((d) => ({id: d.id, ...d.data()}));
+}
+
+/**
+ * The name a person goes by: full name, display name, then email.
+ *
+ * @param {object} user A `users/{uid}` document's data.
+ * @return {string} The name, "" when none.
+ */
+function staffDisplayName(user) {
+  return [user?.fullName, user?.displayName, user?.email]
+      .map((value) => String(value || "").trim()).find(Boolean) || "";
+}
+
+/**
+ * Every ledger of the business that names a receiver, the handovers, the
+ * staff, and the current month's parking and expense netting, put through
+ * staff_balances.js. Members only. Every read is an equality query on
+ * `businessId` (no index to maintain); it reads the business's own rows
+ * once per call, which is what makes the held money exact.
+ *
+ * @param {string} uid The caller.
+ * @param {object} data businessId.
+ * @return {Promise<object>} `{asOfMs, staff, businessAccount, pending}`.
+ */
+async function staffBalancesAnswer(uid, data) {
+  const {db, businessId, business} = await staffBalanceContext(uid, data);
+  const byBusiness = (name) => db.collection(name).where("businessId", "==",
+      businessId).get().then(snapshotRows);
+  const [parkedCars, lotActivities, lotActivityPayments,
+    containerLinePayments, inventorySales, inventoryCreditPayments,
+    invoicePayments, handoverRows, team, entries, repayments] =
+    await Promise.all([
+      byBusiness("parkedCars"), byBusiness("lotActivities"),
+      byBusiness("lotActivityPayments"),
+      byBusiness("containerLinePayments"), byBusiness("inventorySales"),
+      byBusiness(INVENTORY_CREDIT_PAYMENTS), byBusiness("invoicePayments"),
+      byBusiness("staffHandovers"), byBusiness("users"),
+      byBusiness("lotExpenseEntries"),
+      byBusiness("staffExpenseRepayments"),
+    ]);
+  const now = new Date();
+  const staffNames = {};
+  for (const user of team) {
+    if (staffExpenseLedger.isBusinessMember(user, businessId)) {
+      staffNames[user.id] = staffDisplayName(user);
+    }
+  }
+  const ownerUid = String(business.ownerUid || "").trim();
+  if (ownerUid && !(ownerUid in staffNames)) {
+    const owner = ownerUid.includes("/") ? null :
+      await db.collection("users").doc(ownerUid).get();
+    staffNames[ownerUid] = owner?.exists ? staffDisplayName(owner.data()) : "";
+  }
+  // The bills the month-end report works out, as of now, so the parking each
+  // linked person owes (after their expenses) is the same number.
+  const monthKey = zelleCheck.dateKeyIn(now.getTime(), "America/New_York")
+      .slice(0, 7);
+  const summary = parkingMonthSummary(parkedCars, monthKey, now,
+      lotActivities);
+  const input = {
+    now,
+    staffNames,
+    sources: {parkedCars, lotActivities, lotActivityPayments,
+      containerLinePayments, inventorySales, inventoryCreditPayments,
+      invoicePayments},
+    handovers: handoverRows.map((row) => ({...row,
+      createdAtMs: row.createdAt?.toMillis?.() || 0})),
+    netting: {monthKey, customers: summary.customers, entries, repayments,
+      links: business.staffParkingLinks || {}},
+  };
+  const answer = staffBalances.staffBalances(input);
+  // Someone who holds money but is no longer on the team (or never was): a
+  // name from their profile, when there is one, so the row is not blank.
+  const unnamed = [...new Set([
+    ...answer.staff.map((row) => row.staffId),
+    ...answer.pending.flatMap((row) => [row.fromStaffId, row.toId]),
+  ])].filter((id) => id && !(id in staffNames) && !id.includes("/") &&
+    !staffBalances.isBusinessAccount(id)).slice(0, 50);
+  if (unnamed.length === 0) return answer;
+  const docs = await db.getAll(
+      ...unnamed.map((id) => db.collection("users").doc(id)));
+  docs.forEach((doc, i) => {
+    staffNames[unnamed[i]] = doc.exists ? staffDisplayName(doc.data()) : "";
+  });
+  return staffBalances.staffBalances(input);
+}
+
+/**
+ * updateLotExpenseEntry's staff balance branches (STAFF_BALANCES.md §3).
+ *
+ * @param {string} uid The caller.
+ * @param {string} action staff_balances | record_handover |
+ *   confirm_handover | decline_handover | void_handover | record_opening.
+ * @param {object} data The request.
+ * @return {Promise<object>} The action's answer.
+ */
+async function staffBalanceAction(uid, action, data) {
+  if (action === "staff_balances") return staffBalancesAnswer(uid, data);
+  if (action === "record_handover") return recordHandover(uid, data);
+  if (action === "confirm_handover") return answerHandover(uid, data, true);
+  if (action === "decline_handover") return answerHandover(uid, data, false);
+  if (action === "void_handover") return voidHandover(uid, data);
+  if (action === "record_opening") return recordOpening(uid, data);
+  throw staffBalanceError("staff_balances_action_invalid");
 }
 
 // Edit a logged purchase — amount, date, who paid, note, receipt. The line it
@@ -18758,6 +19113,7 @@ function containerLineAudit(businessId, lineId, row, action, uid, summary) {
  * @return {Promise<string>} The name, else "".
  */
 async function businessStaffName(db, businessId, staffId) {
+  if (staffBalances.isBusinessAccount(staffId)) return "Business account";
   const row = await businessPersonProfile(db, businessId, staffId);
   if (!row) return "";
   return [row.fullName, row.name, row.email]
@@ -18790,6 +19146,24 @@ async function businessPersonProfile(db, businessId, staffId) {
   const business = biz && biz.exists ? biz.data() || {} : null;
   return receiverBelongsToBusiness({staffId: id, businessId, person,
     business}) ? person || {} : null;
+}
+
+/**
+ * Who may be named as having received money (docs/STAFF_BALANCES.md §2):
+ * one of the business's people, or the Business account - Zelle, a transfer,
+ * a card or a payment link paid straight to the business, which no staff
+ * member holds. Every `receivedByStaffId` validator calls this; only a
+ * credit's collector stays a person (businessPersonProfile).
+ *
+ * @param {object} db Firestore.
+ * @param {string} businessId The business whose person this must be.
+ * @param {string} staffId A uid, or "business_account".
+ * @return {Promise<object|null>} Their profile ({} for the Business
+ *   account or an owner with none), or null when they are not allowed.
+ */
+async function businessReceiverProfile(db, businessId, staffId) {
+  if (staffBalances.isBusinessAccount(staffId)) return {};
+  return businessPersonProfile(db, businessId, staffId);
 }
 
 /**
@@ -19773,7 +20147,7 @@ function deliveryError(code, extra = {}) {
  * @param {object} db Firestore.
  * @param {object} args {uid, businessId, data (the request: action, lineId,
  *   collectedBy, acknowledgeBalance, pickupCode, override {collectedBy,
- *   photoPath}, collectedCents)}.
+ *   photoPath}, collectedCents, receivedByStaffId)}.
  * @return {Promise<object>} The callable's answer.
  */
 async function containerLineDelivery(db, args) {
@@ -19798,6 +20172,17 @@ async function containerLineDelivery(db, args) {
     if (Number.isNaN(collectedCents)) {
       throw deliveryError("collected_cents_invalid");
     }
+  }
+  // Who held the money collected at handover: the agent unless the request
+  // names another person of the business or the Business account
+  // (docs/STAFF_BALANCES.md §2).
+  const namedReceiver = String(data.receivedByStaffId || "").trim();
+  let receiverId = uid;
+  if (collectedCents > 0 && namedReceiver && namedReceiver !== uid) {
+    if (!await businessReceiverProfile(db, businessId, namedReceiver)) {
+      throw receivedByInvalid();
+    }
+    receiverId = namedReceiver;
   }
   const lineRef = db.collection("containerLines").doc(lineId);
   // Read before the transaction: who is handing it over, by name; the
@@ -19875,7 +20260,7 @@ async function containerLineDelivery(db, args) {
           .where("lineId", "==", group.rootId));
       const paidCents = sumContainerLivePayments(
           payments.docs.map((d) => d.data() || {}));
-      const payment = deliveryPaymentInput(collectedCents, uid);
+      const payment = deliveryPaymentInput(collectedCents, receiverId);
       const errors = validateContainerLinePayment(payment,
           {...(group.root || row), priceCents: summary.priceCents, paidCents});
       if (errors.length > 0) throw deliveryError(errors[0]);
@@ -20084,7 +20469,7 @@ exports.addWaitingPackage = onCall(
             {reasons: errors});
       }
       const db = admin.firestore();
-      if (payment && !await businessPersonProfile(
+      if (payment && !await businessReceiverProfile(
           db, businessId, payment.receivedByStaffId)) {
         throw receivedByInvalid();
       }
@@ -21291,7 +21676,7 @@ exports.recordContainerLinePayment = onCall(
       // Whether the person named may be credited, read once before the
       // transaction; refused after the payment's own checks, so a blank
       // name still says "say who" rather than "not on your team".
-      const receiverKnown = Boolean(await businessPersonProfile(
+      const receiverKnown = Boolean(await businessReceiverProfile(
           db, businessId, data.receivedByStaffId));
       const done = await db.runTransaction(async (tx) => {
         const askedDoc = await tx.get(askedRef);
@@ -23059,6 +23444,18 @@ exports.recordInvoicePayment = onCall(
         throw new HttpsError("invalid-argument", invoiceMessage(errors));
       }
       const record = invoicePaymentRecord(payment, invoiceToday());
+      // Who held the money: the caller unless the payment names another
+      // person of the business or the Business account
+      // (docs/STAFF_BALANCES.md §2).
+      const namedReceiver = String(
+          payment.receivedByStaffId ?? data.receivedByStaffId ?? "").trim();
+      let receiverId = uid;
+      if (namedReceiver && namedReceiver !== uid) {
+        if (!await businessReceiverProfile(db, businessId, namedReceiver)) {
+          throw receivedByInvalid();
+        }
+        receiverId = namedReceiver;
+      }
       // A payment "for" a line names one of THIS invoice's lines, in the
       // line's own words; anything else is a stale pick and is refused.
       if (record.forLineId) {
@@ -23076,7 +23473,8 @@ exports.recordInvoicePayment = onCall(
         businessId,
         invoiceId: ref.id,
         ...record,
-        receivedByStaffId: uid,
+        receivedByStaffId: receiverId,
+        recordedByStaffId: uid,
         createdAt: FirestoreFieldValue.serverTimestamp(),
         updatedAt: FirestoreFieldValue.serverTimestamp(),
       });
@@ -25085,7 +25483,8 @@ const inventoryCreditPaymentsOf = (db, businessId, saleId) =>
 
 /**
  * Who took the money: the caller when nobody else is named, else a person of
- * this business (the owner the business names, or a profile pointing at it).
+ * this business (the owner the business names, or a profile pointing at it)
+ * or the Business account.
  *
  * @param {object} db Firestore.
  * @param {string} businessId The business.
@@ -25101,7 +25500,7 @@ async function inventoryReceiverOf(db, businessId, uid, raw) {
   const id = inventory.cleanStaffId(raw);
   if (!id) throw inventoryRefusal("received_by_invalid");
   if (id === uid) return uid;
-  if (!(await businessPersonProfile(db, businessId, id))) {
+  if (!(await businessReceiverProfile(db, businessId, id))) {
     throw inventoryRefusal("received_by_invalid");
   }
   return id;
@@ -46368,7 +46767,7 @@ exports.receivePackageRequest = onCall(
               packageProof.REFUSAL[errors[0]] || containerMessage(errors),
             {reason: errors[0], reasons: errors});
       }
-      if (payment && !await businessPersonProfile(db, businessId,
+      if (payment && !await businessReceiverProfile(db, businessId,
           payment.receivedByStaffId)) {
         throw receivedByInvalid();
       }

@@ -45,6 +45,23 @@ describe("photo paths", () => {
         {businessId: BIZ, uid: UID, allowServerFolders: true}), true);
   });
 
+  it("handover slips: the caller's own folder in their business only", () => {
+    const slip = `staffHandoverProofs/${BIZ}/${UID}/abcd1234efgh.png`;
+    assert.equal(proof.handoverProofAllowed(slip,
+        {businessId: BIZ, uid: UID}), true);
+    assert.equal(proof.handoverProofAllowed(slip,
+        {businessId: BIZ, uid: "other"}), false);
+    assert.equal(proof.handoverProofAllowed(slip,
+        {businessId: "keren", uid: UID}), false);
+    // A package photo is not a slip, and a slip is not a package photo.
+    assert.equal(proof.handoverProofAllowed(PATH,
+        {businessId: BIZ, uid: UID}), false);
+    assert.equal(proof.photoPathParts(slip), null);
+    assert.equal(proof.handoverProofAllowed(
+        `staffHandoverProofs/${BIZ}/${UID}/short.jpg`,
+        {businessId: BIZ, uid: UID}), false);
+  });
+
   it("checks size and type of the stored file", () => {
     assert.equal(proof.photoMetadataValid(
         {size: "120000", contentType: "image/jpeg"}), true);

@@ -3938,6 +3938,49 @@ describe("lot ledger collections are callable-only", () => {
   });
 });
 
+describe("staff handovers are callable-only", () => {
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await context.firestore().doc("staffHandovers/handover_a").set({
+        businessId: "biz_a", kind: "handover", fromStaffId: "staff-parking-a",
+        toId: "business_account", amountCents: 500, method: "cash",
+        status: "pending",
+      });
+    });
+  });
+
+  it("lets everyone on the business's team read, nobody else", async () => {
+    for (const uid of ["owner-a", "staff-parking-a", "staff-barrels-a",
+      "super-admin"]) {
+      await assertSucceeds(firestoreFor(uid)
+          .doc("staffHandovers/handover_a").get());
+    }
+    await assertSucceeds(firestoreFor("owner-a")
+        .collection("staffHandovers")
+        .where("businessId", "==", "biz_a").get());
+    await assertFails(firestoreFor("owner-b")
+        .doc("staffHandovers/handover_a").get());
+    await assertFails(firestoreFor("customer-stranger")
+        .doc("staffHandovers/handover_a").get());
+    await assertFails(firestoreFor(null)
+        .doc("staffHandovers/handover_a").get());
+  });
+
+  it("denies every client write, even the owner's and an admin's",
+      async () => {
+        for (const uid of ["owner-a", "staff-parking-a", "super-admin"]) {
+          const db = firestoreFor(uid);
+          await assertFails(db.doc(`staffHandovers/forged_${uid}`).set({
+            businessId: "biz_a", fromStaffId: uid,
+            toId: "business_account", amountCents: 1, status: "confirmed",
+          }));
+          await assertFails(db.doc("staffHandovers/handover_a")
+              .update({status: "confirmed"}));
+          await assertFails(db.doc("staffHandovers/handover_a").delete());
+        }
+      });
+});
+
 describe("staff expense credit is callable-only", () => {
   beforeEach(async () => {
     await testEnv.withSecurityRulesDisabled(async (context) => {
@@ -4347,6 +4390,68 @@ describe("package photo rules", () => {
     await assertFails(storageFor("owner-a").ref(path).delete());
     await assertFails(storageFor("super-admin").ref(path).delete());
   });
+});
+
+// Staff handover slips (docs/STAFF_BALANCES.md §2): like package photos,
+// but any member of the business's team uploads and reads them.
+describe("staff handover proof rules", () => {
+  const barrels = () => storageFor("staff-barrels-a");
+  function putProof(storage, businessId, uploader, fileName, options = {}) {
+    return storage.ref(
+        `staffHandoverProofs/${businessId}/${uploader}/${fileName}`).put(
+        imageBytes(options.size), {contentType: options.contentType ||
+          "image/jpeg"});
+  }
+
+  it("lets the owner and any staff member upload to their own folder only",
+      async () => {
+        await assertSucceeds(putProof(storageFor("owner-a"), "biz_a",
+            "owner-a", "slip-0001.jpg"));
+        await assertSucceeds(putProof(barrels(), "biz_a", "staff-barrels-a",
+            "slip-0002.png", {contentType: "image/png"}));
+        // Someone else's folder, another business, not signed in.
+        await assertFails(putProof(barrels(), "biz_a", "owner-a",
+            "slip-0003.jpg"));
+        await assertFails(putProof(barrels(), "biz_b", "staff-barrels-a",
+            "slip-0004.jpg"));
+        await assertFails(putProof(storageFor(null), "biz_a", "owner-a",
+            "slip-0005.jpg"));
+        await assertFails(putProof(storageFor("customer-owner"), "biz_a",
+            "customer-owner", "slip-0006.jpg"));
+        // Type, size and name.
+        for (const contentType of ["image/gif", "text/html", "video/mp4",
+          "application/pdf"]) {
+          await assertFails(putProof(barrels(), "biz_a", "staff-barrels-a",
+              "slip-0007.jpg", {contentType}));
+        }
+        await assertFails(putProof(barrels(), "biz_a", "staff-barrels-a",
+            "slip-0008.jpg", {size: 2 * 1024 * 1024 + 1}));
+        await assertFails(putProof(barrels(), "biz_a", "staff-barrels-a",
+            "bad name.jpg"));
+        await assertFails(putProof(barrels(), "biz_a", "staff-barrels-a",
+            "short.jpg"));
+        // Create only.
+        await assertFails(putProof(storageFor("owner-a"), "biz_a",
+            "owner-a", "slip-0001.jpg"));
+      });
+
+  it("shows a slip to the team and operations admins; nobody deletes",
+      async () => {
+        await assertSucceeds(putProof(barrels(), "biz_a", "staff-barrels-a",
+            "slip-0101.jpg"));
+        const path = "staffHandoverProofs/biz_a/staff-barrels-a/slip-0101.jpg";
+        await assertSucceeds(barrels().ref(path).getMetadata());
+        await assertSucceeds(storageFor("owner-a").ref(path).getMetadata());
+        await assertSucceeds(
+            storageFor("operations-admin").ref(path).getMetadata());
+        await assertFails(storageFor("owner-b").ref(path).getMetadata());
+        await assertFails(storageFor("content-admin").ref(path).getMetadata());
+        await assertFails(storageFor("customer-owner").ref(path).getMetadata());
+        await assertFails(storageFor(null).ref(path).getMetadata());
+        await assertFails(barrels().ref(path).delete());
+        await assertFails(storageFor("owner-a").ref(path).delete());
+        await assertFails(storageFor("super-admin").ref(path).delete());
+      });
 });
 
 // Phone accounts (docs/PHONE_ACCOUNTS.md §6): customers still cannot read

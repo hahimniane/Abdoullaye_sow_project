@@ -391,6 +391,33 @@ service firebase.storage {
       allow update, delete: if false;
     }
 
+    // Staff handover slips (docs/STAFF_BALANCES.md): the photo or screenshot
+    // of a cash handover or a transfer. Same rules as a package photo: the
+    // person handing the money over uploads into their OWN uid folder, create
+    // only, an image under 2 MB, a file id of 8-64 safe characters; the
+    // handover callable re-checks the path, type and size. Read: everyone on
+    // the business's team (the owner and any staff member), and platform
+    // operations admins.
+    function canUseBusinessHandoverProofs(businessId) {
+      return isLinkedToBusiness(businessId) &&
+        (userRole() == 'businessOwner' || userRole() == 'staff');
+    }
+
+    match /staffHandoverProofs/{businessId}/{uploaderUid}/{fileName} {
+      allow read: if request.auth != null &&
+        (
+          canUseBusinessHandoverProofs(businessId) ||
+          (isAdmin() && hasBuiltInAdminCapability('operations'))
+        );
+      allow create: if request.auth != null &&
+        resource == null &&
+        request.auth.uid == uploaderUid &&
+        canUseBusinessHandoverProofs(businessId) &&
+        fileName.matches('^[A-Za-z0-9_-]{8,64}[.](jpg|jpeg|png|webp)$') &&
+        validPackagePhotoUpload();
+      allow update, delete: if false;
+    }
+
     // Receipt PDFs of parked cars (docs/PARKING_WHATSAPP.md): written and
     // served by the server only (the /d receiptPdf link, signed). No client,
     // staff or admin reads or writes them.

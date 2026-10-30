@@ -678,6 +678,15 @@ service cloud.firestore {
       allow read: if lotLedgerRead(resource.data.businessId);
       allow write: if false;
     }
+    // Staff balances (STAFF_BALANCES.md): money one person hands to another
+    // or to the business account, pending until the receiver confirms.
+    // Everyone on the business's team sees every handover; written only by
+    // updateLotExpenseEntry, never deleted (a mistake is voided).
+    match /staffHandovers/{handoverId} {
+      allow read: if request.auth != null &&
+        canManageBusiness(request.auth.uid, resource.data.businessId);
+      allow write: if false;
+    }
     // The lot's customer memory (name, contact, cars seen), written only by
     // the callables when an activity or walk-up is recorded. Managers of the
     // business read it to pick a customer instead of re-keying them.
