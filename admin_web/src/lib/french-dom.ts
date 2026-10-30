@@ -7682,6 +7682,20 @@ Object.assign(TEXT_TRANSLATIONS, {
     "Les instructions de paiement ne peuvent pas dépasser 300 caractères.",
 });
 
+// Month end's "Business owes" counting the cash staff hold (owner, 2026-10-30).
+Object.assign(TEXT_TRANSLATIONS, {
+  "Lot expenses staff paid out of their own pocket, after their parking bill and the business money they hold.":
+    "Dépenses du parking payées par l’équipe de sa poche, après sa facture de parking et l’argent de l’entreprise qu’elle détient.",
+  "holds for the business": "détient pour l’entreprise",
+  "Expenses owed": "Dépenses dues",
+  "Holding": "Détient",
+  "Staff hold": "L’équipe détient",
+  "Cash held is as of today, from Staff balances.": "L’argent détenu est celui d’aujourd’hui, d’après Soldes du personnel.",
+  "Checking the cash staff hold…": "Vérification de l’argent détenu par l’équipe…",
+  "The cash staff hold could not be checked; showing expenses only.":
+    "L’argent détenu par l’équipe n’a pas pu être vérifié ; seules les dépenses sont affichées.",
+});
+
 const englishDictionary = { ...TEXT_TRANSLATIONS, ...ATTRIBUTE_TRANSLATIONS };
 const frenchDictionary = buildReverseDictionary([
   TEXT_TRANSLATIONS,

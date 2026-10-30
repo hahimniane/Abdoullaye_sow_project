@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { httpsCallable } from "firebase/functions";
 import { HandCoins, RefreshCw, Undo2, X } from "lucide-react";
 
@@ -21,6 +21,13 @@ import {
   type StaffRepaymentDraft,
 } from "@/lib/staff-expense-console";
 import type { BusinessOwesLine, StaffParkingLinks } from "@/lib/staff-expense-credit";
+import {
+  businessOwesWithCash,
+  staffBalancesFrom,
+  staffBalancesRequest,
+  STAFF_BALANCES_TIMEOUT_MS,
+  type StaffBalanceRow,
+} from "@/lib/staff-balances";
 
 type Row = Record<string, unknown>;
 
@@ -44,6 +51,10 @@ type BusinessOwesSectionProps = {
  * expenses out of their own pocket and are still owed after their parking
  * bill - no bill, or credit bigger than it - with Paid back to record the
  * money given, and this month's paid-back records (voidable, never deleted).
+ * Each line also counts the business money the person holds today (Staff
+ * balances' one net number, owner 2026-10-30): someone who collected more
+ * than they are owed "holds $X for the business", and Paid back is offered
+ * only when the business really owes them.
  */
 export function BusinessOwesSection({
   businessId, monthKey, summary, links, repayments, staffOptions, canSettle, estimating, onFlash,
@@ -58,8 +69,40 @@ export function BusinessOwesSection({
   const history = monthStaffRepayments(repayments, monthKey);
   const nameOf = (id: string) => staffOptions.find((s) => s.id === id)?.name ?? "";
   const today = newYorkDayKey();
+  const [balances, setBalances] = useState<StaffBalanceRow[] | null>(null);
+  const [cashState, setCashState] = useState<"loading" | "ready" | "failed">("loading");
+  const asking = summary.businessOwes.length > 0;
+
+  // The cash each person holds, from Staff balances (as of today). Loading
+  // always resolves: an answer, a refusal or the timeout.
+  useEffect(() => {
+    if (!asking || !businessId) return;
+    let live = true;
+    let timer = 0;
+    setCashState("loading");
+    const timeout = new Promise<never>((_, reject) => {
+      timer = window.setTimeout(() => reject(new Error("timeout")), STAFF_BALANCES_TIMEOUT_MS);
+    });
+    Promise.race([httpsCallable(functions, "updateLotExpenseEntry")(staffBalancesRequest(businessId)), timeout])
+      .then((response) => {
+        if (!live) return;
+        setBalances(staffBalancesFrom((response as { data?: unknown }).data).staff);
+        setCashState("ready");
+      })
+      .catch(() => {
+        if (!live) return;
+        setBalances(null);
+        setCashState("failed");
+      })
+      .finally(() => window.clearTimeout(timer));
+    return () => {
+      live = false;
+      window.clearTimeout(timer);
+    };
+  }, [asking, businessId, summary.businessOwesCents]);
 
   if (summary.businessOwes.length === 0 && history.length === 0) return null;
+  const withCash = businessOwesWithCash(summary.businessOwes, cashState === "ready" ? balances : null);
 
   /** The parking bill a staff member's expenses come off, as the row says it. */
   const billOf = (line: BusinessOwesLine) => {
@@ -69,11 +112,11 @@ export function BusinessOwesSection({
     return { name: text(links[line.staffId]?.customerName, ""), note: "no parking bill this month" };
   };
 
-  function openPay(line: BusinessOwesLine) {
+  function openPay(line: BusinessOwesLine, owedNowCents: number) {
     const me = auth.currentUser?.uid ?? "";
     setPayFor(line);
     setDraft({
-      amount: (line.owedCents / 100).toFixed(2),
+      amount: (Math.min(line.owedCents, owedNowCents) / 100).toFixed(2),
       method: "cash",
       givenByStaffId: staffOptions.some((s) => s.id === me) ? me : "",
       note: "",
@@ -128,16 +171,24 @@ export function BusinessOwesSection({
       <header className="pk-owes-head">
         <div>
           <h3>Business owes</h3>
-          <small>Lot expenses staff paid out of their own pocket, still owed after their parking bill.</small>
+          <small>Lot expenses staff paid out of their own pocket, after their parking bill and the business money they hold.</small>
         </div>
-        {summary.businessOwesCents > 0 && <strong className="pk-owed">{moneyText(summary.businessOwesCents)}</strong>}
+        <span className="pk-month-amount">
+          {withCash.owedNowCents > 0 && <strong className="pk-owed">{moneyText(withCash.owedNowCents)}</strong>}
+          {withCash.holdsCents > 0 && <small><span>Staff hold</span> {moneyText(withCash.holdsCents)}</small>}
+        </span>
       </header>
+      {asking && cashState === "loading" && <p className="lst-hint" role="status"><RefreshCw className="spin" size={12} aria-hidden="true" /> Checking the cash staff hold…</p>}
+      {asking && cashState === "failed" && <p className="lst-hint" role="status">The cash staff hold could not be checked; showing expenses only.</p>}
+      {asking && cashState === "ready" && <p className="lst-hint">Cash held is as of today, from Staff balances.</p>}
       {summary.businessOwes.length === 0 ? (
         <div className="empty-state">The business owes its staff nothing for this month.</div>
       ) : (
         <ul className="pk-owes-list">
-          {summary.businessOwes.map((line) => {
+          {summary.businessOwes.map((line, index) => {
             const bill = billOf(line);
+            const cash = withCash.lines[index];
+            const known = cash.netCents !== null;
             return (
               <li key={line.staffId}>
                 <span className="pk-month-car">
@@ -146,10 +197,21 @@ export function BusinessOwesSection({
                     {bill.name ? <><span>Parking bill</span>: <span data-no-translate>{bill.name}</span> · </> : null}
                     <span>{bill.note}</span>
                   </small>
+                  {known && (
+                    <small>
+                      <span>Expenses owed</span> {moneyText(cash.expenseOwedCents)} · <span>Holding</span> {moneyText(cash.heldCents)}
+                    </small>
+                  )}
                 </span>
-                <span className="pk-month-amount"><strong>{moneyText(line.owedCents)}</strong><small>owed</small></span>
-                {canSettle && !estimating && (
-                  <button className="lst-btn ghost" type="button" disabled={busy} onClick={() => openPay(line)}><HandCoins size={14} /> Paid back</button>
+                {cash.holdsCents > 0 ? (
+                  <span className="pk-month-amount"><strong className="pk-due">{moneyText(cash.holdsCents)}</strong><small>holds for the business</small></span>
+                ) : cash.owedNowCents > 0 ? (
+                  <span className="pk-month-amount"><strong>{moneyText(cash.owedNowCents)}</strong><small>owed</small></span>
+                ) : (
+                  <span className="pk-month-amount"><strong className="pk-paid">{moneyText(0)}</strong><small>Settled up</small></span>
+                )}
+                {canSettle && !estimating && cash.canPayBack && (
+                  <button className="lst-btn ghost" type="button" disabled={busy} onClick={() => openPay(line, cash.owedNowCents)}><HandCoins size={14} /> Paid back</button>
                 )}
               </li>
             );

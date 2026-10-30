@@ -80,9 +80,11 @@ test("Paid back and Void go through updateLotExpenseEntry's actions, capped at w
   assert.match(owes, /staffRepaymentRequest\(businessId, payFor\.staffId, draft\)/);
   assert.match(owes, /action: "void_staff_repayment",/);
   assert.match(owes, /staffRepaymentProblem\(draft, payFor\.owedCents, today\)/, "the client cap");
-  assert.match(owes, /amount: \(line\.owedCents \/ 100\)\.toFixed\(2\)/, "prefilled with what is owed");
+  // Prefilled with what the business really owes now (expenses, less the cash they hold).
+  assert.match(owes, /amount: \(Math\.min\(line\.owedCents, owedNowCents\) \/ 100\)\.toFixed\(2\)/, "prefilled with what is owed");
   assert.match(owes, /givenByStaffId: staffOptions\.some\(\(s\) => s\.id === me\) \? me : ""/, "given by defaults to whoever is signed in");
-  assert.match(owes, /\{canSettle && !estimating && \(/, "never from an estimate, never without the permission");
+  // ...and only when the business really owes them after the cash they hold.
+  assert.match(owes, /\{canSettle && !estimating && cash\.canPayBack && \(/, "never from an estimate, never without the permission");
   assert.match(owes, /<h3>Void this paid-back record\?<\/h3>/, "a void is confirmed");
   assert.match(owes, /staffCreditRefusalText\(failure\)/);
 });

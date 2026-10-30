@@ -476,3 +476,56 @@ export const PENDING_HANDOVERS_WHERE: readonly [string, "==", string][] = [["sta
 
 /** How long the page waits for its answer before it says so (loading always resolves). */
 export const STAFF_BALANCES_TIMEOUT_MS = 15000;
+
+// ---------------------------------------------------------------------------
+// Month end's "Business owes", counting the cash staff hold (owner, 2026-10-30).
+// ---------------------------------------------------------------------------
+
+/** One "Business owes" line as Month end shows it once the cash held is known. */
+export type OwesWithCash = {
+  staffId: string;
+  staffName: string;
+  customerKey: string;
+  /** The month's lot expenses still owed to them after their parking bill. */
+  expenseOwedCents: number;
+  /** Business money they hold today (Staff balances); 0 while unknown. */
+  heldCents: number;
+  /** Staff balances' one net number today: + they owe the business, - the business owes them; null while unknown. */
+  netCents: number | null;
+  /** What the business really owes them now (0 when they hold more than they are owed). */
+  owedNowCents: number;
+  /** Business money they hold beyond what they are owed. */
+  holdsCents: number;
+  /** Paid back makes sense only when the business really owes them. */
+  canPayBack: boolean;
+};
+
+/**
+ * The month's "Business owes" lines netted against the cash each person holds
+ * for the business, using Staff balances' one net number (as of today). Until
+ * the balances are known (`balances` null), a line reads as before: the
+ * expenses owed, Paid back allowed. A person with no balance row holds nothing.
+ */
+export function businessOwesWithCash(
+  lines: readonly { staffId: string; staffName: string; customerKey: string; owedCents: number }[],
+  balances: readonly StaffBalanceRow[] | null,
+): { lines: OwesWithCash[]; owedNowCents: number; holdsCents: number } {
+  const out = lines.map((line): OwesWithCash => {
+    const expenseOwedCents = Math.max(0, cents(line.owedCents));
+    const base = { staffId: line.staffId, staffName: line.staffName, customerKey: line.customerKey, expenseOwedCents };
+    if (!balances) {
+      return { ...base, heldCents: 0, netCents: null, owedNowCents: expenseOwedCents, holdsCents: 0, canPayBack: expenseOwedCents > 0 };
+    }
+    const row = balances.find((r) => r.staffId === line.staffId);
+    const heldCents = Math.max(0, cents(row?.heldCents));
+    const netCents = row ? cents(row.netCents) : -expenseOwedCents;
+    const owedNowCents = netCents < 0 ? Math.min(expenseOwedCents, -netCents) : 0;
+    const holdsCents = Math.max(0, netCents);
+    return { ...base, heldCents, netCents, owedNowCents, holdsCents, canPayBack: owedNowCents > 0 };
+  });
+  return {
+    lines: out,
+    owedNowCents: out.reduce((s, l) => s + l.owedNowCents, 0),
+    holdsCents: out.reduce((s, l) => s + l.holdsCents, 0),
+  };
+}
