@@ -28,6 +28,7 @@ import {
   Settings,
   Sparkles,
   Receipt,
+  Scale,
   Star,
   Truck,
   UserCog,
@@ -45,6 +46,7 @@ import {BusinessVolumePanel} from "@/components/volume-views";
 import {containerDeepLinkFromSearch, type ContainerDeepLink} from "@/lib/package-staff";
 import {InventoryPanel} from "@/components/business/inventory-panel";
 import {InvoicesPanel} from "@/components/business/invoices-panel";
+import {StaffBalancesPanel} from "@/components/business/staff-balances-panel";
 import {GrowthPanel} from "@/components/business/growth-panel";
 import {
   BarrelsPanel,
@@ -114,6 +116,12 @@ import {
 } from "@/lib/menu-moved-notice";
 import type {ListView} from "@/components/business/containers-panel";
 import { buildBusinessVerificationChecklist } from "@/lib/business-verification";
+import {
+  PENDING_HANDOVERS_WHERE,
+  handoverFrom,
+  isBalancesOwner,
+  waitingOnYou,
+} from "@/lib/staff-balances";
 import { db, functions } from "@/lib/firebase";
 import { formatDate, text } from "@/lib/format";
 import { inventoryViewerFromProfile, saleFocusFrom, type SaleFocus } from "@/lib/inventory";
@@ -556,6 +564,38 @@ export function BusinessConsole({
     },
   );
 
+  // Hand-overs waiting for somebody's confirmation: the one equality query
+  // (this business, status pending) behind the "Waiting on you" badge and
+  // Today row. Every staff member runs it; the viewer's share is picked out
+  // here, never in the query.
+  const pendingHandovers = useBusinessCollection(
+    "staffHandovers",
+    businessId,
+    enabled,
+    {pageSize: null, where: PENDING_HANDOVERS_WHERE, sort: "query"},
+  );
+  const balancesViewer = useMemo(
+    () => ({uid: firebaseUser.uid, isOwner: isBalancesOwner(profile.role)}),
+    [firebaseUser.uid, profile.role],
+  );
+  const waitingHandovers = useMemo(
+    () => waitingOnYou(pendingHandovers.rows.map(handoverFrom).filter((h) => h.id), balancesViewer),
+    [balancesViewer, pendingHandovers.rows],
+  );
+  const todayExtraAttention = useMemo<TodayAttentionItem[]>(
+    () => waitingHandovers.count > 0
+      ? [{
+          key: "staffHandovers",
+          label: "Money handed to you to confirm",
+          count: waitingHandovers.count,
+          amountCents: waitingHandovers.amountCents,
+          tab: "staffBalances",
+          view: "",
+        }]
+      : [],
+    [waitingHandovers],
+  );
+
   const businessName = text(business?.name ?? profile.businessName, "Business");
   const status = text(business?.status ?? business?.businessStatus, "pending");
   const isApproved = status === "approved";
@@ -712,6 +752,7 @@ export function BusinessConsole({
                   active={activeTab === tab.id}
                   key={tab.id}
                   onOpen={() => setActiveTab(tab.id)}
+                  badge={tab.id === "staffBalances" ? waitingHandovers.count : 0}
                   onTogglePin={() => togglePinnedTab(tab.id)}
                   pinned={pinnedTabs.includes(tab.id)}
                   tab={tab}
@@ -749,6 +790,7 @@ export function BusinessConsole({
 
           {activeTab === "today" && (
             <TodayView
+              extraAttention={todayExtraAttention}
               ledgerEvents={ledgerEvents.rows}
               onOpenAttention={openTodayItem}
               onOpenContainer={openTodayContainer}
@@ -914,6 +956,14 @@ export function BusinessConsole({
               previewMode={previewMode}
             />
           )}
+          {activeTab === "staffBalances" && (
+            <StaffBalancesPanel
+              businessId={businessId}
+              isOwner={balancesViewer.isOwner}
+              previewMode={previewMode}
+              viewerUid={firebaseUser.uid}
+            />
+          )}
           {activeTab === "inventory" && (
             <InventoryPanel
               businessId={businessId}
@@ -1054,12 +1104,15 @@ function writePinnedTabs(tabs: readonly BusinessTab[]) {
 
 function BusinessNavItem({
   active,
+  badge = 0,
   pinned,
   tab,
   onOpen,
   onTogglePin,
 }: {
   active: boolean;
+  /** How many things wait on the viewer in this section (0 = no badge). */
+  badge?: number;
   pinned: boolean;
   tab: BusinessSidebarTab;
   onOpen: () => void;
@@ -1079,6 +1132,9 @@ function BusinessNavItem({
           <b>{tab.label}</b>
           <small>{tab.description}</small>
         </span>
+        {badge > 0 && (
+          <span aria-label="Waiting on you" className="nav-badge" data-no-translate title="Waiting on you">{badge}</span>
+        )}
       </button>
       <button
         aria-label={pinTitle}
@@ -1556,6 +1612,7 @@ function tabIcon(tab: BusinessTab) {
     reviews: <Star {...props} />,
     cases: <MessageCircle {...props} />,
     growth: <Sparkles {...props} />,
+    staffBalances: <Scale {...props} />,
     shipping: <Container {...props} />,
   };
   return icons[tab];

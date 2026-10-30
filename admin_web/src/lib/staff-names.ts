@@ -1,3 +1,5 @@
+import { BUSINESS_ACCOUNT_RECEIVER, businessAccountName } from "./staff-balances.ts";
+
 /**
  * uid -> the name a business's panels show for one of its own people.
  *
@@ -20,9 +22,15 @@ export function staffNameIndex(
   return index;
 }
 
-/** The name for `id`, or "" when this business cannot name that person. */
+/**
+ * The name for `id`, or "" when this business cannot name that person. The
+ * Business account (money paid straight to the business, docs/STAFF_BALANCES.md)
+ * is named too, in the page's language - a payment received by it reads
+ * "Received by Business account", never as an unknown person.
+ */
 export function staffNameFrom(index: ReadonlyMap<string, string>, id: unknown): string {
   const key = String(id ?? "").trim();
+  if (key === BUSINESS_ACCOUNT_RECEIVER) return businessAccountName();
   return key ? index.get(key) ?? "" : "";
 }
 

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { httpsCallable } from "firebase/functions";
 import { Banknote, Pencil, Plus, Printer, RefreshCw, Tag, X } from "lucide-react";
 
+import { ReceivedByOptions } from "@/components/business/received-by-options";
 import { ContactPhone, SenderIsReceiverBox } from "@/components/business/contact-phone";
 import { ContainerLabelsDialog } from "@/components/business/container-labels-dialog";
 import { PackagePaymentDialog } from "@/components/business/package-payment-dialog";
@@ -756,8 +757,7 @@ export function WaitingPackagesPanel({
                       </label>
                       <label className="lst-field"><span>Received by</span>
                         <select id="wpk-received-by" {...invalidProps("wpk-received-by")} value={draft.money.receivedByStaffId} disabled={busy} onChange={(e) => setMoney({ receivedByStaffId: e.target.value })}>
-                          <option value="">Choose staff</option>
-                          {staffOptions.map((s) => (<option key={s.id} value={s.id} data-no-translate>{s.name}</option>))}
+                          <ReceivedByOptions staffOptions={staffOptions} placeholder="Choose staff" />
                         </select>
                         {fieldErrorNote("wpk-received-by")}
                       </label>

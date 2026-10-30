@@ -288,6 +288,8 @@ function eventMs(row: FirestoreRow) {
   return 0;
 }
 
+const NO_EXTRA_ATTENTION: TodayAttentionItem[] = [];
+
 export function TodayView({
   today,
   state,
@@ -296,6 +298,7 @@ export function TodayView({
   onOpenAttention,
   onOpenContainer,
   onOpenLedger,
+  extraAttention = NO_EXTRA_ATTENTION,
   children,
 }: {
   today: BusinessToday | null;
@@ -305,6 +308,8 @@ export function TodayView({
   onOpenAttention: (item: TodayAttentionItem) => void;
   onOpenContainer: (containerId: string) => void;
   onOpenLedger: () => void;
+  /** Rows the viewer's own work adds above the server's (money handed to them to confirm). */
+  extraAttention?: TodayAttentionItem[];
   /** What follows the month (the payouts panel). */
   children?: ReactNode;
 }) {
@@ -312,6 +317,8 @@ export function TodayView({
   // Worked out once per answer, never per render of a row.
   const tiles = useMemo(() => todayTiles(today), [today]);
   const attention = useMemo(() => todayAttention(today), [today]);
+  // The viewer's own work (money handed to them to confirm) leads the server's rows.
+  const attentionRows = useMemo(() => [...extraAttention, ...attention], [extraAttention, attention]);
   const ledgerAlerts = useMemo(
     () =>
       ledgerEvents
@@ -359,13 +366,13 @@ export function TodayView({
       <div className={containers ? "today-grid" : "stack"}>
         <Panel icon={<ListChecks size={18} />} title="Needs attention">
           <div className="today-attention">
-            {attention.map((item) => (
+            {attentionRows.map((item) => (
               <AttentionRow item={item} key={item.key} language={language} onOpen={onOpenAttention} />
             ))}
-            {today && attention.length === 0 && ledgerAlerts.length === 0 && (
+            {today && attentionRows.length === 0 && ledgerAlerts.length === 0 && (
               <div className="empty-state">Nothing is waiting on you right now.</div>
             )}
-            {!today && ledgerAlerts.length === 0 && (
+            {!today && attentionRows.length === 0 && ledgerAlerts.length === 0 && (
               <div className="empty-state">
                 {state.error ? "This list could not be loaded." : "Counting what is waiting…"}
               </div>

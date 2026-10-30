@@ -61,6 +61,7 @@ import {
   type LineGroupSummary,
 } from "./line-pieces.ts";
 import { readMoneyInput } from "./money-input.ts";
+import { BUSINESS_ACCOUNT_RECEIVER } from "./staff-balances.ts";
 import {
   newPieceDraft,
   parseInches,
@@ -849,7 +850,8 @@ export function validateIntakeMoney(draft: WaitingPackageDraft, staffIds?: reado
     payOnArrival: draft.payOnArrival === true,
   });
   const who = text(money.receivedByStaffId, 120);
-  if (who && staffIds && !staffIds.includes(who)) errors.push("received_by_invalid");
+  // The Business account is a receiver too (docs/STAFF_BALANCES.md), though no person.
+  if (who && who !== BUSINESS_ACCOUNT_RECEIVER && staffIds && !staffIds.includes(who)) errors.push("received_by_invalid");
   return errors;
 }
 

@@ -7547,6 +7547,106 @@ Object.assign(ATTRIBUTE_TRANSLATIONS, {
   "Filter by how packages ship": "Filtrer selon le mode d’expédition",
 });
 
+// Staff balances (docs/STAFF_BALANCES.md): Money -> Staff balances, the
+// hand-overs between people, the Business account and its refusals.
+Object.assign(TEXT_TRANSLATIONS, {
+  "Staff balances": "Soldes du personnel",
+  "Who holds or owes what": "Qui détient ou doit quoi",
+  "Hand over money": "Remettre de l’argent",
+  "Opening amount": "Montant d’ouverture",
+  "Loading the balances…": "Chargement des soldes…",
+  "The balances could not be loaded.": "Les soldes n’ont pas pu être chargés.",
+  "Loading the balances is taking too long. Try again.":
+    "Le chargement des soldes prend trop de temps. Réessayez.",
+  "Who is holding the business's money, who owes it and who it owes. Everyone on the team sees every balance.":
+    "Qui détient l’argent de l’entreprise, qui lui en doit et à qui elle en doit. Toute l’équipe voit tous les soldes.",
+  "Held by the team": "Détenu par l’équipe",
+  "Team owes the business": "L’équipe doit à l’entreprise",
+  "The business owes the team": "L’entreprise doit à l’équipe",
+  "Money handed to you. Confirm it once you have it.":
+    "De l’argent qui vous a été remis. Confirmez-le dès que vous l’avez reçu.",
+  "Money handed to you to confirm": "Argent qui vous a été remis, à confirmer",
+  "Balances": "Soldes",
+  "No team members to show yet.": "Aucun membre de l’équipe à afficher pour le moment.",
+  "Person": "Personne",
+  "Money held": "Argent détenu",
+  "Expenses owed to them": "Dépenses qui leur sont dues",
+  "Waiting for you to confirm": "En attente de votre confirmation",
+  "Owes the business": "Doit à l’entreprise",
+  "The business owes them": "L’entreprise lui doit",
+  "Settled up": "À jour",
+  "Business account": "Compte de l’entreprise",
+  "Business account (Zelle, transfer, card)": "Compte de l’entreprise (Zelle, virement, carte)",
+  "Business account (the owner confirms)": "Compte de l’entreprise (le propriétaire confirme)",
+  "Me (I hold the money)": "Moi (je garde l’argent)",
+  "Zelle, transfer and card payments, and money handed to the business":
+    "Paiements Zelle, par virement et par carte, et argent remis à l’entreprise",
+  "Received so far": "Reçu jusqu’à présent",
+  "Waiting to be confirmed": "À confirmer",
+  "Hand-overs": "Remises d’argent",
+  "No hand-over has been recorded yet.": "Aucune remise d’argent n’a encore été enregistrée.",
+  "Waiting for confirmation": "En attente de confirmation",
+  "Bank deposit": "Dépôt bancaire",
+  "Breakdown": "Détail des calculs",
+  "Payments collected": "Paiements encaissés",
+  "Handed over (confirmed)": "Remis (confirmé)",
+  "Received from others (confirmed)": "Reçu d’autres personnes (confirmé)",
+  "Money held now": "Argent détenu actuellement",
+  "Collected by method": "Encaissé par mode de paiement",
+  "Nothing collected yet.": "Rien n’a encore été encaissé.",
+  "Handed over, waiting for the receiver": "Remis, en attente du destinataire",
+  "Handed to them, waiting for their confirmation":
+    "Remis à cette personne, en attente de sa confirmation",
+  "Expenses they paid for the lot": "Dépenses payées par cette personne pour le parc",
+  "Net is the money held plus the parking bill, minus what the business owes for expenses.":
+    "Le net est l’argent détenu plus la facture de parking, moins ce que l’entreprise doit pour les dépenses.",
+  "You are the one giving the money.": "C’est vous qui remettez l’argent.",
+  "Give to": "Remettre à",
+  "Choose who receives it": "Choisissez qui le reçoit",
+  "How it was handed over": "Comment il a été remis",
+  "Photo of the slip or screenshot (optional)": "Photo du reçu ou capture d’écran (facultatif)",
+  "The person you choose must confirm they received it. Until then your balance does not change.":
+    "La personne choisie doit confirmer qu’elle l’a reçu. D’ici là, votre solde ne change pas.",
+  "Record hand-over": "Enregistrer la remise",
+  "Money already handed to the business before Staff balances existed.":
+    "Argent déjà remis à l’entreprise avant les soldes du personnel.",
+  "Choose a team member": "Choisissez un membre de l’équipe",
+  "It is recorded and confirmed right away, and lowers what this person is holding by the amount.":
+    "Il est enregistré et confirmé tout de suite, et réduit de ce montant ce que cette personne détient.",
+  "Record opening amount": "Enregistrer le montant d’ouverture",
+  "Decline this hand-over?": "Refuser cette remise ?",
+  "The giver keeps the money on their balance. You can leave a note to tell them why.":
+    "La personne qui l’a remis le garde sur son solde. Vous pouvez laisser une note pour lui expliquer pourquoi.",
+  "Note (optional)": "Note (facultative)",
+  "Decline hand-over": "Refuser la remise",
+  "Void this hand-over?": "Invalider cette remise ?",
+  "It stays in the history, marked void, and no balance changes because of it.":
+    "Elle reste dans l’historique, marquée invalidée, et aucun solde ne change à cause d’elle.",
+  "Reason (optional)": "Motif (facultatif)",
+  "Void hand-over": "Invalider la remise",
+  "Hand-over confirmed.": "Remise confirmée.",
+  "Hand-over declined.": "Remise refusée.",
+  "Hand-over recorded. It waits for the receiver to confirm.":
+    "Remise enregistrée. Elle attend la confirmation du destinataire.",
+  "Opening amount recorded.": "Montant d’ouverture enregistré.",
+  "Hand-over voided.": "Remise invalidée.",
+  "Choose the team member.": "Choisissez le membre de l’équipe.",
+  "You cannot hand money to yourself.": "Vous ne pouvez pas vous remettre de l’argent à vous-même.",
+  "Choose how the money was handed over.": "Choisissez comment l’argent a été remis.",
+  "Choose who is receiving the money: a team member or the Business account.":
+    "Choisissez qui reçoit l’argent : un membre de l’équipe ou le compte de l’entreprise.",
+  "Only the person this money was handed to can confirm or decline it. For the Business account, that is the business owner.":
+    "Seule la personne à qui cet argent a été remis peut le confirmer ou le refuser. Pour le compte de l’entreprise, c’est le propriétaire.",
+  "This hand-over was already answered or voided. Refresh the page.":
+    "Cette remise a déjà reçu une réponse ou a été invalidée. Actualisez la page.",
+  "Only the business owner can set an opening amount.":
+    "Seul le propriétaire de l’entreprise peut définir un montant d’ouverture.",
+});
+Object.assign(ATTRIBUTE_TRANSLATIONS, {
+  "Void this hand-over": "Invalider cette remise",
+  "Photo of the hand-over slip": "Photo du reçu de la remise",
+});
+
 const englishDictionary = { ...TEXT_TRANSLATIONS, ...ATTRIBUTE_TRANSLATIONS };
 const frenchDictionary = buildReverseDictionary([
   TEXT_TRANSLATIONS,

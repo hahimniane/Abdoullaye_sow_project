@@ -1,5 +1,6 @@
 "use client";
 
+import { ReceivedByOptions } from "@/components/business/received-by-options";
 import { moneyDollars } from "@/lib/money-input";
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import {
@@ -5164,7 +5165,7 @@ export function ParkingPanel({
   const nameForStaff = (id: unknown) => {
     const key = text(id, "");
     if (!key) return "";
-    return staffNameById.get(key) || "";
+    return staffNameFrom(staffNameById, key);
   };
   const STAFF_UNKNOWN = "Not on your team";
   const [parkingView, setParkingView] = useState<"list" | "cards">("list");
@@ -6646,12 +6647,14 @@ export function ParkingPanel({
                           </label>
                           <label className="lst-field"><span>Received by</span>
                             <select value={entryReceivedBy} onChange={(event) => setEntryReceivedBy(event.target.value)}>
-                              <option value="">Choose staff…</option>
-                              {parkingStaff.rows.map((row) => {
-                                const r = row as Record<string, unknown>;
-                                const id = String(r.id ?? "");
-                                return <option key={id} value={id}>{text(r.fullName, "") || text(r.name, "") || text(r.email, "") || id}</option>;
-                              })}
+                              <ReceivedByOptions
+                                placeholder="Choose staff…"
+                                staffOptions={parkingStaff.rows.map((row) => {
+                                  const r = row as Record<string, unknown>;
+                                  const id = String(r.id ?? "");
+                                  return { id, name: text(r.fullName, "") || text(r.name, "") || text(r.email, "") || id };
+                                })}
+                              />
                             </select>
                           </label>
                         </>
@@ -9378,7 +9381,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false, focu
                     {activityDraft.paymentReceived && (
                       <div className="lst-form-grid">
                         <label className="lst-field"><span>How it was paid</span><select value={activityDraft.receivedVia} onChange={(e) => setActivityDraft((d) => ({ ...d, receivedVia: e.target.value }))}>{LOT_RECEIVED_VIA_OPTIONS.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}</select></label>
-                        <label className="lst-field"><span>Received by</span><select value={activityDraft.receivedByStaffId} onChange={(e) => setActivityDraft((d) => ({ ...d, receivedByStaffId: e.target.value }))}><option value="">Choose staff</option>{staffOptions.map((s) => (<option key={s.id} value={s.id} data-no-translate>{s.name}</option>))}</select></label>
+                        <label className="lst-field"><span>Received by</span><select value={activityDraft.receivedByStaffId} onChange={(e) => setActivityDraft((d) => ({ ...d, receivedByStaffId: e.target.value }))}><ReceivedByOptions staffOptions={staffOptions} placeholder="Choose staff" /></select></label>
                       </div>
                     )}
                     {!activityDraft.paymentReceived && (
@@ -9449,7 +9452,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false, focu
               )}
               <div className="lst-form-grid">
                 <label className="lst-field"><span>How it was paid</span><select value={chaseVia} onChange={(e) => setChaseVia(e.target.value)}>{LOT_RECEIVED_VIA_OPTIONS.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}</select></label>
-                <label className="lst-field"><span>Received by</span><select value={chaseStaff} onChange={(e) => setChaseStaff(e.target.value)}><option value="">Choose staff</option>{staffOptions.map((s) => (<option key={s.id} value={s.id} data-no-translate>{s.name}</option>))}</select></label>
+                <label className="lst-field"><span>Received by</span><select value={chaseStaff} onChange={(e) => setChaseStaff(e.target.value)}><ReceivedByOptions staffOptions={staffOptions} placeholder="Choose staff" /></select></label>
               </div>
               {/* How much came in. The question is asked first and the amount
                   field appears only once the answer needs it. */}
@@ -9880,8 +9883,7 @@ function ParkingBillingActions({ row, staff }: { row: FirestoreRow; staff: Fires
         {!settled && billedThrough && (
           <>
             <select value={receivedBy} onChange={(e) => setReceivedBy(e.target.value)} aria-label="Received by">
-              <option value="">Received by…</option>
-              {staffOptions.map((s) => (<option key={s.id} value={s.id} data-no-translate>{s.name}</option>))}
+              <ReceivedByOptions staffOptions={staffOptions} placeholder="Received by…" />
             </select>
             <button className="secondary-button" type="button" disabled={busy} onClick={received}>Payment received in person</button>
           </>
@@ -9897,8 +9899,7 @@ function ParkingBillingActions({ row, staff }: { row: FirestoreRow; staff: Fires
       {canPartPay && String(r.paymentStatus) === "awaiting_direct_payment" && outstandingCents > 0 && (
         <div className="pk-partpay-row">
           <select value={settleReceivedBy} onChange={(e) => setSettleReceivedBy(e.target.value)} aria-label="Received by">
-            <option value="">Received by…</option>
-            {staffOptions.map((s) => (<option key={s.id} value={s.id} data-no-translate>{s.name}</option>))}
+            <ReceivedByOptions staffOptions={staffOptions} placeholder="Received by…" />
           </select>
           <button className="primary-button" type="button" disabled={busy} onClick={markFullyPaid}>
             Mark as fully paid ({lotFormatCents(outstandingCents)})
@@ -9920,8 +9921,7 @@ function ParkingBillingActions({ row, staff }: { row: FirestoreRow; staff: Fires
               aria-label={partMode === "days" ? "Days paid" : "Amount paid"}
             />
             <select value={partReceivedBy} onChange={(e) => setPartReceivedBy(e.target.value)} aria-label="Received by">
-              <option value="">Received by…</option>
-              {staffOptions.map((sopt) => (<option key={sopt.id} value={sopt.id}>{sopt.name}</option>))}
+              <ReceivedByOptions staffOptions={staffOptions} placeholder="Received by…" />
             </select>
           </div>
           <div className="pk-partpay-row">

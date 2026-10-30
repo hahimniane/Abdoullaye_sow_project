@@ -6,6 +6,7 @@ import { httpsCallable } from "firebase/functions";
 import { getDownloadURL, ref } from "firebase/storage";
 import { Camera, ChevronDown, ChevronUp, PackageCheck, RefreshCw, RotateCcw, X } from "lucide-react";
 
+import { ReceivedByMeOptions } from "@/components/business/received-by-options";
 import { confirmImportantAction } from "@/lib/action-confirmation";
 import { containerLineTitle, containerLineTitleIsCopy } from "@/lib/container-manifest";
 import {
@@ -150,6 +151,8 @@ export function MarkDeliveredDialog({
   const photoInput = useRef<HTMLInputElement>(null);
   // USD collected at handover, typed in dollars.
   const [collectedTyped, setCollectedTyped] = useState("");
+  // Who holds that money: the agent ("") or the Business account (docs/STAFF_BALANCES.md).
+  const [collectedReceiver, setCollectedReceiver] = useState("");
 
   const collectedCents = collectedDollarsToCents(collectedTyped);
   const collectedNow = collectedCents !== null && Number.isFinite(collectedCents) ? collectedCents : 0;
@@ -208,6 +211,7 @@ export function MarkDeliveredDialog({
           pickupCode: override ? "" : pickupCode,
           override,
           collectedCents: collectedNow,
+          receivedByStaffId: collectedReceiver,
         }),
       );
       onDone(deliverResultText(deliverAnswerFrom(response.data), lang));
@@ -352,6 +356,14 @@ export function MarkDeliveredDialog({
                   value={collectedTyped}
                 />
               </label>
+              {collectedNow > 0 && (
+                <label className="lst-field wide">
+                  <span>Received by</span>
+                  <select disabled={busy} onChange={(e) => setCollectedReceiver(e.target.value)} value={collectedReceiver}>
+                    <ReceivedByMeOptions />
+                  </select>
+                </label>
+              )}
               <p className="lst-hint">
                 <span>US dollars taken at handover, if any. It is recorded as a cash payment on the package.</span>
                 {owedText && <> <strong data-no-translate>{owedText}</strong></>}

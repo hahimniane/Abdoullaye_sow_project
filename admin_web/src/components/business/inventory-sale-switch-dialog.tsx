@@ -4,6 +4,8 @@ import { useRef, useState } from "react";
 import { httpsCallable } from "firebase/functions";
 import { ArrowLeftRight, RefreshCw, X } from "lucide-react";
 
+import { BUSINESS_ACCOUNT_RECEIVER } from "@/lib/staff-balances";
+import { ReceivedByOptions } from "@/components/business/received-by-options";
 import { CustomerPhoneField } from "@/components/customer-phone-field";
 import { confirmImportantAction } from "@/lib/action-confirmation";
 import { functions } from "@/lib/firebase";
@@ -65,7 +67,7 @@ export function InventorySaleSwitchDialog({
   const attempt = useRef({ key: "", id: "" });
   const split = switchSplit(credit, sale.totalCents);
   // A person who is no longer in the team list still shows, so the select never looks empty.
-  const receiverOptions = paid.receivedByStaffId && !staffOptions.some((s) => s.id === paid.receivedByStaffId)
+  const receiverOptions = paid.receivedByStaffId && paid.receivedByStaffId !== BUSINESS_ACCOUNT_RECEIVER && !staffOptions.some((s) => s.id === paid.receivedByStaffId)
     ? [...staffOptions, { id: paid.receivedByStaffId, name: paid.receivedByStaffId }]
     : staffOptions;
 
@@ -158,8 +160,7 @@ export function InventorySaleSwitchDialog({
                 </label>
                 <label className="lst-field"><span>Received by</span>
                   <select value={paid.receivedByStaffId} disabled={busy} onChange={(e) => setPaid((d) => ({ ...d, receivedByStaffId: e.target.value }))}>
-                    <option value="">Choose staff</option>
-                    {receiverOptions.map((s) => (<option key={s.id} value={s.id} data-no-translate>{s.name}</option>))}
+                    <ReceivedByOptions staffOptions={receiverOptions} placeholder="Choose staff" />
                   </select>
                 </label>
               </div>

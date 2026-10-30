@@ -19,6 +19,7 @@ export type BusinessTab =
   | "reviews"
   | "cases"
   | "growth"
+  | "staffBalances"
   | "shipping";
 
 /**
@@ -126,6 +127,9 @@ export const businessSidebarTabs: BusinessSidebarTab[] = [
   // charge) and its own permission. It sits with Invoices - both are what the
   // business sold.
   {id: "inventory", label: "Inventory", description: "Products, stock and counter sales", group: "money", service: "inventory", permission: "inventory"},
+  // Everyone on the team sees every balance (docs/STAFF_BALANCES.md decision 6),
+  // so no service gate and no permission.
+  {id: "staffBalances", label: "Staff balances", description: "Who holds or owes what", group: "money", keywords: ["Hand over", "Cash", "Handover", "Owes", "Expenses"]},
   {id: "profile", label: "Profile", description: "Identity and verification", group: "business", permission: "profile", keywords: ["Business"]},
   {id: "destinations", label: "Services & coverage", description: "Availability, pickup, rates, and routes", group: "business", permission: "destinations"},
   {id: "people", label: "People", description: "Owners and staff", group: "business", permission: "people"},

@@ -566,6 +566,8 @@ test("money received now is judged against the total, the way the server refuses
   assert.deepEqual(validateWaitingPackage(paidDraft({ amount: "40" }), STAFF), [], "part now, the rest later");
   assert.deepEqual(validateWaitingPackage(paidDraft({ receivedByStaffId: "" }), STAFF), ["received_by_required"]);
   assert.deepEqual(validateWaitingPackage(paidDraft({ receivedByStaffId: "stranger" }), STAFF), ["received_by_invalid"]);
+  // The Business account is a receiver that is no person (docs/STAFF_BALANCES.md): it satisfies the required picker.
+  assert.deepEqual(validateWaitingPackage(paidDraft({ receivedByStaffId: "business_account" }), STAFF), []);
   assert.deepEqual(validateWaitingPackage(paidDraft({ amount: "150.01" }), STAFF), ["payment_exceeds_balance"]);
   assert.deepEqual(validateWaitingPackage(paidDraft({ amount: "0" }), STAFF), ["amount_required"]);
   assert.deepEqual(validateWaitingPackage(paidDraft({ amount: "" }), STAFF), ["amount_required"]);

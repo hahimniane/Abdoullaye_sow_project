@@ -23,6 +23,7 @@ import { lotActivityListQuery, lotExpenseEntryQueries } from "./lot-ledger.ts";
 import { businessCollectionPlan, statusFilterSpec, type BusinessCollectionOptions, type QueryFilterSpec } from "./paged-query.ts";
 import { parkingMonthQueryPlan } from "./parking-month-statement.ts";
 import { describeRequiredIndex, requiredIndex, shapeIsIndexed, type IndexDefinition, type QueryShape } from "./query-index.ts";
+import { PENDING_HANDOVERS_WHERE } from "./staff-balances.ts";
 import { supportCasesQuerySpec } from "./support-cases-query.ts";
 
 const indexes = (JSON.parse(readFileSync("../my_flutter_app/firestore.indexes.json", "utf8")) as {
@@ -239,6 +240,10 @@ const SITES: Site[] = [
   // keeps only its unacknowledged ledger changes live.
   { file: C("business-console.tsx"), kind: "useBusinessCollection", what: "Growth insights", shapes: [bc("businessInsights", { pageSize: 3 })] },
   { file: C("business-console.tsx"), kind: "useBusinessCollection", what: "Today ledger changes", shapes: [bc("lotLedgerAudit", { pageSize: 6, orderBy: "at", where: [["acknowledged", "==", false]] })] },
+  // Staff balances (docs/STAFF_BALANCES.md): the sidebar badge / Today row ask for this business's pending hand-overs
+  // (two equalities, no composite index); the page itself reads every hand-over of the business (one equality).
+  { file: C("business-console.tsx"), kind: "useBusinessCollection", what: "pending staff hand-overs (badge and Today row)", shapes: [bc("staffHandovers", { pageSize: null, where: PENDING_HANDOVERS_WHERE })] },
+  { file: B("staff-balances-panel.tsx"), kind: "useBusinessCollection", what: "every staff hand-over of the business", shapes: [bc("staffHandovers", { pageSize: null })] },
   // --- invoices-panel.tsx ---------------------------------------------------
   { file: B("invoices-panel.tsx"), kind: "useBusinessCollection", what: "lotCustomers", shapes: [bc("lotCustomers", { pageSize: 300, orderBy: "lastSeenAt" })] },
   { file: B("invoices-panel.tsx"), kind: "useBusinessCollection", what: "invoices by filter", shapes: (["", "open", "paid", "overdue"] as const).map((filter) => bc("invoices", invoiceListQuery(filter, "2026-10-05"))) },

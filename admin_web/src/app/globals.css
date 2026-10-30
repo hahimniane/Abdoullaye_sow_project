@@ -16962,3 +16962,63 @@ button.pkq-card:hover { border-color: var(--brand); }
 .pk-wa-line.state-failed .pk-wa-state { color: var(--danger); }
 .pk-wa-line small { color: var(--muted); }
 .pk-wa-line .pk-wa-error { color: var(--danger); }
+
+/* Staff balances (docs/STAFF_BALANCES.md): who holds, owes and is owed. */
+.sb-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.sb-tiles { display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 12px 18px 18px; }
+.sb-tile { min-height: 0; }
+.sb-table { display: grid; padding: 0 18px 10px; }
+.sb-page .panel > .dlv-notice, .sb-page .panel > .lst-form-error, .sb-page .panel > .lst-hint, .sb-page .panel > .empty-state, .sb-page .panel > .ghost-button { margin-left: 18px; margin-right: 18px; }
+.sb-head,
+.sb-row {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(160px, 1.6fr) repeat(3, minmax(90px, 1fr)) minmax(150px, 1.2fr) auto;
+  padding: 10px 4px;
+}
+.sb-head { border-bottom: 1px solid var(--rule); color: var(--muted); font-size: 12px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
+.sb-row { border-bottom: 1px dashed var(--rule); font-size: 14px; }
+.sb-row:last-child { border-bottom: 0; }
+.sb-person { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.sb-person small { color: var(--muted); font-size: 12px; }
+.sb-person .sb-pending { color: #b45309; font-weight: 700; }
+.sb-person .sb-you { color: var(--brand-strong, #0f766e); font-weight: 800; }
+.sb-cell { display: flex; flex-direction: column; font-variant-numeric: tabular-nums; gap: 2px; }
+.sb-cell b { font-weight: 750; }
+.sb-label { display: none; }
+.sb-account .sb-label { color: var(--muted); display: block; font-size: 11px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
+.sb-net small { color: var(--muted); font-size: 12px; }
+.sb-net.owes b { color: #b45309; }
+.sb-net.owed b { color: #15803d; }
+.sb-account { background: var(--paper-soft, rgba(13, 148, 136, 0.05)); border-radius: 8px; }
+.sb-list { list-style: none; margin: 0; padding: 0 18px 8px; }
+.sb-list li { align-items: center; border-bottom: 1px dashed var(--rule); display: flex; flex-wrap: wrap; gap: 8px 14px; justify-content: space-between; padding: 10px 0; }
+.sb-list li:last-child { border-bottom: 0; }
+.sb-line { display: flex; flex-direction: column; gap: 3px; min-width: 0; overflow-wrap: anywhere; flex: 1 1 260px; }
+.sb-line-main { align-items: center; display: flex; flex-wrap: wrap; gap: 6px; }
+.sb-line-main svg { color: var(--muted); flex: none; }
+.sb-amount { font-variant-numeric: tabular-nums; margin-left: 4px; }
+.sb-line small { color: var(--muted); font-size: 12px; }
+.sb-line .sb-reason { color: #b45309; }
+.sb-proof img { border: 1px solid var(--rule); border-radius: 8px; height: 56px; object-fit: cover; width: 56px; }
+.sb-row-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; }
+.sb-waiting { border-color: rgba(245, 158, 11, 0.45); }
+.sb-breakdown { display: grid; gap: 0; margin: 0 0 8px; }
+.sb-breakdown > div { align-items: baseline; border-bottom: 1px dashed var(--rule); display: flex; font-size: 14px; gap: 12px; justify-content: space-between; padding: 7px 0; }
+.sb-breakdown dt { color: var(--ink); }
+.sb-breakdown dd { font-variant-numeric: tabular-nums; font-weight: 700; margin: 0; }
+.sb-breakdown .sb-total { border-bottom: 0; border-top: 1px solid var(--rule); font-size: 15px; }
+.sb-photo { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.nav-badge { margin-left: auto; background: #d97706; border-radius: 999px; color: #fff; flex: none; font-size: 11px; font-weight: 800; line-height: 1; min-width: 20px; padding: 4px 7px; text-align: center; }
+@media (max-width: 860px) {
+  .sb-tiles { grid-template-columns: 1fr; }
+  .sb-page .panel-header { flex-wrap: wrap; gap: 10px; }
+  .sb-page .sb-actions { justify-content: flex-start; width: 100%; }
+  .sb-head { display: none; }
+  .sb-row { gap: 6px 12px; grid-template-columns: 1fr 1fr; padding: 12px 4px; }
+  .sb-row .sb-person { grid-column: 1 / -1; }
+  .sb-row .sb-more { grid-column: 1 / -1; }
+  .sb-label { color: var(--muted); display: block; font-size: 11px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
+  .sb-row-actions { width: 100%; }
+}
