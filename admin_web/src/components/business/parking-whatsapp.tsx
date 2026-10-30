@@ -237,7 +237,7 @@ export function ParkingWelcomeDialog({
   );
 }
 
-function Tick({ tick }: { tick: ParkingMessageLine["tick"] }) {
+export function Tick({ tick }: { tick: ParkingMessageLine["tick"] }) {
   const props = { "aria-hidden": true, size: 14 } as const;
   if (tick === "cross") return <XCircle {...props} />;
   if (tick === "double" || tick === "double-read") return <CheckCheck {...props} />;

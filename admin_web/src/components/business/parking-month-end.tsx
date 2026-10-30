@@ -14,6 +14,9 @@ import { overlayDismiss } from "@/lib/overlay-dismiss";
 import { currentLanguage, formatDayKey, text } from "@/lib/format";
 import { PdfPreview, type PdfPreviewFile } from "@/components/pdf-preview";
 import { BusinessOwesSection } from "@/components/business/business-owes-section";
+import { InvoiceMessageStatus, ParkingInvoicesPanel, useParkingInvoiceMessages } from "@/components/business/parking-invoices";
+import { invoicesOfferedFor } from "@/lib/parking-invoices";
+import { parkingWhatsAppEnabled, parkingWhatsAppEverEnabled } from "@/lib/parking-whatsapp";
 import {
   buildParkingMonthBillPdf,
   buildParkingMonthSummaryPdf,
@@ -55,6 +58,9 @@ type ParkingMonthEndProps = {
   /** Owner, platform admin, or staff with the `ledger` permission: may
    * record and void Paid back (docs/STAFF_EXPENSE_CREDIT.md §1.4). */
   canSettleStaff?: boolean;
+  /** Owner or platform admin: may send the month's invoices on WhatsApp
+   * (docs/PARKING_INVOICES.md). Everyone else does not see the panel. */
+  canSendInvoices?: boolean;
 };
 
 /**
@@ -63,7 +69,7 @@ type ParkingMonthEndProps = {
  * to send. Worked out live from the cars; payments are recorded on the car
  * as always, oldest month first, so a bill flips to paid by itself.
  */
-export function ParkingMonthEnd({ businessId, staff = [], business, businessName, initialMonth, onClose, onOpenCar, canSettleStaff = false }: ParkingMonthEndProps) {
+export function ParkingMonthEnd({ businessId, staff = [], business, businessName, initialMonth, onClose, onOpenCar, canSettleStaff = false, canSendInvoices = false }: ParkingMonthEndProps) {
   const [monthKey, setMonthKey] = useState(initialMonth || previousMonthKey());
   const inputs = useParkingMonthInputs(businessId, monthKey, Boolean(businessId));
   const rows = inputs.cars;
@@ -111,6 +117,11 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
     for (const link of Object.values(links)) if (link?.customerKey && link.customerName) out[link.customerKey] = link.customerName;
     return out;
   }, [links]);
+  // Invoices: the panel only when the WhatsApp switch is on and this is the
+  // month that just ended; each card shows its invoice message's tick for any
+  // month the business has sent invoices for.
+  const invoicesOffered = canSendInvoices && parkingWhatsAppEnabled(business) && invoicesOfferedFor(monthKey);
+  const invoiceMessages = useParkingInvoiceMessages(businessId, monthKey, parkingWhatsAppEverEnabled(business));
   const [openExpenses, setOpenExpenses] = useState<Set<string>>(() => new Set());
   const lang = currentLanguage() === "fr" ? "fr" : "en";
   const orgName = text(business?.name, "") || businessName;
@@ -281,6 +292,8 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
         </div>
       </div>
 
+      {invoicesOffered && <ParkingInvoicesPanel key={monthKey} businessId={businessId} monthKey={monthKey} staffNames={staffNames} />}
+
       <div className="pk-month-tools">
         <div className="pk-view" role="group" aria-label="Which customers">
           <button type="button" className={view === "owing" ? "on" : ""} aria-pressed={view === "owing"} onClick={() => setView("owing")}>Who owes ({summary.customersOwing.length})</button>
@@ -298,6 +311,7 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
               <header>
                 <div>
                   <strong data-no-translate>{customer.customerName || "—"}</strong>
+                  {invoiceMessages.byCustomer.has(customer.key) && <InvoiceMessageStatus line={invoiceMessages.byCustomer.get(customer.key)!} />}
                   <small>{[customer.customerPhone, customer.cars.length ? `${customer.cars.length} car${customer.cars.length === 1 ? "" : "s"}` : "", customer.activities.length + customer.olderActivities.length ? `${customer.activities.length + customer.olderActivities.length} activit${customer.activities.length + customer.olderActivities.length === 1 ? "y" : "ies"}` : ""].filter(Boolean).join(" · ")}</small>
                 </div>
                 <div className="pk-month-due">

@@ -16976,6 +16976,23 @@ button.pkq-card:hover { border-color: var(--brand); }
 .pk-wa-line small { color: var(--muted); }
 .pk-wa-line .pk-wa-error { color: var(--danger); }
 
+/* Monthly invoices (docs/PARKING_INVOICES.md): the payment instructions field in settings, the Send invoices panel on Month end, and a card's invoice tick. */
+.pk-payment-instructions { display: grid; gap: 6px; }
+.pk-payment-instructions textarea { min-height: 72px; resize: vertical; width: 100%; }
+.pk-payment-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; }
+.pk-invoices { background: var(--paper, #fff); border: 1px solid var(--rule); border-radius: 12px; display: grid; gap: 10px; margin: 12px 0; padding: 14px; }
+.pk-invoices-head { align-items: flex-start; display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; }
+.pk-invoices-head h3 { margin: 0 0 2px; }
+.pk-invoices-head .panel-lede { margin: 0; }
+.pk-invoices-run { font-weight: 600; margin: 0; }
+.pk-invoices-list { max-height: 360px; overflow-y: auto; }
+.pk-invoices-list label.customer-choice-row { align-items: flex-start; }
+.pk-invoices-due { margin-left: auto; white-space: nowrap; }
+.pk-invoices-actions, .pk-invoices-confirm { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; }
+.pk-invoices-confirm p { flex: 1 1 240px; margin: 0; }
+.pk-invoice-status { align-items: center; color: var(--muted); display: inline-flex; flex-wrap: wrap; font-size: 12px; gap: 4px 8px; padding: 0; border: 0; }
+.pk-invoice-status .pk-wa-state { justify-self: auto; font-size: 12px; }
+
 /* Staff balances (docs/STAFF_BALANCES.md): who holds, owes and is owed. */
 .sb-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
 .sb-tiles { display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 12px 18px 18px; }

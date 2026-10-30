@@ -5908,6 +5908,7 @@ export function ParkingPanel({
           onClose={() => setMonthEndKey("")}
           onOpenCar={(row) => editParking(row)}
           canSettleStaff={canManageLedger}
+          canSendInvoices={canSendParkingWelcome}
         />
       )}
 

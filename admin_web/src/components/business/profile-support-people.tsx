@@ -45,6 +45,7 @@ import {
   InviteMethodSwitch,
 } from "@/components/staff-invite-fields";
 import { SearchableSelect } from "@/components/searchable-select";
+import { PaymentInstructionsField } from "@/components/business/parking-invoices";
 import { ParkingWhatsAppSwitch } from "@/components/business/parking-whatsapp";
 import { StaffParkingBillField, StaffParkingLinkPicker } from "@/components/business/staff-parking-link";
 import {
@@ -1629,6 +1630,14 @@ export function BusinessServicesPanel({
                       the form below: messages start or stop the moment the
                       owner decides. docs/PARKING_WHATSAPP.md §1. */}
                   <ParkingWhatsAppSwitch
+                    businessId={businessId}
+                    business={business}
+                    canChange={canSetParkingWhatsApp}
+                  />
+                  {/* How to pay, printed on every monthly invoice. Same owner
+                      and same own-callable save as the switch.
+                      docs/PARKING_INVOICES.md §1.4. */}
+                  <PaymentInstructionsField
                     businessId={businessId}
                     business={business}
                     canChange={canSetParkingWhatsApp}

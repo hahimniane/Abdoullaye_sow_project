@@ -183,13 +183,14 @@ export function welcomeResultText(result: WelcomeResult, lang: Lang = "en"): str
 // A car's WhatsApp messages: parkingMessages where parkedCarId ==
 // ---------------------------------------------------------------------------
 
-export type ParkingMessageKind = "parked" | "receipt" | "welcome";
+export type ParkingMessageKind = "parked" | "receipt" | "welcome" | "invoice";
 export type ParkingMessageState = "queued" | "sent" | "delivered" | "read" | "failed" | "stopped" | "skipped";
 
 export const PARKING_MESSAGE_KIND_LABEL: Record<ParkingMessageKind, string> = {
   parked: "Car parked message",
   receipt: "Payment receipt",
   welcome: "Welcome message",
+  invoice: "Monthly invoice",
 };
 
 export const PARKING_MESSAGE_STATE_LABEL: Record<ParkingMessageState, string> = {
@@ -226,7 +227,7 @@ export type ParkingMessageLine = {
   phone: string;
 };
 
-const KINDS = new Set<string>(["parked", "receipt", "welcome"]);
+const KINDS = new Set<string>(["parked", "receipt", "welcome", "invoice"]);
 const STATES = new Set<string>(["queued", "sent", "failed", "stopped", "skipped"]);
 
 function millisOf(value: unknown): number {

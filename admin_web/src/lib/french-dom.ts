@@ -7647,6 +7647,41 @@ Object.assign(ATTRIBUTE_TRANSLATIONS, {
   "Photo of the hand-over slip": "Photo du reçu de la remise",
 });
 
+Object.assign(ATTRIBUTE_TRANSLATIONS, {
+  "Pay at the office, or Zelle …": "Payez au bureau, ou Zelle …",
+  "Send invoices": "Envoyer les factures",
+});
+// Monthly parking invoices on WhatsApp (docs/PARKING_INVOICES.md §3).
+Object.assign(TEXT_TRANSLATIONS, {
+  "Payment instructions": "Instructions de paiement",
+  "Shown on monthly invoices, e.g. Pay at the office, or Zelle 347-555-0100 (Your business name).":
+    "Affichées sur les factures mensuelles, par exemple : Payez au bureau, ou Zelle 347-555-0100 (Nom de votre entreprise).",
+  "Save instructions": "Enregistrer les instructions",
+  "Send invoices": "Envoyer les factures",
+  "Each customer gets one WhatsApp invoice with a PDF that covers all of their cars. Look through the list, then send. If nobody has sent them by the 3rd, they go out automatically.":
+    "Chaque client reçoit une facture WhatsApp avec un PDF qui couvre toutes ses voitures. Parcourez la liste, puis envoyez. Si personne ne les a envoyées d’ici le 3, elles partent automatiquement.",
+  "Loading invoices…": "Chargement des factures…",
+  "No customer needs an invoice for this month.": "Aucun client n’a besoin d’une facture pour ce mois.",
+  "Not prepared yet. The list shows who would get an invoice.":
+    "Pas encore préparé. La liste montre qui recevrait une facture.",
+  "Sending is in progress. Refresh in a minute to see the result.":
+    "L’envoi est en cours. Actualisez dans une minute pour voir le résultat.",
+  "Already sent": "Déjà envoyée",
+  "Still parked": "Toujours garée",
+  "Refresh": "Actualiser",
+  "Send these invoices now? Customers get them on WhatsApp right away and this cannot be undone.":
+    "Envoyer ces factures maintenant ? Les clients les reçoivent tout de suite sur WhatsApp et c’est irréversible.",
+  "Yes, send": "Oui, envoyer",
+  "The send stopped to stay within its time limit. Send again to finish the rest.":
+    "L’envoi s’est arrêté pour respecter sa limite de temps. Envoyez de nouveau pour terminer le reste.",
+  "Monthly invoice": "Facture mensuelle",
+  "Only the business owner can send invoices.": "Seul le propriétaire de l’entreprise peut envoyer les factures.",
+  "Invoices can only be sent for the month that just ended.":
+    "Les factures ne peuvent être envoyées que pour le mois qui vient de se terminer.",
+  "Payment instructions can be at most 300 characters.":
+    "Les instructions de paiement ne peuvent pas dépasser 300 caractères.",
+});
+
 const englishDictionary = { ...TEXT_TRANSLATIONS, ...ATTRIBUTE_TRANSLATIONS };
 const frenchDictionary = buildReverseDictionary([
   TEXT_TRANSLATIONS,
