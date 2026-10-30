@@ -17,6 +17,7 @@ import '../services/firestore_query_spec.dart';
 import '../services/lot_ledger.dart' show lotDollarsToCents;
 import '../services/parking_month_statement.dart';
 import '../services/parking_whatsapp.dart';
+import '../services/staff_balances.dart';
 import '../services/staff_expense_repayments.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_motion.dart';
@@ -45,9 +46,13 @@ class ParkingMonthEndScreen extends StatefulWidget {
     super.key,
     required this.businessId,
     this.monthKey,
+    this.balancesService = const StaffBalancesService(),
   });
 
   final String businessId;
+
+  /// Staff balances, for the cash staff hold in "Business owes".
+  final StaffBalancesService balancesService;
 
   /// "YYYY-MM"; the month just ended when absent.
   final String? monthKey;
@@ -131,6 +136,37 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
   bool _creditError = false;
   bool _creditTimedOut = false;
   Timer? _creditSafety;
+
+  /// The cash each person holds today (Staff balances), for "Business owes"
+  /// (owner, 2026-10-30). Fetched once per set of owed lines; loading always
+  /// resolves (the service's timeout), and a failure shows expenses only.
+  List<StaffBalanceRow>? _cashBalances;
+  OwesCashState _cashState = OwesCashState.loading;
+  int _cashKey = -1;
+  int _cashGeneration = 0;
+
+  void _askCash(int owesCents) {
+    if (owesCents == _cashKey) return;
+    _cashKey = owesCents;
+    final generation = ++_cashGeneration;
+    // Never setState during build.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || generation != _cashGeneration) return;
+      setState(() => _cashState = OwesCashState.loading);
+      List<StaffBalanceRow>? balances;
+      try {
+        balances = (await widget.balancesService.load(widget.businessId)).staff;
+      } catch (_) {
+        balances = null;
+      }
+      if (!mounted || generation != _cashGeneration) return;
+      setState(() {
+        _cashBalances = balances;
+        _cashState =
+            balances == null ? OwesCashState.failed : OwesCashState.ready;
+      });
+    });
+  }
 
   bool get _creditReady =>
       _expensesLoaded && _repaymentsLoaded && !_creditError;
@@ -433,11 +469,17 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
   }
 
   Future<void> _paidBack(ParkingMonthStaffOwed row) async {
+    // Prefilled with what the business really owes now (the expenses, less
+    // the cash they hold); the cap stays the expenses owed.
+    final owedNow = _cashState == OwesCashState.ready
+        ? businessOwesWithCash([row], _cashBalances).lines.first.owedNowCents
+        : row.owedCents;
     await showLotSheet<bool>(
       context,
       StaffRepaymentSheet(
         businessId: widget.businessId,
         owed: row,
+        prefillCents: owedNow < row.owedCents ? owedNow : row.owedCents,
         staff: _staff,
         currentUid: FirebaseAuth.instance.currentUser?.uid ?? '',
       ),
@@ -714,9 +756,16 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
       canSend: auth.isBusinessOwner || auth.isAdmin,
       staffNames: {for (final s in _staff) s.id: s.name},
     );
+    if (showOwes && summary.businessOwes.isNotEmpty) {
+      _askCash(summary.businessOwesCents);
+    }
     final owes = showOwes
         ? ParkingMonthBusinessOwes(
             summary: summary,
+            cashState: summary.businessOwes.isEmpty
+                ? OwesCashState.none
+                : _cashState,
+            balances: _cashBalances,
             repayments: monthRepayments,
             staffNames: {for (final s in _staff) s.id: s.name},
             busyKey: _busy,
@@ -1778,6 +1827,10 @@ Future<bool?> confirmVoidStaffRepayment(
   );
 }
 
+/// Whether "Business owes" knows the cash staff hold today (Staff balances).
+/// [none]: not asked, so lines read as the expenses owed with no status line.
+enum OwesCashState { none, loading, ready, failed }
+
 /// "Business owes": the staff the business still owes for lot expenses they
 /// paid themselves - not linked to a parking bill, or owed more than their
 /// bill - each with Paid back, and this month's paid-back amounts with Void.
@@ -1786,6 +1839,8 @@ class ParkingMonthBusinessOwes extends StatelessWidget {
   const ParkingMonthBusinessOwes({
     super.key,
     required this.summary,
+    this.cashState = OwesCashState.none,
+    this.balances,
     required this.repayments,
     required this.staffNames,
     required this.onPaidBack,
@@ -1794,6 +1849,12 @@ class ParkingMonthBusinessOwes extends StatelessWidget {
   });
 
   final ParkingMonthSummary summary;
+
+  /// Whether the cash staff hold (Staff balances, as of today) is known; with
+  /// [OwesCashState.none] no status line shows and lines read as the
+  /// expenses owed.
+  final OwesCashState cashState;
+  final List<StaffBalanceRow>? balances;
 
   /// This month's repayments still standing.
   final List<StaffExpenseRepayment> repayments;
@@ -1813,6 +1874,16 @@ class ParkingMonthBusinessOwes extends StatelessWidget {
     }
 
     const muted = TextStyle(fontSize: 12, color: AppColors.muted);
+    final withCash = businessOwesWithCash(
+      summary.businessOwes,
+      cashState == OwesCashState.ready ? balances : null,
+    );
+    const amountStyle = TextStyle(
+      fontSize: 13,
+      fontWeight: FontWeight.w700,
+      fontFeatures: [FontFeature.tabularFigures()],
+      color: AppColors.ink,
+    );
     return Container(
       key: const Key('month-end-business-owes'),
       margin: const EdgeInsets.only(bottom: AppSpacing.md),
@@ -1837,24 +1908,51 @@ class ParkingMonthBusinessOwes extends StatelessWidget {
                   ),
                 ),
               ),
-              Text(
-                parkingMoney(summary.businessOwesCents),
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  fontFeatures: [FontFeature.tabularFigures()],
-                  color: AppColors.ink,
-                ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  if (withCash.owedNowCents > 0)
+                    Text(
+                      parkingMoney(withCash.owedNowCents),
+                      key: const Key('month-end-owes-total'),
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        fontFeatures: [FontFeature.tabularFigures()],
+                        color: AppColors.ink,
+                      ),
+                    ),
+                  if (withCash.holdsCents > 0)
+                    Text(
+                      l10n.pmeOwesStaffHold(parkingMoney(withCash.holdsCents)),
+                      key: const Key('month-end-owes-staff-hold'),
+                      style: muted,
+                    ),
+                ],
               ),
             ],
           ),
           Text(l10n.pmeBusinessOwesHint, style: muted),
+          if (cashState != OwesCashState.none &&
+              summary.businessOwes.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                switch (cashState) {
+                  OwesCashState.loading => l10n.pmeOwesCashChecking,
+                  OwesCashState.failed => l10n.pmeOwesCashFailed,
+                  _ => l10n.pmeOwesCashAsOf,
+                },
+                key: const Key('month-end-owes-cash-status'),
+                style: muted,
+              ),
+            ),
           const Divider(height: 16),
           if (summary.businessOwes.isEmpty)
             Text(l10n.pmeBusinessOwesNone, style: muted),
-          for (final row in summary.businessOwes)
+          for (final cash in withCash.lines)
             Padding(
-              key: Key('month-end-owes-${row.staffId}'),
+              key: Key('month-end-owes-${cash.line.staffId}'),
               padding: const EdgeInsets.only(bottom: 6),
               child: Row(
                 children: [
@@ -1863,7 +1961,9 @@ class ParkingMonthBusinessOwes extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          row.staffName.isEmpty ? '—' : row.staffName,
+                          cash.line.staffName.isEmpty
+                              ? '—'
+                              : cash.line.staffName,
                           style: const TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
@@ -1871,13 +1971,22 @@ class ParkingMonthBusinessOwes extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          row.customerKey.isEmpty
+                          cash.line.customerKey.isEmpty
                               ? l10n.pmeNoParkingBill
-                              : (row.customerName.isEmpty
+                              : (cash.line.customerName.isEmpty
                                     ? '—'
-                                    : row.customerName),
+                                    : cash.line.customerName),
                           style: muted,
                         ),
+                        if (cash.known)
+                          Text(
+                            l10n.pmeOwesCashLine(
+                              parkingMoney(cash.expenseOwedCents),
+                              parkingMoney(cash.heldCents),
+                            ),
+                            key: Key('month-end-owes-cash-${cash.line.staffId}'),
+                            style: muted,
+                          ),
                       ],
                     ),
                   ),
@@ -1886,17 +1995,25 @@ class ParkingMonthBusinessOwes extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
-                        parkingMoney(row.owedCents),
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          fontFeatures: [FontFeature.tabularFigures()],
-                          color: AppColors.ink,
+                        parkingMoney(
+                          cash.holdsCents > 0
+                              ? cash.holdsCents
+                              : cash.owedNowCents,
                         ),
+                        style: amountStyle,
                       ),
-                      if (onPaidBack != null)
+                      Text(
+                        cash.holdsCents > 0
+                            ? l10n.pmeOwesHolds
+                            : (cash.owedNowCents > 0
+                                  ? l10n.pmeOwesOwed
+                                  : l10n.pmeOwesSettledUp),
+                        key: Key('month-end-owes-kind-${cash.line.staffId}'),
+                        style: muted,
+                      ),
+                      if (onPaidBack != null && cash.canPayBack)
                         TextButton(
-                          key: Key('month-end-paid-back-${row.staffId}'),
+                          key: Key('month-end-paid-back-${cash.line.staffId}'),
                           style: TextButton.styleFrom(
                             padding: const EdgeInsets.symmetric(horizontal: 8),
                             minimumSize: const Size(0, 32),
@@ -1904,7 +2021,7 @@ class ParkingMonthBusinessOwes extends StatelessWidget {
                           ),
                           onPressed: busyKey.isNotEmpty
                               ? null
-                              : () => onPaidBack!(row),
+                              : () => onPaidBack!(cash.line),
                           child: Text(l10n.pmePaidBack),
                         ),
                     ],
@@ -2007,10 +2124,15 @@ class StaffRepaymentSheet extends StatefulWidget {
     required this.staff,
     required this.currentUid,
     this.service = const StaffExpenseRepaymentService(),
+    this.prefillCents,
   });
 
   final String businessId;
   final ParkingMonthStaffOwed owed;
+
+  /// What the amount starts as (what the business really owes now, after the
+  /// cash they hold); the cap stays [owed]. Null: all of it.
+  final int? prefillCents;
   final List<({String id, String name})> staff;
   final String currentUid;
   final StaffExpenseRepaymentService service;
@@ -2021,7 +2143,8 @@ class StaffRepaymentSheet extends StatefulWidget {
 
 class _StaffRepaymentSheetState extends State<StaffRepaymentSheet> {
   late final _amount = TextEditingController(
-    text: (widget.owed.owedCents / 100).toStringAsFixed(2),
+    text: ((widget.prefillCents ?? widget.owed.owedCents) / 100)
+        .toStringAsFixed(2),
   );
   final _note = TextEditingController();
   String _method = 'cash';

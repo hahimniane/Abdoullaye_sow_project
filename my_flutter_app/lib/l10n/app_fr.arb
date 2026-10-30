@@ -9058,8 +9058,53 @@
   },
   "pmeExpensesUnavailable": "Les dépenses du personnel n'ont pas pu être chargées : les factures sont affichées avant dépenses.",
   "pmeBusinessOwes": "L'entreprise doit",
-  "pmeBusinessOwesHint": "Dépenses payées par le personnel de sa poche, après ce qu'il doit pour le stationnement.",
+  "pmeBusinessOwesHint": "Dépenses du parking payées par l’équipe de sa poche, après sa facture de parking et l’argent de l’entreprise qu’elle détient.",
   "pmeBusinessOwesNone": "L'entreprise ne doit rien à son personnel.",
+  "pmeOwesHolds": "détient pour l’entreprise",
+  "@pmeOwesHolds": {
+    "description": "Under the amount of a Business owes line: the person holds more of the business's money than the business owes them."
+  },
+  "pmeOwesOwed": "dû",
+  "@pmeOwesOwed": {
+    "description": "Under the amount of a Business owes line: the business owes the person this much after the cash they hold."
+  },
+  "pmeOwesSettledUp": "À jour",
+  "@pmeOwesSettledUp": {
+    "description": "Under $0.00 on a Business owes line: the cash they hold and the expenses they are owed cancel out."
+  },
+  "pmeOwesCashLine": "Dépenses dues {owed} · Détient {held}",
+  "@pmeOwesCashLine": {
+    "description": "Line under a staff member's name in Business owes: the month's expenses owed to them and the business cash they hold today.",
+    "placeholders": {
+      "owed": {
+        "type": "String"
+      },
+      "held": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeOwesStaffHold": "L’équipe détient {amount}",
+  "@pmeOwesStaffHold": {
+    "description": "Header of Business owes: the business money staff hold beyond what they are owed.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeOwesCashChecking": "Vérification de l’argent détenu par l’équipe…",
+  "@pmeOwesCashChecking": {
+    "description": "Status line of Business owes while the cash staff hold is being fetched."
+  },
+  "pmeOwesCashFailed": "L’argent détenu par l’équipe n’a pas pu être vérifié ; seules les dépenses sont affichées.",
+  "@pmeOwesCashFailed": {
+    "description": "Status line of Business owes when Staff balances could not be read."
+  },
+  "pmeOwesCashAsOf": "L’argent détenu est celui d’aujourd’hui, d’après Soldes du personnel.",
+  "@pmeOwesCashAsOf": {
+    "description": "Status line of Business owes once the cash staff hold is known."
+  },
   "pmeNoParkingBill": "Pas de facture de stationnement",
   "pmePaidBack": "Remboursé",
   "pmePaidBackSubtitle": "{name} · dû {amount}",

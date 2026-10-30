@@ -29327,7 +29327,7 @@ abstract class AppLocalizations {
   /// No description provided for @pmeBusinessOwesHint.
   ///
   /// In en, this message translates to:
-  /// **'Expenses staff paid out of their own pocket, after what they owe on parking.'**
+  /// **'Lot expenses staff paid out of their own pocket, after their parking bill and the business money they hold.'**
   String get pmeBusinessOwesHint;
 
   /// No description provided for @pmeBusinessOwesNone.
@@ -29335,6 +29335,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The business owes its staff nothing.'**
   String get pmeBusinessOwesNone;
+
+  /// Under the amount of a Business owes line: the person holds more of the business's money than the business owes them.
+  ///
+  /// In en, this message translates to:
+  /// **'holds for the business'**
+  String get pmeOwesHolds;
+
+  /// Under the amount of a Business owes line: the business owes the person this much after the cash they hold.
+  ///
+  /// In en, this message translates to:
+  /// **'owed'**
+  String get pmeOwesOwed;
+
+  /// Under $0.00 on a Business owes line: the cash they hold and the expenses they are owed cancel out.
+  ///
+  /// In en, this message translates to:
+  /// **'Settled up'**
+  String get pmeOwesSettledUp;
+
+  /// Line under a staff member's name in Business owes: the month's expenses owed to them and the business cash they hold today.
+  ///
+  /// In en, this message translates to:
+  /// **'Expenses owed {owed} · Holding {held}'**
+  String pmeOwesCashLine(String owed, String held);
+
+  /// Header of Business owes: the business money staff hold beyond what they are owed.
+  ///
+  /// In en, this message translates to:
+  /// **'Staff hold {amount}'**
+  String pmeOwesStaffHold(String amount);
+
+  /// Status line of Business owes while the cash staff hold is being fetched.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking the cash staff hold…'**
+  String get pmeOwesCashChecking;
+
+  /// Status line of Business owes when Staff balances could not be read.
+  ///
+  /// In en, this message translates to:
+  /// **'The cash staff hold could not be checked; showing expenses only.'**
+  String get pmeOwesCashFailed;
+
+  /// Status line of Business owes once the cash staff hold is known.
+  ///
+  /// In en, this message translates to:
+  /// **'Cash held is as of today, from Staff balances.'**
+  String get pmeOwesCashAsOf;
 
   /// No description provided for @pmeNoParkingBill.
   ///

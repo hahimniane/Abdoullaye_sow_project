@@ -17352,10 +17352,40 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pmeBusinessOwesHint =>
-      'Expenses staff paid out of their own pocket, after what they owe on parking.';
+      'Lot expenses staff paid out of their own pocket, after their parking bill and the business money they hold.';
 
   @override
   String get pmeBusinessOwesNone => 'The business owes its staff nothing.';
+
+  @override
+  String get pmeOwesHolds => 'holds for the business';
+
+  @override
+  String get pmeOwesOwed => 'owed';
+
+  @override
+  String get pmeOwesSettledUp => 'Settled up';
+
+  @override
+  String pmeOwesCashLine(String owed, String held) {
+    return 'Expenses owed $owed · Holding $held';
+  }
+
+  @override
+  String pmeOwesStaffHold(String amount) {
+    return 'Staff hold $amount';
+  }
+
+  @override
+  String get pmeOwesCashChecking => 'Checking the cash staff hold…';
+
+  @override
+  String get pmeOwesCashFailed =>
+      'The cash staff hold could not be checked; showing expenses only.';
+
+  @override
+  String get pmeOwesCashAsOf =>
+      'Cash held is as of today, from Staff balances.';
 
   @override
   String get pmeNoParkingBill => 'No parking bill';

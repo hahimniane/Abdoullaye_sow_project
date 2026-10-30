@@ -17625,11 +17625,42 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get pmeBusinessOwesHint =>
-      'Dépenses payées par le personnel de sa poche, après ce qu\'il doit pour le stationnement.';
+      'Dépenses du parking payées par l’équipe de sa poche, après sa facture de parking et l’argent de l’entreprise qu’elle détient.';
 
   @override
   String get pmeBusinessOwesNone =>
       'L\'entreprise ne doit rien à son personnel.';
+
+  @override
+  String get pmeOwesHolds => 'détient pour l’entreprise';
+
+  @override
+  String get pmeOwesOwed => 'dû';
+
+  @override
+  String get pmeOwesSettledUp => 'À jour';
+
+  @override
+  String pmeOwesCashLine(String owed, String held) {
+    return 'Dépenses dues $owed · Détient $held';
+  }
+
+  @override
+  String pmeOwesStaffHold(String amount) {
+    return 'L’équipe détient $amount';
+  }
+
+  @override
+  String get pmeOwesCashChecking =>
+      'Vérification de l’argent détenu par l’équipe…';
+
+  @override
+  String get pmeOwesCashFailed =>
+      'L’argent détenu par l’équipe n’a pas pu être vérifié ; seules les dépenses sont affichées.';
+
+  @override
+  String get pmeOwesCashAsOf =>
+      'L’argent détenu est celui d’aujourd’hui, d’après Soldes du personnel.';
 
   @override
   String get pmeNoParkingBill => 'Pas de facture de stationnement';

@@ -9059,8 +9059,53 @@
   },
   "pmeExpensesUnavailable": "Staff expenses could not be loaded, so bills are shown before expenses.",
   "pmeBusinessOwes": "Business owes",
-  "pmeBusinessOwesHint": "Expenses staff paid out of their own pocket, after what they owe on parking.",
+  "pmeBusinessOwesHint": "Lot expenses staff paid out of their own pocket, after their parking bill and the business money they hold.",
   "pmeBusinessOwesNone": "The business owes its staff nothing.",
+  "pmeOwesHolds": "holds for the business",
+  "@pmeOwesHolds": {
+    "description": "Under the amount of a Business owes line: the person holds more of the business's money than the business owes them."
+  },
+  "pmeOwesOwed": "owed",
+  "@pmeOwesOwed": {
+    "description": "Under the amount of a Business owes line: the business owes the person this much after the cash they hold."
+  },
+  "pmeOwesSettledUp": "Settled up",
+  "@pmeOwesSettledUp": {
+    "description": "Under $0.00 on a Business owes line: the cash they hold and the expenses they are owed cancel out."
+  },
+  "pmeOwesCashLine": "Expenses owed {owed} · Holding {held}",
+  "@pmeOwesCashLine": {
+    "description": "Line under a staff member's name in Business owes: the month's expenses owed to them and the business cash they hold today.",
+    "placeholders": {
+      "owed": {
+        "type": "String"
+      },
+      "held": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeOwesStaffHold": "Staff hold {amount}",
+  "@pmeOwesStaffHold": {
+    "description": "Header of Business owes: the business money staff hold beyond what they are owed.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeOwesCashChecking": "Checking the cash staff hold…",
+  "@pmeOwesCashChecking": {
+    "description": "Status line of Business owes while the cash staff hold is being fetched."
+  },
+  "pmeOwesCashFailed": "The cash staff hold could not be checked; showing expenses only.",
+  "@pmeOwesCashFailed": {
+    "description": "Status line of Business owes when Staff balances could not be read."
+  },
+  "pmeOwesCashAsOf": "Cash held is as of today, from Staff balances.",
+  "@pmeOwesCashAsOf": {
+    "description": "Status line of Business owes once the cash staff hold is known."
+  },
   "pmeNoParkingBill": "No parking bill",
   "pmePaidBack": "Paid back",
   "pmePaidBackSubtitle": "{name} · owed {amount}",

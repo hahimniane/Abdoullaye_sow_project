@@ -7,6 +7,7 @@ import '../utils/callable_data.dart'
     show callableInt, callableMap, callableString;
 import 'business_account_receiver.dart';
 import 'lot_ledger.dart' show lotDateOf;
+import 'parking_month_statement.dart' show ParkingMonthStaffOwed;
 import 'waiting_package_service.dart'
     show ContainerCallableCaller, callContainerCallable;
 
@@ -325,6 +326,106 @@ StaffNetKind staffNetKind(int netCents) => netCents > 0
     : netCents < 0
     ? StaffNetKind.isOwed
     : StaffNetKind.settled;
+
+// ---------------------------------------------------------------------------
+// Month end's "Business owes", counting the cash staff hold (owner,
+// 2026-10-30). Mirrors the console's `businessOwesWithCash`.
+// ---------------------------------------------------------------------------
+
+/// One "Business owes" line as Month end shows it once the cash held is known.
+class OwesWithCash {
+  const OwesWithCash({
+    required this.line,
+    required this.expenseOwedCents,
+    required this.heldCents,
+    required this.netCents,
+    required this.owedNowCents,
+    required this.holdsCents,
+  });
+
+  final ParkingMonthStaffOwed line;
+
+  /// The month's lot expenses still owed to them after their parking bill.
+  final int expenseOwedCents;
+
+  /// Business money they hold today (Staff balances); 0 while unknown.
+  final int heldCents;
+
+  /// Staff balances' one net number today: + they owe the business, - the
+  /// business owes them; null while the balances are unknown.
+  final int? netCents;
+
+  /// What the business really owes them now (0 when they hold more than they
+  /// are owed).
+  final int owedNowCents;
+
+  /// Business money they hold beyond what they are owed.
+  final int holdsCents;
+
+  /// The cash held is known for this line.
+  bool get known => netCents != null;
+
+  /// Paid back makes sense only when the business really owes them.
+  bool get canPayBack => owedNowCents > 0;
+}
+
+/// The month's "Business owes" lines netted against the cash each person holds
+/// for the business.
+class OwesWithCashTotals {
+  const OwesWithCashTotals({
+    required this.lines,
+    required this.owedNowCents,
+    required this.holdsCents,
+  });
+
+  final List<OwesWithCash> lines;
+  final int owedNowCents;
+  final int holdsCents;
+}
+
+/// Uses Staff balances' one net number (as of today). Until the balances are
+/// known ([balances] null) a line reads as before: the expenses owed, Paid
+/// back allowed. A person with no balance row holds nothing.
+OwesWithCashTotals businessOwesWithCash(
+  List<ParkingMonthStaffOwed> lines,
+  List<StaffBalanceRow>? balances,
+) {
+  final out = <OwesWithCash>[];
+  for (final line in lines) {
+    final expenseOwed = line.owedCents < 0 ? 0 : line.owedCents;
+    if (balances == null) {
+      out.add(
+        OwesWithCash(
+          line: line,
+          expenseOwedCents: expenseOwed,
+          heldCents: 0,
+          netCents: null,
+          owedNowCents: expenseOwed,
+          holdsCents: 0,
+        ),
+      );
+      continue;
+    }
+    final row = balances.where((r) => r.staffId == line.staffId).firstOrNull;
+    final held = row == null || row.heldCents < 0 ? 0 : row.heldCents;
+    final net = row?.netCents ?? -expenseOwed;
+    out.add(
+      OwesWithCash(
+        line: line,
+        expenseOwedCents: expenseOwed,
+        heldCents: held,
+        netCents: net,
+        owedNowCents: net < 0 ? (expenseOwed < -net ? expenseOwed : -net) : 0,
+        holdsCents: net > 0 ? net : 0,
+      ),
+    );
+  }
+  return OwesWithCashTotals(
+    lines: out,
+    owedNowCents: out.fold(0, (s, l) => s + l.owedNowCents),
+    holdsCents: out.fold(0, (s, l) => s + l.holdsCents),
+  );
+}
 
 // ---------------------------------------------------------------------------
 // The service.
