@@ -1188,6 +1188,8 @@ String loadMessageText(AppLocalizations l10n, LoadFailure failure) {
     LoadMessage.containerLocked => l10n.ldgErrLocked,
     LoadMessage.destinationRequired => l10n.ldgErrDestinationRequired,
     LoadMessage.destinationMismatch => l10n.ldgErrDestinationMismatch,
+    LoadMessage.shipModeMismatch => l10n.wpkErrShipModeMismatch,
+    LoadMessage.shipModeMismatchAir => l10n.wpkErrShipModeMismatchAir,
     LoadMessage.lineDelivered => l10n.ldgErrDelivered,
     LoadMessage.inOtherContainer =>
       where.isEmpty

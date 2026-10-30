@@ -4,6 +4,8 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_flutter_app/l10n/app_localizations.dart';
+import 'package:my_flutter_app/services/package_requests.dart'
+    show PackageProofSettings;
 import 'package:my_flutter_app/models/destination_country.dart';
 import 'package:my_flutter_app/screens/add_waiting_packages_sheet.dart';
 import 'package:my_flutter_app/screens/containers_screen.dart';
@@ -99,9 +101,10 @@ class _Payments implements LinePaymentsSource {
 }
 
 class _FakeRepo implements ContainerPackageRepository {
-  _FakeRepo(this.lines);
+  _FakeRepo(this.lines, {this.settings = const PackageProofSettings()});
 
   final List<ContainerLine> lines;
+  final PackageProofSettings settings;
 
   @override
   Future<ContainerLine?> findLineByCode(String businessId, String code) async =>
@@ -129,6 +132,10 @@ class _FakeRepo implements ContainerPackageRepository {
 
   @override
   Future<String> businessCountryCode(String businessId) async => 'US';
+
+  @override
+  Future<PackageProofSettings> proofSettings(String businessId) async =>
+      settings;
 
   @override
   Future<List<DestinationCountry>> destinations(String businessId) async =>
@@ -1180,6 +1187,43 @@ void main() {
       expect(find.text('Impayé'), findsOneWidget);
       expect(find.textContaining('Déposé le'), findsOneWidget);
       expect(tester.takeException(), isNull);
+    });
+
+    // "Ships by" (docs/AIR_PACKAGES.md §7): the package page's edit offers
+    // the choice as the Waiting list does, from the business's settings.
+    testWidgets('editing a waiting package from its page offers Ships by',
+        (tester) async {
+      await _pump(
+        tester,
+        PackageResultScreen(
+          businessId: 'b1',
+          code: 'CL-K7M4P2',
+          repository: _FakeRepo([_waiting()],
+              settings: const PackageProofSettings(shipsByAir: true)),
+        ),
+        scaffold: false,
+      );
+      await tester.ensureVisible(find.byKey(const Key('pkg-edit-line')));
+      await tester.tap(find.byKey(const Key('pkg-edit-line')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('ship-mode-choice')), findsOneWidget);
+      // Sea (the line's mode): no proof section.
+      expect(find.byKey(const Key('proof-weight')), findsNothing);
+    });
+
+    testWidgets('without shipsByAir the package page edit has no choice',
+        (tester) async {
+      await _pump(
+        tester,
+        PackageResultScreen(
+            businessId: 'b1', code: 'CL-K7M4P2',
+            repository: _FakeRepo([_waiting()])),
+        scaffold: false,
+      );
+      await tester.ensureVisible(find.byKey(const Key('pkg-edit-line')));
+      await tester.tap(find.byKey(const Key('pkg-edit-line')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('ship-mode-choice')), findsNothing);
     });
 
     testWidgets('the screen finds a waiting line by its code and does not fail',

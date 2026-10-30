@@ -66,6 +66,7 @@ import 'package_scan_screen.dart';
 import 'vin_scanner_screen.dart';
 import 'waiting_packages_screen.dart';
 import '../services/whatsapp_conversations.dart' show messageCustomerTargets;
+import '../widgets/ship_mode_choice.dart';
 import '../widgets/whatsapp_widgets.dart'
     show PackageUpdateTicks, openWhatsAppForLine;
 import 'zelle_check_sheet.dart' show zelleViewerIsOwner;
@@ -812,6 +813,7 @@ class _ContainersScreenState extends State<ContainersScreen> {
           onOpenContainer: _openDetail,
           staff: _staff,
           groupLines: _lines,
+          proofSettings: _proofSettings,
         ),
       ),
     );
@@ -3891,6 +3893,28 @@ class _LineFormSheetState extends State<_LineFormSheet> {
   bool get _editing => widget.existing != null;
   bool get _waiting => widget.waiting;
 
+  /// "Ships by" (docs/AIR_PACKAGES.md §7): a waiting package's own choice
+  /// (sea unless air is picked; an edit opens on the line's); a line added
+  /// onto a container goes the way that container goes.
+  String _shipMode = containerShipModeSea;
+
+  /// The Sea · Air choice: a waiting package of a business that ships by
+  /// air (or one already marked air, so it can be changed back).
+  bool get _offersShipMode =>
+      _waiting &&
+      (widget.proofSettings.shipsByAir ||
+          (widget.existing?.isAirPackage ?? false));
+
+  /// How this line ships: the choice for a waiting package, the container's
+  /// mode for a line on one.
+  String get _lineShipMode => _waiting
+      ? _shipMode
+      : containerShipModeOf(widget.container?.shipMode);
+
+  /// The proof section (photos, what is inside, weight, declared value) is
+  /// for packages that fly: a sea package's form is the one it always was.
+  bool get _showsProof => _lineShipMode == containerShipModeAir;
+
   @override
   void initState() {
     super.initState();
@@ -3914,6 +3938,7 @@ class _LineFormSheetState extends State<_LineFormSheet> {
           businessId: widget.businessId,
           initial: line?.proofDraft ?? PackageProofDraft.empty,
         );
+    _shipMode = line?.shipMode ?? containerShipModeSea;
     if (line == null) {
       // At the counter most packages are barrels and boxes; on a container
       // the yard starts with a car, as it always has.
@@ -4350,7 +4375,10 @@ class _LineFormSheetState extends State<_LineFormSheet> {
         priceCents:
             _waiting && _isCar ? readPackagePrice(_price.text).cents : null,
         payOnArrival: _waiting && _payOnArrival,
-        proof: _proof.draft,
+        // Hidden for a sea package: nothing is sent, so an edit keeps
+        // whatever the line already has.
+        proof: _showsProof ? _proof.draft : null,
+        shipMode: _waiting ? _shipMode : null,
       );
   }
 
@@ -4433,11 +4461,12 @@ class _LineFormSheetState extends State<_LineFormSheet> {
       errors.add('vin_already_loaded');
     }
     // Photos required at drop-off (docs/AIR_PACKAGES.md §4.2): counter
-    // lines only, new or edited, as the server judges them.
+    // lines that fly only, new or edited, as the server judges them.
     final photoRefusal = photoRequirementRefusal(
       widget.proofSettings,
       source: widget.existing?.source ?? 'counter',
       photoPaths: _proof.photoPaths,
+      shipMode: _lineShipMode,
     );
     if (photoRefusal.isNotEmpty) errors.add(photoRefusal);
     if (errors.isNotEmpty) {
@@ -4806,6 +4835,19 @@ class _LineFormSheetState extends State<_LineFormSheet> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // "Ships by: Sea · Air" (docs/AIR_PACKAGES.md §7), at the top.
+          if (_offersShipMode) ...[
+            ShipModeChoice(
+              value: _shipMode,
+              enabled: !_busy,
+              onChanged: (mode) => setState(() {
+                _shipMode = mode;
+                _serverNote = '';
+                _errors = {..._errors}..removeAll(_proofCodes);
+              }),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+          ],
           if (_editing && !_waiting) ...[
             Text(
               l10n.ctrEditLineNote,
@@ -5002,14 +5044,16 @@ class _LineFormSheetState extends State<_LineFormSheet> {
                   errorFor('price_invalid') ?? errorFor('price_below_paid'),
             ),
           // Proof on the package (docs/AIR_PACKAGES.md §2): photos, what is
-          // inside, weight and declared value - every line, car or pieces.
-          if (showOwner) ...[
+          // inside, weight and declared value - every line that flies, car
+          // or pieces (§7: a sea package's form is the one it always was).
+          if (showOwner && _showsProof) ...[
             const SizedBox(height: AppSpacing.lg),
             ProofFields(
               controller: _proof,
               photosRequired: photoRequirementRefusal(
                     widget.proofSettings,
                     source: widget.existing?.source ?? 'counter',
+                    shipMode: _lineShipMode,
                   ).isNotEmpty,
               enabled: !_busy,
               onEdited: () {
@@ -6262,6 +6306,11 @@ String containerErrorText(
     'payment_already_reverted' => l10n.wpkErrPaymentReverted,
     'carrier_invalid' => l10n.ctrErrCarrierInvalid,
     'air_waybill_invalid' => l10n.airErrWaybill,
+    // "Ships by" (docs/AIR_PACKAGES.md §7).
+    'ship_mode_mismatch' => l10n.wpkErrShipModeMismatch,
+    'ship_mode_mismatch_air' => l10n.wpkErrShipModeMismatchAir,
+    'ship_mode_locked' => l10n.wpkErrShipModeLocked,
+    'ship_mode_invalid' => l10n.wpkErrShipModeInvalid,
     'sender_problem' => l10n.proofProblemBanner,
     // Pieces on lines: copy in lib/l10n (pcsErr*), the server's own words.
     'pieces_required' => l10n.pcsErrPiecesRequired,

@@ -7473,6 +7473,26 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Expenses from earlier months": "Dépenses des mois précédents",
 });
 
+// "Ships by: Sea · Air" on the package forms (ships-by.tsx), the Air/Sea
+// filter of the Waiting list and the refusals when a package goes the wrong
+// way (docs/AIR_PACKAGES.md §7). "Sea" and "Air" reuse the freight words.
+Object.assign(TEXT_TRANSLATIONS, {
+  "Ships by": "Expédié par",
+  "No waiting package ships that way.": "Aucun colis en attente n’est expédié de cette façon.",
+  "This package is marked to go by sea; this is a flight. Change the package's Ships by first.":
+    "Ce colis est prévu par bateau ; ceci est un envoi par avion. Modifiez d’abord « Expédié par » du colis.",
+  "This package is marked to go by air; this is a sea container. Change the package's Ships by first.":
+    "Ce colis est prévu par avion ; ceci est un conteneur maritime. Modifiez d’abord « Expédié par » du colis.",
+  "This package is on a container already, so it goes the way that one goes. Take it off first to change Ships by.":
+    "Ce colis est déjà sur un conteneur : il voyage comme lui. Retirez-le d’abord pour changer « Expédié par ».",
+  "Choose how the package ships: sea or air.": "Choisissez comment le colis est expédié : par bateau ou par avion.",
+});
+Object.assign(ATTRIBUTE_TRANSLATIONS, {
+  "Ships by": "Expédié par",
+  "Ships by air": "Expédié par avion",
+  "Filter by how packages ship": "Filtrer selon le mode d’expédition",
+});
+
 const englishDictionary = { ...TEXT_TRANSLATIONS, ...ATTRIBUTE_TRANSLATIONS };
 const frenchDictionary = buildReverseDictionary([
   TEXT_TRANSLATIONS,

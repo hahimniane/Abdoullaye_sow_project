@@ -222,14 +222,59 @@ export function proofSettingsOf(business: unknown): ProofSettings {
   };
 }
 
-/** Whether a counter drop-off may be saved without a photo: "" or the refusal. */
+/**
+ * Whether a counter drop-off may be saved without a photo: "" or the refusal.
+ * The switch is for packages that fly: a sea package (the default, and every
+ * line from before "Ships by") never needs one.
+ */
 export function photoRequirementRefusal(settings: Pick<ProofSettings, "photosRequired">, line: unknown): "" | "photo_required" {
   if (!settings?.photosRequired) return "";
   const row = asRow(line);
+  if (String(row.shipMode || "").toLowerCase() !== "air") return "";
   const source = String(row.source || "counter");
   if (source !== "counter") return "";
   const photos = Array.isArray(row.photoPaths) ? row.photoPaths : [];
   return photos.length ? "" : "photo_required";
+}
+
+// ---------------------------------------------------------------------------
+// "Ships by: Sea · Air" (docs/AIR_PACKAGES.md §7). A waiting package says how
+// it ships; only an air package carries the proof section (photos, what is
+// inside, weight, declared value). The choice is offered once the business
+// has started a flight (`businesses/{id}.shipsByAir`, set by the server).
+// ---------------------------------------------------------------------------
+
+export type PackageShipMode = "sea" | "air";
+
+/** A line's (or a typed) ship mode: "air", or "sea" for anything else. */
+export function packageShipModeOf(value: unknown): PackageShipMode {
+  return String(value ?? "").trim().toLowerCase() === "air" ? "air" : "sea";
+}
+
+/** Whether the business ships by air: the flag the server sets on its first flight. */
+export function shipsByAirOf(business: unknown): boolean {
+  return asRow(business).shipsByAir === true;
+}
+
+/**
+ * Whether a package form offers "Ships by": when the business flies, or when
+ * the package being edited already flies (so it can be set back to sea).
+ */
+export function shipsByChoiceShown(shipsByAir: boolean, line: unknown = null): boolean {
+  return shipsByAir === true || packageShipModeOf(asRow(line).shipMode) === "air";
+}
+
+/** Whether the form shows the proof section: only for a package that flies. */
+export function proofSectionShown(shipMode: unknown): boolean {
+  return packageShipModeOf(shipMode) === "air";
+}
+
+/**
+ * What a package form sends for the proof section: the four fields for an
+ * air package; nothing for a sea one (an edit then keeps what is stored).
+ */
+export function proofPayloadFor(shipMode: unknown, draft: ProofDraft): Partial<ProofFields> {
+  return proofSectionShown(shipMode) ? proofPayload(draft) : {};
 }
 
 // ---------------------------------------------------------------------------
@@ -260,6 +305,11 @@ export function senderConfirmationOf(line: unknown): SenderConfirmation {
 }
 
 export type ProofTicks = {
+  /**
+   * An air package shows all three ticks; a sea package (the default, and
+   * every line from before "Ships by") only the delivered one.
+   */
+  air: boolean;
   photo: boolean;
   senderOk: SenderConfirmationStatus;
   delivered: boolean;
@@ -268,28 +318,36 @@ export type ProofTicks = {
   complete: boolean;
 };
 
-/** The three ticks a package shows (derived, never stored). */
+/**
+ * The ticks a package shows (derived, never stored; the server's
+ * `proofTicks`). A sea package never needs a photo or a sender's answer:
+ * it is complete once delivered.
+ */
 export function proofTicks(line: unknown): ProofTicks {
   const row = asRow(line);
+  const air = packageShipModeOf(row.shipMode) === "air";
   const photo = Array.isArray(row.photoPaths) && row.photoPaths.length > 0;
   const senderOk = senderConfirmationOf(row).status;
   const delivered = Boolean(row.deliveredAt);
   return {
+    air,
     photo,
     senderOk,
     delivered,
     deliveredWithoutCode: delivered && row.deliveredWithoutCode === true,
-    complete: photo && senderOk === "confirmed" && delivered,
+    complete: air ? photo && senderOk === "confirmed" && delivered : delivered,
   };
 }
 
 /**
- * "Missing proof" on the Waiting list: no drop-off photo, or - when the
- * business asks senders to confirm - a sender who has not said OK yet
- * (asked, none) or said something is wrong.
+ * "Missing proof" on the Waiting list: an AIR package with no drop-off
+ * photo, or - when the business asks senders to confirm - whose sender has
+ * not said OK yet (asked, none) or said something is wrong. A sea package
+ * is never missing proof.
  */
 export function lineMissingProof(line: unknown, settings: Pick<ProofSettings, "senderConfirm">): boolean {
   const ticks = proofTicks(line);
+  if (!ticks.air) return false;
   if (!ticks.photo) return true;
   return Boolean(settings?.senderConfirm) && ticks.senderOk !== "confirmed";
 }

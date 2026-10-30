@@ -17824,4 +17824,33 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get lotErrEndMonthBeforePurchases =>
       'Ce poste a des achats après ce mois.';
+
+  @override
+  String get shipsByLabel => 'Expédié par';
+
+  @override
+  String get shipsByAirBadge => 'Avion';
+
+  @override
+  String get wpkErrShipModeMismatch =>
+      'Ce colis est prévu par mer ; ceci est un envoi aérien. Changez d\'abord « Expédié par » du colis.';
+
+  @override
+  String get wpkErrShipModeMismatchAir =>
+      'Ce colis est prévu par avion ; ceci est un conteneur maritime. Changez d\'abord « Expédié par » du colis.';
+
+  @override
+  String get wpkErrShipModeLocked =>
+      'Ce colis est déjà sur un conteneur : il part comme lui. Retirez-le d\'abord pour changer « Expédié par ».';
+
+  @override
+  String get wpkErrShipModeInvalid =>
+      'Choisissez comment le colis est expédié : mer ou avion.';
+
+  @override
+  String get wpkBlockedShipsBySea => 'Par mer ; ceci est un envoi aérien';
+
+  @override
+  String get wpkBlockedShipsByAir =>
+      'Par avion ; ceci est un conteneur maritime';
 }

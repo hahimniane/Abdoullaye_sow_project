@@ -1561,6 +1561,7 @@ Map<String, Object?> receivePayload({
   bool payOnArrival = false,
   Map<String, Object?>? payment,
   Map<String, Object?> proof = const {},
+  String? shipMode,
 }) => {
   'businessId': businessId,
   'requestId': requestId,
@@ -1573,6 +1574,9 @@ Map<String, Object?> receivePayload({
   // receivePackageRequest reads them. The request's own photos are copied
   // by the server ahead of these.
   ...proof,
+  // "Ships by" (docs/AIR_PACKAGES.md §7): sent when the business ships by
+  // air; the server reads none as sea.
+  'shipMode': ?shipMode,
 };
 
 class RequestReceived {
@@ -1869,6 +1873,7 @@ class PackageProofSettings {
     this.photosRequired = false,
     this.senderConfirm = false,
     this.pickupCode = false,
+    this.shipsByAir = false,
   });
 
   /// From the stored map (`packageProofSettings`) or the callable's echo.
@@ -1883,7 +1888,8 @@ class PackageProofSettings {
 
   /// From the `businesses/{id}` document.
   factory PackageProofSettings.fromBusiness(Map<String, dynamic> business) =>
-      PackageProofSettings.fromMap(business['packageProofSettings']);
+      PackageProofSettings.fromMap(business['packageProofSettings'])
+          .copyWith(shipsByAir: business['shipsByAir'] == true);
 
   /// Photos required at drop-off (counter packages only).
   final bool photosRequired;
@@ -1893,6 +1899,11 @@ class PackageProofSettings {
 
   /// A pickup code is minted per package and asked at delivery.
   final bool pickupCode;
+
+  /// `businesses/{id}.shipsByAir` (docs/AIR_PACKAGES.md §7), set by the
+  /// server the first time the business starts a flight: its package forms
+  /// offer "Ships by: Sea · Air". Not a switch: never in [toMap].
+  final bool shipsByAir;
 
   bool get anyOn => photosRequired || senderConfirm || pickupCode;
 
@@ -1907,10 +1918,12 @@ class PackageProofSettings {
     bool? photosRequired,
     bool? senderConfirm,
     bool? pickupCode,
+    bool? shipsByAir,
   }) => PackageProofSettings(
     photosRequired: photosRequired ?? this.photosRequired,
     senderConfirm: senderConfirm ?? this.senderConfirm,
     pickupCode: pickupCode ?? this.pickupCode,
+    shipsByAir: shipsByAir ?? this.shipsByAir,
   );
 
   @override
@@ -1918,10 +1931,12 @@ class PackageProofSettings {
       other is PackageProofSettings &&
       other.photosRequired == photosRequired &&
       other.senderConfirm == senderConfirm &&
-      other.pickupCode == pickupCode;
+      other.pickupCode == pickupCode &&
+      other.shipsByAir == shipsByAir;
 
   @override
-  int get hashCode => Object.hash(photosRequired, senderConfirm, pickupCode);
+  int get hashCode =>
+      Object.hash(photosRequired, senderConfirm, pickupCode, shipsByAir);
 }
 
 /// A request code as the counter types or scans it (docs/AIR_PACKAGES.md

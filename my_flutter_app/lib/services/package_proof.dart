@@ -435,13 +435,17 @@ PackageProofSettings proofSettingsOf(Map<String, dynamic>? business) =>
     PackageProofSettings.fromBusiness(business ?? const {});
 
 /// Whether a counter drop-off may be saved without a photo: "" or
-/// "photo_required". Mirrors `photoRequirementRefusal`.
+/// "photo_required". The switch is for packages that fly: a sea package
+/// ([shipMode] "sea", the default, and every line from before "Ships by")
+/// never needs one. Mirrors `photoRequirementRefusal`.
 String photoRequirementRefusal(
   PackageProofSettings settings, {
   String source = 'counter',
   List<String> photoPaths = const [],
+  String shipMode = 'sea',
 }) {
   if (!settings.photosRequired) return '';
+  if (shipMode.trim().toLowerCase() != 'air') return '';
   if ((source.isEmpty ? 'counter' : source) != 'counter') return '';
   return photoPaths.isEmpty ? 'photo_required' : '';
 }
@@ -494,14 +498,22 @@ SenderConfirmation senderConfirmationOf(Map<String, dynamic>? line) =>
 
 /// The three ticks a package shows (§1.11): drop-off photo, the sender's
 /// answer, delivered. Derived, never stored. Mirrors `proofTicks`.
+///
+/// A sea package (the default, and every line from before "Ships by", §7)
+/// has only the delivered tick: it never needs a photo or a sender's
+/// answer, so it is complete once delivered and never missing proof.
 class ProofTicks {
   const ProofTicks({
     required this.photo,
     required this.senderOk,
     required this.delivered,
     this.deliveredWithoutCode = false,
+    this.air = true,
   });
 
+  /// Whether the package flies: only then are the photo and sender ticks
+  /// shown and counted.
+  final bool air;
   final bool photo;
 
   /// One of [senderConfirmationStatuses].
@@ -509,27 +521,31 @@ class ProofTicks {
   final bool delivered;
   final bool deliveredWithoutCode;
 
-  bool get complete =>
-      photo && senderOk == senderConfirmationConfirmed && delivered;
+  bool get complete => air
+      ? photo && senderOk == senderConfirmationConfirmed && delivered
+      : delivered;
 
-  /// Missing proof (the Waiting list's filter): no photo, or a sender who
-  /// has not said OK.
-  bool get missing => !photo || senderOk != senderConfirmationConfirmed;
+  /// Missing proof (the Waiting list's filter): an air package with no
+  /// photo, or whose sender has not said OK. A sea package never is.
+  bool get missing =>
+      air && (!photo || senderOk != senderConfirmationConfirmed);
 
   @override
   bool operator ==(Object other) =>
       other is ProofTicks &&
+      other.air == air &&
       other.photo == photo &&
       other.senderOk == senderOk &&
       other.delivered == delivered &&
       other.deliveredWithoutCode == deliveredWithoutCode;
 
   @override
-  int get hashCode => Object.hash(photo, senderOk, delivered, deliveredWithoutCode);
+  int get hashCode =>
+      Object.hash(air, photo, senderOk, delivered, deliveredWithoutCode);
 
   @override
-  String toString() =>
-      'ProofTicks(photo: $photo, sender: $senderOk, delivered: $delivered)';
+  String toString() => 'ProofTicks(air: $air, photo: $photo, '
+      'sender: $senderOk, delivered: $delivered)';
 }
 
 /// The ticks of a stored line map. Mirrors `proofTicks`.
@@ -540,6 +556,7 @@ ProofTicks proofTicksOf(Map<String, dynamic>? line) {
     senderOk: senderConfirmationOf(line).status,
     delivered: line?['deliveredAt'] != null,
     deliveredWithoutCode: line?['deliveredWithoutCode'] == true,
+    air: (line?['shipMode'] ?? '').toString().trim().toLowerCase() == 'air',
   );
 }
 

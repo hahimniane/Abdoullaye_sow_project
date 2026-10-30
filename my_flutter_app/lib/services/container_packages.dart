@@ -10,6 +10,7 @@ import '../data/calling_code_catalog.dart';
 import 'container_manifest.dart';
 import 'package_codes.dart';
 import 'package_labels.dart';
+import 'package_proof.dart' show PackageProofSettings, proofSettingsOf;
 import 'waiting_package_service.dart' show callContainerCallable;
 
 /// Reading one package - a container line - and its container, scoped to the
@@ -38,6 +39,10 @@ abstract interface class ContainerPackageRepository {
   /// where the phone pickers start. Empty when unreadable.
   Future<String> businessCountryCode(String businessId);
   Future<List<DestinationCountry>> destinations(String businessId);
+
+  /// The business's package switches and whether it ships by air
+  /// (`packageProofSettings`, `shipsByAir`); all off when unreadable.
+  Future<PackageProofSettings> proofSettings(String businessId);
 }
 
 class FirestoreContainerPackageRepository implements ContainerPackageRepository {
@@ -109,6 +114,16 @@ class FirestoreContainerPackageRepository implements ContainerPackageRepository 
       .map((snap) => sortContainers([
             for (final d in snap.docs) ShippingContainer.fromMap(d.id, d.data()),
           ]));
+
+  @override
+  Future<PackageProofSettings> proofSettings(String businessId) async {
+    try {
+      final doc = await _db.collection('businesses').doc(businessId).get();
+      return proofSettingsOf(doc.data());
+    } catch (_) {
+      return const PackageProofSettings();
+    }
+  }
 
   @override
   Future<String> businessCountryCode(String businessId) async {

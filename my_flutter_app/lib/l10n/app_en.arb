@@ -9268,5 +9268,37 @@
   "lotErrEndMonthBeforePurchases": "This line has purchases after that month.",
   "@lotErrEndMonthBeforePurchases": {
     "description": "Refusal: the line has purchases after the stop month."
+  },
+  "shipsByLabel": "Ships by",
+  "@shipsByLabel": {
+    "description": "Label above the Sea / Air choice on a package form (docs/AIR_PACKAGES.md \u00a77)."
+  },
+  "shipsByAirBadge": "Air",
+  "@shipsByAirBadge": {
+    "description": "Small badge on a waiting package marked to fly."
+  },
+  "wpkErrShipModeMismatch": "This package is marked to go by sea; this is a flight. Change the package's Ships by first.",
+  "@wpkErrShipModeMismatch": {
+    "description": "Refusal: a package marked sea put on an air shipment."
+  },
+  "wpkErrShipModeMismatchAir": "This package is marked to go by air; this is a sea container. Change the package's Ships by first.",
+  "@wpkErrShipModeMismatchAir": {
+    "description": "Refusal: a package marked air put on a sea container."
+  },
+  "wpkErrShipModeLocked": "This package is on a container already, so it goes the way that one goes. Take it off first to change Ships by.",
+  "@wpkErrShipModeLocked": {
+    "description": "Refusal: Ships by changed on a package already on a container."
+  },
+  "wpkErrShipModeInvalid": "Choose how the package ships: sea or air.",
+  "@wpkErrShipModeInvalid": {
+    "description": "Refusal: the ship mode sent is neither sea nor air."
+  },
+  "wpkBlockedShipsBySea": "Ships by sea; this is a flight",
+  "@wpkBlockedShipsBySea": {
+    "description": "Why a waiting package cannot go on this air shipment (row note)."
+  },
+  "wpkBlockedShipsByAir": "Ships by air; this is a sea container",
+  "@wpkBlockedShipsByAir": {
+    "description": "Why a waiting package cannot go on this sea container (row note)."
   }
 }

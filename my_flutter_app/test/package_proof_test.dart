@@ -221,17 +221,41 @@ void main() {
       );
     });
 
-    test('requires a photo only for counter drop-offs when switched on', () {
+    test('requires a photo only for air counter drop-offs when on', () {
       const on = PackageProofSettings(photosRequired: true);
-      expect(photoRequirementRefusal(on), 'photo_required');
-      expect(photoRequirementRefusal(on, photoPaths: [path]), '');
-      expect(photoRequirementRefusal(on, source: 'request'), '');
-      expect(photoRequirementRefusal(const PackageProofSettings()), '');
+      expect(photoRequirementRefusal(on, shipMode: 'air'), 'photo_required');
+      expect(
+        photoRequirementRefusal(on, photoPaths: [path], shipMode: 'air'),
+        '',
+      );
+      expect(
+        photoRequirementRefusal(on, source: 'request', shipMode: 'air'),
+        '',
+      );
+      expect(
+        photoRequirementRefusal(const PackageProofSettings(), shipMode: 'air'),
+        '',
+      );
+      // A sea package (the default, and every line from before "Ships
+      // by") never needs a photo.
+      expect(photoRequirementRefusal(on), '');
+      expect(photoRequirementRefusal(on, shipMode: 'sea'), '');
+    });
+
+    test('reads shipsByAir off the business, never into the switches', () {
+      expect(proofSettingsOf({'shipsByAir': true}).shipsByAir, isTrue);
+      expect(proofSettingsOf({'shipsByAir': 'yes'}).shipsByAir, isFalse);
+      expect(proofSettingsOf(null).shipsByAir, isFalse);
+      expect(
+        const PackageProofSettings(shipsByAir: true).toMap().keys,
+        isNot(contains('shipsByAir')),
+      );
     });
 
     test('shows the three ticks', () {
       expect(
         proofTicksOf({
+          'shipMode': 'air',
           'photoPaths': [path],
           'senderConfirmation': {'status': 'confirmed'},
           'deliveredAt': DateTime(2026, 10, 29),
@@ -242,10 +266,29 @@ void main() {
           delivered: true,
         ),
       );
-      expect(proofTicksOf({}),
+      expect(proofTicksOf({'shipMode': 'air'}),
           const ProofTicks(photo: false, senderOk: 'none', delivered: false));
+      expect(proofTicksOf({'shipMode': 'air'}).complete, isFalse);
+      expect(proofTicksOf({'shipMode': 'air'}).missing, isTrue);
+      // A sea package (or one from before "Ships by") has only the
+      // delivered tick: never missing proof, complete once delivered.
+      expect(
+        proofTicksOf({}),
+        const ProofTicks(
+            photo: false, senderOk: 'none', delivered: false, air: false),
+      );
+      expect(proofTicksOf({}).missing, isFalse);
+      expect(proofTicksOf({'shipMode': 'sea', 'senderConfirmation': {
+        'status': 'problem',
+      }}).missing, isFalse);
       expect(proofTicksOf({}).complete, isFalse);
-      expect(proofTicksOf({}).missing, isTrue);
+      expect(
+          proofTicksOf({'deliveredAt': DateTime(2026, 10, 29)}).complete,
+          isTrue);
+      expect(
+          ContainerLine.fromMap('x', {'shipMode': 'air'}).proofTicks.air,
+          isTrue);
+      expect(ContainerLine.fromMap('x', {}).proofTicks.missing, isFalse);
       expect(
         senderConfirmationOf({
           'senderConfirmation': {'status': 'weird'},

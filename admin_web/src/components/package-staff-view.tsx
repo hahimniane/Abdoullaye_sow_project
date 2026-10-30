@@ -329,9 +329,9 @@ export function PackageStaffView({
         <h3>Proof</h3>
         <div className="prf-staff-ticks">
           <ProofTicks line={line} ticks={ticks} />
-          <small data-no-translate>{tickLabels.photo} · {tickLabels.sender} · {tickLabels.delivered}</small>
+          <small data-no-translate>{ticks.air ? `${tickLabels.photo} · ${tickLabels.sender} · ${tickLabels.delivered}` : tickLabels.delivered}</small>
         </div>
-        {photoPaths.length > 0 ? <ProofPhotoThumbs paths={photoPaths} /> : <p className="pkg-staff-muted">No drop-off photo.</p>}
+        {photoPaths.length > 0 ? <ProofPhotoThumbs paths={photoPaths} /> : ticks.air ? <p className="pkg-staff-muted">No drop-off photo.</p> : null}
         <div className="pur-info">
           <div>
             <span>What&apos;s inside</span>

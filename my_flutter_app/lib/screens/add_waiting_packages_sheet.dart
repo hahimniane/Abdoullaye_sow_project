@@ -214,6 +214,12 @@ class _AddWaitingPackagesSheetState extends State<AddWaitingPackagesSheet> {
     if (entry.refusal == 'container_destination_required') {
       return l10n.wpkErrContainerDestinationRequired;
     }
+    // Going the other way (docs/AIR_PACKAGES.md §7): say how it ships.
+    if (entry.refusal == 'ship_mode_mismatch') {
+      return entry.line.isAirPackage
+          ? l10n.wpkBlockedShipsByAir
+          : l10n.wpkBlockedShipsBySea;
+    }
     final line = entry.line;
     final from = line.destinationCountryName.isEmpty
         ? line.destinationCountryId

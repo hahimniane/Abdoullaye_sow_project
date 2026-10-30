@@ -332,7 +332,14 @@ export type ContainerRefusal =
   | "line_delivered"
   | "line_in_other_container"
   // Loading warning (docs/AIR_PACKAGES.md §4.8).
-  | "sender_problem";
+  | "sender_problem"
+  // "Ships by" (docs/AIR_PACKAGES.md §7). `ship_mode_mismatch_air` is only
+  // the sentence for an air package on a sea container; the code is
+  // ship_mode_mismatch either way, with `details.shipMode`.
+  | "ship_mode_mismatch"
+  | "ship_mode_mismatch_air"
+  | "ship_mode_locked"
+  | "ship_mode_invalid";
 
 export const CONTAINER_MESSAGES: Record<ContainerRefusal, string> = {
   container_label_required: "Give the container a working name, or its container or booking number.",
@@ -372,6 +379,13 @@ export const CONTAINER_MESSAGES: Record<ContainerRefusal, string> = {
   package_destination_required: "Choose where this package is going.",
   destination_mismatch:
     "A package can only go on a container headed to the same country.",
+  ship_mode_mismatch:
+    "This package is marked to go by sea; this is a flight. Change the package's Ships by first.",
+  ship_mode_mismatch_air:
+    "This package is marked to go by air; this is a sea container. Change the package's Ships by first.",
+  ship_mode_locked:
+    "This package is on a container already, so it goes the way that one goes. Take it off first to change Ships by.",
+  ship_mode_invalid: "Choose how the package ships: sea or air.",
   container_destination_required:
     "Choose where this container is going before adding packages to it.",
   size_invalid:
@@ -1781,9 +1795,29 @@ export type ContainerCallableFailure = {
   conflictContainerId: string;
   /** Set when the car that is already held is a package waiting for a container (nothing to jump to). */
   conflictWaiting: boolean;
-  /** Set when the refusal was `destination_mismatch`: the packages that do not fit. */
+  /** Set when the refusal was `destination_mismatch` or `ship_mode_mismatch`: the packages that do not fit. */
   offendingLineIds: string[];
 };
+
+/** How a package ships ("Ships by"): "air", or "sea" for anything else (every line from before the choice). */
+export function lineShipModeOf(line: unknown): ShipMode {
+  return shipModeOf(asRow(line).shipMode);
+}
+
+/**
+ * Whether a line may ride a container by how each ships (the server's
+ * `shipModeMismatch`): a line on a container (a move) goes the way that
+ * container goes.
+ */
+export function shipModeMismatch(line: unknown, container: unknown, onContainer: unknown = null): "ship_mode_mismatch" | null {
+  const lineMode = onContainer && typeof onContainer === "object" ? shipModeOf(asRow(onContainer).shipMode) : lineShipModeOf(line);
+  return lineMode === shipModeOf(asRow(container).shipMode) ? null : "ship_mode_mismatch";
+}
+
+/** The refusal sentence for a package going the wrong way (the server's `shipModeMismatchMessage`). */
+export function shipModeMismatchMessage(lineMode: unknown): string {
+  return shipModeOf(lineMode) === "air" ? CONTAINER_MESSAGES.ship_mode_mismatch_air : CONTAINER_MESSAGES.ship_mode_mismatch;
+}
 
 /**
  * A callable's rejection, read for the sentence and the details that change
@@ -1803,6 +1837,7 @@ export function containerCallableFailure(error: unknown): ContainerCallableFailu
   const reason = text(details.reason, 40);
   const message =
     text(e.message, 500) ||
+    (reason === "ship_mode_mismatch" ? shipModeMismatchMessage(details.shipMode) : "") ||
     (reason && reason in CONTAINER_MESSAGES
       ? CONTAINER_MESSAGES[reason as ContainerRefusal]
       : "") ||
@@ -1816,6 +1851,8 @@ export function containerCallableFailure(error: unknown): ContainerCallableFailu
     conflictContainerId: conflictWaiting ? "" : holder,
     conflictWaiting,
     offendingLineIds:
-      reason === "destination_mismatch" ? rawIds.map((id) => text(id, MAX_LABEL)).filter(Boolean) : [],
+      reason === "destination_mismatch" || reason === "ship_mode_mismatch"
+        ? rawIds.map((id) => text(id, MAX_LABEL)).filter(Boolean)
+        : [],
   };
 }

@@ -4415,23 +4415,39 @@ describe("proof on the package", () => {
           }
         });
 
-    it("requires one at the counter when the switch is on", async () => {
-      await switches({photosRequired: true});
-      await assert.rejects(run("addWaitingPackage", barrels(1), P_STAFF),
+    it("requires one at the counter when the switch is on, for air only",
+        async () => {
+          await switches({photosRequired: true});
+          await assert.rejects(run("addWaitingPackage",
+              barrels(1, {shipMode: "air"}), P_STAFF),
           (error) => error.code === "failed-precondition" &&
             error.details?.reason === "photo_required");
+          // A sea package (the default) never needs one.
+          const sea = await run("addWaitingPackage", barrels(1), P_STAFF);
+          assert.equal((await lineOf(sea.lineId)).shipMode, "sea");
+          const seaBox = await run("createContainer",
+              {label: "Required sea box", ...GUINEA});
+          await run("addContainerLine", {containerId: seaBox.containerId,
+            line: barrels(1, {photoPaths: []})}, P_STAFF);
+          await switches({});
+        });
+
+    it("requires one on an air line when the switch is on", async () => {
+      await switches({photosRequired: true});
       const {containerId} = await run("createContainer",
-          {label: "Required box", ...GUINEA});
+          {label: "Required flight", shipMode: "air", ...GUINEA});
+      // Added straight onto a flight, it flies: the photo is needed.
       await assert.rejects(run("addContainerLine", {containerId,
         line: barrels(1, {photoPaths: []})}, P_STAFF),
       refused("photo_required"));
       const own = await photo(P_STAFF);
       const dropped = await run("addWaitingPackage",
-          barrels(1, {photoPaths: [own]}), P_STAFF);
+          barrels(1, {photoPaths: [own], shipMode: "air"}), P_STAFF);
       assert.deepEqual((await lineOf(dropped.lineId)).photoPaths, [own]);
       const added = await run("addContainerLine", {containerId,
         line: barrels(1, {photoPaths: [own]})}, P_STAFF);
       assert.deepEqual((await lineOf(added.lineId)).photoPaths, [own]);
+      assert.equal((await lineOf(added.lineId)).shipMode, "air");
       // Taking the last photo off a counter line is refused the same way.
       await assert.rejects(run("updateContainerLine", {
         lineId: dropped.lineId, line: {...barrels(1), photoPaths: []}},
@@ -4820,4 +4836,173 @@ describe("proof on the package", () => {
           swept.photosDeletedAtMs);
     });
   });
+});
+
+// "Ships by: Sea · Air" (docs/AIR_PACKAGES.md §7): a waiting package says
+// how it ships; it rides only a container of the same mode; a line added
+// straight onto a container takes the container's; the business is marked
+// `shipsByAir` the first time it starts a flight. Its own business, so the
+// flag starts unset.
+describe("ships by: sea or air", () => {
+  const S_BIZ = "shipmode-test-biz";
+  const S_OWNER = "shipmode-test-owner";
+  const bizRef = db.collection("businesses").doc(S_BIZ);
+  before(async () => {
+    await Promise.all([
+      bizRef.set({name: "Mode Shipping", status: "approved",
+        ownerUid: S_OWNER}),
+      db.collection("users").doc(S_OWNER).set({
+        role: "businessOwner", businessId: S_BIZ, fullName: "Mode Owner",
+      }),
+    ]);
+  });
+  const run = (name, data) =>
+    functions[name].run({auth: {uid: S_OWNER, token: {}},
+      data: {businessId: S_BIZ, ...data}});
+  const GUINEA = {destinationCountryId: "gn",
+    destinationCountryName: "Guinea"};
+  const pkg = (extra = {}) => ({ownerKind: "customer",
+    customerName: "Fatou Diallo", customerPhone: "+16465550100",
+    receiverName: "Mariama Bah", receiverPhone: "+224620000000", ...GUINEA,
+    pieces: [{kind: "barrel"}], ...extra});
+  const lineOf = async (id) =>
+    (await db.collection("containerLines").doc(id).get()).data();
+  let serial = 0;
+  const box = async (extra = {}) => (await run("createContainer", {
+    label: `Mode box ${++serial}`, ...GUINEA, ...extra})).containerId;
+  const mismatch = (shipMode, lineIds) => (error) =>
+    error.code === "failed-precondition" &&
+    error.details?.reason === "ship_mode_mismatch" &&
+    error.details?.shipMode === shipMode &&
+    (!lineIds || JSON.stringify(error.details?.lineIds) ===
+      JSON.stringify(lineIds)) &&
+    error.message === (shipMode === "air" ?
+      CONTAINER_MESSAGES.ship_mode_mismatch_air :
+      CONTAINER_MESSAGES.ship_mode_mismatch);
+  let scans = 0;
+  const scan = (containerId, code) => run("assignContainerLines", {
+    containerId, action: "scan", code,
+    scanId: `mode-scan-${String(++scans).padStart(4, "0")}`});
+
+  it("marks the business on its first flight, never on a sea box",
+      async () => {
+        await box();
+        assert.equal((await bizRef.get()).data().shipsByAir, undefined);
+        const sea = await box();
+        await run("updateContainer", {containerId: sea,
+          changes: {notes: "still sea"}});
+        assert.equal((await bizRef.get()).data().shipsByAir, undefined);
+        // Turning a loading box into a flight marks it too.
+        await run("updateContainer", {containerId: sea,
+          changes: {shipMode: "air", airWaybill: "176-10000001"}});
+        assert.equal((await bizRef.get()).data().shipsByAir, true);
+        // Back to sea: the flag stays.
+        await run("updateContainer", {containerId: sea,
+          changes: {shipMode: "sea"}});
+        assert.equal((await bizRef.get()).data().shipsByAir, true);
+        await bizRef.update({shipsByAir: admin.firestore.FieldValue.delete()});
+        await box({shipMode: "air", airWaybill: "176-10000002"});
+        assert.equal((await bizRef.get()).data().shipsByAir, true);
+      });
+
+  it("is sea by default and air when chosen, on a waiting package",
+      async () => {
+        const sea = await run("addWaitingPackage", pkg());
+        assert.equal((await lineOf(sea.lineId)).shipMode, "sea");
+        const air = await run("addWaitingPackage", pkg({shipMode: "air"}));
+        assert.equal((await lineOf(air.lineId)).shipMode, "air");
+        await assert.rejects(run("addWaitingPackage",
+            pkg({shipMode: "rail"})), (error) =>
+          error.details?.reasons?.includes("ship_mode_invalid"));
+      });
+
+  it("gives a line added onto a container the container's mode",
+      async () => {
+        const flight = await box({shipMode: "air"});
+        const sea = await box();
+        const onFlight = await run("addContainerLine", {containerId: flight,
+          line: pkg({shipMode: "sea"})});
+        assert.equal((await lineOf(onFlight.lineId)).shipMode, "air");
+        const onSea = await run("addContainerLine", {containerId: sea,
+          line: pkg({shipMode: "air"})});
+        assert.equal((await lineOf(onSea.lineId)).shipMode, "sea");
+      });
+
+  it("refuses the wrong mode from the list, both ways, all or none",
+      async () => {
+        const flight = await box({shipMode: "air"});
+        const sea = await box();
+        const s1 = (await run("addWaitingPackage", pkg())).lineId;
+        const a1 = (await run("addWaitingPackage",
+            pkg({shipMode: "air"}))).lineId;
+        await assert.rejects(run("assignContainerLines",
+            {containerId: flight, lineIds: [a1, s1]}), mismatch("sea", [s1]));
+        await assert.rejects(run("assignContainerLines",
+            {containerId: sea, lineIds: [s1, a1]}), mismatch("air", [a1]));
+        // Nothing went on.
+        assert.equal((await lineOf(a1)).containerId, "");
+        assert.equal((await lineOf(s1)).containerId, "");
+        await run("assignContainerLines", {containerId: flight,
+          lineIds: [a1]});
+        await run("assignContainerLines", {containerId: sea, lineIds: [s1]});
+        assert.equal((await lineOf(a1)).containerId, flight);
+        assert.equal((await lineOf(s1)).containerId, sea);
+        // Nor moved across.
+        await assert.rejects(run("moveContainerLine",
+            {lineId: a1, toContainerId: sea}), mismatch("air", [a1]));
+        await assert.rejects(run("moveContainerLine",
+            {lineId: s1, toContainerId: flight}), mismatch("sea", [s1]));
+        // Flight to flight moves.
+        const flight2 = await box({shipMode: "air"});
+        await run("moveContainerLine", {lineId: a1, toContainerId: flight2});
+        assert.equal((await lineOf(a1)).containerId, flight2);
+      });
+
+  it("refuses the wrong mode by scan, both ways", async () => {
+    const flight = await box({shipMode: "air"});
+    const sea = await box();
+    const s1 = await run("addWaitingPackage", pkg());
+    const a1 = await run("addWaitingPackage", pkg({shipMode: "air"}));
+    await assert.rejects(scan(flight, s1.trackingCode),
+        mismatch("sea", [s1.lineId]));
+    await assert.rejects(scan(sea, a1.trackingCode),
+        mismatch("air", [a1.lineId]));
+    await scan(flight, a1.trackingCode);
+    await scan(sea, s1.trackingCode);
+    assert.equal((await lineOf(a1.lineId)).containerId, flight);
+    assert.equal((await lineOf(s1.lineId)).containerId, sea);
+  });
+
+  it("changes Ships by while waiting, never once on a container",
+      async () => {
+        const {lineId} = await run("addWaitingPackage", pkg());
+        const edited = await run("updateContainerLine",
+            {lineId, line: {...pkg(), shipMode: "air"}});
+        assert.deepEqual(edited.changed, ["shipMode"]);
+        assert.equal((await lineOf(lineId)).shipMode, "air");
+        const flight = await box({shipMode: "air"});
+        await run("assignContainerLines", {containerId: flight,
+          lineIds: [lineId]});
+        await assert.rejects(run("updateContainerLine",
+            {lineId, line: {...pkg(), shipMode: "sea"}}), (error) =>
+          error.code === "failed-precondition" &&
+            error.details?.reason === "ship_mode_locked");
+        assert.equal((await lineOf(lineId)).shipMode, "air");
+        // An edit that leaves it out is fine.
+        await run("updateContainerLine",
+            {lineId, line: {...pkg(), receiverName: "Aissatou Bah"}});
+        // Back on the waiting list it keeps the flight's mode.
+        await run("unassignContainerLine", {lineId});
+        assert.equal((await lineOf(lineId)).shipMode, "air");
+      });
+
+  it("carries a loading box's lines along when its mode changes",
+      async () => {
+        const containerId = await box();
+        const {lineId} = await run("addContainerLine",
+            {containerId, line: pkg()});
+        await run("updateContainer", {containerId,
+          changes: {shipMode: "air", airWaybill: "176-10000003"}});
+        assert.equal((await lineOf(lineId)).shipMode, "air");
+      });
 });
