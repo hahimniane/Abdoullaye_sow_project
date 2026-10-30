@@ -146,3 +146,26 @@ test("the real PDF in French lists the earlier months too", async () => {
   assert.ok(drawn.includes("Dépenses des mois précédents"), JSON.stringify(drawn));
   assert.ok(drawn.includes("Moins les dépenses"));
 });
+
+// A car that left before the month and still owes (docs/PARKING_CARRYOVER.md)
+// is listed under "Unpaid from before" on the printed bill, before the month's
+// own total.
+const carriedCustomer = () =>
+  parkingMonthSummary([
+    { id: "highlander", ...direct, customerName: "Mariam", customerPhone: "+12015550101", parkingDate: at("2026-09-06"), parkingEndDate: at("2026-09-07"), amountDueCents: 2400, carYear: "2021", carMake: "Toyota", carModel: "Highlander", vinNumber: "1abc" },
+  ], "2026-10", NOV1, []).customers[0];
+
+test("the real PDF lists a carried car under Unpaid from before", async () => {
+  const drawn = drawnText(await pdfText(await buildParkingMonthBillPdf({ business: { name: "Dala Parking" }, customer: carriedCustomer(), language: "en" }))).map((d) => d.text);
+  assert.ok(drawn.includes("Unpaid from before"), JSON.stringify(drawn));
+  assert.ok(drawn.includes("Parking · 2021 Toyota Highlander"), JSON.stringify(drawn));
+  assert.ok(drawn.includes("Sep 6, 2026 to Sep 7, 2026"), JSON.stringify(drawn));
+  assert.ok(drawn.some((t) => t.startsWith("VIN 1ABC")), JSON.stringify(drawn));
+  assert.ok(drawn.includes("$24.00"));
+});
+
+test("the real PDF lists a carried car in French too", async () => {
+  const drawn = drawnText(await pdfText(await buildParkingMonthBillPdf({ business: { name: "Dala Parking" }, customer: carriedCustomer(), language: "fr" }))).map((d) => d.text);
+  assert.ok(drawn.includes("Impayé des mois précédents"), JSON.stringify(drawn));
+  assert.ok(drawn.includes("Parking · 2021 Toyota Highlander"), JSON.stringify(drawn));
+});

@@ -173,6 +173,7 @@ const SITES: Site[] = [
   { file: L("business-data.ts"), kind: "useBusinessCollection", what: "useParkedCarHistory", shapes: [bc("parkedCars", { orderBy: "occupancyEndMs", direction: "desc", where: [["occupancyEndMs", "<", 0]] })] },
   { file: L("business-data.ts"), kind: "useBusinessCollection", what: "useOpenContainerPlacements containers", shapes: [bc("containers", { pageSize: null, where: [["status", "in", ["loading", "shipped"]]] })] },
   { file: L("business-data.ts"), kind: "useBusinessCollection", what: "month cars", shapes: [bc("parkedCars", { pageSize: null, where: monthPlan.cars.where })] },
+  { file: L("business-data.ts"), kind: "useBusinessCollection", what: "month cars unpaid", shapes: [bc("parkedCars", { pageSize: null, where: monthPlan.unpaidCars.where })] },
   { file: L("business-data.ts"), kind: "useBusinessCollection", what: "month activities in month", shapes: [bc("lotActivities", { pageSize: null, where: monthPlan.inMonth.where, orderBy: "activityDate", direction: "desc" })] },
   { file: L("business-data.ts"), kind: "useBusinessCollection", what: "month activities unsettled", shapes: [bc("lotActivities", { pageSize: null, where: monthPlan.unsettled.where })] },
   { file: L("business-data.ts"), kind: "useBusinessCollection", what: "month activities undated", shapes: [bc("lotActivities", { pageSize: null, where: monthPlan.undated.where })] },

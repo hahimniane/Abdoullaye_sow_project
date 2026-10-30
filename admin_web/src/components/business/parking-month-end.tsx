@@ -312,7 +312,7 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
                 <div>
                   <strong data-no-translate>{customer.customerName || "—"}</strong>
                   {invoiceMessages.byCustomer.has(customer.key) && <InvoiceMessageStatus line={invoiceMessages.byCustomer.get(customer.key)!} />}
-                  <small>{[customer.customerPhone, customer.cars.length ? `${customer.cars.length} car${customer.cars.length === 1 ? "" : "s"}` : "", customer.activities.length + customer.olderActivities.length ? `${customer.activities.length + customer.olderActivities.length} activit${customer.activities.length + customer.olderActivities.length === 1 ? "y" : "ies"}` : ""].filter(Boolean).join(" · ")}</small>
+                  <small>{[customer.customerPhone, customer.cars.length + customer.olderCars.length ? `${customer.cars.length + customer.olderCars.length} car${customer.cars.length + customer.olderCars.length === 1 ? "" : "s"}` : "", customer.activities.length + customer.olderActivities.length ? `${customer.activities.length + customer.olderActivities.length} activit${customer.activities.length + customer.olderActivities.length === 1 ? "y" : "ies"}` : ""].filter(Boolean).join(" · ")}</small>
                 </div>
                 <div className="pk-month-due">
                   {customer.dueCents > 0
@@ -360,8 +360,26 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
                     <span aria-hidden="true"></span>
                   </li>
                 );
+                // A car that left before this month and still owes
+                // (docs/PARKING_CARRYOVER.md): the whole stay's dates, listed
+                // first - it is the oldest money - then the month's cars.
+                const olderCarLine = (b: (typeof customer.olderCars)[number]) => {
+                  const car = rowById.get(b.id);
+                  return (
+                    <li key={`old-${b.id}`} className="pk-month-activity pk-month-carried">
+                      <span className="pk-month-car">
+                        <strong>{b.vehicle || "Car"}</strong>
+                        <small>{["unpaid from before", b.vinNumber, b.registeredTo ? `registered to ${b.registeredTo}` : "", "left"].filter(Boolean).join(" · ")}</small>
+                      </span>
+                      <span className="pk-month-period">{formatDayKey(b.periodFrom)} → {formatDayKey(b.periodTo)}</span>
+                      <span className="pk-month-calc">{b.days} day{b.days === 1 ? "" : "s"}</span>
+                      <span className="pk-month-amount"><strong>{moneyText(b.dueCents)}</strong><small>{moneyText(b.dueCents)} due</small></span>
+                      {car ? <button className="ghost-button" type="button" title="Open the car to record a payment" onClick={() => onOpenCar(car)}><SquarePen size={14} /></button> : <span aria-hidden="true"></span>}
+                    </li>
+                  );
+                };
                 const acts = [...customer.activities, ...customer.olderActivities];
-                const owingLines = [...customer.cars.filter((b) => b.dueCents > 0).map(carLine), ...acts.filter((a) => a.dueCents > 0).map(actLine)];
+                const owingLines = [...customer.olderCars.map(olderCarLine), ...customer.cars.filter((b) => b.dueCents > 0).map(carLine), ...acts.filter((a) => a.dueCents > 0).map(actLine)];
                 const paidLines = [...customer.cars.filter((b) => b.dueCents <= 0).map(carLine), ...acts.filter((a) => a.dueCents <= 0).map(actLine)];
                 const showPaid = openPaid.has(customer.key);
                 // A linked staff member's lot expenses: one line with what
