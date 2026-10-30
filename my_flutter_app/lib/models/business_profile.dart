@@ -48,6 +48,7 @@ class BusinessProfile {
     this.parkingPickupAvailable = false,
     this.parkingAcceptsReservations = true,
     this.parkingWhatsAppEnabled = false,
+    this.paymentInstructions = '',
     this.parkingPickupFee = 0,
     this.parkingInstructions,
     this.parkingLatitude,
@@ -121,6 +122,10 @@ class BusinessProfile {
   /// `parkingWhatsApp.enabled` (docs/PARKING_WHATSAPP.md): the lot's parking
   /// customers hear from it on WhatsApp. Off until the owner switches it on.
   final bool parkingWhatsAppEnabled;
+
+  /// `paymentInstructions` (docs/PARKING_INVOICES.md): how customers pay,
+  /// printed on monthly invoices. '' when none.
+  final String paymentInstructions;
   final double parkingPickupFee;
   final String? parkingInstructions;
   final double? parkingLatitude;
@@ -214,6 +219,9 @@ class BusinessProfile {
           data['parkingAcceptsReservations'] != false,
       parkingWhatsAppEnabled: data['parkingWhatsApp'] is Map &&
           (data['parkingWhatsApp'] as Map)['enabled'] == true,
+      paymentInstructions: data['paymentInstructions'] is String
+          ? (data['paymentInstructions'] as String).trim()
+          : '',
       parkingPickupFee: _parseDouble(data['parkingPickupFee'], 0),
       parkingInstructions: data['parkingInstructions'] as String?,
       parkingLatitude: _parseNullableDouble(data['parkingLatitude']),

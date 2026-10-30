@@ -28,6 +28,7 @@ import '../utils/phone_number_validator.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/country_phone_field.dart';
 import '../widgets/language_toggle.dart';
+import '../widgets/parking_payment_instructions_field.dart';
 import '../widgets/parking_whatsapp_switch.dart';
 import '../widgets/pickup_plan_editor.dart';
 import '../widgets/staff_invite_widgets.dart' show BusinessInvitationsSection;
@@ -740,6 +741,7 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
                   canEdit: canEdit,
                   businessId: business.id,
                   parkingWhatsAppEnabled: business.parkingWhatsAppEnabled,
+                  paymentInstructions: business.paymentInstructions,
                   detailsSectionKey: _detailsSectionKey,
                   headquartersSectionKey: _headquartersSectionKey,
                   paidHoldPricingSectionKey: _paidHoldPricingSectionKey,
@@ -1526,6 +1528,7 @@ class _BusinessForm extends StatelessWidget {
     required this.canEdit,
     required this.businessId,
     required this.parkingWhatsAppEnabled,
+    required this.paymentInstructions,
     required this.detailsSectionKey,
     required this.headquartersSectionKey,
     required this.paidHoldPricingSectionKey,
@@ -1579,6 +1582,7 @@ class _BusinessForm extends StatelessWidget {
 
   /// `parkingWhatsApp.enabled` on the business record.
   final bool parkingWhatsAppEnabled;
+  final String paymentInstructions;
   final GlobalKey detailsSectionKey;
   final GlobalKey headquartersSectionKey;
   final GlobalKey paidHoldPricingSectionKey;
@@ -2061,6 +2065,13 @@ class _BusinessForm extends StatelessWidget {
                 ParkingWhatsAppSwitch(
                   businessId: businessId,
                   enabled: parkingWhatsAppEnabled,
+                  canEdit: canEdit,
+                ),
+                // How customers pay: printed on the monthly invoices. Saves
+                // on its own button; hidden for staff.
+                ParkingPaymentInstructionsField(
+                  businessId: businessId,
+                  saved: paymentInstructions,
                   canEdit: canEdit,
                 ),
               ],

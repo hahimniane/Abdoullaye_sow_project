@@ -729,3 +729,9 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   a scheduled function's `new Date()` can be set to 11:59:59 pm vs midnight New
   York without an injected clock or a test-only export. Prove a guard like this
   by deleting it once and watching the test fail (the 3rd check was).
+- Widgets fed by a `Stream` in tests (e.g. the monthly-invoices card's run
+  stream): use `StreamController.broadcast(sync: true)`; with the default async
+  controller `tester.pump()` does not deliver the event. Some screens are
+  guarded by source-contract tests (`parking_month_staff_expense_test.dart`
+  greps `parking_month_end_screen.dart`), so never run `dart format` over a
+  whole screen file you only touched in places.

@@ -18296,4 +18296,151 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get sbalRefusalOpeningOwnerOnly =>
       'Seul le propriétaire peut enregistrer un montant d\'ouverture.';
+
+  @override
+  String get parkingInvPayTitle => 'Instructions de paiement';
+
+  @override
+  String get parkingInvPayHelp =>
+      'Imprimées sur chaque facture mensuelle sous le solde à payer et envoyées avec elle. Elles ont leur propre bouton d\'enregistrement, distinct de celui du profil.';
+
+  @override
+  String get parkingInvPayHint =>
+      'Payez au bureau, ou par Zelle 347-xxx-xxxx (Nom de l\'entreprise)';
+
+  @override
+  String get parkingInvPaySave => 'Enregistrer les instructions';
+
+  @override
+  String get parkingInvPaySaved => 'Instructions de paiement enregistrées.';
+
+  @override
+  String get parkingInvPaySaveFailed =>
+      'Impossible d\'enregistrer les instructions de paiement. Réessayez.';
+
+  @override
+  String get parkingInvErrPayInvalid =>
+      'Les instructions de paiement ne peuvent pas dépasser 300 caractères.';
+
+  @override
+  String get parkingInvErrOwnerOnly =>
+      'Seul le propriétaire de l\'entreprise peut envoyer les factures.';
+
+  @override
+  String get parkingInvErrMonthInvalid =>
+      'Seul le mois qui vient de se terminer peut être facturé.';
+
+  @override
+  String get parkingInvCardTitle => 'Envoyer les factures';
+
+  @override
+  String get parkingInvCardIntro =>
+      'Une facture WhatsApp par client qui doit de l\'argent ou a encore une voiture garée, pour toutes ses voitures. Ce qui n\'est pas envoyé avant le 3 part automatiquement.';
+
+  @override
+  String parkingInvRunNone(String month) {
+    return '$month : factures pas encore préparées. Vous pouvez quand même les vérifier et les envoyer.';
+  }
+
+  @override
+  String parkingInvRunReady(String month, int count, String total) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count clients',
+      one: '1 client',
+    );
+    return '$month : prêtes à envoyer · $_temp0 · $total à payer';
+  }
+
+  @override
+  String parkingInvRunSending(String month) {
+    return '$month : envoi des factures…';
+  }
+
+  @override
+  String parkingInvRunSentAuto(String date) {
+    return 'Envoyées le $date automatiquement';
+  }
+
+  @override
+  String parkingInvRunSentBy(String date, String name) {
+    return 'Envoyées le $date par $name';
+  }
+
+  @override
+  String parkingInvRunSentOn(String date) {
+    return 'Envoyées le $date';
+  }
+
+  @override
+  String get parkingInvReview => 'Vérifier et envoyer';
+
+  @override
+  String parkingInvSheetTitle(String month) {
+    return 'Factures · $month';
+  }
+
+  @override
+  String get parkingInvSheetIntro =>
+      'Une facture WhatsApp par numéro de téléphone. Les clients qui ont déjà reçu la facture de ce mois sont grisés et décochés.';
+
+  @override
+  String get parkingInvLoading => 'Préparation de la liste…';
+
+  @override
+  String get parkingInvEmpty =>
+      'Personne n\'a besoin d\'une facture ce mois-ci.';
+
+  @override
+  String get parkingInvLoadFailed =>
+      'Impossible de charger les factures. Réessayez.';
+
+  @override
+  String get parkingInvSendFailed =>
+      'Les factures n\'ont pas pu être envoyées. Réessayez.';
+
+  @override
+  String get parkingInvAlreadySent => 'Facture déjà envoyée';
+
+  @override
+  String parkingInvDue(String total) {
+    return '$total à payer';
+  }
+
+  @override
+  String parkingInvSendCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Envoyer $count factures',
+      one: 'Envoyer 1 facture',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get parkingInvResultTitle => 'Factures envoyées';
+
+  @override
+  String parkingInvRemaining(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count factures sont encore en attente.',
+      one: '1 facture est encore en attente.',
+    );
+    return '$_temp0 Envoyez à nouveau pour continuer.';
+  }
+
+  @override
+  String get parkingInvSendRest => 'Envoyer le reste';
+
+  @override
+  String parkingInvCustomerStatus(String status) {
+    return 'Facture : $status';
+  }
+
+  @override
+  String get parkingWaKindInvoice => 'Facture mensuelle';
 }

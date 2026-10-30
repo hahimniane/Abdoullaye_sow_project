@@ -14,6 +14,7 @@ String parkingMessageKindText(AppLocalizations l10n, ParkingMessageKind kind) =>
       ParkingMessageKind.parked => l10n.parkingWaKindParked,
       ParkingMessageKind.receipt => l10n.parkingWaKindReceipt,
       ParkingMessageKind.welcome => l10n.parkingWaKindWelcome,
+      ParkingMessageKind.invoice => l10n.parkingWaKindInvoice,
     };
 
 /// What to tell the lot about a message: its status, refined by what WhatsApp
@@ -38,7 +39,9 @@ String parkingMessageStatusText(AppLocalizations l10n, ParkingMessage m) {
   };
 }
 
-bool _isProblem(ParkingMessage m) =>
+/// A message that did not get through (failed, or sent but WhatsApp later
+/// reported it failed).
+bool parkingMessageIsProblem(ParkingMessage m) =>
     m.status == ParkingMessageStatus.failed ||
     (m.status == ParkingMessageStatus.sent && m.deliveryStatus == 'failed');
 
@@ -161,7 +164,7 @@ class _MessageRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context).textTheme;
-    final problem = _isProblem(message);
+    final problem = parkingMessageIsProblem(message);
     final at = message.at == null ? '' : displayDateTime(message.at!, locale);
     return Row(
       key: Key('parking-message-${message.id}'),

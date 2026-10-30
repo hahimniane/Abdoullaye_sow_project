@@ -16,6 +16,10 @@ String parkingWhatsAppErrorText(
   ParkingWhatsAppRefusal.switchOff => l10n.parkingWaErrSwitchOff,
   ParkingWhatsAppRefusal.welcomeOwnerOnly => l10n.parkingWaErrWelcomeOwnerOnly,
   ParkingWhatsAppRefusal.switchOwnerOnly => l10n.parkingWaErrOwnerOnly,
+  ParkingWhatsAppRefusal.invoicesOwnerOnly => l10n.parkingInvErrOwnerOnly,
+  ParkingWhatsAppRefusal.invoiceMonthInvalid => l10n.parkingInvErrMonthInvalid,
+  ParkingWhatsAppRefusal.paymentInstructionsInvalid =>
+    l10n.parkingInvErrPayInvalid,
   null => fallback,
 };
 

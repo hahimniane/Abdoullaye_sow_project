@@ -30463,6 +30463,198 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Only the owner can record an opening amount.'**
   String get sbalRefusalOpeningOwnerOnly;
+
+  /// Label of the payment instructions field in business settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment instructions'**
+  String get parkingInvPayTitle;
+
+  /// Explains the payment instructions field.
+  ///
+  /// In en, this message translates to:
+  /// **'Printed on each monthly invoice under the balance due and sent with it. It has its own Save button, separate from the profile\'s.'**
+  String get parkingInvPayHelp;
+
+  /// Example text inside the empty payment instructions field.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay at the office, or Zelle 347-xxx-xxxx (Business name)'**
+  String get parkingInvPayHint;
+
+  /// Button that saves the payment instructions.
+  ///
+  /// In en, this message translates to:
+  /// **'Save instructions'**
+  String get parkingInvPaySave;
+
+  /// Confirmation after saving the payment instructions.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment instructions saved.'**
+  String get parkingInvPaySaved;
+
+  /// Error when saving the payment instructions failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save the payment instructions. Try again.'**
+  String get parkingInvPaySaveFailed;
+
+  /// Refusal payment_instructions_invalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment instructions can be at most 300 characters.'**
+  String get parkingInvErrPayInvalid;
+
+  /// Refusal invoices_owner_only.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the business owner can send invoices.'**
+  String get parkingInvErrOwnerOnly;
+
+  /// Refusal invoice_month_invalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the month that just ended can be invoiced.'**
+  String get parkingInvErrMonthInvalid;
+
+  /// Title of the monthly invoices card on Month end.
+  ///
+  /// In en, this message translates to:
+  /// **'Send invoices'**
+  String get parkingInvCardTitle;
+
+  /// Explains the monthly invoices card.
+  ///
+  /// In en, this message translates to:
+  /// **'One WhatsApp invoice per customer who owes money or still has a car parked, covering all their cars. Anything not sent by the 3rd goes out automatically.'**
+  String get parkingInvCardIntro;
+
+  /// Invoices card status when the server has not prepared the month.
+  ///
+  /// In en, this message translates to:
+  /// **'{month}: invoices not prepared yet. You can still review and send them.'**
+  String parkingInvRunNone(String month);
+
+  /// Invoices card status when the month's invoices are ready.
+  ///
+  /// In en, this message translates to:
+  /// **'{month}: ready to send · {count, plural, =1{1 customer} other{{count} customers}} · {total} due'**
+  String parkingInvRunReady(String month, int count, String total);
+
+  /// Invoices card status while the invoices go out.
+  ///
+  /// In en, this message translates to:
+  /// **'{month}: sending invoices…'**
+  String parkingInvRunSending(String month);
+
+  /// Invoices card status: the 3rd-of-the-month automatic send happened.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent on {date} automatically'**
+  String parkingInvRunSentAuto(String date);
+
+  /// Invoices card status: a team member sent the invoices.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent on {date} by {name}'**
+  String parkingInvRunSentBy(String date, String name);
+
+  /// Invoices card status: sent, sender unknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent on {date}'**
+  String parkingInvRunSentOn(String date);
+
+  /// Button on the invoices card that opens the preview.
+  ///
+  /// In en, this message translates to:
+  /// **'Review and send'**
+  String get parkingInvReview;
+
+  /// Title of the invoice preview sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Invoices · {month}'**
+  String parkingInvSheetTitle(String month);
+
+  /// Explains the invoice preview.
+  ///
+  /// In en, this message translates to:
+  /// **'One WhatsApp invoice per phone number. Customers who already got this month\'s invoice are greyed out and unticked.'**
+  String get parkingInvSheetIntro;
+
+  /// Shown while the invoice preview loads.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing the list…'**
+  String get parkingInvLoading;
+
+  /// Invoice preview with no recipients.
+  ///
+  /// In en, this message translates to:
+  /// **'Nobody needs an invoice for this month.'**
+  String get parkingInvEmpty;
+
+  /// Error when the invoice preview failed to load.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load the invoices. Try again.'**
+  String get parkingInvLoadFailed;
+
+  /// Error when sending the invoices failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The invoices could not be sent. Try again.'**
+  String get parkingInvSendFailed;
+
+  /// Marks a customer who already got this month's invoice.
+  ///
+  /// In en, this message translates to:
+  /// **'Invoice already sent'**
+  String get parkingInvAlreadySent;
+
+  /// Balance due on an invoice preview row.
+  ///
+  /// In en, this message translates to:
+  /// **'{total} due'**
+  String parkingInvDue(String total);
+
+  /// Send button of the invoice preview with the number of selected customers.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Send 1 invoice} other{Send {count} invoices}}'**
+  String parkingInvSendCount(int count);
+
+  /// Title after the invoices send finished.
+  ///
+  /// In en, this message translates to:
+  /// **'Invoices sent'**
+  String get parkingInvResultTitle;
+
+  /// Shown when the server stopped before sending everything.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 invoice is still waiting.} other{{count} invoices are still waiting.}} Send again to continue.'**
+  String parkingInvRemaining(int count);
+
+  /// Button that continues an invoice send the server did not finish.
+  ///
+  /// In en, this message translates to:
+  /// **'Send the rest'**
+  String get parkingInvSendRest;
+
+  /// A customer's invoice status on a Month end card.
+  ///
+  /// In en, this message translates to:
+  /// **'Invoice: {status}'**
+  String parkingInvCustomerStatus(String status);
+
+  /// Kind label of a monthly invoice WhatsApp message.
+  ///
+  /// In en, this message translates to:
+  /// **'Monthly invoice'**
+  String get parkingWaKindInvoice;
 }
 
 class _AppLocalizationsDelegate

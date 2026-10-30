@@ -9863,5 +9863,197 @@
   "sbalRefusalOpeningOwnerOnly": "Seul le propriétaire peut enregistrer un montant d'ouverture.",
   "@sbalRefusalOpeningOwnerOnly": {
     "description": "Server refusal opening_owner_only."
+  },
+  "parkingInvPayTitle": "Instructions de paiement",
+  "@parkingInvPayTitle": {
+    "description": "Label of the payment instructions field in business settings."
+  },
+  "parkingInvPayHelp": "Imprimées sur chaque facture mensuelle sous le solde à payer et envoyées avec elle. Elles ont leur propre bouton d'enregistrement, distinct de celui du profil.",
+  "@parkingInvPayHelp": {
+    "description": "Explains the payment instructions field."
+  },
+  "parkingInvPayHint": "Payez au bureau, ou par Zelle 347-xxx-xxxx (Nom de l'entreprise)",
+  "@parkingInvPayHint": {
+    "description": "Example text inside the empty payment instructions field."
+  },
+  "parkingInvPaySave": "Enregistrer les instructions",
+  "@parkingInvPaySave": {
+    "description": "Button that saves the payment instructions."
+  },
+  "parkingInvPaySaved": "Instructions de paiement enregistrées.",
+  "@parkingInvPaySaved": {
+    "description": "Confirmation after saving the payment instructions."
+  },
+  "parkingInvPaySaveFailed": "Impossible d'enregistrer les instructions de paiement. Réessayez.",
+  "@parkingInvPaySaveFailed": {
+    "description": "Error when saving the payment instructions failed."
+  },
+  "parkingInvErrPayInvalid": "Les instructions de paiement ne peuvent pas dépasser 300 caractères.",
+  "@parkingInvErrPayInvalid": {
+    "description": "Refusal payment_instructions_invalid."
+  },
+  "parkingInvErrOwnerOnly": "Seul le propriétaire de l'entreprise peut envoyer les factures.",
+  "@parkingInvErrOwnerOnly": {
+    "description": "Refusal invoices_owner_only."
+  },
+  "parkingInvErrMonthInvalid": "Seul le mois qui vient de se terminer peut être facturé.",
+  "@parkingInvErrMonthInvalid": {
+    "description": "Refusal invoice_month_invalid."
+  },
+  "parkingInvCardTitle": "Envoyer les factures",
+  "@parkingInvCardTitle": {
+    "description": "Title of the monthly invoices card on Month end."
+  },
+  "parkingInvCardIntro": "Une facture WhatsApp par client qui doit de l'argent ou a encore une voiture garée, pour toutes ses voitures. Ce qui n'est pas envoyé avant le 3 part automatiquement.",
+  "@parkingInvCardIntro": {
+    "description": "Explains the monthly invoices card."
+  },
+  "parkingInvRunNone": "{month} : factures pas encore préparées. Vous pouvez quand même les vérifier et les envoyer.",
+  "@parkingInvRunNone": {
+    "description": "Invoices card status when the server has not prepared the month.",
+    "placeholders": {
+      "month": {
+        "type": "String"
+      }
+    }
+  },
+  "parkingInvRunReady": "{month} : prêtes à envoyer · {count, plural, =1{1 client} other{{count} clients}} · {total} à payer",
+  "@parkingInvRunReady": {
+    "description": "Invoices card status when the month's invoices are ready.",
+    "placeholders": {
+      "month": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      },
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "parkingInvRunSending": "{month} : envoi des factures…",
+  "@parkingInvRunSending": {
+    "description": "Invoices card status while the invoices go out.",
+    "placeholders": {
+      "month": {
+        "type": "String"
+      }
+    }
+  },
+  "parkingInvRunSentAuto": "Envoyées le {date} automatiquement",
+  "@parkingInvRunSentAuto": {
+    "description": "Invoices card status: the 3rd-of-the-month automatic send happened.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "parkingInvRunSentBy": "Envoyées le {date} par {name}",
+  "@parkingInvRunSentBy": {
+    "description": "Invoices card status: a team member sent the invoices.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "parkingInvRunSentOn": "Envoyées le {date}",
+  "@parkingInvRunSentOn": {
+    "description": "Invoices card status: sent, sender unknown.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "parkingInvReview": "Vérifier et envoyer",
+  "@parkingInvReview": {
+    "description": "Button on the invoices card that opens the preview."
+  },
+  "parkingInvSheetTitle": "Factures · {month}",
+  "@parkingInvSheetTitle": {
+    "description": "Title of the invoice preview sheet.",
+    "placeholders": {
+      "month": {
+        "type": "String"
+      }
+    }
+  },
+  "parkingInvSheetIntro": "Une facture WhatsApp par numéro de téléphone. Les clients qui ont déjà reçu la facture de ce mois sont grisés et décochés.",
+  "@parkingInvSheetIntro": {
+    "description": "Explains the invoice preview."
+  },
+  "parkingInvLoading": "Préparation de la liste…",
+  "@parkingInvLoading": {
+    "description": "Shown while the invoice preview loads."
+  },
+  "parkingInvEmpty": "Personne n'a besoin d'une facture ce mois-ci.",
+  "@parkingInvEmpty": {
+    "description": "Invoice preview with no recipients."
+  },
+  "parkingInvLoadFailed": "Impossible de charger les factures. Réessayez.",
+  "@parkingInvLoadFailed": {
+    "description": "Error when the invoice preview failed to load."
+  },
+  "parkingInvSendFailed": "Les factures n'ont pas pu être envoyées. Réessayez.",
+  "@parkingInvSendFailed": {
+    "description": "Error when sending the invoices failed."
+  },
+  "parkingInvAlreadySent": "Facture déjà envoyée",
+  "@parkingInvAlreadySent": {
+    "description": "Marks a customer who already got this month's invoice."
+  },
+  "parkingInvDue": "{total} à payer",
+  "@parkingInvDue": {
+    "description": "Balance due on an invoice preview row.",
+    "placeholders": {
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "parkingInvSendCount": "{count, plural, =1{Envoyer 1 facture} other{Envoyer {count} factures}}",
+  "@parkingInvSendCount": {
+    "description": "Send button of the invoice preview with the number of selected customers.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "parkingInvResultTitle": "Factures envoyées",
+  "@parkingInvResultTitle": {
+    "description": "Title after the invoices send finished."
+  },
+  "parkingInvRemaining": "{count, plural, =1{1 facture est encore en attente.} other{{count} factures sont encore en attente.}} Envoyez à nouveau pour continuer.",
+  "@parkingInvRemaining": {
+    "description": "Shown when the server stopped before sending everything.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "parkingInvSendRest": "Envoyer le reste",
+  "@parkingInvSendRest": {
+    "description": "Button that continues an invoice send the server did not finish."
+  },
+  "parkingInvCustomerStatus": "Facture : {status}",
+  "@parkingInvCustomerStatus": {
+    "description": "A customer's invoice status on a Month end card.",
+    "placeholders": {
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "parkingWaKindInvoice": "Facture mensuelle",
+  "@parkingWaKindInvoice": {
+    "description": "Kind label of a monthly invoice WhatsApp message."
   }
 }

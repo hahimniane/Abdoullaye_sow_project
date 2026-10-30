@@ -58,6 +58,26 @@ class _FakeService implements ParkingWhatsAppService {
     if (error != null) throw error;
     return sendResult;
   }
+
+  // The monthly invoices are covered by test/parking_invoices_test.dart.
+  @override
+  Future<void> setPaymentInstructions({
+    required String businessId,
+    required String text,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<ParkingInvoicePreview> invoicesPreview({
+    required String businessId,
+    String? monthKey,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<ParkingInvoiceResult> invoicesSend({
+    required String businessId,
+    required String monthKey,
+    List<String>? phones,
+  }) => throw UnimplementedError();
 }
 
 FirebaseFunctionsException _refusal(String reason) =>

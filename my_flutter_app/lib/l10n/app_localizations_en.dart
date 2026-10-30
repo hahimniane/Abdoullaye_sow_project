@@ -18015,4 +18015,149 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get sbalRefusalOpeningOwnerOnly =>
       'Only the owner can record an opening amount.';
+
+  @override
+  String get parkingInvPayTitle => 'Payment instructions';
+
+  @override
+  String get parkingInvPayHelp =>
+      'Printed on each monthly invoice under the balance due and sent with it. It has its own Save button, separate from the profile\'s.';
+
+  @override
+  String get parkingInvPayHint =>
+      'Pay at the office, or Zelle 347-xxx-xxxx (Business name)';
+
+  @override
+  String get parkingInvPaySave => 'Save instructions';
+
+  @override
+  String get parkingInvPaySaved => 'Payment instructions saved.';
+
+  @override
+  String get parkingInvPaySaveFailed =>
+      'Could not save the payment instructions. Try again.';
+
+  @override
+  String get parkingInvErrPayInvalid =>
+      'Payment instructions can be at most 300 characters.';
+
+  @override
+  String get parkingInvErrOwnerOnly =>
+      'Only the business owner can send invoices.';
+
+  @override
+  String get parkingInvErrMonthInvalid =>
+      'Only the month that just ended can be invoiced.';
+
+  @override
+  String get parkingInvCardTitle => 'Send invoices';
+
+  @override
+  String get parkingInvCardIntro =>
+      'One WhatsApp invoice per customer who owes money or still has a car parked, covering all their cars. Anything not sent by the 3rd goes out automatically.';
+
+  @override
+  String parkingInvRunNone(String month) {
+    return '$month: invoices not prepared yet. You can still review and send them.';
+  }
+
+  @override
+  String parkingInvRunReady(String month, int count, String total) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count customers',
+      one: '1 customer',
+    );
+    return '$month: ready to send · $_temp0 · $total due';
+  }
+
+  @override
+  String parkingInvRunSending(String month) {
+    return '$month: sending invoices…';
+  }
+
+  @override
+  String parkingInvRunSentAuto(String date) {
+    return 'Sent on $date automatically';
+  }
+
+  @override
+  String parkingInvRunSentBy(String date, String name) {
+    return 'Sent on $date by $name';
+  }
+
+  @override
+  String parkingInvRunSentOn(String date) {
+    return 'Sent on $date';
+  }
+
+  @override
+  String get parkingInvReview => 'Review and send';
+
+  @override
+  String parkingInvSheetTitle(String month) {
+    return 'Invoices · $month';
+  }
+
+  @override
+  String get parkingInvSheetIntro =>
+      'One WhatsApp invoice per phone number. Customers who already got this month\'s invoice are greyed out and unticked.';
+
+  @override
+  String get parkingInvLoading => 'Preparing the list…';
+
+  @override
+  String get parkingInvEmpty => 'Nobody needs an invoice for this month.';
+
+  @override
+  String get parkingInvLoadFailed => 'Could not load the invoices. Try again.';
+
+  @override
+  String get parkingInvSendFailed =>
+      'The invoices could not be sent. Try again.';
+
+  @override
+  String get parkingInvAlreadySent => 'Invoice already sent';
+
+  @override
+  String parkingInvDue(String total) {
+    return '$total due';
+  }
+
+  @override
+  String parkingInvSendCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Send $count invoices',
+      one: 'Send 1 invoice',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get parkingInvResultTitle => 'Invoices sent';
+
+  @override
+  String parkingInvRemaining(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count invoices are still waiting.',
+      one: '1 invoice is still waiting.',
+    );
+    return '$_temp0 Send again to continue.';
+  }
+
+  @override
+  String get parkingInvSendRest => 'Send the rest';
+
+  @override
+  String parkingInvCustomerStatus(String status) {
+    return 'Invoice: $status';
+  }
+
+  @override
+  String get parkingWaKindInvoice => 'Monthly invoice';
 }
