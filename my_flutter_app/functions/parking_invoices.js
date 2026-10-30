@@ -359,6 +359,8 @@ function invoiceRecipients(summary, staffCredit, now = new Date(),
       stillParked: b.stillParked === true,
     }));
     const trackingCode = named.find((b) => b.trackingCode)?.trackingCode ||
+      text((c.olderCars || []).find((b) => text(b.trackingCode))
+          ?.trackingCode, 40) ||
       text([...(c.activities || []), ...(c.olderActivities || [])]
           .find((a) => text(a.trackingCode))?.trackingCode, 40);
     const reach = reachablePhone({customerPhone: c.customerPhone},

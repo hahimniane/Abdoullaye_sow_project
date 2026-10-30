@@ -23,9 +23,11 @@ const NOW = new Date("2026-10-01T13:00:00Z");
 const MONTH = "2026-09";
 
 const car = (id, fields) => {
+  // Every stored car carries a paymentStatus (the unpaid-cars read relies
+  // on it: Firestore's not-in skips rows without the field).
   const row = {id, customerPhone: `555000${id.length}${id}`,
     customerName: id, dailyRate: 10, totalCostCents: 9000,
-    status: "parked", ...fields};
+    status: "parked", paymentStatus: "awaiting_direct_payment", ...fields};
   return {...row, occupancyEndMs: occupancyEndMs(row)};
 };
 
@@ -38,6 +40,14 @@ const cars = [
     parkingEndDate: ts("2026-09-05")}),
   car("ended-day-before", {parkingDate: ts("2026-08-01"),
     parkingEndDate: ts("2026-08-31")}),
+  // Left before the month, unpaid / part paid / paid: the first two come
+  // along as "unpaid from before" (PARKING_CARRYOVER.md).
+  car("left-earlier-unpaid", {parkingDate: ts("2026-07-01"),
+    parkingEndDate: ts("2026-07-10")}),
+  car("left-earlier-part-paid", {parkingDate: ts("2026-06-01"),
+    parkingEndDate: ts("2026-06-03"), amountPaidCents: 4000}),
+  car("left-earlier-paid", {parkingDate: ts("2026-05-01"),
+    parkingEndDate: ts("2026-05-02"), paymentStatus: "paid"}),
   car("ends-first-day", {parkingDate: ts("2026-08-25"),
     parkingEndDate: ts("2026-09-01")}),
   car("in-month", {parkingDate: ts("2026-09-10"),
@@ -67,7 +77,11 @@ const activities = [
 ];
 
 function narrowCars(rows, bounds) {
-  return rows.filter((row) => row.occupancyEndMs >= bounds.startMs);
+  const onLot = rows.filter((row) => row.occupancyEndMs >= bounds.startMs);
+  // Firestore's not-in skips rows without the field, like this does.
+  const unpaid = rows.filter((row) => typeof row.paymentStatus === "string" &&
+    !["paid", "succeeded"].includes(row.paymentStatus));
+  return mergeRowsById(onLot, unpaid);
 }
 
 function narrowActivities(rows, bounds) {
@@ -112,13 +126,18 @@ describe("month-scoped reads for the month-end notice", () => {
     assert.ok(full.customersOwing.length > 0);
     assert.ok(full.bills.some((bill) => bill.id === "old-open"));
     assert.ok(full.bills.some((bill) => bill.id === "ends-first-day"));
+    assert.deepEqual(full.carried.map((c) => [c.id, c.dueCents]).sort(), [
+      ["ended-day-before", 9000],
+      ["left-earlier-part-paid", 5000],
+      ["left-earlier-unpaid", 9000],
+    ]);
   });
 
   it("while reading far less than the history", () => {
     const bounds = monthBoundsMs(MONTH);
     const read = narrowCars(cars, bounds).map((row) => row.id);
     assert.equal(read.includes("old-closed-paid"), false);
-    assert.equal(read.includes("ended-day-before"), false);
+    assert.equal(read.includes("left-earlier-paid"), false);
     const acts = narrowActivities(activities, bounds).map((row) => row.id);
     assert.equal(acts.includes("old-paid"), false);
   });

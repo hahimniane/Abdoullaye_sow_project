@@ -134,11 +134,20 @@ function invoiceModel(args) {
       label: "Unpaid from before / Impayé des mois précédents",
       value: money(c.priorUnpaidCents),
       tone: "due",
-      sub: (c.olderActivities || []).map((a) => ({
-        label: [usDayKey(a.date), text(a.label, 80), text(a.vehicle, 80)]
-            .filter(Boolean).join(" · "),
-        value: money(a.dueCents),
-      })),
+      sub: [
+        // Cars that left before the month still owing (PARKING_CARRYOVER.md).
+        ...(c.olderCars || []).map((b) => ({
+          label: [`${usDayKey(b.periodFrom)} – ${usDayKey(b.periodTo)}`,
+            "Parking / Stationnement", text(b.vehicle, 80)]
+              .filter(Boolean).join(" · "),
+          value: money(b.dueCents),
+        })),
+        ...(c.olderActivities || []).map((a) => ({
+          label: [usDayKey(a.date), text(a.label, 80), text(a.vehicle, 80)]
+              .filter(Boolean).join(" · "),
+          value: money(a.dueCents),
+        })),
+      ],
     });
   }
   if (cents(c.monthPaidCents) > 0) {

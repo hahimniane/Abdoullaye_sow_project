@@ -385,6 +385,55 @@ function parkingMonthStatement(row, monthKey, now = new Date()) {
 }
 
 /**
+ * A car that left the lot BEFORE the month and still owes: it comes along on
+ * the month's bill as "unpaid from before", like an older unpaid activity
+ * (docs/PARKING_CARRYOVER.md). Null when the car was on the lot during the
+ * month (parkingMonthStatement carries its earlier days), has not left, left
+ * paid up, or was voided or cancelled.
+ *
+ * @param {object} row A parkedCars document (with its `id`).
+ * @param {string} monthKey "YYYY-MM".
+ * @param {Date} [now] The moment the bill is worked out.
+ * @return {object|null} The item.
+ */
+function carriedCarItem(row, monthKey, now = new Date()) {
+  const r = row && typeof row === "object" ? row : {};
+  if (text(r.status, 40) === "cancelled" || r.voided === true) return null;
+  const month = monthDays(monthKey);
+  const start = dayNumber(r.parkingDate);
+  const leave = dayNumber(r.parkingEndDate);
+  const today = dayNumber(now);
+  if (!month || start === null || leave === null || today === null) {
+    return null;
+  }
+  if (leave >= month.first || leave < start) return null;
+  const accrued = accruedThroughCents(r, leave, today);
+  const dueCents = Math.max(0, accrued - paidCents(r, today));
+  if (dueCents <= 0) return null;
+  return {
+    id: text(r.id),
+    kind: "parking",
+    monthKey,
+    periodFrom: dayKeyOf(start),
+    periodTo: dayKeyOf(leave),
+    days: leave - start + 1,
+    accruedCents: accrued,
+    dueCents,
+    prior: true,
+    customerName: text(r.customerName) || text(r.ownerName),
+    customerPhone: text(r.customerPhone, 40),
+    customerEmail: text(r.customerEmail, 180),
+    vehicle: [r.carYear, r.carMake, r.carModel].map((v) => text(v, 80))
+        .filter(Boolean).join(" "),
+    vinNumber: text(r.vinNumber, 17).toUpperCase(),
+    trackingCode: text(r.trackingCode, 40),
+    paymentMethod: text(r.paymentMethod, 40),
+    recordable: text(r.paymentMethod, 40) === "direct" &&
+      (text(r.source, 40) === "business" || r.enteredByBusiness === true),
+  };
+}
+
+/**
  * One ledger activity on a month's bill: what it was, the day it was done,
  * its fee, and what has been paid toward it - or null when it does not
  * belong on this month's bill. An activity dated in the month is that
@@ -449,12 +498,16 @@ function parkingMonthSummary(rows, monthKey, now = new Date(),
   const activities = (Array.isArray(activityRows) ? activityRows : [])
       .map((row) => activityMonthItem(row, monthKey))
       .filter(Boolean);
+  // Cars that left before the month still owing (PARKING_CARRYOVER.md).
+  const carried = (Array.isArray(rows) ? rows : [])
+      .map((row) => carriedCarItem(row, monthKey, now))
+      .filter(Boolean);
   const owing = bills.filter((b) => b.owes)
       .sort((a, b) => b.dueCents - a.dueCents ||
         a.customerName.localeCompare(b.customerName));
   const sum = (list, key) => list.reduce((s, b) => s + b[key], 0);
   const inMonth = activities.filter((a) => !a.prior);
-  const customers = parkingMonthCustomers(bills, activities);
+  const customers = parkingMonthCustomers(bills, activities, carried);
   const customersOwing = customers.filter((c) => c.owes);
   return {
     monthKey,
@@ -472,6 +525,7 @@ function parkingMonthSummary(rows, monthKey, now = new Date(),
     dueCents: sum(customersOwing, "dueCents"),
     owing,
     bills,
+    carried,
   };
 }
 
@@ -525,22 +579,27 @@ function mostUsedName(names) {
  *
  * @param {object[]} bills From parkingMonthStatement.
  * @param {object[]} [activities] From activityMonthItem.
+ * @param {object[]} [carried] From carriedCarItem: cars that left before
+ *   the month still owing, listed as `olderCars` under "unpaid from before".
  * @return {object[]} Customers, most owed first.
  */
-function parkingMonthCustomers(bills, activities = []) {
+function parkingMonthCustomers(bills, activities = [], carried = []) {
   const groups = new Map();
   const add = (item, field) => {
     const key = parkingCustomerKey(item);
-    if (!groups.has(key)) groups.set(key, {cars: [], activities: []});
+    if (!groups.has(key)) {
+      groups.set(key, {cars: [], activities: [], olderCars: []});
+    }
     groups.get(key)[field].push(item);
   };
   for (const b of Array.isArray(bills) ? bills : []) add(b, "cars");
   for (const a of Array.isArray(activities) ? activities : []) {
     add(a, "activities");
   }
+  for (const c of Array.isArray(carried) ? carried : []) add(c, "olderCars");
   const customers = [];
   for (const [key, group] of groups) {
-    const all = [...group.cars, ...group.activities];
+    const all = [...group.cars, ...group.activities, ...group.olderCars];
     const customerName = mostUsedName(all.map((x) => x.customerName));
     // Every line says whose name it was registered under - also when that
     // is the name at the top of the bill - so a line never looks unnamed.
@@ -552,6 +611,9 @@ function parkingMonthCustomers(bills, activities = []) {
     const acts = [...group.activities].sort((a, b) =>
       a.date.localeCompare(b.date) || a.label.localeCompare(b.label))
         .map(tag);
+    const olderCars = [...group.olderCars].sort((a, b) =>
+      a.periodFrom.localeCompare(b.periodFrom) ||
+      a.vehicle.localeCompare(b.vehicle)).map(tag);
     const inMonth = acts.filter((a) => !a.prior);
     const older = acts.filter((a) => a.prior);
     const sum = (list, k) => list.reduce((s, x) => s + x[k], 0);
@@ -561,7 +623,7 @@ function parkingMonthCustomers(bills, activities = []) {
     const monthUnpaidCents = sum(cars, "monthUnpaidCents") +
       sum(inMonth, "dueCents");
     const priorUnpaidCents = sum(cars, "priorUnpaidCents") +
-      sum(older, "dueCents");
+      sum(older, "dueCents") + sum(olderCars, "dueCents");
     const dueCents = monthUnpaidCents + priorUnpaidCents;
     const paidVia = [];
     for (const line of [...cars.filter((b) => b.monthPaidCents > 0),
@@ -572,13 +634,14 @@ function parkingMonthCustomers(bills, activities = []) {
     }
     customers.push({
       key,
-      monthKey: (cars[0] || acts[0]).monthKey,
+      monthKey: (cars[0] || acts[0] || olderCars[0]).monthKey,
       customerName,
       customerPhone: all.find((x) => x.customerPhone)?.customerPhone || "",
       customerEmail: all.find((x) => x.customerEmail)?.customerEmail || "",
       cars,
       activities: inMonth,
       olderActivities: older,
+      olderCars,
       monthCents,
       monthPaidCents,
       monthUnpaidCents,
@@ -676,9 +739,14 @@ function parkingMonthCustomerText(customer, businessName) {
       `${moneyText(a.feeCents)}`);
     if (a.paidCents > 0) lines.push(`  Paid — -${moneyText(a.paidCents)}`);
   }
-  if ((c.olderActivities || []).length) {
+  if ((c.olderCars || []).length || (c.olderActivities || []).length) {
     lines.push("", "Unpaid from before");
-    for (const a of c.olderActivities) {
+    for (const b of c.olderCars || []) {
+      lines.push(`${dayLabel(b.periodFrom)} to ${dayLabel(b.periodTo)} · ` +
+        `Parking · ${b.vehicle || "Car"}${named(b)} — ` +
+        `${moneyText(b.dueCents)}`);
+    }
+    for (const a of c.olderActivities || []) {
       lines.push(`${dayLabel(a.date)} · ${a.label}` +
         `${a.vehicle ? ` · ${a.vehicle}` : ""}${named(a)} — ` +
         `${moneyText(a.dueCents)}`);
@@ -731,7 +799,9 @@ function monthBillPaymentPlan(customer) {
   const c = customer || {};
   const items = [];
   const skipped = [];
-  for (const b of c.cars || []) {
+  // A car that left before the month still owing pays off the same way
+  // (docs/PARKING_CARRYOVER.md); it comes first - it is the oldest money.
+  for (const b of [...(c.olderCars || []), ...(c.cars || [])]) {
     if (b.dueCents <= 0) continue;
     const entry = {kind: "car", id: b.id, label: b.vehicle || "Car",
       amountCents: b.dueCents};
@@ -793,6 +863,7 @@ module.exports = {
   monthBillPaymentPlan,
   activityMonthItem,
   activityPaidVia,
+  carriedCarItem,
   parkingPaidVia,
   parkingMonthCustomerPaid,
   parkingCustomerKey,

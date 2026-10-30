@@ -213,6 +213,11 @@ const SHAPES = [
   ["running stays", (db, b) =>
     db.collection("parkedCars").where("businessId", "==", b)
         .where("occupancyEndMs", ">=", Date.UTC(2026, 9, 5))],
+  // Month end: cars not paid up, for those that left before the month
+  // still owing (docs/PARKING_CARRYOVER.md).
+  ["unpaid stays carried into month end", (db, b) =>
+    db.collection("parkedCars").where("businessId", "==", b)
+        .where("paymentStatus", "not-in", ["paid", "succeeded"])],
   ["ended stays, paged", (db, b) =>
     db.collection("parkedCars").where("businessId", "==", b)
         .where("occupancyEndMs", "<", Date.UTC(2026, 9, 5))

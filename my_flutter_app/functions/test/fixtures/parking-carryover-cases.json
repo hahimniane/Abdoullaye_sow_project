@@ -1,0 +1,482 @@
+{
+  "about": "Cars that left before the month still owing come along as 'unpaid from before' (docs/PARKING_CARRYOVER.md). Server parking_month_statement.js, console parking-month-statement.ts and app parking_month_statement.dart must all give these answers.",
+  "cases": [
+    {
+      "name": "left in an earlier month, unpaid: carried whole",
+      "monthKey": "2026-10",
+      "now": "2026-11-01T12:00:00Z",
+      "cars": [
+        {
+          "id": "highlander",
+          "businessId": "lot",
+          "paymentMethod": "direct",
+          "source": "business",
+          "status": "parked",
+          "paymentStatus": "awaiting_direct_payment",
+          "customerName": "Mariam",
+          "customerPhone": "+12015550101",
+          "carYear": 2021,
+          "carMake": "Toyota",
+          "carModel": "Highlander",
+          "parkingDate": "2026-09-06",
+          "parkingEndDate": "2026-09-07",
+          "dailyRate": 12,
+          "amountDueCents": 2400,
+          "trackingCode": "PK-TEST01"
+        }
+      ],
+      "expect": {
+        "carried": [
+          {
+            "id": "highlander",
+            "periodFrom": "2026-09-06",
+            "periodTo": "2026-09-07",
+            "days": 2,
+            "accruedCents": 2400,
+            "dueCents": 2400
+          }
+        ],
+        "customers": [
+          {
+            "key": "phone:2015550101",
+            "carIds": [],
+            "olderCarIds": [
+              "highlander"
+            ],
+            "monthCents": 0,
+            "priorUnpaidCents": 2400,
+            "dueCents": 2400,
+            "owes": true,
+            "paid": false
+          }
+        ]
+      }
+    },
+    {
+      "name": "left earlier, part paid: carries the rest",
+      "monthKey": "2026-10",
+      "now": "2026-11-01T12:00:00Z",
+      "cars": [
+        {
+          "id": "corolla",
+          "businessId": "lot",
+          "paymentMethod": "direct",
+          "source": "business",
+          "status": "parked",
+          "paymentStatus": "awaiting_direct_payment",
+          "customerName": "Ibou",
+          "customerPhone": "2015550202",
+          "carYear": 2011,
+          "carMake": "Toyota",
+          "carModel": "Corolla",
+          "parkingDate": "2026-09-01",
+          "parkingEndDate": "2026-09-11",
+          "dailyRate": 12,
+          "amountDueCents": 13200,
+          "amountPaidCents": 9600
+        }
+      ],
+      "expect": {
+        "carried": [
+          {
+            "id": "corolla",
+            "periodFrom": "2026-09-01",
+            "periodTo": "2026-09-11",
+            "days": 11,
+            "accruedCents": 13200,
+            "dueCents": 3600
+          }
+        ],
+        "customers": [
+          {
+            "key": "phone:2015550202",
+            "carIds": [],
+            "olderCarIds": [
+              "corolla"
+            ],
+            "monthCents": 0,
+            "priorUnpaidCents": 3600,
+            "dueCents": 3600,
+            "owes": true,
+            "paid": false
+          }
+        ]
+      }
+    },
+    {
+      "name": "left earlier, paid up: nothing",
+      "monthKey": "2026-10",
+      "now": "2026-11-01T12:00:00Z",
+      "cars": [
+        {
+          "id": "paid",
+          "businessId": "lot",
+          "paymentMethod": "direct",
+          "source": "business",
+          "status": "parked",
+          "paymentStatus": "paid",
+          "customerName": "Paid",
+          "customerPhone": "5550001111",
+          "parkingDate": "2026-09-01",
+          "parkingEndDate": "2026-09-10",
+          "dailyRate": 12,
+          "amountDueCents": 12000
+        }
+      ],
+      "expect": {
+        "carried": [],
+        "customers": []
+      }
+    },
+    {
+      "name": "left earlier, overpaid: nothing",
+      "monthKey": "2026-10",
+      "now": "2026-11-01T12:00:00Z",
+      "cars": [
+        {
+          "id": "over",
+          "businessId": "lot",
+          "paymentMethod": "direct",
+          "source": "business",
+          "status": "parked",
+          "paymentStatus": "awaiting_direct_payment",
+          "customerName": "Over",
+          "customerPhone": "5550002222",
+          "parkingDate": "2026-09-01",
+          "parkingEndDate": "2026-09-02",
+          "dailyRate": 12,
+          "amountDueCents": 2400,
+          "amountPaidCents": 5000
+        }
+      ],
+      "expect": {
+        "carried": [],
+        "customers": []
+      }
+    },
+    {
+      "name": "voided or cancelled: never carried",
+      "monthKey": "2026-10",
+      "now": "2026-11-01T12:00:00Z",
+      "cars": [
+        {
+          "id": "voided",
+          "businessId": "lot",
+          "paymentMethod": "direct",
+          "source": "business",
+          "status": "parked",
+          "paymentStatus": "awaiting_direct_payment",
+          "customerName": "V",
+          "customerPhone": "5550003333",
+          "parkingDate": "2026-09-01",
+          "parkingEndDate": "2026-09-05",
+          "dailyRate": 12,
+          "amountDueCents": 6000,
+          "voided": true
+        },
+        {
+          "id": "cancelled",
+          "businessId": "lot",
+          "paymentMethod": "direct",
+          "source": "business",
+          "status": "cancelled",
+          "paymentStatus": "awaiting_direct_payment",
+          "customerName": "X",
+          "customerPhone": "5550004444",
+          "parkingDate": "2026-09-01",
+          "parkingEndDate": "2026-09-05",
+          "dailyRate": 12,
+          "amountDueCents": 6000
+        }
+      ],
+      "expect": {
+        "carried": [],
+        "customers": []
+      }
+    },
+    {
+      "name": "left on the month's first day: on the month's own bill, not carried",
+      "monthKey": "2026-10",
+      "now": "2026-11-01T12:00:00Z",
+      "cars": [
+        {
+          "id": "firstday",
+          "businessId": "lot",
+          "paymentMethod": "direct",
+          "source": "business",
+          "status": "parked",
+          "paymentStatus": "awaiting_direct_payment",
+          "customerName": "F",
+          "customerPhone": "5550005555",
+          "parkingDate": "2026-09-25",
+          "parkingEndDate": "2026-10-01",
+          "dailyRate": 12,
+          "amountDueCents": 8400
+        }
+      ],
+      "expect": {
+        "carried": [],
+        "customers": [
+          {
+            "key": "phone:5550005555",
+            "carIds": [
+              "firstday"
+            ],
+            "olderCarIds": [],
+            "monthCents": 1200,
+            "priorUnpaidCents": 7200,
+            "dueCents": 8400,
+            "owes": true,
+            "paid": false
+          }
+        ]
+      }
+    },
+    {
+      "name": "left the day before the month: carried",
+      "monthKey": "2026-10",
+      "now": "2026-11-01T12:00:00Z",
+      "cars": [
+        {
+          "id": "lastday",
+          "businessId": "lot",
+          "paymentMethod": "direct",
+          "source": "business",
+          "status": "parked",
+          "paymentStatus": "awaiting_direct_payment",
+          "customerName": "L",
+          "customerPhone": "5550006666",
+          "parkingDate": "2026-09-28",
+          "parkingEndDate": "2026-09-30",
+          "dailyRate": 12,
+          "amountDueCents": 3600
+        }
+      ],
+      "expect": {
+        "carried": [
+          {
+            "id": "lastday",
+            "periodFrom": "2026-09-28",
+            "periodTo": "2026-09-30",
+            "days": 3,
+            "accruedCents": 3600,
+            "dueCents": 3600
+          }
+        ],
+        "customers": [
+          {
+            "key": "phone:5550006666",
+            "carIds": [],
+            "olderCarIds": [
+              "lastday"
+            ],
+            "monthCents": 0,
+            "priorUnpaidCents": 3600,
+            "dueCents": 3600,
+            "owes": true,
+            "paid": false
+          }
+        ]
+      }
+    },
+    {
+      "name": "still parked (no leave day): on the month's bill, not carried",
+      "monthKey": "2026-10",
+      "now": "2026-11-01T12:00:00Z",
+      "cars": [
+        {
+          "id": "open",
+          "businessId": "lot",
+          "paymentMethod": "direct",
+          "source": "business",
+          "status": "parked",
+          "paymentStatus": "awaiting_direct_payment",
+          "customerName": "O",
+          "customerPhone": "5550007777",
+          "parkingDate": "2026-09-20",
+          "dailyRate": 10
+        }
+      ],
+      "expect": {
+        "carried": [],
+        "customers": [
+          {
+            "key": "phone:5550007777",
+            "carIds": [
+              "open"
+            ],
+            "olderCarIds": [],
+            "monthCents": 31000,
+            "priorUnpaidCents": 11000,
+            "dueCents": 42000,
+            "owes": true,
+            "paid": false
+          }
+        ]
+      }
+    },
+    {
+      "name": "same phone: a carried car joins the customer's month bill as unpaid from before",
+      "monthKey": "2026-10",
+      "now": "2026-11-01T12:00:00Z",
+      "cars": [
+        {
+          "id": "rogue",
+          "businessId": "lot",
+          "paymentMethod": "direct",
+          "source": "business",
+          "status": "parked",
+          "paymentStatus": "awaiting_direct_payment",
+          "customerName": "Kofi",
+          "customerPhone": "2015550101",
+          "carYear": 2021,
+          "carMake": "Nissan",
+          "carModel": "Rogue Sport",
+          "parkingDate": "2026-09-01",
+          "parkingEndDate": "2026-10-17",
+          "dailyRate": 12,
+          "amountDueCents": 56400
+        },
+        {
+          "id": "highlander",
+          "businessId": "lot",
+          "paymentMethod": "direct",
+          "source": "business",
+          "status": "parked",
+          "paymentStatus": "awaiting_direct_payment",
+          "customerName": "Mariam",
+          "customerPhone": "+12015550101",
+          "carYear": 2021,
+          "carMake": "Toyota",
+          "carModel": "Highlander",
+          "parkingDate": "2026-09-06",
+          "parkingEndDate": "2026-09-07",
+          "dailyRate": 12,
+          "amountDueCents": 2400
+        }
+      ],
+      "expect": {
+        "carried": [
+          {
+            "id": "highlander",
+            "periodFrom": "2026-09-06",
+            "periodTo": "2026-09-07",
+            "days": 2,
+            "accruedCents": 2400,
+            "dueCents": 2400
+          }
+        ],
+        "customers": [
+          {
+            "key": "phone:2015550101",
+            "carIds": [
+              "rogue"
+            ],
+            "olderCarIds": [
+              "highlander"
+            ],
+            "monthCents": 20400,
+            "priorUnpaidCents": 38400,
+            "dueCents": 58800,
+            "owes": true,
+            "paid": false
+          }
+        ]
+      }
+    },
+    {
+      "name": "a customer with only a carried car gets a bill of its own",
+      "monthKey": "2026-10",
+      "now": "2026-11-01T12:00:00Z",
+      "cars": [
+        {
+          "id": "bah",
+          "businessId": "lot",
+          "paymentMethod": "direct",
+          "source": "business",
+          "status": "parked",
+          "paymentStatus": "awaiting_direct_payment",
+          "customerName": "Awa",
+          "customerPhone": "2015550303",
+          "parkingDate": "2026-09-01",
+          "parkingEndDate": "2026-09-24",
+          "dailyRate": 12,
+          "amountDueCents": 28800
+        }
+      ],
+      "expect": {
+        "carried": [
+          {
+            "id": "bah",
+            "periodFrom": "2026-09-01",
+            "periodTo": "2026-09-24",
+            "days": 24,
+            "accruedCents": 28800,
+            "dueCents": 28800
+          }
+        ],
+        "customers": [
+          {
+            "key": "phone:2015550303",
+            "carIds": [],
+            "olderCarIds": [
+              "bah"
+            ],
+            "monthCents": 0,
+            "priorUnpaidCents": 28800,
+            "dueCents": 28800,
+            "owes": true,
+            "paid": false
+          }
+        ]
+      }
+    },
+    {
+      "name": "left two months back: still carried",
+      "monthKey": "2026-10",
+      "now": "2026-11-01T12:00:00Z",
+      "cars": [
+        {
+          "id": "august",
+          "businessId": "lot",
+          "paymentMethod": "direct",
+          "source": "business",
+          "status": "parked",
+          "paymentStatus": "awaiting_direct_payment",
+          "customerName": "A",
+          "customerPhone": "5550008888",
+          "parkingDate": "2026-08-01",
+          "parkingEndDate": "2026-08-03",
+          "dailyRate": 15,
+          "amountDueCents": 4500
+        }
+      ],
+      "expect": {
+        "carried": [
+          {
+            "id": "august",
+            "periodFrom": "2026-08-01",
+            "periodTo": "2026-08-03",
+            "days": 3,
+            "accruedCents": 4500,
+            "dueCents": 4500
+          }
+        ],
+        "customers": [
+          {
+            "key": "phone:5550008888",
+            "carIds": [],
+            "olderCarIds": [
+              "august"
+            ],
+            "monthCents": 0,
+            "priorUnpaidCents": 4500,
+            "dueCents": 4500,
+            "owes": true,
+            "paid": false
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -9381,10 +9381,17 @@ async function parkingMonthEndData(db, businessDoc, monthKey, now,
     snapshot.docs.map((d) => ({id: d.id, ...d.data()}));
   const activities = db.collection("lotActivities")
       .where("businessId", "==", businessId);
-  const [cars, inMonth, unsettled, undated] = await Promise.all([
+  //  - cars not paid up, for those that left before the month still owing
+  //    ("unpaid from before", docs/PARKING_CARRYOVER.md); every car carries
+  //    a paymentStatus, and paid / succeeded stays owe nothing.
+  const [cars, unpaidCars, inMonth, unsettled, undated] = await Promise.all([
     db.collection("parkedCars")
         .where("businessId", "==", businessId)
         .where("occupancyEndMs", ">=", bounds.startMs)
+        .get(),
+    db.collection("parkedCars")
+        .where("businessId", "==", businessId)
+        .where("paymentStatus", "not-in", ["paid", "succeeded"])
         .get(),
     activities
         .where("activityDate", ">=",
@@ -9398,7 +9405,7 @@ async function parkingMonthEndData(db, businessDoc, monthKey, now,
   ]);
   // Cars and the ledger's activities go on the same month bills.
   const summary = parkingMonthSummary(
-      rows(cars), monthKey, now,
+      mergeParkingMonthRows(rows(cars), rows(unpaidCars)), monthKey, now,
       mergeParkingMonthRows(rows(inMonth), rows(unsettled), rows(undated)));
   // Staff expenses come off their own parking bill (STAFF_EXPENSE_CREDIT.md).
   // Unlinked lots read nothing more.
