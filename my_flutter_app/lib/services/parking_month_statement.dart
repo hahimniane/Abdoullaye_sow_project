@@ -244,6 +244,7 @@ class ParkingMonthBill {
     required this.vehicle,
     required this.vinNumber,
     required this.trackingCode,
+    this.forStaffId = '',
     this.paymentMethod = '',
     this.paidVia = const [],
     this.recordable = false,
@@ -269,6 +270,9 @@ class ParkingMonthBill {
   final String vehicle;
   final String vinNumber;
   final String trackingCode;
+
+  /// The team member whose own car this is, '' for a customer's car.
+  final String forStaffId;
   final String paymentMethod;
 
   /// How what was paid toward this month came in (method codes); empty when
@@ -334,6 +338,7 @@ ParkingMonthBill? parkingMonthStatement(
         .join(' '),
     vinNumber: _text(row['vinNumber'], 17).toUpperCase(),
     trackingCode: _text(row['trackingCode'], 40),
+    forStaffId: _text(row['forStaffId'], 128),
     paymentMethod: _text(row['paymentMethod'], 40),
     paidVia: monthPaid > 0 ? parkingPaidVia(row) : const [],
     recordable: _text(row['paymentMethod'], 40) == 'direct' &&
@@ -437,6 +442,7 @@ class ParkingCarriedCar {
     required this.vehicle,
     required this.vinNumber,
     required this.trackingCode,
+    this.forStaffId = '',
     this.paymentMethod = '',
     this.recordable = false,
   });
@@ -460,6 +466,9 @@ class ParkingCarriedCar {
   final String vehicle;
   final String vinNumber;
   final String trackingCode;
+
+  /// The team member whose own car this is, '' for a customer's car.
+  final String forStaffId;
   final String paymentMethod;
 
   /// A payment can be recorded by hand: a direct car the business entered.
@@ -506,6 +515,7 @@ ParkingCarriedCar? carriedCarItem(Map<String, dynamic> row, String monthKey,
         .join(' '),
     vinNumber: _text(row['vinNumber'], 17).toUpperCase(),
     trackingCode: _text(row['trackingCode'], 40),
+    forStaffId: _text(row['forStaffId'], 128),
     paymentMethod: _text(row['paymentMethod'], 40),
     recordable: _text(row['paymentMethod'], 40) == 'direct' &&
         (_text(row['source'], 40) == 'business' ||
@@ -537,6 +547,7 @@ class ParkingMonthCustomer {
     required this.paid,
     required this.paidVia,
     required this.partialMonth,
+    this.forStaffId = '',
     int? dueBeforeExpensesCents,
     this.expenseCreditCents = 0,
     this.expenseLines = const [],
@@ -579,6 +590,10 @@ class ParkingMonthCustomer {
   /// How this month's payments came in, method codes in first-seen order.
   final List<String> paidVia;
   final bool partialMonth;
+
+  /// The team member whose own cars these are, '' for a customer
+  /// (key `staff:{uid}`).
+  final String forStaffId;
 
   /// What they owed on the lot before their expenses came off
   /// (docs/STAFF_EXPENSE_CREDIT.md §3); the same as [dueCents] for anyone
@@ -629,6 +644,7 @@ class ParkingMonthCustomer {
         ),
         paidVia: paidVia,
         partialMonth: partialMonth,
+        forStaffId: forStaffId,
         dueBeforeExpensesCents: net.dueBeforeExpensesCents,
         expenseCreditCents: net.expenseCreditCents,
         expenseLines: lines,
@@ -718,7 +734,14 @@ class ParkingMonthStaffExpenses {
 String _normName(String v) => v.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
 
 /// Who a bill goes to: the phone, last ten digits. Mirrors the server.
-String parkingCustomerKeyOf(String phone, String name) {
+///
+/// A team member's own car ([forStaffId]) is theirs whatever number is on it
+/// (docs/PARKING_TEAM_CARS.md): `staff:{uid}`.
+String parkingCustomerKeyOf(String phone, String name, [String forStaffId = '']) {
+  final staffId = forStaffId.trim();
+  if (staffId.isNotEmpty) {
+    return 'staff:${staffId.length > 128 ? staffId.substring(0, 128) : staffId}';
+  }
   var digits = phone.replaceAll(RegExp(r'\D+'), '');
   if (digits.length > 10) digits = digits.substring(digits.length - 10);
   if (digits.length >= 7) return 'phone:$digits';
@@ -726,7 +749,7 @@ String parkingCustomerKeyOf(String phone, String name) {
 }
 
 String parkingCustomerKey(ParkingMonthBill b) =>
-    parkingCustomerKeyOf(b.customerPhone, b.customerName);
+    parkingCustomerKeyOf(b.customerPhone, b.customerName, b.forStaffId);
 
 /// The spelling used most often (capitals ignored), capitalised when typed so.
 String mostUsedName(Iterable<String> names) {
@@ -769,7 +792,9 @@ List<ParkingMonthCustomer> parkingMonthCustomers(
   }
   for (final c in carried) {
     carriedGroups
-        .putIfAbsent(parkingCustomerKeyOf(c.customerPhone, c.customerName), () => [])
+        .putIfAbsent(
+            parkingCustomerKeyOf(c.customerPhone, c.customerName, c.forStaffId),
+            () => [])
         .add(c);
   }
   final keys = {...carGroups.keys, ...actGroups.keys, ...carriedGroups.keys};
@@ -845,6 +870,7 @@ List<ParkingMonthCustomer> parkingMonthCustomers(
       paid: parkingMonthCustomerPaid(monthCents: monthCents, dueCents: due),
       paidVia: paidVia,
       partialMonth: cars.any((b) => b.partialMonth),
+      forStaffId: key.startsWith('staff:') ? key.substring(6) : '',
       olderCars: olderCars,
       olderCarsRegisteredTo: [for (final c in olderCars) reg(c.customerName)],
     ));

@@ -47,6 +47,17 @@ class ParkedCar {
   /// What this entry recorded, in dollars.
   double get amountDue => businessParkingAmountDue(paymentFields);
 
+  /// The team member whose own car this is (docs/PARKING_TEAM_CARS.md), or
+  /// '' for a customer's car.
+  String get forStaffId => (paymentFields['forStaffId'] ?? '').toString().trim();
+
+  /// Their name as saved when the car was tied to them, or ''.
+  String get forStaffName =>
+      (paymentFields['forStaffName'] ?? '').toString().trim();
+
+  /// True when this is a team member's own car.
+  bool get isTeamCar => forStaffId.isNotEmpty;
+
   /// The hosted Stripe Checkout page for a payment-link entry, or "".
   String get checkoutUrl => (paymentFields['checkoutUrl'] ?? '').toString();
 

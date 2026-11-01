@@ -13,6 +13,9 @@
 /// case of the shared `functions/test/fixtures/staff-expense-credit-cases.json`.
 library;
 
+/// Month end's customer key for a team member's own cars.
+const _teamKeyPrefix = 'staff:';
+
 final _month = RegExp(r'^\d{4}-(0[1-9]|1[0-2])$');
 
 int _cents(Object? value) {
@@ -169,7 +172,8 @@ class StaffOwedRow {
   final String staffId;
   final String staffName;
 
-  /// The linked customer's key; '' when the staff member is not linked.
+  /// Their bill's key: `staff:{uid}` when their own cars are billed under
+  /// them, else the linked customer's; '' when neither.
   final String customerKey;
   final int owedCents;
 }
@@ -203,42 +207,66 @@ StaffExpenseNetting netStaffExpenses(
 }) {
   final credits = staffCredits(entries, repayments, monthKey);
   final byCustomer = staffByCustomer(links);
+  // A team member's own cars (`staff:{uid}`, docs/PARKING_TEAM_CARS.md) are
+  // theirs without any link.
+  for (final customer in customers) {
+    final key = _text(customer.key, 200);
+    if (!key.startsWith(_teamKeyPrefix)) continue;
+    final id = key.substring(_teamKeyPrefix.length);
+    final list = byCustomer.putIfAbsent(key, () => []);
+    if (id.isNotEmpty && !list.contains(id)) list.add(id);
+  }
   final names = staffNames ?? const <String, String>{};
-  final owedByStaff = <String, int>{
+  // What each person's expenses can still cover: one credit, used once,
+  // whichever of their bills it lands on - their own cars first.
+  final left = <String, int>{
     for (final e in credits.entries) e.key: e.value.creditCents,
   };
-
-  final netted = <StaffNettedCustomer>[];
-  for (final customer in customers) {
+  bool isTeamKey(int i) => _text(customers[i].key).startsWith(_teamKeyPrefix);
+  // List.sort is not stable: the index breaks ties, so everyone else keeps
+  // the order they came in.
+  final order = List<int>.generate(customers.length, (i) => i)
+    ..sort((a, b) {
+      final byTeam = (isTeamKey(a) ? 0 : 1).compareTo(isTeamKey(b) ? 0 : 1);
+      return byTeam != 0 ? byTeam : a.compareTo(b);
+    });
+  final netted = List<StaffNettedCustomer?>.filled(customers.length, null);
+  for (final i in order) {
+    final customer = customers[i];
     final linked = byCustomer[customer.key] ?? const <String>[];
-    final credit = linked.fold<int>(
-      0,
-      (s, id) => s + (credits[id]?.creditCents ?? 0),
-    );
+    final credit = linked.fold<int>(0, (s, id) => s + (left[id] ?? 0));
     final before = _cents(customer.dueCents);
     final applied = before < credit ? before : credit;
     if (linked.isNotEmpty) {
-      final used = splitByCredit(applied, linked, credits);
+      final view = <String, StaffCredit>{
+        for (final id in linked) id: StaffCredit(creditCents: left[id] ?? 0),
+      };
+      final used = splitByCredit(applied, linked, view);
       for (final id in linked) {
-        final left = (credits[id]?.creditCents ?? 0) - (used[id] ?? 0);
-        owedByStaff[id] = left > 0 ? left : 0;
+        final rest = (left[id] ?? 0) - (used[id] ?? 0);
+        left[id] = rest > 0 ? rest : 0;
       }
     }
-    netted.add(
-      StaffNettedCustomer(
-        key: customer.key,
-        linkedStaffIds: List.unmodifiable(linked),
-        dueBeforeExpensesCents: before,
-        expenseCreditCents: applied,
-        dueCents: before - applied,
-      ),
+    netted[i] = StaffNettedCustomer(
+      key: customer.key,
+      linkedStaffIds: List.unmodifiable(linked),
+      dueBeforeExpensesCents: before,
+      expenseCreditCents: applied,
+      dueCents: before - applied,
     );
   }
+  final owedByStaff = left;
 
   final keyOf = <String, String>{
     for (final e in (links ?? const <String, dynamic>{}).entries)
       e.key: _text(e.value is Map ? e.value['customerKey'] : null, 200),
   };
+  for (final customer in customers) {
+    final key = _text(customer.key, 200);
+    if (key.startsWith(_teamKeyPrefix)) {
+      keyOf[key.substring(_teamKeyPrefix.length)] = key;
+    }
+  }
   final businessOwes =
       [
         for (final e in owedByStaff.entries)
@@ -256,10 +284,10 @@ StaffExpenseNetting netStaffExpenses(
         return byName != 0 ? byName : a.staffId.compareTo(b.staffId);
       });
   return StaffExpenseNetting(
-    customers: netted,
+    customers: [for (final c in netted) c!],
     businessOwes: businessOwes,
     businessOwesCents: businessOwes.fold(0, (s, x) => s + x.owedCents),
-    expenseCreditCents: netted.fold(0, (s, c) => s + c.expenseCreditCents),
+    expenseCreditCents: netted.fold(0, (s, c) => s + c!.expenseCreditCents),
   );
 }
 

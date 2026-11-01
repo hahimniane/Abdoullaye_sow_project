@@ -566,14 +566,15 @@ void main() {
       expect(screen, contains('focusNode: _nameFocus'));
     });
 
-    test('the lot own people are offered too, and are labelled', () {
-      // A colleague parking here should not have to be filed as a customer
-      // first. Reading the team needs the 'people' permission, so it is
-      // best-effort and silent.
-      expect(screen, contains('lotCustomerSources('));
+    test('the lot own people are picked under Whose car?, not suggested', () {
+      // A colleague parking here is a team member's car
+      // (docs/PARKING_TEAM_CARS.md), picked by name - they are no longer
+      // mixed into the customer suggestions. Reading the team needs the
+      // 'people' permission, so it is best-effort and silent.
+      expect(screen, contains('lotCustomerSources(saved, const [])'));
       expect(screen, contains('LotCustomer.fromStaff('));
       expect(screen, contains("collection('users')"));
-      expect(screen, contains(r"'${customer.name} · Staff'"));
+      expect(screen, contains('ParkingWhoseCarChoice('));
     });
 
     test('picking one fills the name and phone it knows, and no car', () {

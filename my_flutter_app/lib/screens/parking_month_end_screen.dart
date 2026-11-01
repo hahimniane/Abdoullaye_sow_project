@@ -32,6 +32,7 @@ import '../widgets/app_snackbars.dart';
 import '../widgets/lot_sheets.dart';
 import '../widgets/parking_bill_payment_widgets.dart';
 import '../widgets/parking_invoices_card.dart';
+import '../widgets/parking_whose_car.dart';
 import '../widgets/parking_messages_section.dart'
     show parkingMessageIsProblem, parkingMessageStatusText;
 import '../widgets/received_by_options.dart';
@@ -1482,6 +1483,14 @@ class _CustomerTileState extends State<_CustomerTile> {
                           color: AppColors.ink,
                         ),
                       ),
+                      // A team member's own cars (key `staff:{uid}`).
+                      if (customer.forStaffId.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2, bottom: 2),
+                          child: ParkingTeamTagChip(
+                            text: l10n.parkingWhoseCarTeamMember,
+                          ),
+                        ),
                       Text(
                         [
                           customer.customerPhone,

@@ -18,6 +18,9 @@ import '../data/car_catalog.dart';
 import '../services/business_account_receiver.dart';
 import '../services/business_parking_entry.dart';
 import '../services/container_manifest.dart';
+import '../services/lot_ledger.dart'
+    show LotStaff, lotStaffFromProfile, withBusinessOwner;
+import '../services/parking_team.dart';
 import '../services/parking_whatsapp.dart' show ParkingMessage;
 import '../services/vin_catalog_matcher.dart';
 import '../services/vin_decoder_service.dart';
@@ -37,6 +40,7 @@ import '../widgets/container_link_chip.dart';
 import '../widgets/phone_account_widgets.dart' show RecordPhoneFlagNotes;
 import '../widgets/lot_sheets.dart' show showLotSheet;
 import '../widgets/parking_messages_section.dart';
+import '../widgets/parking_whose_car.dart';
 import '../widgets/void_record_sheet.dart';
 import '../services/phone_accounts.dart'
     show RecordPhoneField, recordPhoneFlagsOf;
@@ -114,6 +118,18 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
   // parking-only staff member simply gets no names and can still mark paid.
   Map<String, String> _staffNames = const {};
 
+  // "Whose car?" (docs/PARKING_TEAM_CARS.md): the car's team member while one
+  // is picked. The picker lists the owner and every staff member, read once
+  // when the screen opens; empty when the team cannot be read.
+  late bool _teamCar;
+  late String _teamStaffId;
+  List<LotStaff> _people = const [];
+  List<LotStaff> _team = const [];
+  Set<String> _teamIds = const {};
+  String _ownerUid = '';
+  String _ownerName = '';
+  String _ownerEmail = '';
+
   /// Where this car is as far as the containers know, when it is on a box
   /// that has not arrived. One read for this VIN when the screen opens;
   /// null until then, and null when the car is on no open container.
@@ -140,7 +156,10 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     _vinController = TextEditingController(text: widget.parkedCar.vinNumber);
     _trackingCode = widget.parkedCar.trackingCode;
     _paymentFields = Map<String, dynamic>.from(widget.parkedCar.paymentFields);
+    _teamStaffId = widget.parkedCar.forStaffId;
+    _teamCar = _teamStaffId.isNotEmpty;
     _loadStaffNames();
+    _loadOwner();
     _loadContainerLink();
     _customerPhoneController = TextEditingController(
       text: (_paymentFields['customerPhone'] ?? '').toString(),
@@ -418,15 +437,25 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
       }
     }
 
-    moved(
-      'customerName',
-      _paymentFields['customerName'] ?? _paymentFields['ownerName'],
+    // A team member's own car: the server fills the name, phone and email
+    // from the person, so none of them is sent; only who it is for.
+    changes.addAll(
+      businessParkingTeamChange(
+        current: (_paymentFields['forStaffId'] ?? '').toString(),
+        next: draft.forStaffId,
+      ),
     );
-    moved('customerPhone', _paymentFields['customerPhone']);
-    moved(
-      'customerEmail',
-      (_paymentFields['customerEmail'] ?? '').toString().toLowerCase(),
-    );
+    if (draft.forStaffId.trim().isEmpty) {
+      moved(
+        'customerName',
+        _paymentFields['customerName'] ?? _paymentFields['ownerName'],
+      );
+      moved('customerPhone', _paymentFields['customerPhone']);
+      moved(
+        'customerEmail',
+        (_paymentFields['customerEmail'] ?? '').toString().toLowerCase(),
+      );
+    }
     moved('carMake', _paymentFields['carMake']);
     moved('carModel', _paymentFields['carModel']);
     moved('carYear', _paymentFields['carYear']);
@@ -457,11 +486,17 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
       return false;
     }
 
+    if (_teamCar && _teamStaffId.isEmpty) {
+      showErrorSnackBar(context, l10n.parkingTeamMemberRequired);
+      return false;
+    }
+    final team = _teamCar;
     final draft = BusinessParkingEntryDraft(
       businessId: (_paymentFields['businessId'] ?? '').toString(),
-      customerName: _ownerNameController.text,
-      customerPhone: _customerPhoneController.text,
-      customerEmail: _customerEmailController.text,
+      forStaffId: team ? _teamStaffId : '',
+      customerName: team ? '' : _ownerNameController.text,
+      customerPhone: team ? '' : _customerPhoneController.text,
+      customerEmail: team ? '' : _customerEmailController.text,
       carMake: _selectedMake ?? '',
       carModel: _selectedModel ?? '',
       carYear: _selectedYear ?? '',
@@ -496,10 +531,14 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
 
       final nextFields = <String, dynamic>{
         ..._paymentFields,
-        'customerName': draft.customerName.trim(),
-        'ownerName': draft.customerName.trim(),
-        'customerPhone': draft.customerPhone.trim(),
-        'customerEmail': draft.customerEmail.trim().toLowerCase(),
+        // The server fills a team member's car from the person, so the saved
+        // customer details stay as they were until the record is read again.
+        if (!team) ...{
+          'customerName': draft.customerName.trim(),
+          'ownerName': draft.customerName.trim(),
+          'customerPhone': draft.customerPhone.trim(),
+          'customerEmail': draft.customerEmail.trim().toLowerCase(),
+        },
         'carMake': draft.carMake,
         'carModel': draft.carModel,
         'carYear': draft.carYear,
@@ -511,6 +550,18 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
             : result.paymentMethod,
         'amountDueCents': result.amountDueCents,
       };
+      if (changes.containsKey('forStaffId')) {
+        if (team) {
+          nextFields['forStaffId'] = draft.forStaffId;
+          nextFields['forStaffName'] = [
+            for (final m in _team)
+              if (m.id == draft.forStaffId) m.name,
+          ].firstOrNull ?? '';
+        } else {
+          nextFields.remove('forStaffId');
+          nextFields.remove('forStaffName');
+        }
+      }
       if (changes.containsKey('paymentMethod')) {
         nextFields['paymentStatus'] = result.isPaymentLink
             ? 'awaiting_link_payment'
@@ -1407,28 +1458,61 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
         children: [
           if (_isCatalogLoading) const LinearProgressIndicator(minHeight: 2),
           if (_isCatalogLoading) const SizedBox(height: 16),
-          TextFormField(
-            controller: _ownerNameController,
-            readOnly: !canEdit,
-            decoration: InputDecoration(
-              labelText: l10n.ownerName,
-              suffixIcon: _copyIcon(
-                _ownerNameController,
-                l10n.copyName,
-                l10n.nameCopied,
-              ),
+          // Whose car: a walk-up the lot recorded can be moved to or from a
+          // team member (docs/PARKING_TEAM_CARS.md). Choosing a member hides
+          // the customer's details; choosing Someone else shows them again.
+          if (canEdit && isBusinessEntry) ...[
+            ParkingWhoseCarChoice(
+              teamCar: _teamCar,
+              staffId: _teamStaffId,
+              team: _team,
+              onTeamCarChanged: (value) => setState(() => _teamCar = value),
+              onStaffChanged: (id) => setState(() => _teamStaffId = id),
             ),
-            validator: (value) {
-              if (!canEdit) return null;
-              return value == null || value.isEmpty
-                  ? l10n.ownerNameRequired
-                  : null;
-            },
-          ),
+            const SizedBox(height: 16),
+          ],
+          if (!(canEdit && isBusinessEntry && _teamCar)) ...[
+            TextFormField(
+              controller: _ownerNameController,
+              readOnly: !canEdit,
+              decoration: InputDecoration(
+                labelText: l10n.ownerName,
+                suffixIcon: _copyIcon(
+                  _ownerNameController,
+                  l10n.copyName,
+                  l10n.nameCopied,
+                ),
+              ),
+              validator: (value) {
+                if (!canEdit) return null;
+                return value == null || value.isEmpty
+                    ? l10n.ownerNameRequired
+                    : null;
+              },
+            ),
+            // A small label beside the owner of a team member's own car.
+            if (parkingTeamTagOf(
+                  (_paymentFields['forStaffId'] ?? '').toString(),
+                  _teamIds,
+                ) !=
+                ParkingTeamTag.none)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: ParkingTeamTagChip(
+                    tag: parkingTeamTagOf(
+                      (_paymentFields['forStaffId'] ?? '').toString(),
+                      _teamIds,
+                    ),
+                  ),
+                ),
+              ),
+          ],
           // A walk-up carries the customer's own contact details, and they are
           // what a payment link travels on: an email corrected here is the
           // difference between a link that arrives and one that does not.
-          if (isBusinessEntry) ...[
+          if (isBusinessEntry && !(canEdit && _teamCar)) ...[
             const SizedBox(height: 16),
             TextFormField(
               key: const ValueKey<String>('parking-customer-phone'),
@@ -1604,6 +1688,15 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
       }
       setState(() {
         _staffNames = names;
+        _people = [
+          for (final doc in snap.docs)
+            lotStaffFromProfile(
+              doc.id,
+              doc.data(),
+              unnamed: AppLocalizations.of(context)!.lotUnnamedPerson,
+            ),
+        ];
+        _rebuildTeam();
         final first = names.keys.isNotEmpty ? names.keys.first : '';
         _partReceivedBy = first;
         _settleReceivedBy = first;
@@ -1612,6 +1705,49 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     } catch (_) {
       // No permission to read the team: names stay blank, the flow still works.
     }
+  }
+
+  /// The business's owner, who may not be on the people list. One read of the
+  /// business document; silent when it cannot be read.
+  Future<void> _loadOwner() async {
+    final businessId = (_paymentFields['businessId'] ?? '').toString().trim();
+    if (businessId.isEmpty) return;
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('businesses')
+          .doc(businessId)
+          .get();
+      if (!mounted) return;
+      final data = snap.data() ?? const <String, dynamic>{};
+      setState(() {
+        _ownerUid = (data['ownerUid'] ?? '').toString();
+        _ownerName = (data['ownerName'] ?? '').toString();
+        _ownerEmail = (data['ownerEmail'] ?? '').toString();
+        _rebuildTeam();
+      });
+    } catch (_) {
+      // No permission to read the business: the team is whoever is listed.
+    }
+  }
+
+  /// The picker's team: everyone listed for the business plus its owner, and
+  /// the ids the "Team" label is judged against. Worked out when the lists
+  /// load, not on every build.
+  void _rebuildTeam() {
+    final l10n = AppLocalizations.of(context)!;
+    final me = context.read<AuthProvider>().user;
+    _team = withBusinessOwner(
+      _people,
+      ownerUid: _ownerUid,
+      ownerName: [_ownerName, _ownerEmail]
+          .map((v) => v.trim())
+          .firstWhere((v) => v.isNotEmpty, orElse: () => ''),
+      fallbackName: me != null && me.uid == _ownerUid
+          ? (me.displayName ?? me.email ?? '')
+          : '',
+      unnamedLabel: l10n.lotBusinessOwner,
+    );
+    _teamIds = {for (final m in _team) m.id};
   }
 
   /// The container this car sits on, if any. Two equality filters, so no

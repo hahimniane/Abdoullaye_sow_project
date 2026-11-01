@@ -42,6 +42,8 @@ import 'parking_month_end_screen.dart';
 import 'staff_balances_screen.dart';
 import '../widgets/received_by_options.dart';
 import '../widgets/parking_welcome_sheet.dart';
+import '../widgets/parking_whose_car.dart';
+import '../services/parking_team.dart';
 import 'office_locations_screen.dart';
 import 'park_car_screen.dart';
 import 'lot_ledger_screen.dart';
@@ -469,6 +471,28 @@ class _HomeMenuState extends State<HomeMenu> {
             .trim();
         if (name.isNotEmpty) names[doc.id] = name;
       }
+      // The owner is on the team even when their own profile does not name
+      // this business, so a car tied to them is never called "former".
+      try {
+        final business = await FirebaseFirestore.instance
+            .collection('businesses')
+            .doc(id)
+            .get();
+        final data = business.data() ?? const <String, dynamic>{};
+        final ownerUid = (data['ownerUid'] ?? '').toString().trim();
+        if (ownerUid.isNotEmpty && !names.containsKey(ownerUid) && mounted) {
+          final ownerName = [data['ownerName'], data['ownerEmail']]
+              .map((v) => (v ?? '').toString().trim())
+              .firstWhere(
+                (v) => v.isNotEmpty,
+                orElse: () => AppLocalizations.of(context)!.lotBusinessOwner,
+              );
+          names[ownerUid] = ownerName;
+        }
+      } catch (_) {
+        // The business document is not readable: the people list stands.
+      }
+      if (!mounted) return;
       setState(() => _staffNames = names);
     } catch (_) {
       // No permission to read the team: the columns stay blank and every
@@ -2669,6 +2693,17 @@ class _ParkingListRow extends StatelessWidget {
                       const SizedBox(height: 3),
                       Row(
                         children: [
+                          // A team member's own car says so next to the name;
+                          // "former" once they are off the team list.
+                          if (car.isTeamCar) ...[
+                            ParkingTeamTagChip(
+                              tag: parkingTeamTagOf(
+                                car.forStaffId,
+                                staffNames.keys,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                          ],
                           Expanded(
                             child: Text(
                               [

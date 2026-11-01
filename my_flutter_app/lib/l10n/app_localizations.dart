@@ -30883,6 +30883,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Payment undone.'**
   String get pmeBillPaymentUndoDone;
+
+  /// Question above the choice on the add or edit parked-car form: a customer's car or a team member's own car.
+  ///
+  /// In en, this message translates to:
+  /// **'Whose car?'**
+  String get parkingWhoseCar;
+
+  /// Choice: the car belongs to a customer (name and phone typed).
+  ///
+  /// In en, this message translates to:
+  /// **'Someone else'**
+  String get parkingWhoseCarSomeoneElse;
+
+  /// Choice: the car is a team member's own. Also the small label on a Month end card for a team member's cars.
+  ///
+  /// In en, this message translates to:
+  /// **'Team member'**
+  String get parkingWhoseCarTeamMember;
+
+  /// Label of the picker listing the owner and every staff member.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick the team member'**
+  String get parkingTeamMemberPicker;
+
+  /// Shown when Team member is chosen but nobody is picked.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a team member.'**
+  String get parkingTeamMemberRequired;
+
+  /// Explains a team member's car under the picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Their parking goes on their Staff balances. No WhatsApp is sent.'**
+  String get parkingTeamMemberHint;
+
+  /// Small label next to the owner of a car that is a team member's own.
+  ///
+  /// In en, this message translates to:
+  /// **'Team'**
+  String get parkingTeamTag;
+
+  /// Small label next to the owner of a car tied to someone who is no longer on the team.
+  ///
+  /// In en, this message translates to:
+  /// **'Former team member'**
+  String get parkingFormerTeamTag;
 }
 
 class _AppLocalizationsDelegate

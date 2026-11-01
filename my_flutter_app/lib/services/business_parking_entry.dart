@@ -76,9 +76,15 @@ class BusinessParkingEntryDraft {
     this.endDate,
     this.paymentMethod = BusinessParkingPaymentMethod.direct,
     this.parkingRateId = '',
+    this.forStaffId = '',
   });
 
   final String businessId;
+
+  /// The team member whose own car this is (docs/PARKING_TEAM_CARS.md), or
+  /// '' for someone else's car. With a member, the name and phone are not
+  /// typed: the server fills them from the member.
+  final String forStaffId;
   final String customerName;
   final String customerPhone;
   final String customerEmail;
@@ -116,12 +122,15 @@ List<BusinessParkingEntryError> validateBusinessParkingEntry(
   if (_trimmed(draft.businessId, 180).isEmpty) {
     errors.add(BusinessParkingEntryError.businessRequired);
   }
-  if (_trimmed(draft.customerName).isEmpty) {
+  // A team member's own car needs neither: the server fills both from the
+  // person.
+  final teamCar = _trimmed(draft.forStaffId, 128).isNotEmpty;
+  if (!teamCar && _trimmed(draft.customerName).isEmpty) {
     errors.add(BusinessParkingEntryError.customerNameRequired);
   }
 
   final phone = _trimmed(draft.customerPhone, 40);
-  if (phone.isEmpty) {
+  if (!teamCar && phone.isEmpty) {
     errors.add(BusinessParkingEntryError.customerPhoneRequired);
   }
 
@@ -194,6 +203,10 @@ Map<String, dynamic> businessParkingEntryPayload(
 ) {
   return <String, dynamic>{
     'businessId': _trimmed(draft.businessId, 180),
+    // Only sent for a team member's own car: an absent field is how the
+    // server hears "someone else's car".
+    if (_trimmed(draft.forStaffId, 128).isNotEmpty)
+      'forStaffId': _trimmed(draft.forStaffId, 128),
     'customerName': _trimmed(draft.customerName),
     'customerPhone': _trimmed(draft.customerPhone, 40),
     'customerEmail': _trimmed(draft.customerEmail, 180).toLowerCase(),
@@ -209,6 +222,19 @@ Map<String, dynamic> businessParkingEntryPayload(
     if (_trimmed(draft.parkingRateId, 60).isNotEmpty)
       'parkingRateId': _trimmed(draft.parkingRateId, 60),
   };
+}
+
+/// What an edit changes about whose car it is, in the callable's own field
+/// name: `{forStaffId: uid}` to tie the car to a team member (or move it to
+/// another), `{forStaffId: ''}` to untie it, `{}` when it stays as it is.
+/// Only the difference is sent, like every other edited field.
+Map<String, dynamic> businessParkingTeamChange({
+  required String current,
+  required String next,
+}) {
+  final was = _trimmed(current, 128);
+  final now = _trimmed(next, 128);
+  return was == now ? const <String, dynamic>{} : {'forStaffId': now};
 }
 
 /// What the callable answers with.

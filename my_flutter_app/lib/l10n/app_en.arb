@@ -10200,5 +10200,37 @@
       }
     }
   },
-  "pmeBillPaymentUndoDone": "Payment undone."
+  "pmeBillPaymentUndoDone": "Payment undone.",
+  "parkingWhoseCar": "Whose car?",
+  "@parkingWhoseCar": {
+    "description": "Question above the choice on the add or edit parked-car form: a customer's car or a team member's own car."
+  },
+  "parkingWhoseCarSomeoneElse": "Someone else",
+  "@parkingWhoseCarSomeoneElse": {
+    "description": "Choice: the car belongs to a customer (name and phone typed)."
+  },
+  "parkingWhoseCarTeamMember": "Team member",
+  "@parkingWhoseCarTeamMember": {
+    "description": "Choice: the car is a team member's own. Also the small label on a Month end card for a team member's cars."
+  },
+  "parkingTeamMemberPicker": "Pick the team member",
+  "@parkingTeamMemberPicker": {
+    "description": "Label of the picker listing the owner and every staff member."
+  },
+  "parkingTeamMemberRequired": "Pick a team member.",
+  "@parkingTeamMemberRequired": {
+    "description": "Shown when Team member is chosen but nobody is picked."
+  },
+  "parkingTeamMemberHint": "Their parking goes on their Staff balances. No WhatsApp is sent.",
+  "@parkingTeamMemberHint": {
+    "description": "Explains a team member's car under the picker."
+  },
+  "parkingTeamTag": "Team",
+  "@parkingTeamTag": {
+    "description": "Small label next to the owner of a car that is a team member's own."
+  },
+  "parkingFormerTeamTag": "Former team member",
+  "@parkingFormerTeamTag": {
+    "description": "Small label next to the owner of a car tied to someone who is no longer on the team."
+  }
 }

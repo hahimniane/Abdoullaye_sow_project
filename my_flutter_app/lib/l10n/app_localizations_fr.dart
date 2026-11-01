@@ -18590,4 +18590,29 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get pmeBillPaymentUndoDone => 'Paiement annulé.';
+
+  @override
+  String get parkingWhoseCar => 'À qui est la voiture ?';
+
+  @override
+  String get parkingWhoseCarSomeoneElse => 'Quelqu\'un d\'autre';
+
+  @override
+  String get parkingWhoseCarTeamMember => 'Membre de l\'équipe';
+
+  @override
+  String get parkingTeamMemberPicker => 'Choisir le membre de l\'équipe';
+
+  @override
+  String get parkingTeamMemberRequired => 'Choisissez un membre de l\'équipe.';
+
+  @override
+  String get parkingTeamMemberHint =>
+      'Son stationnement va dans ses Soldes du personnel. Aucun WhatsApp n\'est envoyé.';
+
+  @override
+  String get parkingTeamTag => 'Équipe';
+
+  @override
+  String get parkingFormerTeamTag => 'Ancien membre de l\'équipe';
 }

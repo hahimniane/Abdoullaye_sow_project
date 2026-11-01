@@ -18,6 +18,7 @@ import '../providers/auth_provider.dart';
 import '../screens/vin_scanner_screen.dart';
 import '../services/vin_catalog_matcher.dart';
 import '../services/lot_customers.dart';
+import '../services/lot_ledger.dart' show LotStaff, withBusinessOwner;
 import '../services/vin_decoder_service.dart';
 import '../services/business_parking_entry.dart';
 import '../services/parking_rates.dart';
@@ -38,6 +39,7 @@ import '../widgets/async_action_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/country_phone_field.dart';
 import '../widgets/marketplace_transaction_disclosure.dart';
+import '../widgets/parking_whose_car.dart';
 
 class ParkCarScreen extends StatefulWidget {
   const ParkCarScreen({
@@ -79,6 +81,15 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
   // car must never be shown the lot's other customers.
   List<LotCustomer> _lotCustomers = const [];
   List<LotCustomer> _staffCustomers = const [];
+  // "Whose car?" (docs/PARKING_TEAM_CARS.md): a team member's own car is
+  // picked by name instead of typing a customer. The team is the owner and
+  // every staff member; built once when the lists load, not per build.
+  bool _teamCar = false;
+  String _teamStaffId = '';
+  List<LotStaff> _team = const [];
+  String _ownerUid = '';
+  String _ownerName = '';
+  String _ownerEmail = '';
   final _nameFocus = FocusNode();
   List<LotCustomer> _customerSuggestions = const [];
   bool _isLoading = false;
@@ -165,7 +176,14 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
           .doc(businessId)
           .get();
       if (!mounted) return;
-      setState(() => _rateChoices = parkingRateChoices(snap.data()));
+      final data = snap.data() ?? const <String, dynamic>{};
+      setState(() {
+        _rateChoices = parkingRateChoices(snap.data());
+        _ownerUid = (data['ownerUid'] ?? '').toString();
+        _ownerName = (data['ownerName'] ?? '').toString();
+        _ownerEmail = (data['ownerEmail'] ?? '').toString();
+        _rebuildTeam();
+      });
     } catch (_) {
       // The standard rate still applies.
     }
@@ -190,7 +208,9 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
       final saved = [
         for (final d in snap.docs) LotCustomer.fromMap(d.id, d.data()),
       ];
-      setState(() => _lotCustomers = lotCustomerSources(saved, _staffCustomers));
+      // Past customers only: the team is picked under "Whose car?", never
+      // mixed into the customer suggestions.
+      setState(() => _lotCustomers = lotCustomerSources(saved, const []));
     } catch (_) {
       // Nothing to offer; the form is unaffected.
     }
@@ -215,13 +235,36 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
       }
       setState(() {
         _staffCustomers = staff;
-        _lotCustomers = lotCustomerSources(
-          [for (final c in _lotCustomers) if (!c.staff) c],
-          staff,
-        );
+        _rebuildTeam();
       });
     } catch (_) {
       // No permission to see the team: the memory alone still works.
+    }
+  }
+
+  /// The picker's team: every staff member the lot lists (the same list
+  /// "Received by" uses), plus the owner when their own profile is not on it.
+  void _rebuildTeam() {
+    final l10n = AppLocalizations.of(context)!;
+    final auth = context.read<AuthProvider>();
+    final me = auth.user;
+    final people = [
+      for (final c in _staffCustomers)
+        LotStaff(id: c.id.replaceFirst('staff:', ''), name: c.name),
+    ];
+    _team = withBusinessOwner(
+      people,
+      ownerUid: _ownerUid,
+      ownerName: [_ownerName, _ownerEmail]
+          .map((v) => v.trim())
+          .firstWhere((v) => v.isNotEmpty, orElse: () => ''),
+      fallbackName: me != null && me.uid == _ownerUid
+          ? (me.displayName ?? me.email ?? '')
+          : '',
+      unnamedLabel: l10n.lotBusinessOwner,
+    );
+    if (_teamStaffId.isNotEmpty && !_team.any((m) => m.id == _teamStaffId)) {
+      _teamStaffId = '';
     }
   }
 
@@ -1055,13 +1098,16 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
   }
 
   BusinessParkingEntryDraft _walkUpDraft(AuthProvider auth) {
+    // A team member's own car sends the person and no customer details.
+    final team = _teamCar;
     return BusinessParkingEntryDraft(
       businessId: auth.isAdmin
           ? BusinessProfile.defaultBusinessId
           : auth.businessId ?? BusinessProfile.defaultBusinessId,
-      customerName: _nameController.text,
-      customerPhone: _phoneController.text,
-      customerEmail: _emailController.text,
+      forStaffId: team ? _teamStaffId : '',
+      customerName: team ? '' : _nameController.text,
+      customerPhone: team ? '' : _phoneController.text,
+      customerEmail: team ? '' : _emailController.text,
       carMake: _selectedMake ?? '',
       carModel: _selectedModel ?? '',
       carYear: _selectedYear ?? '',
@@ -1083,6 +1129,10 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
   Future<void> _recordWalkUpParking() async {
     final l10n = AppLocalizations.of(context)!;
     if (!_formKey.currentState!.validate()) return;
+    if (_teamCar && _teamStaffId.isEmpty) {
+      showErrorSnackBar(context, l10n.parkingTeamMemberRequired);
+      return;
+    }
 
     final draft = _walkUpDraft(context.read<AuthProvider>());
     final errors = validateBusinessParkingEntry(draft);
@@ -1634,88 +1684,105 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                                 _buildEntryResultPanel(
                                   AppLocalizations.of(context)!,
                                 ),
-                              _RoundedTextField(
-                                controller: _nameController,
-                                label: AppLocalizations.of(context)!.name,
-                                focusNode: _nameFocus,
-                                onChanged: (value) {
-                                  setState(() =>
-                                      _customerSuggestions = _suggestFor(value));
-                                },
-                                validator: (value) {
-                                  if (value == null || value.isEmpty) {
-                                    return AppLocalizations.of(
-                                      context,
-                                    )!.pleaseEnterOwnerName;
-                                  }
-                                  return null;
-                                },
+                              ParkingWhoseCarChoice(
+                                teamCar: _teamCar,
+                                staffId: _teamStaffId,
+                                team: _team,
+                                onTeamCarChanged: (value) => setState(() {
+                                  _teamCar = value;
+                                  if (value) _customerSuggestions = const [];
+                                }),
+                                onStaffChanged: (id) =>
+                                    setState(() => _teamStaffId = id),
                               ),
-                              // The lot's memory, offered inline rather than
-                              // in a menu that floats over the field being
-                              // typed into. Typing a name nobody recognises
-                              // is still how a new customer is added.
-                              if (_customerSuggestions.isNotEmpty) ...[
-                                const SizedBox(height: 8),
-                                Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: Text(
-                                    AppLocalizations.of(
-                                      context,
-                                    )!.lotSavedCustomers,
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                      color: Color(0xFF6B7280),
+                              const SizedBox(height: 16),
+                              // Someone else's car: the customer, as before.
+                              // A team member's car has no name or phone to
+                              // type - the server fills them from the person.
+                              if (!_teamCar) ...[
+                                _RoundedTextField(
+                                  controller: _nameController,
+                                  label: AppLocalizations.of(context)!.name,
+                                  focusNode: _nameFocus,
+                                  onChanged: (value) {
+                                    setState(() =>
+                                        _customerSuggestions = _suggestFor(value));
+                                  },
+                                  validator: (value) {
+                                    if (value == null || value.isEmpty) {
+                                      return AppLocalizations.of(
+                                        context,
+                                      )!.pleaseEnterOwnerName;
+                                    }
+                                    return null;
+                                  },
+                                ),
+                                // The lot's memory, offered inline rather than
+                                // in a menu that floats over the field being
+                                // typed into. Typing a name nobody recognises
+                                // is still how a new customer is added.
+                                if (_customerSuggestions.isNotEmpty) ...[
+                                  const SizedBox(height: 8),
+                                  Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      AppLocalizations.of(
+                                        context,
+                                      )!.lotSavedCustomers,
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFF6B7280),
+                                      ),
                                     ),
                                   ),
-                                ),
-                                const SizedBox(height: 6),
-                                Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: Wrap(
-                                    spacing: 6,
-                                    runSpacing: 6,
-                                    children: [
-                                      for (final customer
-                                          in _customerSuggestions.take(4))
-                                        _CustomerSuggestionChip(
-                                          key: Key(
-                                            'parking-customer-${customer.id}',
+                                  const SizedBox(height: 6),
+                                  Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Wrap(
+                                      spacing: 6,
+                                      runSpacing: 6,
+                                      children: [
+                                        for (final customer
+                                            in _customerSuggestions.take(4))
+                                          _CustomerSuggestionChip(
+                                            key: Key(
+                                              'parking-customer-${customer.id}',
+                                            ),
+                                            customer: customer,
+                                            onTap: () =>
+                                                _applyLotCustomer(customer),
                                           ),
-                                          customer: customer,
-                                          onTap: () =>
-                                              _applyLotCustomer(customer),
-                                        ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
+                                ],
+                                const SizedBox(height: 16),
+                                CountryPhoneField(
+                                  controller: _phoneController,
+                                  labelText: AppLocalizations.of(
+                                    context,
+                                  )!.phoneNumber,
+                                  validator: (value) {
+                                    if (value == null || value.trim().isEmpty) {
+                                      return AppLocalizations.of(
+                                        context,
+                                      )!.parkingErrorCustomerPhone;
+                                    }
+                                    return null;
+                                  },
                                 ),
+                                const SizedBox(height: 16),
+                                // Optional - until a payment link has to reach
+                                // someone; the shared validator enforces that.
+                                _RoundedTextField(
+                                  controller: _emailController,
+                                  label: AppLocalizations.of(
+                                    context,
+                                  )!.customerEmailOptional,
+                                ),
+                                const SizedBox(height: 16),
                               ],
-                              const SizedBox(height: 16),
-                              CountryPhoneField(
-                                controller: _phoneController,
-                                labelText: AppLocalizations.of(
-                                  context,
-                                )!.phoneNumber,
-                                validator: (value) {
-                                  if (value == null || value.trim().isEmpty) {
-                                    return AppLocalizations.of(
-                                      context,
-                                    )!.parkingErrorCustomerPhone;
-                                  }
-                                  return null;
-                                },
-                              ),
-                              const SizedBox(height: 16),
-                              // Optional - until a payment link has to reach
-                              // someone; the shared validator enforces that.
-                              _RoundedTextField(
-                                controller: _emailController,
-                                label: AppLocalizations.of(
-                                  context,
-                                )!.customerEmailOptional,
-                              ),
-                              const SizedBox(height: 16),
                               // VIN first: a full VIN fills the make, model and
                               // year below, so it leads the vehicle fields.
                               _RoundedTextField(
@@ -2113,23 +2180,28 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                                         ),
                                 ),
                               ),
-                              const SizedBox(height: 12),
-                              // The paper-only path a lot already had. Kept
-                              // because it works when the business has no
-                              // parking rates configured yet, which the
-                              // callable correctly refuses to price.
-                              SizedBox(
-                                width: double.infinity,
-                                child: AsyncActionButton.outlined(
-                                  onPressed: (_isLoading || _isRecordingEntry)
-                                      ? null
-                                      : _saveAndPrintReceipt,
-                                  icon: Icons.print,
-                                  label: AppLocalizations.of(
-                                    context,
-                                  )!.printReceiptOnly,
+                              // A team member's own car is not printed as a
+                              // customer receipt: the paper-only path writes
+                              // no person on the record.
+                              if (!_teamCar) ...[
+                                const SizedBox(height: 12),
+                                // The paper-only path a lot already had. Kept
+                                // because it works when the business has no
+                                // parking rates configured yet, which the
+                                // callable correctly refuses to price.
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: AsyncActionButton.outlined(
+                                    onPressed: (_isLoading || _isRecordingEntry)
+                                        ? null
+                                        : _saveAndPrintReceipt,
+                                    icon: Icons.print,
+                                    label: AppLocalizations.of(
+                                      context,
+                                    )!.printReceiptOnly,
+                                  ),
                                 ),
-                              ),
+                              ],
                             ],
                           ),
                         ),

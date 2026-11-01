@@ -18306,4 +18306,29 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pmeBillPaymentUndoDone => 'Payment undone.';
+
+  @override
+  String get parkingWhoseCar => 'Whose car?';
+
+  @override
+  String get parkingWhoseCarSomeoneElse => 'Someone else';
+
+  @override
+  String get parkingWhoseCarTeamMember => 'Team member';
+
+  @override
+  String get parkingTeamMemberPicker => 'Pick the team member';
+
+  @override
+  String get parkingTeamMemberRequired => 'Pick a team member.';
+
+  @override
+  String get parkingTeamMemberHint =>
+      'Their parking goes on their Staff balances. No WhatsApp is sent.';
+
+  @override
+  String get parkingTeamTag => 'Team';
+
+  @override
+  String get parkingFormerTeamTag => 'Former team member';
 }
