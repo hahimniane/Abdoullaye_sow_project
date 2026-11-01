@@ -374,6 +374,7 @@ function parkingMonthStatement(row, monthKey, now = new Date()) {
         .filter(Boolean).join(" "),
     vinNumber: text(r.vinNumber, 17).toUpperCase(),
     trackingCode: text(r.trackingCode, 40),
+    forStaffId: text(r.forStaffId, 128),
     paymentMethod: text(r.paymentMethod, 40),
     // How what was paid toward this month came in; empty when nothing was.
     paidVia: monthPaidCents > 0 ? parkingPaidVia(r) : [],
@@ -427,6 +428,7 @@ function carriedCarItem(row, monthKey, now = new Date()) {
         .filter(Boolean).join(" "),
     vinNumber: text(r.vinNumber, 17).toUpperCase(),
     trackingCode: text(r.trackingCode, 40),
+    forStaffId: text(r.forStaffId, 128),
     paymentMethod: text(r.paymentMethod, 40),
     recordable: text(r.paymentMethod, 40) === "direct" &&
       (text(r.source, 40) === "business" || r.enteredByBusiness === true),
@@ -538,6 +540,10 @@ function parkingMonthSummary(rows, monthKey, now = new Date(),
  * @return {string} The grouping key.
  */
 function parkingCustomerKey(bill) {
+  // A team member's own car is theirs whatever number is on it
+  // (docs/PARKING_TEAM_CARS.md).
+  const staffId = text(bill?.forStaffId, 128);
+  if (staffId) return `staff:${staffId}`;
   const digits = text(bill?.customerPhone, 40).replace(/\D+/g, "").slice(-10);
   if (digits.length >= 7) return `phone:${digits}`;
   return `name:${text(bill?.customerName).toLowerCase().replace(/\s+/g, " ")}`;
@@ -638,6 +644,8 @@ function parkingMonthCustomers(bills, activities = [], carried = []) {
       customerName,
       customerPhone: all.find((x) => x.customerPhone)?.customerPhone || "",
       customerEmail: all.find((x) => x.customerEmail)?.customerEmail || "",
+      // The team member whose own cars these are, "" for a customer.
+      forStaffId: key.startsWith("staff:") ? key.slice(6) : "",
       cars,
       activities: inMonth,
       olderActivities: older,

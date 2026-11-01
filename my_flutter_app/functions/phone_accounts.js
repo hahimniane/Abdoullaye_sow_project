@@ -163,6 +163,9 @@ function needsRegion(collection, data) {
  */
 function recordPhones(collection, data, regionIso = "") {
   const row = data && typeof data === "object" ? data : {};
+  // A team member's own car makes no customer account: it is tied to the
+  // person (docs/PARKING_TEAM_CARS.md).
+  if (collection === "parkedCars" && cleanText(row.forStaffId, 128)) return [];
   return (PHONE_RECORD_SOURCES[collection] || []).map((source) => {
     const raw = pathValue(row, source.raw);
     const parsed = source.e164 ? toE164(raw, {regionIso}) :

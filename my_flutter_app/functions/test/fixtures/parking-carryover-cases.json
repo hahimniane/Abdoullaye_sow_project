@@ -477,6 +477,111 @@
           }
         ]
       }
+    },
+    {
+      "name": "a team member's own cars group under them, whatever number is on them (PARKING_TEAM_CARS.md)",
+      "monthKey": "2026-10",
+      "now": "2026-11-01T12:00:00Z",
+      "cars": [
+        {
+          "businessId": "lot",
+          "paymentMethod": "direct",
+          "source": "business",
+          "status": "parked",
+          "paymentStatus": "awaiting_direct_payment",
+          "dailyRate": 12,
+          "id": "team-old",
+          "customerName": "Musa",
+          "customerPhone": "+12015550199",
+          "carYear": 2012,
+          "carMake": "Honda",
+          "carModel": "Accord",
+          "parkingDate": "2026-09-02",
+          "parkingEndDate": "2026-09-04",
+          "amountDueCents": 3600,
+          "trackingCode": "PK-TEAM01",
+          "forStaffId": "staff-musa",
+          "forStaffName": "Musa Kante"
+        },
+        {
+          "businessId": "lot",
+          "paymentMethod": "direct",
+          "source": "business",
+          "status": "parked",
+          "paymentStatus": "awaiting_direct_payment",
+          "dailyRate": 12,
+          "id": "team-now",
+          "customerName": "Musa",
+          "customerPhone": "",
+          "carYear": 2015,
+          "carMake": "Toyota",
+          "carModel": "Camry",
+          "parkingDate": "2026-10-10",
+          "parkingEndDate": "2026-10-12",
+          "amountDueCents": 3600,
+          "trackingCode": "PK-TEAM02",
+          "forStaffId": "staff-musa",
+          "forStaffName": "Musa Kante"
+        },
+        {
+          "businessId": "lot",
+          "paymentMethod": "direct",
+          "source": "business",
+          "status": "parked",
+          "paymentStatus": "awaiting_direct_payment",
+          "dailyRate": 12,
+          "id": "same-number",
+          "customerName": "Musa",
+          "customerPhone": "+12015550199",
+          "carYear": 2010,
+          "carMake": "Ford",
+          "carModel": "Focus",
+          "parkingDate": "2026-10-20",
+          "parkingEndDate": "2026-10-21",
+          "amountDueCents": 2400,
+          "trackingCode": "PK-TEAM03"
+        }
+      ],
+      "expect": {
+        "carried": [
+          {
+            "id": "team-old",
+            "periodFrom": "2026-09-02",
+            "periodTo": "2026-09-04",
+            "days": 3,
+            "accruedCents": 3600,
+            "dueCents": 3600
+          }
+        ],
+        "customers": [
+          {
+            "key": "staff:staff-musa",
+            "carIds": [
+              "team-now"
+            ],
+            "olderCarIds": [
+              "team-old"
+            ],
+            "monthCents": 3600,
+            "priorUnpaidCents": 3600,
+            "dueCents": 7200,
+            "owes": true,
+            "paid": false
+          },
+          {
+            "key": "phone:2015550199",
+            "carIds": [
+              "same-number"
+            ],
+            "olderCarIds": [],
+            "monthCents": 2400,
+            "priorUnpaidCents": 0,
+            "dueCents": 2400,
+            "owes": true,
+            "paid": false
+          }
+        ]
+      }
     }
   ]
 }

@@ -126,6 +126,9 @@ function carIsMessageable(car) {
   if (car.voided === true || text(car.status, 40) === "cancelled") {
     return false;
   }
+  // A team member's own car: settled in Staff balances, never messaged as
+  // a customer (docs/PARKING_TEAM_CARS.md).
+  if (text(car.forStaffId, 128)) return false;
   return text(car.source, 40) === "business" ||
     car.enteredByBusiness === true;
 }
@@ -553,6 +556,8 @@ function welcomeRecipients({cars, business, welcomed, now}) {
   const skipped = new Map();
   for (const car of Array.isArray(cars) ? cars : []) {
     if (!carIsParkedNow(car, now)) continue;
+    // Team members' own cars are not welcomed as customers.
+    if (text(car.forStaffId, 128)) continue;
     const reach = reachablePhone(car, business);
     const entry = {id: text(car.id, 200), label: carLabel(car),
       trackingCode: text(car.trackingCode, 40),

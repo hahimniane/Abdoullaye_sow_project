@@ -245,6 +245,7 @@ const parkingReceiptPdf = require("./parking_receipt_pdf");
 // Monthly parking invoices on WhatsApp (docs/PARKING_INVOICES.md).
 const parkingInvoices = require("./parking_invoices");
 const parkingBillPayment = require("./parking_bill_payment");
+const parkingTeam = require("./parking_team");
 const parkingInvoicePdf = require("./parking_invoice_pdf");
 const {parkingBalanceNow} = require("./parking_month_statement");
 const {
@@ -14002,6 +14003,39 @@ function businessParkingReturnUrls(trackingCode) {
   };
 }
 
+/**
+ * Whose car it is (docs/PARKING_TEAM_CARS.md): a picked team member's name
+ * and number, or - for a car typed with a number the owner linked to a team
+ * member - that member, so the car is tied to the person either way.
+ *
+ * @param {object} db Firestore.
+ * @param {object} args `{businessId, business, staffId, phone}`: staffId is
+ *   the picked member ("" when none was picked), phone the typed number.
+ * @return {Promise<?object>} teamCarFields' answer for a picked member,
+ *   `{forStaffId, forStaffName}` for a linked number, or null.
+ */
+async function parkingTeamFields(db, {businessId, business, staffId, phone}) {
+  const links = business?.staffParkingLinks || {};
+  if (staffId) {
+    const snap = await db.collection("users").doc(staffId).get();
+    const user = snap.exists ? snap.data() || {} : null;
+    if (!parkingTeam.isTeamMember(user, staffId, businessId, business)) {
+      throw new HttpsError("failed-precondition",
+          "This person is not on this business's team.",
+          {reason: "team_member_invalid"});
+    }
+    return parkingTeam.teamCarFields({staffId, user,
+      link: links[staffId] || null});
+  }
+  const linked = parkingTeam.linkedStaffForPhone(phone, links);
+  if (!linked) return null;
+  const snap = await db.collection("users").doc(linked).get();
+  const user = snap.exists ? snap.data() || {} : null;
+  const fields = parkingTeam.teamCarFields({staffId: linked, user,
+    link: links[linked] || null});
+  return {forStaffId: fields.forStaffId, forStaffName: fields.forStaffName};
+}
+
 exports.createBusinessParkingEntry = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK,
@@ -14026,6 +14060,21 @@ exports.createBusinessParkingEntry = onCall(
 
       const db = admin.firestore();
       const businessRef = db.collection("businesses").doc(input.businessId);
+      // A team member's own car: tied to the person, named from them.
+      const team = await parkingTeamFields(db, {
+        businessId: input.businessId,
+        business: (await businessRef.get()).data() || {},
+        staffId: input.forStaffId,
+        phone: input.customerPhone,
+      });
+      if (team) {
+        input.forStaffId = team.forStaffId;
+        input.forStaffName = team.forStaffName;
+        if (team.customerName !== undefined) {
+          input.customerName = team.customerName;
+          input.customerPhone = team.customerPhone;
+        }
+      }
       const entryRef = db.collection("parkedCars").doc();
       const trackingCode = await generateTrackingCode("PK", "parkedCars");
       const availabilityQuery = await availabilityQueryFor(
@@ -16477,11 +16526,33 @@ exports.updateBusinessParkingEntry = onCall(
 
       // Validate the edited record as a whole, so a correction can never
       // leave a row the create path would have refused.
+      // Whose car (PARKING_TEAM_CARS.md): "" unties, a uid ties; left out,
+      // the car keeps its tie - or gets one, when its number is linked.
+      const askedTeam = Object.prototype.hasOwnProperty.call(plan.changes,
+          "forStaffId");
+      const teamBefore = cleanText(before.forStaffId, 128);
+      const teamWanted = askedTeam ?
+        cleanText(plan.changes.forStaffId, 128) : teamBefore;
+      const teamBusiness = (await db.collection("businesses").doc(businessId)
+          .get()).data() || {};
+      let team = null;
+      if (teamWanted && teamWanted !== teamBefore) {
+        team = await parkingTeamFields(db, {businessId,
+          business: teamBusiness, staffId: teamWanted, phone: ""});
+      } else if (!teamWanted && !askedTeam) {
+        team = await parkingTeamFields(db, {businessId,
+          business: teamBusiness, staffId: "",
+          phone: plan.changes.customerPhone ?? before.customerPhone});
+      }
+      const tiedTo = team?.forStaffId || teamWanted;
       const merged = {
         businessId,
         paymentMethod: plan.nextMethod,
-        customerName: plan.changes.customerName ?? before.customerName,
-        customerPhone: plan.changes.customerPhone ?? before.customerPhone,
+        forStaffId: tiedTo,
+        customerName: team?.customerName ?? plan.changes.customerName ??
+          before.customerName,
+        customerPhone: team?.customerPhone ?? plan.changes.customerPhone ??
+          before.customerPhone,
         customerEmail: plan.changes.customerEmail ?? before.customerEmail,
         carMake: plan.changes.carMake ?? before.carMake,
         carModel: plan.changes.carModel ?? before.carModel,
@@ -16578,6 +16649,11 @@ exports.updateBusinessParkingEntry = onCall(
           customerPhone: input.customerPhone,
           customerEmail: input.customerEmail,
           ownerName: input.customerName,
+          ...(tiedTo ? {forStaffId: tiedTo,
+            forStaffName: team?.forStaffName || cleanText(before.forStaffName,
+                120)} :
+            {forStaffId: FirestoreFieldValue.delete(),
+              forStaffName: FirestoreFieldValue.delete()}),
           carMake: input.carMake,
           carModel: input.carModel,
           carYear: input.carYear,
@@ -16605,6 +16681,8 @@ exports.updateBusinessParkingEntry = onCall(
       // changed it. Before, only payments did, so a phone moved from one
       // customer to another left no trace of who moved it.
       const editChanges = businessParkingEditChanges(before, {
+        forStaffName: tiedTo ? (team?.forStaffName ||
+          cleanText(before.forStaffName, 120)) : "",
         customerName: input.customerName,
         customerPhone: input.customerPhone,
         customerEmail: input.customerEmail,

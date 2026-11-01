@@ -123,37 +123,56 @@ function splitByCredit(amount, staffIds, credits) {
 function netStaffExpenses(customers, ctx) {
   const credits = staffCredits(ctx?.entries, ctx?.repayments, ctx?.monthKey);
   const byCustomer = staffByCustomer(ctx?.links);
-  const names = ctx?.staffNames || {};
-  const owedByStaff = {};
-  for (const [id, c] of Object.entries(credits)) {
-    owedByStaff[id] = c.creditCents;
+  const list = customers || [];
+  // A team member's own cars (`staff:{uid}`, PARKING_TEAM_CARS.md) are
+  // theirs without any link.
+  for (const customer of list) {
+    const key = text(customer?.key, 200);
+    if (!key.startsWith("staff:")) continue;
+    const id = key.slice(6);
+    if (!byCustomer[key]) byCustomer[key] = [];
+    if (id && !byCustomer[key].includes(id)) byCustomer[key].push(id);
   }
-
-  const netted = (customers || []).map((customer) => {
+  const names = ctx?.staffNames || {};
+  // What each person's expenses can still cover: one credit, used once,
+  // whichever of their bills it lands on - their own cars first.
+  const left = {};
+  for (const [id, c] of Object.entries(credits)) left[id] = c.creditCents;
+  const order = list.map((customer, i) => i).sort((a, b) =>
+    Number(!text(list[a]?.key).startsWith("staff:")) -
+      Number(!text(list[b]?.key).startsWith("staff:")) || a - b);
+  const netted = new Array(list.length);
+  for (const i of order) {
+    const customer = list[i];
     const linked = byCustomer[customer.key] || [];
-    const credit = linked.reduce((s, id) => s + (credits[id]?.creditCents || 0),
-        0);
+    const credit = linked.reduce((s, id) => s + (left[id] || 0), 0);
     const before = cents(customer.dueCents);
     const applied = Math.min(before, credit);
     if (linked.length) {
-      const used = splitByCredit(applied, linked, credits);
+      const view = Object.fromEntries(linked.map((id) =>
+        [id, {creditCents: left[id] || 0}]));
+      const used = splitByCredit(applied, linked, view);
       for (const id of linked) {
-        owedByStaff[id] = Math.max(0, (credits[id]?.creditCents || 0) -
-          (used[id] || 0));
+        left[id] = Math.max(0, (left[id] || 0) - (used[id] || 0));
       }
     }
-    return {
+    netted[i] = {
       ...customer,
       linkedStaffIds: linked,
       dueBeforeExpensesCents: before,
       expenseCreditCents: applied,
       dueCents: before - applied,
     };
-  });
+  }
+  const owedByStaff = left;
 
   const keyOf = {};
   for (const [id, link] of Object.entries(ctx?.links || {})) {
     keyOf[id] = text(link?.customerKey, 200);
+  }
+  for (const customer of list) {
+    const key = text(customer?.key, 200);
+    if (key.startsWith("staff:")) keyOf[key.slice(6)] = key;
   }
   const businessOwes = Object.entries(owedByStaff)
       .filter(([, owed]) => owed > 0)

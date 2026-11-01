@@ -138,11 +138,15 @@ function normalizeBusinessParkingEntry(raw) {
     errors.push("payment_method_invalid");
   }
 
+  // A team member's own car (docs/PARKING_TEAM_CARS.md): the person is
+  // picked, and the server fills the name and number from them.
+  const forStaffId = text(source.forStaffId, 128);
+
   const customerName = text(source.customerName);
-  if (!customerName) errors.push("customer_name_required");
+  if (!customerName && !forStaffId) errors.push("customer_name_required");
 
   const customerPhone = text(source.customerPhone, 40);
-  if (!customerPhone) errors.push("customer_phone_required");
+  if (!customerPhone && !forStaffId) errors.push("customer_phone_required");
 
   const customerEmail = text(source.customerEmail, 180).toLowerCase();
   if (customerEmail && !isEmailish(customerEmail)) {
@@ -191,6 +195,7 @@ function normalizeBusinessParkingEntry(raw) {
     input: {
       businessId,
       paymentMethod,
+      forStaffId,
       customerName,
       customerPhone,
       customerEmail,
@@ -334,6 +339,11 @@ function buildBusinessParkingEntryRecord({
     customerName: input.customerName,
     ownerName: input.customerName,
     customerPhone: input.customerPhone,
+    // A team member's own car: tied to the person, not the number.
+    ...(text(input.forStaffId, 128) ? {
+      forStaffId: text(input.forStaffId, 128),
+      forStaffName: text(input.forStaffName, 120),
+    } : {}),
     customerEmail: input.customerEmail,
     carMake: input.carMake,
     carModel: input.carModel,
@@ -734,6 +744,8 @@ function parkingCheckoutSessionReusable({session, nowMs}) {
 //   * switching payment method is really "cancel one arrangement, start
 //     another", which the callable performs rather than the browser.
 const BUSINESS_PARKING_EDITABLE_FIELDS = Object.freeze([
+  // "" unties a team member's car; a uid ties it (PARKING_TEAM_CARS.md).
+  "forStaffId",
   "customerName",
   "customerPhone",
   "customerEmail",
@@ -818,6 +830,7 @@ function businessParkingOwnRateCents({record, start, end}) {
 }
 
 const BUSINESS_PARKING_EDIT_LABELS = Object.freeze([
+  ["forStaffName", "Team member"],
   ["customerName", "Owner"],
   ["customerPhone", "Phone"],
   ["customerEmail", "Email"],

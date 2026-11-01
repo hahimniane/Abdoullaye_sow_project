@@ -347,6 +347,9 @@ function invoiceRecipients(summary, staffCredit, now = new Date(),
   const recipients = [];
   const skipped = [];
   for (const c of customers) {
+    // A team member's own cars are settled in Staff balances, not invoiced
+    // (docs/PARKING_TEAM_CARS.md).
+    if (text(c.key, 200).startsWith("staff:")) continue;
     const stillParked = (c.cars || []).some((b) => b.stillParked === true);
     const due = cents(c.dueCents);
     if (due <= 0 && !stillParked) continue;
