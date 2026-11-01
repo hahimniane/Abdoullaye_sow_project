@@ -6,6 +6,7 @@ import { ArrowLeft, Banknote, ChevronDown, ChevronLeft, ChevronRight, Copy, File
 
 import { BUSINESS_ACCOUNT_RECEIVER, businessAccountName } from "@/lib/staff-balances";
 import { ReceivedByOptions } from "@/components/business/received-by-options";
+import { TeamTag } from "@/components/business/whose-car-field";
 import { auth, functions } from "@/lib/firebase";
 import { useParkingBillPayments, useParkingMonthInputs, useStaffExpenseCreditInputs } from "@/lib/business-data";
 import { BUSINESS_PARKING_RECEIVED_VIA_OPTIONS } from "@/lib/business-parking-entry";
@@ -418,6 +419,7 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
               <header>
                 <div>
                   <strong data-no-translate>{customer.customerName || "—"}</strong>
+                  {customer.forStaffId && <TeamTag label="Team member" />}
                   {invoiceMessages.byCustomer.has(customer.key) && <InvoiceMessageStatus line={invoiceMessages.byCustomer.get(customer.key)!} />}
                   <small>{[customer.customerPhone, customer.cars.length + customer.olderCars.length ? `${customer.cars.length + customer.olderCars.length} car${customer.cars.length + customer.olderCars.length === 1 ? "" : "s"}` : "", customer.activities.length + customer.olderActivities.length ? `${customer.activities.length + customer.olderActivities.length} activit${customer.activities.length + customer.olderActivities.length === 1 ? "y" : "ies"}` : ""].filter(Boolean).join(" · ")}</small>
                 </div>

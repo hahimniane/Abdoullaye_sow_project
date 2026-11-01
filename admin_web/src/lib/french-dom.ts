@@ -7748,6 +7748,18 @@ Object.assign(TEXT_TRANSLATIONS, {
   "This payment covers lot activities: it needs the ledger permission.":
     "Ce paiement couvre des activités du parc : il faut la permission du registre.",
 });
+// "Whose car?" on parking: a team member's own car (docs/PARKING_TEAM_CARS.md).
+Object.assign(TEXT_TRANSLATIONS, {
+  "Whose car?": "À qui est la voiture ?",
+  "Someone else": "Quelqu’un d’autre",
+  "Choose a team member…": "Choisissez un membre de l’équipe…",
+  "Their parking goes on their Staff balances. No WhatsApp is sent.":
+    "Leur parking est porté à leur solde du personnel. Aucun message WhatsApp n’est envoyé.",
+  "Team car": "Voiture de l’équipe",
+  "Former team member": "Ancien membre de l’équipe",
+  "Choose which team member's car this is.": "Choisissez de quel membre de l’équipe est cette voiture.",
+  "This person is not on this business's team.": "Cette personne ne fait pas partie de l’équipe de cette entreprise.",
+});
 const englishDictionary = { ...TEXT_TRANSLATIONS, ...ATTRIBUTE_TRANSLATIONS };
 const frenchDictionary = buildReverseDictionary([
   TEXT_TRANSLATIONS,

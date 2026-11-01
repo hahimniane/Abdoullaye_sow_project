@@ -167,8 +167,9 @@ import {
   type LotExpenseEntryDraft,
   type LotInstalmentDraft,
 } from "@/lib/lot-ledger";
+import { WhoseCarField, TeamTag, type WhoseCar } from "@/components/business/whose-car-field";
+import { teamMemberOptions, parkingTeamLabel } from "@/lib/parking-team";
 import {
-  lotCustomerFromStaffRow,
   lotCustomerSources,
   lotCustomerFromRow,
   matchLotCustomers,
@@ -428,6 +429,9 @@ type EditImage = { key: string; url?: string; file?: File; preview: string };
 // for a staff member to type a price into.
 type ParkingDraft = {
   id: string;
+  /** Whose car: a customer typed below, or a team member (`forStaffId`). */
+  whose: WhoseCar;
+  forStaffId: string;
   ownerName: string;
   customerPhone: string;
   customerEmail: string;
@@ -616,6 +620,8 @@ const emptyListingDraft: ListingDraft = {
 
 const emptyParkingDraft: ParkingDraft = {
   id: "",
+  whose: "other",
+  forStaffId: "",
   ownerName: "",
   customerPhone: "",
   customerEmail: "",
@@ -5069,6 +5075,10 @@ export function ParkingPanel({
     error: activeStays.error || pastStays.error,
   };
   const parkingStaff = useBusinessStaff(businessId, parkingEnabled);
+  // Who can be a team member's car: the owner and every staff member. Worked
+  // out once per change; the list rows only look their uid up in the set.
+  const teamOptions = useMemo(() => teamMemberOptions(parkingStaff.rows, business), [parkingStaff.rows, business]);
+  const teamIds = useMemo(() => new Set(teamOptions.map((option) => option.id)), [teamOptions]);
   // The lot already remembers everyone it has taken a car from - walk-ups
   // write to lotCustomers through createBusinessParkingEntry. A regular is
   // therefore someone to pick, not someone to re-type. Most recently seen
@@ -5207,6 +5217,9 @@ export function ParkingPanel({
   const [entryReceivedBy, setEntryReceivedBy] = useState("");
   const [entryCustomerMenuOpen, setEntryCustomerMenuOpen] = useState(false);
   const [entryCustomerPick, setEntryCustomerPick] = useState<LotCustomer | null>(null);
+  // "Whose car?": the form's choice. The picked uid itself is
+  // entryDraft.forStaffId, which only goes to the server in team mode.
+  const [entryWhose, setEntryWhose] = useState<WhoseCar>("other");
   // VIN decode for the record form: a full VIN fills make/model/year from the
   // public NHTSA database, matched to the lot's catalog. `entryVinNote` reports
   // the outcome; `lastEntryVin` stops it re-firing for the same VIN.
@@ -5263,7 +5276,7 @@ export function ParkingPanel({
   }
   const focusedCardRef = useRef<HTMLElement | null>(null);
   const searched = useMemo(
-    () => filterRows(parkedCars.rows, search, ["trackingCode", "ownerName", "customerName", "carMake", "carModel", "carYear", "vinNumber", "status"]),
+    () => filterRows(parkedCars.rows, search, ["trackingCode", "ownerName", "customerName", "forStaffName", "carMake", "carModel", "carYear", "vinNumber", "status"]),
     [parkedCars.rows, search],
   );
   // One control, two questions: where the car is in its stay, and whether it
@@ -5353,6 +5366,8 @@ export function ParkingPanel({
       paymentMethod:
         text(row.paymentMethod, "direct") === "payment_link" ? "payment_link" : "direct",
       status: text(row.status, "reserved"),
+      forStaffId: text(row.forStaffId, ""),
+      whose: text(row.forStaffId, "") ? "team" : "other",
     });
     setEditErrors([]);
     setMessage("");
@@ -5366,6 +5381,8 @@ export function ParkingPanel({
    */
   function editDraftAsEntry(): BusinessParkingEntryDraft {
     return {
+      // Always sent on an edit: a uid ties the car, "" unties it.
+      forStaffId: draft.whose === "team" ? draft.forStaffId : "",
       customerName: draft.ownerName,
       customerPhone: draft.customerPhone,
       customerEmail: draft.customerEmail,
@@ -5407,6 +5424,10 @@ export function ParkingPanel({
       return;
     }
 
+    if (draft.whose === "team" && !draft.forStaffId) {
+      setMessage("Choose which team member's car this is.");
+      return;
+    }
     const entry = editDraftAsEntry();
     const errors = validateBusinessParkingEntryDraft(entry, businessId);
     setEditErrors(errors);
@@ -5466,6 +5487,7 @@ export function ParkingPanel({
   }
 
   function openEntry() {
+    setEntryWhose("other");
     setEntryDraft(emptyBusinessParkingEntryDraft);
     setEntryErrors([]);
     setEntryMessage("");
@@ -5490,22 +5512,21 @@ export function ParkingPanel({
     setEntryReceivedBy("");
     setEntryCustomerPick(null);
     setEntryCustomerMenuOpen(false);
+    setEntryWhose("other");
   }
 
   // Everyone this desk can hand the keys back to: the customers the lot
-  // remembers, plus the business's own people. Staff park cars here too, and
-  // nobody should have to be filed as a customer before their colleague can
-  // write their name down.
+  // remembers. The business's own people are not in this list any more: their
+  // cars are picked under "Whose car? - Team member" and tied to the person
+  // (docs/PARKING_TEAM_CARS.md), not typed in as if they were customers.
   const entryKnownCustomers = useMemo(
     () => lotCustomerSources(
         parkingCustomers.rows
             .map((row) => lotCustomerFromRow(row as Record<string, unknown>))
             .sort((a, b) => b.lastSeenMs - a.lastSeenMs),
-        parkingStaff.rows
-            .map((row) => lotCustomerFromStaffRow(row as Record<string, unknown>))
-            .filter((entry): entry is LotCustomer => entry !== null),
+        [],
     ),
-    [parkingCustomers.rows, parkingStaff.rows],
+    [parkingCustomers.rows],
   );
   // Suggestions close once someone has been picked, so the list does not sit
   // over the fields it just filled.
@@ -5641,6 +5662,10 @@ export function ParkingPanel({
   }
 
   async function submitEntry() {
+    if (entryWhose === "team" && !entryDraft.forStaffId) {
+      setEntryMessage("Choose which team member's car this is.");
+      return;
+    }
     const errors = validateBusinessParkingEntryDraft(entryDraft, businessId);
     setEntryErrors(errors);
     if (errors.length > 0) {
@@ -5671,7 +5696,12 @@ export function ParkingPanel({
       const response = await httpsCallable(
         functions,
         "createBusinessParkingEntry",
-      )(businessParkingEntryPayload(entryDraft, businessId));
+      )(businessParkingEntryPayload(
+        // Only a picked team member goes along; typed customer fields of a
+        // team car are dropped by the payload.
+        {...entryDraft, forStaffId: entryWhose === "team" ? entryDraft.forStaffId : ""},
+        businessId,
+      ));
       const created = businessParkingEntryResult(response.data);
       setEntryResult(created);
       // Settling goes through the same callable the "payment received"
@@ -6066,7 +6096,7 @@ export function ParkingPanel({
                     )}
                     {voided && <VoidedNote row={row} nameFor={nameForStaff} />}
                   </span>
-                  <span><b><span data-no-translate>{text(row.customerName ?? row.ownerName, "—")}</span><CopyValue value={text(row.customerName ?? row.ownerName, "")} label="Copy name" /></b><small data-no-translate>{text(row.customerPhone, "")}</small><RecordPhoneFlags row={row} field="customerPhone" /></span>
+                  <span><b><span data-no-translate>{text(row.customerName ?? row.ownerName, "—")}</span><TeamTag label={parkingTeamLabel(row.forStaffId, teamIds)} /><CopyValue value={text(row.customerName ?? row.ownerName, "")} label="Copy name" /></b><small data-no-translate>{text(row.customerPhone, "")}</small><RecordPhoneFlags row={row} field="customerPhone" /></span>
                   <span>{formatDate(row.parkingDate) || "—"}</span>
                   <span className={openEnded ? "muted" : undefined}>{openEnded ? "Open" : formatDate(row.parkingEndDate)}</span>
                   <span className="num">{businessParkingStayDays(row)}</span>
@@ -6159,7 +6189,7 @@ export function ParkingPanel({
                 </span>
               </div>
               <div className="pur-info">
-                <div><span>Owner</span><b><span data-no-translate>{text(row.customerName ?? row.ownerName, "—")}</span><CopyValue value={text(row.customerName ?? row.ownerName, "")} label="Copy name" /></b></div>
+                <div><span>Owner</span><b><span data-no-translate>{text(row.customerName ?? row.ownerName, "—")}</span><TeamTag label={parkingTeamLabel(row.forStaffId, teamIds)} /><CopyValue value={text(row.customerName ?? row.ownerName, "")} label="Copy name" /></b></div>
                 <div><span>VIN</span><b><span data-no-translate>{text(row.vinNumber, "—")}</span><CopyValue value={text(row.vinNumber, "")} label="Copy VIN" /></b></div>
                 {vinPlacements.has(text(row.vinNumber, "").toUpperCase()) && (
                   <div><span>Container</span><b className="ctn-placement">{vinPlacementText(vinPlacements.get(text(row.vinNumber, "").toUpperCase()), placementLang)}</b></div>
@@ -6375,6 +6405,16 @@ export function ParkingPanel({
             <div className="lst-modal-body">
               {message && <div className="lst-form-error" role="alert">{message}</div>}
               <div className="lst-form-grid">
+                <WhoseCarField
+                  whose={draft.whose}
+                  staffId={draft.forStaffId}
+                  options={teamOptions}
+                  disabled={busy}
+                  onWhose={(next) => setDraft((value) => ({ ...value, whose: next, forStaffId: next === "other" ? "" : value.forStaffId }))}
+                  onStaffId={(id) => setDraft((value) => ({ ...value, forStaffId: id }))}
+                />
+                {draft.whose === "other" && (
+                  <>
                 <label className="lst-field wide"><span>Owner name</span>
                   <input value={draft.ownerName} onChange={(event) => setDraft((value) => ({ ...value, ownerName: event.target.value }))} placeholder="Customer name" />
                 </label>
@@ -6386,6 +6426,8 @@ export function ParkingPanel({
                 <label className="lst-field"><span>Customer email</span>
                   <input value={draft.customerEmail} onChange={(event) => setDraft((value) => ({ ...value, customerEmail: event.target.value }))} placeholder="Email address" />
                 </label>
+                  </>
+                )}
                 {/* VIN first: it fills make, model and year, so it leads the
                     vehicle fields here just as it does on the record form. */}
                 <label className="lst-field wide"><span>VIN</span>
@@ -6508,6 +6550,19 @@ export function ParkingPanel({
               <div className="lst-modal-body">
                 {entryMessage && <div className="lst-form-error" role="alert">{entryMessage}</div>}
                 <div className="lst-form-grid">
+                  <WhoseCarField
+                    whose={entryWhose}
+                    staffId={entryDraft.forStaffId ?? ""}
+                    options={teamOptions}
+                    onWhose={(next) => {
+                      setEntryWhose(next);
+                      // Back to a customer: forget the picked person.
+                      if (next === "other") setEntryDraft((value) => ({...value, forStaffId: ""}));
+                    }}
+                    onStaffId={(id) => setEntryDraft((value) => ({...value, forStaffId: id}))}
+                  />
+                  {entryWhose === "other" && (
+                    <>
                   <label className="lst-field wide" style={{ position: "relative" }}><span>Customer name</span>
                     <input
                       value={entryDraft.customerName}
@@ -6526,7 +6581,7 @@ export function ParkingPanel({
                         {entryCustomerMatches.map((customer) => (
                           <li key={customer.id} role="option" aria-selected={false}>
                             <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => pickEntryCustomer(customer)}>
-                              <strong>{customer.name}{customer.staff ? " · Staff" : ""}</strong>
+                              <strong>{customer.name}</strong>
                               <small>{customer.phone}</small>
                             </button>
                           </li>
@@ -6540,6 +6595,8 @@ export function ParkingPanel({
                   <label className="lst-field"><span>Customer email (optional)</span>
                     <input value={entryDraft.customerEmail} onChange={(event) => setEntryDraft((value) => ({...value, customerEmail: event.target.value}))} placeholder="Email address" />
                   </label>
+                    </>
+                  )}
                   {/* VIN first: it fills make, model and year in one step, so it
                       leads the vehicle fields rather than trailing them. */}
                   <label className="lst-field wide"><span>VIN (optional)</span>

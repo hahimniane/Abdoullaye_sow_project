@@ -234,6 +234,8 @@ export type ParkingMonthBill = {
   vehicle: string;
   vinNumber: string;
   trackingCode: string;
+  /** The team member whose own car this is, "" for a customer's car. */
+  forStaffId: string;
   paymentMethod: string;
   /** How what was paid toward this month came in (method codes); empty when
    * nothing was paid toward it. */
@@ -289,6 +291,7 @@ export function parkingMonthStatement(row: Row, monthKey: string, now: Date = ne
     vehicle: [row.carYear, row.carMake, row.carModel].map((v) => text(v, 80)).filter(Boolean).join(" "),
     vinNumber: text(row.vinNumber, 17).toUpperCase(),
     trackingCode: text(row.trackingCode, 40),
+    forStaffId: text(row.forStaffId, 128),
     paymentMethod: text(row.paymentMethod, 40),
     paidVia: monthPaidCents > 0 ? parkingPaidVia(row) : [],
     recordable: text(row.paymentMethod, 40) === "direct" && (text(row.source, 40) === "business" || row.enteredByBusiness === true),
@@ -329,6 +332,7 @@ export function carriedCarItem(row: Row, monthKey: string, now: Date = new Date(
     vehicle: [row.carYear, row.carMake, row.carModel].map((v) => text(v, 80)).filter(Boolean).join(" "),
     vinNumber: text(row.vinNumber, 17).toUpperCase(),
     trackingCode: text(row.trackingCode, 40),
+    forStaffId: text(row.forStaffId, 128),
     paymentMethod: text(row.paymentMethod, 40),
     recordable: text(row.paymentMethod, 40) === "direct" && (text(row.source, 40) === "business" || row.enteredByBusiness === true),
   };
@@ -355,6 +359,8 @@ export type ParkingMonthCarriedCar = {
   vehicle: string;
   vinNumber: string;
   trackingCode: string;
+  /** The team member whose own car this is, "" for a customer's car. */
+  forStaffId: string;
   paymentMethod: string;
   /** A payment can be recorded by hand: a direct car the business entered. */
   recordable: boolean;
@@ -372,6 +378,8 @@ export type ParkingMonthCustomer = {
   customerName: string;
   customerPhone: string;
   customerEmail: string;
+  /** The team member whose own cars these are (key `staff:{uid}`), "" for a customer. */
+  forStaffId: string;
   cars: ParkingMonthCar[];
   activities: ParkingMonthActivityLine[];
   olderActivities: ParkingMonthActivityLine[];
@@ -435,8 +443,12 @@ export type ParkingMonthStaffCredit = {
   staffNames?: Record<string, string> | null;
 };
 
-/** Who a bill goes to: the phone, last ten digits. Mirrors the server. */
-export function parkingCustomerKey(bill: { customerPhone: string; customerName: string }): string {
+/** Who a bill goes to: the team member for their own car, else the phone, last ten digits. Mirrors the server. */
+export function parkingCustomerKey(bill: { customerPhone: string; customerName: string; forStaffId?: string }): string {
+  // A team member's own car is theirs whatever number is on it
+  // (docs/PARKING_TEAM_CARS.md).
+  const staffId = text(bill.forStaffId, 128);
+  if (staffId) return `staff:${staffId}`;
   const digits = text(bill.customerPhone, 40).replace(/\D+/g, "").slice(-10);
   if (digits.length >= 7) return `phone:${digits}`;
   return `name:${text(bill.customerName).toLowerCase().replace(/\s+/g, " ")}`;
@@ -511,6 +523,8 @@ export function parkingMonthCustomers(
       customerName,
       customerPhone: all.find((x) => x.customerPhone)?.customerPhone ?? "",
       customerEmail: all.find((x) => x.customerEmail)?.customerEmail ?? "",
+      // The team member whose own cars these are, "" for a customer.
+      forStaffId: key.startsWith("staff:") ? key.slice(6) : "",
       cars,
       activities: inMonth,
       olderActivities: older,

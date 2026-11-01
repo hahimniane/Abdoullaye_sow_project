@@ -6911,6 +6911,12 @@ html[data-lang-pending] body {
 .lst-chip:hover { border-color: var(--brand); }
 .lst-chip.on { background: var(--mist); border-color: var(--brand); color: var(--brand-strong); }
 .lst-chip-note { font-weight: 500; opacity: 0.65; }
+/* A team member's own car (docs/PARKING_TEAM_CARS.md): small label beside the owner's name. */
+.lst-team-tag {
+  display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px;
+  font-size: 11px; font-weight: 700; line-height: 1.5; vertical-align: middle;
+  background: var(--mist); color: var(--brand-strong); white-space: nowrap;
+}
 
 /* Listings modal — photo gallery with cover selection */
 .lst-photos { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }

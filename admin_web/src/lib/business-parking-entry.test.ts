@@ -697,12 +697,12 @@ test("the walk-up form offers the customers the lot already remembers", () => {
   assert.match(panelSource, /if \(typed\.length < 2\) return entryKnownCustomers\.slice\(0, 6\)/);
   assert.match(panelSource, /\.sort\(\(a, b\) => b\.lastSeenMs - a\.lastSeenMs\)/);
 
-  // The lot's own people are offered too - a colleague parking here should
-  // not have to be filed as a customer first - and they are labelled so the
-  // person at the desk can tell which is which.
+  // The lot's own people are no longer mixed into the customer suggestions:
+  // a colleague's car is picked under "Whose car? - Team member" and tied to
+  // the person (docs/PARKING_TEAM_CARS.md), not typed in as a customer.
   assert.match(panelSource, /lotCustomerSources\(/);
-  assert.match(panelSource, /lotCustomerFromStaffRow\(/);
-  assert.match(panelSource, /customer\.staff \? " · Staff" : ""/);
+  assert.doesNotMatch(panelSource, /lotCustomerFromStaffRow\(/);
+  assert.doesNotMatch(panelSource, /customer\.staff \? " · Staff" : ""/);
 
   // The suggestion list closes once someone is picked, so it cannot sit over
   // the fields it just filled.

@@ -35,6 +35,10 @@ export type BusinessParkingEntryDraft = {
   /** Which of the lot's price cards this stay is quoted on. "" = the lot's
    *  standard rate, which is what the server reads as "no card chosen". */
   parkingRateId?: string;
+  /** A team member's own car (docs/PARKING_TEAM_CARS.md): their uid. "" or
+   *  absent = someone else's car. On an edit, "" unties the car (the server
+   *  then needs a customer name and phone); absent leaves the tie alone. */
+  forStaffId?: string;
   customerName: string;
   customerPhone: string;
   customerEmail: string;
@@ -129,10 +133,13 @@ export function validateBusinessParkingEntryDraft(
     errors.push("payment_method_invalid");
   }
 
-  if (!trimmed(draft.customerName)) errors.push("customer_name_required");
+  // A team member's car is picked, not typed: the server fills the name and
+  // number from the person (docs/PARKING_TEAM_CARS.md).
+  const forStaffId = trimmed(draft.forStaffId, 128);
+  if (!trimmed(draft.customerName) && !forStaffId) errors.push("customer_name_required");
 
   const phone = trimmed(draft.customerPhone, 40);
-  if (!phone) errors.push("customer_phone_required");
+  if (!phone && !forStaffId) errors.push("customer_phone_required");
 
   const email = trimmed(draft.customerEmail, 180).toLowerCase();
   if (email && !isEmailish(email)) errors.push("customer_email_invalid");
@@ -192,7 +199,9 @@ export function businessParkingEntryPayload(
     // Only sent when a card was actually chosen. An empty id means the lot's
     // standard rate, and the server reads an absent field as exactly that.
     ...(rateId ? {parkingRateId: rateId} : {}),
-    ...businessParkingUpdateChanges(draft),
+    // A new car has nothing to untie: forStaffId only goes when a team
+    // member was picked.
+    ...businessParkingUpdateChanges({...draft, forStaffId: trimmed(draft.forStaffId, 128) || undefined}),
   };
 }
 
@@ -209,10 +218,19 @@ export function businessParkingEntryPayload(
  * @return The `changes` object `updateBusinessParkingEntry` expects.
  */
 export function businessParkingUpdateChanges(draft: BusinessParkingEntryDraft) {
+  const forStaffId = trimmed(draft.forStaffId, 128);
+  // A tied car carries no typed customer: the server fills it from the
+  // member. Untying ("" sent) needs the typed customer, so it goes along.
+  const customer = forStaffId
+    ? {}
+    : {
+        customerName: trimmed(draft.customerName),
+        customerPhone: trimmed(draft.customerPhone, 40),
+        customerEmail: trimmed(draft.customerEmail, 180).toLowerCase(),
+      };
   return {
-    customerName: trimmed(draft.customerName),
-    customerPhone: trimmed(draft.customerPhone, 40),
-    customerEmail: trimmed(draft.customerEmail, 180).toLowerCase(),
+    ...(draft.forStaffId !== undefined ? {forStaffId} : {}),
+    ...customer,
     carMake: trimmed(draft.carMake, 80),
     carModel: trimmed(draft.carModel, 80),
     carYear: trimmed(draft.carYear, 8),
