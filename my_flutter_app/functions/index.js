@@ -620,6 +620,7 @@ const {staffCredits, withStandingPayers, BUSINESS_PAYER} =
   require("./staff_expense_credit");
 const staffExpenseLedger = require("./staff_expense_ledger");
 const staffBalances = require("./staff_balances");
+const staffBalanceMonths = require("./staff_balance_months");
 const {
   resolveBillingPlan,
   monthEndBillingAmount,
@@ -20139,9 +20140,10 @@ async function staffBalancesAnswer(uid, data) {
     // (EXPENSE_PAID_BY.md).
     netting: {monthKey, customers: summary.customers,
       entries: withStandingPayers(entries, expenseLines, monthKey),
-      repayments, links: business.staffParkingLinks || {}},
+      repayments, links: business.staffParkingLinks || {},
+      lines: expenseLines},
   };
-  const answer = staffBalances.staffBalances(input);
+  const answer = withBalanceMonths(staffBalances.staffBalances(input), input);
   // Someone who holds money but is no longer on the team (or never was): a
   // name from their profile, when there is one, so the row is not blank.
   const unnamed = [...new Set([
@@ -20155,7 +20157,21 @@ async function staffBalancesAnswer(uid, data) {
   docs.forEach((doc, i) => {
     staffNames[unnamed[i]] = doc.exists ? staffDisplayName(doc.data()) : "";
   });
-  return staffBalances.staffBalances(input);
+  return withBalanceMonths(staffBalances.staffBalances(input), input);
+}
+
+/**
+ * Each person's row gains `months`: the net told month by month
+ * (docs/STAFF_BALANCES_MONTHLY.md).
+ *
+ * @param {object} answer staffBalances' answer.
+ * @param {object} input Its input.
+ * @return {object} The answer, rows with `months`.
+ */
+function withBalanceMonths(answer, input) {
+  const months = staffBalanceMonths.staffBalanceMonths(input);
+  return {...answer, staff: answer.staff.map((row) =>
+    ({...row, months: months[row.staffId] || []}))};
 }
 
 /**
