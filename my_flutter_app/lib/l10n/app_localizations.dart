@@ -30290,11 +30290,101 @@ abstract class AppLocalizations {
   /// **'Parking bill (after expenses)'**
   String get sbalDetailParking;
 
-  /// Breakdown line.
+  /// Breakdown line: the real total they paid.
   ///
   /// In en, this message translates to:
-  /// **'Expenses taken off the parking bill'**
-  String get sbalDetailExpensesApplied;
+  /// **'Expenses they paid for the lot'**
+  String get sbalDetailExpensesPaid;
+
+  /// Breakdown line: the part of what they paid that was taken off their own parking bill.
+  ///
+  /// In en, this message translates to:
+  /// **'Used for their own parking'**
+  String get sbalUsedForParking;
+
+  /// Heading of the per-month breakdown of a person's balance.
+  ///
+  /// In en, this message translates to:
+  /// **'Month by month'**
+  String get sbalMonthByMonth;
+
+  /// Month row: money the person collected from customers for that month's bills.
+  ///
+  /// In en, this message translates to:
+  /// **'Collected'**
+  String get sbalCollected;
+
+  /// Month row: expenses the person paid for the lot.
+  ///
+  /// In en, this message translates to:
+  /// **'Bills paid'**
+  String get sbalBillsPaid;
+
+  /// Month row: what the person's own parking added that month.
+  ///
+  /// In en, this message translates to:
+  /// **'Own parking'**
+  String get sbalOwnParking;
+
+  /// Month row: the net of that one month.
+  ///
+  /// In en, this message translates to:
+  /// **'That month'**
+  String get sbalThatMonth;
+
+  /// Month row: the net up to and including that month.
+  ///
+  /// In en, this message translates to:
+  /// **'Running total'**
+  String get sbalRunningTotal;
+
+  /// Running total: the person owes the business.
+  ///
+  /// In en, this message translates to:
+  /// **'Owes {amount}'**
+  String sbalRunningOwes(Object amount);
+
+  /// Running total: the business owes the person.
+  ///
+  /// In en, this message translates to:
+  /// **'Business owes {amount}'**
+  String sbalRunningBusinessOwes(Object amount);
+
+  /// Running total: nothing owed either way.
+  ///
+  /// In en, this message translates to:
+  /// **'Settled'**
+  String get sbalRunningSettled;
+
+  /// A payment line: the day it was collected.
+  ///
+  /// In en, this message translates to:
+  /// **'collected {date}'**
+  String sbalCollectedOn(Object date);
+
+  /// A hand-over the person gave.
+  ///
+  /// In en, this message translates to:
+  /// **'To {name}'**
+  String sbalHandedTo(Object name);
+
+  /// A hand-over the person received.
+  ///
+  /// In en, this message translates to:
+  /// **'From {name}'**
+  String sbalHandedFrom(Object name);
+
+  /// The business paid the person back for expenses.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid back'**
+  String get sbalPaidBack;
+
+  /// Small tag on a bill that comes from a monthly line's standing payer.
+  ///
+  /// In en, this message translates to:
+  /// **'monthly'**
+  String get sbalMonthlyTag;
 
   /// Breakdown line.
   ///

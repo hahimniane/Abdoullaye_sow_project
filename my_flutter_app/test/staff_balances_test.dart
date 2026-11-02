@@ -630,7 +630,7 @@ void main() {
       expect(find.text('Cash'), findsWidgets);
       expect(find.text(r'$150.00'), findsWidgets);
       expect(find.text('Handed over, not confirmed yet'), findsOneWidget);
-      expect(find.text('Expenses taken off the parking bill'), findsOneWidget);
+      expect(find.text('Used for their own parking'), findsOneWidget);
       expect(find.text('Expenses the business owes them'), findsOneWidget);
       expect(
         tester.widget<Text>(find.byKey(const Key('sbal-detail-net'))).data,
@@ -1154,6 +1154,291 @@ void main() {
       await _tapKey(tester, 'sbal-handover-send');
       expect(find.text(fr.sbalSayWho), findsOneWidget);
       expect(find.text(fr.sbalAmountInvalid), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('month by month', () {
+    int ms(int m, int d) => DateTime(2026, m, d, 10).millisecondsSinceEpoch;
+
+    /// Yao, shaped like the server's `months` (docs/STAFF_BALANCES_MONTHLY).
+    Map<String, Object?> yao() => {
+      ..._row(
+        'yao',
+        'Yao',
+        collected: 1971000,
+        handedOut: 0,
+        held: 0,
+        parking: 0,
+        credit: 100000,
+        owedToThem: 791734,
+        net: -891734,
+      ),
+      'months': [
+        // Out of order on purpose: the app sorts oldest first.
+        {
+          'monthKey': '2026-10',
+          'collectedCents': 193500,
+          'handedOutCents': 0,
+          'receivedFromOthersCents': 0,
+          'ownParkingCents': 59800,
+          'expensesPaidCents': 915915,
+          'paidBackCents': 0,
+          'monthNetCents': -662615,
+          'runningNetCents': -897734,
+          'lines': {
+            'collected': [
+              {
+                'source': 'parking',
+                'id': 'c1',
+                'label': 'Parking',
+                'customerName': 'Keren Auto',
+                'vehicle': '2019 Honda Civic',
+                'code': 'K-100',
+                'amountCents': 193500,
+                'collectedAtMs': ms(10, 13),
+                'method': 'cash',
+              },
+            ],
+            'expenses': [
+              {
+                'id': 'e1',
+                'label': 'Rent',
+                'amountCents': 915915,
+                'standing': true,
+              },
+            ],
+            'handovers': <Object?>[],
+            'parking': [
+              {
+                'customerKey': 'staff:yao',
+                'label': 'Yao',
+                'amountCents': 59800,
+              },
+            ],
+            'paidBack': <Object?>[],
+          },
+        },
+        {
+          'monthKey': '2026-09',
+          'collectedCents': 838000,
+          'handedOutCents': 5000,
+          'receivedFromOthersCents': 0,
+          'ownParkingCents': 38400,
+          'expensesPaidCents': 1111519,
+          'paidBackCents': 0,
+          'monthNetCents': -235119,
+          'runningNetCents': -235119,
+          'lines': {
+            'collected': <Object?>[],
+            'expenses': <Object?>[],
+            'handovers': [
+              {
+                'id': 'h9',
+                'direction': 'out',
+                'otherName': 'Alhoussaine',
+                'amountCents': 5000,
+                'atMs': ms(9, 30),
+              },
+            ],
+            'parking': <Object?>[],
+            'paidBack': <Object?>[],
+          },
+        },
+        {
+          'monthKey': '2026-11',
+          'collectedCents': 3600,
+          'handedOutCents': 0,
+          'receivedFromOthersCents': 0,
+          'ownParkingCents': 2400,
+          'expensesPaidCents': 0,
+          'paidBackCents': 0,
+          'monthNetCents': 6000,
+          'runningNetCents': 0,
+          'lines': {
+            'collected': <Object?>[],
+            'expenses': <Object?>[],
+            'handovers': <Object?>[],
+            'parking': <Object?>[],
+            'paidBack': <Object?>[],
+          },
+        },
+      ],
+    };
+
+    _Calls callsWith(Map<String, Object?> row) =>
+        _Calls()
+          ..respond = (action, _) => action == 'staff_balances'
+              ? {
+                  ...recordedAnswer(),
+                  'staff': [row],
+                  'pending': <Object?>[],
+                }
+              : null;
+
+    test('parses months, oldest first, and ignores a missing list', () {
+      final row = StaffBalanceRow.fromMap(yao());
+      expect(row.months.map((m) => m.monthKey), [
+        '2026-09',
+        '2026-10',
+        '2026-11',
+      ]);
+      final oct = row.months[1];
+      expect(oct.collectedCents, 193500);
+      expect(oct.expensesPaidCents, 915915);
+      expect(oct.monthNetCents, -662615);
+      expect(oct.runningNetCents, -897734);
+      expect(oct.date, DateTime(2026, 10));
+      final c = oct.collected.single;
+      expect(
+        (c.source, c.label, c.customerName, c.vehicle, c.code, c.method),
+        (
+          'parking',
+          'Parking',
+          'Keren Auto',
+          '2019 Honda Civic',
+          'K-100',
+          'cash',
+        ),
+      );
+      expect(c.amountCents, 193500);
+      expect(c.collectedAt, DateTime(2026, 10, 13, 10));
+      expect(oct.expenses.single.standing, isTrue);
+      expect(oct.parking.single.amountCents, 59800);
+      final sep = row.months.first;
+      expect(sep.handovers.single.isOut, isTrue);
+      expect(sep.handovers.single.otherName, 'Alhoussaine');
+      expect(sep.handovers.single.at, DateTime(2026, 9, 30, 10));
+      expect(row.expensesPaidTotalCents, 1111519 + 915915);
+
+      final old = StaffBalanceRow.fromMap(
+        _row('a', 'A', credit: 2500, owedToThem: 15000),
+      );
+      expect(old.months, isEmpty);
+      expect(old.expensesPaidTotalCents, 17500);
+      final bad = StaffBalanceRow.fromMap({
+        ..._row('b', 'B'),
+        'months': [
+          'x',
+          {'monthKey': 'nope'},
+          {
+            'monthKey': '2026-01',
+            'monthNetCents': -5,
+            'runningNetCents': -5,
+            'lines': 'broken',
+          },
+        ],
+      });
+      expect(bad.months.map((m) => m.monthKey), ['2026-01']);
+      expect(bad.months.single.collected, isEmpty);
+    });
+
+    testWidgets('the sheet lists the months with the running wording, and '
+        'the real expenses total', (tester) async {
+      await _pumpScreen(tester, callsWith(yao()), size: const Size(360, 3200));
+      await _tapKey(tester, 'sbal-row-yao');
+      expect(find.text('Month by month'), findsOneWidget);
+      // Oldest first.
+      expect(
+        tester.getTopLeft(find.byKey(const Key('sbal-month-2026-09'))).dy,
+        lessThan(
+          tester.getTopLeft(find.byKey(const Key('sbal-month-2026-10'))).dy,
+        ),
+      );
+      Text running(String m) =>
+          tester.widget<Text>(find.byKey(Key('sbal-month-running-$m')));
+      expect(running('2026-09').data, r'Business owes $2,351.19');
+      expect(running('2026-10').data, r'Business owes $8,977.34');
+      expect(running('2026-11').data, 'Settled');
+      expect(find.text('That month'), findsNWidgets(3));
+      expect(find.text('Running total'), findsNWidgets(3));
+      expect(find.text('Bills paid'), findsWidgets);
+      expect(find.text('Own parking'), findsWidgets);
+      // Handed over appears only on the month that has one.
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('sbal-month-2026-09')),
+          matching: find.text('Handed over'),
+        ),
+        findsWidgets,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('sbal-month-2026-10')),
+          matching: find.text('Handed over'),
+        ),
+        findsNothing,
+      );
+      // The latest month is open by default; the others open on a tap.
+      expect(find.byKey(const Key('sbal-month-lines-2026-11')), findsOneWidget);
+      expect(find.byKey(const Key('sbal-month-lines-2026-10')), findsNothing);
+      await _tapKey(tester, 'sbal-month-toggle-2026-10');
+      expect(
+        find.text('Keren Auto · 2019 Honda Civic · K-100'),
+        findsOneWidget,
+      );
+      expect(find.text('collected Oct 13, 2026'), findsOneWidget);
+      expect(find.textContaining('Rent', findRichText: true), findsOneWidget);
+      expect(
+        find.textContaining('monthly', findRichText: true),
+        findsOneWidget,
+      );
+      await _tapKey(tester, 'sbal-month-toggle-2026-09');
+      expect(find.text('To Alhoussaine'), findsOneWidget);
+      expect(find.text('Sep 30, 2026'), findsOneWidget);
+      // The mislabelled row shows the real total, and the part used for
+      // their parking is separate.
+      expect(
+        tester
+            .widget<Text>(find.byKey(const Key('sbal-detail-expenses-paid')))
+            .data,
+        r'$20,274.34',
+      );
+      expect(find.text('Expenses they paid for the lot'), findsOneWidget);
+      expect(
+        tester
+            .widget<Text>(find.byKey(const Key('sbal-detail-used-for-parking')))
+            .data,
+        r'$1,000.00',
+      );
+      expect(find.text('Used for their own parking'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('French reads the running total and fits 360 px', (
+      tester,
+    ) async {
+      setMoneyDisplayLanguage('fr');
+      addTearDown(() => setMoneyDisplayLanguage('en'));
+      await _pumpScreen(
+        tester,
+        callsWith(yao()),
+        locale: const Locale('fr'),
+        size: const Size(360, 3200),
+      );
+      final fr = lookupAppLocalizations(const Locale('fr'));
+      await _tapKey(tester, 'sbal-row-yao');
+      expect(find.text(fr.sbalMonthByMonth), findsOneWidget);
+      expect(
+        tester
+            .widget<Text>(find.byKey(const Key('sbal-month-running-2026-10')))
+            .data,
+        fr.sbalRunningBusinessOwes(formatLotCents(897734, language: 'fr')),
+      );
+      expect(
+        tester
+            .widget<Text>(find.byKey(const Key('sbal-month-running-2026-11')))
+            .data,
+        fr.sbalRunningSettled,
+      );
+      expect(find.text(fr.sbalDetailExpensesPaid), findsOneWidget);
+      expect(find.text(fr.sbalUsedForParking), findsOneWidget);
+      await _tapKey(tester, 'sbal-month-toggle-2026-10');
+      expect(find.textContaining('13 oct. 2026'), findsOneWidget);
+      expect(
+        find.textContaining(fr.sbalMonthlyTag, findRichText: true),
+        findsOneWidget,
+      );
       expect(tester.takeException(), isNull);
     });
   });

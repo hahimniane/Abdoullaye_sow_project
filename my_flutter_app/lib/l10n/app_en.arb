@@ -9749,9 +9749,84 @@
   "@sbalDetailParking": {
     "description": "Breakdown line."
   },
-  "sbalDetailExpensesApplied": "Expenses taken off the parking bill",
-  "@sbalDetailExpensesApplied": {
-    "description": "Breakdown line."
+  "sbalDetailExpensesPaid": "Expenses they paid for the lot",
+  "@sbalDetailExpensesPaid": {
+    "description": "Breakdown line: the real total they paid."
+  },
+  "sbalUsedForParking": "Used for their own parking",
+  "@sbalUsedForParking": {
+    "description": "Breakdown line: the part of what they paid that was taken off their own parking bill."
+  },
+  "sbalMonthByMonth": "Month by month",
+  "@sbalMonthByMonth": {
+    "description": "Heading of the per-month breakdown of a person's balance."
+  },
+  "sbalCollected": "Collected",
+  "@sbalCollected": {
+    "description": "Month row: money the person collected from customers for that month's bills."
+  },
+  "sbalBillsPaid": "Bills paid",
+  "@sbalBillsPaid": {
+    "description": "Month row: expenses the person paid for the lot."
+  },
+  "sbalOwnParking": "Own parking",
+  "@sbalOwnParking": {
+    "description": "Month row: what the person's own parking added that month."
+  },
+  "sbalThatMonth": "That month",
+  "@sbalThatMonth": {
+    "description": "Month row: the net of that one month."
+  },
+  "sbalRunningTotal": "Running total",
+  "@sbalRunningTotal": {
+    "description": "Month row: the net up to and including that month."
+  },
+  "sbalRunningOwes": "Owes {amount}",
+  "@sbalRunningOwes": {
+    "description": "Running total: the person owes the business.",
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "sbalRunningBusinessOwes": "Business owes {amount}",
+  "@sbalRunningBusinessOwes": {
+    "description": "Running total: the business owes the person.",
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "sbalRunningSettled": "Settled",
+  "@sbalRunningSettled": {
+    "description": "Running total: nothing owed either way."
+  },
+  "sbalCollectedOn": "collected {date}",
+  "@sbalCollectedOn": {
+    "description": "A payment line: the day it was collected.",
+    "placeholders": {
+      "date": {}
+    }
+  },
+  "sbalHandedTo": "To {name}",
+  "@sbalHandedTo": {
+    "description": "A hand-over the person gave.",
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "sbalHandedFrom": "From {name}",
+  "@sbalHandedFrom": {
+    "description": "A hand-over the person received.",
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "sbalPaidBack": "Paid back",
+  "@sbalPaidBack": {
+    "description": "The business paid the person back for expenses."
+  },
+  "sbalMonthlyTag": "monthly",
+  "@sbalMonthlyTag": {
+    "description": "Small tag on a bill that comes from a monthly line's standing payer."
   },
   "sbalDetailExpensesOwed": "Expenses the business owes them",
   "@sbalDetailExpensesOwed": {

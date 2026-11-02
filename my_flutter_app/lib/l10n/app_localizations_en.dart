@@ -17918,7 +17918,62 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sbalDetailParking => 'Parking bill (after expenses)';
 
   @override
-  String get sbalDetailExpensesApplied => 'Expenses taken off the parking bill';
+  String get sbalDetailExpensesPaid => 'Expenses they paid for the lot';
+
+  @override
+  String get sbalUsedForParking => 'Used for their own parking';
+
+  @override
+  String get sbalMonthByMonth => 'Month by month';
+
+  @override
+  String get sbalCollected => 'Collected';
+
+  @override
+  String get sbalBillsPaid => 'Bills paid';
+
+  @override
+  String get sbalOwnParking => 'Own parking';
+
+  @override
+  String get sbalThatMonth => 'That month';
+
+  @override
+  String get sbalRunningTotal => 'Running total';
+
+  @override
+  String sbalRunningOwes(Object amount) {
+    return 'Owes $amount';
+  }
+
+  @override
+  String sbalRunningBusinessOwes(Object amount) {
+    return 'Business owes $amount';
+  }
+
+  @override
+  String get sbalRunningSettled => 'Settled';
+
+  @override
+  String sbalCollectedOn(Object date) {
+    return 'collected $date';
+  }
+
+  @override
+  String sbalHandedTo(Object name) {
+    return 'To $name';
+  }
+
+  @override
+  String sbalHandedFrom(Object name) {
+    return 'From $name';
+  }
+
+  @override
+  String get sbalPaidBack => 'Paid back';
+
+  @override
+  String get sbalMonthlyTag => 'monthly';
 
   @override
   String get sbalDetailExpensesOwed => 'Expenses the business owes them';

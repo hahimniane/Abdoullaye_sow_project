@@ -9748,9 +9748,84 @@
   "@sbalDetailParking": {
     "description": "Breakdown line."
   },
-  "sbalDetailExpensesApplied": "Dépenses déduites de la facture de parking",
-  "@sbalDetailExpensesApplied": {
-    "description": "Breakdown line."
+  "sbalDetailExpensesPaid": "Dépenses qu'ils ont payées pour le parc",
+  "@sbalDetailExpensesPaid": {
+    "description": "Breakdown line: the real total they paid."
+  },
+  "sbalUsedForParking": "Utilisé pour son parking",
+  "@sbalUsedForParking": {
+    "description": "Breakdown line: the part of what they paid that was taken off their own parking bill."
+  },
+  "sbalMonthByMonth": "Mois par mois",
+  "@sbalMonthByMonth": {
+    "description": "Heading of the per-month breakdown of a person's balance."
+  },
+  "sbalCollected": "Encaissé",
+  "@sbalCollected": {
+    "description": "Month row: money the person collected from customers for that month's bills."
+  },
+  "sbalBillsPaid": "Factures payées",
+  "@sbalBillsPaid": {
+    "description": "Month row: expenses the person paid for the lot."
+  },
+  "sbalOwnParking": "Son parking",
+  "@sbalOwnParking": {
+    "description": "Month row: what the person's own parking added that month."
+  },
+  "sbalThatMonth": "Ce mois",
+  "@sbalThatMonth": {
+    "description": "Month row: the net of that one month."
+  },
+  "sbalRunningTotal": "Total cumulé",
+  "@sbalRunningTotal": {
+    "description": "Month row: the net up to and including that month."
+  },
+  "sbalRunningOwes": "Doit {amount}",
+  "@sbalRunningOwes": {
+    "description": "Running total: the person owes the business.",
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "sbalRunningBusinessOwes": "L'entreprise doit {amount}",
+  "@sbalRunningBusinessOwes": {
+    "description": "Running total: the business owes the person.",
+    "placeholders": {
+      "amount": {}
+    }
+  },
+  "sbalRunningSettled": "À jour",
+  "@sbalRunningSettled": {
+    "description": "Running total: nothing owed either way."
+  },
+  "sbalCollectedOn": "encaissé le {date}",
+  "@sbalCollectedOn": {
+    "description": "A payment line: the day it was collected.",
+    "placeholders": {
+      "date": {}
+    }
+  },
+  "sbalHandedTo": "À {name}",
+  "@sbalHandedTo": {
+    "description": "A hand-over the person gave.",
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "sbalHandedFrom": "De {name}",
+  "@sbalHandedFrom": {
+    "description": "A hand-over the person received.",
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "sbalPaidBack": "Remboursé",
+  "@sbalPaidBack": {
+    "description": "The business paid the person back for expenses."
+  },
+  "sbalMonthlyTag": "mensuel",
+  "@sbalMonthlyTag": {
+    "description": "Small tag on a bill that comes from a monthly line's standing payer."
   },
   "sbalDetailExpensesOwed": "Dépenses que l'entreprise leur doit",
   "@sbalDetailExpensesOwed": {

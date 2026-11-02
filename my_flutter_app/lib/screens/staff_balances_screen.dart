@@ -105,6 +105,23 @@ String staffNetText(AppLocalizations l10n, int netCents) =>
       StaffNetKind.settled => l10n.sbalSettled,
     };
 
+/// A month's running total: "Owes $50.00" / "Business owes $20.00" /
+/// "Settled".
+String staffRunningText(AppLocalizations l10n, int netCents) =>
+    switch (staffNetKind(netCents)) {
+      StaffNetKind.owes => l10n.sbalRunningOwes(formatLotCents(netCents)),
+      StaffNetKind.isOwed => l10n.sbalRunningBusinessOwes(
+        formatLotCents(-netCents),
+      ),
+      StaffNetKind.settled => l10n.sbalRunningSettled,
+    };
+
+Color _runningColor(int netCents) => switch (staffNetKind(netCents)) {
+  StaffNetKind.owes => AppColors.errorRed,
+  StaffNetKind.isOwed => AppColors.sage,
+  StaffNetKind.settled => AppColors.muted,
+};
+
 Color _netColor(int netCents) => switch (staffNetKind(netCents)) {
   StaffNetKind.owes => AppColors.warn,
   StaffNetKind.isOwed => AppColors.sage,
@@ -1271,6 +1288,26 @@ class StaffBalanceDetailSheet extends StatelessWidget {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (row.months.isNotEmpty) ...[
+                Text(
+                  l10n.sbalMonthByMonth,
+                  key: const Key('sbal-months'),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.ink,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                for (var i = 0; i < row.months.length; i++)
+                  _MonthCard(
+                    key: Key('sbal-month-${row.months[i].monthKey}'),
+                    month: row.months[i],
+                    initiallyExpanded: i == row.months.length - 1,
+                    locale: locale,
+                  ),
+                const Divider(height: AppSpacing.lg),
+              ],
               line(l10n.sbalDetailCollected, row.collectedCents),
               for (final e in row.collectedByMethod.entries)
                 Padding(
@@ -1291,8 +1328,21 @@ class StaffBalanceDetailSheet extends StatelessWidget {
                 key: const Key('sbal-detail-held'),
               ),
               line(l10n.sbalDetailParking, row.parkingDueCents),
+              if (row.expensesPaidTotalCents != 0)
+                line(
+                  l10n.sbalDetailExpensesPaid,
+                  row.expensesPaidTotalCents,
+                  key: const Key('sbal-detail-expenses-paid'),
+                ),
               if (row.expenseCreditCents != 0)
-                line(l10n.sbalDetailExpensesApplied, row.expenseCreditCents),
+                Padding(
+                  padding: const EdgeInsetsDirectional.only(start: 14),
+                  child: line(
+                    l10n.sbalUsedForParking,
+                    row.expenseCreditCents,
+                    key: const Key('sbal-detail-used-for-parking'),
+                  ),
+                ),
               line(l10n.sbalDetailExpensesOwed, row.expenseOwedToThemCents),
               const Divider(height: AppSpacing.lg),
               Padding(
@@ -1370,6 +1420,335 @@ class StaffBalanceDetailSheet extends StatelessWidget {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Month by month (docs/STAFF_BALANCES_MONTHLY.md).
+// ---------------------------------------------------------------------------
+
+/// One month of a person's balance: the totals always show, the lines behind
+/// them open on a tap (the latest month starts open).
+class _MonthCard extends StatefulWidget {
+  const _MonthCard({
+    super.key,
+    required this.month,
+    required this.initiallyExpanded,
+    required this.locale,
+  });
+
+  final StaffBalanceMonth month;
+  final bool initiallyExpanded;
+  final String locale;
+
+  @override
+  State<_MonthCard> createState() => _MonthCardState();
+}
+
+class _MonthCardState extends State<_MonthCard> {
+  late bool _open = widget.initiallyExpanded;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final m = widget.month;
+    final locale = widget.locale;
+    final date = m.date;
+    final title = date == null ? m.monthKey : displayMonthYear(date, locale);
+    Widget total(String label, int cents, {Color? color, Key? key}) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 13, color: AppColors.muted),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Text(
+            formatLotCents(cents),
+            key: key,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: color ?? AppColors.ink,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+        ],
+      ),
+    );
+    final running = staffRunningText(l10n, m.runningNetCents);
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: AppColors.paper,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.rule),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InkWell(
+            key: Key('sbal-month-toggle-${m.monthKey}'),
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => setState(() => _open = !_open),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 8, 6),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.ink,
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    _open ? Icons.expand_less : Icons.expand_more,
+                    size: 22,
+                    color: AppColors.muted,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                total(l10n.sbalCollected, m.collectedCents),
+                total(l10n.sbalBillsPaid, m.expensesPaidCents),
+                total(l10n.sbalOwnParking, m.ownParkingCents),
+                if (m.handedOutCents != 0)
+                  total(l10n.sbalDetailHandedOut, m.handedOutCents),
+                if (m.receivedFromOthersCents != 0)
+                  total(l10n.sbalDetailReceived, m.receivedFromOthersCents),
+                if (m.paidBackCents != 0)
+                  total(l10n.sbalPaidBack, m.paidBackCents),
+                const Divider(height: 12),
+                total(
+                  l10n.sbalThatMonth,
+                  m.monthNetCents,
+                  color: _runningColor(m.monthNetCents),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          l10n.sbalRunningTotal,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.ink,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Flexible(
+                        child: Text(
+                          running,
+                          key: Key('sbal-month-running-${m.monthKey}'),
+                          textAlign: TextAlign.end,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: _runningColor(m.runningNetCents),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (_open)
+            Container(
+              key: Key('sbal-month-lines-${m.monthKey}'),
+              decoration: const BoxDecoration(
+                color: AppColors.cream,
+                border: Border(top: BorderSide(color: AppColors.rule)),
+                borderRadius: BorderRadius.vertical(
+                  bottom: Radius.circular(12),
+                ),
+              ),
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+              child: _MonthLines(month: m, locale: locale),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The lines behind a month's totals, grouped.
+class _MonthLines extends StatelessWidget {
+  const _MonthLines({required this.month, required this.locale});
+
+  final StaffBalanceMonth month;
+  final String locale;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final m = month;
+    Widget heading(String text) => Padding(
+      padding: const EdgeInsets.only(top: 6, bottom: 2),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w800,
+          color: AppColors.muted,
+        ),
+      ),
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (m.collected.isNotEmpty) ...[
+          heading(l10n.sbalCollected),
+          for (final c in m.collected)
+            _MonthLine(
+              title: c.label.isEmpty ? c.source : c.label,
+              detail: [
+                c.customerName,
+                c.vehicle,
+                c.code,
+              ].where((t) => t.isNotEmpty).join(' · '),
+              note: c.collectedAt == null
+                  ? ''
+                  : l10n.sbalCollectedOn(displayDate(c.collectedAt!, locale)),
+              cents: c.amountCents,
+            ),
+        ],
+        if (m.expenses.isNotEmpty) ...[
+          heading(l10n.sbalBillsPaid),
+          for (final e in m.expenses)
+            _MonthLine(
+              title: e.label,
+              tag: e.standing ? l10n.sbalMonthlyTag : '',
+              cents: e.amountCents,
+            ),
+        ],
+        if (m.parking.isNotEmpty) ...[
+          heading(l10n.sbalOwnParking),
+          for (final p in m.parking)
+            _MonthLine(title: p.label, cents: p.amountCents),
+        ],
+        if (m.handovers.isNotEmpty) ...[
+          heading(l10n.sbalDetailHandedOut),
+          for (final h in m.handovers)
+            _MonthLine(
+              title: h.isOut
+                  ? l10n.sbalHandedTo(h.otherName)
+                  : l10n.sbalHandedFrom(h.otherName),
+              note: h.at == null ? '' : displayDate(h.at!, locale),
+              cents: h.amountCents,
+            ),
+        ],
+        if (m.paidBack.isNotEmpty) ...[
+          heading(l10n.sbalPaidBack),
+          for (final b in m.paidBack)
+            _MonthLine(
+              title: l10n.sbalPaidBack,
+              note: b.at == null ? '' : displayDate(b.at!, locale),
+              cents: b.amountCents,
+            ),
+        ],
+      ],
+    );
+  }
+}
+
+/// One line of a month: a title (and a small tag), what it is for, when, and
+/// the amount. Long text wraps instead of overflowing.
+class _MonthLine extends StatelessWidget {
+  const _MonthLine({
+    required this.title,
+    required this.cents,
+    this.detail = '',
+    this.note = '',
+    this.tag = '',
+  });
+
+  final String title;
+  final String detail;
+  final String note;
+  final String tag;
+  final int cents;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(text: title),
+                      if (tag.isNotEmpty)
+                        TextSpan(
+                          text: '  $tag',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.muted,
+                          ),
+                        ),
+                    ],
+                  ),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.ink,
+                  ),
+                ),
+                if (detail.isNotEmpty)
+                  Text(
+                    detail,
+                    style: const TextStyle(fontSize: 12, color: AppColors.ink),
+                  ),
+                if (note.isNotEmpty)
+                  Text(
+                    note,
+                    style: const TextStyle(
+                      fontSize: 11.5,
+                      color: AppColors.muted,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Text(
+            formatLotCents(cents),
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: AppColors.ink,
+              fontFeatures: [FontFeature.tabularFigures()],
+            ),
+          ),
+        ],
       ),
     );
   }

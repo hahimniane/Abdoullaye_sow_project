@@ -72,6 +72,7 @@ class StaffBalanceRow {
     this.expenseCreditCents = 0,
     this.expenseOwedToThemCents = 0,
     this.netCents = 0,
+    this.months = const [],
   });
 
   factory StaffBalanceRow.fromMap(Map<String, dynamic> d) {
@@ -93,6 +94,7 @@ class StaffBalanceRow {
       expenseCreditCents: _cents(d['expenseCreditCents']),
       expenseOwedToThemCents: _cents(d['expenseOwedToThemCents']),
       netCents: _cents(d['netCents']),
+      months: StaffBalanceMonth.listFrom(d['months']),
     );
   }
 
@@ -125,6 +127,230 @@ class StaffBalanceRow {
 
   /// Positive: owes the business. Negative: the business owes them.
   final int netCents;
+
+  /// Month by month, oldest first (docs/STAFF_BALANCES_MONTHLY.md). Empty
+  /// when the answer carries none (an older server).
+  final List<StaffBalanceMonth> months;
+
+  /// Everything they paid for the lot: the sum of the months when the answer
+  /// has them, else the part used for their parking plus the part the
+  /// business still owes them.
+  int get expensesPaidTotalCents => months.isNotEmpty
+      ? months.fold<int>(0, (total, m) => total + m.expensesPaidCents)
+      : expenseCreditCents + expenseOwedToThemCents;
+}
+
+DateTime? _epochMs(Object? v) {
+  final ms = callableInt(v);
+  return ms > 0 ? DateTime.fromMillisecondsSinceEpoch(ms) : null;
+}
+
+/// A payment the person collected, shown under the month its bill was for.
+class StaffMonthCollected {
+  const StaffMonthCollected({
+    this.source = '',
+    this.id = '',
+    this.label = '',
+    this.customerName = '',
+    this.vehicle = '',
+    this.code = '',
+    this.amountCents = 0,
+    this.collectedAt,
+    this.method = '',
+  });
+
+  factory StaffMonthCollected.fromMap(Map<String, dynamic> d) =>
+      StaffMonthCollected(
+        source: _text(d['source'], 40),
+        id: _text(d['id'], 128),
+        label: _text(d['label'], 120),
+        customerName: _text(d['customerName'], 200),
+        vehicle: _text(d['vehicle'], 200),
+        code: _text(d['code'], 40),
+        amountCents: _cents(d['amountCents']),
+        collectedAt: _epochMs(d['collectedAtMs']),
+        method: _text(d['method'], 40),
+      );
+
+  final String source;
+  final String id;
+  final String label;
+  final String customerName;
+  final String vehicle;
+  final String code;
+  final int amountCents;
+  final DateTime? collectedAt;
+  final String method;
+}
+
+/// An expense the person paid for the lot; [standing] when it came from a
+/// monthly line's standing payer.
+class StaffMonthExpense {
+  const StaffMonthExpense({
+    this.id = '',
+    this.label = '',
+    this.amountCents = 0,
+    this.standing = false,
+  });
+
+  factory StaffMonthExpense.fromMap(Map<String, dynamic> d) =>
+      StaffMonthExpense(
+        id: _text(d['id'], 128),
+        label: _text(d['label'], 200),
+        amountCents: _cents(d['amountCents']),
+        standing: d['standing'] == true,
+      );
+
+  final String id;
+  final String label;
+  final int amountCents;
+  final bool standing;
+}
+
+/// A confirmed handover the person gave ([isOut]) or received.
+class StaffMonthHandover {
+  const StaffMonthHandover({
+    this.id = '',
+    this.isOut = true,
+    this.otherName = '',
+    this.amountCents = 0,
+    this.at,
+  });
+
+  factory StaffMonthHandover.fromMap(Map<String, dynamic> d) =>
+      StaffMonthHandover(
+        id: _text(d['id'], 128),
+        isOut: _text(d['direction'], 10) != 'in',
+        otherName: _text(d['otherName'], 200),
+        amountCents: _cents(d['amountCents']),
+        at: _epochMs(d['atMs']),
+      );
+
+  final String id;
+  final bool isOut;
+  final String otherName;
+  final int amountCents;
+  final DateTime? at;
+}
+
+/// What a month added to the person's own parking bill, per customer.
+class StaffMonthParking {
+  const StaffMonthParking({
+    this.customerKey = '',
+    this.label = '',
+    this.amountCents = 0,
+  });
+
+  factory StaffMonthParking.fromMap(Map<String, dynamic> d) =>
+      StaffMonthParking(
+        customerKey: _text(d['customerKey'], 128),
+        label: _text(d['label'], 200),
+        amountCents: _cents(d['amountCents']),
+      );
+
+  final String customerKey;
+  final String label;
+  final int amountCents;
+}
+
+/// The business paid the person back for expenses.
+class StaffMonthPaidBack {
+  const StaffMonthPaidBack({this.id = '', this.amountCents = 0, this.at});
+
+  factory StaffMonthPaidBack.fromMap(Map<String, dynamic> d) =>
+      StaffMonthPaidBack(
+        id: _text(d['id'], 128),
+        amountCents: _cents(d['amountCents']),
+        at: _epochMs(d['atMs']),
+      );
+
+  final String id;
+  final int amountCents;
+  final DateTime? at;
+}
+
+List<T> _mapList<T>(Object? v, T Function(Map<String, dynamic>) make) => [
+  if (v is List)
+    for (final r in v)
+      if (r is Map) make(callableMap(r)),
+];
+
+/// One month of a person's balance (`staff_balances.staff[].months`): money
+/// counts in the month its bill was for. Positive nets are owed to the
+/// business, negative ones by it.
+class StaffBalanceMonth {
+  const StaffBalanceMonth({
+    required this.monthKey,
+    this.collectedCents = 0,
+    this.handedOutCents = 0,
+    this.receivedFromOthersCents = 0,
+    this.ownParkingCents = 0,
+    this.expensesPaidCents = 0,
+    this.paidBackCents = 0,
+    this.monthNetCents = 0,
+    this.runningNetCents = 0,
+    this.collected = const [],
+    this.expenses = const [],
+    this.handovers = const [],
+    this.parking = const [],
+    this.paidBack = const [],
+  });
+
+  factory StaffBalanceMonth.fromMap(Map<String, dynamic> d) {
+    final lines = callableMap(d['lines']);
+    return StaffBalanceMonth(
+      monthKey: _text(d['monthKey'], 7),
+      collectedCents: _cents(d['collectedCents']),
+      handedOutCents: _cents(d['handedOutCents']),
+      receivedFromOthersCents: _cents(d['receivedFromOthersCents']),
+      ownParkingCents: _cents(d['ownParkingCents']),
+      expensesPaidCents: _cents(d['expensesPaidCents']),
+      paidBackCents: _cents(d['paidBackCents']),
+      monthNetCents: callableInt(d['monthNetCents']),
+      runningNetCents: callableInt(d['runningNetCents']),
+      collected: _mapList(lines['collected'], StaffMonthCollected.fromMap),
+      expenses: _mapList(lines['expenses'], StaffMonthExpense.fromMap),
+      handovers: _mapList(lines['handovers'], StaffMonthHandover.fromMap),
+      parking: _mapList(lines['parking'], StaffMonthParking.fromMap),
+      paidBack: _mapList(lines['paidBack'], StaffMonthPaidBack.fromMap),
+    );
+  }
+
+  /// The `months` of a row, oldest first; anything unreadable is skipped and
+  /// a missing list is empty.
+  static List<StaffBalanceMonth> listFrom(Object? v) {
+    final out = _mapList(v, StaffBalanceMonth.fromMap)
+      ..removeWhere((m) => m.date == null);
+    out.sort((a, b) => a.monthKey.compareTo(b.monthKey));
+    return out;
+  }
+
+  /// "2026-09".
+  final String monthKey;
+  final int collectedCents;
+  final int handedOutCents;
+  final int receivedFromOthersCents;
+  final int ownParkingCents;
+  final int expensesPaidCents;
+  final int paidBackCents;
+
+  /// collected - handed out + received + own parking - paid + paid back.
+  final int monthNetCents;
+
+  /// The month nets up to and including this month.
+  final int runningNetCents;
+  final List<StaffMonthCollected> collected;
+  final List<StaffMonthExpense> expenses;
+  final List<StaffMonthHandover> handovers;
+  final List<StaffMonthParking> parking;
+  final List<StaffMonthPaidBack> paidBack;
+
+  /// The first day of the month, or null when [monthKey] is not "YYYY-MM".
+  DateTime? get date {
+    final m = RegExp(r'^(\d{4})-(0[1-9]|1[0-2])$').firstMatch(monthKey);
+    if (m == null) return null;
+    return DateTime(int.parse(m.group(1)!), int.parse(m.group(2)!));
+  }
 }
 
 /// The business account's line: what reached it, and what is on the way.
