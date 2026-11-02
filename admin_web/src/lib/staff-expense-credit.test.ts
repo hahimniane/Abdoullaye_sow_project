@@ -214,3 +214,16 @@ test("the business is nobody's credit and never on a bill", () => {
   assert.deepEqual(monthExpenseLines(entries, "2026-10", [BUSINESS_PAYER, "s1"]),
     server.monthExpenseLines(entries, "2026-10", [BUSINESS_PAYER, "s1"]));
 });
+
+test("linePayerEntryFor: 'since' is where the same person's run began", async () => {
+  const { linePayerEntryFor } = await import("./staff-expense-credit.ts");
+  const line = { payers: [
+    { fromMonth: "2026-09", staffId: "yao" },
+    { fromMonth: "2026-10", staffId: "yao" },
+    { fromMonth: "2026-11", staffId: "business_account" },
+    { fromMonth: "2027-01", staffId: "yao" },
+  ] };
+  assert.deepEqual(linePayerEntryFor(line, "2026-10"), { fromMonth: "2026-09", staffId: "yao" });
+  assert.equal(linePayerEntryFor(line, "2026-11"), null);
+  assert.deepEqual(linePayerEntryFor(line, "2027-02"), { fromMonth: "2027-01", staffId: "yao" });
+});

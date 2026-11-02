@@ -199,6 +199,20 @@ void main() {
       expect(all.first['id'], (c['expect'] as List).first['id']);
     });
 
+    test('"since" is where the same person\'s run began', () {
+      final line = {
+        'payers': [
+          {'fromMonth': '2026-09', 'staffId': 'yao'},
+          {'fromMonth': '2026-10', 'staffId': 'yao'},
+          {'fromMonth': '2026-11', 'staffId': businessPayer},
+          {'fromMonth': '2027-01', 'staffId': 'yao'},
+        ],
+      };
+      expect(linePayerSince(line, '2026-10')?.fromMonth, '2026-09');
+      expect(linePayerSince(line, '2026-11')?.staffId, '');
+      expect(linePayerSince(line, '2027-02')?.fromMonth, '2027-01');
+    });
+
     test('the business is a choice, and it is nobody\'s credit', () {
       final line = {
         'payers': [

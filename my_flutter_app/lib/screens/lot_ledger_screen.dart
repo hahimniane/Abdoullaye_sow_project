@@ -4155,6 +4155,9 @@ class _ExpensesPanel extends StatelessWidget {
     AppLocalizations l10n,
     LotExpenseLine line,
   ) {
+    // A purchase recorded this month says who paid it; the standing payer
+    // does not apply then.
+    if (math.lineEntries(line.id, month).isNotEmpty) return '';
     final payer = line.personPayerIn(month);
     if (payer == null) return '';
     final name = staff.where((s) => s.id == payer.staffId).firstOrNull?.name;

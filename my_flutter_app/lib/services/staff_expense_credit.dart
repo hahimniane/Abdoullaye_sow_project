@@ -63,9 +63,21 @@ const _maxStandingMonths = 36;
       bestId = _text(p['staffId'], 128);
     }
   }
-  return bestFrom == null
-      ? null
-      : (staffId: _personPayer(bestId), fromMonth: bestFrom);
+  if (bestFrom == null) return null;
+  // "Since" is where this person's unbroken run began: Sep then Oct, both
+  // Yao, reads "since Sep".
+  final starts = <({String from, String id})>[
+    for (final p in payers is List ? payers : const [])
+      if (p is Map &&
+          _month.hasMatch(_text(p['fromMonth'], 7)) &&
+          _text(p['fromMonth'], 7).compareTo(bestFrom) <= 0)
+        (from: _text(p['fromMonth'], 7), id: _text(p['staffId'], 128)),
+  ]..sort((a, b) => a.from.compareTo(b.from));
+  var since = bestFrom;
+  for (var i = starts.length - 1; i >= 0 && starts[i].id == bestId; i--) {
+    since = starts[i].from;
+  }
+  return (staffId: _personPayer(bestId), fromMonth: since);
 }
 
 /// Who pays a monthly line in [month]: a staff id, or '' for the business.

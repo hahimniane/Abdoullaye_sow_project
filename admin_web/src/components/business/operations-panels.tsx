@@ -9261,7 +9261,9 @@ export function LotLedgerPanel({ businessId, business, previewMode = false, focu
                 const missing = metered && monthEntries.length === 0 && !stoppedHere;
                 // Who pays a monthly line in this month: nothing is said
                 // when the business does.
-                const payerEntry = metered ? null : linePayerEntryFor(l, month);
+                // A purchase recorded this month says who paid it; the
+                // standing payer does not apply then.
+                const payerEntry = metered || monthEntries.length > 0 ? null : linePayerEntryFor(l, month);
                 const payerHere = payerEntry ? { name: staffName(payerEntry.staffId) || (currentLanguage() === "fr" ? "Un membre de l’équipe" : "A team member"), fromMonth: payerEntry.fromMonth } : null;
                 return (
                   <article className={`lot-expense-card${lineVoided ? " voided" : stoppedHere ? " stopped" : ""}`} key={String(l.id)}>

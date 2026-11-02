@@ -59,7 +59,16 @@ export function linePayerEntryFor(
     if (!best || from >= best.from) best = { from, id: text(p?.staffId, 128) };
   }
   const id = best ? personPayer(best.id) : "";
-  return best && id ? { fromMonth: best.from, staffId: id } : null;
+  if (!best || !id) return null;
+  // "Since" is where this person's unbroken run began: Sep then Oct, both
+  // Yao, reads "since Sep".
+  const starts = ((Array.isArray(line?.payers) ? line.payers : []) as Row[])
+    .map((p) => ({ from: text(p?.fromMonth, 7), id: text(p?.staffId, 128) }))
+    .filter((p) => MONTH.test(p.from) && p.from <= best!.from)
+    .sort((a, b) => a.from.localeCompare(b.from));
+  let since = best.from;
+  for (let i = starts.length - 1; i >= 0 && starts[i].id === best.id; i--) since = starts[i].from;
+  return { fromMonth: since, staffId: id };
 }
 
 const nextMonth = (month: string): string => {

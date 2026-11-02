@@ -212,4 +212,7 @@ test("a monthly line's Paid by: the card sentence, the History row and the Frenc
   const panels = readFileSync(new URL("../components/business/operations-panels.tsx", import.meta.url), "utf8");
   assert.match(panels, /<option value=\{BUSINESS_PAYER\}>The business<\/option>/);
   assert.match(panels, /action: "setPayer",\s*businessId,\s*lineId: editLineId,\s*staffId: linePayer\.staffId,\s*fromMonth: linePayer\.fromMonth,/);
+  // A month with a recorded purchase names who paid it; the card does not
+  // also claim the standing payer (Keren, Oct 2026 bathroom).
+  assert.match(panels, /const payerEntry = metered \|\| monthEntries\.length > 0 \? null : linePayerEntryFor\(l, month\);/);
 });
