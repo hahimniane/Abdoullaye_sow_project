@@ -7620,6 +7620,21 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Handed to them, waiting for their confirmation":
     "Remis à cette personne, en attente de sa confirmation",
   "Expenses they paid for the lot": "Dépenses payées par cette personne pour le parc",
+  "Used for their own parking": "Utilisé pour son parking",
+  "Bills paid": "Factures payées",
+  "Own parking": "Son parking",
+  "Handed over": "Remis",
+  "That month": "Ce mois",
+  "Running total": "Total cumulé",
+  "Owes": "Doit",
+  "collected": "encaissé le",
+  "monthly": "mensuel",
+  "Handed to": "Remis à",
+  "Received from": "Reçu de",
+  "Paid back to them": "Remboursé à cette personne",
+  "Nothing recorded this month.": "Rien d’enregistré ce mois-ci.",
+  "Money counts in the month its bill was for. A positive total is what they owe the business.":
+    "L’argent compte dans le mois de la facture concernée. Un total positif est ce que la personne doit à l’entreprise.",
   "Net is the money held plus the parking bill, minus what the business owes for expenses.":
     "Le net est l’argent détenu plus la facture de parking, moins ce que l’entreprise doit pour les dépenses.",
   "You are the one giving the money.": "C’est vous qui remettez l’argent.",

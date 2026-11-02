@@ -592,7 +592,7 @@ export type ParkingMonthActivity = {
   vinNumber: string;
   trackingCode: string;
   /** The team member whose own job this is, "" for a customer. */
-  forStaffId: string;
+  forStaffId?: string;
   /** How what was paid came in (method codes); empty when nothing was. */
   paidVia: string[];
 };

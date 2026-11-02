@@ -11,6 +11,7 @@
 import { photoPathPartsUnder, photoPathUnder } from "./package-proof.ts";
 import { dollarsToCents, staffCreditRefusalText } from "./staff-expense-console.ts";
 import { currentWebLanguage } from "./language.ts";
+import { monthLabel } from "./parking-month-statement.ts";
 
 type Row = Record<string, unknown>;
 
@@ -101,6 +102,41 @@ export type StaffBalanceRow = {
   expenseOwedToThemCents: number;
   /** held + parking owed - expenses owed to them: positive = owes the business. */
   netCents: number;
+  /** One row per month, oldest first (docs/STAFF_BALANCES_MONTHLY.md); absent in an older answer. */
+  months?: BalanceMonth[];
+};
+
+/** What a month's lines hold (docs/STAFF_BALANCES_MONTHLY.md section 2). */
+export type BalanceMonthLines = {
+  collected: {
+    source: string;
+    id: string;
+    label: string;
+    customerName: string;
+    vehicle: string;
+    code: string;
+    amountCents: number;
+    collectedAtMs: number;
+    method: string;
+  }[];
+  expenses: { id: string; label: string; amountCents: number; standing: boolean }[];
+  handovers: { id: string; direction: "out" | "in"; otherName: string; amountCents: number; atMs: number }[];
+  parking: { customerKey: string; label: string; amountCents: number }[];
+  paidBack: { id: string; amountCents: number; atMs: number }[];
+};
+
+/** One person's month: money counts in the month its bill was for. Signed cents: + owes the business, - the business owes them. */
+export type BalanceMonth = {
+  monthKey: string;
+  collectedCents: number;
+  handedOutCents: number;
+  receivedFromOthersCents: number;
+  ownParkingCents: number;
+  expensesPaidCents: number;
+  paidBackCents: number;
+  monthNetCents: number;
+  runningNetCents: number;
+  lines: BalanceMonthLines;
 };
 
 /** Which kinds of money count as the business's (docs/STAFF_BALANCES.md §7). */
@@ -183,6 +219,61 @@ export function handoverFrom(value: unknown): Handover {
   };
 }
 
+const listOf = (value: unknown): Row[] => (Array.isArray(value) ? value.map(rowOf) : []);
+
+/** One month of a person's answer, read defensively. */
+export function balanceMonthFrom(value: unknown): BalanceMonth {
+  const r = rowOf(value);
+  const lines = rowOf(r.lines);
+  return {
+    monthKey: text(r.monthKey, 7),
+    collectedCents: cents(r.collectedCents),
+    handedOutCents: cents(r.handedOutCents),
+    receivedFromOthersCents: cents(r.receivedFromOthersCents),
+    ownParkingCents: cents(r.ownParkingCents),
+    expensesPaidCents: cents(r.expensesPaidCents),
+    paidBackCents: cents(r.paidBackCents),
+    monthNetCents: cents(r.monthNetCents),
+    runningNetCents: cents(r.runningNetCents),
+    lines: {
+      collected: listOf(lines.collected).map((l) => ({
+        source: text(l.source, 40),
+        id: text(l.id, 200),
+        label: text(l.label, 200),
+        customerName: text(l.customerName, 200),
+        vehicle: text(l.vehicle, 200),
+        code: text(l.code, 80),
+        amountCents: cents(l.amountCents),
+        collectedAtMs: timeMs(l.collectedAtMs),
+        method: text(l.method, 40),
+      })),
+      expenses: listOf(lines.expenses).map((l) => ({
+        id: text(l.id, 200),
+        label: text(l.label, 200),
+        amountCents: cents(l.amountCents),
+        standing: l.standing === true,
+      })),
+      handovers: listOf(lines.handovers).map((l) => ({
+        id: text(l.id, 200),
+        direction: l.direction === "in" ? ("in" as const) : ("out" as const),
+        otherName: text(l.otherName, 200),
+        amountCents: cents(l.amountCents),
+        atMs: timeMs(l.atMs),
+      })),
+      parking: listOf(lines.parking).map((l) => ({
+        customerKey: text(l.customerKey, 200),
+        label: text(l.label, 200),
+        amountCents: cents(l.amountCents),
+      })),
+      paidBack: listOf(lines.paidBack).map((l) => ({
+        id: text(l.id, 200),
+        amountCents: cents(l.amountCents),
+        atMs: timeMs(l.atMs),
+      })),
+    },
+  };
+}
+
 function balanceRowFrom(value: unknown): StaffBalanceRow {
   const r = rowOf(value);
   const methods: Record<string, number> = {};
@@ -204,6 +295,10 @@ function balanceRowFrom(value: unknown): StaffBalanceRow {
     expenseCreditCents: cents(r.expenseCreditCents),
     expenseOwedToThemCents: cents(r.expenseOwedToThemCents),
     netCents: cents(r.netCents),
+    // An older answer has no months: the window then shows no table.
+    ...(Array.isArray(r.months)
+      ? { months: r.months.map(balanceMonthFrom).filter((m) => m.monthKey).sort((a, b) => a.monthKey.localeCompare(b.monthKey)) }
+      : {}),
   };
 }
 
@@ -561,4 +656,51 @@ export function businessOwesWithCash(
     owedNowCents: out.reduce((s, l) => s + l.owedNowCents, 0),
     holdsCents: out.reduce((s, l) => s + l.holdsCents, 0),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Month by month (docs/STAFF_BALANCES_MONTHLY.md): the person's Details window.
+// ---------------------------------------------------------------------------
+
+/** The running total in words: positive = they owe the business, negative = the business owes them. */
+export function runningPhrase(runningNetCents: number): { tone: NetTone; label: string; cents: number } {
+  const n = cents(runningNetCents);
+  if (n > 0) return { tone: "owes", label: "Owes", cents: n };
+  if (n < 0) return { tone: "owed", label: "Business owes", cents: -n };
+  return { tone: "even", label: "Settled up", cents: 0 };
+}
+
+/** What the person handed over in the month, net of what they received (out minus in). */
+export const monthHandedNetCents = (m: BalanceMonth) => m.handedOutCents - m.receivedFromOthersCents;
+
+/** "September 2026" (or "septembre 2026") for a "2026-09" key. */
+export const balanceMonthLabel = (monthKey: string, lang: string = currentWebLanguage()) =>
+  monthLabel(monthKey, lang === "fr" ? "fr" : "en");
+
+/** The table: whether the Handed over column shows (only when any month has one), and each month ready to print. */
+export function monthTableView(months: readonly BalanceMonth[] | undefined, lang: string = currentWebLanguage()) {
+  const list = months ?? [];
+  return {
+    showHandedOver: list.some((m) => monthHandedNetCents(m) !== 0),
+    rows: list.map((m) => ({
+      month: m,
+      label: balanceMonthLabel(m.monthKey, lang),
+      handedNetCents: monthHandedNetCents(m),
+      running: runningPhrase(m.runningNetCents),
+      lineCount:
+        m.lines.collected.length + m.lines.expenses.length + m.lines.handovers.length + m.lines.parking.length + m.lines.paidBack.length,
+    })),
+  };
+}
+
+/** The month key shown open at first: the latest one (all the others start collapsed); "" with no months. */
+export function defaultOpenMonthKey(months: readonly BalanceMonth[] | undefined): string {
+  const list = months ?? [];
+  return list.reduce((latest, m) => (m.monthKey > latest ? m.monthKey : latest), "");
+}
+
+/** What the person really paid for the lot: the months' total when there are months, else the part used plus the part still owed. */
+export function expensesPaidTotalCents(row: StaffBalanceRow): number {
+  if (row.months && row.months.length > 0) return row.months.reduce((sum, m) => sum + m.expensesPaidCents, 0);
+  return row.expenseCreditCents + row.expenseOwedToThemCents;
 }

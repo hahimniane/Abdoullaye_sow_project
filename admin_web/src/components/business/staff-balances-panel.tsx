@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { httpsCallable } from "firebase/functions";
-import { ArrowRight, Camera, Check, HandCoins, RefreshCw, Scale, Undo2, X } from "lucide-react";
+import { ArrowRight, Camera, Check, ChevronDown, ChevronRight, HandCoins, RefreshCw, Scale, Undo2, X } from "lucide-react";
 
 import { useStoragePhotoUrls } from "@/components/business/proof-ticks";
 import { useShowMore } from "@/components/show-more";
 import { useBusinessCollection } from "@/lib/business-data";
 import { functions } from "@/lib/firebase";
+import { currentWebLanguage } from "@/lib/language";
 import { formatDateTime } from "@/lib/format";
 import { overlayDismiss } from "@/lib/overlay-dismiss";
 import { uploadStaffHandoverProof } from "@/lib/package-photo";
@@ -23,6 +24,9 @@ import {
   canVoidHandover,
   collectedByMethodLines,
   confirmHandoverRequest,
+  defaultOpenMonthKey,
+  expensesPaidTotalCents,
+  monthTableView,
   declineHandoverRequest,
   emptyHandoverDraft,
   handoverFrom,
@@ -45,6 +49,7 @@ import {
   staffBalancesRequest,
   voidHandoverRequest,
   waitingOnViewerRows,
+  type BalanceMonth,
   type BalancesViewer,
   type Handover,
   type HandoverDraft,
@@ -551,6 +556,213 @@ function HandoverLine({ h, nameOf, proofUrl }: { h: Handover; nameOf: (id: strin
   );
 }
 
+/** A person's months, oldest first: what each month added up to, each opening to its lines. The latest month starts open. */
+function MonthByMonth({ months }: { months: BalanceMonth[] }) {
+  const lang = currentWebLanguage();
+  const view = useMemo(() => monthTableView(months, lang), [months, lang]);
+  const [open, setOpen] = useState<Set<string>>(() => new Set([defaultOpenMonthKey(months)]));
+  const toggle = (key: string) =>
+    setOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  const columns = view.showHandedOver ? 7 : 6;
+  return (
+    <section className="sb-months">
+      <div className="lst-form-section">Month by month</div>
+      <div className="sb-months-scroll">
+        <table className="sb-months-table">
+          <thead>
+            <tr>
+              <th scope="col">Month</th>
+              <th scope="col">Collected</th>
+              <th scope="col">Bills paid</th>
+              <th scope="col">Own parking</th>
+              {view.showHandedOver && <th scope="col">Handed over</th>}
+              <th scope="col">That month</th>
+              <th scope="col">Running total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {view.rows.map(({ month: m, label, handedNetCents, running }) => {
+              const isOpen = open.has(m.monthKey);
+              const panelId = `sb-month-${m.monthKey}`;
+              return (
+                <MonthRows
+                  columns={columns}
+                  handedNetCents={handedNetCents}
+                  isOpen={isOpen}
+                  key={m.monthKey}
+                  label={label}
+                  m={m}
+                  onToggle={() => toggle(m.monthKey)}
+                  panelId={panelId}
+                  running={running}
+                  showHandedOver={view.showHandedOver}
+                />
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="lst-hint">Money counts in the month its bill was for. A positive total is what they owe the business.</p>
+    </section>
+  );
+}
+
+function MonthRows({
+  m,
+  label,
+  isOpen,
+  panelId,
+  onToggle,
+  columns,
+  showHandedOver,
+  handedNetCents,
+  running,
+}: {
+  m: BalanceMonth;
+  label: string;
+  isOpen: boolean;
+  panelId: string;
+  onToggle: () => void;
+  columns: number;
+  showHandedOver: boolean;
+  handedNetCents: number;
+  running: { tone: string; label: string; cents: number };
+}) {
+  const { lines } = m;
+  return (
+    <>
+      <tr className={isOpen ? "sb-month-open" : undefined}>
+        <th scope="row">
+          <button aria-controls={panelId} aria-expanded={isOpen} className="sb-month-toggle" onClick={onToggle} type="button">
+            {isOpen ? <ChevronDown aria-hidden="true" size={14} /> : <ChevronRight aria-hidden="true" size={14} />}
+            <span data-no-translate>{label}</span>
+          </button>
+        </th>
+        <td data-no-translate>{moneyText(m.collectedCents)}</td>
+        <td data-no-translate>{moneyText(m.expensesPaidCents)}</td>
+        <td data-no-translate>{moneyText(m.ownParkingCents)}</td>
+        {showHandedOver && <td data-no-translate>{handedNetCents === 0 ? "—" : moneyText(handedNetCents)}</td>}
+        <td data-no-translate>{moneyText(m.monthNetCents)}</td>
+        <td className={`sb-running ${running.tone}`}>
+          <span>{running.label}</span>
+          {running.cents > 0 && <> <b data-no-translate>{moneyText(running.cents)}</b></>}
+        </td>
+      </tr>
+      {isOpen && (
+        <tr className="sb-month-lines" id={panelId}>
+          <td colSpan={columns}>
+            <MonthLines lines={lines} />
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+function MonthLines({ lines }: { lines: BalanceMonth["lines"] }) {
+  const empty =
+    lines.collected.length + lines.expenses.length + lines.handovers.length + lines.parking.length + lines.paidBack.length === 0;
+  return (
+    <div className="sb-month-groups">
+      {empty && <p className="lst-hint">Nothing recorded this month.</p>}
+      {lines.collected.length > 0 && (
+        <div className="sb-month-group">
+          <h4>Collected</h4>
+          <ul>
+            {lines.collected.map((l, i) => (
+              <li key={`${l.source}-${l.id}-${i}`}>
+                <span className="sb-line-main">
+                  <span data-no-translate>{[l.label, l.customerName, l.vehicle, l.code].filter(Boolean).join(" · ") || "—"}</span>
+                  <b className="sb-amount" data-no-translate>{moneyText(l.amountCents)}</b>
+                </span>
+                {(l.collectedAtMs !== 0 || l.method !== "") && (
+                  <small>
+                    {l.collectedAtMs > 0 && (
+                      <>
+                        <span>collected</span> <span data-no-translate>{formatDateTime(l.collectedAtMs)}</span>
+                      </>
+                    )}
+                    {l.collectedAtMs > 0 && l.method ? " · " : null}
+                    {l.method ? <span>{handoverMethodLabel(l.method)}</span> : null}
+                  </small>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {lines.expenses.length > 0 && (
+        <div className="sb-month-group">
+          <h4>Bills paid</h4>
+          <ul>
+            {lines.expenses.map((l, i) => (
+              <li key={`${l.id}-${i}`}>
+                <span className="sb-line-main">
+                  <span data-no-translate>{l.label || "—"}</span>
+                  {l.standing && <small className="sb-tag">monthly</small>}
+                  <b className="sb-amount" data-no-translate>{moneyText(l.amountCents)}</b>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {lines.parking.length > 0 && (
+        <div className="sb-month-group">
+          <h4>Own parking</h4>
+          <ul>
+            {lines.parking.map((l, i) => (
+              <li key={`${l.customerKey}-${i}`}>
+                <span className="sb-line-main">
+                  <span data-no-translate>{l.label || "—"}</span>
+                  <b className="sb-amount" data-no-translate>{moneyText(l.amountCents)}</b>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {lines.handovers.length > 0 && (
+        <div className="sb-month-group">
+          <h4>Handed over</h4>
+          <ul>
+            {lines.handovers.map((l, i) => (
+              <li key={`${l.id}-${i}`}>
+                <span className="sb-line-main">
+                  <span>{l.direction === "in" ? "Received from" : "Handed to"}</span>
+                  <strong data-no-translate>{l.otherName || "—"}</strong>
+                  <b className="sb-amount" data-no-translate>{moneyText(l.amountCents)}</b>
+                </span>
+                {l.atMs > 0 && <small data-no-translate>{formatDateTime(l.atMs)}</small>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {lines.paidBack.length > 0 && (
+        <div className="sb-month-group">
+          <h4>Paid back to them</h4>
+          <ul>
+            {lines.paidBack.map((l, i) => (
+              <li key={`${l.id}-${i}`}>
+                <span className="sb-line-main">
+                  <b className="sb-amount" data-no-translate>{moneyText(l.amountCents)}</b>
+                </span>
+                {l.atMs > 0 && <small data-no-translate>{formatDateTime(l.atMs)}</small>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** A person's breakdown: how their numbers add up. */
 function BalanceDrawer({ row, onClose }: { row: StaffBalanceRow; onClose: () => void }) {
   const methods = collectedByMethodLines(row);
@@ -562,6 +774,7 @@ function BalanceDrawer({ row, onClose }: { row: StaffBalanceRow; onClose: () => 
           <button aria-label="Close" className="lst-icon-btn" onClick={onClose} type="button"><X size={18} /></button>
         </header>
         <div className="lst-modal-body">
+          {row.months && row.months.length > 0 && <MonthByMonth months={row.months} />}
           <dl className="sb-breakdown">
             {breakdownLines(row).map((line) => (
               <div className={line.key === "net" ? "sb-total" : undefined} key={line.key}>
@@ -587,7 +800,8 @@ function BalanceDrawer({ row, onClose }: { row: StaffBalanceRow; onClose: () => 
           </dl>
           <div className="lst-form-section">Expenses</div>
           <dl className="sb-breakdown">
-            <div><dt>Expenses they paid for the lot</dt><dd data-no-translate>{moneyText(row.expenseCreditCents)}</dd></div>
+            <div><dt>Expenses they paid for the lot</dt><dd data-no-translate>{moneyText(expensesPaidTotalCents(row))}</dd></div>
+            <div><dt>Used for their own parking</dt><dd data-no-translate>{moneyText(row.expenseCreditCents)}</dd></div>
           </dl>
           <p className="lst-hint">Net is the money held plus the parking bill, minus what the business owes for expenses.</p>
         </div>

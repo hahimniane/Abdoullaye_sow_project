@@ -17050,6 +17050,27 @@ button.pkq-card:hover { border-color: var(--brand); }
 .sb-breakdown dt { color: var(--ink); }
 .sb-breakdown dd { font-variant-numeric: tabular-nums; font-weight: 700; margin: 0; }
 .sb-breakdown .sb-total { border-bottom: 0; border-top: 1px solid var(--rule); font-size: 15px; }
+.sb-months { margin-bottom: 14px; }
+.sb-months-scroll { max-width: 100%; overflow-x: auto; }
+.sb-months-table { border-collapse: collapse; font-size: 13px; min-width: 560px; width: 100%; }
+.sb-months-table th, .sb-months-table td { border-bottom: 1px dashed var(--rule); font-variant-numeric: tabular-nums; padding: 7px 8px; text-align: right; white-space: nowrap; }
+.sb-months-table thead th { color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
+.sb-months-table th:first-child, .sb-months-table td:first-child { text-align: left; }
+.sb-months-table tbody th { font-weight: 700; }
+.sb-month-toggle { align-items: center; background: none; border: 0; color: var(--ink); cursor: pointer; display: inline-flex; font: inherit; font-weight: 700; gap: 4px; padding: 2px 0; }
+.sb-month-toggle:focus-visible { outline: 2px solid var(--brand-strong, #0f766e); outline-offset: 2px; }
+.sb-running.owes b, .sb-running.owes span { color: #b91c1c; }
+.sb-running.owed b, .sb-running.owed span { color: #15803d; }
+.sb-running.even span { color: var(--muted); }
+.sb-month-lines > td { background: var(--paper-soft, rgba(13, 148, 136, 0.05)); padding: 8px 10px 12px; text-align: left; white-space: normal; }
+.sb-month-groups { display: grid; gap: 10px; }
+.sb-month-group h4 { color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: 0.04em; margin: 0 0 4px; text-transform: uppercase; }
+.sb-month-group ul { list-style: none; margin: 0; padding: 0; }
+.sb-month-group li { border-bottom: 1px dashed var(--rule); display: flex; flex-direction: column; gap: 2px; padding: 5px 0; }
+.sb-month-group li:last-child { border-bottom: 0; }
+.sb-month-group .sb-line-main { justify-content: space-between; overflow-wrap: anywhere; }
+.sb-month-group small { color: var(--muted); font-size: 12px; }
+.sb-month-group .sb-tag { background: var(--paper, #fff); border: 1px solid var(--rule); border-radius: 999px; padding: 0 7px; }
 .sb-photo { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
 .nav-badge { margin-left: auto; background: #d97706; border-radius: 999px; color: #fff; flex: none; font-size: 11px; font-weight: 800; line-height: 1; min-width: 20px; padding: 4px 7px; text-align: center; }
 @media (max-width: 860px) {
