@@ -19,6 +19,7 @@ import '../services/firestore_query_spec.dart';
 import '../services/known_car_lookup.dart';
 import '../services/lot_ledger.dart';
 import '../services/lot_vin_duplicates.dart';
+import '../services/staff_expense_credit.dart' show businessPayer;
 import '../services/vin_decoder_service.dart';
 import '../utils/action_confirmation.dart';
 import '../utils/date_display.dart';
@@ -4147,6 +4148,23 @@ class _ExpensesPanel extends StatelessWidget {
   final List<LotStaff> staff;
   final int proofThresholdCents;
 
+  /// "Paid by Yao since October 2026" for a monthly line's payer in the
+  /// month on screen; '' when the business pays (docs/EXPENSE_PAID_BY.md §5).
+  String _paidByLabel(
+    BuildContext context,
+    AppLocalizations l10n,
+    LotExpenseLine line,
+  ) {
+    final payer = line.personPayerIn(month);
+    if (payer == null) return '';
+    final name = staff.where((s) => s.id == payer.staffId).firstOrNull?.name;
+    if (name == null || name.isEmpty) return '';
+    return l10n.lotLinePaidBySince(
+      name,
+      displayMonthYear(lotMonthStart(payer.fromMonth), dateLocaleOf(context)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -4195,6 +4213,7 @@ class _ExpensesPanel extends StatelessWidget {
                   month: month,
                   monthLabel: monthLabel,
                   math: math,
+                  paidByLabel: _paidByLabel(context, l10n, line),
                   onStop: line.hasEndMonth
                       ? null
                       : () => showLotSheet(
@@ -4367,7 +4386,12 @@ class ExpenseLineCard extends StatelessWidget {
     this.voidedByName = '',
     this.onStop,
     this.onResume,
+    this.paidByLabel = '',
   });
+
+  /// "Paid by Yao since October 2026": who pays this monthly line in the
+  /// month on screen. '' when the business pays or the line is metered.
+  final String paidByLabel;
 
   /// "Stop after this month" (the month on screen). Null when the line
   /// already has a stop month, or is voided.
@@ -4468,6 +4492,20 @@ class ExpenseLineCard extends StatelessWidget {
                       color: AppColors.muted,
                     ),
                   ),
+                  if (paidByLabel.isNotEmpty && !voided) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      paidByLabel,
+                      key: ValueKey<String>('line-paid-by-${line.id}'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.muted,
+                      ),
+                    ),
+                  ],
                   if (voided) ...[
                     const SizedBox(height: 4),
                     VoidedNote(
@@ -5003,7 +5041,9 @@ class _PurchasesSheetState extends State<_PurchasesSheet> {
           const SizedBox(height: AppSpacing.md),
           LotPickerField(
             label: l10n.lotPaidBy,
-            value: widget.staff.where((s) => s.id == _paidBy).firstOrNull?.name,
+            value: _paidBy == businessPayer
+                ? l10n.lotPaidByBusiness
+                : widget.staff.where((s) => s.id == _paidBy).firstOrNull?.name,
             placeholder: l10n.lotPaidBy,
             error: errorFor('expense_paid_by_required'),
             onTap: () async {
@@ -5012,6 +5052,8 @@ class _PurchasesSheetState extends State<_PurchasesSheet> {
                 title: l10n.lotPaidBy,
                 selected: _paidBy,
                 options: [
+                  // The business paying itself: nobody is owed (EXPENSE_PAID_BY.md).
+                  LotOption(businessPayer, l10n.lotPaidByBusiness),
                   for (final s in widget.staff) LotOption(s.id, s.name),
                 ],
               );

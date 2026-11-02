@@ -374,6 +374,7 @@ const {
   lotLineLiveIn,
   lotLineVoidPlan,
   lotLineEndMonthPlan,
+  lotLinePayerPlan,
   normalizeReceivedVia: lotNormalizeReceivedVia,
   lotVinKey,
   lotJobKey,
@@ -615,7 +616,8 @@ const {
   paymentCents: parkingPaymentCents,
 } = require("./parking_month_statement");
 const {lotCustomerKey, mergeLotCustomer} = require("./lot_customers");
-const {staffCredits} = require("./staff_expense_credit");
+const {staffCredits, withStandingPayers, BUSINESS_PAYER} =
+  require("./staff_expense_credit");
 const staffExpenseLedger = require("./staff_expense_ledger");
 const staffBalances = require("./staff_balances");
 const {
@@ -9417,14 +9419,20 @@ async function parkingMonthEndData(db, businessDoc, monthKey, now,
   let nettingFailed = false;
   if (Object.keys(links).length > 0) {
     try {
-      const [entries, repayments] = await Promise.all([
+      const [entries, repayments, lines] = await Promise.all([
         db.collection("lotExpenseEntries")
             .where("businessId", "==", businessId).get(),
         db.collection("staffExpenseRepayments")
             .where("businessId", "==", businessId).get(),
+        db.collection("lotExpenseLines")
+            .where("businessId", "==", businessId).get(),
       ]);
-      netting = {entries: rows(entries), repayments: rows(repayments), links,
-        monthKey};
+      // Monthly lines a person pays count as their expenses
+      // (EXPENSE_PAID_BY.md).
+      const nowMonth = zelleCheck.dateKeyIn(now.getTime(), "America/New_York")
+          .slice(0, 7);
+      netting = {entries: withStandingPayers(rows(entries), rows(lines),
+          nowMonth), repayments: rows(repayments), links, monthKey};
     } catch (error) {
       if (strict) throw error;
       nettingFailed = true;
@@ -19417,6 +19425,54 @@ async function setLotExpenseLineEndMonth({db, uid, businessId, lineId,
   return {success: true, lineId, endMonth: plan.endMonth};
 }
 
+/**
+ * upsertLotExpenseLine `action: "setPayer"` (EXPENSE_PAID_BY.md §4): who
+ * pays a monthly line from a month on - a team member (their expense, so it
+ * comes off what they owe) or the business. Earlier months keep their payer.
+ *
+ * @param {object} args {db, uid, businessId, lineId, staffId, fromMonth}.
+ * @return {Promise<object>} {success, lineId, payers}.
+ */
+async function setLotExpenseLinePayer({db, uid, businessId, lineId, staffId,
+  fromMonth}) {
+  const ref = db.collection("lotExpenseLines").doc(lineId || "-");
+  const snap = lineId ? await ref.get() : null;
+  const line = snap?.exists && snap.data()?.businessId === businessId ?
+    snap.data() : null;
+  const payer = String(staffId || "").trim();
+  const [userDoc, businessDoc] = await Promise.all([
+    payer && payer !== BUSINESS_PAYER && !payer.includes("/") ?
+      db.collection("users").doc(payer).get() : null,
+    db.collection("businesses").doc(businessId).get(),
+  ]);
+  const user = userDoc?.exists ? userDoc.data() : null;
+  const isMember = staffExpenseLedger.isBusinessMember(user, businessId) ||
+    (Boolean(payer) && businessDoc.data()?.ownerUid === payer);
+  const createdMs = line?.createdAt?.toMillis?.() || 0;
+  const firstMonth = createdMs ?
+    zelleCheck.dateKeyIn(createdMs, "America/New_York").slice(0, 7) : "";
+  const plan = lotLinePayerPlan({line, staffId: payer, fromMonth, firstMonth,
+    isMember, names: user ? {[payer]: staffDisplayName(user)} : {}, uid,
+    nowMs: Date.now()});
+  if (!plan.ok) throw lotLineRefusal(plan.reason);
+  if (!plan.changed) return {success: true, lineId, payers: line.payers || []};
+  await ref.set({
+    payers: plan.payers,
+    editedByStaffId: uid,
+    updatedAt: FirestoreFieldValue.serverTimestamp(),
+  }, {merge: true});
+  await writeLotLedgerAudit({
+    businessId,
+    entityType: "expense_line",
+    entityId: lineId,
+    action: "edited",
+    byStaffId: uid,
+    summary: plan.summary,
+    changes: [{field: "Paid by", from: "", to: plan.summary}],
+  });
+  return {success: true, lineId, payers: plan.payers};
+}
+
 exports.upsertLotExpenseLine = onCall(
     {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
     async (request) => {
@@ -19424,6 +19480,11 @@ exports.upsertLotExpenseLine = onCall(
       const data = request.data || {};
       const businessId = String(data.businessId || "").trim();
       await requireBusinessPermission(uid, businessId, "ledger");
+      if (String(data.action || "") === "setPayer") {
+        return setLotExpenseLinePayer({db: admin.firestore(), uid,
+          businessId, lineId: String(data.lineId || "").trim(),
+          staffId: data.staffId, fromMonth: data.fromMonth});
+      }
       if (String(data.action || "") === "setEndMonth") {
         return setLotExpenseLineEndMonth({db: admin.firestore(), uid,
           businessId, lineId: String(data.lineId || "").trim(),
@@ -19654,14 +19715,17 @@ async function recordStaffRepayment(uid, data) {
   // In one transaction with the reads, so two Paid back taps cannot both
   // pass the cap.
   const creditCents = await db.runTransaction(async (transaction) => {
-    const [entries, repayments] = await Promise.all([
+    const [entries, repayments, lines] = await Promise.all([
       transaction.get(db.collection("lotExpenseEntries")
           .where("businessId", "==", businessId)),
       transaction.get(db.collection("staffExpenseRepayments")
           .where("businessId", "==", businessId)),
+      transaction.get(db.collection("lotExpenseLines")
+          .where("businessId", "==", businessId)),
     ]);
     const credits = staffCredits(
-        entries.docs.map((d) => d.data()),
+        withStandingPayers(entries.docs.map((d) => d.data()),
+            lines.docs.map((d) => ({id: d.id, ...d.data()})), currentMonth),
         repayments.docs.map((d) => d.data()),
         currentMonth);
     const credit = credits[staffId]?.creditCents || 0;
@@ -20031,7 +20095,7 @@ async function staffBalancesAnswer(uid, data) {
       businessId).get().then(snapshotRows);
   const [parkedCars, lotActivities, lotActivityPayments,
     containerLinePayments, inventorySales, inventoryCreditPayments,
-    invoicePayments, handoverRows, team, entries, repayments] =
+    invoicePayments, handoverRows, team, entries, repayments, expenseLines] =
     await Promise.all([
       byBusiness("parkedCars"), byBusiness("lotActivities"),
       byBusiness("lotActivityPayments"),
@@ -20040,6 +20104,7 @@ async function staffBalancesAnswer(uid, data) {
       byBusiness("staffHandovers"), byBusiness("users"),
       byBusiness("lotExpenseEntries"),
       byBusiness("staffExpenseRepayments"),
+      byBusiness("lotExpenseLines"),
     ]);
   const now = new Date();
   const staffNames = {};
@@ -20070,8 +20135,11 @@ async function staffBalancesAnswer(uid, data) {
     counted: business.staffBalanceSources,
     handovers: handoverRows.map((row) => ({...row,
       createdAtMs: row.createdAt?.toMillis?.() || 0})),
-    netting: {monthKey, customers: summary.customers, entries, repayments,
-      links: business.staffParkingLinks || {}},
+    // Monthly lines a person pays count as their expenses
+    // (EXPENSE_PAID_BY.md).
+    netting: {monthKey, customers: summary.customers,
+      entries: withStandingPayers(entries, expenseLines, monthKey),
+      repayments, links: business.staffParkingLinks || {}},
   };
   const answer = staffBalances.staffBalances(input);
   // Someone who holds money but is no longer on the team (or never was): a

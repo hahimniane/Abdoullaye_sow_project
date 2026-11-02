@@ -189,3 +189,24 @@ test("staff with credit and no link are owed it all; the bills are untouched", (
   assert.equal(s.customers[0].dueCents, 494200);
   assert.deepEqual(s.businessOwes, [{ staffId: "abd", staffName: "Abdoulaye Sow", customerKey: "", owedCents: 44831 }]);
 });
+
+test("a monthly line's standing payer is an expense on the bill (\"Rent\"), the business's is nobody's", () => {
+  const rent = { id: "rent", label: "Rent", kind: "fixed", recurringCents: 100000, payers: [{ fromMonth: "2026-10", staffId: "abd" }] };
+  const s = parkingMonthSummary(cars, "2026-10", NOV1, [], { ...credit, lines: [rent] });
+  const sow = s.customers[0];
+  // $448.31 of purchases + October's rent $1,000.00.
+  assert.equal(sow.expenseCreditCents, 44831 + 100000);
+  assert.deepEqual(sow.expenseLines.map((l) => [l.id, l.label, l.amountCents, l.date]), [
+    ["standing:rent:2026-10", "Rent", 100000, "2026-10-01"],
+    ["e2", "Light bulbs", 24831, "2026-10-12"],
+  ]);
+  assert.equal(sow.dueCents, 494200 - 144831);
+  // September's rent logged by hand replaces the standing one for that month.
+  const logged = { ...credit, lines: [{ ...rent, payers: [{ fromMonth: "2026-09", staffId: "abd" }] }] };
+  logged.entries = [...logged.entries, { id: "r10", lineId: "rent", paidByStaffId: "abd", amountCents: 90000, month: "2026-10", spentAt: at("2026-10-03") }];
+  const byHand = parkingMonthSummary(cars, "2026-10", NOV1, [], logged).customers[0];
+  assert.equal(byHand.expenseLines.filter((l) => l.lineLabel === "Rent").length, 1);
+  // The business paying: nobody's credit.
+  const biz = parkingMonthSummary(cars, "2026-10", NOV1, [], { ...credit, lines: [{ ...rent, payers: [{ fromMonth: "2026-10", staffId: "business_account" }] }] });
+  assert.equal(biz.customers[0].expenseCreditCents, 44831);
+});

@@ -7458,6 +7458,19 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Pick a valid month.": "Choisissez un mois valide.",
   "This line has purchases after that month.":
     "Cette ligne a des achats après ce mois.",
+  // "Paid by" on a lot expense: the business, or a person from a month on
+  // (EXPENSE_PAID_BY.md). The card's "Paid by Yao since Oct 2026" is built in
+  // the page's language (lot-ledger.ts).
+  "The business": "L’entreprise",
+  "Starting": "À partir de",
+  "Each month from then on counts as paid by this person (it comes off what they owe). Months before keep who paid them.":
+    "À partir de ce mois, chaque mois compte comme payé par cette personne (cela vient en déduction de ce qu’elle doit). Les mois précédents gardent la personne qui les a payés.",
+  "Only a monthly line has someone who pays it each month.":
+    "Seule une ligne mensuelle a quelqu’un qui la paie chaque mois.",
+  "Pick someone on the team, or the business.":
+    "Choisissez quelqu’un de l’équipe, ou l’entreprise.",
+  "Pick a month from when this line started.":
+    "Choisissez un mois à partir du début de cette ligne.",
 });
 Object.assign(ATTRIBUTE_TRANSLATIONS, {
   "Void this car": "Invalider cette voiture",

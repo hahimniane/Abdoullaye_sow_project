@@ -23,6 +23,119 @@ const cents = (value) => {
 };
 const text = (value, max = 200) => String(value ?? "").trim().slice(0, max);
 
+/** "Paid by: the business" (EXPENSE_PAID_BY.md): nobody's credit. */
+const BUSINESS_PAYER = "business_account";
+
+/**
+ * A person who paid, or "" for the business / nobody.
+ *
+ * @param {*} id A paidByStaffId.
+ * @return {string} The staff id, or "".
+ */
+const personPayer = (id) => {
+  const v = text(id, 128);
+  return v && v !== BUSINESS_PAYER ? v : "";
+};
+
+/** At most this many months of a standing payer (3 years). */
+const MAX_STANDING_MONTHS = 36;
+
+/**
+ * Who pays a monthly line in `month` (EXPENSE_PAID_BY.md §2): the payer
+ * with the greatest `fromMonth <= month`.
+ *
+ * @param {object} line lotExpenseLines row `{payers}`.
+ * @param {string} month "yyyy-mm".
+ * @return {string} A staff id, or "" for the business.
+ */
+function linePayerFor(line, month) {
+  let best = null;
+  for (const p of Array.isArray(line?.payers) ? line.payers : []) {
+    const from = text(p?.fromMonth, 7);
+    if (!MONTH.test(from) || from > month) continue;
+    if (!best || from >= best.from) best = {from, id: text(p?.staffId, 128)};
+  }
+  return best ? personPayer(best.id) : "";
+}
+
+/**
+ * The month after "yyyy-mm".
+ *
+ * @param {string} month "yyyy-mm".
+ * @return {string} The next "yyyy-mm".
+ */
+function nextMonth(month) {
+  const [y, m] = month.split("-").map(Number);
+  return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
+}
+
+/**
+ * The months a monthly line's standing payer pays (EXPENSE_PAID_BY.md §3),
+ * as virtual expense entries, so the netting reads them like purchases.
+ *
+ * @param {object[]} lines lotExpenseLines rows `{id, kind, recurringCents,
+ *   payers, endMonth, voided, active}`.
+ * @param {object[]} entries lotExpenseEntries rows `{lineId, month,
+ *   voided}`: a real purchase on the line for a month wins.
+ * @param {string} nowMonth The current "yyyy-mm".
+ * @return {object[]} `{id, lineId, month, amountCents, paidByStaffId, note,
+ *   spentAtMs, standing}`, by line then month.
+ */
+function standingPayerEntries(lines, entries, nowMonth) {
+  const out = [];
+  if (!MONTH.test(String(nowMonth || ""))) return out;
+  const logged = new Set();
+  for (const e of entries || []) {
+    if (!e || e.voided === true) continue;
+    logged.add(`${text(e.lineId, 128)}|${text(e.month, 7)}`);
+  }
+  for (const line of lines || []) {
+    const lineId = text(line?.id, 128);
+    if (!lineId || line.kind !== "fixed" || line.voided === true ||
+      line.active === false) continue;
+    const amount = cents(line.recurringCents);
+    if (amount <= 0) continue;
+    const froms = (Array.isArray(line.payers) ? line.payers : [])
+        .map((p) => text(p?.fromMonth, 7)).filter((m) => MONTH.test(m)).sort();
+    if (froms.length === 0) continue;
+    const end = text(line.endMonth, 7);
+    let month = froms[0];
+    for (let n = 0; n < MAX_STANDING_MONTHS && month <= nowMonth; n++) {
+      if (MONTH.test(end) && month > end) break;
+      const payer = linePayerFor(line, month);
+      if (payer && !logged.has(`${lineId}|${month}`)) {
+        const [y, m] = month.split("-").map(Number);
+        out.push({
+          id: `standing:${lineId}:${month}`,
+          lineId,
+          month,
+          amountCents: amount,
+          paidByStaffId: payer,
+          note: "",
+          spentAtMs: Date.UTC(y, m - 1, 1, 12),
+          standing: true,
+        });
+      }
+      month = nextMonth(month);
+    }
+  }
+  return out;
+}
+
+/**
+ * The entries every netting reads: the real ones plus the monthly lines'
+ * standing payers (EXPENSE_PAID_BY.md §3).
+ *
+ * @param {object[]} entries lotExpenseEntries rows.
+ * @param {object[]} lines lotExpenseLines rows.
+ * @param {string} nowMonth The current "yyyy-mm".
+ * @return {object[]} entries followed by standingPayerEntries.
+ */
+function withStandingPayers(entries, lines, nowMonth) {
+  return [...(entries || []),
+    ...standingPayerEntries(lines, entries, nowMonth)];
+}
+
 /**
  * Each staff member's expenses, paid-back amounts and credit up to the end
  * of `monthKey`.
@@ -42,7 +155,7 @@ function staffCredits(entries, repayments, monthKey) {
     return out[id];
   };
   for (const e of entries || []) {
-    const id = text(e?.paidByStaffId, 128);
+    const id = personPayer(e?.paidByStaffId);
     const month = text(e?.month, 7);
     if (!id || e?.voided === true || !MONTH.test(month) || month > monthKey) {
       continue;
@@ -236,7 +349,7 @@ function expenseLabel(lineLabel, note) {
  *   label, spentAtMs}`, oldest first.
  */
 function monthExpenseLines(entries, monthKey, staffIds, lineLabels) {
-  const wanted = new Set(staffIds || []);
+  const wanted = new Set((staffIds || []).filter((id) => personPayer(id)));
   const names = lineLabels || {};
   return (entries || [])
       .filter((e) => e && e.voided !== true && wanted.has(e.paidByStaffId) &&
@@ -300,7 +413,11 @@ function itemsAfterCredit(items, creditCents) {
 }
 
 module.exports = {
+  BUSINESS_PAYER,
   earlierExpenseCents,
+  linePayerFor,
+  standingPayerEntries,
+  withStandingPayers,
   expenseLabel,
   expenseLineLabels,
   itemsAfterCredit,

@@ -30,6 +30,133 @@ String _text(Object? value, [int max = 200]) {
   return t.length > max ? t.substring(0, max) : t;
 }
 
+/// "Paid by: the business" (docs/EXPENSE_PAID_BY.md): nobody's credit. The
+/// same value as `businessAccountReceiver`.
+const businessPayer = 'business_account';
+
+/// A person who paid, or '' for the business / nobody.
+String _personPayer(Object? id) {
+  final v = _text(id, 128);
+  return v.isNotEmpty && v != businessPayer ? v : '';
+}
+
+/// At most this many months of a standing payer (3 years).
+const _maxStandingMonths = 36;
+
+/// Who pays a monthly line in [month] (docs/EXPENSE_PAID_BY.md §2), and
+/// since which month: the payer with the greatest `fromMonth <= month`.
+/// [line] is a `lotExpenseLines` row `{payers}`. Null when no payer entry
+/// applies; `staffId` is '' when that entry is the business.
+({String staffId, String fromMonth})? linePayerSince(
+  Map<String, dynamic>? line,
+  String month,
+) {
+  String? bestFrom;
+  var bestId = '';
+  final payers = line?['payers'];
+  for (final p in payers is List ? payers : const []) {
+    if (p is! Map) continue;
+    final from = _text(p['fromMonth'], 7);
+    if (!_month.hasMatch(from) || from.compareTo(month) > 0) continue;
+    if (bestFrom == null || from.compareTo(bestFrom) >= 0) {
+      bestFrom = from;
+      bestId = _text(p['staffId'], 128);
+    }
+  }
+  return bestFrom == null
+      ? null
+      : (staffId: _personPayer(bestId), fromMonth: bestFrom);
+}
+
+/// Who pays a monthly line in [month]: a staff id, or '' for the business.
+String linePayerFor(Map<String, dynamic>? line, String month) =>
+    linePayerSince(line, month)?.staffId ?? '';
+
+String _nextMonth(String month) {
+  final y = int.parse(month.substring(0, 4));
+  final m = int.parse(month.substring(5, 7));
+  return m == 12
+      ? '${y + 1}-01'
+      : '$y-${m + 1 < 10 ? '0' : ''}${m + 1}';
+}
+
+/// The months a monthly line's standing payer pays
+/// (docs/EXPENSE_PAID_BY.md §3), as virtual expense entries so the netting
+/// reads them like purchases. [lines] are `lotExpenseLines` rows `{id, kind,
+/// recurringCents, payers, endMonth, voided, active}`; [entries] are
+/// `lotExpenseEntries` rows `{lineId, month, voided}` - a real purchase on
+/// the line for a month wins. Each is `{id, lineId, month, amountCents,
+/// paidByStaffId, note, spentAtMs, standing}`, by line then month.
+List<Map<String, dynamic>> standingPayerEntries(
+  Iterable<Map<String, dynamic>>? lines,
+  Iterable<Map<String, dynamic>>? entries,
+  String nowMonth,
+) {
+  final out = <Map<String, dynamic>>[];
+  if (!_month.hasMatch(nowMonth)) return out;
+  final logged = <String>{};
+  for (final e in entries ?? const <Map<String, dynamic>>[]) {
+    if (e['voided'] == true) continue;
+    logged.add('${_text(e['lineId'], 128)}|${_text(e['month'], 7)}');
+  }
+  for (final line in lines ?? const <Map<String, dynamic>>[]) {
+    final lineId = _text(line['id'], 128);
+    if (lineId.isEmpty ||
+        line['kind'] != 'fixed' ||
+        line['voided'] == true ||
+        line['active'] == false) {
+      continue;
+    }
+    final amount = _cents(line['recurringCents']);
+    if (amount <= 0) continue;
+    final payers = line['payers'];
+    final froms = [
+      for (final p in payers is List ? payers : const [])
+        if (p is Map && _month.hasMatch(_text(p['fromMonth'], 7)))
+          _text(p['fromMonth'], 7),
+    ]..sort();
+    if (froms.isEmpty) continue;
+    final end = _text(line['endMonth'], 7);
+    var month = froms.first;
+    for (var n = 0;
+        n < _maxStandingMonths && month.compareTo(nowMonth) <= 0;
+        n++) {
+      if (_month.hasMatch(end) && month.compareTo(end) > 0) break;
+      final payer = linePayerFor(line, month);
+      if (payer.isNotEmpty && !logged.contains('$lineId|$month')) {
+        out.add({
+          'id': 'standing:$lineId:$month',
+          'lineId': lineId,
+          'month': month,
+          'amountCents': amount,
+          'paidByStaffId': payer,
+          'note': '',
+          'spentAtMs': DateTime.utc(
+            int.parse(month.substring(0, 4)),
+            int.parse(month.substring(5, 7)),
+            1,
+            12,
+          ).millisecondsSinceEpoch,
+          'standing': true,
+        });
+      }
+      month = _nextMonth(month);
+    }
+  }
+  return out;
+}
+
+/// The entries every netting reads: the real ones plus the monthly lines'
+/// standing payers (docs/EXPENSE_PAID_BY.md §3).
+List<Map<String, dynamic>> withStandingPayers(
+  Iterable<Map<String, dynamic>>? entries,
+  Iterable<Map<String, dynamic>>? lines,
+  String nowMonth,
+) => [
+  ...?entries,
+  ...standingPayerEntries(lines, entries, nowMonth),
+];
+
 /// One staff member's expenses, paid-back amounts and credit.
 class StaffCredit {
   const StaffCredit({
@@ -65,7 +192,7 @@ Map<String, StaffCredit> staffCredits(
   }
 
   for (final e in entries ?? const <Map<String, dynamic>>[]) {
-    final id = _text(e['paidByStaffId'], 128);
+    final id = _personPayer(e['paidByStaffId']);
     final month = _text(e['month'], 7);
     if (id.isEmpty ||
         e['voided'] == true ||
@@ -361,7 +488,10 @@ List<StaffExpenseLine> monthExpenseLines(
   Iterable<String>? staffIds, [
   Map<String, String>? lineLabels,
 ]) {
-  final wanted = {...?staffIds};
+  final wanted = {
+    for (final id in staffIds ?? const <String>[])
+      if (_personPayer(id).isNotEmpty) id,
+  };
   final names = lineLabels ?? const <String, String>{};
   StaffExpenseLine lineOf(Map<String, dynamic> e) {
     final lineId = _text(e['lineId'], 128);

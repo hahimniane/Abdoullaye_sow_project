@@ -967,6 +967,9 @@ const LOT_EXPENSE_LINE_REFUSALS = Object.freeze({
   end_month_invalid: "Pick a valid month.",
   end_month_before_purchases: "This line has purchases after that month.",
   line_stopped: "This line stopped before that month.",
+  line_not_fixed: "Only a monthly line has someone who pays it each month.",
+  payer_not_member: "Pick someone on the team, or the business.",
+  payer_month_invalid: "Pick a month from when this line started.",
 });
 
 const LOT_MONTH_NAMES = Object.freeze(["January", "February", "March",
@@ -1063,8 +1066,71 @@ function lotLineEndMonthPlan({line, endMonth, purchaseMonths}) {
   };
 }
 
+/** "Paid by: the business" (EXPENSE_PAID_BY.md); staff_expense_credit's. */
+const LOT_BUSINESS_PAYER = "business_account";
+
+/**
+ * "Paid by" on a monthly line (EXPENSE_PAID_BY.md §4): who pays it from
+ * `fromMonth` on. A start already set for that month is replaced; earlier
+ * months keep their payer.
+ *
+ * @param {object} input `{line, staffId, fromMonth, firstMonth, isMember,
+ *   names, uid, nowMs}`: the stored line (null when missing); the payer
+ *   (a staff id or "business_account"); the line's first month
+ *   ("yyyy-mm", "" when unknown); whether `staffId` is on the team;
+ *   `names` = `{[staffId]: name}` for the History summary.
+ * @return {object} `{ok, reason, payers, summary, changed}`.
+ */
+function lotLinePayerPlan({line, staffId, fromMonth, firstMonth, isMember,
+  names, uid, nowMs}) {
+  const refuse = (reason) => ({ok: false, reason, payers: [], summary: "",
+    changed: false});
+  if (!line) return refuse("line_not_found");
+  if (line.voided === true) return refuse("line_voided");
+  if (String(line.kind || "") !== "fixed") return refuse("line_not_fixed");
+  const payer = String(staffId ?? "").trim().slice(0, 128);
+  if (!payer || (payer !== LOT_BUSINESS_PAYER && isMember !== true)) {
+    return refuse("payer_not_member");
+  }
+  const from = String(fromMonth ?? "").trim();
+  if (!lotIsMonthKey(from)) return refuse("payer_month_invalid");
+  if (lotIsMonthKey(firstMonth) && from < firstMonth) {
+    return refuse("payer_month_invalid");
+  }
+  const before = (Array.isArray(line.payers) ? line.payers : [])
+      .filter((p) => p && lotIsMonthKey(String(p.fromMonth || "")));
+  const whoAt = (list, month) => {
+    let best = null;
+    for (const p of list) {
+      if (p.fromMonth <= month && (!best || p.fromMonth >= best.fromMonth)) {
+        best = p;
+      }
+    }
+    return best ? String(best.staffId || "") : LOT_BUSINESS_PAYER;
+  };
+  const was = whoAt(before, from);
+  const payers = [
+    ...before.filter((p) => p.fromMonth !== from),
+    {fromMonth: from, staffId: payer, setByUid: String(uid || ""),
+      setAtMs: Number(nowMs) || 0},
+  ].sort((a, b) => a.fromMonth.localeCompare(b.fromMonth));
+  const label = (id) => id === LOT_BUSINESS_PAYER || !id ? "The business" :
+    String(names?.[id] || "").trim() || "A team member";
+  const same = before.find((p) => p.fromMonth === from);
+  return {
+    ok: true,
+    reason: "",
+    payers,
+    summary: `Paid by: ${label(was)} → ${label(payer)} from ` +
+      `${lotMonthLabel(from)}`,
+    changed: !same || String(same.staffId || "") !== payer,
+  };
+}
+
 module.exports = {
+  LOT_BUSINESS_PAYER,
   LOT_EXPENSE_LINE_REFUSALS,
+  lotLinePayerPlan,
   lotIsMonthKey,
   lotMonthLabel,
   lotLineEndMonth,

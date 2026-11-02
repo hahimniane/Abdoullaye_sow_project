@@ -24,6 +24,107 @@ const cents = (value: unknown): number => {
 };
 const text = (value: unknown, max = 200): string => String(value ?? "").trim().slice(0, max);
 
+/** "Paid by: the business" (EXPENSE_PAID_BY.md): nobody's credit. */
+export const BUSINESS_PAYER = "business_account";
+
+/** A person who paid, or "" for the business / nobody. */
+const personPayer = (id: unknown): string => {
+  const v = text(id, 128);
+  return v && v !== BUSINESS_PAYER ? v : "";
+};
+
+/** At most this many months of a standing payer (3 years). */
+const MAX_STANDING_MONTHS = 36;
+
+/**
+ * Who pays a monthly line in `month` (EXPENSE_PAID_BY.md §2): the payer with
+ * the greatest `fromMonth <= month`. A staff id, or "" for the business.
+ */
+export function linePayerFor(line: Row | null | undefined, month: string): string {
+  return linePayerEntryFor(line, month)?.staffId ?? "";
+}
+
+/**
+ * The payers entry that applies to `month` ({fromMonth, staffId}), or null
+ * when nobody (a person) pays: no entry yet, or the business pays.
+ */
+export function linePayerEntryFor(
+  line: Row | null | undefined,
+  month: string,
+): { fromMonth: string; staffId: string } | null {
+  let best: { from: string; id: string } | null = null;
+  for (const p of (Array.isArray(line?.payers) ? line.payers : []) as Row[]) {
+    const from = text(p?.fromMonth, 7);
+    if (!MONTH.test(from) || from > month) continue;
+    if (!best || from >= best.from) best = { from, id: text(p?.staffId, 128) };
+  }
+  const id = best ? personPayer(best.id) : "";
+  return best && id ? { fromMonth: best.from, staffId: id } : null;
+}
+
+const nextMonth = (month: string): string => {
+  const [y, m] = month.split("-").map(Number);
+  return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
+};
+
+/**
+ * The months a monthly line's standing payer pays (EXPENSE_PAID_BY.md §3),
+ * as virtual expense entries, so the netting reads them like purchases. A
+ * real, non-voided purchase on the line for a month wins.
+ */
+export function standingPayerEntries(
+  lines: readonly Row[] | null | undefined,
+  entries: readonly Row[] | null | undefined,
+  nowMonth: string,
+): Row[] {
+  const out: Row[] = [];
+  if (!MONTH.test(String(nowMonth || ""))) return out;
+  const logged = new Set<string>();
+  for (const e of entries || []) {
+    if (!e || e.voided === true) continue;
+    logged.add(`${text(e.lineId, 128)}|${text(e.month, 7)}`);
+  }
+  for (const line of lines || []) {
+    const lineId = text(line?.id, 128);
+    if (!lineId || line.kind !== "fixed" || line.voided === true || line.active === false) continue;
+    const amount = cents(line.recurringCents);
+    if (amount <= 0) continue;
+    const froms = (Array.isArray(line.payers) ? (line.payers as Row[]) : [])
+      .map((p) => text(p?.fromMonth, 7)).filter((m) => MONTH.test(m)).sort();
+    if (froms.length === 0) continue;
+    const end = text(line.endMonth, 7);
+    let month = froms[0];
+    for (let n = 0; n < MAX_STANDING_MONTHS && month <= nowMonth; n++) {
+      if (MONTH.test(end) && month > end) break;
+      const payer = linePayerFor(line, month);
+      if (payer && !logged.has(`${lineId}|${month}`)) {
+        const [y, m] = month.split("-").map(Number);
+        out.push({
+          id: `standing:${lineId}:${month}`,
+          lineId,
+          month,
+          amountCents: amount,
+          paidByStaffId: payer,
+          note: "",
+          spentAtMs: Date.UTC(y, m - 1, 1, 12),
+          standing: true,
+        });
+      }
+      month = nextMonth(month);
+    }
+  }
+  return out;
+}
+
+/** The entries every netting reads: the real ones plus the monthly lines' standing payers. */
+export function withStandingPayers(
+  entries: readonly Row[] | null | undefined,
+  lines: readonly Row[] | null | undefined,
+  nowMonth: string,
+): Row[] {
+  return [...(entries || []), ...standingPayerEntries(lines, entries, nowMonth)];
+}
+
 export type StaffCredit = { expensesCents: number; repaidCents: number; creditCents: number };
 export type StaffParkingLink = {
   customerKey?: string;
@@ -47,7 +148,7 @@ export function staffCredits(
     return out[id];
   };
   for (const e of entries || []) {
-    const id = text(e?.paidByStaffId, 128);
+    const id = personPayer(e?.paidByStaffId);
     const month = text(e?.month, 7);
     if (!id || e?.voided === true || !MONTH.test(month) || month > monthKey) continue;
     slot(id).expensesCents += cents(e.amountCents);
@@ -244,7 +345,7 @@ export function monthExpenseLines(
   staffIds: readonly string[] | null | undefined,
   lineLabels?: Record<string, string> | null,
 ): MonthExpenseLine[] {
-  const wanted = new Set(staffIds || []);
+  const wanted = new Set((staffIds || []).filter((id) => personPayer(id)));
   const names = lineLabels || {};
   return (entries || [])
     .filter((e) => e && e.voided !== true && wanted.has(e.paidByStaffId as string) &&

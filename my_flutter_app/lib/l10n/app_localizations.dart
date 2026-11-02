@@ -14334,6 +14334,18 @@ abstract class AppLocalizations {
   /// **'Paid by'**
   String get lotPaidBy;
 
+  /// A choice in 'Paid by' on expenses: the business itself pays, so nobody is owed the money.
+  ///
+  /// In en, this message translates to:
+  /// **'The business'**
+  String get lotPaidByBusiness;
+
+  /// On a monthly expense line: who pays it each month, from which month on.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid by {name} since {month}'**
+  String lotLinePaidBySince(String name, String month);
+
   /// No description provided for @lotNote.
   ///
   /// In en, this message translates to:

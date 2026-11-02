@@ -1,5 +1,5 @@
 {
-  "_comment": "docs/STAFF_EXPENSE_CREDIT.md §3. Run by functions (staff-expense-credit.test.js), the console (staff-expense-credit.test.ts) and the app (staff_expense_credit_test.dart). Amounts in cents.",
+  "_comment": "docs/STAFF_EXPENSE_CREDIT.md §3. Run by functions (staff-expense-credit.test.js), the console (staff-expense-credit.test.ts) and the app (staff_expense_credit_test.dart). Amounts in cents. `standing` (EXPENSE_PAID_BY.md §3): standingPayerEntries(lines, entries, nowMonth), compared on id, lineId, month, amountCents, paidByStaffId.",
   "cases": [
     {
       "name": "Abdoulaye: expenses come off a bigger parking bill",
@@ -377,6 +377,58 @@
         "businessOwesCents": 3000,
         "expenseCreditCents": 5000
       }
+    },
+    {
+      "name": "Expenses paid by the business are nobody's credit",
+      "monthKey": "2026-10",
+      "customers": [
+        {
+          "key": "staff:yao",
+          "dueCents": 100600
+        }
+      ],
+      "entries": [
+        {
+          "id": "b1",
+          "paidByStaffId": "business_account",
+          "amountCents": 50000,
+          "month": "2026-10"
+        },
+        {
+          "id": "y1",
+          "paidByStaffId": "yao",
+          "amountCents": 186104,
+          "month": "2026-09"
+        }
+      ],
+      "repayments": [],
+      "links": {},
+      "staffNames": {
+        "yao": "Yao"
+      },
+      "expect": {
+        "customers": [
+          {
+            "key": "staff:yao",
+            "dueBeforeExpensesCents": 100600,
+            "expenseCreditCents": 100600,
+            "dueCents": 0,
+            "linkedStaffIds": [
+              "yao"
+            ]
+          }
+        ],
+        "businessOwes": [
+          {
+            "staffId": "yao",
+            "staffName": "Yao",
+            "customerKey": "staff:yao",
+            "owedCents": 85504
+          }
+        ],
+        "businessOwesCents": 85504,
+        "expenseCreditCents": 100600
+      }
     }
   ],
   "itemsAfterCredit": [
@@ -665,6 +717,286 @@
         "earlierExpenseCents": 21276,
         "dueCents": 472924
       }
+    }
+  ],
+  "standing": [
+    {
+      "name": "Rent paid by Yao from October: October and November, not September",
+      "nowMonth": "2026-11",
+      "lines": [
+        {
+          "id": "rent",
+          "kind": "fixed",
+          "recurringCents": 850000,
+          "payers": [
+            {
+              "fromMonth": "2026-10",
+              "staffId": "yao"
+            }
+          ]
+        }
+      ],
+      "entries": [],
+      "expect": [
+        {
+          "id": "standing:rent:2026-10",
+          "lineId": "rent",
+          "month": "2026-10",
+          "amountCents": 850000,
+          "paidByStaffId": "yao"
+        },
+        {
+          "id": "standing:rent:2026-11",
+          "lineId": "rent",
+          "month": "2026-11",
+          "amountCents": 850000,
+          "paidByStaffId": "yao"
+        }
+      ]
+    },
+    {
+      "name": "A purchase logged on the line for a month wins (September by hand, October standing)",
+      "nowMonth": "2026-10",
+      "lines": [
+        {
+          "id": "rent",
+          "kind": "fixed",
+          "recurringCents": 850000,
+          "payers": [
+            {
+              "fromMonth": "2026-09",
+              "staffId": "yao"
+            }
+          ]
+        }
+      ],
+      "entries": [
+        {
+          "id": "sep",
+          "lineId": "rent",
+          "month": "2026-09",
+          "paidByStaffId": "yao",
+          "amountCents": 850000
+        }
+      ],
+      "expect": [
+        {
+          "id": "standing:rent:2026-10",
+          "lineId": "rent",
+          "month": "2026-10",
+          "amountCents": 850000,
+          "paidByStaffId": "yao"
+        }
+      ]
+    },
+    {
+      "name": "A voided purchase does not stop the standing payer",
+      "nowMonth": "2026-10",
+      "lines": [
+        {
+          "id": "rent",
+          "kind": "fixed",
+          "recurringCents": 850000,
+          "payers": [
+            {
+              "fromMonth": "2026-10",
+              "staffId": "yao"
+            }
+          ]
+        }
+      ],
+      "entries": [
+        {
+          "id": "v",
+          "lineId": "rent",
+          "month": "2026-10",
+          "paidByStaffId": "yao",
+          "amountCents": 850000,
+          "voided": true
+        }
+      ],
+      "expect": [
+        {
+          "id": "standing:rent:2026-10",
+          "lineId": "rent",
+          "month": "2026-10",
+          "amountCents": 850000,
+          "paidByStaffId": "yao"
+        }
+      ]
+    },
+    {
+      "name": "Payer changes keep history: Yao Oct-Nov, the business from December, Abdoulaye from February",
+      "nowMonth": "2027-03",
+      "lines": [
+        {
+          "id": "rent",
+          "kind": "fixed",
+          "recurringCents": 850000,
+          "payers": [
+            {
+              "fromMonth": "2026-12",
+              "staffId": "business_account"
+            },
+            {
+              "fromMonth": "2026-10",
+              "staffId": "yao"
+            },
+            {
+              "fromMonth": "2027-02",
+              "staffId": "abd"
+            }
+          ]
+        }
+      ],
+      "entries": [],
+      "expect": [
+        {
+          "id": "standing:rent:2026-10",
+          "lineId": "rent",
+          "month": "2026-10",
+          "amountCents": 850000,
+          "paidByStaffId": "yao"
+        },
+        {
+          "id": "standing:rent:2026-11",
+          "lineId": "rent",
+          "month": "2026-11",
+          "amountCents": 850000,
+          "paidByStaffId": "yao"
+        },
+        {
+          "id": "standing:rent:2027-02",
+          "lineId": "rent",
+          "month": "2027-02",
+          "amountCents": 850000,
+          "paidByStaffId": "abd"
+        },
+        {
+          "id": "standing:rent:2027-03",
+          "lineId": "rent",
+          "month": "2027-03",
+          "amountCents": 850000,
+          "paidByStaffId": "abd"
+        }
+      ]
+    },
+    {
+      "name": "A stopped line stops paying after its last month",
+      "nowMonth": "2027-01",
+      "lines": [
+        {
+          "id": "rent",
+          "kind": "fixed",
+          "recurringCents": 850000,
+          "payers": [
+            {
+              "fromMonth": "2026-10",
+              "staffId": "yao"
+            }
+          ],
+          "endMonth": "2026-11"
+        }
+      ],
+      "entries": [],
+      "expect": [
+        {
+          "id": "standing:rent:2026-10",
+          "lineId": "rent",
+          "month": "2026-10",
+          "amountCents": 850000,
+          "paidByStaffId": "yao"
+        },
+        {
+          "id": "standing:rent:2026-11",
+          "lineId": "rent",
+          "month": "2026-11",
+          "amountCents": 850000,
+          "paidByStaffId": "yao"
+        }
+      ]
+    },
+    {
+      "name": "No payer, the business, metered, voided, paused or zero lines pay nothing",
+      "nowMonth": "2026-11",
+      "lines": [
+        {
+          "id": "a",
+          "kind": "fixed",
+          "recurringCents": 100,
+          "payers": []
+        },
+        {
+          "id": "b",
+          "kind": "fixed",
+          "recurringCents": 100,
+          "payers": [
+            {
+              "fromMonth": "2026-10",
+              "staffId": "business_account"
+            }
+          ]
+        },
+        {
+          "id": "c",
+          "kind": "metered",
+          "recurringCents": 100,
+          "payers": [
+            {
+              "fromMonth": "2026-10",
+              "staffId": "yao"
+            }
+          ]
+        },
+        {
+          "id": "d",
+          "kind": "fixed",
+          "recurringCents": 100,
+          "voided": true,
+          "payers": [
+            {
+              "fromMonth": "2026-10",
+              "staffId": "yao"
+            }
+          ]
+        },
+        {
+          "id": "e",
+          "kind": "fixed",
+          "recurringCents": 100,
+          "active": false,
+          "payers": [
+            {
+              "fromMonth": "2026-10",
+              "staffId": "yao"
+            }
+          ]
+        },
+        {
+          "id": "f",
+          "kind": "fixed",
+          "recurringCents": 0,
+          "payers": [
+            {
+              "fromMonth": "2026-10",
+              "staffId": "yao"
+            }
+          ]
+        },
+        {
+          "id": "g",
+          "kind": "fixed",
+          "recurringCents": 100,
+          "payers": [
+            {
+              "fromMonth": "2026-12",
+              "staffId": "yao"
+            }
+          ]
+        }
+      ],
+      "entries": [],
+      "expect": []
     }
   ]
 }

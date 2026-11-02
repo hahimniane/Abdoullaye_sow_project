@@ -7,15 +7,20 @@ import { createRequire } from "node:module";
 import test from "node:test";
 
 import {
+  BUSINESS_PAYER,
   earlierExpenseCents,
   expenseLabel,
   expenseLineLabels,
   itemsAfterCredit,
+  linePayerEntryFor,
+  linePayerFor,
   monthExpenseLines,
   netStaffExpenses,
   splitByCredit,
   staffByCustomer,
   staffCredits,
+  standingPayerEntries,
+  withStandingPayers,
 } from "./staff-expense-credit.ts";
 
 const fixtureUrl = new URL("../../../my_flutter_app/functions/test/fixtures/staff-expense-credit-cases.json", import.meta.url);
@@ -34,6 +39,13 @@ const fixture = JSON.parse(readFileSync(fixtureUrl, "utf8")) as {
       businessOwesCents: number;
       expenseCreditCents: number;
     };
+  }[];
+  standing: {
+    name: string;
+    nowMonth: string;
+    lines: Record<string, unknown>[];
+    entries: Record<string, unknown>[];
+    expect: { id: string; lineId: string; month: string; amountCents: number; paidByStaffId: string }[];
   }[];
   itemsAfterCredit: { items: { id: string; amountCents: number }[]; creditCents: number; expect: unknown[] }[];
   bills: {
@@ -147,4 +159,58 @@ test("the smaller pieces match the server's", () => {
   const credits = { a: { expensesCents: 1, repaidCents: 0, creditCents: 1 }, b: { expensesCents: 2, repaidCents: 0, creditCents: 2 } };
   assert.deepEqual(splitByCredit(100, ["a", "b"], credits), { a: 34, b: 66 });
   assert.deepEqual(splitByCredit(100, ["a", "b"], credits), server.splitByCredit(100, ["a", "b"], credits));
+});
+
+const pick = (rows: Record<string, unknown>[]) =>
+  rows.map((e) => ({ id: e.id, lineId: e.lineId, month: e.month, amountCents: e.amountCents, paidByStaffId: e.paidByStaffId }));
+
+test("the fixture has standing-payer cases", () => {
+  assert.ok(fixture.standing.length >= 5);
+});
+
+for (const c of fixture.standing) {
+  test(`fixture standing payers: ${c.name}`, () => {
+    const out = standingPayerEntries(c.lines, c.entries, c.nowMonth);
+    assert.deepEqual(pick(out), c.expect);
+    // The server's module gives the very same entries, field for field.
+    assert.deepEqual(out, server.standingPayerEntries(c.lines, c.entries, c.nowMonth));
+    assert.deepEqual(
+      withStandingPayers(c.entries, c.lines, c.nowMonth),
+      server.withStandingPayers(c.entries, c.lines, c.nowMonth),
+    );
+    assert.equal(withStandingPayers(c.entries, c.lines, c.nowMonth).length, c.entries.length + c.expect.length);
+  });
+}
+
+test("a monthly line's payer is the latest entry that has started", () => {
+  const line = {
+    payers: [
+      { fromMonth: "2026-10", staffId: "yao" },
+      { fromMonth: "2026-12", staffId: BUSINESS_PAYER },
+      { fromMonth: "2026-08", staffId: "ada" },
+    ],
+  };
+  assert.equal(linePayerFor(line, "2026-07"), "");
+  assert.equal(linePayerFor(line, "2026-09"), "ada");
+  assert.equal(linePayerFor(line, "2026-11"), "yao");
+  assert.equal(linePayerFor(line, "2027-01"), "");
+  assert.deepEqual(linePayerEntryFor(line, "2026-11"), { fromMonth: "2026-10", staffId: "yao" });
+  assert.equal(linePayerEntryFor(line, "2027-01"), null);
+  assert.equal(linePayerEntryFor({}, "2026-11"), null);
+  for (const m of ["2026-07", "2026-09", "2026-11", "2027-01"]) {
+    assert.equal(linePayerFor(line, m), server.linePayerFor(line, m));
+  }
+  assert.equal(BUSINESS_PAYER, server.BUSINESS_PAYER);
+});
+
+test("the business is nobody's credit and never on a bill", () => {
+  const entries = [
+    { id: "a", paidByStaffId: BUSINESS_PAYER, amountCents: 900, month: "2026-10", spentAtMs: 1 },
+    { id: "b", paidByStaffId: "s1", amountCents: 100, month: "2026-10", spentAtMs: 2 },
+  ];
+  assert.deepEqual(Object.keys(staffCredits(entries, [], "2026-10")), ["s1"]);
+  assert.deepEqual(monthExpenseLines(entries, "2026-10", [BUSINESS_PAYER, "s1"]).map((l) => l.id), ["b"]);
+  assert.deepEqual(monthExpenseLines(entries, "2026-10", [BUSINESS_PAYER]), []);
+  assert.deepEqual(monthExpenseLines(entries, "2026-10", [BUSINESS_PAYER, "s1"]),
+    server.monthExpenseLines(entries, "2026-10", [BUSINESS_PAYER, "s1"]));
 });

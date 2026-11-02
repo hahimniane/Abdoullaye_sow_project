@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 
 import '../utils/money_input.dart';
 import 'business_parking_entry.dart' show businessParkingCollectedByMonth;
+import 'staff_expense_credit.dart' show linePayerSince;
 
 // ---------------------------------------------------------------------------
 // Vocabulary shared with the server.
@@ -449,6 +450,7 @@ class LotExpenseLine {
     this.voidedByStaffId = '',
     this.voidedAt,
     this.endMonth = '',
+    this.payers = const [],
   });
 
   final String id;
@@ -474,6 +476,20 @@ class LotExpenseLine {
   /// it are unchanged.
   final String endMonth;
 
+  /// Who pays a monthly line from which month (docs/EXPENSE_PAID_BY.md §2):
+  /// `{fromMonth: "yyyy-mm", staffId}` rows, where a staffId of
+  /// `business_account` is the business. Set from the console only.
+  final List<Map<String, dynamic>> payers;
+
+  /// The person paying this monthly line in [month], with the month they
+  /// started; null when the business pays (or nobody is set). Nothing for a
+  /// metered line.
+  ({String staffId, String fromMonth})? personPayerIn(String month) {
+    if (kind != 'fixed') return null;
+    final p = linePayerSince({'payers': payers}, month);
+    return p == null || p.staffId.isEmpty ? null : p;
+  }
+
   factory LotExpenseLine.fromMap(String id, Map<String, dynamic> d) {
     return LotExpenseLine(
       id: id,
@@ -492,6 +508,14 @@ class LotExpenseLine {
       // Not cut to 7 characters: a malformed value must stay malformed, so it
       // runs on here exactly as it does on the server.
       endMonth: _s(d['endMonth'], 20),
+      payers: [
+        for (final p in d['payers'] is List ? d['payers'] as List : const [])
+          if (p is Map)
+            {
+              'fromMonth': _s(p['fromMonth'], 7),
+              'staffId': _s(p['staffId'], 128),
+            },
+      ],
     );
   }
 

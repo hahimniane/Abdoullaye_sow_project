@@ -396,6 +396,49 @@ describe("void and stop an expense line", () => {
     assert.ok(summaries.includes("Resumed"));
   });
 
+  it("sets who pays a monthly line from a month on (EXPENSE_PAID_BY.md)",
+      async () => {
+        const id = await line({label: "Rent", recurringCents: 850000});
+        const set = await run("upsertLotExpenseLine", LEDGER_STAFF,
+            {businessId: BIZ, lineId: id, action: "setPayer",
+              staffId: LEDGER_STAFF, fromMonth: "2026-10"});
+        assert.equal(set.success, true);
+        assert.deepEqual((await stored(id)).payers.map((p) =>
+          [p.fromMonth, p.staffId, p.setByUid]),
+        [["2026-10", LEDGER_STAFF, LEDGER_STAFF]]);
+        await run("upsertLotExpenseLine", OWNER, {businessId: BIZ, lineId: id,
+          action: "setPayer", staffId: "business_account",
+          fromMonth: "2026-12"});
+        assert.deepEqual((await stored(id)).payers.map((p) =>
+          [p.fromMonth, p.staffId]),
+        [["2026-10", LEDGER_STAFF], ["2026-12", "business_account"]]);
+        // A full edit keeps who pays.
+        await run("upsertLotExpenseLine", OWNER, {businessId: BIZ, lineId: id,
+          label: "Rent", kind: "fixed", recurringCents: 900000});
+        assert.equal((await stored(id)).payers.length, 2);
+        await assert.rejects(run("upsertLotExpenseLine", OWNER,
+            {businessId: BIZ, lineId: id, action: "setPayer",
+              staffId: OTHER_OWNER, fromMonth: "2026-10"}),
+        refusal("failed-precondition", "payer_not_member"));
+        await assert.rejects(run("upsertLotExpenseLine", OWNER,
+            {businessId: BIZ, lineId: id, action: "setPayer",
+              staffId: OWNER, fromMonth: "2025-12"}),
+        refusal("failed-precondition", "payer_month_invalid"));
+        const metered = await line({kind: "metered", recurringCents: 0});
+        await assert.rejects(run("upsertLotExpenseLine", OWNER,
+            {businessId: BIZ, lineId: metered, action: "setPayer",
+              staffId: OWNER, fromMonth: "2026-10"}),
+        refusal("failed-precondition", "line_not_fixed"));
+        await assert.rejects(run("upsertLotExpenseLine", PARKING_STAFF,
+            {businessId: BIZ, lineId: id, action: "setPayer",
+              staffId: OWNER, fromMonth: "2026-10"}),
+        (error) => error.code === "permission-denied");
+        const summaries = (await auditFor(id)).map((row) => row.summary);
+        const want = /^Paid by: The business → .+ from October 2026$/;
+        assert.ok(summaries.some((s) => want.test(s)),
+            JSON.stringify(summaries));
+      });
+
   it("totals skip a voided line and a stopped line's later months",
       async () => {
         const lot = "void-ledger-totals-biz";

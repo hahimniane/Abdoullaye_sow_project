@@ -314,6 +314,9 @@ const rules: Rule[] = [
   // set running again.
   [/^Stopped after (January|February|March|April|May|June|July|August|September|October|November|December) (\d{4})$/, (m) =>
     `Arrêtée après ${MONTHS_FR[m[1]]} ${m[2]}`],
+  // "Paid by" on a monthly line: "Paid by: The business → Yao from October 2026".
+  [/^Paid by: (.+?) → (.+) from (January|February|March|April|May|June|July|August|September|October|November|December) (\d{4})$/, (m) =>
+    `Payé par : ${m[1] === "The business" ? "L’entreprise" : m[1]} → ${m[2] === "The business" ? "L’entreprise" : m[2]} à partir ${/^[aeiouhéèà]/.test(MONTHS_FR[m[3]]) ? "d’" : "de "}${MONTHS_FR[m[3]]} ${m[4]}`],
   [/^Resumed$/, () => "Reprise"],
   [/^Edited — nothing changed$/, () => "Modifié — rien n’a changé"],
   [/^Edited — (.+)$/, (m) => `Modifié — ${m[1]}`],

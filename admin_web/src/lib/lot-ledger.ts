@@ -1252,6 +1252,15 @@ export function lotLineStoppedLabel(endMonth: string, language: "en" | "fr" = "e
   return language === "fr" ? `Arrêtée après ${name}` : `Stopped after ${name}`;
 }
 
+/**
+ * A monthly line's card: "Paid by Yao since Oct 2026" (EXPENSE_PAID_BY.md §5),
+ * in the page's language (the name is a person's, never translated).
+ */
+export function lotLinePaidBySentence(name: string, fromMonth: string, language: "en" | "fr" = "en"): string {
+  const since = lotMonthName(fromMonth, language, "short");
+  return language === "fr" ? `Payé par ${name} depuis ${since}` : `Paid by ${name} since ${since}`;
+}
+
 /** The confirmation: what stopping after `month` does. */
 export function lotLineStopSentence(month: string, language: "en" | "fr" = "en"): string {
   const name = lotMonthName(month, language, "long");

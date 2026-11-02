@@ -13,6 +13,7 @@ import {
   itemsAfterCredit,
   monthExpenseLines,
   netStaffExpenses,
+  withStandingPayers,
   type BusinessOwesLine,
   type StaffParkingLinks,
 } from "./staff-expense-credit.ts";
@@ -690,7 +691,13 @@ export function withStaffExpenseCredit(
 ): { customers: ParkingMonthCustomer[]; businessOwes: BusinessOwesLine[]; businessOwesCents: number; expenseCreditCents: number } {
   if (!credit) return { customers, businessOwes: [], businessOwesCents: 0, expenseCreditCents: 0 };
   const names = credit.staffNames ?? {};
-  const entries = (credit.entries ?? []).map((e) => ({ ...e, spentAtMs: toDate(e.spentAt)?.getTime() ?? 0 }));
+  // A monthly line's standing payer counts like a purchase logged for each
+  // month (EXPENSE_PAID_BY.md §3), so "Rent" reads on the bill.
+  const entries = withStandingPayers(
+    (credit.entries ?? []).map((e) => ({ ...e, spentAtMs: toDate(e.spentAt)?.getTime() ?? 0 })),
+    credit.lines ?? [],
+    monthKey,
+  );
   const net = netStaffExpenses(customers, {
     entries,
     repayments: credit.repayments ?? [],

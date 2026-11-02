@@ -8229,6 +8229,14 @@ class AppLocalizationsFr extends AppLocalizations {
   String get lotPaidBy => 'Payé par';
 
   @override
+  String get lotPaidByBusiness => 'L\'entreprise';
+
+  @override
+  String lotLinePaidBySince(String name, String month) {
+    return 'Payé par $name depuis $month';
+  }
+
+  @override
   String get lotNote => 'Note';
 
   @override

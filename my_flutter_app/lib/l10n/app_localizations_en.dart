@@ -8090,6 +8090,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get lotPaidBy => 'Paid by';
 
   @override
+  String get lotPaidByBusiness => 'The business';
+
+  @override
+  String lotLinePaidBySince(String name, String month) {
+    return 'Paid by $name since $month';
+  }
+
+  @override
   String get lotNote => 'Note';
 
   @override

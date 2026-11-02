@@ -733,3 +733,45 @@ describe("the VIN duplicate rule (owner decision 2026-10-22)", () => {
         /for a car · VIN …3A004352 \(LA-x\) by someone$/);
   });
 });
+
+describe("lotLinePayerPlan (EXPENSE_PAID_BY.md §4)", () => {
+  const {lotLinePayerPlan} = require("../lot_ledger");
+  const rent = {kind: "fixed", recurringCents: 850000, payers: []};
+  const base = {line: rent, staffId: "yao", fromMonth: "2026-10",
+    firstMonth: "2026-09", isMember: true, names: {yao: "Yao"}, uid: "u",
+    nowMs: 5};
+  it("sets Rent paid by Yao from October", () => {
+    const plan = lotLinePayerPlan(base);
+    assert.equal(plan.ok, true);
+    assert.deepEqual(plan.payers, [{fromMonth: "2026-10", staffId: "yao",
+      setByUid: "u", setAtMs: 5}]);
+    assert.equal(plan.summary,
+        "Paid by: The business → Yao from October 2026");
+    assert.equal(plan.changed, true);
+  });
+  it("keeps earlier months and replaces the same start month", () => {
+    const line = {...rent, payers: [
+      {fromMonth: "2026-10", staffId: "yao"},
+      {fromMonth: "2026-12", staffId: "abd"},
+    ]};
+    const plan = lotLinePayerPlan({...base, line, staffId: "business_account",
+      fromMonth: "2026-12"});
+    assert.deepEqual(plan.payers.map((p) => [p.fromMonth, p.staffId]),
+        [["2026-10", "yao"], ["2026-12", "business_account"]]);
+    assert.equal(plan.summary,
+        "Paid by: A team member → The business from December 2026");
+    const same = lotLinePayerPlan({...base, line});
+    assert.equal(same.changed, false);
+  });
+  it("refuses what it must", () => {
+    const reason = (over) => lotLinePayerPlan({...base, ...over}).reason;
+    assert.equal(reason({line: null}), "line_not_found");
+    assert.equal(reason({line: {...rent, voided: true}}), "line_voided");
+    assert.equal(reason({line: {kind: "metered"}}), "line_not_fixed");
+    assert.equal(reason({isMember: false}), "payer_not_member");
+    assert.equal(reason({staffId: ""}), "payer_not_member");
+    assert.equal(reason({staffId: "business_account", isMember: false}), "");
+    assert.equal(reason({fromMonth: "2026-13"}), "payer_month_invalid");
+    assert.equal(reason({fromMonth: "2026-08"}), "payer_month_invalid");
+  });
+});

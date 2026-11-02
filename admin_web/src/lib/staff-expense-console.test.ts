@@ -9,6 +9,7 @@ import test from "node:test";
 
 import { translateAuditSummary } from "./audit-summaries.ts";
 import { translateValue } from "./french-dom.ts";
+import { lotLinePaidBySentence } from "./lot-ledger.ts";
 import {
   defaultRepaymentDay,
   dollarsToCents,
@@ -185,4 +186,30 @@ test("every new word reads in French", () => {
   assert.match(translateValue("2 expenses this month", "fr"), /^2 dépenses ce mois-ci$/);
   assert.match(translateValue("3 parked cars", "fr"), /^3 voitures garées$/);
   assert.match(translateValue("$15.00 owed", "fr"), /^\$15\.00 dû$/);
+});
+
+test("a monthly line's Paid by: the card sentence, the History row and the French (EXPENSE_PAID_BY.md)", () => {
+  assert.equal(lotLinePaidBySentence("Yao", "2026-10", "en"), "Paid by Yao since Oct 2026");
+  assert.equal(lotLinePaidBySentence("Yao", "2026-10", "fr"), "Payé par Yao depuis oct. 2026");
+  assert.equal(
+    translateAuditSummary("Paid by: The business → Yao from October 2026", () => undefined),
+    "Payé par : L’entreprise → Yao à partir d’octobre 2026",
+  );
+  assert.equal(
+    translateAuditSummary("Paid by: Yao → The business from March 2027", () => undefined),
+    "Payé par : Yao → L’entreprise à partir de mars 2027",
+  );
+  for (const [en, fr] of [
+    ["The business", "L’entreprise"],
+    ["Starting", "À partir de"],
+    ["Only a monthly line has someone who pays it each month.", "Seule une ligne mensuelle a quelqu’un qui la paie chaque mois."],
+    ["Pick someone on the team, or the business.", "Choisissez quelqu’un de l’équipe, ou l’entreprise."],
+    ["Pick a month from when this line started.", "Choisissez un mois à partir du début de cette ligne."],
+  ]) assert.equal(translateValue(en, "fr"), fr);
+  assert.match(translateValue("Each month from then on counts as paid by this person (it comes off what they owe). Months before keep who paid them.", "fr"), /^À partir de ce mois/);
+  // The console wires it: the purchase picker offers the business, the line
+  // edit calls setPayer.
+  const panels = readFileSync(new URL("../components/business/operations-panels.tsx", import.meta.url), "utf8");
+  assert.match(panels, /<option value=\{BUSINESS_PAYER\}>The business<\/option>/);
+  assert.match(panels, /action: "setPayer",\s*businessId,\s*lineId: editLineId,\s*staffId: linePayer\.staffId,\s*fromMonth: linePayer\.fromMonth,/);
 });

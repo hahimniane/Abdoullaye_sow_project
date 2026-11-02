@@ -89,3 +89,36 @@ describe("monthExpenseLines", () => {
     assert.equal(lines[0].note, "Battery");
   });
 });
+
+describe("standing payers on monthly lines (EXPENSE_PAID_BY.md)", () => {
+  const pickStanding = (e) => ({id: e.id, lineId: e.lineId, month: e.month,
+    amountCents: e.amountCents, paidByStaffId: e.paidByStaffId});
+  for (const c of fixture.standing) {
+    it(c.name, () => {
+      const out = credit.standingPayerEntries(c.lines, c.entries, c.nowMonth);
+      assert.deepEqual(out.map(pickStanding), c.expect);
+      assert.ok(out.every((e) => e.standing === true && e.note === ""));
+    });
+  }
+  it("withStandingPayers keeps the real entries first", () => {
+    const real = [{id: "x", lineId: "other", month: "2026-10",
+      paidByStaffId: "a", amountCents: 5}];
+    const out = credit.withStandingPayers(real, fixture.standing[0].lines,
+        "2026-10");
+    assert.equal(out[0], real[0]);
+    assert.deepEqual(out.map((e) => e.id), ["x", "standing:rent:2026-10"]);
+  });
+  it("linePayerFor picks the latest start on or before the month", () => {
+    const line = {payers: [{fromMonth: "2026-10", staffId: "yao"},
+      {fromMonth: "2026-12", staffId: "business_account"}]};
+    assert.equal(credit.linePayerFor(line, "2026-09"), "");
+    assert.equal(credit.linePayerFor(line, "2026-11"), "yao");
+    assert.equal(credit.linePayerFor(line, "2026-12"), "");
+  });
+  it("standing rent counts as Yao's credit in the netting", () => {
+    const entries = credit.withStandingPayers([],
+        fixture.standing[0].lines, "2026-11");
+    const out = credit.staffCredits(entries, [], "2026-10");
+    assert.equal(out.yao.creditCents, 850000);
+  });
+});

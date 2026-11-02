@@ -723,8 +723,10 @@ class ParkingMonthStaffExpenses {
   /// `spentAtMs`.
   final List<Map<String, dynamic>> entries;
 
-  /// `lotExpenseLines` rows (`id, label`): each expense reads as its line's
-  /// name, then its note. Without them it reads as its note.
+  /// `lotExpenseLines` rows (`id, label`, and for a monthly line's standing
+  /// payer `kind, recurringCents, payers, endMonth, voided, active`): each
+  /// expense reads as its line's name, then its note. Without them it reads
+  /// as its note.
   final List<Map<String, dynamic>> lines;
   final List<Map<String, dynamic>> repayments;
   final Map<String, dynamic> links;
@@ -1070,8 +1072,10 @@ ParkingMonthSummary parkingMonthSummary(
   String monthKey,
   ParkingMonthStaffExpenses input,
 ) {
+  // Monthly lines a person pays count as their expenses, as if logged
+  // (docs/EXPENSE_PAID_BY.md §3).
   final entries = [
-    for (final row in input.entries)
+    for (final row in withStandingPayers(input.entries, input.lines, monthKey))
       {
         ...row,
         'spentAtMs': row['spentAtMs'] ??

@@ -148,6 +148,8 @@ import {
   lotExpenseEntryQueries,
   lotExpenseByLine,
   lotLineEndMonth,
+  lotLineFirstMonth,
+  lotLinePaidBySentence,
   lotLineStopSentence,
   lotLineStoppedFor,
   lotLineStoppedLabel,
@@ -309,6 +311,7 @@ import {
 } from "@/lib/vehicle-options";
 import { localDateKey, localDateKeyInDays } from "@/lib/local-date";
 import { staffNameFrom, staffNameIndex } from "@/lib/staff-names";
+import { BUSINESS_PAYER, linePayerEntryFor } from "@/lib/staff-expense-credit";
 import {
   normalizeTransportContainerNumber,
   transportFulfillmentErrorMessage,
@@ -8012,6 +8015,10 @@ export function LotLedgerPanel({ businessId, business, previewMode = false, focu
   const [lineDraft, setLineDraft] = useState({ label: "", detail: "", kind: "metered", recurring: "" });
   // Set when the expense-line form is editing an existing line, not adding one.
   const [editLineId, setEditLineId] = useState("");
+  // "Paid by" and "Starting" on an existing monthly line (EXPENSE_PAID_BY.md
+  // §5). `staffId`/`fromMonth` are what the form shows; `was*` what it opened
+  // with, so a save only calls setPayer when one of them moved.
+  const [linePayer, setLinePayer] = useState({ enabled: false, staffId: BUSINESS_PAYER, fromMonth: "", firstMonth: "", wasStaffId: BUSINESS_PAYER, wasFromMonth: "" });
   const [purchase, setPurchase] = useState<LotExpenseEntryDraft>(emptyLotExpenseEntryDraft);
   const [purchaseFile, setPurchaseFile] = useState<File | null>(null);
   // Set when the purchase form is editing an existing entry rather than adding.
@@ -8794,6 +8801,18 @@ export function LotLedgerPanel({ businessId, business, previewMode = false, focu
     // A voided line is history: it is never edited back to life.
     if (isVoidedRecord(line)) return;
     setEditLineId(String(line.id ?? ""));
+    const payerNow = linePayerEntryFor(line, month)?.staffId ?? BUSINESS_PAYER;
+    // "Starting" opens on the month being viewed (never before the line began).
+    const firstMonth = lotLineFirstMonth(line);
+    const startMonth = firstMonth && month < firstMonth ? firstMonth : month;
+    setLinePayer({
+      enabled: String(line.kind) === "fixed",
+      staffId: payerNow,
+      fromMonth: startMonth,
+      firstMonth,
+      wasStaffId: payerNow,
+      wasFromMonth: startMonth,
+    });
     setLineDraft({
       label: text(line.label, ""),
       detail: text(line.detail, ""),
@@ -8810,6 +8829,10 @@ export function LotLedgerPanel({ businessId, business, previewMode = false, focu
       return;
     }
     const editing = Boolean(editLineId);
+    if (editing && linePayer.enabled && lineDraft.kind === "fixed" && !/^\d{4}-(0[1-9]|1[0-2])$/.test(linePayer.fromMonth)) {
+      setDraftError("Pick a valid month.");
+      return;
+    }
     await runPanelAction(setBusy, setFlash, editing ? "Expense line updated." : "Expense line added.", async () => {
       await httpsCallable(functions, "upsertLotExpenseLine")({
         ...(editing ? { lineId: editLineId } : {}),
@@ -8819,6 +8842,17 @@ export function LotLedgerPanel({ businessId, business, previewMode = false, focu
         kind: lineDraft.kind,
         recurringCents: lineDraft.kind === "fixed" ? Math.round((Number(lineDraft.recurring) || 0) * 100) : 0,
       });
+      // Who pays it each month, from a month on (a separate callable action).
+      if (editing && linePayer.enabled && lineDraft.kind === "fixed" &&
+        (linePayer.staffId !== linePayer.wasStaffId || linePayer.fromMonth !== linePayer.wasFromMonth)) {
+        await httpsCallable(functions, "upsertLotExpenseLine")({
+          action: "setPayer",
+          businessId,
+          lineId: editLineId,
+          staffId: linePayer.staffId,
+          fromMonth: linePayer.fromMonth,
+        });
+      }
       setLineDraft({ label: "", detail: "", kind: "metered", recurring: "" });
       setEditLineId("");
       closeModal();
@@ -9225,6 +9259,10 @@ export function LotLedgerPanel({ businessId, business, previewMode = false, focu
                 // the totals use.
                 const amount = metered || monthEntries.length > 0 || stoppedHere ? entriesTotal : Number(l.recurringCents) || 0;
                 const missing = metered && monthEntries.length === 0 && !stoppedHere;
+                // Who pays a monthly line in this month: nothing is said
+                // when the business does.
+                const payerEntry = metered ? null : linePayerEntryFor(l, month);
+                const payerHere = payerEntry ? { name: staffName(payerEntry.staffId) || (currentLanguage() === "fr" ? "Un membre de l’équipe" : "A team member"), fromMonth: payerEntry.fromMonth } : null;
                 return (
                   <article className={`lot-expense-card${lineVoided ? " voided" : stoppedHere ? " stopped" : ""}`} key={String(l.id)}>
                     <div className="lot-expense-card-head">
@@ -9234,6 +9272,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false, focu
                         {lineVoided && <span className="status-pill danger compact">Voided</span>}
                         {lineEndMonth && <span className="lst-badge muted compact" data-no-translate>{lotLineStoppedLabel(lineEndMonth, currentLanguage() === "fr" ? "fr" : "en")}</span>}
                         {text(l.detail, "") && <small>{text(l.detail, "")}</small>}
+                        {!lineVoided && !metered && payerHere && <small className="lot-expense-payer" data-no-translate>{lotLinePaidBySentence(payerHere.name, payerHere.fromMonth, currentLanguage() === "fr" ? "fr" : "en")}</small>}
                         {lineVoided && <VoidedNote row={l} nameFor={staffName} />}
                       </div>
                       <div className="lot-expense-card-amount">
@@ -9266,7 +9305,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false, focu
                                 ) : er.proofRequired ? (
                                   <span className="status-pill danger compact">Proof missing</span>
                                 ) : null}
-                                {staffName(text(er.paidByStaffId, "")) && <small>· {staffName(text(er.paidByStaffId, ""))}</small>}
+                                {text(er.paidByStaffId, "") === BUSINESS_PAYER ? <small>· The business</small> : staffName(text(er.paidByStaffId, "")) && <small>· {staffName(text(er.paidByStaffId, ""))}</small>}
                                 {text(er.note, "") && <small>· {text(er.note, "")}</small>}
                               </div>
                               <div className="lot-expense-purchase-actions">
@@ -9549,6 +9588,13 @@ export function LotLedgerPanel({ businessId, business, previewMode = false, focu
                 <label className="lst-field wide"><span>Supplier / detail</span><input value={lineDraft.detail} onChange={(e) => setLineDraft((d) => ({ ...d, detail: e.target.value }))} /></label>
                 <label className="lst-field"><span>How it behaves</span><select value={lineDraft.kind} onChange={(e) => setLineDraft((d) => ({ ...d, kind: e.target.value }))}><option value="metered">Changes every month</option><option value="fixed">Same every month</option></select></label>
                 {lineDraft.kind === "fixed" && (<label className="lst-field"><span>Monthly amount</span><input inputMode="decimal" value={lineDraft.recurring} onChange={(e) => setLineDraft((d) => ({ ...d, recurring: e.target.value }))} /></label>)}
+                {editLineId && linePayer.enabled && lineDraft.kind === "fixed" && (
+                  <>
+                    <label className="lst-field"><span>Paid by</span><select value={linePayer.staffId} onChange={(e) => setLinePayer((d) => ({ ...d, staffId: e.target.value }))}><option value={BUSINESS_PAYER}>The business</option>{staffOptions.map((s) => (<option key={s.id} value={s.id} data-no-translate>{s.name}</option>))}</select></label>
+                    <label className="lst-field"><span>Starting</span><input type="month" value={linePayer.fromMonth} min={linePayer.firstMonth || undefined} onChange={(e) => setLinePayer((d) => ({ ...d, fromMonth: e.target.value }))} /></label>
+                    <small className="lst-hint" style={{ gridColumn: "1 / -1" }}>Each month from then on counts as paid by this person (it comes off what they owe). Months before keep who paid them.</small>
+                  </>
+                )}
               </div>
             </div>
             <footer className="lst-modal-foot"><button className="lst-btn ghost" type="button" disabled={busy} onClick={closeModal}>Cancel</button><button className="lst-add" type="button" disabled={busy} onClick={saveExpenseLine}>{editLineId ? "Save changes" : "Add line"}</button></footer>
@@ -9565,7 +9611,7 @@ export function LotLedgerPanel({ businessId, business, previewMode = false, focu
               <div className="lst-form-grid">
                 <label className="lst-field"><span>Amount</span><input inputMode="decimal" value={purchase.amount} onChange={(e) => setPurchase((d) => ({ ...d, amount: e.target.value }))} /></label>
                 <label className="lst-field"><span>Date</span><input type="date" value={purchase.spentAt} onChange={(e) => setPurchase((d) => ({ ...d, spentAt: e.target.value }))} /></label>
-                <label className="lst-field"><span>Paid by</span><select value={purchase.paidByStaffId} onChange={(e) => setPurchase((d) => ({ ...d, paidByStaffId: e.target.value }))}><option value="">Choose staff</option>{staffOptions.map((s) => (<option key={s.id} value={s.id} data-no-translate>{s.name}</option>))}</select></label>
+                <label className="lst-field"><span>Paid by</span><select value={purchase.paidByStaffId} onChange={(e) => setPurchase((d) => ({ ...d, paidByStaffId: e.target.value }))}><option value="">Choose staff</option><option value={BUSINESS_PAYER}>The business</option>{staffOptions.map((s) => (<option key={s.id} value={s.id} data-no-translate>{s.name}</option>))}</select></label>
                 <label className="lst-field wide"><span>Note</span><input value={purchase.note} onChange={(e) => setPurchase((d) => ({ ...d, note: e.target.value }))} /></label>
                 <label className="lst-field wide"><span>Receipt</span><input type="file" accept="image/*,application/pdf" onChange={(e) => setPurchaseFile(e.target.files?.[0] ?? null)} /><small className="lst-hint">{modal === "edit-purchase" && purchase.hasProof && !purchaseFile ? "A receipt is on file — choose a new one only to replace it. " : ""}{expenseProofRequired(purchaseCents, proofThreshold) ? `This is at or above ${lotFormatCents(proofThreshold)}, so a receipt is required.` : `Below ${lotFormatCents(proofThreshold)} — a receipt is optional, attach one anyway if you have it.`}</small></label>
               </div>

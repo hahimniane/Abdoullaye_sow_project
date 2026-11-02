@@ -3482,6 +3482,22 @@
   },
   "lotAmount": "Montant",
   "lotPaidBy": "Payé par",
+  "lotPaidByBusiness": "L'entreprise",
+  "@lotPaidByBusiness": {
+    "description": "A choice in 'Paid by' on expenses: the business itself pays, so nobody is owed the money."
+  },
+  "lotLinePaidBySince": "Payé par {name} depuis {month}",
+  "@lotLinePaidBySince": {
+    "description": "On a monthly expense line: who pays it each month, from which month on.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "month": {
+        "type": "String"
+      }
+    }
+  },
   "lotNote": "Note",
   "lotReceipt": "Reçu",
   "lotAttachReceipt": "Joindre un reçu",

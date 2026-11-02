@@ -26,9 +26,12 @@ void main() {
       (r as Map).cast<String, dynamic>(),
   ];
 
+  final standing = (fixture['standing'] as List).cast<Map<String, dynamic>>();
+
   test('the fixture has its cases', () {
     expect(cases.length, greaterThanOrEqualTo(5));
     expect(itemCases.length, greaterThanOrEqualTo(3));
+    expect(standing.length, greaterThanOrEqualTo(5));
   });
 
   group('netStaffExpenses, the shared cases', () {
@@ -152,6 +155,90 @@ void main() {
         expect(got, c['expect']);
       });
     }
+  });
+
+  group('standing payers, the shared cases', () {
+    for (final c in standing) {
+      test(c['name'], () {
+        final got = standingPayerEntries(
+          rows(c['lines']),
+          rows(c['entries']),
+          c['nowMonth'] as String,
+        );
+        expect([
+          for (final e in got)
+            {
+              'id': e['id'],
+              'lineId': e['lineId'],
+              'month': e['month'],
+              'amountCents': e['amountCents'],
+              'paidByStaffId': e['paidByStaffId'],
+            },
+        ], c['expect']);
+        for (final e in got) {
+          expect(e['standing'], true);
+          expect(e['note'], '');
+          final month = (e['month'] as String).split('-').map(int.parse);
+          expect(
+            e['spentAtMs'],
+            DateTime.utc(month.first, month.last, 1, 12).millisecondsSinceEpoch,
+          );
+        }
+      });
+    }
+
+    test('withStandingPayers is the entries then the standing ones', () {
+      final c = standing.first;
+      final entries = rows(c['entries']);
+      final all = withStandingPayers(
+        entries,
+        rows(c['lines']),
+        c['nowMonth'] as String,
+      );
+      expect(all.length, entries.length + (c['expect'] as List).length);
+      expect(all.first['id'], (c['expect'] as List).first['id']);
+    });
+
+    test('the business is a choice, and it is nobody\'s credit', () {
+      final line = {
+        'payers': [
+          {'fromMonth': '2026-10', 'staffId': 'yao'},
+          {'fromMonth': '2026-12', 'staffId': businessPayer},
+        ],
+      };
+      expect(linePayerFor(line, '2026-09'), '');
+      expect(linePayerFor(line, '2026-11'), 'yao');
+      expect(linePayerFor(line, '2026-12'), '', reason: 'the business');
+      expect(linePayerSince(line, '2026-11')?.fromMonth, '2026-10');
+      expect(linePayerSince(line, '2026-09'), isNull);
+      final credits = staffCredits(
+        [
+          {
+            'paidByStaffId': businessPayer,
+            'amountCents': 900,
+            'month': '2026-10',
+          },
+        ],
+        const [],
+        '2026-10',
+      );
+      expect(credits, isEmpty);
+      expect(
+        monthExpenseLines(
+          [
+            {
+              'id': 'x',
+              'paidByStaffId': businessPayer,
+              'amountCents': 900,
+              'month': '2026-10',
+            },
+          ],
+          '2026-10',
+          [businessPayer],
+        ),
+        isEmpty,
+      );
+    });
   });
 
   group('the pieces', () {
