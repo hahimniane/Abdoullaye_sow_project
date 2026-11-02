@@ -112,3 +112,22 @@ describe("staffBalanceMonths", () => {
     assert.equal(al["2026-10"].lines.handovers[0].otherName, "Yao");
   });
 });
+
+describe("card payments online are nobody's cash", () => {
+  const {collectReceipts} = require("../staff_balances");
+  it("a stay Stripe settled is not held by its old 'received by'", () => {
+    const base = {parkingDate: "2026-10-22T12:00:00Z",
+      parkingEndDate: "2026-10-26T12:00:00Z", amountDueCents: 4800,
+      paymentStatus: "succeeded", paymentMethod: "direct",
+      receivedByStaffId: "yao"};
+    const online = {...base, id: "a",
+      stripeReconciledAt: "2026-10-26T17:57:02Z"};
+    const byHand = {...base, id: "b", directPaymentReceived: true,
+      stripeReconciledAt: "2026-10-26T17:57:02Z"};
+    const plain = {...base, id: "c"};
+    const now = new Date("2026-11-02T18:00:00Z");
+    const ids = collectReceipts({parkedCars: [online, byHand, plain]}, now,
+        {parking: true}).map((r) => r.id).sort();
+    assert.deepEqual(ids, ["b", "c"]);
+  });
+});

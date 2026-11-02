@@ -326,6 +326,19 @@ function objects(list) {
 }
 
 /**
+ * Whether a stay was settled online by card through Stripe (not by hand):
+ * the payment was reconciled from Stripe and never marked received in
+ * person. Such money goes to the business through its payout.
+ *
+ * @param {object} car A parkedCars row.
+ * @return {boolean} True for a card payment online.
+ */
+function paidOnlineByCard(car) {
+  return Boolean(car?.stripeReconciledAt) &&
+    car?.directPaymentReceived !== true;
+}
+
+/**
  * Parking money held by a person. The listed payments name their own
  * receiver; what the car carries beyond them (a car marked paid in full,
  * or paid after instalments) belongs to the record's receiver. Reverted
@@ -354,6 +367,9 @@ function parkingReceipts(cars, now) {
     });
     const staffId = text(car.receivedByStaffId, 128);
     if (!staffId || today === null) continue;
+    // Paid online by card (Stripe settled the stay): nobody on the team took
+    // that money, whatever "received by" was left on the car from before.
+    if (paidOnlineByCard(car)) continue;
     const rest = paidNowCents(car, today) - listed;
     if (rest > 0) {
       const last = live.length > 0 ? live[live.length - 1].receivedVia : "";
@@ -751,6 +767,7 @@ module.exports = {
   isBusinessAccount,
   netBalances,
   openingRecord,
+  paidOnlineByCard,
   parkingNetting,
   pendingHandovers,
   recordHandoverRefusal,
