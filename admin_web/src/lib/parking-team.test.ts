@@ -155,3 +155,20 @@ test("a team member's own lot jobs join their staff: bill", async () => {
   assert.equal(mine?.cars.length, 1);
   assert.deepEqual(s.customers.find((c) => c.key === "phone:3475628973")?.activities.map((a) => a.id), ["k"]);
 });
+
+test("month end names who received each payment", async () => {
+  const { parkingPaidBy, activityPaidBy } = await import("./parking-month-statement.ts");
+  assert.deepEqual(parkingPaidBy({ parkingPayments: [
+    { amountCents: 100, receivedByStaffId: "abd" },
+    { amountCents: 100, receivedByStaffId: "abd" },
+    { amountCents: 100, receivedByStaffId: "yao", reverted: true },
+    { amountCents: 100, receivedByStaffId: "business_account" },
+  ], receivedByStaffId: "yao" }), ["abd", "business_account"]);
+  // Marked paid with no payment line: the car's own "received by".
+  assert.deepEqual(parkingPaidBy({ receivedByStaffId: "yao" }), ["yao"]);
+  assert.deepEqual(parkingPaidBy({}), []);
+  assert.deepEqual(activityPaidBy({ receivedByStaffId: "yao" }), ["yao"]);
+  const source = readFileSync(new URL("../components/business/parking-month-end.tsx", import.meta.url), "utf8");
+  assert.match(source, /received by \$\{names\.join/);
+  assert.match(source, /reçu par \$\{names\.join/);
+});

@@ -188,6 +188,33 @@ export function parkingPaidVia(row: Row): string[] {
   return method === "direct" ? [] : ["online"];
 }
 
+/**
+ * Who received the money on a car (staff ids, or "business_account"): each
+ * live recorded payment's receiver, else the car's own "received by" when it
+ * was marked paid without a payment line. Console only, to name them on the
+ * month-end card.
+ */
+export function parkingPaidBy(row: Row): string[] {
+  const ids: string[] = [];
+  const add = (v: unknown) => {
+    const id = text(v, 128);
+    if (id && !ids.includes(id)) ids.push(id);
+  };
+  const payments = Array.isArray(row.parkingPayments) ? row.parkingPayments : [];
+  for (const p of payments) {
+    if ((p as Row | null)?.reverted === true) continue;
+    add((p as Row | null)?.receivedByStaffId);
+  }
+  if (ids.length === 0) add(row.receivedByStaffId);
+  return ids;
+}
+
+/** Who received a lot job's money: its "received by", when set. */
+export function activityPaidBy(row: Row): string[] {
+  const id = text(row.receivedByStaffId, 128);
+  return id ? [id] : [];
+}
+
 /** A `paidVia` code as the console shows it (English; french-dom.ts
  * translates it): the same words as "How it was paid" everywhere else. */
 export function parkingPaidViaLabel(code: string): string {
@@ -241,6 +268,8 @@ export type ParkingMonthBill = {
   /** How what was paid toward this month came in (method codes); empty when
    * nothing was paid toward it. */
   paidVia: string[];
+  /** Who received what was paid (staff ids / "business_account"). */
+  paidBy?: string[];
   /** A payment can be recorded by hand: a direct car the business entered. */
   recordable: boolean;
 };
@@ -295,6 +324,7 @@ export function parkingMonthStatement(row: Row, monthKey: string, now: Date = ne
     forStaffId: text(row.forStaffId, 128),
     paymentMethod: text(row.paymentMethod, 40),
     paidVia: monthPaidCents > 0 ? parkingPaidVia(row) : [],
+    paidBy: monthPaidCents > 0 ? parkingPaidBy(row) : [],
     recordable: text(row.paymentMethod, 40) === "direct" && (text(row.source, 40) === "business" || row.enteredByBusiness === true),
   };
 }
@@ -396,6 +426,8 @@ export type ParkingMonthCustomer = {
   paid: boolean;
   /** How this month's payments came in, method codes in first-seen order. */
   paidVia: string[];
+  /** Who received what was paid (staff ids / "business_account"). */
+  paidBy?: string[];
   partialMonth: boolean;
   /** What was owed before the linked staff's lot expenses came off
    * (docs/STAFF_EXPENSE_CREDIT.md). Equal to dueCents when nothing is netted. */
@@ -515,8 +547,10 @@ export function parkingMonthCustomers(
     const priorUnpaidCents = sumCars("priorUnpaidCents") + sumActs(older, "dueCents") + olderCars.reduce((s, c) => s + c.dueCents, 0);
     const dueCents = monthUnpaidCents + priorUnpaidCents;
     const paidVia: string[] = [];
+    const paidBy: string[] = [];
     for (const line of [...cars.filter((b) => b.monthPaidCents > 0), ...inMonth.filter((a) => a.paidCents > 0)]) {
       for (const code of line.paidVia) if (!paidVia.includes(code)) paidVia.push(code);
+      for (const id of line.paidBy ?? []) if (!paidBy.includes(id)) paidBy.push(id);
     }
     customers.push({
       key,
@@ -538,6 +572,7 @@ export function parkingMonthCustomers(
       owes: dueCents > 0,
       paid: parkingMonthCustomerPaid({ monthCents, dueCents }),
       paidVia,
+      paidBy,
       partialMonth: cars.some((b) => b.partialMonth),
       dueBeforeExpensesCents: dueCents,
       expenseCreditCents: 0,
@@ -595,6 +630,8 @@ export type ParkingMonthActivity = {
   forStaffId?: string;
   /** How what was paid came in (method codes); empty when nothing was. */
   paidVia: string[];
+  /** Who received what was paid (staff ids / "business_account"). */
+  paidBy?: string[];
 };
 
 /** An activity dated in the month is that month's; an older one still unpaid
@@ -630,6 +667,7 @@ export function activityMonthItem(row: Row, monthKey: string): ParkingMonthActiv
     // A team member's own job joins their bill (PARKING_TEAM_CARS.md).
     forStaffId: text(row.forStaffId, 128),
     paidVia: paidCents > 0 ? activityPaidVia(row) : [],
+    paidBy: paidCents > 0 ? activityPaidBy(row) : [],
   };
 }
 

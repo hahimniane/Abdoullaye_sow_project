@@ -264,6 +264,14 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
     return staffNames[id] ?? "";
   }
 
+  /** " · received by Yao" for who took a line's money; "" when nobody is
+   * recorded. A receiver no longer on the team still shows as someone. */
+  function receivedByText(ids: readonly string[] | undefined): string {
+    const names = (ids ?? []).map((id) => receiverName(id) || (lang === "fr" ? "quelqu'un hors de l'équipe" : "someone not on the team"));
+    if (names.length === 0) return "";
+    return lang === "fr" ? ` · reçu par ${names.join(", ")}` : ` · received by ${names.join(", ")}`;
+  }
+
   function openPay(customer: ParkingMonthCustomer) {
     setPayKey(customer.key);
     setPayAmount("");
@@ -426,7 +434,7 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
                 <div className="pk-month-due">
                   {customer.dueCents > 0
                     ? <><strong className="pk-owed">{moneyText(customer.dueCents)}</strong><small>{customer.monthPaidCents > 0 ? `${moneyText(customer.monthPaidCents)} paid · ` : ""}{moneyText(customer.monthCents)} this month{customer.priorUnpaidCents > 0 ? ` + ${moneyText(customer.priorUnpaidCents)} from before` : ""}</small>{customer.expenseCreditCents > 0 && <small className="pk-month-paid-via">Less expenses -{moneyText(customer.expenseCreditCents)}</small>}</>
-                    : <><span className="lst-badge ok">Paid</span>{customer.monthPaidCents > 0 && <small className="pk-month-paid-via">{moneyText(customer.monthPaidCents)} paid{customer.paidVia.length > 0 ? ` · ${customer.paidVia.map(parkingPaidViaLabel).join(", ")}` : ""}</small>}{customer.expenseCreditCents > 0 && <small className="pk-month-paid-via">Less expenses -{moneyText(customer.expenseCreditCents)}</small>}</>}
+                    : <><span className="lst-badge ok">Paid</span>{customer.monthPaidCents > 0 && <small className="pk-month-paid-via">{moneyText(customer.monthPaidCents)} paid{customer.paidVia.length > 0 ? ` · ${customer.paidVia.map(parkingPaidViaLabel).join(", ")}` : ""}{receivedByText(customer.paidBy)}</small>}{customer.expenseCreditCents > 0 && <small className="pk-month-paid-via">Less expenses -{moneyText(customer.expenseCreditCents)}</small>}</>}
                 </div>
                 <div className="pk-month-actions">
                   <button className="lst-btn ghost" type="button" disabled={busyId !== ""} onClick={() => void saveBill(customer)}>
@@ -455,7 +463,7 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
                       </span>
                       <span className="pk-month-period">{formatDayKey(b.periodFrom)} → {formatDayKey(b.periodTo)}</span>
                       <span className="pk-month-calc">{b.days} day{b.days === 1 ? "" : "s"} × {moneyText(b.dayRateCents)}</span>
-                      <span className="pk-month-amount"><strong>{moneyText(b.monthCents)}</strong>{b.monthPaidCents > 0 && <small className="pk-paid">{moneyText(b.monthPaidCents)} paid</small>}{b.dueCents > 0 ? <small>{moneyText(b.dueCents)} due</small> : <small>paid in full</small>}</span>
+                      <span className="pk-month-amount"><strong>{moneyText(b.monthCents)}</strong>{b.monthPaidCents > 0 && <small className="pk-paid">{moneyText(b.monthPaidCents)} paid</small>}{b.dueCents > 0 ? <small>{moneyText(b.dueCents)} due</small> : <small>paid in full</small>}{b.monthPaidCents > 0 && receivedByText(b.paidBy) && <small className="pk-received-by">{receivedByText(b.paidBy).replace(/^ · /, "")}</small>}</span>
                       {car && <button className="ghost-button" type="button" title="Open the car to record a payment" onClick={() => onOpenCar(car)}><SquarePen size={14} /></button>}
                     </li>
                   );
@@ -468,7 +476,7 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
                     </span>
                     <span className="pk-month-period">{formatDayKey(a.date)}</span>
                     <span className="pk-month-calc">{a.prior ? "" : "this month"}</span>
-                    <span className="pk-month-amount"><strong>{moneyText(a.prior ? a.dueCents : a.feeCents)}</strong>{a.paidCents > 0 && <small className="pk-paid">{moneyText(a.paidCents)} paid</small>}{a.dueCents > 0 ? <small>{moneyText(a.dueCents)} due</small> : <small>paid in full</small>}</span>
+                    <span className="pk-month-amount"><strong>{moneyText(a.prior ? a.dueCents : a.feeCents)}</strong>{a.paidCents > 0 && <small className="pk-paid">{moneyText(a.paidCents)} paid</small>}{a.dueCents > 0 ? <small>{moneyText(a.dueCents)} due</small> : <small>paid in full</small>}{a.paidCents > 0 && receivedByText(a.paidBy) && <small className="pk-received-by">{receivedByText(a.paidBy).replace(/^ · /, "")}</small>}</span>
                     <span aria-hidden="true"></span>
                   </li>
                 );
