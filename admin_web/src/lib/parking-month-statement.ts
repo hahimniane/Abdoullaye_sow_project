@@ -591,6 +591,8 @@ export type ParkingMonthActivity = {
   vehicle: string;
   vinNumber: string;
   trackingCode: string;
+  /** The team member whose own job this is, "" for a customer. */
+  forStaffId: string;
   /** How what was paid came in (method codes); empty when nothing was. */
   paidVia: string[];
 };
@@ -625,6 +627,8 @@ export function activityMonthItem(row: Row, monthKey: string): ParkingMonthActiv
     vehicle: [row.carYear, row.carMake, row.carModel].map((v) => text(v, 80)).filter(Boolean).join(" "),
     vinNumber: text(row.vinNumber, 17).toUpperCase(),
     trackingCode: text(row.trackingCode, 40),
+    // A team member's own job joins their bill (PARKING_TEAM_CARS.md).
+    forStaffId: text(row.forStaffId, 128),
     paidVia: paidCents > 0 ? activityPaidVia(row) : [],
   };
 }

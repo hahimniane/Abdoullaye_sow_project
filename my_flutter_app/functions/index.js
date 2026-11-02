@@ -18746,8 +18746,14 @@ exports.createLotActivity = onCall(
       });
       const activityDate = lotActivityMidday(data.activityDate);
       const now = FirestoreFieldValue.serverTimestamp();
+      // A job on a team member's linked number is theirs: it joins their
+      // own bill, like their cars (PARKING_TEAM_CARS.md).
+      const team = await parkingTeamFields(db, {businessId, business,
+        staffId: "", phone: record.customerPhone});
       const body = {
         ...record,
+        ...(team ? {forStaffId: team.forStaffId,
+          forStaffName: team.forStaffName} : {}),
         businessId,
         trackingCode,
         activityDate: activityDate ?

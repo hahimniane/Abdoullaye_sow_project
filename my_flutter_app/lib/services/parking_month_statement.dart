@@ -363,6 +363,7 @@ class ParkingMonthActivity {
     required this.customerEmail,
     required this.vehicle,
     required this.vinNumber,
+    this.forStaffId = '',
     this.paidVia = const [],
   });
 
@@ -381,6 +382,10 @@ class ParkingMonthActivity {
   final String customerEmail;
   final String vehicle;
   final String vinNumber;
+
+  /// The team member whose own job this is (it joins their bill,
+  /// PARKING_TEAM_CARS.md); '' for a customer.
+  final String forStaffId;
 
   /// How what was paid came in (method codes); empty when nothing was.
   final List<String> paidVia;
@@ -420,6 +425,7 @@ ParkingMonthActivity? activityMonthItem(Map<String, dynamic> row, String monthKe
         .where((v) => v.isNotEmpty)
         .join(' '),
     vinNumber: _text(row['vinNumber'], 17).toUpperCase(),
+    forStaffId: _text(row['forStaffId'], 128),
     paidVia: paid > 0 ? activityPaidVia(row) : const [],
   );
 }
@@ -790,7 +796,7 @@ List<ParkingMonthCustomer> parkingMonthCustomers(
     carGroups.putIfAbsent(parkingCustomerKey(b), () => []).add(b);
   }
   for (final a in activities) {
-    actGroups.putIfAbsent(parkingCustomerKeyOf(a.customerPhone, a.customerName), () => []).add(a);
+    actGroups.putIfAbsent(parkingCustomerKeyOf(a.customerPhone, a.customerName, a.forStaffId), () => []).add(a);
   }
   for (final c in carried) {
     carriedGroups

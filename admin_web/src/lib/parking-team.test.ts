@@ -138,3 +138,20 @@ test("every new string has a French translation", () => {
   }
   assert.ok(panelSource.includes("Choose which team member's car this is."));
 });
+
+test("a team member's own lot jobs join their staff: bill", async () => {
+  const { parkingMonthSummary } = await import("./parking-month-statement.ts");
+  const s = parkingMonthSummary(
+    [{ id: "c", parkingDate: "2026-10-01T12:00:00Z", parkingEndDate: "2026-10-03T12:00:00Z", amountDueCents: 3600, customerName: "Abdoulaye Sow", customerPhone: "+13475628973", forStaffId: "abd", paymentMethod: "direct" }],
+    "2026-10",
+    new Date("2026-11-02T18:00:00Z"),
+    [
+      { id: "j", activityDate: "2026-10-15T12:00:00Z", activityTypeLabel: "title", feeCents: 10000, customerName: "abdoulaye sow", customerPhone: "3475628973", forStaffId: "abd" },
+      { id: "k", activityDate: "2026-10-15T12:00:00Z", activityTypeLabel: "title", feeCents: 10000, customerName: "abdoulaye sow", customerPhone: "3475628973" },
+    ],
+  );
+  const mine = s.customers.find((c) => c.key === "staff:abd");
+  assert.deepEqual(mine?.activities.map((a) => a.id), ["j"]);
+  assert.equal(mine?.cars.length, 1);
+  assert.deepEqual(s.customers.find((c) => c.key === "phone:3475628973")?.activities.map((a) => a.id), ["k"]);
+});

@@ -120,3 +120,25 @@ test("no customer WhatsApp, welcome, invoice or account for a team car", () => {
   assert.ok(phoneAccounts.recordPhones("parkedCars",
       {...car, forStaffId: ""}, "US").length > 0);
 });
+
+test("a team member's own lot jobs join their bill", () => {
+  const {parkingMonthSummary} = require("../parking_month_statement");
+  {
+    const now = new Date("2026-11-02T18:00:00Z");
+    const car = {id: "c", parkingDate: "2026-10-01T12:00:00Z",
+      parkingEndDate: "2026-10-03T12:00:00Z", amountDueCents: 3600,
+      customerName: "Abdoulaye Sow", customerPhone: "+13475628973",
+      forStaffId: "abd", paymentMethod: "direct"};
+    const job = {id: "j", activityDate: "2026-10-15T12:00:00Z",
+      activityTypeLabel: "title", feeCents: 10000,
+      customerName: "abdoulaye sow", customerPhone: "3475628973",
+      forStaffId: "abd"};
+    const untied = {...job, id: "k", forStaffId: ""};
+    const s = parkingMonthSummary([car], "2026-10", now, [job, untied]);
+    const mine = s.customers.find((c) => c.key === "staff:abd");
+    assert.deepEqual(mine.activities.map((a) => a.id), ["j"]);
+    assert.equal(mine.cars.length, 1);
+    const phone = s.customers.find((c) => c.key === "phone:3475628973");
+    assert.deepEqual(phone.activities.map((a) => a.id), ["k"]);
+  }
+});

@@ -476,6 +476,8 @@ function activityMonthItem(row, monthKey) {
         .filter(Boolean).join(" "),
     vinNumber: text(r.vinNumber, 17).toUpperCase(),
     trackingCode: text(r.trackingCode, 40),
+    // A team member's own job joins their bill (PARKING_TEAM_CARS.md).
+    forStaffId: text(r.forStaffId, 128),
     paidVia: paidCents > 0 ? activityPaidVia(r) : [],
   };
 }

@@ -230,6 +230,50 @@ void main() {
       expect(other.forStaffId, '');
     });
 
+    test('a team member\'s own lot jobs join their staff: bill', () {
+      final summary = parkingMonthSummary(
+        [
+          {
+            'id': 'c',
+            'parkingDate': '2026-10-01T12:00:00Z',
+            'parkingEndDate': '2026-10-03T12:00:00Z',
+            'amountDueCents': 3600,
+            'customerName': 'Abdoulaye Sow',
+            'customerPhone': '+13475628973',
+            'forStaffId': 'abd',
+            'paymentMethod': 'direct',
+          },
+        ],
+        '2026-10',
+        DateTime.parse('2026-11-02T18:00:00Z'),
+        [
+          {
+            'id': 'j',
+            'activityDate': '2026-10-15T12:00:00Z',
+            'activityTypeLabel': 'title',
+            'feeCents': 10000,
+            'customerName': 'abdoulaye sow',
+            'customerPhone': '3475628973',
+            'forStaffId': 'abd',
+          },
+          {
+            'id': 'k',
+            'activityDate': '2026-10-15T12:00:00Z',
+            'activityTypeLabel': 'title',
+            'feeCents': 10000,
+            'customerName': 'abdoulaye sow',
+            'customerPhone': '3475628973',
+          },
+        ],
+      );
+      final mine = summary.customers.firstWhere((c) => c.key == 'staff:abd');
+      expect(mine.activities.map((a) => a.id), ['j']);
+      expect(mine.cars, hasLength(1));
+      final phone =
+          summary.customers.firstWhere((c) => c.key == 'phone:3475628973');
+      expect(phone.activities.map((a) => a.id), ['k']);
+    });
+
     test(
       'one credit is used once: the own staff: bill first, input order kept',
       () {
