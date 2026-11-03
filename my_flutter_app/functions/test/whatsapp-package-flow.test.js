@@ -158,8 +158,16 @@ describe("whatsapp package flow", () => {
         assert.deepEqual(items.data.items.map((i) => i.id),
             ["i:electronics|phone", "lb:clothing"]);
         assert.match(items.data.items[0].description, /From \$35/);
-        const how = await step(f, "ITEMS", {item_1: "i:electronics|phone",
-          qty_1: "2", item_2: "lb:clothing", qty_2: "50"});
+        const amounts = await step(f, "ITEMS", {item_1: "i:electronics|phone",
+          item_2: "lb:clothing"});
+        assert.equal(amounts.screen, "AMOUNTS");
+        // Each chosen item asks its own question: a count, or pounds.
+        assert.equal(amounts.data.l_qty_1, "How many");
+        assert.equal(amounts.data.h_qty_1, "Phone");
+        assert.equal(amounts.data.l_qty_2, "Weight (lb)");
+        assert.equal(amounts.data.show_2, true);
+        assert.equal(amounts.data.show_3, false);
+        const how = await step(f, "AMOUNTS", {qty_1: "2", qty_2: "50"});
         assert.equal(how.screen, "HOW");
         assert.deepEqual(how.data.hows.map((h) => h.id),
             ["bring_in", "collect"]);
@@ -207,7 +215,8 @@ describe("whatsapp package flow", () => {
         const {f} = harness();
         await f.handle({action: "INIT", flow_token: "tok"});
         await step(f, "WHERE", {country: "gn", mode: "sea"});
-        await step(f, "ITEMS", {item_1: "lb:clothing", qty_1: "20"});
+        await step(f, "ITEMS", {item_1: "lb:clothing"});
+        await step(f, "AMOUNTS", {qty_1: "20"});
         assert.equal((await step(f, "HOW", {how: "collect"})).data
             .error_message, "Enter the pickup address.");
         const out = await step(f, "HOW", {how: "collect",
@@ -218,13 +227,21 @@ describe("whatsapp package flow", () => {
         assert.equal(out.data.whens[0].id, "2026-11-03|11:00|13:00|");
       });
 
+  it("only something else skips the amounts screen", async () => {
+    const {f} = harness();
+    await f.handle({action: "INIT", flow_token: "tok"});
+    await step(f, "WHERE", {country: "gn", mode: "sea"});
+    const how = await step(f, "ITEMS", {other: "A box of shoes"});
+    assert.equal(how.screen, "HOW");
+  });
+
   it("refuses bad amounts and an expired form", async () => {
     const {f, sessions} = harness();
     await f.handle({action: "INIT", flow_token: "tok"});
     await step(f, "WHERE", {country: "gn", mode: "air"});
-    const bad = await step(f, "ITEMS", {item_1: "i:electronics|phone",
-      qty_1: "1.5"});
-    assert.equal(bad.screen, "ITEMS");
+    await step(f, "ITEMS", {item_1: "i:electronics|phone"});
+    const bad = await step(f, "AMOUNTS", {qty_1: "1.5"});
+    assert.equal(bad.screen, "AMOUNTS");
     assert.match(bad.data.error_message, /Check the amounts/);
     sessions.set("tok", {...sessions.get("tok"), expiresAtMs: 0});
     const gone = await step(f, "ITEMS", {});

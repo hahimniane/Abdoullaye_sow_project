@@ -4,7 +4,9 @@ Steps, run in order (each prints what it did, never a secret):
     python3 ops/whatsapp/package_flow.py key       # RSA key: private half to
                                                    # Secret Manager, public to Meta
     python3 ops/whatsapp/package_flow.py create    # create the Flow + upload JSON
-    python3 ops/whatsapp/package_flow.py upload    # re-upload the JSON (after edits)
+    python3 ops/whatsapp/package_flow.py upload    # re-upload the JSON (draft only)
+    python3 ops/whatsapp/package_flow.py new-version  # a published Flow can't
+                                                   # change: new draft + upload
     python3 ops/whatsapp/package_flow.py health    # status, validation, endpoint health
     python3 ops/whatsapp/package_flow.py publish   # publish (after the deploy)
     python3 ops/whatsapp/package_flow.py enable    # appConfig/whatsappPackageFlow
@@ -18,6 +20,7 @@ import pathlib
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -136,6 +139,22 @@ def cmd_create():
     upload(result["id"])
 
 
+def cmd_new_version():
+    old = STATE.read_text().strip() if STATE.exists() else ""
+    if old:
+        with open(STATE.with_suffix(".history"), "a") as history:
+            history.write(old + "\n")
+    name = f"{NAME}_{time.strftime('%Y%m%d_%H%M')}"
+    result = call("POST", f"{WABA}/flows",
+                  form={"name": name, "categories": json.dumps(["OTHER"]),
+                        "endpoint_uri": ENDPOINT})
+    print("create:", result)
+    if "id" not in result:
+        sys.exit(1)
+    STATE.write_text(result["id"])
+    upload(result["id"])
+
+
 def cmd_health():
     fid = flow_id()
     print(json.dumps(call("GET", f"{fid}?fields=id,name,status,"
@@ -160,6 +179,7 @@ def cmd_enable():
 
 COMMANDS = {"key": cmd_key, "create": cmd_create,
             "upload": lambda: upload(flow_id()), "health": cmd_health,
+            "new-version": cmd_new_version,
             "publish": cmd_publish, "enable": cmd_enable}
 
 if __name__ == "__main__":

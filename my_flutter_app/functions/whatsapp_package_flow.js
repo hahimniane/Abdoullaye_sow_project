@@ -6,8 +6,9 @@
  * on the existing `whatsappWebhook` (no new function: the CPU budget is
  * full).
  *
- * Screens: WHERE (country, Sea/Air) -> ITEMS (up to 4 lines + something
- * else) -> HOW (bring it / pick it up + address) -> PICK (compare the
+ * Screens: WHERE (country, Sea/Air) -> ITEMS (up to 4 kinds + something
+ * else) -> AMOUNTS (how many, or the pounds, per kind) -> HOW (bring
+ * it / pick it up + address) -> PICK (compare the
  * businesses; skipped when the customer came from a business's QR) ->
  * WHEN (day and 2-hour window) -> PEOPLE (names, receiver phone) -> REVIEW
  * (send). The answers live server-side in `whatsappFlowSessions/{token}`;
@@ -23,8 +24,8 @@ const priceList = require("./package_price_list");
 
 const FLOW_VERSION = "6.0";
 const DATA_API_VERSION = "3.0";
-const SCREENS = Object.freeze(["WHERE", "ITEMS", "HOW", "PICK", "WHEN",
-  "PEOPLE", "REVIEW"]);
+const SCREENS = Object.freeze(["WHERE", "ITEMS", "AMOUNTS", "HOW", "PICK",
+  "WHEN", "PEOPLE", "REVIEW"]);
 const SLOTS = 4;
 const DAYS_AHEAD = 14;
 const PICKUP_DAY = Object.freeze({from: "07:00", to: "21:00"});
@@ -46,9 +47,12 @@ const T = Object.freeze({
     whereTitle: "Send a package", country: "Country", mode: "Ships by",
     sea: "Sea", air: "Air", next: "Next",
     itemsTitle: "What are you sending", itemsIntro:
-      "Pick up to 4 kinds of items. For things sold by the pound, give " +
-      "the pounds (a suitcase is about 50 lb).",
-    item: "Item", qty: "How many or lb", other: "Something else",
+      "Pick up to 4 kinds of items. You say how many on the next screen.",
+    item: "Item", other: "Something else",
+    amountsTitle: "How many", amountsIntro:
+      "For things sold by the pound, give the pounds (a suitcase is " +
+      "about 50 lb).",
+    count: "How many", pounds: "Weight (lb)",
     otherHelp: "Anything not in the list: the business sends its price.",
     howTitle: "Drop-off or pickup", how: "How", bring: "I'll bring it",
     pickup: "Pick it up from me", address: "Pickup address",
@@ -84,9 +88,13 @@ const T = Object.freeze({
     whereTitle: "Envoyer un colis", country: "Pays", mode: "Par",
     sea: "Bateau", air: "Avion", next: "Suivant",
     itemsTitle: "Que voulez-vous envoyer", itemsIntro:
-      "Choisissez jusqu'à 4 sortes d'articles. Pour ce qui se paie à la " +
-      "livre, donnez les livres (une valise fait environ 50 lb).",
-    item: "Article", qty: "Combien ou lb", other: "Autre chose",
+      "Choisissez jusqu'à 4 sortes d'articles. Vous donnez les quantités " +
+      "à l'écran suivant.",
+    item: "Article", other: "Autre chose",
+    amountsTitle: "Combien", amountsIntro:
+      "Pour ce qui se paie à la livre, donnez les livres (une valise fait " +
+      "environ 50 lb).",
+    count: "Combien", pounds: "Poids (lb)",
     otherHelp: "Ce qui n'est pas dans la liste : l'entreprise donne son prix.",
     howTitle: "Dépôt ou ramassage", how: "Comment", bring: "Je l'apporte",
     pickup: "Venez le chercher", address: "Adresse",
@@ -209,13 +217,22 @@ function flowJson() {
   const slot = (n) => [
     {type: "Dropdown", name: `item_${n}`, label: `\${data.l_item_${n}}`,
       "data-source": "${data.items}", required: n === 1},
-    {type: "TextInput", name: `qty_${n}`, label: "${data.l_qty}",
-      "input-type": "number", required: n === 1},
   ];
+  // One box per chosen item, labelled for it: "How many" for things
+  // counted, "Weight (lb)" for things sold by the pound.
+  const amount = (n) => ({type: "TextInput", name: `qty_${n}`,
+    label: `\${data.l_qty_${n}}`, "helper-text": `\${data.h_qty_${n}}`,
+    "input-type": "number", required: false,
+    visible: `\${data.show_${n}}`});
   const itemsPayload = {};
+  const amountsPayload = {};
+  const amountData = {};
   for (let n = 1; n <= SLOTS; n++) {
     itemsPayload[`item_${n}`] = `\${form.item_${n}}`;
-    itemsPayload[`qty_${n}`] = `\${form.qty_${n}}`;
+    amountsPayload[`qty_${n}`] = `\${form.qty_${n}}`;
+    amountData[`l_qty_${n}`] = str("How many");
+    amountData[`h_qty_${n}`] = str("Barrel");
+    amountData[`show_${n}`] = {type: "boolean", __example__: n === 1};
   }
   itemsPayload.other = "${form.other}";
   const itemLabels = {};
@@ -224,7 +241,8 @@ function flowJson() {
     version: FLOW_VERSION,
     data_api_version: DATA_API_VERSION,
     routing_model: {
-      WHERE: ["ITEMS"], ITEMS: ["HOW"], HOW: ["PICK", "WHEN"],
+      WHERE: ["ITEMS"], ITEMS: ["AMOUNTS", "HOW"], AMOUNTS: ["HOW"],
+      HOW: ["PICK", "WHEN"],
       PICK: ["WHEN"], WHEN: ["PEOPLE"], PEOPLE: ["REVIEW"], REVIEW: [],
     },
     screens: [
@@ -243,7 +261,7 @@ function flowJson() {
       ]}},
       {id: "ITEMS", title: "Laawol", data: {
         l_title: str("What are you sending"), l_intro: str("Pick"),
-        ...itemLabels, l_qty: str("How many or lb"), l_other: str("Other"),
+        ...itemLabels, l_other: str("Other"),
         l_other_help: str("Anything else"), l_next: str("Next"),
         items: list()},
       layout: {type: "SingleColumnLayout", children: [
@@ -254,6 +272,15 @@ function flowJson() {
           "helper-text": "${data.l_other_help}", required: false,
           "max-length": 120},
         footer("ITEMS", itemsPayload),
+      ]}},
+      {id: "AMOUNTS", title: "Laawol", data: {
+        l_title: str("How many"), l_intro: str("For things sold by the lb"),
+        l_next: str("Next"), ...amountData},
+      layout: {type: "SingleColumnLayout", children: [
+        {type: "TextHeading", text: "${data.l_title}"},
+        {type: "TextBody", text: "${data.l_intro}"},
+        amount(1), amount(2), amount(3), amount(4),
+        footer("AMOUNTS", amountsPayload),
       ]}},
       {id: "HOW", title: "Laawol", data: {
         l_title: str("Drop-off or pickup"), l_how: str("How"),
@@ -609,11 +636,13 @@ function labels(screen, lang) {
         l_next: w.next};
     case "ITEMS": {
       const out = {l_title: w.itemsTitle, l_intro: w.itemsIntro,
-        l_qty: w.qty, l_other: w.other, l_other_help: w.otherHelp,
-        l_next: w.next};
+        l_other: w.other, l_other_help: w.otherHelp, l_next: w.next};
       for (let n = 1; n <= SLOTS; n++) out[`l_item_${n}`] = `${w.item} ${n}`;
       return out;
     }
+    case "AMOUNTS":
+      return {l_title: w.amountsTitle, l_intro: w.amountsIntro,
+        l_next: w.next};
     case "HOW":
       return {l_title: w.howTitle, l_how: w.how, l_address: w.address,
         l_address_help: w.addressHelp, l_next: w.next};
@@ -704,6 +733,20 @@ function createPackageFlow(deps) {
     const data = payload.data || {};
     const screen = String(data.screen || payload.screen || "");
 
+    // Bring it in / pick it up: only the ways a business there offers.
+    const howScreen = (current, from = "ITEMS") => {
+      const here = countryOptions(current, options);
+      const hows = [];
+      if (here.some((o) => o.bringIn?.available)) {
+        hows.push({id: "bring_in", title: w.bring, description: ""});
+      }
+      if (here.some((o) => o.collect?.available)) {
+        hows.push({id: "collect", title: w.pickup, description: ""});
+      }
+      if (!hows.length) return fail(current, from, w.noBusinesses);
+      return screenOut(token, current, "HOW", {hows});
+    };
+
     if (screen === "WHERE") {
       const country = String(data.country || "");
       const mode = data.mode === "air" ? "air" : "sea";
@@ -724,11 +767,34 @@ function createPackageFlow(deps) {
 
     if (screen === "ITEMS") {
       const catalog = Array.isArray(session.catalog) ? session.catalog : [];
-      const lines = [];
+      const picked = [];
       for (let n = 1; n <= SLOTS; n++) {
         const id = String(data[`item_${n}`] || "");
         if (!id || id === "none") continue;
         const row = catalog.find((c) => c.id === id);
+        // The same kind twice is one line.
+        if (row && !picked.includes(id)) picked.push(id);
+      }
+      const other = String(data.other || "").trim().slice(0, 120);
+      if (!picked.length && !other) return fail(session, "ITEMS", w.errItems);
+      await deps.saveSession(token, {picked, other, lines: []});
+      if (!picked.length) return howScreen({...session, other});
+      const amounts = {};
+      for (let n = 1; n <= SLOTS; n++) {
+        const row = catalog.find((c) => c.id === picked[n - 1]);
+        amounts[`show_${n}`] = Boolean(row);
+        amounts[`l_qty_${n}`] = row?.kind === "per_lb" ? w.pounds : w.count;
+        amounts[`h_qty_${n}`] = row ? clip(row.title, 80) : "";
+      }
+      return screenOut(token, session, "AMOUNTS", amounts);
+    }
+
+    if (screen === "AMOUNTS") {
+      const catalog = Array.isArray(session.catalog) ? session.catalog : [];
+      const picked = Array.isArray(session.picked) ? session.picked : [];
+      const lines = [];
+      for (let n = 1; n <= picked.length && n <= SLOTS; n++) {
+        const row = catalog.find((c) => c.id === picked[n - 1]);
         if (!row) continue;
         const amount = Number(String(data[`qty_${n}`] ?? "")
             .replace(",", "."));
@@ -736,24 +802,16 @@ function createPackageFlow(deps) {
           amount >= 0.1 && amount <= priceList.LIMIT.WEIGHT_LB :
           Number.isInteger(amount) && amount >= 1 &&
             amount <= priceList.LIMIT.QUANTITY;
-        if (!ok) return fail(session, "ITEMS", w.errQty);
+        if (!ok) return fail(session, "AMOUNTS", w.errQty);
         lines.push({kind: row.kind, label: row.label,
           categoryId: row.categoryId, amount: row.kind === "per_lb" ?
             Math.round(amount * 10) / 10 : amount});
       }
-      const other = String(data.other || "").trim().slice(0, 120);
-      if (!lines.length && !other) return fail(session, "ITEMS", w.errItems);
-      await deps.saveSession(token, {lines, other});
-      const here = countryOptions(session, options);
-      const hows = [];
-      if (here.some((o) => o.bringIn?.available)) {
-        hows.push({id: "bring_in", title: w.bring, description: ""});
+      if (!lines.length && !session.other) {
+        return fail(session, "AMOUNTS", w.errQty);
       }
-      if (here.some((o) => o.collect?.available)) {
-        hows.push({id: "collect", title: w.pickup, description: ""});
-      }
-      if (!hows.length) return fail(session, "ITEMS", w.noBusinesses);
-      return screenOut(token, session, "HOW", {hows});
+      await deps.saveSession(token, {lines});
+      return howScreen(session, "AMOUNTS");
     }
 
     if (screen === "HOW") {
