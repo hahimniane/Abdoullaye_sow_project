@@ -187,6 +187,23 @@ function parseWebhook(body) {
         } else if (type === "button") {
           event.text = String(msg.button?.text || msg.button?.payload || "");
           event.buttonPayload = String(msg.button?.payload || "");
+        } else if (type === "interactive" &&
+            msg.interactive?.type === "nfm_reply") {
+          // A WhatsApp Flow was completed ("Send a package",
+          // docs/PACKAGE_PRICE_LIST.md §5): its params come back as JSON.
+          let params = {};
+          try {
+            params = JSON.parse(String(
+                msg.interactive.nfm_reply?.response_json || "{}")) || {};
+          } catch (error) {
+            params = {};
+          }
+          event.flowReply = {
+            flowToken: String(params.flow_token || ""),
+            requestCode: String(params.request_code || ""),
+            requestToken: String(params.request_token || ""),
+          };
+          event.text = "";
         } else if (type === "interactive") {
           const reply = msg.interactive?.button_reply ||
             msg.interactive?.list_reply || {};

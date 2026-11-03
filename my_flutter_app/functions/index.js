@@ -234,6 +234,7 @@ const {
 // pure rules share names (toMillis, moneyText) with helpers in this file.
 const packageRequests = require("./package_requests");
 const packagePriceList = require("./package_price_list");
+const packageFlow = require("./whatsapp_package_flow");
 const requestReceive = require("./request_receive");
 const {
   loginCodeTemplateMessage,
@@ -752,6 +753,9 @@ const whatsappPhoneNumberId = defineSecret("WHATSAPP_PHONE_NUMBER_ID");
 // Two-way WhatsApp (docs/WHATSAPP_CONVERSATIONS.md): the Meta app secret,
 // which signs every webhook call (and derives the verify token).
 const whatsappAppSecret = defineSecret("WHATSAPP_APP_SECRET");
+// The RSA key of the "Send a package" WhatsApp Flow endpoint
+// (docs/PACKAGE_PRICE_LIST.md §5); its public half is uploaded to Meta.
+const whatsappFlowPrivateKey = defineSecret("WHATSAPP_FLOW_PRIVATE_KEY");
 const WHATSAPP_GRAPH_URL = "https://graph.facebook.com/v21.0";
 const TERMINAL49_BASE_URL = "https://api.terminal49.com/v2";
 const TERMINAL49_TIMEOUT_MS = 15 * 1000;
@@ -23545,8 +23549,157 @@ function whatsappConversations() {
     notifyConversation: notifyWhatsAppConversation,
     recordUpdateDelivery: recordWhatsAppUpdateDelivery,
     shipmentQueries: require("./phone_accounts").shipmentQueries,
+    packageFlow: {
+      openRequest: packageFlow.openRequest,
+      open: openPackageFlow,
+      completed: packageFlowCompleted,
+    },
   });
   return whatsappConversationsService;
+}
+
+const PACKAGE_FLOW_SESSIONS = "whatsappFlowSessions";
+
+/**
+ * Sends the "Send a package" form to a customer who asked for it
+ * (docs/PACKAGE_PRICE_LIST.md §5). Nothing happens (the message goes on as
+ * an ordinary one) until the Flow is published and its id stored in
+ * appConfig/whatsappPackageFlow, or when a named business is unknown.
+ *
+ * @param {object} args {phone, lang, slug, profileName}.
+ * @return {Promise<boolean>} Whether the form was sent.
+ */
+async function openPackageFlow({phone, lang, slug, profileName}) {
+  const db = admin.firestore();
+  const config = (await db.collection("appConfig")
+      .doc("whatsappPackageFlow").get()).data() || {};
+  const flowId = String(config.flowId || "");
+  if (!flowId || config.enabled === false) return false;
+  let businessName = "";
+  if (slug) {
+    const claim = await db.collection("packageRequestSlugs").doc(slug).get();
+    const businessId = String(claim.data()?.businessId || "");
+    if (!businessId) return false;
+    const business = (await db.collection("businesses").doc(businessId)
+        .get()).data() || {};
+    businessName = String(business.name || "");
+  }
+  const flowToken = crypto.randomBytes(24).toString("base64url");
+  const nowMs = Date.now();
+  await db.collection(PACKAGE_FLOW_SESSIONS).doc(flowToken).set({
+    phone, lang: lang === "fr" ? "fr" : "en", slug: slug || "",
+    businessName, profileName: String(profileName || "").slice(0, 80),
+    expiresAtMs: nowMs + packageFlow.SESSION_MS,
+    expiresAt: FirestoreTimestamp.fromMillis(nowMs + 30 * 24 * 60 * 60 *
+      1000),
+    createdAtMs: nowMs,
+    createdAt: FirestoreFieldValue.serverTimestamp(),
+  });
+  const sent = await sendWhatsAppMessage(packageFlow.flowMessageBody({
+    phone, flowId, flowToken, lang, businessName}));
+  if (!sent.ok) {
+    logger.warn("Send a package form not sent", {error: sent.error,
+      errorCode: sent.errorCode});
+  }
+  return sent.ok;
+}
+
+/**
+ * A customer finished the form: answer in the chat with the request.
+ *
+ * @param {object} args {phone, lang, reply: {flowToken, requestCode,
+ *   requestToken}}.
+ * @return {Promise<void>}
+ */
+async function packageFlowCompleted({phone, lang, reply}) {
+  const db = admin.firestore();
+  const code = packageRequests.normalizeRequestCode(reply.requestCode);
+  const claim = code ? await db.collection("packageRequestCodes").doc(code)
+      .get() : null;
+  const requestId = String(claim?.data()?.requestId || "");
+  const request = requestId ? (await db.collection(PACKAGE_REQUESTS)
+      .doc(requestId).get()).data() || null : null;
+  const fr = lang === "fr";
+  const link = request ? `https://customer.laawoldigital.com/e/` +
+    `${request.token}` : "";
+  const text = !request ?
+    (fr ? "Merci ! Si votre demande n'est pas arrivée, écrivez " +
+      "« Envoyer un colis » pour recommencer." :
+      "Thank you! If your request did not go through, write \"Send a " +
+      "package\" to start again.") :
+    request.status === packageRequests.STATUS.CONFIRMED ?
+      (fr ? `C'est noté ✅ Demande ${request.code} chez ` +
+        `${request.businessName}. Vous payez au dépôt ou au ramassage. ` +
+        `Détails et changement d'heure : ${link}` :
+        `You're all set ✅ Request ${request.code} with ` +
+        `${request.businessName}. You pay at drop-off or pickup. Details ` +
+        `and a new time if you need one: ${link}`) :
+      (fr ? `Demande ${request.code} envoyée à ${request.businessName}. ` +
+        `Elle vous enverra ici le prix de ce qui reste à chiffrer. ` +
+        `Détails : ${link}` :
+        `Request ${request.code} sent to ${request.businessName}. They ` +
+        `will send you the price of what's left to quote here. Details: ` +
+        link);
+  await sendWhatsAppMessage(whatsappInbox.freeFormBody({phone, text}));
+}
+
+/**
+ * Minutes after midnight now in a time zone.
+ *
+ * @param {string} zone IANA zone.
+ * @return {number} Minutes.
+ */
+function minutesNowIn(zone) {
+  const parts = new Intl.DateTimeFormat("en-US", {timeZone:
+    packageRequests.businessTimeZone(zone), hour: "2-digit",
+  minute: "2-digit", hourCycle: "h23"}).formatToParts(new Date());
+  const get = (type) => Number(parts.find((p) => p.type === type)?.value);
+  return get("hour") * 60 + get("minute");
+}
+
+let packageFlowService = null;
+
+/**
+ * The "Send a package" Flow endpoint's brain with Firestore behind it.
+ *
+ * @return {{handle: function(object): Promise<object>}}
+ */
+function packageFlowEndpoint() {
+  if (packageFlowService) return packageFlowService;
+  const db = admin.firestore();
+  const sessions = db.collection(PACKAGE_FLOW_SESSIONS);
+  packageFlowService = packageFlow.createPackageFlow({
+    loadSession: async (token) => {
+      if (!/^[A-Za-z0-9_-]{16,64}$/.test(token)) return null;
+      const snap = await sessions.doc(token).get();
+      return snap.exists ? snap.data() || null : null;
+    },
+    saveSession: (token, patch) => sessions.doc(token).update({...patch,
+      updatedAt: FirestoreFieldValue.serverTimestamp()}),
+    loadOptions: async ({slug}) => {
+      if (!slug) {
+        return {business: null, options: await allPackageRequestOptions(db)};
+      }
+      const claim = await db.collection("packageRequestSlugs").doc(slug)
+          .get();
+      const businessId = String(claim.data()?.businessId || "");
+      const doc = businessId ?
+        await db.collection("businesses").doc(businessId).get() : null;
+      if (!doc || !doc.exists) return {business: null, options: []};
+      return {business: {businessId, name: String(doc.data()?.name || "")},
+        options: await packageRequestOptionsOf(db, doc)};
+    },
+    pickupQuotes: (address, ids) => pickupQuotesFor(db, address, ids,
+        safeSecretValue(googleMapsApiKey)),
+    createRequest: (data, session) => createPackageRequest(db, {
+      uid: `whatsapp:${String(session.phone).replace(/\D/g, "")}`,
+      anonymous: true, data, mapsKey: safeSecretValue(googleMapsApiKey)}),
+    nowMs: () => Date.now(),
+    todayKey: (zone) => packageRequests.dateKeyIn(Date.now(),
+        packageRequests.businessTimeZone(zone)),
+    nowMinutes: (zone) => minutesNowIn(zone),
+  });
+  return packageFlowService;
 }
 
 /**
@@ -23825,6 +23978,39 @@ exports.whatsappConversation = onCall(
 // GET answers Meta's one-time verification; POST must carry Meta's
 // signature. Always 200 once the signature is good, so Meta does not retry
 // events we already handled (a failed one is retried by its own dedupe).
+/**
+ * Decrypts a Flow endpoint call, answers it, encrypts the answer.
+ *
+ * @param {object} body The encrypted request.
+ * @param {object} res The HTTP response.
+ * @return {Promise<void>}
+ */
+async function answerPackageFlow(body, res) {
+  let opened = null;
+  try {
+    opened = packageFlow.decryptFlowRequest(body,
+        safeSecretValue(whatsappFlowPrivateKey).replace(/\\n/g, "\n"));
+  } catch (error) {
+    // 421: WhatsApp fetches the public key again and retries.
+    logger.warn("Package flow request not decrypted",
+        {error: String(error?.message || error)});
+    res.status(421).send("Cannot decrypt");
+    return;
+  }
+  let answer = null;
+  try {
+    answer = await packageFlowEndpoint().handle(opened.payload);
+  } catch (error) {
+    logger.error("Package flow step failed",
+        {error: String(error?.message || error)});
+    res.status(500).send("Error");
+    return;
+  }
+  res.set("Content-Type", "text/plain");
+  res.status(200).send(packageFlow.encryptFlowResponse(answer,
+      opened.aesKey, opened.iv));
+}
+
 exports.whatsappWebhook = onRequest(
     {
       cors: false,
@@ -23832,7 +24018,8 @@ exports.whatsappWebhook = onRequest(
       maxInstances: 2,
       timeoutSeconds: 120,
       memory: "512MiB",
-      secrets: [whatsappAppSecret, whatsappAccessToken, whatsappPhoneNumberId],
+      secrets: [whatsappAppSecret, whatsappAccessToken, whatsappPhoneNumberId,
+        whatsappFlowPrivateKey, googleMapsApiKey],
     },
     async (req, res) => {
       const secret = safeSecretValue(whatsappAppSecret);
@@ -23861,6 +24048,12 @@ exports.whatsappWebhook = onRequest(
         body = JSON.parse(req.rawBody.toString("utf8"));
       } catch (error) {
         res.status(400).send("Bad JSON");
+        return;
+      }
+      // The "Send a package" Flow's data endpoint shares this URL
+      // (docs/PACKAGE_PRICE_LIST.md §5): Meta sends it encrypted.
+      if (body && body.encrypted_flow_data) {
+        await answerPackageFlow(body, res);
         return;
       }
       const parsed = whatsappInbox.parseWebhook(body);
@@ -47514,6 +47707,29 @@ function closeRequestPatch(request, status, entry, nowMs, reason = "") {
 }
 
 /**
+ * Every business x destination a customer can send to.
+ *
+ * @param {object} db Firestore.
+ * @return {Promise<object[]>} requestOption rows, by country then name.
+ */
+async function allPackageRequestOptions(db) {
+  const businesses = await db.collection("businesses")
+      .where("packageRequestSettings.acceptRequests", "==", true)
+      .limit(500)
+      .get();
+  const options = [];
+  for (const group of inGroups(businesses.docs.filter((doc) =>
+    String(doc.data()?.status) === "approved"), 10)) {
+    const lists = await Promise.all(group.map((doc) =>
+      packageRequestOptionsOf(db, doc)));
+    lists.forEach((list) => options.push(...list));
+  }
+  options.sort((a, b) => a.country.name.localeCompare(b.country.name) ||
+    a.businessName.localeCompare(b.businessName));
+  return options;
+}
+
+/**
  * The pickup fee of each business a customer compares, for one address
  * (docs/PACKAGE_PRICE_LIST.md decision 8). A business without a pickup plan
  * for packages answers `priced: false` (its staff set the fee); one that
@@ -47532,8 +47748,23 @@ async function quotePackagePickups(db, request) {
   });
   const address = String(request.data?.address || "").trim().slice(0, 200);
   if (!address) throw requestInvalid(["pickup_address_required"]);
-  const ids = [...new Set((Array.isArray(request.data?.businessIds) ?
-    request.data.businessIds : []).map((id) => String(id || "").trim())
+  return {quotes: await pickupQuotesFor(db, address,
+      request.data?.businessIds, googleMapsApiKey.value())};
+}
+
+/**
+ * Each business's pickup fee for one address (quotePackagePickups and the
+ * WhatsApp form).
+ *
+ * @param {object} db Firestore.
+ * @param {string} address The pickup address.
+ * @param {string[]} businessIds Up to 20 businesses.
+ * @param {string} key Google Maps key.
+ * @return {Promise<object[]>} The quotes.
+ */
+async function pickupQuotesFor(db, address, businessIds, key) {
+  const ids = [...new Set((Array.isArray(businessIds) ? businessIds : [])
+      .map((id) => String(id || "").trim())
       .filter((id) => id && !id.includes("/")))].slice(0, 20);
   const docs = await Promise.all(ids.map((id) =>
     db.collection("businesses").doc(id).get()));
@@ -47549,7 +47780,7 @@ async function quotePackagePickups(db, request) {
     if (!config) return {...base, available: true};
     try {
       const quote = await computePlanPickupFee({config, business, address,
-        key: googleMapsApiKey.value()});
+        key});
       return {...base, available: true, priced: true,
         feeCents: quote.feeCents, distanceMiles: quote.distanceMiles ?? null,
         borough: quote.borough || ""};
@@ -47558,7 +47789,7 @@ async function quotePackagePickups(db, request) {
         reason: String(error?.details?.reason || "pickup_out_of_area")};
     }
   }));
-  return {quotes};
+  return quotes;
 }
 
 exports.listPackageRequestOptions = onCall(
@@ -47608,20 +47839,7 @@ exports.listPackageRequestOptions = onCall(
           options,
         };
       }
-      const businesses = await db.collection("businesses")
-          .where("packageRequestSettings.acceptRequests", "==", true)
-          .limit(500)
-          .get();
-      const options = [];
-      for (const group of inGroups(businesses.docs.filter((doc) =>
-        String(doc.data()?.status) === "approved"), 10)) {
-        const lists = await Promise.all(group.map((doc) =>
-          packageRequestOptionsOf(db, doc)));
-        lists.forEach((list) => options.push(...list));
-      }
-      options.sort((a, b) => a.country.name.localeCompare(b.country.name) ||
-        a.businessName.localeCompare(b.businessName));
-      return {business: null, options};
+      return {business: null, options: await allPackageRequestOptions(db)};
     },
 );
 

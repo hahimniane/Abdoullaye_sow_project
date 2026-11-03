@@ -293,3 +293,20 @@ describe("the package confirmation's buttons and photos with a code", () => {
     assert.equal(wa.codeInText(null), "");
   });
 });
+
+describe("a finished Send a package form (nfm_reply)", () => {
+  it("parses the flow params and leaves no text", () => {
+    const {parseWebhook: parse} = require("../whatsapp_inbox");
+    const {messages: [event]} = parse({object: "whatsapp_business_account", entry: [{
+      changes: [{field: "messages", value: {metadata: {phone_number_id:
+        "1"}, contacts: [{wa_id: "16465550100", profile: {name: "Fatou"}}],
+      messages: [{id: "wamid.1", from: "16465550100", timestamp: "1",
+        type: "interactive", interactive: {type: "nfm_reply", nfm_reply: {
+          name: "flow", body: "Sent", response_json: JSON.stringify({
+            flow_token: "tok", request_code: "R-B2C3D",
+            request_token: "abc"})}}}]}}]}]});
+    assert.deepEqual(event.flowReply, {flowToken: "tok",
+      requestCode: "R-B2C3D", requestToken: "abc"});
+    assert.equal(event.text, "");
+  });
+});

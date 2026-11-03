@@ -579,6 +579,23 @@ function createWhatsAppConversations(deps) {
       ...(event.profileName ? {profileName: event.profileName} : {}),
       updatedAt: FieldValue.serverTimestamp()}, {merge: true});
 
+    // "Send a package" (docs/PACKAGE_PRICE_LIST.md §5): a finished form
+    // is answered with its request; the send words open the form. Neither
+    // becomes a conversation.
+    if (event.flowReply && deps.packageFlow) {
+      await deps.packageFlow.completed({phone, lang, reply: event.flowReply,
+        wamid: event.wamid});
+      return "package_flow_done";
+    }
+    const opening = !event.media && deps.packageFlow ?
+      deps.packageFlow.openRequest(wa.fold(event.text)) : null;
+    if (opening) {
+      const opened = await deps.packageFlow.open({phone, lang,
+        slug: opening.slug, profileName: event.profileName ||
+          contact.profileName || ""});
+      if (opened) return "package_flow_opened";
+    }
+
     // A tap on the package confirmation: OK is thanked and opens nothing;
     // Something's wrong goes on as a message to the package's business.
     const answer = await confirmationAnswer(event);
