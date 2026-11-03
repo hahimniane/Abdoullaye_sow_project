@@ -345,10 +345,13 @@ function pricePiece(route, piece, ctx = {}) {
         error: "weight_invalid"};
     }
     const rate = route?.perLbCents?.[categoryId];
-    const label = CATEGORIES.find((c) => c.id === categoryId).en;
+    const category = CATEGORIES.find((c) => c.id === categoryId);
+    const label = category.en;
+    // The stored description is in the customer's language; the price's
+    // label stays English so re-pricing compares like with like.
+    const said = `${ctx.lang === "fr" ? category.fr : label} · ${weightLb} lb`;
     if (!Number.isInteger(rate) || rate <= 0) {
-      return {price: null, estimateCents: null,
-        description: `${label} · ${weightLb} lb`, error: ""};
+      return {price: null, estimateCents: null, description: said, error: ""};
     }
     return {
       price: {
@@ -364,7 +367,7 @@ function pricePiece(route, piece, ctx = {}) {
         weightLb,
       },
       estimateCents: Math.round(rate * weightLb),
-      description: `${label} · ${weightLb} lb`,
+      description: said,
       error: "",
     };
   }

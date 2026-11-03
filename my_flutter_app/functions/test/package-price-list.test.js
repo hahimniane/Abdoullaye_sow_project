@@ -139,3 +139,14 @@ describe("re-pricing open requests at today's prices", () => {
     assert.equal(out.pieces[0].estimateCents, 7000);
   });
 });
+
+it("a per-pound piece is described in the customer's language", () => {
+  const route = {items: [], perLbCents: {clothing: 300}, departure: null};
+  const piece = {categoryId: "clothing", weightLb: 50};
+  assert.equal(pl.pricePiece(route, piece, {lang: "fr"}).description,
+      "Vêtements et tissus · 50 lb");
+  const en = pl.pricePiece(route, piece, {});
+  assert.equal(en.description, "Clothes and fabric · 50 lb");
+  assert.equal(pl.pricePiece(route, piece, {lang: "fr"}).price.label,
+      en.price.label);
+});

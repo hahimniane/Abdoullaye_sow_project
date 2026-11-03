@@ -683,7 +683,8 @@ function cleanPieces(raw, ctx = {}) {
     const descriptionRaw = String(piece.description ?? "").trim();
     if (descriptionRaw.length > LIMIT.DESCRIPTION) add("text_too_long");
     const priced = priceList.pricePiece(ctx.route || null,
-        {...piece, kind}, {barrelPriceCents: ctx.barrelPriceCents});
+        {...piece, kind}, {barrelPriceCents: ctx.barrelPriceCents,
+          lang: ctx.lang});
     if (priced.error) add(priced.error);
     const description = (descriptionRaw || priced.description)
         .slice(0, LIMIT.DESCRIPTION);
@@ -917,6 +918,7 @@ function validateSubmission(input, ctx) {
         shipMode),
     businessId: ctx.businessId,
     uid: ctx.uid,
+    lang: text(data.language, 5),
   });
   pieceErrors.forEach(add);
   const language = text(data.language, 5);

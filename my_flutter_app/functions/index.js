@@ -48376,7 +48376,10 @@ async function savePackagePriceList(db, {uid, user, businessId, data}) {
       ...(snap.exists ? {} :
         {createdAt: FirestoreFieldValue.serverTimestamp()}),
     };
-    tx.set(ref, next, {merge: true});
+    // update/set replace `routes` whole, so a cleared rate, route or
+    // country is gone (a merge would keep the old prices).
+    if (snap.exists) tx.update(ref, next);
+    else tx.set(ref, next);
     return {...current, ...next, previousRoutes: before};
   });
   if (byLaawol) {

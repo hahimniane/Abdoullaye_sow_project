@@ -1179,6 +1179,22 @@ describe("price lists (docs/PACKAGE_PRICE_LIST.md)", () => {
         "country_unknown");
       });
 
+  it("a cleared rate, route or price is gone after the next save",
+      async () => {
+        await staff("setPackageRequestSettings", {action: "price_list",
+          routes});
+        await staff("setPackageRequestSettings", {action: "price_list",
+          routes: {gn: {air: {...routes.gn.air, perLbCents: {}}}}});
+        const doc = await priceList();
+        assert.equal(doc.routes.gn.sea, undefined);
+        assert.deepEqual(doc.routes.gn.air.perLbCents || {}, {});
+        assert.equal(doc.routes.gn.air.items[0].label, "Phone");
+        await staff("setPackageRequestSettings", {action: "price_list",
+          routes});
+        assert.equal((await priceList()).routes.gn.sea.items[0].label,
+            "TV 43 in");
+      });
+
   it("Laawol saves on the business's behalf until it looks right",
       async () => {
         await staff("setPackageRequestSettings", {action: "price_list",
