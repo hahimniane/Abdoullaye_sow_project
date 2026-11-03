@@ -15,6 +15,8 @@
  */
 
 const {isInternationalPhone} = require("./container_manifest");
+const priceList = require("./package_price_list");
+const {resolveServicePickup} = require("./pickup_plan");
 
 const STATUS = Object.freeze({
   NEW: "new",
@@ -38,7 +40,14 @@ const WEEK_DAYS = Object.freeze(["mon", "tue", "wed", "thu", "fri", "sat",
   "sun"]);
 const LANGUAGES = Object.freeze(["en", "fr"]);
 const CONFIRMED_VIA = Object.freeze({
-  LINK: "link", STAFF_PHONE: "staff_phone", CARD: "card"});
+  LINK: "link", STAFF_PHONE: "staff_phone", CARD: "card", FORM: "form"});
+const SHIP_MODES = Object.freeze(["sea", "air"]);
+const CHANNELS = Object.freeze(["web", "app", "whatsapp"]);
+// A drop-off or pickup window (docs/PACKAGE_PRICE_LIST.md decision 6): up
+// to two hours; a pickup inside the day's working hours below.
+const WINDOW_MIN_MINUTES = 30;
+const WINDOW_MAX_MINUTES = 120;
+const PICKUP_DAY = Object.freeze({from: "07:00", to: "21:00"});
 
 const DEFAULT_TIME_ZONE = "America/New_York";
 
@@ -77,6 +86,10 @@ const ACTION = Object.freeze({
   ESTIMATE_REMINDER: "estimate_reminder",
   STAFF_ALERT: "staff_alert",
   DROPOFF_REMINDER: "dropoff_reminder",
+  // A drop-off with a time window (docs/PACKAGE_PRICE_LIST.md decision 6):
+  // a reminder that morning, and one "Still coming?" the day after.
+  DROPOFF_TODAY: "dropoff_today",
+  STILL_COMING: "still_coming",
   EXPIRE: "expire",
   DELETE_PHOTOS: "delete_photos",
   CHECK_PHOTOS: "check_photos",
@@ -145,6 +158,17 @@ const REQUEST_MESSAGES = Object.freeze({
   location_unknown: "That location is not one of yours.",
   pickup_areas_required: "Say which areas you pick up from.",
   price_required: "Price every piece, or none of them.",
+  ship_mode_invalid: "Choose Sea or Air.",
+  air_unavailable: "This business does not fly packages there.",
+  window_invalid: "Choose a time window of up to 2 hours in opening hours.",
+  quantity_invalid: "Enter how many (1 to 50).",
+  weight_invalid: "Enter the weight in pounds (0.1 to 2,000).",
+  category_invalid: "Choose what kind of goods it is.",
+  pickup_out_of_area: "This business does not pick up at that address.",
+  pickup_out_of_range: "That address is too far for this business.",
+  pickup_origin_missing: "This business has not set where pickups start.",
+  channel_invalid: "Refresh the page and send again.",
+  freight_moved: "Freight is now part of Send a package.",
 });
 
 const text = (value, max = 200) => String(value ?? "").trim().slice(0, max);
@@ -485,7 +509,7 @@ function bringInLocations(locations, settings) {
  * @return {object|null} The option, or null when this pair is not offered.
  */
 function requestOption({businessId, business, destinationId, destination,
-  locations}) {
+  locations, priceListDoc = null, planned = [], nowMs = 0}) {
   if (!business || text(business.status, 40) !== "approved") return null;
   const settings = requestSettingsOf(business);
   if (!settings.acceptRequests || !text(business.requestSlug, 40)) return null;
@@ -510,6 +534,74 @@ function requestOption({businessId, business, destinationId, destination,
     bringIn,
     collect,
     timeZone: settings.timeZone,
+    ...comparisonFields({business, destinationId, destination,
+      priceListDoc, planned, nowMs, zone: settings.timeZone}),
+  };
+}
+
+const LEGACY_DAY = Object.freeze({monday: "mon", tuesday: "tue",
+  wednesday: "wed", thursday: "thu", friday: "fri", saturday: "sat",
+  sunday: "sun"});
+
+/**
+ * What the comparison list shows for a business on one destination
+ * (docs/PACKAGE_PRICE_LIST.md §4): its prices by Sea and Air, the next
+ * departure of each, rating, cover and how it prices pickups.
+ *
+ * @param {object} args {business, destinationId, destination,
+ *   priceListDoc, planned: [{mode, countryId, dateKey, departed}], nowMs,
+ *   zone}.
+ * @return {object} The added option fields.
+ */
+function comparisonFields({business, destinationId, destination,
+  priceListDoc, planned, nowMs, zone}) {
+  const routes = {};
+  const departures = {};
+  const todayKey = nowMs ? dateKeyIn(nowMs, zone) : "";
+  for (const mode of SHIP_MODES) {
+    const route = priceList.routeOf(priceListDoc, destinationId, mode);
+    routes[mode] = route ? {items: route.items || [],
+      perLbCents: route.perLbCents || {}} : null;
+    // The route's own schedule, else the days the business set for freight
+    // on that destination before price lists existed.
+    const legacy = (Array.isArray(destination?.[mode === "air" ?
+      "freightAirDepartureDays" : "freightSeaDepartureDays"]) ?
+      destination[mode === "air" ? "freightAirDepartureDays" :
+        "freightSeaDepartureDays"] : [])
+        .map((day) => LEGACY_DAY[String(day).toLowerCase()])
+        .filter(Boolean);
+    const schedule = route?.departure || (legacy.length ?
+      {weekdays: priceList.WEEK_DAYS.filter((d) => legacy.includes(d)),
+        everyWeeks: 1, anchorDate: ""} : null);
+    departures[mode] = todayKey ? priceList.nextDeparture({
+      departure: schedule,
+      planned: (Array.isArray(planned) ? planned : []).filter((p) =>
+        p && p.mode === mode && p.countryId === destinationId),
+      todayKey,
+    }) : {dateKey: "", source: "none", approximate: false};
+  }
+  const count = Number(business?.reviewCount || 0);
+  const sum = Number(business?.reviewRatingSum || 0);
+  const pickup = resolveServicePickup(business?.pickupPlan, "packages");
+  const cents = (dollars) => Number.isFinite(Number(dollars)) ?
+    Math.round(Number(dollars) * 100) : 0;
+  return {
+    routes,
+    departures,
+    shipsByAir: business?.shipsByAir === true || routes.air !== null,
+    rating: count > 0 && sum > 0 ? Math.round((sum / count) * 10) / 10 : null,
+    reviewCount: count > 0 ? count : 0,
+    coversLoss: business?.freightCoverageEnabled === true,
+    pickupPricing: pickup ? {
+      mode: String(pickup.mode || ""),
+      flatFeeCents: cents(pickup.flatFee),
+      baseFeeCents: cents(pickup.baseFee),
+      perMileCents: cents(pickup.perMileFee),
+      minimumFeeCents: cents(pickup.minimumFee),
+      maxPickupMiles: Number(pickup.maxPickupMiles || 0) || 0,
+      boroughPricesCents: Object.fromEntries(Object.entries(
+          pickup.boroughPrices || {}).map(([k, v]) => [k, cents(v)])),
+    } : null,
   };
 }
 
@@ -578,11 +670,24 @@ function cleanPieces(raw, ctx = {}) {
   const photoPaths = [];
   list.slice(0, LIMIT.PIECES).forEach((item, index) => {
     const piece = item && typeof item === "object" ? item : {};
-    const kind = text(piece.kind, 20);
+    // A piece from the price list (docs/PACKAGE_PRICE_LIST.md): an item
+    // with a quantity, or a category by the pound. It says what it is, so
+    // it needs no description of its own.
+    const fromList = Boolean(text(piece.priceItemId, 44) ||
+      (text(piece.categoryId, 40) && piece.weightLb !== undefined &&
+        piece.weightLb !== null && piece.weightLb !== ""));
+    const kindRaw = text(piece.kind, 20);
+    const kind = fromList && !PIECE_KINDS.includes(kindRaw) ? "other" :
+      kindRaw;
     if (!PIECE_KINDS.includes(kind)) add("piece_kind_invalid");
     const descriptionRaw = String(piece.description ?? "").trim();
     if (descriptionRaw.length > LIMIT.DESCRIPTION) add("text_too_long");
-    if (kind !== "barrel" && !descriptionRaw) {
+    const priced = priceList.pricePiece(ctx.route || null,
+        {...piece, kind}, {barrelPriceCents: ctx.barrelPriceCents});
+    if (priced.error) add(priced.error);
+    const description = (descriptionRaw || priced.description)
+        .slice(0, LIMIT.DESCRIPTION);
+    if (kind !== "barrel" && !description && !fromList) {
       add("piece_description_required");
     }
     const {size, ok} = cleanSize(piece.sizeIn);
@@ -599,18 +704,94 @@ function cleanPieces(raw, ctx = {}) {
       cleanPaths.push(path);
       photoPaths.push(path);
     }
-    const price = Number.isInteger(ctx.barrelPriceCents) &&
-      ctx.barrelPriceCents > 0 ? ctx.barrelPriceCents : null;
+    const preset = priceList.SIZE_PRESETS.find((p) =>
+      p.id === text(piece.sizePreset, 20));
     pieces.push({
       id: `p${index + 1}`,
       kind: PIECE_KINDS.includes(kind) ? kind : "other",
-      description: descriptionRaw.slice(0, LIMIT.DESCRIPTION),
+      description,
       sizeIn: size,
       photoPaths: cleanPaths,
-      estimateCents: kind === "barrel" ? price : null,
+      estimateCents: Number.isInteger(priced.estimateCents) ?
+        priced.estimateCents : null,
+      ...(fromList || priced.price ? {
+        price: priced.price,
+        sizePreset: preset ? preset.id : "",
+      } : {}),
     });
   });
   return {pieces, errors, photoPaths};
+}
+
+/**
+ * @param {string} value "HH:MM".
+ * @return {number} Minutes after midnight, NaN when not a time.
+ */
+function minutesOf(value) {
+  const match = TIME_OF_DAY.exec(String(value || ""));
+  return match ? Number(match[1]) * 60 + Number(match[2]) : NaN;
+}
+
+/**
+ * A drop-off / pickup window: 30 minutes to 2 hours, inside the hours of
+ * that day (docs/PACKAGE_PRICE_LIST.md decision 6).
+ *
+ * @param {*} raw {from, to} or "HH:MM-HH:MM".
+ * @param {{from: string, to: string}} day The day's open hours.
+ * @return {?{from: string, to: string}} The window, or null when invalid.
+ */
+function cleanWindow(raw, day) {
+  let from = "";
+  let to = "";
+  if (typeof raw === "string") {
+    [from, to] = raw.split("-").map((part) => part.trim());
+  } else if (raw && typeof raw === "object") {
+    from = text(raw.from, 5);
+    to = text(raw.to, 5);
+  }
+  const a = minutesOf(from);
+  const b = minutesOf(to);
+  const open = minutesOf(day?.from);
+  const close = minutesOf(day?.to);
+  if (![a, b, open, close].every(Number.isFinite)) return null;
+  if (b - a < WINDOW_MIN_MINUTES || b - a > WINDOW_MAX_MINUTES) return null;
+  if (a < open || b > close) return null;
+  return {from, to};
+}
+
+/**
+ * The customer picks a new drop-off day and window from the /e/ page
+ * (docs/PACKAGE_PRICE_LIST.md decision 6, "Still coming?").
+ *
+ * @param {object} request The stored request.
+ * @param {object} input {plannedDate, plannedWindow}.
+ * @param {object} ctx {hours: the location's week, nowMs}.
+ * @return {{code: string, patch: ?object}} A refusal code, or the fields.
+ */
+function rescheduleDecision(request, input, ctx) {
+  if (!isOpenStatus(request?.status)) {
+    return {code: "request_closed", patch: null};
+  }
+  if (request.handoff !== HANDOFF.BRING_IN) {
+    return {code: "handoff_invalid", patch: null};
+  }
+  const data = input && typeof input === "object" ? input : {};
+  const plannedDate = text(data.plannedDate, 10);
+  const zone = businessTimeZone(request.timeZone);
+  if (!pickableDate(plannedDate, ctx.nowMs, zone)) {
+    return {code: "planned_date_invalid", patch: null};
+  }
+  const day = ctx.hours?.[weekdayOf(plannedDate)];
+  if (!day || day.open !== true) {
+    return {code: "planned_day_closed", patch: null};
+  }
+  const plannedWindow = cleanWindow(data.plannedWindow, day);
+  if (!plannedWindow) return {code: "window_invalid", patch: null};
+  const reminders = {...(request.reminders || {})};
+  delete reminders.dropoffTodayAt;
+  delete reminders.stillComingAt;
+  delete reminders.dropoff3dAt;
+  return {code: "", patch: {plannedDate, plannedWindow, reminders}};
 }
 
 /**
@@ -656,6 +837,17 @@ function validateSubmission(input, ctx) {
   };
   const handoff = text(data.handoff, 20);
   if (!HANDOFFS.includes(handoff)) add("handoff_invalid");
+  // Sea or Air, chosen by the customer (docs/PACKAGE_PRICE_LIST.md); an
+  // older client sends none: sea, and staff may change it at Received.
+  const modeRaw = text(data.shipMode, 10).toLowerCase();
+  if (modeRaw && !SHIP_MODES.includes(modeRaw)) add("ship_mode_invalid");
+  const shipMode = modeRaw === "air" ? "air" : "sea";
+  if (shipMode === "air" && option.shipsByAir === false) {
+    return {precondition: "air_unavailable", errors: [], record: null,
+      photoPaths: []};
+  }
+  const channelRaw = text(data.channel, 20);
+  if (channelRaw && !CHANNELS.includes(channelRaw)) add("channel_invalid");
   if (handoff === HANDOFF.BRING_IN && !option.bringIn.available) {
     return {precondition: "bring_in_unavailable", errors: [], record: null,
       photoPaths: []};
@@ -667,6 +859,7 @@ function validateSubmission(input, ctx) {
   const zone = option.timeZone;
   let location = null;
   let plannedDate = "";
+  let plannedWindow = null;
   let pickup = null;
   if (handoff === HANDOFF.BRING_IN) {
     const spots = option.bringIn.locations;
@@ -680,6 +873,11 @@ function validateSubmission(input, ctx) {
     } else if (location && location.hours[weekdayOf(plannedDate)]?.open !==
         true) {
       add("planned_day_closed");
+    } else if (location && data.plannedWindow !== undefined &&
+        data.plannedWindow !== null && data.plannedWindow !== "") {
+      plannedWindow = cleanWindow(data.plannedWindow,
+          location.hours[weekdayOf(plannedDate)]);
+      if (!plannedWindow) add("window_invalid");
     }
   } else if (handoff === HANDOFF.COLLECT) {
     const raw = data.pickup && typeof data.pickup === "object" ?
@@ -692,8 +890,13 @@ function validateSubmission(input, ctx) {
     }
     const date = text(raw.date, 10);
     if (!pickableDate(date, ctx.nowMs, zone)) add("pickup_date_invalid");
-    const window = text(raw.window, 20);
-    if (!PICKUP_WINDOWS.includes(window)) add("pickup_window_invalid");
+    let window = text(raw.window, 20);
+    if (!PICKUP_WINDOWS.includes(window)) {
+      // A 2-hour window ("14:00-16:00") from newer clients.
+      const timed = cleanWindow(window, PICKUP_DAY);
+      if (timed) window = `${timed.from}-${timed.to}`;
+      else add("pickup_window_invalid");
+    }
     pickup = {address: address.slice(0, LIMIT.ADDRESS), date, window,
       note: note.slice(0, LIMIT.NOTE)};
   }
@@ -710,6 +913,8 @@ function validateSubmission(input, ctx) {
   const receiver = person(data.receiver, "receiver");
   const {pieces, errors: pieceErrors, photoPaths} = cleanPieces(data.pieces, {
     barrelPriceCents: option.barrelPriceCents,
+    route: priceList.routeOf(ctx.priceListDoc || null, option.country.id,
+        shipMode),
     businessId: ctx.businessId,
     uid: ctx.uid,
   });
@@ -734,7 +939,13 @@ function validateSubmission(input, ctx) {
         {id: location.id, label: location.label, address: location.address} :
         null,
       plannedDate,
+      plannedWindow,
       pickup,
+      shipMode,
+      // Where the customer found the business (decision 4) and what they
+      // sent it from; "" for clients from before price lists.
+      foundVia: channelRaw ? priceList.foundVia(data.foundVia) : "",
+      channel: channelRaw,
       sender,
       receiver,
       destinationCountryId: option.country.id,
@@ -1143,8 +1354,27 @@ function nextTimer(request, extra = {}) {
         atMs: sent + TIMER.ESTIMATE_REMINDER_MS});
     }
   }
+  const windowed = Boolean(request.plannedWindow?.from);
   if (status === STATUS.CONFIRMED && request.handoff === HANDOFF.BRING_IN &&
-      !reminders.dropoff3dAt && !isCardPaid(request) &&
+      windowed && !isCardPaid(request) &&
+      dateKeyValid(text(request.plannedDate, 10))) {
+    // 8 AM on the day (only when it was confirmed before then), and 10 AM
+    // the day after if they did not come.
+    const morning = startOfDayMs(request.plannedDate, request.timeZone) +
+      8 * 60 * 60 * 1000;
+    const confirmedAt = toMillis(request.confirmedAtMs ||
+      request.confirmedAt);
+    if (!reminders.dropoffTodayAt && (!confirmedAt || confirmedAt < morning)) {
+      candidates.push({action: ACTION.DROPOFF_TODAY, atMs: morning});
+    }
+    if (!reminders.stillComingAt) {
+      candidates.push({action: ACTION.STILL_COMING,
+        atMs: startOfDayMs(addDays(request.plannedDate, 1),
+            request.timeZone) + 10 * 60 * 60 * 1000});
+    }
+  }
+  if (status === STATUS.CONFIRMED && request.handoff === HANDOFF.BRING_IN &&
+      !windowed && !reminders.dropoff3dAt && !isCardPaid(request) &&
       dateKeyValid(text(request.plannedDate, 10))) {
     // Three days after the planned day: the morning of plannedDate + 3, in
     // the business's zone (9 AM so nobody is woken).
@@ -1284,6 +1514,12 @@ function hoursText(week, language) {
 function requestMessageValues(request, args = {}) {
   const total = Number(request.estimate?.totalCents);
   const hours = args.hours || request.location?.hours || null;
+  // The morning-of reminder names the window the customer chose.
+  const slot = args.update === ACTION.DROPOFF_TODAY &&
+    request.plannedWindow?.from ? request.plannedWindow : null;
+  const slotText = (lang) => slot ? `${lang === "fr" ? "aujourd'hui" :
+    "today"}, ${clockText(slot.from, lang)}–${clockText(slot.to, lang)}` :
+    "";
   return {
     name: text(request.sender?.name, 60),
     business: text(request.businessName, 80),
@@ -1294,8 +1530,8 @@ function requestMessageValues(request, args = {}) {
     destinationEn: text(request.destinationCountryName, 80),
     destinationFr: text(args.destinationFr || request.destinationCountryName,
         80),
-    hoursEn: hours ? hoursText(hours, "en") : "",
-    hoursFr: hours ? hoursText(hours, "fr") : "",
+    hoursEn: slot ? slotText("en") : (hours ? hoursText(hours, "en") : ""),
+    hoursFr: slot ? slotText("fr") : (hours ? hoursText(hours, "fr") : ""),
     requestCode: text(request.code, 20),
     token: text(request.token, 80),
   };
@@ -1343,11 +1579,17 @@ function publicRequestView(id, request, business = {}, extra = {}) {
       hours: extra.hours || null,
     } : null,
     plannedDate: text(request.plannedDate, 10),
+    plannedWindow: request.plannedWindow?.from ? {
+      from: text(request.plannedWindow.from, 5),
+      to: text(request.plannedWindow.to, 5)} : null,
+    shipMode: request.shipMode === "air" ? "air" : "sea",
     pickup: request.pickup ? {
       address: text(request.pickup.address, LIMIT.ADDRESS),
       date: text(request.pickup.date, 10),
       window: text(request.pickup.window, 20),
       note: text(request.pickup.note, LIMIT.NOTE),
+      feeCents: Number.isInteger(request.pickup.feeCents) ?
+        request.pickup.feeCents : null,
     } : null,
     sender: {name: text(request.sender?.name, LIMIT.NAME)},
     receiver: {name: text(request.receiver?.name, LIMIT.NAME)},
@@ -1357,6 +1599,19 @@ function publicRequestView(id, request, business = {}, extra = {}) {
       description: text(p.description, LIMIT.DESCRIPTION),
       sizeIn: p.sizeIn || null,
       photoCount: Array.isArray(p.photoPaths) ? p.photoPaths.length : 0,
+      // How the price list priced it (docs/PACKAGE_PRICE_LIST.md): the
+      // page explains "up to 2 lb each" and "weighed at drop-off".
+      price: p.price && typeof p.price === "object" ? {
+        source: text(p.price.source, 10),
+        label: text(p.price.label, 60),
+        quantity: Number(p.price.quantity) || 1,
+        unitCents: Number.isInteger(p.price.unitCents) ?
+          p.price.unitCents : null,
+        includedLb: Number(p.price.includedLb) || 0,
+        perLbCents: Number.isInteger(p.price.perLbCents) ?
+          p.price.perLbCents : null,
+        weightLb: Number(p.price.weightLb) || null,
+      } : null,
     })),
     estimate: estimate ? {
       version: estimateVersion(request),
@@ -1575,6 +1830,12 @@ module.exports = {
   photoMetadataValid,
   cleanSize,
   cleanPieces,
+  cleanWindow,
+  rescheduleDecision,
+  minutesOf,
+  comparisonFields,
+  SHIP_MODES,
+  CHANNELS,
   pieceCounts,
   validateSubmission,
   automaticEstimate,

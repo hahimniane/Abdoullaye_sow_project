@@ -1032,3 +1032,153 @@ describe("the request code at the counter", () => {
     assert.match(lookup, /const \{token, \.\.\.request\}/);
   });
 });
+
+describe("price lists on requests (docs/PACKAGE_PRICE_LIST.md)", () => {
+  const listDoc = {routes: {gn: {
+    sea: {items: [{id: "i_tv", categoryId: "fragile", label: "TV",
+      priceCents: 12000, includedLb: 0}], perLbCents: {clothing: 300},
+    departure: {weekdays: ["sat"], everyWeeks: 1, anchorDate: ""}},
+    air: {items: [{id: "i_phone", categoryId: "electronics",
+      label: "Phone", priceCents: 4000, includedLb: 2}],
+    perLbCents: {clothing: 800}, departure: null},
+  }}};
+  const priced = (biz = business({shipsByAir: true, reviewCount: 4,
+    reviewRatingSum: 18, freightCoverageEnabled: true})) =>
+    pr.requestOption({businessId: "dala", business: biz,
+      destinationId: "gn", destination: guinea(), locations: LOCATIONS,
+      priceListDoc: listDoc, nowMs: NOW,
+      planned: [{mode: "air", countryId: "gn", dateKey: "2026-10-23",
+        departed: false}]});
+  const check = (input, opt = priced()) => pr.validateSubmission(input, {
+    option: opt, business: business(), businessId: "dala", uid: "anon-1",
+    nowMs: NOW, priceListDoc: listDoc});
+
+  it("an option shows prices, departures, rating and cover", () => {
+    const opt = priced();
+    assert.equal(opt.routes.air.items[0].label, "Phone");
+    assert.deepEqual(opt.routes.sea.perLbCents, {clothing: 300});
+    assert.deepEqual(opt.departures.air, {dateKey: "2026-10-23",
+      source: "planned", approximate: false});
+    assert.deepEqual(opt.departures.sea, {dateKey: "2026-10-24",
+      source: "schedule", approximate: false});
+    assert.equal(opt.rating, 4.5);
+    assert.equal(opt.reviewCount, 4);
+    assert.equal(opt.coversLoss, true);
+    assert.equal(opt.shipsByAir, true);
+    assert.equal(opt.pickupPricing, null);
+  });
+
+  it("legacy freight departure days are the schedule when none is set", () => {
+    const opt = pr.requestOption({businessId: "dala", business: business(),
+      destinationId: "gn", destination: guinea({freightAirDepartureDays:
+        ["thursday"]}), locations: LOCATIONS, nowMs: NOW});
+    assert.equal(opt.departures.air.dateKey, "2026-10-22");
+    assert.equal(opt.shipsByAir, false);
+    assert.equal(opt.routes.air, null);
+  });
+
+  it("prices list pieces by Air and keeps what the customer chose", () => {
+    const out = check(submission({shipMode: "air", channel: "web",
+      foundVia: "laawol", plannedWindow: {from: "11:00", to: "13:00"},
+      pieces: [{priceItemId: "i_phone", quantity: 2},
+        {categoryId: "clothing", weightLb: 50, sizePreset: "suitcase"}]}));
+    assert.deepEqual(out.errors, []);
+    const r = out.record;
+    assert.equal(r.shipMode, "air");
+    assert.equal(r.foundVia, "laawol");
+    assert.equal(r.channel, "web");
+    assert.deepEqual(r.plannedWindow, {from: "11:00", to: "13:00"});
+    assert.deepEqual(r.pieces.map((p) => [p.description, p.estimateCents]),
+        [["2 × Phone", 8000], ["Clothes and fabric · 50 lb", 40000]]);
+    assert.equal(r.pieces[1].sizePreset, "suitcase");
+    assert.equal(r.pieces[0].price.includedLb, 2);
+    assert.ok(pr.automaticEstimate(r.pieces, NOW));
+  });
+
+  it("an older client keeps sea, no window and no found-via", () => {
+    const out = check(submission());
+    assert.deepEqual(out.errors, []);
+    assert.equal(out.record.shipMode, "sea");
+    assert.equal(out.record.plannedWindow, null);
+    assert.equal(out.record.foundVia, "");
+    assert.equal(out.record.pieces[0].estimateCents, 15000, "barrel price");
+  });
+
+  it("refuses Air where the business does not fly, and bad windows", () => {
+    const noAir = pr.requestOption({businessId: "dala", business: business(),
+      destinationId: "gn", destination: guinea(), locations: LOCATIONS,
+      nowMs: NOW});
+    assert.equal(check(submission({shipMode: "air"}), noAir).precondition,
+        "air_unavailable");
+    for (const plannedWindow of [{from: "09:00", to: "12:00"},
+      {from: "13:00", to: "15:00"}, {from: "11:00", to: "11:10"}, "x"]) {
+      assert.deepEqual(check(submission({plannedWindow})).errors,
+          ["window_invalid"], JSON.stringify(plannedWindow));
+    }
+    assert.deepEqual(check(submission({shipMode: "train"})).errors,
+        ["ship_mode_invalid"]);
+    assert.deepEqual(check(submission({pieces: [{priceItemId: "i_tv",
+      quantity: 0}]})).errors, ["quantity_invalid"]);
+  });
+
+  it("a pickup window may be two hours", () => {
+    const pickup = {address: "1 Main St", date: "2026-10-22",
+      window: "14:00-16:00"};
+    const out = check(submission({handoff: "collect", pickup}));
+    assert.deepEqual(out.errors, []);
+    assert.equal(out.record.pickup.window, "14:00-16:00");
+    assert.deepEqual(check(submission({handoff: "collect",
+      pickup: {...pickup, window: "06:00-08:00"}})).errors,
+    ["pickup_window_invalid"]);
+  });
+
+  it("a windowed drop-off gets the morning reminder and Still coming", () => {
+    const request = {status: "confirmed", handoff: "bring_in",
+      plannedDate: "2026-10-24", plannedWindow: {from: "11:00", to: "13:00"},
+      timeZone: NY, confirmedAtMs: NOW, createdAtMs: NOW, reminders: {}};
+    const first = pr.nextTimer(request);
+    assert.equal(first.action, "dropoff_today");
+    assert.equal(new Date(first.atMs).toISOString(),
+        "2026-10-24T12:00:00.000Z", "8 AM New York");
+    const second = pr.nextTimer({...request,
+      reminders: {dropoffTodayAt: first.atMs}});
+    assert.equal(second.action, "still_coming");
+    assert.equal(new Date(second.atMs).toISOString(),
+        "2026-10-25T14:00:00.000Z", "10 AM the day after");
+    const values = pr.requestMessageValues({...request, sender: {name: "F"},
+      pieces: []}, {update: "dropoff_today"});
+    assert.equal(values.hoursEn, "today, 11:00 AM–1:00 PM");
+    assert.equal(values.hoursFr, "aujourd'hui, 11 h 00–13 h 00");
+    assert.equal(requestTemplateForUpdate("still_coming"),
+        REQUEST_TEMPLATE.PACKAGE_DROPOFF_REMINDER_2LANG);
+  });
+
+  it("the customer picks a new time and the reminders start over", () => {
+    const request = {status: "confirmed", handoff: "bring_in",
+      plannedDate: "2026-10-22", timeZone: NY,
+      reminders: {dropoffTodayAt: 1, stillComingAt: 2, estimate24hAt: 3}};
+    const ok = pr.rescheduleDecision(request, {plannedDate: "2026-10-24",
+      plannedWindow: {from: "10:00", to: "12:00"}}, {hours: WEEK,
+      nowMs: NOW});
+    assert.equal(ok.code, "");
+    assert.deepEqual(ok.patch, {plannedDate: "2026-10-24",
+      plannedWindow: {from: "10:00", to: "12:00"},
+      reminders: {estimate24hAt: 3}});
+    assert.equal(pr.rescheduleDecision(request, {plannedDate: "2026-10-25",
+      plannedWindow: "10:00-12:00"}, {hours: WEEK, nowMs: NOW}).code,
+    "planned_day_closed");
+    assert.equal(pr.rescheduleDecision({...request, status: "received"},
+        {}, {hours: WEEK, nowMs: NOW}).code, "request_closed");
+  });
+
+  it("the received line keeps where the customer found the business", () => {
+    const line = rr.requestLineRecord({status: "confirmed",
+      handoff: "bring_in", foundVia: "laawol", sender: {name: "F",
+        phoneE164: "+16465550100"}, receiver: {name: "M",
+        phoneE164: "+224620000000"}, destinationCountryId: "gn",
+      destinationCountryName: "Guinea", pieces: [{id: "p1", kind: "box",
+        description: "TV", estimateCents: 12000}], estimate: null},
+    {lineId: "l1", requestId: "r1", staffUid: "s", receivedAt: "TS"});
+    assert.equal(line.foundVia, "laawol");
+  });
+});

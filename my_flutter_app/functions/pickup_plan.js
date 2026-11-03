@@ -21,6 +21,9 @@ const PICKUP_SERVICES = Object.freeze([
   "freight",
   "parking",
   "carTransport",
+  // "Send a package" pickups (docs/PACKAGE_PRICE_LIST.md): inherit the
+  // shared plan unless the business sets them apart.
+  "packages",
 ]);
 
 const NYC_BOROUGHS = Object.freeze([

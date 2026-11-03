@@ -648,7 +648,8 @@ function requestTemplateForUpdate(update) {
   if (/^estimate_v\d+$/.test(value) || value === "estimate_reminder") {
     return REQUEST_TEMPLATE.PACKAGE_ESTIMATE_2LANG;
   }
-  if (value === "dropoff_reminder") {
+  if (value === "dropoff_reminder" || value === "dropoff_today" ||
+      value === "still_coming") {
     return REQUEST_TEMPLATE.PACKAGE_DROPOFF_REMINDER_2LANG;
   }
   return null;

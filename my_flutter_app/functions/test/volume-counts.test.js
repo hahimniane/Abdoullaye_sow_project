@@ -363,8 +363,9 @@ describe("a month's rollup", () => {
 describe("reading rollups back", () => {
   it("a missing or half-written rollup reads as zeros", () => {
     assert.deepEqual(rollupNumbers({requestSeq: 3}), {pieces: 0, barrels: 0,
-      packages: 0, cars: 0, customerLines: 0, containersShipped: 0,
-      containerPieces: 0, avgPerContainer: null});
+      packages: 0, cars: 0, customerLines: 0, laawolLines: 0,
+      laawolPieces: 0, containersShipped: 0, containerPieces: 0,
+      avgPerContainer: null});
     assert.deepEqual(rollupContainers(null), []);
     assert.deepEqual(rollupContainers({containers: [{id: "a", barrels: "2",
       packages: 1, cars: null, sailedAtMs: 5}]}), [{id: "a", number: "",
@@ -385,7 +386,8 @@ describe("reading rollups back", () => {
   it("builds the By business table with a totals row", () => {
     const table = volumeTableRows([
       {businessId: "b1", pieces: 10, barrels: 6, packages: 3, cars: 1,
-        customerLines: 4, containersShipped: 2, containerPieces: 9},
+        customerLines: 4, laawolLines: 2, laawolPieces: 5,
+        containersShipped: 2, containerPieces: 9},
       {businessId: "gone", pieces: 30, barrels: 30, packages: 0, cars: 0,
         customerLines: 9, containersShipped: 1, containerPieces: 30},
       {businessId: "idle", requestSeq: 2},
@@ -395,8 +397,9 @@ describe("reading rollups back", () => {
         "busiest first; a deleted business shows its id; idle rows drop");
     assert.equal(table.rows[1].avgPerContainer, 4.5);
     assert.deepEqual(table.totals, {businesses: 2, pieces: 40, barrels: 36,
-      packages: 3, cars: 1, customerLines: 13, containersShipped: 3,
-      containerPieces: 39, avgPerContainer: 13});
+      packages: 3, cars: 1, customerLines: 13, laawolLines: 2,
+      laawolPieces: 5, containersShipped: 3, containerPieces: 39,
+      avgPerContainer: 13});
   });
 
   it("doc ids are business then month", () => {
@@ -449,5 +452,22 @@ describe("the volume functions are wired with a small budget", () => {
   it("keeps the rollups server-only", () => {
     assert.match(rules, new RegExp("match /volumeMonthly/\\{rollupId\\} " +
         "\\{\\s*allow read, write: if false;"));
+  });
+});
+
+describe("found on Laawol (docs/PACKAGE_PRICE_LIST.md decision 4)", () => {
+  it("counts customer lines the comparison list brought", () => {
+    const {buildMonthRollup: build} = require("../volume_counts");
+    const at = new Date("2026-11-10T15:00:00Z");
+    const line = (id, extra) => ({id, data: {businessId: "b", kind: "other",
+      quantity: 1, pieces: [{id: "p1", kind: "box"}, {id: "p2",
+        kind: "box"}], barrelPieces: 0, packagePieces: 2, carPieces: 0,
+      ownerKind: "customer", receivedAt: at, ...extra}});
+    const rollup = build({businessId: "b", month: "2026-11", lines: [
+      line("l1", {foundVia: "laawol"}), line("l2", {foundVia: "business"}),
+      line("l3", {})]});
+    assert.equal(rollup.customerLines, 3);
+    assert.equal(rollup.laawolLines, 1);
+    assert.equal(rollup.laawolPieces, 2);
   });
 });

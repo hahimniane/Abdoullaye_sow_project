@@ -446,6 +446,43 @@ function priceBasket(route, pieces, ctx = {}) {
   };
 }
 
+/**
+ * Re-prices the stored pieces of an open request at today's list (owner
+ * decision 10). Only pieces priced from the list (item / per pound) move; a
+ * piece whose item left the list keeps its price (staff decide at the
+ * counter); barrels and "ask me" pieces are left alone.
+ *
+ * @param {object[]} pieces Stored request pieces (with `price`).
+ * @param {?object} route Today's route.
+ * @return {{pieces: object[], changed: boolean, wentUp: boolean,
+ *   cents: Map<string, number>}} `cents`: the new estimate per piece id.
+ */
+function repricePieces(pieces, route) {
+  const list = Array.isArray(pieces) ? pieces : [];
+  let changed = false;
+  let wentUp = false;
+  const cents = new Map();
+  const next = list.map((piece) => {
+    const source = piece?.price?.source;
+    if (source !== "item" && source !== "per_lb") return piece;
+    const again = pricePiece(route, source === "item" ?
+      {priceItemId: piece.price.itemId, quantity: piece.price.quantity} :
+      {categoryId: piece.price.categoryId, weightLb: piece.price.weightLb});
+    if (!again.price || !Number.isInteger(again.estimateCents)) return piece;
+    const before = Number.isInteger(piece.estimateCents) ?
+      piece.estimateCents : null;
+    if (before === again.estimateCents &&
+        JSON.stringify(piece.price) === JSON.stringify(again.price)) {
+      return piece;
+    }
+    changed = true;
+    if (before === null || again.estimateCents > before) wentUp = true;
+    cents.set(piece.id, again.estimateCents);
+    return {...piece, price: again.price, estimateCents: again.estimateCents};
+  });
+  return {pieces: next, changed, wentUp, cents};
+}
+
 // ---------------------------------------------------------------------------
 // Next departure (owner decision 5).
 // ---------------------------------------------------------------------------
@@ -628,6 +665,7 @@ module.exports = {
   pricePiece,
   counterPriceCents,
   priceBasket,
+  repricePieces,
   dateKeyValid,
   addDays,
   weekdayOf,

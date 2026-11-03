@@ -785,6 +785,16 @@ service cloud.firestore {
         resource.data.get('sender', {}).get('uid', '') == request.auth.uid);
       allow write: if false;
     }
+    // A business's price list (docs/PACKAGE_PRICE_LIST.md §3): its people
+    // with the containers section read it; customers get it through
+    // listPackageRequestOptions. Written by setPackageRequestSettings only.
+    match /packagePriceLists/{businessId} {
+      allow read: if request.auth != null && (
+        isAdmin(request.auth.uid) ||
+        canManageBusinessSection(request.auth.uid, businessId,
+            'containers'));
+      allow write: if false;
+    }
     // Request bookkeeping: slug claims, unique codes, idempotency keys.
     match /packageRequestSlugs/{slug} {
       allow read, write: if false;

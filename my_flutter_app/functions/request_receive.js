@@ -280,6 +280,10 @@ function requestLineRecord(request, args) {
       requestId: args.requestId,
       receivedAt: args.receivedAt,
     }),
+    // Where the customer found the business (docs/PACKAGE_PRICE_LIST.md
+    // decision 4): monthly volume counts "Found on Laawol".
+    ...(["laawol", "business"].includes(request?.foundVia) ?
+      {foundVia: request.foundVia} : {}),
   };
 }
 

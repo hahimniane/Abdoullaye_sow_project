@@ -100,3 +100,42 @@ describe("package price list, the rules", () => {
     assert.equal(pl.nextScheduledDate(departure, "2026-11-07"), "2026-11-07");
   });
 });
+
+describe("re-pricing open requests at today's prices", () => {
+  const stored = (piece, route) => {
+    const r = pl.pricePiece(route, piece);
+    return {id: "p1", estimateCents: r.estimateCents, price: r.price};
+  };
+  it("moves list-priced pieces and says when the total went up", () => {
+    const before = [stored({priceItemId: "i_phone", quantity: 2},
+        fixture.route),
+    {id: "p2", kind: "barrel", estimateCents: 12500,
+      price: {source: "barrel", unitCents: 12500}},
+    {id: "p3", kind: "box", estimateCents: null, price: null}];
+    const dearer = {...fixture.route, items: fixture.route.items.map((i) =>
+      i.id === "i_phone" ? {...i, priceCents: 4500} : i)};
+    const out = pl.repricePieces(before, dearer);
+    assert.equal(out.changed, true);
+    assert.equal(out.wentUp, true);
+    assert.equal(out.pieces[0].estimateCents, 9000);
+    assert.equal(out.pieces[1], before[1]);
+    assert.equal(out.pieces[2], before[2]);
+    assert.deepEqual([...out.cents], [["p1", 9000]]);
+  });
+  it("a cheaper price changes without going up; no change is no change", () => {
+    const before = [stored({categoryId: "clothing", weightLb: 50},
+        fixture.route)];
+    const cheaper = {...fixture.route, perLbCents: {clothing: 500}};
+    const out = pl.repricePieces(before, cheaper);
+    assert.equal(out.changed, true);
+    assert.equal(out.wentUp, false);
+    assert.equal(out.pieces[0].estimateCents, 25000);
+    assert.equal(pl.repricePieces(before, fixture.route).changed, false);
+  });
+  it("an item taken off the list keeps its price", () => {
+    const before = [stored({priceItemId: "i_laptop"}, fixture.route)];
+    const out = pl.repricePieces(before, {...fixture.route, items: []});
+    assert.equal(out.changed, false);
+    assert.equal(out.pieces[0].estimateCents, 7000);
+  });
+});

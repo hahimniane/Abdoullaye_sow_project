@@ -392,7 +392,7 @@ function lineCountSignature(line, id, timeZone, root) {
   const pieces = linePieces(line);
   return JSON.stringify([text(line.businessId),
     lineMonthKey(line, id, timeZone, root), pieces.barrels, pieces.packages,
-    pieces.cars, isCustomerLine(line, id)]);
+    pieces.cars, isCustomerLine(line, id), text(line.foundVia)]);
 }
 
 /**
@@ -556,7 +556,7 @@ function buildMonthRollup({businessId, month, timeZone = VOLUME_TIME_ZONE,
   complete = true}) {
   const biz = text(businessId);
   const totals = {pieces: 0, barrels: 0, packages: 0, cars: 0,
-    customerLines: 0, lineCount: 0};
+    customerLines: 0, lineCount: 0, laawolLines: 0, laawolPieces: 0};
   const counted = new Set();
   for (const entry of lines) {
     const id = text(entry?.id);
@@ -572,7 +572,15 @@ function buildMonthRollup({businessId, month, timeZone = VOLUME_TIME_ZONE,
     totals.packages += pieces.packages;
     totals.cars += pieces.cars;
     totals.lineCount += 1;
-    if (isCustomerLine(line, id)) totals.customerLines += 1;
+    if (isCustomerLine(line, id)) {
+      totals.customerLines += 1;
+      // Found on Laawol (docs/PACKAGE_PRICE_LIST.md decision 4): the
+      // customer chose this business in the comparison list.
+      if (text(line.foundVia) === "laawol") {
+        totals.laawolLines += 1;
+        totals.laawolPieces += pieces.pieces;
+      }
+    }
   }
 
   const shipped = [];
@@ -646,6 +654,8 @@ function rollupNumbers(doc) {
     packages: n(row.packages),
     cars: n(row.cars),
     customerLines: n(row.customerLines),
+    laawolLines: n(row.laawolLines),
+    laawolPieces: n(row.laawolPieces),
     containersShipped,
     containerPieces,
     avgPerContainer: averagePerContainer(containerPieces, containersShipped),
@@ -716,6 +726,8 @@ function volumeTableRows(docs, names = new Map()) {
       packages: sum("packages"),
       cars: sum("cars"),
       customerLines: sum("customerLines"),
+      laawolLines: sum("laawolLines"),
+      laawolPieces: sum("laawolPieces"),
       containersShipped,
       containerPieces,
       avgPerContainer: averagePerContainer(containerPieces,
