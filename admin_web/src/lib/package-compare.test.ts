@@ -32,6 +32,7 @@ import {
   peopleProblems,
   pickupFeeText,
   pickupQuotePayload,
+  pickupQuotePayloads,
   pickupWindowText,
   pieceCount,
   piecesCountText,
@@ -287,6 +288,9 @@ test("pickup: each row carries the business's fee, 'to quote', or is blocked", (
   const noBring = { ...DALA, bringIn: { available: false, locations: [] } };
   assert.deepEqual(compareRows([noBring, BRONX], { countryId: "guinea", mode: "sea", lines, handoff: "bring_in", quotes: [] }).map((r) => r.businessId), ["bronx"]);
   assert.deepEqual(pickupQuotePayload(" 12 Grand Concourse ", [DALA, BRONX, far], "guinea", "sea"), { action: "pickup_quote", address: "12 Grand Concourse", businessIds: ["dala", "far"] });
+  const many = Array.from({ length: 45 }, (_, i) => ({ ...far, businessId: `b${i}` }));
+  const chunks = pickupQuotePayloads("1 Main St", many, "guinea", "sea");
+  assert.deepEqual(chunks.map((c) => c.businessIds.length), [20, 20, 5]);
 });
 
 test("sorting and filtering the comparison", () => {
@@ -570,7 +574,7 @@ test("the customer form is wired to the price list flow, not the old estimate-fi
   assert.doesNotMatch(form, /stripe|startCheckout/i);
   assert.match(form, /submitPackageRequest/);
   assert.match(form, /listPackageRequestOptions/);
-  assert.match(form, /pickupQuotePayload/);
+  assert.match(form, /pickupQuotePayloads/);
   assert.match(form, /compareRows/);
   assert.match(form, /submitPayload/);
   // The old copy that said the business sends an estimate for everything is gone.

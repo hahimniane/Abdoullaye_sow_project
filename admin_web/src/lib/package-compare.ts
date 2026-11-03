@@ -718,11 +718,16 @@ export function peopleProblems(draft: Pick<SendDraft, "senderName" | "senderPhon
 
 /** The `listPackageRequestOptions` pickup quote call. */
 export function pickupQuotePayload(address: string, options: readonly RequestOption[], countryId: string, mode: ShipMode) {
-  return {
-    action: "pickup_quote" as const,
-    address: address.trim().slice(0, REQUEST_LIMITS.address),
-    businessIds: modeOptions(options, countryId, mode).filter((option) => option.collect.available).map((option) => option.businessId).slice(0, 20),
-  };
+  return pickupQuotePayloads(address, options, countryId, mode)[0];
+}
+
+/** One pickup_quote call per 20 businesses (the server's cap per call), so every business that picks up gets a fee. */
+export function pickupQuotePayloads(address: string, options: readonly RequestOption[], countryId: string, mode: ShipMode) {
+  const ids = [...new Set(modeOptions(options, countryId, mode).filter((option) => option.collect.available).map((option) => option.businessId))];
+  const clean = address.trim().slice(0, REQUEST_LIMITS.address);
+  const chunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += 20) chunks.push(ids.slice(i, i + 20));
+  return (chunks.length ? chunks : [[]]).map((businessIds) => ({ action: "pickup_quote" as const, address: clean, businessIds }));
 }
 
 /** The submitPackageRequest payload (docs/PACKAGE_PRICE_LIST.md §4). */

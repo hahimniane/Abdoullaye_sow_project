@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { httpsCallable } from "firebase/functions";
 import { CheckCircle2, History, Plane, Plus, RefreshCw, Save, Ship, Tag, Trash2 } from "lucide-react";
 
@@ -84,6 +84,19 @@ export function PriceListPanel({ businessId, canEdit, byLaawol = false, previewM
 
   const serverDraft = useMemo(() => listDraftFrom(stored.routes, countryIds, l), [stored.routes, countryIds, l]);
   const [edits, setEdits] = useState<ListDraft | null>(null);
+  // After a save, the edits stay on screen until the live list shows the
+  // save (so the old prices never flash back), at most 8 seconds.
+  const [savedFrom, setSavedFrom] = useState<number | null>(null);
+  useEffect(() => {
+    if (savedFrom === null) return undefined;
+    if (stored.updatedAtMs !== savedFrom) {
+      setEdits(null);
+      setSavedFrom(null);
+      return undefined;
+    }
+    const timer = setTimeout(() => { setEdits(null); setSavedFrom(null); }, 8000);
+    return () => clearTimeout(timer);
+  }, [savedFrom, stored.updatedAtMs]);
   const draft: ListDraft = useMemo(() => ({ ...serverDraft, ...(edits ?? {}) }), [serverDraft, edits]);
   const dirty = edits !== null;
 
@@ -125,7 +138,7 @@ export function PriceListPanel({ businessId, canEdit, byLaawol = false, previewM
     setFlash("");
     try {
       await call({ action: "price_list", ...listPayload(draft) });
-      setEdits(null);
+      setSavedFrom(stored.updatedAtMs);
       setFlash(byLaawol ? "Price list saved. The business is asked to check it." : "Price list saved.");
     } catch (err) {
       setError(priceListFailure(err).message);
@@ -149,7 +162,10 @@ export function PriceListPanel({ businessId, canEdit, byLaawol = false, previewM
   }
 
   const loading = live && (destinations.loading || !listRead.settled);
-  const readOnly = !canEdit || previewMode;
+  // A list that failed to load is never edited: saving would replace every
+  // country's prices with what this screen wrongly thinks is empty.
+  const readFailed = live && listRead.failed;
+  const readOnly = !canEdit || previewMode || readFailed;
   const modeRoutes = (m: PriceMode) => (countryId ? stored.routes[countryId]?.[m] : undefined);
 
   return (
@@ -175,6 +191,14 @@ export function PriceListPanel({ businessId, canEdit, byLaawol = false, previewM
       )}
       {readOnly && !previewMode && <p className="pkq-banner" role="status">Only the business owner can change the price list.</p>}
       {flash && <p className="pkq-banner" role="status">{flash}</p>}
+      {readFailed && (
+        <div className="pkq-banner warn" role="alert">
+          <span>The price list could not be loaded, so it cannot be changed right now.</span>
+          <button className="lst-btn ghost" onClick={() => window.location.reload()} type="button">
+            <RefreshCw size={14} aria-hidden="true" /> Try again
+          </button>
+        </div>
+      )}
 
       {loading ? (
         <div className="empty-state"><RefreshCw className="spin" size={16} aria-hidden="true" /> Loading…</div>
@@ -386,7 +410,7 @@ export function PriceListPanel({ businessId, canEdit, byLaawol = false, previewM
           {error && <div className="lst-form-error" role="alert">{error}</div>}
           {!readOnly && (
             <div className="plist-actions">
-              <button className="lst-add" data-loading={busy} disabled={busy || !dirty} onClick={() => void save()} type="button">
+              <button className="lst-add" data-loading={busy} disabled={busy || !dirty || savedFrom !== null} onClick={() => void save()} type="button">
                 {busy ? <RefreshCw className="spin" size={14} aria-hidden="true" /> : <Save size={14} aria-hidden="true" />} {busy ? "Saving..." : "Save price list"}
               </button>
               {dirty && (
@@ -404,7 +428,7 @@ export function PriceListPanel({ businessId, canEdit, byLaawol = false, previewM
                   <li key={`${h.atMs}-${h.action}`}>
                     <span>
                       <strong data-no-translate>{formatDateTime(h.atMs)}</strong>{" "}
-                      <span>{h.action === "checked" ? "Checked: looks right" : "Saved"}</span>
+                      <span data-no-translate>{h.action === "checked" ? (l === "fr" ? "Vérifiée : c’est bon" : "Checked: looks right") : (l === "fr" ? "Enregistrée" : "Saved")}</span>
                     </span>
                     <small data-no-translate>
                       {h.byLaawol ? `${h.byName || "Laawol"} (Laawol)` : h.byName}

@@ -857,8 +857,12 @@ function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onF
   function weigh(id: string, price: ReturnType<typeof piecePriceOf>, typed: string) {
     setWeights((current) => ({ ...current, [id]: typed }));
     const next = weighedPriceInput(price, typed, l);
-    setNoRate((current) => ({ ...current, [id]: next === null && typed.trim() !== "" && readWeightLb(typed) !== null }));
-    if (next !== null) setPieces((list) => list.map((piece) => (piece.id === id ? { ...piece, price: next } : piece)));
+    const missingRate = next === null && typed.trim() !== "" && readWeightLb(typed) !== null;
+    setNoRate((current) => ({ ...current, [id]: missingRate }));
+    // No rate for this weight: empty the price so an older weight's price is
+    // never received by mistake; staff type it.
+    const newPrice = next ?? (missingRate ? "" : null);
+    if (newPrice !== null) setPieces((list) => list.map((piece) => (piece.id === id ? { ...piece, price: newPrice } : piece)));
   }
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -931,7 +935,7 @@ function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onF
           {weighable.length > 0 && (
             <section className="pkq-weigh">
               <h4>Weigh at the counter</h4>
-              <small className="lst-hint">Type what the scale says. The price below follows the price list, and you can still change it.</small>
+              <small className="lst-hint">Type what the scale says (all the pieces of a line together). The price below follows the price list, and you can still change it.</small>
               {weighable.map((entry) => (
                 <div className="pkq-weigh-row" key={entry.id}>
                   <span>

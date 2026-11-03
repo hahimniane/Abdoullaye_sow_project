@@ -7860,6 +7860,11 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Save or discard your changes first.": "Enregistrez ou annulez d’abord vos modifications.",
   "No destination countries yet. Add the countries you ship to under Services & coverage, then price them here.":
     "Aucun pays de destination pour l’instant. Ajoutez les pays où vous expédiez dans Services et couverture, puis tarifez-les ici.",
+  "The price list could not be loaded, so it cannot be changed right now.":
+    "La liste de prix n’a pas pu être chargée ; elle ne peut pas être modifiée pour l’instant.",
+  "You are all set. The business is expecting you.": "Tout est prêt. L’entreprise vous attend.",
+  "You are all set. The business will come to collect it.": "Tout est prêt. L’entreprise viendra le récupérer.",
+  "Try again": "Essayer de nouveau",
   "Only the business owner can change the price list.":
     "Seul le propriétaire de l’entreprise peut modifier la liste de prix.",
   "Nothing priced yet for this route. Customers see it as “ask me”.":
@@ -7887,8 +7892,8 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Coming today": "Attendus aujourd’hui",
   "Any time today": "À tout moment aujourd’hui",
   "Weigh at the counter": "Peser au comptoir",
-  "Type what the scale says. The price below follows the price list, and you can still change it.":
-    "Saisissez ce qu’indique la balance. Le prix ci-dessous suit la liste de prix, et vous pouvez toujours le modifier.",
+  "Type what the scale says (all the pieces of a line together). The price below follows the price list, and you can still change it.":
+    "Saisissez ce qu’indique la balance (toutes les pièces d’une ligne ensemble). Le prix ci-dessous suit la liste de prix, et vous pouvez toujours le modifier.",
   "No price per pound for the extra weight. Type the price.":
     "Pas de prix par livre pour le poids en plus. Saisissez le prix.",
   "Planned departure": "Départ prévu",

@@ -34,7 +34,7 @@ import {
   modeOptions,
   peopleProblems,
   pickupFeeText,
-  pickupQuotePayload,
+  pickupQuotePayloads,
   piecesCountText,
   pieceCount,
   ratingText,
@@ -159,6 +159,8 @@ export function PackageRequestForm({ slug = "", senderName = "", senderPhone = "
   const [tried, setTried] = useState<Step | "">("");
   const [serverErrors, setServerErrors] = useState<string[]>([]);
   const [error, setError] = useState("");
+  // The server's refusal, shown on the step it sent the customer back to.
+  const errorFor = (where: string) => (error && serverErrors.some((r) => REQUEST_ERROR_STEP[r] === where) ? error : "");
   const [sending, setSending] = useState(false);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [sent, setSent] = useState<SentSnapshot | null>(null);
@@ -318,8 +320,9 @@ export function PackageRequestForm({ slug = "", senderName = "", senderPhone = "
       setQuoting(true);
       setQuoteError("");
       try {
-        const result = await call<{ quotes: PickupQuote[] }>("listPackageRequestOptions", pickupQuotePayload(draft.pickupAddress, options, draft.countryId, draft.shipMode));
-        setQuotes(Array.isArray(result.quotes) ? result.quotes : []);
+        const results = await Promise.all(pickupQuotePayloads(draft.pickupAddress, options, draft.countryId, draft.shipMode)
+          .map(function quote(payload) { return call<{ quotes: PickupQuote[] }>("listPackageRequestOptions", payload); }));
+        setQuotes(results.flatMap((result) => (Array.isArray(result.quotes) ? result.quotes : [])));
         setQuotedKey(addressKey);
       } catch (err) {
         setQuoteError(requestFailure(err).message);
@@ -547,6 +550,7 @@ export function PackageRequestForm({ slug = "", senderName = "", senderPhone = "
               </fieldset>
             )}
             {showWhereError && <p className="customer-field-error" role="alert">Choose a country.</p>}
+            {errorFor("where") && <p className="customer-field-error" role="alert">{errorFor("where")}</p>}
             <div className="pkr-actions">
               <button className="primary-button" onClick={continueFromWhere} type="button">Continue</button>
             </div>
@@ -776,6 +780,7 @@ export function PackageRequestForm({ slug = "", senderName = "", senderPhone = "
           </div>
         )}
         {quoteError && <p className="customer-field-error" role="alert">{quoteError}</p>}
+        {!quoteError && errorFor("handoff") && <p className="customer-field-error" role="alert">{errorFor("handoff")}</p>}
         <div className="pkr-actions">
           <button className="primary-button" data-loading={quoting} disabled={quoting} onClick={() => void continueFromHandoff()} type="button">
             {quoting ? "Getting pickup prices..." : "Continue"}
