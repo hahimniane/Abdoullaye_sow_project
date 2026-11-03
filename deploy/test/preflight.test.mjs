@@ -467,3 +467,15 @@ test("the functions dry run passes --force like the real deploy", () => {
   const dryRun = source.slice(source.indexOf('"--dry-run"'), source.indexOf("{cwd: appDir}"));
   assert.match(dryRun, /"--force"/);
 });
+
+test("a host behind Hostinger's CDN passes only when it serves the pinned origin's file", async () => {
+  const { assessCdnFrontedOrigin, etagIdentity } = await import("../preflight-lib.mjs");
+  const origin = { etag: '"1f8b-6ae90496-411ed28c;;;"', "last-modified": "Mon, 02 Nov 2026 21:45:58 GMT" };
+  const cdn = { platform: "hostinger", server: "hcdn", etag: 'W/"1f8b-6ae90496-411ed28c;gz"', "last-modified": "Mon, 02 Nov 2026 21:45:58 GMT" };
+  assert.equal(etagIdentity(cdn.etag), etagIdentity(origin.etag));
+  assert.equal(assessCdnFrontedOrigin({ hostname: "h", cdnHeaders: cdn, originHeaders: origin }).ok, true);
+  assert.equal(assessCdnFrontedOrigin({ hostname: "h", cdnHeaders: { ...cdn, server: "nginx" }, originHeaders: origin }).ok, false);
+  assert.equal(assessCdnFrontedOrigin({ hostname: "h", cdnHeaders: { ...cdn, etag: 'W/"other;gz"' }, originHeaders: origin }).ok, false);
+  assert.equal(assessCdnFrontedOrigin({ hostname: "h", cdnHeaders: cdn, originHeaders: {} }).ok, false);
+  assert.equal(assessCdnFrontedOrigin({ hostname: "h", cdnHeaders: { ...cdn, "last-modified": "x" }, originHeaders: origin }).ok, false);
+});
