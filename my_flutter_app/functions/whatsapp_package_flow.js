@@ -27,6 +27,10 @@ const DATA_API_VERSION = "3.0";
 const SCREENS = Object.freeze(["WHERE", "ITEMS", "AMOUNTS", "HOW", "PICK",
   "WHEN", "PEOPLE", "REVIEW"]);
 const SLOTS = 4;
+const ASK_ROWS = Object.freeze([
+  Object.freeze({id: "box", en: "Box", fr: "Carton"}),
+  Object.freeze({id: "suitcase", en: "Suitcase", fr: "Valise"}),
+]);
 const DAYS_AHEAD = 14;
 const PICKUP_DAY = Object.freeze({from: "07:00", to: "21:00"});
 const SESSION_MS = 24 * 60 * 60 * 1000;
@@ -54,6 +58,7 @@ const T = Object.freeze({
       "about 50 lb).",
     count: "How many", pounds: "Weight (lb)",
     otherHelp: "Anything not in the list: the business sends its price.",
+    askHelp: "The business sends its price",
     howTitle: "Drop-off or pickup", how: "How", bring: "I'll bring it",
     pickup: "Pick it up from me", address: "Pickup address",
     addressHelp: "Street, city, ZIP. Needed for a pickup.",
@@ -96,6 +101,7 @@ const T = Object.freeze({
       "environ 50 lb).",
     count: "Combien", pounds: "Poids (lb)",
     otherHelp: "Ce qui n'est pas dans la liste : l'entreprise donne son prix.",
+    askHelp: "L'entreprise donne son prix",
     howTitle: "Dépôt ou ramassage", how: "Comment", bring: "Je l'apporte",
     pickup: "Venez le chercher", address: "Adresse",
     addressHelp: "Rue, ville, code postal. Pour un ramassage.",
@@ -515,6 +521,13 @@ function catalogFor(options, mode, lang) {
       "Baril" : "Barrel", categoryId: "", title: lang === "fr" ? "Baril" :
       "Barrel", description: ""});
   }
+  // Boxes and suitcases are always offered: a business without a price for
+  // them sends one (the request waits for its quote).
+  for (const ask of ASK_ROWS) {
+    rows.push({id: `ask:${ask.id}`, kind: "ask", label: ask[lang === "fr" ?
+      "fr" : "en"], categoryId: "", title: ask[lang === "fr" ? "fr" : "en"],
+    description: w.askHelp});
+  }
   return rows.slice(0, MAX_OPTIONS);
 }
 
@@ -541,6 +554,10 @@ function piecesFor(lines, route, other) {
         kind: "other"});
     } else if (line.kind === "barrel") {
       for (let i = 0; i < line.amount; i++) pieces.push({kind: "barrel"});
+    } else if (line.kind === "ask") {
+      for (let i = 0; i < line.amount; i++) {
+        pieces.push({kind: "box", description: line.label});
+      }
     }
   }
   const text = String(other || "").trim();
