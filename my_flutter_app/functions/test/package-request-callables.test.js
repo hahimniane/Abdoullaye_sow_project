@@ -1141,3 +1141,125 @@ describe("card barrel orders (§8.10)", () => {
     assert.equal(await requestDoc("card_ship-3"), undefined);
   });
 });
+
+describe("price lists (docs/PACKAGE_PRICE_LIST.md)", () => {
+  const ADMIN = "req-test-platform-admin";
+  const routes = {gn: {
+    sea: {items: [{label: "TV 43 in", categoryId: "fragile",
+      priceCents: 12000}], perLbCents: {clothing: 300}},
+    air: {items: [{label: "Phone", categoryId: "electronics",
+      priceCents: 4000, includedLb: 2}], perLbCents: {clothing: 800},
+    departure: {weekdays: ["tue", "fri"]}},
+  }};
+  const priceList = async () => (await db.collection("packagePriceLists")
+      .doc(BIZ).get()).data();
+
+  before(async () => {
+    await db.collection("users").doc(ADMIN).set({role: "admin",
+      email: "ops@laawol.test", displayName: "Laawol Ops"});
+    await admin.auth().createUser({uid: ADMIN, email: "ops@laawol.test",
+      emailVerified: true}).catch(() => null);
+    await saveSettings();
+  });
+
+  it("the owner saves a list; staff cannot; unknown countries are refused",
+      async () => {
+        const saved = await staff("setPackageRequestSettings",
+            {action: "price_list", routes});
+        assert.equal(saved.success, true);
+        const doc = await priceList();
+        assert.equal(doc.routes.gn.air.items[0].id, "i_phone");
+        assert.equal(doc.needsCheck, false);
+        assert.equal(doc.history.at(-1).action, "saved");
+        assert.deepEqual(doc.history.at(-1).countries, ["gn"]);
+        assert.equal(await reasonOf(staff("setPackageRequestSettings",
+            {action: "price_list", routes}, MARIAMA)), "permission-denied");
+        assert.equal(await reasonOf(staff("setPackageRequestSettings",
+            {action: "price_list", routes: {zz: routes.gn}})),
+        "country_unknown");
+      });
+
+  it("Laawol saves on the business's behalf until it looks right",
+      async () => {
+        await staff("setPackageRequestSettings", {action: "price_list",
+          routes}, ADMIN);
+        assert.equal((await priceList()).needsCheck, true);
+        assert.equal((await priceList()).updatedByLaawol, true);
+        assert.equal(await reasonOf(staff("setPackageRequestSettings",
+            {action: "price_list_checked"}, ADMIN)), "permission-denied");
+        await staff("setPackageRequestSettings",
+            {action: "price_list_checked"});
+        assert.equal((await priceList()).needsCheck, false);
+      });
+
+  it("customers see prices and departures; a priced request is confirmed",
+      async () => {
+        const listed = await call("listPackageRequestOptions", {}, "anon-x",
+            ANON);
+        const option = listed.options.find((o) => o.businessId === BIZ &&
+          o.country.id === "gn");
+        assert.equal(option.routes.air.items[0].label, "Phone");
+        assert.equal(option.shipsByAir, true);
+        assert.equal(option.departures.air.source, "schedule");
+        const sent = await submit({shipMode: "air", channel: "app",
+          foundVia: "laawol", plannedWindow: {from: "10:00", to: "12:00"},
+          pieces: [{priceItemId: "i_phone", quantity: 2},
+            {categoryId: "clothing", weightLb: 10, sizePreset: "small_bag"}]});
+        assert.equal(sent.status, "confirmed");
+        assert.equal(sent.totalCents, 8000 + 8000);
+        const row = await requestDoc(sent.requestId);
+        assert.equal(row.confirmedVia, "form");
+        assert.equal(row.shipMode, "air");
+        assert.equal(row.foundVia, "laawol");
+        assert.equal(row.channel, "app");
+        assert.deepEqual(row.plannedWindow, {from: "10:00", to: "12:00"});
+        assert.equal(row.estimate.auto, true);
+        assert.equal(await reasonOf(submit({shipMode: "air", channel: "app",
+          plannedWindow: {from: "07:00", to: "09:00"}})), "window_invalid");
+      });
+
+  it("an older client's request still waits for its estimate", async () => {
+    const sent = await submit();
+    assert.equal(sent.status, "new");
+    assert.equal((await requestDoc(sent.requestId)).foundVia, "");
+  });
+
+  it("a raised price re-prices the open request and asks again",
+      async () => {
+        const sent = await submit({shipMode: "air", channel: "web",
+          pieces: [{priceItemId: "i_phone", quantity: 1}]});
+        assert.equal(sent.status, "confirmed");
+        const dearer = JSON.parse(JSON.stringify(routes));
+        dearer.gn.air.items[0].priceCents = 4500;
+        await staff("setPackageRequestSettings", {action: "price_list",
+          routes: dearer});
+        const row = await requestDoc(sent.requestId);
+        assert.equal(row.estimate.version, 2);
+        assert.equal(row.estimate.totalCents, 4500);
+        assert.equal(row.status, "estimate_sent", "raised: their OK again");
+        await staff("setPackageRequestSettings", {action: "price_list",
+          routes});
+      });
+
+  it("the customer picks a new drop-off time from the link", async () => {
+    const sent = await submit({channel: "web", plannedWindow:
+      {from: "10:00", to: "12:00"}, pieces: [{kind: "barrel"}]});
+    const day = todayPlus(5);
+    const moved = await call("confirmPackageEstimate", {token: sent.token,
+      action: "reschedule", plannedDate: day,
+      plannedWindow: {from: "14:00", to: "16:00"}}, "anon-y", ANON);
+    assert.equal(moved.plannedDate, day);
+    const row = await requestDoc(sent.requestId);
+    assert.deepEqual(row.plannedWindow, {from: "14:00", to: "16:00"});
+    assert.equal(row.history.at(-1).action, "rescheduled");
+    const view = await call("getPackageRequestByToken", {token: sent.token},
+        "anon-y", ANON);
+    assert.deepEqual(view.request.plannedWindow, {from: "14:00",
+      to: "16:00"});
+  });
+
+  it("new freight work is refused", async () => {
+    assert.equal(await reasonOf(call("createFreightQuoteRequest", {},
+        CUSTOMER)), "freight_moved");
+  });
+});

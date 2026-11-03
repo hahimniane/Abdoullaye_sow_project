@@ -18,7 +18,7 @@
     "test:parking-bill-payments": "firebase emulators:exec --config ../firebase.json --only auth,firestore,storage --project demo-laawol-parking-bill \"node --test test/parking-bill-payment-callables.test.js\"",
     "test:parking-team": "firebase emulators:exec --config ../firebase.json --only firestore --project demo-laawol-parking-team \"node --test test/parking-team-callables.test.js\"",
     "test:parking-invoices": "firebase emulators:exec --config ../firebase.json --only auth,firestore,storage --project demo-laawol-parking-inv \"node --test test/parking-invoices-callables.test.js\"",
-    "test:requests": "firebase emulators:exec --config ../firebase.json --only firestore,storage --project demo-laawol-requests \"node test/package-request-callables.test.js\"",
+    "test:requests": "firebase emulators:exec --config ../firebase.json --only auth,firestore,storage --project demo-laawol-requests \"node test/package-request-callables.test.js\"",
     "test:inventory": "firebase emulators:exec --config ../firebase.json --only auth,firestore --project demo-laawol-inventory \"node test/inventory-callables.test.js\"",
     "test:transfers": "firebase emulators:exec --config ../firebase.json --only auth,firestore --project demo-laawol-transfers \"node test/inventory-transfer-callables.test.js\"",
     "test:bank": "firebase emulators:exec --config ../firebase.json --only auth,firestore --project demo-laawol-bank \"node test/bank-callables.test.js\"",
