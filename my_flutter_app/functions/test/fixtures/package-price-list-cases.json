@@ -1,0 +1,1136 @@
+{
+  "route": {
+    "items": [
+      {
+        "id": "i_phone",
+        "categoryId": "electronics",
+        "label": "Phone",
+        "priceCents": 4000,
+        "includedLb": 2
+      },
+      {
+        "id": "i_laptop",
+        "categoryId": "electronics",
+        "label": "Laptop",
+        "priceCents": 7000,
+        "includedLb": 0
+      },
+      {
+        "id": "i_tv_43",
+        "categoryId": "fragile",
+        "label": "TV 43 in",
+        "priceCents": 12000,
+        "includedLb": 0
+      }
+    ],
+    "perLbCents": {
+      "clothing": 600,
+      "food": 500,
+      "general": 450
+    },
+    "departure": {
+      "weekdays": [
+        "tue",
+        "fri"
+      ],
+      "everyWeeks": 1,
+      "anchorDate": ""
+    }
+  },
+  "noGeneral": {
+    "items": [
+      {
+        "id": "i_phone",
+        "categoryId": "electronics",
+        "label": "Phone",
+        "priceCents": 4000,
+        "includedLb": 2
+      },
+      {
+        "id": "i_laptop",
+        "categoryId": "electronics",
+        "label": "Laptop",
+        "priceCents": 7000,
+        "includedLb": 0
+      },
+      {
+        "id": "i_tv_43",
+        "categoryId": "fragile",
+        "label": "TV 43 in",
+        "priceCents": 12000,
+        "includedLb": 0
+      }
+    ],
+    "perLbCents": {
+      "clothing": 600
+    },
+    "departure": {
+      "weekdays": [
+        "tue",
+        "fri"
+      ],
+      "everyWeeks": 1,
+      "anchorDate": ""
+    }
+  },
+  "baskets": [
+    {
+      "name": "items and a suitcase of clothes",
+      "route": {
+        "items": [
+          {
+            "id": "i_phone",
+            "categoryId": "electronics",
+            "label": "Phone",
+            "priceCents": 4000,
+            "includedLb": 2
+          },
+          {
+            "id": "i_laptop",
+            "categoryId": "electronics",
+            "label": "Laptop",
+            "priceCents": 7000,
+            "includedLb": 0
+          },
+          {
+            "id": "i_tv_43",
+            "categoryId": "fragile",
+            "label": "TV 43 in",
+            "priceCents": 12000,
+            "includedLb": 0
+          }
+        ],
+        "perLbCents": {
+          "clothing": 600,
+          "food": 500,
+          "general": 450
+        },
+        "departure": {
+          "weekdays": [
+            "tue",
+            "fri"
+          ],
+          "everyWeeks": 1,
+          "anchorDate": ""
+        }
+      },
+      "ctx": {
+        "barrelPriceCents": 12500
+      },
+      "pieces": [
+        {
+          "priceItemId": "i_phone",
+          "quantity": 2
+        },
+        {
+          "priceItemId": "i_laptop"
+        },
+        {
+          "categoryId": "clothing",
+          "weightLb": 50
+        }
+      ],
+      "expect": {
+        "pieces": [
+          {
+            "price": {
+              "source": "item",
+              "itemId": "i_phone",
+              "label": "Phone",
+              "categoryId": "electronics",
+              "quantity": 2,
+              "unitCents": 4000,
+              "includedLb": 2,
+              "excessPerLbCents": 450,
+              "perLbCents": null,
+              "weightLb": null
+            },
+            "estimateCents": 8000,
+            "description": "2 × Phone",
+            "error": ""
+          },
+          {
+            "price": {
+              "source": "item",
+              "itemId": "i_laptop",
+              "label": "Laptop",
+              "categoryId": "electronics",
+              "quantity": 1,
+              "unitCents": 7000,
+              "includedLb": 0,
+              "excessPerLbCents": null,
+              "perLbCents": null,
+              "weightLb": null
+            },
+            "estimateCents": 7000,
+            "description": "Laptop",
+            "error": ""
+          },
+          {
+            "price": {
+              "source": "per_lb",
+              "itemId": "",
+              "label": "Clothes and fabric",
+              "categoryId": "clothing",
+              "quantity": 1,
+              "unitCents": null,
+              "includedLb": 0,
+              "excessPerLbCents": null,
+              "perLbCents": 600,
+              "weightLb": 50
+            },
+            "estimateCents": 30000,
+            "description": "Clothes and fabric · 50 lb",
+            "error": ""
+          }
+        ],
+        "pricedCents": 45000,
+        "unpricedCount": 0,
+        "allPriced": true,
+        "totalCents": 45000,
+        "weighsAtCounter": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "pickup fee joins the total",
+      "route": {
+        "items": [
+          {
+            "id": "i_phone",
+            "categoryId": "electronics",
+            "label": "Phone",
+            "priceCents": 4000,
+            "includedLb": 2
+          },
+          {
+            "id": "i_laptop",
+            "categoryId": "electronics",
+            "label": "Laptop",
+            "priceCents": 7000,
+            "includedLb": 0
+          },
+          {
+            "id": "i_tv_43",
+            "categoryId": "fragile",
+            "label": "TV 43 in",
+            "priceCents": 12000,
+            "includedLb": 0
+          }
+        ],
+        "perLbCents": {
+          "clothing": 600,
+          "food": 500,
+          "general": 450
+        },
+        "departure": {
+          "weekdays": [
+            "tue",
+            "fri"
+          ],
+          "everyWeeks": 1,
+          "anchorDate": ""
+        }
+      },
+      "ctx": {
+        "barrelPriceCents": null,
+        "pickupFeeCents": 1800
+      },
+      "pieces": [
+        {
+          "priceItemId": "i_laptop"
+        }
+      ],
+      "expect": {
+        "pieces": [
+          {
+            "price": {
+              "source": "item",
+              "itemId": "i_laptop",
+              "label": "Laptop",
+              "categoryId": "electronics",
+              "quantity": 1,
+              "unitCents": 7000,
+              "includedLb": 0,
+              "excessPerLbCents": null,
+              "perLbCents": null,
+              "weightLb": null
+            },
+            "estimateCents": 7000,
+            "description": "Laptop",
+            "error": ""
+          }
+        ],
+        "pricedCents": 8800,
+        "unpricedCount": 0,
+        "allPriced": true,
+        "totalCents": 8800,
+        "weighsAtCounter": false,
+        "errors": []
+      }
+    },
+    {
+      "name": "a barrel uses the barrel price",
+      "route": {
+        "items": [
+          {
+            "id": "i_phone",
+            "categoryId": "electronics",
+            "label": "Phone",
+            "priceCents": 4000,
+            "includedLb": 2
+          },
+          {
+            "id": "i_laptop",
+            "categoryId": "electronics",
+            "label": "Laptop",
+            "priceCents": 7000,
+            "includedLb": 0
+          },
+          {
+            "id": "i_tv_43",
+            "categoryId": "fragile",
+            "label": "TV 43 in",
+            "priceCents": 12000,
+            "includedLb": 0
+          }
+        ],
+        "perLbCents": {
+          "clothing": 600,
+          "food": 500,
+          "general": 450
+        },
+        "departure": {
+          "weekdays": [
+            "tue",
+            "fri"
+          ],
+          "everyWeeks": 1,
+          "anchorDate": ""
+        }
+      },
+      "ctx": {
+        "barrelPriceCents": 12500
+      },
+      "pieces": [
+        {
+          "kind": "barrel"
+        },
+        {
+          "categoryId": "food",
+          "weightLb": 12.34
+        }
+      ],
+      "expect": {
+        "pieces": [
+          {
+            "price": {
+              "source": "barrel",
+              "itemId": "",
+              "label": "Barrel",
+              "categoryId": "",
+              "quantity": 1,
+              "unitCents": 12500,
+              "includedLb": 0,
+              "excessPerLbCents": null,
+              "perLbCents": null,
+              "weightLb": null
+            },
+            "estimateCents": 12500,
+            "description": "",
+            "error": ""
+          },
+          {
+            "price": {
+              "source": "per_lb",
+              "itemId": "",
+              "label": "Food",
+              "categoryId": "food",
+              "quantity": 1,
+              "unitCents": null,
+              "includedLb": 0,
+              "excessPerLbCents": null,
+              "perLbCents": 500,
+              "weightLb": 12.3
+            },
+            "estimateCents": 6150,
+            "description": "Food · 12.3 lb",
+            "error": ""
+          }
+        ],
+        "pricedCents": 18650,
+        "unpricedCount": 0,
+        "allPriced": true,
+        "totalCents": 18650,
+        "weighsAtCounter": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "ask me: a category with no rate and a free description",
+      "route": {
+        "items": [
+          {
+            "id": "i_phone",
+            "categoryId": "electronics",
+            "label": "Phone",
+            "priceCents": 4000,
+            "includedLb": 2
+          },
+          {
+            "id": "i_laptop",
+            "categoryId": "electronics",
+            "label": "Laptop",
+            "priceCents": 7000,
+            "includedLb": 0
+          },
+          {
+            "id": "i_tv_43",
+            "categoryId": "fragile",
+            "label": "TV 43 in",
+            "priceCents": 12000,
+            "includedLb": 0
+          }
+        ],
+        "perLbCents": {
+          "clothing": 600
+        },
+        "departure": {
+          "weekdays": [
+            "tue",
+            "fri"
+          ],
+          "everyWeeks": 1,
+          "anchorDate": ""
+        }
+      },
+      "ctx": {},
+      "pieces": [
+        {
+          "categoryId": "food",
+          "weightLb": 10
+        },
+        {
+          "kind": "box",
+          "description": "Car parts"
+        },
+        {
+          "priceItemId": "i_phone"
+        }
+      ],
+      "expect": {
+        "pieces": [
+          {
+            "price": null,
+            "estimateCents": null,
+            "description": "Food · 10 lb",
+            "error": ""
+          },
+          {
+            "price": null,
+            "estimateCents": null,
+            "description": "",
+            "error": ""
+          },
+          {
+            "price": {
+              "source": "item",
+              "itemId": "i_phone",
+              "label": "Phone",
+              "categoryId": "electronics",
+              "quantity": 1,
+              "unitCents": 4000,
+              "includedLb": 2,
+              "excessPerLbCents": null,
+              "perLbCents": null,
+              "weightLb": null
+            },
+            "estimateCents": 4000,
+            "description": "Phone",
+            "error": ""
+          }
+        ],
+        "pricedCents": 4000,
+        "unpricedCount": 2,
+        "allPriced": false,
+        "totalCents": null,
+        "weighsAtCounter": true,
+        "errors": []
+      }
+    },
+    {
+      "name": "an item taken off the list becomes ask me",
+      "route": {
+        "items": [
+          {
+            "id": "i_phone",
+            "categoryId": "electronics",
+            "label": "Phone",
+            "priceCents": 4000,
+            "includedLb": 2
+          },
+          {
+            "id": "i_laptop",
+            "categoryId": "electronics",
+            "label": "Laptop",
+            "priceCents": 7000,
+            "includedLb": 0
+          },
+          {
+            "id": "i_tv_43",
+            "categoryId": "fragile",
+            "label": "TV 43 in",
+            "priceCents": 12000,
+            "includedLb": 0
+          }
+        ],
+        "perLbCents": {
+          "clothing": 600,
+          "food": 500,
+          "general": 450
+        },
+        "departure": {
+          "weekdays": [
+            "tue",
+            "fri"
+          ],
+          "everyWeeks": 1,
+          "anchorDate": ""
+        }
+      },
+      "ctx": {},
+      "pieces": [
+        {
+          "priceItemId": "i_tablet",
+          "quantity": 3,
+          "label": "Tablet"
+        }
+      ],
+      "expect": {
+        "pieces": [
+          {
+            "price": null,
+            "estimateCents": null,
+            "description": "3 × Tablet",
+            "error": ""
+          }
+        ],
+        "pricedCents": 0,
+        "unpricedCount": 1,
+        "allPriced": false,
+        "totalCents": null,
+        "weighsAtCounter": false,
+        "errors": []
+      }
+    },
+    {
+      "name": "no route: nothing priced",
+      "route": null,
+      "ctx": {
+        "barrelPriceCents": 9000
+      },
+      "pieces": [
+        {
+          "priceItemId": "i_phone"
+        },
+        {
+          "kind": "barrel"
+        }
+      ],
+      "expect": {
+        "pieces": [
+          {
+            "price": null,
+            "estimateCents": null,
+            "description": "",
+            "error": ""
+          },
+          {
+            "price": {
+              "source": "barrel",
+              "itemId": "",
+              "label": "Barrel",
+              "categoryId": "",
+              "quantity": 1,
+              "unitCents": 9000,
+              "includedLb": 0,
+              "excessPerLbCents": null,
+              "perLbCents": null,
+              "weightLb": null
+            },
+            "estimateCents": 9000,
+            "description": "",
+            "error": ""
+          }
+        ],
+        "pricedCents": 9000,
+        "unpricedCount": 1,
+        "allPriced": false,
+        "totalCents": null,
+        "weighsAtCounter": false,
+        "errors": []
+      }
+    },
+    {
+      "name": "bad quantity and weight",
+      "route": {
+        "items": [
+          {
+            "id": "i_phone",
+            "categoryId": "electronics",
+            "label": "Phone",
+            "priceCents": 4000,
+            "includedLb": 2
+          },
+          {
+            "id": "i_laptop",
+            "categoryId": "electronics",
+            "label": "Laptop",
+            "priceCents": 7000,
+            "includedLb": 0
+          },
+          {
+            "id": "i_tv_43",
+            "categoryId": "fragile",
+            "label": "TV 43 in",
+            "priceCents": 12000,
+            "includedLb": 0
+          }
+        ],
+        "perLbCents": {
+          "clothing": 600,
+          "food": 500,
+          "general": 450
+        },
+        "departure": {
+          "weekdays": [
+            "tue",
+            "fri"
+          ],
+          "everyWeeks": 1,
+          "anchorDate": ""
+        }
+      },
+      "ctx": {},
+      "pieces": [
+        {
+          "priceItemId": "i_phone",
+          "quantity": 0
+        },
+        {
+          "categoryId": "clothing",
+          "weightLb": 0
+        }
+      ],
+      "expect": {
+        "pieces": [
+          {
+            "price": null,
+            "estimateCents": null,
+            "description": "",
+            "error": "quantity_invalid"
+          },
+          {
+            "price": null,
+            "estimateCents": null,
+            "description": "",
+            "error": "weight_invalid"
+          }
+        ],
+        "pricedCents": 0,
+        "unpricedCount": 2,
+        "allPriced": false,
+        "totalCents": null,
+        "weighsAtCounter": false,
+        "errors": [
+          "quantity_invalid",
+          "weight_invalid"
+        ]
+      }
+    }
+  ],
+  "counter": [
+    {
+      "name": "fixed any weight never changes",
+      "price": {
+        "source": "item",
+        "itemId": "i_laptop",
+        "label": "Laptop",
+        "categoryId": "electronics",
+        "quantity": 1,
+        "unitCents": 7000,
+        "includedLb": 0,
+        "excessPerLbCents": null,
+        "perLbCents": null,
+        "weightLb": null
+      },
+      "weighedLb": 30,
+      "expect": 7000
+    },
+    {
+      "name": "up to 2 lb each, 2 phones weigh 3 lb",
+      "price": {
+        "source": "item",
+        "itemId": "i_phone",
+        "label": "Phone",
+        "categoryId": "electronics",
+        "quantity": 2,
+        "unitCents": 4000,
+        "includedLb": 2,
+        "excessPerLbCents": 450,
+        "perLbCents": null,
+        "weightLb": null
+      },
+      "weighedLb": 3,
+      "expect": 8000
+    },
+    {
+      "name": "up to 2 lb each, 2 phones weigh 6.5 lb",
+      "price": {
+        "source": "item",
+        "itemId": "i_phone",
+        "label": "Phone",
+        "categoryId": "electronics",
+        "quantity": 2,
+        "unitCents": 4000,
+        "includedLb": 2,
+        "excessPerLbCents": 450,
+        "perLbCents": null,
+        "weightLb": null
+      },
+      "weighedLb": 6.5,
+      "expect": 9125
+    },
+    {
+      "name": "extra weight with no rate: staff decide",
+      "price": {
+        "source": "item",
+        "itemId": "i_phone",
+        "label": "Phone",
+        "categoryId": "electronics",
+        "quantity": 1,
+        "unitCents": 4000,
+        "includedLb": 2,
+        "excessPerLbCents": null,
+        "perLbCents": null,
+        "weightLb": null
+      },
+      "weighedLb": 5,
+      "expect": null
+    },
+    {
+      "name": "by the pound uses the scale",
+      "price": {
+        "source": "per_lb",
+        "itemId": "",
+        "label": "Clothes and fabric",
+        "categoryId": "clothing",
+        "quantity": 1,
+        "unitCents": null,
+        "includedLb": 0,
+        "excessPerLbCents": null,
+        "perLbCents": 600,
+        "weightLb": 50
+      },
+      "weighedLb": 42.5,
+      "expect": 25500
+    },
+    {
+      "name": "by the pound with no weight",
+      "price": {
+        "source": "per_lb",
+        "itemId": "",
+        "label": "Clothes and fabric",
+        "categoryId": "clothing",
+        "quantity": 1,
+        "unitCents": null,
+        "includedLb": 0,
+        "excessPerLbCents": null,
+        "perLbCents": 600,
+        "weightLb": 50
+      },
+      "weighedLb": 0,
+      "expect": null
+    }
+  ],
+  "departures": [
+    {
+      "name": "schedule Tue/Fri from a Monday",
+      "input": {
+        "departure": {
+          "weekdays": [
+            "tue",
+            "fri"
+          ],
+          "everyWeeks": 1,
+          "anchorDate": ""
+        },
+        "planned": [],
+        "todayKey": "2026-11-02"
+      },
+      "expect": {
+        "dateKey": "2026-11-03",
+        "source": "schedule",
+        "approximate": false
+      }
+    },
+    {
+      "name": "schedule today counts",
+      "input": {
+        "departure": {
+          "weekdays": [
+            "tue",
+            "fri"
+          ],
+          "everyWeeks": 1,
+          "anchorDate": ""
+        },
+        "planned": [],
+        "todayKey": "2026-11-06"
+      },
+      "expect": {
+        "dateKey": "2026-11-06",
+        "source": "schedule",
+        "approximate": false
+      }
+    },
+    {
+      "name": "planned date wins",
+      "input": {
+        "departure": {
+          "weekdays": [
+            "tue",
+            "fri"
+          ],
+          "everyWeeks": 1,
+          "anchorDate": ""
+        },
+        "planned": [
+          {
+            "dateKey": "2026-11-09",
+            "departed": false
+          }
+        ],
+        "todayKey": "2026-11-02"
+      },
+      "expect": {
+        "dateKey": "2026-11-09",
+        "source": "planned",
+        "approximate": false
+      }
+    },
+    {
+      "name": "a planned date that passed: not confirmed",
+      "input": {
+        "departure": {
+          "weekdays": [
+            "tue",
+            "fri"
+          ],
+          "everyWeeks": 1,
+          "anchorDate": ""
+        },
+        "planned": [
+          {
+            "dateKey": "2026-10-30",
+            "departed": false
+          }
+        ],
+        "todayKey": "2026-11-02"
+      },
+      "expect": {
+        "dateKey": "",
+        "source": "unconfirmed",
+        "approximate": false
+      }
+    },
+    {
+      "name": "a departed one is ignored",
+      "input": {
+        "departure": null,
+        "planned": [
+          {
+            "dateKey": "2026-10-30",
+            "departed": true
+          }
+        ],
+        "todayKey": "2026-11-02"
+      },
+      "expect": {
+        "dateKey": "",
+        "source": "none",
+        "approximate": false
+      }
+    },
+    {
+      "name": "every 3 weeks from an anchor",
+      "input": {
+        "departure": {
+          "weekdays": [
+            "sat"
+          ],
+          "everyWeeks": 3,
+          "anchorDate": "2026-10-24"
+        },
+        "planned": [],
+        "todayKey": "2026-11-02"
+      },
+      "expect": {
+        "dateKey": "2026-11-14",
+        "source": "schedule",
+        "approximate": true
+      }
+    },
+    {
+      "name": "nothing",
+      "input": {
+        "departure": null,
+        "planned": [],
+        "todayKey": "2026-11-02"
+      },
+      "expect": {
+        "dateKey": "",
+        "source": "none",
+        "approximate": false
+      }
+    }
+  ],
+  "rank": {
+    "options": [
+      {
+        "businessId": "e",
+        "businessName": "Express Air",
+        "allPriced": false,
+        "unpricedCount": 1,
+        "totalCents": null,
+        "pricedCents": 7000,
+        "rating": 4,
+        "reviewCount": 1,
+        "departureKey": "2026-11-05"
+      },
+      {
+        "businessId": "a",
+        "businessName": "Atlantic",
+        "allPriced": true,
+        "unpricedCount": 0,
+        "totalCents": 30000,
+        "pricedCents": 30000,
+        "rating": 4.2,
+        "reviewCount": 10,
+        "departureKey": "2026-11-14"
+      },
+      {
+        "businessId": "b",
+        "businessName": "Baobab",
+        "allPriced": true,
+        "unpricedCount": 0,
+        "totalCents": 28000,
+        "pricedCents": 28000,
+        "rating": null,
+        "reviewCount": 0,
+        "departureKey": "2026-11-04"
+      },
+      {
+        "businessId": "c",
+        "businessName": "Conakry Express",
+        "allPriced": false,
+        "unpricedCount": 1,
+        "totalCents": null,
+        "pricedCents": 9000,
+        "rating": 4.9,
+        "reviewCount": 30,
+        "departureKey": "2026-11-03"
+      },
+      {
+        "businessId": "d",
+        "businessName": "Dakar Direct",
+        "allPriced": false,
+        "unpricedCount": 3,
+        "totalCents": null,
+        "pricedCents": 0,
+        "rating": 3.5,
+        "reviewCount": 2,
+        "departureKey": ""
+      }
+    ],
+    "expect": {
+      "best": [
+        "b",
+        "a",
+        "e",
+        "c",
+        "d"
+      ],
+      "price": [
+        "b",
+        "a",
+        "e",
+        "c",
+        "d"
+      ],
+      "rating": [
+        "c",
+        "a",
+        "e",
+        "d",
+        "b"
+      ],
+      "soonest": [
+        "c",
+        "b",
+        "e",
+        "a",
+        "d"
+      ]
+    }
+  },
+  "routes": [
+    {
+      "name": "valid route keeps ids and drops blank rates",
+      "raw": {
+        "items": [
+          {
+            "id": "i_phone",
+            "label": " Phone ",
+            "categoryId": "electronics",
+            "priceCents": 4000,
+            "includedLb": "2"
+          },
+          {
+            "label": "Télé 43\"",
+            "categoryId": "fragile",
+            "priceCents": 12000
+          }
+        ],
+        "perLbCents": {
+          "clothing": 600,
+          "food": null
+        },
+        "departure": {
+          "weekdays": [
+            "fri",
+            "tue"
+          ]
+        }
+      },
+      "expect": {
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_tele_43",
+              "categoryId": "fragile",
+              "label": "Télé 43\"",
+              "priceCents": 12000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          }
+        },
+        "errors": []
+      }
+    },
+    {
+      "name": "duplicate names get distinct ids but are refused",
+      "raw": {
+        "items": [
+          {
+            "label": "Phone",
+            "categoryId": "electronics",
+            "priceCents": 4000
+          },
+          {
+            "label": "phone",
+            "categoryId": "electronics",
+            "priceCents": 4500
+          }
+        ]
+      },
+      "expect": {
+        "route": null,
+        "errors": [
+          "label_duplicate"
+        ]
+      }
+    },
+    {
+      "name": "bad values",
+      "raw": {
+        "items": [
+          {
+            "label": "",
+            "categoryId": "toys",
+            "priceCents": 0,
+            "includedLb": 900
+          }
+        ],
+        "perLbCents": {
+          "clothing": 1.5
+        },
+        "departure": {
+          "weekdays": [
+            "xyz"
+          ]
+        }
+      },
+      "expect": {
+        "route": null,
+        "errors": [
+          "label_required",
+          "category_invalid",
+          "price_invalid",
+          "included_invalid",
+          "per_lb_invalid",
+          "departure_invalid"
+        ]
+      }
+    },
+    {
+      "name": "every 2 weeks needs an anchor",
+      "raw": {
+        "departure": {
+          "weekdays": [
+            "sat"
+          ],
+          "everyWeeks": 2
+        }
+      },
+      "expect": {
+        "route": null,
+        "errors": [
+          "departure_invalid"
+        ]
+      }
+    },
+    {
+      "name": "empty route is no route",
+      "raw": {
+        "items": [],
+        "perLbCents": {},
+        "departure": {
+          "weekdays": []
+        }
+      },
+      "expect": {
+        "route": null,
+        "errors": []
+      }
+    }
+  ]
+}
