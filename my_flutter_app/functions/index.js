@@ -23979,6 +23979,20 @@ exports.whatsappConversation = onCall(
 // signature. Always 200 once the signature is good, so Meta does not retry
 // events we already handled (a failed one is retried by its own dedupe).
 /**
+ * The Flow endpoint's private key, "" while the secret is not bound to the
+ * webhook yet.
+ *
+ * @return {string} PEM.
+ */
+function flowPrivateKey() {
+  try {
+    return safeSecretValue(whatsappFlowPrivateKey);
+  } catch (error) {
+    return "";
+  }
+}
+
+/**
  * Decrypts a Flow endpoint call, answers it, encrypts the answer.
  *
  * @param {object} body The encrypted request.
@@ -23989,7 +24003,7 @@ async function answerPackageFlow(body, res) {
   let opened = null;
   try {
     opened = packageFlow.decryptFlowRequest(body,
-        safeSecretValue(whatsappFlowPrivateKey).replace(/\\n/g, "\n"));
+        flowPrivateKey().replace(/\\n/g, "\n"));
   } catch (error) {
     // 421: WhatsApp fetches the public key again and retries.
     logger.warn("Package flow request not decrypted",
@@ -24018,8 +24032,11 @@ exports.whatsappWebhook = onRequest(
       maxInstances: 2,
       timeoutSeconds: 120,
       memory: "512MiB",
+      // WHATSAPP_FLOW_PRIVATE_KEY joins this list once the secret exists
+      // (ops/whatsapp/package_flow.py key); until then the Send a package
+      // form stays off (no flowId in appConfig/whatsappPackageFlow).
       secrets: [whatsappAppSecret, whatsappAccessToken, whatsappPhoneNumberId,
-        whatsappFlowPrivateKey, googleMapsApiKey],
+        googleMapsApiKey],
     },
     async (req, res) => {
       const secret = safeSecretValue(whatsappAppSecret);
