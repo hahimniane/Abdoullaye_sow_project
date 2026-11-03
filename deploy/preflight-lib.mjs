@@ -211,6 +211,42 @@ export async function resolveDnsOverHttps({
   }
 }
 
+/**
+ * Hostinger can put its CDN in front of a domain, so DNS then returns
+ * rotating CDN addresses instead of the pinned origin. That host is still
+ * ours when (1) the public response comes from Hostinger's CDN and (2) it
+ * serves the same file as the pinned origin: same ETag identity and
+ * Last-Modified. Headers are lower-cased name -> value maps.
+ */
+export function etagIdentity(value) {
+  return String(value || "").trim().replace(/^W\//, "").replace(/"/g, "")
+      .split(";")[0];
+}
+
+export function assessCdnFrontedOrigin({ hostname, cdnHeaders, originHeaders }) {
+  const cdn = cdnHeaders || {};
+  const origin = originHeaders || {};
+  const viaHostingerCdn = String(cdn.platform || "").toLowerCase() === "hostinger" &&
+    String(cdn.server || "").toLowerCase() === "hcdn";
+  if (!viaHostingerCdn) {
+    return { ok: false, detail: `${hostname} is not served by Hostinger's CDN` };
+  }
+  const cdnTag = etagIdentity(cdn.etag);
+  const originTag = etagIdentity(origin.etag);
+  const sameFile = Boolean(cdnTag) && cdnTag === originTag &&
+    Boolean(cdn["last-modified"]) && cdn["last-modified"] === origin["last-modified"];
+  if (!sameFile) {
+    return {
+      ok: false,
+      detail: `${hostname} via Hostinger CDN does not serve the pinned origin's file (cdn ${cdnTag || "none"}, origin ${originTag || "none"})`,
+    };
+  }
+  return {
+    ok: true,
+    detail: `behind Hostinger CDN; serves the pinned origin's file (${cdnTag})`,
+  };
+}
+
 export function trustedDnsConsensus(results) {
   const normalized = (results || []).map((result) => ({
     provider: result?.provider || "unknown",

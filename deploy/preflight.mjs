@@ -22,6 +22,7 @@ import {
   TRUSTED_DNS_OVER_HTTPS_PROVIDERS,
   assessStorageRulesFirestoreIam,
   assessStaticDnsHost,
+  assessCdnFrontedOrigin,
   appCheckKeyMatchesProject,
   appCheckWebConfig,
   deploymentChildEnvironment,
@@ -204,6 +205,31 @@ if (resolvedDeploymentMode.mode === "production") {
   );
 }
 
+/** HEAD https://hostname/ (optionally pinned to one IPv4); lower-cased headers, {} on failure. */
+async function headHeaders(hostname, pinnedIPv4 = "") {
+  const https = await import("node:https");
+  return new Promise((resolve) => {
+    const request = https.request({
+      host: hostname,
+      servername: hostname,
+      path: "/",
+      method: "HEAD",
+      timeout: 15000,
+      headers: { "accept-encoding": "gzip" },
+      ...(pinnedIPv4 ? { lookup: (_name, options, callback) => (options?.all ?
+        callback(null, [{ address: pinnedIPv4, family: 4 }]) :
+        callback(null, pinnedIPv4, 4)) } : {}),
+    }, (response) => {
+      response.resume();
+      resolve(Object.fromEntries(Object.entries(response.headers)
+          .map(([name, value]) => [name.toLowerCase(), Array.isArray(value) ? value.join(", ") : String(value)])));
+    });
+    request.on("timeout", () => request.destroy());
+    request.on("error", () => resolve({}));
+    request.end();
+  });
+}
+
 if (checksStatic) {
   for (const hostname of PRODUCTION_STATIC_HOSTS) {
     const [ipv4Result, ipv6Result] = await Promise.all([
@@ -217,7 +243,19 @@ if (checksStatic) {
       ipv4Result,
       ipv6Result,
     });
-    addCheck(`Static DNS for ${hostname}`, dns.ok, dns.detail);
+    if (dns.ok) {
+      addCheck(`Static DNS for ${hostname}`, true, dns.detail);
+      continue;
+    }
+    // Behind Hostinger's CDN the addresses rotate; prove the CDN serves the
+    // pinned origin instead.
+    const [cdnHeaders, originHeaders] = await Promise.all([
+      headHeaders(hostname),
+      headHeaders(hostname, HOSTINGER_PRODUCTION_IPV4),
+    ]);
+    const cdn = assessCdnFrontedOrigin({ hostname, cdnHeaders, originHeaders });
+    addCheck(`Static DNS for ${hostname}`, cdn.ok,
+        cdn.ok ? cdn.detail : `${dns.detail}; ${cdn.detail}`);
   }
 
   // Judge the env `next build` will actually see: exported variables over
