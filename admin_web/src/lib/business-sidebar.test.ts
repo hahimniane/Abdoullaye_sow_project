@@ -49,6 +49,7 @@ describe("business sidebar navigation", () => {
         ["waiting", true],
         ["containers", true],
         ["deliveries", true],
+        ["priceList", false],
         ["barrels", false],
         ["freight", false],
         ["volume", false],
@@ -78,11 +79,11 @@ describe("business sidebar navigation", () => {
   it("gives an owner of a barrel shipper every step but Freight", () => {
     assert.deepEqual(
       visibleStepIds(["barrelShipping", "carSales", "carParking", "carTransport"], "owner"),
-      ["requests", "waiting", "containers", "deliveries", "barrels", "volume"],
+      ["requests", "waiting", "containers", "deliveries", "priceList", "barrels", "volume"],
     );
     assert.deepEqual(
       visibleStepIds(["freight"], "owner"),
-      ["requests", "waiting", "containers", "deliveries", "freight", "volume"],
+      ["requests", "waiting", "containers", "deliveries", "priceList", "freight", "volume"],
     );
   });
 
@@ -90,7 +91,7 @@ describe("business sidebar navigation", () => {
     // Containers holders: the three lists, Deliveries (implied) and the month.
     assert.deepEqual(
       visibleStepIds(["barrelShipping"], ["containers"]),
-      ["requests", "waiting", "containers", "deliveries", "volume"],
+      ["requests", "waiting", "containers", "deliveries", "priceList", "volume"],
     );
     // A deliveries-only person sees Deliveries and nothing of the loading lists.
     assert.deepEqual(visibleStepIds(["barrelShipping"], ["deliveries"]), ["deliveries"]);
@@ -111,6 +112,9 @@ describe("business sidebar navigation", () => {
     assert.equal(shippingStepForTab("barrels"), "barrels");
     assert.equal(shippingStepForTab("freight", "requests"), "freight");
     assert.equal(shippingStepForTab("volume"), "volume");
+    // The "Laawol set up your prices" notification lands on the Price list step.
+    assert.equal(shippingStepForTab("containers", "priceList"), "priceList");
+    assert.equal(shippingStepForTab("priceList"), "priceList");
     for (const other of ["today", "parking", "transport", "invoices", "profile", "shipping"]) {
       assert.equal(shippingStepForTab(other), null, other);
     }

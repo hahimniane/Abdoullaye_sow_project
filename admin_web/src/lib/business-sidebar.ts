@@ -35,6 +35,7 @@ export type ShippingStep =
   | "deliveries"
   | "barrels"
   | "freight"
+  | "priceList"
   | "volume";
 
 export type BusinessSidebarGroupId =
@@ -162,6 +163,10 @@ export const shippingSteps: ShippingStepSpec[] = [
   {id: "waiting", label: "Waiting", flow: true, services: shippingServiceIds, permission: "containers"},
   {id: "containers", label: "Containers", flow: true, services: shippingServiceIds, permission: "containers"},
   {id: "deliveries", label: "Deliveries", flow: true, services: shippingServiceIds, permission: "deliveries"},
+  // What the business charges to send a package, per country, sea and air
+  // (docs/PACKAGE_PRICE_LIST.md). The owner edits it; staff with the
+  // Containers section read it.
+  {id: "priceList", label: "Price list", flow: false, services: shippingServiceIds, permission: "containers"},
   {id: "barrels", label: "Barrel orders", flow: false, service: "barrelShipping", permission: "barrels"},
   {id: "freight", label: "Freight", flow: false, service: "freight", permission: "freight"},
   {id: "volume", label: "This month", flow: false, services: shippingServiceIds, permission: "containers"},
@@ -209,12 +214,15 @@ export const containerListSteps: readonly ShippingStep[] = ["requests", "waiting
 export function shippingStepForTab(tab: string, view = ""): ShippingStep | null {
   switch (tab) {
     case "containers":
-      return view === "requests" || view === "waiting" ? view : "containers";
+      // "priceList": the "Laawol set up your prices" notification.
+      return view === "requests" || view === "waiting" || view === "priceList" ? view : "containers";
     case "deliveries":
     case "barrels":
     case "freight":
     case "volume":
       return tab;
+    case "priceList":
+      return "priceList";
     default:
       return null;
   }

@@ -15,6 +15,7 @@
 import { destinationCountryOptionForRow } from "./destination-countries.ts";
 import { centsToInput as ledgerCentsToInput, moneyText as ledgerMoneyText } from "./invoice-ledger.ts";
 import { pickupFeeOf, pieceSizeOf, piecesLineFields } from "./line-pieces.ts";
+import type { NextDepartureResult, PriceItem } from "./package-price-list.ts";
 import {
   newPieceDraft as newPieceDraftOf,
   pieceDraftProblems,
@@ -82,6 +83,29 @@ export type RequestOption = {
   bringIn: { available: boolean; locations: RequestLocation[] };
   collect: { available: boolean; areas: string };
   timeZone: string;
+  // The comparison fields (docs/PACKAGE_PRICE_LIST.md §4). Optional so an
+  // option from a server that predates price lists still reads: no prices,
+  // no ratings, "ask me" for every piece.
+  routes?: { sea: PublicRoute | null; air: PublicRoute | null };
+  departures?: { sea: NextDepartureResult; air: NextDepartureResult };
+  shipsByAir?: boolean;
+  rating?: number | null;
+  reviewCount?: number;
+  coversLoss?: boolean;
+  pickupPricing?: PickupPricing | null;
+};
+
+/** What a business prices on one destination by one mode (public part of a route). */
+export type PublicRoute = { items: PriceItem[]; perLbCents: Record<string, number> };
+
+export type PickupPricing = {
+  mode: string;
+  flatFeeCents: number;
+  baseFeeCents: number;
+  perMileCents: number;
+  minimumFeeCents: number;
+  maxPickupMiles: number;
+  boroughPricesCents: Record<string, number>;
 };
 
 export type RequestBusinessHeader = {
@@ -103,10 +127,20 @@ export type PublicRequest = {
   destination: { id: string; name: string };
   location: RequestLocation | null;
   plannedDate: string;
-  pickup: { address: string; date: string; window: string; note: string } | null;
+  plannedWindow: { from: string; to: string } | null;
+  shipMode: "sea" | "air";
+  pickup: { address: string; date: string; window: string; note: string; feeCents: number | null } | null;
   sender: { name: string };
   receiver: { name: string };
-  pieces: { id: string; kind: PieceKind; description: string; sizeIn: unknown; photoCount: number }[];
+  pieces: {
+    id: string;
+    kind: PieceKind;
+    description: string;
+    sizeIn: unknown;
+    photoCount: number;
+    /** How the price list priced it; null when the piece waits for a staff estimate. */
+    price: PublicPiecePrice | null;
+  }[];
   estimate: {
     version: number;
     totalCents: number;
@@ -126,6 +160,16 @@ export type PublicRequest = {
   trackingCode: string;
   receivedAt: string;
   timeZone: string;
+};
+
+export type PublicPiecePrice = {
+  source: "item" | "per_lb" | "barrel" | "";
+  label: string;
+  quantity: number;
+  unitCents: number | null;
+  includedLb: number;
+  perLbCents: number | null;
+  weightLb: number | null;
 };
 
 type Row = Record<string, unknown>;
@@ -373,74 +417,6 @@ export type PhotoDraft = {
   status: "uploading" | "ready" | "error";
 };
 
-export type PieceDraft = {
-  key: string;
-  kind: PieceKind;
-  description: string;
-  photos: PhotoDraft[];
-};
-
-export type RequestDraft = {
-  businessId: string;
-  countryId: string;
-  handoff: Handoff | "";
-  locationId: string;
-  plannedDate: string;
-  pickupAddress: string;
-  pickupDate: string;
-  pickupWindow: PickupWindow | "";
-  pickupNote: string;
-  senderName: string;
-  senderPhone: string;
-  receiverName: string;
-  receiverPhone: string;
-  pieces: PieceDraft[];
-};
-
-let pieceSerial = 0;
-export function newPieceDraft(kind: PieceKind = "barrel"): PieceDraft {
-  pieceSerial += 1;
-  return { key: `piece-${Date.now()}-${pieceSerial}`, kind, description: "", photos: [] };
-}
-
-export function emptyRequestDraft(): RequestDraft {
-  return {
-    businessId: "",
-    countryId: "",
-    handoff: "",
-    locationId: "",
-    plannedDate: "",
-    pickupAddress: "",
-    pickupDate: "",
-    pickupWindow: "",
-    pickupNote: "",
-    senderName: "",
-    senderPhone: "",
-    receiverName: "",
-    receiverPhone: "",
-    pieces: [newPieceDraft("barrel")],
-  };
-}
-
-/**
- * Choosing how the goods reach the business: the other answer's fields are
- * cleared (guardrails §4 rule 3 - never submit an address for a drop-off).
- */
-export function chooseHandoff(draft: RequestDraft, handoff: Handoff, option: RequestOption | null): RequestDraft {
-  const spots = option?.bringIn.locations ?? [];
-  return handoff === "bring_in"
-    ? {
-        ...draft,
-        handoff,
-        locationId: spots.length === 1 ? spots[0].id : draft.locationId,
-        pickupAddress: "",
-        pickupDate: "",
-        pickupWindow: "",
-        pickupNote: "",
-      }
-    : { ...draft, handoff, locationId: "", plannedDate: "" };
-}
-
 /** The countries the eligible businesses ship to, by name in the page's language. */
 export function requestCountries(options: readonly RequestOption[], lang: Lang): { id: string; name: string }[] {
   const seen = new Map<string, string>();
@@ -476,135 +452,44 @@ export function optionsForCountry(options: readonly RequestOption[], countryId: 
     .sort((a, b) => a.businessName.localeCompare(b.businessName));
 }
 
-export function selectedOption(options: readonly RequestOption[], draft: Pick<RequestDraft, "businessId" | "countryId">): RequestOption | null {
-  return options.find((option) => option.businessId === draft.businessId && option.country.id === draft.countryId) ?? null;
-}
-
-export function selectedLocation(option: RequestOption | null, draft: Pick<RequestDraft, "locationId">): RequestLocation | null {
+export function selectedLocation(option: RequestOption | null, draft: { locationId: string }): RequestLocation | null {
   const spots = option?.bringIn.locations ?? [];
   return spots.find((spot) => spot.id === draft.locationId) ?? (spots.length === 1 ? spots[0] : null);
 }
 
-/** The estimate the customer sees before sending: barrels priced, the rest "the business will send you an estimate". */
-export function draftEstimate(draft: Pick<RequestDraft, "pieces">, option: RequestOption | null): {
-  pricedCents: number;
-  unpriced: number;
-  allPriced: boolean;
-} {
-  const price = option?.barrelPriceCents ?? null;
-  let pricedCents = 0;
-  let unpriced = 0;
-  for (const piece of draft.pieces) {
-    if (piece.kind === "barrel" && price) pricedCents += price;
-    else unpriced += 1;
-  }
-  return { pricedCents, unpriced, allPriced: unpriced === 0 && draft.pieces.length > 0 };
-}
+/** The steps a refusal's field lives on (components/package-request-form.tsx), for taking a person back to it. */
+export type RequestFieldStep = "where" | "items" | "handoff" | "when" | "people";
 
-export type RequestFieldStep = "details" | "pieces";
-
-/** The steps a field lives on, for taking a person back to the first problem. */
 export const REQUEST_ERROR_STEP: Record<string, RequestFieldStep> = {
-  handoff_invalid: "details",
-  location_invalid: "details",
-  planned_date_invalid: "details",
-  planned_day_closed: "details",
-  pickup_address_required: "details",
-  pickup_date_invalid: "details",
-  pickup_window_invalid: "details",
-  sender_name_required: "details",
-  sender_phone_invalid: "details",
-  receiver_name_required: "details",
-  receiver_phone_invalid: "details",
-  pieces_required: "pieces",
-  too_many_pieces: "pieces",
-  piece_kind_invalid: "pieces",
-  piece_description_required: "pieces",
-  too_many_photos: "pieces",
-  photo_invalid: "pieces",
-  size_invalid: "pieces",
+  ship_mode_invalid: "where",
+  air_unavailable: "where",
+  destination_unavailable: "where",
+  pieces_required: "items",
+  too_many_pieces: "items",
+  piece_kind_invalid: "items",
+  piece_description_required: "items",
+  too_many_photos: "items",
+  photo_invalid: "items",
+  size_invalid: "items",
+  quantity_invalid: "items",
+  weight_invalid: "items",
+  category_invalid: "items",
+  handoff_invalid: "handoff",
+  pickup_address_required: "handoff",
+  pickup_out_of_area: "handoff",
+  pickup_out_of_range: "handoff",
+  pickup_origin_missing: "handoff",
+  location_invalid: "when",
+  planned_date_invalid: "when",
+  planned_day_closed: "when",
+  window_invalid: "when",
+  pickup_date_invalid: "when",
+  pickup_window_invalid: "when",
+  sender_name_required: "people",
+  sender_phone_invalid: "people",
+  receiver_name_required: "people",
+  receiver_phone_invalid: "people",
 };
-
-/** What is wrong with the details step, as the server's codes. */
-export function detailsProblems(draft: RequestDraft, option: RequestOption | null, nowMs = Date.now()): string[] {
-  const errors: string[] = [];
-  const zone = option?.timeZone || DEFAULT_TIME_ZONE;
-  const { min, max } = pickableDays(zone, nowMs);
-  const inRange = (key: string) => dateKeyValid(key) && key >= min && key <= max;
-  if (draft.handoff !== "bring_in" && draft.handoff !== "collect") errors.push("handoff_invalid");
-  if (draft.handoff === "bring_in") {
-    const location = selectedLocation(option, draft);
-    if (!location) errors.push("location_invalid");
-    if (!inRange(draft.plannedDate)) errors.push("planned_date_invalid");
-    else if (location && !dayIsOpen(location.hours, draft.plannedDate)) errors.push("planned_day_closed");
-  }
-  if (draft.handoff === "collect") {
-    if (!draft.pickupAddress.trim()) errors.push("pickup_address_required");
-    if (!inRange(draft.pickupDate)) errors.push("pickup_date_invalid");
-    if (!PICKUP_WINDOWS.includes(draft.pickupWindow as PickupWindow)) errors.push("pickup_window_invalid");
-  }
-  if (!draft.senderName.trim()) errors.push("sender_name_required");
-  if (!e164(draft.senderPhone)) errors.push("sender_phone_invalid");
-  if (!draft.receiverName.trim()) errors.push("receiver_name_required");
-  if (!e164(draft.receiverPhone)) errors.push("receiver_phone_invalid");
-  const long =
-    draft.senderName.trim().length > REQUEST_LIMITS.name ||
-    draft.receiverName.trim().length > REQUEST_LIMITS.name ||
-    draft.pickupAddress.trim().length > REQUEST_LIMITS.address ||
-    draft.pickupNote.trim().length > REQUEST_LIMITS.note;
-  if (long) errors.push("text_too_long");
-  return errors;
-}
-
-/** What is wrong with the pieces step, as the server's codes. */
-export function piecesProblems(draft: Pick<RequestDraft, "pieces">): string[] {
-  const errors: string[] = [];
-  const add = (code: string) => {
-    if (!errors.includes(code)) errors.push(code);
-  };
-  if (draft.pieces.length === 0) add("pieces_required");
-  if (draft.pieces.length > REQUEST_LIMITS.pieces) add("too_many_pieces");
-  for (const piece of draft.pieces) {
-    if (piece.kind !== "barrel" && !piece.description.trim()) add("piece_description_required");
-    if (piece.description.trim().length > REQUEST_LIMITS.description) add("text_too_long");
-    if (piece.photos.length > REQUEST_LIMITS.photosPerPiece) add("too_many_photos");
-    if (piece.photos.some((photo) => photo.status === "error")) add("photo_invalid");
-  }
-  return errors;
-}
-
-export function photosStillUploading(draft: Pick<RequestDraft, "pieces">): boolean {
-  return draft.pieces.some((piece) => piece.photos.some((photo) => photo.status === "uploading"));
-}
-
-/** The submitPackageRequest payload (§8.5). */
-export function submitRequestPayload(draft: RequestDraft, option: RequestOption, language: Lang, idempotencyKey: string) {
-  const location = selectedLocation(option, draft);
-  return {
-    businessId: option.businessId,
-    destinationCountryId: option.country.id,
-    handoff: draft.handoff,
-    ...(draft.handoff === "bring_in"
-      ? { locationId: location?.id ?? draft.locationId, plannedDate: draft.plannedDate }
-      : {
-          pickup: {
-            address: draft.pickupAddress.trim(),
-            date: draft.pickupDate,
-            window: draft.pickupWindow,
-            note: draft.pickupNote.trim(),
-          },
-        }),
-    sender: { name: draft.senderName.trim(), phoneE164: e164(draft.senderPhone) },
-    receiver: { name: draft.receiverName.trim(), phoneE164: e164(draft.receiverPhone) },
-    pieces: draft.pieces.map((piece) => ({
-      kind: piece.kind,
-      description: piece.kind === "barrel" ? piece.description.trim() : piece.description.trim(),
-      photoPaths: piece.photos.filter((photo) => photo.status === "ready" && photo.path).map((photo) => photo.path),
-    })),
-    language,
-    idempotencyKey,
-  };
-}
 
 /** A fresh idempotency key for one sending of the form. */
 export function newIdempotencyKey(random: () => number = Math.random): string {
@@ -697,6 +582,17 @@ export const REQUEST_ERROR_MESSAGES: Record<string, string> = {
   payment_method_invalid: "Choose how the money arrived.",
   received_by_required: "Choose who took the money.",
   received_by_invalid: "Choose someone from your team.",
+  // Price lists, Sea / Air and drop-off windows (docs/PACKAGE_PRICE_LIST.md §4).
+  ship_mode_invalid: "Choose Sea or Air.",
+  air_unavailable: "This business does not fly packages there.",
+  window_invalid: "Choose a time window of up to 2 hours in opening hours.",
+  quantity_invalid: "Enter how many (1 to 50).",
+  weight_invalid: "Enter the weight in pounds (0.1 to 2,000).",
+  category_invalid: "Choose what kind of goods it is.",
+  channel_invalid: "Refresh the page and send again.",
+  pickup_out_of_area: "This business does not pick up at that address.",
+  pickup_out_of_range: "That address is too far for this business.",
+  pickup_origin_missing: "This business has not set where pickups start.",
 };
 
 export const REQUEST_GENERIC_ERROR = "Something went wrong. Try again.";
@@ -851,10 +747,14 @@ export function pickupWhen(row: unknown): { date: string; window: PickupWindow |
  * The /e/ page's "confirmed" banner: a collect request is not "expected"
  * anywhere - the business comes to the customer.
  */
-export function confirmedBannerText(request: { handoff?: unknown; payment?: { timing?: unknown } | null }): string {
+export function confirmedBannerText(request: { handoff?: unknown; confirmedVia?: unknown; payment?: { timing?: unknown } | null }): string {
   const collect = text(request.handoff, 20) === "collect";
   if (text(request.payment?.timing, 20) === "card") {
     return collect ? "Paid online. The business will come to collect it." : "Paid online. The business is expecting you.";
+  }
+  // Priced in full in the form: the customer agreed there, nothing to confirm.
+  if (text(request.confirmedVia, 20) === "form") {
+    return collect ? "You are all set. The business will come to collect it." : "You are all set. The business is expecting you.";
   }
   return collect ? "You confirmed this estimate. The business will come to collect it." : "You confirmed this estimate. The business is expecting you.";
 }

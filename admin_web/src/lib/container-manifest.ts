@@ -272,6 +272,7 @@ export type ContainerRefusal =
   | "container_label_required"
   | "container_number_invalid"
   | "air_waybill_invalid"
+  | "planned_departure_invalid"
   | "container_status_invalid"
   | "container_transition_invalid"
   | "destination_required"
@@ -347,6 +348,7 @@ export const CONTAINER_MESSAGES: Record<ContainerRefusal, string> = {
     "A container number is four letters and seven digits, like MSKU1234567. " +
     "Booking numbers and bills of lading go in the reference field.",
   air_waybill_invalid: "An air waybill is 6 to 20 letters, digits or dashes, like 176-12345678.",
+  planned_departure_invalid: "Pick a real day for the planned departure.",
   container_status_invalid: "That is not a state a container can be in.",
   container_transition_invalid:
     "A container only moves forward: loading, then shipped, then arrived.",
@@ -465,6 +467,8 @@ export type ContainerDraft = {
   notes: string;
   /** The shipping line's SCAC; "" = guess it from the container number. */
   carrierScac: string;
+  /** When it is planned to leave, "YYYY-MM-DD"; "" = not set (docs/PACKAGE_PRICE_LIST.md §3). */
+  plannedDepartureDate: string;
 };
 
 export const emptyContainerDraft: ContainerDraft = {
@@ -478,6 +482,7 @@ export const emptyContainerDraft: ContainerDraft = {
   destinationCountryName: "",
   notes: "",
   carrierScac: "",
+  plannedDepartureDate: "",
 };
 
 /** A SCAC as the server stores it (`containerCarrierScac`). */
@@ -509,7 +514,16 @@ export function containerCarrierNeedsChoice(row: unknown): boolean {
 export type ContainerError =
   | "container_label_required"
   | "container_number_invalid"
-  | "air_waybill_invalid";
+  | "air_waybill_invalid"
+  | "planned_departure_invalid";
+
+/** Whether "YYYY-MM-DD" is a real day (the server's `plannedDateValid`). */
+export function plannedDepartureValid(key: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) return false;
+  const [y, m, d] = key.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d;
+}
 
 /** Same checks as the server's `validateContainer`, every problem at once, mode-aware. */
 export function validateContainerDraft(draft: ContainerDraft): ContainerError[] {
@@ -528,6 +542,10 @@ export function validateContainerDraft(draft: ContainerDraft): ContainerError[] 
   }
   if (waybill && !AIR_WAYBILL.test(waybill)) {
     errors.push("air_waybill_invalid");
+  }
+  const planned = text(draft.plannedDepartureDate, 10);
+  if (planned && !plannedDepartureValid(planned)) {
+    errors.push("planned_departure_invalid");
   }
   return errors;
 }
@@ -551,6 +569,7 @@ export function containerPayload(draft: ContainerDraft) {
     destinationCountryName: text(draft.destinationCountryName, MAX_LABEL),
     notes: text(draft.notes, MAX_NOTE),
     carrierScac: air ? "" : containerCarrierScac(draft.carrierScac),
+    plannedDepartureDate: text(draft.plannedDepartureDate, 10),
   };
 }
 
@@ -568,6 +587,7 @@ export function containerDraftFromRow(row: Row): ContainerDraft {
     destinationCountryName: text(row.destinationCountryName, MAX_LABEL),
     notes: text(row.notes, MAX_NOTE),
     carrierScac: air ? "" : containerCarrierScac(row.carrierScac),
+    plannedDepartureDate: plannedDepartureValid(text(row.plannedDepartureDate, 10)) ? text(row.plannedDepartureDate, 10) : "",
   };
 }
 

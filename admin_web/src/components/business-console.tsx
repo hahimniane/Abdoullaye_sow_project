@@ -106,6 +106,7 @@ import {
   type BusinessTab,
   type ShippingStep,
 } from "@/lib/business-sidebar";
+import {PriceListPanel} from "@/components/business/price-list-panel";
 import {ShippingStepBar} from "@/components/business/shipping-steps";
 import {MenuMovedDialog} from "@/components/business/menu-moved-dialog";
 import {
@@ -940,6 +941,13 @@ export function BusinessConsole({
                   businessId={businessId}
                   focusRecordId={notificationFocusId}
                   focusView={notificationFocusView}
+                  previewMode={previewMode}
+                />
+              )}
+              {activeShippingStep === "priceList" && (
+                <PriceListPanel
+                  businessId={businessId}
+                  canEdit={(profile.role === "businessOwner" || profile.role === "admin") && !previewMode}
                   previewMode={previewMode}
                 />
               )}

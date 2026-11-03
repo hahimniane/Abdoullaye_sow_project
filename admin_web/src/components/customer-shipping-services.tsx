@@ -238,18 +238,18 @@ type FreightQuote = {
   currency?: string;
 };
 
+/**
+ * What the customer's shipping screen offers now: "Send a package" and car
+ * transport. Freight is part of Send a package (docs/PACKAGE_PRICE_LIST.md
+ * decision 12); an old freight link opens Send a package.
+ */
+type OfferedService = "barrel" | "transport";
+
 type CustomerShippingServicesProps = {
   profile: UserProfile;
+  /** Running freight shipments: their verified-weight balances can still be paid here. */
   freightShipments?: FirestoreRow[];
-  initialService?: ShippingService;
-  /// A price request the customer already accepted, so the booking that
-  /// follows charges the agreed amount. Only the id: the server reads the
-  /// price off the request.
-  /// The business whose price was accepted. It has to be bookable even
-  /// though it never published a row for this item - not having one is why
-  /// the customer asked in the first place.
-  bookingQuoteBusinessId?: string;
-  bookingQuoteRequestId?: string;
+  initialService?: OfferedService;
   authenticated?: boolean;
   guestReady?: boolean;
   onAuthenticationRequired?: () => void | boolean | Promise<boolean | void>;
@@ -517,15 +517,13 @@ export function CustomerShippingServices({
   profile,
   freightShipments = [],
   initialService = "barrel",
-  bookingQuoteBusinessId = "",
-  bookingQuoteRequestId = "",
   authenticated = true,
   guestReady = false,
   onAuthenticationRequired,
   onTransportCreated,
   requestSlug = "",
 }: CustomerShippingServicesProps) {
-  const [service, setService] = useState<ShippingService>(initialService);
+  const [service, setService] = useState<OfferedService>(initialService);
   const [destinationOptions, setDestinationOptions] = useState<
     DestinationOption[]
   >([]);
@@ -670,13 +668,6 @@ export function CustomerShippingServices({
           onClick={() => setService("barrel")}
         />
         <ServiceTab
-          active={service === "freight"}
-          icon={<Plane size={20} />}
-          label="Freight"
-          note="Air or sea by weight"
-          onClick={() => setService("freight")}
-        />
-        <ServiceTab
           active={service === "transport"}
           icon={<Truck size={20} />}
           label="Car transport"
@@ -713,18 +704,6 @@ export function CustomerShippingServices({
               requestSlug={requestSlug}
             />
           )}
-          {service === "freight" && (
-            <FreightShipmentForm
-              authenticated={authenticated}
-              bookingQuoteBusinessId={bookingQuoteBusinessId}
-              bookingQuoteRequestId={bookingQuoteRequestId}
-              guestReady={guestReady}
-              freightShipments={freightShipments}
-              onAuthenticationRequired={onAuthenticationRequired}
-              options={destinationOptions}
-              profile={profile}
-            />
-          )}
           {service === "transport" && (
             <TransportRequestForm
               authenticated={authenticated}
@@ -737,6 +716,8 @@ export function CustomerShippingServices({
           )}
         </>
       )}
+      {/* A running freight shipment's balance can still be paid. */}
+      {authenticated && <FreightSettlements shipments={freightShipments} />}
     </section>
   );
 }

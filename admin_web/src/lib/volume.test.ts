@@ -94,6 +94,8 @@ const answer: PlatformVolumeResponse = {
     packages: 3,
     cars: 1,
     customerLines: 13,
+    laawolLines: 6,
+    laawolPieces: 8,
     containersShipped: 3,
     containerPieces: 39,
     avgPerContainer: 13,
@@ -109,6 +111,7 @@ const answer: PlatformVolumeResponse = {
       packages: 0,
       cars: 0,
       customerLines: 9,
+      laawolLines: 5,
       containersShipped: 1,
       containerPieces: 30,
       avgPerContainer: 30,
@@ -121,6 +124,7 @@ const answer: PlatformVolumeResponse = {
       packages: 3,
       cars: 1,
       customerLines: 4,
+      laawolLines: 1,
       containersShipped: 2,
       containerPieces: 9,
       avgPerContainer: 4.5,
@@ -135,19 +139,19 @@ test("the CSV has one row per business and a totals row", () => {
   assert.equal(lines.length, 4);
   assert.equal(
     lines[0],
-    '"Month","Business","Business ID","Barrels","Packages","Cars","Pieces","Customer lines","Containers shipped","Pieces in containers","Avg pieces / container"',
+    '"Month","Business","Business ID","Barrels","Packages","Cars","Pieces","Customer lines","Containers shipped","Pieces in containers","Avg pieces / container","Found on Laawol (lines)"',
   );
   // A business with no name is shown by its id.
-  assert.equal(lines[1], '"2026-10","gone","gone","30","0","0","30","9","1","30","30"');
+  assert.equal(lines[1], '"2026-10","gone","gone","30","0","0","30","9","1","30","30","5"');
   // A typed name cannot run as a spreadsheet formula, and quotes stay quotes.
-  assert.equal(lines[2], '"2026-10","\'=HYPERLINK(""x"") ""Express""","b1","6","3","1","10","4","2","9","4.5"');
-  assert.equal(lines[3], '"2026-10","Total","","36","3","1","40","13","3","39","13"');
+  assert.equal(lines[2], '"2026-10","\'=HYPERLINK(""x"") ""Express""","b1","6","3","1","10","4","2","9","4.5","1"');
+  assert.equal(lines[3], '"2026-10","Total","","36","3","1","40","13","3","39","13","6"');
 });
 
 test("the CSV speaks French on a French page and starts with a BOM", () => {
   const csv = volumeCsv({ ...answer, totals: { ...answer.totals, avgPerContainer: null } }, "fr");
   assert.ok(csv.startsWith("﻿\"Mois\",\"Entreprise\""));
-  assert.match(csv, /"Total","","36","3","1","40","13","3","39",""\r\n$/);
+  assert.match(csv, /"Total","","36","3","1","40","13","3","39","","6"\r\n$/);
   assert.equal(volumeCsvFilename("2026-10"), "laawol-volume-2026-10.csv");
   assert.equal(volumeCsvCell("-5"), "\"'-5\"");
   assert.equal(volumeCsvCell(12), '"12"');
@@ -181,7 +185,12 @@ test("each kind of piece has its own tile, and containers and the average have t
   );
   assert.deepEqual(
     tiles.shipped.map((tile) => [tile.key, tile.value, tile.kind]),
-    [["containersShipped", 3, "count"], ["avgPerContainer", 13, "average"], ["customerLines", 13, "count"]],
+    [
+      ["containersShipped", 3, "count"],
+      ["avgPerContainer", 13, "average"],
+      ["customerLines", 13, "count"],
+      ["laawolLines", 6, "count"],
+    ],
   );
   // The business console has no customer-lines tile.
   const business = volumeTiles(answer.totals, { showCustomerLines: false });

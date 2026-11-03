@@ -10,7 +10,6 @@ import {
 import { translateValue } from "./french-dom.ts";
 
 test("public customer service links select every supported customer journey", () => {
-  assert.equal(customerServiceFromSearch("?service=freight"), "freight");
   assert.equal(customerServiceFromSearch("?service=barrel"), "barrel");
   assert.equal(customerServiceFromSearch("?service=car-transport"), "car-transport");
   assert.equal(customerServiceFromSearch("?service=parking"), "parking");
@@ -19,7 +18,33 @@ test("public customer service links select every supported customer journey", ()
   assert.equal(customerServiceFromSearch("?service=tracking"), "tracking");
   assert.equal(customerServiceFromSearch("?service=item-tag"), "item-tag");
   assert.equal(customerServiceFromSearch("?service=unknown"), null);
-  assert.equal(customerServiceUrl("freight"), "https://customer.laawoldigital.com/?service=freight");
+  assert.equal(customerServiceUrl("barrel"), "https://customer.laawoldigital.com/?service=barrel");
+});
+
+test("an old freight link opens Send a package, never an error", () => {
+  // Freight folded into Send a package (docs/PACKAGE_PRICE_LIST.md decision
+  // 12): the public site's and WhatsApp's old ?service=freight links still work.
+  assert.equal(customerServiceFromSearch("?service=freight"), "barrel");
+  assert.equal(customerServiceFromLocation("/", "?service=freight"), "barrel");
+  assert.equal(customerServiceFromSearch("?service=freight&agreedRequest=r1"), "barrel");
+  // Not a way to reach anything else.
+  assert.equal(customerServiceFromSearch("?service=constructor"), null);
+  assert.equal(customerServiceFromSearch("?service=toString"), null);
+});
+
+test("the customer's shipping screen no longer offers a Freight tab", () => {
+  const shipping = readFileSync("src/components/customer-shipping-services.tsx", "utf8");
+  const entry = readFileSync("src/components/customer-service-entry.tsx", "utf8");
+  assert.doesNotMatch(shipping, /label="Freight"/);
+  assert.doesNotMatch(shipping, /Air or sea by weight/);
+  assert.doesNotMatch(shipping, /setService\("freight"\)/);
+  assert.doesNotMatch(shipping, /service === "freight" && \(\s*<FreightShipmentForm/);
+  assert.match(shipping, /label="Send a package"/);
+  assert.match(shipping, /label="Car transport"/);
+  // Old freight records stay readable and a running shipment's balance payable.
+  assert.match(shipping, /<FreightSettlements shipments=\{freightShipments\} \/>/);
+  assert.doesNotMatch(entry, /initialService === "freight"/);
+  assert.doesNotMatch(entry, /Save your freight request/);
 });
 
 test("guest service entry gates only final submission and preserves the mounted form", () => {

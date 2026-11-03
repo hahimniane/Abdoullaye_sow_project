@@ -116,7 +116,7 @@ test("shared barrels still require a real account", () => {
   const entry = readFileSync("src/components/customer-service-entry.tsx", "utf8");
   const guard = entry.match(/const guestAllowed =[\s\S]*?;/)?.[0] ?? "";
   assert.match(guard, /"barrel"/);
-  assert.match(guard, /"freight"/);
+  assert.doesNotMatch(guard, /"freight"/);
   assert.doesNotMatch(guard, /shared-barrels/);
 });
 

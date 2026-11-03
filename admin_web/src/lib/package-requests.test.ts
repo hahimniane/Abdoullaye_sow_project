@@ -13,13 +13,9 @@ import {
   REQUEST_ERROR_MESSAGES,
   REQUEST_STATUS_LABELS,
   HISTORY_ACTION_LABELS,
-  chooseHandoff,
   dayIsOpen,
-  detailsProblems,
-  draftEstimate,
   draftTotalCents,
   e164,
-  emptyRequestDraft,
   emptyWeek,
   estimateDraftPrices,
   estimatePageState,
@@ -30,8 +26,6 @@ import {
   hoursLines,
   lockView,
   moneyText,
-  newPieceDraft,
-  piecesProblems,
   pieceSummaryText,
   pieceKindLabel,
   plannedDayText,
@@ -66,7 +60,6 @@ import {
   pickupWhen,
   requestEstimate,
   slugEditable,
-  submitRequestPayload,
   todayKeyIn,
   compressedSize,
   type RequestOption,
@@ -161,76 +154,6 @@ test("phones must be E.164", () => {
   assert.equal(e164("+1 (646) 555-0100"), "+16465550100");
   assert.equal(e164("6465550100"), "");
   assert.equal(e164("+224"), "");
-});
-
-test("the form refuses what the server would, before sending", () => {
-  const draft = { ...emptyRequestDraft(), businessId: "dala", countryId: "guinea" };
-  assert.deepEqual(detailsProblems(draft, OPTION, NOW), [
-    "handoff_invalid", "sender_name_required", "sender_phone_invalid",
-    "receiver_name_required", "receiver_phone_invalid",
-  ]);
-  const bring = {
-    ...chooseHandoff(draft, "bring_in", OPTION),
-    plannedDate: "2026-10-25",
-    senderName: "Fatou", senderPhone: "+16465550100",
-    receiverName: "Mariama", receiverPhone: "+224620000000",
-  };
-  // The only location is chosen for them; Sunday is closed.
-  assert.equal(bring.locationId, "bronx");
-  assert.deepEqual(detailsProblems(bring, OPTION, NOW), ["planned_day_closed"]);
-  assert.deepEqual(detailsProblems({ ...bring, plannedDate: "2026-10-19" }, OPTION, NOW), ["planned_date_invalid"]);
-  assert.deepEqual(detailsProblems({ ...bring, plannedDate: "2026-10-24" }, OPTION, NOW), []);
-  // Switching to "Collect from me" clears the drop-off answers, and back.
-  const collect = chooseHandoff({ ...bring, plannedDate: "2026-10-24" }, "collect", OPTION);
-  assert.equal(collect.plannedDate, "");
-  assert.equal(collect.locationId, "");
-  assert.deepEqual(detailsProblems(collect, OPTION, NOW), ["pickup_address_required", "pickup_date_invalid", "pickup_window_invalid"]);
-  const back = chooseHandoff({ ...collect, pickupAddress: "12 Grand Concourse", pickupWindow: "evening" }, "bring_in", OPTION);
-  assert.equal(back.pickupAddress, "");
-  assert.equal(back.pickupWindow, "");
-});
-
-test("pieces: a description for boxes and items, at most 20, photos uploaded", () => {
-  assert.deepEqual(piecesProblems({ pieces: [] }), ["pieces_required"]);
-  assert.deepEqual(piecesProblems({ pieces: [newPieceDraft("box")] }), ["piece_description_required"]);
-  assert.deepEqual(piecesProblems({ pieces: Array.from({ length: 21 }, () => newPieceDraft("barrel")) }), ["too_many_pieces"]);
-  const withBadPhoto = { ...newPieceDraft("box"), description: "TV", photos: [{ key: "k", path: "", previewUrl: "", status: "error" as const }] };
-  assert.deepEqual(piecesProblems({ pieces: [withBadPhoto] }), ["photo_invalid"]);
-});
-
-test("the estimate shown before sending prices barrels only", () => {
-  const pieces = [newPieceDraft("barrel"), newPieceDraft("barrel"), { ...newPieceDraft("box"), description: "TV" }];
-  assert.deepEqual(draftEstimate({ pieces }, OPTION), { pricedCents: 30000, unpriced: 1, allPriced: false });
-  assert.deepEqual(draftEstimate({ pieces: pieces.slice(0, 2) }, OPTION), { pricedCents: 30000, unpriced: 0, allPriced: true });
-  // No barrel price for the destination: the barrel needs an estimate too.
-  assert.deepEqual(draftEstimate({ pieces: pieces.slice(0, 1) }, { ...OPTION, barrelPriceCents: null }), { pricedCents: 0, unpriced: 1, allPriced: false });
-});
-
-test("the payload carries only the chosen handoff's answers and ready photos", () => {
-  const draft = {
-    ...chooseHandoff({ ...emptyRequestDraft(), businessId: "dala", countryId: "guinea" }, "bring_in", OPTION),
-    plannedDate: "2026-10-24",
-    senderName: " Fatou ", senderPhone: "+1 646 555 0100",
-    receiverName: "Mariama", receiverPhone: "+224620000000",
-    pieces: [{ ...newPieceDraft("box"), description: "TV", photos: [
-      { key: "a", path: "packageRequestPhotos/dala/u/a.jpg", previewUrl: "", status: "ready" as const },
-      { key: "b", path: "", previewUrl: "", status: "uploading" as const },
-    ] }],
-  };
-  const payload = submitRequestPayload(draft, OPTION, "fr", "web-key-123456");
-  assert.deepEqual(payload, {
-    businessId: "dala",
-    destinationCountryId: "guinea",
-    handoff: "bring_in",
-    locationId: "bronx",
-    plannedDate: "2026-10-24",
-    sender: { name: "Fatou", phoneE164: "+16465550100" },
-    receiver: { name: "Mariama", phoneE164: "+224620000000" },
-    pieces: [{ kind: "box", description: "TV", photoPaths: ["packageRequestPhotos/dala/u/a.jpg"] }],
-    language: "fr",
-    idempotencyKey: "web-key-123456",
-  });
-  assert.equal("pickup" in payload, false);
 });
 
 test("countries list once each, in the page's language", () => {
@@ -343,6 +266,9 @@ test("collect wording: the /e/ page and WhatsApp-not-connected (1.0.17 click-thr
   assert.equal(confirmedBannerText({ handoff: "bring_in", payment: { timing: "" } }), "You confirmed this estimate. The business is expecting you.");
   assert.equal(confirmedBannerText({ handoff: "collect", payment: { timing: "" } }), "You confirmed this estimate. The business will come to collect it.");
   assert.equal(confirmedBannerText({ handoff: "collect", payment: { timing: "card" } }), "Paid online. The business will come to collect it.");
+  // Priced in full in the form: the customer agreed there, nothing was confirmed on a link.
+  assert.equal(confirmedBannerText({ handoff: "bring_in", confirmedVia: "form", payment: { timing: "at_handoff" } }), "You are all set. The business is expecting you.");
+  assert.equal(confirmedBannerText({ handoff: "collect", confirmedVia: "form", payment: { timing: "at_handoff" } }), "You are all set. The business will come to collect it.");
   for (const value of ["You confirmed this estimate. The business will come to collect it.", "Paid online. The business will come to collect it."]) {
     assert.notEqual(translateValue(value, "fr"), value);
   }
@@ -445,7 +371,7 @@ test("the estimate page shows every state", () => {
     assert.equal(estimatePageState({ ...base, status }), status);
   }
   assert.deepEqual(estimateRows({
-    pieces: [{ id: "p1", kind: "barrel", description: "", sizeIn: null, photoCount: 0 }, { id: "p2", kind: "box", description: "TV", sizeIn: null, photoCount: 1 }],
+    pieces: [{ id: "p1", kind: "barrel", description: "", sizeIn: null, photoCount: 0, price: null }, { id: "p2", kind: "box", description: "TV", sizeIn: null, photoCount: 1, price: null }],
     estimate: { ...base.estimate, pieces: [{ id: "p1", cents: 15000 }] },
   }).map((r) => r.cents), [15000, null]);
 });

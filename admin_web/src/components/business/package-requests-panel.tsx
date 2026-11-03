@@ -5,6 +5,7 @@ import { httpsCallable } from "firebase/functions";
 import { getDownloadURL, ref } from "firebase/storage";
 import {
   CheckCircle2,
+  Clock,
   CreditCard,
   Download,
   History,
@@ -37,6 +38,16 @@ import {
 import { ShipsByChoice } from "@/components/business/ships-by";
 import { CONTAINER_MESSAGES } from "@/lib/container-manifest";
 import type { PieceDraft } from "@/lib/piece-drafts";
+import {
+  comingToday,
+  piecePriceOf,
+  pieceNeedsWeight,
+  plannedWindowOf,
+  priceBasisText,
+  readWeightLb,
+  weighedPriceInput,
+  windowText,
+} from "@/lib/business-price-list";
 import { CopyValue } from "@/components/copy-value";
 import { auth, functions, storage } from "@/lib/firebase";
 import { currentLanguage } from "@/lib/format";
@@ -89,6 +100,7 @@ import {
   receivedFlash,
   sendEstimatePayload,
   slugEditable,
+  todayKeyIn,
   type RequestFilter,
   type RequestSettingsDraft,
   type SettingsLocation,
@@ -155,6 +167,7 @@ function WhenLine({ row }: { row: Row }) {
       {planned && (
         <>
           {" · "}<span>planned</span> <span data-no-translate>{plannedDayText(planned, l)}</span>
+          {plannedWindowOf(row.plannedWindow) && <span data-no-translate>{` · ${windowText(plannedWindowOf(row.plannedWindow), l)}`}</span>}
         </>
       )}
       {str(asRow(row.location).label) && <span data-no-translate>{` · ${str(asRow(row.location).label)}`}</span>}
@@ -633,14 +646,27 @@ type ExpectedProps = {
   enabled: boolean;
   /** The business ships by air: Received offers "Ships by: Sea · Air". */
   shipsByAir?: boolean;
+  /** The business's time zone: "Coming today" is today there. */
+  timeZone?: string;
 };
 
 /**
  * The confirmed requests, above "In the shop": what customers said they will
  * bring (or the business will collect). "Received" turns one into a line.
  */
-export function ExpectedRequestsSection({ businessId, rows, staffOptions, onFlash, enabled, shipsByAir = false }: ExpectedProps) {
+export function ExpectedRequestsSection({ businessId, rows, staffOptions, onFlash, enabled, shipsByAir = false, timeZone = DEFAULT_TIME_ZONE }: ExpectedProps) {
   const expected = useMemo(() => expectedRequests(rows), [rows]);
+  // "Coming today" (docs/PACKAGE_PRICE_LIST.md decision 6): the open
+  // requests already loaded, narrowed to today in the business's zone. The
+  // day is re-read every few minutes so the list turns over at midnight.
+  const [dayTick, setDayTick] = useState(0);
+  useEffect(() => {
+    const timer = window.setInterval(() => setDayTick((n) => n + 1), 5 * 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const todayKey = useMemo(() => todayKeyIn(timeZone), [timeZone, dayTick]);
+  const coming = useMemo(() => comingToday(expected, todayKey), [expected, todayKey]);
   const [receiving, setReceiving] = useState<Row | null>(null);
   const [cancelling, setCancelling] = useState("");
   const [labels, setLabels] = useState<Row | null>(null);
@@ -725,6 +751,28 @@ export function ExpectedRequestsSection({ businessId, rows, staffOptions, onFlas
   }
   return (
     <section className="pkq-expected">
+      {coming.length > 0 && (
+        <section aria-label="Coming today" className="pkq-today">
+          <h3><Clock aria-hidden="true" size={15} /> <span>Coming today</span> <b data-no-translate>· {coming.length}</b></h3>
+          <div className="pkq-cards">
+            {coming.map((row) => {
+              const window = plannedWindowOf(row.plannedWindow);
+              return (
+                <div className="pkq-card today" key={str(row.id)}>
+                  {window ? <strong className="pkq-window" data-no-translate>{windowText(window, lang())}</strong> : <strong className="pkq-window">Any time today</strong>}
+                  <RequestTitle row={row} />
+                  <PersonLines row={row} />
+                  <span className="pkq-actions">
+                    <button className="lst-add" disabled={!enabled} onClick={() => setReceiving(row)} type="button">
+                      <CheckCircle2 size={14} aria-hidden="true" /> <span data-no-translate>{lang() === "fr" ? "Reçu" : "Received"}</span>
+                    </button>
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
       {codeForm}
       <h3><span>Expected</span> <b data-no-translate>· {expected.length}</b></h3>
       <div className="pkq-cards">
@@ -791,7 +839,27 @@ function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onF
   const [proof, setProof] = useState<ProofDraft>(() => emptyProofDraft());
   // "Ships by" (docs/AIR_PACKAGES.md §7): sea unless air is chosen; only
   // an air package carries the proof section.
-  const [shipMode, setShipMode] = useState<PackageShipMode>("sea");
+  // The customer's choice (the request's `shipMode`) is where it starts.
+  const requestMode: PackageShipMode = str(row.shipMode, 10) === "air" ? "air" : "sea";
+  const [shipMode, setShipMode] = useState<PackageShipMode>(requestMode);
+  // The counter scale (docs/PACKAGE_PRICE_LIST.md decision 2): pieces priced
+  // by the pound, or "up to X lb" each, get a weight box; the price follows.
+  const weighable = useMemo(() => {
+    const names = new Map(requestPieces(row).map((piece) => [piece.id, piece.description]));
+    const raw = Array.isArray(row.pieces) ? (row.pieces as unknown[]) : [];
+    return raw
+      .map((piece) => ({ id: str(asRow(piece).id, 40), price: piecePriceOf(piece) }))
+      .filter((entry) => entry.id && pieceNeedsWeight(entry.price))
+      .map((entry) => ({ ...entry, description: names.get(entry.id) ?? "" }));
+  }, [row]);
+  const [weights, setWeights] = useState<Record<string, string>>({});
+  const [noRate, setNoRate] = useState<Record<string, boolean>>({});
+  function weigh(id: string, price: ReturnType<typeof piecePriceOf>, typed: string) {
+    setWeights((current) => ({ ...current, [id]: typed }));
+    const next = weighedPriceInput(price, typed, l);
+    setNoRate((current) => ({ ...current, [id]: next === null && typed.trim() !== "" && readWeightLb(typed) !== null }));
+    if (next !== null) setPieces((list) => list.map((piece) => (piece.id === id ? { ...piece, price: next } : piece)));
+  }
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const collect = str(row.handoff) === "collect";
@@ -858,8 +926,33 @@ function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onF
           <button aria-label="Close" className="lst-icon-btn" onClick={onClose} type="button"><X size={18} /></button>
         </header>
         <div className="lst-modal-body">
-          {shipsByAir && <ShipsByChoice id="pkq-receive-ships-by" value={shipMode} onChange={setShipMode} disabled={busy} />}
+          {(shipsByAir || requestMode === "air") && <ShipsByChoice id="pkq-receive-ships-by" value={shipMode} onChange={setShipMode} disabled={busy} />}
           <div className="pkq-detail"><PersonLines row={row} /><WhenLine row={row} /></div>
+          {weighable.length > 0 && (
+            <section className="pkq-weigh">
+              <h4>Weigh at the counter</h4>
+              <small className="lst-hint">Type what the scale says. The price below follows the price list, and you can still change it.</small>
+              {weighable.map((entry) => (
+                <div className="pkq-weigh-row" key={entry.id}>
+                  <span>
+                    <strong data-no-translate>{entry.description}</strong>
+                    <small data-no-translate>{priceBasisText(entry.price, l)}</small>
+                  </span>
+                  <label className="lst-field">
+                    <span className="sr-only">Weight (lb)</span>
+                    <input
+                      disabled={busy}
+                      inputMode="decimal"
+                      onChange={(event) => weigh(entry.id, entry.price, event.target.value)}
+                      placeholder="Weight (lb)"
+                      value={weights[entry.id] ?? ""}
+                    />
+                  </label>
+                  {noRate[entry.id] && <small className="pkq-warn">No price per pound for the extra weight. Type the price.</small>}
+                </div>
+              ))}
+            </section>
+          )}
           <PiecesEditor
             disabled={busy}
             id="pkq-receive-pieces"

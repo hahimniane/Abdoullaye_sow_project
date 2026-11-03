@@ -1,6 +1,5 @@
 export const customerServices = [
   "barrel",
-  "freight",
   "car-transport",
   "parking",
   "shared-barrels",
@@ -20,10 +19,22 @@ export const customerServices = [
 
 export type CustomerService = (typeof customerServices)[number];
 
+/**
+ * Services that were folded into another one (docs/PACKAGE_PRICE_LIST.md
+ * decision 12): an old link still opens the service that replaced them, never
+ * an error. Freight is part of Send a package.
+ */
+const RETIRED_SERVICES: Record<string, CustomerService> = {
+  freight: "barrel",
+};
+
 export function customerServiceFromSearch(
   search: string,
 ): CustomerService | null {
   const value = new URLSearchParams(search).get("service");
+  if (value !== null && Object.hasOwn(RETIRED_SERVICES, value)) {
+    return RETIRED_SERVICES[value];
+  }
   return customerServices.includes(value as CustomerService)
     ? (value as CustomerService)
     : null;

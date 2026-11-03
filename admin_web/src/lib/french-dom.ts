@@ -909,6 +909,60 @@ const BUSINESS_TODAY_TRANSLATIONS: Record<string, string> = {
 
 export const TEXT_TRANSLATIONS: Record<string, string> = {
   "Invitation security": "Sécurité de l’invitation",
+  // Send a package: price lists, comparison, drop-off windows (docs/PACKAGE_PRICE_LIST.md).
+  "See your request": "Voir votre demande",
+  "The business sends you the price": "L’entreprise vous envoie le prix",
+  "You get a tracking code once the business has your goods.": "Vous recevez un code de suivi dès que l’entreprise a vos colis.",
+  "See the price from each business that ships there, pick one, and say when you will bring it. Nothing is paid now.": "Voyez le prix de chaque entreprise qui expédie vers cette destination, choisissez-en une et dites quand vous l’apporterez. Rien n’est payé maintenant.",
+  "How should it travel?": "Comment doit-il voyager ?",
+  "Add each thing you will hand over. You see every business's price for them next.": "Ajoutez chaque chose que vous remettrez. Vous verrez ensuite le prix de chaque entreprise.",
+  "At each business's barrel price": "Au prix du baril de chaque entreprise",
+  "Priced by the pound": "Au prix par livre",
+  "Weighed at drop-off": "Pesé au dépôt",
+  "Size": "Taille",
+  "Weight in pounds": "Poids en livres",
+  "Anything not listed. The business sends you its price on WhatsApp.": "Tout ce qui n’est pas listé. L’entreprise vous envoie son prix sur WhatsApp.",
+  "Add something else": "Ajouter autre chose",
+  "The pickup fee depends on the address. You see each business's fee next.": "Les frais de collecte dépendent de l’adresse. Vous verrez ensuite les frais de chaque entreprise.",
+  "Pays back if lost": "Rembourse en cas de perte",
+  "Picks up": "Vient chercher",
+  "Doesn't pick up there": "Ne fait pas de collecte à cette adresse",
+  "Compare businesses": "Comparer les entreprises",
+  "No business takes it that way. Go back and change how it gets there.": "Aucune entreprise ne le prend ainsi. Revenez en arrière et changez la façon dont il arrive.",
+  "These are today's prices. Items that are weighed get their final price at the counter.": "Ce sont les prix d’aujourd’hui. Les articles pesés reçoivent leur prix final au comptoir.",
+  "Includes a pickup fee of": "Comprend des frais de collecte de",
+  "The business will send you the price for the items to quote on WhatsApp.": "L’entreprise vous enverra sur WhatsApp le prix des articles à estimer.",
+  "Choose a day": "Choisissez un jour",
+  "Time window": "Plage horaire",
+  "Show only": "Afficher seulement",
+  "Best match": "Meilleure correspondance",
+  "Lowest price": "Prix le plus bas",
+  "Highest rated": "Mieux notées",
+  "Soonest departure": "Départ le plus proche",
+  "Has a rating": "A une note",
+  "Getting pickup prices...": "Calcul des frais de collecte...",
+  "When will you bring it?": "Quand l’apporterez-vous ?",
+  "When should they come?": "Quand doivent-ils venir ?",
+  "You pay when the business collects. The final price is set then, once items are weighed.": "Vous payez quand l’entreprise vient chercher. Le prix final est fixé à ce moment, une fois les articles pesés.",
+  "You pay at drop-off. The final price is set at the counter, once items are weighed.": "Vous payez au dépôt. Le prix final est fixé au comptoir, une fois les articles pesés.",
+  "Uploading photos...": "Envoi des photos...",
+  "Remove one": "Retirer un",
+  "Add one": "Ajouter un",
+  "Choose a country.": "Choisissez un pays.",
+  "No time left that day. Pick another day.": "Plus de créneau ce jour-là. Choisissez un autre jour.",
+  "No business matches these filters.": "Aucune entreprise ne correspond à ces filtres.",
+  "Save new time": "Enregistrer le nouvel horaire",
+  "Sent by sea": "Envoyé par mer",
+  "Sent by air": "Envoyé par avion",
+  "Your new time is saved.": "Votre nouvel horaire est enregistré.",
+  "Pick a new time": "Choisir un nouvel horaire",
+  "This business does not fly packages there.": "Cette entreprise n’envoie pas de colis par avion vers cette destination.",
+  "Choose a time window of up to 2 hours in opening hours.": "Choisissez une plage de 2 heures au plus, dans les heures d’ouverture.",
+  "Choose what kind of goods it is.": "Choisissez de quel type de marchandise il s’agit.",
+  "This business does not pick up at that address.": "Cette entreprise ne fait pas de collecte à cette adresse.",
+  "That address is too far for this business.": "Cette adresse est trop éloignée pour cette entreprise.",
+  "This business has not set where pickups start.": "Cette entreprise n’a pas indiqué d’où partent les collectes.",
+  "Save your package request": "Enregistrez votre demande d’envoi de colis",
   "Finish setting up your access": "Terminez la configuration de votre accès",
   "Your password is ready. Verify the invited email, then Laawol will activate the platform or business role assigned to you.":
     "Votre mot de passe est prêt. Vérifiez le courriel invité, puis Laawol activera le rôle de plateforme ou d’entreprise qui vous a été attribué.",
@@ -7787,6 +7841,87 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Former team member": "Ancien membre de l’équipe",
   "Choose which team member's car this is.": "Choisissez de quel membre de l’équipe est cette voiture.",
   "This person is not on this business's team.": "Cette personne ne fait pas partie de l’équipe de cette entreprise.",
+});
+// Business price lists: Shipping > Price list, Coming today, the weigh-in at
+// Received, planned departures, Found on Laawol (docs/PACKAGE_PRICE_LIST.md).
+Object.assign(TEXT_TRANSLATIONS, {
+  "Price list": "Liste de prix",
+  "Price list saved.": "Liste de prix enregistrée.",
+  "Price list saved. The business is asked to check it.":
+    "Liste de prix enregistrée. L’entreprise est invitée à la vérifier.",
+  "Thanks. Your price list is confirmed.": "Merci. Votre liste de prix est confirmée.",
+  "What you charge to send a package, by country, for sea and for air. Customers see these prices when they compare businesses.":
+    "Ce que vous facturez pour envoyer un colis, par pays, par mer et par avion. Les clients voient ces prix lorsqu’ils comparent les entreprises.",
+  "Laawol set up these prices. The business has not checked them yet.":
+    "Laawol a préparé ces prix. L’entreprise ne les a pas encore vérifiés.",
+  "Laawol set up your prices. Please check them.":
+    "Laawol a préparé vos prix. Veuillez les vérifier.",
+  "Looks right": "C’est bon",
+  "Save or discard your changes first.": "Enregistrez ou annulez d’abord vos modifications.",
+  "No destination countries yet. Add the countries you ship to under Services & coverage, then price them here.":
+    "Aucun pays de destination pour l’instant. Ajoutez les pays où vous expédiez dans Services et couverture, puis tarifez-les ici.",
+  "Only the business owner can change the price list.":
+    "Seul le propriétaire de l’entreprise peut modifier la liste de prix.",
+  "Nothing priced yet for this route. Customers see it as “ask me”.":
+    "Rien n’est encore tarifé pour cet itinéraire. Les clients voient « sur demande ».",
+  "Items and prices": "Articles et prix",
+  "A fixed price for each item. “Covers up to” is optional: leave it empty when the price is the same at any weight. The extra pounds are charged at the item's category rate per pound below, else the General goods rate. With neither, you type the price at the counter.":
+    "Un prix fixe pour chaque article. « Couvre jusqu’à » est facultatif : laissez-le vide quand le prix est le même quel que soit le poids. Les livres en plus sont facturées au tarif par livre de la catégorie de l’article ci-dessous, sinon au tarif des Marchandises générales. Sans l’un ni l’autre, vous saisissez le prix au comptoir.",
+  "Covers up to (lb)": "Couvre jusqu’à (lb)",
+  "No items priced.": "Aucun article tarifé.",
+  "Price per pound": "Prix par livre",
+  "For goods sold by weight, such as clothes or food. Leave a category empty to quote it by hand.":
+    "Pour les marchandises vendues au poids, comme les vêtements ou la nourriture. Laissez une catégorie vide pour la chiffrer à la main.",
+  "Departure days": "Jours de départ",
+  "The regular days a flight leaves. Customers see the next one. A planned date on a flight takes over.":
+    "Les jours habituels de départ d’un vol. Les clients voient le prochain. Une date prévue sur un vol prend le dessus.",
+  "The regular days a container leaves. Customers see the next one. A planned date on a container takes over.":
+    "Les jours habituels de départ d’un conteneur. Les clients voient le prochain. Une date prévue sur un conteneur prend le dessus.",
+  "How often": "Fréquence",
+  "Counting from the week of": "À compter de la semaine du",
+  "Save price list": "Enregistrer la liste de prix",
+  "Discard changes": "Annuler les modifications",
+  "Saving sends every country at once. Open requests that use a changed price get a new estimate.":
+    "L’enregistrement envoie tous les pays à la fois. Les demandes ouvertes qui utilisent un prix modifié reçoivent un nouveau devis.",
+  "Checked: looks right": "Vérifié : c’est bon",
+  "Coming today": "Attendus aujourd’hui",
+  "Any time today": "À tout moment aujourd’hui",
+  "Weigh at the counter": "Peser au comptoir",
+  "Type what the scale says. The price below follows the price list, and you can still change it.":
+    "Saisissez ce qu’indique la balance. Le prix ci-dessous suit la liste de prix, et vous pouvez toujours le modifier.",
+  "No price per pound for the extra weight. Type the price.":
+    "Pas de prix par livre pour le poids en plus. Saisissez le prix.",
+  "Planned departure": "Départ prévu",
+  "Optional. Customers comparing businesses see it as the next departure.":
+    "Facultatif. Les clients qui comparent les entreprises le voient comme le prochain départ.",
+  "Found on Laawol": "Trouvés sur Laawol",
+  "customer lines from Laawol’s comparison": "envois clients venus de la comparaison Laawol",
+  "The price list could not be read.": "La liste de prix n’a pas pu être lue.",
+  "That country is not one you ship to.": "Ce pays ne fait pas partie de ceux où vous expédiez.",
+  "Choose Sea or Air.": "Choisissez Maritime ou Aérien.",
+  "Too many countries in one price list.": "Trop de pays dans une seule liste de prix.",
+  "A route can hold at most 60 items.": "Un itinéraire peut contenir 60 articles au plus.",
+  "Give every item a name.": "Donnez un nom à chaque article.",
+  "An item name is too long (60 characters).":
+    "Le nom d’un article est trop long (60 caractères).",
+  "Two items have the same name.": "Deux articles ont le même nom.",
+  "Choose a category for every item.": "Choisissez une catégorie pour chaque article.",
+  "Enter a price between $0.01 and $10,000.": "Saisissez un prix entre 0,01 $ et 10 000 $.",
+  "The weight a price covers must be 0 to 500 lb.":
+    "Le poids couvert par un prix doit être de 0 à 500 lb.",
+  "Enter a price per pound between $0.01 and $1,000.":
+    "Saisissez un prix par livre entre 0,01 $ et 1 000 $.",
+  "Pick the days it leaves, and how many weeks apart.":
+    "Choisissez les jours de départ et l’écart en semaines.",
+  "That item is no longer on the price list.": "Cet article n’est plus sur la liste de prix.",
+  "Enter how many (1 to 50).": "Saisissez la quantité (1 à 50).",
+  "Enter the weight in pounds (0.1 to 2,000).": "Saisissez le poids en livres (0,1 à 2 000).",
+  "Pick a real day for the planned departure.": "Choisissez un jour réel pour le départ prévu.",
+  "Something went wrong. Try again.": "Une erreur s’est produite. Réessayez.",
+});
+Object.assign(ATTRIBUTE_TRANSLATIONS, {
+  "e.g. Phone": "ex. Téléphone",
+  "$ per lb": "$ par lb",
 });
 const englishDictionary = { ...TEXT_TRANSLATIONS, ...ATTRIBUTE_TRANSLATIONS };
 const frenchDictionary = buildReverseDictionary([

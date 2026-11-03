@@ -187,8 +187,18 @@ test("a stored row round-trips into the edit form", () => {
     destinationCountryName: "Guinea",
     notes: "n",
     carrierScac: "CMDU",
+    plannedDepartureDate: "",
   });
   assert.equal(containerDraftFromRow({}).carrierScac, "");
+  // The planned departure (docs/PACKAGE_PRICE_LIST.md §3) goes both ways, and a made-up day is refused.
+  assert.equal(containerDraftFromRow({ plannedDepartureDate: "2026-11-14" }).plannedDepartureDate, "2026-11-14");
+  assert.equal(containerPayload({ ...emptyContainerDraft, plannedDepartureDate: " 2026-11-14 " }).plannedDepartureDate, "2026-11-14");
+  assert.equal(containerPayload(emptyContainerDraft).plannedDepartureDate, "");
+  assert.deepEqual(
+    validateContainerDraft({ ...emptyContainerDraft, label: "Box 2", plannedDepartureDate: "2026-02-30" }),
+    ["planned_departure_invalid"],
+  );
+  assert.deepEqual(validateContainerDraft({ ...emptyContainerDraft, label: "Box 2", plannedDepartureDate: "2026-11-14" }), []);
 });
 
 // Real container TCKU6418832: tracking could not tell its line from the

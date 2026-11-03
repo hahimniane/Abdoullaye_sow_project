@@ -47,6 +47,8 @@ export type BusinessPanelView =
   // Containers: one container line, found wherever it is (on a container,
   // or still in the waiting list).
   | "line"
+  // Shipping: the Price list step ("Laawol set up your prices").
+  | "priceList"
   // Parking's month-end bills for one month, e.g. "month_end:2026-09".
   | `month_end:${string}`
   // Settings: the "Bank for Zelle checks" card (the owner's Check bank limit notice).
@@ -281,6 +283,9 @@ export function businessTargetForNotification(
     // A customer's package request: Containers, the Requests list, that one.
     case "package_request":
       return {tab: "containers", focusId, panelView: "requests"};
+    // "Laawol set up your prices": Shipping, Price list.
+    case "package_price_list":
+      return {tab: "containers", panelView: "priceList"};
     case "freight_shipment_status":
     case "freight_balance_due":
     case "freight_refund_issued":

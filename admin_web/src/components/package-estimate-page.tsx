@@ -1,22 +1,30 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { httpsCallable } from "firebase/functions";
-import { CheckCircle2, Clock3, MapPin, Phone, RefreshCw, Truck, XCircle } from "lucide-react";
+import { CheckCircle2, Clock3, MapPin, Phone, Plane, RefreshCw, Ship, Truck, XCircle } from "lucide-react";
 
 import { functions } from "@/lib/firebase";
 import { currentWebLanguage } from "@/lib/language";
 import {
-  PICKUP_WINDOW_LABELS,
+  canReschedule,
+  dayChoices,
+  listPriceCents,
+  priceExplanation,
+  requestPlanText,
+  reschedulePayload,
+  whenText,
+  windowText,
+  windowsForDay,
+} from "@/lib/package-compare";
+import {
   confirmedBannerText,
-  pickupWhen,
   pieceKindLabel,
   REQUEST_ERROR_MESSAGES,
   estimatePageState,
   estimateRows,
   hoursLines,
   moneyText,
-  plannedDayText,
   requestFailure,
   type PublicRequest,
 } from "@/lib/package-requests";
@@ -49,11 +57,15 @@ export function PackageEstimatePage({ token }: { token: string }) {
   const [request, setRequest] = useState<PublicRequest | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
-  const [busy, setBusy] = useState<"" | "confirm" | "decline">("");
+  const [busy, setBusy] = useState<"" | "confirm" | "decline" | "reschedule">("");
   const [error, setError] = useState("");
   const [changed, setChanged] = useState(false);
   const [declining, setDeclining] = useState(false);
   const [reason, setReason] = useState("");
+  const [rescheduling, setRescheduling] = useState(false);
+  const [newDate, setNewDate] = useState("");
+  const [newWindow, setNewWindow] = useState("");
+  const [rescheduled, setRescheduled] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -112,6 +124,39 @@ export function PackageEstimatePage({ token }: { token: string }) {
     }
   }
 
+  async function reschedule() {
+    if (!request) return;
+    setBusy("reschedule");
+    setError("");
+    try {
+      await call("confirmPackageEstimate", reschedulePayload(token, newDate, newWindow));
+      setRescheduling(false);
+      setNewDate("");
+      setNewWindow("");
+      setRescheduled(true);
+      await load();
+    } catch (err) {
+      const failure = requestFailure(err);
+      if (failure.reason === "request_closed") {
+        setRescheduling(false);
+        await load();
+      } else {
+        // The picker stays open on the same choice: the person can pick again.
+        setError(failure.message);
+      }
+    } finally {
+      setBusy("");
+    }
+  }
+
+  const resched = request?.location?.hours ?? null;
+  const reschedZone = request?.timeZone || "America/New_York";
+  const reschedDays = useMemo(() => (resched ? dayChoices(resched, reschedZone, lang) : []), [resched, reschedZone, lang]);
+  const reschedWindows = useMemo(
+    () => (newDate && resched ? windowsForDay({ handoff: "bring_in", hours: resched, dateKey: newDate, zone: reschedZone }) : []),
+    [newDate, resched, reschedZone],
+  );
+
   if (loading && !request) {
     return (
       <div className="customer-service-loading" role="status">
@@ -134,7 +179,11 @@ export function PackageEstimatePage({ token }: { token: string }) {
   const estimate = request.estimate;
   const location = request.location;
   const open = state === "confirm" || state === "confirmed" || state === "price_dropped" || state === "waiting_estimate";
-  const when = pickupWhen(request);
+  const plan = requestPlanText(request, lang);
+  const pricesById = new Map(request.pieces.map((piece) => [piece.id, piece.price]));
+  const listCentsById = new Map(request.pieces.map((piece) => [piece.id, listPriceCents(piece.price)]));
+  const pickupFeeCents = estimate ? estimate.pickupFeeCents : request.pickup?.feeCents ?? 0;
+  const mayReschedule = open && canReschedule(request);
 
   return (
     <section className="pkr-card pkr-estimate">
@@ -170,20 +219,29 @@ export function PackageEstimatePage({ token }: { token: string }) {
         <p className="pkr-code"><span>Tracking code</span> <a data-no-translate href={`/t/${request.trackingCode}`}>{request.trackingCode}</a></p>
       )}
 
+      <p className="pkr-mode">
+        {request.shipMode === "air" ? <Plane aria-hidden="true" size={16} /> : <Ship aria-hidden="true" size={16} />}
+        <span>{request.shipMode === "air" ? "Sent by air" : "Sent by sea"}</span>
+      </p>
       <div className="pkr-estimate-lines">
-        {rows.map((row) => (
-          <div className="pkr-estimate-line" key={row.id}>
-            <span>
-              <strong data-no-translate>{pieceKindLabel(row.kind, lang)}</strong>
-              {row.description && <small data-no-translate>{row.description}</small>}
-            </span>
-            <span data-no-translate>{row.cents === null ? "—" : moneyText(row.cents, lang)}</span>
-          </div>
-        ))}
-        {estimate && estimate.pickupFeeCents > 0 && (
+        {rows.map((row) => {
+          const explanation = priceExplanation(pricesById.get(row.id), lang);
+          const cents = row.cents ?? listCentsById.get(row.id) ?? null;
+          return (
+            <div className="pkr-estimate-line" key={row.id}>
+              <span>
+                <strong data-no-translate>{pieceKindLabel(row.kind, lang)}</strong>
+                {row.description && <small data-no-translate>{row.description}</small>}
+                {explanation && <small data-no-translate>{explanation}</small>}
+              </span>
+              <span data-no-translate>{cents === null ? "—" : moneyText(cents, lang)}</span>
+            </div>
+          );
+        })}
+        {pickupFeeCents > 0 && (
           <div className="pkr-estimate-line">
             <span><strong>Pickup fee</strong></span>
-            <span data-no-translate>{moneyText(estimate.pickupFeeCents, lang)}</span>
+            <span data-no-translate>{moneyText(pickupFeeCents, lang)}</span>
           </div>
         )}
         {estimate && (
@@ -210,23 +268,60 @@ export function PackageEstimatePage({ token }: { token: string }) {
             <strong data-no-translate>{location.label}</strong>
             <span data-no-translate>{location.address}</span>
             {location.hours && <span className="pkr-hours" data-no-translate>{hoursLines(location.hours, lang).join(" · ")}</span>}
-            {request.plannedDate && <span><span>You planned</span> <span data-no-translate>{plannedDayText(request.plannedDate, lang)}</span></span>}
+            {plan && <span><span>You planned</span> <strong data-no-translate>{plan}</strong></span>}
           </div>
         </div>
       )}
-      {open && when && (
+      {open && request.handoff === "collect" && request.pickup && (
         <div className="pkr-place">
           <Truck aria-hidden="true" size={18} />
           <div>
             {/* The business's own day and time once its estimate set them. */}
-            <small>{when.scheduled ? "The business comes" : "Pickup"}</small>
-            <span data-no-translate>{when.address}</span>
-            {when.date && (
-              <span>
-                <span data-no-translate>{plannedDayText(when.date, lang)}</span>{" "}
-                {when.window ? PICKUP_WINDOW_LABELS[when.window] : ""}
-              </span>
+            <small>{estimate?.pickupSchedule ? "The business comes" : "Pickup"}</small>
+            <span data-no-translate>{request.pickup.address}</span>
+            {(estimate?.pickupSchedule || plan) && (
+              <strong data-no-translate>
+                {estimate?.pickupSchedule ? whenText(estimate.pickupSchedule.date, estimate.pickupSchedule.window, lang) : plan}
+              </strong>
             )}
+          </div>
+        </div>
+      )}
+      {rescheduled && <p className="pkr-banner ok" role="status"><CheckCircle2 aria-hidden="true" size={18} /> Your new time is saved.</p>}
+      {mayReschedule && !rescheduling && !declining && (
+        <div className="pkr-actions">
+          <button className="secondary-button" disabled={Boolean(busy)} onClick={() => { setRescheduling(true); setRescheduled(false); setError(""); }} type="button">Pick a new time</button>
+        </div>
+      )}
+      {mayReschedule && rescheduling && (
+        <div className="pkr-group">
+          <h3>Pick a new time</h3>
+          <label className="pkr-field">
+            <span>Day</span>
+            <select onChange={(event) => { setNewDate(event.target.value); setNewWindow(""); }} value={newDate}>
+              <option value="">Choose a day</option>
+              {reschedDays.map((day) => (
+                <option data-no-translate disabled={!day.open} key={day.key} value={day.key}>{day.label}</option>
+              ))}
+            </select>
+          </label>
+          {newDate && (
+            <fieldset className="pkr-segments">
+              <legend>Time window</legend>
+              {reschedWindows.map((slot) => (
+                <label className={newWindow === slot.value ? "active" : ""} key={slot.value}>
+                  <input checked={newWindow === slot.value} name="pkr-new-window" onChange={() => setNewWindow(slot.value)} type="radio" />
+                  <span data-no-translate>{windowText(slot.value, lang)}</span>
+                </label>
+              ))}
+            </fieldset>
+          )}
+          {newDate && reschedWindows.length === 0 && <p className="pkr-hint" role="status">No time left that day. Pick another day.</p>}
+          <div className="pkr-actions">
+            <button className="secondary-button" disabled={Boolean(busy)} onClick={() => { setRescheduling(false); setError(""); }} type="button">Cancel</button>
+            <button className="primary-button" data-loading={busy === "reschedule"} disabled={Boolean(busy) || !newDate || !newWindow} onClick={() => void reschedule()} type="button">
+              {busy === "reschedule" ? "Saving..." : "Save new time"}
+            </button>
           </div>
         </div>
       )}

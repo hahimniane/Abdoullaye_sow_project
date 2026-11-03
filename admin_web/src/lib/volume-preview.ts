@@ -42,6 +42,9 @@ function numbers(barrels: number, packages: number, cars: number, lines: number,
     packages,
     cars,
     customerLines: lines,
+    // About a third of the sample's customer lines were found on Laawol.
+    laawolLines: Math.round(lines / 3),
+    laawolPieces: Math.round(pieces / 3),
     containersShipped: containers,
     containerPieces,
     avgPerContainer: containers > 0 ? Math.round((containerPieces / containers) * 10) / 10 : null,
@@ -74,11 +77,12 @@ function sumRows(rows: VolumeBusinessRow[]): VolumeNumbers {
       packages: acc.packages + row.packages,
       cars: acc.cars + row.cars,
       lines: acc.lines + row.customerLines,
+      laawol: acc.laawol + (row.laawolLines ?? 0),
       containers: acc.containers + row.containersShipped,
     }),
-    { barrels: 0, packages: 0, cars: 0, lines: 0, containers: 0 },
+    { barrels: 0, packages: 0, cars: 0, lines: 0, laawol: 0, containers: 0 },
   );
-  const sum = numbers(total.barrels, total.packages, total.cars, total.lines, total.containers);
+  const sum = { ...numbers(total.barrels, total.packages, total.cars, total.lines, total.containers), laawolLines: total.laawol };
   const containerPieces = rows.reduce((acc, row) => acc + row.containerPieces, 0);
   return {
     ...sum,

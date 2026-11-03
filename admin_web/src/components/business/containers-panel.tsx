@@ -157,6 +157,7 @@ import {
 } from "@/lib/destination-countries";
 import { db, functions } from "@/lib/firebase";
 import { currentLanguage, formatDate, formatDateTime, text } from "@/lib/format";
+import { plannedDepartureText } from "@/lib/business-price-list";
 import { staffNameFrom, staffNameIndex, staffOptionsFrom } from "@/lib/staff-names";
 import { overlayDismiss } from "@/lib/overlay-dismiss";
 import { closePendingTab, openPendingTab, sendPendingTab } from "@/lib/pending-tab";
@@ -1301,6 +1302,9 @@ export function ContainersPanel({
                 <div><span>Shipping line</span>{oceanCarrierLabel(selected.carrierScac) ? <b data-no-translate>{oceanCarrierLabel(selected.carrierScac)}</b> : <b>Not chosen yet</b>}</div>
               )}
               <div><span>Started</span><b>{formatDate(selected.createdAt) || "—"}</b></div>
+              {selectedStatus === "loading" && plannedDepartureText(selected.plannedDepartureDate, lang) && (
+                <div><span>Planned departure</span><b data-no-translate>{plannedDepartureText(selected.plannedDepartureDate, lang)}</b></div>
+              )}
               {Boolean(selected.sailedAt) && <div><span>{selectedAir ? "Departed" : "Sailed"}</span><b>{formatDate(selected.sailedAt)}</b></div>}
               {Boolean(selected.arrivedAt) && <div><span>Ready for pickup</span><b>{formatDate(selected.arrivedAt)}</b></div>}
               {selectedCounts && (
@@ -1503,6 +1507,7 @@ export function ContainersPanel({
               onFlash={setFlash}
               enabled={enabled}
               shipsByAir={shipsByAir}
+              timeZone={text((business as Row | null)?.packageRequestSettings && ((business as Row).packageRequestSettings as Row).timeZone, "") || undefined}
             />
           }
           businessId={businessId}
@@ -1638,7 +1643,7 @@ export function ContainersPanel({
                       onClick={() => setSelectedId(id)}
                       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedId(id); } }}
                     >
-                      <span><strong data-no-translate>{containerTitle(row)}</strong>{number && <small data-no-translate>{text(row.label, "")}</small>}{air && <small className="prf-air"><Plane size={11} aria-hidden="true" /> <span>By air</span></small>}</span>
+                      <span><strong data-no-translate>{containerTitle(row)}</strong>{number && <small data-no-translate>{text(row.label, "")}</small>}{air && <small className="prf-air"><Plane size={11} aria-hidden="true" /> <span>By air</span></small>}{status === "loading" && plannedDepartureText(row.plannedDepartureDate, lang) && <small data-no-translate>{plannedDepartureText(row.plannedDepartureDate, lang)}</small>}</span>
                       <span><strong>{destinationLabel(row) || "—"}</strong>{text(row.bookingReference, "") && <small data-no-translate>{text(row.bookingReference, "")}</small>}</span>
                       <span><strong>{counts.carCount} · {counts.barrelCount} · {counts.otherCount}</strong><small>cars · barrels · other</small></span>
                       <span>
@@ -1714,6 +1719,7 @@ export function ContainersPanel({
                       <label className="lst-field"><span>Container number</span><input value={containerDraft.containerNumber} onChange={(e) => setContainerDraft((d) => ({ ...d, containerNumber: e.target.value.toUpperCase() }))} placeholder="e.g. MSKU1234567" /><small className="lst-hint">Four letters and seven digits, when the shipping line sends it.</small></label>
                     )}
                     <label className="lst-field"><span>Booking / BL reference</span><input value={containerDraft.bookingReference} onChange={(e) => setContainerDraft((d) => ({ ...d, bookingReference: e.target.value }))} /></label>
+                    <label className="lst-field"><span>Planned departure</span><input type="date" value={containerDraft.plannedDepartureDate} onChange={(e) => setContainerDraft((d) => ({ ...d, plannedDepartureDate: e.target.value }))} /><small className="lst-hint">Optional. Customers comparing businesses see it as the next departure.</small></label>
                     <label className="lst-field wide"><span>Destination</span>
                       <select value={containerDraft.destinationCountryId} onChange={(e) => pickDestination(e.target.value)}>
                         <option value="">Not chosen yet</option>

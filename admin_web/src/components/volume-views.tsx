@@ -11,6 +11,7 @@ import { BarChart3, ChevronLeft, ChevronRight, Container, Download, RefreshCw } 
 
 import { TotalsStatus } from "@/components/totals-status";
 import { UserText } from "@/components/user-text";
+import { laawolLinesOf } from "@/lib/business-price-list";
 import { functions } from "@/lib/firebase";
 import { currentLanguage, formatDate } from "@/lib/format";
 import { useServerTotals } from "@/lib/use-server-totals";
@@ -165,6 +166,11 @@ function VolumeTileCard({ tile, totals }: { tile: VolumeTile; totals: VolumeTota
       {totals && tile.key === "customerLines" && (
         <small>
           <span>customer loads received</span>
+        </small>
+      )}
+      {totals && tile.key === "laawolLines" && (
+        <small>
+          <span>customer lines from Laawol’s comparison</span>
         </small>
       )}
     </article>
@@ -528,6 +534,7 @@ export function AdminVolumeView({
                         <th scope="col">Pieces</th>
                         <th scope="col">Containers</th>
                         <th scope="col">Avg / container</th>
+                        <th scope="col">Found on Laawol</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -564,6 +571,9 @@ export function AdminVolumeView({
                             <Count value={row.containersShipped} />
                           </td>
                           <td data-no-translate>{formatVolumeAverage(row.avgPerContainer, language)}</td>
+                          <td>
+                            <Count value={laawolLinesOf(row)} />
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -589,6 +599,9 @@ export function AdminVolumeView({
                             <Count value={totals.containersShipped} />
                           </td>
                           <td data-no-translate>{formatVolumeAverage(totals.avgPerContainer, language)}</td>
+                          <td>
+                            <Count value={laawolLinesOf(totals)} />
+                          </td>
                         </tr>
                       </tfoot>
                     )}

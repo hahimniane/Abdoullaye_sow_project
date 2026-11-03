@@ -400,8 +400,6 @@ export function CustomerConsole({
           )}
           {activeTab === "services" && (
             <CustomerShippingServices
-              bookingQuoteBusinessId={bookingQuoteBusinessId}
-              bookingQuoteRequestId={bookingQuoteRequestId}
               freightShipments={freight.rows}
               profile={profile}
             />

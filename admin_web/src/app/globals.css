@@ -17095,3 +17095,133 @@ button.pkq-card:hover { border-color: var(--brand); }
 .pk-bill-payment-main strong { font-variant-numeric: tabular-nums; }
 .pk-month-customer li.pk-bill-payment-undone { opacity: .55; }
 .pk-month-customer li.pk-bill-payment-undone strong { text-decoration: line-through; }
+
+/* Send a package: items, comparison, drop-off windows (docs/PACKAGE_PRICE_LIST.md). */
+.pkr-catalog { display: grid; gap: 8px; }
+
+.pkr-item {
+  align-items: center;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 10px 12px;
+}
+
+.pkr-item-name { display: grid; gap: 2px; min-width: 0; }
+.pkr-item-name small { color: var(--muted); }
+
+.pkr-stepper { align-items: center; display: inline-flex; flex: none; gap: 10px; }
+.pkr-stepper strong { min-width: 20px; text-align: center; }
+
+.pkr-compare-tools { display: grid; gap: 12px; }
+.pkr-compare { display: grid; gap: 10px; }
+
+.pkr-compare-row {
+  align-items: center;
+  border: 1px solid var(--rule-strong);
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  position: relative;
+}
+
+.pkr-compare-row input {
+  height: 1px;
+  opacity: 0;
+  position: absolute;
+  width: 1px;
+}
+
+.pkr-compare-row:focus-within { outline: 2px solid var(--brand); outline-offset: 2px; }
+.pkr-compare-row.active { background: var(--mist); border-color: var(--brand); }
+.pkr-compare-row.blocked { cursor: default; opacity: 0.6; }
+
+.pkr-compare-logo {
+  align-items: center;
+  background: var(--paper-soft);
+  border-radius: 8px;
+  color: var(--brand-strong);
+  display: inline-flex;
+  flex: none;
+  height: 40px;
+  justify-content: center;
+  overflow: hidden;
+  width: 40px;
+}
+
+.pkr-compare-logo img { height: 100%; object-fit: cover; width: 100%; }
+.pkr-compare-body { display: grid; flex: 1; gap: 2px; min-width: 0; }
+.pkr-compare-body small { color: var(--muted); }
+
+.pkr-compare-total {
+  display: grid;
+  flex: none;
+  gap: 2px;
+  justify-items: end;
+  max-width: 45%;
+  text-align: right;
+}
+
+.pkr-compare-total strong { color: var(--money); }
+.pkr-compare-total small { color: var(--muted); }
+.pkr-card-pay { justify-self: start; }
+.pkr-mode { align-items: center; color: var(--muted); display: flex; gap: 6px; margin: 0; }
+.pkr-sent-title { font-size: 18px; font-weight: 600; margin: 0; }
+.pkr-sent-total { font-size: 18px; margin: 0; }
+
+@media (max-width: 540px) {
+  .pkr-compare-row { align-items: flex-start; flex-wrap: wrap; }
+  .pkr-compare-total { justify-items: start; max-width: none; text-align: left; width: 100%; }
+}
+
+/* Package price list (business console) and Coming today */
+.plist .pkq-settings-block h3, .plist .pkq-settings-block h4 { margin: 0; }
+.plist-pick { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; margin: 8px 0; }
+.plist-pick .lst-field { flex: 1 1 220px; max-width: 320px; }
+.plist-summary { color: var(--muted); margin: 4px 0 0; overflow-wrap: anywhere; }
+.plist-items { display: grid; gap: 8px; }
+.plist-row {
+  align-items: end;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(140px, 2fr) minmax(130px, 1.4fr) minmax(90px, 1fr) minmax(110px, 1fr) 36px;
+}
+.plist-row .lst-field { margin: 0; min-width: 0; }
+.plist-row .lst-field input, .plist-row .lst-field select { width: 100%; }
+.plist-row .ghost-button { align-self: center; justify-self: center; }
+.plist-head { color: var(--muted); font-size: 12.5px; font-weight: 700; }
+.plist-label { display: none; }
+.plist-rates { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+.plist-cadence { display: flex; flex-wrap: wrap; gap: 12px; }
+.plist-cadence .lst-field { flex: 0 1 200px; }
+.plist-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.plist-history { margin-top: 14px; }
+/* Own breakpoint: the price-list rows stack a little before the 720px phone rules. */
+@media (max-width: 760px) {
+  .plist-head { display: none; }
+  .plist-row {
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    grid-template-columns: 1fr 1fr;
+    padding: 10px;
+  }
+  .plist-row .lst-field:first-child { grid-column: 1 / -1; }
+  .plist-row .ghost-button { grid-column: 1 / -1; justify-self: end; }
+  .plist-label { color: var(--muted); display: block; font-size: 12.5px; font-weight: 700; }
+}
+.pkq-today { margin: 0 0 16px; }
+.pkq-today h3 { align-items: center; display: flex; gap: 6px; }
+.pkq-card.today { background: #eff6ff; border-color: #93c5fd; }
+.pkq-window { font-size: 15px; }
+.pkq-weigh { border-top: 1px solid var(--rule); display: grid; gap: 8px; margin: 12px 0; padding-top: 12px; }
+.pkq-weigh h4 { margin: 0; }
+.pkq-weigh-row { align-items: center; display: grid; gap: 4px 12px; grid-template-columns: minmax(0, 1fr) 140px; }
+.pkq-weigh-row > span { display: grid; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.pkq-weigh-row > span small { color: var(--muted); }
+.pkq-weigh-row .lst-field { margin: 0; }
+.pkq-weigh-row .pkq-warn { grid-column: 1 / -1; }
+#pkq-receive-pieces, #pkq-receive-proof, #pkq-receive-ships-by { margin: 10px 0; }

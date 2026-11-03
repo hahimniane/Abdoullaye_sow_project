@@ -107,21 +107,7 @@ export function CustomerServiceEntry({
       setAuthIntent("service-continuation");
     });
   }
-  const guestAllowed = initialService === "barrel" ||
-    initialService === "freight";
-  // Handed over from the tracking page after a guest claimed their price
-  // request and accepted an answer there. Read once at mount: it is an
-  // arrival, not a subscription to the URL.
-  const [{agreedRequestId, agreedBusinessId}] = useState(() => {
-    if (typeof window === "undefined") {
-      return {agreedRequestId: "", agreedBusinessId: ""};
-    }
-    const params = new URLSearchParams(window.location.search);
-    return {
-      agreedRequestId: params.get("agreedRequest") ?? "",
-      agreedBusinessId: params.get("agreedBusiness") ?? "",
-    };
-  });
+  const guestAllowed = initialService === "barrel";
   // The container-line code the tracking page is on: the label's code from
   // the URL at arrival, then whatever the lookup box last found.
   const [packageCode, setPackageCode] = useState(() =>
@@ -147,15 +133,14 @@ export function CustomerServiceEntry({
       estimateToken: estimateTokenFromLocation(window.location.pathname, window.location.search),
     };
   });
+  // Freight is part of Send a package: an old freight link is already
+  // mapped to "barrel" (customer-service-intent.ts).
   const shippingService:
     | "barrel"
-    | "freight"
     | "transport"
     | null =
-    initialService === "barrel" || initialService === "freight"
-      ? initialService
-      : initialService === "package-request"
-        ? "barrel"
+    initialService === "barrel" || initialService === "package-request"
+      ? "barrel"
       : initialService === "car-transport"
         ? "transport"
         : null;
@@ -172,7 +157,7 @@ export function CustomerServiceEntry({
             ? "Save your car transport request"
             : initialService === "barrel"
               ? "Save your barrel request"
-              : "Save your freight request";
+              : "Save your package request";
 
   useEffect(() => {
     if (!authenticated || !authOpen) return;
@@ -242,11 +227,6 @@ export function CustomerServiceEntry({
             onAuthenticationRequired={askHowToContinue}
             profile={profile}
             requestSlug={requestSlug}
-            // An accepted price arriving from the tracking page: the guest
-            // claimed their request there, accepted a business's answer,
-            // and lands here to finish the booking at that number.
-            bookingQuoteRequestId={agreedRequestId}
-            bookingQuoteBusinessId={agreedBusinessId}
           />
         )}
         {["parking", "shared-barrels"].includes(initialService) && (

@@ -88,6 +88,7 @@ import {
   type StaffInviteResult,
 } from "@/lib/staff-phone-invite";
 import { isValidE164, normalizePhone } from "@/lib/phone";
+import { PriceListPanel } from "@/components/business/price-list-panel";
 import { ReviewsPanel } from "@/components/business/reviews-panel";
 import { SearchableSelect } from "@/components/searchable-select";
 import { ToggleRow } from "@/components/toggle-row";
@@ -10583,6 +10584,9 @@ function BusinessWorkspace({
                   destinations={destinations}
                   runAction={runAction}
                 />
+                {/* Laawol sets up (or fixes) a business's package prices; the
+                    business is asked to check them (needsCheck). */}
+                <PriceListPanel businessId={business.id} canEdit byLaawol />
                 <ServiceGroup
                   title="Barrel shipments"
                   icon={<Package size={16} />}

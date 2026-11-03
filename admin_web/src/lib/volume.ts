@@ -15,6 +15,9 @@ export type VolumeNumbers = {
   packages: number;
   cars: number;
   customerLines: number;
+  /** Customer lines (and their pieces) that came through Laawol's comparison; older rollups have none. */
+  laawolLines?: number;
+  laawolPieces?: number;
   containersShipped: number;
   containerPieces: number;
   avgPerContainer: number | null;
@@ -168,6 +171,8 @@ export function emptyVolumeTotals(): VolumeTotals {
     packages: 0,
     cars: 0,
     customerLines: 0,
+    laawolLines: 0,
+    laawolPieces: 0,
     containersShipped: 0,
     containerPieces: 0,
     avgPerContainer: null,
@@ -207,7 +212,8 @@ export type VolumeTileKey =
   | "cars"
   | "containersShipped"
   | "avgPerContainer"
-  | "customerLines";
+  | "customerLines"
+  | "laawolLines";
 
 export type VolumeTile = {
   key: VolumeTileKey;
@@ -240,6 +246,8 @@ export function volumeTiles(
   ];
   if (showCustomerLines) {
     shipped.push({ key: "customerLines", label: "Customer lines", value: count(totals.customerLines), kind: "count" });
+    // How many of those found the business on Laawol (docs/PACKAGE_PRICE_LIST.md decision 4).
+    shipped.push({ key: "laawolLines", label: "Found on Laawol", value: count(totals.laawolLines), kind: "count" });
   }
   return {
     received: [
@@ -320,6 +328,7 @@ const CSV_HEADERS: Record<VolumeLanguage, string[]> = {
     "Containers shipped",
     "Pieces in containers",
     "Avg pieces / container",
+    "Found on Laawol (lines)",
   ],
   fr: [
     "Mois",
@@ -333,6 +342,7 @@ const CSV_HEADERS: Record<VolumeLanguage, string[]> = {
     "Conteneurs expédiés",
     "Pièces dans les conteneurs",
     "Moyenne de pièces / conteneur",
+    "Trouvés sur Laawol (envois)",
   ],
 };
 
@@ -368,6 +378,7 @@ export function volumeCsv(answer: PlatformVolumeResponse, language: VolumeLangua
       row.containersShipped,
       row.containerPieces,
       csvAverage(row.avgPerContainer),
+      row.laawolLines ?? 0,
     ]);
   }
   const totals = answer.totals;
@@ -383,6 +394,7 @@ export function volumeCsv(answer: PlatformVolumeResponse, language: VolumeLangua
     totals.containersShipped,
     totals.containerPieces,
     csvAverage(totals.avgPerContainer),
+    totals.laawolLines ?? 0,
   ]);
   // A byte-order mark so a spreadsheet reads the accents as UTF-8.
   return `﻿${rows.map((cells) => cells.map(volumeCsvCell).join(",")).join("\r\n")}\r\n`;
