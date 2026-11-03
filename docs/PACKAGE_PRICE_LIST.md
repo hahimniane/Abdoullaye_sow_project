@@ -130,8 +130,9 @@ real day). A container counts as departed once `status` is `shipped` or
 | `confirmedVia` | also `form` | every piece priced at submit: the customer agreed in the form |
 | `reminders.dropoffTodayAt`, `reminders.stillComingAt` | | decision 6 |
 
-A request whose pieces are all priced (items, per pound, barrels) and whose
-pickup fee (collect) is known is created **`confirmed`** with an automatic
+A request from a newer client (it sends `channel`) whose pieces are all
+priced (items, per pound, barrels) and whose pickup fee (collect) is known
+is created **`confirmed`** with an automatic
 estimate v1 (`auto: true`) and `confirmedVia: "form"`: it is Expected at
 once. Otherwise it is created `new` with the priced pieces' `estimateCents`
 prefilled; staff estimate the rest as today.
@@ -173,9 +174,19 @@ shipsByAir: bool
 `PublicRoute = {items, perLbCents}`. An option is offered for Air only when
 it has an air route or `shipsByAir`.
 
+`departures[mode] = {dateKey: "YYYY-MM-DD" | "", source: "planned" |
+"schedule" | "unconfirmed" | "none", approximate}`. `pickupPricing =
+{mode: "flat"|"distance"|"borough", flatFeeCents, baseFeeCents,
+perMileCents, minimumFeeCents, maxPickupMiles, boroughPricesCents} | null`
+(the business's `pickupPlan` for service `packages`, which inherits the
+shared plan). `routes[mode] = {items, perLbCents} | null`.
+
 Action `{action: "pickup_quote", address, businessIds: string[] (<= 20)}`
--> `{normalizedAddress, quotes: [{businessId, available, feeCents,
-distanceMiles?, borough?}]}` (Google Maps once per address; rate limited).
+-> `{quotes: [{businessId, available, priced, feeCents, distanceMiles,
+borough, reason}]}`: `priced: false` = the business picks up but has no
+pickup plan (its staff set the fee); `available: false` with `reason`
+(`collect_unavailable`, `pickup_out_of_area`, `pickup_out_of_range`,
+`pickup_origin_missing`).
 
 ### `submitPackageRequest`
 
@@ -183,10 +194,36 @@ Input gains `shipMode`, `foundVia`, `channel`, `plannedWindow` (bring_in),
 `pickup.window` as `"HH:MM-HH:MM"`, and per piece `priceItemId`,
 `quantity`, `categoryId`, `weightLb`, `sizePreset`, `label`. The server
 prices with today's list (`priceBasket`), quotes the pickup fee itself, and
-creates `confirmed` (all priced) or `new`. New reasons:
-`ship_mode_invalid`, `window_invalid` (not 2 hours / outside opening
-hours), `quantity_invalid`, `weight_invalid`, `category_invalid`,
-`pickup_out_of_area`.
+creates `confirmed` (all priced) or `new`. Pieces from the list need no
+`description` (it is "2 × Phone" / "Clothes and fabric · 50 lb"); their
+`kind` defaults to `other`. Windows: 30 min to 2 h; bring_in inside that
+day's hours; pickup between 07:00 and 21:00, sent as `pickup.window =
+"HH:MM-HH:MM"`. New reasons: `ship_mode_invalid`, `air_unavailable`
+(precondition), `window_invalid`, `quantity_invalid`, `weight_invalid`,
+`category_invalid`, `channel_invalid`, `pickup_out_of_area`,
+`pickup_out_of_range`, `pickup_origin_missing`. Received uses the
+request's `shipMode` unless staff choose another.
+
+### Request page (`/e/<token>`)
+
+- `getPackageRequestByToken` adds `plannedWindow {from,to} | null`,
+  `shipMode`, `pickup.feeCents`, and per piece `price {source, label,
+  quantity, unitCents, includedLb, perLbCents, weightLb} | null`.
+- `confirmPackageEstimate {token, action: "reschedule", plannedDate,
+  plannedWindow: {from,to}}` -> `{success, plannedDate, plannedWindow}`:
+  "Pick a new time" (bring_in, open requests). Reasons `request_closed`,
+  `handoff_invalid`, `planned_date_invalid`, `planned_day_closed`,
+  `window_invalid`. The day's reminders start over.
+
+### Reminders
+
+- `dropoff_today` (8 AM on `plannedDate`, only if confirmed before then)
+  and `still_coming` (10 AM the day after) for a confirmed bring_in with a
+  `plannedWindow`; both use the approved `package_dropoff_reminder_2lang`
+  (`{{4}}` = "today, 2:00 PM–4:00 PM" for the morning one, the opening
+  hours for Still coming; the button opens `/e/<token>` where the customer
+  picks a new time). Requests without a window keep the old +3 days
+  reminder.
 
 ### Freight
 
