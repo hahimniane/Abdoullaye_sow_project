@@ -24032,11 +24032,10 @@ exports.whatsappWebhook = onRequest(
       maxInstances: 2,
       timeoutSeconds: 120,
       memory: "512MiB",
-      // WHATSAPP_FLOW_PRIVATE_KEY joins this list once the secret exists
-      // (ops/whatsapp/package_flow.py key); until then the Send a package
-      // form stays off (no flowId in appConfig/whatsappPackageFlow).
+      // WHATSAPP_FLOW_PRIVATE_KEY decrypts the Send a package form
+      // (ops/whatsapp/package_flow.py key creates it).
       secrets: [whatsappAppSecret, whatsappAccessToken, whatsappPhoneNumberId,
-        googleMapsApiKey],
+        googleMapsApiKey, whatsappFlowPrivateKey],
     },
     async (req, res) => {
       const secret = safeSecretValue(whatsappAppSecret);
