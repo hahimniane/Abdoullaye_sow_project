@@ -47,6 +47,7 @@ import '../widgets/app_snackbars.dart';
 import '../widgets/container_volume_card.dart';
 import '../widgets/country_phone_field.dart';
 import '../widgets/label_print_sheet.dart';
+import '../utils/date_display.dart' show displayDay, displayMonthDay, parseDayKey;
 import '../widgets/lot_sheets.dart';
 import '../widgets/received_by_options.dart';
 import '../widgets/package_delivery_widgets.dart';
@@ -1314,11 +1315,15 @@ class _ContainerCard extends StatelessWidget {
       if (c.reference.isNotEmpty) c.label,
       if (c.destinationCountryName.isNotEmpty) c.destinationCountryName,
     ].join(' · ');
+    final plannedDay = parseDayKey(c.plannedDepartureDate);
     final when = c.isArrived && c.arrivedAt != null
         ? l10n.ctrArrivedOn(DateFormat.MMMd(tag).format(c.arrivedAt!))
         : c.isShipped && c.sailedAt != null
             ? l10n.ctrSailed(DateFormat.MMMd(tag).format(c.sailedAt!))
-            : '';
+            // Still loading with a planned day: "Departs Nov 14".
+            : c.isLoading && plannedDay != null
+                ? l10n.pplPlannedDepartureOn(displayMonthDay(plannedDay, tag))
+                : '';
 
     return PressableScale(
       onTap: () {
@@ -3352,6 +3357,9 @@ class _ContainerFormSheetState extends State<_ContainerFormSheet> {
   String _destinationId = '';
   String _destinationName = '';
 
+  /// "YYYY-MM-DD" when it is planned to leave, else '' (optional).
+  String _plannedDeparture = '';
+
   /// Sea (the default) or air (docs/AIR_PACKAGES.md §1): a flight is named
   /// by its waybill and airline and has no container number or shipping
   /// line. Locked after departure, like the number.
@@ -3387,6 +3395,7 @@ class _ContainerFormSheetState extends State<_ContainerFormSheet> {
     _shipMode = existing.shipMode;
     _waybill.text = existing.airWaybill;
     _airline.text = existing.airline;
+    _plannedDeparture = existing.plannedDepartureDate;
   }
 
   @override
@@ -3426,6 +3435,24 @@ class _ContainerFormSheetState extends State<_ContainerFormSheet> {
     });
   }
 
+  Future<void> _pickPlannedDeparture() async {
+    final today = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: parseDayKey(_plannedDeparture) ?? today,
+      firstDate: DateTime(today.year, today.month, today.day),
+      lastDate: DateTime(today.year + 2, today.month, today.day),
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _plannedDeparture =
+          '${picked.year.toString().padLeft(4, '0')}-'
+          '${picked.month.toString().padLeft(2, '0')}-'
+          '${picked.day.toString().padLeft(2, '0')}';
+      _errors = {..._errors}..remove('planned_departure_invalid');
+    });
+  }
+
   Future<void> _submit() async {
     final l10n = AppLocalizations.of(context)!;
     final draft = ContainerDraft(
@@ -3438,6 +3465,7 @@ class _ContainerFormSheetState extends State<_ContainerFormSheet> {
       shipMode: _shipMode,
       airWaybill: _waybill.text,
       airline: _airline.text,
+      plannedDepartureDate: _plannedDeparture,
     );
     final errors = _open ? validateContainer(draft) : const <String>[];
     if (errors.isNotEmpty) {
@@ -3519,6 +3547,7 @@ class _ContainerFormSheetState extends State<_ContainerFormSheet> {
     'destination_required',
     'carrier_invalid',
     'air_waybill_invalid',
+    'planned_departure_invalid',
   };
 
   @override
@@ -3704,6 +3733,47 @@ class _ContainerFormSheetState extends State<_ContainerFormSheet> {
               placeholder: l10n.ctrShippingLineGuess,
               onTap: _pickCarrier,
               error: errorFor('carrier_invalid'),
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
+          // Optional, and only while it is still loading: customers who
+          // compare businesses see it as the next departure.
+          if (_open) ...[
+            LotPickerField(
+              key: const Key('container-planned-departure'),
+              label: l10n.pplPlannedDeparture,
+              value: _plannedDeparture.isEmpty
+                  ? null
+                  : displayDay(
+                      _plannedDeparture,
+                      Localizations.localeOf(context).toLanguageTag(),
+                    ),
+              placeholder: l10n.pplPickDate,
+              onTap: _pickPlannedDeparture,
+              error: errorFor('planned_departure_invalid'),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      l10n.pplPlannedDepartureHint,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        height: 1.35,
+                        color: AppColors.muted,
+                      ),
+                    ),
+                  ),
+                  if (_plannedDeparture.isNotEmpty)
+                    TextButton(
+                      key: const Key('container-planned-departure-clear'),
+                      onPressed: () => setState(() => _plannedDeparture = ''),
+                      child: Text(l10n.pplClearDate),
+                    ),
+                ],
+              ),
             ),
             const SizedBox(height: AppSpacing.md),
           ],
@@ -6262,6 +6332,7 @@ String containerErrorText(
   return switch (code) {
     'container_label_required' => l10n.ctrErrLabelRequired,
     'container_number_invalid' => l10n.ctrErrNumberInvalid,
+    'planned_departure_invalid' => l10n.pplErrPlannedDeparture,
     'container_status_invalid' => l10n.ctrErrStatusInvalid,
     'container_transition_invalid' => l10n.ctrErrTransitionInvalid,
     'destination_required' => l10n.ctrErrDestinationRequired,

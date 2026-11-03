@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/app_localizations.dart';
+import '../services/business_price_list.dart' show priceSnapshotWeighs;
+import '../services/eastern_clock.dart' show easternWall;
+import '../services/package_request_compare.dart';
 import '../services/package_request_service.dart';
 import '../services/package_requests.dart';
 import '../theme/app_colors.dart';
@@ -11,7 +14,10 @@ import '../theme/app_motion.dart';
 import '../theme/app_spacing.dart';
 import '../utils/date_display.dart';
 import '../widgets/app_snackbars.dart';
+import '../widgets/day_picker.dart';
 import '../widgets/guest_tracking_lookup.dart';
+import '../widgets/lot_sheets.dart';
+import '../widgets/package_request_compare_widgets.dart';
 import '../widgets/package_request_widgets.dart';
 
 /// What `/package-request-detail` carries: the request by id (a signed-in
@@ -39,11 +45,15 @@ class PackageRequestDetailScreen extends StatefulWidget {
     this.service,
     this.onTrack,
     this.onCall,
+    this.clock = DateTime.now,
   });
 
   final String requestId;
   final String token;
   final PackageRequestService? service;
+
+  /// Now; tests set it.
+  final DateTime Function() clock;
 
   /// Opens the tracking page for a code; the public lookup when null.
   final void Function(BuildContext context, String code)? onTrack;
@@ -260,6 +270,30 @@ class _PackageRequestDetailScreenState
     }
   }
 
+  /// "Pick a new time": a new drop-off day and window for an open bring-in.
+  Future<void> _reschedule(PackageRequest request) async {
+    final l10n = AppLocalizations.of(context)!;
+    if (_busy.isNotEmpty || _token.isEmpty) return;
+    final outcome = await showLotSheet<Object?>(
+      context,
+      _RescheduleSheet(
+        request: request,
+        service: _service,
+        token: _token,
+        clock: widget.clock,
+      ),
+    );
+    if (outcome == null || !mounted) return;
+    if (outcome is RequestFailure) {
+      AppHaptics.refuse();
+      showErrorSnackBar(context, requestRefusalText(l10n, outcome.refusal));
+    } else {
+      AppHaptics.commit();
+      showSuccessSnackBar(context, l10n.spkRescheduleDone);
+    }
+    await _fetch();
+  }
+
   void _track(String code) {
     final track = widget.onTrack;
     if (track != null) {
@@ -345,7 +379,7 @@ class _PackageRequestDetailScreenState
           onTrack: _track,
         ),
         RequestSectionTitle(l10n.prqPieces),
-        RequestCard(child: RequestPriceTable(request: request)),
+        RequestCard(child: RequestPriceTable(request: request, explain: true)),
         if ((request.estimate?.note ?? '').isNotEmpty)
           RequestCard(
             color: AppColors.parchment,
@@ -371,7 +405,14 @@ class _PackageRequestDetailScreenState
             child: Text(
               [
                 request.isCollect ? l10n.prqPayAtPickup : l10n.prqPayAtDropOff,
-                l10n.prqNotBinding,
+                // A price the customer agreed to in the form is not an
+                // estimate; what is weighed at the counter still moves it.
+                if (request.confirmedVia != 'form')
+                  l10n.prqNotBinding
+                else if (request.pieces.any(
+                  (p) => priceSnapshotWeighs(p.price),
+                ))
+                  l10n.spkSendWeighed,
               ].join(' '),
               style: const TextStyle(
                 fontSize: 12.5,
@@ -381,7 +422,17 @@ class _PackageRequestDetailScreenState
             ),
           ),
         RequestSectionTitle(l10n.prqWhereWhen),
-        _WhereWhen(request: request, locale: locale),
+        _WhereWhen(
+          request: request,
+          locale: locale,
+          onReschedule:
+              request.isOpen &&
+                  request.isBringIn &&
+                  request.location?.hours != null &&
+                  _token.isNotEmpty
+              ? () => _reschedule(request)
+              : null,
+        ),
         if (request.receiverName.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 4),
@@ -474,6 +525,8 @@ class _StateCard extends StatelessWidget {
             ? l10n.prqStateConfirmedByPhone(business)
             : request.confirmedVia == 'card'
             ? l10n.prqPaidOnline
+            : request.confirmedVia == 'form'
+            ? l10n.spkStateConfirmedForm
             : l10n.prqStateConfirmed,
         request.priceDropped ? l10n.prqPriceDropped : null,
         AppColors.sage,
@@ -584,14 +637,22 @@ class _StateCard extends StatelessWidget {
 }
 
 class _WhereWhen extends StatelessWidget {
-  const _WhereWhen({required this.request, required this.locale});
+  const _WhereWhen({
+    required this.request,
+    required this.locale,
+    this.onReschedule,
+  });
 
   final PackageRequest request;
   final String locale;
 
+  /// "Pick a new time"; null when the request cannot be moved.
+  final VoidCallback? onReschedule;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final language = Localizations.localeOf(context).languageCode;
     final lines = <String>[];
     String label;
     if (request.isCollect) {
@@ -603,14 +664,19 @@ class _WhereWhen extends StatelessWidget {
       final day = request.handoffDay;
       if (day.isNotEmpty) {
         final window = request.handoffWindow;
+        final range = requestPickupRange(window);
+        final windowText = range == null
+            ? requestWindowLabel(l10n, window)
+            : requestWindowShortText(range.from, range.to, language) ?? window;
         lines.add(
           window.isEmpty
               ? requestDayText(day, locale)
-              : l10n.prqDayWindow(
-                  requestDayText(day, locale),
-                  requestWindowLabel(l10n, window),
-                ),
+              : l10n.prqDayWindow(requestDayText(day, locale), windowText),
         );
+      }
+      final fee = pickup?.feeCents;
+      if (fee != null && fee > 0) {
+        lines.add(l10n.spkPickupFeeLine(formatRequestCents(fee)));
       }
       if (pickup != null && pickup.note.isNotEmpty) lines.add(pickup.note);
     } else {
@@ -622,8 +688,15 @@ class _WhereWhen extends StatelessWidget {
         );
       }
       if (request.plannedDate.isNotEmpty) {
+        final window = request.plannedWindow;
+        final windowText = window == null
+            ? null
+            : requestWindowShortText(window.from, window.to, language);
+        final dayText = requestDayText(request.plannedDate, locale);
         lines.add(
-          l10n.prqPlannedFor(requestDayText(request.plannedDate, locale)),
+          windowText == null
+              ? l10n.prqPlannedFor(dayText)
+              : l10n.spkPlannedForWindow(dayText, windowText),
         );
         final day = requestDayFromKey(request.plannedDate);
         final hours = day == null ? null : location?.hours?.forDate(day);
@@ -655,6 +728,205 @@ class _WhereWhen extends StatelessWidget {
                 fontSize: 14,
                 height: 1.35,
                 color: AppColors.ink,
+              ),
+            ),
+          if (request.shipMode.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              l10n.spkShippingLabel,
+              style: const TextStyle(fontSize: 12, color: AppColors.muted),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              request.isAirRequest ? l10n.spkModeByAir : l10n.spkModeBySea,
+              key: const Key('request-ship-mode'),
+              style: const TextStyle(fontSize: 14, color: AppColors.ink),
+            ),
+          ],
+          if (onReschedule != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                key: const Key('request-reschedule'),
+                onPressed: onReschedule,
+                icon: const Icon(Icons.event_repeat_outlined, size: 18),
+                label: Text(l10n.spkReschedule),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// "Pick a new time": a day the shop is open and one of its 2-hour windows.
+/// Pops the [RequestRescheduled] answer, or the [RequestFailure] of a refusal
+/// that ends the request's chance of moving.
+class _RescheduleSheet extends StatefulWidget {
+  const _RescheduleSheet({
+    required this.request,
+    required this.service,
+    required this.token,
+    required this.clock,
+  });
+
+  final PackageRequest request;
+  final PackageRequestService service;
+  final String token;
+  final DateTime Function() clock;
+
+  @override
+  State<_RescheduleSheet> createState() => _RescheduleSheetState();
+}
+
+class _RescheduleSheetState extends State<_RescheduleSheet> {
+  String _day = '';
+  String _window = '';
+  String _error = '';
+  bool _busy = false;
+
+  DateTime get _today => requestToday(widget.clock());
+
+  List<RequestTimeWindow> _windowsOn(DateTime day) {
+    final hours = widget.request.location?.hours?.forDate(day);
+    if (hours == null) return const [];
+    final wall = easternWall(widget.clock());
+    final isToday = requestDayKey(day) == requestDayKey(_today);
+    return dropOffWindows(
+      hours,
+      afterMinutes: isToday ? wall.hour * 60 + wall.minute : null,
+    );
+  }
+
+  Future<void> _chooseDay() async {
+    final today = _today;
+    final picked = await pickCalendarDay(
+      context,
+      initial: requestDayFromKey(_day) ?? today,
+      first: today,
+      last: requestLastPlannedDay(today),
+      selectable: (day) => _windowsOn(day).isNotEmpty,
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _day = requestDayKey(picked);
+      _window = '';
+      _error = '';
+    });
+  }
+
+  Future<void> _save() async {
+    final l10n = AppLocalizations.of(context)!;
+    final parts = _window.split('-');
+    if (_busy) return;
+    if (_day.isEmpty || parts.length != 2) {
+      setState(
+        () => _error = _day.isEmpty
+            ? requestReasonText(l10n, 'planned_date_invalid') ?? ''
+            : l10n.spkErrWindow,
+      );
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = '';
+    });
+    try {
+      final result = await widget.service
+          .reschedule(
+            token: widget.token,
+            plannedDate: _day,
+            window: RequestTimeWindow(from: parts[0], to: parts[1]),
+          )
+          .timeout(const Duration(seconds: 25));
+      if (!mounted) return;
+      Navigator.of(context).pop(result);
+    } on RequestFailure catch (failure) {
+      if (!mounted) return;
+      AppHaptics.refuse();
+      // A request that closed or changed kind cannot be moved: leave.
+      if (failure.refusal.has('request_closed') ||
+          failure.refusal.has('handoff_invalid')) {
+        Navigator.of(context).pop(failure);
+        return;
+      }
+      setState(() => _error = requestRefusalText(l10n, failure.refusal));
+    } catch (_) {
+      if (!mounted) return;
+      AppHaptics.refuse();
+      setState(() => _error = l10n.prqErrGeneric);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final locale = dateLocaleOf(context);
+    final language = Localizations.localeOf(context).languageCode;
+    final day = requestDayFromKey(_day);
+    final windows = day == null ? null : _windowsOn(day);
+    return LotSheetShell(
+      title: l10n.spkReschedule,
+      subtitle: l10n.spkWindowNote,
+      footer: RequestPrimaryButton(
+        key: const Key('request-reschedule-save'),
+        label: l10n.spkRescheduleSave,
+        busyLabel: l10n.prqSending,
+        busy: _busy,
+        onTap: _save,
+      ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          LotPickerField(
+            key: const Key('request-reschedule-day'),
+            label: l10n.prqPlannedDay,
+            value: _day.isEmpty ? null : requestDayText(_day, locale),
+            placeholder: l10n.prqPickDay,
+            onTap: _chooseDay,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            l10n.spkWindowTitle,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppColors.muted,
+            ),
+          ),
+          const SizedBox(height: 6),
+          if (windows == null)
+            Text(
+              l10n.spkPickDayFirst,
+              style: const TextStyle(fontSize: 13, color: AppColors.muted),
+            )
+          else if (windows.isEmpty)
+            Text(
+              l10n.spkNoWindowsLeft,
+              style: const TextStyle(fontSize: 13, color: AppColors.errorRed),
+            )
+          else
+            RequestWindowChips(
+              keyPrefix: 'request-reschedule-window',
+              windows: windows,
+              selected: _window,
+              languageCode: language,
+              onChanged: (w) => setState(() {
+                _window = requestWindowKey(w);
+                _error = '';
+              }),
+            ),
+          if (_error.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.md),
+              child: Text(
+                _error,
+                key: const Key('request-reschedule-error'),
+                style: const TextStyle(fontSize: 13, color: AppColors.errorRed),
               ),
             ),
         ],

@@ -36,10 +36,10 @@ const customerServiceCatalog = <CustomerService>[
     route: '/open-barrels',
   ),
   CustomerService(
-    id: 'freight',
-    label: 'Freight',
-    icon: Icons.inventory_2_outlined,
-    route: '/send-freight',
+    id: 'package',
+    label: 'Send a package',
+    icon: Icons.markunread_mailbox_outlined,
+    route: '/package-request',
   ),
   CustomerService(
     id: 'park',

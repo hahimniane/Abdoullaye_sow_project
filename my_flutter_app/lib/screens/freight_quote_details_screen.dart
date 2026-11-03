@@ -4,7 +4,7 @@ import '../l10n/app_localizations.dart';
 import '../models/freight_quote.dart';
 import '../services/freight_quote_service.dart';
 import '../utils/freight_localization.dart';
-import 'send_freight_screen.dart';
+import 'package_request_form_screen.dart';
 
 /// The prices businesses have sent back for one parcel, as they arrive.
 ///
@@ -217,15 +217,13 @@ class _FreightQuoteDetailsScreenState extends State<FreightQuoteDetailsScreen> {
         final chosen = quotes.where((q) => q.isSelected).toList();
         if (chosen.isNotEmpty || request?.isSelected == true) {
           final winner = chosen.isNotEmpty ? chosen.first : null;
-          final businessId =
-              winner?.businessId ?? request?.selectedBusinessId ?? '';
           final amountCents =
               winner?.amountCents ?? request?.selectedAmountCents ?? 0;
-          // Accepting a price used to end here, on a notice with nowhere to
-          // go: the price was agreed and the customer had no way to book it
-          // or pay. Selecting fixes the price; the parcel still needs a
-          // receiver, an address and a pickup choice, so this carries them
-          // into the booking that collects those.
+          // Freight folded into Send a package (docs/PACKAGE_PRICE_LIST.md
+          // decision 12) and the server refuses new freight bookings
+          // ("freight_moved"), so a price accepted earlier cannot be booked
+          // here any more. The accepted price stays readable; the way
+          // forward is Send a package, not a booking that would be refused.
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -240,7 +238,7 @@ class _FreightQuoteDetailsScreenState extends State<FreightQuoteDetailsScreen> {
               ),
               const SizedBox(height: 14),
               Text(
-                l10n.freightQuoteChosenNext,
+                l10n.freightQuoteMovedNext,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.hintColor,
                 ),
@@ -249,22 +247,11 @@ class _FreightQuoteDetailsScreenState extends State<FreightQuoteDetailsScreen> {
               FilledButton.icon(
                 onPressed: () => Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (_) => SendFreightScreen(
-                      quoteRequestId: widget.requestId,
-                      agreedBusinessId: businessId,
-                      agreedAmountCents: amountCents,
-                      agreedBusinessName: winner?.businessName ??
-                          request?.selectedBusinessName ??
-                          '',
-                      agreedMode: request?.mode ?? '',
-                      agreedCoversLoss: winner?.coversLoss ??
-                          request?.selectedCoversLoss ??
-                          false,
-                    ),
+                    builder: (_) => const PackageRequestFormScreen(),
                   ),
                 ),
                 icon: const Icon(Icons.arrow_forward),
-                label: Text(l10n.continueToBooking),
+                label: Text(l10n.prqSendPackage),
               ),
             ],
           );

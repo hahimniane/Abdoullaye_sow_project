@@ -74,7 +74,9 @@ void main() {
     // Shared barrels is paused platform-wide (default off); it should not
     // render until the remote flag is turned back on.
     expect(find.text('Barils partagés'), findsNothing);
-    expect(find.text('Fret'), findsOneWidget);
+    // Freight folded into Send a package: no Freight tile, one Send a package.
+    expect(find.text('Fret'), findsNothing);
+    expect(find.text('Envoyer un colis'), findsOneWidget);
     expect(find.text('Transporter une voiture'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

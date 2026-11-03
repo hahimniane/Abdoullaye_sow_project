@@ -8,6 +8,7 @@ import '../services/container_packages.dart';
 import '../services/line_pieces.dart' show LineGroupSummary, piecesLineFields;
 import '../services/lot_customers.dart';
 import '../services/lot_ledger.dart' show LotKnownCar, LotStaff;
+import '../services/package_coming_today.dart';
 import '../services/package_request_feed.dart';
 import '../services/package_request_service.dart';
 import '../services/package_requests.dart';
@@ -122,10 +123,14 @@ class WaitingPackagesScreen extends StatefulWidget {
     this.labelOpener = openContainerLabels,
     this.requestFeed,
     this.proofSettings = const PackageProofSettings(),
+    this.clock,
   });
 
   final String businessId;
   final ContainerFeed feed;
+
+  /// "Now" for "Coming today"; the real clock when null (tests set it).
+  final DateTime Function()? clock;
 
   /// The business's proof switches (docs/AIR_PACKAGES.md §1.3): the register
   /// form requires a photo when `photosRequired` is on.
@@ -194,6 +199,12 @@ class _WaitingPackagesScreenState extends State<WaitingPackagesScreen> {
           r,
     ];
   }
+
+  /// Today's bring-ins matching the search, soonest window first.
+  List<PackageRequest> _comingToday() => comingTodayRequests(
+    _expected(_filter.text),
+    widget.clock?.call() ?? DateTime.now(),
+  );
 
   /// "Enter the customer's code" (docs/AIR_PACKAGES.md §4.10): the request
   /// the code names opens in the same Received sheet an Expected card does.
@@ -658,7 +669,11 @@ class _WaitingPackagesScreenState extends State<WaitingPackagesScreen> {
                     searching: searching || _missingOnly,
                     onTap: _busy.isNotEmpty ? null : _actions,
                     onPrint: _busy.isNotEmpty ? null : _printLabel,
-                    expected: _expected(_filter.text),
+                    expected: expectedExcept(
+                      _expected(_filter.text),
+                      _comingToday(),
+                    ),
+                    comingToday: _comingToday(),
                     busyRequestId: _busy,
                     onReceived: _receive,
                     onCancelRequest: _cancelRequest,
@@ -700,6 +715,7 @@ class WaitingPackagesList extends StatelessWidget {
     required this.onPrint,
     this.groups = const {},
     this.expected = const [],
+    this.comingToday = const [],
     this.onReceived,
     this.onCancelRequest,
     this.onOpenRequest,
@@ -725,6 +741,11 @@ class WaitingPackagesList extends StatelessWidget {
   /// Confirmed package requests not yet handed over: "Expected", above the
   /// packages already in the shop.
   final List<PackageRequest> expected;
+
+  /// Confirmed bring-ins planned for today (docs/PACKAGE_PRICE_LIST.md §1
+  /// decision 6), soonest window first: "Coming today" above Expected. A
+  /// request is in one list or the other, never both.
+  final List<PackageRequest> comingToday;
   final ValueChanged<PackageRequest>? onReceived;
   final ValueChanged<PackageRequest>? onCancelRequest;
   final ValueChanged<PackageRequest>? onOpenRequest;
@@ -742,7 +763,9 @@ class WaitingPackagesList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    if (expected.isNotEmpty) return _withExpected(context, l10n);
+    if (expected.isNotEmpty || comingToday.isNotEmpty) {
+      return _withExpected(context, l10n);
+    }
     if (lines.isEmpty) {
       return ListView(
         padding: const EdgeInsets.fromLTRB(
@@ -799,6 +822,16 @@ class WaitingPackagesList extends StatelessWidget {
         ),
       ),
     );
+    Widget card(PackageRequest request) => ExpectedRequestCard(
+      key: ValueKey('expected:${request.id}'),
+      request: request,
+      busy: busyRequestId == request.id,
+      onReceived: onReceived == null ? null : () => onReceived!(request),
+      onCancel: onCancelRequest == null || request.isCardOrder
+          ? null
+          : () => onCancelRequest!(request),
+      onOpen: onOpenRequest == null ? null : () => onOpenRequest!(request),
+    );
     return ListView(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.lg,
@@ -808,23 +841,20 @@ class WaitingPackagesList extends StatelessWidget {
       ),
       children: [
         ?_lookupRow,
-        header(
-          l10n.prqExpectedTitle(expected.length),
-          const Key('waiting-expected-title'),
-        ),
-        for (final request in expected)
-          ExpectedRequestCard(
-            key: ValueKey('expected:${request.id}'),
-            request: request,
-            busy: busyRequestId == request.id,
-            onReceived: onReceived == null ? null : () => onReceived!(request),
-            onCancel: onCancelRequest == null || request.isCardOrder
-                ? null
-                : () => onCancelRequest!(request),
-            onOpen: onOpenRequest == null
-                ? null
-                : () => onOpenRequest!(request),
+        if (comingToday.isNotEmpty) ...[
+          header(
+            l10n.pplComingTodayTitle(comingToday.length),
+            const Key('waiting-coming-today-title'),
           ),
+          for (final request in comingToday) card(request),
+        ],
+        if (expected.isNotEmpty) ...[
+          header(
+            l10n.prqExpectedTitle(expected.length),
+            const Key('waiting-expected-title'),
+          ),
+          for (final request in expected) card(request),
+        ],
         header(
           l10n.prqInShopTitle(lines.length),
           const Key('waiting-in-shop-title'),
@@ -885,9 +915,12 @@ class ExpectedRequestCard extends StatelessWidget {
                 ))
         : (request.plannedDate.isEmpty
               ? l10n.prqNoDay
-              : l10n.prqPlannedDayShort(
-                  requestDayText(request.plannedDate, locale),
-                ));
+              : [
+                  l10n.prqPlannedDayShort(
+                    requestDayText(request.plannedDate, locale),
+                  ),
+                  ?requestWindowText(request, l10n.localeName),
+                ].join(' · '));
     final where = request.isCollect
         ? request.pickup?.address ?? ''
         : request.location?.title ?? '';

@@ -77,6 +77,239 @@ class AppLocalizationsEn extends AppLocalizations {
   String get english => 'English';
 
   @override
+  String get pplTitle => 'Price list';
+
+  @override
+  String get pplSubtitle => 'What you charge per country, by sea and by air';
+
+  @override
+  String get pplNeedsCheckBanner =>
+      'Laawol set up your prices - please check them.';
+
+  @override
+  String get pplLooksRight => 'Looks right';
+
+  @override
+  String get pplCheckedDone => 'Thanks. Your price list is marked as checked.';
+
+  @override
+  String get pplSave => 'Save prices';
+
+  @override
+  String get pplSaving => 'Saving...';
+
+  @override
+  String get pplSaved => 'Prices saved.';
+
+  @override
+  String get pplUnsaved => 'Unsaved changes';
+
+  @override
+  String get pplLoadFailed => 'Could not load the price list.';
+
+  @override
+  String get pplNoCountries => 'No destination countries yet';
+
+  @override
+  String get pplNoCountriesHint =>
+      'Add the countries you ship to in Services and coverage first.';
+
+  @override
+  String get pplReadOnly => 'Only the owner or an admin can change prices.';
+
+  @override
+  String get pplItemsTitle => 'Items';
+
+  @override
+  String get pplItemsHint =>
+      'A fixed price for something you carry, like a phone or a TV.';
+
+  @override
+  String get pplNoItems => 'No items yet';
+
+  @override
+  String get pplAddItem => 'Add an item';
+
+  @override
+  String get pplNewItem => 'New item';
+
+  @override
+  String get pplEditItem => 'Edit item';
+
+  @override
+  String get pplItemName => 'Name';
+
+  @override
+  String get pplItemNameHint => 'Phone, TV 43 in, Laptop';
+
+  @override
+  String get pplItemCategory => 'Category';
+
+  @override
+  String get pplItemPrice => 'Price';
+
+  @override
+  String get pplItemCovers => 'Covers up to (lb), optional';
+
+  @override
+  String get pplItemCoversHint =>
+      'Each item up to this weight costs the fixed price. Extra pounds are charged at the category\'s price per pound.';
+
+  @override
+  String pplItemCoversUpTo(Object lb) {
+    return 'up to $lb lb each';
+  }
+
+  @override
+  String get pplItemDone => 'Done';
+
+  @override
+  String get pplRemoveItem => 'Remove';
+
+  @override
+  String get pplPerLbTitle => 'Price per pound';
+
+  @override
+  String get pplPerLbHint =>
+      'Charged by weight at the counter, once the package is weighed. Leave blank for \"ask me\": your staff quote it.';
+
+  @override
+  String get pplDepartureTitle => 'Departure days';
+
+  @override
+  String get pplDepartureHint =>
+      'The days a shipment leaves. Customers see the next one.';
+
+  @override
+  String get pplEveryWeek => 'Every week';
+
+  @override
+  String pplEveryNWeeks(int n) {
+    return 'Every $n weeks';
+  }
+
+  @override
+  String get pplRepeat => 'Repeat';
+
+  @override
+  String get pplAnchorDate => 'A day it leaves';
+
+  @override
+  String get pplAnchorHint => 'Needed to count the weeks.';
+
+  @override
+  String get pplPickDate => 'Pick a date';
+
+  @override
+  String get pplClearDate => 'Clear';
+
+  @override
+  String get pplHistoryTitle => 'History';
+
+  @override
+  String get pplHistoryNone => 'No changes yet';
+
+  @override
+  String pplHistorySaved(Object who) {
+    return 'Saved by $who';
+  }
+
+  @override
+  String pplHistoryChecked(Object who) {
+    return 'Marked as checked by $who';
+  }
+
+  @override
+  String pplHistoryLaawol(Object name) {
+    return '$name (Laawol)';
+  }
+
+  @override
+  String pplHistoryCountries(Object countries) {
+    return 'Changed: $countries';
+  }
+
+  @override
+  String get pplErrPriceListInvalid => 'The price list could not be read.';
+
+  @override
+  String get pplErrCountryUnknown => 'That country is not one you ship to.';
+
+  @override
+  String get pplErrModeInvalid => 'Choose Sea or Air.';
+
+  @override
+  String get pplErrTooManyRoutes => 'Too many countries in one price list.';
+
+  @override
+  String get pplErrTooManyItems => 'A route can hold at most 60 items.';
+
+  @override
+  String get pplErrLabelRequired => 'Give every item a name.';
+
+  @override
+  String get pplErrLabelTooLong => 'An item name is too long (60 characters).';
+
+  @override
+  String get pplErrLabelDuplicate => 'Two items have the same name.';
+
+  @override
+  String get pplErrCategoryInvalid => 'Choose a category for every item.';
+
+  @override
+  String get pplErrPriceInvalid => 'Enter a price between \$0.01 and \$10,000.';
+
+  @override
+  String get pplErrIncludedInvalid =>
+      'The weight a price covers must be 0 to 500 lb.';
+
+  @override
+  String get pplErrPerLbInvalid =>
+      'Enter a price per pound between \$0.01 and \$1,000.';
+
+  @override
+  String get pplErrDepartureInvalid =>
+      'Pick the days it leaves, and how many weeks apart.';
+
+  @override
+  String get pplErrItemUnknown => 'That item is no longer on the price list.';
+
+  @override
+  String get pplErrQuantityInvalid => 'Enter how many (1 to 50).';
+
+  @override
+  String get pplErrWeightInvalid =>
+      'Enter the weight in pounds (0.1 to 2,000).';
+
+  @override
+  String pplComingTodayTitle(int count) {
+    return 'Coming today · $count';
+  }
+
+  @override
+  String get pplWeightLb => 'Weight (lb)';
+
+  @override
+  String get pplWeightHelper =>
+      'Fills the price from your price list. You can change it.';
+
+  @override
+  String get pplPlannedDeparture => 'Planned departure (optional)';
+
+  @override
+  String get pplPlannedDepartureHint =>
+      'Customers comparing businesses see this as the next departure.';
+
+  @override
+  String pplPlannedDepartureOn(Object date) {
+    return 'Departs $date';
+  }
+
+  @override
+  String get pplErrPlannedDeparture =>
+      'Pick a real day for the planned departure.';
+
+  @override
   String get french => 'French';
 
   @override
@@ -7721,6 +7954,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get freightQuoteChosenNext =>
       'Add the receiver, the address and how the parcel reaches the business. You pay at the end, at the price you accepted.';
+
+  @override
+  String get freightQuoteMovedNext =>
+      'Freight is now part of Send a package, so this price can no longer be booked here. Send your parcel as a package instead: you see each business\'s prices, pick one, and pay at drop-off or pickup.';
 
   @override
   String get orderTypePriceRequests => 'Price requests';
@@ -18391,6 +18628,327 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get parkingTeamTag => 'Team';
+
+  @override
+  String get spkStepMode => 'How should it travel?';
+
+  @override
+  String get spkModeSea => 'Sea';
+
+  @override
+  String get spkModeAir => 'Air';
+
+  @override
+  String get spkModeBySea => 'By sea';
+
+  @override
+  String get spkModeByAir => 'By air';
+
+  @override
+  String get spkShippingLabel => 'Shipping';
+
+  @override
+  String spkItemsIntro(String country) {
+    return 'Add what you are sending. Prices come from the businesses that ship to $country.';
+  }
+
+  @override
+  String spkUpToLbEach(String lb) {
+    return 'Up to $lb lb each';
+  }
+
+  @override
+  String get spkOneMore => 'One more';
+
+  @override
+  String get spkOneLess => 'One less';
+
+  @override
+  String get spkByWeightTitle => 'Priced by weight';
+
+  @override
+  String get spkByWeightHint =>
+      'Choose what it is, then a size or type the pounds.';
+
+  @override
+  String spkAddWeight(String category) {
+    return 'Add $category';
+  }
+
+  @override
+  String get spkWeightLabel => 'Weight (lb)';
+
+  @override
+  String spkSizeButton(String name, String lb) {
+    return '$name · $lb lb';
+  }
+
+  @override
+  String get spkRemoveWeight => 'Remove';
+
+  @override
+  String get spkBarrelRowNote =>
+      'Each barrel has the price of the business you choose.';
+
+  @override
+  String get spkElseTitle => 'Something else';
+
+  @override
+  String get spkElseNote =>
+      'Describe it and add photos if you like. The business sends you a price.';
+
+  @override
+  String get spkElseAdd => 'Add something else';
+
+  @override
+  String get spkPickUp => 'Pick it up';
+
+  @override
+  String get spkPickUpNote => 'The business comes and gets it';
+
+  @override
+  String get spkPickupAddressTitle => 'Where should they pick it up?';
+
+  @override
+  String get spkSeePrices => 'See prices';
+
+  @override
+  String get spkSeePricesBusy => 'Checking…';
+
+  @override
+  String get spkStepCompare => 'Compare prices';
+
+  @override
+  String get spkStepYourPrice => 'Your price';
+
+  @override
+  String get spkSortBest => 'Best match';
+
+  @override
+  String get spkSortPrice => 'Lowest price';
+
+  @override
+  String get spkSortRating => 'Highest rated';
+
+  @override
+  String get spkSortSoonest => 'Soonest departure';
+
+  @override
+  String get spkFilterPicksUp => 'Picks up';
+
+  @override
+  String get spkFilterPaysBack => 'Pays back if lost';
+
+  @override
+  String get spkFilterRated => 'Has a rating';
+
+  @override
+  String spkRowAbout(String total) {
+    return 'about $total';
+  }
+
+  @override
+  String spkRowPartial(String total, String count) {
+    return '$total + $count to quote';
+  }
+
+  @override
+  String get spkRowToQuote => 'Sends you a price';
+
+  @override
+  String spkRating(String rating, String count) {
+    return '★ $rating ($count)';
+  }
+
+  @override
+  String get spkNoRating => 'No ratings yet';
+
+  @override
+  String spkNextFlight(String date) {
+    return 'Next flight: $date';
+  }
+
+  @override
+  String spkNextContainer(String date) {
+    return 'Next container: $date';
+  }
+
+  @override
+  String spkAroundDate(String date) {
+    return 'around $date';
+  }
+
+  @override
+  String get spkDepartureUnconfirmed => 'Departure date not confirmed';
+
+  @override
+  String get spkNoPickupThere => 'Doesn’t pick up there';
+
+  @override
+  String get spkNoDropOff => 'Doesn’t take drop-offs';
+
+  @override
+  String spkPickupIncluded(String fee) {
+    return 'Includes $fee pickup';
+  }
+
+  @override
+  String get spkPickupFeePending => 'Pickup fee set by the business';
+
+  @override
+  String spkNoBusinessSea(String country) {
+    return 'No business takes packages to $country by sea yet.';
+  }
+
+  @override
+  String spkNoBusinessAir(String country) {
+    return 'No business takes packages to $country by air yet.';
+  }
+
+  @override
+  String get spkNoRowsFiltered => 'No business matches these filters.';
+
+  @override
+  String get spkAddItemsHint => 'Add what you are sending to see prices.';
+
+  @override
+  String get spkChooseHint => 'Tap a business to choose it.';
+
+  @override
+  String get spkStepWhenBring => 'When will you bring it?';
+
+  @override
+  String get spkStepWhenPickup => 'When should they pick it up?';
+
+  @override
+  String get spkWindowTitle => 'Time window';
+
+  @override
+  String get spkWindowNote =>
+      'Choose a 2-hour window. You can change it later.';
+
+  @override
+  String get spkPickDayFirst => 'Choose a day to see the times.';
+
+  @override
+  String get spkNoWindowsLeft => 'No time left that day. Pick another day.';
+
+  @override
+  String spkSendReadyBring(String total) {
+    return 'Total $total. You pay at drop-off, no card now.';
+  }
+
+  @override
+  String spkSendReadyPickup(String total) {
+    return 'Total $total. You pay when it is picked up, no card now.';
+  }
+
+  @override
+  String get spkSendWeighed =>
+      'Items priced by weight are weighed at the counter: the weight sets the final price.';
+
+  @override
+  String spkSendQuote(String business) {
+    return '$business will send you the price of the items to quote on WhatsApp.';
+  }
+
+  @override
+  String spkSentAllSetBring(String when, String where) {
+    return 'You’re all set — bring it $when to $where.';
+  }
+
+  @override
+  String spkSentAllSetPickup(String when, String where) {
+    return 'You’re all set — they’ll pick it up $when at $where.';
+  }
+
+  @override
+  String spkSentTotal(String total) {
+    return 'Total: $total';
+  }
+
+  @override
+  String spkSentToQuote(String business) {
+    return '$business will send the price for the items to quote.';
+  }
+
+  @override
+  String get spkStateConfirmedForm =>
+      'You agreed to this price when you sent it';
+
+  @override
+  String spkPlannedForWindow(String day, String window) {
+    return 'Planned for $day, $window';
+  }
+
+  @override
+  String spkPickupFeeLine(String fee) {
+    return 'Pickup fee $fee';
+  }
+
+  @override
+  String spkNoteItem(String quantity, String unit) {
+    return '$quantity × $unit';
+  }
+
+  @override
+  String spkNoteExtra(String rate) {
+    return 'Extra pounds are $rate per lb, weighed at drop-off.';
+  }
+
+  @override
+  String get spkNoteExtraStaff =>
+      'Extra weight is priced when the business weighs it.';
+
+  @override
+  String spkNotePerLb(String lb, String rate) {
+    return '$lb lb at $rate per lb, weighed when received.';
+  }
+
+  @override
+  String get spkReschedule => 'Pick a new time';
+
+  @override
+  String get spkRescheduleSave => 'Save new time';
+
+  @override
+  String get spkRescheduleDone => 'Your new time is saved.';
+
+  @override
+  String get spkErrShipMode => 'Choose Sea or Air.';
+
+  @override
+  String get spkErrAirUnavailable => 'This business does not ship by air.';
+
+  @override
+  String get spkErrWindow => 'Choose a time window.';
+
+  @override
+  String get spkErrQuantity => 'Choose how many (1 to 50).';
+
+  @override
+  String get spkErrWeight => 'Enter the weight in pounds (0.1 to 2,000).';
+
+  @override
+  String get spkErrCategory => 'Choose what kind of goods this is.';
+
+  @override
+  String get spkErrPickupOutOfArea =>
+      'This business does not pick up in your area.';
+
+  @override
+  String get spkErrPickupOutOfRange =>
+      'Your address is too far for this business to pick up.';
+
+  @override
+  String get spkErrPickupOrigin =>
+      'This business cannot price pickups yet. Choose another business or bring it in.';
+
+  @override
+  String get spkErrChooseBusiness => 'Choose a business.';
+
+  @override
+  String get spkErrPhotoUpload => 'A photo could not be uploaded. Try again.';
 
   @override
   String get parkingFormerTeamTag => 'Former team member';

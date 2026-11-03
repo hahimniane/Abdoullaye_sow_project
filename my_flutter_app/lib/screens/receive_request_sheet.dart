@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../l10n/app_localizations.dart';
 import '../services/invoice_ledger.dart' show invoicePaymentMethods;
 import '../services/lot_ledger.dart' show LotStaff;
+import '../services/business_price_list.dart' show priceSnapshotWeighs;
 import '../services/container_manifest.dart'
     show containerShipModeAir, containerShipModeSea;
 import '../services/package_proof.dart'
@@ -95,6 +96,12 @@ class _ReceiveRequestSheetState extends State<ReceiveRequestSheet> {
     pickupFeeCents: widget.request.isCollect
         ? receivePrefillPickupFeeCents(widget.request)
         : null,
+    // A piece the business's list prices by weight asks for its weighed
+    // pounds and fills its price from the list (docs/PACKAGE_PRICE_LIST.md).
+    priceSnapshots: {
+      for (final piece in widget.request.pieces)
+        if (priceSnapshotWeighs(piece.price)) piece.id: piece.price!,
+    },
   )..addListener(_edited);
 
   /// The total as the payment fields read it ("money received" needs a
@@ -122,9 +129,16 @@ class _ReceiveRequestSheetState extends State<ReceiveRequestSheet> {
 
   bool get _card => widget.request.isCardOrder;
 
-  /// "Ships by": sea unless Air is picked.
-  String _shipMode = containerShipModeSea;
-  bool get _air => widget.shipsByAir && _shipMode == containerShipModeAir;
+  /// "Ships by": what the customer chose (docs/PACKAGE_PRICE_LIST.md §3),
+  /// sea unless Air was.
+  late String _shipMode = widget.request.isAirRequest
+      ? containerShipModeAir
+      : containerShipModeSea;
+
+  /// Offered to a business that ships by air, and to any request that asked
+  /// for Air (its business priced an air route).
+  bool get _offersShipMode => widget.shipsByAir || widget.request.isAirRequest;
+  bool get _air => _offersShipMode && _shipMode == containerShipModeAir;
 
   @override
   void initState() {
@@ -255,7 +269,7 @@ class _ReceiveRequestSheetState extends State<ReceiveRequestSheet> {
           payment: takesMoney ? intakePaymentRecord(_payment) : null,
           // A sea package sends no proof fields: the sea form as it was.
           proof: _air ? proof.fields.toPayload() : const {},
-          shipMode: widget.shipsByAir ? _shipMode : null,
+          shipMode: _offersShipMode ? _shipMode : null,
         ),
       );
       if (!mounted) return;
@@ -316,7 +330,7 @@ class _ReceiveRequestSheetState extends State<ReceiveRequestSheet> {
           RequestPickupNote(request: request),
           const SizedBox(height: AppSpacing.md),
           // "Ships by: Sea · Air" (docs/AIR_PACKAGES.md §7).
-          if (widget.shipsByAir) ...[
+          if (_offersShipMode) ...[
             ShipModeChoice(
               value: _shipMode,
               enabled: !_busy,

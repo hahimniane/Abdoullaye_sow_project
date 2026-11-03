@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:my_flutter_app/services/business_price_list.dart';
 import 'package:my_flutter_app/services/package_request_service.dart';
 import 'package:my_flutter_app/services/package_requests.dart';
 
@@ -106,6 +107,42 @@ class FakePackageRequests implements PackageRequestService {
   @override
   Future<void> declineEstimate({required String token, String reason = ''}) =>
       _record('declinePackageEstimate', {'token': token, 'reason': reason});
+
+  /// What a pickup-fee check answers, by business id (absent: not
+  /// answered for).
+  Map<String, PickupQuote> pickupQuoteAnswers = const {};
+
+  @override
+  Future<Map<String, PickupQuote>> pickupQuotes({
+    required String address,
+    required List<String> businessIds,
+  }) async {
+    await _record('listPackageRequestOptions', {
+      'action': 'pickup_quote',
+      'address': address,
+      'businessIds': businessIds,
+    });
+    return pickupQuoteAnswers;
+  }
+
+  /// What a new time answers; null answers the day and window it was sent.
+  RequestRescheduled? rescheduled;
+
+  @override
+  Future<RequestRescheduled> reschedule({
+    required String token,
+    required String plannedDate,
+    required RequestTimeWindow window,
+  }) async {
+    await _record('confirmPackageEstimate', {
+      'token': token,
+      'action': 'reschedule',
+      'plannedDate': plannedDate,
+      'plannedWindow': {'from': window.from, 'to': window.to},
+    });
+    return rescheduled ??
+        RequestRescheduled(plannedDate: plannedDate, window: window);
+  }
 
   @override
   Stream<List<PackageRequest>> watchMine(String uid) async* {
@@ -245,5 +282,39 @@ class FakePackageRequests implements PackageRequestService {
   Future<RequestLinkQr> linkQr(String businessId) async {
     await _record('getPackageRequestLinkQr', {'businessId': businessId});
     return qr;
+  }
+
+  /// The business's price list as the watcher first answers it.
+  PackagePriceList priceList = PackagePriceList.empty;
+
+  /// Pushes a newer price list to the open screen.
+  final priceLists = StreamController<PackagePriceList>.broadcast();
+
+  @override
+  Stream<PackagePriceList> watchPriceList(String businessId) async* {
+    yield priceList;
+    yield* priceLists.stream;
+  }
+
+  @override
+  Future<PackagePriceList> savePriceList({
+    required String businessId,
+    required Map<String, Object?> routes,
+  }) async {
+    await _record('setPackageRequestSettings', {
+      'action': 'price_list',
+      'businessId': businessId,
+      'routes': routes,
+    });
+    return priceList;
+  }
+
+  @override
+  Future<PackagePriceList> markPriceListChecked(String businessId) async {
+    await _record('setPackageRequestSettings', {
+      'action': 'price_list_checked',
+      'businessId': businessId,
+    });
+    return priceList;
   }
 }

@@ -9,6 +9,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 
 import 'business_activity_queries.dart'
     show packageRequestsMineSpec, packageRequestsOpenSpec;
+import 'business_price_list.dart';
 import 'package_requests.dart';
 import 'waiting_package_service.dart'
     show ContainerCallableCaller, callContainerCallable;
@@ -81,6 +82,22 @@ abstract interface class PackageRequestService {
   });
   Future<void> declineEstimate({required String token, String reason = ''});
 
+  /// What each business charges to pick up from [address]
+  /// (`listPackageRequestOptions {action: "pickup_quote"}`), by business id;
+  /// a business the server did not answer for is absent.
+  Future<Map<String, PickupQuote>> pickupQuotes({
+    required String address,
+    required List<String> businessIds,
+  });
+
+  /// "Pick a new time": a new drop-off day and 2-hour window for an open
+  /// bring-in request (`confirmPackageEstimate {action: "reschedule"}`).
+  Future<RequestRescheduled> reschedule({
+    required String token,
+    required String plannedDate,
+    required RequestTimeWindow window,
+  });
+
   /// The signed-in customer's own requests, newest first.
   Stream<List<PackageRequest>> watchMine(String uid);
 
@@ -138,6 +155,21 @@ abstract interface class PackageRequestService {
   Stream<PackageRequestSettings> watchSettings(String businessId);
   Future<RequestSettingsSaved> saveSettings(Map<String, Object?> payload);
   Future<RequestLinkQr> linkQr(String businessId);
+
+  /// The business's price list (docs/PACKAGE_PRICE_LIST.md); a business
+  /// that never saved one reads as [PackagePriceList.empty].
+  Stream<PackagePriceList> watchPriceList(String businessId);
+
+  /// Saves the whole `routes` map (owner / admin); answers what the server
+  /// stored, or throws a [RequestFailure] whose reasons are the
+  /// `PRICE_LIST_MESSAGES` codes.
+  Future<PackagePriceList> savePriceList({
+    required String businessId,
+    required Map<String, Object?> routes,
+  });
+
+  /// "Looks right": the business checked a list Laawol set up.
+  Future<PackagePriceList> markPriceListChecked(String businessId);
 }
 
 /// The real thing: the callables of §8.5 / §8.6 (through
@@ -252,6 +284,32 @@ class FirebasePackageRequestService implements PackageRequestService {
       if (reason.trim().isNotEmpty) 'reason': reason.trim(),
     });
   }
+
+  @override
+  Future<Map<String, PickupQuote>> pickupQuotes({
+    required String address,
+    required List<String> businessIds,
+  }) async => PickupQuote.fromResponse(
+    await _call('listPackageRequestOptions', {
+      'action': 'pickup_quote',
+      'address': address,
+      'businessIds': businessIds,
+    }),
+  );
+
+  @override
+  Future<RequestRescheduled> reschedule({
+    required String token,
+    required String plannedDate,
+    required RequestTimeWindow window,
+  }) async => RequestRescheduled.fromResponse(
+    await _call('confirmPackageEstimate', {
+      'token': token,
+      'action': 'reschedule',
+      'plannedDate': plannedDate,
+      'plannedWindow': {'from': window.from, 'to': window.to},
+    }),
+  );
 
   List<PackageRequest> _rows(QuerySnapshot<Map<String, dynamic>> snap) =>
       sortRequestsNewestFirst([
@@ -451,6 +509,39 @@ class FirebasePackageRequestService implements PackageRequestService {
       url: (m['url'] ?? '').toString(),
       png: decodePngDataUrl((m['pngDataUrl'] ?? '').toString()),
     );
+  }
+
+  @override
+  Stream<PackagePriceList> watchPriceList(String businessId) => _db
+      .collection('packagePriceLists')
+      .doc(businessId)
+      .snapshots()
+      .map(
+        (doc) => doc.exists
+            ? PackagePriceList.fromMap(doc.data())
+            : PackagePriceList.empty,
+      );
+
+  @override
+  Future<PackagePriceList> savePriceList({
+    required String businessId,
+    required Map<String, Object?> routes,
+  }) async {
+    final data = await _call('setPackageRequestSettings', {
+      'action': 'price_list',
+      'businessId': businessId,
+      'routes': routes,
+    });
+    return PackagePriceList.fromMap(data is Map ? data['priceList'] : null);
+  }
+
+  @override
+  Future<PackagePriceList> markPriceListChecked(String businessId) async {
+    final data = await _call('setPackageRequestSettings', {
+      'action': 'price_list_checked',
+      'businessId': businessId,
+    });
+    return PackagePriceList.fromMap(data is Map ? data['priceList'] : null);
   }
 }
 

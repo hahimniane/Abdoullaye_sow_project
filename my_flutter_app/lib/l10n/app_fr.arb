@@ -22,6 +22,118 @@
   "emailSentMessage": "Nous avons envoyé un lien de réinitialisation à votre adresse email. Veuillez vérifier votre boîte de réception et suivre les instructions.",
   "language": "Langue",
   "english": "Anglais",
+  "pplTitle": "Liste de prix",
+  "pplSubtitle": "Ce que vous facturez par pays, par mer et par avion",
+  "pplNeedsCheckBanner": "Laawol a préparé vos prix - veuillez les vérifier.",
+  "pplLooksRight": "C'est bon",
+  "pplCheckedDone": "Merci. Votre liste de prix est marquée comme vérifiée.",
+  "pplSave": "Enregistrer les prix",
+  "pplSaving": "Enregistrement...",
+  "pplSaved": "Prix enregistrés.",
+  "pplUnsaved": "Modifications non enregistrées",
+  "pplLoadFailed": "Impossible de charger la liste de prix.",
+  "pplNoCountries": "Aucun pays de destination pour l'instant",
+  "pplNoCountriesHint": "Ajoutez d'abord les pays où vous expédiez dans Services et couverture.",
+  "pplReadOnly": "Seul le propriétaire ou un administrateur peut modifier les prix.",
+  "pplItemsTitle": "Articles",
+  "pplItemsHint": "Un prix fixe pour un article que vous transportez, comme un téléphone ou une télé.",
+  "pplNoItems": "Aucun article pour l'instant",
+  "pplAddItem": "Ajouter un article",
+  "pplNewItem": "Nouvel article",
+  "pplEditItem": "Modifier l'article",
+  "pplItemName": "Nom",
+  "pplItemNameHint": "Téléphone, TV 43 po, Ordinateur",
+  "pplItemCategory": "Catégorie",
+  "pplItemPrice": "Prix",
+  "pplItemCovers": "Couvre jusqu'à (lb), facultatif",
+  "pplItemCoversHint": "Chaque article jusqu'à ce poids coûte le prix fixe. Les livres en plus sont facturées au prix par livre de la catégorie.",
+  "pplItemCoversUpTo": "jusqu'à {lb} lb chacun",
+  "@pplItemCoversUpTo": {
+    "placeholders": {
+      "lb": {}
+    }
+  },
+  "pplItemDone": "Terminé",
+  "pplRemoveItem": "Retirer",
+  "pplPerLbTitle": "Prix par livre",
+  "pplPerLbHint": "Facturé au poids au comptoir, une fois le colis pesé. Laissez vide pour « sur demande » : votre équipe donne le prix.",
+  "pplDepartureTitle": "Jours de départ",
+  "pplDepartureHint": "Les jours où un envoi part. Les clients voient le prochain.",
+  "pplEveryWeek": "Chaque semaine",
+  "pplEveryNWeeks": "Toutes les {n} semaines",
+  "@pplEveryNWeeks": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "pplRepeat": "Répéter",
+  "pplAnchorDate": "Un jour de départ",
+  "pplAnchorHint": "Nécessaire pour compter les semaines.",
+  "pplPickDate": "Choisir une date",
+  "pplClearDate": "Effacer",
+  "pplHistoryTitle": "Historique",
+  "pplHistoryNone": "Aucun changement pour l'instant",
+  "pplHistorySaved": "Enregistré par {who}",
+  "@pplHistorySaved": {
+    "placeholders": {
+      "who": {}
+    }
+  },
+  "pplHistoryChecked": "Marqué comme vérifié par {who}",
+  "@pplHistoryChecked": {
+    "placeholders": {
+      "who": {}
+    }
+  },
+  "pplHistoryLaawol": "{name} (Laawol)",
+  "@pplHistoryLaawol": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "pplHistoryCountries": "Modifié : {countries}",
+  "@pplHistoryCountries": {
+    "placeholders": {
+      "countries": {}
+    }
+  },
+  "pplErrPriceListInvalid": "La liste de prix n'a pas pu être lue.",
+  "pplErrCountryUnknown": "Vous n'expédiez pas vers ce pays.",
+  "pplErrModeInvalid": "Choisissez Mer ou Avion.",
+  "pplErrTooManyRoutes": "Trop de pays dans une même liste de prix.",
+  "pplErrTooManyItems": "Une route peut contenir 60 articles au plus.",
+  "pplErrLabelRequired": "Donnez un nom à chaque article.",
+  "pplErrLabelTooLong": "Un nom d'article est trop long (60 caractères).",
+  "pplErrLabelDuplicate": "Deux articles ont le même nom.",
+  "pplErrCategoryInvalid": "Choisissez une catégorie pour chaque article.",
+  "pplErrPriceInvalid": "Entrez un prix entre 0,01 $ et 10 000 $.",
+  "pplErrIncludedInvalid": "Le poids couvert par un prix doit être de 0 à 500 lb.",
+  "pplErrPerLbInvalid": "Entrez un prix par livre entre 0,01 $ et 1 000 $.",
+  "pplErrDepartureInvalid": "Choisissez les jours de départ et l'écart en semaines.",
+  "pplErrItemUnknown": "Cet article n'est plus dans la liste de prix.",
+  "pplErrQuantityInvalid": "Entrez la quantité (1 à 50).",
+  "pplErrWeightInvalid": "Entrez le poids en livres (0,1 à 2 000).",
+  "pplComingTodayTitle": "Attendus aujourd'hui · {count}",
+  "@pplComingTodayTitle": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pplWeightLb": "Poids (lb)",
+  "pplWeightHelper": "Remplit le prix selon votre liste de prix. Vous pouvez le modifier.",
+  "pplPlannedDeparture": "Départ prévu (facultatif)",
+  "pplPlannedDepartureHint": "Les clients qui comparent les entreprises le voient comme prochain départ.",
+  "pplPlannedDepartureOn": "Départ le {date}",
+  "@pplPlannedDepartureOn": {
+    "placeholders": {
+      "date": {}
+    }
+  },
+  "pplErrPlannedDeparture": "Choisissez un vrai jour pour le départ prévu.",
   "french": "Français",
   "welcomeToBusinessServices": "Bienvenue aux Services d'Entreprise",
   "chooseServiceToStart": "Choisissez un service pour commencer",
@@ -3328,6 +3440,10 @@
   },
   "continueToBooking": "Continuer vers la réservation",
   "freightQuoteChosenNext": "Ajoutez le destinataire, l'adresse et la façon dont le colis parvient à l'entreprise. Vous payez à la fin, au prix que vous avez accepté.",
+  "freightQuoteMovedNext": "Le fret fait maintenant partie de « Envoyer un colis » : ce prix ne peut plus être réservé ici. Envoyez plutôt votre colis comme un colis : vous voyez les prix de chaque entreprise, vous en choisissez une et vous payez au dépôt ou à la collecte.",
+  "@freightQuoteMovedNext": {
+    "description": "Shown under an accepted freight price: freight folded into Send a package, so it can no longer be booked from here."
+  },
   "orderTypePriceRequests": "Demandes de prix",
   "guestTrackingStageAwaitingPayment": "En attente de paiement",
   "openingSecurePayment": "Ouverture du paiement sécurisé...",
@@ -10318,6 +10434,503 @@
   "parkingTeamTag": "Équipe",
   "@parkingTeamTag": {
     "description": "Small label next to the owner of a car that is a team member's own."
+  },
+  "spkStepMode": "Comment doit-il voyager ?",
+  "@spkStepMode": {
+    "description": "Step title above the Sea | Air choice on the send-a-package form."
+  },
+  "spkModeSea": "Mer",
+  "@spkModeSea": {
+    "description": "Choice: ship by sea."
+  },
+  "spkModeAir": "Avion",
+  "@spkModeAir": {
+    "description": "Choice: ship by air."
+  },
+  "spkModeBySea": "Par mer",
+  "@spkModeBySea": {
+    "description": "Where a request's shipping mode is shown: by sea."
+  },
+  "spkModeByAir": "Par avion",
+  "@spkModeByAir": {
+    "description": "Where a request's shipping mode is shown: by air."
+  },
+  "spkShippingLabel": "Expédition",
+  "@spkShippingLabel": {
+    "description": "Small label above a request's shipping mode (by sea / by air)."
+  },
+  "spkItemsIntro": "Ajoutez ce que vous envoyez. Les prix viennent des entreprises qui expédient vers {country}.",
+  "@spkItemsIntro": {
+    "description": "Under the items title on the send-a-package form.",
+    "placeholders": {
+      "country": {
+        "type": "String"
+      }
+    }
+  },
+  "spkUpToLbEach": "Jusqu’à {lb} lb chacun",
+  "@spkUpToLbEach": {
+    "description": "Note on an item whose price covers a weight each.",
+    "placeholders": {
+      "lb": {
+        "type": "String"
+      }
+    }
+  },
+  "spkOneMore": "Un de plus",
+  "@spkOneMore": {
+    "description": "Tooltip of the plus button on a quantity stepper."
+  },
+  "spkOneLess": "Un de moins",
+  "@spkOneLess": {
+    "description": "Tooltip of the minus button on a quantity stepper."
+  },
+  "spkByWeightTitle": "Prix au poids",
+  "@spkByWeightTitle": {
+    "description": "Heading of the categories priced per pound."
+  },
+  "spkByWeightHint": "Choisissez ce que c’est, puis une taille ou saisissez les livres.",
+  "@spkByWeightHint": {
+    "description": "Hint under the priced-by-weight heading."
+  },
+  "spkAddWeight": "Ajouter : {category}",
+  "@spkAddWeight": {
+    "description": "Button that adds a piece of a category priced per pound.",
+    "placeholders": {
+      "category": {
+        "type": "String"
+      }
+    }
+  },
+  "spkWeightLabel": "Poids (lb)",
+  "@spkWeightLabel": {
+    "description": "Label of the pounds field of a piece priced by weight."
+  },
+  "spkSizeButton": "{name} · {lb} lb",
+  "@spkSizeButton": {
+    "description": "A size button that fills the pounds: Small bag · 10 lb.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "lb": {
+        "type": "String"
+      }
+    }
+  },
+  "spkRemoveWeight": "Retirer",
+  "@spkRemoveWeight": {
+    "description": "Tooltip of the button that removes a weight piece."
+  },
+  "spkBarrelRowNote": "Chaque baril a le prix de l’entreprise que vous choisirez.",
+  "@spkBarrelRowNote": {
+    "description": "Note under Barrel in the items list."
+  },
+  "spkElseTitle": "Autre chose",
+  "@spkElseTitle": {
+    "description": "Heading of the free-text pieces in the items list."
+  },
+  "spkElseNote": "Décrivez-le et ajoutez des photos si vous voulez. L’entreprise vous envoie un prix.",
+  "@spkElseNote": {
+    "description": "Note under Something else."
+  },
+  "spkElseAdd": "Ajouter autre chose",
+  "@spkElseAdd": {
+    "description": "Button that adds a free-text piece."
+  },
+  "spkPickUp": "Venez le chercher",
+  "@spkPickUp": {
+    "description": "Choice: the business comes and gets the package."
+  },
+  "spkPickUpNote": "L’entreprise vient le récupérer",
+  "@spkPickUpNote": {
+    "description": "Note under the Pick it up choice."
+  },
+  "spkPickupAddressTitle": "Où doivent-ils le récupérer ?",
+  "@spkPickupAddressTitle": {
+    "description": "Heading above the pickup address."
+  },
+  "spkSeePrices": "Voir les prix",
+  "@spkSeePrices": {
+    "description": "Button that checks each business's pickup fee for the address."
+  },
+  "spkSeePricesBusy": "Vérification…",
+  "@spkSeePricesBusy": {
+    "description": "The See prices button while the fees are being checked."
+  },
+  "spkStepCompare": "Comparer les prix",
+  "@spkStepCompare": {
+    "description": "Heading of the list of businesses with their totals."
+  },
+  "spkStepYourPrice": "Votre prix",
+  "@spkStepYourPrice": {
+    "description": "Heading of the single business's total when the form came from its own link."
+  },
+  "spkSortBest": "Meilleur choix",
+  "@spkSortBest": {
+    "description": "Sort: best match."
+  },
+  "spkSortPrice": "Prix le plus bas",
+  "@spkSortPrice": {
+    "description": "Sort: lowest price."
+  },
+  "spkSortRating": "Mieux notées",
+  "@spkSortRating": {
+    "description": "Sort: highest rated."
+  },
+  "spkSortSoonest": "Départ le plus proche",
+  "@spkSortSoonest": {
+    "description": "Sort: soonest departure."
+  },
+  "spkFilterPicksUp": "Ramasse chez vous",
+  "@spkFilterPicksUp": {
+    "description": "Filter and badge: the business picks up."
+  },
+  "spkFilterPaysBack": "Rembourse en cas de perte",
+  "@spkFilterPaysBack": {
+    "description": "Filter and badge: the business pays back a lost package."
+  },
+  "spkFilterRated": "A une note",
+  "@spkFilterRated": {
+    "description": "Filter: the business has reviews."
+  },
+  "spkRowAbout": "environ {total}",
+  "@spkRowAbout": {
+    "description": "A total that depends on the counter scale.",
+    "placeholders": {
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "spkRowPartial": "{total} + {count} à chiffrer",
+  "@spkRowPartial": {
+    "description": "A total with items the business still has to price.",
+    "placeholders": {
+      "total": {
+        "type": "String"
+      },
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "spkRowToQuote": "Vous envoie un prix",
+  "@spkRowToQuote": {
+    "description": "A business that prices nothing of the basket yet."
+  },
+  "spkRating": "★ {rating} ({count})",
+  "@spkRating": {
+    "description": "A business's rating and its number of reviews.",
+    "placeholders": {
+      "rating": {
+        "type": "String"
+      },
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "spkNoRating": "Pas encore de note",
+  "@spkNoRating": {
+    "description": "A business with no reviews."
+  },
+  "spkNextFlight": "Prochain vol : {date}",
+  "@spkNextFlight": {
+    "description": "The next departure by air.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "spkNextContainer": "Prochain conteneur : {date}",
+  "@spkNextContainer": {
+    "description": "The next departure by sea.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "spkAroundDate": "vers le {date}",
+  "@spkAroundDate": {
+    "description": "An approximate date, after Next flight: / Next container:.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "spkDepartureUnconfirmed": "Date de départ non confirmée",
+  "@spkDepartureUnconfirmed": {
+    "description": "A planned departure that passed while the shipment is still loading."
+  },
+  "spkNoPickupThere": "Ne ramasse pas à cette adresse",
+  "@spkNoPickupThere": {
+    "description": "A business that does not reach the pickup address."
+  },
+  "spkNoDropOff": "N’accepte pas les dépôts",
+  "@spkNoDropOff": {
+    "description": "A business with no drop-off location."
+  },
+  "spkPickupIncluded": "Dont {fee} de ramassage",
+  "@spkPickupIncluded": {
+    "description": "Under a total: the pickup fee it contains.",
+    "placeholders": {
+      "fee": {
+        "type": "String"
+      }
+    }
+  },
+  "spkPickupFeePending": "Frais de ramassage fixés par l’entreprise",
+  "@spkPickupFeePending": {
+    "description": "A business that picks up but sets the fee itself."
+  },
+  "spkNoBusinessSea": "Aucune entreprise ne prend de colis vers {country} par mer pour l’instant.",
+  "@spkNoBusinessSea": {
+    "description": "Empty comparison by sea.",
+    "placeholders": {
+      "country": {
+        "type": "String"
+      }
+    }
+  },
+  "spkNoBusinessAir": "Aucune entreprise ne prend de colis vers {country} par avion pour l’instant.",
+  "@spkNoBusinessAir": {
+    "description": "Empty comparison by air.",
+    "placeholders": {
+      "country": {
+        "type": "String"
+      }
+    }
+  },
+  "spkNoRowsFiltered": "Aucune entreprise ne correspond à ces filtres.",
+  "@spkNoRowsFiltered": {
+    "description": "Empty comparison after filtering."
+  },
+  "spkAddItemsHint": "Ajoutez ce que vous envoyez pour voir les prix.",
+  "@spkAddItemsHint": {
+    "description": "Shown instead of the comparison while the basket is empty."
+  },
+  "spkChooseHint": "Touchez une entreprise pour la choisir.",
+  "@spkChooseHint": {
+    "description": "Under the comparison list."
+  },
+  "spkStepWhenBring": "Quand l’apporterez-vous ?",
+  "@spkStepWhenBring": {
+    "description": "Heading of the drop-off day and time window."
+  },
+  "spkStepWhenPickup": "Quand doivent-ils venir ?",
+  "@spkStepWhenPickup": {
+    "description": "Heading of the pickup day and time window."
+  },
+  "spkWindowTitle": "Plage horaire",
+  "@spkWindowTitle": {
+    "description": "Label above the 2-hour windows."
+  },
+  "spkWindowNote": "Choisissez une plage de 2 heures. Vous pourrez la changer ensuite.",
+  "@spkWindowNote": {
+    "description": "Under the time windows."
+  },
+  "spkPickDayFirst": "Choisissez un jour pour voir les horaires.",
+  "@spkPickDayFirst": {
+    "description": "Shown instead of the windows until a day is chosen."
+  },
+  "spkNoWindowsLeft": "Plus d’horaire ce jour-là. Choisissez un autre jour.",
+  "@spkNoWindowsLeft": {
+    "description": "Shown when every window of the chosen day has started."
+  },
+  "spkSendReadyBring": "Total {total}. Vous payez au dépôt, pas de carte maintenant.",
+  "@spkSendReadyBring": {
+    "description": "Under Send when every piece is priced and the package is brought in.",
+    "placeholders": {
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "spkSendReadyPickup": "Total {total}. Vous payez au ramassage, pas de carte maintenant.",
+  "@spkSendReadyPickup": {
+    "description": "Under Send when every piece is priced and the package is picked up.",
+    "placeholders": {
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "spkSendWeighed": "Les articles au poids sont pesés au comptoir : le poids fixe le prix final.",
+  "@spkSendWeighed": {
+    "description": "Under Send and on the sent page when something is priced by weight."
+  },
+  "spkSendQuote": "{business} vous enverra sur WhatsApp le prix des articles à chiffrer.",
+  "@spkSendQuote": {
+    "description": "Under Send when some pieces have no price yet.",
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "spkSentAllSetBring": "Tout est prêt — apportez-le {when} à {where}.",
+  "@spkSentAllSetBring": {
+    "description": "Headline of the sent page for a priced drop-off.",
+    "placeholders": {
+      "when": {
+        "type": "String"
+      },
+      "where": {
+        "type": "String"
+      }
+    }
+  },
+  "spkSentAllSetPickup": "Tout est prêt — ils viendront le chercher {when} à {where}.",
+  "@spkSentAllSetPickup": {
+    "description": "Headline of the sent page for a priced pickup.",
+    "placeholders": {
+      "when": {
+        "type": "String"
+      },
+      "where": {
+        "type": "String"
+      }
+    }
+  },
+  "spkSentTotal": "Total : {total}",
+  "@spkSentTotal": {
+    "description": "Total line of the sent page.",
+    "placeholders": {
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "spkSentToQuote": "{business} enverra le prix des articles à chiffrer.",
+  "@spkSentToQuote": {
+    "description": "Sent page when some pieces have no price yet.",
+    "placeholders": {
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "spkStateConfirmedForm": "Vous avez accepté ce prix à l’envoi",
+  "@spkStateConfirmedForm": {
+    "description": "State card of a request confirmed in the form."
+  },
+  "spkPlannedForWindow": "Prévu le {day}, {window}",
+  "@spkPlannedForWindow": {
+    "description": "Where and when: the drop-off day with its time window.",
+    "placeholders": {
+      "day": {
+        "type": "String"
+      },
+      "window": {
+        "type": "String"
+      }
+    }
+  },
+  "spkPickupFeeLine": "Frais de ramassage {fee}",
+  "@spkPickupFeeLine": {
+    "description": "Where and when: the pickup fee quoted when it was sent.",
+    "placeholders": {
+      "fee": {
+        "type": "String"
+      }
+    }
+  },
+  "spkNoteItem": "{quantity} × {unit}",
+  "@spkNoteItem": {
+    "description": "A piece's price explained: quantity times the price of one.",
+    "placeholders": {
+      "quantity": {
+        "type": "String"
+      },
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
+  "spkNoteExtra": "Les livres en plus coûtent {rate} la livre, pesées au dépôt.",
+  "@spkNoteExtra": {
+    "description": "A piece's price explained: the rate for weight above what the price covers.",
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "spkNoteExtraStaff": "Le poids en plus est chiffré quand l’entreprise le pèse.",
+  "@spkNoteExtraStaff": {
+    "description": "A piece's price explained: no rate for extra weight."
+  },
+  "spkNotePerLb": "{lb} lb à {rate} la livre, pesées à la réception.",
+  "@spkNotePerLb": {
+    "description": "A piece's price explained: priced by the pound.",
+    "placeholders": {
+      "lb": {
+        "type": "String"
+      },
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "spkReschedule": "Choisir un nouvel horaire",
+  "@spkReschedule": {
+    "description": "Button on a request page: change the drop-off day and window."
+  },
+  "spkRescheduleSave": "Enregistrer l’horaire",
+  "@spkRescheduleSave": {
+    "description": "Confirm button of the new-time sheet."
+  },
+  "spkRescheduleDone": "Votre nouvel horaire est enregistré.",
+  "@spkRescheduleDone": {
+    "description": "Shown after a new drop-off time is saved."
+  },
+  "spkErrShipMode": "Choisissez Mer ou Avion.",
+  "@spkErrShipMode": {
+    "description": "Refusal: ship_mode_invalid, or no mode chosen."
+  },
+  "spkErrAirUnavailable": "Cette entreprise n’expédie pas par avion.",
+  "@spkErrAirUnavailable": {
+    "description": "Refusal: air_unavailable."
+  },
+  "spkErrWindow": "Choisissez une plage horaire.",
+  "@spkErrWindow": {
+    "description": "Refusal: window_invalid, or none chosen."
+  },
+  "spkErrQuantity": "Choisissez combien (de 1 à 50).",
+  "@spkErrQuantity": {
+    "description": "Refusal: quantity_invalid."
+  },
+  "spkErrWeight": "Saisissez le poids en livres (de 0,1 à 2 000).",
+  "@spkErrWeight": {
+    "description": "Refusal: weight_invalid."
+  },
+  "spkErrCategory": "Choisissez le type de marchandise.",
+  "@spkErrCategory": {
+    "description": "Refusal: category_invalid."
+  },
+  "spkErrPickupOutOfArea": "Cette entreprise ne ramasse pas dans votre secteur.",
+  "@spkErrPickupOutOfArea": {
+    "description": "Refusal: pickup_out_of_area."
+  },
+  "spkErrPickupOutOfRange": "Votre adresse est trop loin pour que cette entreprise vienne la chercher.",
+  "@spkErrPickupOutOfRange": {
+    "description": "Refusal: pickup_out_of_range."
+  },
+  "spkErrPickupOrigin": "Cette entreprise ne peut pas encore chiffrer les ramassages. Choisissez-en une autre ou apportez le colis.",
+  "@spkErrPickupOrigin": {
+    "description": "Refusal: pickup_origin_missing."
+  },
+  "spkErrChooseBusiness": "Choisissez une entreprise.",
+  "@spkErrChooseBusiness": {
+    "description": "Shown when Send is pressed with no business chosen."
+  },
+  "spkErrPhotoUpload": "Une photo n’a pas pu être envoyée. Réessayez.",
+  "@spkErrPhotoUpload": {
+    "description": "Shown when Send could not upload a photo."
   },
   "parkingFormerTeamTag": "Ancien membre de l'équipe",
   "@parkingFormerTeamTag": {

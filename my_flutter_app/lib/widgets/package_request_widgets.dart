@@ -8,6 +8,9 @@ import 'package:flutter/material.dart';
 import '../l10n/app_localizations.dart';
 import '../screens/containers_screen.dart' show containerErrorText;
 import '../services/container_manifest.dart' show containerRefusalCodes;
+import '../services/business_price_list.dart' show priceLbText;
+import '../services/package_coming_today.dart' show requestWindowTextOf;
+import '../services/package_price_list.dart' show priceCategoryOf;
 import '../services/package_request_service.dart';
 import '../services/package_requests.dart';
 import '../theme/app_colors.dart';
@@ -40,6 +43,71 @@ String requestPieceTitle(AppLocalizations l10n, RequestPiece piece) =>
     ? piece.description
     : requestPieceKindLabel(l10n, piece.kind);
 
+/// A piece priced from a list as the customer's language writes it: "2 ×
+/// Phone", "Vêtements et tissus · 50 lb"; any other piece as
+/// [requestPieceTitle].
+String requestPieceListTitle(
+  AppLocalizations l10n,
+  RequestPiece piece,
+  String languageCode,
+) {
+  final price = piece.price;
+  if (price == null) return requestPieceTitle(l10n, piece);
+  switch (price['source']) {
+    case 'item':
+      final quantity = price['quantity'];
+      final label = (price['label'] ?? '').toString();
+      return quantity is num && quantity > 1
+          ? '${quantity.toInt()} × $label'
+          : label;
+    case 'per_lb':
+      final category = priceCategoryOf((price['categoryId'] ?? '').toString());
+      final lb = price['weightLb'];
+      return category == null || lb is! num
+          ? requestPieceTitle(l10n, piece)
+          : '${category.label(languageCode)} · ${priceLbText(lb)} lb';
+    case 'barrel':
+      return l10n.prqKindBarrel;
+  }
+  return requestPieceTitle(l10n, piece);
+}
+
+/// How a piece was priced, in a line: "Up to 2 lb each · Extra pounds are
+/// $4.50 per lb, weighed at drop-off." Null when there is nothing to add.
+String? requestPieceNote(AppLocalizations l10n, RequestPiece piece) {
+  final price = piece.price;
+  if (price == null) return null;
+  String cents(Object? value) =>
+      value is num ? formatRequestCents(value.toInt()) : '';
+  switch (price['source']) {
+    case 'item':
+      final parts = <String>[];
+      final quantity = price['quantity'];
+      if (quantity is num && quantity > 1) {
+        parts.add(
+          l10n.spkNoteItem('${quantity.toInt()}', cents(price['unitCents'])),
+        );
+      }
+      final included = price['includedLb'];
+      if (included is num && included > 0) {
+        parts.add(l10n.spkUpToLbEach(priceLbText(included)));
+        final extra = price['excessPerLbCents'];
+        parts.add(
+          extra is num && extra > 0
+              ? l10n.spkNoteExtra(cents(extra))
+              : l10n.spkNoteExtraStaff,
+        );
+      }
+      return parts.isEmpty ? null : parts.join(' · ');
+    case 'per_lb':
+      final lb = price['weightLb'];
+      return lb is num
+          ? l10n.spkNotePerLb(priceLbText(lb), cents(price['perLbCents']))
+          : null;
+  }
+  return null;
+}
+
 /// "2 barrels · 1 box" - only the kinds there are.
 String requestPiecesSummary(AppLocalizations l10n, PieceCounts counts) {
   final parts = [
@@ -55,7 +123,8 @@ String requestWindowLabel(AppLocalizations l10n, String window) =>
       requestWindowMorning => l10n.prqWindowMorning,
       requestWindowAfternoon => l10n.prqWindowAfternoon,
       requestWindowEvening => l10n.prqWindowEvening,
-      _ => window,
+      // A 2-hour window ("14:00-16:00", docs/PACKAGE_PRICE_LIST.md §3).
+      _ => requestWindowTextOf(window, l10n.localeName) ?? window,
     };
 
 /// "Sat, Oct 24" / "sam. 24 oct." for a day key; the key itself when it is
@@ -152,7 +221,18 @@ String? requestReasonText(AppLocalizations l10n, String reason) =>
       'too_many_photos' => l10n.prqErrTooManyPhotos,
       'photo_invalid' => l10n.prqErrPhotoInvalid,
       'photo_too_large' => l10n.prqPhotoTooLarge,
-      'language_invalid' || 'idempotency_key_invalid' => l10n.prqErrGeneric,
+      'ship_mode_invalid' => l10n.spkErrShipMode,
+      'air_unavailable' => l10n.spkErrAirUnavailable,
+      'window_invalid' => l10n.spkErrWindow,
+      'quantity_invalid' => l10n.spkErrQuantity,
+      'weight_invalid' => l10n.spkErrWeight,
+      'category_invalid' => l10n.spkErrCategory,
+      'pickup_out_of_area' => l10n.spkErrPickupOutOfArea,
+      'pickup_out_of_range' => l10n.spkErrPickupOutOfRange,
+      'pickup_origin_missing' => l10n.spkErrPickupOrigin,
+      'language_invalid' ||
+      'idempotency_key_invalid' ||
+      'channel_invalid' => l10n.prqErrGeneric,
       'rate_limited' => l10n.prqErrRateLimited,
       'request_not_found' => l10n.prqErrNotFound,
       'estimate_changed' => l10n.prqChangedBanner,
@@ -404,9 +484,17 @@ class RequestCard extends StatelessWidget {
 /// The pieces with their prices and the total: the estimate as the customer
 /// reads it, and the summary staff see.
 class RequestPriceTable extends StatelessWidget {
-  const RequestPriceTable({super.key, required this.request});
+  const RequestPriceTable({
+    super.key,
+    required this.request,
+    this.explain = false,
+  });
 
   final PackageRequest request;
+
+  /// Under each piece priced from a price list, how it was priced ("up to
+  /// 2 lb each", "weighed when received") - the customer's page.
+  final bool explain;
 
   @override
   Widget build(BuildContext context) {
@@ -417,34 +505,57 @@ class RequestPriceTable extends StatelessWidget {
       fontWeight: strong ? FontWeight.w700 : FontWeight.w500,
       color: AppColors.ink,
     );
-    Widget row(String label, String value, {bool strong = false, Key? key}) =>
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Text(label, style: style(strong: strong)),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Text(
-                value,
-                key: key,
-                style: style(strong: strong),
-              ),
-            ],
+    Widget row(
+      String label,
+      String value, {
+      bool strong = false,
+      Key? key,
+      String? note,
+    }) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: style(strong: strong)),
+                if (note != null && note.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      note,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        height: 1.3,
+                        color: AppColors.muted,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
-        );
+          const SizedBox(width: AppSpacing.sm),
+          Text(value, key: key, style: style(strong: strong)),
+        ],
+      ),
+    );
+    final language = Localizations.localeOf(context).languageCode;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (final piece in request.pieces)
           row(
-            requestPieceTitle(l10n, piece),
-            switch (estimate?.pieceCents[piece.id]) {
+            explain
+                ? requestPieceListTitle(l10n, piece, language)
+                : requestPieceTitle(l10n, piece),
+            switch (estimate?.pieceCents[piece.id] ??
+                (explain ? piece.estimateCents : null)) {
               final int cents => formatRequestCents(cents),
               null => l10n.prqPriceToCome,
             },
+            note: explain ? requestPieceNote(l10n, piece) : null,
           ),
         if (estimate?.pickupFeeCents case final int fee when fee > 0)
           row(l10n.prqPickupFee, formatRequestCents(fee)),

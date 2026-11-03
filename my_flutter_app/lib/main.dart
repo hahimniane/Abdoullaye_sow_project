@@ -37,7 +37,6 @@ import 'services/business_service_overview.dart';
 import 'screens/park_car_screen.dart';
 import 'screens/send_barrel_screen.dart';
 import 'screens/open_barrels_screen.dart';
-import 'screens/send_freight_screen.dart';
 import 'screens/customize_navbar_screen.dart';
 import 'screens/transport_car_screen.dart';
 import 'screens/request_transport_screen.dart';
@@ -270,7 +269,8 @@ class MyApp extends StatelessWidget {
               '/park': (context) => const ParkCarScreen(),
               '/barrel': (context) => const SendBarrelScreen(),
               '/open-barrels': (context) => const OpenBarrelsScreen(),
-              '/send-freight': (context) => const SendFreightScreen(),
+              // Freight folded into Send a package: an old deep link opens the form.
+              '/send-freight': (context) => const PackageRequestFormScreen(),
               '/customize-navbar': (context) => const CustomizeNavbarScreen(),
               '/transport': (context) => const TransportCarScreen(),
               '/request-transport': (context) => const RequestTransportScreen(),

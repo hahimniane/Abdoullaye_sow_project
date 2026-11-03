@@ -372,13 +372,8 @@ class ShippingTab extends StatelessWidget {
             AppColors.saffron,
             '/open-barrels',
           ),
-        _HubItem(
-          l10n.orderTypeFreight,
-          l10n.hubFreightSubtitle,
-          Icons.inventory_2_outlined,
-          AppColors.sage,
-          '/send-freight',
-        ),
+        // Freight folded into Send a package (docs/PACKAGE_PRICE_LIST.md
+        // decision 12): no Freight tile here any more.
         _HubItem(
           l10n.hubTransportCar,
           l10n.hubShipCarHome,

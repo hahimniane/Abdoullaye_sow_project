@@ -37,11 +37,14 @@ void main() {
 
   test('the booking opens on the mode the price was quoted for', () {
     expect(source, contains('modes.contains(widget.agreedMode)'));
+    // The quote page no longer opens this booking: freight folded into Send a
+    // package and the server refuses new freight bookings (freight_moved).
+    // The booking screen keeps reading the agreed mode for freight that was
+    // already agreed, and the model keeps carrying it.
     final details = File(
       'lib/screens/freight_quote_details_screen.dart',
     ).readAsStringSync();
-    expect(details, contains('agreedMode: request?.mode'));
-    expect(details, contains('agreedCoversLoss:'));
+    expect(details.contains('SendFreightScreen('), isFalse);
     final model = File('lib/models/freight_quote.dart').readAsStringSync();
     expect(model, contains("mode: (data['mode'] ?? '') as String"));
     expect(model, contains("selectedCoversLoss: data['selectedCoversLoss']"));

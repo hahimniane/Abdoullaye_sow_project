@@ -19,7 +19,6 @@ import 'settings_screen.dart';
 // Customer service screens, reachable in-tab so the bottom navbar stays put.
 import 'send_barrel_screen.dart';
 import 'open_barrels_screen.dart';
-import 'send_freight_screen.dart';
 import 'sell_cars_screen.dart';
 import 'park_car_screen.dart';
 import 'request_transport_screen.dart';
@@ -72,16 +71,9 @@ List<ShipOption> shipSheetOptions(
         subtitle: l10n.hubSharedBarrelsSubtitle,
         tint: AppColors.cobaltMid,
       ),
-    // The tints have to be told apart at a glance, and the palette's
-    // teals read as one colour at 13% alpha — so the four options step
-    // teal, bright teal, amber, slate rather than four shades of green.
-    ShipOption(
-      route: '/send-freight',
-      icon: Icons.inventory_2_outlined,
-      title: l10n.orderTypeFreight,
-      subtitle: l10n.hubFreightSubtitle,
-      tint: AppColors.saffron,
-    ),
+    // The tints have to be told apart at a glance, so the options step
+    // through distinct colours rather than shades of one. (Freight is not
+    // here: it is part of Send a package, below.)
     ShipOption(
       route: '/request-transport',
       icon: Icons.car_rental_outlined,
@@ -113,8 +105,10 @@ Route<dynamic>? _customerTabRoute(RouteSettings settings) {
     case '/open-barrels':
       page = const OpenBarrelsScreen();
       break;
+    // Freight folded into Send a package: an old link or shortcut to
+    // /send-freight opens the Send a package form instead.
     case '/send-freight':
-      page = const SendFreightScreen();
+      page = const PackageRequestFormScreen();
       break;
     case '/sell':
       page = const SellCarsScreen(showBackButton: true);

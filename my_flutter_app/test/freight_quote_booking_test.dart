@@ -3,20 +3,25 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  group('accepting a price leads somewhere', () {
+  group('an accepted freight price leads somewhere that works', () {
     final screen =
         File('lib/screens/freight_quote_details_screen.dart').readAsStringSync();
 
-    test('the accepted state offers the booking that follows it', () {
-      // Accepting used to end on a notice with no action at all: the price
-      // was agreed and the customer had no way to book it or pay.
-      expect(screen, contains('l10n.continueToBooking'));
-      expect(screen, contains('SendFreightScreen('));
-      expect(screen, contains('quoteRequestId: widget.requestId'));
+    test('it offers Send a package, not a booking the server refuses', () {
+      // Freight folded into Send a package and the server answers new
+      // freight bookings with "freight_moved" (docs/PACKAGE_PRICE_LIST.md
+      // decision 12). A "Continue to booking" button would end in an error,
+      // so the accepted state points at the form that does work.
+      expect(screen, contains('PackageRequestFormScreen()'));
+      expect(screen, contains('l10n.prqSendPackage'));
+      expect(screen, contains('l10n.freightQuoteMovedNext'));
+      expect(screen.contains('SendFreightScreen('), isFalse);
+      expect(screen.contains('l10n.continueToBooking'), isFalse);
     });
 
-    test('the booking goes to the business whose price was accepted', () {
-      expect(screen, contains('agreedBusinessId'));
+    test('the accepted price is still shown', () {
+      // Old records stay readable: nothing about the agreed price is hidden.
+      expect(screen, contains('l10n.freightQuoteChosenMessage'));
     });
   });
 

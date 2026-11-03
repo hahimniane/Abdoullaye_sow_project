@@ -115,6 +115,8 @@ const containerMaxQuantity = 999;
 const containerRefusalCodes = <String>[
   'container_label_required',
   'container_number_invalid',
+  // When it is planned to leave (docs/PACKAGE_PRICE_LIST.md §3).
+  'planned_departure_invalid',
   'container_status_invalid',
   'container_transition_invalid',
   'destination_required',
@@ -301,6 +303,7 @@ class ContainerDraft {
     this.shipMode = containerShipModeSea,
     this.airWaybill = '',
     this.airline = '',
+    this.plannedDepartureDate = '',
   });
 
   final String label;
@@ -309,6 +312,9 @@ class ContainerDraft {
   final String destinationCountryId;
   final String destinationCountryName;
   final String notes;
+
+  /// "YYYY-MM-DD" when it is planned to leave, else '' (optional).
+  final String plannedDepartureDate;
 
   /// Sea or air; a flight carries its waybill and airline and no container
   /// number, a box the other way round.
@@ -340,7 +346,24 @@ List<String> validateContainer(ContainerDraft input) {
   if (waybill.isNotEmpty && !airWaybillPattern.hasMatch(waybill)) {
     errors.add('air_waybill_invalid');
   }
+  // Optional; customers comparing businesses see it as the next departure.
+  final planned = _text(input.plannedDepartureDate, 10);
+  if (planned.isNotEmpty && !containerDayKeyValid(planned)) {
+    errors.add('planned_departure_invalid');
+  }
   return errors;
+}
+
+final _containerDayKey = RegExp(r'^(\d{4})-(\d{2})-(\d{2})$');
+
+/// Whether [key] is a real "YYYY-MM-DD" calendar day. Mirrors the server's
+/// `plannedDateValid`.
+bool containerDayKeyValid(String key) {
+  final m = _containerDayKey.firstMatch(key);
+  if (m == null) return false;
+  final y = int.parse(m[1]!), mo = int.parse(m[2]!), d = int.parse(m[3]!);
+  final date = DateTime.utc(y, mo, d);
+  return date.year == y && date.month == mo && date.day == d;
 }
 
 /// The fields a business may set on a container, normalised the way the
@@ -359,6 +382,7 @@ Map<String, String> containerRecord(ContainerDraft input) {
     'destinationCountryName':
         _text(input.destinationCountryName, containerMaxLabel),
     'notes': _text(input.notes, containerMaxNote),
+    'plannedDepartureDate': _text(input.plannedDepartureDate, 10),
   };
 }
 
@@ -394,6 +418,7 @@ class ShippingContainer {
     this.shipMode = containerShipModeSea,
     this.airWaybill = '',
     this.airline = '',
+    this.plannedDepartureDate = '',
   });
 
   final String id;
@@ -412,6 +437,9 @@ class ShippingContainer {
   final String shipMode;
   final String airWaybill;
   final String airline;
+
+  /// "YYYY-MM-DD" when staff planned its departure, else ''.
+  final String plannedDepartureDate;
 
   bool get isAir => shipMode == containerShipModeAir;
 
@@ -482,6 +510,9 @@ class ShippingContainer {
           : '',
       airline: containerShipModeOf(d['shipMode']) == containerShipModeAir
           ? _text(d['airline'], containerMaxAirline)
+          : '',
+      plannedDepartureDate: containerDayKeyValid(_text(d['plannedDepartureDate'], 10))
+          ? _text(d['plannedDepartureDate'], 10)
           : '',
     );
   }

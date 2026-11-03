@@ -2,6 +2,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/customer_service_catalog.dart';
 
+/// A shortcut saved under an id that has since been renamed. Freight folded
+/// into Send a package (docs/PACKAGE_PRICE_LIST.md decision 12), so a pinned
+/// "freight" shortcut now opens Send a package instead of silently vanishing.
+String migratedServiceId(String stored) =>
+    stored == 'freight' ? 'package' : stored;
+
 /// Persists the customer's chosen bottom-navbar shortcuts.
 class NavPrefs {
   static const _key = 'customer_navbar_services_v1';
@@ -10,17 +16,22 @@ class NavPrefs {
     final prefs = await SharedPreferences.getInstance();
     final saved = prefs.getStringList(_key);
     if (saved == null) return List<String>.from(defaultPinnedServiceIds);
-    final valid = saved
-        .where((id) => serviceById(id) != null)
-        .take(maxPinnedServices)
-        .toList();
+    final valid = <String>[];
+    for (final stored in saved) {
+      final id = migratedServiceId(stored);
+      if (serviceById(id) != null && !valid.contains(id)) valid.add(id);
+    }
+    if (valid.length > maxPinnedServices) {
+      valid.removeRange(maxPinnedServices, valid.length);
+    }
     return valid.isEmpty ? List<String>.from(defaultPinnedServiceIds) : valid;
   }
 
   Future<void> setPinned(List<String> ids) async {
     final prefs = await SharedPreferences.getInstance();
     final unique = <String>[];
-    for (final id in ids) {
+    for (final stored in ids) {
+      final id = migratedServiceId(stored);
       if (serviceById(id) != null && !unique.contains(id)) unique.add(id);
     }
     await prefs.setStringList(_key, unique.take(maxPinnedServices).toList());

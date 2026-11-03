@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../l10n/app_localizations.dart';
+import '../services/business_price_list.dart'
+    show priceLbText, priceSnapshotWeighs;
 import '../services/line_pieces.dart';
 import '../services/lot_ledger.dart' show formatLotCents;
 import '../services/invoice_ledger.dart' show invoiceCentsToInput;
+import '../services/package_price_list.dart' show counterPriceCents;
 import '../services/waiting_packages.dart' show trimNumber;
 import '../theme/app_colors.dart';
 import '../theme/app_motion.dart';
@@ -35,11 +38,16 @@ class PieceDraftRow {
     String width = '',
     String height = '',
     String price = '',
+    this.snapshot,
+    String weight = '',
   }) : description = TextEditingController(text: description),
        length = TextEditingController(text: length),
        width = TextEditingController(text: width),
        height = TextEditingController(text: height),
        price = TextEditingController(text: price),
+       weight = priceSnapshotWeighs(snapshot)
+           ? TextEditingController(text: weight)
+           : null,
        showSize = length.isNotEmpty || width.isNotEmpty || height.isNotEmpty;
 
   /// Local identity, so a row keeps its fields when one above it goes.
@@ -55,6 +63,16 @@ class PieceDraftRow {
   final TextEditingController height;
   final TextEditingController price;
 
+  /// The price the business's list gave this piece when it was requested
+  /// (docs/PACKAGE_PRICE_LIST.md §3), when the counter scale decides its
+  /// final price: an item that covers only some pounds, or a category
+  /// priced by the pound. Null for every other piece.
+  final Map<String, dynamic>? snapshot;
+
+  /// The weighed pounds, for a piece with a [snapshot] that weighs; typing
+  /// one sets [price] from the list (`counterPriceCents`), still editable.
+  final TextEditingController? weight;
+
   /// The size fields are open: asked for, or already filled in.
   bool showSize;
 
@@ -64,6 +82,7 @@ class PieceDraftRow {
     width,
     height,
     price,
+    ?weight,
   ];
 
   static String _side(String typed) => typed.trim().replaceAll(',', '.');
@@ -107,11 +126,15 @@ class PiecesEditorController extends ChangeNotifier {
   /// collected request's fee, its own amount beside the pieces and inside
   /// the total, never spread into the piece prices (owner decision
   /// 2026-10-18). Null: the line has none and no field shows.
+  ///
+  /// [priceSnapshots] by piece id: a piece whose snapshot weighs gets a
+  /// weight field that fills its price (a request's pieces at Received).
   PiecesEditorController({
     Iterable<LinePiece> initial = const [],
     String kind = 'barrel',
     this.limit = maxPieces,
     int? pickupFeeCents,
+    Map<String, Map<String, dynamic>> priceSnapshots = const {},
   }) : hasPickupFee = pickupFeeCents != null,
        pickupFee = TextEditingController(
          text: pickupFeeCents == null
@@ -136,6 +159,8 @@ class PiecesEditorController extends ChangeNotifier {
             price: piece.priceCents == null
                 ? ''
                 : invoiceCentsToInput(piece.priceCents!),
+            snapshot: priceSnapshots[piece.id],
+            weight: _startWeight(priceSnapshots[piece.id]),
           ),
         );
       }
@@ -176,6 +201,25 @@ class PiecesEditorController extends ChangeNotifier {
   final List<PieceDraftRow> _retired = [];
   int _nextUid = 0;
 
+  /// A by-the-pound piece opens on the pounds the customer gave.
+  static String _startWeight(Map<String, dynamic>? snapshot) {
+    final lb = snapshot?['weightLb'];
+    return lb is num && lb > 0 ? priceLbText(lb) : '';
+  }
+
+  /// The pounds typed for [row] set its price from the list; a weight that
+  /// is not a number, or a price the list cannot give (extra pounds with no
+  /// rate), leaves the price as it was for staff to type.
+  void _weighed(PieceDraftRow row) {
+    final text = row.weight?.text.trim().replaceAll(',', '.') ?? '';
+    final lb = double.tryParse(text);
+    if (lb == null || lb <= 0) return;
+    final cents = counterPriceCents(row.snapshot, lb);
+    if (cents == null) return;
+    final next = invoiceCentsToInput(cents);
+    if (row.price.text != next) row.price.text = next;
+  }
+
   PieceDraftRow _row({
     String id = '',
     required String kind,
@@ -184,6 +228,8 @@ class PiecesEditorController extends ChangeNotifier {
     String width = '',
     String height = '',
     String price = '',
+    Map<String, dynamic>? snapshot,
+    String weight = '',
   }) {
     final row = PieceDraftRow._(
       uid: _nextUid++,
@@ -194,10 +240,13 @@ class PiecesEditorController extends ChangeNotifier {
       width: width,
       height: height,
       price: price,
+      snapshot: snapshot,
+      weight: weight,
     );
     for (final c in row._fields) {
       c.addListener(notifyListeners);
     }
+    row.weight?.addListener(() => _weighed(row));
     return row;
   }
 
@@ -552,6 +601,31 @@ class _PieceCard extends StatelessWidget {
               ),
             ],
           ),
+          if (row.weight != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: SizedBox(
+                width: 220,
+                child: TextField(
+                  key: Key('piece-weight-$index'),
+                  controller: row.weight,
+                  enabled: enabled,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  inputFormatters: [_decimal],
+                  decoration: InputDecoration(
+                    labelText: l10n.pplWeightLb,
+                    suffixText: 'lb',
+                    helperText: l10n.pplWeightHelper,
+                    helperMaxLines: 2,
+                    isDense: true,
+                  ),
+                ),
+              ),
+            ),
+          ],
           if (row.showSize) ...[
             const SizedBox(height: AppSpacing.sm),
             Row(

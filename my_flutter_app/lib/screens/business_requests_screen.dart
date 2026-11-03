@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../models/destination_country.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
+import '../services/package_coming_today.dart';
 import '../services/package_request_feed.dart';
 import '../services/package_request_service.dart';
 import '../services/package_requests.dart';
@@ -18,6 +20,7 @@ import '../widgets/lot_sheets.dart';
 import '../widgets/package_request_widgets.dart';
 import 'containers_screen.dart' show containerPiecesSummary;
 import 'package_estimate_screen.dart';
+import 'package_price_list_screen.dart';
 import 'package_request_settings_screen.dart';
 
 /// What `/business-requests` carries: the request a notification is about.
@@ -108,6 +111,7 @@ class BusinessRequestsScreen extends StatefulWidget {
     this.focusRequestId = '',
     this.canManageSettings,
     this.myUid,
+    this.priceListCountries,
   });
 
   final String businessId;
@@ -123,6 +127,11 @@ class BusinessRequestsScreen extends StatefulWidget {
   /// or admin flag when null.
   final bool? canManageSettings;
   final String? myUid;
+
+  /// Where the Price list reads the business's destination countries; the
+  /// business's own `destinationCountries` when null (tests give it a fake).
+  final Stream<List<DestinationCountry>> Function(String businessId)?
+  priceListCountries;
 
   @override
   State<BusinessRequestsScreen> createState() => _BusinessRequestsScreenState();
@@ -246,6 +255,19 @@ class _BusinessRequestsScreenState extends State<BusinessRequestsScreen> {
     );
   }
 
+  void _openPriceList() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => PackagePriceListScreen(
+          businessId: widget.businessId,
+          service: _service,
+          canEdit: _canManage,
+          countries: widget.priceListCountries,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -281,11 +303,25 @@ class _BusinessRequestsScreenState extends State<BusinessRequestsScreen> {
           RequestPageHeader(
             title: l10n.prqRequestsTitle,
             subtitle: l10n.prqEntryCount(needs.length + waiting.length),
-            trailing: IconButton(
-              key: const Key('requests-settings'),
-              tooltip: l10n.prqSettings,
-              onPressed: _openSettings,
-              icon: const Icon(Icons.tune, color: AppColors.cobaltDeep),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  key: const Key('requests-price-list'),
+                  tooltip: l10n.pplTitle,
+                  onPressed: _openPriceList,
+                  icon: const Icon(
+                    Icons.sell_outlined,
+                    color: AppColors.cobaltDeep,
+                  ),
+                ),
+                IconButton(
+                  key: const Key('requests-settings'),
+                  tooltip: l10n.prqSettings,
+                  onPressed: _openSettings,
+                  icon: const Icon(Icons.tune, color: AppColors.cobaltDeep),
+                ),
+              ],
             ),
             bottom: Wrap(
               spacing: AppSpacing.sm,
@@ -417,9 +453,12 @@ class BusinessRequestCard extends StatelessWidget {
                 ))
         : (request.plannedDate.isEmpty
               ? l10n.prqNoDay
-              : l10n.prqBringsItOn(
-                  requestDayText(request.plannedDate, locale),
-                ));
+              : [
+                  l10n.prqBringsItOn(
+                    requestDayText(request.plannedDate, locale),
+                  ),
+                  ?requestWindowText(request, l10n.localeName),
+                ].join(' · '));
     final total = request.totalCents;
     return PressableScale(
       scale: 0.985,

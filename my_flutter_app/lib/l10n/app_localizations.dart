@@ -230,6 +230,414 @@ abstract class AppLocalizations {
   /// **'English'**
   String get english;
 
+  /// No description provided for @pplTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Price list'**
+  String get pplTitle;
+
+  /// No description provided for @pplSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'What you charge per country, by sea and by air'**
+  String get pplSubtitle;
+
+  /// No description provided for @pplNeedsCheckBanner.
+  ///
+  /// In en, this message translates to:
+  /// **'Laawol set up your prices - please check them.'**
+  String get pplNeedsCheckBanner;
+
+  /// No description provided for @pplLooksRight.
+  ///
+  /// In en, this message translates to:
+  /// **'Looks right'**
+  String get pplLooksRight;
+
+  /// No description provided for @pplCheckedDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Thanks. Your price list is marked as checked.'**
+  String get pplCheckedDone;
+
+  /// No description provided for @pplSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save prices'**
+  String get pplSave;
+
+  /// No description provided for @pplSaving.
+  ///
+  /// In en, this message translates to:
+  /// **'Saving...'**
+  String get pplSaving;
+
+  /// No description provided for @pplSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Prices saved.'**
+  String get pplSaved;
+
+  /// No description provided for @pplUnsaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Unsaved changes'**
+  String get pplUnsaved;
+
+  /// No description provided for @pplLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load the price list.'**
+  String get pplLoadFailed;
+
+  /// No description provided for @pplNoCountries.
+  ///
+  /// In en, this message translates to:
+  /// **'No destination countries yet'**
+  String get pplNoCountries;
+
+  /// No description provided for @pplNoCountriesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Add the countries you ship to in Services and coverage first.'**
+  String get pplNoCountriesHint;
+
+  /// No description provided for @pplReadOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the owner or an admin can change prices.'**
+  String get pplReadOnly;
+
+  /// No description provided for @pplItemsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Items'**
+  String get pplItemsTitle;
+
+  /// No description provided for @pplItemsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'A fixed price for something you carry, like a phone or a TV.'**
+  String get pplItemsHint;
+
+  /// No description provided for @pplNoItems.
+  ///
+  /// In en, this message translates to:
+  /// **'No items yet'**
+  String get pplNoItems;
+
+  /// No description provided for @pplAddItem.
+  ///
+  /// In en, this message translates to:
+  /// **'Add an item'**
+  String get pplAddItem;
+
+  /// No description provided for @pplNewItem.
+  ///
+  /// In en, this message translates to:
+  /// **'New item'**
+  String get pplNewItem;
+
+  /// No description provided for @pplEditItem.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit item'**
+  String get pplEditItem;
+
+  /// No description provided for @pplItemName.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get pplItemName;
+
+  /// No description provided for @pplItemNameHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Phone, TV 43 in, Laptop'**
+  String get pplItemNameHint;
+
+  /// No description provided for @pplItemCategory.
+  ///
+  /// In en, this message translates to:
+  /// **'Category'**
+  String get pplItemCategory;
+
+  /// No description provided for @pplItemPrice.
+  ///
+  /// In en, this message translates to:
+  /// **'Price'**
+  String get pplItemPrice;
+
+  /// No description provided for @pplItemCovers.
+  ///
+  /// In en, this message translates to:
+  /// **'Covers up to (lb), optional'**
+  String get pplItemCovers;
+
+  /// No description provided for @pplItemCoversHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Each item up to this weight costs the fixed price. Extra pounds are charged at the category\'s price per pound.'**
+  String get pplItemCoversHint;
+
+  /// No description provided for @pplItemCoversUpTo.
+  ///
+  /// In en, this message translates to:
+  /// **'up to {lb} lb each'**
+  String pplItemCoversUpTo(Object lb);
+
+  /// No description provided for @pplItemDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get pplItemDone;
+
+  /// No description provided for @pplRemoveItem.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get pplRemoveItem;
+
+  /// No description provided for @pplPerLbTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Price per pound'**
+  String get pplPerLbTitle;
+
+  /// No description provided for @pplPerLbHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Charged by weight at the counter, once the package is weighed. Leave blank for \"ask me\": your staff quote it.'**
+  String get pplPerLbHint;
+
+  /// No description provided for @pplDepartureTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Departure days'**
+  String get pplDepartureTitle;
+
+  /// No description provided for @pplDepartureHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The days a shipment leaves. Customers see the next one.'**
+  String get pplDepartureHint;
+
+  /// No description provided for @pplEveryWeek.
+  ///
+  /// In en, this message translates to:
+  /// **'Every week'**
+  String get pplEveryWeek;
+
+  /// No description provided for @pplEveryNWeeks.
+  ///
+  /// In en, this message translates to:
+  /// **'Every {n} weeks'**
+  String pplEveryNWeeks(int n);
+
+  /// No description provided for @pplRepeat.
+  ///
+  /// In en, this message translates to:
+  /// **'Repeat'**
+  String get pplRepeat;
+
+  /// No description provided for @pplAnchorDate.
+  ///
+  /// In en, this message translates to:
+  /// **'A day it leaves'**
+  String get pplAnchorDate;
+
+  /// No description provided for @pplAnchorHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Needed to count the weeks.'**
+  String get pplAnchorHint;
+
+  /// No description provided for @pplPickDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a date'**
+  String get pplPickDate;
+
+  /// No description provided for @pplClearDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get pplClearDate;
+
+  /// No description provided for @pplHistoryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'History'**
+  String get pplHistoryTitle;
+
+  /// No description provided for @pplHistoryNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No changes yet'**
+  String get pplHistoryNone;
+
+  /// No description provided for @pplHistorySaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved by {who}'**
+  String pplHistorySaved(Object who);
+
+  /// No description provided for @pplHistoryChecked.
+  ///
+  /// In en, this message translates to:
+  /// **'Marked as checked by {who}'**
+  String pplHistoryChecked(Object who);
+
+  /// No description provided for @pplHistoryLaawol.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} (Laawol)'**
+  String pplHistoryLaawol(Object name);
+
+  /// No description provided for @pplHistoryCountries.
+  ///
+  /// In en, this message translates to:
+  /// **'Changed: {countries}'**
+  String pplHistoryCountries(Object countries);
+
+  /// No description provided for @pplErrPriceListInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'The price list could not be read.'**
+  String get pplErrPriceListInvalid;
+
+  /// No description provided for @pplErrCountryUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'That country is not one you ship to.'**
+  String get pplErrCountryUnknown;
+
+  /// No description provided for @pplErrModeInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose Sea or Air.'**
+  String get pplErrModeInvalid;
+
+  /// No description provided for @pplErrTooManyRoutes.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many countries in one price list.'**
+  String get pplErrTooManyRoutes;
+
+  /// No description provided for @pplErrTooManyItems.
+  ///
+  /// In en, this message translates to:
+  /// **'A route can hold at most 60 items.'**
+  String get pplErrTooManyItems;
+
+  /// No description provided for @pplErrLabelRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Give every item a name.'**
+  String get pplErrLabelRequired;
+
+  /// No description provided for @pplErrLabelTooLong.
+  ///
+  /// In en, this message translates to:
+  /// **'An item name is too long (60 characters).'**
+  String get pplErrLabelTooLong;
+
+  /// No description provided for @pplErrLabelDuplicate.
+  ///
+  /// In en, this message translates to:
+  /// **'Two items have the same name.'**
+  String get pplErrLabelDuplicate;
+
+  /// No description provided for @pplErrCategoryInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a category for every item.'**
+  String get pplErrCategoryInvalid;
+
+  /// No description provided for @pplErrPriceInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a price between \$0.01 and \$10,000.'**
+  String get pplErrPriceInvalid;
+
+  /// No description provided for @pplErrIncludedInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'The weight a price covers must be 0 to 500 lb.'**
+  String get pplErrIncludedInvalid;
+
+  /// No description provided for @pplErrPerLbInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a price per pound between \$0.01 and \$1,000.'**
+  String get pplErrPerLbInvalid;
+
+  /// No description provided for @pplErrDepartureInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick the days it leaves, and how many weeks apart.'**
+  String get pplErrDepartureInvalid;
+
+  /// No description provided for @pplErrItemUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'That item is no longer on the price list.'**
+  String get pplErrItemUnknown;
+
+  /// No description provided for @pplErrQuantityInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter how many (1 to 50).'**
+  String get pplErrQuantityInvalid;
+
+  /// No description provided for @pplErrWeightInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the weight in pounds (0.1 to 2,000).'**
+  String get pplErrWeightInvalid;
+
+  /// No description provided for @pplComingTodayTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Coming today · {count}'**
+  String pplComingTodayTitle(int count);
+
+  /// No description provided for @pplWeightLb.
+  ///
+  /// In en, this message translates to:
+  /// **'Weight (lb)'**
+  String get pplWeightLb;
+
+  /// No description provided for @pplWeightHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Fills the price from your price list. You can change it.'**
+  String get pplWeightHelper;
+
+  /// No description provided for @pplPlannedDeparture.
+  ///
+  /// In en, this message translates to:
+  /// **'Planned departure (optional)'**
+  String get pplPlannedDeparture;
+
+  /// No description provided for @pplPlannedDepartureHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Customers comparing businesses see this as the next departure.'**
+  String get pplPlannedDepartureHint;
+
+  /// No description provided for @pplPlannedDepartureOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Departs {date}'**
+  String pplPlannedDepartureOn(Object date);
+
+  /// No description provided for @pplErrPlannedDeparture.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a real day for the planned departure.'**
+  String get pplErrPlannedDeparture;
+
   /// No description provided for @french.
   ///
   /// In en, this message translates to:
@@ -13661,6 +14069,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Add the receiver, the address and how the parcel reaches the business. You pay at the end, at the price you accepted.'**
   String get freightQuoteChosenNext;
+
+  /// Shown under an accepted freight price: freight folded into Send a package, so it can no longer be booked from here.
+  ///
+  /// In en, this message translates to:
+  /// **'Freight is now part of Send a package, so this price can no longer be booked here. Send your parcel as a package instead: you see each business\'s prices, pick one, and pay at drop-off or pickup.'**
+  String get freightQuoteMovedNext;
 
   /// No description provided for @orderTypePriceRequests.
   ///
@@ -31027,6 +31441,528 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Team'**
   String get parkingTeamTag;
+
+  /// Step title above the Sea | Air choice on the send-a-package form.
+  ///
+  /// In en, this message translates to:
+  /// **'How should it travel?'**
+  String get spkStepMode;
+
+  /// Choice: ship by sea.
+  ///
+  /// In en, this message translates to:
+  /// **'Sea'**
+  String get spkModeSea;
+
+  /// Choice: ship by air.
+  ///
+  /// In en, this message translates to:
+  /// **'Air'**
+  String get spkModeAir;
+
+  /// Where a request's shipping mode is shown: by sea.
+  ///
+  /// In en, this message translates to:
+  /// **'By sea'**
+  String get spkModeBySea;
+
+  /// Where a request's shipping mode is shown: by air.
+  ///
+  /// In en, this message translates to:
+  /// **'By air'**
+  String get spkModeByAir;
+
+  /// Small label above a request's shipping mode (by sea / by air).
+  ///
+  /// In en, this message translates to:
+  /// **'Shipping'**
+  String get spkShippingLabel;
+
+  /// Under the items title on the send-a-package form.
+  ///
+  /// In en, this message translates to:
+  /// **'Add what you are sending. Prices come from the businesses that ship to {country}.'**
+  String spkItemsIntro(String country);
+
+  /// Note on an item whose price covers a weight each.
+  ///
+  /// In en, this message translates to:
+  /// **'Up to {lb} lb each'**
+  String spkUpToLbEach(String lb);
+
+  /// Tooltip of the plus button on a quantity stepper.
+  ///
+  /// In en, this message translates to:
+  /// **'One more'**
+  String get spkOneMore;
+
+  /// Tooltip of the minus button on a quantity stepper.
+  ///
+  /// In en, this message translates to:
+  /// **'One less'**
+  String get spkOneLess;
+
+  /// Heading of the categories priced per pound.
+  ///
+  /// In en, this message translates to:
+  /// **'Priced by weight'**
+  String get spkByWeightTitle;
+
+  /// Hint under the priced-by-weight heading.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose what it is, then a size or type the pounds.'**
+  String get spkByWeightHint;
+
+  /// Button that adds a piece of a category priced per pound.
+  ///
+  /// In en, this message translates to:
+  /// **'Add {category}'**
+  String spkAddWeight(String category);
+
+  /// Label of the pounds field of a piece priced by weight.
+  ///
+  /// In en, this message translates to:
+  /// **'Weight (lb)'**
+  String get spkWeightLabel;
+
+  /// A size button that fills the pounds: Small bag · 10 lb.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} · {lb} lb'**
+  String spkSizeButton(String name, String lb);
+
+  /// Tooltip of the button that removes a weight piece.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get spkRemoveWeight;
+
+  /// Note under Barrel in the items list.
+  ///
+  /// In en, this message translates to:
+  /// **'Each barrel has the price of the business you choose.'**
+  String get spkBarrelRowNote;
+
+  /// Heading of the free-text pieces in the items list.
+  ///
+  /// In en, this message translates to:
+  /// **'Something else'**
+  String get spkElseTitle;
+
+  /// Note under Something else.
+  ///
+  /// In en, this message translates to:
+  /// **'Describe it and add photos if you like. The business sends you a price.'**
+  String get spkElseNote;
+
+  /// Button that adds a free-text piece.
+  ///
+  /// In en, this message translates to:
+  /// **'Add something else'**
+  String get spkElseAdd;
+
+  /// Choice: the business comes and gets the package.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick it up'**
+  String get spkPickUp;
+
+  /// Note under the Pick it up choice.
+  ///
+  /// In en, this message translates to:
+  /// **'The business comes and gets it'**
+  String get spkPickUpNote;
+
+  /// Heading above the pickup address.
+  ///
+  /// In en, this message translates to:
+  /// **'Where should they pick it up?'**
+  String get spkPickupAddressTitle;
+
+  /// Button that checks each business's pickup fee for the address.
+  ///
+  /// In en, this message translates to:
+  /// **'See prices'**
+  String get spkSeePrices;
+
+  /// The See prices button while the fees are being checked.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking…'**
+  String get spkSeePricesBusy;
+
+  /// Heading of the list of businesses with their totals.
+  ///
+  /// In en, this message translates to:
+  /// **'Compare prices'**
+  String get spkStepCompare;
+
+  /// Heading of the single business's total when the form came from its own link.
+  ///
+  /// In en, this message translates to:
+  /// **'Your price'**
+  String get spkStepYourPrice;
+
+  /// Sort: best match.
+  ///
+  /// In en, this message translates to:
+  /// **'Best match'**
+  String get spkSortBest;
+
+  /// Sort: lowest price.
+  ///
+  /// In en, this message translates to:
+  /// **'Lowest price'**
+  String get spkSortPrice;
+
+  /// Sort: highest rated.
+  ///
+  /// In en, this message translates to:
+  /// **'Highest rated'**
+  String get spkSortRating;
+
+  /// Sort: soonest departure.
+  ///
+  /// In en, this message translates to:
+  /// **'Soonest departure'**
+  String get spkSortSoonest;
+
+  /// Filter and badge: the business picks up.
+  ///
+  /// In en, this message translates to:
+  /// **'Picks up'**
+  String get spkFilterPicksUp;
+
+  /// Filter and badge: the business pays back a lost package.
+  ///
+  /// In en, this message translates to:
+  /// **'Pays back if lost'**
+  String get spkFilterPaysBack;
+
+  /// Filter: the business has reviews.
+  ///
+  /// In en, this message translates to:
+  /// **'Has a rating'**
+  String get spkFilterRated;
+
+  /// A total that depends on the counter scale.
+  ///
+  /// In en, this message translates to:
+  /// **'about {total}'**
+  String spkRowAbout(String total);
+
+  /// A total with items the business still has to price.
+  ///
+  /// In en, this message translates to:
+  /// **'{total} + {count} to quote'**
+  String spkRowPartial(String total, String count);
+
+  /// A business that prices nothing of the basket yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Sends you a price'**
+  String get spkRowToQuote;
+
+  /// A business's rating and its number of reviews.
+  ///
+  /// In en, this message translates to:
+  /// **'★ {rating} ({count})'**
+  String spkRating(String rating, String count);
+
+  /// A business with no reviews.
+  ///
+  /// In en, this message translates to:
+  /// **'No ratings yet'**
+  String get spkNoRating;
+
+  /// The next departure by air.
+  ///
+  /// In en, this message translates to:
+  /// **'Next flight: {date}'**
+  String spkNextFlight(String date);
+
+  /// The next departure by sea.
+  ///
+  /// In en, this message translates to:
+  /// **'Next container: {date}'**
+  String spkNextContainer(String date);
+
+  /// An approximate date, after Next flight: / Next container:.
+  ///
+  /// In en, this message translates to:
+  /// **'around {date}'**
+  String spkAroundDate(String date);
+
+  /// A planned departure that passed while the shipment is still loading.
+  ///
+  /// In en, this message translates to:
+  /// **'Departure date not confirmed'**
+  String get spkDepartureUnconfirmed;
+
+  /// A business that does not reach the pickup address.
+  ///
+  /// In en, this message translates to:
+  /// **'Doesn’t pick up there'**
+  String get spkNoPickupThere;
+
+  /// A business with no drop-off location.
+  ///
+  /// In en, this message translates to:
+  /// **'Doesn’t take drop-offs'**
+  String get spkNoDropOff;
+
+  /// Under a total: the pickup fee it contains.
+  ///
+  /// In en, this message translates to:
+  /// **'Includes {fee} pickup'**
+  String spkPickupIncluded(String fee);
+
+  /// A business that picks up but sets the fee itself.
+  ///
+  /// In en, this message translates to:
+  /// **'Pickup fee set by the business'**
+  String get spkPickupFeePending;
+
+  /// Empty comparison by sea.
+  ///
+  /// In en, this message translates to:
+  /// **'No business takes packages to {country} by sea yet.'**
+  String spkNoBusinessSea(String country);
+
+  /// Empty comparison by air.
+  ///
+  /// In en, this message translates to:
+  /// **'No business takes packages to {country} by air yet.'**
+  String spkNoBusinessAir(String country);
+
+  /// Empty comparison after filtering.
+  ///
+  /// In en, this message translates to:
+  /// **'No business matches these filters.'**
+  String get spkNoRowsFiltered;
+
+  /// Shown instead of the comparison while the basket is empty.
+  ///
+  /// In en, this message translates to:
+  /// **'Add what you are sending to see prices.'**
+  String get spkAddItemsHint;
+
+  /// Under the comparison list.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap a business to choose it.'**
+  String get spkChooseHint;
+
+  /// Heading of the drop-off day and time window.
+  ///
+  /// In en, this message translates to:
+  /// **'When will you bring it?'**
+  String get spkStepWhenBring;
+
+  /// Heading of the pickup day and time window.
+  ///
+  /// In en, this message translates to:
+  /// **'When should they pick it up?'**
+  String get spkStepWhenPickup;
+
+  /// Label above the 2-hour windows.
+  ///
+  /// In en, this message translates to:
+  /// **'Time window'**
+  String get spkWindowTitle;
+
+  /// Under the time windows.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a 2-hour window. You can change it later.'**
+  String get spkWindowNote;
+
+  /// Shown instead of the windows until a day is chosen.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a day to see the times.'**
+  String get spkPickDayFirst;
+
+  /// Shown when every window of the chosen day has started.
+  ///
+  /// In en, this message translates to:
+  /// **'No time left that day. Pick another day.'**
+  String get spkNoWindowsLeft;
+
+  /// Under Send when every piece is priced and the package is brought in.
+  ///
+  /// In en, this message translates to:
+  /// **'Total {total}. You pay at drop-off, no card now.'**
+  String spkSendReadyBring(String total);
+
+  /// Under Send when every piece is priced and the package is picked up.
+  ///
+  /// In en, this message translates to:
+  /// **'Total {total}. You pay when it is picked up, no card now.'**
+  String spkSendReadyPickup(String total);
+
+  /// Under Send and on the sent page when something is priced by weight.
+  ///
+  /// In en, this message translates to:
+  /// **'Items priced by weight are weighed at the counter: the weight sets the final price.'**
+  String get spkSendWeighed;
+
+  /// Under Send when some pieces have no price yet.
+  ///
+  /// In en, this message translates to:
+  /// **'{business} will send you the price of the items to quote on WhatsApp.'**
+  String spkSendQuote(String business);
+
+  /// Headline of the sent page for a priced drop-off.
+  ///
+  /// In en, this message translates to:
+  /// **'You’re all set — bring it {when} to {where}.'**
+  String spkSentAllSetBring(String when, String where);
+
+  /// Headline of the sent page for a priced pickup.
+  ///
+  /// In en, this message translates to:
+  /// **'You’re all set — they’ll pick it up {when} at {where}.'**
+  String spkSentAllSetPickup(String when, String where);
+
+  /// Total line of the sent page.
+  ///
+  /// In en, this message translates to:
+  /// **'Total: {total}'**
+  String spkSentTotal(String total);
+
+  /// Sent page when some pieces have no price yet.
+  ///
+  /// In en, this message translates to:
+  /// **'{business} will send the price for the items to quote.'**
+  String spkSentToQuote(String business);
+
+  /// State card of a request confirmed in the form.
+  ///
+  /// In en, this message translates to:
+  /// **'You agreed to this price when you sent it'**
+  String get spkStateConfirmedForm;
+
+  /// Where and when: the drop-off day with its time window.
+  ///
+  /// In en, this message translates to:
+  /// **'Planned for {day}, {window}'**
+  String spkPlannedForWindow(String day, String window);
+
+  /// Where and when: the pickup fee quoted when it was sent.
+  ///
+  /// In en, this message translates to:
+  /// **'Pickup fee {fee}'**
+  String spkPickupFeeLine(String fee);
+
+  /// A piece's price explained: quantity times the price of one.
+  ///
+  /// In en, this message translates to:
+  /// **'{quantity} × {unit}'**
+  String spkNoteItem(String quantity, String unit);
+
+  /// A piece's price explained: the rate for weight above what the price covers.
+  ///
+  /// In en, this message translates to:
+  /// **'Extra pounds are {rate} per lb, weighed at drop-off.'**
+  String spkNoteExtra(String rate);
+
+  /// A piece's price explained: no rate for extra weight.
+  ///
+  /// In en, this message translates to:
+  /// **'Extra weight is priced when the business weighs it.'**
+  String get spkNoteExtraStaff;
+
+  /// A piece's price explained: priced by the pound.
+  ///
+  /// In en, this message translates to:
+  /// **'{lb} lb at {rate} per lb, weighed when received.'**
+  String spkNotePerLb(String lb, String rate);
+
+  /// Button on a request page: change the drop-off day and window.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a new time'**
+  String get spkReschedule;
+
+  /// Confirm button of the new-time sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Save new time'**
+  String get spkRescheduleSave;
+
+  /// Shown after a new drop-off time is saved.
+  ///
+  /// In en, this message translates to:
+  /// **'Your new time is saved.'**
+  String get spkRescheduleDone;
+
+  /// Refusal: ship_mode_invalid, or no mode chosen.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose Sea or Air.'**
+  String get spkErrShipMode;
+
+  /// Refusal: air_unavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This business does not ship by air.'**
+  String get spkErrAirUnavailable;
+
+  /// Refusal: window_invalid, or none chosen.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a time window.'**
+  String get spkErrWindow;
+
+  /// Refusal: quantity_invalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose how many (1 to 50).'**
+  String get spkErrQuantity;
+
+  /// Refusal: weight_invalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the weight in pounds (0.1 to 2,000).'**
+  String get spkErrWeight;
+
+  /// Refusal: category_invalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose what kind of goods this is.'**
+  String get spkErrCategory;
+
+  /// Refusal: pickup_out_of_area.
+  ///
+  /// In en, this message translates to:
+  /// **'This business does not pick up in your area.'**
+  String get spkErrPickupOutOfArea;
+
+  /// Refusal: pickup_out_of_range.
+  ///
+  /// In en, this message translates to:
+  /// **'Your address is too far for this business to pick up.'**
+  String get spkErrPickupOutOfRange;
+
+  /// Refusal: pickup_origin_missing.
+  ///
+  /// In en, this message translates to:
+  /// **'This business cannot price pickups yet. Choose another business or bring it in.'**
+  String get spkErrPickupOrigin;
+
+  /// Shown when Send is pressed with no business chosen.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a business.'**
+  String get spkErrChooseBusiness;
+
+  /// Shown when Send could not upload a photo.
+  ///
+  /// In en, this message translates to:
+  /// **'A photo could not be uploaded. Try again.'**
+  String get spkErrPhotoUpload;
 
   /// Small label next to the owner of a car tied to someone who is no longer on the team.
   ///

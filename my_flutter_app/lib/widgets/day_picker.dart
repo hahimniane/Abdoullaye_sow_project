@@ -8,11 +8,17 @@ import '../l10n/app_localizations.dart';
 /// popup (Cancel / Done), the Material calendar elsewhere - the same split
 /// the parking forms use. Answers that day at local midnight, or null when
 /// the person cancelled.
+///
+/// [selectable] rules days out (a closed shop's Sundays): the Material
+/// calendar greys them and cannot pick them; the iOS wheel cannot grey a day,
+/// so Done moves a ruled-out day on to the next day that is allowed. Null
+/// when no day in range is allowed.
 Future<DateTime?> pickCalendarDay(
   BuildContext context, {
   required DateTime initial,
   required DateTime first,
   required DateTime last,
+  bool Function(DateTime day)? selectable,
 }) async {
   DateTime day(DateTime d) => DateTime(d.year, d.month, d.day);
   final lo = day(first);
@@ -20,6 +26,23 @@ Future<DateTime?> pickCalendarDay(
   var start = day(initial);
   if (start.isBefore(lo)) start = lo;
   if (start.isAfter(hi)) start = hi;
+  if (selectable != null && !selectable(start)) {
+    // The calendar asserts its first day is allowed.
+    DateTime? next(DateTime from) {
+      for (
+        var d = from;
+        !d.isAfter(hi);
+        d = DateTime(d.year, d.month, d.day + 1)
+      ) {
+        if (selectable(d)) return d;
+      }
+      return null;
+    }
+
+    final found = next(start) ?? next(lo);
+    if (found == null) return null;
+    start = found;
+  }
 
   if (defaultTargetPlatform != TargetPlatform.iOS) {
     final picked = await showDatePicker(
@@ -27,6 +50,9 @@ Future<DateTime?> pickCalendarDay(
       initialDate: start,
       firstDate: lo,
       lastDate: hi,
+      selectableDayPredicate: selectable == null
+          ? null
+          : (d) => selectable(day(d)),
     );
     return picked == null ? null : day(picked);
   }
@@ -71,5 +97,14 @@ Future<DateTime?> pickCalendarDay(
       ),
     ),
   );
-  return done == true ? chosen : null;
+  if (done != true) return null;
+  if (selectable == null || selectable(chosen)) return chosen;
+  for (
+    var d = chosen;
+    !d.isAfter(hi);
+    d = DateTime(d.year, d.month, d.day + 1)
+  ) {
+    if (selectable(d)) return d;
+  }
+  return null;
 }

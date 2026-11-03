@@ -24,6 +24,8 @@ import 'eastern_clock.dart';
 import 'line_pieces.dart' as lp;
 import 'lot_ledger.dart' show formatLotCents;
 import 'package_codes.dart' show packageLinkHost;
+import 'package_price_list.dart'
+    show DepartureResult, priceCategoryOf, priceModes;
 
 // ---------------------------------------------------------------------------
 // Vocabulary (§8.2 / §8.3).
@@ -69,6 +71,19 @@ const requestPieceKinds = <String>[
 
 /// Server limits (§8.5 `submitPackageRequest`).
 const requestMaxPieces = 20;
+const requestMaxQuantity = 50;
+const requestMaxWeightLb = 2000;
+
+/// Where a request was sent from (`channel`).
+const requestChannels = <String>['web', 'app', 'whatsapp'];
+
+/// A window is 30 minutes to 2 hours (docs/PACKAGE_PRICE_LIST.md decision 6).
+const requestWindowMinMinutes = 30;
+const requestWindowMaxMinutes = 120;
+
+/// A pickup window lies between these hours.
+const requestPickupFrom = '07:00';
+const requestPickupTo = '21:00';
 const requestMaxPhotosPerPiece = 5;
 const requestMaxName = 80;
 const requestMaxDescription = 120;
@@ -292,6 +307,36 @@ String requestHhmm(int minutes) {
   return '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}';
 }
 
+/// Whether `[from, to]` is a window the server takes: 30 minutes to 2 hours
+/// and, when the day's [hours] are known, inside them.
+bool requestWindowFits(String from, String to, RequestDayHours? hours) {
+  final a = requestMinutesOf(from), b = requestMinutesOf(to);
+  if (a == null || b == null) return false;
+  if (b - a < requestWindowMinMinutes || b - a > requestWindowMaxMinutes) {
+    return false;
+  }
+  if (hours == null) return true;
+  final open = requestMinutesOf(hours.from), close = requestMinutesOf(hours.to);
+  if (!hours.open || open == null || close == null) return false;
+  return a >= open && b <= close;
+}
+
+final _rangeText = RegExp(r'^(\d{2}:\d{2})-(\d{2}:\d{2})$');
+
+/// A pickup window written "HH:MM-HH:MM" and fitting 07:00-21:00, else null.
+RequestTimeWindow? requestPickupRange(String window) {
+  final m = _rangeText.firstMatch(window.trim());
+  if (m == null) return null;
+  final hours = RequestDayHours(
+    open: true,
+    from: requestPickupFrom,
+    to: requestPickupTo,
+  );
+  return requestWindowFits(m[1]!, m[2]!, hours)
+      ? RequestTimeWindow(from: m[1]!, to: m[2]!)
+      : null;
+}
+
 class RequestLocation {
   const RequestLocation({
     required this.id,
@@ -325,6 +370,7 @@ class RequestPickup {
     this.date = '',
     this.window = '',
     this.note = '',
+    this.feeCents,
   });
 
   factory RequestPickup.fromMap(Object? value) {
@@ -334,13 +380,38 @@ class RequestPickup {
       date: _text(m['date']),
       window: _text(m['window']),
       note: _text(m['note']),
+      feeCents: _intOrNull(m['feeCents']),
     );
   }
 
   final String address;
   final String date;
+
+  /// morning / afternoon / evening (old requests) or "HH:MM-HH:MM"
+  /// (docs/PACKAGE_PRICE_LIST.md §3).
   final String window;
   final String note;
+
+  /// The instant pickup fee quoted at submit, or null (staff set it).
+  final int? feeCents;
+}
+
+/// A bring-in's 2-hour window (`plannedWindow {from, to}`, "HH:MM" each).
+class RequestTimeWindow {
+  const RequestTimeWindow({required this.from, required this.to});
+
+  /// Null unless both ends are real "HH:MM" times.
+  static RequestTimeWindow? fromMap(Object? value) {
+    final m = _map(value);
+    final from = _text(m['from']), to = _text(m['to']);
+    if (requestMinutesOf(from) == null || requestMinutesOf(to) == null) {
+      return null;
+    }
+    return RequestTimeWindow(from: from, to: to);
+  }
+
+  final String from;
+  final String to;
 }
 
 /// When the business will really come (an estimate's `pickupSchedule`).
@@ -393,6 +464,10 @@ class RequestPiece {
     this.photoPaths = const [],
     this.photoCount = 0,
     this.estimateCents,
+    this.price,
+    this.quantity,
+    this.weightLb,
+    this.sizePreset = '',
   });
 
   factory RequestPiece.fromMap(Object? value) {
@@ -411,6 +486,12 @@ class RequestPiece {
           ? paths.length
           : _int(m['photoCount']),
       estimateCents: _intOrNull(m['estimateCents']),
+      price: m['price'] is Map ? _map(m['price']) : null,
+      quantity: _intOrNull(m['quantity']),
+      weightLb: m['weightLb'] is num && (m['weightLb'] as num).isFinite
+          ? (m['weightLb'] as num).toDouble()
+          : null,
+      sizePreset: _text(m['sizePreset']),
     );
   }
 
@@ -423,6 +504,18 @@ class RequestPiece {
 
   /// The price the server prefilled (a barrel's per-barrel price), or null.
   final int? estimateCents;
+
+  /// The price snapshot from the business's list at submit (docs/
+  /// PACKAGE_PRICE_LIST.md §3): `{source: item | per_lb | barrel, itemId,
+  /// label, categoryId, quantity, unitCents, includedLb, excessPerLbCents,
+  /// perLbCents, weightLb}`; null for "ask me" pieces and old requests.
+  /// Kept as the server's map: `counterPriceCents` reads it as it is.
+  final Map<String, dynamic>? price;
+
+  /// As the customer sent them (list pieces only).
+  final int? quantity;
+  final double? weightLb;
+  final String sizePreset;
 
   bool get isBarrel => kind == requestPieceBarrel;
 }
@@ -584,6 +677,10 @@ class PackageRequest {
     this.createdAt,
     this.updatedAt,
     this.timeZone = requestDefaultTimeZone,
+    this.shipMode = '',
+    this.foundVia = '',
+    this.channel = '',
+    this.plannedWindow,
   });
 
   factory PackageRequest.fromMap(String id, Map<String, dynamic> d) {
@@ -664,6 +761,10 @@ class PackageRequest {
       createdAt: _timeOf(d, 'createdAt'),
       updatedAt: requestTime(d['updatedAt']),
       timeZone: zone.isEmpty ? requestDefaultTimeZone : zone,
+      shipMode: _text(d['shipMode']),
+      foundVia: _text(d['foundVia']),
+      channel: _text(d['channel']),
+      plannedWindow: RequestTimeWindow.fromMap(d['plannedWindow']),
     );
   }
 
@@ -710,6 +811,21 @@ class PackageRequest {
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final String timeZone;
+
+  /// What the customer chose: `sea` or `air`; '' on a request from before
+  /// price lists (read as sea).
+  final String shipMode;
+
+  /// `laawol` (comparison) or `business` (its own link / QR); '' when old.
+  final String foundVia;
+
+  /// `web`, `app` or `whatsapp`; '' when old.
+  final String channel;
+
+  /// A bring-in's 2-hour window on [plannedDate], or null.
+  final RequestTimeWindow? plannedWindow;
+
+  bool get isAirRequest => shipMode == 'air';
 
   bool get isCollect => handoff == requestHandoffCollect;
   bool get isBringIn => !isCollect;
@@ -790,6 +906,12 @@ class RequestOption {
     this.collectAvailable = false,
     this.collectAreas = '',
     this.timeZone = requestDefaultTimeZone,
+    this.routes = const {},
+    this.departures = const {},
+    this.rating,
+    this.reviewCount = 0,
+    this.coversLoss = false,
+    this.shipsByAir = false,
   });
 
   factory RequestOption.fromMap(Object? value) {
@@ -816,6 +938,22 @@ class RequestOption {
       collectAvailable: _bool(collect['available']),
       collectAreas: _text(collect['areas']),
       timeZone: zone.isEmpty ? requestDefaultTimeZone : zone,
+      routes: {
+        for (final mode in priceModes)
+          if (_map(m['routes'])[mode] is Map)
+            mode: _map(_map(m['routes'])[mode]),
+      },
+      departures: {
+        for (final mode in priceModes)
+          if (_map(m['departures'])[mode] is Map)
+            mode: DepartureResult.fromMap(_map(m['departures'])[mode]),
+      },
+      rating: m['rating'] is num && (m['rating'] as num).isFinite
+          ? (m['rating'] as num).toDouble()
+          : null,
+      reviewCount: _int(m['reviewCount']),
+      coversLoss: _bool(m['coversLoss']),
+      shipsByAir: _bool(m['shipsByAir']),
     );
   }
 
@@ -836,7 +974,34 @@ class RequestOption {
   final String collectAreas;
   final String timeZone;
 
+  /// The business's public price route per mode (`sea` / `air`): `{items,
+  /// perLbCents}` as `listPackageRequestOptions` sends it. A mode it never
+  /// priced is absent. The rules that read it are in `package_price_list.dart`.
+  final Map<String, Map<String, dynamic>> routes;
+
+  /// The next departure per mode (docs/PACKAGE_PRICE_LIST.md decision 5).
+  final Map<String, DepartureResult> departures;
+
+  /// 0..5, or null with no reviews.
+  final double? rating;
+  final int reviewCount;
+
+  /// "Pays back if lost".
+  final bool coversLoss;
+
+  /// Offered for Air: it has an air route or says it ships by air.
+  final bool shipsByAir;
+
   bool get anyHandoff => bringInAvailable || collectAvailable;
+
+  /// The route priced for [mode], or null.
+  Map<String, dynamic>? routeFor(String mode) => routes[mode];
+
+  /// The next departure for [mode] (none when the server named none).
+  DepartureResult departureFor(String mode) =>
+      departures[mode] ?? const DepartureResult();
+
+  bool get hasRating => rating != null && reviewCount > 0;
 }
 
 class RequestOptions {
@@ -886,6 +1051,80 @@ class RequestOptions {
       );
 }
 
+/// One business's answer to "what does it cost to pick this up?"
+/// (`listPackageRequestOptions {action: "pickup_quote"}`,
+/// docs/PACKAGE_PRICE_LIST.md §4).
+class PickupQuote {
+  const PickupQuote({
+    required this.businessId,
+    this.available = false,
+    this.priced = false,
+    this.feeCents,
+    this.distanceMiles,
+    this.borough = '',
+    this.reason = '',
+  });
+
+  factory PickupQuote.fromMap(Object? value) {
+    final m = _map(value);
+    return PickupQuote(
+      businessId: _text(m['businessId']),
+      available: _bool(m['available']),
+      priced: _bool(m['priced']),
+      feeCents: _intOrNull(m['feeCents']),
+      distanceMiles: m['distanceMiles'] is num
+          ? (m['distanceMiles'] as num).toDouble()
+          : null,
+      borough: _text(m['borough']),
+      reason: _text(m['reason']),
+    );
+  }
+
+  /// Every quote of an answer, by business id.
+  static Map<String, PickupQuote> fromResponse(Object? data) => {
+    for (final q in _list(_map(data)['quotes']))
+      if (PickupQuote.fromMap(q) case final PickupQuote quote
+          when quote.businessId.isNotEmpty)
+        quote.businessId: quote,
+  };
+
+  final String businessId;
+
+  /// False: it does not pick up there ([reason] says why).
+  final bool available;
+
+  /// False with [available]: it picks up but has no pickup plan - its staff
+  /// set the fee.
+  final bool priced;
+  final int? feeCents;
+  final double? distanceMiles;
+  final String borough;
+
+  /// `collect_unavailable`, `pickup_out_of_area`, `pickup_out_of_range`,
+  /// `pickup_origin_missing`; '' when available.
+  final String reason;
+
+  /// The fee the customer is shown, or null when staff set it.
+  int? get shownFeeCents => available && priced ? feeCents : null;
+}
+
+/// `confirmPackageEstimate {action: "reschedule"}`'s answer: the day and
+/// window now on the request.
+class RequestRescheduled {
+  const RequestRescheduled({required this.plannedDate, this.window});
+
+  factory RequestRescheduled.fromResponse(Object? data) {
+    final m = _map(data);
+    return RequestRescheduled(
+      plannedDate: _text(m['plannedDate']),
+      window: RequestTimeWindow.fromMap(m['plannedWindow']),
+    );
+  }
+
+  final String plannedDate;
+  final RequestTimeWindow? window;
+}
+
 // ---------------------------------------------------------------------------
 // The customer's form: what it holds, the server's checks, the payload.
 // ---------------------------------------------------------------------------
@@ -895,13 +1134,61 @@ class RequestPieceDraft {
     this.kind = requestPieceBarrel,
     this.description = '',
     this.photoPaths = const [],
+    this.priceItemId = '',
+    this.label = '',
+    this.quantity,
+    this.categoryId = '',
+    this.weightLb,
+    this.sizePreset = '',
   });
+
+  /// An item from the business's price list, [quantity] of it.
+  const RequestPieceDraft.item({
+    required String itemId,
+    required String itemLabel,
+    required this.quantity,
+  }) : kind = requestPieceOther,
+       description = '',
+       photoPaths = const [],
+       priceItemId = itemId,
+       label = itemLabel,
+       categoryId = '',
+       weightLb = null,
+       sizePreset = '';
+
+  /// A category priced by the pound.
+  const RequestPieceDraft.byWeight({
+    required this.categoryId,
+    required this.weightLb,
+    this.sizePreset = '',
+  }) : kind = requestPieceOther,
+       description = '',
+       photoPaths = const [],
+       priceItemId = '',
+       label = '',
+       quantity = null;
 
   final String kind;
   final String description;
 
   /// Uploaded photos (Storage paths) for this piece.
   final List<String> photoPaths;
+
+  /// docs/PACKAGE_PRICE_LIST.md: `priceItemId` + [quantity] (an item), or
+  /// [categoryId] + [weightLb] (by the pound). Such a piece says what it is
+  /// and needs no description.
+  final String priceItemId;
+  final String label;
+  final int? quantity;
+  final String categoryId;
+  final double? weightLb;
+  final String sizePreset;
+
+  bool get isItem => priceItemId.isNotEmpty;
+  bool get isByWeight => !isItem && categoryId.isNotEmpty && weightLb != null;
+
+  /// Priced from a list rather than described by the customer.
+  bool get fromList => isItem || isByWeight;
 
   RequestPieceDraft copyWith({
     String? kind,
@@ -911,6 +1198,12 @@ class RequestPieceDraft {
     kind: kind ?? this.kind,
     description: description ?? this.description,
     photoPaths: photoPaths ?? this.photoPaths,
+    priceItemId: priceItemId,
+    label: label,
+    quantity: quantity,
+    categoryId: categoryId,
+    weightLb: weightLb,
+    sizePreset: sizePreset,
   );
 }
 
@@ -932,6 +1225,10 @@ class RequestDraft {
     this.pieces = const [],
     this.language = 'en',
     this.idempotencyKey = '',
+    this.shipMode = '',
+    this.foundVia = '',
+    this.channel = '',
+    this.plannedWindow,
   });
 
   final String businessId;
@@ -950,6 +1247,21 @@ class RequestDraft {
   final List<RequestPieceDraft> pieces;
   final String language;
   final String idempotencyKey;
+
+  /// `sea` or `air` (docs/PACKAGE_PRICE_LIST.md); '' sends none (an old
+  /// client: the server reads sea).
+  final String shipMode;
+
+  /// `laawol` (found in the comparison) or `business` (its own link / QR);
+  /// sent with [channel].
+  final String foundVia;
+
+  /// Where it was sent from (`app`); '' sends none, which keeps the
+  /// request on the estimate flow instead of pricing it from the list.
+  final String channel;
+
+  /// A bring-in's 2-hour window on [plannedDate].
+  final RequestTimeWindow? plannedWindow;
 }
 
 final _e164 = RegExp(r'^\+[1-9]\d{7,14}$');
@@ -972,6 +1284,7 @@ List<String> validateRequestDraft(
   RequestDraft draft, {
   required RequestOption option,
   required DateTime today,
+  bool requireWindow = false,
 }) {
   final reasons = <String>[];
   void add(String code) {
@@ -994,6 +1307,17 @@ List<String> validateRequestDraft(
       add('planned_date_invalid');
     } else if (location?.hours != null && !location!.hours!.forDate(day).open) {
       add('planned_day_closed');
+    } else {
+      final window = draft.plannedWindow;
+      if (window == null) {
+        if (requireWindow) add('window_invalid');
+      } else if (!requestWindowFits(
+        window.from,
+        window.to,
+        location?.hours?.forDate(day),
+      )) {
+        add('window_invalid');
+      }
     }
   } else if (draft.handoff == requestHandoffCollect) {
     if (draft.pickupAddress.trim().isEmpty) add('pickup_address_required');
@@ -1002,7 +1326,8 @@ List<String> validateRequestDraft(
     }
     final day = requestDayFromKey(draft.pickupDate);
     if (day == null || !inWindow(day)) add('pickup_date_invalid');
-    if (!requestPickupWindows.contains(draft.pickupWindow)) {
+    if (!requestPickupWindows.contains(draft.pickupWindow) &&
+        requestPickupRange(draft.pickupWindow) == null) {
       add('pickup_window_invalid');
     }
     if (draft.pickupNote.trim().length > requestMaxNote) add('text_too_long');
@@ -1019,10 +1344,30 @@ List<String> validateRequestDraft(
 
   if (draft.pieces.isEmpty) add('pieces_required');
   if (draft.pieces.length > requestMaxPieces) add('too_many_pieces');
+  if (draft.shipMode.isNotEmpty && !priceModes.contains(draft.shipMode)) {
+    add('ship_mode_invalid');
+  } else if (draft.shipMode == 'air' && !option.shipsByAir) {
+    add('air_unavailable');
+  }
+  if (draft.channel.isNotEmpty && !requestChannels.contains(draft.channel)) {
+    add('channel_invalid');
+  }
   for (final piece in draft.pieces) {
     if (!requestPieceKinds.contains(piece.kind)) add('piece_kind_invalid');
     final description = piece.description.trim();
-    if (piece.kind != requestPieceBarrel && description.isEmpty) {
+    if (piece.isItem) {
+      final quantity = piece.quantity ?? 0;
+      if (quantity < 1 || quantity > requestMaxQuantity) {
+        add('quantity_invalid');
+      }
+    } else if (piece.categoryId.isNotEmpty || piece.weightLb != null) {
+      final weight = piece.weightLb;
+      if (priceCategoryOf(piece.categoryId) == null) add('category_invalid');
+      if (weight == null ||
+          !(weight >= 0.1 && weight <= requestMaxWeightLb)) {
+        add('weight_invalid');
+      }
+    } else if (piece.kind != requestPieceBarrel && description.isEmpty) {
       add('piece_description_required');
     }
     if (description.length > requestMaxDescription) add('text_too_long');
@@ -1041,19 +1386,27 @@ List<String> validateRequestDraft(
 
 /// Which piece fields a reason code points at, for the form to flag them.
 bool pieceNeedsDescription(RequestPieceDraft piece) =>
-    piece.kind != requestPieceBarrel && piece.description.trim().isEmpty;
+    !piece.fromList &&
+    piece.kind != requestPieceBarrel &&
+    piece.description.trim().isEmpty;
 
 /// The `submitPackageRequest` body (§8.5). Only the handoff's own fields are
 /// sent: a pickup address never rides along with a drop-off.
 Map<String, Object?> submitRequestPayload(RequestDraft draft) {
   final bring = draft.handoff == requestHandoffBringIn;
   final note = draft.pickupNote.trim();
+  final window = draft.plannedWindow;
   return {
     'businessId': draft.businessId,
     'destinationCountryId': draft.destinationCountryId,
     'handoff': draft.handoff,
+    if (draft.shipMode.isNotEmpty) 'shipMode': draft.shipMode,
+    if (draft.channel.isNotEmpty) 'channel': draft.channel,
+    if (draft.channel.isNotEmpty) 'foundVia': draft.foundVia,
     if (bring) 'locationId': draft.locationId,
     if (bring) 'plannedDate': draft.plannedDate,
+    if (bring && window != null)
+      'plannedWindow': {'from': window.from, 'to': window.to},
     if (!bring)
       'pickup': {
         'address': draft.pickupAddress.trim(),
@@ -1069,17 +1422,34 @@ Map<String, Object?> submitRequestPayload(RequestDraft draft) {
       'name': draft.receiverName.trim(),
       'phoneE164': draft.receiverPhone.trim(),
     },
-    'pieces': [
-      for (final p in draft.pieces)
-        {
-          'kind': p.kind,
-          if (p.description.trim().isNotEmpty)
-            'description': p.description.trim(),
-          if (p.photoPaths.isNotEmpty) 'photoPaths': p.photoPaths,
-        },
-    ],
+    'pieces': [for (final p in draft.pieces) requestPiecePayload(p)],
     'language': draft.language,
     'idempotencyKey': draft.idempotencyKey,
+  };
+}
+
+/// One piece as `submitPackageRequest` takes it (docs/PACKAGE_PRICE_LIST.md
+/// §4): `{priceItemId, quantity}`, `{categoryId, weightLb, sizePreset}`,
+/// `{kind: "barrel"}`, or `{kind, description, photoPaths}`.
+Map<String, Object?> requestPiecePayload(RequestPieceDraft p) {
+  if (p.isItem) {
+    return {
+      'priceItemId': p.priceItemId,
+      'quantity': p.quantity,
+      if (p.label.trim().isNotEmpty) 'label': p.label.trim(),
+    };
+  }
+  if (p.isByWeight) {
+    return {
+      'categoryId': p.categoryId,
+      'weightLb': p.weightLb,
+      if (p.sizePreset.isNotEmpty) 'sizePreset': p.sizePreset,
+    };
+  }
+  return {
+    'kind': p.kind,
+    if (p.description.trim().isNotEmpty) 'description': p.description.trim(),
+    if (p.photoPaths.isNotEmpty) 'photoPaths': p.photoPaths,
   };
 }
 
