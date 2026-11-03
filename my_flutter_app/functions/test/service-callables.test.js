@@ -1,5 +1,5 @@
 const assert = require("node:assert/strict");
-const {before, describe, it} = require("node:test");
+const {after, before, describe, it} = require("node:test");
 const admin = require("firebase-admin");
 
 // These handlers run directly against the Firestore emulator instead of
@@ -334,6 +334,17 @@ describe("self-service account deletion request", () => {
 });
 
 describe("freight service callable lifecycle", () => {
+  // Freight is closed to new bookings (it moved into Send a package); these
+  // tests cover the reopen switch and freight already booked.
+  before(async () => {
+    await db.collection("appConfig").doc("freightBooking")
+        .set({reopened: true});
+  });
+  after(async () => {
+    await db.collection("appConfig").doc("freightBooking")
+        .set({reopened: false});
+  });
+
   it("lists freight-only destinations without requiring a barrel rate",
       async () => {
         const businessId = "freight-only-discovery-business";
@@ -1267,6 +1278,25 @@ describe("freight service callable lifecycle", () => {
             /Business access denied/,
         );
       });
+});
+
+describe("freight is closed to new bookings", () => {
+  it("refuses new freight quotes, quote picks and bookings", async () => {
+    await db.collection("appConfig").doc("freightBooking")
+        .set({reopened: false});
+    for (const name of ["createFreightQuoteRequest", "selectFreightQuote",
+      "createFreightShipmentPaymentIntent"]) {
+      await assert.rejects(
+          () => functions[name].run({
+            auth: {uid: CUSTOMER_UID},
+            data: {requestId: "r", quoteId: "q"},
+          }),
+          (error) => error.code === "failed-precondition" &&
+            error.details?.reason === "freight_moved",
+          name,
+      );
+    }
+  });
 });
 
 describe("destination coverage admin callable", () => {

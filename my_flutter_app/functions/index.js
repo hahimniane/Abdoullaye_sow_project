@@ -38230,9 +38230,15 @@ async function getApprovedFreightDestination({businessId, countryId, mode}) {
 /**
  * Refuses new freight quotes and bookings: customers send packages with
  * "Send a package" now (docs/PACKAGE_PRICE_LIST.md decision 12). Freight
- * already booked carries on.
+ * already booked carries on. A platform admin can reopen it without a
+ * deploy by setting appConfig/freightBooking.reopened = true (rollback
+ * lever; server-only doc).
+ * @return {Promise<void>}
  */
-function refuseNewFreight() {
+async function refuseNewFreight() {
+  const config = await admin.firestore().collection("appConfig")
+      .doc("freightBooking").get();
+  if (config.exists && config.data().reopened === true) return;
   throw new HttpsError("failed-precondition",
       "Freight is now part of Send a package.", {reason: "freight_moved"});
 }
@@ -38247,7 +38253,7 @@ exports.createFreightShipmentPaymentIntent = onCall(
       const customerUid = requireAuth(request);
       // Freight is now part of "Send a package"
       // (docs/PACKAGE_PRICE_LIST.md decision 12): no new freight work.
-      refuseNewFreight();
+      await refuseNewFreight();
       // Set when this shipment is the booking of a price a business quoted
       // for a parcel the pricing table had no number for.
       const quoteRequestId = cleanText(request.data?.quoteRequestId, 200);
@@ -39820,7 +39826,7 @@ exports.createFreightQuoteRequest = onCall(
       const customerUid = requireAuth(request);
       // Freight is now part of "Send a package"
       // (docs/PACKAGE_PRICE_LIST.md decision 12): no new freight work.
-      refuseNewFreight();
+      await refuseNewFreight();
       await enforceGuestBookingRateLimit(request);
       // Resolved here rather than at the record write so a guest with
       // unusable contact details is turned away before any pricing,
@@ -40051,7 +40057,7 @@ exports.selectFreightQuote = onCall(
       const customerUid = requireAuth(request);
       // Freight is now part of "Send a package"
       // (docs/PACKAGE_PRICE_LIST.md decision 12): no new freight work.
-      refuseNewFreight();
+      await refuseNewFreight();
       const {requestId, quoteId} = request.data || {};
       if (!requestId || !quoteId) {
         throw new HttpsError(
