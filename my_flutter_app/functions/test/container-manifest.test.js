@@ -1833,3 +1833,17 @@ describe("ships by: sea or air", () => {
     ["receiverName"]);
   });
 });
+
+describe("planned departure date (docs/PACKAGE_PRICE_LIST.md)", () => {
+  const {validateContainer: check, containerRecord: record} =
+    require("../container_manifest");
+  it("is optional and must be a real day", () => {
+    assert.deepEqual(check({label: "Box 1"}), []);
+    assert.deepEqual(check({label: "Box 1", plannedDepartureDate:
+      "2026-11-14"}), []);
+    assert.deepEqual(check({label: "Box 1", plannedDepartureDate:
+      "2026-02-30"}), ["planned_departure_invalid"]);
+    assert.equal(record({label: "Box 1", plannedDepartureDate:
+      " 2026-11-14 "}).plannedDepartureDate, "2026-11-14");
+  });
+});

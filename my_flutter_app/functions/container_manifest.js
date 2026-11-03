@@ -302,7 +302,25 @@ function validateContainer(input) {
       input?.carrierScac !== null && carrierScacRefusal(input.carrierScac)) {
     errors.push("carrier_invalid");
   }
+  // When it is planned to leave (docs/PACKAGE_PRICE_LIST.md §3): customers
+  // comparing businesses see it as the next departure. Optional.
+  const planned = text(input?.plannedDepartureDate, 10);
+  if (planned && !plannedDateValid(planned)) {
+    errors.push("planned_departure_invalid");
+  }
   return errors;
+}
+
+/**
+ * @param {string} key "YYYY-MM-DD".
+ * @return {boolean} Whether it is a real calendar day.
+ */
+function plannedDateValid(key) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) return false;
+  const [y, m, d] = key.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 &&
+    date.getUTCDate() === d;
 }
 
 // -------------------------------------------------------------------------
@@ -401,6 +419,7 @@ function containerRecord(input) {
     destinationCountryId: text(input.destinationCountryId, 60),
     destinationCountryName: text(input.destinationCountryName, MAX_LABEL),
     notes: text(input.notes, MAX_NOTE),
+    plannedDepartureDate: text(input.plannedDepartureDate, 10),
   };
 }
 
@@ -1524,6 +1543,7 @@ function inGroups(items, size) {
 }
 
 const CONTAINER_MESSAGES = Object.freeze({
+  planned_departure_invalid: "Pick a real day for the planned departure.",
   container_label_required:
     "Give the container a working name, or its container or booking number.",
   container_number_invalid:
