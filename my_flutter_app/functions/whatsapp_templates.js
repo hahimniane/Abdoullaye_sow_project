@@ -546,7 +546,7 @@ function componentParts(order, shape, values, lang) {
       index: String(index),
       parameters: [{type: "payload", payload}],
     }));
-  } else {
+  } else if (shape.buttons !== "none") {
     parts.push({
       // https://customer.laawoldigital.com/t/{{1}}
       type: "button",
@@ -713,6 +713,10 @@ const PARKING_TEMPLATE = Object.freeze({
   RECEIPT: "parking_receipt_2lang",
   WELCOME: "parking_welcome_2lang",
   INVOICE: "parking_invoice_2lang",
+  // The same invoice without the Track button (owner 2026-11-04: old app
+  // versions opened the home screen). Used while appConfig/parkingInvoices
+  // .withoutButton is true.
+  INVOICE_NO_BUTTON: "parking_invoice_nb_2lang",
 });
 
 const PARKING_TEMPLATE_VARIABLES = Object.freeze({
@@ -752,6 +756,12 @@ const PARKING_TEMPLATE_VARIABLES = Object.freeze({
     VARIABLE.BUSINESS, VARIABLE.MONTH_FR, VARIABLE.DUE_FR,
     VARIABLE.PAYMENT_INSTRUCTIONS, VARIABLE.BUSINESS_PHONE,
   ]),
+  [PARKING_TEMPLATE.INVOICE_NO_BUTTON]: Object.freeze([
+    VARIABLE.NAME,
+    VARIABLE.BUSINESS, VARIABLE.MONTH_EN, VARIABLE.DUE_EN,
+    VARIABLE.BUSINESS, VARIABLE.MONTH_FR, VARIABLE.DUE_FR,
+    VARIABLE.PAYMENT_INSTRUCTIONS, VARIABLE.BUSINESS_PHONE,
+  ]),
 });
 
 const PARKING_TEMPLATE_SHAPE = Object.freeze({
@@ -760,6 +770,9 @@ const PARKING_TEMPLATE_SHAPE = Object.freeze({
   }),
   [PARKING_TEMPLATE.INVOICE]: Object.freeze({
     header: "document", buttons: "url", documentName: "Invoice.pdf",
+  }),
+  [PARKING_TEMPLATE.INVOICE_NO_BUTTON]: Object.freeze({
+    header: "document", buttons: "none", documentName: "Invoice.pdf",
   }),
 });
 
