@@ -2,9 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { httpsCallable } from "firebase/functions";
-import { ArrowLeft, Box, Camera, CheckCircle2, CreditCard, MapPin, Minus, Plane, Plus, RefreshCw, Ship, Store, Trash2, Truck, X } from "lucide-react";
+import { ArrowLeft, Box, CheckCircle2, CreditCard, MapPin, Plane, Plus, RefreshCw, Ship, Store, Trash2, Truck } from "lucide-react";
 
 import { CustomerPhoneField } from "@/components/customer-phone-field";
+import { BoxLineCard } from "@/components/box-designer/box-line-card";
+import { QuantityStepper } from "@/components/quantity-stepper";
+import { RequestPhotoStrip } from "@/components/request-photo-strip";
 import { functions } from "@/lib/firebase";
 import { phoneCountryForDestination } from "@/lib/container-manifest";
 import { currentWebLanguage } from "@/lib/language";
@@ -12,6 +15,7 @@ import {
   NO_FILTERS,
   SHIP_MODES,
   SORT_KEYS,
+  addBoxLine,
   addOtherLine,
   addWeightLine,
   airOffered,
@@ -57,6 +61,7 @@ import {
   type ShipMode,
   type SortKey,
 } from "@/lib/package-compare";
+import { BOX_PHOTO_LIMIT, boxPricesOf, lowestBoxPrices, type BoxLine } from "@/lib/package-box";
 import { SIZE_PRESETS } from "@/lib/package-price-list";
 import {
   REQUEST_ERROR_MESSAGES,
@@ -167,7 +172,6 @@ export function PackageRequestForm({ slug = "", senderName = "", senderPhone = "
   // One key per filled-in form: a double tap or a retry after a timeout is
   // the same request (the server answers the first one again).
   const idempotencyKey = useRef(newIdempotencyKey());
-  const fileInputs = useRef<Record<string, HTMLInputElement | null>>({});
   // A chosen photo stays on the device until Send: its folder is the chosen
   // business's, which is not known while the items are being added.
   const photoFiles = useRef<Record<string, File>>({});
@@ -350,15 +354,19 @@ export function PackageRequestForm({ slug = "", senderName = "", senderPhone = "
     go("people");
   }
 
-  function addPhotos(line: Extract<BasketLine, { type: "other" }>, files: FileList | null) {
+  function addPhotos(line: Extract<BasketLine, { type: "other" | "box" }>, files: FileList | null) {
     if (!files) return;
-    const room = REQUEST_LIMITS.photosPerPiece - line.photos.length;
+    const room = (line.type === "box" ? BOX_PHOTO_LIMIT : REQUEST_LIMITS.photosPerPiece) - line.photos.length;
     const added = Array.from(files).slice(0, Math.max(0, room)).map((file) => {
       const key = `${line.key}-photo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       photoFiles.current[key] = file;
       return { key, path: "", previewUrl: URL.createObjectURL(file), status: "ready" as const };
     });
-    updateLine(line.key, (current) => (current.type === "other" ? { ...current, photos: [...current.photos, ...added] } : current));
+    updateLine(line.key, (current) => (current.type === "other" || current.type === "box" ? { ...current, photos: [...current.photos, ...added] } : current));
+  }
+
+  function removePhoto(lineKey: string, photoKey: string) {
+    updateLine(lineKey, (row) => (row.type === "other" || row.type === "box" ? { ...row, photos: row.photos.filter((p) => p.key !== photoKey) } : row));
   }
 
   /** Uploads the photos not yet in the chosen business's folder; the lines, with their paths. */
@@ -366,7 +374,7 @@ export function PackageRequestForm({ slug = "", senderName = "", senderPhone = "
     let next = lines;
     let failed = false;
     for (const line of lines) {
-      if (line.type !== "other") continue;
+      if (line.type !== "other" && line.type !== "box") continue;
       for (const photo of line.photos) {
         if (photo.status !== "ready" || (photo.path && uploadedFor.current[photo.key] === businessId)) continue;
         const file = photoFiles.current[photo.key];
@@ -382,7 +390,7 @@ export function PackageRequestForm({ slug = "", senderName = "", senderPhone = "
           failed = true;
         }
         next = next.map((row) =>
-          row.key === line.key && row.type === "other"
+          row.key === line.key && (row.type === "other" || row.type === "box")
             ? { ...row, photos: row.photos.map((p) => (p.key === photo.key ? { ...p, ...outcome } : p)) }
             : row,
         );
@@ -403,7 +411,7 @@ export function PackageRequestForm({ slug = "", senderName = "", senderPhone = "
     try {
       await ensureRequestSession();
       let lines = draft.lines;
-      if (lines.some((line) => line.type === "other" && line.photos.length > 0)) {
+      if (lines.some((line) => (line.type === "other" || line.type === "box") && line.photos.length > 0)) {
         setUploadingPhotos(true);
         const uploaded = await uploadPhotos(lines, option.businessId);
         setUploadingPhotos(false);
@@ -574,6 +582,11 @@ export function PackageRequestForm({ slug = "", senderName = "", senderPhone = "
     const count = pieceCount(draft.lines);
     const weightLines = draft.lines.filter((line): line is Extract<BasketLine, { type: "weight" }> => line.type === "weight");
     const otherLines = draft.lines.filter((line): line is Extract<BasketLine, { type: "other" }> => line.type === "other");
+    const boxLines = draft.lines.filter((line): line is BoxLine => line.type === "box");
+    const sea = draft.shipMode === "sea";
+    // One business (its own link): its prices. Several: the lowest per size, "from $X".
+    const boxComparing = modeOpts.length > 1;
+    const boxPrices = sea ? (boxComparing ? lowestBoxPrices(modeOpts.map((o) => o.routes?.sea)) : boxPricesOf(modeOpts[0]?.routes?.sea)) : null;
     return (
       <section className="pkr-card" ref={cardRef}>
         <button className="text-button pkr-back" onClick={() => go("where")} type="button"><ArrowLeft size={16} aria-hidden="true" /> Back</button>
@@ -589,7 +602,7 @@ export function PackageRequestForm({ slug = "", senderName = "", senderPhone = "
                   <strong>Barrel</strong>
                   <small>At each business&apos;s barrel price</small>
                 </span>
-                <Stepper
+                <QuantityStepper
                   label="Barrel"
                   onChange={(n) => setLines((lines) => setBarrelQuantity(lines, n))}
                   value={barrelQuantity(draft.lines)}
@@ -604,7 +617,7 @@ export function PackageRequestForm({ slug = "", senderName = "", senderPhone = "
                     <strong data-no-translate>{entry.label}</strong>
                     <small data-no-translate>{[categoryLabel(entry.categoryId, lang), limit].filter(Boolean).join(" · ")}</small>
                   </span>
-                  <Stepper
+                  <QuantityStepper
                     label={entry.label}
                     onChange={(n) => setLines((lines) => setItemQuantity(lines, entry, n))}
                     value={itemQuantity(draft.lines, entry.key)}
@@ -612,6 +625,30 @@ export function PackageRequestForm({ slug = "", senderName = "", senderPhone = "
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {sea && (
+          <div className="pkr-group">
+            <h3>Boxes</h3>
+            <p className="pkr-hint">Priced by size, not weight. Staff confirm the size when you drop it off.</p>
+            {boxLines.map((line) => (
+              <BoxLineCard
+                comparing={boxComparing}
+                disabled={sending}
+                key={line.key}
+                lang={lang}
+                line={line}
+                onAddPhotos={(files) => addPhotos(line, files)}
+                onChange={(next) => updateLine(line.key, () => next)}
+                onRemove={() => setLines((lines) => lines.filter((row) => row.key !== line.key))}
+                onRemovePhoto={(photoKey) => removePhoto(line.key, photoKey)}
+                prices={boxPrices}
+              />
+            ))}
+            <button className="secondary-button pkr-add" disabled={sending} onClick={() => setLines((lines) => addBoxLine(lines))} type="button">
+              <Plus size={16} aria-hidden="true" /> Add a box
+            </button>
           </div>
         )}
 
@@ -671,6 +708,7 @@ export function PackageRequestForm({ slug = "", senderName = "", senderPhone = "
                   <Trash2 size={16} aria-hidden="true" />
                 </button>
               </header>
+              {!sea && (
               <div className="pkr-segments" role="radiogroup" aria-label="What is it?">
                 {(["box", "other"] as const).map((kind) => (
                   <label className={line.kind === kind ? "active" : ""} key={kind}>
@@ -680,58 +718,27 @@ export function PackageRequestForm({ slug = "", senderName = "", senderPhone = "
                   </label>
                 ))}
               </div>
+              )}
               <label className="pkr-field">
                 <span>What is it?</span>
                 <input maxLength={REQUEST_LIMITS.description} onChange={(event) => updateLine(line.key, (row) => (row.type === "other" ? { ...row, description: event.target.value } : row))} placeholder="e.g. clothes, a TV, a generator" value={line.description} />
               </label>
-              <div className="pkr-photos">
-                {line.photos.map((photo) => (
-                  <figure className={`pkr-photo ${photo.status}`} key={photo.key}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img alt="Photo of the piece" src={photo.previewUrl} />
-                    {photo.status === "error" && <span className="pkr-photo-state pkr-photo-error">Not uploaded</span>}
-                    <button
-                      aria-label="Remove photo"
-                      className="pkr-photo-remove"
-                      disabled={sending}
-                      onClick={() => updateLine(line.key, (row) => (row.type === "other" ? { ...row, photos: row.photos.filter((p) => p.key !== photo.key) } : row))}
-                      type="button"
-                    >
-                      <X size={12} aria-hidden="true" />
-                    </button>
-                  </figure>
-                ))}
-                {line.photos.length < REQUEST_LIMITS.photosPerPiece && (
-                  <button className="pkr-photo-add" disabled={sending} onClick={() => fileInputs.current[line.key]?.click()} type="button">
-                    <Camera size={18} aria-hidden="true" />
-                    <span>Add photos</span>
-                  </button>
-                )}
-                <input
-                  accept="image/*"
-                  aria-label="Add photos"
-                  className="sr-only"
-                  multiple
-                  onChange={(event) => {
-                    addPhotos(line, event.target.files);
-                    event.target.value = "";
-                  }}
-                  ref={(element) => {
-                    fileInputs.current[line.key] = element;
-                  }}
-                  tabIndex={-1}
-                  type="file"
-                />
-              </div>
-              <small className="pkr-hint">Optional, up to 5 photos. Only the business sees them.</small>
+              <RequestPhotoStrip
+                disabled={sending}
+                hint="Optional, up to 5 photos. Only the business sees them."
+                limit={REQUEST_LIMITS.photosPerPiece}
+                onAdd={(files) => addPhotos(line, files)}
+                onRemove={(photoKey) => removePhoto(line.key, photoKey)}
+                photos={line.photos}
+              />
             </article>
           ))}
-          <button className="secondary-button pkr-add" disabled={sending} onClick={() => setLines((lines) => addOtherLine(lines))} type="button">
+          <button className="secondary-button pkr-add" disabled={sending} onClick={() => setLines((lines) => addOtherLine(lines, sea ? "other" : "box"))} type="button">
             <Plus size={16} aria-hidden="true" /> Add something else
           </button>
         </div>
 
-        <FieldError codes={shownItems} show={["pieces_required", "too_many_pieces", "weight_invalid", "quantity_invalid", "piece_description_required", "too_many_photos", "photo_invalid", "text_too_long", "category_invalid"]} />
+        <FieldError codes={shownItems} show={["pieces_required", "too_many_pieces", "weight_invalid", "quantity_invalid", "piece_description_required", "too_many_photos", "photo_invalid", "text_too_long", "category_invalid", "box_size_invalid", "dims_invalid"]} />
         {count > 0 && <p className="pkr-hint" data-no-translate>{piecesCountText(count, lang)}</p>}
         {error && <p className="customer-field-error" role="alert">{error}</p>}
         <div className="pkr-actions">
@@ -1068,20 +1075,5 @@ export function PackageRequestForm({ slug = "", senderName = "", senderPhone = "
         </button>
       </div>
     </section>
-  );
-}
-
-/** A − 2 + control for a quantity (0 removes the item). */
-function Stepper({ label, value, onChange }: { label: string; value: number; onChange: (next: number) => void }) {
-  return (
-    <span className="pkr-stepper" role="group" aria-label={label}>
-      <button aria-label="Remove one" className="icon-button" disabled={value <= 0} onClick={() => onChange(value - 1)} type="button">
-        <Minus size={16} aria-hidden="true" />
-      </button>
-      <strong data-no-translate>{value}</strong>
-      <button aria-label="Add one" className="icon-button" onClick={() => onChange(value + 1)} type="button">
-        <Plus size={16} aria-hidden="true" />
-      </button>
-    </span>
   );
 }

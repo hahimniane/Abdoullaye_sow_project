@@ -19,7 +19,9 @@ import {
   priceListView,
   readWeightLb,
   routeDraftFrom,
+  routeDraftIsEmpty,
   routePayload,
+  routeSummary,
   weighedPriceInput,
   windowText,
 } from "./business-price-list.ts";
@@ -182,4 +184,31 @@ test("Found on Laawol: older rollups count as zero", () => {
   assert.equal(laawolLinesOf({ laawolLines: 4 }), 4);
   assert.equal(laawolLinesOf({}), 0);
   assert.equal(laawolLinesOf(null), 0);
+});
+
+test("box sizes: three prices round-trip through the editor on a Sea route", () => {
+  const route = { ...stored, boxPricesCents: { small: 2000, medium: 3550, large: 5000 } };
+  const draft = routeDraftFrom(route);
+  assert.deepEqual(draft.boxPrices, { small: "20", medium: "35.50", large: "50" });
+  const { routes, errors } = validatePriceList({ routes: { gn: { sea: routePayload(draft, "sea") } } }, ["gn"]);
+  assert.deepEqual(errors, []);
+  assert.deepEqual(routes?.gn.sea?.boxPricesCents, { small: 2000, medium: 3550, large: 5000 });
+  assert.equal(routeSummary(route).includes("3 box sizes"), true);
+  assert.equal(routeSummary(route, "fr").includes("3 tailles de carton"), true);
+});
+
+test("box sizes are Sea only: the Air payload never carries them, a bad price is named, a box-only route counts", () => {
+  const draft = routeDraftFrom({ items: [], perLbCents: {}, boxPricesCents: { medium: 3500 }, departure: null });
+  assert.equal(routePayload(draft, "air"), null, "nothing else priced, so an Air route is empty");
+  assert.deepEqual(routePayload(draft, "sea")?.boxPricesCents, { medium: 3500 });
+  assert.equal(routeDraftIsEmpty(draft, "sea"), false);
+  assert.equal(routeDraftIsEmpty(draft, "air"), true);
+  const bad = routeDraftFrom({});
+  bad.boxPrices.small = "twenty";
+  assert.equal(listProblem({ gn: { sea: bad, air: emptyRouteDraft() } }), "box_price_invalid");
+  assert.equal(PRICE_LIST_MESSAGES.box_price_invalid.length > 0, true);
+  const air = routeDraftFrom({});
+  air.boxPrices.small = "20";
+  assert.equal(routePayload(air, "air"), null, "a typed box price is dropped on Air");
+  assert.deepEqual(priceListView({ routes: { gn: { sea: { items: [], perLbCents: {}, boxPricesCents: { small: 2000 } } } } }).routes.gn.sea?.boxPricesCents, { small: 2000 });
 });

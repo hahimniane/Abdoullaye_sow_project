@@ -28,6 +28,7 @@ import {
 import { destinationCountryOptionForRow } from "@/lib/destination-countries";
 import { functions } from "@/lib/firebase";
 import { currentLanguage, formatDateTime } from "@/lib/format";
+import { BOX_PRICED_IDS, boxPicture, boxPriceFieldLabel, boxSizeExample, boxSizeLimit, boxSizeName } from "@/lib/package-box";
 import { CATEGORIES, LIMIT, WEEK_DAYS, type PriceMode, type WeekDayKey } from "@/lib/package-price-list";
 
 type Props = {
@@ -321,6 +322,44 @@ export function PriceListPanel({ businessId, canEdit, byLaawol = false, previewM
             )}
             {readOnly && route.items.length === 0 && <p className="pkq-muted">No items priced.</p>}
           </section>
+
+          {mode === "sea" && (
+            <section className="pkq-settings-block plist-boxes">
+              <h4>Box sizes</h4>
+              <small className="lst-hint">
+                Laawol sets the sizes for every business; you set the price of each. Customers pick a size (or type the inches) and see your price. Staff confirm the size at the counter, at today&apos;s price. Leave a size empty to quote it by hand.
+              </small>
+              <div className="plist-box-grid">
+                {BOX_PRICED_IDS.map((id) => (
+                  <label className="plist-box" key={id}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img alt="" height={72} src={boxPicture(id)} width={72} />
+                    <strong data-no-translate>{boxSizeName(id, l)}</strong>
+                    <small data-no-translate>{boxSizeExample(id, l)}</small>
+                    <small data-no-translate>{boxSizeLimit(id, l)}</small>
+                    <span className="lst-field">
+                      <span className="plist-label">Price ($)</span>
+                      <input
+                        aria-label={boxPriceFieldLabel(id, l)}
+                        disabled={readOnly}
+                        inputMode="decimal"
+                        onChange={(event) => editRoute((r) => ({ ...r, boxPrices: { ...r.boxPrices, [id]: event.target.value } }))}
+                        placeholder={l === "fr" ? "35,00" : "35.00"}
+                        value={route.boxPrices[id] ?? ""}
+                      />
+                    </span>
+                  </label>
+                ))}
+                <div className="plist-box quote">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img alt="" height={72} src={boxPicture("xl")} width={72} />
+                  <strong data-no-translate>{boxSizeName("xl", l)}</strong>
+                  <small data-no-translate>{boxSizeExample("xl", l)}</small>
+                  <small>Extra large: you quote it</small>
+                </div>
+              </div>
+            </section>
+          )}
 
           <section className="pkq-settings-block">
             <h4>Price per pound</h4>

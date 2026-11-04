@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 
 import { BankUsageSummary } from "@/components/business/bank-usage-summary";
+import { PayNowPayoutsAdmin } from "@/components/business/pay-now-payouts";
 import { MonthPicker, MonthText } from "@/components/volume-views";
 import { confirmImportantAction } from "@/lib/action-confirmation";
 import { functions } from "@/lib/firebase";
@@ -1700,7 +1701,7 @@ function MonthTable({ rows, onPick }: { rows: MonthRow[]; onPick: (businessId: s
  * the rate calculator); the admin console keeps its tab in memory, so a
  * reload starts on Today either way.
  */
-export function AdminBillsView({ previewMode }: { previewMode: boolean }) {
+export function AdminBillsView({ previewMode, canPayOut = true }: { previewMode: boolean; canPayOut?: boolean }) {
   const lang = useLang();
   const [month, setMonth] = useState(() => currentVolumeMonth());
   const [businessId, setBusinessId] = useState("");
@@ -1790,6 +1791,7 @@ export function AdminBillsView({ previewMode }: { previewMode: boolean }) {
           note={summary ? <span>online payments, this month</span> : undefined}
         />
       </div>
+      <PayNowPayoutsAdmin canPayOut={canPayOut} previewMode={previewMode} />
       {summary?.partial && <p className="bl-warning">Not every business is counted yet. Show more below, or refresh in a moment.</p>}
       <section className="panel">
         <div className="panel-header">

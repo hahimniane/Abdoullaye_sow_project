@@ -1,3 +1,4 @@
+import { PAY_NOW_MESSAGES, PAYOUT_MESSAGES } from "./pay-now.ts";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -388,7 +389,11 @@ test("request settings: hours per location, slug once, areas when picking up", (
   assert.deepEqual(requestLocationsFor([{ id: "a", label: "A", address: "x", isActive: true }, { id: "b", isActive: false }], business).map((l) => l.id), ["a"]);
   const draft = requestSettingsDraft(business, locations);
   assert.equal(draft.hours.default.sat.from, "10:00");
-  assert.equal(draft.cardBarrelBooking, true);
+  assert.equal(draft.payNow, true, "the old card switch is the one Pay now switch");
+  assert.equal(requestSettingsDraft({ ...business, packageRequestSettings: { ...business.packageRequestSettings, payNow: false } }, locations).payNow, false, "payNow wins over the old name");
+  const saved = requestSettingsPayload("dala", { ...draft, payNow: true }, "dala");
+  assert.equal(saved.payNow, true);
+  assert.equal(saved.cardBarrelBooking, true, "a save writes both names to the same value");
   assert.deepEqual(requestSettingsProblems({ ...draft, pickupAreas: " " }), ["pickup_areas_required"]);
   assert.deepEqual(requestSettingsProblems({ ...draft, slug: "Bad Slug" }), ["slug_invalid"]);
   const badHours = { ...draft, hours: { default: { ...WEEK, mon: { open: true, from: "18:00", to: "09:00" } } } };
@@ -448,6 +453,13 @@ test("every request screen string has a French translation", () => {
     "src/components/package-request-form.tsx",
     "src/components/package-estimate-page.tsx",
     "src/components/business/package-requests-panel.tsx",
+    // Box sizes, the box designer and Pay now (docs/PACKAGE_BOX_SIZES_PAY_NOW.md).
+    "src/components/box-designer/box-designer.tsx",
+    "src/components/box-designer/box-size-cards.tsx",
+    "src/components/box-designer/box-line-card.tsx",
+    "src/components/request-photo-strip.tsx",
+    "src/components/business/request-box-and-pay.tsx",
+    "src/components/business/pay-now-payouts.tsx",
   ];
   const strings = new Set<string>();
   for (const file of files) {
@@ -462,7 +474,7 @@ test("every request screen string has a French translation", () => {
       strings.add(match[2]);
     }
   }
-  for (const table of [REQUEST_ERROR_MESSAGES, REQUEST_STATUS_LABELS, HISTORY_ACTION_LABELS]) {
+  for (const table of [REQUEST_ERROR_MESSAGES, REQUEST_STATUS_LABELS, HISTORY_ACTION_LABELS, PAY_NOW_MESSAGES, PAYOUT_MESSAGES]) {
     for (const value of Object.values(table)) strings.add(value);
   }
   // Names, codes and units that read the same in both languages.

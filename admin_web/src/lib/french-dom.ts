@@ -7921,6 +7921,10 @@ Object.assign(TEXT_TRANSLATIONS, {
   "That item is no longer on the price list.": "Cet article n’est plus sur la liste de prix.",
   "Enter how many (1 to 50).": "Saisissez la quantité (1 à 50).",
   "Enter the weight in pounds (0.1 to 2,000).": "Saisissez le poids en livres (0,1 à 2 000).",
+  "Box sizes are priced for Sea only.": "Les tailles de carton ne sont tarifées que par voie maritime.",
+  "Enter a box price between $0.01 and $10,000.": "Saisissez un prix de carton entre 0,01 $ et 10 000 $.",
+  "Choose a box size.": "Choisissez une taille de carton.",
+  "Box inches must be 1 to 120 in each direction.": "Les pouces du carton doivent aller de 1 à 120 dans chaque sens.",
   "Pick a real day for the planned departure.": "Choisissez un jour réel pour le départ prévu.",
   "Something went wrong. Try again.": "Une erreur s’est produite. Réessayez.",
 });
@@ -7928,6 +7932,130 @@ Object.assign(ATTRIBUTE_TRANSLATIONS, {
   "e.g. Phone": "ex. Téléphone",
   "$ per lb": "$ par lb",
 });
+// ==== Box sizes, the box designer and Pay now (docs/PACKAGE_BOX_SIZES_PAY_NOW.md) START ====
+Object.assign(TEXT_TRANSLATIONS, {
+  // The box designer.
+  "Drag to spin": "Faites glisser pour tourner",
+  "Sneaker (12 in)": "Basket (12 po)",
+  "Person (5 ft 6 in)": "Personne (5 pi 6 po)",
+  "Grid squares are 1 ft": "Chaque carré de la grille mesure 1 pi",
+  "Length": "Longueur",
+  "Width": "Largeur",
+  "Height": "Hauteur",
+  "Slide up to 60 in, or type up to 120 in.": "Faites glisser jusqu’à 60 po, ou saisissez jusqu’à 120 po.",
+  // A box on Send a package.
+  "Boxes": "Cartons",
+  "Priced by size, not weight. Staff confirm the size when you drop it off.":
+    "Prix selon la taille, pas le poids. Le personnel confirme la taille au dépôt.",
+  "Pick the closest size. Know the inches? The size follows them.":
+    "Choisissez la taille la plus proche. Vous connaissez les dimensions ? La taille les suit.",
+  "How many of this size?": "Combien de cette taille ?",
+  "Know the inches?": "Vous connaissez les dimensions ?",
+  "I do not know the inches": "Je ne connais pas les dimensions",
+  "Add a box": "Ajouter un carton",
+  "Optional, up to 3 photos. Only the business sees them.": "Facultatif, jusqu’à 3 photos. Seule l’entreprise les voit.",
+  // The request page.
+  "See your box": "Voir votre carton",
+  "Hide your box": "Masquer votre carton",
+  "Pay by card now": "Payer par carte maintenant",
+  "Paying online is optional. You can still pay at the counter in cash or by Zelle.":
+    "Payer en ligne est facultatif. Vous pouvez toujours payer au comptoir, en espèces ou par Zelle.",
+  "Balance due at the counter": "Solde à payer au comptoir",
+  // The business: price list, settings, request detail.
+  "Box sizes": "Tailles de carton",
+  "Laawol sets the sizes for every business; you set the price of each. Customers pick a size (or type the inches) and see your price. Staff confirm the size at the counter, at today's price. Leave a size empty to quote it by hand.":
+    "Laawol fixe les tailles pour toutes les entreprises ; vous fixez le prix de chacune. Les clients choisissent une taille (ou saisissent les dimensions) et voient votre prix. Le personnel confirme la taille au comptoir, au prix du jour. Laissez une taille vide pour la chiffrer à la main.",
+  "Extra large: you quote it": "Très grande : vous la chiffrez",
+  "Let customers pay online by card (optional)": "Permettre aux clients de payer en ligne par carte (facultatif)",
+  "Customers get an optional link to pay by card once the price is final. You pay the card fee (2.9% + 30¢). Without Stripe, Laawol collects and pays you every Monday.":
+    "Les clients reçoivent un lien facultatif pour payer par carte une fois le prix définitif. Vous payez les frais de carte (2,9 % + 0,30 $). Sans Stripe, Laawol encaisse et vous verse chaque lundi.",
+  "Stripe is connected: card payments go straight to your account.":
+    "Stripe est connecté : les paiements par carte vont directement sur votre compte.",
+  "Stripe is not connected: Laawol collects the card payments and pays you every Monday. See Laawol owes you under This month.":
+    "Stripe n’est pas connecté : Laawol encaisse les paiements par carte et vous verse chaque lundi. Voir « Laawol vous doit » sous Ce mois-ci.",
+  "Details": "Détails",
+  "See the box": "Voir le carton",
+  "Hide the box": "Masquer le carton",
+  "No inches given": "Dimensions non indiquées",
+  "Charged on your Stripe account": "Débité sur votre compte Stripe",
+  "Laawol collects and pays you on Mondays": "Laawol encaisse et vous verse chaque lundi",
+  "Refund": "Remboursement",
+  "Refunding...": "Remboursement...",
+  "The pay link was sent again.": "Le lien de paiement a été renvoyé.",
+  "Refund the card payment": "Rembourser le paiement par carte",
+  "The card is refunded at once. The card fee is not returned by Stripe.":
+    "La carte est remboursée immédiatement. Stripe ne rend pas les frais de carte.",
+  "Up to": "Jusqu’à",
+  "Amount ($)": "Montant ($)",
+  "Reason": "Motif",
+  "e.g. Damaged in transit": "p. ex. Endommagé pendant le transport",
+  "Refunded. The customer is told on WhatsApp.": "Remboursé. Le client est prévenu sur WhatsApp.",
+  "This request was not paid online.": "Cette demande n’a pas été payée en ligne.",
+  "That is more than is left to refund.": "C’est plus que ce qu’il reste à rembourser.",
+  "Enter an amount to refund.": "Saisissez un montant à rembourser.",
+  "Only the owner, an admin or staff who can void may do this.":
+    "Seuls le propriétaire, un administrateur ou le personnel autorisé à annuler peuvent le faire.",
+  "Give a reason.": "Indiquez un motif.",
+  "The reason is too long.": "Le motif est trop long.",
+  // Bills: Laawol owes you, and the admin's payouts.
+  "Laawol owes you": "Laawol vous doit",
+  "Card payments Laawol collected for you, paid out by Zelle or bank every Monday for the week before (Monday to Sunday, New York time). Card fees, refunds and chargebacks are taken off.":
+    "Les paiements par carte que Laawol a encaissés pour vous, versés par Zelle ou virement chaque lundi pour la semaine précédente (du lundi au dimanche, heure de New York). Les frais de carte, remboursements et contestations sont déduits.",
+  "Owed to you now": "Dû maintenant",
+  "Your unpaid Laawol bill of": "Votre montant Laawol impayé de",
+  "is taken out of the next payout.": "est déduit du prochain versement.",
+  "Week of": "Semaine du",
+  "Paid out on": "Versé le",
+  "Still collecting. Paid out on": "Encaissement en cours. Versé le",
+  "Nothing to pay this week": "Rien à verser cette semaine",
+  "Goes onto the Laawol bill": "Porté sur le montant dû à Laawol",
+  "Pay now payouts": "Versements Payer maintenant",
+  "Card payments Laawol collected for businesses without their own Stripe. Send each business what is due by Zelle or bank, then tap Paid out.":
+    "Paiements par carte que Laawol a encaissés pour les entreprises sans Stripe. Envoyez à chacune ce qui est dû par Zelle ou virement, puis touchez Versé.",
+  "No payout is due.": "Aucun versement n’est dû.",
+  "Due to businesses": "Dû aux entreprises",
+  "Paid out": "Versé",
+  "Put on the bill": "Porter sur le montant dû",
+  "Put on the Laawol bill": "Porter sur le montant dû à Laawol",
+  "Recently paid out": "Versés récemment",
+  "How you paid": "Comment vous avez payé",
+  "Reference (optional)": "Référence (facultatif)",
+  "e.g. Zelle confirmation number": "p. ex. numéro de confirmation Zelle",
+  "This week nets to less than nothing, so it is charged on the business's Laawol bill. No money is sent.":
+    "Cette semaine est négative : elle est portée sur le montant dû par l’entreprise à Laawol. Aucun argent n’est envoyé.",
+  "Send the money first, then record how you paid. Any unpaid Laawol bill is taken out and recorded as a bill payment.":
+    "Envoyez d’abord l’argent, puis indiquez comment vous avez payé. Tout montant Laawol impayé est déduit et enregistré comme paiement.",
+  "Put on the business's Laawol bill.": "Porté sur le montant dû par l’entreprise à Laawol.",
+  "Paid out. The business gets a receipt on WhatsApp.": "Versé. L’entreprise reçoit un reçu sur WhatsApp.",
+  "Payouts are taking longer than usual. Try again in a moment.": "Les versements prennent plus de temps que d’habitude. Réessayez dans un instant.",
+  "Payouts could not be loaded. Try again.": "Les versements n’ont pas pu être chargés. Réessayez.",
+  "Choose how you paid.": "Indiquez comment vous avez payé.",
+  "The reference is too long.": "La référence est trop longue.",
+});
+Object.assign(ATTRIBUTE_TRANSLATIONS, {
+  "Box designer": "Concepteur de carton",
+  "Box size": "Taille du carton",
+  "How many boxes": "Combien de cartons",
+  "Length slider, inches": "Curseur de longueur, en pouces",
+  "Width slider, inches": "Curseur de largeur, en pouces",
+  "Height slider, inches": "Curseur de hauteur, en pouces",
+  "e.g. Damaged in transit": "p. ex. Endommagé pendant le transport",
+  "e.g. Zelle confirmation number": "p. ex. numéro de confirmation Zelle",
+});
+// ==== Box sizes, the box designer and Pay now END ====
+// ==== Label printer (Web Bluetooth, PM-241) START ====
+Object.assign(TEXT_TRANSLATIONS, {
+  // The labels dialog (container-labels-dialog.tsx). The progress and
+  // failure sentences carry counts and are built in label-printer-status.ts.
+  "Label printer": "Imprimante d’étiquettes",
+  "Print on label printer": "Imprimer sur l’imprimante d’étiquettes",
+  "Printing...": "Impression...",
+  "Prints straight to the PM-241 label printer over Bluetooth: one label per piece, with no print window.":
+    "Imprime directement sur l’imprimante d’étiquettes PM-241 par Bluetooth : une étiquette par colis, sans fenêtre d’impression.",
+  "Use Chrome to print straight to the label printer, or the Laawol app on iPhone.":
+    "Utilisez Chrome pour imprimer directement sur l’imprimante d’étiquettes, ou l’application Laawol sur iPhone.",
+});
+// ==== Label printer (Web Bluetooth, PM-241) END ====
 const englishDictionary = { ...TEXT_TRANSLATIONS, ...ATTRIBUTE_TRANSLATIONS };
 const frenchDictionary = buildReverseDictionary([
   TEXT_TRANSLATIONS,

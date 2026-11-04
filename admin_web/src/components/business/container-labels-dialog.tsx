@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { httpsCallable } from "firebase/functions";
-import { RefreshCw, Tag, X } from "lucide-react";
+import { Printer, RefreshCw, Tag, X } from "lucide-react";
 
 import {
   containerCallableFailure,
@@ -19,6 +19,8 @@ import { currentLanguage, text } from "@/lib/format";
 import { labelCountText, labelsPieceCount } from "@/lib/waiting-packages";
 import { overlayDismiss } from "@/lib/overlay-dismiss";
 import { closePendingTab, openPendingTab, sendPendingTab } from "@/lib/pending-tab";
+import { labelPrinterStatusRole, labelPrinterStatusText } from "@/lib/label-printer-status";
+import { useLabelPrinter } from "@/components/business/use-label-printer";
 
 type Row = Record<string, unknown>;
 
@@ -65,6 +67,16 @@ export function ContainerLabelsDialog({
         return counts.carCount + counts.barrelCount + counts.otherCount;
       })()
     : labelsPieceCount(labelsContainerId ? (line ? [line] : []) : (lines ?? (line ? [line] : [])));
+  // Straight to the PM-241 label printer over Bluetooth (Chrome): one label
+  // per piece, no print window. Where the browser cannot, the dialog says so
+  // and "Open labels" below stays the way to print.
+  const printer = useLabelPrinter({
+    businessId,
+    containerId: labelsContainerId,
+    lineId: labelsContainerId ? labelsLineId : "",
+    lineIds: waitingIds,
+  });
+  const printerStatus = labelPrinterStatusText(printer.state, lang);
 
   async function printLabels() {
     if (busy || (!labelsContainerId && waitingIds.length === 0)) return;
@@ -133,10 +145,34 @@ export function ContainerLabelsDialog({
             <label className="lst-radio"><input type="radio" name="ctnlabelcopies" checked={labelChoice.copies === 1} disabled={busy} onChange={() => setLabelChoice((c) => ({ ...c, copies: 1 }))} /><span>1 — to replace a single torn label</span></label>
           </fieldset>
           {pieceTotal > 0 && <p className="lst-hint" role="status" data-no-translate>{labelCountText(pieceTotal, labelChoice.copies, lang)}</p>}
+          <fieldset className="lst-fieldset" aria-busy={printer.busy}>
+            <legend>Label printer</legend>
+            {printer.supported ? (
+              <p className="lst-hint" style={{ margin: 0 }}>Prints straight to the PM-241 label printer over Bluetooth: one label per piece, with no print window.</p>
+            ) : (
+              <p className="lst-hint" style={{ margin: 0 }}>Use Chrome to print straight to the label printer, or the Laawol app on iPhone.</p>
+            )}
+            {printerStatus && (
+              <div
+                className="lst-form-error"
+                role={labelPrinterStatusRole(printer.state)}
+                data-no-translate
+                style={{ marginBottom: 0, ...(printer.state.phase === "failed" ? {} : { background: "var(--mist)", borderColor: "var(--rule)", color: "var(--brand-strong)" }) }}
+              >
+                {printerStatus}
+              </div>
+            )}
+          </fieldset>
           <p className="lst-hint ctn-label-tip">Use weatherproof polyester or vinyl labels and cover each one with clear packing tape. On a thermal printer use thermal-transfer labels with a resin ribbon; direct-thermal labels fade in a hot container.</p>
         </div>
         <footer className="lst-modal-foot">
           <button className="lst-btn ghost" type="button" disabled={busy} onClick={onClose}>Cancel</button>
+          {printer.supported && (
+            <button className="lst-btn" type="button" disabled={busy || printer.busy} aria-busy={printer.busy} onClick={() => void printer.print()}>
+              {printer.busy ? <RefreshCw className="spin" size={16} /> : <Printer size={16} />}
+              {printer.busy ? "Printing..." : "Print on label printer"}
+            </button>
+          )}
           <button className="lst-add" type="button" disabled={busy} aria-busy={busy} onClick={() => void printLabels()}>
             {busy ? <RefreshCw className="spin" size={16} /> : <Tag size={16} />}
             {busy ? "Opening..." : "Open labels"}

@@ -15,7 +15,8 @@
 import { destinationCountryOptionForRow } from "./destination-countries.ts";
 import { centsToInput as ledgerCentsToInput, moneyText as ledgerMoneyText } from "./invoice-ledger.ts";
 import { pickupFeeOf, pieceSizeOf, piecesLineFields } from "./line-pieces.ts";
-import type { NextDepartureResult, PriceItem } from "./package-price-list.ts";
+import { payNowOn } from "./pay-now.ts";
+import type { BoxSizeId, NextDepartureResult, PriceItem } from "./package-price-list.ts";
 import {
   newPieceDraft as newPieceDraftOf,
   pieceDraftProblems,
@@ -96,7 +97,7 @@ export type RequestOption = {
 };
 
 /** What a business prices on one destination by one mode (public part of a route). */
-export type PublicRoute = { items: PriceItem[]; perLbCents: Record<string, number> };
+export type PublicRoute = { items: PriceItem[]; perLbCents: Record<string, number>; boxPricesCents?: Partial<Record<BoxSizeId, number>> };
 
 export type PickupPricing = {
   mode: string;
@@ -137,6 +138,9 @@ export type PublicRequest = {
     kind: PieceKind;
     description: string;
     sizeIn: unknown;
+    /** A sized box (Sea): its size id and the inches the customer typed, if any. */
+    boxSize?: string;
+    dimsIn?: { l: number; w: number; h: number } | null;
     photoCount: number;
     /** How the price list priced it; null when the piece waits for a staff estimate. */
     price: PublicPiecePrice | null;
@@ -153,6 +157,8 @@ export type PublicRequest = {
   confirmedVersion: number | null;
   confirmedAt: string;
   confirmedVia: string;
+  /** The optional card link: null until the price is final and the business turned Pay now on. */
+  payNow?: { status: string; amountCents: number; linkUrl: string; paidCents: number; refundedCents: number } | null;
   priceDropped: boolean;
   declineReason: string;
   expiresAt: string;
@@ -163,7 +169,8 @@ export type PublicRequest = {
 };
 
 export type PublicPiecePrice = {
-  source: "item" | "per_lb" | "barrel" | "";
+  source: "item" | "per_lb" | "barrel" | "box_size" | "";
+  boxSize?: string;
   label: string;
   quantity: number;
   unitCents: number | null;
@@ -472,6 +479,8 @@ export const REQUEST_ERROR_STEP: Record<string, RequestFieldStep> = {
   photo_invalid: "items",
   size_invalid: "items",
   quantity_invalid: "items",
+  box_size_invalid: "items",
+  dims_invalid: "items",
   weight_invalid: "items",
   category_invalid: "items",
   handoff_invalid: "handoff",
@@ -572,6 +581,10 @@ export const REQUEST_ERROR_MESSAGES: Record<string, string> = {
   proof_settings_invalid: "Check the proof settings: each switch is on or off.",
   // The counter's request lookup by code (receivePackageRequest action lookup_code).
   not_found: "No request with that code for this business.",
+  pay_not_paid: "This request was not paid online.",
+  refund_too_much: "That is more than is left to refund.",
+  refund_invalid: "Enter an amount to refund.",
+  not_allowed: "Only the owner, an admin or staff who can void may do this.",
   location_unknown: "That location is not one of yours.",
   pickup_areas_required: "Say which areas you pick up from.",
   price_required: "Price every piece, or none of them.",
@@ -589,6 +602,8 @@ export const REQUEST_ERROR_MESSAGES: Record<string, string> = {
   quantity_invalid: "Enter how many (1 to 50).",
   weight_invalid: "Enter the weight in pounds (0.1 to 2,000).",
   category_invalid: "Choose what kind of goods it is.",
+  box_size_invalid: "Choose a box size.",
+  dims_invalid: "Box inches must be 1 to 120 in each direction.",
   channel_invalid: "Refresh the page and send again.",
   pickup_out_of_area: "This business does not pick up at that address.",
   pickup_out_of_range: "That address is too far for this business.",
@@ -1108,7 +1123,8 @@ export type RequestSettingsDraft = {
   hours: Record<string, WeekHours>;
   pickupEnabled: boolean;
   pickupAreas: string;
-  cardBarrelBooking: boolean;
+  /** Pay now: the one card switch (it was "card payment for barrels"), now for every priced item. */
+  payNow: boolean;
   proof: ProofSettings;
 };
 
@@ -1125,7 +1141,7 @@ export function requestSettingsDraft(business: unknown, locations: readonly Sett
     hours,
     pickupEnabled: pickup.enabled === true,
     pickupAreas: text(pickup.areas, REQUEST_LIMITS.areas),
-    cardBarrelBooking: settings.cardBarrelBooking === true,
+    payNow: payNowOn(settings),
     proof: proofSettingsOf(business),
   };
 }
@@ -1180,7 +1196,9 @@ export function requestSettingsPayload(businessId: string, draft: RequestSetting
     acceptRequests: draft.acceptRequests,
     openingHours,
     pickup: { enabled: draft.pickupEnabled, areas: draft.pickupEnabled ? draft.pickupAreas.trim() : "" },
-    cardBarrelBooking: draft.cardBarrelBooking,
+    // One switch: the server writes both names to the same value.
+    payNow: draft.payNow,
+    cardBarrelBooking: draft.payNow,
     // Always sent: a save without `proof` keeps the stored switches, and the
     // dialog always shows them, so what is shown is what is saved.
     proof: {

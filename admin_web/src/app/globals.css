@@ -17225,3 +17225,204 @@ button.pkq-card:hover { border-color: var(--brand); }
 .pkq-weigh-row .lst-field { margin: 0; }
 .pkq-weigh-row .pkq-warn { grid-column: 1 / -1; }
 #pkq-receive-pieces, #pkq-receive-proof, #pkq-receive-ships-by { margin: 10px 0; }
+
+/* ==== BOX SIZES, BOX DESIGNER, PAY NOW (docs/PACKAGE_BOX_SIZES_PAY_NOW.md) START ==== */
+/* The box designer: a cardboard box, a sneaker and a person on a one-foot grid. */
+.bd { display: grid; gap: 10px; }
+.bd-stage {
+  background: linear-gradient(#eef6f5 0%, #f8fafc 62%, #e8f0ef 100%);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  cursor: grab;
+  height: clamp(300px, 84vw, 380px);
+  overflow: hidden;
+  perspective: 1100px;
+  position: relative;
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.bd-stage:active { cursor: grabbing; }
+.bd-stage:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.bd-origin { height: 0; left: 50%; position: absolute; top: 50%; transform-style: preserve-3d; width: 0; }
+.bd-world {
+  transform: translateY(var(--bd-lift, 0px)) rotateX(var(--bd-tilt, -22deg)) rotateY(var(--bd-spin, -32deg));
+  transform-style: preserve-3d;
+}
+.bd-floor {
+  background-image:
+    linear-gradient(to right, rgba(11, 59, 56, 0.18) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(11, 59, 56, 0.18) 1px, transparent 1px);
+  background-position: center;
+  left: 0;
+  position: absolute;
+  top: 0;
+  transition: width 0.18s ease, height 0.18s ease;
+}
+.bd-prism { height: 0; left: 0; position: absolute; top: 0; transform-style: preserve-3d; width: 0; transition: transform 0.18s ease; }
+.bd-face {
+  backface-visibility: visible;
+  box-sizing: border-box;
+  left: 0;
+  position: absolute;
+  top: 0;
+  transition: width 0.18s ease, height 0.18s ease, transform 0.18s ease;
+}
+.bd-box .bd-face { background: #c58a4f; border: 1px solid rgba(94, 58, 22, 0.55); }
+.bd-box .bd-face.front { background: #d49a5e; }
+.bd-box .bd-face.back { background: #b8803f; }
+.bd-box .bd-face.right { background: #b9824a; }
+.bd-box .bd-face.left { background: #a8733b; }
+.bd-box .bd-face.top { background: #e0ad73; }
+.bd-tape {
+  background: rgba(244, 228, 190, 0.85);
+  box-shadow: inset 0 0 0 1px rgba(120, 90, 40, 0.25);
+  left: 0;
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.bd-sneaker .bd-face { background: #f4f6f8; border: 1px solid rgba(15, 23, 42, 0.35); }
+.bd-sneaker .bd-face.right,
+.bd-sneaker .bd-face.back { background: #dfe4ea; }
+.bd-sneaker .bd-face.left { background: #cfd6de; }
+.bd-sneaker .bd-face.top { background: #ffffff; }
+.bd-person {
+  color: rgba(51, 65, 85, 0.62);
+  left: 0;
+  position: absolute;
+  top: 0;
+  transform-origin: 50% 100%;
+  transition: width 0.18s ease, height 0.18s ease;
+}
+.bd-person svg { display: block; fill: currentColor; height: 100%; width: 100%; }
+.bd-badge {
+  background: var(--brand-strong);
+  border-radius: 16px;
+  color: #fff;
+  font-size: 14px;
+  line-height: 1.25;
+  text-wrap: balance;
+  font-weight: 700;
+  left: 50%;
+  margin: 0;
+  max-width: calc(100% - 24px);
+  padding: 6px 14px;
+  position: absolute;
+  text-align: center;
+  top: 10px;
+  transform: translateX(-50%);
+  z-index: 2;
+}
+.bd-badge.quote { background: #92400e; }
+.bd-badge.plain { background: #475569; }
+.bd-hint { bottom: 8px; color: var(--muted); font-size: 12px; left: 0; margin: 0; pointer-events: none; position: absolute; right: 0; text-align: center; }
+.bd-legend { color: var(--muted); display: flex; flex-wrap: wrap; font-size: 12.5px; gap: 4px 14px; list-style: none; margin: 0; padding: 0; }
+.bd-legend li { align-items: center; display: inline-flex; gap: 6px; }
+.bd-key { border-radius: 3px; display: inline-block; height: 10px; width: 14px; }
+.bd-key.sneaker { background: #f4f6f8; border: 1px solid rgba(15, 23, 42, 0.45); }
+.bd-key.person { background: rgba(51, 65, 85, 0.62); }
+.bd-key.grid { background-image: linear-gradient(to right, rgba(11,59,56,.45) 1px, transparent 1px), linear-gradient(to bottom, rgba(11,59,56,.45) 1px, transparent 1px); background-size: 5px 5px; border: 1px solid rgba(11,59,56,.35); }
+.bd-dims { font-weight: 700; margin: 0; }
+.bd-controls { display: grid; gap: 10px; }
+.bd-control { align-items: center; display: grid; gap: 8px 12px; grid-template-columns: 64px minmax(0, 1fr) 92px; }
+.bd-control label { font-size: 14px; font-weight: 600; }
+.bd-slider { accent-color: var(--brand); min-width: 0; width: 100%; }
+.bd-number { align-items: center; display: inline-flex; gap: 6px; }
+.bd-number input { border: 1.5px solid var(--rule-strong); border-radius: 8px; font: inherit; min-height: 40px; min-width: 0; padding: 6px 8px; text-align: right; width: 100%; }
+.bd-number input[aria-invalid="true"] { border-color: var(--danger); }
+.bd-number span { color: var(--muted); font-size: 13px; }
+.bd-help { color: var(--muted); font-size: 12.5px; margin: 0; }
+@media (max-width: 420px) {
+  .bd-control { grid-template-columns: 56px minmax(0, 1fr) 84px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bd-face, .bd-prism, .bd-floor, .bd-person { transition: none; }
+}
+
+/* Box size picture cards (Send a package, Sea). */
+.bsz { display: grid; gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.bsz-card {
+  align-content: start;
+  background: var(--paper);
+  border: 1.5px solid var(--rule);
+  border-radius: 10px;
+  cursor: pointer;
+  display: grid;
+  gap: 2px;
+  justify-items: center;
+  padding: 8px 6px 10px;
+  position: relative;
+  text-align: center;
+}
+.bsz-card input { opacity: 0; pointer-events: none; position: absolute; }
+.bsz-card img { height: 88px; object-fit: contain; width: 88px; }
+.bsz-card small { color: var(--muted); font-size: 12px; line-height: 1.25; }
+.bsz-card .bsz-limit { font-variant-numeric: tabular-nums; }
+.bsz-card.active { background: var(--mist); border-color: var(--brand); box-shadow: 0 0 0 1px var(--brand); }
+.bsz-card:focus-within { outline: 2px solid var(--brand); outline-offset: 2px; }
+.bsz-price { color: var(--brand-strong); font-size: 14px; font-weight: 700; margin-top: 2px; }
+.bsz-price.quote { color: #92400e; }
+@media (min-width: 560px) { .bsz { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.pkr-box-line { gap: 12px; }
+.pkr-box-qty { align-items: center; display: flex; gap: 12px; justify-content: space-between; }
+.pkr-box-qty > span:first-child { font-weight: 600; font-size: 14px; }
+
+/* The request page: a box piece and the optional Pay now. */
+.pkr-estimate-box { display: grid; gap: 8px; margin-top: 4px; }
+.pkr-estimate-box-line { align-items: center; display: flex; gap: 8px; }
+.pkr-estimate-box-line img { flex: none; height: 44px; object-fit: contain; width: 44px; }
+.pkr-estimate-box .text-button { justify-self: start; }
+.pkr-pay { background: var(--paper-soft); border: 1px solid var(--rule); border-radius: 10px; display: grid; gap: 10px; padding: 14px; }
+.pkr-pay.paid { background: transparent; border: 0; padding: 0; }
+.pkr-pay-title { align-items: center; display: flex; gap: 8px; margin: 0; }
+.pkr-pay a.primary-button { align-items: center; display: inline-flex; justify-content: center; text-decoration: none; }
+
+/* The business's price list: Box sizes. */
+.plist-box-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.plist-box { align-content: start; border: 1px solid var(--rule); border-radius: 10px; display: grid; gap: 4px; justify-items: center; padding: 10px; text-align: center; }
+.plist-box img { height: 72px; object-fit: contain; width: 72px; }
+.plist-box small { color: var(--muted); font-size: 12px; }
+.plist-box .lst-field { justify-items: stretch; margin-top: 4px; text-align: left; width: 100%; }
+.plist-box.quote { background: var(--paper-soft); }
+
+/* A request's box and Pay now, as staff see them. */
+.pkq-box { display: grid; gap: 8px; margin-top: 4px; }
+.pkq-box-line { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; }
+.pkq-box-line img { flex: none; height: 48px; object-fit: contain; width: 48px; }
+.pkq-pay { border-top: 1px solid var(--rule); display: grid; gap: 8px; margin: 12px 0 0; padding-top: 12px; }
+.pkq-pay-head { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; margin: 0; }
+.pkq-pay-refunds { display: grid; gap: 4px; list-style: none; margin: 0; padding: 0; }
+.pkq-pay-refunds li { display: grid; gap: 1px; }
+.pkq-pay-refunds small { color: var(--muted); }
+
+/* Bills: Laawol owes you / Pay now payouts. */
+.pn-card { margin-top: 16px; }
+.pn-total { align-items: baseline; display: flex; gap: 8px; margin: 0 0 8px; }
+.pn-total strong { font-size: 22px; }
+.pn-note { color: var(--muted); margin: 0 0 8px; }
+.pn-weeks { display: grid; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.pn-weeks > li { border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; }
+.pn-week { align-items: center; background: transparent; border: 0; color: inherit; cursor: pointer; display: flex; font: inherit; gap: 12px; justify-content: space-between; padding: 10px 12px; text-align: left; width: 100%; }
+.pn-week.static { cursor: default; flex-wrap: wrap; }
+.pn-week > span { display: grid; flex: 1; gap: 2px; min-width: 0; }
+.pn-week svg { flex: none; transition: transform 0.15s ease; }
+.pn-week svg.open { transform: rotate(180deg); }
+.pn-status { color: var(--muted); }
+.pn-status.paid { color: var(--money); }
+.pn-status.due { color: #92400e; }
+.pn-neg { color: var(--danger); }
+.pn-lines { border-top: 1px solid var(--rule); display: grid; gap: 0; list-style: none; margin: 0; padding: 0 12px; }
+.pn-lines li { align-items: baseline; border-bottom: 1px solid var(--rule); display: grid; gap: 2px 12px; grid-template-columns: minmax(0, 1fr) auto; padding: 8px 0; }
+.pn-lines li:last-child { border-bottom: 0; }
+.pn-lines li > span:first-child { display: grid; gap: 1px; }
+.pn-lines small { color: var(--muted); }
+.pn-lines li > small { grid-column: 1 / -1; }
+.pn-recent { margin-top: 12px; }
+
+/* .icon-button is white on a dark header; inside the request cards it needs to read on white. */
+.pkr-card .icon-button { background: var(--paper); border-color: var(--rule-strong); color: var(--ink); }
+.pkr-card .icon-button:disabled { opacity: 0.4; }
+.pkr-stepper .icon-button { height: 38px; width: 38px; }
+/* ==== BOX SIZES, BOX DESIGNER, PAY NOW END ==== */

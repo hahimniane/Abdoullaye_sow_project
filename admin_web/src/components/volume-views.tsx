@@ -9,6 +9,7 @@ import { useMemo, useState } from "react";
 import { httpsCallable } from "firebase/functions";
 import { BarChart3, ChevronLeft, ChevronRight, Container, Download, RefreshCw } from "lucide-react";
 
+import { LaawolOwesYou } from "@/components/business/pay-now-payouts";
 import { TotalsStatus } from "@/components/totals-status";
 import { UserText } from "@/components/user-text";
 import { laawolLinesOf } from "@/lib/business-price-list";
@@ -638,6 +639,7 @@ export function BusinessVolumePanel({ businessId, previewMode }: { businessId: s
         </div>
       </section>
       <BusinessMonth businessId={businessId} month={month} previewMode={previewMode} showCustomerLines={false} />
+      <LaawolOwesYou businessId={businessId} previewMode={previewMode} />
     </div>
   );
 }

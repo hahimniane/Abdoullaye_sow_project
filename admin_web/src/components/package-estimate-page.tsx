@@ -2,9 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { httpsCallable } from "firebase/functions";
-import { CheckCircle2, Clock3, MapPin, Phone, Plane, RefreshCw, Ship, Truck, XCircle } from "lucide-react";
+import { CheckCircle2, Clock3, CreditCard, MapPin, Phone, Plane, RefreshCw, Ship, Truck, XCircle } from "lucide-react";
+
+import { BoxDesigner } from "@/components/box-designer/box-designer";
 
 import { functions } from "@/lib/firebase";
+import { boxPicture, requestBoxOf, requestBoxText, type BoxSizeId } from "@/lib/package-box";
 import { currentWebLanguage } from "@/lib/language";
 import {
   canReschedule,
@@ -26,8 +29,10 @@ import {
   hoursLines,
   moneyText,
   requestFailure,
+  type Lang,
   type PublicRequest,
 } from "@/lib/package-requests";
+import { customerPayView, paidOnlineText, payNowButtonText, publicPayNowOf, money } from "@/lib/pay-now";
 
 const CALL_TIMEOUT_MS = 20_000;
 
@@ -44,6 +49,32 @@ async function call<T>(name: string, data: Record<string, unknown>): Promise<T> 
   } finally {
     if (timer) clearTimeout(timer);
   }
+}
+
+/**
+ * A box piece on the request page: its picture, the size and the inches the
+ * customer gave, and the same 3D box (read-only, still spinnable) when there
+ * are inches. Nothing for a piece that is not a sized box.
+ */
+function RequestBox({ piece, lang }: { piece: PublicRequest["pieces"][number] | undefined; lang: Lang }) {
+  const [shown, setShown] = useState(false);
+  const box = requestBoxOf(piece, lang);
+  if (!box || !piece) return null;
+  const unit = piece.price?.unitCents ?? null;
+  const prices: Partial<Record<BoxSizeId, number>> = unit && box.size !== "xl" ? { [box.size]: unit } : {};
+  return (
+    <span className="pkr-estimate-box">
+      <span className="pkr-estimate-box-line">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img alt="" height={44} src={boxPicture(box.size)} width={44} />
+        <span data-no-translate>{requestBoxText(box, lang)}</span>
+      </span>
+      {box.dims && (
+        <button className="text-button" onClick={() => setShown((value) => !value)} type="button">{shown ? "Hide your box" : "See your box"}</button>
+      )}
+      {shown && box.dims && <BoxDesigner dims={box.dims} lang={lang} prices={prices} size={box.size} />}
+    </span>
+  );
 }
 
 /**
@@ -184,6 +215,11 @@ export function PackageEstimatePage({ token }: { token: string }) {
   const listCentsById = new Map(request.pieces.map((piece) => [piece.id, listPriceCents(piece.price)]));
   const pickupFeeCents = estimate ? estimate.pickupFeeCents : request.pickup?.feeCents ?? 0;
   const mayReschedule = open && canReschedule(request);
+  const piecesById = new Map(request.pieces.map((piece) => [piece.id, piece]));
+  // Pay now is optional: a link while the request is open, "Paid online" after.
+  const payOpen = state === "confirmed" || state === "price_dropped" || state === "received";
+  const pay = customerPayView(publicPayNowOf(request.payNow), payOpen, estimate ? estimate.totalCents : null);
+  const paidText = pay.kind === "paid" ? paidOnlineText(pay, lang) : null;
 
   return (
     <section className="pkr-card pkr-estimate">
@@ -233,6 +269,7 @@ export function PackageEstimatePage({ token }: { token: string }) {
                 <strong data-no-translate>{pieceKindLabel(row.kind, lang)}</strong>
                 {row.description && <small data-no-translate>{row.description}</small>}
                 {explanation && <small data-no-translate>{explanation}</small>}
+                <RequestBox lang={lang} piece={piecesById.get(row.id)} />
               </span>
               <span data-no-translate>{cents === null ? "—" : moneyText(cents, lang)}</span>
             </div>
@@ -252,6 +289,22 @@ export function PackageEstimatePage({ token }: { token: string }) {
         )}
       </div>
       {estimate?.note && <p className="pkr-note" data-no-translate>{estimate.note}</p>}
+      {pay.kind === "pay" && (
+        <div className="pkr-pay">
+          <p className="pkr-pay-title"><CreditCard aria-hidden="true" size={18} /> <strong>Pay by card now</strong></p>
+          <a className="primary-button pkr-big" data-no-translate href={pay.linkUrl} rel="noopener noreferrer" target="_blank">{payNowButtonText(pay.amountCents, lang)}</a>
+          <p className="pkr-hint">Paying online is optional. You can still pay at the counter in cash or by Zelle.</p>
+        </div>
+      )}
+      {pay.kind === "paid" && paidText && (
+        <div className="pkr-pay paid">
+          <p className="pkr-banner ok" role="status"><CheckCircle2 aria-hidden="true" size={18} /> <span data-no-translate>{paidText.paid}</span></p>
+          {paidText.refunded && <p className="pkr-hint" data-no-translate>{paidText.refunded}</p>}
+          {pay.balanceCents > 0 && (
+            <p className="pkr-hint"><span>Balance due at the counter</span> <strong data-no-translate>{money(pay.balanceCents, lang)}</strong></p>
+          )}
+        </div>
+      )}
       {estimate && (
         <p className="pkr-hint">
           {request.handoff === "collect"

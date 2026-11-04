@@ -32,7 +32,7 @@ test("the page talks to the one platformBilling callable the server exports", ()
 });
 
 test("the admin console shows Bills to Finance readers", () => {
-  assert.match(consoleSource, /activeTab === "bills" && <AdminBillsView previewMode=\{previewMode\} \/>/);
+  assert.match(consoleSource, /activeTab === "bills" && <AdminBillsView canPayOut=\{perms\.can\("finance"\)\} previewMode=\{previewMode\} \/>/);
   assert.match(consoleSource, /bills: "Bills",/);
   assert.match(consoleSource, /bills: "What businesses owe Laawol",/);
   assert.match(consoleSource, /bills: <Receipt \{\.\.\.props\} \/>,/);

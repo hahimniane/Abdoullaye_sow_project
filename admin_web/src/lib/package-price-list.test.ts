@@ -6,9 +6,15 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
+  BOX_DIM_MAX_IN,
+  BOX_SIZES,
+  BOX_SLACK_IN,
   CATEGORIES,
+  PRICE_LIST_MESSAGES,
   SORTS,
   addDays,
+  boxSizeFor,
+  cleanDims,
   counterPriceCents,
   dateKeyValid,
   foundVia,
@@ -128,4 +134,71 @@ test("re-pricing moves list-priced pieces and says when the total went up", () =
   assert.equal(out.changed, true);
   assert.equal(out.wentUp, true);
   assert.equal(out.pieces[0].estimateCents, 9000);
+});
+
+test("box sizes: the fixture has its cases and the sizes are Laawol's", () => {
+  const box = fixture.boxSizes;
+  assert.ok(box.sizeFor.length >= 20);
+  assert.ok(box.dims.length >= 5);
+  assert.ok(box.routes.length >= 10);
+  assert.ok(box.pieces.length >= 20);
+  assert.ok(box.baskets.length >= 3);
+  assert.deepEqual(
+    BOX_SIZES.map((b) => b.id),
+    ["small", "medium", "large", "xl"],
+  );
+  assert.equal(BOX_SLACK_IN, 1);
+  assert.equal(BOX_DIM_MAX_IN, 120);
+  assert.equal(BOX_SIZES[3].maxIn, null);
+});
+for (const c of fixture.boxSizes.sizeFor) {
+  test(`box size: ${c.name}`, () => {
+    assert.equal(boxSizeFor(c.dims), c.expect);
+  });
+}
+for (const c of fixture.boxSizes.dims) {
+  test(`box dims: ${c.name}`, () => {
+    assert.deepEqual(cleanDims(c.raw), c.expect);
+  });
+}
+for (const c of fixture.boxSizes.routes) {
+  test(`box route: ${c.name}`, () => {
+    assert.deepEqual(validateRoute(c.raw, c.mode), c.expect);
+  });
+}
+for (const c of fixture.boxSizes.pieces) {
+  test(`box piece: ${c.name}`, () => {
+    assert.deepEqual(pricePiece(c.route, c.piece, c.ctx || {}), c.expect);
+  });
+}
+for (const c of fixture.boxSizes.baskets) {
+  test(`box basket: ${c.name}`, () => {
+    assert.deepEqual(priceBasket(c.route, c.pieces, c.ctx), c.expect);
+  });
+}
+
+test("box sizes: a whole list refuses box prices on an air route", () => {
+  const air = validatePriceList({ routes: { gn: { air: { boxPricesCents: { small: 2500 } } } } }, ["gn"]);
+  assert.equal(air.routes, null);
+  assert.deepEqual(air.errors, ["box_sizes_sea_only"]);
+  const sea = validatePriceList({ routes: { gn: { sea: { boxPricesCents: { small: 2500 } } } } }, ["gn"]);
+  assert.deepEqual(sea.errors, []);
+  assert.deepEqual(sea.routes?.gn.sea?.boxPricesCents, { small: 2500 });
+  for (const code of ["box_sizes_sea_only", "box_price_invalid", "box_size_invalid", "dims_invalid"]) {
+    assert.ok(PRICE_LIST_MESSAGES[code], code);
+  }
+});
+
+test("box sizes: the counter keeps a box price and re-pricing follows the list", () => {
+  const route = { items: [], perLbCents: {}, departure: null, boxPricesCents: { medium: 3500 } };
+  const r = pricePiece(route, { kind: "box", boxSize: "medium", quantity: 2 });
+  assert.equal(counterPriceCents(r.price, 99), 7000);
+  const before = [{ id: "p1", estimateCents: r.estimateCents, price: r.price }];
+  const dearer = { ...route, boxPricesCents: { medium: 4000 } };
+  const out = repricePieces(before, dearer);
+  assert.equal(out.changed, true);
+  assert.equal(out.wentUp, true);
+  assert.equal(out.cents.get("p1"), 8000);
+  assert.equal(repricePieces(before, route).changed, false);
+  assert.equal(repricePieces(before, { ...route, boxPricesCents: {} }).changed, false);
 });

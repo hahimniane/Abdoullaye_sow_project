@@ -14,6 +14,7 @@
  * strings live in the components and french-dom.ts.
  */
 
+import { boxLineProblems, boxPieceFor, boxSizeLabel, newBoxLine, type BoxLine } from "./package-box.ts";
 import {
   CATEGORIES,
   LIMIT as PRICE_LIMIT,
@@ -155,7 +156,8 @@ export type BasketLine =
   | { key: string; type: "item"; catalogKey: string; label: string; categoryId: string; quantity: number }
   | { key: string; type: "barrel"; quantity: number }
   | { key: string; type: "weight"; categoryId: string; weightLb: string; sizePreset: string }
-  | { key: string; type: "other"; kind: "box" | "other"; description: string; photos: PhotoDraft[] };
+  | { key: string; type: "other"; kind: "box" | "other"; description: string; photos: PhotoDraft[] }
+  | BoxLine;
 
 let lineSerial = 0;
 export function newLineKey(): string {
@@ -195,8 +197,14 @@ export function addWeightLine(lines: readonly BasketLine[], categoryId: string):
   return [...lines, { key: newLineKey(), type: "weight", categoryId, weightLb: "", sizePreset: "" }];
 }
 
-export function addOtherLine(lines: readonly BasketLine[]): BasketLine[] {
-  return [...lines, { key: newLineKey(), type: "other", kind: "box", description: "", photos: [] }];
+/** "Something else": a box by default on Air; on Sea a box is its own line (addBoxLine), so this one starts as "other". */
+export function addOtherLine(lines: readonly BasketLine[], kind: "box" | "other" = "box"): BasketLine[] {
+  return [...lines, { key: newLineKey(), type: "other", kind, description: "", photos: [] }];
+}
+
+/** A Sea box: a size card, optional inches, a quantity and up to 3 photos (docs/PACKAGE_BOX_SIZES_PAY_NOW.md). */
+export function addBoxLine(lines: readonly BasketLine[]): BasketLine[] {
+  return [...lines, newBoxLine(newLineKey())];
 }
 
 /** A size button: fills the pounds with the preset's weight (still editable). */
@@ -225,7 +233,7 @@ export function pieceCount(lines: readonly BasketLine[]): number {
 }
 
 export function photosStillUploading(lines: readonly BasketLine[]): boolean {
-  return lines.some((line) => line.type === "other" && line.photos.some((photo) => photo.status === "uploading"));
+  return lines.some((line) => (line.type === "other" || line.type === "box") && line.photos.some((photo) => photo.status === "uploading"));
 }
 
 /** What is wrong with the items step, as the server's codes. */
@@ -239,6 +247,7 @@ export function itemsProblems(lines: readonly BasketLine[]): string[] {
   for (const line of lines) {
     if (line.type === "item" && !(line.quantity >= 1 && line.quantity <= PRICE_LIMIT.QUANTITY)) add("quantity_invalid");
     if (line.type === "weight" && readWeight(line.weightLb) === null) add("weight_invalid");
+    if (line.type === "box") boxLineProblems(line).forEach(add);
     if (line.type === "other") {
       if (!line.description.trim()) add("piece_description_required");
       if (line.description.trim().length > REQUEST_LIMITS.description) add("text_too_long");
@@ -263,6 +272,8 @@ export type SendPiece = {
   kind?: "barrel" | "box" | "other";
   description?: string;
   photoPaths?: string[];
+  boxSize?: string;
+  dimsIn?: { l: number; w: number; h: number };
 };
 
 /**
@@ -279,6 +290,8 @@ export function piecesFor(lines: readonly BasketLine[], option: RequestOption, m
       pieces.push(item
         ? { priceItemId: item.id, quantity: line.quantity, label: item.label }
         : { kind: "other", description: `${line.quantity} × ${line.label}`.slice(0, REQUEST_LIMITS.description) });
+    } else if (line.type === "box") {
+      pieces.push(boxPieceFor(line));
     } else if (line.type === "barrel") {
       for (let i = 0; i < line.quantity; i++) pieces.push({ kind: "barrel" });
     } else if (line.type === "weight") {
@@ -844,6 +857,11 @@ export function priceExplanation(price: PublicPiecePrice | PiecePrice | null | u
       : `${money(price.perLbCents)} per lb${weight ? ` × ${weight}` : ""}, weighed at drop-off`;
   }
   if (price.source === "barrel") return fr ? "Prix du baril" : "Barrel price";
+  if (price.source === "box_size") {
+    const each = price.quantity > 1 ? `${price.quantity} × ${money(price.unitCents)}` : money(price.unitCents);
+    const name = price.boxSize ? boxSizeLabel(price.boxSize, lang) : "";
+    return name ? `${name} · ${each}` : each;
+  }
   return "";
 }
 
@@ -853,6 +871,7 @@ export function listPriceCents(price: PublicPiecePrice | PiecePrice | null | und
   if (price.source === "item" && price.unitCents !== null) return price.unitCents * (price.quantity || 1);
   if (price.source === "per_lb" && price.perLbCents !== null && price.weightLb) return Math.round(price.perLbCents * price.weightLb);
   if (price.source === "barrel" && price.unitCents !== null) return price.unitCents;
+  if (price.source === "box_size" && price.unitCents !== null) return price.unitCents * (price.quantity || 1);
   return null;
 }
 

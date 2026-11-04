@@ -2760,7 +2760,7 @@ export function AdminConsole() {
               previewMode={previewMode}
             />
           )}
-          {activeTab === "bills" && <AdminBillsView previewMode={previewMode} />}
+          {activeTab === "bills" && <AdminBillsView canPayOut={perms.can("finance")} previewMode={previewMode} />}
           {activeTab === "support" && (
             <SupportCasesPanel
               scope="admin"

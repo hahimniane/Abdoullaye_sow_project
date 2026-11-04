@@ -68,6 +68,9 @@ test("the charts are inline SVG, with no charting dependency added", () => {
     "jspdf",
     "lucide-react",
     "next",
+    // The package label's QR for the PM-241 label printer (src/lib/
+    // package-label-canvas.ts): a zero-dependency encoder, pinned exactly.
+    "qrcode-generator",
     "react",
     "react-dom",
   ], "no charting library may be added");

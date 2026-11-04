@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { httpsCallable } from "firebase/functions";
-import { getDownloadURL, ref } from "firebase/storage";
 import {
   CheckCircle2,
   Clock,
@@ -22,6 +21,8 @@ import {
   XCircle,
 } from "lucide-react";
 
+import { RequestPhotos } from "@/components/business/request-photos";
+import { RequestBoxDetail, RequestPayNow } from "@/components/business/request-box-and-pay";
 import { ReceivedByOptions } from "@/components/business/received-by-options";
 import { ContainerLabelsDialog } from "@/components/business/container-labels-dialog";
 import { PiecesEditor } from "@/components/business/pieces-editor";
@@ -49,8 +50,9 @@ import {
   windowText,
 } from "@/lib/business-price-list";
 import { CopyValue } from "@/components/copy-value";
-import { auth, functions, storage } from "@/lib/firebase";
+import { auth, functions } from "@/lib/firebase";
 import { currentLanguage } from "@/lib/format";
+import { chargeTypeFor, payChip, requestPayNowOf } from "@/lib/pay-now";
 import { INVOICE_PAYMENT_METHODS, INVOICE_PAYMENT_METHOD_LABELS, centsToInput as ledgerCentsToInput, type InvoicePaymentMethod } from "@/lib/invoice-ledger";
 import { overlayDismiss } from "@/lib/overlay-dismiss";
 import { MessageCustomerButton } from "@/components/support/message-customer";
@@ -234,6 +236,8 @@ type PanelProps = {
   onFlash: (message: string) => void;
   enabled: boolean;
   focusId?: string;
+  /** The viewer may refund a Pay now payment (owner, admin, or staff who can void). */
+  canRefund?: boolean;
 };
 
 /**
@@ -241,7 +245,7 @@ type PanelProps = {
  * for, by what it needs - an estimate, or the customer's answer. One person
  * writes an estimate at a time; the others see who.
  */
-export function PackageRequestsPanel({ businessId, business, rows, loading, error, tabs, officeLocations, onFlash, enabled, focusId = "" }: PanelProps) {
+export function PackageRequestsPanel({ businessId, business, rows, loading, error, tabs, officeLocations, onFlash, enabled, focusId = "", canRefund = false }: PanelProps) {
   const [filter, setFilter] = useState<RequestFilter>("needs_estimate");
   const [openId, setOpenId] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -311,7 +315,7 @@ export function PackageRequestsPanel({ businessId, business, rows, loading, erro
         </div>
       )}
       {open && (
-        <EstimateDialog businessId={businessId} onClose={() => setOpenId("")} onFlash={onFlash} row={open} />
+        <EstimateDialog businessId={businessId} canRefund={canRefund} onClose={() => setOpenId("")} onFlash={onFlash} row={open} />
       )}
       {settingsOpen && (
         <RequestSettingsDialog business={business} businessId={businessId} officeLocations={officeLocations} onClose={() => setSettingsOpen(false)} onFlash={onFlash} />
@@ -323,39 +327,6 @@ export function PackageRequestsPanel({ businessId, business, rows, loading, erro
 // ---------------------------------------------------------------------------
 // The estimate editor, with its lock.
 // ---------------------------------------------------------------------------
-
-function RequestPhotos({ paths }: { paths: string[] }) {
-  const [urls, setUrls] = useState<Record<string, string>>({});
-  const key = paths.join("|");
-  useEffect(() => {
-    let active = true;
-    for (const path of key ? key.split("|") : []) {
-      getDownloadURL(ref(storage, path))
-        .then((url) => {
-          if (active) setUrls((current) => ({ ...current, [path]: url }));
-        })
-        .catch(() => undefined);
-    }
-    return () => {
-      active = false;
-    };
-  }, [key]);
-  if (paths.length === 0) return null;
-  return (
-    <span className="pkq-photos">
-      {paths.map((path) =>
-        urls[path] ? (
-          <a href={urls[path]} key={path} rel="noopener noreferrer" target="_blank">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img alt="Photo from the customer" src={urls[path]} />
-          </a>
-        ) : (
-          <span className="pkq-photo-wait" key={path}><RefreshCw className="spin" size={12} aria-hidden="true" /></span>
-        ),
-      )}
-    </span>
-  );
-}
 
 function HistoryList({ row }: { row: Row }) {
   const entries = requestHistory(row);
@@ -385,7 +356,7 @@ function HistoryList({ row }: { row: Row }) {
   );
 }
 
-function EstimateDialog({ businessId, row, onClose, onFlash }: { businessId: string; row: Row; onClose: () => void; onFlash: (m: string) => void }) {
+function EstimateDialog({ businessId, row, canRefund, onClose, onFlash }: { businessId: string; row: Row; canRefund: boolean; onClose: () => void; onFlash: (m: string) => void }) {
   const l = lang();
   const requestId = str(row.id);
   const [prices, setPrices] = useState<Record<string, string>>(() => estimateDraftPrices(row, l));
@@ -401,6 +372,7 @@ function EstimateDialog({ businessId, row, onClose, onFlash }: { businessId: str
   const [closing, setClosing] = useState(false);
   const held = useRef(false);
   const pieces = requestPieces(row);
+  const rawPieces: unknown[] = Array.isArray(row.pieces) ? row.pieces : [];
   const estimate = requestEstimate(row);
   const total = draftTotalCents(row, prices, pickupFee);
   const collect = str(row.handoff) === "collect";
@@ -513,6 +485,7 @@ function EstimateDialog({ businessId, row, onClose, onFlash }: { businessId: str
                 <span>
                   <strong><span data-no-translate>{`${index + 1}. `}</span><span data-no-translate>{pieceKindLabel(piece.kind, lang())}</span></strong>
                   {piece.description && <small data-no-translate>{piece.description}</small>}
+                  <RequestBoxDetail lang={l} piece={rawPieces[index]} />
                   <RequestPhotos paths={piece.photoPaths} />
                 </span>
                 <label className="lst-field pkq-price">
@@ -567,6 +540,7 @@ function EstimateDialog({ businessId, row, onClose, onFlash }: { businessId: str
             <span>Note for the customer (optional)</span>
             <input disabled={!editable} maxLength={300} onChange={(event) => setNote(event.target.value)} value={note} />
           </label>
+          <RequestPayNow businessId={businessId} canRefund={canRefund} lang={l} onFlash={onFlash} row={row} />
           {estimate && status === "confirmed" && <p className="lst-hint">The customer confirmed <span data-no-translate>{moneyText(Number(row.confirmedTotalCents) || 0, l)}</span>. A higher total asks them to confirm again; a lower one is only told.</p>}
           <HistoryList row={row} />
           {error && <div className="lst-form-error" role="alert">{error}</div>}
@@ -648,13 +622,15 @@ type ExpectedProps = {
   shipsByAir?: boolean;
   /** The business's time zone: "Coming today" is today there. */
   timeZone?: string;
+  /** The viewer may refund a Pay now payment (owner, admin, or staff who can void). */
+  canRefund?: boolean;
 };
 
 /**
  * The confirmed requests, above "In the shop": what customers said they will
  * bring (or the business will collect). "Received" turns one into a line.
  */
-export function ExpectedRequestsSection({ businessId, rows, staffOptions, onFlash, enabled, shipsByAir = false, timeZone = DEFAULT_TIME_ZONE }: ExpectedProps) {
+export function ExpectedRequestsSection({ businessId, rows, staffOptions, onFlash, enabled, shipsByAir = false, timeZone = DEFAULT_TIME_ZONE, canRefund = false }: ExpectedProps) {
   const expected = useMemo(() => expectedRequests(rows), [rows]);
   // "Coming today" (docs/PACKAGE_PRICE_LIST.md decision 6): the open
   // requests already loaded, narrowed to today in the business's zone. The
@@ -670,6 +646,8 @@ export function ExpectedRequestsSection({ businessId, rows, staffOptions, onFlas
   const [receiving, setReceiving] = useState<Row | null>(null);
   const [cancelling, setCancelling] = useState("");
   const [labels, setLabels] = useState<Row | null>(null);
+  const [detailId, setDetailId] = useState("");
+  const detail = expected.find((row) => str(row.id) === detailId) ?? null;
   // The counter's lookup by the customer's code (docs/AIR_PACKAGES.md §4.10):
   // R-XXXXX typed or scanned, with or without the dash. A found request opens
   // the same receive sheet as an Expected row, whatever its status.
@@ -734,8 +712,10 @@ export function ExpectedRequestsSection({ businessId, rows, staffOptions, onFlas
           row={receiving}
           staffOptions={staffOptions}
           shipsByAir={shipsByAir}
+          canRefund={canRefund}
         />
       )}
+      {detail && <RequestDetailDialog businessId={businessId} canRefund={canRefund} onClose={() => setDetailId("")} onFlash={onFlash} row={detail} />}
       {/* The labels dialog outlives the list: receiving the last expected
           request empties it, and the labels for that package must still print. */}
       {labels && <ContainerLabelsDialog businessId={businessId} line={labels} lines={[labels]} onClose={() => setLabels(null)} />}
@@ -789,8 +769,12 @@ export function ExpectedRequestsSection({ businessId, rows, staffOptions, onFlas
                 {card && <span className="status-pill ok"><CreditCard aria-hidden="true" size={12} /> Paid online</span>}
                 {str(row.confirmedVia) === "staff_phone" && <span className="status-pill muted">Customer agreed by phone</span>}
                 {estimate && <span className="status-pill muted" data-no-translate>{moneyText(estimate.totalCents, lang())}</span>}
+                {payChip(requestPayNowOf(row), lang()) && (
+                  <span className={`status-pill ${payChip(requestPayNowOf(row), lang())?.tone === "paid" ? "ok" : "muted"}`} data-no-translate>{payChip(requestPayNowOf(row), lang())?.text}</span>
+                )}
               </span>
               <span className="pkq-actions">
+                <button className="lst-btn ghost" onClick={() => setDetailId(str(row.id))} type="button">Details</button>
                 <button className="lst-add" disabled={!enabled} onClick={() => setReceiving(row)} type="button">
                   <CheckCircle2 size={14} aria-hidden="true" />{" "}
                   {/* "Received" alone is a date label in the dictionary ("Reçu le"). */}
@@ -813,7 +797,49 @@ export function ExpectedRequestsSection({ businessId, rows, staffOptions, onFlas
   );
 }
 
-function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onFlash, shipsByAir = false }: {
+/** What staff see for a confirmed request: who, when, every piece (box size, inches, the 3D box, photos), the total, and Pay now. */
+function RequestDetailDialog({ businessId, row, canRefund, onClose, onFlash }: { businessId: string; row: Row; canRefund: boolean; onClose: () => void; onFlash: (message: string) => void }) {
+  const l = lang();
+  const pieces = requestPieces(row);
+  const raw: unknown[] = Array.isArray(row.pieces) ? row.pieces : [];
+  const estimate = requestEstimate(row);
+  return (
+    <div className="lst-modal-overlay" role="dialog" aria-modal="true" {...overlayDismiss(onClose)}>
+      <div className="lst-modal pkq-modal" onClick={(event) => event.stopPropagation()}>
+        <header className="lst-modal-head">
+          <div>
+            <h3>Request</h3>
+            <p><span data-no-translate>{str(row.code)}</span></p>
+          </div>
+          <button aria-label="Close" className="lst-icon-btn" onClick={onClose} type="button"><X size={18} /></button>
+        </header>
+        <div className="lst-modal-body">
+          <div className="pkq-detail"><PersonLines row={row} withMessage /><WhenLine row={row} /></div>
+          <div className="pkq-pieces">
+            {pieces.map((piece, index) => (
+              <div className="pkq-piece" key={piece.id}>
+                <span>
+                  <strong><span data-no-translate>{`${index + 1}. `}</span><span data-no-translate>{pieceKindLabel(piece.kind, l)}</span></strong>
+                  {piece.description && <small data-no-translate>{piece.description}</small>}
+                  <RequestBoxDetail lang={l} piece={raw[index]} />
+                  <RequestPhotos paths={piece.photoPaths} />
+                </span>
+                {piece.estimateCents !== null && <span data-no-translate>{moneyText(piece.estimateCents, l)}</span>}
+              </div>
+            ))}
+          </div>
+          {estimate && <p className="pkq-total"><span>Estimated total</span> <strong data-no-translate>{moneyText(estimate.totalCents, l)}</strong></p>}
+          <RequestPayNow businessId={businessId} canRefund={canRefund} lang={l} onFlash={onFlash} row={row} />
+        </div>
+        <footer className="lst-modal-foot">
+          <button className="lst-btn ghost" onClick={onClose} type="button">Close</button>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onFlash, shipsByAir = false, canRefund = false }: {
   businessId: string;
   row: Row;
   staffOptions: readonly { id: string; name: string }[];
@@ -821,6 +847,7 @@ function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onF
   onReceived: (line: Row) => void;
   onFlash: (message: string) => void;
   shipsByAir?: boolean;
+  canRefund?: boolean;
 }) {
   const l = lang();
   const card = asRow(row.payment).timing === "card";
@@ -977,6 +1004,7 @@ function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onF
               lang={l}
             />
           )}
+          <RequestPayNow businessId={businessId} canRefund={canRefund} lang={l} onFlash={onFlash} row={row} />
           {card ? (
             <p className="lst-hint"><CreditCard size={14} aria-hidden="true" /> <span>Paid online by card</span> <span data-no-translate>{moneyText(Number(asRow(row.payment).paidCents) || 0, l)}</span></p>
           ) : (
@@ -1175,12 +1203,17 @@ function RequestSettingsDialog({ businessId, business, officeLocations, onClose,
           </section>
 
           <section className="pkq-settings-block">
-            <h4>Card payment for barrels</h4>
+            <h4>Pay now</h4>
             <label className="ctn-notify">
-              <input checked={draft.cardBarrelBooking} disabled={!isOwner} onChange={(event) => setDraft((d) => ({ ...d, cardBarrelBooking: event.target.checked }))} role="switch" type="checkbox" />
-              <span>Let customers pay barrels by card when they book</span>
+              <input checked={draft.payNow} disabled={!isOwner} onChange={(event) => setDraft((d) => ({ ...d, payNow: event.target.checked }))} role="switch" type="checkbox" />
+              <span>Let customers pay online by card (optional)</span>
             </label>
-            <small className="lst-hint">Paid orders arrive in the Waiting list as Expected — paid online.</small>
+            <small className="lst-hint">Customers get an optional link to pay by card once the price is final. You pay the card fee (2.9% + 30¢). Without Stripe, Laawol collects and pays you every Monday.</small>
+            <small className="lst-hint">
+              {chargeTypeFor(business) === "direct"
+                ? "Stripe is connected: card payments go straight to your account."
+                : "Stripe is not connected: Laawol collects the card payments and pays you every Monday. See Laawol owes you under This month."}
+            </small>
           </section>
 
           {/* Proof on every package (docs/AIR_PACKAGES.md §1 decision 3):

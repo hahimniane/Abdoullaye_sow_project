@@ -9,6 +9,7 @@
 import { centsToInput } from "./invoice-ledger.ts";
 import { readMoneyInput } from "./money-input.ts";
 import {
+  BOX_PRICED_IDS,
   CATEGORIES,
   LIMIT,
   MODES,
@@ -59,6 +60,8 @@ export type RouteDraft = {
   items: ItemDraft[];
   /** Dollars per pound as typed, by category id. */
   rates: Record<string, string>;
+  /** Dollars per box size as typed (Sea only): small, medium, large. Extra large is always quoted. */
+  boxPrices: Record<string, string>;
   departure: DepartureDraft;
 };
 
@@ -72,7 +75,7 @@ export function newItemDraft(): ItemDraft {
 }
 
 export function emptyRouteDraft(): RouteDraft {
-  return { items: [], rates: {}, departure: { days: [], everyWeeks: "1", anchorDate: "" } };
+  return { items: [], rates: {}, boxPrices: {}, departure: { days: [], everyWeeks: "1", anchorDate: "" } };
 }
 
 /** Dollars as the field shows them: "40", "12.50" (a French reader types a comma, which the reader accepts). */
@@ -103,6 +106,11 @@ export function routeDraftFrom(route: unknown, lang: Lang = "en"): RouteDraft {
     const typed = dollarsInput(cents, lang);
     if (typed) rates[categoryId] = typed;
   }
+  const boxPrices: Record<string, string> = {};
+  for (const [sizeId, cents] of Object.entries(asRow(r.boxPricesCents))) {
+    const typed = dollarsInput(cents, lang);
+    if (typed && (BOX_PRICED_IDS as readonly string[]).includes(sizeId)) boxPrices[sizeId] = typed;
+  }
   const dep = asRow(r.departure);
   const days = (Array.isArray(dep.weekdays) ? dep.weekdays : []).filter((d): d is WeekDayKey =>
     (WEEK_DAYS as readonly string[]).includes(String(d)),
@@ -110,6 +118,7 @@ export function routeDraftFrom(route: unknown, lang: Lang = "en"): RouteDraft {
   return {
     items,
     rates,
+    boxPrices,
     departure: {
       days: WEEK_DAYS.filter((d) => days.includes(d)),
       everyWeeks: String(Number(dep.everyWeeks) >= 1 ? Number(dep.everyWeeks) : 1),
@@ -138,7 +147,7 @@ function itemIsBlank(item: ItemDraft): boolean {
  * is dropped, not refused. A price that does not read as money goes as 0, so
  * the server's own `price_invalid` (also checked here first) names it.
  */
-export function routePayload(draft: RouteDraft): Row | null {
+export function routePayload(draft: RouteDraft, mode: PriceMode = "sea"): Row | null {
   const items = draft.items
     .filter((item) => !itemIsBlank(item))
     .map((item) => {
@@ -158,6 +167,14 @@ export function routePayload(draft: RouteDraft): Row | null {
     const cents = readMoneyInput(typed).cents;
     perLbCents[categoryId] = cents ?? 0;
   }
+  // Box sizes are Sea only; a typed price that does not read goes as 0 so the server names it.
+  const boxPricesCents: Record<string, number> = {};
+  if (mode === "sea") {
+    for (const [sizeId, typed] of Object.entries(draft.boxPrices ?? {})) {
+      if (!typed.trim()) continue;
+      boxPricesCents[sizeId] = readMoneyInput(typed).cents ?? 0;
+    }
+  }
   const weeks = Number(draft.departure.everyWeeks);
   const departure = draft.departure.days.length
     ? {
@@ -166,13 +183,14 @@ export function routePayload(draft: RouteDraft): Row | null {
         anchorDate: draft.departure.anchorDate,
       }
     : null;
-  if (items.length === 0 && Object.keys(perLbCents).length === 0 && !departure) return null;
-  return { items, perLbCents, departure };
+  const hasBoxes = Object.keys(boxPricesCents).length > 0;
+  if (items.length === 0 && Object.keys(perLbCents).length === 0 && !hasBoxes && !departure) return null;
+  return { items, perLbCents, ...(hasBoxes ? { boxPricesCents } : {}), departure };
 }
 
 /** Whether a country's mode holds nothing yet. */
-export function routeDraftIsEmpty(draft: RouteDraft): boolean {
-  return routePayload(draft) === null;
+export function routeDraftIsEmpty(draft: RouteDraft, mode: PriceMode = "sea"): boolean {
+  return routePayload(draft, mode) === null;
 }
 
 /** The whole map the server takes: every country, only its priced modes. */
@@ -181,7 +199,7 @@ export function listPayload(draft: ListDraft): { routes: Record<string, Row> } {
   for (const [countryId, pair] of Object.entries(draft)) {
     const out: Row = {};
     for (const mode of MODES) {
-      const route = routePayload(pair[mode]);
+      const route = routePayload(pair[mode], mode);
       if (route) out[mode] = route;
     }
     if (Object.keys(out).length) routes[countryId] = out;
@@ -201,10 +219,12 @@ export function routeSummary(route: unknown, lang: Lang = "en"): string {
   const r = asRow(route);
   const items = Array.isArray(r.items) ? r.items.length : 0;
   const rates = Object.keys(asRow(r.perLbCents)).length;
+  const boxes = Object.keys(asRow(r.boxPricesCents)).length;
   const days = Array.isArray(asRow(r.departure).weekdays) ? (asRow(r.departure).weekdays as string[]) : [];
   const parts: string[] = [];
   if (items) parts.push(lang === "fr" ? `${items} article${items > 1 ? "s" : ""}` : `${items} item${items > 1 ? "s" : ""}`);
   if (rates) parts.push(lang === "fr" ? `${rates} tarif${rates > 1 ? "s" : ""} au lb` : `${rates} per-lb rate${rates > 1 ? "s" : ""}`);
+  if (boxes) parts.push(lang === "fr" ? `${boxes} taille${boxes > 1 ? "s" : ""} de carton` : `${boxes} box size${boxes > 1 ? "s" : ""}`);
   if (days.length) parts.push(days.map((d) => weekdayShort(d as WeekDayKey, lang)).join(", "));
   return parts.join(" · ");
 }
@@ -279,7 +299,7 @@ export function priceListView(doc: unknown): PriceListView {
     const out: RoutePair = {};
     for (const mode of MODES) {
       const route = asRow(p[mode]);
-      if (Array.isArray(route.items) || Object.keys(asRow(route.perLbCents)).length || route.departure) {
+      if (Array.isArray(route.items) || Object.keys(asRow(route.perLbCents)).length || Object.keys(asRow(route.boxPricesCents)).length || route.departure) {
         out[mode] = route as unknown as Route;
       }
     }

@@ -204,6 +204,8 @@ type ContainersPanelProps = {
   /** The business record, for the country its customers' phones default to. */
   business?: FirestoreRow | null;
   previewMode?: boolean;
+  /** The viewer may refund a Pay now payment: the owner, an admin, or staff who can void. */
+  canRefundPayNow?: boolean;
   /**
    * Opened from a link (a package's "Open in business console"): the
    * container to open, and the line on it to mark and scroll to.
@@ -280,6 +282,7 @@ export function ContainersPanel({
   businessId,
   business = null,
   previewMode = false,
+  canRefundPayNow = false,
   focusContainerId = "",
   focusLineId = "",
   focusView = "",
@@ -1496,6 +1499,7 @@ export function ContainersPanel({
           onFlash={setFlash}
           enabled={enabled}
           focusId={focusRequestId}
+          canRefund={canRefundPayNow}
         />
       ) : view === "waiting" ? (
         <WaitingPackagesPanel
@@ -1507,6 +1511,7 @@ export function ContainersPanel({
               onFlash={setFlash}
               enabled={enabled}
               shipsByAir={shipsByAir}
+              canRefund={canRefundPayNow}
               timeZone={text((business as Row | null)?.packageRequestSettings && ((business as Row).packageRequestSettings as Row).timeZone, "") || undefined}
             />
           }

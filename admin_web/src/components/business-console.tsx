@@ -107,6 +107,7 @@ import {
   type ShippingStep,
 } from "@/lib/business-sidebar";
 import {PriceListPanel} from "@/components/business/price-list-panel";
+import {mayRefund} from "@/lib/pay-now";
 import {ShippingStepBar} from "@/components/business/shipping-steps";
 import {MenuMovedDialog} from "@/components/business/menu-moved-dialog";
 import {
@@ -882,6 +883,7 @@ export function BusinessConsole({
               canSendParkingWelcome={
                 (profile.role === "businessOwner" || profile.role === "admin") && !previewMode
               }
+              canSendParkingInvoices={!previewMode}
             />
           )}
           {activeTab === "ledger" && (
@@ -906,6 +908,7 @@ export function BusinessConsole({
                   businessId={businessId}
                   business={business}
                   previewMode={previewMode}
+                  canRefundPayNow={mayRefund(profile) && !previewMode}
                   view={activeShippingStep as ListView}
                   onViewChange={onContainerView}
                   onCounts={onContainerCounts}

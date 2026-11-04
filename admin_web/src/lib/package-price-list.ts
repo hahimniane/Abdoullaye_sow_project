@@ -33,6 +33,71 @@ export const SIZE_PRESETS = Object.freeze([
   { id: "big_box", lb: 70, en: "Big box", fr: "Grand carton" },
 ]);
 
+export type BoxSizeId = "small" | "medium" | "large" | "xl";
+export type BoxSize = {
+  id: BoxSizeId;
+  maxIn: readonly number[] | null;
+  en: string;
+  fr: string;
+  exampleEn: string;
+  exampleFr: string;
+};
+export type BoxDims = { l: number; w: number; h: number };
+
+/**
+ * Box sizes (docs/PACKAGE_BOX_SIZES_PAY_NOW.md section 1). Laawol sets them
+ * for every business; a business only prices them. `maxIn` is what the size
+ * fits inside, longest side first; `xl` is anything bigger, always quoted.
+ */
+export const BOX_SIZES: readonly BoxSize[] = Object.freeze([
+  {
+    id: "small",
+    maxIn: Object.freeze([18, 18, 18]),
+    en: "Small",
+    fr: "Petite",
+    exampleEn: "About a shoebox",
+    exampleFr: "Environ une boîte à chaussures",
+  },
+  {
+    id: "medium",
+    maxIn: Object.freeze([24, 18, 18]),
+    en: "Medium",
+    fr: "Moyenne",
+    exampleEn: "About a microwave box",
+    exampleFr: "Environ un carton de micro-ondes",
+  },
+  {
+    id: "large",
+    maxIn: Object.freeze([30, 24, 24]),
+    en: "Large",
+    fr: "Grande",
+    exampleEn: "About a TV box",
+    exampleFr: "Environ un carton de télé",
+  },
+  {
+    id: "xl",
+    maxIn: null,
+    en: "Extra large",
+    fr: "Très grande",
+    exampleEn: "Bigger than Large",
+    exampleFr: "Plus grande que Grande",
+  },
+] as BoxSize[]);
+export const BOX_SIZE_IDS: readonly string[] = Object.freeze(BOX_SIZES.map((b) => b.id));
+/** The sizes a business can price (`xl` is always quoted). */
+export const BOX_PRICED_IDS: readonly BoxSizeId[] = Object.freeze(["small", "medium", "large"] as BoxSizeId[]);
+/** A box may be this many inches over a size's limit, per dimension. */
+export const BOX_SLACK_IN = 1;
+/** A typed dimension is 1..120 inches, rounded to a tenth. */
+export const BOX_DIM_MAX_IN = 120;
+/** What a box line says (the stored description), by language. */
+export const BOX_LABELS: Readonly<Record<BoxSizeId, { en: string; fr: string }>> = Object.freeze({
+  small: { en: "Small box", fr: "Petite boîte" },
+  medium: { en: "Medium box", fr: "Boîte moyenne" },
+  large: { en: "Large box", fr: "Grande boîte" },
+  xl: { en: "Extra large box", fr: "Très grande boîte" },
+});
+
 export const LIMIT = Object.freeze({
   ROUTES: 80,
   ITEMS_PER_ROUTE: 60,
@@ -69,6 +134,10 @@ export const PRICE_LIST_MESSAGES: Readonly<Record<string, string>> = Object.free
   item_unknown: "That item is no longer on the price list.",
   quantity_invalid: "Enter how many (1 to 50).",
   weight_invalid: "Enter the weight in pounds (0.1 to 2,000).",
+  box_sizes_sea_only: "Box sizes are priced for Sea only.",
+  box_price_invalid: "Enter a box price between $0.01 and $10,000.",
+  box_size_invalid: "Choose a box size.",
+  dims_invalid: "Box inches must be 1 to 120 in each direction.",
 });
 
 // ---------------------------------------------------------------------------
@@ -92,6 +161,8 @@ export type Departure = {
 export type Route = {
   items: PriceItem[];
   perLbCents: Record<string, number>;
+  /** Sea only; absent when no box size is priced. */
+  boxPricesCents?: Partial<Record<BoxSizeId, number>>;
   departure: Departure | null;
 };
 
@@ -99,7 +170,9 @@ export type RoutePair = { sea?: Route; air?: Route };
 export type RoutesMap = Record<string, RoutePair>;
 
 export type PiecePrice = {
-  source: "item" | "per_lb" | "barrel";
+  source: "item" | "per_lb" | "barrel" | "box_size";
+  /** Only on `box_size` prices. */
+  boxSize?: BoxSizeId;
   itemId: string;
   label: string;
   categoryId: string;
@@ -172,6 +245,51 @@ function tenth(value: unknown): number {
   return Number.isFinite(n) ? Math.round(n * 10) / 10 : NaN;
 }
 
+/** {l, w, h} in inches, each 1..120 rounded to a tenth; null when any side is missing or out of range. */
+export function cleanDims(raw: unknown): BoxDims | null {
+  if (!isObject(raw)) return null;
+  const sides = [raw.l, raw.w, raw.h].map(tenth);
+  if (!sides.every((n) => n >= 1 && n <= BOX_DIM_MAX_IN)) return null;
+  return { l: sides[0], w: sides[1], h: sides[2] };
+}
+
+/**
+ * The smallest size a box fits in, turned any way, with 1 inch of slack per
+ * dimension (both triples sorted longest first); null when the inches are
+ * invalid.
+ */
+export function boxSizeFor(dims: unknown): BoxSizeId | null {
+  const clean = cleanDims(dims);
+  if (!clean) return null;
+  const box = [clean.l, clean.w, clean.h].sort((a, b) => b - a);
+  for (const size of BOX_SIZES) {
+    const max = size.maxIn;
+    if (max && box.every((n, i) => n <= max[i] + BOX_SLACK_IN)) return size.id;
+  }
+  return "xl";
+}
+
+/**
+ * What a box piece says it is. Typed inches win over the size the client
+ * chose; boxSize is "" when the piece names neither.
+ */
+export function boxOfPiece(piece: unknown): { boxSize: BoxSizeId | ""; dimsIn: BoxDims | null; error: string } {
+  const p: Record<string, Loose> = isObject(piece) ? piece : {};
+  const blank = (v: unknown) => v === undefined || v === null || v === "";
+  const typed = isObject(p.dimsIn) ? ["l", "w", "h"].some((k) => !blank(p.dimsIn[k])) : !blank(p.dimsIn);
+  if (typed) {
+    const dimsIn = cleanDims(p.dimsIn);
+    return dimsIn
+      ? { boxSize: boxSizeFor(dimsIn) as BoxSizeId, dimsIn, error: "" }
+      : { boxSize: "", dimsIn: null, error: "dims_invalid" };
+  }
+  const id = text(p.boxSize, 10);
+  if (!id) return { boxSize: "", dimsIn: null, error: "" };
+  return BOX_SIZE_IDS.includes(id)
+    ? { boxSize: id as BoxSizeId, dimsIn: null, error: "" }
+    : { boxSize: "", dimsIn: null, error: "box_size_invalid" };
+}
+
 /** A stable id for an item name ("Phone (any)" -> "i_phone_any"). */
 export function itemIdFor(label: string): string {
   const slug = text(label, LIMIT.LABEL)
@@ -211,8 +329,8 @@ export function cleanDeparture(raw: unknown): { departure: Departure | null; ok:
   };
 }
 
-/** Validates one route (a country by Sea or by Air). */
-export function validateRoute(raw: unknown): { route: Route | null; errors: string[] } {
+/** Validates one route (a country by Sea or by Air; box sizes are Sea only, `mode` defaults to sea). */
+export function validateRoute(raw: unknown, mode: string = "sea"): { route: Route | null; errors: string[] } {
   const errors: string[] = [];
   const add = (code: string) => {
     if (!errors.includes(code)) errors.push(code);
@@ -267,11 +385,35 @@ export function validateRoute(raw: unknown): { route: Route | null; errors: stri
     if (cents === null) add("per_lb_invalid");
     else perLbCents[categoryId] = cents;
   }
+  const boxPricesCents: Partial<Record<BoxSizeId, number>> = {};
+  const boxRaw = raw.boxPricesCents;
+  if (boxRaw !== undefined && boxRaw !== null) {
+    if (!isObject(boxRaw)) {
+      add("box_price_invalid");
+    } else {
+      for (const [sizeId, value] of Object.entries(boxRaw)) {
+        if (value === null || value === undefined || value === "") continue;
+        if (mode === "air") {
+          add("box_sizes_sea_only");
+          continue;
+        }
+        const cents = (BOX_PRICED_IDS as readonly string[]).includes(sizeId)
+          ? centsIn(value, LIMIT.PRICE_CENTS)
+          : null;
+        if (cents === null) add("box_price_invalid");
+        else boxPricesCents[sizeId as BoxSizeId] = cents;
+      }
+    }
+  }
   const { departure, ok } = cleanDeparture(raw.departure);
   if (!ok) add("departure_invalid");
   if (errors.length) return { route: null, errors };
-  const empty = items.length === 0 && Object.keys(perLbCents).length === 0 && !departure;
-  return { route: empty ? null : { items, perLbCents, departure }, errors };
+  const hasBoxes = Object.keys(boxPricesCents).length > 0;
+  const empty = items.length === 0 && Object.keys(perLbCents).length === 0 && !hasBoxes && !departure;
+  return {
+    route: empty ? null : { items, perLbCents, ...(hasBoxes ? { boxPricesCents } : {}), departure },
+    errors,
+  };
 }
 
 /** Validates a whole price list ({routes: {[countryId]: {sea?, air?}}}). */
@@ -304,7 +446,7 @@ export function validatePriceList(
     }
     const pair: RoutePair = {};
     for (const mode of MODES) {
-      const { route, errors: routeErrors } = validateRoute(value[mode]);
+      const { route, errors: routeErrors } = validateRoute(value[mode], mode);
       routeErrors.forEach(add);
       if (route) pair[mode] = route;
     }
@@ -338,13 +480,15 @@ export function excessRateCents(route: Loose, categoryId: string): number | null
  * Prices one piece a customer added, at today's prices.
  * - `{priceItemId, quantity}`: an item from the list;
  * - `{categoryId, weightLb}`: a category priced by the pound;
+ * - `{kind: "box", boxSize | dimsIn, quantity}`: a Sea box priced by size
+ *   (typed inches win); `xl` or a size the business did not price is "ask me";
  * - `{kind: "barrel"}`: priced by the destination's barrel price;
  * - anything else ("ask me"): no price, staff estimate it.
  */
 export function pricePiece(
   route: Loose,
   piece: unknown,
-  ctx: { barrelPriceCents?: number | null } = {},
+  ctx: { barrelPriceCents?: number | null; pickupFeeCents?: number | null; lang?: string } = {},
 ): PricedPiece {
   const p: Record<string, Loose> = isObject(piece) ? piece : {};
   const itemId = text(p.priceItemId, 44);
@@ -393,14 +537,13 @@ export function pricePiece(
       return { price: null, estimateCents: null, description: "", error: "weight_invalid" };
     }
     const rate = route?.perLbCents?.[categoryId];
-    const label = (CATEGORIES.find((c) => c.id === categoryId) as PriceCategory).en;
+    const category = CATEGORIES.find((c) => c.id === categoryId) as PriceCategory;
+    const label = category.en;
+    // The stored description is in the customer's language; the price's
+    // label stays English so re-pricing compares like with like.
+    const said = `${ctx.lang === "fr" ? category.fr : label} · ${weightLb} lb`;
     if (!Number.isInteger(rate) || rate <= 0) {
-      return {
-        price: null,
-        estimateCents: null,
-        description: `${label} · ${weightLb} lb`,
-        error: "",
-      };
+      return { price: null, estimateCents: null, description: said, error: "" };
     }
     return {
       price: {
@@ -416,9 +559,47 @@ export function pricePiece(
         weightLb,
       },
       estimateCents: Math.round(rate * weightLb),
-      description: `${label} · ${weightLb} lb`,
+      description: said,
       error: "",
     };
+  }
+  if (text(p.kind, 20) === "box") {
+    const box = boxOfPiece(p);
+    if (box.error) {
+      return { price: null, estimateCents: null, description: "", error: box.error };
+    }
+    if (box.boxSize) {
+      const quantity = Number(p.quantity ?? 1);
+      if (!Number.isInteger(quantity) || quantity < 1 || quantity > LIMIT.QUANTITY) {
+        return { price: null, estimateCents: null, description: "", error: "quantity_invalid" };
+      }
+      // The description is in the customer's language; the price's label
+      // stays English so re-pricing compares like with like.
+      const name = BOX_LABELS[box.boxSize][ctx.lang === "fr" ? "fr" : "en"];
+      const description = quantity > 1 ? `${quantity} × ${name}` : name;
+      const unit = route?.boxPricesCents?.[box.boxSize];
+      if (box.boxSize === "xl" || !Number.isInteger(unit) || unit <= 0) {
+        return { price: null, estimateCents: null, description, error: "" };
+      }
+      return {
+        price: {
+          source: "box_size",
+          boxSize: box.boxSize,
+          itemId: "",
+          label: BOX_LABELS[box.boxSize].en,
+          categoryId: "",
+          quantity,
+          unitCents: unit,
+          includedLb: 0,
+          excessPerLbCents: null,
+          perLbCents: null,
+          weightLb: null,
+        },
+        estimateCents: unit * quantity,
+        description,
+        error: "",
+      };
+    }
   }
   if (text(p.kind, 20) === "barrel") {
     const barrel = ctx.barrelPriceCents;
@@ -461,6 +642,7 @@ export function counterPriceCents(price: unknown, weighedLb: unknown): number | 
     return Math.round(pr.perLbCents * weight);
   }
   if (pr.source === "barrel") return pr.unitCents;
+  if (pr.source === "box_size") return pr.unitCents * pr.quantity;
   if (pr.source !== "item") return null;
   const base = pr.unitCents * pr.quantity;
   if (!(pr.includedLb > 0)) return base;
@@ -475,7 +657,7 @@ export function counterPriceCents(price: unknown, weighedLb: unknown): number | 
 export function priceBasket(
   route: Loose,
   pieces: unknown,
-  ctx: { barrelPriceCents?: number | null; pickupFeeCents?: number | null } = {},
+  ctx: { barrelPriceCents?: number | null; pickupFeeCents?: number | null; lang?: string } = {},
 ): BasketResult {
   const list: unknown[] = Array.isArray(pieces) ? pieces : [];
   const errors: string[] = [];
@@ -507,7 +689,7 @@ export function priceBasket(
 
 /**
  * Re-prices the stored pieces of an open request at today's list (owner
- * decision 10). Only pieces priced from the list (item / per pound) move; a
+ * decision 10). Only pieces priced from the list (item / per pound / box size) move; a
  * piece whose item left the list keeps its price; barrels and "ask me"
  * pieces are left alone.
  */
@@ -521,12 +703,14 @@ export function repricePieces<P extends Record<string, Loose>>(
   const cents = new Map<string, number>();
   const next = list.map((piece) => {
     const source = piece?.price?.source;
-    if (source !== "item" && source !== "per_lb") return piece;
+    if (source !== "item" && source !== "per_lb" && source !== "box_size") return piece;
     const again = pricePiece(
       route,
       source === "item"
         ? { priceItemId: piece.price.itemId, quantity: piece.price.quantity }
-        : { categoryId: piece.price.categoryId, weightLb: piece.price.weightLb },
+        : source === "box_size"
+          ? { kind: "box", boxSize: piece.price.boxSize, quantity: piece.price.quantity }
+          : { categoryId: piece.price.categoryId, weightLb: piece.price.weightLb },
     );
     if (!again.price || !Number.isInteger(again.estimateCents)) return piece;
     const before = Number.isInteger(piece.estimateCents) ? (piece.estimateCents as number) : null;

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240">
+  <defs><filter id="b" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="3"/></filter><filter id="b2" x="-30%" y="-100%" width="160%" height="300%"><feGaussianBlur stdDeviation="1.4"/></filter></defs>
+  <g filter="url(#b)" fill="#1f2a37" fill-opacity=".22">
+    <polygon points="107,97.5 236.9,172.5 133,232.5 3.1,157.5"/>
+  </g>
+  <ellipse cx="105" cy="220.8" rx="22.2" ry="3" fill="#1f2a37" fill-opacity=".28" filter="url(#b2)"/>
+  <g stroke="#7a4f24" stroke-opacity=".45" stroke-width=".8" stroke-linejoin="round">
+    <polygon fill="#A9763F" points="210.9,76.5 133,121.5 133,211.5 210.9,166.5"/>
+    <polygon fill="#C99A5E" points="29.1,61.5 133,121.5 133,211.5 29.1,151.5"/>
+    <polygon fill="#E3BA82" points="107,16.5 210.9,76.5 133,121.5 29.1,61.5"/>
+  </g>
+  <g><polygon fill="#EBD5A8" points="71.3,37.1 175.2,97.1 168.7,100.9 64.8,40.9"/><polygon fill="#C9AA72" points="175.2,97.1 168.7,100.9 168.7,118.9 175.2,115.1"/><polygon fill="#EBD5A8" points="155.7,44.6 162.2,48.4 84.3,93.4 77.8,89.6"/><polygon fill="#D9BC86" points="77.8,89.6 84.3,93.4 84.3,111.4 77.8,107.6"/><polygon fill="#D9BC86" points="64.1,136.4 97.9,155.9 97.9,151.1 64.1,131.6"/><polygon fill="#D9BC86" points="79,162 83.1,164.4 83.1,125.4 79,123"/></g>
+  <g transform="translate(87 220.5) scale(3)">
+    <path fill="#F4F1EA" d="M.7 0H11q1 0 1-1V-1.7H0V-.7Q0 0 .7 0z"/>
+    <path fill="#D6D0C2" d="M0 -.55H12V-.2Q12 0 11 0H.7Q0 0 0 -.7z"/>
+    <path fill="#0F766E" d="M.15 -1.7Q-.1 -3 .1 -4.1Q.3 -4.8 1.1 -4.75L2.8 -4.05Q3.4 -3.95 3.7 -4.5L4.1 -5Q4.7 -5.2 5 -4.7L7 -3.2Q9.6 -3.1 11.2 -2.6Q12 -2.3 12 -1.7z"/>
+    <path fill="#0A5A54" d="M.45 -4.8Q.8 -4.95 1.2 -4.8L2.8 -4.05L3 -3.7Q1.6 -4 .4 -3.9z"/>
+    <path fill="#0A5A54" d="M9 -3.1Q11.6 -2.9 12 -1.7H8.6Q9.2 -2.3 9 -3.1z"/>
+    <path fill="#F5A524" d="M.1 -4.1Q.05 -5 .7 -5.05L1.2 -4.9L1 -3.7L.1 -3.7z"/>
+    <path fill="none" stroke="#F5A524" stroke-width=".5" stroke-linecap="round" d="M2.2 -2.4Q5.5 -2.9 8.4 -2.5"/>
+    <path fill="none" stroke="#F4F1EA" stroke-width=".38" stroke-linecap="round" d="M4.7 -4.4l-0.5 0.95M5.3 -4.1l-0.5 0.95M5.9 -3.7l-0.5 0.95M6.5 -3.3l-0.5 0.95"/>
+  </g>
+</svg>
