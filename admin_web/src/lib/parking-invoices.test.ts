@@ -188,12 +188,12 @@ test("the run's status line: ready, sending, sent by a person, sent automaticall
   assert.equal(invoiceRunText({ ...sent, sentBy: "auto" }, { lang: "fr", sentOn: "3 nov. 2026" }), "Envoyées 3 nov. 2026 automatiquement · 2 factures envoyées · 1 échec");
 });
 
-test("the panel sits on Month end only for the owner, with the switch on, in the month just ended", () => {
+test("the panel sits on Month end for parking staff, with the switch on, in the month just ended", () => {
   assert.match(monthEnd, /const invoicesOffered = canSendInvoices && parkingWhatsAppEnabled\(business\) && invoicesOfferedFor\(monthKey\)/);
   assert.match(monthEnd, /\{invoicesOffered && <ParkingInvoicesPanel key=\{monthKey\} businessId=\{businessId\} monthKey=\{monthKey\} staffNames=\{staffNames\} \/>\}/);
-  assert.match(panels, /<ParkingMonthEnd[\s\S]*?canSendInvoices=\{canSendParkingWelcome\}/);
-  // The same owner / platform-admin flag the welcome uses, never in a preview.
-  assert.match(read("../components/business-console.tsx"), /canSendParkingWelcome=\{\s*\(profile\.role === "businessOwner" \|\| profile\.role === "admin"\) && !previewMode/);
+  assert.match(panels, /<ParkingMonthEnd[\s\S]*?canSendInvoices=\{canSendParkingInvoices\}/);
+  // Any staff with Parking (owner, 2026-11-04), never in a preview.
+  assert.match(read("../components/business-console.tsx"), /canSendParkingInvoices=\{!previewMode\}/);
 });
 
 test("the panel previews first, sends only what is ticked after a confirmation, and every wait ends", () => {

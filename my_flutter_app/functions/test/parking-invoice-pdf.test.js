@@ -168,7 +168,12 @@ describe("the invoice's lines", () => {
         "$882.00");
     const prior = by["Unpaid from before / Impayé des mois précédents"];
     assert.equal(prior.value, "$145.00");
+    // Every dollar of "from before" is listed: the Camry's unpaid
+    // September parking (still here in October) and the old jump start.
     assert.deepEqual(prior.sub, [{
+      label: "Earlier months / Mois précédents · Parking / Stationnement · " +
+        "2018 Toyota Camry",
+      value: "$120.00"}, {
       label: "Sep 10, 2026 · Jump start · 2018 Toyota Camry",
       value: "$25.00"}]);
     assert.equal(by["Payments received / Paiements reçus"].value, "-$50.00");

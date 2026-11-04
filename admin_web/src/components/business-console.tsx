@@ -882,6 +882,7 @@ export function BusinessConsole({
               canSendParkingWelcome={
                 (profile.role === "businessOwner" || profile.role === "admin") && !previewMode
               }
+              canSendParkingInvoices={!previewMode}
             />
           )}
           {activeTab === "ledger" && (

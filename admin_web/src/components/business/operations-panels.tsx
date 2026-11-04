@@ -357,6 +357,8 @@ type PanelProps = {
    * one-time WhatsApp welcome to current parking customers
    * (docs/PARKING_WHATSAPP.md §2). */
   canSendParkingWelcome?: boolean;
+  /** Month end "Send invoices": any staff with Parking (owner, 2026-11-04). */
+  canSendParkingInvoices?: boolean;
 };
 
 type DestinationDraft = {
@@ -5057,6 +5059,7 @@ export function ParkingPanel({
   focusView = "",
   canManageLedger = false,
   canSendParkingWelcome = false,
+  canSendParkingInvoices = false,
 }: PanelProps) {
   // Loads the make/model/year catalog on demand; re-renders when it is in.
   useCarCatalog();
@@ -5941,7 +5944,7 @@ export function ParkingPanel({
           onClose={() => setMonthEndKey("")}
           onOpenCar={(row) => editParking(row)}
           canSettleStaff={canManageLedger}
-          canSendInvoices={canSendParkingWelcome}
+          canSendInvoices={canSendParkingInvoices}
         />
       )}
 

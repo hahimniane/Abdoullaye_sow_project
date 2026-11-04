@@ -445,11 +445,10 @@ describe("invoices_preview", () => {
         [[true, "sent"], [true, "sent"], [true, "sent"]]);
       });
 
-  it("is the owner's: staff, another business's owner and the signed-out " +
-      "are refused; a platform admin may", async () => {
+  it("is the parking staff's: another business's owner and the signed-out " +
+      "are refused; staff and a platform admin may", async () => {
     await turnOn();
-    await assert.rejects(preview(STAFF),
-        refusal("permission-denied", "invoices_owner_only"));
+    assert.equal((await preview(STAFF)).success, true);
     await assert.rejects(preview(OTHER_OWNER),
         (error) => error.code === "permission-denied");
     assert.equal((await preview(PLATFORM_ADMIN)).success, true);
@@ -722,13 +721,11 @@ describe("invoices_send", () => {
         .length, 2);
   });
 
-  it("is the owner's, needs the switch on, and only the month that " +
-      "just ended", async () => {
+  it("is the parking staff's, needs the switch on, and only the month " +
+      "that just ended", async () => {
     await assert.rejects(send(),
         refusal("failed-precondition", "parking_whatsapp_off"));
     await turnOn();
-    await assert.rejects(send(STAFF),
-        refusal("permission-denied", "invoices_owner_only"));
     await assert.rejects(send(OTHER_OWNER),
         (error) => error.code === "permission-denied");
     for (const monthKey of ["2026-09", "2026-11", "", undefined, "2026-1"]) {
@@ -739,6 +736,15 @@ describe("invoices_send", () => {
     assert.deepEqual(await rowsOf(), []);
     assert.equal((await runRef().get()).exists, false);
   });
+
+  it("a staff member with parking sends them (owner, 2026-11-04)",
+      async () => {
+        await turnOn();
+        await seedLot();
+        const result = await send(STAFF);
+        assert.equal(result.sent, 3);
+        assert.equal((await runDoc()).sentBy, STAFF);
+      });
 
   it("goes by New York's calendar: until midnight on the 1st the month " +
       "has not ended", async () => {

@@ -15359,8 +15359,9 @@ async function parkingInvoiceRunView(db, run) {
 
 /**
  * updateBusinessParkingEntry's invoice actions, which are about the whole
- * business rather than one car (docs/PARKING_INVOICES.md §2): owner (or
- * platform admin) only.
+ * business rather than one car (docs/PARKING_INVOICES.md §2): anyone with
+ * the parking section previews and sends; the payment instructions are the
+ * owner's (or a platform admin's).
  *   set_payment_instructions {businessId, text}
  *   invoices_preview {businessId, monthKey?}
  *   invoices_send {businessId, monthKey, phones?}
@@ -15381,7 +15382,10 @@ async function parkingInvoicesAction(request, uid, action) {
         {reason: "business_required"});
   }
   const user = await requireBusinessPermission(uid, businessId, "parking");
-  if (user.role !== "businessOwner" && user.role !== "admin") {
+  // Sending the month's invoices is any parking staff's job (owner,
+  // 2026-11-04); the "How to pay" text stays the owner's.
+  if (action === "set_payment_instructions" &&
+      user.role !== "businessOwner" && user.role !== "admin") {
     throw parkingInvoicesRefusal(parkingInvoices.REFUSAL.OWNER_ONLY,
         "permission-denied");
   }

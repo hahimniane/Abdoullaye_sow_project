@@ -135,6 +135,16 @@ function invoiceModel(args) {
       value: money(c.priorUnpaidCents),
       tone: "due",
       sub: [
+        // Cars still here this month whose earlier months are unpaid: that
+        // money is in the total, so it is listed too (else a customer saw
+        // $2,278 "from before" with only $586 explained).
+        ...(c.cars || []).filter((b) => cents(b.priorUnpaidCents) > 0)
+            .map((b) => ({
+              label: ["Earlier months / Mois précédents",
+                "Parking / Stationnement", text(b.vehicle, 80)]
+                  .filter(Boolean).join(" · "),
+              value: money(b.priorUnpaidCents),
+            })),
         // Cars that left before the month still owing (PARKING_CARRYOVER.md).
         ...(c.olderCars || []).map((b) => ({
           label: [`${usDayKey(b.periodFrom)} – ${usDayKey(b.periodTo)}`,
