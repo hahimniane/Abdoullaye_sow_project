@@ -8056,6 +8056,18 @@
   "phaBusinessUnknown": "A business",
   "phaServicePackageRequest": "Package request",
   "phaSentToSelf": "You're the sender and the receiver",
+  "phaParkingStateParked": "Parked",
+  "phaParkingStateLeft": "Left",
+  "phaParkingStateCancelled": "Cancelled",
+  "phaParkingStateVoided": "Voided",
+  "phaParkingLine": "Parking · {code}",
+  "@phaParkingLine": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
   "phaRecordedOn": "Recorded {date}",
   "@phaRecordedOn": {
     "placeholders": {

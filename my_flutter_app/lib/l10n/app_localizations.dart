@@ -26572,6 +26572,36 @@ abstract class AppLocalizations {
   /// **'You\'re the sender and the receiver'**
   String get phaSentToSelf;
 
+  /// No description provided for @phaParkingStateParked.
+  ///
+  /// In en, this message translates to:
+  /// **'Parked'**
+  String get phaParkingStateParked;
+
+  /// No description provided for @phaParkingStateLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'Left'**
+  String get phaParkingStateLeft;
+
+  /// No description provided for @phaParkingStateCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get phaParkingStateCancelled;
+
+  /// No description provided for @phaParkingStateVoided.
+  ///
+  /// In en, this message translates to:
+  /// **'Voided'**
+  String get phaParkingStateVoided;
+
+  /// No description provided for @phaParkingLine.
+  ///
+  /// In en, this message translates to:
+  /// **'Parking · {code}'**
+  String phaParkingLine(String code);
+
   /// No description provided for @phaRecordedOn.
   ///
   /// In en, this message translates to:

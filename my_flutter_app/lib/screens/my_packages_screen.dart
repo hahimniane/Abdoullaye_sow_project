@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/guest_tracking_result.dart';
+import '../services/guest_tracking_service.dart'
+    show GuestTrackingLookupService;
 import '../services/phone_account_service.dart';
 import '../services/phone_accounts.dart';
 import '../theme/app_colors.dart';
@@ -12,7 +14,10 @@ import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/async_action_button.dart';
 import '../widgets/guest_tracking_lookup.dart'
-    show guestTrackingServiceLabel, guestTrackingStageLabel;
+    show
+        GuestTrackingLookupPage,
+        guestTrackingServiceLabel,
+        guestTrackingStageLabel;
 import '../widgets/package_request_widgets.dart' show requestStatusLabel;
 import '../widgets/phone_account_widgets.dart';
 import 'phone_sign_in_screen.dart';
@@ -29,6 +34,7 @@ class MyPackagesScreen extends StatefulWidget {
     super.key,
     this.service,
     this.phoneSignInClient,
+    this.guestTrackingService,
     this.loadTimeout = const Duration(seconds: 20),
   });
 
@@ -37,6 +43,9 @@ class MyPackagesScreen extends StatefulWidget {
 
   /// For tests: the sign-in a signed-out person is offered.
   final PhoneSignInClient? phoneSignInClient;
+
+  /// For tests: the code lookup a tapped parked car opens.
+  final GuestTrackingLookupService? guestTrackingService;
 
   /// The first page always resolves: after this it reads as a failure with
   /// Retry instead of a spinner that never ends.
@@ -181,6 +190,20 @@ class _MyPackagesScreenState extends State<MyPackagesScreen> {
     }
   }
 
+  /// A parked car's card opens that car's tracking page: the same page its
+  /// PK- code opens, already looked up.
+  void _openTracking(MyShipmentItem item) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => GuestTrackingLookupPage(
+          service: widget.guestTrackingService,
+          initialCode: item.trackingCode,
+          phoneSignInClient: widget.phoneSignInClient,
+        ),
+      ),
+    );
+  }
+
   Future<void> _signIn() async {
     final outcome = await Navigator.of(context).push<PhoneSignInOutcome>(
       MaterialPageRoute(
@@ -297,6 +320,9 @@ class _MyPackagesScreenState extends State<MyPackagesScreen> {
               item: item,
               reporting: _reporting.contains(item.key),
               onNotMine: () => _confirmNotMine(item),
+              onOpen: item.isParking && item.trackingCode.isNotEmpty
+                  ? () => _openTracking(item)
+                  : null,
             ),
           );
         }
@@ -342,6 +368,9 @@ String myShipmentStageText(AppLocalizations l10n, MyShipmentItem item) {
   if (item.isPackageRequest) {
     return requestStatusLabel(l10n, item.requestStatus, forCustomer: true);
   }
+  // A parked car is Parked / Left / Cancelled, never "Booked".
+  final parking = item.isParking ? _parkingStateText(l10n, item) : null;
+  if (parking != null) return parking;
   final stage = item.stageValue;
   if (stage == null) return '';
   return guestTrackingStageLabel(
@@ -351,8 +380,21 @@ String myShipmentStageText(AppLocalizations l10n, MyShipmentItem item) {
   );
 }
 
+String? _parkingStateText(AppLocalizations l10n, MyShipmentItem item) {
+  return switch (item.parkingState) {
+    'parked' => l10n.phaParkingStateParked,
+    'left' => l10n.phaParkingStateLeft,
+    'cancelled' => l10n.phaParkingStateCancelled,
+    'voided' => l10n.phaParkingStateVoided,
+    _ => null,
+  };
+}
+
+/// The card's title: a parked car is the car ("2018 Toyota RAV4"); anything
+/// else, its service.
 String myShipmentServiceText(AppLocalizations l10n, MyShipmentItem item) {
   if (item.isPackageRequest) return l10n.phaServicePackageRequest;
+  if (item.isParking && item.vehicleLabel.isNotEmpty) return item.vehicleLabel;
   final service = item.serviceType;
   return service == null
       ? l10n.guestTrackingServiceLabel
@@ -365,11 +407,15 @@ class _ShipmentCard extends StatelessWidget {
     required this.item,
     required this.reporting,
     required this.onNotMine,
+    this.onOpen,
   });
 
   final MyShipmentItem item;
   final bool reporting;
   final VoidCallback onNotMine;
+
+  /// Opens the record's tracking page; null when the card does not open one.
+  final VoidCallback? onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -382,148 +428,175 @@ class _ShipmentCard extends StatelessWidget {
       context,
     ).textTheme.bodySmall?.copyWith(color: AppColors.lightMuted, height: 1.35);
     final shipping = item.shipping;
+    final radius = BorderRadius.circular(AppSpacing.radiusMd);
+    final named = item.isParking && item.vehicleLabel.isNotEmpty;
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-      padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color: AppColors.paper,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        borderRadius: radius,
         border: Border.all(color: AppColors.rule),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Text(
-                  myShipmentServiceText(l10n, item),
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.ink,
-                  ),
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          key: onOpen == null ? null : Key('my-package-open:${item.key}'),
+          borderRadius: radius,
+          onTap: onOpen,
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        myShipmentServiceText(l10n, item),
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.ink,
+                        ),
+                      ),
+                    ),
+                    if (stage.isNotEmpty) ...[
+                      const SizedBox(width: AppSpacing.sm),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.mist.withValues(alpha: 0.6),
+                          borderRadius: BorderRadius.circular(
+                            AppSpacing.radiusSm,
+                          ),
+                        ),
+                        child: Text(
+                          stage,
+                          key: const Key('my-package-stage'),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.cobaltDeep,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
-              ),
-              if (stage.isNotEmpty) ...[
-                const SizedBox(width: AppSpacing.sm),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.mist.withValues(alpha: 0.6),
-                    borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-                  ),
-                  child: Text(
-                    stage,
-                    key: const Key('my-package-stage'),
+                if (item.trackingCode.isNotEmpty && named) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    l10n.phaParkingLine(item.trackingCode),
+                    key: const Key('my-package-parking-line'),
                     style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.2,
                       color: AppColors.cobaltDeep,
                     ),
                   ),
+                ] else if (item.trackingCode.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  SelectableText(
+                    item.trackingCode,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.2,
+                      color: AppColors.cobaltDeep,
+                    ),
+                  ),
+                ],
+                if (item.pieceCount > 0) ...[
+                  const SizedBox(height: 4),
+                  Text(l10n.pcsPieceCount(item.pieceCount), style: muted),
+                ],
+                if (item.parts.length > 1)
+                  for (final part in item.parts)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        [
+                          part.trackingCode,
+                          if (part.stage != null)
+                            guestTrackingStageLabel(
+                              l10n,
+                              item.serviceType ??
+                                  GuestTrackingServiceType.container,
+                              part.stage!,
+                            ),
+                          if (part.pieceCount > 0)
+                            l10n.pcsPieceCount(part.pieceCount),
+                        ].join(' · '),
+                        style: muted,
+                      ),
+                    ),
+                if (shipping != null) ...[
+                  const SizedBox(height: 4),
+                  if (shipping.shippingLine.isNotEmpty)
+                    Text(
+                      '${l10n.guestTrackingShippingLine}: ${shipping.shippingLine}',
+                      style: muted,
+                    ),
+                  if (shipping.containerNumber.isNotEmpty)
+                    Text(
+                      '${l10n.guestTrackingContainerNumber}: '
+                      '${shipping.containerNumber}',
+                      style: muted,
+                    ),
+                  if (shipping.bookingNumber.isNotEmpty)
+                    Text(
+                      '${l10n.guestTrackingBookingNumber}: ${shipping.bookingNumber}',
+                      style: muted,
+                    ),
+                ],
+                if (item.sentToSelf) ...[
+                  const SizedBox(height: 4),
+                  Text(l10n.phaSentToSelf, style: muted),
+                ],
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        [
+                          if (created != null)
+                            l10n.phaRecordedOn(displayDate(created, locale)),
+                          if (updated != null &&
+                              (created == null || updated.isAfter(created)))
+                            l10n.phaUpdatedOn(displayDateTime(updated, locale)),
+                        ].join(' · '),
+                        style: muted,
+                      ),
+                    ),
+                    if (reporting)
+                      const Padding(
+                        padding: EdgeInsets.all(AppSpacing.sm),
+                        child: SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    else
+                      TextButton(
+                        key: ValueKey('my-package-not-mine:${item.key}'),
+                        onPressed: onNotMine,
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppColors.muted,
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        child: Text(l10n.phaNotMine),
+                      ),
+                  ],
                 ),
               ],
-            ],
-          ),
-          if (item.trackingCode.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            SelectableText(
-              item.trackingCode,
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.2,
-                color: AppColors.cobaltDeep,
-              ),
             ),
-          ],
-          if (item.pieceCount > 0) ...[
-            const SizedBox(height: 4),
-            Text(l10n.pcsPieceCount(item.pieceCount), style: muted),
-          ],
-          if (item.parts.length > 1)
-            for (final part in item.parts)
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Text(
-                  [
-                    part.trackingCode,
-                    if (part.stage != null)
-                      guestTrackingStageLabel(
-                        l10n,
-                        item.serviceType ?? GuestTrackingServiceType.container,
-                        part.stage!,
-                      ),
-                    if (part.pieceCount > 0)
-                      l10n.pcsPieceCount(part.pieceCount),
-                  ].join(' · '),
-                  style: muted,
-                ),
-              ),
-          if (shipping != null) ...[
-            const SizedBox(height: 4),
-            if (shipping.shippingLine.isNotEmpty)
-              Text(
-                '${l10n.guestTrackingShippingLine}: ${shipping.shippingLine}',
-                style: muted,
-              ),
-            if (shipping.containerNumber.isNotEmpty)
-              Text(
-                '${l10n.guestTrackingContainerNumber}: '
-                '${shipping.containerNumber}',
-                style: muted,
-              ),
-            if (shipping.bookingNumber.isNotEmpty)
-              Text(
-                '${l10n.guestTrackingBookingNumber}: ${shipping.bookingNumber}',
-                style: muted,
-              ),
-          ],
-          if (item.sentToSelf) ...[
-            const SizedBox(height: 4),
-            Text(l10n.phaSentToSelf, style: muted),
-          ],
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  [
-                    if (created != null)
-                      l10n.phaRecordedOn(displayDate(created, locale)),
-                    if (updated != null &&
-                        (created == null || updated.isAfter(created)))
-                      l10n.phaUpdatedOn(displayDateTime(updated, locale)),
-                  ].join(' · '),
-                  style: muted,
-                ),
-              ),
-              if (reporting)
-                const Padding(
-                  padding: EdgeInsets.all(AppSpacing.sm),
-                  child: SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                )
-              else
-                TextButton(
-                  key: ValueKey('my-package-not-mine:${item.key}'),
-                  onPressed: onNotMine,
-                  style: TextButton.styleFrom(
-                    foregroundColor: AppColors.muted,
-                    visualDensity: VisualDensity.compact,
-                  ),
-                  child: Text(l10n.phaNotMine),
-                ),
-            ],
           ),
-        ],
+        ),
       ),
     );
   }

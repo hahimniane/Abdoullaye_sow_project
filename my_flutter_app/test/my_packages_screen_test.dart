@@ -25,6 +25,7 @@ Map<String, Object?> _row(
   String stage = 'in_transit',
   String trackingCode = 'CL-AAAAAA',
   int createdAtMs = 1767225600000,
+  Map<String, Object?> extra = const {},
 }) => {
   'key': key,
   'collection': key.split('/').first,
@@ -38,6 +39,7 @@ Map<String, Object?> _row(
   'pieceCount': 2,
   'createdAtMs': createdAtMs,
   'updatedAtMs': createdAtMs,
+  ...extra,
 };
 
 /// The `phoneAccount` callable, answered from a script.
@@ -74,16 +76,22 @@ Future<void> _pump(
   WidgetTester tester,
   _FakeCallable callable, {
   Locale locale = const Locale('en'),
+  GuestTrackingLookupService? tracking,
 }) async {
   await tester.pumpWidget(
-    MaterialApp(
-      theme: AppTheme.light,
-      locale: locale,
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
-      home: MyPackagesScreen(
-        service: PhoneAccountService(caller: callable.call),
-        phoneSignInClient: FakePhoneSignIn(),
+    ChangeNotifierProvider.value(
+      // The tracking page a parked car opens carries the language toggle.
+      value: LanguageProvider()..setLanguage(locale.languageCode),
+      child: MaterialApp(
+        theme: AppTheme.light,
+        locale: locale,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: MyPackagesScreen(
+          service: PhoneAccountService(caller: callable.call),
+          phoneSignInClient: FakePhoneSignIn(),
+          guestTrackingService: tracking,
+        ),
       ),
     ),
   );
@@ -91,7 +99,146 @@ Future<void> _pump(
   await tester.pump();
 }
 
+Map<String, Object?> _parkedRow(
+  String id, {
+  String code = 'PK-TK9VNW',
+  Map<String, Object?> extra = const {},
+}) => _row(
+  'parkedCars/$id',
+  businessName: 'Keren Auto Sales',
+  service: 'parking',
+  stage: 'booked',
+  trackingCode: code,
+  extra: extra,
+);
+
 void main() {
+  group('a parked car', () {
+    testWidgets('is the car, with its code and where the stay stands', (
+      tester,
+    ) async {
+      final callable = _FakeCallable()
+        ..pages.add({
+          'phoneLastTwo': '35',
+          'items': [
+            _parkedRow(
+              'p1',
+              extra: {
+                'vehicleLabel': '2018 Toyota RAV4',
+                'parkingState': 'parked',
+              },
+            ),
+            _parkedRow(
+              'p2',
+              code: 'PK-LEFT22',
+              extra: {
+                'vehicleLabel': '2015 Honda Civic',
+                'parkingState': 'left',
+              },
+            ),
+            _parkedRow(
+              'p3',
+              code: 'PK-CANCEL',
+              extra: {
+                'vehicleLabel': '2020 Kia Soul',
+                'parkingState': 'cancelled',
+              },
+            ),
+          ],
+          'nextCursor': null,
+        });
+      await _pump(tester, callable);
+      expect(find.text('2018 Toyota RAV4'), findsOneWidget);
+      expect(find.text('Parking · PK-TK9VNW'), findsOneWidget);
+      expect(find.text('Car parking'), findsNothing);
+      expect(find.text('Booked'), findsNothing);
+      final chips = tester
+          .widgetList<Text>(find.byKey(const Key('my-package-stage')))
+          .map((text) => text.data)
+          .toList();
+      expect(chips, ['Parked', 'Left', 'Cancelled']);
+      // Still reportable.
+      expect(
+        find.byKey(const ValueKey('my-package-not-mine:parkedCars/p1')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('an older server\'s row keeps the generic words', (
+      tester,
+    ) async {
+      final callable = _FakeCallable()
+        ..pages.add({
+          'phoneLastTwo': '35',
+          'items': [_parkedRow('p1')],
+          'nextCursor': null,
+        });
+      await _pump(tester, callable);
+      expect(find.text('Car parking'), findsOneWidget);
+      expect(find.text('PK-TK9VNW'), findsOneWidget);
+      expect(find.text('Booked'), findsOneWidget);
+    });
+
+    testWidgets('reads in French', (tester) async {
+      final callable = _FakeCallable()
+        ..pages.add({
+          'phoneLastTwo': '35',
+          'items': [
+            _parkedRow(
+              'p1',
+              extra: {
+                'vehicleLabel': '2018 Toyota RAV4',
+                'parkingState': 'left',
+              },
+            ),
+          ],
+          'nextCursor': null,
+        });
+      await _pump(tester, callable, locale: const Locale('fr'));
+      expect(find.text('Stationnement · PK-TK9VNW'), findsOneWidget);
+      expect(find.text('Partie'), findsOneWidget);
+    });
+
+    testWidgets('tapping the card opens that car\'s tracking page', (
+      tester,
+    ) async {
+      final callable = _FakeCallable()
+        ..pages.add({
+          'phoneLastTwo': '35',
+          'items': [
+            _parkedRow(
+              'p1',
+              extra: {
+                'vehicleLabel': '2018 Toyota RAV4',
+                'parkingState': 'parked',
+              },
+            ),
+          ],
+          'nextCursor': null,
+        });
+      final tracking = _CapturingLookup();
+      await _pump(tester, callable, tracking: tracking);
+      await tester.tap(find.byKey(const Key('my-package-open:parkedCars/p1')));
+      await tester.pumpAndSettle();
+      expect(tracking.looked, ['PK-TK9VNW']);
+      expect(find.byType(GuestTrackingLookupPage), findsOneWidget);
+    });
+
+    testWidgets('a container card does not open a page', (tester) async {
+      final callable = _FakeCallable()
+        ..pages.add({
+          'phoneLastTwo': '35',
+          'items': [_row('containerLines/a1')],
+          'nextCursor': null,
+        });
+      await _pump(tester, callable);
+      expect(
+        find.byKey(const Key('my-package-open:containerLines/a1')),
+        findsNothing,
+      );
+    });
+  });
+
   testWidgets('sections by role, grouped by business, newest first; no price', (
     tester,
   ) async {
@@ -434,6 +581,28 @@ class _OneRecord implements GuestTrackingLookupService {
   @override
   Future<GuestTrackingResult> lookup(String identifier) async =>
       GuestTrackingResult.found(record);
+
+  @override
+  Future<String> claimQuoteRequest({
+    required String trackingCode,
+    required String email,
+  }) async => '';
+}
+
+class _CapturingLookup implements GuestTrackingLookupService {
+  final looked = <String>[];
+
+  @override
+  Future<GuestTrackingResult> lookup(String identifier) async {
+    looked.add(identifier);
+    return GuestTrackingResult.found(
+      GuestTrackingRecord(
+        trackingCode: identifier,
+        service: GuestTrackingServiceType.parking,
+        stage: GuestTrackingStage.booked,
+      ),
+    );
+  }
 
   @override
   Future<String> claimQuoteRequest({

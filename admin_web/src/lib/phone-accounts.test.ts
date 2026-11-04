@@ -19,6 +19,8 @@ import {
   customerTabFromSearch,
   groupMyShipments,
   parseMyShipmentsPage,
+  myShipmentTrackingHref,
+  PARKING_STATE_LABEL,
   parsePhoneCodeChallenge,
   parsePhoneLinkResult,
   parsePhoneSignInToken,
@@ -152,7 +154,7 @@ function item(key: string, role: "sender" | "receiver", businessId: string, crea
   return {
     key, collection: key.split("/")[0], role, roles: [role], businessId, businessName: `Biz ${businessId}`,
     service: "container", trackingCode: key.split("/")[1].toUpperCase(), stage: "booked", pieceCount: 1,
-    parts: [], shipping: null, createdAtMs, updatedAtMs: createdAtMs, ...extra,
+    parts: [], shipping: null, vehicleLabel: "", parkingState: "", createdAtMs, updatedAtMs: createdAtMs, ...extra,
   };
 }
 
@@ -191,6 +193,24 @@ test("two packages made the same millisecond keep the server's order; sent to on
     item("parkedCars/q", "sender", "", 5, { businessName: "Other" }),
   ]);
   assert.equal(unnamed.mine.length, 2);
+});
+
+test("a parked car carries its name and stay, and links to its tracking page", () => {
+  const page = parseMyShipmentsPage({
+    items: [
+      { key: "parkedCars/p1", role: "sender", service: "parking", trackingCode: "PK-TK9VNW", stage: "booked",
+        vehicleLabel: "2018 Toyota RAV4", parkingState: "left" },
+      { key: "parkedCars/p2", role: "sender", service: "parking", trackingCode: "PK-OLD", parkingState: "bogus" },
+    ],
+  });
+  assert.equal(page.items[0].vehicleLabel, "2018 Toyota RAV4");
+  assert.equal(page.items[0].parkingState, "left");
+  assert.equal(PARKING_STATE_LABEL[page.items[0].parkingState as "left"], "Left");
+  assert.equal(page.items[0].service === "parking" && myShipmentTrackingHref(page.items[0]), "/?service=tracking&code=PK-TK9VNW");
+  // An older server sends neither; an unknown word is dropped.
+  assert.equal(page.items[1].vehicleLabel, "");
+  assert.equal(page.items[1].parkingState, "");
+  assert.equal(myShipmentTrackingHref({ service: "container", trackingCode: "CL-1" }), null);
 });
 
 test("getMyShipments' answer is read defensively and pages append without repeats", () => {

@@ -397,6 +397,8 @@ class MyShipmentItem {
     this.shipping,
     this.quoteCount = 0,
     this.requestStatus = '',
+    this.vehicleLabel = '',
+    this.parkingState = '',
     this.createdAtMs = 0,
     this.updatedAtMs = 0,
   });
@@ -422,11 +424,21 @@ class MyShipmentItem {
   final GuestContainerShipping? shipping;
   final int quoteCount;
   final String requestStatus;
+
+  /// A parked car by name ("2018 Toyota RAV4"); empty for anything else or
+  /// from an older server.
+  final String vehicleLabel;
+
+  /// Where a parked car's stay stands: parked | left | cancelled | voided.
+  /// Empty for anything else, a stay not begun, or an older server (the
+  /// card then keeps the generic stage word).
+  final String parkingState;
   final int createdAtMs;
   final int updatedAtMs;
 
   bool get isReceiver => role == PhoneRole.receiver;
   bool get isPackageRequest => service == packageRequestService;
+  bool get isParking => serviceType == GuestTrackingServiceType.parking;
 
   /// Sent to oneself: the card says both.
   bool get sentToSelf =>
@@ -492,6 +504,8 @@ class MyShipmentItem {
           : GuestContainerShipping.fromWire(serviceType, d['shipping']),
       quoteCount: _count(d['quoteCount']),
       requestStatus: callableString(d['requestStatus']),
+      vehicleLabel: callableString(d['vehicleLabel']),
+      parkingState: callableString(d['parkingState']),
       createdAtMs: callableInt(d['createdAtMs']),
       updatedAtMs: callableInt(d['updatedAtMs']),
     );
@@ -518,10 +532,7 @@ class MyShipmentsPage {
     final d = callableMap(raw);
     final rows = d['items'] is List ? d['items'] as List : const [];
     return MyShipmentsPage(
-      items: [
-        for (final row in rows)
-          ?MyShipmentItem.fromCallable(row),
-      ],
+      items: [for (final row in rows) ?MyShipmentItem.fromCallable(row)],
       nextCursor: MyShipmentsCursor.fromCallable(d['nextCursor']),
       phoneLastTwo: callableString(d['phoneLastTwo']),
     );

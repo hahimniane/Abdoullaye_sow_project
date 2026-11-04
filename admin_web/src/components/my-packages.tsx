@@ -15,6 +15,8 @@ import {
 import {
   appendShipmentPage,
   groupMyShipments,
+  myShipmentTrackingHref,
+  PARKING_STATE_LABEL,
   phoneRefusalOf,
   phoneRefusalText,
   type BusinessShipmentGroup,
@@ -287,14 +289,44 @@ function PackageCard({
   reportLocked: boolean;
 }) {
   const shipping = item.shipping;
+  // A parked car is the car, then "Parking · PK-…", and says whether it is still parked.
+  const car = item.service === "parking" && item.vehicleLabel ? item.vehicleLabel : "";
+  const href = myShipmentTrackingHref(item);
+  const statusWord =
+    item.service === "parking" && item.parkingState
+      ? PARKING_STATE_LABEL[item.parkingState]
+      : shipmentStageLabel(item.service, item.stage);
   return (
-    <article className="my-package-card">
+    <article className={`my-package-card${href ? " openable" : ""}`}>
       <div className="my-package-head">
         <div>
-          <span className="customer-service-kicker">{guestServiceLabel(item.service)}</span>
-          {item.trackingCode && <code className="ctn-code" data-no-translate>{item.trackingCode}</code>}
+          {car ? (
+            <>
+              {href ? (
+                <a className="my-package-title-link" href={href}>
+                  <span data-no-translate>{car}</span>
+                </a>
+              ) : (
+                <strong data-no-translate>{car}</strong>
+              )}
+              <span className="customer-service-kicker">
+                Parking
+                {item.trackingCode && (
+                  <>
+                    {" · "}
+                    <code className="ctn-code" data-no-translate>{item.trackingCode}</code>
+                  </>
+                )}
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="customer-service-kicker">{guestServiceLabel(item.service)}</span>
+              {item.trackingCode && <code className="ctn-code" data-no-translate>{item.trackingCode}</code>}
+            </>
+          )}
         </div>
-        <span className="status-pill compact">{shipmentStageLabel(item.service, item.stage)}</span>
+        <span className="status-pill compact">{statusWord}</span>
       </div>
       <dl className="my-package-facts">
         {item.pieceCount > 0 && (

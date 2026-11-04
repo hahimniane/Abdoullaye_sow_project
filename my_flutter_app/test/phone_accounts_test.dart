@@ -262,6 +262,25 @@ void main() {
       expect(MyShipmentItem.fromCallable({'key': 'nokey'}), isNull);
     });
 
+    test('a parked car carries its name and where its stay stands', () {
+      final car = _parsed({
+        'key': 'parkedCars/p1',
+        'service': 'parking',
+        'trackingCode': 'PK-TK9VNW',
+        'stage': 'booked',
+        'vehicleLabel': '2018 Toyota RAV4',
+        'parkingState': 'left',
+      });
+      expect(car.isParking, isTrue);
+      expect(car.vehicleLabel, '2018 Toyota RAV4');
+      expect(car.parkingState, 'left');
+      // An older server sends neither.
+      final old = _parsed({'key': 'parkedCars/p2', 'service': 'parking'});
+      expect(old.isParking, isTrue);
+      expect(old.vehicleLabel, '');
+      expect(old.parkingState, '');
+    });
+
     test('a page carries its cursor; none means the end', () {
       final page = MyShipmentsPage.fromCallable(<Object?, Object?>{
         'phoneLastTwo': '35',

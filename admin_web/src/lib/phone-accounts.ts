@@ -290,6 +290,25 @@ export type MyShipmentShipping = {
 
 export type MyShipmentPart = { trackingCode: string; stage: string; pieceCount: number };
 
+export type ParkingState = "parked" | "left" | "cancelled" | "voided";
+
+const PARKING_STATES: readonly string[] = ["parked", "left", "cancelled", "voided"];
+
+/** The status word on a parked car's card (French in french-dom.ts). */
+export const PARKING_STATE_LABEL: Record<ParkingState, string> = {
+  parked: "Parked",
+  left: "Left",
+  cancelled: "Cancelled",
+  voided: "Voided",
+};
+
+/** Where a card for this record opens its tracking page: the same page its code opens. */
+export function myShipmentTrackingHref(item: Pick<MyShipmentItem, "service" | "trackingCode">): string | null {
+  return item.service === "parking" && item.trackingCode
+    ? `/?service=tracking&code=${encodeURIComponent(item.trackingCode)}`
+    : null;
+}
+
 export type MyShipmentItem = {
   /** "<collection>/<id>": what "This isn't mine" sends back. */
   key: string;
@@ -304,6 +323,10 @@ export type MyShipmentItem = {
   pieceCount: number;
   parts: MyShipmentPart[];
   shipping: MyShipmentShipping | null;
+  /** A parked car by name ("2018 Toyota RAV4"); "" for anything else or an older server. */
+  vehicleLabel: string;
+  /** A parked car's stay: parked | left | cancelled | voided; "" when unknown (the card keeps the stage word). */
+  parkingState: ParkingState | "";
   createdAtMs: number;
   updatedAtMs: number;
 };
@@ -359,6 +382,8 @@ function parseItem(value: unknown): MyShipmentItem | null {
     pieceCount: wholeNumber(row.pieceCount),
     parts,
     shipping: parseShipping(row.shipping),
+    vehicleLabel: cleanString(row.vehicleLabel, 240),
+    parkingState: PARKING_STATES.includes(String(row.parkingState)) ? (row.parkingState as ParkingState) : "",
     createdAtMs,
     updatedAtMs: Math.max(wholeNumber(row.updatedAtMs), createdAtMs),
   };

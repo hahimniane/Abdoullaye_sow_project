@@ -15869,6 +15869,11 @@ button.pkq-card:hover { border-color: var(--brand); }
 .my-package-parts li { align-items: center; display: flex; flex-wrap: wrap; gap: 6px; }
 .my-package-parts small { color: var(--muted); }
 .my-package-note { color: var(--muted); font-size: 12px; margin: 0; }
+.my-package-card.openable { position: relative; }
+.my-package-title-link { color: inherit; font-weight: 700; text-decoration: none; }
+.my-package-title-link::after { content: ""; inset: 0; position: absolute; }
+.my-package-title-link:hover, .my-package-title-link:focus-visible { text-decoration: underline; }
+.my-package-card.openable .my-package-actions { position: relative; z-index: 1; }
 .my-package-actions { border-top: 1px solid var(--rule); display: flex; justify-content: flex-end; padding-top: 6px; }
 .my-package-actions > .text-button { font-size: 13px; }
 .my-packages-more { justify-self: center; }

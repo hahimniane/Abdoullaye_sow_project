@@ -8055,6 +8055,18 @@
   "phaBusinessUnknown": "Une entreprise",
   "phaServicePackageRequest": "Demande d'envoi de colis",
   "phaSentToSelf": "Vous êtes l'expéditeur et le destinataire",
+  "phaParkingStateParked": "Garée",
+  "phaParkingStateLeft": "Partie",
+  "phaParkingStateCancelled": "Annulée",
+  "phaParkingStateVoided": "Annulée",
+  "phaParkingLine": "Stationnement · {code}",
+  "@phaParkingLine": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
   "phaRecordedOn": "Enregistré le {date}",
   "@phaRecordedOn": {
     "placeholders": {

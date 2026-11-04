@@ -15630,6 +15630,23 @@ class AppLocalizationsEn extends AppLocalizations {
   String get phaSentToSelf => 'You\'re the sender and the receiver';
 
   @override
+  String get phaParkingStateParked => 'Parked';
+
+  @override
+  String get phaParkingStateLeft => 'Left';
+
+  @override
+  String get phaParkingStateCancelled => 'Cancelled';
+
+  @override
+  String get phaParkingStateVoided => 'Voided';
+
+  @override
+  String phaParkingLine(String code) {
+    return 'Parking · $code';
+  }
+
+  @override
   String phaRecordedOn(String date) {
     return 'Recorded $date';
   }

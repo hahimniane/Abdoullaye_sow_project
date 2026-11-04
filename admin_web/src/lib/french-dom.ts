@@ -6670,6 +6670,8 @@ Object.assign(TEXT_TRANSLATIONS, {
   "A Laawol business": "Une entreprise Laawol",
   "You are the sender and the receiver.": "Vous êtes l’expéditeur et le destinataire.",
   "This isn't mine": "Ce n’est pas à moi",
+  // A parked car's card in My packages: status words (Parked, Cancelled and Voided already exist).
+  Left: "Partie",
   "Thanks. We removed it from your list and asked the business to check the number.":
     "Merci. Nous l’avons retiré de votre liste et avons demandé à l’entreprise de vérifier le numéro.",
   // The profile's phone verification (customer-console.tsx).
