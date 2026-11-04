@@ -19536,4 +19536,66 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get pplErrBoxPriceInvalid =>
       'Entrez un prix de carton entre 0,01 \$ et 10 000 \$.';
+
+  @override
+  String get pmeStatement => 'Relevé';
+
+  @override
+  String get pmeOwesBusiness => 'Doit à l’entreprise';
+
+  @override
+  String get pmeBusinessOwesThem => 'L’entreprise leur doit';
+
+  @override
+  String get pmeSettled => 'Réglé';
+
+  @override
+  String get pmeCashHeldTitle => 'Argent détenu pour l’entreprise';
+
+  @override
+  String get pmeCashHeldNote =>
+      'Argent qu’ils ont encaissé pour l’entreprise et qu’ils détiennent encore, à la fin du mois';
+
+  @override
+  String get pmeCashHeldLoading =>
+      'Vérification de l’argent détenu par les membres de l’équipe…';
+
+  @override
+  String get pmeCashHeldFailed =>
+      'L’argent détenu par les membres de l’équipe n’a pas pu être vérifié ; leurs factures s’affichent sans lui.';
+
+  @override
+  String get pmePdfStatementTitle => 'RELEVÉ';
+
+  @override
+  String get pmePdfTeamMember => 'Membre de l’équipe';
+
+  @override
+  String get pmePdfCashHeld => 'Argent que vous gardez pour l’entreprise';
+
+  @override
+  String get pmePdfYouOwe => 'Vous devez à l’entreprise';
+
+  @override
+  String get pmePdfBusinessOwesYou => 'L’entreprise vous doit';
+
+  @override
+  String pmeIncludedInStatement(String name) {
+    return 'Inclus dans le relevé de $name';
+  }
+
+  @override
+  String pmeStatementParkingAndJobs(String amount) {
+    return '$amount de stationnement et travaux';
+  }
+
+  @override
+  String pmeStatementExpenses(String amount) {
+    return '− $amount de dépenses';
+  }
+
+  @override
+  String pmeStatementCash(String amount) {
+    return '$amount d’argent détenu';
+  }
 }

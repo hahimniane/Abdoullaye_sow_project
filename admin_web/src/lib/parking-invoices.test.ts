@@ -145,7 +145,7 @@ test("the preview lists each number once with its cars and balance; only the uns
   assert.equal(preview.run?.totalDueCents, 45_050);
   // A server that has not prepared the month answers run: null; garbage reads as empty.
   assert.equal(parseInvoicePreview({ monthKey: "2026-10", run: null, recipients: [] }).run, null);
-  assert.deepEqual(parseInvoicePreview(null), { monthKey: "", run: null, recipients: [] });
+  assert.deepEqual(parseInvoicePreview(null), { monthKey: "", run: null, recipients: [], skippedMembers: [] });
   assert.deepEqual(parseInvoicePreview({ recipients: "x" }).recipients, []);
   // A balance is never negative text and an unknown run status reads as ready.
   assert.equal(parseInvoicePreview({ recipients: [{ phone: "+1", totalDueCents: -5 }] }).recipients[0].totalDueCents, 0);
@@ -263,7 +263,8 @@ test("the messages query is three equalities and nothing else, opened per month,
   assert.match(component, /\(\) => \{\s*settled\.current = true;\s*setRows\(\[\]\);\s*setLoading\(false\);/);
   // Month end subscribes once the business has used the switch, and each card shows its line.
   assert.match(monthEnd, /useParkingInvoiceMessages\(businessId, monthKey, parkingWhatsAppEverEnabled\(business\)\)/);
-  assert.match(monthEnd, /invoiceMessages\.byCustomer\.get\(customer\.key\)!/);
+  // (a team member's statement is found by the member too)
+  assert.match(monthEnd, /invoiceMessages\.byCustomer\.get\(customer\.key\) \?\? \(customer\.statementStaffId/);
   assert.match(monthEnd, /<InvoiceMessageStatus line=/);
   // The month-end view still never writes the database itself.
   assert.doesNotMatch(component, /setDoc\(|updateDoc\(|addDoc\(|deleteDoc\(/);

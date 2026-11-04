@@ -11139,5 +11139,93 @@
         "type": "String"
       }
     }
+  },
+  "pmeStatement": "Relevé",
+  "@pmeStatement": {
+    "description": "The badge / title of a team member's month-end statement (their parking and lot jobs, less expenses they paid, plus cash they hold for the business)."
+  },
+  "pmeOwesBusiness": "Doit à l’entreprise",
+  "@pmeOwesBusiness": {
+    "description": "On a team member's month-end card: what they owe the business."
+  },
+  "pmeBusinessOwesThem": "L’entreprise leur doit",
+  "@pmeBusinessOwesThem": {
+    "description": "On a team member's month-end card: the business owes them money."
+  },
+  "pmeSettled": "Réglé",
+  "@pmeSettled": {
+    "description": "On a team member's month-end card: nobody owes anything."
+  },
+  "pmeCashHeldTitle": "Argent détenu pour l’entreprise",
+  "@pmeCashHeldTitle": {
+    "description": "A line on a team member's statement: money they took in for the business and still hold."
+  },
+  "pmeCashHeldNote": "Argent qu’ils ont encaissé pour l’entreprise et qu’ils détiennent encore, à la fin du mois",
+  "@pmeCashHeldNote": {
+    "description": "Under 'Cash held for the business' on a statement."
+  },
+  "pmeCashHeldLoading": "Vérification de l’argent détenu par les membres de l’équipe…",
+  "@pmeCashHeldLoading": {
+    "description": "Shown while the cash team members hold is being loaded."
+  },
+  "pmeCashHeldFailed": "L’argent détenu par les membres de l’équipe n’a pas pu être vérifié ; leurs factures s’affichent sans lui.",
+  "@pmeCashHeldFailed": {
+    "description": "Shown when the cash team members hold could not be loaded."
+  },
+  "pmePdfStatementTitle": "RELEVÉ",
+  "@pmePdfStatementTitle": {
+    "description": "The title of a team member's statement PDF."
+  },
+  "pmePdfTeamMember": "Membre de l’équipe",
+  "@pmePdfTeamMember": {
+    "description": "Label above the name on a team member's statement PDF."
+  },
+  "pmePdfCashHeld": "Argent que vous gardez pour l’entreprise",
+  "@pmePdfCashHeld": {
+    "description": "A row on a team member's statement PDF / text."
+  },
+  "pmePdfYouOwe": "Vous devez à l’entreprise",
+  "@pmePdfYouOwe": {
+    "description": "The final row of a statement: what the team member owes the business."
+  },
+  "pmePdfBusinessOwesYou": "L’entreprise vous doit",
+  "@pmePdfBusinessOwesYou": {
+    "description": "The final row of a statement when the business owes the team member."
+  },
+  "pmeIncludedInStatement": "Inclus dans le relevé de {name}",
+  "@pmeIncludedInStatement": {
+    "description": "On a team member's second bill: it is part of their statement.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeStatementParkingAndJobs": "{amount} de stationnement et travaux",
+  "@pmeStatementParkingAndJobs": {
+    "description": "First part of the line under a statement's total.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeStatementExpenses": "− {amount} de dépenses",
+  "@pmeStatementExpenses": {
+    "description": "Second part of the line under a statement's total.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeStatementCash": "{amount} d’argent détenu",
+  "@pmeStatementCash": {
+    "description": "Third part of the line under a statement's total (amount carries its sign).",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
   }
 }

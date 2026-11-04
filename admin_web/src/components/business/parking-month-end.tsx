@@ -1,10 +1,19 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { httpsCallable } from "firebase/functions";
 import { ArrowLeft, Banknote, ChevronDown, ChevronLeft, ChevronRight, Copy, FileDown, RefreshCw, SquarePen, Undo2, X } from "lucide-react";
 
-import { BUSINESS_ACCOUNT_RECEIVER, businessAccountName } from "@/lib/staff-balances";
+import { BUSINESS_ACCOUNT_RECEIVER, STAFF_BALANCES_TIMEOUT_MS, businessAccountName } from "@/lib/staff-balances";
+import {
+  cardOwes,
+  cardPaid,
+  hasTeamBills,
+  staffStatementCashFrom,
+  staffStatementCashRequest,
+  staffStatements,
+  statementCards,
+} from "@/lib/staff-statement";
 import { ReceivedByOptions } from "@/components/business/received-by-options";
 import { TeamTag } from "@/components/business/whose-car-field";
 import { auth, functions } from "@/lib/firebase";
@@ -48,6 +57,7 @@ import {
   parkingMonthSummary,
   previousMonthKey,
   shiftMonthKey,
+  staffCreditEntries,
   type ParkingMonthCustomer,
   type ParkingMonthStaffCredit,
 } from "@/lib/parking-month-statement";
@@ -171,8 +181,62 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
     [summary],
   );
   const thisMonth = new Date().toISOString().slice(0, 7);
+
+  // A team member's STATEMENT (docs/PARKING_INVOICES.md §6): their card shows
+  // exactly what the WhatsApp statement says - parking and jobs, less the
+  // expenses not yet credited, plus the cash they hold for the business at
+  // the END of the month. The cash comes from the server (it needs every
+  // payment and handover); until it arrives, or if it cannot, team members
+  // show as before with a note - never half a statement. Loading always
+  // resolves: an answer, a refusal or the timeout.
+  const needsCash = Boolean(businessId) && credit.available && !inputs.loading && hasTeamBills(summary.customers);
+  const [cash, setCash] = useState<{ state: "idle" | "loading" | "ready" | "failed"; held: Record<string, number> }>({ state: "idle", held: {} });
+  useEffect(() => {
+    if (!needsCash) {
+      setCash({ state: "idle", held: {} });
+      return undefined;
+    }
+    let live = true;
+    let timer = 0;
+    setCash((current) => ({ state: "loading", held: current.held }));
+    const timeout = new Promise<never>((_, reject) => {
+      timer = window.setTimeout(() => reject(new Error("timeout")), STAFF_BALANCES_TIMEOUT_MS);
+    });
+    Promise.race([httpsCallable(functions, "updateLotExpenseEntry")(staffStatementCashRequest(businessId, monthKey)), timeout])
+      .then((response) => {
+        if (live) setCash({ state: "ready", held: staffStatementCashFrom((response as { data?: unknown }).data) });
+      })
+      .catch(() => {
+        if (live) setCash({ state: "failed", held: {} });
+      })
+      .finally(() => window.clearTimeout(timer));
+    return () => {
+      live = false;
+      window.clearTimeout(timer);
+    };
+  }, [needsCash, businessId, monthKey, billPays.rows.length]);
+  const statements = useMemo(() => {
+    if (!staffCredit || !needsCash || cash.state !== "ready") return null;
+    return staffStatements(summary.customers, {
+      monthKey,
+      entries: staffCreditEntries(staffCredit, monthKey),
+      repayments: staffCredit.repayments,
+      lines: staffCredit.lines,
+      staffNames,
+      held: cash.held,
+    });
+  }, [staffCredit, needsCash, cash, summary.customers, monthKey, staffNames]);
+  const cards = useMemo(
+    () => (statements ? statementCards(summary.customers, statements.statements, statements.customerKeys) : summary.customers),
+    [statements, summary.customers],
+  );
+  const cardsOwing = useMemo(() => cards.filter(cardOwes), [cards]);
+  const cardsPaid = useMemo(() => cards.filter(cardPaid), [cards]);
+  // What each card is owed on: the statement's number for a team member.
+  const stillOwedCents = cardsOwing.reduce((sum, c) => sum + (c.statementOwesCents ?? c.dueCents), 0);
+  const origByKey = useMemo(() => new Map(summary.customers.map((c) => [c.key, c])), [summary.customers]);
   // One row per customer (grouped by phone), their cars underneath.
-  const listed = view === "all" ? summary.customers : view === "paid" ? summary.customersPaid : summary.customersOwing;
+  const listed = view === "all" ? cards : view === "paid" ? cardsPaid : cardsOwing;
   const rowById = useMemo(() => {
     const map = new Map<string, FirestoreRow>();
     rows.forEach((r) => map.set(String(r.id), r));
@@ -183,7 +247,10 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
     setBusyId("summary");
     setFlash("");
     try {
-      const blob = await buildParkingMonthSummaryPdf({ business: identity, summary, language: lang, estimate: estimating, linkedCustomerNames });
+      // A team member's line is their statement's amount, as on the card.
+      const pdfCards = cards.filter((c) => !c.includedInStatementOf).map((c) => (c.statementOwesCents === undefined ? c : { ...c, dueCents: Math.max(0, c.statementOwesCents) }));
+      const forPdf = { ...summary, customers: pdfCards, customersOwing: pdfCards.filter(cardOwes), customersPaid: pdfCards.filter(cardPaid), dueCents: stillOwedCents };
+      const blob = await buildParkingMonthSummaryPdf({ business: identity, summary: forPdf, language: lang, estimate: estimating, linkedCustomerNames });
       setPreview({ blob, fileName: parkingMonthFileName("summary", monthKey, "", orgName), title: `Month end — ${monthLabel(monthKey, lang)}` });
     } catch {
       setFlash("The PDF could not be made. Try again.");
@@ -388,6 +455,12 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
       {!credit.available && !credit.loading && (
         <p className="lst-hint" role="status">Staff expenses are not taken off these bills: your account cannot see the lot's expenses.</p>
       )}
+      {needsCash && cash.state === "loading" && (
+        <p className="lst-hint" role="status"><RefreshCw className="spin" size={12} aria-hidden="true" /> Checking the cash team members hold…</p>
+      )}
+      {needsCash && cash.state === "failed" && (
+        <p className="lst-hint" role="status">The cash team members hold could not be checked, so their bills show without it.</p>
+      )}
       {!billPays.available && !billPays.loading && (
         <p className="lst-hint" role="status">Payments recorded on bills could not be loaded.</p>
       )}
@@ -396,14 +469,14 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
       )}
 
       <div className="pk-scoreboard" role="group" aria-label="Month totals">
-        <div className="pk-stat"><span>Cars on the lot</span><b>{summary.carsOnLot}</b><small>{summary.customersOwing.length} customers still owe</small></div>
+        <div className="pk-stat"><span>Cars on the lot</span><b>{summary.carsOnLot}</b><small>{cardsOwing.length} customers still owe</small></div>
         <div className="pk-stat"><span>Billed</span><b>{moneyText(summary.billedCents)}</b><small>{estimating ? "estimate, whole month" : "for the month"}</small></div>
         <div className="pk-stat"><span>Collected</span><b>{moneyText(summary.collectedCents)}</b><small>toward the month</small></div>
-        <div className="pk-stat"><span>Paid in full</span><b>{summary.customersPaid.length}</b><small>customers this month</small></div>
+        <div className="pk-stat"><span>Paid in full</span><b>{cardsPaid.length}</b><small>customers this month</small></div>
         {summary.expenseCreditCents > 0 && (
           <div className="pk-stat"><span>Less staff expenses</span><b className="pk-paid">-{moneyText(summary.expenseCreditCents)}</b><small>off staff parking bills</small></div>
         )}
-        <div className="pk-stat"><span>Still owed</span><b className={summary.dueCents > 0 ? "owed" : ""}>{moneyText(summary.dueCents)}</b>
+        <div className="pk-stat"><span>Still owed</span><b className={stillOwedCents > 0 ? "owed" : ""}>{moneyText(stillOwedCents)}</b>
           <small>{summary.olderOwedCents > 0 ? `incl. ${moneyText(summary.olderOwedCents)} from before` : "by the customers below"}</small>
         </div>
       </div>
@@ -412,9 +485,9 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
 
       <div className="pk-month-tools">
         <div className="pk-view" role="group" aria-label="Which customers">
-          <button type="button" className={view === "owing" ? "on" : ""} aria-pressed={view === "owing"} onClick={() => setView("owing")}>Who owes ({summary.customersOwing.length})</button>
-          <button type="button" className={view === "paid" ? "on" : ""} aria-pressed={view === "paid"} onClick={() => setView("paid")}>Paid ({summary.customersPaid.length})</button>
-          <button type="button" className={view === "all" ? "on" : ""} aria-pressed={view === "all"} onClick={() => setView("all")}>Everyone ({summary.customers.length})</button>
+          <button type="button" className={view === "owing" ? "on" : ""} aria-pressed={view === "owing"} onClick={() => setView("owing")}>Who owes ({cardsOwing.length})</button>
+          <button type="button" className={view === "paid" ? "on" : ""} aria-pressed={view === "paid"} onClick={() => setView("paid")}>Paid ({cardsPaid.length})</button>
+          <button type="button" className={view === "all" ? "on" : ""} aria-pressed={view === "all"} onClick={() => setView("all")}>Everyone ({cards.length})</button>
         </div>
       </div>
 
@@ -427,12 +500,31 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
               <header>
                 <div>
                   <strong data-no-translate>{customer.customerName || "—"}</strong>
-                  {customer.forStaffId && <TeamTag label="Team member" />}
-                  {invoiceMessages.byCustomer.has(customer.key) && <InvoiceMessageStatus line={invoiceMessages.byCustomer.get(customer.key)!} />}
+                  {(customer.forStaffId || customer.statementStaffId) && <TeamTag label="Team member" />}
+                  {(() => {
+                    // A team member's statement is found by the member, too.
+                    const line = invoiceMessages.byCustomer.get(customer.key) ?? (customer.statementStaffId ? invoiceMessages.byCustomer.get(`staff:${customer.statementStaffId}`) : undefined);
+                    return line ? <InvoiceMessageStatus line={line} /> : null;
+                  })()}
                   <small>{[customer.customerPhone, customer.cars.length + customer.olderCars.length ? `${customer.cars.length + customer.olderCars.length} car${customer.cars.length + customer.olderCars.length === 1 ? "" : "s"}` : "", customer.activities.length + customer.olderActivities.length ? `${customer.activities.length + customer.olderActivities.length} activit${customer.activities.length + customer.olderActivities.length === 1 ? "y" : "ies"}` : ""].filter(Boolean).join(" · ")}</small>
                 </div>
                 <div className="pk-month-due">
-                  {customer.dueCents > 0
+                  {customer.includedInStatementOf
+                    ? <small><span>Included in the statement of</span> <b data-no-translate>{customer.includedInStatementOf}</b></small>
+                    : customer.statementOwesCents !== undefined
+                    ? <>
+                        {customer.statementOwesCents > 0
+                          ? <><small>Owes the business</small><strong className="pk-owed">{moneyText(customer.statementOwesCents)}</strong></>
+                          : customer.statementOwesCents < 0
+                          ? <><small>The business owes them</small><strong className="pk-paid">{moneyText(-customer.statementOwesCents)}</strong></>
+                          : <span className="lst-badge ok">Settled</span>}
+                        <small>
+                          <span data-no-translate>{moneyText(customer.dueCents)}</span> <span>parking and jobs</span>
+                          {customer.expenseCreditCents > 0 && <> <span data-no-translate>− {moneyText(customer.expenseCreditCents)}</span> <span>expenses</span></>}
+                          {(customer.cashHeldCents ?? 0) !== 0 && <> <span data-no-translate>{(customer.cashHeldCents ?? 0) > 0 ? "+" : "−"} {moneyText(Math.abs(customer.cashHeldCents ?? 0))}</span> <span>cash held</span></>}
+                        </small>
+                      </>
+                    : customer.dueCents > 0
                     ? <><strong className="pk-owed">{moneyText(customer.dueCents)}</strong><small>{customer.monthPaidCents > 0 ? `${moneyText(customer.monthPaidCents)} paid · ` : ""}{moneyText(customer.monthCents)} this month{customer.priorUnpaidCents > 0 ? ` + ${moneyText(customer.priorUnpaidCents)} from before` : ""}</small>{customer.expenseCreditCents > 0 && <small className="pk-month-paid-via">Less expenses -{moneyText(customer.expenseCreditCents)}</small>}</>
                     : <><span className="lst-badge ok">Paid</span>{customer.monthPaidCents > 0 && <small className="pk-month-paid-via">{moneyText(customer.monthPaidCents)} paid{customer.paidVia.length > 0 ? ` · ${customer.paidVia.map(parkingPaidViaLabel).join(", ")}` : ""}{receivedByText(customer.paidBy)}</small>}{customer.expenseCreditCents > 0 && <small className="pk-month-paid-via">Less expenses -{moneyText(customer.expenseCreditCents)}</small>}</>}
                 </div>
@@ -441,10 +533,10 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
                     {busyId === customer.key ? <RefreshCw className="spin" size={14} /> : <FileDown size={14} />} View bill
                   </button>
                   <button className="lst-btn ghost" type="button" onClick={() => void copyBill(customer)}><Copy size={14} /> Copy text</button>
-                  {!estimating && customer.dueCents > 0 && monthBillPaymentPlan(customer).items.length > 0 && (
+                  {!estimating && (origByKey.get(customer.key) ?? customer).dueCents > 0 && monthBillPaymentPlan(origByKey.get(customer.key) ?? customer).items.length > 0 && (
                     <button className="lst-btn" type="button" disabled={busyId !== ""} onClick={() => openSettle(customer)}><Banknote size={14} /> Mark all paid</button>
                   )}
-                  {!estimating && customer.dueCents > 0 && (payableByCustomer.get(customer.key) ?? 0) > 0 && (
+                  {!estimating && (origByKey.get(customer.key) ?? customer).dueCents > 0 && (payableByCustomer.get(customer.key) ?? 0) > 0 && (
                     <button className="lst-btn" type="button" disabled={busyId !== "" || payBusy} onClick={() => openPay(customer)}><Banknote size={14} /> Record a payment</button>
                   )}
                 </div>
@@ -551,6 +643,21 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
                     <span aria-hidden="true"></span>
                   </li>
                 );
+                // A team member's statement: the cash they hold for the
+                // business at the end of the month, then what they owe.
+                const cashHeld = customer.cashHeldCents ?? 0;
+                const cashRow = customer.statementOwesCents !== undefined && cashHeld !== 0 && (
+                  <li key="cash-held" className="pk-month-expense">
+                    <span className="pk-month-car">
+                      <strong>Cash held for the business</strong>
+                      <small>money they took in for the business and still hold, as of the end of the month</small>
+                    </span>
+                    <span className="pk-month-period"></span>
+                    <span className="pk-month-calc"></span>
+                    <span className="pk-month-amount"><strong className={cashHeld > 0 ? "pk-owed" : "pk-paid"}>{cashHeld > 0 ? "+" : "-"}{moneyText(Math.abs(cashHeld))}</strong></span>
+                    <span aria-hidden="true"></span>
+                  </li>
+                );
                 const payments = paymentsByCustomer.get(customer.key) ?? [];
                 const paymentsList = payments.length > 0 && (
                   <section className="pk-bill-payments" aria-label="Payments on this bill">
@@ -585,6 +692,7 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
                     {expenseRow}
                     {expenseLines}
                     {earlierLine}
+                    {cashRow}
                     {paidLines.length > 0 && (
                       <li className="pk-month-paid-toggle">
                         <button className="ghost-button" type="button" aria-expanded={showPaid} onClick={() => setOpenPaid((current) => {

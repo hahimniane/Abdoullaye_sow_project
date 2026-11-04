@@ -68,6 +68,12 @@ class ParkingMonthPdfCopy {
     this.noParkingBill = 'No parking bill',
     this.lotExpense = 'Lot expense',
     this.earlierExpenses = 'Expenses from earlier months',
+    this.statement = 'STATEMENT',
+    this.teamMember = 'Team member',
+    this.cashHeld = 'Cash you hold for the business',
+    this.youOwe = 'You owe the business',
+    this.businessOwesYou = 'The business owes you',
+    this.settled = 'Settled',
   });
 
   final String bill;
@@ -135,6 +141,15 @@ class ParkingMonthPdfCopy {
 
   /// The earlier months' part of the expenses taken off the bill.
   final String earlierExpenses;
+
+  /// A team member's statement (docs/PARKING_INVOICES.md §6): its title, the
+  /// label over their name, the cash they hold, and the last row.
+  final String statement;
+  final String teamMember;
+  final String cashHeld;
+  final String youOwe;
+  final String businessOwesYou;
+  final String settled;
 }
 
 String _t(Object? v) => (v ?? '').toString().trim();
@@ -251,7 +266,10 @@ Future<Uint8List> buildParkingMonthBillPdf({
 }) async {
   final c = customer;
   final items = c.cars.length + c.activities.length;
-  final head = await _header(business, copy.bill, copy.monthLabel,
+  // A team member's STATEMENT (staff_statement.dart) instead of a bill.
+  final isStatement = c.statementOwesCents != null;
+  final head = await _header(
+      business, isStatement ? copy.statement : copy.bill, copy.monthLabel,
       copy.itemsLabel?.call(items) ?? '',
       estimate: copy.estimate);
   String standing(int paid, int due) => [
@@ -305,7 +323,7 @@ Future<Uint8List> buildParkingMonthBillPdf({
     footer: (_) => _footer(copy.footer),
     build: (_) => [
       head,
-      _label(copy.billedTo),
+      _label(isStatement ? copy.teamMember : copy.billedTo),
       pw.SizedBox(height: 4),
       pw.Text(c.customerName.isEmpty ? '—' : c.customerName,
           style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold, color: _ink)),
@@ -445,10 +463,26 @@ Future<Uint8List> buildParkingMonthBillPdf({
           _row('${copy.paidToward} ${actTitle(a)} (${displayDay(a.date, copy.locale)})', '-${parkingMoney(a.paidCents)}', color: _ok),
       if (c.expenseCreditCents > 0)
         _row(copy.lessExpenses, '-${parkingMoney(c.expenseCreditCents)}', color: _ok),
+      if (isStatement && (c.cashHeldCents ?? 0) != 0)
+        _row(
+            copy.cashHeld,
+            '${c.cashHeldCents! > 0 ? '+' : '-'}'
+            '${parkingMoney(c.cashHeldCents!.abs())}',
+            color: _ink),
       pw.Container(height: 1.2, color: _ink, margin: const pw.EdgeInsets.symmetric(vertical: 6)),
-      c.dueCents > 0
-          ? _row(copy.balanceDue, parkingMoney(c.dueCents), bold: true, color: _due)
-          : _row(copy.paidInFull, parkingMoney(0), bold: true, color: _ok),
+      if (isStatement)
+        (c.statementOwesCents! > 0
+            ? _row(copy.youOwe, parkingMoney(c.statementOwesCents!),
+                bold: true, color: _due)
+            : c.statementOwesCents! < 0
+                ? _row(copy.businessOwesYou,
+                    parkingMoney(-c.statementOwesCents!),
+                    bold: true, color: _ok)
+                : _row(copy.settled, parkingMoney(0), bold: true, color: _ok))
+      else if (c.dueCents > 0)
+        _row(copy.balanceDue, parkingMoney(c.dueCents), bold: true, color: _due)
+      else
+        _row(copy.paidInFull, parkingMoney(0), bold: true, color: _ok),
     ],
   ));
   return doc.save();

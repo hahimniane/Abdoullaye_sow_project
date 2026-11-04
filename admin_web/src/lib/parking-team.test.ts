@@ -109,7 +109,7 @@ test("team members are no longer mixed into the parking customer suggestions", (
 
 test("the list rows, card and Month end carry the Team labels", () => {
   assert.equal((panelSource.match(/<TeamTag label=\{parkingTeamLabel\(row\.forStaffId, teamIds\)\}/g) ?? []).length, 2);
-  assert.match(monthEndSource, /customer\.forStaffId && <TeamTag label="Team member" \/>/);
+  assert.match(monthEndSource, /\(customer\.forStaffId \|\| customer\.statementStaffId\) && <TeamTag label="Team member" \/>/);
 });
 
 test("Month end groups a team car under staff:{uid}, apart from a same-number untied car", () => {

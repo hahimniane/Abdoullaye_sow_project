@@ -67,6 +67,7 @@ const BIZ = "pkinv-lot";
 const OTHER_BIZ = "pkinv-other-lot";
 const OWNER = "pkinv-owner";
 const STAFF = "pkinv-staff";
+const MEMBER = "pkinv-member";
 const OTHER_OWNER = "pkinv-other-owner";
 const PLATFORM_ADMIN = "pkinv-admin";
 const MONTH = "2026-10";
@@ -235,7 +236,7 @@ async function open(link) {
 async function clear() {
   for (const name of ["parkingMessages", "parkingInvoiceRuns",
     "whatsappContacts", "whatsappStops", "whatsappTemplateCounts",
-    "parkedCars", "lotActivities", "lotExpenseEntries"]) {
+    "parkedCars", "lotActivities", "lotExpenseEntries", "staffHandovers"]) {
     const snap = await db.collection(name).get();
     await Promise.all(snap.docs.map((doc) => doc.ref.delete()));
   }
@@ -394,20 +395,21 @@ describe("invoices_preview", () => {
     assert.equal(result.run, null);
     assert.equal(result.totalDueCents, 19000);
     assert.deepEqual(result.recipients.map((r) => ({
-      phone: r.phone, name: r.name, cars: r.cars,
+      kind: r.kind, phone: r.phone, name: r.name, cars: r.cars,
       totalDueCents: r.totalDueCents, stillParked: r.stillParked,
       alreadySent: r.alreadySent, invoiceNumber: r.invoiceNumber,
       messageStatus: r.messageStatus,
     })), [
-      {phone: "+12015550001", name: "Alimou Barry",
+      {kind: "invoice", phone: "+12015550001", name: "Alimou Barry",
         cars: [{id: a, label: "2014 Toyota Corolla"}], totalDueCents: 10000,
         stillParked: false, alreadySent: false,
         invoiceNumber: "INV-202610-0001-1", messageStatus: ""},
-      {phone: "+12015550005", name: "Mamadou Diallo",
+      // STAFF is linked to Mamadou's bill: a team member's STATEMENT.
+      {kind: "statement", phone: "+12015550005", name: "Mamadou Diallo",
         cars: [{id: e, label: "2014 Kia Rio"}], totalDueCents: 9000,
         stillParked: false, alreadySent: false,
-        invoiceNumber: "INV-202610-0005-1", messageStatus: ""},
-      {phone: "+12015550002", name: "Binta Diallo",
+        invoiceNumber: "ST-202610-0005-1", messageStatus: ""},
+      {kind: "invoice", phone: "+12015550002", name: "Binta Diallo",
         cars: [{id: b, label: "2016 Honda Civic"}], totalDueCents: 0,
         stillParked: true, alreadySent: false,
         invoiceNumber: "INV-202610-0002-1", messageStatus: ""},
@@ -965,4 +967,141 @@ describe("the automatic send from the 3rd", () => {
         assert.equal((await db.collection("parkingInvoiceRuns")
             .doc(`ghost_${MONTH}`).get()).data().status, "ready");
       });
+});
+
+// A team member's own cars: Month end and the WhatsApp message carry the SAME
+// statement - parking and jobs, less expenses not yet credited, plus the
+// cash they hold at the END of the month (docs/PARKING_INVOICES.md §6).
+describe("team members get a statement", () => {
+  const profile = (extra = {}) => db.collection("users").doc(MEMBER).set({
+    role: "staff", businessId: BIZ, businessPermissions: ["parking"],
+    fullName: "Alhoussaine Barry", phone: "+12015550077", ...extra});
+
+  // Alhoussaine, October 2026: $1,226 of parking on his own car, a $35
+  // expense from September not yet credited, and $36 he took in cash on
+  // Zed's car on Oct 15 -> owes $1,227.
+  async function seedMember() {
+    await profile();
+    await seedCar({forStaffId: MEMBER, forStaffName: "Alhoussaine Barry",
+      customerName: "Alhoussaine Barry", customerPhone: "",
+      carMake: "Honda", carModel: "Accord", carYear: "2015",
+      parkingDate: day("2026-10-02"), parkingEndDate: day("2026-10-20"),
+      amountDue: 1226, amountDueCents: 122600, totalCost: 1226,
+      totalCostCents: 122600});
+    await seedCar({customerName: "Zed Camara", customerPhone: "+12015550099",
+      carMake: "Kia", carModel: "Rio", carYear: "2010",
+      parkingDate: day("2026-10-03"), parkingEndDate: day("2026-10-10"),
+      amountDue: 500, amountDueCents: 50000, totalCost: 500,
+      totalCostCents: 50000, amountPaidCents: 3600,
+      parkingPayments: [{amountCents: 3600, receivedByStaffId: MEMBER,
+        receivedVia: "cash", at: day("2026-10-15")}]});
+    await db.collection("lotExpenseEntries").doc("pkinv-exp-sep").set({
+      businessId: BIZ, paidByStaffId: MEMBER, amountCents: 3500,
+      month: "2026-09", spentAt: day("2026-09-06"), note: "cups",
+      voided: false});
+  }
+
+  it("previews the statement with the numbers Month end shows, marked " +
+      "kind: statement, and the customer's invoice unchanged", async () => {
+    await turnOn();
+    await seedMember();
+    const result = await preview();
+    assert.deepEqual(result.recipients.map((r) => [r.kind, r.name, r.phone,
+      r.totalDueCents, r.invoiceNumber]), [
+      ["statement", "Alhoussaine Barry", "+12015550077", 122700,
+        "ST-202610-0077-1"],
+      ["invoice", "Zed Camara", "+12015550099", 46400,
+        "INV-202610-0099-1"],
+    ]);
+    assert.equal(result.recipients[0].staffId, MEMBER);
+    assert.equal(result.recipients[0].owesCents, 122700);
+    assert.equal(result.totalDueCents, 122700 + 46400);
+    assert.deepEqual(result.skipped, []);
+  });
+
+  it("sends the same template as an invoice, with the statement's amount " +
+      "as the balance due and a STATEMENT PDF", async () => {
+    await turnOn();
+    await seedMember();
+    const result = await send();
+    assert.equal(result.sent, 2);
+    const body = sent.find((b) => b.to === "12015550077");
+    assert.equal(body.template.name, "parking_invoice_2lang");
+    assert.equal(body.template.components[0].parameters[0].document.filename,
+        "Statement ST-202610-0077-1.pdf");
+    assert.deepEqual(receiptBody(body).slice(0, 4),
+        ["Alhoussaine Barry", "Dala Parking", "October 2026", "$1,227.00"]);
+    const row = (await invoiceRows()).find((r) => r.phone === "+12015550077");
+    assert.equal(row.documentKind, "statement");
+    assert.equal(row.staffId, MEMBER);
+    assert.equal(row.totalDueCents, 122700);
+    assert.equal(row.invoiceNumber, "ST-202610-0077-1");
+    const [pdf] = await bucket().file(
+        `parkingInvoices/${BIZ}/${MONTH}/12015550077.pdf`).download();
+    assert.equal(pdf.subarray(0, 5).toString("latin1"), "%PDF-");
+    // Zed's is still an invoice.
+    assert.equal(sent.find((b) => b.to === "12015550099").template
+        .components[0].parameters[0].document.filename,
+    "Invoice INV-202610-0099-1.pdf");
+  });
+
+  it("is not changed by money handed over after the month ended, but is " +
+      "by a handover confirmed before it", async () => {
+    await turnOn();
+    await seedMember();
+    const handover = (id, at) => db.collection("staffHandovers").doc(id).set({
+      businessId: BIZ, kind: "handover", fromStaffId: MEMBER,
+      toId: "business_account", amountCents: 3600, method: "cash",
+      status: "confirmed", createdAt: Timestamp.fromDate(new Date(at)),
+      confirmedAt: Timestamp.fromDate(new Date(at))});
+    await handover("late", "2026-11-02T15:00:00Z");
+    assert.equal((await preview()).recipients[0].totalDueCents, 122700);
+    await handover("early", "2026-10-20T15:00:00Z");
+    assert.equal((await preview()).recipients[0].totalDueCents, 119100);
+  });
+
+  it("lists a team member with no phone under skipped, with why",
+      async () => {
+        await turnOn();
+        await seedMember();
+        await db.collection("users").doc(MEMBER)
+            .update({phone: admin.firestore.FieldValue.delete()});
+        const result = await preview();
+        assert.deepEqual(result.recipients.map((r) => r.name),
+            ["Zed Camara"]);
+        assert.deepEqual(result.skipped.map((s) => [s.kind, s.name,
+          s.reason]), [["statement", "Alhoussaine Barry", "no_phone"]]);
+        assert.deepEqual((await send()).skipped, 1);
+      });
+
+  it("gets none when the business owes them and no car is parked",
+      async () => {
+        await turnOn();
+        await seedMember();
+        await db.collection("lotExpenseEntries").doc("pkinv-exp-big").set({
+          businessId: BIZ, paidByStaffId: MEMBER, amountCents: 200000,
+          month: MONTH, spentAt: day("2026-10-12"), note: "paint",
+          voided: false});
+        const result = await preview();
+        assert.deepEqual(result.recipients.map((r) => r.name),
+            ["Zed Camara"]);
+        assert.deepEqual(result.skipped, []);
+      });
+
+  it("answers the cash held at a month's end to the console (staff " +
+      "statement cash)", async () => {
+    await turnOn();
+    await seedMember();
+    const answer = await run("updateLotExpenseEntry", OWNER,
+        {action: "staff_statement_cash", businessId: BIZ, monthKey: MONTH});
+    assert.deepEqual(answer.held, {[MEMBER]: 3600});
+    assert.equal(answer.monthKey, MONTH);
+    assert.equal(answer.asOfMs, Date.parse("2026-11-01T03:59:59.999Z"));
+    await assert.rejects(run("updateLotExpenseEntry", OWNER,
+        {action: "staff_statement_cash", businessId: BIZ, monthKey: "Oct"}),
+    refusal("invalid-argument", "statement_month_invalid"));
+    await assert.rejects(run("updateLotExpenseEntry", OTHER_OWNER,
+        {action: "staff_statement_cash", businessId: BIZ, monthKey: MONTH}),
+    (error) => error.code === "permission-denied");
+  });
 });

@@ -515,5 +515,18 @@ Add future project conventions and repeated architectural decisions here.
   The old "card for barrels" switch is the one `payNow` switch: a save writes
   `payNow` and `cardBarrelBooking` equal.
 - Never run `dart format lib` (or any directory-wide format) in this repo: it
-  reformats ~130 unrelated files. Format only the files you changed.
+  reformats ~130 unrelated files. Format only the files you changed - and
+  only NEW files: several old files (`parking_month_statement.dart`,
+  `parking_month_pdf.dart`) are not formatter-clean, so formatting one buries
+  a 90-line change in a 600-line diff. Check `git diff --stat` after
+  formatting; if it ballooned, format a copy of HEAD, `diff` it against your
+  formatted file and `patch` that onto HEAD.
+- Staff statements (docs/PARKING_INVOICES.md section 6): a team member's
+  Month end card is `lib/services/staff_statement.dart` (`staffStatements`,
+  `summaryWithStatements`; fixture-pinned mirror of `staff_statement.js` and
+  the console's `staff-statement.ts`). The cash they hold at the month's end
+  comes from the server (`StaffBalancesService.loadStatementCash`); until it
+  arrives the cards read as before with a note. Payments are always recorded
+  on the customer's own bill (`parkingMonthCustomerOptions(payable:)`), never
+  on the merged statement card.
 

@@ -11148,5 +11148,93 @@
   "pplErrBoxSizeInvalid": "Choose a box size.",
   "pplErrDimsInvalid": "Box inches must be 1 to 120 in each direction.",
   "pplErrBoxSizesSeaOnly": "Box sizes are priced for Sea only.",
-  "pplErrBoxPriceInvalid": "Enter a box price between $0.01 and $10,000."
+  "pplErrBoxPriceInvalid": "Enter a box price between $0.01 and $10,000.",
+  "pmeStatement": "Statement",
+  "@pmeStatement": {
+    "description": "The badge / title of a team member's month-end statement (their parking and lot jobs, less expenses they paid, plus cash they hold for the business)."
+  },
+  "pmeOwesBusiness": "Owes the business",
+  "@pmeOwesBusiness": {
+    "description": "On a team member's month-end card: what they owe the business."
+  },
+  "pmeBusinessOwesThem": "The business owes them",
+  "@pmeBusinessOwesThem": {
+    "description": "On a team member's month-end card: the business owes them money."
+  },
+  "pmeSettled": "Settled",
+  "@pmeSettled": {
+    "description": "On a team member's month-end card: nobody owes anything."
+  },
+  "pmeCashHeldTitle": "Cash held for the business",
+  "@pmeCashHeldTitle": {
+    "description": "A line on a team member's statement: money they took in for the business and still hold."
+  },
+  "pmeCashHeldNote": "Money they took in for the business and still hold, as of the end of the month",
+  "@pmeCashHeldNote": {
+    "description": "Under 'Cash held for the business' on a statement."
+  },
+  "pmeCashHeldLoading": "Checking the cash team members hold…",
+  "@pmeCashHeldLoading": {
+    "description": "Shown while the cash team members hold is being loaded."
+  },
+  "pmeCashHeldFailed": "The cash team members hold could not be checked, so their bills show without it.",
+  "@pmeCashHeldFailed": {
+    "description": "Shown when the cash team members hold could not be loaded."
+  },
+  "pmePdfStatementTitle": "STATEMENT",
+  "@pmePdfStatementTitle": {
+    "description": "The title of a team member's statement PDF."
+  },
+  "pmePdfTeamMember": "Team member",
+  "@pmePdfTeamMember": {
+    "description": "Label above the name on a team member's statement PDF."
+  },
+  "pmePdfCashHeld": "Cash you hold for the business",
+  "@pmePdfCashHeld": {
+    "description": "A row on a team member's statement PDF / text."
+  },
+  "pmePdfYouOwe": "You owe the business",
+  "@pmePdfYouOwe": {
+    "description": "The final row of a statement: what the team member owes the business."
+  },
+  "pmePdfBusinessOwesYou": "The business owes you",
+  "@pmePdfBusinessOwesYou": {
+    "description": "The final row of a statement when the business owes the team member."
+  },
+  "pmeIncludedInStatement": "Included in the statement of {name}",
+  "@pmeIncludedInStatement": {
+    "description": "On a team member's second bill: it is part of their statement.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeStatementParkingAndJobs": "{amount} parking and jobs",
+  "@pmeStatementParkingAndJobs": {
+    "description": "First part of the line under a statement's total.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeStatementExpenses": "− {amount} expenses",
+  "@pmeStatementExpenses": {
+    "description": "Second part of the line under a statement's total.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeStatementCash": "{amount} cash held",
+  "@pmeStatementCash": {
+    "description": "Third part of the line under a statement's total (amount carries its sign).",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  }
 }

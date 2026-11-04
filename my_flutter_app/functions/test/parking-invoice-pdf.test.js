@@ -45,9 +45,13 @@ const ACTIVITIES = [
     feeCents: 2500, carYear: "2018", carMake: "Toyota", carModel: "Camry",
     trackingCode: "PK-K7M4P2", paymentStatus: "awaiting_direct_payment"},
 ];
+// Two staff share the customer's bill, so it stays a customer's invoice (a
+// customer linked to ONE team member is that member's statement instead:
+// docs/PARKING_INVOICES.md section 6).
 const CREDIT = {
-  links: {staff1: {customerKey: "phone:2015551234"}},
-  staffNames: {staff1: "Mamadou Diallo"},
+  links: {staff1: {customerKey: "phone:2015551234"},
+    staff2: {customerKey: "phone:2015551234"}},
+  staffNames: {staff1: "Mamadou Diallo", staff2: "Fatou Sow"},
   lines: [{id: "l1", label: "Groceries"}],
   repayments: [],
   entries: [

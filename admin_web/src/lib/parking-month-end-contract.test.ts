@@ -37,7 +37,9 @@ test("the view is worked out from the cars and activities, and records only thro
   const callables = [...view.matchAll(/httpsCallable\(functions, "(\w+)"\)/g)].map((m) => m[1]).sort();
   // ...and a part of the bill paid at once goes through updateBusinessParkingEntry's
   // bill_payment_* actions (docs/PARKING_BILL_PAYMENTS.md), never a write of its own.
-  assert.deepEqual([...new Set(callables)], ["recordBusinessParkingPartialPayment", "recordLotActivityInstalment", "updateBusinessParkingEntry"]);
+  // ...and a team member's statement asks updateLotExpenseEntry for the cash they
+  // hold at the month's end (`staff_statement_cash`, read only).
+  assert.deepEqual([...new Set(callables)], ["recordBusinessParkingPartialPayment", "recordLotActivityInstalment", "updateBusinessParkingEntry", "updateLotExpenseEntry"]);
   assert.match(view, /receivedByStaffId: settleBy/, "who received the money is always sent");
   assert.match(view, /if \(!settleBy\) \{/, "and required before anything is recorded");
   // Cars and the ledger's activities, both read, never written.
@@ -72,7 +74,8 @@ test("the customer card shows what came off; Business owes follows the list", ()
   assert.match(view, /canSettle=\{canSettleStaff\}/);
   assert.match(panels, /canSettleStaff=\{canManageLedger\}/);
   assert.match(consoleSource, /canManageLedger=\{hasBusinessPermission\(profile, "ledger"\)\}/, "owner, admin, or the ledger permission");
-  assert.match(view, /buildParkingMonthSummaryPdf\(\{ business: identity, summary, language: lang, estimate: estimating, linkedCustomerNames \}\)/);
+  // The month's PDF lists a team member by their statement, as the card does.
+  assert.match(view, /buildParkingMonthSummaryPdf\(\{ business: identity, summary: forPdf, language: lang, estimate: estimating, linkedCustomerNames \}\)/);
 });
 
 test("Paid back and Void go through updateLotExpenseEntry's actions, capped at what is owed", () => {
@@ -105,7 +108,8 @@ test("the People page links each person to a parking bill, owner or admin only",
 test("the whole-month estimate is a preview: only for the current month, nothing collected", () => {
   assert.match(view, /const canEstimate = parkingMonthCanEstimate\(monthKey\)/);
   assert.match(view, /\{canEstimate && \(/, "the switch shows only for the unfinished month");
-  assert.match(view, /!estimating && customer\.dueCents > 0/, "no Mark all paid on an estimate");
+  // Payments always go through the customer's own bill (a statement merges a member's bills for display).
+  assert.match(view, /!estimating && \(origByKey\.get\(customer\.key\) \?\? customer\)\.dueCents > 0/, "no Mark all paid on an estimate");
   assert.match(view, /estimate: estimating/, "the PDFs say Estimate");
   for (const english of ["So far", "Whole month (estimate)", "estimate, whole month"]) {
     assert.notEqual(translateValue(english, "fr"), english, `no French for "${english}"`);
@@ -119,18 +123,19 @@ test("its words read in French", () => {
 });
 
 test("three views, in order: Who owes · Paid · Everyone, each from the shared statement", () => {
-  const owes = view.indexOf("Who owes ({summary.customersOwing.length})");
-  const paid = view.indexOf("Paid ({summary.customersPaid.length})");
-  const everyone = view.indexOf("Everyone ({summary.customers.length})");
+  const owes = view.indexOf("Who owes ({cardsOwing.length})");
+  const paid = view.indexOf("Paid ({cardsPaid.length})");
+  const everyone = view.indexOf("Everyone ({cards.length})");
   assert.ok(owes > 0 && paid > owes && everyone > paid, "tabs read Who owes · Paid · Everyone");
   // The list is the statement's own split - no second definition of "paid" here.
-  assert.match(view, /view === "paid" \? summary\.customersPaid : summary\.customersOwing/);
+  // (a team member's statement is the card's own: staff-statement.ts cardOwes / cardPaid, over the same customers.)
+  assert.match(view, /view === "paid" \? cardsPaid : cardsOwing/);
   assert.doesNotMatch(view, /dueCents === 0|dueCents <= 0 &&|monthCents > 0 &&/, "paid is decided in parking-month-statement.ts");
   assert.match(view, /"Nobody has paid for this month yet\."/);
   // The same customer card for every view, with what came in and how.
   assert.equal(view.match(/<article className="pk-month-customer"/g)?.length, 1, "one card, not a fork");
   assert.match(view, /customer\.paidVia\.map\(parkingPaidViaLabel\)/);
-  assert.match(view, /<span>Paid in full<\/span><b>\{summary\.customersPaid\.length\}<\/b>/);
+  assert.match(view, /<span>Paid in full<\/span><b>\{cardsPaid\.length\}<\/b>/);
   assert.match(view, /<strong data-no-translate>\{customer\.customerName/, "a name is not copy");
 });
 
@@ -149,7 +154,7 @@ test("a paid line folds away on the card; only what is left to collect leads", (
 
 test("Record a payment: one amount, the shared plan, one request, undone as a whole", () => {
   // The same gate as Mark all paid; the plan is the shared mirror's, never a second definition.
-  assert.match(view, /!estimating && customer\.dueCents > 0 && \(payableByCustomer\.get\(customer\.key\) \?\? 0\) > 0 && \(/);
+  assert.match(view, /!estimating && \(origByKey\.get\(customer\.key\) \?\? customer\)\.dueCents > 0 && \(payableByCustomer\.get\(customer\.key\) \?\? 0\) > 0 && \(/);
   assert.match(view, /new Map\(summary\.customers\.map\(\(c\) => \[c\.key, billPaymentPlan\(c, 1\)\.payableCents\]\)\)/, "precomputed once per statement, not per render");
   assert.match(view, /const paymentsByCustomer = useMemo\(\(\) => billPaymentsByCustomer\(billPays\.rows\), \[billPays\.rows\]\)/);
   assert.match(view, /httpsCallable\(functions, "updateBusinessParkingEntry"\)\(billPaymentRecordRequest\(\{/);

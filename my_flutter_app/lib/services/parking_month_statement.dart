@@ -561,6 +561,10 @@ class ParkingMonthCustomer {
     this.linkedStaffIds = const [],
     this.olderCars = const [],
     this.olderCarsRegisteredTo = const [],
+    this.cashHeldCents,
+    this.statementOwesCents,
+    this.statementStaffId = '',
+    this.includedInStatementOf = '',
   }) : dueBeforeExpensesCents = dueBeforeExpensesCents ?? dueCents;
 
   final String key;
@@ -620,6 +624,61 @@ class ParkingMonthCustomer {
 
   /// The staff members linked to this customer.
   final List<String> linkedStaffIds;
+
+  /// Only on a TEAM MEMBER's card once their statement is known
+  /// (`staff_statement.dart`): the cash they hold for the business at the end
+  /// of the month, and what they owe the business (negative: it owes them).
+  /// The card, the bill and the WhatsApp statement all show these.
+  final int? cashHeldCents;
+  final int? statementOwesCents;
+
+  /// The team member this card carries the statement of ('' for a customer).
+  final String statementStaffId;
+
+  /// Set on a member's OTHER bills: the name of the statement they are in.
+  final String includedInStatementOf;
+
+  /// The same customer carrying (or included in) a team member's statement.
+  ParkingMonthCustomer withStatement({
+    int? cashHeldCents,
+    int? statementOwesCents,
+    String statementStaffId = '',
+    String includedInStatementOf = '',
+    int? dueCents,
+  }) => ParkingMonthCustomer(
+    key: key,
+    monthKey: monthKey,
+    customerName: customerName,
+    customerPhone: customerPhone,
+    customerEmail: customerEmail,
+    cars: cars,
+    registeredTo: registeredTo,
+    activities: activities,
+    olderActivities: olderActivities,
+    activityRegisteredTo: activityRegisteredTo,
+    olderRegisteredTo: olderRegisteredTo,
+    monthCents: monthCents,
+    monthPaidCents: monthPaidCents,
+    monthUnpaidCents: monthUnpaidCents,
+    priorUnpaidCents: priorUnpaidCents,
+    dueCents: dueCents ?? this.dueCents,
+    owes: owes,
+    paid: paid,
+    paidVia: paidVia,
+    partialMonth: partialMonth,
+    forStaffId: forStaffId,
+    dueBeforeExpensesCents: dueBeforeExpensesCents,
+    expenseCreditCents: expenseCreditCents,
+    expenseLines: expenseLines,
+    earlierExpenseCents: earlierExpenseCents,
+    linkedStaffIds: linkedStaffIds,
+    olderCars: olderCars,
+    olderCarsRegisteredTo: olderCarsRegisteredTo,
+    cashHeldCents: cashHeldCents,
+    statementOwesCents: statementOwesCents,
+    statementStaffId: statementStaffId,
+    includedInStatementOf: includedInStatementOf,
+  );
 
   /// The same customer with their staff expenses netted in.
   ParkingMonthCustomer _withExpenses(
@@ -1068,6 +1127,24 @@ ParkingMonthSummary parkingMonthSummary(
   );
 }
 
+/// The expense entries every netting reads: the real ones with their dates,
+/// plus a monthly line's standing payer counted like a purchase logged for
+/// each month (docs/EXPENSE_PAID_BY.md §3). A team member's statement
+/// (`staff_statement.dart`) reads the same entries.
+List<Map<String, dynamic>> parkingMonthCreditEntries(
+  ParkingMonthStaffExpenses input,
+  String monthKey,
+) => [
+  for (final row in withStandingPayers(input.entries, input.lines, monthKey))
+    {
+      ...row,
+      'spentAtMs':
+          row['spentAtMs'] ??
+          lotDateOf(row['spentAt'])?.millisecondsSinceEpoch ??
+          0,
+    },
+];
+
 ({
   List<ParkingMonthCustomer> customers,
   List<ParkingMonthStaffOwed> businessOwes,
@@ -1078,17 +1155,7 @@ ParkingMonthSummary parkingMonthSummary(
   String monthKey,
   ParkingMonthStaffExpenses input,
 ) {
-  // Monthly lines a person pays count as their expenses, as if logged
-  // (docs/EXPENSE_PAID_BY.md §3).
-  final entries = [
-    for (final row in withStandingPayers(input.entries, input.lines, monthKey))
-      {
-        ...row,
-        'spentAtMs': row['spentAtMs'] ??
-            lotDateOf(row['spentAt'])?.millisecondsSinceEpoch ??
-            0,
-      },
-  ];
+  final entries = parkingMonthCreditEntries(input, monthKey);
   final net = netStaffExpenses(
     [for (final c in customers) (key: c.key, dueCents: c.dueCents)],
     entries: entries,

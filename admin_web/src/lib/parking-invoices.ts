@@ -82,6 +82,7 @@ export const PARKING_INVOICES_COPY = {
   invoicesTitle: "Send invoices",
   invoicesLede:
     "Each customer gets one WhatsApp invoice with a PDF that covers all of their cars. " +
+    "A team member gets a statement instead: the same bill, less the expenses they paid for the lot, plus the cash they hold for the business. " +
     "Look through the list, then send. If nobody has sent them by the 3rd, they go out automatically.",
   loading: "Loading invoices…",
   empty: "No customer needs an invoice for this month.",
@@ -97,6 +98,11 @@ export const PARKING_INVOICES_COPY = {
   cancel: "Cancel",
   remainingHint: "The send stopped to stay within its time limit. Send again to finish the rest.",
   invoiceMessage: "Monthly invoice",
+  statementBadge: "Statement",
+  skippedTitle: "Not sent: no number to reach",
+  noPhone: "no phone number",
+  needsCountryCode: "number needs a country code",
+  duplicatePhone: "same number as another recipient",
   retry: "Retry",
   done: "Done",
 } as const;
@@ -121,6 +127,8 @@ export function parkingInvoiceRefusalText(error: unknown): string {
 
 export type InvoiceCar = { id: string; label: string };
 export type InvoiceRecipient = {
+  /** "statement" for a team member, "invoice" for a customer. */
+  kind: "invoice" | "statement";
   phone: string;
   name: string;
   cars: InvoiceCar[];
@@ -141,7 +149,9 @@ export type InvoiceRun = {
   failed: number;
   skipped: number;
 };
-export type InvoicePreview = { monthKey: string; run: InvoiceRun | null; recipients: InvoiceRecipient[] };
+/** A team member the statement could not be sent to, and why (`no_phone`, `needs_country_code`, `duplicate_phone`). */
+export type InvoiceSkippedMember = { name: string; reason: string };
+export type InvoicePreview = { monthKey: string; run: InvoiceRun | null; recipients: InvoiceRecipient[]; skippedMembers: InvoiceSkippedMember[] };
 
 export function invoicesPreviewRequest(businessId: string, monthKey: string) {
   return { businessId, action: "invoices_preview", monthKey };
@@ -199,6 +209,7 @@ export function parseInvoicePreview(value: unknown): InvoicePreview {
       return { id: text(c.id, 80), label: text(c.label, 120) };
     });
     recipients.push({
+      kind: text(row.kind, 20) === "statement" ? "statement" : "invoice",
       phone,
       name: text(row.name, 120),
       cars,
@@ -207,7 +218,19 @@ export function parseInvoicePreview(value: unknown): InvoicePreview {
       alreadySent: row.alreadySent === true,
     });
   }
-  return { monthKey: text(root.monthKey, 7), run: parseRun(root.run), recipients };
+  const skippedMembers = (Array.isArray(root.skipped) ? root.skipped : [])
+    .slice(0, 200)
+    .map(asRow)
+    .filter((row) => text(row.kind, 20) === "statement")
+    .map((row) => ({ name: text(row.name, 120), reason: text(row.reason, 40) }));
+  return { monthKey: text(root.monthKey, 7), run: parseRun(root.run), recipients, skippedMembers };
+}
+
+/** The reason a team member's statement was not sent, as a short phrase for the panel. */
+export function skippedMemberReason(reason: string): string {
+  if (reason === "needs_country_code") return PARKING_INVOICES_COPY.needsCountryCode;
+  if (reason === "duplicate_phone") return PARKING_INVOICES_COPY.duplicatePhone;
+  return PARKING_INVOICES_COPY.noPhone;
 }
 
 /** Who is ticked when the list opens: everyone not sent yet. */
@@ -316,6 +339,13 @@ export function invoiceMessagesByCustomer(rows: readonly Row[], monthKey: string
     if (!key.startsWith("phone:")) continue;
     const current = out.get(key);
     if (!current || line.atMs >= current.atMs) out.set(key, line);
+    // A team member's statement is sent to THEIR number: their card is found
+    // by the member (`staff:{uid}`), as well as by that number.
+    const staffId = text(row.staffId, 128);
+    if (text(row.documentKind, 20) === "statement" && staffId) {
+      const mine = out.get(`staff:${staffId}`);
+      if (!mine || line.atMs >= mine.atMs) out.set(`staff:${staffId}`, line);
+    }
   }
   return out;
 }

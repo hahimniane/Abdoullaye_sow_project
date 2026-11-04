@@ -29,6 +29,7 @@ const {
   usDayKey,
 } = require("./parking_receipt_pdf");
 const {monthTextEn, monthTextFr} = require("./parking_invoices");
+const {dayKeyOf, monthDays} = require("./parking_month_statement");
 
 const text = (value, max = 200) => String(value ?? "").trim().slice(0, max);
 const cents = (value) => {
@@ -46,41 +47,15 @@ function daysText(n) {
 }
 
 /**
- * The lines of one invoice.
+ * The tables of a bill: one line per car and one per lot activity of the
+ * month. Shared by the customer's invoice and the team member's statement.
  *
- * @param {object} args {business: the businesses document (name, phone,
- *   email, logo, address fields), recipient: one of invoiceRecipients'
- *   recipients (its `customer` is the netted month-end customer),
- *   monthKey, issuedMs, paymentInstructions, timeZone?}.
- * @return {object} What to print: {title, reference, invoiceNumber,
- *   businessName, businessAddress, businessContact, logoUrl, status:
- *   {label, paidInFull}, rows: [{label, value}], sections: [{heading,
- *   head: string[], lines: [{title, detail, period, calc, amount}]}],
- *   summary: [{label, value, tone, sub: [{label, value}]}], balance:
- *   {label, value, note}, instructions: ?{label, text}, footer: string[]}.
+ * @param {object} c A month-end customer.
+ * @param {string} customerName The name at the top of the document.
+ * @return {object[]} Sections `{heading, head, lines}`.
  */
-function invoiceModel(args) {
-  const business = args?.business || {};
-  const recipient = args?.recipient || {};
-  const c = recipient.customer || {};
-  const monthKey = text(args?.monthKey, 7) || text(c.monthKey, 7);
-  const zone = args?.timeZone || "America/New_York";
-  const due = cents(c.dueCents);
-  const stillParked = recipient.stillParked === true;
-  const paidUp = due <= 0;
-  const name = text(business.name, 160) || "Laawol";
-  const customerName = text(c.customerName || recipient.name, 120);
-  const monthEn = monthTextEn(monthKey);
-  const monthFr = monthTextFr(monthKey);
+function billSections(c, customerName) {
   const displayedName = norm(customerName);
-
-  const rows = [
-    ["Customer / Client", customerName],
-    ["Phone / Téléphone", text(c.customerPhone || recipient.phone, 40)],
-    ["Invoice for / Facture du mois", `${monthEn} / ${monthFr}`],
-    ["Invoice date / Date de la facture", usDate(args?.issuedMs, zone)],
-  ].filter(([, value]) => value).map(([label, value]) => ({label, value}));
-
   const sections = [];
   const carLines = (c.cars || []).map((b) => {
     const registered = text(b.registeredTo, 120);
@@ -123,6 +98,19 @@ function invoiceModel(args) {
     });
   }
 
+  return sections;
+}
+
+/**
+ * The money rows every bill starts with: the month's total, what was unpaid
+ * from before (itemized), payments received.
+ *
+ * @param {object} c A month-end customer.
+ * @param {string} monthEn "October 2026".
+ * @param {string} monthFr "octobre 2026".
+ * @return {object[]} Summary rows `{label, value, tone, sub}`.
+ */
+function billSummary(c, monthEn, monthFr) {
   const summary = [{
     label: `Total for ${monthEn} / Total pour ${monthFr}`,
     value: money(c.monthCents),
@@ -168,6 +156,46 @@ function invoiceModel(args) {
       sub: [],
     });
   }
+  return summary;
+}
+
+/**
+ * The lines of one invoice.
+ *
+ * @param {object} args {business: the businesses document (name, phone,
+ *   email, logo, address fields), recipient: one of invoiceRecipients'
+ *   recipients (its `customer` is the netted month-end customer),
+ *   monthKey, issuedMs, paymentInstructions, timeZone?}.
+ * @return {object} What to print: {title, reference, invoiceNumber,
+ *   businessName, businessAddress, businessContact, logoUrl, status:
+ *   {label, paidInFull}, rows: [{label, value}], sections: [{heading,
+ *   head: string[], lines: [{title, detail, period, calc, amount}]}],
+ *   summary: [{label, value, tone, sub: [{label, value}]}], balance:
+ *   {label, value, note}, instructions: ?{label, text}, footer: string[]}.
+ */
+function invoiceModel(args) {
+  const business = args?.business || {};
+  const recipient = args?.recipient || {};
+  const c = recipient.customer || {};
+  const monthKey = text(args?.monthKey, 7) || text(c.monthKey, 7);
+  const zone = args?.timeZone || "America/New_York";
+  const due = cents(c.dueCents);
+  const stillParked = recipient.stillParked === true;
+  const paidUp = due <= 0;
+  const name = text(business.name, 160) || "Laawol";
+  const customerName = text(c.customerName || recipient.name, 120);
+  const monthEn = monthTextEn(monthKey);
+  const monthFr = monthTextFr(monthKey);
+
+  const rows = [
+    ["Customer / Client", customerName],
+    ["Phone / Téléphone", text(c.customerPhone || recipient.phone, 40)],
+    ["Invoice for / Facture du mois", `${monthEn} / ${monthFr}`],
+    ["Invoice date / Date de la facture", usDate(args?.issuedMs, zone)],
+  ].filter(([, value]) => value).map(([label, value]) => ({label, value}));
+
+  const sections = billSections(c, customerName);
+  const summary = billSummary(c, monthEn, monthFr);
   const credit = cents(c.expenseCreditCents);
   if (credit > 0) {
     const sub = (c.expenseLines || []).map((l) => ({
@@ -228,6 +256,134 @@ function invoiceModel(args) {
 }
 
 /**
+ * The lines of one team member's STATEMENT (docs/PARKING_INVOICES.md
+ * section 6): the same design as an invoice, with the money told the way
+ * Month end tells it: the month's parking and lot jobs (itemized, plus
+ * anything unpaid from before), less the expenses they paid for the lot,
+ * plus the cash they hold for the business at the month's end, down to what
+ * they owe the business (or what the business owes them).
+ *
+ * @param {object} args {business, recipient: one of invoiceRecipients'
+ *   statement recipients (its `statement` holds the numbers), monthKey,
+ *   issuedMs, paymentInstructions, timeZone?}.
+ * @return {object} The same shape as invoiceModel.
+ */
+function staffStatementModel(args) {
+  const business = args?.business || {};
+  const recipient = args?.recipient || {};
+  const st = recipient.statement || {};
+  const c = recipient.customer || st.customer || {};
+  const monthKey = text(args?.monthKey, 7) || text(st.monthKey, 7) ||
+    text(c.monthKey, 7);
+  const zone = args?.timeZone || "America/New_York";
+  const owes = Math.round(Number(st.owesCents) || 0);
+  const settled = owes === 0;
+  const name = text(business.name, 160) || "Laawol";
+  const memberName = text(st.name || recipient.name, 120);
+  const monthEn = monthTextEn(monthKey);
+  const monthFr = monthTextFr(monthKey);
+  const days = monthDays(monthKey);
+  const lastDay = days ? usDayKey(dayKeyOf(days.last)) : "";
+
+  const rows = [
+    ["Team member / Membre de l'équipe", memberName],
+    ["Phone / Téléphone", text(recipient.phone || c.customerPhone, 40)],
+    ["Statement for / Relevé du mois", `${monthEn} / ${monthFr}`],
+    ["Statement date / Date du relevé", usDate(args?.issuedMs, zone)],
+  ].filter(([, value]) => value).map(([label, value]) => ({label, value}));
+
+  const sections = billSections(c, memberName);
+  // The month's total, unpaid from before and payments received, exactly as
+  // an invoice lists them...
+  const summary = billSummary(c, monthEn, monthFr).map((row, index) =>
+    index === 0 ? {...row, label: `Parking and lot jobs for ${monthEn} / ` +
+      `Stationnement et travaux de ${monthFr}`} : row);
+  // ...then what they come to, when more than the month's own total.
+  const jobs = Math.round(Number(st.parkingJobsCents) || 0);
+  if (summary.length > 1) {
+    summary.push({
+      label: "Parking and lot jobs to pay / " +
+        "Stationnement et travaux à payer",
+      value: money(jobs),
+      tone: "",
+      sub: [],
+    });
+  }
+  const expenses = cents(st.expenseCents);
+  if (expenses > 0) {
+    const sub = (st.expenseLines || []).map((l) => ({
+      label: [l.date ? usDayKey(l.date) : "",
+        text(l.label, 100) || "Expense / Dépense"]
+          .filter(Boolean).join(" · "),
+      value: `-${money(l.amountCents)}`,
+    }));
+    if (cents(st.earlierExpenseCents) > 0) {
+      sub.push({label: "Expenses from earlier months / " +
+        "Dépenses des mois précédents",
+      value: `-${money(st.earlierExpenseCents)}`});
+    }
+    summary.push({
+      label: "Less expenses you paid for the lot / " +
+        "Moins les dépenses payées pour le parking",
+      value: `-${money(expenses)}`,
+      tone: "paid",
+      sub,
+    });
+  }
+  const cash = Math.round(Number(st.cashHeldCents) || 0);
+  if (cash !== 0) {
+    summary.push({
+      label: "Cash you hold for the business / " +
+        "Argent que vous gardez pour l'entreprise",
+      value: `${cash > 0 ? "+" : "-"}${money(Math.abs(cash))}`,
+      tone: "",
+      sub: [],
+    });
+  }
+
+  const upTo = lastDay ? `Up to ${lastDay}. ` : "";
+  const upToFr = lastDay ? `Jusqu'au ${lastDay}. ` : "";
+  const stillParked = recipient.stillParked === true || st.stillParked === true;
+  const instructions = text(args?.paymentInstructions, 300);
+  return {
+    title: "STATEMENT / RELEVÉ",
+    reference: text(recipient.invoiceNumber, 40),
+    invoiceNumber: text(recipient.invoiceNumber, 40),
+    businessName: name,
+    businessAddress: formatBusinessAddress({business, entry: {}}),
+    businessContact: [text(business.phone, 40), text(business.email, 180)]
+        .filter(Boolean).join("  |  "),
+    logoUrl: documentLogo(business).url,
+    status: {
+      label: owes > 0 ? "YOU OWE / VOUS DEVEZ" : owes < 0 ?
+        "THE BUSINESS OWES YOU / L'ENTREPRISE VOUS DOIT" :
+        "SETTLED / À JOUR",
+      paidInFull: owes <= 0,
+    },
+    rows,
+    sections,
+    summary,
+    balance: {
+      label: owes < 0 ? "THE BUSINESS OWES YOU / L'ENTREPRISE VOUS DOIT" :
+        settled ? "BALANCE / SOLDE" :
+          "YOU OWE THE BUSINESS / VOUS DEVEZ À L'ENTREPRISE",
+      value: money(Math.abs(owes)),
+      note: `${upTo}${stillParked ? "Your car is still parked: " : ""}` +
+        "Later months will be on your next statement. / " +
+        `${upToFr}${stillParked ? "Votre voiture est toujours " +
+          "stationnée : " : ""}Les mois suivants seront sur votre prochain ` +
+        "relevé.",
+    },
+    instructions: instructions && owes > 0 ?
+      {label: "How to pay / Comment payer", text: instructions} : null,
+    footer: [
+      "Thank you. / Merci.",
+      "Issued through Laawol Digital · laawoldigital.com",
+    ],
+  };
+}
+
+/**
  * Draws an invoice.
  *
  * @param {object} model From invoiceModel.
@@ -237,7 +393,8 @@ function invoiceModel(args) {
  */
 function renderInvoicePdf(model, options) {
   return renderPdf({
-    title: `Invoice ${model.reference}`,
+    title: `${/^STATEMENT/.test(model.title) ? "Statement" : "Invoice"} ` +
+      model.reference,
     author: model.businessName,
     logoUrl: model.logoUrl,
   }, (doc, logo) => draw(doc, model, logo), options);
@@ -494,4 +651,5 @@ function draw(doc, model, logo) {
 module.exports = {
   invoiceModel,
   renderInvoicePdf,
+  staffStatementModel,
 };

@@ -19234,4 +19234,65 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get pplErrBoxPriceInvalid =>
       'Enter a box price between \$0.01 and \$10,000.';
+
+  @override
+  String get pmeStatement => 'Statement';
+
+  @override
+  String get pmeOwesBusiness => 'Owes the business';
+
+  @override
+  String get pmeBusinessOwesThem => 'The business owes them';
+
+  @override
+  String get pmeSettled => 'Settled';
+
+  @override
+  String get pmeCashHeldTitle => 'Cash held for the business';
+
+  @override
+  String get pmeCashHeldNote =>
+      'Money they took in for the business and still hold, as of the end of the month';
+
+  @override
+  String get pmeCashHeldLoading => 'Checking the cash team members hold…';
+
+  @override
+  String get pmeCashHeldFailed =>
+      'The cash team members hold could not be checked, so their bills show without it.';
+
+  @override
+  String get pmePdfStatementTitle => 'STATEMENT';
+
+  @override
+  String get pmePdfTeamMember => 'Team member';
+
+  @override
+  String get pmePdfCashHeld => 'Cash you hold for the business';
+
+  @override
+  String get pmePdfYouOwe => 'You owe the business';
+
+  @override
+  String get pmePdfBusinessOwesYou => 'The business owes you';
+
+  @override
+  String pmeIncludedInStatement(String name) {
+    return 'Included in the statement of $name';
+  }
+
+  @override
+  String pmeStatementParkingAndJobs(String amount) {
+    return '$amount parking and jobs';
+  }
+
+  @override
+  String pmeStatementExpenses(String amount) {
+    return '− $amount expenses';
+  }
+
+  @override
+  String pmeStatementCash(String amount) {
+    return '$amount cash held';
+  }
 }

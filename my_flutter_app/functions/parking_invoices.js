@@ -33,6 +33,7 @@ const {
   phoneDigits,
   reachablePhone,
 } = require("./parking_whatsapp");
+const {staffStatements} = require("./staff_statement");
 
 const TIME_ZONE = "America/New_York";
 
@@ -212,6 +213,16 @@ function cleanPaymentInstructions(value) {
 // ---------------------------------------------------------------------------
 
 /**
+ * @param {?object} credit The staff credit (`entries` carry `spentAt` or
+ *   `spentAtMs`).
+ * @return {object[]} Its expense entries, each with `spentAtMs`.
+ */
+function creditEntries(credit) {
+  return (credit?.entries || []).map((e) => ({
+    ...e, spentAtMs: Number(e.spentAtMs) || msOf(e.spentAt)}));
+}
+
+/**
  * The month's customers with their linked staff's lot expenses taken off
  * (the server twin of the console's `withStaffExpenseCredit`): each gains
  * `expenseLines`, `earlierExpenseCents`, and netStaffExpenses' fields. With
@@ -227,8 +238,7 @@ function nettedCustomers(customers, monthKey, credit) {
   const list = Array.isArray(customers) ? customers : [];
   if (!credit) return list;
   const names = credit.staffNames || {};
-  const entries = (credit.entries || []).map((e) => ({
-    ...e, spentAtMs: Number(e.spentAtMs) || msOf(e.spentAt)}));
+  const entries = creditEntries(credit);
   const net = netStaffExpenses(list, {
     entries,
     repayments: credit.repayments || [],
@@ -299,9 +309,61 @@ function invoiceNumbers(customers, monthKey) {
  * @return {string} "INV-202610-1234-1".
  */
 function invoiceNumber(monthKey, last4, n = 1) {
+  return documentNumber("INV", monthKey, last4, n);
+}
+
+/**
+ * @param {string} monthKey "YYYY-MM".
+ * @param {string} last4 The last four digits of the team member's phone.
+ * @param {number} n Tells apart numbers that end the same (1-based).
+ * @return {string} "ST-202610-1234-1".
+ */
+function statementNumber(monthKey, last4, n = 1) {
+  return documentNumber("ST", monthKey, last4, n);
+}
+
+/**
+ * @param {string} prefix "INV" or "ST".
+ * @param {string} monthKey "YYYY-MM".
+ * @param {string} last4 The last four digits of a phone.
+ * @param {number} n 1-based.
+ * @return {string} "{prefix}-{YYYYMM}-{last4}-{n}".
+ */
+function documentNumber(prefix, monthKey, last4, n) {
   const month = text(monthKey, 7).replace("-", "");
   const tail = text(last4, 20).replace(/\D/g, "").slice(-4).padStart(4, "0");
-  return `INV-${month}-${tail}-${Math.max(1, Math.round(Number(n) || 1))}`;
+  return `${prefix}-${month}-${tail}-${Math.max(1,
+      Math.round(Number(n) || 1))}`;
+}
+
+/**
+ * Statement numbers for the month's team members: ST-{YYYYMM}-{last 4
+ * digits of the phone}-{n}; `n` tells apart members whose numbers end the
+ * same (phone order, then staff id), so a number never moves when anybody
+ * pays.
+ *
+ * @param {{staffId: string, phoneDigits: string}[]} people The month's team
+ *   members that have a phone.
+ * @param {string} monthKey "YYYY-MM".
+ * @return {Map<string, string>} Staff id to statement number.
+ */
+function statementNumbers(people, monthKey) {
+  const groups = new Map();
+  for (const p of Array.isArray(people) ? people : []) {
+    const digits = text(p?.phoneDigits, 40);
+    if (!digits || !p.staffId) continue;
+    const last4 = digits.slice(-4);
+    if (!groups.has(last4)) groups.set(last4, []);
+    groups.get(last4).push({staffId: p.staffId, digits});
+  }
+  const out = new Map();
+  for (const [last4, list] of groups) {
+    list.sort((a, b) => a.digits.localeCompare(b.digits) ||
+      a.staffId.localeCompare(b.staffId)).forEach((p, index) => {
+      out.set(p.staffId, statementNumber(monthKey, last4, index + 1));
+    });
+  }
+  return out;
 }
 
 /**
@@ -317,26 +379,60 @@ function carsByRecency(customer) {
 }
 
 /**
- * Who gets an invoice for the month, from the month-end summary.
+ * The cars an invoice or statement names, and the code the Track button
+ * points at (the newest car's, else an older car's, else an activity's).
  *
- * A customer gets ONE invoice when they owe money after staff expenses
+ * @param {object} c A month-end customer.
+ * @return {{cars: object[], trackingCode: string}} The named cars.
+ */
+function namedCars(c) {
+  const named = carsByRecency(c).map((b) => ({
+    id: text(b.id, 200),
+    label: text(b.vehicle, 120) || "Car",
+    vinNumber: text(b.vinNumber, 17),
+    trackingCode: text(b.trackingCode, 40),
+    stillParked: b.stillParked === true,
+  }));
+  const trackingCode = named.find((b) => b.trackingCode)?.trackingCode ||
+    text((c.olderCars || []).find((b) => text(b.trackingCode))
+        ?.trackingCode, 40) ||
+    text([...(c.activities || []), ...(c.olderActivities || [])]
+        .find((a) => text(a.trackingCode))?.trackingCode, 40);
+  return {cars: named, trackingCode};
+}
+
+/**
+ * Who gets an invoice (or a statement) for the month, from the month-end
+ * summary.
+ *
+ * A CUSTOMER gets ONE invoice when they owe money after staff expenses
  * (`dueCents > 0`) or any of their cars is still parked at the end of the
  * month. A customer who left and paid up gets none. Voided and cancelled
  * cars are not in the summary, so they are never billed. Customers with no
  * number the WhatsApp can reach are listed apart, with why.
  *
+ * A TEAM MEMBER (own cars under `staff:{uid}` and/or the one member linked
+ * to a customer) gets ONE statement instead, with the numbers Month end
+ * shows (staff_statement.js): parking and jobs, less their expenses, plus
+ * the cash they hold at the month's end. The same rule decides whether they
+ * get one: they owe (`owesCents > 0`) or a car is still parked.
+ *
  * @param {object} summary parkingMonthSummary(...).
  * @param {?object} staffCredit `{entries, repayments, links, staffNames,
- *   lines}` for the month, or null (nothing to net).
- * @param {Date} now The moment (the invoice's date).
+ *   lines}` for the month, or null (nothing to net, no statements).
+ * @param {Date} now The moment (the document's date).
  * @param {object} [options] `{business}` (its country reads local numbers),
- *   `sent` (a Set of phone digits already sent this month's invoice).
+ *   `sent` (a Set of phone digits already sent this month's document),
+ *   `held` ({[staffId]: cash held at the month's end, cents}) and
+ *   `staffPhones` ({[staffId]: profile phone}) for the statements.
  * @return {{monthKey: string, issuedMs: number, recipients: object[],
- *   skipped: object[], totalDueCents: number}} Recipients: `{key, phone,
- *   phoneDigits, name, invoiceNumber, cars: [{id, label, vinNumber,
- *   trackingCode, stillParked}], totalDueCents, stillParked, trackingCode,
- *   alreadySent, customer}`; `customer` is the netted month-end customer the
- *   PDF is drawn from.
+ *   skipped: object[], totalDueCents: number}} Recipients: `{kind:
+ *   "invoice"|"statement", key, phone, phoneDigits, name, invoiceNumber,
+ *   cars: [{id, label, vinNumber, trackingCode, stillParked}],
+ *   totalDueCents, stillParked, trackingCode, alreadySent, customer}`;
+ *   `customer` is the netted month-end customer the PDF is drawn from (a
+ *   statement's is the member's bills as one) and a statement also has
+ *   `staffId`, `owesCents` (signed) and `statement`.
  */
 function invoiceRecipients(summary, staffCredit, now = new Date(),
     options = {}) {
@@ -344,31 +440,32 @@ function invoiceRecipients(summary, staffCredit, now = new Date(),
   const customers = nettedCustomers(summary?.customers, monthKey, staffCredit);
   const numbers = invoiceNumbers(customers, monthKey);
   const sent = options.sent instanceof Set ? options.sent : new Set();
+  const team = staffCredit ? staffStatements(customers, {
+    monthKey,
+    entries: creditEntries(staffCredit),
+    repayments: staffCredit.repayments || [],
+    lines: staffCredit.lines || [],
+    staffNames: staffCredit.staffNames || {},
+    held: options.held || {},
+  }) : {statements: [], customerKeys: {}};
   const recipients = [];
   const skipped = [];
+  const taken = new Set();
   for (const c of customers) {
-    // A team member's own cars are settled in Staff balances, not invoiced
+    // A team member's bills are in their statement, below; their own cars
+    // alone (no netting to read) are settled in Staff balances
     // (docs/PARKING_TEAM_CARS.md).
-    if (text(c.key, 200).startsWith("staff:")) continue;
+    if (text(c.key, 200).startsWith("staff:") || team.customerKeys[c.key]) {
+      continue;
+    }
     const stillParked = (c.cars || []).some((b) => b.stillParked === true);
     const due = cents(c.dueCents);
     if (due <= 0 && !stillParked) continue;
-    const ordered = carsByRecency(c);
-    const named = ordered.map((b) => ({
-      id: text(b.id, 200),
-      label: text(b.vehicle, 120) || "Car",
-      vinNumber: text(b.vinNumber, 17),
-      trackingCode: text(b.trackingCode, 40),
-      stillParked: b.stillParked === true,
-    }));
-    const trackingCode = named.find((b) => b.trackingCode)?.trackingCode ||
-      text((c.olderCars || []).find((b) => text(b.trackingCode))
-          ?.trackingCode, 40) ||
-      text([...(c.activities || []), ...(c.olderActivities || [])]
-          .find((a) => text(a.trackingCode))?.trackingCode, 40);
+    const {cars: named, trackingCode} = namedCars(c);
     const reach = reachablePhone({customerPhone: c.customerPhone},
         options.business);
     const base = {
+      kind: "invoice",
       key: c.key,
       name: text(c.customerName, 120),
       cars: named,
@@ -381,6 +478,7 @@ function invoiceRecipients(summary, staffCredit, now = new Date(),
       continue;
     }
     const digits = phoneDigits(reach.phone);
+    taken.add(digits);
     recipients.push({
       ...base,
       phone: reach.phone,
@@ -390,6 +488,57 @@ function invoiceRecipients(summary, staffCredit, now = new Date(),
       trackingCode,
       alreadySent: sent.has(digits),
       customer: c,
+    });
+  }
+
+  // The team members: their phone is the profile's, else the number of the
+  // customer the owner linked them to.
+  const reached = team.statements.map((st) => {
+    const links = staffCredit?.links || {};
+    const raw = text(options.staffPhones?.[st.staffId], 40) ||
+      text(links[st.staffId]?.customerPhone, 40) ||
+      text(st.customer.customerPhone, 40);
+    return {st, reach: reachablePhone({customerPhone: raw},
+        options.business), raw};
+  });
+  const stNumbers = statementNumbers(reached.filter((r) => r.reach.phone)
+      .map((r) => ({staffId: r.st.staffId,
+        phoneDigits: phoneDigits(r.reach.phone)})), monthKey);
+  for (const {st, reach, raw} of reached) {
+    if (st.owesCents <= 0 && !st.stillParked) continue;
+    const {cars: named, trackingCode} = namedCars(st.customer);
+    const base = {
+      kind: "statement",
+      key: st.key,
+      staffId: st.staffId,
+      name: st.name,
+      cars: named,
+      totalDueCents: cents(st.owesCents),
+      owesCents: st.owesCents,
+      stillParked: st.stillParked,
+    };
+    if (!reach.phone) {
+      skipped.push({...base, phone: raw, reason: reach.error});
+      continue;
+    }
+    const digits = phoneDigits(reach.phone);
+    // One message row per number and month: a number already taken by
+    // another recipient cannot be sent to twice.
+    if (taken.has(digits)) {
+      skipped.push({...base, phone: reach.phone, reason: "duplicate_phone"});
+      continue;
+    }
+    taken.add(digits);
+    recipients.push({
+      ...base,
+      phone: reach.phone,
+      phoneDigits: digits,
+      invoiceNumber: stNumbers.get(st.staffId) ||
+        statementNumber(monthKey, digits, 1),
+      trackingCode,
+      alreadySent: sent.has(digits),
+      customer: st.customer,
+      statement: st,
     });
   }
   recipients.sort((a, b) => b.totalDueCents - a.totalDueCents ||
@@ -438,18 +587,20 @@ function invoiceMessageValues(recipient, business) {
  * @return {string} "2026-10" ("" when it is not an invoice number).
  */
 function monthKeyFromNumber(number) {
-  const match = /^INV-(\d{4})(\d{2})-/.exec(text(number, 40));
+  const match = /^(?:INV|ST)-(\d{4})(\d{2})-/.exec(text(number, 40));
   return match ? `${match[1]}-${match[2]}` : "";
 }
 
 /**
  * The file name of the PDF the message carries.
  *
- * @param {string} invoiceNo The invoice number.
- * @return {string} "Invoice INV-202610-1234-1.pdf".
+ * @param {string} invoiceNo The invoice or statement number.
+ * @return {string} "Invoice INV-202610-1234-1.pdf" or "Statement
+ *   ST-202610-1234-1.pdf".
  */
 function invoiceFilename(invoiceNo) {
-  return `Invoice ${text(invoiceNo, 40)}.pdf`.replace(/["\\\r\n]/g, "");
+  const kind = text(invoiceNo, 40).startsWith("ST-") ? "Statement" : "Invoice";
+  return `${kind} ${text(invoiceNo, 40)}.pdf`.replace(/["\\\r\n]/g, "");
 }
 
 // ---------------------------------------------------------------------------
@@ -560,6 +711,8 @@ module.exports = {
   newYorkDay,
   runClaimable,
   runId,
+  statementNumber,
+  statementNumbers,
   storagePath,
   tallyRows,
 };

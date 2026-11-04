@@ -32443,6 +32443,108 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Enter a box price between \$0.01 and \$10,000.'**
   String get pplErrBoxPriceInvalid;
+
+  /// The badge / title of a team member's month-end statement (their parking and lot jobs, less expenses they paid, plus cash they hold for the business).
+  ///
+  /// In en, this message translates to:
+  /// **'Statement'**
+  String get pmeStatement;
+
+  /// On a team member's month-end card: what they owe the business.
+  ///
+  /// In en, this message translates to:
+  /// **'Owes the business'**
+  String get pmeOwesBusiness;
+
+  /// On a team member's month-end card: the business owes them money.
+  ///
+  /// In en, this message translates to:
+  /// **'The business owes them'**
+  String get pmeBusinessOwesThem;
+
+  /// On a team member's month-end card: nobody owes anything.
+  ///
+  /// In en, this message translates to:
+  /// **'Settled'**
+  String get pmeSettled;
+
+  /// A line on a team member's statement: money they took in for the business and still hold.
+  ///
+  /// In en, this message translates to:
+  /// **'Cash held for the business'**
+  String get pmeCashHeldTitle;
+
+  /// Under 'Cash held for the business' on a statement.
+  ///
+  /// In en, this message translates to:
+  /// **'Money they took in for the business and still hold, as of the end of the month'**
+  String get pmeCashHeldNote;
+
+  /// Shown while the cash team members hold is being loaded.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking the cash team members hold…'**
+  String get pmeCashHeldLoading;
+
+  /// Shown when the cash team members hold could not be loaded.
+  ///
+  /// In en, this message translates to:
+  /// **'The cash team members hold could not be checked, so their bills show without it.'**
+  String get pmeCashHeldFailed;
+
+  /// The title of a team member's statement PDF.
+  ///
+  /// In en, this message translates to:
+  /// **'STATEMENT'**
+  String get pmePdfStatementTitle;
+
+  /// Label above the name on a team member's statement PDF.
+  ///
+  /// In en, this message translates to:
+  /// **'Team member'**
+  String get pmePdfTeamMember;
+
+  /// A row on a team member's statement PDF / text.
+  ///
+  /// In en, this message translates to:
+  /// **'Cash you hold for the business'**
+  String get pmePdfCashHeld;
+
+  /// The final row of a statement: what the team member owes the business.
+  ///
+  /// In en, this message translates to:
+  /// **'You owe the business'**
+  String get pmePdfYouOwe;
+
+  /// The final row of a statement when the business owes the team member.
+  ///
+  /// In en, this message translates to:
+  /// **'The business owes you'**
+  String get pmePdfBusinessOwesYou;
+
+  /// On a team member's second bill: it is part of their statement.
+  ///
+  /// In en, this message translates to:
+  /// **'Included in the statement of {name}'**
+  String pmeIncludedInStatement(String name);
+
+  /// First part of the line under a statement's total.
+  ///
+  /// In en, this message translates to:
+  /// **'{amount} parking and jobs'**
+  String pmeStatementParkingAndJobs(String amount);
+
+  /// Second part of the line under a statement's total.
+  ///
+  /// In en, this message translates to:
+  /// **'− {amount} expenses'**
+  String pmeStatementExpenses(String amount);
+
+  /// Third part of the line under a statement's total (amount carries its sign).
+  ///
+  /// In en, this message translates to:
+  /// **'{amount} cash held'**
+  String pmeStatementCash(String amount);
 }
 
 class _AppLocalizationsDelegate

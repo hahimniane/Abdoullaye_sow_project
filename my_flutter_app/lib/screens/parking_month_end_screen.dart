@@ -21,6 +21,7 @@ import '../services/parking_month_statement.dart';
 import '../services/parking_whatsapp.dart';
 import '../services/staff_balances.dart';
 import '../services/staff_expense_repayments.dart';
+import '../services/staff_statement.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_motion.dart';
 import '../theme/app_spacing.dart';
@@ -179,6 +180,88 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
             balances == null ? OwesCashState.failed : OwesCashState.ready;
       });
     });
+  }
+
+  /// The cash each team member held for the business at the END of the month
+  /// (`staff_statement_cash`), for their statement (docs/PARKING_INVOICES.md
+  /// §6). Asked only when some bill belongs to a team member; loading always
+  /// resolves (the service's timeout) and a failure shows their bills as
+  /// before, with a note - never half a statement.
+  Map<String, int> _statementCash = const {};
+  OwesCashState _statementCashState = OwesCashState.none;
+  String _statementCashKey = '';
+  int _statementCashGeneration = 0;
+
+  void _askStatementCash(bool needed) {
+    final paid = _billPayments.values.fold<int>(0, (s, l) => s + l.length);
+    final key = needed ? '${widget.businessId}|$_monthKey|$paid' : '';
+    if (key == _statementCashKey) return;
+    _statementCashKey = key;
+    final generation = ++_statementCashGeneration;
+    // Never setState during build.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || generation != _statementCashGeneration) return;
+      if (!needed) {
+        setState(() {
+          _statementCash = const {};
+          _statementCashState = OwesCashState.none;
+        });
+        return;
+      }
+      setState(() => _statementCashState = OwesCashState.loading);
+      Map<String, int>? held;
+      try {
+        held = await widget.balancesService.loadStatementCash(
+          widget.businessId,
+          _monthKey,
+        );
+      } catch (_) {
+        held = null;
+      }
+      if (!mounted || generation != _statementCashGeneration) return;
+      setState(() {
+        _statementCash = held ?? const {};
+        _statementCashState = held == null
+            ? OwesCashState.failed
+            : OwesCashState.ready;
+      });
+    });
+  }
+
+  /// The month with team members' statements in: their first bill is their
+  /// statement (all their bills as one, the cash line, "owes the business"),
+  /// their other bills are marked as included, and the lists, tabs and totals
+  /// follow. Worked out once per change, not per build.
+  Object? _statementKey;
+  ParkingMonthSummary? _statementCache;
+
+  ParkingMonthSummary _statementSummary(ParkingMonthSummary base) {
+    if (_statementCashState != OwesCashState.ready || !_creditReady) {
+      return base;
+    }
+    final key = (base, _statementCash, _expenseRows, _repaymentRows, _staff);
+    if (_statementCache != null && key == _statementKey) {
+      return _statementCache!;
+    }
+    _statementKey = key;
+    final links = _business['staffParkingLinks'];
+    final input = ParkingMonthStaffExpenses(
+      entries: _expenseRows,
+      repayments: _repaymentRows,
+      lines: _expenseLineRows,
+      links: links is Map ? links.cast<String, dynamic>() : const {},
+      staffNames: {for (final s in _staff) s.id: s.name},
+    );
+    final result = staffStatements(
+      base.customers,
+      monthKey: _monthKey,
+      entries: parkingMonthCreditEntries(input, _monthKey),
+      repayments: _repaymentRows,
+      lines: _expenseLineRows,
+      staffNames: input.staffNames,
+      held: _statementCash,
+    );
+    return _statementCache = summaryWithStatements(base, result);
   }
 
   bool get _creditReady =>
@@ -642,6 +725,12 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
         noParkingBill: l10n.pmeNoParkingBill,
         lotExpense: l10n.pmeLotExpense,
         earlierExpenses: l10n.pmeEarlierExpenses,
+        statement: l10n.pmePdfStatementTitle,
+        teamMember: l10n.pmePdfTeamMember,
+        cashHeld: l10n.pmePdfCashHeld,
+        youOwe: l10n.pmePdfYouOwe,
+        businessOwesYou: l10n.pmePdfBusinessOwesYou,
+        settled: l10n.pmeSettled,
       );
 
   Future<void> _run(String key, Future<void> Function() work) async {
@@ -663,7 +752,7 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
     await _run('summary', () async {
       final bytes = await buildParkingMonthSummaryPdf(
         business: {..._business, 'name': _businessName},
-        summary: summary,
+        summary: parkingMonthSummaryForPdf(summary),
         copy: _copy(l10n, locale),
       );
       if (!mounted) return;
@@ -685,6 +774,11 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
     final l10n = AppLocalizations.of(context)!;
     final locale = Localizations.localeOf(context).toLanguageTag();
     final estimating = _estimating;
+    // A team member's card merges their bills into one statement; a payment
+    // is always recorded on the customer's own bill.
+    final own =
+        _summary().customers.where((c) => c.key == customer.key).firstOrNull ??
+        customer;
     final action = await pickLotOption<String>(
       context,
       title: customer.customerName.isEmpty
@@ -694,6 +788,7 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
         l10n,
         customer,
         estimate: estimating,
+        payable: own,
       ),
     );
     if (action == null || !mounted) return;
@@ -705,7 +800,7 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
         await showLotSheet<bool>(
           context,
           _SettleSheet(
-            customer: customer,
+            customer: own,
             monthLabel: parkingMonthLabel(_monthKey, locale),
             staff: _staff,
           ),
@@ -717,7 +812,7 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
             businessId: widget.businessId,
             monthKey: _monthKey,
             monthLabel: parkingMonthLabel(_monthKey, locale),
-            customer: customer,
+            customer: own,
             staff: _staff,
             service: widget.billPaymentService,
           ),
@@ -748,7 +843,7 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
         // The bill text mirrors the server byte for byte; an estimate only
         // gets its one-line marker on top, and a linked staff member's bill
         // its expenses (added here, never in the shared builder).
-        final text = parkingMonthTextWithExpenses(
+        var text = parkingMonthTextWithExpenses(
           parkingMonthCustomerText(customer, _businessName),
           customer,
           title: l10n.pmeExpensesTitle,
@@ -756,6 +851,19 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
           lotExpense: l10n.pmeLotExpense,
           earlier: l10n.pmeEarlierExpenses,
         );
+        // A team member's statement: the cash they hold, then what they owe
+        // the business (or what it owes them) instead of "Balance due".
+        if (customer.statementOwesCents != null) {
+          text = parkingMonthStatementText(
+            text,
+            customer,
+            statement: l10n.pmeStatement,
+            cashHeld: l10n.pmePdfCashHeld,
+            youOwe: l10n.pmePdfYouOwe,
+            businessOwesYou: l10n.pmePdfBusinessOwesYou,
+            settled: l10n.pmeSettled,
+          );
+        }
         await SharePlus.instance.share(
           ShareParams(
             text: estimating
@@ -808,7 +916,14 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final locale = Localizations.localeOf(context).toLanguageTag();
-    final summary = _summary();
+    final base = _summary();
+    // Team members' statements need the cash they hold at the month's end.
+    final teamBills =
+        _creditReady &&
+        !_loading &&
+        base.customers.any((c) => statementMemberOf(c).isNotEmpty);
+    _askStatementCash(teamBills);
+    final summary = _statementSummary(base);
     final thisMonth = shiftParkingMonthKey(previousParkingMonthKey(), 1);
     // "Business owes" and Paid back: the owner, or staff with the ledger.
     final canSettleStaff = Provider.of<AuthProvider>(context)
@@ -980,6 +1095,30 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
                         ),
                       ],
                     ),
+                    if (_statementCashState == OwesCashState.loading) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        l10n.pmeCashHeldLoading,
+                        key: const Key('month-end-statement-cash-loading'),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          height: 1.3,
+                          color: AppColors.muted,
+                        ),
+                      ),
+                    ],
+                    if (_statementCashState == OwesCashState.failed) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        l10n.pmeCashHeldFailed,
+                        key: const Key('month-end-statement-cash-failed'),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          height: 1.3,
+                          color: AppColors.muted,
+                        ),
+                      ),
+                    ],
                     if (creditUnavailable) ...[
                       const SizedBox(height: 6),
                       Text(
@@ -1027,6 +1166,48 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
   }
 }
 
+/// The month's summary as its PDF lists it: a team member is listed by what
+/// their statement says they owe (as their card does), and their other bills
+/// - included in it - are not listed twice. Unchanged without statements.
+ParkingMonthSummary parkingMonthSummaryForPdf(ParkingMonthSummary summary) {
+  if (!summary.customers.any((c) => c.statementOwesCents != null)) {
+    return summary;
+  }
+  ParkingMonthCustomer shown(ParkingMonthCustomer c) =>
+      c.statementOwesCents == null
+      ? c
+      : c.withStatement(
+          cashHeldCents: c.cashHeldCents,
+          statementOwesCents: c.statementOwesCents,
+          statementStaffId: c.statementStaffId,
+          dueCents: c.statementOwesCents! > 0 ? c.statementOwesCents! : 0,
+        );
+  final customers = [
+    for (final c in summary.customers)
+      if (c.includedInStatementOf.isEmpty) shown(c),
+  ];
+  return ParkingMonthSummary(
+    monthKey: summary.monthKey,
+    carsOnLot: summary.carsOnLot,
+    carsOwing: summary.carsOwing,
+    activitiesInMonth: summary.activitiesInMonth,
+    customers: customers,
+    customersOwing: customers.where(cardOwes).toList(),
+    customersPaid: customers.where(cardPaid).toList(),
+    billedCents: summary.billedCents,
+    collectedCents: summary.collectedCents,
+    owedCents: summary.owedCents,
+    olderOwedCents: summary.olderOwedCents,
+    dueCents: summary.dueCents,
+    owing: summary.owing,
+    bills: summary.bills,
+    carried: summary.carried,
+    expenseCreditCents: summary.expenseCreditCents,
+    businessOwes: summary.businessOwes,
+    businessOwesCents: summary.businessOwesCents,
+  );
+}
+
 /// What a customer's card offers: the bill as a PDF or text, and - only for
 /// real numbers, never for the whole-month estimate - the ways to record a
 /// payment ("Mark all paid", open the car).
@@ -1034,19 +1215,26 @@ List<LotOption<String>> parkingMonthCustomerOptions(
   AppLocalizations l10n,
   ParkingMonthCustomer customer, {
   bool estimate = false,
-}) => [
-  LotOption('pdf', l10n.pmeSharePdf),
-  LotOption('text', l10n.pmeSendText),
-  if (!estimate &&
-      customer.dueCents > 0 &&
-      monthBillPaymentPlan(customer).items.isNotEmpty)
-    LotOption('settle', l10n.pmeMarkAllPaid),
-  // One typed amount, split oldest first (docs/PARKING_BILL_PAYMENTS.md).
-  if (!estimate && billPaymentPlan(customer, 1).payableCents > 0)
-    LotOption('record', l10n.pmeRecordPayment),
-  if (!estimate && (customer.cars.isNotEmpty || customer.olderCars.isNotEmpty))
-    LotOption('open', l10n.pmeOpenCar),
-];
+  // The customer's own bill, when [customer] is a team member's statement
+  // (their bills merged): payments are recorded on it.
+  ParkingMonthCustomer? payable,
+}) {
+  final bill = payable ?? customer;
+  return [
+    LotOption('pdf', l10n.pmeSharePdf),
+    LotOption('text', l10n.pmeSendText),
+    if (!estimate &&
+        bill.dueCents > 0 &&
+        monthBillPaymentPlan(bill).items.isNotEmpty)
+      LotOption('settle', l10n.pmeMarkAllPaid),
+    // One typed amount, split oldest first (docs/PARKING_BILL_PAYMENTS.md).
+    if (!estimate && billPaymentPlan(bill, 1).payableCents > 0)
+      LotOption('record', l10n.pmeRecordPayment),
+    if (!estimate &&
+        (customer.cars.isNotEmpty || customer.olderCars.isNotEmpty))
+      LotOption('open', l10n.pmeOpenCar),
+  ];
+}
 
 /// A shared bill marked as the estimate: the marker line, a blank line, then
 /// the bill text exactly as the server would send it.
@@ -1302,6 +1490,41 @@ String parkingMonthTextWithExpenses(
   return lines.join('\n');
 }
 
+/// A team member's statement as text: the bill text with its expenses
+/// ([parkingMonthTextWithExpenses]), then the cash they hold and what they
+/// owe the business - or what it owes them - in place of "Balance due".
+String parkingMonthStatementText(
+  String text,
+  ParkingMonthCustomer c, {
+  required String statement,
+  required String cashHeld,
+  required String youOwe,
+  required String businessOwesYou,
+  required String settled,
+}) {
+  final owes = c.statementOwesCents;
+  if (owes == null) return text;
+  final lines = text.split('\n');
+  if (lines.length < 2) return text;
+  // The last line is the (parking and jobs) balance: the statement replaces it.
+  lines.removeLast();
+  if (lines.isNotEmpty) {
+    lines[0] = lines[0].replaceFirst(' — Monthly bill,', ' — $statement,');
+  }
+  final cash = c.cashHeldCents ?? 0;
+  if (cash != 0) {
+    lines.add('$cashHeld — ${cash > 0 ? '+' : '-'}${parkingMoney(cash.abs())}');
+  }
+  lines.add(
+    owes > 0
+        ? '$youOwe: ${parkingMoney(owes)}'
+        : owes < 0
+        ? '$businessOwesYou: ${parkingMoney(-owes)}'
+        : settled,
+  );
+  return lines.join('\n');
+}
+
 class _Stat extends StatelessWidget {
   const _Stat({required this.label, required this.value, this.tone});
 
@@ -1443,7 +1666,14 @@ class _CustomerTileState extends State<_CustomerTile> {
     final customer = widget.customer;
     final busy = widget.busy;
     final onTap = widget.onTap;
-    final owes = customer.dueCents > 0;
+    // A team member's card is their statement (staff_statement.dart): what
+    // they owe the business after expenses and the cash they hold; their
+    // other bills say which statement they are in.
+    final statementOwes = customer.statementOwesCents;
+    final includedIn = customer.includedInStatementOf;
+    final owes = statementOwes != null
+        ? statementOwes > 0
+        : customer.dueCents > 0;
     final paidLines =
         customer.cars.where((b) => b.dueCents <= 0).length +
         [
@@ -1484,7 +1714,8 @@ class _CustomerTileState extends State<_CustomerTile> {
                         ),
                       ),
                       // A team member's own cars (key `staff:{uid}`).
-                      if (customer.forStaffId.isNotEmpty)
+                      if (customer.forStaffId.isNotEmpty ||
+                          customer.statementStaffId.isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.only(top: 2, bottom: 2),
                           child: ParkingTeamTagChip(
@@ -1521,6 +1752,46 @@ class _CustomerTileState extends State<_CustomerTile> {
                     height: 18,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
+                else if (includedIn.isNotEmpty)
+                  Flexible(
+                    child: Text(
+                      l10n.pmeIncludedInStatement(includedIn),
+                      key: const Key('month-end-included-in-statement'),
+                      textAlign: TextAlign.end,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.muted,
+                      ),
+                    ),
+                  )
+                else if (statementOwes != null)
+                  Column(
+                    key: const Key('month-end-statement-total'),
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        statementOwes > 0
+                            ? l10n.pmeOwesBusiness
+                            : statementOwes < 0
+                            ? l10n.pmeBusinessOwesThem
+                            : l10n.pmeSettled,
+                        style: const TextStyle(
+                          fontSize: 11.5,
+                          color: AppColors.muted,
+                        ),
+                      ),
+                      if (statementOwes != 0)
+                        Text(
+                          parkingMoney(statementOwes.abs()),
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                            color: owes ? AppColors.warn : AppColors.sage,
+                          ),
+                        ),
+                    ],
+                  )
                 else
                   Text(
                     owes ? parkingMoney(customer.dueCents) : l10n.invStatusPaid,
@@ -1533,6 +1804,30 @@ class _CustomerTileState extends State<_CustomerTile> {
                   ),
               ],
             ),
+            // What the statement adds up: parking and jobs, less expenses,
+            // plus the cash held.
+            if (statementOwes != null && includedIn.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  [
+                    l10n.pmeStatementParkingAndJobs(
+                      parkingMoney(customer.dueBeforeExpensesCents),
+                    ),
+                    if (customer.expenseCreditCents > 0)
+                      l10n.pmeStatementExpenses(
+                        parkingMoney(customer.expenseCreditCents),
+                      ),
+                    if ((customer.cashHeldCents ?? 0) != 0)
+                      l10n.pmeStatementCash(
+                        '${customer.cashHeldCents! > 0 ? '+' : '−'}'
+                        '${parkingMoney(customer.cashHeldCents!.abs())}',
+                      ),
+                  ].join(' '),
+                  key: const Key('month-end-statement-line'),
+                  style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                ),
+              ),
             if (widget.invoice case final invoice?)
               _InvoiceStatus(customer: customer, invoice: invoice),
             const Divider(height: 16),
@@ -1715,6 +2010,55 @@ class _CustomerTileState extends State<_CustomerTile> {
                 customer: customer,
                 open: _showExpenses,
                 onToggle: () => setState(() => _showExpenses = !_showExpenses),
+              ),
+            // The cash a team member holds for the business, as of the end
+            // of the month (their statement's last line before the total).
+            if (statementOwes != null &&
+                includedIn.isEmpty &&
+                (customer.cashHeldCents ?? 0) != 0)
+              Padding(
+                key: const Key('month-end-cash-held'),
+                padding: const EdgeInsets.only(top: 4),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            l10n.pmeCashHeldTitle,
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.ink,
+                            ),
+                          ),
+                          Text(
+                            l10n.pmeCashHeldNote,
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              color: AppColors.muted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Text(
+                      '${customer.cashHeldCents! > 0 ? '+' : '-'}'
+                      '${parkingMoney(customer.cashHeldCents!.abs())}',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                        color: customer.cashHeldCents! > 0
+                            ? AppColors.warn
+                            : AppColors.sage,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             if (widget.payments.isNotEmpty)
               ParkingBillPaymentsSection(

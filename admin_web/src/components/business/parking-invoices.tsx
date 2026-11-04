@@ -29,6 +29,7 @@ import {
   paymentInstructionsOf,
   selectAllInvoices,
   setPaymentInstructionsRequest,
+  skippedMemberReason,
   type InvoicePreview,
   type InvoiceResult,
 } from "@/lib/parking-invoices";
@@ -298,6 +299,7 @@ export function ParkingInvoicesPanel({
                     <strong data-no-translate>{person.name || person.phone}</strong>
                     <small data-no-translate>{person.name ? person.phone : ""}</small>
                     <small data-no-translate>{person.cars.map((car) => car.label).filter(Boolean).join(", ")}</small>
+                    {person.kind === "statement" && <small><span className="lst-badge">{COPY.statementBadge}</span></small>}
                     {person.stillParked && <small>{COPY.stillParked}</small>}
                     {person.alreadySent && <small className="muted">{COPY.alreadySent}</small>}
                   </span>
@@ -306,6 +308,16 @@ export function ParkingInvoicesPanel({
               </li>
             ))}
           </ul>
+          {(preview?.skippedMembers.length ?? 0) > 0 && (
+            <div className="lst-hint" role="status">
+              <strong>{COPY.skippedTitle}</strong>
+              <ul>
+                {preview!.skippedMembers.map((member, index) => (
+                  <li key={`${member.name}-${index}`}><span className="lst-badge">{COPY.statementBadge}</span> <span data-no-translate>{member.name}</span> · <span>{skippedMemberReason(member.reason)}</span></li>
+                ))}
+              </ul>
+            </div>
+          )}
           {confirming ? (
             <div className="pk-invoices-confirm" role="alertdialog" aria-label="Send invoices">
               <p>{COPY.confirmText}</p>

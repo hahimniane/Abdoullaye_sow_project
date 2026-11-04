@@ -50,7 +50,7 @@ export function dayNumber(value: unknown): number | null {
   return Math.floor(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()) / DAY_MS);
 }
 
-function dayKeyOf(day: number) {
+export function dayKeyOf(day: number) {
   return new Date(day * DAY_MS).toISOString().slice(0, 10);
 }
 
@@ -443,6 +443,16 @@ export type ParkingMonthCustomer = {
   earlierExpenseCents: number;
   /** The staff linked to this customer (their parking bill). */
   linkedStaffIds: string[];
+  /** Only on a TEAM MEMBER's card once their statement is known
+   * (staff-statement.ts): the cash they hold for the business at the end of
+   * the month, and what they owe the business (negative: it owes them).
+   * The card, the bill and the WhatsApp statement all show these. */
+  cashHeldCents?: number;
+  statementOwesCents?: number;
+  /** The team member this card is for, when it carries their statement. */
+  statementStaffId?: string;
+  /** Set on a member's OTHER bills: the name of the statement they are in. */
+  includedInStatementOf?: string;
 };
 
 /** One lot expense a linked staff member paid this month, on their bill. */
@@ -721,6 +731,20 @@ export function parkingMonthSummary(
 }
 
 /**
+ * The expense entries every netting reads: the real ones with their dates,
+ * plus a monthly line's standing payer counted like a purchase logged for
+ * each month (EXPENSE_PAID_BY.md §3), so "Rent" reads on the bill. A team
+ * member's statement reads the same entries (staff-statement.ts).
+ */
+export function staffCreditEntries(credit: ParkingMonthStaffCredit, monthKey: string): Row[] {
+  return withStandingPayers(
+    (credit.entries ?? []).map((e) => ({ ...e, spentAtMs: toDate(e.spentAt)?.getTime() ?? 0 })),
+    credit.lines ?? [],
+    monthKey,
+  );
+}
+
+/**
  * The month's customers with their linked staff's lot expenses taken off
  * (docs/STAFF_EXPENSE_CREDIT.md §3), and what the business still owes its
  * staff. Without `credit` the customers come back exactly as they were.
@@ -733,13 +757,7 @@ export function withStaffExpenseCredit(
 ): { customers: ParkingMonthCustomer[]; businessOwes: BusinessOwesLine[]; businessOwesCents: number; expenseCreditCents: number } {
   if (!credit) return { customers, businessOwes: [], businessOwesCents: 0, expenseCreditCents: 0 };
   const names = credit.staffNames ?? {};
-  // A monthly line's standing payer counts like a purchase logged for each
-  // month (EXPENSE_PAID_BY.md §3), so "Rent" reads on the bill.
-  const entries = withStandingPayers(
-    (credit.entries ?? []).map((e) => ({ ...e, spentAtMs: toDate(e.spentAt)?.getTime() ?? 0 })),
-    credit.lines ?? [],
-    monthKey,
-  );
+  const entries = staffCreditEntries(credit, monthKey);
   const net = netStaffExpenses(customers, {
     entries,
     repayments: credit.repayments ?? [],
@@ -839,7 +857,7 @@ export function moneyText(cents: number): string {
 export function parkingMonthCustomerText(c: ParkingMonthCustomer, businessName: string): string {
   const month = MONTH_NAMES_EN[Number(c.monthKey.slice(5, 7)) - 1] ?? "the month";
   const lines = [
-    `${text(businessName) || "Parking"} — Monthly bill, ${monthLabel(c.monthKey)}`,
+    `${text(businessName) || "Parking"} — ${c.statementOwesCents !== undefined ? "Statement" : "Monthly bill"}, ${monthLabel(c.monthKey)}`,
     `For: ${[c.customerName || "—", c.customerPhone].filter(Boolean).join(" · ")}`,
   ];
   const named = (x: { registeredTo: string }) => (x.registeredTo ? ` (registered to ${x.registeredTo})` : "");
@@ -880,6 +898,15 @@ export function parkingMonthCustomerText(c: ParkingMonthCustomer, businessName: 
   if (c.priorUnpaidCents > 0) lines.push(`Unpaid from before — ${moneyText(c.priorUnpaidCents)}`);
   if (c.monthPaidCents > 0) lines.push(`Paid — -${moneyText(c.monthPaidCents)}`);
   if (credited) lines.push(`Less expenses — -${moneyText(c.expenseCreditCents)}`);
+  // A team member's statement (staff-statement.ts): the cash they hold for
+  // the business, then what they owe it - or what it owes them.
+  const owes = c.statementOwesCents;
+  if (owes !== undefined) {
+    const cash = c.cashHeldCents || 0;
+    if (cash !== 0) lines.push(`Cash you hold for the business — ${cash > 0 ? "+" : "-"}${moneyText(Math.abs(cash))}`);
+    lines.push(owes > 0 ? `YOU OWE THE BUSINESS: ${moneyText(owes)}` : owes < 0 ? `THE BUSINESS OWES YOU: ${moneyText(-owes)}` : "SETTLED");
+    return lines.join("\n");
+  }
   lines.push(c.dueCents > 0 ? `BALANCE DUE: ${moneyText(c.dueCents)}` : "PAID IN FULL");
   return lines.join("\n");
 }

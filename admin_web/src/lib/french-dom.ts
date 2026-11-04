@@ -7751,8 +7751,8 @@ Object.assign(TEXT_TRANSLATIONS, {
     "Affichées sur les factures mensuelles, par exemple : Payez au bureau, ou Zelle 347-555-0100 (Nom de votre entreprise).",
   "Save instructions": "Enregistrer les instructions",
   "Send invoices": "Envoyer les factures",
-  "Each customer gets one WhatsApp invoice with a PDF that covers all of their cars. Look through the list, then send. If nobody has sent them by the 3rd, they go out automatically.":
-    "Chaque client reçoit une facture WhatsApp avec un PDF qui couvre toutes ses voitures. Parcourez la liste, puis envoyez. Si personne ne les a envoyées d’ici le 3, elles partent automatiquement.",
+  "Each customer gets one WhatsApp invoice with a PDF that covers all of their cars. A team member gets a statement instead: the same bill, less the expenses they paid for the lot, plus the cash they hold for the business. Look through the list, then send. If nobody has sent them by the 3rd, they go out automatically.":
+    "Chaque client reçoit une facture WhatsApp avec un PDF qui couvre toutes ses voitures. Un membre de l’équipe reçoit un relevé à la place : la même facture, moins les dépenses qu’il a payées pour le parc, plus l’argent qu’il garde pour l’entreprise. Parcourez la liste, puis envoyez. Si personne ne les a envoyées d’ici le 3, elles partent automatiquement.",
   "Loading invoices…": "Chargement des factures…",
   "No customer needs an invoice for this month.": "Aucun client n’a besoin d’une facture pour ce mois.",
   "Not prepared yet. The list shows who would get an invoice.":
@@ -7773,6 +7773,29 @@ Object.assign(TEXT_TRANSLATIONS, {
     "Les factures ne peuvent être envoyées que pour le mois qui vient de se terminer.",
   "Payment instructions can be at most 300 characters.":
     "Les instructions de paiement ne peuvent pas dépasser 300 caractères.",
+});
+
+// Staff statements (docs/PARKING_INVOICES.md §6): a team member's Month end
+// card and WhatsApp statement carry the same numbers.
+Object.assign(TEXT_TRANSLATIONS, {
+  "Statement": "Relevé",
+  "Owes the business": "Doit à l’entreprise",
+  "The business owes them": "L’entreprise leur doit",
+  "Settled": "Réglé",
+  "parking and jobs": "stationnement et travaux",
+  "expenses": "dépenses",
+  "cash held": "argent détenu",
+  "Cash held for the business": "Argent détenu pour l’entreprise",
+  "money they took in for the business and still hold, as of the end of the month":
+    "argent qu’ils ont encaissé pour l’entreprise et qu’ils détiennent encore, à la fin du mois",
+  "Included in the statement of": "Inclus dans le relevé de",
+  "Checking the cash team members hold…": "Vérification de l’argent détenu par les membres de l’équipe…",
+  "The cash team members hold could not be checked, so their bills show without it.":
+    "L’argent détenu par les membres de l’équipe n’a pas pu être vérifié ; leurs factures s’affichent sans lui.",
+  "Not sent: no number to reach": "Non envoyé : aucun numéro joignable",
+  "no phone number": "aucun numéro de téléphone",
+  "number needs a country code": "le numéro doit avoir un indicatif de pays",
+  "same number as another recipient": "même numéro qu’un autre destinataire",
 });
 
 // Month end's "Business owes" counting the cash staff hold (owner, 2026-10-30).

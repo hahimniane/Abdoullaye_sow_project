@@ -33,6 +33,8 @@ const COPY = {
     earlierExpenses: "Expenses from earlier months",
     lessStaffExpenses: "Less staff expenses", businessOwes: "Business owes",
     parkingBill: "Parking bill", noParkingBill: "No parking bill",
+    statement: "STATEMENT", cashHeld: "Cash you hold for the business", owesBusiness: "You owe the business",
+    businessOwesYou: "The business owes you", settled: "Settled", teamMember: "Team member",
   },
   fr: {
     bill: "FACTURE MENSUELLE", summary: "FIN DE MOIS", billedTo: "Facturé à", vehicle: "Véhicule",
@@ -48,6 +50,8 @@ const COPY = {
     earlierExpenses: "Dépenses des mois précédents",
     lessStaffExpenses: "Dépenses équipe", businessOwes: "L’entreprise doit",
     parkingBill: "Facture de parking", noParkingBill: "Pas de facture de parking",
+    statement: "RELEVÉ", cashHeld: "Argent que vous gardez pour l’entreprise", owesBusiness: "Vous devez à l’entreprise",
+    businessOwesYou: "L’entreprise vous doit", settled: "Réglé", teamMember: "Membre de l’équipe",
   },
 } as const;
 
@@ -130,6 +134,21 @@ export function billTotalsLayout(c: ParkingMonthCustomer, language: Lang, top: n
     if (a.paidCents > 0) add(`${t.paidToward} ${a.label}${a.vehicle ? ` · ${a.vehicle}` : ""} (${day(a.date)})`, `-${moneyText(a.paidCents)}`, OK, 16);
   }
   if ((c.expenseCreditCents || 0) > 0) add(t.lessExpenses, `-${moneyText(c.expenseCreditCents)}`, OK, 16);
+  // A team member's STATEMENT (staff-statement.ts): the cash they hold for
+  // the business, then what they owe it - or what it owes them.
+  const owes = c.statementOwesCents;
+  if (owes !== undefined) {
+    const cash = c.cashHeldCents || 0;
+    if (cash !== 0) add(t.cashHeld, `${cash > 0 ? "+" : "-"}${moneyText(Math.abs(cash))}`, INK, 16);
+    const ruleY = y - 4;
+    y += 14;
+    rows.push(owes > 0
+      ? { label: t.owesBusiness, value: moneyText(owes), y, color: DUE, bold: true }
+      : owes < 0
+        ? { label: t.businessOwesYou, value: moneyText(-owes), y, color: OK, bold: true }
+        : { label: t.settled, value: moneyText(0), y, color: OK, bold: true });
+    return { rows, ruleY, endY: y + 6 };
+  }
   const ruleY = y - 4;
   y += 14;
   rows.push(c.dueCents > 0
@@ -167,9 +186,10 @@ export async function buildParkingMonthBillPdf(input: { business: Row; customer:
   const doc = new jsPDF({ unit: "pt", format: "letter" });
   const items = c.cars.length + c.activities.length;
   const billTitle = monthLabel(c.monthKey, input.language) + (input.estimate ? ` · ${t.estimate}` : "");
-  let y = await header(doc, input.business, t.bill, billTitle, `${items} ${items === 1 ? t.item : t.items}`);
+  const isStatement = c.statementOwesCents !== undefined;
+  let y = await header(doc, input.business, isStatement ? t.statement : t.bill, billTitle, `${items} ${items === 1 ? t.item : t.items}`);
 
-  doc.setFont("helvetica", "bold").setFontSize(8).setTextColor(...MUTED).text(t.billedTo.toUpperCase(), M, y);
+  doc.setFont("helvetica", "bold").setFontSize(8).setTextColor(...MUTED).text((isStatement ? t.teamMember : t.billedTo).toUpperCase(), M, y);
   doc.setFontSize(13).setTextColor(...INK).text(c.customerName || "—", M, y + 16);
   doc.setFont("helvetica", "normal").setFontSize(9.5).setTextColor(...MUTED);
   const who = [c.customerPhone, c.customerEmail].filter(Boolean).join("  |  ");

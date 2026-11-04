@@ -8,6 +8,7 @@ import '../utils/callable_data.dart'
 import 'business_account_receiver.dart';
 import 'lot_ledger.dart' show lotDateOf;
 import 'parking_month_statement.dart' show ParkingMonthStaffOwed;
+import 'staff_statement.dart' show staffStatementCashFrom;
 import 'waiting_package_service.dart'
     show ContainerCallableCaller, callContainerCallable;
 
@@ -726,6 +727,21 @@ class StaffBalancesService {
       StaffBalancesSnapshot.fromCallable(
         await _call({'action': 'staff_balances', 'businessId': businessId}),
       );
+
+  /// `staff_statement_cash`: the cash each person held for the business at
+  /// the END of [monthKey] (New York time), `{staffId: cents}` - the number a
+  /// team member's statement adds (docs/PARKING_INVOICES.md §6).
+  Future<Map<String, int>> loadStatementCash(
+    String businessId,
+    String monthKey,
+  ) async {
+    final answer = await _call({
+      'action': 'staff_statement_cash',
+      'businessId': businessId,
+      'monthKey': monthKey,
+    });
+    return staffStatementCashFrom(answer);
+  }
 
   /// `record_handover`: the caller hands [amountCents] to [toId] (a staff uid
   /// or [businessAccountReceiver]). Pending until the receiver confirms.

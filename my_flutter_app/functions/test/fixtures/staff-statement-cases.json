@@ -1,0 +1,205 @@
+{
+  "description": "Staff statements (docs/PARKING_INVOICES.md section 6): a team member's month-end numbers. owes = parking and lot jobs - expenses not yet credited + cash held at the month's end. Run by the server (test/staff-statement.test.js), the console (admin_web/src/lib/staff-statement.test.ts) and the app (test/staff_statement_test.dart). `customers` are month-end customers AFTER staff expenses were netted (only the fields the statement reads); `ctx.held` is the cash each person held at the month's end.",
+  "cases": [
+    {
+      "name": "Alhoussaine, October 2026: $1,226 + jobs, a September expense not yet credited, $36 held = owes $1,227",
+      "monthKey": "2026-10",
+      "customers": [
+        {
+          "key": "phone:3475550101",
+          "customerName": "Alhoussaine Barry",
+          "customerPhone": "+13475550101",
+          "linkedStaffIds": ["alh"],
+          "monthCents": 122600,
+          "monthPaidCents": 0,
+          "priorUnpaidCents": 0,
+          "dueBeforeExpensesCents": 122600,
+          "cars": [{"id": "car-1", "stillParked": false}]
+        }
+      ],
+      "ctx": {
+        "entries": [
+          {"id": "e-sep", "paidByStaffId": "alh", "amountCents": 3500, "month": "2026-09", "spentAtMs": 1788696000000, "note": "cups"}
+        ],
+        "repayments": [],
+        "lines": [],
+        "staffNames": {"alh": "Alhoussaine Barry"},
+        "held": {"alh": 3600}
+      },
+      "expected": [
+        {
+          "staffId": "alh",
+          "name": "Alhoussaine Barry",
+          "key": "phone:3475550101",
+          "parkingJobsCents": 122600,
+          "expenseCents": 3500,
+          "expenseLineCount": 0,
+          "earlierExpenseCents": 3500,
+          "cashHeldCents": 3600,
+          "owesCents": 122700,
+          "stillParked": false
+        }
+      ],
+      "customerKeys": {"phone:3475550101": "alh"}
+    },
+    {
+      "name": "the business owes them: expenses and cash beat a small parking bill",
+      "monthKey": "2026-10",
+      "customers": [
+        {
+          "key": "staff:musa",
+          "customerName": "Musa Kante",
+          "customerPhone": "",
+          "linkedStaffIds": ["musa"],
+          "monthCents": 20000,
+          "monthPaidCents": 0,
+          "priorUnpaidCents": 0,
+          "dueBeforeExpensesCents": 20000,
+          "cars": [{"id": "car-m", "stillParked": true}]
+        }
+      ],
+      "ctx": {
+        "entries": [
+          {"id": "e-oct", "paidByStaffId": "musa", "amountCents": 50000, "month": "2026-10", "spentAtMs": 1792500000000, "lineId": "rent", "note": ""}
+        ],
+        "repayments": [],
+        "lines": [{"id": "rent", "label": "Rent"}],
+        "staffNames": {"musa": "Musa Kante"},
+        "held": {"musa": 5000}
+      },
+      "expected": [
+        {
+          "staffId": "musa",
+          "name": "Musa Kante",
+          "key": "staff:musa",
+          "parkingJobsCents": 20000,
+          "expenseCents": 50000,
+          "expenseLineCount": 1,
+          "earlierExpenseCents": 0,
+          "cashHeldCents": 5000,
+          "owesCents": -25000,
+          "stillParked": true
+        }
+      ],
+      "customerKeys": {"staff:musa": "musa"}
+    },
+    {
+      "name": "expenses after the month end and paid-back money do not count; cash held below zero is subtracted",
+      "monthKey": "2026-10",
+      "customers": [
+        {
+          "key": "phone:3475550102",
+          "customerName": "Yao Koffi",
+          "customerPhone": "+13475550102",
+          "linkedStaffIds": ["yao"],
+          "monthCents": 30000,
+          "monthPaidCents": 5000,
+          "priorUnpaidCents": 10000,
+          "dueBeforeExpensesCents": 35000,
+          "cars": []
+        }
+      ],
+      "ctx": {
+        "entries": [
+          {"id": "e1", "paidByStaffId": "yao", "amountCents": 8000, "month": "2026-10", "spentAtMs": 1792500000000, "note": "paper"},
+          {"id": "e2", "paidByStaffId": "yao", "amountCents": 9999, "month": "2026-11", "spentAtMs": 1794000000000, "note": "later"},
+          {"id": "e3", "paidByStaffId": "yao", "amountCents": 7777, "month": "2026-10", "voided": true, "spentAtMs": 1792500000000, "note": "voided"}
+        ],
+        "repayments": [
+          {"id": "r1", "staffId": "yao", "amountCents": 3000, "month": "2026-10"},
+          {"id": "r2", "staffId": "yao", "amountCents": 1111, "month": "2026-11"}
+        ],
+        "lines": [],
+        "staffNames": {"yao": "Yao Koffi"},
+        "held": {"yao": -1000}
+      },
+      "expected": [
+        {
+          "staffId": "yao",
+          "name": "Yao Koffi",
+          "key": "phone:3475550102",
+          "parkingJobsCents": 35000,
+          "expenseCents": 5000,
+          "expenseLineCount": 1,
+          "earlierExpenseCents": 0,
+          "cashHeldCents": -1000,
+          "owesCents": 29000,
+          "stillParked": false
+        }
+      ],
+      "customerKeys": {"phone:3475550102": "yao"}
+    },
+    {
+      "name": "a member with their own cars AND a linked number gets ONE statement over both bills; a customer linked to two members stays a customer; plain customers have none",
+      "monthKey": "2026-10",
+      "customers": [
+        {
+          "key": "phone:3475550103",
+          "customerName": "Sira Doumbia (jobs)",
+          "customerPhone": "+13475550103",
+          "linkedStaffIds": ["sira"],
+          "monthCents": 4000,
+          "monthPaidCents": 0,
+          "priorUnpaidCents": 0,
+          "dueBeforeExpensesCents": 4000,
+          "cars": []
+        },
+        {
+          "key": "staff:sira",
+          "customerName": "Sira Doumbia",
+          "customerPhone": "",
+          "linkedStaffIds": ["sira"],
+          "monthCents": 10000,
+          "monthPaidCents": 0,
+          "priorUnpaidCents": 2000,
+          "dueBeforeExpensesCents": 12000,
+          "cars": [{"id": "car-s", "stillParked": false}]
+        },
+        {
+          "key": "phone:3475550104",
+          "customerName": "Shared Garage",
+          "customerPhone": "+13475550104",
+          "linkedStaffIds": ["sira", "other"],
+          "monthCents": 9000,
+          "monthPaidCents": 0,
+          "priorUnpaidCents": 0,
+          "dueBeforeExpensesCents": 9000,
+          "cars": []
+        },
+        {
+          "key": "phone:3475550105",
+          "customerName": "Plain Customer",
+          "customerPhone": "+13475550105",
+          "linkedStaffIds": [],
+          "monthCents": 1000,
+          "monthPaidCents": 0,
+          "priorUnpaidCents": 0,
+          "dueBeforeExpensesCents": 1000,
+          "cars": []
+        }
+      ],
+      "ctx": {
+        "entries": [],
+        "repayments": [],
+        "lines": [],
+        "staffNames": {"sira": "Sira Doumbia", "other": "Other"},
+        "held": {"sira": 500}
+      },
+      "expected": [
+        {
+          "staffId": "sira",
+          "name": "Sira Doumbia",
+          "key": "staff:sira",
+          "parkingJobsCents": 16000,
+          "expenseCents": 0,
+          "expenseLineCount": 0,
+          "earlierExpenseCents": 0,
+          "cashHeldCents": 500,
+          "owesCents": 16500,
+          "stillParked": false
+        }
+      ],
+      "customerKeys": {"phone:3475550103": "sira", "staff:sira": "sira"}
+    }
+  ]
+}

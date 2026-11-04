@@ -154,3 +154,71 @@ Where the build chose within the contract:
   not be read (the push still falls back; the preview/send refuse by error).
 - **Not covered by an invoice:** a customer whose number has no country code
   (or no number at all) is listed under `skipped`; no row is made.
+
+## 6. Team members get a statement (owner decision, 2026-11-04)
+
+A **team member** - a staff member or owner whose own cars are team cars
+(month-end customer key `staff:{uid}`, docs/PARKING_TEAM_CARS.md) and/or who
+is linked to ONE parking customer (`staffParkingLinks`,
+docs/STAFF_EXPENSE_CREDIT.md) - is not invoiced like a customer. They get ONE
+**statement** a month, and Month end's card shows the SAME numbers:
+
+```
+  Parking + lot jobs of the month (plus anything unpaid from before)
+- expenses they paid that are not yet credited (cumulative to the month's
+  end: a Sep 6 expense counts in October until it is credited)
++ cash they hold for the business at the END of the month
+= Owes the business   (negative: The business owes them)
+```
+
+Example (Alhoussaine, October 2026): $1,226 - $35 + $36 = **$1,227**. Month
+end used to say $1,191 (no cash line) and now says $1,227, like the WhatsApp
+statement. A customer is unchanged: their monthly invoice stays as it was.
+It is Staff balances' net (`held + parking due - expenses owed`) told as of a
+month's last moment, because the bill and the credit are both cumulative.
+
+**Definitions.**
+
+- *Parking and jobs* = the member's bills' `dueBeforeExpensesCents`, summed:
+  their `staff:{uid}` bill and the one customer linked to them (a customer
+  linked to TWO members stays a customer). Several bills -> one statement;
+  the first (own cars first) carries it and the others read "Included in the
+  statement of {name}".
+- *Expenses* = the member's whole credit (`staffCredits`: their non-voided
+  expenses up to the month, standing payers included, less what was paid
+  back), not the part that fits their bill - so a credit bigger than the bill
+  makes the business owe them. The lines are this month's; the rest is
+  "Expenses from earlier months".
+- *Cash held* = what they collected (the kinds of money the business counts,
+  Staff balances' "What counts") up to **the last millisecond of the month in
+  New York**, less the handovers they gave and plus those they received that
+  were **confirmed** by then. A payment or a handover dated after the month
+  ended changes nothing. A payment with no date counts as old; a car marked
+  paid counts from `directPaymentReceivedAt` (never `updatedAt`).
+- Gets a statement when `owes > 0` **or** a car is still parked (the
+  customers' rule); someone the business owes with no car parked gets none.
+
+**Server.** Pure `staff_statement.js` (`monthEndMs`, `staffHeldAsOf`,
+`staffStatements`; shared fixture `test/fixtures/staff-statement-cases.json`,
+mirrored by `admin_web/src/lib/staff-statement.ts` and the app's
+`staff_statement.dart`). `invoiceRecipients` returns recipients with `kind:
+"invoice" | "statement"`; a statement's number is
+`ST-{YYYYMM}-{last 4 of the phone}-{n}`. Their phone is the profile's
+(`users/{uid}.phone`), else the linked customer's; with none (or without a
+country code, or the same number as another recipient) they are listed under
+`skipped` with the reason. `staffStatementModel` (parking_invoice_pdf.js)
+draws "STATEMENT / RELEVÉ" in the invoice's design. The same template is sent
+(`parkingInvoiceTemplate`) with the month and `due` = what they owe (0 when
+the business owes them). `invoices_preview` marks each row `kind`; the
+message row gains `documentKind` and `staffId`. `parkingMonthEndData` nets
+team cars even when the business has no links yet. New action on
+`updateLotExpenseEntry`: `staff_statement_cash {businessId, monthKey}` ->
+`{monthKey, asOfMs, held: {staffId: cents}}` (any member of the business),
+refusal `statement_month_invalid`. The month-end push still counts what
+customers owe after expenses (no cash).
+
+**Console / app.** Month end loads the cash once the month's bills are in;
+until it arrives (or if it fails) team members show as before, with a note.
+The card shows "Owes the business $X" with "parking and jobs - expenses +
+cash held", a "Cash held for the business" line, and the bill (PDF / text)
+says "STATEMENT". Send invoices lists statements with a "Statement" badge.

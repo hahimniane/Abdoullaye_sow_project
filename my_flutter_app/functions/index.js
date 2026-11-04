@@ -629,6 +629,7 @@ const {staffCredits, withStandingPayers, BUSINESS_PAYER} =
 const staffExpenseLedger = require("./staff_expense_ledger");
 const staffBalances = require("./staff_balances");
 const staffBalanceMonths = require("./staff_balance_months");
+const staffStatement = require("./staff_statement");
 const {
   resolveBillingPlan,
   monthEndBillingAmount,
@@ -9429,7 +9430,11 @@ async function parkingMonthEndData(db, businessDoc, monthKey, now,
   const links = businessDoc.data()?.staffParkingLinks || {};
   let netting = null;
   let nettingFailed = false;
-  if (Object.keys(links).length > 0) {
+  // A team member's own cars (`staff:{uid}`) are netted and get a statement
+  // with or without a link (docs/PARKING_INVOICES.md section 6).
+  const teamBills = summary.customers.some((c) =>
+    String(c.key || "").startsWith("staff:"));
+  if (Object.keys(links).length > 0 || teamBills) {
     try {
       const [entries, repayments, lines] = await Promise.all([
         db.collection("lotExpenseEntries")
@@ -14910,9 +14915,12 @@ function parkingInvoiceRunRef(db, businessId, monthKey) {
  * @param {object} db Firestore.
  * @param {object} businessDoc The business's snapshot.
  * @param {object} netting parkingMonthEndData's `netting`.
- * @return {Promise<object>} The credit invoiceRecipients nets with.
+ * @param {string[]} [teamIds] Team members whose names and phones are
+ *   needed besides the linked staff (owner, former members).
+ * @return {Promise<object>} The credit invoiceRecipients nets with, plus
+ *   `staffPhones` (profile phones by staff id).
  */
-async function parkingInvoiceCredit(db, businessDoc, netting) {
+async function parkingInvoiceCredit(db, businessDoc, netting, teamIds = []) {
   const businessId = businessDoc.id;
   const [team, lines] = await Promise.all([
     db.collection("users").where("businessId", "==", businessId).get(),
@@ -14920,20 +14928,40 @@ async function parkingInvoiceCredit(db, businessDoc, netting) {
         .get(),
   ]);
   const staffNames = {};
-  for (const doc of team.docs) {
-    staffNames[doc.id] = staffDisplayName(doc.data());
-  }
-  const missing = Object.keys(netting.links || {})
-      .filter((id) => !(id in staffNames) && !id.includes("/")).slice(0, 50);
+  const staffPhones = {};
+  const note = (id, data) => {
+    staffNames[id] = staffDisplayName(data);
+    const phone = staffProfilePhone(data);
+    if (phone) staffPhones[id] = phone;
+  };
+  for (const doc of team.docs) note(doc.id, doc.data());
+  // Linked staff, and the members whose own cars are on the lot: the owner
+  // and former members may not be in the business's user list.
+  const missing = [...new Set([...Object.keys(netting.links || {}),
+    ...(teamIds || [])])]
+      .filter((id) => id && !(id in staffNames) && !id.includes("/"))
+      .slice(0, 50);
   if (missing.length > 0) {
     const docs = await db.getAll(
         ...missing.map((id) => db.collection("users").doc(id)));
     docs.forEach((doc, i) => {
-      staffNames[missing[i]] = doc.exists ? staffDisplayName(doc.data()) : "";
+      if (doc.exists) note(missing[i], doc.data());
+      else staffNames[missing[i]] = "";
     });
   }
-  return {...netting, staffNames,
+  return {...netting, staffNames, staffPhones,
     lines: lines.docs.map((doc) => ({id: doc.id, ...doc.data()}))};
+}
+
+/**
+ * The number a team member can be reached on: their profile's.
+ *
+ * @param {object} user A `users/{uid}` document's data.
+ * @return {string} The phone, "" when none.
+ */
+function staffProfilePhone(user) {
+  return [user?.phone, user?.normalizedPhone, user?.phoneInvite?.phoneE164,
+    user?.phoneNumber].map((v) => String(v || "").trim()).find(Boolean) || "";
 }
 
 /**
@@ -14978,14 +15006,30 @@ function parkingInvoiceHandled(row, nowMs) {
  *   message `rows`.
  */
 async function parkingInvoiceBookFrom(db, businessDoc, monthKey, now, data) {
+  const business = businessDoc.data() || {};
+  // The team members with a bill this month: their own cars (`staff:{uid}`)
+  // and whoever the owner linked to a customer who has one.
+  const links = data.netting?.links || {};
+  const billed = new Set(data.summary.customers.map((c) => String(c.key)));
+  const teamIds = [...new Set([
+    ...[...billed].filter((key) => key.startsWith("staff:"))
+        .map((key) => key.slice(6)),
+    ...Object.entries(links)
+        .filter(([, link]) => billed.has(String(link?.customerKey || "")))
+        .map(([id]) => id),
+  ])];
   const credit = data.netting ?
-    await parkingInvoiceCredit(db, businessDoc, data.netting) : null;
+    await parkingInvoiceCredit(db, businessDoc, data.netting, teamIds) : null;
+  // Their statements carry the cash they hold at the month's end.
+  const held = credit && teamIds.length > 0 ?
+    (await staffHeldAtMonthEnd(db, business, businessDoc.id, monthKey)).held :
+    {};
   const rows = await parkingInvoiceRows(db, businessDoc.id, monthKey);
   const sent = new Set(rows.filter((row) =>
     parkingInvoiceHandled(row, now.getTime()))
       .map((row) => parkingWhatsApp.phoneDigits(row.phone)));
   const book = parkingInvoices.invoiceRecipients(data.summary, credit, now,
-      {business: businessDoc.data() || {}, sent});
+      {business, sent, held, staffPhones: credit?.staffPhones || {}});
   return {...book, rows};
 }
 
@@ -15162,6 +15206,9 @@ async function sendParkingInvoice(db, args) {
     parkedCarId: recipient.cars[0]?.id || "",
     parkedCarIds: recipient.cars.map((car) => car.id),
     kind: parkingWhatsApp.KIND.INVOICE,
+    // "invoice" for a customer, "statement" for a team member.
+    documentKind: recipient.kind === "statement" ? "statement" : "invoice",
+    ...(recipient.kind === "statement" ? {staffId: recipient.staffId} : {}),
     template,
     phone: recipient.phone,
     name: recipient.name,
@@ -15194,7 +15241,9 @@ async function sendParkingInvoice(db, args) {
   try {
     const zone = String(business?.packageRequestSettings?.timeZone || "")
         .trim() || "America/New_York";
-    const model = parkingInvoicePdf.invoiceModel({
+    // A team member gets a statement, a customer an invoice.
+    const model = (recipient.kind === "statement" ?
+      parkingInvoicePdf.staffStatementModel : parkingInvoicePdf.invoiceModel)({
       business, recipient, monthKey, issuedMs: nowMs,
       paymentInstructions: business.paymentInstructions, timeZone: zone});
     const bytes = await parkingInvoicePdf.renderInvoicePdf(model,
@@ -15472,6 +15521,10 @@ async function parkingInvoicesAction(request, uid, action) {
       run: await parkingInvoiceRunView(db,
           runSnap.exists ? runSnap.data() : null),
       recipients: book.recipients.map((r) => ({
+        // "invoice" for a customer, "statement" for a team member.
+        kind: r.kind,
+        ...(r.kind === "statement" ? {staffId: r.staffId,
+          owesCents: r.owesCents} : {}),
         phone: r.phone,
         name: r.name,
         cars: r.cars.map((car) => ({id: car.id, label: car.label})),
@@ -15482,6 +15535,7 @@ async function parkingInvoicesAction(request, uid, action) {
         messageStatus: statusOf.get(r.phoneDigits) || "",
       })),
       skipped: book.skipped.map((r) => ({
+        kind: r.kind,
         phone: r.phone, name: r.name, reason: r.reason,
         totalDueCents: r.totalDueCents,
         cars: r.cars.map((car) => ({id: car.id, label: car.label})),
@@ -20219,6 +20273,66 @@ async function staffBalancesAnswer(uid, data) {
 }
 
 /**
+ * The cash each person held for the business at the END of a month (New York
+ * time): what they had collected by then, less the handovers confirmed by
+ * then (docs/PARKING_INVOICES.md section 6). Reads every ledger that names a
+ * receiver, as staffBalancesAnswer does, and works it out with
+ * staff_statement.js.
+ *
+ * @param {object} db Firestore.
+ * @param {object} business The businesses document's data.
+ * @param {string} businessId The business.
+ * @param {string} monthKey "YYYY-MM".
+ * @return {Promise<{asOfMs: number, held: object}>} `held` is
+ *   `{[staffId]: cents}` (signed).
+ */
+async function staffHeldAtMonthEnd(db, business, businessId, monthKey) {
+  const byBusiness = (name) => db.collection(name).where("businessId", "==",
+      businessId).get().then(snapshotRows);
+  const [parkedCars, lotActivities, lotActivityPayments,
+    containerLinePayments, inventorySales, inventoryCreditPayments,
+    invoicePayments, handoverRows] = await Promise.all([
+    byBusiness("parkedCars"), byBusiness("lotActivities"),
+    byBusiness("lotActivityPayments"), byBusiness("containerLinePayments"),
+    byBusiness("inventorySales"), byBusiness(INVENTORY_CREDIT_PAYMENTS),
+    byBusiness("invoicePayments"), byBusiness("staffHandovers"),
+  ]);
+  const asOfMs = staffStatement.monthEndMs(monthKey);
+  const held = staffStatement.staffHeldAsOf({
+    asOfMs,
+    now: new Date(),
+    sources: {parkedCars, lotActivities, lotActivityPayments,
+      containerLinePayments, inventorySales, inventoryCreditPayments,
+      invoicePayments},
+    counted: business?.staffBalanceSources,
+    handovers: handoverRows.map((row) => ({...row,
+      createdAtMs: row.createdAt?.toMillis?.() || 0,
+      confirmedAtMs: row.confirmedAt?.toMillis?.() || 0})),
+  });
+  return {asOfMs, held};
+}
+
+/**
+ * updateLotExpenseEntry action `staff_statement_cash {businessId, monthKey}`:
+ * the cash each person held at the end of that month - the one number
+ * Month end cannot work out from the cars alone. Any member of the business.
+ *
+ * @param {string} uid The caller.
+ * @param {object} data `{businessId, monthKey}`.
+ * @return {Promise<object>} `{monthKey, asOfMs, held}`.
+ */
+async function staffStatementCash(uid, data) {
+  const {db, businessId, business} = await staffBalanceContext(uid, data);
+  const monthKey = String(data.monthKey || "").trim();
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(monthKey)) {
+    throw staffBalanceError("statement_month_invalid");
+  }
+  const {asOfMs, held} = await staffHeldAtMonthEnd(db, business, businessId,
+      monthKey);
+  return {monthKey, asOfMs, held};
+}
+
+/**
  * Each person's row gains `months`: the net told month by month
  * (docs/STAFF_BALANCES_MONTHLY.md).
  *
@@ -20271,6 +20385,7 @@ async function staffBalanceAction(uid, action, data) {
   if (action === "void_handover") return voidHandover(uid, data);
   if (action === "record_opening") return recordOpening(uid, data);
   if (action === "set_counted_sources") return setCountedSources(uid, data);
+  if (action === "staff_statement_cash") return staffStatementCash(uid, data);
   throw staffBalanceError("staff_balances_action_invalid");
 }
 

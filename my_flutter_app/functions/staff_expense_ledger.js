@@ -197,7 +197,9 @@ function repaymentRecord(data, ctx) {
  */
 function monthEndOwing(customers, ctx) {
   const list = Array.isArray(customers) ? customers : [];
-  const linked = ctx && ctx.links && Object.keys(ctx.links).length > 0;
+  // A team member's own cars (`staff:{uid}`) are netted without any link.
+  const linked = ctx && ((ctx.links && Object.keys(ctx.links).length > 0) ||
+    list.some((c) => String(c?.key || "").startsWith("staff:")));
   const netted = linked ? netStaffExpenses(list, ctx) : null;
   const rows = netted ? netted.customers : list;
   const owing = rows.filter((c) => Number(c.dueCents) > 0);

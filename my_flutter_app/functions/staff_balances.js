@@ -65,6 +65,7 @@ const HANDOVER_MESSAGES = Object.freeze({
   counted_sources_owner_only:
     "Only the owner can choose what counts as the business's money.",
   counted_sources_invalid: "Choose what counts as the business's money.",
+  statement_month_invalid: "Choose a month (yyyy-mm).",
 });
 
 const REFUSAL_KIND = Object.freeze({
@@ -84,6 +85,7 @@ const REFUSAL_KIND = Object.freeze({
   staff_balances_action_invalid: "invalid-argument",
   counted_sources_owner_only: "permission-denied",
   counted_sources_invalid: "invalid-argument",
+  statement_month_invalid: "invalid-argument",
 });
 
 const STAFF_BALANCE_ACTIONS = Object.freeze([
@@ -94,6 +96,7 @@ const STAFF_BALANCE_ACTIONS = Object.freeze([
   "void_handover",
   "record_opening",
   "set_counted_sources",
+  "staff_statement_cash",
 ]);
 
 // Which kinds of money count as the business's (docs/STAFF_BALANCES.md §7):

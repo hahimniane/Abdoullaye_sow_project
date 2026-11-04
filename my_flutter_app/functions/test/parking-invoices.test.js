@@ -73,18 +73,27 @@ describe("who gets an invoice (the fixture)", () => {
     assert.ok(!all.includes("Doudou Sy"));
   });
 
-  it("nets a linked staff member's expenses (voided ones do not count)",
-      () => {
-        const staff = byPhone["12015550005"].customer;
-        assert.equal(staff.dueBeforeExpensesCents, 15000);
-        assert.equal(staff.expenseCreditCents, 6000);
-        assert.equal(staff.dueCents, 9000);
-        assert.equal(staff.expenseLines.length, 1);
-        assert.deepEqual(staff.expenseLines[0], {
-          id: "e-a", date: "2026-10-08", label: "Groceries · cups",
-          amountCents: 6000, staffName: "Mamadou Diallo"});
-        assert.equal(staff.earlierExpenseCents, 0);
-      });
+  it("sends a linked staff member a STATEMENT, with their expenses taken " +
+      "off (voided ones do not count)", () => {
+    const member = byPhone["12015550005"];
+    assert.equal(member.kind, "statement");
+    assert.equal(member.staffId, "staff-a");
+    assert.equal(member.invoiceNumber, "ST-202610-0005-1");
+    assert.equal(member.statement.parkingJobsCents, 15000);
+    assert.equal(member.statement.expenseCents, 6000);
+    assert.equal(member.statement.cashHeldCents, 0);
+    assert.equal(member.statement.owesCents, 9000);
+    const staff = member.customer;
+    assert.equal(staff.dueBeforeExpensesCents, 15000);
+    assert.equal(staff.expenseCreditCents, 6000);
+    assert.equal(staff.dueCents, 15000);
+    assert.equal(staff.expenseLines.length, 1);
+    assert.deepEqual(staff.expenseLines[0], {
+      id: "e-a", date: "2026-10-08", label: "Groceries · cups",
+      lineLabel: "Groceries", note: "cups", amountCents: 6000,
+      staffId: "staff-a", staffName: "Mamadou Diallo"});
+    assert.equal(staff.earlierExpenseCents, 0);
+  });
 
   it("still invoices a customer whose expenses cover everything but whose " +
       "car is still parked, for $0.00", () => {
@@ -217,7 +226,7 @@ describe("the message values", () => {
     assert.deepEqual(body.template.components, [
       {type: "header", parameters: [{type: "document", document: {
         link: "https://example.test/d?view=invoicePdf",
-        filename: "Invoice INV-202610-0005-1.pdf"}}]},
+        filename: "Statement ST-202610-0005-1.pdf"}}]},
       {type: "body", parameters: [
         "Mamadou Diallo",
         "Keren Auto Sales", "October 2026", "$90.00",
