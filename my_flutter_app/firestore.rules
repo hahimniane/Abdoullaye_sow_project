@@ -832,6 +832,34 @@ service cloud.firestore {
     match /billingPayments/{paymentId} {
       allow read, write: if false;
     }
+    // A negative Pay now week put on a business's Laawol bill
+    // (docs/PACKAGE_BOX_SIZES_PAY_NOW.md section 3): server-only, like the
+    // rest of the bill.
+    match /billingAdjustments/{adjustmentId} {
+      allow read, write: if false;
+    }
+    // Pay now (docs/PACKAGE_BOX_SIZES_PAY_NOW.md section 3): what Laawol
+    // collected by card for a business that has no Stripe of its own, and
+    // the weekly payouts that settle it. Read by Finance admins and by the
+    // business's own owner (query on businessId); every write is the
+    // server's, so a client can never mark a week paid or add a line.
+    function payNowRead(businessId) {
+      return request.auth != null &&
+        (hasAdminCapability(request.auth.uid, 'finance') ||
+         hasAdminSectionAccess(request.auth.uid, 'finance') ||
+         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          userAccessAllowed(request.auth.uid) &&
+          userRole(request.auth.uid) == 'businessOwner' &&
+          userBusinessId(request.auth.uid) == businessId));
+    }
+    match /payNowLedger/{rowId} {
+      allow read: if payNowRead(resource.data.businessId);
+      allow write: if false;
+    }
+    match /payNowPayouts/{payoutId} {
+      allow read: if payNowRead(resource.data.businessId);
+      allow write: if false;
+    }
     // Inventory (docs/INVENTORY.md): products a shop sells, the sales staff
     // ring up, and every stock change. Read by the business's managers (the
     // same read as containers); every write goes through the inventory

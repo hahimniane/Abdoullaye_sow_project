@@ -131,6 +131,8 @@ const REQUEST_MESSAGES = Object.freeze({
   piece_description_required: "Say what each box or item is.",
   text_too_long: "One of the answers is too long.",
   size_invalid: "Sizes are inches, all three or none.",
+  box_size_invalid: "Choose a box size.",
+  dims_invalid: "Box inches must be 1 to 120 in each direction.",
   too_many_photos: "Up to 5 photos per piece.",
   photo_invalid: "One of the photos could not be used. Add it again.",
   language_invalid: "Choose a language.",
@@ -561,7 +563,8 @@ function comparisonFields({business, destinationId, destination,
   for (const mode of SHIP_MODES) {
     const route = priceList.routeOf(priceListDoc, destinationId, mode);
     routes[mode] = route ? {items: route.items || [],
-      perLbCents: route.perLbCents || {}} : null;
+      perLbCents: route.perLbCents || {},
+      boxPricesCents: route.boxPricesCents || {}} : null;
     // The route's own schedule, else the days the business set for freight
     // on that destination before price lists existed.
     const legacy = (Array.isArray(destination?.[mode === "air" ?
@@ -688,7 +691,7 @@ function cleanPieces(raw, ctx = {}) {
     if (priced.error) add(priced.error);
     const description = (descriptionRaw || priced.description)
         .slice(0, LIMIT.DESCRIPTION);
-    if (kind !== "barrel" && !description && !fromList) {
+    if (kind !== "barrel" && !description && !fromList && !priced.error) {
       add("piece_description_required");
     }
     const {size, ok} = cleanSize(piece.sizeIn);
@@ -707,6 +710,10 @@ function cleanPieces(raw, ctx = {}) {
     }
     const preset = priceList.SIZE_PRESETS.find((p) =>
       p.id === text(piece.sizePreset, 20));
+    // A box says its size, or its inches (which win). Bad input was already
+    // refused by pricePiece (box_size_invalid / dims_invalid).
+    const box = kind === "box" ? priceList.boxOfPiece(piece) :
+      {boxSize: "", dimsIn: null, error: ""};
     pieces.push({
       id: `p${index + 1}`,
       kind: PIECE_KINDS.includes(kind) ? kind : "other",
@@ -715,6 +722,7 @@ function cleanPieces(raw, ctx = {}) {
       photoPaths: cleanPaths,
       estimateCents: Number.isInteger(priced.estimateCents) ?
         priced.estimateCents : null,
+      ...(box.boxSize ? {boxSize: box.boxSize, dimsIn: box.dimsIn} : {}),
       ...(fromList || priced.price ? {
         price: priced.price,
         sizePreset: preset ? preset.id : "",
@@ -1600,11 +1608,14 @@ function publicRequestView(id, request, business = {}, extra = {}) {
       kind: text(p.kind, 20),
       description: text(p.description, LIMIT.DESCRIPTION),
       sizeIn: p.sizeIn || null,
+      boxSize: text(p.boxSize, 10),
+      dimsIn: p.dimsIn || null,
       photoCount: Array.isArray(p.photoPaths) ? p.photoPaths.length : 0,
       // How the price list priced it (docs/PACKAGE_PRICE_LIST.md): the
       // page explains "up to 2 lb each" and "weighed at drop-off".
       price: p.price && typeof p.price === "object" ? {
         source: text(p.price.source, 10),
+        boxSize: text(p.price.boxSize, 10),
         label: text(p.price.label, 60),
         quantity: Number(p.price.quantity) || 1,
         unitCents: Number.isInteger(p.price.unitCents) ?

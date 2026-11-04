@@ -9,6 +9,9 @@
  *   to `includedLb` pounds each (above that, the extra pounds are charged at
  *   the item's category rate, once weighed at the counter);
  * - perLbCents: a price per pound for a whole category ("Clothes $6/lb");
+ * - boxPricesCents (Sea only): a price per box size (small / medium /
+ *   large; docs/PACKAGE_BOX_SIZES_PAY_NOW.md), the size picked from typed
+ *   inches or the customer's choice;
  * - departure: the weekly schedule shown as "Next flight / container".
  * Anything not on the list is "ask me": the piece waits for a staff estimate.
  *
@@ -39,6 +42,44 @@ const SIZE_PRESETS = Object.freeze([
   {id: "suitcase", lb: 50, en: "Suitcase", fr: "Valise"},
   {id: "big_box", lb: 70, en: "Big box", fr: "Grand carton"},
 ]);
+
+/**
+ * Box sizes (docs/PACKAGE_BOX_SIZES_PAY_NOW.md §1). Laawol sets them for
+ * every business; a business only prices them. `maxIn` is what the size
+ * fits inside, longest side first; `xl` is anything bigger and is always
+ * quoted.
+ */
+const BOX_SIZES = Object.freeze([
+  {id: "small", maxIn: Object.freeze([18, 18, 18]),
+    en: "Small", fr: "Petite",
+    exampleEn: "About a shoebox",
+    exampleFr: "Environ une boîte à chaussures"},
+  {id: "medium", maxIn: Object.freeze([24, 18, 18]),
+    en: "Medium", fr: "Moyenne",
+    exampleEn: "About a microwave box",
+    exampleFr: "Environ un carton de micro-ondes"},
+  {id: "large", maxIn: Object.freeze([30, 24, 24]),
+    en: "Large", fr: "Grande",
+    exampleEn: "About a TV box",
+    exampleFr: "Environ un carton de télé"},
+  {id: "xl", maxIn: null, en: "Extra large", fr: "Très grande",
+    exampleEn: "Bigger than Large",
+    exampleFr: "Plus grande que Grande"},
+]);
+const BOX_SIZE_IDS = Object.freeze(BOX_SIZES.map((b) => b.id));
+/** The sizes a business can price (`xl` is always quoted). */
+const BOX_PRICED_IDS = Object.freeze(["small", "medium", "large"]);
+/** A box may be this many inches over a size's limit, per dimension. */
+const BOX_SLACK_IN = 1;
+/** A typed dimension is 1..120 inches, rounded to a tenth. */
+const BOX_DIM_MAX_IN = 120;
+/** What a box line says (the stored description), by language. */
+const BOX_LABELS = Object.freeze({
+  small: {en: "Small box", fr: "Petite boîte"},
+  medium: {en: "Medium box", fr: "Boîte moyenne"},
+  large: {en: "Large box", fr: "Grande boîte"},
+  xl: {en: "Extra large box", fr: "Très grande boîte"},
+});
 
 const LIMIT = Object.freeze({
   ROUTES: 80,
@@ -73,6 +114,10 @@ const PRICE_LIST_MESSAGES = Object.freeze({
   item_unknown: "That item is no longer on the price list.",
   quantity_invalid: "Enter how many (1 to 50).",
   weight_invalid: "Enter the weight in pounds (0.1 to 2,000).",
+  box_sizes_sea_only: "Box sizes are priced for Sea only.",
+  box_price_invalid: "Enter a box price between $0.01 and $10,000.",
+  box_size_invalid: "Choose a box size.",
+  dims_invalid: "Box inches must be 1 to 120 in each direction.",
 });
 
 const text = (value, max = 200) => String(value ?? "").trim().slice(0, max);
@@ -101,6 +146,62 @@ function centsIn(value, max) {
 function tenth(value) {
   const n = Number(value);
   return Number.isFinite(n) ? Math.round(n * 10) / 10 : NaN;
+}
+
+/**
+ * @param {*} raw {l, w, h} in inches, as typed.
+ * @return {?{l: number, w: number, h: number}} Each side 1..120 rounded to a
+ *   tenth; null when any side is missing or out of range.
+ */
+function cleanDims(raw) {
+  if (!isObject(raw)) return null;
+  const sides = [raw.l, raw.w, raw.h].map(tenth);
+  if (!sides.every((n) => n >= 1 && n <= BOX_DIM_MAX_IN)) return null;
+  return {l: sides[0], w: sides[1], h: sides[2]};
+}
+
+/**
+ * The smallest size a box fits in, turned any way, with 1 inch of slack per
+ * dimension (both triples sorted longest first).
+ *
+ * @param {*} dims {l, w, h} in inches.
+ * @return {?string} "small" | "medium" | "large" | "xl"; null when the
+ *   inches are invalid.
+ */
+function boxSizeFor(dims) {
+  const clean = cleanDims(dims);
+  if (!clean) return null;
+  const box = [clean.l, clean.w, clean.h].sort((a, b) => b - a);
+  for (const size of BOX_SIZES) {
+    if (size.maxIn && box.every((n, i) => n <= size.maxIn[i] + BOX_SLACK_IN)) {
+      return size.id;
+    }
+  }
+  return "xl";
+}
+
+/**
+ * What a box piece says it is. Typed inches win over the size the client
+ * chose.
+ *
+ * @param {*} piece A piece as sent.
+ * @return {{boxSize: string, dimsIn: ?object, error: string}} boxSize is ""
+ *   when the piece names neither a size nor inches.
+ */
+function boxOfPiece(piece) {
+  const p = isObject(piece) ? piece : {};
+  const blank = (v) => v === undefined || v === null || v === "";
+  const typed = isObject(p.dimsIn) ?
+    ["l", "w", "h"].some((k) => !blank(p.dimsIn[k])) : !blank(p.dimsIn);
+  if (typed) {
+    const dimsIn = cleanDims(p.dimsIn);
+    return dimsIn ? {boxSize: boxSizeFor(dimsIn), dimsIn, error: ""} :
+      {boxSize: "", dimsIn: null, error: "dims_invalid"};
+  }
+  const id = text(p.boxSize, 10);
+  if (!id) return {boxSize: "", dimsIn: null, error: ""};
+  return BOX_SIZE_IDS.includes(id) ? {boxSize: id, dimsIn: null, error: ""} :
+    {boxSize: "", dimsIn: null, error: "box_size_invalid"};
 }
 
 /**
@@ -148,9 +249,10 @@ function cleanDeparture(raw) {
  * Validates one route (a country by Sea or by Air).
  *
  * @param {*} raw The route a client sent.
+ * @param {string} mode "sea" (default) | "air"; box sizes are Sea only.
  * @return {{route: ?object, errors: string[]}} The stored shape.
  */
-function validateRoute(raw) {
+function validateRoute(raw, mode = "sea") {
   const errors = [];
   const add = (code) => {
     if (!errors.includes(code)) errors.push(code);
@@ -200,12 +302,33 @@ function validateRoute(raw) {
     if (cents === null) add("per_lb_invalid");
     else perLbCents[categoryId] = cents;
   }
+  const boxPricesCents = {};
+  const boxRaw = raw.boxPricesCents;
+  if (boxRaw !== undefined && boxRaw !== null) {
+    if (!isObject(boxRaw)) {
+      add("box_price_invalid");
+    } else {
+      for (const [sizeId, value] of Object.entries(boxRaw)) {
+        if (value === null || value === undefined || value === "") continue;
+        if (mode === "air") {
+          add("box_sizes_sea_only");
+          continue;
+        }
+        const cents = BOX_PRICED_IDS.includes(sizeId) ?
+          centsIn(value, LIMIT.PRICE_CENTS) : null;
+        if (cents === null) add("box_price_invalid");
+        else boxPricesCents[sizeId] = cents;
+      }
+    }
+  }
   const {departure, ok} = cleanDeparture(raw.departure);
   if (!ok) add("departure_invalid");
   if (errors.length) return {route: null, errors};
+  const hasBoxes = Object.keys(boxPricesCents).length > 0;
   const empty = items.length === 0 && Object.keys(perLbCents).length === 0 &&
-    !departure;
-  return {route: empty ? null : {items, perLbCents, departure}, errors};
+    !hasBoxes && !departure;
+  return {route: empty ? null : {items, perLbCents,
+    ...(hasBoxes ? {boxPricesCents} : {}), departure}, errors};
 }
 
 /**
@@ -241,7 +364,7 @@ function validatePriceList(raw, countryIds) {
     }
     const pair = {};
     for (const mode of MODES) {
-      const {route, errors: routeErrors} = validateRoute(value[mode]);
+      const {route, errors: routeErrors} = validateRoute(value[mode], mode);
       routeErrors.forEach(add);
       if (route) pair[mode] = route;
     }
@@ -286,12 +409,15 @@ function excessRateCents(route, categoryId) {
  * A piece is one of:
  * - `{priceItemId, quantity}`: an item from the list;
  * - `{categoryId, weightLb}`: a category priced by the pound;
+ * - `{kind: "box", boxSize | dimsIn, quantity}`: a Sea box priced by size
+ *   (typed inches win); `xl` or a size the business did not price is "ask
+ *   me";
  * - `{kind: "barrel"}`: priced by the destination's barrel price;
  * - anything else ("ask me"): no price, staff estimate it.
  *
  * @param {object} route The route (or null).
  * @param {object} piece The piece as sent.
- * @param {object} ctx {barrelPriceCents}.
+ * @param {object} ctx {barrelPriceCents, lang}.
  * @return {{price: ?object, estimateCents: ?number, description: string,
  *   error: string}} `price` is the snapshot stored on the piece.
  */
@@ -371,6 +497,47 @@ function pricePiece(route, piece, ctx = {}) {
       error: "",
     };
   }
+  if (text(p.kind, 20) === "box") {
+    const box = boxOfPiece(p);
+    if (box.error) {
+      return {price: null, estimateCents: null, description: "",
+        error: box.error};
+    }
+    if (box.boxSize) {
+      const quantity = Number(p.quantity ?? 1);
+      if (!Number.isInteger(quantity) || quantity < 1 ||
+          quantity > LIMIT.QUANTITY) {
+        return {price: null, estimateCents: null, description: "",
+          error: "quantity_invalid"};
+      }
+      // The description is in the customer's language; the price's label
+      // stays English so re-pricing compares like with like.
+      const name = BOX_LABELS[box.boxSize][ctx.lang === "fr" ? "fr" : "en"];
+      const description = quantity > 1 ? `${quantity} × ${name}` : name;
+      const unit = route?.boxPricesCents?.[box.boxSize];
+      if (box.boxSize === "xl" || !Number.isInteger(unit) || unit <= 0) {
+        return {price: null, estimateCents: null, description, error: ""};
+      }
+      return {
+        price: {
+          source: "box_size",
+          boxSize: box.boxSize,
+          itemId: "",
+          label: BOX_LABELS[box.boxSize].en,
+          categoryId: "",
+          quantity,
+          unitCents: unit,
+          includedLb: 0,
+          excessPerLbCents: null,
+          perLbCents: null,
+          weightLb: null,
+        },
+        estimateCents: unit * quantity,
+        description,
+        error: "",
+      };
+    }
+  }
   if (text(p.kind, 20) === "barrel") {
     const cents = Number.isInteger(ctx.barrelPriceCents) &&
       ctx.barrelPriceCents > 0 ? ctx.barrelPriceCents : null;
@@ -400,6 +567,7 @@ function counterPriceCents(price, weighedLb) {
     return Math.round(price.perLbCents * weight);
   }
   if (price.source === "barrel") return price.unitCents;
+  if (price.source === "box_size") return price.unitCents * price.quantity;
   if (price.source !== "item") return null;
   const base = price.unitCents * price.quantity;
   if (!(price.includedLb > 0)) return base;
@@ -451,7 +619,8 @@ function priceBasket(route, pieces, ctx = {}) {
 
 /**
  * Re-prices the stored pieces of an open request at today's list (owner
- * decision 10). Only pieces priced from the list (item / per pound) move; a
+ * decision 10). Only pieces priced from the list (item / per pound / box
+ * size) move; a
  * piece whose item left the list keeps its price (staff decide at the
  * counter); barrels and "ask me" pieces are left alone.
  *
@@ -467,10 +636,14 @@ function repricePieces(pieces, route) {
   const cents = new Map();
   const next = list.map((piece) => {
     const source = piece?.price?.source;
-    if (source !== "item" && source !== "per_lb") return piece;
+    if (source !== "item" && source !== "per_lb" &&
+        source !== "box_size") return piece;
     const again = pricePiece(route, source === "item" ?
       {priceItemId: piece.price.itemId, quantity: piece.price.quantity} :
-      {categoryId: piece.price.categoryId, weightLb: piece.price.weightLb});
+      source === "box_size" ?
+        {kind: "box", boxSize: piece.price.boxSize,
+          quantity: piece.price.quantity} :
+        {categoryId: piece.price.categoryId, weightLb: piece.price.weightLb});
     if (!again.price || !Number.isInteger(again.estimateCents)) return piece;
     const before = Number.isInteger(piece.estimateCents) ?
       piece.estimateCents : null;
@@ -656,10 +829,19 @@ module.exports = {
   MODES,
   WEEK_DAYS,
   SIZE_PRESETS,
+  BOX_SIZES,
+  BOX_SIZE_IDS,
+  BOX_PRICED_IDS,
+  BOX_SLACK_IN,
+  BOX_DIM_MAX_IN,
+  BOX_LABELS,
   LIMIT,
   SORTS,
   PRICE_LIST_MESSAGES,
   itemIdFor,
+  cleanDims,
+  boxSizeFor,
+  boxOfPiece,
   cleanDeparture,
   validateRoute,
   validatePriceList,

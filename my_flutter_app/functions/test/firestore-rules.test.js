@@ -1180,6 +1180,67 @@ describe("business dashboard Firestore rules", () => {
     }
   });
 
+  // Pay now (docs/PACKAGE_BOX_SIZES_PAY_NOW.md section 3): the money Laawol
+  // collected for a business and the weeks it paid out. Finance admins and
+  // the business's own owner read them (by businessId); nobody writes.
+  it("lets Finance and the owner read Pay now money, and never write it",
+      async () => {
+        const {doc, setDoc, getDoc, getDocs, collection, query, where,
+          updateDoc, deleteDoc} = require("firebase/firestore");
+        await testEnv.withSecurityRulesDisabled(async (context) => {
+          const fs = context.firestore();
+          await setDoc(doc(fs, "payNowLedger/r1_payment"), {
+            businessId: "biz_a", requestId: "r1", type: "payment",
+            amountCents: 13000, weekKey: "2026-11-02", atMs: 1});
+          await setDoc(doc(fs, "payNowPayouts/biz_a_2026-11-02"), {
+            businessId: "biz_a", weekKey: "2026-11-02", status: "paid",
+            netCents: 12000});
+          await setDoc(doc(fs, "billingAdjustments/biz_a_2026-11-02"), {
+            businessId: "biz_a", amountCents: 500, outstandingCents: 500});
+        });
+        for (const path of ["payNowLedger/r1_payment",
+          "payNowPayouts/biz_a_2026-11-02"]) {
+          await assertSucceeds(getDoc(doc(firestoreFor("owner-a"), path)));
+          await assertSucceeds(getDoc(doc(firestoreFor("finance-admin"),
+              path)));
+          await assertSucceeds(getDoc(doc(firestoreFor("super-admin"), path)));
+          // Another business's owner, staff without the owner's role, a
+          // non-finance admin and a stranger see nothing.
+          await assertFails(getDoc(doc(firestoreFor("owner-b"), path)));
+          await assertFails(getDoc(doc(firestoreFor("staff-listings-a"),
+              path)));
+          await assertFails(getDoc(doc(firestoreFor("content-admin"), path)));
+          await assertFails(getDoc(doc(firestoreFor(null), path)));
+        }
+        // The queries the owner's Bills screen runs.
+        await assertSucceeds(getDocs(query(
+            collection(firestoreFor("owner-a"), "payNowLedger"),
+            where("businessId", "==", "biz_a"))));
+        await assertSucceeds(getDocs(query(
+            collection(firestoreFor("owner-a"), "payNowPayouts"),
+            where("businessId", "==", "biz_a"))));
+        await assertFails(getDocs(query(
+            collection(firestoreFor("owner-a"), "payNowLedger"),
+            where("businessId", "==", "biz_b"))));
+        // Nobody writes: not the owner, not a super admin.
+        for (const uid of ["owner-a", "super-admin", "finance-admin"]) {
+          const db = firestoreFor(uid);
+          await assertFails(setDoc(doc(db, "payNowLedger/forged"),
+              {businessId: "biz_a", type: "payment", amountCents: 999999}));
+          await assertFails(updateDoc(doc(db, "payNowLedger/r1_payment"),
+              {amountCents: 1}));
+          await assertFails(deleteDoc(doc(db, "payNowLedger/r1_payment")));
+          await assertFails(setDoc(doc(db, "payNowPayouts/forged"),
+              {businessId: "biz_a", status: "paid"}));
+          await assertFails(updateDoc(doc(db,
+              "payNowPayouts/biz_a_2026-11-02"), {status: "open"}));
+          await assertFails(getDoc(doc(db,
+              "billingAdjustments/biz_a_2026-11-02")));
+          await assertFails(setDoc(doc(db, "billingAdjustments/forged"),
+              {businessId: "biz_a", outstandingCents: 0}));
+        }
+      });
+
   // Inventory (docs/INVENTORY.md): products, sales and stock movements are
   // read by the business's own managers as `where businessId == mine`
   // queries (a product also by code, a sale newest first, a product's

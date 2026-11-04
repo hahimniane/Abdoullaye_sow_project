@@ -1037,6 +1037,7 @@ describe("price lists on requests (docs/PACKAGE_PRICE_LIST.md)", () => {
   const listDoc = {routes: {gn: {
     sea: {items: [{id: "i_tv", categoryId: "fragile", label: "TV",
       priceCents: 12000, includedLb: 0}], perLbCents: {clothing: 300},
+    boxPricesCents: {small: 2500, medium: 3500},
     departure: {weekdays: ["sat"], everyWeeks: 1, anchorDate: ""}},
     air: {items: [{id: "i_phone", categoryId: "electronics",
       label: "Phone", priceCents: 4000, includedLb: 2}],
@@ -1119,6 +1120,85 @@ describe("price lists on requests (docs/PACKAGE_PRICE_LIST.md)", () => {
         ["ship_mode_invalid"]);
     assert.deepEqual(check(submission({pieces: [{priceItemId: "i_tv",
       quantity: 0}]})).errors, ["quantity_invalid"]);
+  });
+
+  it("a Sea option carries the box prices; Air carries none", () => {
+    const opt = priced();
+    assert.deepEqual(opt.routes.sea.boxPricesCents,
+        {small: 2500, medium: 3500});
+    assert.deepEqual(opt.routes.air.boxPricesCents, {});
+  });
+
+  it("stores a box's size and inches, and the inches win", () => {
+    const out = check(submission({pieces: [
+      {kind: "box", boxSize: "small", quantity: 2},
+      {kind: "box", boxSize: "small", dimsIn: {l: 20, w: 16, h: 14}},
+      {kind: "box", dimsIn: {l: 40, w: 30, h: 30}},
+      {kind: "box", boxSize: "large"},
+    ]}));
+    assert.deepEqual(out.errors, []);
+    const [a, b, c, d] = out.record.pieces;
+    assert.equal(a.boxSize, "small");
+    assert.equal(a.dimsIn, null);
+    assert.equal(a.description, "2 × Small box");
+    assert.equal(a.estimateCents, 5000);
+    assert.equal(a.price.source, "box_size");
+    assert.equal(a.price.boxSize, "small");
+    assert.equal(b.boxSize, "medium", "inches beat the chosen size");
+    assert.deepEqual(b.dimsIn, {l: 20, w: 16, h: 14});
+    assert.equal(b.estimateCents, 3500);
+    assert.equal(c.boxSize, "xl");
+    assert.equal(c.estimateCents, null, "extra large is quoted");
+    assert.equal(c.price, undefined);
+    assert.equal(d.boxSize, "large");
+    assert.equal(d.estimateCents, null, "this business did not price Large");
+  });
+
+  it("describes a box in the customer's language", () => {
+    const out = check(submission({language: "fr", pieces: [
+      {kind: "box", boxSize: "medium"}]}));
+    assert.deepEqual(out.errors, []);
+    assert.equal(out.record.pieces[0].description, "Boîte moyenne");
+    assert.equal(out.record.pieces[0].price.label, "Medium box");
+  });
+
+  it("refuses a box with a bad size or bad inches", () => {
+    assert.deepEqual(check(submission({pieces: [{kind: "box",
+      boxSize: "huge"}]})).errors, ["box_size_invalid"]);
+    for (const dimsIn of [{l: 0, w: 5, h: 5}, {l: 121, w: 5, h: 5},
+      {l: "NaN", w: 5, h: 5}, {l: 5, w: 5}, "20x16x14"]) {
+      assert.deepEqual(check(submission({pieces: [{kind: "box",
+        boxSize: "small", dimsIn}]})).errors, ["dims_invalid"],
+      JSON.stringify(dimsIn));
+    }
+    for (const code of ["box_size_invalid", "dims_invalid"]) {
+      assert.ok(pr.REQUEST_MESSAGES[code], code);
+    }
+  });
+
+  it("an older box (a description only) is stored as before", () => {
+    const out = check(submission({pieces: [{kind: "box",
+      description: "Blue box"}]}));
+    assert.deepEqual(out.errors, []);
+    const piece = out.record.pieces[0];
+    assert.equal(piece.boxSize, undefined);
+    assert.equal(piece.dimsIn, undefined);
+    assert.equal(piece.estimateCents, null);
+  });
+
+  it("the /e/ page shows each box's size, inches and price source", () => {
+    const record = {...check(submission({pieces: [
+      {kind: "box", dimsIn: {l: 20, w: 16, h: 14}}, {kind: "barrel"}]}))
+        .record,
+    status: "received", code: "R-K7M4P", token: "secret"};
+    const view = pr.publicRequestView("req1", record, business(),
+        {hours: WEEK});
+    assert.equal(view.pieces[0].boxSize, "medium");
+    assert.deepEqual(view.pieces[0].dimsIn, {l: 20, w: 16, h: 14});
+    assert.equal(view.pieces[0].price.boxSize, "medium");
+    assert.equal(view.pieces[0].price.source, "box_size");
+    assert.equal(view.pieces[1].boxSize, "");
+    assert.equal(view.pieces[1].price.boxSize, "");
   });
 
   it("a pickup window may be two hours", () => {

@@ -7,7 +7,9 @@
  * full).
  *
  * Screens: WHERE (country, Sea/Air) -> ITEMS (up to 4 kinds + something
- * else) -> AMOUNTS (how many, or the pounds, per kind) -> HOW (bring
+ * else; Sea offers four box sizes with their pictures) -> AMOUNTS (how many,
+ * or the pounds, per kind) -> BOXES (only when a box size was chosen:
+ * optional inches per size, optional photos) -> HOW (bring
  * it / pick it up + address) -> PICK (compare the
  * businesses; skipped when the customer came from a business's QR) ->
  * WHEN (day and 2-hour window) -> PEOPLE (names, receiver phone) -> REVIEW
@@ -16,21 +18,37 @@
  *
  * This file holds the pure parts: the Flow JSON, the encryption Meta asks
  * for, and every step's decision with its dependencies injected
- * (test/whatsapp-package-flow.test.js).
+ * (test/whatsapp-package-flow.test.js). Photos are decrypted by
+ * whatsapp_flow_media.js, staged under whatsappFlowPhotos/{token}/ while the
+ * customer is still choosing a business, and copied to the web's request
+ * photo path (packageRequestPhotos/{businessId}/{uid}/{file}) at the end
+ * (docs/PACKAGE_BOX_SIZES_PAY_NOW.md §1, §4).
  */
 
 const crypto = require("crypto");
 const priceList = require("./package_price_list");
+const packageRequests = require("./package_requests");
+const media = require("./whatsapp_flow_media");
+const {BOX_SIZE_IMAGES} = require("./box_size_images");
 
+// Flow JSON 6.0 covers everything used: PhotoPicker (4.0), pictures on
+// Dropdown items (5.0, 100 KB each from 6.0). The Flow itself is a new
+// version in Meta (ops/whatsapp/package_flow.py new-version); FLOW_REVISION
+// counts this file's layout so a deploy can tell which one it serves.
 const FLOW_VERSION = "6.0";
+const FLOW_REVISION = 2;
 const DATA_API_VERSION = "3.0";
-const SCREENS = Object.freeze(["WHERE", "ITEMS", "AMOUNTS", "HOW", "PICK",
-  "WHEN", "PEOPLE", "REVIEW"]);
+const SCREENS = Object.freeze(["WHERE", "ITEMS", "AMOUNTS", "BOXES", "HOW",
+  "PICK", "WHEN", "PEOPLE", "REVIEW"]);
 const SLOTS = 4;
 const ASK_ROWS = Object.freeze([
   Object.freeze({id: "box", en: "Box", fr: "Carton"}),
   Object.freeze({id: "suitcase", en: "Suitcase", fr: "Valise"}),
 ]);
+const PHOTOS_MAX = 3;
+const PHOTO_STAGING_ROOT = "whatsappFlowPhotos";
+// A Dropdown holds 200 rows, 100 when they carry pictures.
+const ITEM_ROWS_MAX = 100;
 const DAYS_AHEAD = 14;
 const PICKUP_DAY = Object.freeze({from: "07:00", to: "21:00"});
 const SESSION_MS = 24 * 60 * 60 * 1000;
@@ -89,6 +107,21 @@ const T = Object.freeze({
     errSend: "We could not send it. Check the answers and try again.",
     errAir: "Air is not offered there. Choose Sea.",
     something: "Something else",
+    quotes: "The business quotes it",
+    boxesTitle: "Your boxes",
+    boxesIntro: "Optional. If you know the inches of a box, type them " +
+      "(length x width x height): the size follows. Photos help the " +
+      "business quote.",
+    dimsHelp: "Optional. Inches, like 20 x 16 x 14",
+    photosLabel: "Photos (optional)",
+    photosHelp: "Up to 3 photos of your boxes.",
+    errDims: "Use 3 numbers: 20 x 16 x 14",
+    errDimsTop: "Check the inches: 3 numbers like 20 x 16 x 14, each from " +
+      "1 to 120.",
+    errPhoto: "We could not read a photo. Try another one or remove it.",
+    errPhotoBig: "A photo is too large. Pick a smaller one or remove it.",
+    errPhotoMany: "Send at most 3 photos.",
+    photos: "Photos", inchesUnit: "in",
   },
   fr: {
     whereTitle: "Envoyer un colis", country: "Pays", mode: "Par",
@@ -135,6 +168,22 @@ const T = Object.freeze({
     errSend: "Envoi impossible. Vérifiez les réponses et réessayez.",
     errAir: "L'avion n'est pas proposé là-bas. Choisissez Bateau.",
     something: "Autre chose",
+    quotes: "L'entreprise donne son prix",
+    boxesTitle: "Vos cartons",
+    boxesIntro: "Facultatif. Si vous connaissez les pouces d'un carton, " +
+      "tapez-les (longueur x largeur x hauteur) : la taille suit. Les " +
+      "photos aident l'entreprise à chiffrer.",
+    dimsHelp: "Facultatif. Pouces, ex. 20 x 16 x 14",
+    photosLabel: "Photos (facultatif)",
+    photosHelp: "Jusqu'à 3 photos de vos cartons.",
+    errDims: "3 nombres : 20 x 16 x 14",
+    errDimsTop: "Vérifiez les pouces : 3 nombres comme 20 x 16 x 14, " +
+      "chacun de 1 à 120.",
+    errPhoto: "Photo illisible. Essayez-en une autre ou retirez-la.",
+    errPhotoBig: "Une photo est trop lourde. Choisissez-en une plus " +
+      "petite ou retirez-la.",
+    errPhotoMany: "Envoyez 3 photos au plus.",
+    photos: "Photos", inchesUnit: "po",
   },
 });
 /**
@@ -210,6 +259,16 @@ const list = () => ({type: "array", items: {type: "object", properties: {
   id: {type: "string"}, title: {type: "string"},
   description: {type: "string"}}},
 __example__: [{id: "a", title: "A", description: ""}]});
+// A 1x1 PNG: the example for a row's picture.
+const PIXEL = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4" +
+  "z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==";
+// The item list: boxes carry a picture (Flow JSON 5.0+).
+const pictureList = () => ({type: "array", items: {type: "object",
+  properties: {id: {type: "string"}, title: {type: "string"},
+    description: {type: "string"}, image: {type: "string"},
+    "alt-text": {type: "string"}}},
+__example__: [{id: "a", title: "A", description: "", image: PIXEL,
+  "alt-text": "A"}]});
 
 /**
  * The Flow definition. Every text comes from the endpoint's data, so one
@@ -232,10 +291,22 @@ function flowJson() {
     label: `\${data.l_qty_${n}}`, "helper-text": `\${data.h_qty_${n}}`,
     "input-type": "number", required: `\${data.show_${n}}`,
     visible: `\${data.show_${n}}`});
+  // One optional "inches" box per chosen box size; one picker for photos.
+  const dimsInput = (n) => ({type: "TextInput", name: `dims_${n}`,
+    label: `\${data.l_dims_${n}}`, "helper-text": `\${data.h_dims_${n}}`,
+    "error-message": `\${data.e_dims_${n}}`, "input-type": "text",
+    required: false, "max-chars": 30, visible: `\${data.show_dims_${n}}`});
   const itemsPayload = {};
   const amountsPayload = {};
   const amountData = {};
+  const boxesPayload = {photos: "${form.photos}"};
+  const boxesData = {};
   for (let n = 1; n <= SLOTS; n++) {
+    boxesPayload[`dims_${n}`] = `\${form.dims_${n}}`;
+    boxesData[`show_dims_${n}`] = {type: "boolean", __example__: n === 1};
+    boxesData[`l_dims_${n}`] = str("Medium box");
+    boxesData[`h_dims_${n}`] = str("Optional. Inches, like 20 x 16 x 14");
+    boxesData[`e_dims_${n}`] = str("");
     itemsPayload[`item_${n}`] = `\${form.item_${n}}`;
     amountsPayload[`qty_${n}`] = `\${form.qty_${n}}`;
     amountData[`l_qty_${n}`] = str("How many");
@@ -249,7 +320,8 @@ function flowJson() {
     version: FLOW_VERSION,
     data_api_version: DATA_API_VERSION,
     routing_model: {
-      WHERE: ["ITEMS"], ITEMS: ["AMOUNTS", "HOW"], AMOUNTS: ["HOW"],
+      WHERE: ["ITEMS"], ITEMS: ["AMOUNTS", "HOW"],
+      AMOUNTS: ["BOXES", "HOW"], BOXES: ["HOW"],
       HOW: ["PICK", "WHEN"],
       PICK: ["WHEN"], WHEN: ["PEOPLE"], PEOPLE: ["REVIEW"], REVIEW: [],
     },
@@ -271,7 +343,7 @@ function flowJson() {
         l_title: str("What are you sending"), l_intro: str("Pick"),
         ...itemLabels, l_other: str("Other"),
         l_other_help: str("Anything else"), l_next: str("Next"),
-        items: list()},
+        items: pictureList()},
       layout: {type: "SingleColumnLayout", children: [
         {type: "TextHeading", text: "${data.l_title}"},
         {type: "TextBody", text: "${data.l_intro}"},
@@ -289,6 +361,21 @@ function flowJson() {
         {type: "TextBody", text: "${data.l_intro}"},
         amount(1), amount(2), amount(3), amount(4),
         footer("AMOUNTS", amountsPayload),
+      ]}},
+      {id: "BOXES", title: "Laawol", data: {
+        l_title: str("Your boxes"), l_intro: str("Inches and photos"),
+        l_photos: str("Photos (optional)"), d_photos: str("Up to 3 photos"),
+        l_next: str("Next"), ...boxesData},
+      layout: {type: "SingleColumnLayout", children: [
+        {type: "TextHeading", text: "${data.l_title}"},
+        {type: "TextBody", text: "${data.l_intro}"},
+        dimsInput(1), dimsInput(2), dimsInput(3), dimsInput(4),
+        {type: "PhotoPicker", name: "photos", label: "${data.l_photos}",
+          description: "${data.d_photos}", "photo-source": "camera_gallery",
+          "min-uploaded-photos": 0, "max-uploaded-photos": PHOTOS_MAX,
+          "max-file-size-kb": Math.floor((packageRequests.PHOTO_MAX_BYTES -
+            1) / 1024)},
+        footer("BOXES", boxesPayload),
       ]}},
       {id: "HOW", title: "Laawol", data: {
         l_title: str("Drop-off or pickup"), l_how: str("How"),
@@ -501,10 +588,11 @@ function catalogFor(options, mode, lang) {
       barrel = true;
     }
   }
-  const rows = [];
+  const head = [];
+  const tail = [];
   for (const [key, item] of [...items.entries()].sort((a, b) =>
     a[1].label.localeCompare(b[1].label))) {
-    rows.push({id: `i:${key}`, kind: "item", label: item.label,
+    head.push({id: `i:${key}`, kind: "item", label: item.label,
       categoryId: item.categoryId, title: clip(item.label, 30),
       description: clip(`${w.from} ${money(item.from, lang)}` +
         (item.includedLb ? ` (${w.upTo} ${item.includedLb} lb ${w.each})` :
@@ -512,25 +600,154 @@ function catalogFor(options, mode, lang) {
   }
   for (const category of priceList.CATEGORIES) {
     if (!perLb.has(category.id)) continue;
-    rows.push({id: `lb:${category.id}`, kind: "per_lb",
+    head.push({id: `lb:${category.id}`, kind: "per_lb",
       label: category[lang === "fr" ? "fr" : "en"], categoryId: category.id,
       title: clip(`${category[lang === "fr" ? "fr" : "en"]} (lb)`, 30),
       description: `${w.from} ${money(perLb.get(category.id), lang)}` +
         w.perLb});
   }
   if (barrel) {
-    rows.push({id: "barrel", kind: "barrel", label: lang === "fr" ?
+    tail.push({id: "barrel", kind: "barrel", label: lang === "fr" ?
       "Baril" : "Barrel", categoryId: "", title: lang === "fr" ? "Baril" :
       "Barrel", description: ""});
   }
-  // Boxes and suitcases are always offered: a business without a price for
-  // them sends one (the request waits for its quote).
+  // Sea boxes are sold by size (four pictures); a size no business there
+  // prices is quoted. Air keeps one "Box" that the business quotes.
+  if (mode === "sea") {
+    const priced = (size) => options
+        .map((o) => o.routes?.sea?.boxPricesCents?.[size])
+        .filter((cents) => Number.isInteger(cents) && cents > 0);
+    const businesses = new Set(options.map((o) => o.businessId));
+    for (const size of priceList.BOX_SIZES) {
+      const prices = priced(size.id);
+      const label = priceList.BOX_LABELS[size.id][lang === "fr" ? "fr" :
+        "en"];
+      const price = prices.length === 0 ? w.quotes :
+        `${businesses.size > 1 ? `${w.from} ` : ""}` +
+        money(Math.min(...prices), lang);
+      tail.push({id: `box:${size.id}`, kind: "box_size", boxSize: size.id,
+        label, categoryId: "", title: clip(label, 30),
+        description: clip(`${size[lang === "fr" ? "exampleFr" :
+          "exampleEn"]} · ${price}`, 300)});
+    }
+  }
+  // Boxes (Air) and suitcases are always offered: a business without a
+  // price for them sends one (the request waits for its quote).
   for (const ask of ASK_ROWS) {
-    rows.push({id: `ask:${ask.id}`, kind: "ask", label: ask[lang === "fr" ?
+    if (ask.id === "box" && mode === "sea") continue;
+    tail.push({id: `ask:${ask.id}`, kind: "ask", label: ask[lang === "fr" ?
       "fr" : "en"], categoryId: "", title: ask[lang === "fr" ? "fr" : "en"],
     description: w.askHelp});
   }
-  return rows.slice(0, MAX_OPTIONS);
+  return [...head.slice(0, Math.max(0, ITEM_ROWS_MAX - tail.length)),
+    ...tail];
+}
+
+/**
+ * The ITEMS dropdown's rows: each box size carries its picture.
+ *
+ * @param {object[]} catalog catalogFor's rows.
+ * @return {object[]} [{id, title, description, image?, "alt-text"?}].
+ */
+function itemRows(catalog) {
+  return catalog.map((row) => ({id: row.id, title: row.title,
+    description: row.description,
+    ...(row.kind === "box_size" && BOX_SIZE_IMAGES[row.boxSize] ? {
+      image: BOX_SIZE_IMAGES[row.boxSize], "alt-text": row.title} : {})}));
+}
+
+/**
+ * A screen's data without pictures (the session keeps the words, not the
+ * pictures: they are put back when the screen is shown again).
+ *
+ * @param {object} data A screen's data.
+ * @return {object} Same, items without image / alt-text.
+ */
+function withoutPictures(data) {
+  if (!Array.isArray(data?.items)) return data;
+  return {...data, items: data.items.map(({id, title, description}) =>
+    ({id, title, description}))};
+}
+
+/**
+ * @param {object} data A stored screen's data.
+ * @return {object} Same, box rows with their pictures again.
+ */
+function withPictures(data) {
+  if (!Array.isArray(data?.items)) return data;
+  return {...data, items: data.items.map((row) => {
+    const size = String(row.id).startsWith("box:") ?
+      String(row.id).slice(4) : "";
+    return BOX_SIZE_IMAGES[size] ? {...row, image: BOX_SIZE_IMAGES[size],
+      "alt-text": row.title} : row;
+  })};
+}
+
+/**
+ * Inches as a customer types them: "20x16x14", "20 x 16 x 14", "20*16*14",
+ * "20,16,14", "20 16 14", with or without "in" / "po".
+ *
+ * @param {*} raw What was typed.
+ * @return {{blank: boolean, invalid: boolean, dims: ?object}} blank: nothing
+ *   typed; invalid: typed but not three sides of 1..120 inches.
+ */
+function parseDims(raw) {
+  const typed = String(raw ?? "").toLowerCase().replace(/["”“″]/g, " ")
+      .replace(/(pouces?|inches|inch|in|po)\b/g, " ").trim();
+  if (!typed) return {blank: true, invalid: false, dims: null};
+  const parts = /[x×*]/.test(typed) ?
+    typed.split(/[x×*]/).map((part) => part.trim().replace(",", ".")) :
+    typed.split(/[\s,;]+/);
+  const number = /^\d+(\.\d+)?$/;
+  if (parts.length !== 3 || !parts.every((part) => number.test(part))) {
+    return {blank: false, invalid: true, dims: null};
+  }
+  const dims = priceList.cleanDims({l: Number(parts[0]), w: Number(parts[1]),
+    h: Number(parts[2])});
+  return dims ? {blank: false, invalid: false, dims} :
+    {blank: false, invalid: true, dims: null};
+}
+
+/**
+ * @param {object} dims {l, w, h}.
+ * @param {string} lang "en" | "fr".
+ * @return {string} "20 × 16 × 14 in" / "20 × 16 × 14 po".
+ */
+function dimsText(dims, lang) {
+  const side = (n) => String(n).replace(".", lang === "fr" ? "," : ".");
+  return `${[dims.l, dims.w, dims.h].map(side).join(" × ")} ` +
+    words(lang).inchesUnit;
+}
+
+/**
+ * How a line reads in the review ("2 × Medium box (20 × 16 × 14 in →
+ * Medium)").
+ *
+ * @param {object} line A line.
+ * @param {string} lang "en" | "fr".
+ * @return {string} The text.
+ */
+function lineText(line, lang) {
+  const w = words(lang);
+  if (line.kind === "per_lb") return `${line.label} · ${line.amount} lb`;
+  if (line.kind !== "box_size") return `${line.amount} × ${line.label}`;
+  const key = lang === "fr" ? "fr" : "en";
+  const name = priceList.BOX_LABELS[line.boxSize][key];
+  if (!line.dimsIn) return `${line.amount} × ${name}`;
+  const size = priceList.BOX_SIZES.find((b) => b.id === line.boxSize)[key];
+  return `${line.amount} × ${name} (${dimsText(line.dimsIn, lang)} → ` +
+    `${size}${line.boxSize === "xl" ? `, ${w.quotes.toLowerCase()}` : ""})`;
+}
+
+/**
+ * Where a customer's request photos live: the web's own folder for that
+ * business, under this WhatsApp number's uid (the one createRequest uses).
+ *
+ * @param {string} phone The customer's WhatsApp number.
+ * @return {string} "whatsapp:16465550100".
+ */
+function requestUid(phone) {
+  return `whatsapp:${String(phone || "").replace(/\D/g, "")}`;
 }
 
 /**
@@ -540,10 +757,13 @@ function catalogFor(options, mode, lang) {
  * @param {object[]} lines [{kind, label, categoryId, amount}] + other text.
  * @param {?object} route The business's route.
  * @param {string} other "Something else" text.
+ * @param {string[]} [photoPaths] The request photo paths (all go on the
+ *   first box: a path may appear once in a request).
  * @return {object[]} Pieces for priceBasket / submitPackageRequest.
  */
-function piecesFor(lines, route, other) {
+function piecesFor(lines, route, other, photoPaths = []) {
   const pieces = [];
+  let photosLeft = photoPaths.length > 0;
   for (const line of lines) {
     if (line.kind === "item") {
       const match = (route?.items || []).find((item) =>
@@ -554,6 +774,13 @@ function piecesFor(lines, route, other) {
     } else if (line.kind === "per_lb") {
       pieces.push({categoryId: line.categoryId, weightLb: line.amount,
         kind: "other"});
+    } else if (line.kind === "box_size") {
+      // Typed inches win over the size picked: the server derives it.
+      pieces.push({kind: "box", boxSize: line.boxSize,
+        ...(line.dimsIn ? {dimsIn: line.dimsIn} : {}),
+        quantity: line.amount,
+        ...(photosLeft ? {photoPaths: [...photoPaths]} : {})});
+      photosLeft = false;
     } else if (line.kind === "barrel") {
       for (let i = 0; i < line.amount; i++) pieces.push({kind: "barrel"});
     } else if (line.kind === "ask") {
@@ -662,6 +889,17 @@ function labels(screen, lang) {
     case "AMOUNTS":
       return {l_title: w.amountsTitle, l_intro: w.amountsIntro,
         l_next: w.next};
+    case "BOXES": {
+      const out = {l_title: w.boxesTitle, l_intro: w.boxesIntro,
+        l_photos: w.photosLabel, d_photos: w.photosHelp, l_next: w.next};
+      for (let n = 1; n <= SLOTS; n++) {
+        out[`show_dims_${n}`] = false;
+        out[`l_dims_${n}`] = w.item;
+        out[`h_dims_${n}`] = w.dimsHelp;
+        out[`e_dims_${n}`] = "";
+      }
+      return out;
+    }
     case "HOW":
       return {l_title: w.howTitle, l_how: w.how, l_address: w.address,
         l_address_help: w.addressHelp, l_next: w.next};
@@ -692,18 +930,27 @@ function labels(screen, lang) {
  *   pickupQuotes(address, businessIds) -> quote[],
  *   createRequest(data, session) -> {code, token, status, totalCents},
  *   nowMs() -> number, todayKey(zone) -> "YYYY-MM-DD",
- *   nowMinutes(zone) -> number}.
+ *   nowMinutes(zone) -> number,
+ *   storePhoto(path, buffer, contentType), copyPhoto(from, to),
+ *   deletePhoto(path) (Storage; needed for photos only),
+ *   downloadMedia(url, {maxBytes}) -> Buffer (default: WhatsApp's CDN)}.
  * @return {{handle: function(object): Promise<object>}}
  */
 function createPackageFlow(deps) {
   const screenOut = async (token, session, screen, data) => {
     const full = {...labels(screen, session.lang), ...data};
-    await deps.saveSession(token, {[`screens.${screen}`]: full,
-      lastScreen: screen});
+    await deps.saveSession(token, {[`screens.${screen}`]:
+      withoutPictures(full), lastScreen: screen});
     return {screen, data: full};
   };
+  const dropPhotos = async (paths) => {
+    if (!deps.deletePhoto) return;
+    await Promise.all((paths || []).map((path) =>
+      Promise.resolve(deps.deletePhoto(path)).catch(() => null)));
+  };
   const fail = (session, screen, message) => ({screen, data: {
-    ...(session.screens?.[screen] || labels(screen, session.lang)),
+    ...withPictures(session.screens?.[screen] ||
+      labels(screen, session.lang)),
     error_message: message}});
 
   const countryOptions = (session, all) => all.filter((o) =>
@@ -728,8 +975,8 @@ function createPackageFlow(deps) {
     if (action === "BACK") {
       const screen = SCREENS.includes(payload.screen) ? payload.screen :
         session.lastScreen || "WHERE";
-      return {screen, data: session.screens?.[screen] ||
-        labels(screen, lang)};
+      return {screen, data: withPictures(session.screens?.[screen] ||
+        labels(screen, lang))};
     }
     const {business, options} = await deps.loadOptions({slug:
       session.slug || ""});
@@ -778,8 +1025,7 @@ function createPackageFlow(deps) {
         here.filter((o) => o.shipsByAir) : here, mode, lang);
       await deps.saveSession(token, {country, mode, catalog,
         countryName: here[0].country.name});
-      const items = catalog.length ? catalog.map((row) => ({id: row.id,
-        title: row.title, description: row.description})) :
+      const items = catalog.length ? itemRows(catalog) :
         [{id: "none", title: w.something, description: w.otherHelp}];
       return screenOut(token, {...session, country, mode}, "ITEMS", {items});
     }
@@ -796,7 +1042,10 @@ function createPackageFlow(deps) {
       }
       const other = String(data.other || "").trim().slice(0, 120);
       if (!picked.length && !other) return fail(session, "ITEMS", w.errItems);
-      await deps.saveSession(token, {picked, other, lines: []});
+      // A new choice starts the boxes over (photos staged before go).
+      await dropPhotos(session.boxPhotos);
+      await deps.saveSession(token, {picked, other, lines: [], boxSlots: [],
+        boxPhotos: []});
       if (!picked.length) return howScreen({...session, other});
       const rows = picked.map((id) => catalog.find((c) => c.id === id));
       // The pounds hint only when something is sold by the pound.
@@ -827,13 +1076,82 @@ function createPackageFlow(deps) {
         if (!ok) return fail(session, "AMOUNTS", w.errQty);
         lines.push({kind: row.kind, label: row.label,
           categoryId: row.categoryId, amount: row.kind === "per_lb" ?
-            Math.round(amount * 10) / 10 : amount});
+            Math.round(amount * 10) / 10 : amount,
+          ...(row.kind === "box_size" ? {boxSize: row.boxSize,
+            chosenSize: row.boxSize} : {})});
       }
       if (!lines.length && !session.other) {
         return fail(session, "AMOUNTS", w.errQty);
       }
-      await deps.saveSession(token, {lines});
-      return howScreen(session, "AMOUNTS");
+      const boxes = lines.filter((line) => line.kind === "box_size");
+      await dropPhotos(session.boxPhotos);
+      await deps.saveSession(token, {lines, boxPhotos: [],
+        boxSlots: boxes.map((line) => line.chosenSize)});
+      if (!boxes.length) return howScreen(session, "AMOUNTS");
+      // Optional inches per chosen size, and optional photos.
+      const boxData = {};
+      for (let n = 1; n <= SLOTS; n++) {
+        const line = boxes[n - 1];
+        boxData[`show_dims_${n}`] = Boolean(line);
+        boxData[`l_dims_${n}`] = line ? clip(line.label, 20) : w.item;
+        boxData[`h_dims_${n}`] = w.dimsHelp;
+        boxData[`e_dims_${n}`] = "";
+      }
+      return screenOut(token, session, "BOXES", boxData);
+    }
+
+    if (screen === "BOXES") {
+      const slots = Array.isArray(session.boxSlots) ? session.boxSlots : [];
+      const stored = session.screens?.BOXES || labels("BOXES", lang);
+      const typed = {};
+      slots.forEach((size, i) => {
+        typed[size] = parseDims(data[`dims_${i + 1}`]);
+      });
+      if (Object.values(typed).some((t) => t.invalid)) {
+        const errors = {};
+        slots.forEach((size, i) => {
+          errors[`e_dims_${i + 1}`] = typed[size].invalid ? w.errDims : "";
+        });
+        return {screen: "BOXES", data: {...stored, ...errors,
+          error_message: w.errDimsTop}};
+      }
+      const picked = Array.isArray(data.photos) ? data.photos : [];
+      if (picked.length > PHOTOS_MAX) {
+        return fail(session, "BOXES", w.errPhotoMany);
+      }
+      let staged = [];
+      if (picked.length) {
+        if (!deps.storePhoto) return fail(session, "BOXES", w.errPhoto);
+        const results = await Promise.allSettled(picked.map(async (item) => {
+          const photo = await media.readPickedPhoto(item, {maxBytes:
+            packageRequests.PHOTO_MAX_BYTES, ...(deps.downloadMedia ?
+            {download: deps.downloadMedia} : {})});
+          const path = `${PHOTO_STAGING_ROOT}/${token}/` +
+            `${crypto.randomBytes(15).toString("base64url")}.${photo.ext}`;
+          await deps.storePhoto(path, photo.bytes, photo.contentType);
+          return path;
+        }));
+        staged = results.filter((r) => r.status === "fulfilled")
+            .map((r) => r.value);
+        const failed = results.find((r) => r.status === "rejected");
+        if (failed) {
+          await dropPhotos(staged);
+          return fail(session, "BOXES", failed.reason?.code ===
+            "media_too_large" ? w.errPhotoBig : w.errPhoto);
+        }
+      }
+      await dropPhotos(session.boxPhotos);
+      // The inches win: the size follows them. Typing again starts over.
+      const withBoxes = (session.lines || []).map((line) => {
+        if (line.kind !== "box_size") return line;
+        const rest = {...line};
+        delete rest.dimsIn;
+        const dims = typed[line.chosenSize]?.dims;
+        return dims ? {...rest, dimsIn: dims, boxSize:
+          priceList.boxSizeFor(dims)} : {...rest, boxSize: line.chosenSize};
+      });
+      await deps.saveSession(token, {lines: withBoxes, boxPhotos: staged});
+      return howScreen({...session, lines: withBoxes}, "BOXES");
     }
 
     if (screen === "HOW") {
@@ -928,14 +1246,15 @@ function createPackageFlow(deps) {
       const basket = priceList.priceBasket(route,
           piecesFor(session.lines || [], route, session.other),
           {barrelPriceCents: option.barrelPriceCents});
-      const lineText = (session.lines || []).map((l) => l.kind === "per_lb" ?
-        `${l.label} · ${l.amount} lb` : `${l.amount} × ${l.label}`);
-      if (session.other) lineText.push(session.other);
+      const lineTexts = (session.lines || []).map((l) => lineText(l, lang));
+      if (session.other) lineTexts.push(session.other);
+      const photoCount = (session.boxPhotos || []).length;
       const when = session.when || {};
       const summary = [
         `${option.businessName} · ${session.countryName || ""} · ` +
           `${session.mode === "air" ? w.air : w.sea}`,
-        `${w.items}: ${lineText.join(", ")}`,
+        `${w.items}: ${lineTexts.join(", ")}`,
+        ...(photoCount ? [`${w.photos}: ${photoCount}`] : []),
         `${w.total}: ${basket.allPriced ? `${basket.weighsAtCounter ?
           `${w.about} ` : ""}${money(basket.totalCents, lang)}` :
           `${money(basket.pricedCents, lang)} + ${basket.unpricedCount} ` +
@@ -959,6 +1278,20 @@ function createPackageFlow(deps) {
       const route = priceList.routeOf({routes: {[option.country.id]:
         option.routes}}, option.country.id, session.mode);
       const when = session.when || {};
+      // Photos move from the staging folder to the web's request photos
+      // (the business is known now). Same name on a retry: same file.
+      const staged = Array.isArray(session.boxPhotos) ? session.boxPhotos :
+        [];
+      const photoPaths = staged.map((path) =>
+        `${packageRequests.PHOTO_ROOT}/${option.businessId}/` +
+        `${requestUid(session.phone)}/${path.split("/").pop()}`);
+      try {
+        for (let i = 0; i < staged.length; i++) {
+          await deps.copyPhoto(staged[i], photoPaths[i]);
+        }
+      } catch (error) {
+        return fail(session, "REVIEW", w.errSend);
+      }
       const request = {
         businessId: option.businessId,
         destinationCountryId: option.country.id,
@@ -975,7 +1308,8 @@ function createPackageFlow(deps) {
         sender: {name: session.senderName, phoneE164: session.phone},
         receiver: {name: session.receiverName,
           phoneE164: session.receiverPhone},
-        pieces: piecesFor(session.lines || [], route, session.other),
+        pieces: piecesFor(session.lines || [], route, session.other,
+            photoPaths),
         language: lang,
         idempotencyKey: `wa-${token.slice(0, 40)}`,
       };
@@ -987,6 +1321,7 @@ function createPackageFlow(deps) {
       }
       await deps.saveSession(token, {requestCode: created.code,
         requestToken: created.token, doneAtMs: deps.nowMs()});
+      await dropPhotos(staged);
       return {screen: "SUCCESS", data: {extension_message_response: {
         params: {flow_token: token, request_code: created.code,
           request_token: created.token}}}};
@@ -998,6 +1333,7 @@ function createPackageFlow(deps) {
 
 module.exports = {
   FLOW_VERSION,
+  FLOW_REVISION,
   SCREENS,
   SESSION_MS,
   OPEN_WORDS,
@@ -1007,6 +1343,12 @@ module.exports = {
   openRequest,
   flowMessageBody,
   catalogFor,
+  itemRows,
+  parseDims,
+  dimsText,
+  requestUid,
+  PHOTOS_MAX,
+  PHOTO_STAGING_ROOT,
   piecesFor,
   whenChoices,
   rowDescription,

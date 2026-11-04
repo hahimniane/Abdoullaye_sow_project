@@ -1132,5 +1132,2283 @@
         "errors": []
       }
     }
-  ]
+  ],
+  "boxSizes": {
+    "sizeFor": [
+      {
+        "name": "fits small exactly",
+        "dims": {
+          "l": 18,
+          "w": 18,
+          "h": 18
+        },
+        "expect": "small"
+      },
+      {
+        "name": "small with 1 in of slack",
+        "dims": {
+          "l": 19,
+          "w": 19,
+          "h": 19
+        },
+        "expect": "small"
+      },
+      {
+        "name": "a tenth over the slack is medium",
+        "dims": {
+          "l": 19.1,
+          "w": 18,
+          "h": 18
+        },
+        "expect": "medium"
+      },
+      {
+        "name": "fits medium exactly",
+        "dims": {
+          "l": 24,
+          "w": 18,
+          "h": 18
+        },
+        "expect": "medium"
+      },
+      {
+        "name": "rotated dims 18x24x18 are medium",
+        "dims": {
+          "l": 18,
+          "w": 24,
+          "h": 18
+        },
+        "expect": "medium"
+      },
+      {
+        "name": "medium with slack",
+        "dims": {
+          "l": 25,
+          "w": 19,
+          "h": 19
+        },
+        "expect": "medium"
+      },
+      {
+        "name": "a tenth over medium slack is large",
+        "dims": {
+          "l": 25.1,
+          "w": 18,
+          "h": 18
+        },
+        "expect": "large"
+      },
+      {
+        "name": "fits large exactly",
+        "dims": {
+          "l": 30,
+          "w": 24,
+          "h": 24
+        },
+        "expect": "large"
+      },
+      {
+        "name": "large with 1 in of slack on every side",
+        "dims": {
+          "l": 31,
+          "w": 25,
+          "h": 25
+        },
+        "expect": "large"
+      },
+      {
+        "name": "31x24x24 is still large (slack)",
+        "dims": {
+          "l": 31,
+          "w": 24,
+          "h": 24
+        },
+        "expect": "large"
+      },
+      {
+        "name": "31.1x24x24 is extra large",
+        "dims": {
+          "l": 31.1,
+          "w": 24,
+          "h": 24
+        },
+        "expect": "xl"
+      },
+      {
+        "name": "32x24x24 is extra large",
+        "dims": {
+          "l": 32,
+          "w": 24,
+          "h": 24
+        },
+        "expect": "xl"
+      },
+      {
+        "name": "a cube of 24 is large",
+        "dims": {
+          "l": 24,
+          "w": 24,
+          "h": 24
+        },
+        "expect": "large"
+      },
+      {
+        "name": "30x30x30 is extra large",
+        "dims": {
+          "l": 30,
+          "w": 30,
+          "h": 30
+        },
+        "expect": "xl"
+      },
+      {
+        "name": "the tiniest box is small",
+        "dims": {
+          "l": 1,
+          "w": 1,
+          "h": 1
+        },
+        "expect": "small"
+      },
+      {
+        "name": "the biggest typed box is extra large",
+        "dims": {
+          "l": 120,
+          "w": 120,
+          "h": 120
+        },
+        "expect": "xl"
+      },
+      {
+        "name": "strings are read as numbers",
+        "dims": {
+          "l": "20",
+          "w": "16",
+          "h": "14"
+        },
+        "expect": "medium"
+      },
+      {
+        "name": "rounds to a tenth first",
+        "dims": {
+          "l": 18.04,
+          "w": 18,
+          "h": 18
+        },
+        "expect": "small"
+      },
+      {
+        "name": "zero is invalid",
+        "dims": {
+          "l": 0,
+          "w": 10,
+          "h": 10
+        },
+        "expect": null
+      },
+      {
+        "name": "121 is invalid",
+        "dims": {
+          "l": 121,
+          "w": 10,
+          "h": 10
+        },
+        "expect": null
+      },
+      {
+        "name": "NaN is invalid",
+        "dims": {
+          "l": "NaN",
+          "w": 10,
+          "h": 10
+        },
+        "expect": null
+      },
+      {
+        "name": "text is invalid",
+        "dims": {
+          "l": "abc",
+          "w": 10,
+          "h": 10
+        },
+        "expect": null
+      },
+      {
+        "name": "a missing side is invalid",
+        "dims": {
+          "l": 10,
+          "w": 10
+        },
+        "expect": null
+      },
+      {
+        "name": "null is invalid",
+        "dims": null,
+        "expect": null
+      },
+      {
+        "name": "a negative side is invalid",
+        "dims": {
+          "l": -5,
+          "w": 10,
+          "h": 10
+        },
+        "expect": null
+      },
+      {
+        "name": "0.04 rounds to 0 and is invalid",
+        "dims": {
+          "l": 0.04,
+          "w": 10,
+          "h": 10
+        },
+        "expect": null
+      }
+    ],
+    "dims": [
+      {
+        "name": "whole inches",
+        "raw": {
+          "l": 20,
+          "w": 16,
+          "h": 14
+        },
+        "expect": {
+          "l": 20,
+          "w": 16,
+          "h": 14
+        }
+      },
+      {
+        "name": "strings and rounding",
+        "raw": {
+          "l": "20",
+          "w": 16.04,
+          "h": "14.26"
+        },
+        "expect": {
+          "l": 20,
+          "w": 16,
+          "h": 14.3
+        }
+      },
+      {
+        "name": "too big",
+        "raw": {
+          "l": 20,
+          "w": 121,
+          "h": 14
+        },
+        "expect": null
+      },
+      {
+        "name": "zero",
+        "raw": {
+          "l": 20,
+          "w": 0,
+          "h": 14
+        },
+        "expect": null
+      },
+      {
+        "name": "not an object",
+        "raw": "20x16x14",
+        "expect": null
+      },
+      {
+        "name": "an array",
+        "raw": [
+          20,
+          16,
+          14
+        ],
+        "expect": null
+      }
+    ],
+    "routes": [
+      {
+        "name": "prices three sizes, drops blanks",
+        "raw": {
+          "boxPricesCents": {
+            "small": 2500,
+            "medium": "3500",
+            "large": null
+          }
+        },
+        "mode": "sea",
+        "expect": {
+          "route": {
+            "items": [],
+            "perLbCents": {},
+            "boxPricesCents": {
+              "small": 2500,
+              "medium": 3500
+            },
+            "departure": null
+          },
+          "errors": []
+        }
+      },
+      {
+        "name": "a route of only box prices is not empty",
+        "raw": {
+          "boxPricesCents": {
+            "large": 5500
+          }
+        },
+        "mode": "sea",
+        "expect": {
+          "route": {
+            "items": [],
+            "perLbCents": {},
+            "boxPricesCents": {
+              "large": 5500
+            },
+            "departure": null
+          },
+          "errors": []
+        }
+      },
+      {
+        "name": "blank box prices make an empty route",
+        "raw": {
+          "boxPricesCents": {
+            "small": "",
+            "medium": null
+          }
+        },
+        "mode": "sea",
+        "expect": {
+          "route": null,
+          "errors": []
+        }
+      },
+      {
+        "name": "mode defaults to sea",
+        "raw": {
+          "boxPricesCents": {
+            "small": 2500
+          }
+        },
+        "expect": {
+          "route": {
+            "items": [],
+            "perLbCents": {},
+            "boxPricesCents": {
+              "small": 2500
+            },
+            "departure": null
+          },
+          "errors": []
+        }
+      },
+      {
+        "name": "air refuses box prices",
+        "raw": {
+          "boxPricesCents": {
+            "small": 2500
+          }
+        },
+        "mode": "air",
+        "expect": {
+          "route": null,
+          "errors": [
+            "box_sizes_sea_only"
+          ]
+        }
+      },
+      {
+        "name": "air with blank box prices is fine",
+        "raw": {
+          "boxPricesCents": {
+            "small": null
+          }
+        },
+        "mode": "air",
+        "expect": {
+          "route": null,
+          "errors": []
+        }
+      },
+      {
+        "name": "extra large is never priced",
+        "raw": {
+          "boxPricesCents": {
+            "xl": 9000
+          }
+        },
+        "mode": "sea",
+        "expect": {
+          "route": null,
+          "errors": [
+            "box_price_invalid"
+          ]
+        }
+      },
+      {
+        "name": "an unknown size is refused",
+        "raw": {
+          "boxPricesCents": {
+            "huge": 9000
+          }
+        },
+        "mode": "sea",
+        "expect": {
+          "route": null,
+          "errors": [
+            "box_price_invalid"
+          ]
+        }
+      },
+      {
+        "name": "zero is refused",
+        "raw": {
+          "boxPricesCents": {
+            "small": 0
+          }
+        },
+        "mode": "sea",
+        "expect": {
+          "route": null,
+          "errors": [
+            "box_price_invalid"
+          ]
+        }
+      },
+      {
+        "name": "a negative price is refused",
+        "raw": {
+          "boxPricesCents": {
+            "small": -5
+          }
+        },
+        "mode": "sea",
+        "expect": {
+          "route": null,
+          "errors": [
+            "box_price_invalid"
+          ]
+        }
+      },
+      {
+        "name": "a fraction of a cent is refused",
+        "raw": {
+          "boxPricesCents": {
+            "small": 10.5
+          }
+        },
+        "mode": "sea",
+        "expect": {
+          "route": null,
+          "errors": [
+            "box_price_invalid"
+          ]
+        }
+      },
+      {
+        "name": "above $10,000 is refused",
+        "raw": {
+          "boxPricesCents": {
+            "small": 1000001
+          }
+        },
+        "mode": "sea",
+        "expect": {
+          "route": null,
+          "errors": [
+            "box_price_invalid"
+          ]
+        }
+      },
+      {
+        "name": "text is refused",
+        "raw": {
+          "boxPricesCents": {
+            "small": "abc"
+          }
+        },
+        "mode": "sea",
+        "expect": {
+          "route": null,
+          "errors": [
+            "box_price_invalid"
+          ]
+        }
+      },
+      {
+        "name": "box prices must be a map",
+        "raw": {
+          "boxPricesCents": "5"
+        },
+        "mode": "sea",
+        "expect": {
+          "route": null,
+          "errors": [
+            "box_price_invalid"
+          ]
+        }
+      },
+      {
+        "name": "box prices keep beside items",
+        "raw": {
+          "items": [
+            {
+              "label": "Phone",
+              "categoryId": "electronics",
+              "priceCents": 4000
+            }
+          ],
+          "boxPricesCents": {
+            "medium": 3500
+          }
+        },
+        "mode": "sea",
+        "expect": {
+          "route": {
+            "items": [
+              {
+                "id": "i_phone",
+                "categoryId": "electronics",
+                "label": "Phone",
+                "priceCents": 4000,
+                "includedLb": 0
+              }
+            ],
+            "perLbCents": {},
+            "boxPricesCents": {
+              "medium": 3500
+            },
+            "departure": null
+          },
+          "errors": []
+        }
+      }
+    ],
+    "pieces": [
+      {
+        "name": "medium box, 2 of them",
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            },
+            {
+              "id": "i_tv_43",
+              "categoryId": "fragile",
+              "label": "TV 43 in",
+              "priceCents": 12000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 450
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          },
+          "boxPricesCents": {
+            "small": 2500,
+            "medium": 3500,
+            "large": 5500
+          }
+        },
+        "piece": {
+          "kind": "box",
+          "boxSize": "medium",
+          "quantity": 2
+        },
+        "expect": {
+          "price": {
+            "source": "box_size",
+            "boxSize": "medium",
+            "itemId": "",
+            "label": "Medium box",
+            "categoryId": "",
+            "quantity": 2,
+            "unitCents": 3500,
+            "includedLb": 0,
+            "excessPerLbCents": null,
+            "perLbCents": null,
+            "weightLb": null
+          },
+          "estimateCents": 7000,
+          "description": "2 × Medium box",
+          "error": ""
+        }
+      },
+      {
+        "name": "quantity defaults to 1",
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            },
+            {
+              "id": "i_tv_43",
+              "categoryId": "fragile",
+              "label": "TV 43 in",
+              "priceCents": 12000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 450
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          },
+          "boxPricesCents": {
+            "small": 2500,
+            "medium": 3500,
+            "large": 5500
+          }
+        },
+        "piece": {
+          "kind": "box",
+          "boxSize": "small"
+        },
+        "expect": {
+          "price": {
+            "source": "box_size",
+            "boxSize": "small",
+            "itemId": "",
+            "label": "Small box",
+            "categoryId": "",
+            "quantity": 1,
+            "unitCents": 2500,
+            "includedLb": 0,
+            "excessPerLbCents": null,
+            "perLbCents": null,
+            "weightLb": null
+          },
+          "estimateCents": 2500,
+          "description": "Small box",
+          "error": ""
+        }
+      },
+      {
+        "name": "typed inches win over the chosen size",
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            },
+            {
+              "id": "i_tv_43",
+              "categoryId": "fragile",
+              "label": "TV 43 in",
+              "priceCents": 12000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 450
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          },
+          "boxPricesCents": {
+            "small": 2500,
+            "medium": 3500,
+            "large": 5500
+          }
+        },
+        "piece": {
+          "kind": "box",
+          "boxSize": "small",
+          "dimsIn": {
+            "l": 20,
+            "w": 16,
+            "h": 14
+          },
+          "quantity": 1
+        },
+        "expect": {
+          "price": {
+            "source": "box_size",
+            "boxSize": "medium",
+            "itemId": "",
+            "label": "Medium box",
+            "categoryId": "",
+            "quantity": 1,
+            "unitCents": 3500,
+            "includedLb": 0,
+            "excessPerLbCents": null,
+            "perLbCents": null,
+            "weightLb": null
+          },
+          "estimateCents": 3500,
+          "description": "Medium box",
+          "error": ""
+        }
+      },
+      {
+        "name": "rotated inches 18x24x18 are medium",
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            },
+            {
+              "id": "i_tv_43",
+              "categoryId": "fragile",
+              "label": "TV 43 in",
+              "priceCents": 12000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 450
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          },
+          "boxPricesCents": {
+            "small": 2500,
+            "medium": 3500,
+            "large": 5500
+          }
+        },
+        "piece": {
+          "kind": "box",
+          "dimsIn": {
+            "l": 18,
+            "w": 24,
+            "h": 18
+          }
+        },
+        "expect": {
+          "price": {
+            "source": "box_size",
+            "boxSize": "medium",
+            "itemId": "",
+            "label": "Medium box",
+            "categoryId": "",
+            "quantity": 1,
+            "unitCents": 3500,
+            "includedLb": 0,
+            "excessPerLbCents": null,
+            "perLbCents": null,
+            "weightLb": null
+          },
+          "estimateCents": 3500,
+          "description": "Medium box",
+          "error": ""
+        }
+      },
+      {
+        "name": "a French description, English price label",
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            },
+            {
+              "id": "i_tv_43",
+              "categoryId": "fragile",
+              "label": "TV 43 in",
+              "priceCents": 12000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 450
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          },
+          "boxPricesCents": {
+            "small": 2500,
+            "medium": 3500,
+            "large": 5500
+          }
+        },
+        "piece": {
+          "kind": "box",
+          "boxSize": "medium",
+          "quantity": 3
+        },
+        "ctx": {
+          "lang": "fr"
+        },
+        "expect": {
+          "price": {
+            "source": "box_size",
+            "boxSize": "medium",
+            "itemId": "",
+            "label": "Medium box",
+            "categoryId": "",
+            "quantity": 3,
+            "unitCents": 3500,
+            "includedLb": 0,
+            "excessPerLbCents": null,
+            "perLbCents": null,
+            "weightLb": null
+          },
+          "estimateCents": 10500,
+          "description": "3 × Boîte moyenne",
+          "error": ""
+        }
+      },
+      {
+        "name": "extra large is quoted",
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            },
+            {
+              "id": "i_tv_43",
+              "categoryId": "fragile",
+              "label": "TV 43 in",
+              "priceCents": 12000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 450
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          },
+          "boxPricesCents": {
+            "small": 2500,
+            "medium": 3500,
+            "large": 5500
+          }
+        },
+        "piece": {
+          "kind": "box",
+          "boxSize": "xl",
+          "quantity": 1
+        },
+        "expect": {
+          "price": null,
+          "estimateCents": null,
+          "description": "Extra large box",
+          "error": ""
+        }
+      },
+      {
+        "name": "big inches are extra large and quoted",
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            },
+            {
+              "id": "i_tv_43",
+              "categoryId": "fragile",
+              "label": "TV 43 in",
+              "priceCents": 12000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 450
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          },
+          "boxPricesCents": {
+            "small": 2500,
+            "medium": 3500,
+            "large": 5500
+          }
+        },
+        "piece": {
+          "kind": "box",
+          "dimsIn": {
+            "l": 40,
+            "w": 30,
+            "h": 30
+          }
+        },
+        "expect": {
+          "price": null,
+          "estimateCents": null,
+          "description": "Extra large box",
+          "error": ""
+        }
+      },
+      {
+        "name": "extra large in French",
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            },
+            {
+              "id": "i_tv_43",
+              "categoryId": "fragile",
+              "label": "TV 43 in",
+              "priceCents": 12000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 450
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          },
+          "boxPricesCents": {
+            "small": 2500,
+            "medium": 3500,
+            "large": 5500
+          }
+        },
+        "piece": {
+          "kind": "box",
+          "boxSize": "xl"
+        },
+        "ctx": {
+          "lang": "fr"
+        },
+        "expect": {
+          "price": null,
+          "estimateCents": null,
+          "description": "Très grande boîte",
+          "error": ""
+        }
+      },
+      {
+        "name": "a size the business did not price is quoted",
+        "route": {
+          "items": [],
+          "perLbCents": {},
+          "boxPricesCents": {
+            "small": 2500,
+            "medium": 3500
+          },
+          "departure": null
+        },
+        "piece": {
+          "kind": "box",
+          "boxSize": "large"
+        },
+        "expect": {
+          "price": null,
+          "estimateCents": null,
+          "description": "Large box",
+          "error": ""
+        }
+      },
+      {
+        "name": "an air route has no box prices",
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            },
+            {
+              "id": "i_tv_43",
+              "categoryId": "fragile",
+              "label": "TV 43 in",
+              "priceCents": 12000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 450
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          }
+        },
+        "piece": {
+          "kind": "box",
+          "boxSize": "medium"
+        },
+        "expect": {
+          "price": null,
+          "estimateCents": null,
+          "description": "Medium box",
+          "error": ""
+        }
+      },
+      {
+        "name": "no route at all",
+        "route": null,
+        "piece": {
+          "kind": "box",
+          "boxSize": "medium"
+        },
+        "expect": {
+          "price": null,
+          "estimateCents": null,
+          "description": "Medium box",
+          "error": ""
+        }
+      },
+      {
+        "name": "unknown size",
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            },
+            {
+              "id": "i_tv_43",
+              "categoryId": "fragile",
+              "label": "TV 43 in",
+              "priceCents": 12000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 450
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          },
+          "boxPricesCents": {
+            "small": 2500,
+            "medium": 3500,
+            "large": 5500
+          }
+        },
+        "piece": {
+          "kind": "box",
+          "boxSize": "huge"
+        },
+        "expect": {
+          "price": null,
+          "estimateCents": null,
+          "description": "",
+          "error": "box_size_invalid"
+        }
+      },
+      {
+        "name": "zero inches",
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            },
+            {
+              "id": "i_tv_43",
+              "categoryId": "fragile",
+              "label": "TV 43 in",
+              "priceCents": 12000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 450
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          },
+          "boxPricesCents": {
+            "small": 2500,
+            "medium": 3500,
+            "large": 5500
+          }
+        },
+        "piece": {
+          "kind": "box",
+          "dimsIn": {
+            "l": 0,
+            "w": 16,
+            "h": 14
+          }
+        },
+        "expect": {
+          "price": null,
+          "estimateCents": null,
+          "description": "",
+          "error": "dims_invalid"
+        }
+      },
+      {
+        "name": "NaN inches",
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            },
+            {
+              "id": "i_tv_43",
+              "categoryId": "fragile",
+              "label": "TV 43 in",
+              "priceCents": 12000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 450
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          },
+          "boxPricesCents": {
+            "small": 2500,
+            "medium": 3500,
+            "large": 5500
+          }
+        },
+        "piece": {
+          "kind": "box",
+          "dimsIn": {
+            "l": "NaN",
+            "w": 16,
+            "h": 14
+          }
+        },
+        "expect": {
+          "price": null,
+          "estimateCents": null,
+          "description": "",
+          "error": "dims_invalid"
+        }
+      },
+      {
+        "name": "inches over 120",
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            },
+            {
+              "id": "i_tv_43",
+              "categoryId": "fragile",
+              "label": "TV 43 in",
+              "priceCents": 12000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 450
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          },
+          "boxPricesCents": {
+            "small": 2500,
+            "medium": 3500,
+            "large": 5500
+          }
+        },
+        "piece": {
+          "kind": "box",
+          "dimsIn": {
+            "l": 121,
+            "w": 16,
+            "h": 14
+          }
+        },
+        "expect": {
+          "price": null,
+          "estimateCents": null,
+          "description": "",
+          "error": "dims_invalid"
+        }
+      },
+      {
+        "name": "inches as text",
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            },
+            {
+              "id": "i_tv_43",
+              "categoryId": "fragile",
+              "label": "TV 43 in",
+              "priceCents": 12000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 450
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          },
+          "boxPricesCents": {
+            "small": 2500,
+            "medium": 3500,
+            "large": 5500
+          }
+        },
+        "piece": {
+          "kind": "box",
+          "dimsIn": "20x16x14"
+        },
+        "expect": {
+          "price": null,
+          "estimateCents": null,
+          "description": "",
+          "error": "dims_invalid"
+        }
+      },
+      {
+        "name": "bad inches beat a good size",
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            },
+            {
+              "id": "i_tv_43",
+              "categoryId": "fragile",
+              "label": "TV 43 in",
+              "priceCents": 12000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 450
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          },
+          "boxPricesCents": {
+            "small": 2500,
+            "medium": 3500,
+            "large": 5500
+          }
+        },
+        "piece": {
+          "kind": "box",
+          "boxSize": "small",
+          "dimsIn": {
+            "l": 0,
+            "w": 16,
+            "h": 14
+          }
+        },
+        "expect": {
+          "price": null,
+          "estimateCents": null,
+          "description": "",
+          "error": "dims_invalid"
+        }
+      },
+      {
+        "name": "good inches beat a bad size",
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            },
+            {
+              "id": "i_tv_43",
+              "categoryId": "fragile",
+              "label": "TV 43 in",
+              "priceCents": 12000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 450
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          },
+          "boxPricesCents": {
+            "small": 2500,
+            "medium": 3500,
+            "large": 5500
+          }
+        },
+        "piece": {
+          "kind": "box",
+          "boxSize": "huge",
+          "dimsIn": {
+            "l": 20,
+            "w": 16,
+            "h": 14
+          }
+        },
+        "expect": {
+          "price": {
+            "source": "box_size",
+            "boxSize": "medium",
+            "itemId": "",
+            "label": "Medium box",
+            "categoryId": "",
+            "quantity": 1,
+            "unitCents": 3500,
+            "includedLb": 0,
+            "excessPerLbCents": null,
+            "perLbCents": null,
+            "weightLb": null
+          },
+          "estimateCents": 3500,
+          "description": "Medium box",
+          "error": ""
+        }
+      },
+      {
+        "name": "quantity 0",
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            },
+            {
+              "id": "i_tv_43",
+              "categoryId": "fragile",
+              "label": "TV 43 in",
+              "priceCents": 12000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 450
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          },
+          "boxPricesCents": {
+            "small": 2500,
+            "medium": 3500,
+            "large": 5500
+          }
+        },
+        "piece": {
+          "kind": "box",
+          "boxSize": "small",
+          "quantity": 0
+        },
+        "expect": {
+          "price": null,
+          "estimateCents": null,
+          "description": "",
+          "error": "quantity_invalid"
+        }
+      },
+      {
+        "name": "quantity 51",
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            },
+            {
+              "id": "i_tv_43",
+              "categoryId": "fragile",
+              "label": "TV 43 in",
+              "priceCents": 12000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 450
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          },
+          "boxPricesCents": {
+            "small": 2500,
+            "medium": 3500,
+            "large": 5500
+          }
+        },
+        "piece": {
+          "kind": "box",
+          "boxSize": "small",
+          "quantity": 51
+        },
+        "expect": {
+          "price": null,
+          "estimateCents": null,
+          "description": "",
+          "error": "quantity_invalid"
+        }
+      },
+      {
+        "name": "a box with neither size nor inches stays unpriced",
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            },
+            {
+              "id": "i_tv_43",
+              "categoryId": "fragile",
+              "label": "TV 43 in",
+              "priceCents": 12000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 450
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          },
+          "boxPricesCents": {
+            "small": 2500,
+            "medium": 3500,
+            "large": 5500
+          }
+        },
+        "piece": {
+          "kind": "box",
+          "description": "Blue box"
+        },
+        "expect": {
+          "price": null,
+          "estimateCents": null,
+          "description": "",
+          "error": ""
+        }
+      },
+      {
+        "name": "empty inches count as none",
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            },
+            {
+              "id": "i_tv_43",
+              "categoryId": "fragile",
+              "label": "TV 43 in",
+              "priceCents": 12000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 450
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          },
+          "boxPricesCents": {
+            "small": 2500,
+            "medium": 3500,
+            "large": 5500
+          }
+        },
+        "piece": {
+          "kind": "box",
+          "dimsIn": {
+            "l": "",
+            "w": null
+          },
+          "boxSize": "large"
+        },
+        "expect": {
+          "price": {
+            "source": "box_size",
+            "boxSize": "large",
+            "itemId": "",
+            "label": "Large box",
+            "categoryId": "",
+            "quantity": 1,
+            "unitCents": 5500,
+            "includedLb": 0,
+            "excessPerLbCents": null,
+            "perLbCents": null,
+            "weightLb": null
+          },
+          "estimateCents": 5500,
+          "description": "Large box",
+          "error": ""
+        }
+      },
+      {
+        "name": "a size on a barrel is ignored",
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            },
+            {
+              "id": "i_tv_43",
+              "categoryId": "fragile",
+              "label": "TV 43 in",
+              "priceCents": 12000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 450
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          },
+          "boxPricesCents": {
+            "small": 2500,
+            "medium": 3500,
+            "large": 5500
+          }
+        },
+        "piece": {
+          "kind": "barrel",
+          "boxSize": "small"
+        },
+        "ctx": {
+          "barrelPriceCents": 12500
+        },
+        "expect": {
+          "price": {
+            "source": "barrel",
+            "itemId": "",
+            "label": "Barrel",
+            "categoryId": "",
+            "quantity": 1,
+            "unitCents": 12500,
+            "includedLb": 0,
+            "excessPerLbCents": null,
+            "perLbCents": null,
+            "weightLb": null
+          },
+          "estimateCents": 12500,
+          "description": "",
+          "error": ""
+        }
+      },
+      {
+        "name": "a per-pound French description",
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            },
+            {
+              "id": "i_tv_43",
+              "categoryId": "fragile",
+              "label": "TV 43 in",
+              "priceCents": 12000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 450
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          },
+          "boxPricesCents": {
+            "small": 2500,
+            "medium": 3500,
+            "large": 5500
+          }
+        },
+        "piece": {
+          "categoryId": "clothing",
+          "weightLb": 20
+        },
+        "ctx": {
+          "lang": "fr"
+        },
+        "expect": {
+          "price": {
+            "source": "per_lb",
+            "itemId": "",
+            "label": "Clothes and fabric",
+            "categoryId": "clothing",
+            "quantity": 1,
+            "unitCents": null,
+            "includedLb": 0,
+            "excessPerLbCents": null,
+            "perLbCents": 600,
+            "weightLb": 20
+          },
+          "estimateCents": 12000,
+          "description": "Vêtements et tissus · 20 lb",
+          "error": ""
+        }
+      }
+    ],
+    "baskets": [
+      {
+        "name": "two boxes and a laptop, pickup fee",
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            },
+            {
+              "id": "i_tv_43",
+              "categoryId": "fragile",
+              "label": "TV 43 in",
+              "priceCents": 12000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 450
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          },
+          "boxPricesCents": {
+            "small": 2500,
+            "medium": 3500,
+            "large": 5500
+          }
+        },
+        "ctx": {
+          "pickupFeeCents": 1500
+        },
+        "pieces": [
+          {
+            "kind": "box",
+            "boxSize": "medium",
+            "quantity": 2
+          },
+          {
+            "kind": "box",
+            "dimsIn": {
+              "l": 10,
+              "w": 10,
+              "h": 10
+            }
+          },
+          {
+            "priceItemId": "i_laptop"
+          }
+        ],
+        "expect": {
+          "pieces": [
+            {
+              "price": {
+                "source": "box_size",
+                "boxSize": "medium",
+                "itemId": "",
+                "label": "Medium box",
+                "categoryId": "",
+                "quantity": 2,
+                "unitCents": 3500,
+                "includedLb": 0,
+                "excessPerLbCents": null,
+                "perLbCents": null,
+                "weightLb": null
+              },
+              "estimateCents": 7000,
+              "description": "2 × Medium box",
+              "error": ""
+            },
+            {
+              "price": {
+                "source": "box_size",
+                "boxSize": "small",
+                "itemId": "",
+                "label": "Small box",
+                "categoryId": "",
+                "quantity": 1,
+                "unitCents": 2500,
+                "includedLb": 0,
+                "excessPerLbCents": null,
+                "perLbCents": null,
+                "weightLb": null
+              },
+              "estimateCents": 2500,
+              "description": "Small box",
+              "error": ""
+            },
+            {
+              "price": {
+                "source": "item",
+                "itemId": "i_laptop",
+                "label": "Laptop",
+                "categoryId": "electronics",
+                "quantity": 1,
+                "unitCents": 7000,
+                "includedLb": 0,
+                "excessPerLbCents": null,
+                "perLbCents": null,
+                "weightLb": null
+              },
+              "estimateCents": 7000,
+              "description": "Laptop",
+              "error": ""
+            }
+          ],
+          "pricedCents": 18000,
+          "unpricedCount": 0,
+          "allPriced": true,
+          "totalCents": 18000,
+          "weighsAtCounter": false,
+          "errors": []
+        }
+      },
+      {
+        "name": "an extra large box leaves the total open",
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            },
+            {
+              "id": "i_tv_43",
+              "categoryId": "fragile",
+              "label": "TV 43 in",
+              "priceCents": 12000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 450
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          },
+          "boxPricesCents": {
+            "small": 2500,
+            "medium": 3500,
+            "large": 5500
+          }
+        },
+        "ctx": {},
+        "pieces": [
+          {
+            "kind": "box",
+            "boxSize": "large"
+          },
+          {
+            "kind": "box",
+            "dimsIn": {
+              "l": 36,
+              "w": 30,
+              "h": 30
+            }
+          }
+        ],
+        "expect": {
+          "pieces": [
+            {
+              "price": {
+                "source": "box_size",
+                "boxSize": "large",
+                "itemId": "",
+                "label": "Large box",
+                "categoryId": "",
+                "quantity": 1,
+                "unitCents": 5500,
+                "includedLb": 0,
+                "excessPerLbCents": null,
+                "perLbCents": null,
+                "weightLb": null
+              },
+              "estimateCents": 5500,
+              "description": "Large box",
+              "error": ""
+            },
+            {
+              "price": null,
+              "estimateCents": null,
+              "description": "Extra large box",
+              "error": ""
+            }
+          ],
+          "pricedCents": 5500,
+          "unpricedCount": 1,
+          "allPriced": false,
+          "totalCents": null,
+          "weighsAtCounter": false,
+          "errors": []
+        }
+      },
+      {
+        "name": "a bad size is reported",
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            },
+            {
+              "id": "i_tv_43",
+              "categoryId": "fragile",
+              "label": "TV 43 in",
+              "priceCents": 12000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 450
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          },
+          "boxPricesCents": {
+            "small": 2500,
+            "medium": 3500,
+            "large": 5500
+          }
+        },
+        "ctx": {},
+        "pieces": [
+          {
+            "kind": "box",
+            "boxSize": "huge"
+          }
+        ],
+        "expect": {
+          "pieces": [
+            {
+              "price": null,
+              "estimateCents": null,
+              "description": "",
+              "error": "box_size_invalid"
+            }
+          ],
+          "pricedCents": 0,
+          "unpricedCount": 1,
+          "allPriced": false,
+          "totalCents": null,
+          "weighsAtCounter": false,
+          "errors": [
+            "box_size_invalid"
+          ]
+        }
+      }
+    ]
+  }
 }

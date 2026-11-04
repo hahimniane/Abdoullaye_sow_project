@@ -45,6 +45,109 @@ describe("package price list, the shared cases", () => {
   }
 });
 
+describe("package price list, box sizes (shared cases)", () => {
+  const box = fixture.boxSizes;
+  it("has its cases", () => {
+    assert.ok(box.sizeFor.length >= 20);
+    assert.ok(box.dims.length >= 5);
+    assert.ok(box.routes.length >= 10);
+    assert.ok(box.pieces.length >= 20);
+    assert.ok(box.baskets.length >= 3);
+  });
+  it("lists the four sizes Laawol sets", () => {
+    assert.deepEqual(pl.BOX_SIZES.map((b) => b.id),
+        ["small", "medium", "large", "xl"]);
+    assert.equal(pl.BOX_SLACK_IN, 1);
+    assert.equal(pl.BOX_DIM_MAX_IN, 120);
+    assert.equal(pl.BOX_SIZES[3].maxIn, null);
+  });
+  for (const c of box.sizeFor) {
+    it(`size: ${c.name}`, () => {
+      assert.equal(pl.boxSizeFor(c.dims), c.expect);
+    });
+  }
+  for (const c of box.dims) {
+    it(`dims: ${c.name}`, () => {
+      assert.deepEqual(pl.cleanDims(c.raw), c.expect);
+    });
+  }
+  for (const c of box.routes) {
+    it(`box route: ${c.name}`, () => {
+      assert.deepEqual(pl.validateRoute(c.raw, c.mode), c.expect);
+    });
+  }
+  for (const c of box.pieces) {
+    it(`box piece: ${c.name}`, () => {
+      assert.deepEqual(pl.pricePiece(c.route, c.piece, c.ctx || {}),
+          c.expect);
+    });
+  }
+  for (const c of box.baskets) {
+    it(`box basket: ${c.name}`, () => {
+      assert.deepEqual(pl.priceBasket(c.route, c.pieces, c.ctx), c.expect);
+    });
+  }
+});
+
+describe("package price list, box sizes (the rules)", () => {
+  const route = {items: [], perLbCents: {}, departure: null,
+    boxPricesCents: {small: 2500, medium: 3500, large: 5500}};
+  const stored = (piece, at) => {
+    const out = pl.pricePiece(at, piece);
+    return {id: "p1", ...piece, price: out.price,
+      estimateCents: out.estimateCents};
+  };
+
+  it("a whole list refuses box prices on an air route", () => {
+    const {routes, errors} = pl.validatePriceList({routes: {gn: {
+      air: {boxPricesCents: {small: 2500}},
+      sea: {boxPricesCents: {small: 2500}}}}}, ["gn"]);
+    assert.equal(routes, null);
+    assert.deepEqual(errors, ["box_sizes_sea_only"]);
+  });
+
+  it("a whole list keeps Sea box prices", () => {
+    const {routes, errors} = pl.validatePriceList({routes: {gn: {
+      sea: {boxPricesCents: {small: 2500, medium: 3500}}}}}, ["gn"]);
+    assert.deepEqual(errors, []);
+    assert.deepEqual(routes.gn.sea.boxPricesCents,
+        {small: 2500, medium: 3500});
+  });
+
+  it("the new refusals have messages", () => {
+    for (const code of ["box_sizes_sea_only", "box_price_invalid",
+      "box_size_invalid", "dims_invalid"]) {
+      assert.ok(pl.PRICE_LIST_MESSAGES[code], code);
+    }
+  });
+
+  it("the counter does not move a box price", () => {
+    const {price} = pl.pricePiece(route, {kind: "box", boxSize: "medium",
+      quantity: 2});
+    assert.equal(pl.counterPriceCents(price, 99), 7000);
+  });
+
+  it("re-prices a box at today's list", () => {
+    const before = [stored({kind: "box", boxSize: "medium", quantity: 2},
+        route)];
+    const dearer = {...route, boxPricesCents: {...route.boxPricesCents,
+      medium: 4000}};
+    const out = pl.repricePieces(before, dearer);
+    assert.equal(out.changed, true);
+    assert.equal(out.wentUp, true);
+    assert.equal(out.cents.get("p1"), 8000);
+    assert.equal(out.pieces[0].price.unitCents, 4000);
+    assert.equal(pl.repricePieces(before, route).changed, false);
+  });
+
+  it("a box whose size left the list keeps its price", () => {
+    const before = [stored({kind: "box", boxSize: "medium"}, route)];
+    const out = pl.repricePieces(before, {...route, boxPricesCents: {}});
+    assert.equal(out.changed, false);
+    assert.equal(out.pieces[0].estimateCents, 3500);
+  });
+});
+
 describe("package price list, the rules", () => {
   it("prices a phone box packed out with shoes at the excess rate", () => {
     const {price} = pl.pricePiece(fixture.route, {priceItemId: "i_phone"});

@@ -234,6 +234,12 @@ const {
 // pure rules share names (toMillis, moneyText) with helpers in this file.
 const packageRequests = require("./package_requests");
 const packagePriceList = require("./package_price_list");
+// Pay now on package requests (docs/PACKAGE_BOX_SIZES_PAY_NOW.md §3): the
+// pure rules, and the glue that index.js wires further down.
+const packagePayNow = require("./package_pay_now");
+const {
+  createPackagePayNowHandlers,
+} = require("./package_pay_now_handlers");
 const packageFlow = require("./whatsapp_package_flow");
 const requestReceive = require("./request_receive");
 const {
@@ -9999,6 +10005,16 @@ exports.handleBusinessProStripeWebhook = onRequest(
           res.status(200).json({received: true, duplicate: true});
           return;
         }
+        // Pay now on a package request keeps its record on the request
+        // itself (packageRequests.payNow), which the generic reconciler
+        // has no route for: handled here, direct (connected account) and
+        // platform charges alike.
+        if (await packagePayNowHandlers.handleStripeEvent(event)) {
+          await finishStripeWebhookEvent(event.id, "completed", {
+            paymentHandled: true, source: "package_request_pay"});
+          res.status(200).json({received: true});
+          return;
+        }
         const checkoutIntentBound = await bindCheckoutPaymentIntent(event);
         const checkoutFailureHandled =
           await reconcileCustomerCheckoutFailure(event);
@@ -14364,6 +14380,9 @@ exports.parkingPaymentLink = onRequest(
         // The same durable /p link also carries lot-activity tokens, whose
         // records live in lotActivities rather than parkedCars.
         if (await resolveLotActivityPaymentLink(db, token, res, req)) return;
+        // ... and package request pay tokens (docs/PACKAGE_BOX_SIZES_PAY_NOW
+        // .md §3), whose records live in packageRequests.
+        if (await packagePayNowHandlers.resolveLink(token, res)) return;
         return res.status(404).send(parkingPaymentLinkPage({
           title: "Link not found",
           message: "This payment link is not valid. Ask the " +
@@ -15359,8 +15378,9 @@ async function parkingInvoiceRunView(db, run) {
 
 /**
  * updateBusinessParkingEntry's invoice actions, which are about the whole
- * business rather than one car (docs/PARKING_INVOICES.md §2): owner (or
- * platform admin) only.
+ * business rather than one car (docs/PARKING_INVOICES.md §2): anyone with
+ * the parking section previews and sends; the payment instructions are the
+ * owner's (or a platform admin's).
  *   set_payment_instructions {businessId, text}
  *   invoices_preview {businessId, monthKey?}
  *   invoices_send {businessId, monthKey, phones?}
@@ -15381,7 +15401,10 @@ async function parkingInvoicesAction(request, uid, action) {
         {reason: "business_required"});
   }
   const user = await requireBusinessPermission(uid, businessId, "parking");
-  if (user.role !== "businessOwner" && user.role !== "admin") {
+  // Sending the month's invoices is any parking staff's job (owner,
+  // 2026-11-04); the "How to pay" text stays the owner's.
+  if (action === "set_payment_instructions" &&
+      user.role !== "businessOwner" && user.role !== "admin") {
     throw parkingInvoicesRefusal(parkingInvoices.REFUSAL.OWNER_ONLY,
         "permission-denied");
   }
@@ -23669,6 +23692,15 @@ function packageFlowEndpoint() {
   const db = admin.firestore();
   const sessions = db.collection(PACKAGE_FLOW_SESSIONS);
   packageFlowService = packageFlow.createPackageFlow({
+    // Photos the customer picks on the BOXES screen: staged, then copied
+    // to the request's folder at REVIEW (whatsapp_flow_media.js).
+    storePhoto: (path, buffer, contentType) =>
+      requestPhotoBucket().file(path).save(buffer,
+          {contentType, resumable: false}),
+    copyPhoto: (from, to) => requestPhotoBucket().file(from)
+        .copy(requestPhotoBucket().file(to)),
+    deletePhoto: (path) => requestPhotoBucket().file(path)
+        .delete({ignoreNotFound: true}),
     loadSession: async (token) => {
       if (!/^[A-Za-z0-9_-]{16,64}$/.test(token)) return null;
       const snap = await sessions.doc(token).get();
@@ -47261,6 +47293,48 @@ exports.platformBilling = onCall(
 // ===========================================================================
 
 const PACKAGE_REQUESTS = "packageRequests";
+
+// Pay now (docs/PACKAGE_BOX_SIZES_PAY_NOW.md §3): the optional card link on a
+// request whose price is final. Rules in package_pay_now.js, glue in
+// package_pay_now_handlers.js; it adds no function: the link is a third
+// resolver of parkingPaymentLink, the paid event a branch of the Stripe
+// webhook, and the staff actions (pay_refund, pay_resend, payouts,
+// payout_paid) are actions of setPackageRequestSettings.
+const packagePayNowHandlers = createPackagePayNowHandlers({
+  admin,
+  logger,
+  HttpsError,
+  FieldValue: FirestoreFieldValue,
+  stripe: {
+    createCheckoutSession: createStripeCustomerCheckoutSession,
+    retrieveCheckoutSession: retrieveStripeCheckoutSession,
+    retrievePaymentIntent: retrieveStripePaymentIntent,
+    createRefund: createStripeRefund,
+    retrieveCharge: retrieveStripeCharge,
+    retrieveBalanceTransaction: retrieveStripeBalanceTransaction,
+    stripeOnlyFeeCents,
+    reusable: parkingCheckoutSessionReusable,
+  },
+  sendWhatsApp: sendWhatsAppMessage,
+  whatsappConfigured: () => containerWhatsAppConfigured(),
+  stoppedErrorCode: WHATSAPP_STOPPED_ERROR_CODE,
+  linkUrl: parkingPaymentLinkUrl,
+  page: parkingPaymentLinkPage,
+  // Where Stripe sends the customer back: their own request page.
+  returnUrls: (request) => {
+    const page = `${normalizedConsoleUrl(process.env.CUSTOMER_CONSOLE_URL)}` +
+      `/e/${encodeURIComponent(String(request.token || ""))}`;
+    return {successUrl: `${page}?paid=1`, cancelUrl: `${page}?paid=0`};
+  },
+  notifyStaff: notifyPackageRequestStaff,
+  appendHistory: packageRequests.appendHistory,
+  setAdminAuditLog,
+  requireAuth,
+  getUserProfile,
+  hasAdminCapability,
+  hasAdminSectionAccess,
+  canManageBusiness,
+});
 const REQUEST_LINK_BASE = "https://laawoldigital.com/r/";
 const REQUEST_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 const REQUEST_CODE_ALPHABET = "23456789BCDFGHJKMNPQRSTVWXYZ";
@@ -47638,11 +47712,12 @@ async function deliverPackageRequestMessage(db, rowRef, row, claim) {
  * (push + bell, §8.7). Best-effort.
  *
  * @param {object} db Firestore.
- * @param {object} args {businessId, requestId, request, event}.
+ * @param {object} args {businessId, requestId, request, event, words
+ *   (optional: language => {title, body})}.
  * @return {Promise<number>} How many people were told.
  */
 async function notifyPackageRequestStaff(db, {businessId, requestId, request,
-  event}) {
+  event, words: customWords}) {
   try {
     const [businessDoc, staffSnap] = await Promise.all([
       db.collection("businesses").doc(businessId).get(),
@@ -47664,8 +47739,10 @@ async function notifyPackageRequestStaff(db, {businessId, requestId, request,
       }
     }
     await Promise.all([...people.values()].map((user) => {
-      const words = packageRequests.requestNotificationText(event, request,
-          recipientLanguage(user));
+      const words = typeof customWords === "function" ?
+        customWords(recipientLanguage(user)) :
+        packageRequests.requestNotificationText(event, request,
+            recipientLanguage(user));
       return safeSendPreferenceNotification({
         uid: user.id,
         preferenceKey: "businessActivity",
@@ -47723,6 +47800,9 @@ function closeRequestPatch(request, status, entry, nowMs, reason = "") {
     lock: null,
     closedAt: FirestoreTimestamp.fromMillis(nowMs),
     closedAtMs: nowMs,
+    // An unpaid pay link closes with the request; a paid one stays (staff
+    // refund it by hand).
+    ...packagePayNow.closePatch(request, nowMs),
     history: packageRequests.appendHistory(request.history,
         {...entry, atMs: nowMs, ...(reason ? {reason} : {})}),
   });
@@ -48116,6 +48196,8 @@ async function createPackageRequest(db, {uid, anonymous, data, mapsKey}) {
   const stored = (await requestRef.get()).data() || {};
   await notifyPackageRequestStaff(db, {businessId,
     requestId: requestRef.id, request: stored, event: "new"});
+  // Priced in full and confirmed in the form: the optional pay link.
+  if (confirmedByForm) await packagePayNowHandlers.syncRequest(requestRef.id);
   // The sender's and receiver's accounts (docs/PHONE_ACCOUNTS.md §3.1).
   await phoneAccounts.afterRecordWrite(PACKAGE_REQUESTS, requestRef.id);
   return {success: true, requestId: requestRef.id, code, token,
@@ -48142,9 +48224,16 @@ exports.getPackageRequestByToken = onCall(
           .doc(String(row.businessId || "-")).get();
       const business = businessDoc.data() || {};
       const settings = packageRequests.requestSettingsOf(business);
-      return {request: packageRequests.publicRequestView(doc.id, row,
+      // Pay now (docs/PACKAGE_BOX_SIZES_PAY_NOW.md §3): the link only while
+      // the price is final and the switch is on.
+      const payNow = packagePayNow.publicPayNow(row.payNow);
+      if (payNow && payNow.status === "open" && !packagePayNow.payNowState(
+          row, packagePayNow.payNowSettingsOf(business)).payable) {
+        payNow.linkUrl = "";
+      }
+      return {request: {...packageRequests.publicRequestView(doc.id, row,
           business, {hours: settings.openingHours[
-              String(row.locationId || "")] || null})};
+              String(row.locationId || "")] || null}), payNow}};
     },
 );
 
@@ -48194,6 +48283,8 @@ exports.confirmPackageEstimate = onCall(
       enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
       invoker: "public",
+      // The optional pay link goes out on confirming (Pay now).
+      secrets: [whatsappAccessToken, whatsappPhoneNumberId],
     },
     async (request) => {
       await enforceCallableRateLimit(request, {
@@ -48238,6 +48329,7 @@ exports.confirmPackageEstimate = onCall(
         await notifyPackageRequestStaff(db, {
           businessId: String(outcome.row.businessId), requestId: doc.id,
           request: outcome.row, event: "confirmed"});
+        await packagePayNowHandlers.syncRequest(doc.id);
       }
       const confirmedVersion = outcome.already ?
         outcome.row.confirmedVersion : version;
@@ -48480,6 +48572,7 @@ async function repriceOpenPackageRequests(db, {businessId, routes,
       await queuePackageRequestMessage(db, {requestId: doc.id,
         update: `estimate_v${queued.version}`});
     }
+    await packagePayNowHandlers.syncRequest(doc.id);
   }
   return changedCount;
 }
@@ -48507,8 +48600,15 @@ function publicPriceListDoc(doc) {
 
 exports.setPackageRequestSettings = onCall(
     {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public",
-      maxInstances: 1},
+      maxInstances: 1,
+      // Pay now's staff actions refund on Stripe and message on WhatsApp.
+      secrets: [stripeSecretKey, whatsappAccessToken, whatsappPhoneNumberId]},
     async (request) => {
+      // Pay now (docs/PACKAGE_BOX_SIZES_PAY_NOW.md §3): refund, resend, the
+      // weekly payouts. Each checks its own caller.
+      if (packagePayNowHandlers.isAction(request.data?.action)) {
+        return packagePayNowHandlers.handleAction(request);
+      }
       const uid = requireAuth(request);
       const data = request.data || {};
       const businessId = String(data.businessId || "").trim();
@@ -48537,6 +48637,11 @@ exports.setPackageRequestSettings = onCall(
         timeZone: business.packageRequestSettings?.timeZone,
       }, {locationIds: locations.map((loc) => String(loc.id))});
       if (checked.errors.length > 0) throw requestInvalid(checked.errors);
+      // Pay now is the old card switch extended to every priced item: one
+      // switch, both fields always the same value.
+      const payNowOn = packagePayNow.payNowFromInput(data);
+      checked.settings.payNow = payNowOn;
+      checked.settings.cardBarrelBooking = payNowOn;
       // The proof switches (docs/AIR_PACKAGES.md §2): saved here, by the
       // same owner, when the request names them; read back from the
       // business document (`packageProofSettings`), which the console and
@@ -48604,9 +48709,15 @@ exports.setPackageRequestSettings = onCall(
         return wanted;
       });
       await bumpPublicCatalogVersion();
+      const chargeType = packagePayNow.chargeTypeOf(business);
       return {success: true, requestSlug: slug,
         requestLink: `${REQUEST_LINK_BASE}${slug}`,
         settings: checked.settings,
+        payNow: payNowOn,
+        // What a card charge would be today, and whether the business has
+        // Stripe connected (money goes straight to it).
+        payNowChargeType: chargeType,
+        stripeConnected: chargeType === packagePayNow.CHARGE_TYPE.DIRECT,
         proof: proof ? proof.settings :
           packageProof.proofSettingsOf(business)};
     },
@@ -48746,6 +48857,8 @@ exports.sendPackageEstimate = onCall(
       });
       await queuePackageRequestMessage(db, {requestId: ref.id,
         update: `estimate_v${sent.version}`});
+      // A confirmed request whose price moved keeps (or changes) its pay link.
+      await packagePayNowHandlers.syncRequest(ref.id);
       return {success: true, version: sent.version, status: sent.status,
         totalCents: sent.totalCents,
         reconfirmRequired: sent.reconfirmRequired,
@@ -48754,7 +48867,8 @@ exports.sendPackageEstimate = onCall(
 );
 
 exports.confirmPackageRequestByPhone = onCall(
-    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public"},
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public",
+      secrets: [whatsappAccessToken, whatsappPhoneNumberId]},
     async (request) => {
       const uid = requireAuth(request);
       const db = admin.firestore();
@@ -48787,6 +48901,7 @@ exports.confirmPackageRequestByPhone = onCall(
         }));
         return false;
       });
+      if (!already) await packagePayNowHandlers.syncRequest(ref.id);
       return {success: true, status: packageRequests.STATUS.CONFIRMED,
         alreadyConfirmed: already};
     },
@@ -48878,10 +48993,14 @@ exports.receivePackageRequest = onCall(
       const totalCents = requestReceive.receivedTotalCents(pieces,
           fee.pickupFeeCents);
       const payment = containerRegistrationPayment(data);
+      // Paid online with Pay now: the counter does not charge it again
+      // (paid - refunded, never more than the price).
+      const payNowCredit = card ? 0 :
+        packagePayNowHandlers.receiveCredit(first, totalCents);
       if (payment && card) errors.push("card_order");
       if (payment && !card) {
         errors.push(...validateContainerLinePayment(payment, {
-          priceCents: totalCents, paidCents: 0}));
+          priceCents: totalCents, paidCents: payNowCredit}));
       }
       // Proof on the package (docs/AIR_PACKAGES.md §4.2): what staff typed
       // at the counter, checked as on any new line.
@@ -48934,6 +49053,15 @@ exports.receivePackageRequest = onCall(
           source: "card_order"} : null);
       const payRef = paymentRecord ?
         db.collection("containerLinePayments").doc() : null;
+      // The online payment, recorded the way a card order's is (source
+      // "card_order": an online payment nobody holds in hand).
+      const payNowRecord = payNowCredit > 0 ? {
+        amountCents: payNowCredit, method: "card_online",
+        note: "Paid online by card (Pay now)", receivedByStaffId: uid,
+        recordedByStaffId: uid, reverted: false, source: "card_order",
+        payNow: true} : null;
+      const payNowRef = payNowRecord ?
+        db.collection("containerLinePayments").doc() : null;
       const name = requestStaffName(user);
       const result = await db.runTransaction(async (tx) => {
         const row = await readBusinessRequestIn(tx, ref, businessId);
@@ -48944,6 +49072,14 @@ exports.receivePackageRequest = onCall(
         if (!packageRequests.isOpenStatus(row.status)) {
           throw requestError("failed-precondition", "request_closed",
               {status: row.status});
+        }
+        // The online payment moved (paid or refunded) while this was
+        // being typed: look again before the counter takes money.
+        if (!card && packagePayNow.netPaidCents(row.payNow) !==
+            packagePayNow.netPaidCents(first.payNow)) {
+          throw new HttpsError("failed-precondition",
+              packagePayNow.MESSAGES.pay_now_changed,
+              {reason: "pay_now_changed", reasons: ["pay_now_changed"]});
         }
         // Re-read against the request as it is now: its pieces decide which
         // ids are its own.
@@ -48969,7 +49105,8 @@ exports.receivePackageRequest = onCall(
           declaredValueCents: proof.fields.declaredValueCents,
           shipMode: data.shipMode ? shipMode : shipModeOf(row.shipMode),
         });
-        const paidCents = paymentRecord ? paymentRecord.amountCents : 0;
+        const paidCents = (paymentRecord ? paymentRecord.amountCents : 0) +
+          (payNowRecord ? payNowRecord.amountCents : 0);
         tx.set(lineRef, {
           businessId,
           ...line,
@@ -48983,7 +49120,17 @@ exports.receivePackageRequest = onCall(
           tx.set(payRef, {businessId, lineId: lineRef.id, ...paymentRecord,
             createdAt: FirestoreFieldValue.serverTimestamp()});
         }
+        if (payNowRef) {
+          tx.set(payNowRef, {businessId, lineId: lineRef.id,
+            ...payNowRecord,
+            createdAt: FirestoreFieldValue.serverTimestamp()});
+        }
         tx.update(ref, requestPatch(row, {
+          // A link nobody paid closes with the request (the counter takes
+          // the money); a paid one remembers which line payment it became.
+          ...(payNowRef ? {payNow: {...row.payNow,
+            linePaymentId: payNowRef.id, receivedLineId: lineRef.id,
+            updatedAtMs: nowMs}} : packagePayNow.closePatch(row, nowMs)),
           status: packageRequests.STATUS.RECEIVED,
           lineId: lineRef.id,
           trackingCode,
