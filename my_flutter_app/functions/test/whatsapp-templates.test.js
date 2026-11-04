@@ -573,10 +573,11 @@ describe("the parking templates", () => {
     parameters: [{type: "text", text: "PK-K7M4P2"}]};
   const text = (value) => ({type: "text", text: value});
 
-  it("names the four templates, bilingual and registered under en", () => {
+  it("names the five templates, bilingual and registered under en", () => {
     assert.deepEqual(Object.values(PARKING_TEMPLATE), [
       "parking_parked_2lang", "parking_receipt_2lang",
-      "parking_welcome_2lang", "parking_invoice_2lang"]);
+      "parking_welcome_2lang", "parking_invoice_2lang",
+      "parking_invoice_nb_2lang"]);
     for (const name of Object.values(PARKING_TEMPLATE)) {
       assert.equal(message(name).template.language.code, "en");
       assert.equal(message(name).to, "13475550199");
@@ -584,6 +585,17 @@ describe("the parking templates", () => {
     assert.equal(parkingTemplateMessage({template: "nope", phone: "1"}),
         null);
   });
+
+  it("parking_invoice_nb_2lang: the invoice's header and body, no button",
+      () => {
+        const plain = message("parking_invoice_2lang").template.components;
+        const bare = message("parking_invoice_nb_2lang").template.components;
+        assert.deepEqual(bare,
+            plain.filter((part) => part.type !== "button"));
+        assert.ok(plain.some((part) => part.type === "button"));
+        assert.equal(bare.find((p) => p.type === "body").parameters.length,
+            9);
+      });
 
   it("fills parking_parked_2lang: 11 variables, a tracking button", () => {
     assert.equal(PARKING_TEMPLATE_VARIABLES.parking_parked_2lang.length, 11);
@@ -606,6 +618,8 @@ describe("the parking templates", () => {
     assert.deepEqual(PARKING_TEMPLATE_SHAPE, {
       parking_receipt_2lang: {header: "document", buttons: "url"},
       parking_invoice_2lang: {header: "document", buttons: "url",
+        documentName: "Invoice.pdf"},
+      parking_invoice_nb_2lang: {header: "document", buttons: "none",
         documentName: "Invoice.pdf"}});
     assert.deepEqual(message("parking_receipt_2lang").template.components, [
       {type: "header", parameters: [{type: "document", document: {

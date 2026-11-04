@@ -15097,10 +15097,33 @@ function cachedLogoFetcher() {
 }
 
 /**
+ * The invoice template to send: the one without the Track button while
+ * appConfig/parkingInvoices.withoutButton is true (owner 2026-11-04, until
+ * the app build whose links open the tracking page is live), else the usual.
+ *
+ * @param {object} db Firestore.
+ * @return {Promise<string>} A PARKING_TEMPLATE name.
+ */
+async function parkingInvoiceTemplate(db) {
+  try {
+    const config = await db.collection("appConfig").doc("parkingInvoices")
+        .get();
+    if (config.data()?.withoutButton === true) {
+      return parkingWhatsApp.PARKING_TEMPLATE.INVOICE_NO_BUTTON;
+    }
+  } catch (error) {
+    logger.warn("Parking invoice template switch not read", {
+      error: String(error?.message || error).slice(0, 200)});
+  }
+  return parkingWhatsApp.PARKING_TEMPLATE.INVOICE;
+}
+
+/**
  * Sends one customer's invoice: claims the month's row (an invoice already
  * sent, or being sent, is left alone; a failed, stopped or skipped one is
  * tried again), draws the PDF, keeps it in Storage and sends
- * `parking_invoice_2lang` with a 30-day signed link to it.
+ * `parking_invoice_2lang` (or the button-free copy) with a 30-day signed
+ * link to it.
  *
  * @param {object} db Firestore.
  * @param {object} args {businessId, business, run, monthKey, recipient, by,
@@ -15109,6 +15132,7 @@ function cachedLogoFetcher() {
  */
 async function sendParkingInvoice(db, args) {
   const {businessId, business, run, monthKey, recipient, by, now} = args;
+  const template = await parkingInvoiceTemplate(db);
   const ref = db.collection("parkingMessages").doc(
       parkingInvoices.messageRowId(businessId, monthKey, recipient.phone));
   const nowMs = now.getTime();
@@ -15119,7 +15143,7 @@ async function sendParkingInvoice(db, args) {
     parkedCarId: recipient.cars[0]?.id || "",
     parkedCarIds: recipient.cars.map((car) => car.id),
     kind: parkingWhatsApp.KIND.INVOICE,
-    template: parkingWhatsApp.PARKING_TEMPLATE.INVOICE,
+    template,
     phone: recipient.phone,
     name: recipient.name,
     trackingCode: recipient.trackingCode,
@@ -15167,7 +15191,7 @@ async function sendParkingInvoice(db, args) {
       expiresMs: nowMs + packageProof.PHOTO_LINK_MS,
     });
     body = parkingTemplateMessage({
-      template: parkingWhatsApp.PARKING_TEMPLATE.INVOICE,
+      template,
       phone: recipient.phone,
       values: {
         ...parkingInvoices.invoiceMessageValues(recipient, business),
