@@ -53,7 +53,8 @@ const T = Object.freeze({
     itemsTitle: "What are you sending", itemsIntro:
       "Pick up to 4 kinds of items. You say how many on the next screen.",
     item: "Item", other: "Something else",
-    amountsTitle: "How many", amountsIntro:
+    amountsTitle: "How many", amountsIntro: "How many of each?",
+    amountsPounds:
       "For things sold by the pound, give the pounds (a suitcase is " +
       "about 50 lb).",
     count: "How many", pounds: "Weight (lb)",
@@ -96,7 +97,8 @@ const T = Object.freeze({
       "Choisissez jusqu'à 4 sortes d'articles. Vous donnez les quantités " +
       "à l'écran suivant.",
     item: "Article", other: "Autre chose",
-    amountsTitle: "Combien", amountsIntro:
+    amountsTitle: "Combien", amountsIntro: "Combien de chaque ?",
+    amountsPounds:
       "Pour ce qui se paie à la livre, donnez les livres (une valise fait " +
       "environ 50 lb).",
     count: "Combien", pounds: "Poids (lb)",
@@ -228,7 +230,7 @@ function flowJson() {
   // counted, "Weight (lb)" for things sold by the pound.
   const amount = (n) => ({type: "TextInput", name: `qty_${n}`,
     label: `\${data.l_qty_${n}}`, "helper-text": `\${data.h_qty_${n}}`,
-    "input-type": "number", required: false,
+    "input-type": "number", required: `\${data.show_${n}}`,
     visible: `\${data.show_${n}}`});
   const itemsPayload = {};
   const amountsPayload = {};
@@ -796,7 +798,10 @@ function createPackageFlow(deps) {
       if (!picked.length && !other) return fail(session, "ITEMS", w.errItems);
       await deps.saveSession(token, {picked, other, lines: []});
       if (!picked.length) return howScreen({...session, other});
-      const amounts = {};
+      const rows = picked.map((id) => catalog.find((c) => c.id === id));
+      // The pounds hint only when something is sold by the pound.
+      const amounts = {l_intro: rows.some((row) => row?.kind === "per_lb") ?
+        w.amountsPounds : w.amountsIntro};
       for (let n = 1; n <= SLOTS; n++) {
         const row = catalog.find((c) => c.id === picked[n - 1]);
         amounts[`show_${n}`] = Boolean(row);

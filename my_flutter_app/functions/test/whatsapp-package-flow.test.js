@@ -168,6 +168,7 @@ describe("whatsapp package flow", () => {
         assert.equal(amounts.data.l_qty_2, "Weight (lb)");
         assert.equal(amounts.data.show_2, true);
         assert.equal(amounts.data.show_3, false);
+        assert.match(amounts.data.l_intro, /by the pound/);
         const how = await step(f, "AMOUNTS", {qty_1: "2", qty_2: "50"});
         assert.equal(how.screen, "HOW");
         assert.deepEqual(how.data.hows.map((h) => h.id),
@@ -244,6 +245,7 @@ describe("whatsapp package flow", () => {
         const amounts = await step(f, "ITEMS", {item_1: "ask:box"});
         assert.equal(amounts.data.l_qty_1, "How many");
         assert.equal(amounts.data.h_qty_1, "Box");
+        assert.equal(amounts.data.l_intro, "How many of each?");
         await step(f, "AMOUNTS", {qty_1: "3"});
         assert.equal(created.length, 0);
         assert.deepEqual(flow.piecesFor([{kind: "ask", label: "Box",
