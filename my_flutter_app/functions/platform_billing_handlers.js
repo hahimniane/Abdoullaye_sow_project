@@ -57,6 +57,8 @@ const IN_BATCH = 100;
 const DEALS = "billingDeals";
 const MONTHS = "billingMonths";
 const PAYMENTS = "billingPayments";
+// A negative Pay now week put on a business's bill (package_pay_now).
+const ADJUSTMENTS = "billingAdjustments";
 const EARNINGS_COLLECTIONS = ["carPurchases", "barrelShipments",
   "freightShipments", "transportRequests", "parkedCars"];
 
@@ -553,7 +555,7 @@ function createPlatformBillingHandlers(deps) {
 
   async function monthCandidates(month, deadlineMs, refresh, extra = []) {
     const [dealsSnap, volumeSnap, monthsSnap, commission, unpaidSnap,
-      businessesSnap] = await Promise.all([
+      businessesSnap, adjustmentsSnap] = await Promise.all([
       db().collection(DEALS).get(),
       db().collection(VOLUME_COLLECTION).where("month", "==", month)
           .select("businessId", "pieces", "barrels", "packages", "cars",
@@ -567,6 +569,8 @@ function createPlatformBillingHandlers(deps) {
       // pending ones too, so a deal can be set before any activity
       // (owner, 2026-10-21; AMT sells in its shop but ships nothing).
       db().collection("businesses").select().get(),
+      db().collection(ADJUSTMENTS).where("outstandingCents", ">", 0)
+          .select("businessId", "outstandingCents", "voided").get(),
     ]);
     const deals = new Map(dealsSnap.docs.map((doc) =>
       [doc.id, dealOf(doc.data() || {})]));
@@ -583,6 +587,13 @@ function createPlatformBillingHandlers(deps) {
       const id = String(data.businessId || "");
       unpaidToDate.set(id, (unpaidToDate.get(id) || 0) +
         (Number(data.unpaidCents) || 0));
+    }
+    // Pay now adjustments still outstanding are owed too.
+    for (const doc of adjustmentsSnap.docs) {
+      const data = doc.data() || {};
+      const id = String(data.businessId || "");
+      unpaidToDate.set(id, (unpaidToDate.get(id) || 0) +
+        billing.adjustmentsOutstanding([data]));
     }
     const ids = new Set(businessesSnap.docs.map((doc) => doc.id));
     for (const id of deals.keys()) ids.add(id);
@@ -676,15 +687,23 @@ function createPlatformBillingHandlers(deps) {
     const businessId = businessIdFrom(data.businessId);
     const month = monthFrom(data.month, thisMonth());
     const deadlineMs = now().getTime() + CALL_BUDGET_MS;
-    const [businessSnap, dealSnap, months, payments, volume, commission] =
-      await Promise.all([
-        db().collection("businesses").doc(businessId).get(),
-        db().collection(DEALS).doc(businessId).get(),
-        businessMonths(businessId),
-        monthPayments(businessId, month),
-        volumeRows([businessId], month),
-        commissionFor(month, data.refresh === true, deadlineMs),
-      ]);
+    const [businessSnap, dealSnap, months, payments, volume, commission,
+      adjustmentsSnap] = await Promise.all([
+      db().collection("businesses").doc(businessId).get(),
+      db().collection(DEALS).doc(businessId).get(),
+      businessMonths(businessId),
+      monthPayments(businessId, month),
+      volumeRows([businessId], month),
+      commissionFor(month, data.refresh === true, deadlineMs),
+      db().collection(ADJUSTMENTS).where("businessId", "==", businessId)
+          .limit(100).get(),
+    ]);
+    const payNowAdjustments = adjustmentsSnap.docs
+        .map((doc) => ({id: doc.id, ...doc.data()}))
+        .filter((a) => Number(a.outstandingCents) > 0 || Number(
+            a.settledCents) > 0)
+        .sort((a, b) => (Number(b.createdAtMs) || 0) -
+          (Number(a.createdAtMs) || 0));
     const deal = dealOf(dealSnap);
     if (!businessSnap.exists && !deal.exists && months.length === 0) {
       refuse("business_not_found");
@@ -757,8 +776,19 @@ function createPlatformBillingHandlers(deps) {
         paidCents: Number(m.paidCents) || 0,
         unpaidCents: Number(m.unpaidCents) || 0,
         closedAtMs: Number(m.closedAtMs) || null})),
+      // Closed months still owed, and Pay now's negative weeks not yet taken
+      // out of a payout.
       unpaidToDateCents: months.filter((m) => m.status === "closed")
-          .reduce((sum, m) => sum + (Number(m.unpaidCents) || 0), 0),
+          .reduce((sum, m) => sum + (Number(m.unpaidCents) || 0), 0) +
+        billing.adjustmentsOutstanding(payNowAdjustments),
+      payNowAdjustmentsCents: billing.adjustmentsOutstanding(
+          payNowAdjustments),
+      payNowAdjustments: payNowAdjustments.map((a) => ({id: a.id,
+        weekKey: text(a.weekKey, 10), reason: text(a.reason, 60),
+        amountCents: Number(a.amountCents) || 0,
+        settledCents: Number(a.settledCents) || 0,
+        outstandingCents: Number(a.outstandingCents) || 0,
+        createdAtMs: Number(a.createdAtMs) || 0})),
       pastOpenMonths: billing.pastOpenMonths({versions: deal.versions,
         closedMonths, currentMonth: thisMonth()}),
       people: Object.fromEntries(names),

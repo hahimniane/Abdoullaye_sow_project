@@ -535,3 +535,22 @@ describe("shop items: per item or a percentage of shop sales", () => {
     assert.equal(billing.dealNeeds(deal).items, true);
   });
 });
+
+describe("Pay now adjustments count in what a business owes", () => {
+  it("sums what a negative week left outstanding", () => {
+    assert.equal(billing.adjustmentsOutstanding([
+      {outstandingCents: 1559, settledCents: 0},
+      {outstandingCents: 0, settledCents: 500},
+      {outstandingCents: 300},
+    ]), 1859);
+  });
+
+  it("leaves out voided, malformed and missing ones", () => {
+    assert.equal(billing.adjustmentsOutstanding([
+      {outstandingCents: 700, voided: true},
+      {outstandingCents: -5}, {outstandingCents: "x"}, null, undefined,
+    ]), 0);
+    assert.equal(billing.adjustmentsOutstanding(undefined), 0);
+    assert.equal(billing.adjustmentsOutstanding([]), 0);
+  });
+});

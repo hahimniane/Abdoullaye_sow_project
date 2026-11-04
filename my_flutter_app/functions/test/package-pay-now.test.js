@@ -266,6 +266,120 @@ describe("payNowPlan", () => {
   });
 });
 
+describe("Checkout Sessions, closed requests and Received", () => {
+  const paidPay = (extra = {}) => ({...pay.newPayNow({token: "t",
+    linkUrl: "u", amountCents: 10000, chargeType: "platform", nowMs: 1}),
+  status: "paid", paidCents: 10000, ...extra});
+
+  it("treats a payment on a closed, received or cancelled link as stray",
+      () => {
+        const open = pay.newPayNow({token: "t", linkUrl: "u",
+          amountCents: 100, chargeType: "platform", nowMs: 1});
+        assert.equal(pay.strayPaymentReason(request({payNow: open})), "");
+        assert.equal(pay.strayPaymentReason(request({payNow: {...open,
+          status: "cancelled"}})), "link_not_open");
+        assert.equal(pay.strayPaymentReason(request()), "link_not_open");
+        for (const status of ["cancelled", "declined", "expired",
+          "customer_declined", "received", "estimate_sent"]) {
+          assert.equal(pay.strayPaymentReason(request({status,
+            payNow: open})), "request_closed", status);
+        }
+        assert.equal(pay.strayPaymentReason(request({closedAtMs: 5,
+          payNow: open})), "request_closed");
+      });
+
+  it("starts a link with no session expired, and a reopened one again",
+      () => {
+        const open = pay.newPayNow({token: "t", linkUrl: "u",
+          amountCents: 100, chargeType: "platform", nowMs: 1});
+        assert.equal(open.sessionExpiredAtMs, 0);
+        const reopened = pay.applyPlan({...open, status: "cancelled",
+          sessionExpiredAtMs: 99}, {action: "open", amountCents: 200},
+        {nowMs: 5});
+        assert.equal(reopened.sessionExpiredAtMs, 0);
+      });
+
+  it("keeps the whole line credit when an overpayment is refunded", () => {
+    // $100 paid, price dropped to $80, the line was credited $80.
+    const afterExcess = paidPay({status: "partly_refunded",
+      refundedCents: 2000});
+    assert.equal(pay.lineCreditAfterRefund(8000, afterExcess), 8000);
+    // Refunding into the price takes the credit down with it.
+    assert.equal(pay.lineCreditAfterRefund(8000, paidPay({status:
+      "partly_refunded", refundedCents: 5000})), 5000);
+    assert.equal(pay.lineCreditAfterRefund(8000, paidPay({status: "refunded",
+      refundedCents: 10000})), 0);
+    // A credit is never raised by a refund.
+    assert.equal(pay.lineCreditAfterRefund(3000, paidPay({status:
+      "partly_refunded", refundedCents: 1000})), 3000);
+  });
+
+  it("owes it all back when a paid request ends unreceived", () => {
+    const paid = paidPay();
+    for (const status of ["declined", "customer_declined", "cancelled",
+      "expired"]) {
+      const patch = pay.closePatch({payNow: paid, status: "confirmed"}, 77,
+          status);
+      assert.equal(patch.payNow.refundDueCents, 10000, status);
+      assert.equal(patch.payNow.balanceDueCents, 0);
+      assert.equal(patch.payNow.status, "paid");
+      assert.equal(pay.payNowBalances({status, payNow: paid}).refundDueCents,
+          10000);
+    }
+    // What was already refunded is not owed again.
+    const partly = paidPay({status: "partly_refunded", refundedCents: 4000});
+    assert.equal(pay.closePatch({payNow: partly}, 1, "cancelled").payNow
+        .refundDueCents, 6000);
+    // Fully refunded, received, or no status: nothing to prompt.
+    assert.deepEqual(pay.closePatch({payNow: paidPay({status: "refunded",
+      refundedCents: 10000})}, 1, "cancelled"), {});
+    assert.deepEqual(pay.closePatch({payNow: paid}, 1), {});
+    // An open link still just cancels, whatever the status.
+    const open = pay.newPayNow({token: "t", linkUrl: "u", amountCents: 1,
+      chargeType: "platform", nowMs: 1});
+    assert.equal(pay.closePatch({payNow: open}, 1, "declined").payNow.status,
+        "cancelled");
+  });
+
+  it("owes back only the overpayment once received", () => {
+    const stored = pay.receivedPayNow(paidPay({paidCents: 10000}), {
+      linePaymentId: "lp1", lineId: "line1", totalCents: 8000, nowMs: 9});
+    assert.equal(stored.refundDueCents, 2000);
+    assert.equal(stored.balanceDueCents, 0);
+    assert.equal(stored.receivedTotalCents, 8000);
+    assert.equal(stored.linePaymentId, "lp1");
+    assert.equal(stored.receivedLineId, "line1");
+    assert.equal(pay.payNowBalances({status: "received", payNow: stored})
+        .refundDueCents, 2000);
+    // The excess refunded: nothing left to prompt.
+    const refunded = {...stored, status: "partly_refunded",
+      refundedCents: 2000};
+    assert.equal(pay.payNowBalances({status: "received", payNow: refunded})
+        .refundDueCents, 0);
+    // Paid exactly, or the price unknown: no prompt.
+    assert.equal(pay.receivedPayNow(paidPay(), {totalCents: 10000, nowMs: 1})
+        .refundDueCents, 0);
+    assert.equal(pay.receivedPayNow(paidPay(), {totalCents: null, nowMs: 1})
+        .refundDueCents, 0);
+    assert.deepEqual(pay.payNowBalances({status: "received", payNow:
+      paidPay()}), {balanceDueCents: 0, refundDueCents: 0});
+  });
+
+  it("tells staff about a refunded stray payment and a dashboard refund",
+      () => {
+        const row = {sender: {name: "Fatou Diallo"}, code: "R-1"};
+        assert.deepEqual(pay.strayNotificationText(row, 13000, "en"),
+            {title: "Online payment refunded", body:
+              "Fatou Diallo · $130.00 · R-1 · request no longer open"});
+        assert.equal(pay.strayNotificationText(row, 13000, "fr").title,
+            "Paiement en ligne remboursé");
+        assert.deepEqual(pay.refundNotificationText(row, 4000, "en"),
+            {title: "Online refund", body: "Fatou Diallo · $40.00 · R-1"});
+        assert.equal(pay.refundNotificationText(row, 4000, "fr").body,
+            "Fatou Diallo · 40,00 $ · R-1");
+      });
+});
+
 describe("refunds", () => {
   const paid = {status: "paid", paidCents: 19000, refundedCents: 0,
     refunds: []};

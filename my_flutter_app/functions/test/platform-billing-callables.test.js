@@ -531,3 +531,41 @@ describe("Laawol bills", () => {
         .update({updatedAt: FieldValue.serverTimestamp()});
   });
 });
+
+// A negative Pay now week put on the bill (billingAdjustments,
+// docs/PACKAGE_BOX_SIZES_PAY_NOW.md section 3) is owed like a closed month.
+describe("Pay now adjustments on the bill", () => {
+  const ADJUSTMENT = `${BIZ_IDLE}_pay-now-adjustment`;
+
+  it("count in what a business and the platform are owed", async () => {
+    const before = await call({action: "getMonthBills", month: PREV},
+        FINANCE);
+    await db.collection("billingAdjustments").doc(ADJUSTMENT).set({
+      businessId: BIZ_IDLE, month: CUR, amountCents: 1559, settledCents: 0,
+      outstandingCents: 1559, reason: "pay_now_negative_week",
+      weekKey: "2026-01-12", createdAtMs: 1, voided: false});
+    try {
+      const bill = await call({action: "getBusinessBill",
+        businessId: BIZ_IDLE, month: PREV}, FINANCE);
+      assert.equal(bill.payNowAdjustmentsCents, 1559);
+      assert.equal(bill.unpaidToDateCents, 1559);
+      assert.deepEqual(bill.payNowAdjustments.map((a) =>
+        [a.weekKey, a.outstandingCents]), [["2026-01-12", 1559]]);
+      const month = await call({action: "getMonthBills", month: PREV},
+          FINANCE);
+      const idle = month.rows.find((row) => row.businessId === BIZ_IDLE);
+      assert.equal(idle.unpaidToDateCents, 1559);
+      assert.equal(month.summary.unpaidToDateCents,
+          before.summary.unpaidToDateCents + 1559);
+      // Once a payout has taken it out, it is no longer owed.
+      await db.collection("billingAdjustments").doc(ADJUSTMENT)
+          .update({settledCents: 1559, outstandingCents: 0});
+      const settled = await call({action: "getBusinessBill",
+        businessId: BIZ_IDLE, month: PREV}, FINANCE);
+      assert.equal(settled.payNowAdjustmentsCents, 0);
+      assert.equal(settled.unpaidToDateCents, 0);
+    } finally {
+      await db.collection("billingAdjustments").doc(ADJUSTMENT).delete();
+    }
+  });
+});

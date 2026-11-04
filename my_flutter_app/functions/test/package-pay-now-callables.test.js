@@ -98,14 +98,15 @@ const submission = (businessId, extra = {}) => ({
 const realFetch = globalThis.fetch;
 const whatsapp = {calls: [], mode: "ok"};
 const stripe = {calls: [], sessions: new Map(), intents: new Map(),
-  seq: 0, refunds: 0, failRefund: false, chargedAtMs: 0};
+  refundList: new Map(), seq: 0, refunds: 0, failRefund: false,
+  chargedAtMs: 0, onCreateSession: null};
 const feeFor = (amount) => Math.round(amount * 0.029) + 30;
 
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {status});
 }
 
-function fakeStripe(url, init = {}) {
+async function fakeStripe(url, init = {}) {
   const u = new URL(String(url));
   const path = u.pathname.replace(/^\/v1/, "");
   const method = String(init.method || "GET").toUpperCase();
@@ -127,6 +128,18 @@ function fakeStripe(url, init = {}) {
       amount_total: Number(body["line_items[0][price_data][unit_amount]"]),
       metadata, account: headers["Stripe-Account"] || ""};
     stripe.sessions.set(id, session);
+    if (stripe.onCreateSession) await stripe.onCreateSession(session);
+    return json(session);
+  }
+  if (method === "POST" &&
+      (match = /^\/checkout\/sessions\/(.+)\/expire$/.exec(path))) {
+    const session = stripe.sessions.get(match[1]);
+    if (!session) return json({error: {message: "no"}}, 404);
+    if (session.status !== "open") {
+      return json({error: {message: "Only an open session can be expired"}},
+          400);
+    }
+    session.status = "expired";
     return json(session);
   }
   if ((match = /^\/checkout\/sessions\/(.+)$/.exec(path))) {
@@ -149,8 +162,21 @@ function fakeStripe(url, init = {}) {
   }
   if (method === "POST" && path === "/refunds") {
     if (stripe.failRefund) return json({error: {message: "declined"}}, 402);
-    return json({id: `re_test_${++stripe.refunds}`, status: "succeeded",
-      amount: Number(body.amount), payment_intent: body.payment_intent});
+    const metadata = {};
+    for (const [key, value] of Object.entries(body)) {
+      const found = /^metadata\[(.+)\]$/.exec(key);
+      if (found) metadata[found[1]] = value;
+    }
+    const refund = {id: `re_test_${++stripe.refunds}`, status: "succeeded",
+      amount: Number(body.amount), payment_intent: body.payment_intent,
+      created: Math.floor(Date.now() / 1000), metadata};
+    const list = stripe.refundList.get(body.payment_intent) || [];
+    stripe.refundList.set(body.payment_intent, [...list, refund]);
+    return json(refund);
+  }
+  if (method === "GET" && path === "/refunds") {
+    return json({data: stripe.refundList.get(
+        u.searchParams.get("payment_intent")) || []});
   }
   return json({error: {message: `unfaked ${method} ${path}`}}, 404);
 }
@@ -963,6 +989,305 @@ describe("Received", () => {
   });
 });
 
+describe("a link that closes cannot be paid any more", () => {
+  const expireCalls = (sessionId) =>
+    stripeCalls("POST", `/checkout/sessions/${sessionId}/expire`);
+
+  async function withSession(businessId = BIZ, barrels = 1) {
+    const made = await confirmedRequest(businessId, barrels);
+    await visit(made.request.payNow.token);
+    const row = await requestDoc(made.requestId);
+    return {...made, row, sessionId: row.payNow.checkoutSessionId};
+  }
+
+  it("expires the open session when the business cancels or the " +
+    "customer says no", async () => {
+    const closers = [
+      ["cancelPackageRequest", (made) => staff("cancelPackageRequest",
+          {requestId: made.requestId, reason: "x"}, COUNTER)],
+      ["declinePackageEstimate", (made) => call("declinePackageEstimate",
+          {token: made.token, reason: "x"})],
+    ];
+    for (const [name, close] of closers) {
+      const made = await withSession();
+      assert.ok(made.sessionId, name);
+      stripe.calls = [];
+      await close(made);
+      const calls = expireCalls(made.sessionId);
+      assert.equal(calls.length, 1, name);
+      assert.equal(calls[0].headers["Stripe-Account"], undefined, name);
+      assert.equal(stripe.sessions.get(made.sessionId).status, "expired");
+      const row = await requestDoc(made.requestId);
+      assert.equal(row.payNow.status, "cancelled", name);
+      assert.ok(row.payNow.sessionExpiredAtMs > 0, name);
+    }
+  });
+
+  it("expires on the connected account for a direct charge", async () => {
+    const made = await withSession(DIRECT_BIZ);
+    stripe.calls = [];
+    await staff("cancelPackageRequest", {requestId: made.requestId,
+      reason: "x"}, DIRECT_OWNER, DIRECT_BIZ);
+    const [call1] = expireCalls(made.sessionId);
+    assert.equal(call1.headers["Stripe-Account"], DIRECT_ACCOUNT);
+  });
+
+  it("expires the session of a package that is received", async () => {
+    const made = await withSession();
+    stripe.calls = [];
+    await staff("receivePackageRequest", {requestId: made.requestId,
+      pieces: [{id: "p1"}]}, COUNTER);
+    assert.equal(expireCalls(made.sessionId).length, 1);
+    assert.equal(stripe.sessions.get(made.sessionId).status, "expired");
+  });
+
+  it("expires the session when the price moves, and mints a new one at " +
+    "the new price", async () => {
+    const made = await withSession(BIZ, 2);
+    assert.equal(stripe.sessions.get(made.sessionId).amount_total, 30000);
+    stripe.calls = [];
+    await staff("sendPackageEstimate", {requestId: made.requestId,
+      baseVersion: 1, pieces: [{id: "p1", cents: 14000},
+        {id: "p2", cents: 14000}]}, COUNTER);
+    assert.equal(expireCalls(made.sessionId).length, 1);
+    const row = await requestDoc(made.requestId);
+    assert.equal(row.payNow.amountCents, 28000);
+    const visited = await visit(row.payNow.token);
+    assert.equal(visited.status, 303);
+    const fresh = await requestDoc(made.requestId);
+    assert.notEqual(fresh.payNow.checkoutSessionId, made.sessionId);
+    assert.equal(stripe.sessions.get(fresh.payNow.checkoutSessionId)
+        .amount_total, 28000);
+    assert.equal(fresh.payNow.sessionExpiredAtMs, 0);
+  });
+
+  it("replaces an open session of another amount before minting", async () => {
+    const made = await withSession();
+    // Another amount on the same open link (the stored price was edited
+    // behind the link's back): the old session must not stay payable.
+    await db.collection("packageRequests").doc(made.requestId).update({
+      "estimate.totalCents": 16000,
+      "estimate.pieces": [{id: "p1", cents: 16000}], "estimate.auto": false});
+    stripe.calls = [];
+    const visited = await visit(made.row.payNow.token);
+    assert.equal(visited.status, 303);
+    assert.equal(expireCalls(made.sessionId).length, 1);
+  });
+
+  it("refunds a payment from a session that was open when the link " +
+    "closed, and records nothing", async () => {
+    const made = await withSession();
+    await staff("cancelPackageRequest", {requestId: made.requestId,
+      reason: "x"}, COUNTER);
+    stripe.calls = [];
+    const paid = await customerPays(made.requestId);
+    assert.equal(paid.sent.status, 200);
+    const refunds = stripeCalls("POST", "/refunds");
+    assert.equal(refunds.length, 1);
+    assert.equal(refunds[0].body.payment_intent, paid.intent.id);
+    assert.equal(refunds[0].body.amount, "15000");
+    const row = await requestDoc(made.requestId);
+    assert.equal(row.payNow.status, "cancelled");
+    assert.equal(row.payNow.paidCents, 0);
+    assert.deepEqual(await ledgerFor(made.requestId), []);
+    assert.equal(row.history.filter((h) => h.action ===
+      "pay_refunded_auto").length, 1);
+    // The event again: the same refund (same key), one history line.
+    await deliver({type: "payment_intent.succeeded",
+      data: {object: paid.intent}});
+    const keys = stripeCalls("POST", "/refunds").map((c) =>
+      c.headers["Idempotency-Key"]);
+    assert.equal(new Set(keys).size, 1);
+    assert.equal((await requestDoc(made.requestId)).history.filter((h) =>
+      h.action === "pay_refunded_auto").length, 1);
+  });
+
+  it("refunds a payment that arrives after the package was received",
+      async () => {
+        const made = await withSession();
+        await staff("receivePackageRequest", {requestId: made.requestId,
+          pieces: [{id: "p1"}]}, COUNTER);
+        stripe.calls = [];
+        await customerPays(made.requestId);
+        assert.equal(stripeCalls("POST", "/refunds").length, 1);
+        const row = await requestDoc(made.requestId);
+        assert.equal(row.payNow.status, "cancelled");
+        assert.deepEqual(await ledgerFor(made.requestId), []);
+        const payments = await db.collection("containerLinePayments")
+            .where("lineId", "==", row.lineId).get();
+        assert.equal(payments.size, 0, "the counter was not told it was paid");
+      });
+
+  it("does not write the session of a link that closed while it was " +
+    "being made", async () => {
+    const made = await confirmedRequest();
+    stripe.calls = [];
+    stripe.onCreateSession = () => db.collection("packageRequests")
+        .doc(made.requestId).update({"payNow.status": "cancelled"});
+    try {
+      const visited = await visit(made.request.payNow.token);
+      assert.equal(visited.status, 200);
+      assert.match(visited.body, /cannot be paid online/);
+    } finally {
+      stripe.onCreateSession = null;
+    }
+    const row = await requestDoc(made.requestId);
+    assert.equal(row.payNow.status, "cancelled");
+    assert.equal(row.payNow.checkoutSessionId, "");
+    assert.equal(row.payNow.mintCount, 0);
+    const [created] = stripeCalls("POST", "/checkout/sessions");
+    assert.ok(created);
+    assert.equal(stripeCalls("POST", `/checkout/sessions/cs_test_${
+      stripe.seq}/expire`).length, 1, "the new session was expired");
+  });
+
+  it("asks for a refund when a paid request ends without being received",
+      async () => {
+        const made = await withSession();
+        await customerPays(made.requestId);
+        await staff("cancelPackageRequest", {requestId: made.requestId,
+          reason: "changed mind"}, COUNTER);
+        let row = await requestDoc(made.requestId);
+        assert.equal(row.payNow.status, "paid");
+        assert.equal(row.payNow.refundDueCents, 15000);
+        await staff("setPackageRequestSettings", {action: "pay_refund",
+          requestId: made.requestId, amountCents: 15000}, OWNER);
+        row = await requestDoc(made.requestId);
+        assert.equal(row.payNow.status, "refunded");
+        assert.equal(row.payNow.refundDueCents, 0);
+      });
+});
+
+describe("an overpayment at Received", () => {
+  it("keeps the line paid when the excess is refunded, and prompts the " +
+    "refund", async () => {
+    const {requestId, request} = await confirmedRequest(BIZ, 2);
+    await visit(request.payNow.token);
+    await customerPays(requestId);
+    // The price drops to $280 after the $300 was paid.
+    await staff("sendPackageEstimate", {requestId, baseVersion: 1,
+      pieces: [{id: "p1", cents: 14000}, {id: "p2", cents: 14000}]},
+    COUNTER);
+    const received = await staff("receivePackageRequest", {requestId,
+      pieces: [{id: "p1"}, {id: "p2"}]}, COUNTER);
+    assert.equal(received.paidCents, 28000, "credited the price, not $300");
+    let row = await requestDoc(requestId);
+    assert.equal(row.payNow.receivedTotalCents, 28000);
+    assert.equal(row.payNow.refundDueCents, 2000);
+    const lineRef = db.collection("containerLines").doc(received.lineId);
+    const paymentRef = db.collection("containerLinePayments")
+        .doc(row.payNow.linePaymentId);
+    // Refunding the $20 excess leaves the line fully paid.
+    await staff("setPackageRequestSettings", {action: "pay_refund",
+      requestId, amountCents: 2000}, OWNER);
+    assert.equal((await lineRef.get()).data().paidCents, 28000);
+    assert.equal((await paymentRef.get()).data().amountCents, 28000);
+    assert.equal((await paymentRef.get()).data().reverted, false);
+    row = await requestDoc(requestId);
+    assert.equal(row.payNow.refundDueCents, 0);
+    // Refunding into the price takes the credit down.
+    await staff("setPackageRequestSettings", {action: "pay_refund",
+      requestId, amountCents: 3000}, OWNER);
+    assert.equal((await lineRef.get()).data().paidCents, 25000);
+    assert.equal((await paymentRef.get()).data().amountCents, 25000);
+  });
+});
+
+describe("refunds made in the Stripe dashboard", () => {
+  const refundEvent = (intent, type = "charge.refunded") => ({type,
+    data: {object: {id: intent.latest_charge, payment_intent: intent.id}}});
+  const dashboardRefund = (id, amount, extra = {}) => ({id,
+    status: "succeeded", amount, created: Math.floor(Date.now() / 1000),
+    metadata: {}, reason: "requested_by_customer", ...extra});
+
+  it("are recorded once: the request, the ledger and the staff's push",
+      async () => {
+        const {requestId, request} = await confirmedRequest();
+        await visit(request.payNow.token);
+        const {intent} = await customerPays(requestId);
+        stripe.refundList.set(intent.id, [dashboardRefund("re_dash_1", 4000)]);
+        assert.equal((await deliver(refundEvent(intent))).status, 200);
+        let row = await requestDoc(requestId);
+        assert.equal(row.payNow.status, "partly_refunded");
+        assert.equal(row.payNow.refundedCents, 4000);
+        assert.equal(row.payNow.refunds[0].refundId, "re_dash_1");
+        assert.equal(row.payNow.refunds[0].byName, "Stripe dashboard");
+        assert.equal(row.payNow.refunds[0].reason, "requested by customer");
+        const refunds = (await ledgerFor(requestId)).filter((r) =>
+          r.type === "refund");
+        assert.deepEqual(refunds.map((r) => [r.id, r.amountCents]),
+            [[`${requestId}_refund_re_dash_1`, -4000]]);
+        // The same refund again, under any event, changes nothing.
+        await deliver(refundEvent(intent));
+        await deliver(refundEvent(intent, "refund.updated"));
+        row = await requestDoc(requestId);
+        assert.equal(row.payNow.refunds.length, 1);
+        assert.equal(row.payNow.refundedCents, 4000);
+        // Our own refund is recorded by pay_refund, once, even though the
+        // event lists it too.
+        await staff("setPackageRequestSettings", {action: "pay_refund",
+          requestId, amountCents: 1000}, OWNER);
+        await deliver(refundEvent(intent, "refund.created"));
+        row = await requestDoc(requestId);
+        assert.equal(row.payNow.refunds.length, 2);
+        assert.equal(row.payNow.refundedCents, 5000);
+        // A dashboard refund of more than is left is cut to what is left.
+        stripe.refundList.set(intent.id, [...stripe.refundList.get(intent.id),
+          dashboardRefund("re_dash_2", 20000)]);
+        await deliver(refundEvent(intent));
+        row = await requestDoc(requestId);
+        assert.equal(row.payNow.status, "refunded");
+        assert.equal(row.payNow.refundedCents, 15000);
+        const ledger = await ledgerFor(requestId);
+        assert.equal(ledger.reduce((total, r) => total + r.amountCents, 0),
+            -feeFor(15000), "payments - refunds = minus the fee");
+      });
+
+  it("ignore a refund that is not pending or not ours to count",
+      async () => {
+        const {requestId, request} = await confirmedRequest();
+        await visit(request.payNow.token);
+        const {intent} = await customerPays(requestId);
+        stripe.refundList.set(intent.id, [dashboardRefund("re_pending", 500,
+            {status: "pending"})]);
+        await deliver(refundEvent(intent));
+        assert.equal((await requestDoc(requestId)).payNow.refundedCents, 0);
+        // A refund of another payment type goes on to the generic path.
+        stripe.intents.set("pi_elsewhere", {id: "pi_elsewhere",
+          status: "succeeded", amount: 100, metadata: {}});
+        const other = await deliver({type: "charge.refunded", data: {object:
+          {id: "ch_elsewhere", payment_intent: "pi_elsewhere"}}});
+        assert.equal(other.status, 200);
+      });
+
+  it("on a direct charge change the request and write no ledger line",
+      async () => {
+        const {requestId, request} = await confirmedRequest(DIRECT_BIZ);
+        await visit(request.payNow.token);
+        const {intent} = await customerPays(requestId);
+        stripe.refundList.set(intent.id, [dashboardRefund("re_dash_d", 6000)]);
+        await deliver({...refundEvent(intent), account: DIRECT_ACCOUNT});
+        const row = await requestDoc(requestId);
+        assert.equal(row.payNow.refundedCents, 6000);
+        assert.deepEqual(await ledgerFor(requestId), []);
+        const list = stripeCalls("GET", "/refunds").pop();
+        assert.equal(list.headers["Stripe-Account"], DIRECT_ACCOUNT);
+      });
+
+  it("take the credit off a received line, up to the price", async () => {
+    const {requestId, request} = await confirmedRequest();
+    await visit(request.payNow.token);
+    const {intent} = await customerPays(requestId);
+    const received = await staff("receivePackageRequest", {requestId,
+      pieces: [{id: "p1"}]}, COUNTER);
+    stripe.refundList.set(intent.id, [dashboardRefund("re_dash_l", 5000)]);
+    await deliver(refundEvent(intent));
+    const line = (await db.collection("containerLines")
+        .doc(received.lineId).get()).data();
+    assert.equal(line.paidCents, 10000);
+  });
+});
+
 // ---- The weekly payouts ---------------------------------------------------
 
 // Finished weeks, counted back from this week so they stay inside the
@@ -1003,6 +1328,10 @@ describe("the weekly payouts", () => {
       async () => {
         const answer = await payouts({businessId: PAYOUT_BIZ}, PAYOUT_OWNER);
         assert.equal(answer.success, true);
+        assert.equal(answer.truncated, false);
+        assert.deepEqual(answer.weeks.map((w) => w.weekKey),
+            [...answer.weeks.map((w) => w.weekKey)].sort().reverse(),
+            "newest week first");
         assert.equal(answer.unpaidBillCents, 5000);
         const week = answer.weeks.find((w) => w.weekKey === PAST_A);
         assert.equal(week.status, "due");
@@ -1192,5 +1521,65 @@ describe("the weekly payouts", () => {
     } finally {
       stripe.chargedAtMs = 0;
     }
+  });
+});
+
+describe("long payout histories and a month at its payment limit", () => {
+  const PAGE_BIZ = "pn-page-biz";
+  const CAP_BIZ = "pn-cap-biz";
+
+  it("cut the oldest weeks, never the newest, and say so", async () => {
+    // 3,010 lines: the newest week is small, the older two are big.
+    const newest = pay.addDays(THIS_WEEK, -7);
+    const middle = pay.addDays(THIS_WEEK, -14);
+    const oldest = pay.addDays(THIS_WEEK, -21);
+    const rows = [];
+    const add = (weekKey, n) => {
+      for (let i = 0; i < n; i++) {
+        rows.push([`${PAGE_BIZ}_${weekKey}_${i}`, {businessId: PAGE_BIZ,
+          requestId: `seed-${weekKey}-${i}`, requestCode: "R-SEED",
+          type: "payment", amountCents: 100, weekKey,
+          atMs: Date.parse(`${weekKey}T15:00:00Z`) + i, byUid: "",
+          byName: "", note: ""}]);
+      }
+    };
+    add(newest, 10);
+    add(middle, 1500);
+    add(oldest, 1500);
+    for (let i = 0; i < rows.length; i += 400) {
+      const batch = db.batch();
+      for (const [id, row] of rows.slice(i, i + 400)) {
+        batch.set(db.collection("payNowLedger").doc(id), row);
+      }
+      await batch.commit();
+    }
+    const answer = await payouts({businessId: PAGE_BIZ});
+    assert.equal(answer.truncated, true);
+    assert.deepEqual(answer.weeks.map((w) => w.weekKey), [newest, middle]);
+    assert.equal(answer.weeks[0].lines.length, 10);
+    assert.equal(answer.weeks[1].collectedCents, 150000);
+  });
+
+  it("do not take from a payout a bill that cannot be recorded", async () => {
+    await seedLedger(CAP_BIZ, PAST_A, [["payment", 10000],
+      ["stripe_fee", -320]]);
+    // A closed month with the most bill payments it can hold.
+    await db.collection("billingMonths").doc(`${CAP_BIZ}_2025-11`).set({
+      businessId: CAP_BIZ, month: "2025-11", status: "closed",
+      amountCents: 5000, paidCents: 0, unpaidCents: 5000,
+      paymentCount: 200});
+    const shown = await payouts({businessId: CAP_BIZ});
+    assert.equal(shown.unpaidBillCents, 0);
+    assert.equal(shown.weeks[0].billOffsetCents, 0);
+    const done = await paidOut({businessId: CAP_BIZ, weekKey: PAST_A});
+    assert.equal(done.payout.billOffsetCents, 0);
+    assert.equal(done.payout.payoutCents, 9680);
+    const month = (await db.collection("billingMonths")
+        .doc(`${CAP_BIZ}_2025-11`).get()).data();
+    assert.equal(month.unpaidCents, 5000);
+    assert.equal(month.paymentCount, 200);
+    const payments = await db.collection("billingPayments")
+        .where("businessId", "==", CAP_BIZ).get();
+    assert.equal(payments.size, 0);
   });
 });

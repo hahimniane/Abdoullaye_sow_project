@@ -47312,6 +47312,11 @@ const packagePayNowHandlers = createPackagePayNowHandlers({
     createRefund: createStripeRefund,
     retrieveCharge: retrieveStripeCharge,
     retrieveBalanceTransaction: retrieveStripeBalanceTransaction,
+    expireSession: expireStripeCheckoutSession,
+    listRefunds: (paymentIntentId, connectedAccountId) => stripeRequest(
+        `/refunds?payment_intent=${encodeURIComponent(paymentIntentId)}` +
+        "&limit=100", {...(connectedAccountId && {
+          headers: {"Stripe-Account": connectedAccountId}})}),
     stripeOnlyFeeCents,
     reusable: parkingCheckoutSessionReusable,
   },
@@ -47802,7 +47807,7 @@ function closeRequestPatch(request, status, entry, nowMs, reason = "") {
     closedAtMs: nowMs,
     // An unpaid pay link closes with the request; a paid one stays (staff
     // refund it by hand).
-    ...packagePayNow.closePatch(request, nowMs),
+    ...packagePayNow.closePatch(request, nowMs, status),
     history: packageRequests.appendHistory(request.history,
         {...entry, atMs: nowMs, ...(reason ? {reason} : {})}),
   });
@@ -48283,8 +48288,9 @@ exports.confirmPackageEstimate = onCall(
       enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
       invoker: "public",
-      // The optional pay link goes out on confirming (Pay now).
-      secrets: [whatsappAccessToken, whatsappPhoneNumberId],
+      // The optional pay link goes out on confirming (Pay now); a session
+      // of a link that changed is expired on Stripe.
+      secrets: [whatsappAccessToken, whatsappPhoneNumberId, stripeSecretKey],
     },
     async (request) => {
       await enforceCallableRateLimit(request, {
@@ -48343,6 +48349,8 @@ exports.declinePackageEstimate = onCall(
       enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
       invoker: "public",
+      // Closing expires an open Pay now Checkout Session on Stripe.
+      secrets: [stripeSecretKey],
     },
     async (request) => {
       await enforceCallableRateLimit(request, {
@@ -48376,6 +48384,8 @@ exports.declinePackageEstimate = onCall(
         await notifyPackageRequestStaff(db, {
           businessId: String(outcome.row.businessId), requestId: doc.id,
           request: outcome.row, event: "customer_declined"});
+        // The Checkout Session the customer may still have open.
+        await packagePayNowHandlers.closeSessions(doc.id);
       }
       return {success: true,
         status: packageRequests.STATUS.CUSTOMER_DECLINED};
@@ -48805,7 +48815,7 @@ exports.sendPackageEstimate = onCall(
       enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
       invoker: "public",
-      secrets: [whatsappAccessToken, whatsappPhoneNumberId],
+      secrets: [whatsappAccessToken, whatsappPhoneNumberId, stripeSecretKey],
     },
     async (request) => {
       const uid = requireAuth(request);
@@ -48868,7 +48878,7 @@ exports.sendPackageEstimate = onCall(
 
 exports.confirmPackageRequestByPhone = onCall(
     {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public",
-      secrets: [whatsappAccessToken, whatsappPhoneNumberId]},
+      secrets: [whatsappAccessToken, whatsappPhoneNumberId, stripeSecretKey]},
     async (request) => {
       const uid = requireAuth(request);
       const db = admin.firestore();
@@ -48937,16 +48947,20 @@ async function closePackageRequestByStaff(request, kind) {
       action: kind === "decline" ? "declined" : "cancelled",
       byUid: uid, byName: name}, nowMs, reason));
   });
+  // The Checkout Session the customer may still have open.
+  await packagePayNowHandlers.closeSessions(ref.id);
   return {success: true, status};
 }
 
 exports.declinePackageRequest = onCall(
-    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public"},
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public",
+      secrets: [stripeSecretKey]},
     (request) => closePackageRequestByStaff(request, "decline"),
 );
 
 exports.cancelPackageRequest = onCall(
-    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public"},
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public",
+      secrets: [stripeSecretKey]},
     (request) => closePackageRequestByStaff(request, "cancel"),
 );
 
@@ -48955,8 +48969,9 @@ exports.receivePackageRequest = onCall(
       enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
       invoker: "public",
-      // The received message is queued here (queuePackageReceived).
-      secrets: [whatsappAccessToken, whatsappPhoneNumberId],
+      // The received message is queued here (queuePackageReceived); the open
+      // Pay now session is expired on Stripe.
+      secrets: [whatsappAccessToken, whatsappPhoneNumberId, stripeSecretKey],
     },
     async (request) => {
       const uid = requireAuth(request);
@@ -49128,9 +49143,10 @@ exports.receivePackageRequest = onCall(
         tx.update(ref, requestPatch(row, {
           // A link nobody paid closes with the request (the counter takes
           // the money); a paid one remembers which line payment it became.
-          ...(payNowRef ? {payNow: {...row.payNow,
-            linePaymentId: payNowRef.id, receivedLineId: lineRef.id,
-            updatedAtMs: nowMs}} : packagePayNow.closePatch(row, nowMs)),
+          ...(payNowRef ? {payNow: packagePayNow.receivedPayNow(row.payNow, {
+            linePaymentId: payNowRef.id, lineId: lineRef.id,
+            totalCents: line.priceCents, nowMs})} :
+            packagePayNow.closePatch(row, nowMs)),
           status: packageRequests.STATUS.RECEIVED,
           lineId: lineRef.id,
           trackingCode,
@@ -49158,6 +49174,8 @@ exports.receivePackageRequest = onCall(
           alreadyReceived: true};
       }
       await queuePackageReceived(db, {lineRef, businessId, containerId: ""});
+      // The Checkout Session of an unpaid link, expired on Stripe.
+      await packagePayNowHandlers.closeSessions(ref.id);
       await rememberLotCustomer(db, {
         businessId,
         seen: lineLotCustomerSeen(result.line),
@@ -49420,6 +49438,10 @@ async function runPackageRequestTimer(db, ref, nowMs) {
     return {action: timer.action, row};
   });
   switch (after.action) {
+    case packageRequests.ACTION.EXPIRE:
+      // The Checkout Session of an unpaid link, expired on Stripe.
+      await packagePayNowHandlers.closeSessions(ref.id);
+      break;
     case packageRequests.ACTION.STAFF_ALERT:
       await notifyPackageRequestStaff(db, {
         businessId: String(after.row.businessId), requestId: ref.id,
@@ -49529,7 +49551,7 @@ exports.sweepPackageRequests = onSchedule(
       // An hourly run is one invocation at a time; a second instance would
       // only race the first over the same due timers.
       maxInstances: 1,
-      secrets: [whatsappAccessToken, whatsappPhoneNumberId],
+      secrets: [whatsappAccessToken, whatsappPhoneNumberId, stripeSecretKey],
     },
     async () => {
       const db = admin.firestore();

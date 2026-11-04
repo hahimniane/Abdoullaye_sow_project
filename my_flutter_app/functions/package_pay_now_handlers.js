@@ -33,7 +33,12 @@ const ACTIONS = Object.freeze(["pay_refund", "pay_resend", "payouts",
 const OFFSET_METHOD = "pay_now_offset";
 const MAX_BILL_PAYMENTS_PER_MONTH = 200;
 const LEDGER_PAGE = 3000;
+const PAYOUT_PAGE = 2000;
 const ALL_BUSINESSES_WEEKS = 26;
+// Stripe events that say a refund happened (any of them re-reads the lot).
+const REFUND_EVENTS = Object.freeze(["charge.refunded",
+  "charge.refund.updated", "refund.created", "refund.updated"]);
+const OWN_REFUND_GRACE_MS = 10 * 60 * 1000;
 
 const text = (value, max = 200) => String(value ?? "").trim().slice(0, max);
 const cents = (value) => {
@@ -184,6 +189,57 @@ function createPackagePayNowHandlers(deps) {
 
   // ---- After a request changes ----------------------------------------
 
+  // ---- Open Checkout Sessions ---------------------------------------
+
+  /**
+   * Expires the Checkout Session a link last minted, so a customer who still
+   * has its page open cannot pay a link that closed, was received or whose
+   * price moved (a session lives 24 hours). Never throws: a session that is
+   * already complete or expired makes Stripe say so, and that is fine.
+   *
+   * @param {object} payNow The stored payNow.
+   * @return {Promise<boolean>} Whether Stripe was asked.
+   */
+  async function expireSession(payNow) {
+    const sessionId = text(payNow?.checkoutSessionId, 200);
+    if (!sessionId) return false;
+    const account = payNow.chargeType === pay.CHARGE_TYPE.DIRECT ?
+      text(payNow.connectedAccountId, 80) : "";
+    try {
+      await stripe.expireSession(sessionId, account || undefined);
+    } catch (error) {
+      logger.info("Pay now session not expired", {sessionId,
+        detail: String(error?.message || error).slice(0, 200)});
+    }
+    return true;
+  }
+
+  /**
+   * After a request closed or was received: expires the session of a link
+   * that is no longer open (once: it is marked).
+   *
+   * @param {string} requestId The request.
+   * @return {Promise<boolean>} Whether a session was expired. Never throws.
+   */
+  async function closeSessions(requestId) {
+    try {
+      const ref = db().collection(REQUESTS).doc(text(requestId, 128) || "-");
+      const request = (await ref.get()).data() || {};
+      const payNow = request.payNow;
+      if (!payNow || payNow.status !== pay.STATUS.CANCELLED ||
+          !text(payNow.checkoutSessionId) || payNow.sessionExpiredAtMs > 0) {
+        return false;
+      }
+      await expireSession(payNow);
+      await ref.update({"payNow.sessionExpiredAtMs": now()});
+      return true;
+    } catch (error) {
+      logger.warn("Pay now sessions not closed", {requestId: String(requestId),
+        error: String(error?.message || error)});
+      return false;
+    }
+  }
+
   /**
    * Brings a request's payNow in line with the request (confirmed,
    * re-priced, closed, switch moved): creates the link, changes its amount,
@@ -225,9 +281,18 @@ function createPackagePayNowHandlers(deps) {
             ...(plan.amountCents ? {totalCents: plan.amountCents} : {})});
         }
         tx.update(ref, update);
-        return {plan, request: {...request, payNow: next}};
+        // A session minted for the old amount (or for a link that is gone)
+        // must not stay payable.
+        const stale = request.payNow && (plan.action === "cancel" ||
+          (plan.action === "open" && cents(request.payNow.amountCents) !==
+            plan.amountCents)) ? request.payNow : null;
+        return {plan, stale, request: {...request, payNow: next}};
       });
       if (!outcome) return "none";
+      if (outcome.stale) {
+        await expireSession(outcome.stale);
+        await ref.update({"payNow.sessionExpiredAtMs": now()});
+      }
       if (outcome.plan.notify && options.send !== false) {
         await sendLink(requestId, outcome.request);
       }
@@ -309,6 +374,11 @@ function createPackagePayNowHandlers(deps) {
           res.redirect(303, String(existing.url || ""));
           return true;
         }
+        // A session for another amount or account is replaced: it must not
+        // stay payable beside the new one.
+        if (existing && existing.status === "open") {
+          await expireSession(payNow);
+        }
       }
       const mintCount = cents(payNow.mintCount) + 1;
       const session = await stripe.createCheckoutSession({
@@ -327,14 +397,30 @@ function createPackagePayNowHandlers(deps) {
         },
         ...deps.returnUrls(request),
       });
-      await ref.update({
-        "payNow.checkoutSessionId": text(session.id, 200),
-        "payNow.mintCount": mintCount,
-        "payNow.amountCents": state.amountCents,
-        "payNow.chargeType": chargeType,
-        "payNow.connectedAccountId": accountId,
-        "payNow.updatedAtMs": now(),
+      // Written only while the link is still open: the request may have
+      // been paid, closed or received while the session was being made.
+      const stored = await db().runTransaction(async (tx) => {
+        const snap = await tx.get(ref);
+        if (snap.data()?.payNow?.status !== pay.STATUS.OPEN) return false;
+        tx.update(ref, {
+          "payNow.checkoutSessionId": text(session.id, 200),
+          "payNow.mintCount": mintCount,
+          "payNow.amountCents": state.amountCents,
+          "payNow.chargeType": chargeType,
+          "payNow.connectedAccountId": accountId,
+          "payNow.sessionExpiredAtMs": 0,
+          "payNow.updatedAtMs": now(),
+        });
+        return true;
       });
+      if (!stored) {
+        await stripe.expireSession(text(session.id, 200),
+            accountId || undefined).catch(() => null);
+        send("Not available right now", `Shipment ${code} cannot be paid ` +
+          "online right now. You can pay at the counter, or ask the " +
+          "business.");
+        return true;
+      }
       res.redirect(303, String(session.url || ""));
     } catch (error) {
       logger.error("Pay now link could not open a session", {
@@ -408,6 +494,22 @@ function createPackagePayNowHandlers(deps) {
         return current.paymentIntentId === piId ? {already: true} :
           {duplicate: true};
       }
+      // A payment on a closed or received request, or on a link that was
+      // cancelled (a session the customer already had open): refunded in
+      // full, never recorded, and staff are told.
+      const stray = pay.strayPaymentReason(row);
+      if (stray) {
+        const note = `auto_refund ${piId}`;
+        const seen = (row.history || []).some((h) => h.reason === note);
+        if (!seen) {
+          tx.update(ref, {
+            history: deps.appendHistory(row.history, {atMs: nowMs,
+              action: "pay_refunded_auto", byUid: "", byName: "",
+              totalCents: paidCents, reason: note}),
+            updatedAt: FieldValue.serverTimestamp()});
+        }
+        return {stray, request: row, fresh: !seen};
+      }
       const businessId = text(row.businessId, 128);
       const payoutSnap = direct ? null : await tx.get(payoutRef(businessId,
           pay.weekKeyFor(paidAtMs)));
@@ -455,6 +557,18 @@ function createPackagePayNowHandlers(deps) {
       await refundDuplicate({requestId, intent, accountId, paidCents});
       return true;
     }
+    if (result.stray) {
+      await refundDuplicate({requestId, intent, accountId, paidCents,
+        reason: result.stray});
+      if (result.fresh) {
+        await deps.notifyStaff(db(), {
+          businessId: text(result.request.businessId, 128), requestId,
+          request: result.request, event: "pay_refunded_auto",
+          words: (language) => pay.strayNotificationText(result.request,
+              paidCents, language)});
+      }
+      return true;
+    }
     if (result.paid) {
       await deps.notifyStaff(db(), {
         businessId: text(result.request.businessId, 128), requestId,
@@ -465,7 +579,8 @@ function createPackagePayNowHandlers(deps) {
     return true;
   }
 
-  async function refundDuplicate({requestId, intent, accountId, paidCents}) {
+  async function refundDuplicate({requestId, intent, accountId, paidCents,
+    reason = "duplicate_payment"}) {
     const piId = text(intent.id, 100);
     try {
       await stripe.createRefund({
@@ -473,12 +588,79 @@ function createPackagePayNowHandlers(deps) {
         connectedAccountId: accountId || undefined,
         idempotencyKey: `laawol-pay-dup-v1-${piId}`,
         metadata: {paymentType: pay.PAYMENT_TYPE, requestId,
-          reason: "duplicate_payment"}});
-      logger.warn("Pay now duplicate payment refunded", {requestId, piId});
+          reason: "duplicate_payment", why: reason}});
+      logger.warn("Pay now stray payment refunded", {requestId, piId, reason});
     } catch (error) {
       logger.error("Pay now duplicate payment NOT refunded - refund it " +
         "by hand", {requestId, piId, error: String(error?.message || error)});
     }
+  }
+
+  // ---- Refunds made on Stripe ---------------------------------------
+
+  /**
+   * Records the refunds of a PaymentIntent that this server did not make
+   * (the Stripe dashboard, another tool), so the request, the ledger and
+   * the line match the card. Our own refunds are skipped while they are
+   * fresh (pay_refund writes them itself); one that never got recorded
+   * (older than ten minutes) is picked up here.
+   *
+   * @param {object} intent The PaymentIntent.
+   * @param {string} accountId The connected account, or "".
+   * @return {Promise<void>}
+   */
+  async function syncStripeRefunds(intent, accountId) {
+    const requestId = text(intent.metadata?.requestId, 128);
+    const ref = db().collection(REQUESTS).doc(requestId || "-");
+    const row = (await ref.get()).data() || {};
+    // Only the PaymentIntent that was recorded as paid counts (a stray one
+    // was refunded by us and never recorded).
+    if (!PAID_STATES.includes(row.payNow?.status) ||
+        row.payNow.paymentIntentId !== text(intent.id, 100)) {
+      return;
+    }
+    const list = await stripe.listRefunds(text(intent.id, 100),
+        accountId || undefined);
+    const nowMs = now();
+    for (const refund of Array.isArray(list?.data) ? list.data : []) {
+      if (refund.status !== "succeeded") continue;
+      const madeMs = (Number(refund.created) || 0) * 1000;
+      if (refund.metadata?.refundedBy && madeMs > nowMs - OWN_REFUND_GRACE_MS) {
+        continue;
+      }
+      const done = await recordRefund({ref,
+        businessId: text(row.businessId, 128), refundId: text(refund.id, 80),
+        amountCents: cents(refund.amount), uid: "",
+        name: refund.metadata?.refundedBy ? "Stripe (recovered)" :
+          "Stripe dashboard",
+        note: text(refund.reason, 100).replace(/_/g, " "),
+        atMs: madeMs || nowMs});
+      if (!done.already) {
+        await deps.notifyStaff(db(), {
+          businessId: text(row.businessId, 128), requestId, request: row,
+          event: "refunded_externally",
+          words: (language) => pay.refundNotificationText(done.request,
+              cents(refund.amount), language)});
+      }
+    }
+  }
+
+  async function handleRefundEvent(event) {
+    const object = event.data?.object || {};
+    const accountId = text(event.account, 80);
+    let intentId = text(object.payment_intent, 100);
+    if (!intentId.startsWith("pi_") && text(object.charge, 100)
+        .startsWith("ch_")) {
+      const charge = await stripe.retrieveCharge(text(object.charge, 100),
+          accountId || undefined);
+      intentId = text(charge.payment_intent, 100);
+    }
+    if (!intentId.startsWith("pi_")) return false;
+    const intent = await stripe.retrievePaymentIntent(intentId,
+        accountId || undefined);
+    if (intent?.metadata?.paymentType !== pay.PAYMENT_TYPE) return false;
+    await syncStripeRefunds(intent, accountId);
+    return true;
   }
 
   // ---- Disputes -------------------------------------------------------
@@ -577,6 +759,7 @@ function createPackagePayNowHandlers(deps) {
         type === "payment_intent.payment_failed") {
       return mine;
     }
+    if (REFUND_EVENTS.includes(type)) return handleRefundEvent(event);
     if (type === "charge.dispute.created" ||
         type === "charge.dispute.closed") {
       return handleDispute(event);
@@ -608,6 +791,85 @@ function createPackagePayNowHandlers(deps) {
    */
   function staffView(payNow) {
     return payNow ? {...payNow} : null;
+  }
+
+  /**
+   * Writes a refund that already happened on Stripe: on the request, in the
+   * ledger (platform charges), and on the line payment when the request was
+   * received. Idempotent by refund id: our own refund, a replayed event and
+   * a refund made in the Stripe dashboard all come through here.
+   *
+   * @param {object} args {ref, businessId, refundId, amountCents, uid, name,
+   *   note, atMs}.
+   * @return {Promise<object>} {already, payNow, request}.
+   */
+  async function recordRefund(args) {
+    const {ref, businessId, refundId, uid, name, note, atMs} = args;
+    return db().runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const row = snap.data() || {};
+      const current = row.payNow || {};
+      if ((current.refunds || []).some((r) => r.refundId === refundId)) {
+        return {already: true, payNow: current, request: row};
+      }
+      // Never more than is left of what was paid.
+      const amountCents = Math.min(cents(args.amountCents),
+          cents(current.paidCents) - cents(current.refundedCents));
+      if (amountCents < 1) {
+        return {already: true, payNow: current, request: row};
+      }
+      const platform = current.chargeType !== pay.CHARGE_TYPE.DIRECT;
+      const payoutSnap = platform ? await tx.get(payoutRef(businessId,
+          pay.weekKeyFor(atMs))) : null;
+      // The line payment this request left at Received, when it was.
+      let linePayment = null;
+      let lineRef = null;
+      let linePayments = [];
+      if (row.lineId && current.linePaymentId) {
+        lineRef = db().collection("containerLines").doc(row.lineId);
+        const payRef = db().collection(LINE_PAYMENTS)
+            .doc(current.linePaymentId);
+        const [paySnap, paysSnap] = await Promise.all([tx.get(payRef),
+          tx.get(db().collection(LINE_PAYMENTS)
+              .where("businessId", "==", businessId)
+              .where("lineId", "==", row.lineId))]);
+        if (paySnap.exists) linePayment = {ref: payRef, ...paySnap.data()};
+        linePayments = paysSnap.docs.map((d) => ({id: d.id, ...d.data()}));
+      }
+      const next = pay.applyRefund(current, {atMs, amountCents, byUid: uid,
+        byName: name, reason: note, refundId});
+      Object.assign(next, pay.payNowBalances({...row, payNow: next}));
+      tx.update(ref, {
+        payNow: next,
+        history: deps.appendHistory(row.history, {atMs,
+          action: "refunded_online", byUid: uid, byName: name,
+          totalCents: amountCents, reason: note}),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      if (platform) {
+        const weekKey = weekFor(atMs, payoutSnap?.data()?.status ===
+          pay.PAYOUT_STATUS.PAID);
+        const {id, row: ledger} = pay.refundRow({businessId,
+          requestId: ref.id, requestCode: row.code, refundId, amountCents,
+          atMs, byUid: uid, byName: name, note, weekKey});
+        tx.set(db().collection(LEDGER).doc(id), {...ledger,
+          createdAt: FieldValue.serverTimestamp()});
+      }
+      if (linePayment && lineRef) {
+        // The line was credited with the price at most: an overpayment that
+        // is refunded takes nothing off it.
+        const left = pay.lineCreditAfterRefund(linePayment.amountCents, next);
+        tx.update(linePayment.ref, left > 0 ? {amountCents: left} :
+          {amountCents: 0, reverted: true, revertedByStaffId: uid,
+            revertedAt: FieldValue.serverTimestamp()});
+        const paid = linePayments.reduce((sum, p) => p.reverted === true ?
+          sum : sum + cents(p.id === linePayment.ref.id ? left :
+            p.amountCents), 0);
+        tx.update(lineRef, {paidCents: paid,
+          updatedAt: FieldValue.serverTimestamp()});
+      }
+      return {already: false, payNow: next, request: {...row, payNow: next}};
+    });
   }
 
   async function refund(user, uid, data) {
@@ -643,70 +905,9 @@ function createPackagePayNowHandlers(deps) {
           "The card refund did not go through. Try again, or refund it in " +
           "Stripe.", {reason: "refund_failed", reasons: ["refund_failed"]});
     }
-    const nowMs = now();
-    const name = staffName(user);
-    const refundId = text(stripeRefund.id, 80);
-    const done = await db().runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      const row = snap.data() || {};
-      const current = row.payNow || {};
-      if ((current.refunds || []).some((r) => r.refundId === refundId)) {
-        return {already: true, payNow: current, request: row};
-      }
-      const platform = current.chargeType !== pay.CHARGE_TYPE.DIRECT;
-      const payoutSnap = platform ? await tx.get(payoutRef(businessId,
-          pay.weekKeyFor(nowMs))) : null;
-      // The line payment this request left at Received, when it was.
-      let linePayment = null;
-      let lineRef = null;
-      let linePayments = [];
-      if (row.lineId && current.linePaymentId) {
-        lineRef = db().collection("containerLines").doc(row.lineId);
-        const payRef = db().collection(LINE_PAYMENTS)
-            .doc(current.linePaymentId);
-        const [paySnap, paysSnap] = await Promise.all([tx.get(payRef),
-          tx.get(db().collection(LINE_PAYMENTS)
-              .where("businessId", "==", businessId)
-              .where("lineId", "==", row.lineId))]);
-        if (paySnap.exists) linePayment = {ref: payRef, ...paySnap.data()};
-        linePayments = paysSnap.docs.map((d) => ({id: d.id, ...d.data()}));
-      }
-      const next = pay.applyRefund(current, {atMs: nowMs,
-        amountCents: decision.amountCents, byUid: uid, byName: name,
-        reason: decision.note, refundId});
-      Object.assign(next, pay.payNowBalances({...row, payNow: next}));
-      tx.update(ref, {
-        payNow: next,
-        history: deps.appendHistory(row.history, {atMs: nowMs,
-          action: "refunded_online", byUid: uid, byName: name,
-          totalCents: decision.amountCents, reason: decision.note}),
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-      if (platform) {
-        const weekKey = weekFor(nowMs, payoutSnap?.data()?.status ===
-          pay.PAYOUT_STATUS.PAID);
-        const {id, row: ledger} = pay.refundRow({businessId,
-          requestId: ref.id, requestCode: row.code, refundId,
-          amountCents: decision.amountCents, atMs: nowMs, byUid: uid,
-          byName: name, note: decision.note, weekKey});
-        tx.set(db().collection(LEDGER).doc(id), {...ledger,
-          createdAt: FieldValue.serverTimestamp()});
-      }
-      if (linePayment && lineRef) {
-        // The counter's credit shrinks with the refund; the line owes it.
-        const left = Math.max(0, cents(linePayment.amountCents) -
-          decision.amountCents);
-        tx.update(linePayment.ref, left > 0 ? {amountCents: left} :
-          {amountCents: 0, reverted: true, revertedByStaffId: uid,
-            revertedAt: FieldValue.serverTimestamp()});
-        const paid = linePayments.reduce((sum, p) => p.reverted === true ?
-          sum : sum + cents(p.id === linePayment.ref.id ? left :
-            p.amountCents), 0);
-        tx.update(lineRef, {paidCents: paid,
-          updatedAt: FieldValue.serverTimestamp()});
-      }
-      return {already: false, payNow: next, request: {...row, payNow: next}};
-    });
+    const done = await recordRefund({ref, businessId,
+      refundId: text(stripeRefund.id, 80), amountCents: decision.amountCents,
+      uid, name: staffName(user), note: decision.note, atMs: now()});
     if (!done.already) {
       await sendRefundNotice(ref.id, done.request, decision.amountCents);
     }
@@ -787,7 +988,10 @@ function createPackagePayNowHandlers(deps) {
     }
     for (const doc of months.docs) {
       const m = doc.data() || {};
-      if (m.status === "closed") add(text(m.businessId), cents(m.unpaidCents));
+      if (m.status === "closed" &&
+          cents(m.paymentCount) < MAX_BILL_PAYMENTS_PER_MONTH) {
+        add(text(m.businessId), cents(m.unpaidCents));
+      }
     }
     for (const doc of adjustments.docs) {
       const a = doc.data() || {};
@@ -822,17 +1026,35 @@ function createPackagePayNowHandlers(deps) {
     const nowMs = now();
     const cutoff = pay.addDays(pay.weekKeyFor(nowMs),
         -7 * ALL_BUSINESSES_WEEKS);
+    // Newest weeks first, so a long history cuts the oldest and never the
+    // weeks that are payable now (a business's query needs the composite
+    // indexes payNowLedger / payNowPayouts (businessId, weekKey desc)).
     const [ledgerSnap, payoutSnap] = businessId ? await Promise.all([
       db().collection(LEDGER).where("businessId", "==", businessId)
-          .limit(LEDGER_PAGE).get(),
+          .orderBy("weekKey", "desc").limit(LEDGER_PAGE).get(),
       db().collection(PAYOUTS).where("businessId", "==", businessId)
-          .limit(500).get()]) : await Promise.all([
-            db().collection(LEDGER).where("weekKey", ">=", cutoff)
-                .limit(LEDGER_PAGE).get(),
-            db().collection(PAYOUTS).where("weekKey", ">=", cutoff)
-                .limit(2000).get()]);
+          .orderBy("weekKey", "desc").limit(PAYOUT_PAGE).get()]) :
+      await Promise.all([
+        db().collection(LEDGER).where("weekKey", ">=", cutoff)
+            .orderBy("weekKey", "desc").limit(LEDGER_PAGE).get(),
+        db().collection(PAYOUTS).where("weekKey", ">=", cutoff)
+            .orderBy("weekKey", "desc").limit(PAYOUT_PAGE).get()]);
+    // A full page may have cut a week in half: that week (the oldest read)
+    // is left out rather than shown with missing lines.
+    const truncated = ledgerSnap.size >= LEDGER_PAGE ||
+      payoutSnap.size >= PAYOUT_PAGE;
+    const ledgerDocs = ledgerSnap.docs;
+    const payoutDocs = payoutSnap.docs;
+    let floorKey = "";
+    if (truncated) {
+      const pageWeeks = (ledgerSnap.size >= LEDGER_PAGE ? ledgerDocs :
+        payoutDocs).map((doc) => text(doc.data().weekKey));
+      floorKey = pageWeeks.reduce((min, key) => !min || key < min ? key : min,
+          "");
+    }
     const byWeek = new Map();
-    for (const doc of ledgerSnap.docs) {
+    for (const doc of ledgerDocs) {
+      if (floorKey && text(doc.data().weekKey) <= floorKey) continue;
       const row = doc.data() || {};
       const key = `${row.businessId}|${row.weekKey}`;
       if (!byWeek.has(key)) {
@@ -841,8 +1063,10 @@ function createPackagePayNowHandlers(deps) {
       }
       byWeek.get(key).rows.push({id: doc.id, ...row});
     }
-    const paid = new Map(payoutSnap.docs.map((doc) => [
-      `${doc.data().businessId}|${doc.data().weekKey}`, doc.data() || {}]));
+    const paid = new Map(payoutDocs
+        .filter((doc) => !floorKey || text(doc.data().weekKey) > floorKey)
+        .map((doc) => [`${doc.data().businessId}|${doc.data().weekKey}`,
+          doc.data() || {}]));
     for (const [key, doc] of paid) {
       if (!byWeek.has(key)) {
         byWeek.set(key, {businessId: text(doc.businessId),
@@ -903,7 +1127,7 @@ function createPackagePayNowHandlers(deps) {
       a.businessName.localeCompare(b.businessName));
     const unpaidBillCents = businessId ? bills.get(businessId) || 0 :
       [...bills.values()].reduce((sum, v) => sum + v, 0);
-    return {success: true, weeks, unpaidBillCents,
+    return {success: true, weeks, truncated, unpaidBillCents,
       ...(businessId ? {} : {unpaidBillByBusiness:
         Object.fromEntries(bills)})};
   }
@@ -944,9 +1168,12 @@ function createPackagePayNowHandlers(deps) {
         throw refuse("failed-precondition",
             pay.REASON.WEEK_EMPTY);
       }
+      // Only months that can still take a bill payment count: what cannot be
+      // recorded on the bill must not be taken out of the payout either.
       const months = monthsSnap.docs
           .map((d) => ({ref: d.ref, ...d.data()}))
-          .filter((m) => m.status === "closed" && cents(m.unpaidCents) > 0)
+          .filter((m) => m.status === "closed" && cents(m.unpaidCents) > 0 &&
+            cents(m.paymentCount) < MAX_BILL_PAYMENTS_PER_MONTH)
           .sort((a, b) => String(a.month).localeCompare(String(b.month)));
       const adjustments = adjSnap.docs
           .map((d) => ({ref: d.ref, ...d.data()}))
@@ -967,7 +1194,6 @@ function createPackagePayNowHandlers(deps) {
       let left = plan.billOffsetCents;
       for (const month of months) {
         if (left <= 0) break;
-        if (cents(month.paymentCount) >= MAX_BILL_PAYMENTS_PER_MONTH) continue;
         const take = Math.min(left, cents(month.unpaidCents));
         left -= take;
         const paymentRef = db().collection(BILLING_PAYMENTS).doc(
@@ -1118,6 +1344,7 @@ function createPackagePayNowHandlers(deps) {
     isAction,
     handleAction,
     syncRequest,
+    closeSessions,
     resolveLink,
     handleStripeEvent,
     recordPaid,

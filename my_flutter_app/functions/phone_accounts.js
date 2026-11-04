@@ -26,6 +26,7 @@ const {
   strictE164,
   toE164,
 } = require("./phone_e164");
+const {dayNumber} = require("./parking_month_statement");
 const {
   invitationChannel,
   isInviteToken,
@@ -650,6 +651,58 @@ function mergeShipmentPage(candidates, options) {
     skipKeys: [...new Set([...carried, ...sameMs])].slice(0, 100)}};
 }
 
+/** Parked-car statuses that mean the stay is over, not cancelled. */
+const PARKING_OVER_STATUSES = Object.freeze(["completed", "released",
+  "departed", "left", "checked_out"]);
+
+/** A stay not yet at the lot: it keeps the generic "Booked" word. */
+const PARKING_NOT_ARRIVED_STATUSES = Object.freeze(["pending_payment",
+  "requested"]);
+
+/** `occupancyEndMs` of a stay with no end (parking_occupancy.js). */
+const OPEN_ENDED_OCCUPANCY_END_MS = 8640000000000000;
+
+/**
+ * How a parked car reads in "My packages": the car by name and where its
+ * stay stands, so a card says WHICH car and whether it is still on the lot
+ * instead of the generic "Car parking" / "Booked". Same day rule as
+ * parkingBalanceNow: a stay with an end day is open through that (UTC) day.
+ *
+ * @param {object} car The parkedCars row.
+ * @param {number} [nowMs] The moment the page is read.
+ * @return {{vehicleLabel: string, parkingState: string}} `vehicleLabel` is
+ *   "2018 Toyota RAV4" (whatever of year, make and model exists, "" for
+ *   none); `parkingState` is parked | left | cancelled | voided, or "" when
+ *   the stay has not begun (the client keeps its generic stage word).
+ */
+function parkedCarDisplay(car, nowMs = Date.now()) {
+  const row = car && typeof car === "object" ? car : {};
+  const vehicleLabel = [row.carYear, row.carMake, row.carModel]
+      .map((part) => cleanText(part, 80)).filter(Boolean).join(" ");
+  const status = cleanText(row.status, 40).toLowerCase();
+  let parkingState;
+  if (row.voided === true) {
+    parkingState = "voided";
+  } else if (status === "cancelled" || status === "canceled") {
+    parkingState = "cancelled";
+  } else if (PARKING_OVER_STATUSES.includes(status)) {
+    parkingState = "left";
+  } else if (PARKING_NOT_ARRIVED_STATUSES.includes(status)) {
+    parkingState = "";
+  } else {
+    const today = dayNumber(new Date(nowMs));
+    let leave = dayNumber(row.parkingEndDate);
+    const occupancyEnd = Number(row.occupancyEndMs);
+    if (leave === null && Number.isFinite(occupancyEnd) &&
+        occupancyEnd > 0 && occupancyEnd < OPEN_ENDED_OCCUPANCY_END_MS) {
+      leave = dayNumber(new Date(occupancyEnd));
+    }
+    parkingState = leave !== null && today !== null && leave < today ?
+      "left" : "parked";
+  }
+  return {vehicleLabel, parkingState};
+}
+
 /**
  * What "My packages" shows of a record: the guest-tracking projection (what
  * the WhatsApp link already shows) without any money, plus who it is from.
@@ -657,9 +710,11 @@ function mergeShipmentPage(candidates, options) {
  * @param {object} publicRecord publicGuestTrackingRecord output.
  * @param {object} row {key, role, roles, collection, data, createdAtMs}.
  * @param {string} businessName The business's name.
+ * @param {number} [nowMs] The moment the page is read.
  * @return {object} The item.
  */
-function privateShipmentItem(publicRecord, row, businessName) {
+function privateShipmentItem(publicRecord, row, businessName,
+    nowMs = Date.now()) {
   const record = {...(publicRecord || {})};
   delete record.payment;
   delete record.signIn;
@@ -678,6 +733,10 @@ function privateShipmentItem(publicRecord, row, businessName) {
     businessId: cleanText(row.data?.businessId, 128),
     businessName: cleanText(businessName, 120),
     ...record,
+    // A parked car says which car it is and where its stay stands (additive:
+    // an older app ignores both and keeps its generic title and stage).
+    ...(row.collection === "parkedCars" ?
+      parkedCarDisplay(row.data, nowMs) : {}),
     createdAtMs: row.createdAtMs,
   };
 }
@@ -2176,6 +2235,7 @@ module.exports = {
   newLoginCode,
   notSignedInYet,
   packageRequestPublicRecord,
+  parkedCarDisplay,
   parseCursor,
   parseRecordKey,
   pathValue,

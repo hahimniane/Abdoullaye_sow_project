@@ -22,6 +22,7 @@ const {
   newLoginCode,
   notSignedInYet,
   packageRequestPublicRecord,
+  parkedCarDisplay,
   parseCursor,
   parseRecordKey,
   privateShipmentItem,
@@ -273,6 +274,76 @@ describe("My packages", () => {
       shipping: {shippingLine: "Maersk"}, updatedAtMs: 9, createdAtMs: 8,
     });
     assert.doesNotMatch(JSON.stringify(item), /5000|price|Fatou|payment/i);
+  });
+
+  describe("a parked car", () => {
+    const now = Date.UTC(2026, 10, 4, 15, 0);
+    const car = {carYear: "2018", carMake: "Toyota", carModel: "RAV4",
+      status: "reserved", parkingDate: new Date(Date.UTC(2026, 9, 31))};
+
+    it("names the car and is Parked while the stay is open", () => {
+      assert.deepEqual(parkedCarDisplay(car, now),
+          {vehicleLabel: "2018 Toyota RAV4", parkingState: "parked"});
+      // Open through its last day, not before it.
+      assert.equal(parkedCarDisplay({...car,
+        parkingEndDate: new Date(Date.UTC(2026, 10, 4))}, now).parkingState,
+      "parked");
+      assert.equal(parkedCarDisplay({...car,
+        parkingEndDate: {toDate: () => new Date(Date.UTC(2026, 10, 20))}},
+      now).parkingState, "parked");
+    });
+
+    it("is Left once the end day is past", () => {
+      assert.equal(parkedCarDisplay({...car,
+        parkingEndDate: new Date(Date.UTC(2026, 10, 3))}, now).parkingState,
+      "left");
+      // occupancyEndMs stands in when there is no end date.
+      assert.equal(parkedCarDisplay({...car,
+        occupancyEndMs: Date.UTC(2026, 10, 2)}, now).parkingState, "left");
+      assert.equal(parkedCarDisplay({...car,
+        occupancyEndMs: 8640000000000000}, now).parkingState, "parked");
+      assert.equal(parkedCarDisplay({...car, status: "completed"}, now)
+          .parkingState, "left");
+    });
+
+    it("is Cancelled or Voided, whatever the dates say", () => {
+      assert.equal(parkedCarDisplay({...car, status: "cancelled"}, now)
+          .parkingState, "cancelled");
+      assert.equal(parkedCarDisplay({...car, voided: true}, now)
+          .parkingState, "voided");
+      assert.equal(parkedCarDisplay({...car, voided: true,
+        status: "cancelled"}, now).parkingState, "voided");
+    });
+
+    it("copes with missing car fields and a stay not begun", () => {
+      assert.deepEqual(parkedCarDisplay({carMake: " Honda ",
+        status: "reserved"}, now),
+      {vehicleLabel: "Honda", parkingState: "parked"});
+      assert.deepEqual(parkedCarDisplay({}, now),
+          {vehicleLabel: "", parkingState: "parked"});
+      assert.deepEqual(parkedCarDisplay(null, now),
+          {vehicleLabel: "", parkingState: "parked"});
+      assert.equal(parkedCarDisplay({...car, status: "pending_payment"}, now)
+          .parkingState, "");
+    });
+
+    it("is added to My packages items for parked cars only", () => {
+      const row = {key: "parkedCars/p1", collection: "parkedCars",
+        role: "sender", roles: ["sender"], createdAtMs: 8,
+        data: {...car, businessId: "keren"}};
+      const item = privateShipmentItem({trackingCode: "PK-TK9VNW",
+        service: "parking", stage: "booked", updatedAtMs: 9}, row, "Keren",
+      now);
+      assert.equal(item.vehicleLabel, "2018 Toyota RAV4");
+      assert.equal(item.parkingState, "parked");
+      assert.equal(item.trackingCode, "PK-TK9VNW");
+      const other = privateShipmentItem({trackingCode: "CL-1",
+        service: "container", stage: "booked"},
+      {...row, key: "containerLines/l1", collection: "containerLines"},
+      "Keren", now);
+      assert.equal("vehicleLabel" in other, false);
+      assert.equal("parkingState" in other, false);
+    });
   });
 
   it("projects a package request without its prices or contents", () => {

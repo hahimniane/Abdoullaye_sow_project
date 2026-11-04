@@ -837,6 +837,21 @@ function monthStanding({amountCents, paidCents}) {
 }
 
 /**
+ * What a business still owes Laawol from Pay now: a negative week put on the
+ * bill (`billingAdjustments`, docs/PACKAGE_BOX_SIZES_PAY_NOW.md section 3)
+ * until a payout takes it out. It counts in "unpaid to date" beside the
+ * closed months.
+ *
+ * @param {Array<object>} adjustments billingAdjustments documents.
+ * @return {number} Whole cents still outstanding.
+ */
+function adjustmentsOutstanding(adjustments) {
+  return (Array.isArray(adjustments) ? adjustments : [])
+      .filter((a) => a && a.voided !== true)
+      .reduce((sum, a) => sum + count(a.outstandingCents), 0);
+}
+
+/**
  * Whether one more payment fits a closed month.
  *
  * @param {object} args {closed, amountCents, paidCents, addCents}.
@@ -1051,6 +1066,7 @@ module.exports = {
   packagePricesOfLines,
   pastOpenMonths,
   paymentBalanceRefusal,
+  adjustmentsOutstanding,
   paymentErrors,
   paymentRecord,
   percentOfCents,

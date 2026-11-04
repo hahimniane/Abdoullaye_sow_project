@@ -251,6 +251,10 @@ function netPaidCents(payNow) {
   return Math.max(0, cents(pay.paidCents) - cents(pay.refundedCents));
 }
 
+// Requests that ended without the package being received.
+const CLOSED_UNRECEIVED = Object.freeze(["declined", "customer_declined",
+  "cancelled", "expired"]);
+
 /**
  * Money in the request's total against money already paid online: the
  * difference when the total moved after payment.
@@ -261,12 +265,25 @@ function netPaidCents(payNow) {
  */
 function payNowBalances(request) {
   const pay = isObject(request?.payNow) ? request.payNow : null;
-  const total = cents(request?.estimate?.totalCents);
+  const none = {balanceDueCents: 0, refundDueCents: 0};
   if (!pay || ![STATUS.PAID, STATUS.PARTLY_REFUNDED, STATUS.REFUNDED]
-      .includes(pay.status) || total <= 0) {
-    return {balanceDueCents: 0, refundDueCents: 0};
+      .includes(pay.status)) {
+    return none;
   }
   const net = netPaidCents(pay);
+  const status = text(request?.status, 40);
+  // A request that ended without being received: all of it goes back.
+  if (CLOSED_UNRECEIVED.includes(status)) {
+    return {balanceDueCents: 0, refundDueCents: net};
+  }
+  // Received: the counter took the rest, so only an overpayment is left.
+  if (status === "received") {
+    return Number.isInteger(pay.receivedTotalCents) ?
+      {balanceDueCents: 0, refundDueCents:
+        Math.max(0, net - pay.receivedTotalCents)} : none;
+  }
+  const total = cents(request?.estimate?.totalCents);
+  if (total <= 0) return none;
   return {
     balanceDueCents: Math.max(0, total - net),
     refundDueCents: Math.max(0, net - total),
@@ -334,6 +351,7 @@ function newPayNow(args) {
     paymentIntentId: "",
     chargeId: "",
     mintCount: 0,
+    sessionExpiredAtMs: 0,
     paidAtMs: 0,
     paidCents: 0,
     stripeFeeCents: 0,
@@ -363,7 +381,7 @@ function applyPlan(existing, plan, ctx) {
       plan.amountCents});
     }
     return {...existing, status: STATUS.OPEN, amountCents: plan.amountCents,
-      updatedAtMs: nowMs};
+      sessionExpiredAtMs: 0, updatedAtMs: nowMs};
   }
   if (plan.action === "cancel") {
     return {...existing, status: STATUS.CANCELLED, updatedAtMs: nowMs};
@@ -376,18 +394,83 @@ function applyPlan(existing, plan, ctx) {
 }
 
 /**
- * What a request closing does to an unpaid link: it is cancelled. A paid one
- * stays as it is (staff refund it by hand).
+ * What a request closing does to its link: an unpaid one is cancelled; a
+ * paid one stays, and when the request ended without being received (the
+ * `status` it closes with) all of it is owed back, so staff get the refund
+ * prompt.
  *
  * @param {object} request The request before it closes.
  * @param {number} nowMs Now.
+ * @param {string} [status] The status it closes with (declined, cancelled,
+ *   expired, customer_declined); "" at Received.
  * @return {object} {} or {payNow} to merge into the closing write.
  */
-function closePatch(request, nowMs) {
+function closePatch(request, nowMs, status = "") {
   const pay = request?.payNow;
-  if (!isObject(pay) || pay.status !== STATUS.OPEN) return {};
-  return {payNow: {...pay, status: STATUS.CANCELLED,
-    updatedAtMs: whole(nowMs)}};
+  if (!isObject(pay)) return {};
+  if (pay.status === STATUS.OPEN) {
+    return {payNow: {...pay, status: STATUS.CANCELLED,
+      updatedAtMs: whole(nowMs)}};
+  }
+  if (CLOSED_UNRECEIVED.includes(text(status, 40)) && netPaidCents(pay) > 0) {
+    return {payNow: {...pay, balanceDueCents: 0,
+      refundDueCents: netPaidCents(pay), updatedAtMs: whole(nowMs)}};
+  }
+  return {};
+}
+
+/**
+ * The payNow of a request at Received, when it was paid: it remembers the
+ * line payment, and what the online payment is against the received price -
+ * an overpayment is owed back (the refund prompt).
+ *
+ * @param {object} payNow The stored payNow.
+ * @param {object} args {linePaymentId, lineId, totalCents (the line's price,
+ *   null when unpriced), nowMs}.
+ * @return {object} The payNow to store.
+ */
+function receivedPayNow(payNow, args) {
+  const total = Number.isInteger(args.totalCents) ? args.totalCents : null;
+  return {...payNow,
+    linePaymentId: text(args.linePaymentId, 128),
+    receivedLineId: text(args.lineId, 128),
+    receivedTotalCents: total,
+    balanceDueCents: 0,
+    refundDueCents: total === null ? 0 :
+      Math.max(0, netPaidCents(payNow) - total),
+    updatedAtMs: whole(args.nowMs)};
+}
+
+/**
+ * What a payment that arrives is: expected (the link is open on a confirmed
+ * request) or stray (the request closed, was received, or its link was
+ * cancelled - a Checkout Session the customer already had open). A stray
+ * payment is refunded in full, never recorded.
+ *
+ * @param {object} request The stored request.
+ * @return {string} "" when expected, else request_closed or link_not_open.
+ */
+function strayPaymentReason(request) {
+  const pay = isObject(request?.payNow) ? request.payNow : null;
+  if (text(request?.status, 40) !== "confirmed" ||
+      Number(request?.closedAtMs) > 0) {
+    return "request_closed";
+  }
+  return pay && pay.status === STATUS.OPEN ? "" : "link_not_open";
+}
+
+/**
+ * The line payment left after a refund after Received. The line was only
+ * ever credited with the price, so a refund of an overpayment (paid more
+ * than the price) takes nothing off it: the credit is capped at what the
+ * customer still has paid.
+ *
+ * @param {number} linePaymentCents The credit on the line before.
+ * @param {object} payNow The payNow after the refund is applied.
+ * @return {number} The credit that stays on the line.
+ */
+function lineCreditAfterRefund(linePaymentCents, payNow) {
+  return Math.min(cents(linePaymentCents), netPaidCents(payNow));
 }
 
 /**
@@ -1050,6 +1133,46 @@ function paidNotificationText(request, paidCents, language) {
   };
 }
 
+/**
+ * The staff's push when a payment arrived on a request that could no longer
+ * take it and was refunded at once.
+ *
+ * @param {object} request The request.
+ * @param {number} paidCents What the card was charged.
+ * @param {"en"|"fr"} language The reader.
+ * @return {{title: string, body: string}} The words.
+ */
+function strayNotificationText(request, paidCents, language) {
+  const fr = language === "fr";
+  const who = text(request?.sender?.name, 60) ||
+    (fr ? "Un client" : "A customer");
+  return {
+    title: fr ? "Paiement en ligne remboursé" : "Online payment refunded",
+    body: [who, fr ? moneyFr(paidCents) : moneyEn(paidCents),
+      text(request?.code, 20), fr ? "demande déjà close" :
+        "request no longer open"].filter(Boolean).join(" · "),
+  };
+}
+
+/**
+ * The staff's push when a refund was made in the Stripe dashboard.
+ *
+ * @param {object} request The request.
+ * @param {number} refundedCents The refund.
+ * @param {"en"|"fr"} language The reader.
+ * @return {{title: string, body: string}} The words.
+ */
+function refundNotificationText(request, refundedCents, language) {
+  const fr = language === "fr";
+  const who = text(request?.sender?.name, 60) ||
+    (fr ? "Un client" : "A customer");
+  return {
+    title: fr ? "Remboursement en ligne" : "Online refund",
+    body: [who, fr ? moneyFr(refundedCents) : moneyEn(refundedCents),
+      text(request?.code, 20)].filter(Boolean).join(" · "),
+  };
+}
+
 module.exports = {
   TIME_ZONE,
   MAX_PAY_CENTS,
@@ -1074,6 +1197,9 @@ module.exports = {
   newPayNow,
   applyPlan,
   closePatch,
+  strayPaymentReason,
+  receivedPayNow,
+  lineCreditAfterRefund,
   publicPayNow,
   refundDecision,
   applyRefund,
@@ -1103,4 +1229,6 @@ module.exports = {
   refundTextMessage,
   payoutTemplateMessage,
   paidNotificationText,
+  strayNotificationText,
+  refundNotificationText,
 };
