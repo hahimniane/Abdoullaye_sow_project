@@ -17,6 +17,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../utils/date_display.dart';
 import 'app_back_button.dart';
+import 'box_size_widgets.dart' show boxPieceLabel;
 import 'lot_sheets.dart';
 import 'proof_refusal_text.dart';
 
@@ -52,7 +53,16 @@ String requestPieceListTitle(
   String languageCode,
 ) {
   final price = piece.price;
-  if (price == null) return requestPieceTitle(l10n, piece);
+  if (price == null) {
+    if (piece.isSizedBox) {
+      // A box nobody priced (Extra large, or a size the business left
+      // blank): the business quotes it.
+      final label = boxPieceLabel(l10n, piece.boxSize);
+      final count = piece.quantity ?? 1;
+      return count > 1 ? l10n.boxQuantityLine(count, label) : label;
+    }
+    return requestPieceTitle(l10n, piece);
+  }
   switch (price['source']) {
     case 'item':
       final quantity = price['quantity'];
@@ -68,6 +78,15 @@ String requestPieceListTitle(
           : '${category.label(languageCode)} · ${priceLbText(lb)} lb';
     case 'barrel':
       return l10n.prqKindBarrel;
+    case 'box_size':
+      // "2 × Medium box" in the reader's language (the server's label is
+      // English).
+      final id = (price['boxSize'] ?? piece.boxSize).toString();
+      final label = boxPieceLabel(l10n, id);
+      final quantity = price['quantity'];
+      return quantity is num && quantity > 1
+          ? l10n.boxQuantityLine(quantity.toInt(), label)
+          : label;
   }
   return requestPieceTitle(l10n, piece);
 }
@@ -75,6 +94,17 @@ String requestPieceListTitle(
 /// How a piece was priced, in a line: "Up to 2 lb each · Extra pounds are
 /// $4.50 per lb, weighed at drop-off." Null when there is nothing to add.
 String? requestPieceNote(AppLocalizations l10n, RequestPiece piece) {
+  // A box says its inches too (the size is in its title).
+  final inches = piece.isSizedBox ? piece.dimsIn?.text : null;
+  final note = _pricingNote(l10n, piece);
+  final parts = [
+    ?inches,
+    if (note != null && note.isNotEmpty) note,
+  ];
+  return parts.isEmpty ? null : parts.join(' · ');
+}
+
+String? _pricingNote(AppLocalizations l10n, RequestPiece piece) {
   final price = piece.price;
   if (price == null) return null;
   String cents(Object? value) =>
@@ -103,6 +133,11 @@ String? requestPieceNote(AppLocalizations l10n, RequestPiece piece) {
       final lb = price['weightLb'];
       return lb is num
           ? l10n.spkNotePerLb(priceLbText(lb), cents(price['perLbCents']))
+          : null;
+    case 'box_size':
+      final quantity = price['quantity'];
+      return quantity is num && quantity > 1
+          ? l10n.spkNoteItem('${quantity.toInt()}', cents(price['unitCents']))
           : null;
   }
   return null;
@@ -227,6 +262,14 @@ String? requestReasonText(AppLocalizations l10n, String reason) =>
       'quantity_invalid' => l10n.spkErrQuantity,
       'weight_invalid' => l10n.spkErrWeight,
       'category_invalid' => l10n.spkErrCategory,
+      'box_size_invalid' => l10n.pplErrBoxSizeInvalid,
+      'dims_invalid' => l10n.pplErrDimsInvalid,
+      'box_sizes_sea_only' => l10n.pplErrBoxSizesSeaOnly,
+      'box_price_invalid' => l10n.pplErrBoxPriceInvalid,
+      'pay_not_paid' => l10n.payNowErrNotPaid,
+      'refund_too_much' => l10n.payNowErrTooMuch,
+      'refund_invalid' => l10n.payNowErrInvalid,
+      'not_allowed' => l10n.payNowErrNotAllowed,
       'pickup_out_of_area' => l10n.spkErrPickupOutOfArea,
       'pickup_out_of_range' => l10n.spkErrPickupOutOfRange,
       'pickup_origin_missing' => l10n.spkErrPickupOrigin,
@@ -537,7 +580,11 @@ class RequestPriceTable extends StatelessWidget {
             ),
           ),
           const SizedBox(width: AppSpacing.sm),
-          Text(value, key: key, style: style(strong: strong)),
+          Text(
+            value,
+            key: key,
+            style: style(strong: strong),
+          ),
         ],
       ),
     );

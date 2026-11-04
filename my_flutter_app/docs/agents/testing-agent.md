@@ -740,3 +740,14 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   `billPaymentItems` in `parking_bill_payment.dart`), decorate with the index
   and break ties on it, and pin it with the shared fixture case that depends on
   the order.
+- Under a widget test's fake clock, `await subscription.cancel()` on a broadcast
+  stream can stay pending until teardown, so a print/send flow that awaits it
+  never finishes while `pumpAndSettle` spins (it times out). In app code that a
+  widget test drives (the label printer controller), `unawaited(sub.cancel())`.
+  A flow that works in a plain `test()` but hangs in `testWidgets` is this, not
+  your logic.
+- Printer fakes (`test/fixtures/fake_printer.dart`) speak both Phomemo models:
+  `FakePrinterTransport(pm241: true)` answers with flow-control credits and
+  TSPL text replies and counts `creditViolations`. A new printer model gets a
+  fake mode and a pure protocol file with byte-exact tests, never a hardware-only
+  check.

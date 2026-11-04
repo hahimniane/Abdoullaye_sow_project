@@ -168,6 +168,12 @@ class _PrintTagsSheetState extends State<PrintTagsSheet> {
       );
       return;
     }
+    if (_printer.settings.model == PrinterModel.pm241) {
+      // A PM-241 prints 4 x 6 in package labels only: say so, send nothing.
+      AppHaptics.refuse();
+      setState(() => _error = l10n.printTagsNotOnPm241);
+      return;
+    }
     if (!await ensureBluetoothExplained(context)) return;
     if (!mounted) return;
     _start(_Busy.printing);

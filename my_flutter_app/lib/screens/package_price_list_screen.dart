@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/destination_country.dart';
+import '../services/box_sizes.dart';
 import '../services/business_price_list.dart';
 import '../services/package_price_list.dart';
 import '../services/package_request_service.dart';
@@ -39,6 +40,10 @@ String? priceListReasonText(AppLocalizations l10n, String code) =>
       'item_unknown' => l10n.pplErrItemUnknown,
       'quantity_invalid' => l10n.pplErrQuantityInvalid,
       'weight_invalid' => l10n.pplErrWeightInvalid,
+      'box_size_invalid' => l10n.pplErrBoxSizeInvalid,
+      'dims_invalid' => l10n.pplErrDimsInvalid,
+      'box_sizes_sea_only' => l10n.pplErrBoxSizesSeaOnly,
+      'box_price_invalid' => l10n.pplErrBoxPriceInvalid,
       _ => null,
     };
 
@@ -489,6 +494,8 @@ class _PackagePriceListScreenState extends State<PackagePriceListScreen> {
             ],
           ),
           _itemsSection(l10n, edit),
+          // Box sizes are Sea only (the server refuses them on Air).
+          if (_mode == 'sea') _boxSizesSection(l10n, edit),
           _perLbSection(l10n, edit),
           _departureSection(l10n, edit, locale),
           if (widget.canEdit) ...[
@@ -561,6 +568,80 @@ class _PackagePriceListScreenState extends State<PackagePriceListScreen> {
               label: Text(l10n.pplAddItem),
             ),
           ),
+      ],
+    );
+  }
+
+  Widget _boxSizesSection(AppLocalizations l10n, bool edit) {
+    final route = _route;
+    final language = Localizations.localeOf(context).languageCode;
+    Widget picture(String id) => SizedBox(
+      width: 56,
+      height: 42,
+      child: Image.asset(
+        boxSizeAsset(id),
+        fit: BoxFit.contain,
+        excludeFromSemantics: true,
+        errorBuilder: (_, _, _) => const Icon(
+          Icons.inventory_2_outlined,
+          color: AppColors.muted,
+        ),
+      ),
+    );
+    return Column(
+      key: const Key('ppl-box-sizes'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        RequestSectionTitle(l10n.boxSizesTitle),
+        Text(
+          l10n.boxSizesHint,
+          style: const TextStyle(
+            fontSize: 12.5,
+            height: 1.35,
+            color: AppColors.muted,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        RequestCard(
+          child: Column(
+            children: [
+              for (final id in boxPricedIds)
+                _RateRow(
+                  key: ValueKey('ppl-box:$_countryId:$id'),
+                  fieldKey: ValueKey('ppl-box-field:$_countryId:$id'),
+                  label: boxSizeName(id, language),
+                  subtitle: boxSizeExample(id, language),
+                  leading: picture(id),
+                  suffix: '',
+                  initial: route.boxPrices[id] ?? '',
+                  enabled: edit,
+                  onChanged: (text) => _edit(
+                    (r) => r.copyWith(boxPrices: {...r.boxPrices, id: text}),
+                  ),
+                ),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    picture(boxSizeXl),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Text(
+                        l10n.boxSizesXlQuote,
+                        key: const Key('ppl-box-xl'),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.muted,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -863,10 +944,18 @@ class _RateRow extends StatefulWidget {
     required this.initial,
     required this.enabled,
     required this.onChanged,
+    this.suffix = '/lb',
+    this.leading,
+    this.subtitle,
   });
 
   final Key fieldKey;
   final String label;
+
+  /// What follows the number: "/lb" for a rate, nothing for a box price.
+  final String suffix;
+  final Widget? leading;
+  final String? subtitle;
   final String initial;
   final bool enabled;
   final ValueChanged<String> onChanged;
@@ -892,14 +981,32 @@ class _RateRowState extends State<_RateRow> {
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
+          if (widget.leading != null) ...[
+            widget.leading!,
+            const SizedBox(width: AppSpacing.md),
+          ],
           Expanded(
-            child: Text(
-              widget.label,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: AppColors.ink,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.label,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.ink,
+                  ),
+                ),
+                if (widget.subtitle != null)
+                  Text(
+                    widget.subtitle!,
+                    style: const TextStyle(
+                      fontSize: 11.5,
+                      height: 1.25,
+                      color: AppColors.muted,
+                    ),
+                  ),
+              ],
             ),
           ),
           SizedBox(
@@ -915,9 +1022,9 @@ class _RateRowState extends State<_RateRow> {
                 FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
               ],
               onChanged: widget.onChanged,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 prefixText: r'$ ',
-                suffixText: '/lb',
+                suffixText: widget.suffix.isEmpty ? null : widget.suffix,
                 isDense: true,
               ),
             ),

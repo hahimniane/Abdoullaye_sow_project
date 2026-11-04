@@ -12668,7 +12668,8 @@ class AppLocalizationsFr extends AppLocalizations {
   String get labelPrinterTitle => 'Imprimante d’étiquettes';
 
   @override
-  String get labelPrinterSubtitle => 'Phomemo M221 en Bluetooth';
+  String get labelPrinterSubtitle =>
+      'Imprimantes d’étiquettes Phomemo en Bluetooth';
 
   @override
   String get labelPrinterSectionPrinter => 'Imprimante';
@@ -12769,6 +12770,43 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get labelPrinterSent => 'Imprimé.';
+
+  @override
+  String get labelPrinterModelM221 =>
+      'Phomemo M221 · étiquettes produit et petits formats';
+
+  @override
+  String get labelPrinterModelPm241 => 'Phomemo PM-241 · étiquettes 4×6';
+
+  @override
+  String get labelPrinterSize4x6 => '4 × 6 po';
+
+  @override
+  String get pkgLabelsTipPm241 =>
+      'Chaque étiquette 4 × 6 po porte le code QR, le code de suivi, ainsi que les deux noms et numéros de téléphone.';
+
+  @override
+  String get labelPrinterPm241Hint =>
+      'Cette imprimante imprime les étiquettes de colis en 4 × 6 po. L’app règle elle-même la taille et l’intensité. Les étiquettes produit s’impriment sur la Phomemo M221.';
+
+  @override
+  String get labelPrinterTestLabel =>
+      'Imprimer une étiquette de test (4 × 6 po)';
+
+  @override
+  String get labelPrinterTestLabelConfirmTitle =>
+      'Imprimer une étiquette de test ?';
+
+  @override
+  String get labelPrinterTestLabelConfirmBody =>
+      'Cela utilise une étiquette 4 × 6 po de l’imprimante.';
+
+  @override
+  String get labelPrinterTestLabelConfirm => 'Imprimer';
+
+  @override
+  String get printTagsNotOnPm241 =>
+      'Cette imprimante n’imprime que les étiquettes de colis 4 × 6 po. Les étiquettes produit s’impriment sur la Phomemo M221 : choisissez-la dans Réglages de l’imprimante.';
 
   @override
   String get labelPrinterStatusDone =>
@@ -14807,13 +14845,6 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get prqAreasHint => 'ex. Bronx, Harlem, Newark';
-
-  @override
-  String get prqCardBarrels => 'Paiement par carte pour les barils';
-
-  @override
-  String get prqCardBarrelsNote =>
-      'Les clients peuvent payer les barils en ligne ; ces commandes apparaissent comme attendues et payées en ligne.';
 
   @override
   String get prqSaved => 'Réglages enregistrés.';
@@ -19246,4 +19277,246 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get parkingFormerTeamTag => 'Ancien membre de l\'équipe';
+
+  @override
+  String get boxDesignerLength => 'Longueur';
+
+  @override
+  String get boxDesignerWidth => 'Largeur';
+
+  @override
+  String get boxDesignerHeight => 'Hauteur';
+
+  @override
+  String get boxDesignerInchesUnit => 'po';
+
+  @override
+  String get boxDesignerDrag => 'Faites glisser pour tourner';
+
+  @override
+  String get boxDesignerScaleNote =>
+      'Une basket (12 po) et une personne (5 pi 6 po) donnent l’échelle. Chaque carré du sol mesure 1 pi.';
+
+  @override
+  String boxDesignerSemantics(String dims) {
+    return 'Carton en 3D, $dims. Faites glisser pour le faire tourner.';
+  }
+
+  @override
+  String get boxDesignerRange => 'Entrez de 1 à 120 pouces.';
+
+  @override
+  String get boxDesignerTitle => 'Votre carton';
+
+  @override
+  String get boxDesignerUse => 'Utiliser ces pouces';
+
+  @override
+  String boxBadgePrice(String size, String price) {
+    return '$size · $price';
+  }
+
+  @override
+  String boxBadgeFrom(String size, String price) {
+    return '$size · à partir de $price';
+  }
+
+  @override
+  String boxBadgeQuote(String size) {
+    return '$size · l’entreprise donnera un prix';
+  }
+
+  @override
+  String get boxLabelSmall => 'Petite boîte';
+
+  @override
+  String get boxLabelMedium => 'Boîte moyenne';
+
+  @override
+  String get boxLabelLarge => 'Grande boîte';
+
+  @override
+  String get boxLabelXl => 'Très grande boîte';
+
+  @override
+  String boxQuantityLine(int count, String label) {
+    return '$count × $label';
+  }
+
+  @override
+  String get boxFormTitle => 'Cartons';
+
+  @override
+  String get boxFormHint =>
+      'Choisissez l’image la plus proche de votre carton. Un doute sur la taille ? Ajoutez les pouces et nous la choisissons pour vous.';
+
+  @override
+  String get boxFormAdd => 'Ajouter un carton';
+
+  @override
+  String boxFormLine(int number) {
+    return 'Carton $number';
+  }
+
+  @override
+  String get boxFormRemove => 'Retirer ce carton';
+
+  @override
+  String get boxFormHowMany => 'Combien';
+
+  @override
+  String get boxFormKnowInches => 'Vous connaissez les pouces ?';
+
+  @override
+  String get boxFormChangeInches => 'Modifier les pouces';
+
+  @override
+  String get boxFormUsePicture => 'Choisir une image à la place';
+
+  @override
+  String boxFormInchesSummary(String dims, String size) {
+    return '$dims · $size';
+  }
+
+  @override
+  String get boxFormErrSize => 'Choisissez une taille ou ajoutez les pouces.';
+
+  @override
+  String get boxFormQuoteNote =>
+      'L’entreprise donnera un prix pour cette taille.';
+
+  @override
+  String payNowButton(String amount) {
+    return 'Payer maintenant $amount';
+  }
+
+  @override
+  String get payNowOptional =>
+      'Facultatif : payez par carte maintenant, ou en personne comme d’habitude.';
+
+  @override
+  String payNowPaid(String amount) {
+    return 'Payé en ligne $amount';
+  }
+
+  @override
+  String payNowRefunded(String amount) {
+    return 'Remboursé $amount';
+  }
+
+  @override
+  String payNowBalance(String amount) {
+    return 'Solde à payer au comptoir : $amount';
+  }
+
+  @override
+  String get payNowCancelled => 'Lien de paiement annulé';
+
+  @override
+  String get payNowOpenFailed =>
+      'Impossible d’ouvrir la page de paiement. Réessayez.';
+
+  @override
+  String get payNowSwitchTitle => 'Payer maintenant';
+
+  @override
+  String get payNowSwitchNote =>
+      'Les clients reçoivent un lien facultatif pour payer par carte une fois le prix définitif. Vous payez les frais de carte (2,9 % + 0,30 \$). Sans Stripe, Laawol encaisse et vous paie chaque lundi.';
+
+  @override
+  String get payNowChargeDirect =>
+      'En ce moment, les paiements par carte vont directement sur votre compte Stripe.';
+
+  @override
+  String get payNowChargePlatform =>
+      'En ce moment, Laawol encaisse les paiements par carte et vous paie chaque lundi.';
+
+  @override
+  String get payNowChipSent => 'Lien envoyé';
+
+  @override
+  String get payNowResend => 'Renvoyer le lien';
+
+  @override
+  String get payNowResent => 'Lien de paiement envoyé.';
+
+  @override
+  String get payNowRefund => 'Rembourser';
+
+  @override
+  String get payNowRefundTitle => 'Remboursement par carte';
+
+  @override
+  String payNowRefundMessage(String max) {
+    return 'Jusqu’à $max peuvent être remboursés sur la carte du client. Les frais de carte restent à la charge de l’entreprise.';
+  }
+
+  @override
+  String get payNowRefundAmount => 'Montant';
+
+  @override
+  String get payNowRefundReason => 'Motif';
+
+  @override
+  String payNowRefundDone(String amount) {
+    return '$amount remboursé.';
+  }
+
+  @override
+  String payNowRefundDifference(String amount) {
+    return 'Le total est maintenant inférieur à ce qui a été payé par carte. Rembourser $amount ?';
+  }
+
+  @override
+  String get payNowErrNotPaid =>
+      'Rien n’a été payé en ligne pour cette demande.';
+
+  @override
+  String get payNowErrTooMuch => 'C’est plus que ce qui a été payé par carte.';
+
+  @override
+  String get payNowErrInvalid => 'Entrez un montant à rembourser.';
+
+  @override
+  String get payNowErrNotAllowed =>
+      'Seuls le propriétaire, un administrateur ou le personnel autorisé à annuler peuvent rembourser.';
+
+  @override
+  String get boxSizesTitle => 'Tailles de cartons';
+
+  @override
+  String get boxSizesHint =>
+      'Laawol fixe les tailles pour toutes les entreprises. Vous fixez le prix de chacune. Les pouces du client choisissent la taille.';
+
+  @override
+  String get boxSizesXlQuote => 'Très grande : vous donnez le prix';
+
+  @override
+  String get boxSee3d => 'Voir le carton en 3D';
+
+  @override
+  String get boxHide3d => 'Masquer le carton en 3D';
+
+  @override
+  String boxDetailSize(String size) {
+    return 'Taille : $size';
+  }
+
+  @override
+  String get payNowOpening => 'Ouverture…';
+
+  @override
+  String get pplErrBoxSizeInvalid => 'Choisissez une taille de carton.';
+
+  @override
+  String get pplErrDimsInvalid =>
+      'Les pouces du carton doivent aller de 1 à 120 dans chaque sens.';
+
+  @override
+  String get pplErrBoxSizesSeaOnly =>
+      'Les tailles de cartons ne sont tarifées que pour le maritime.';
+
+  @override
+  String get pplErrBoxPriceInvalid =>
+      'Entrez un prix de carton entre 0,01 \$ et 10 000 \$.';
 }

@@ -40,6 +40,12 @@ const packageSize50x80mm = '50x80mm';
 const packageSize62x100mm = '62x100mm';
 const packageSize4x6in = '4x6in';
 
+/// The 4 x 6 in label of the Phomemo PM-241: the printable area, 800 x 1180
+/// dots (100 x 147.5 mm at 8 dots per millimetre), which the printer places
+/// on the label itself. Chosen automatically for that printer; never offered
+/// in the size picker.
+const packageSizePm241 = '4x6pm241';
+
 /// The sizes a package label prints at. The M221 sizes stop at its 72 mm head
 /// and a custom one takes the same clamps as a shop tag; the 4 x 6 in label is
 /// the system dialog's page.
@@ -48,6 +54,9 @@ abstract final class PackageLabelSizes {
   static const fiftyByEighty = TagLabelSize(packageSize50x80mm, 50, 80);
   static const sixtyTwoByHundred = TagLabelSize(packageSize62x100mm, 62, 100);
   static const fourBySix = TagLabelSize(packageSize4x6in, 101.6, 152.4);
+
+  /// What a PM-241 prints on a 4 x 6 in label: 800 x 1180 dots.
+  static const pm241FourBySix = TagLabelSize(packageSizePm241, 100, 147.5);
 
   /// What the label printer offers, in order; custom follows.
   static const presets = [seventyByEighty, fiftyByEighty, sixtyTwoByHundred];

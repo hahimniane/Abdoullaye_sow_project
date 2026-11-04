@@ -12474,7 +12474,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get labelPrinterTitle => 'Label printer';
 
   @override
-  String get labelPrinterSubtitle => 'Phomemo M221 over Bluetooth';
+  String get labelPrinterSubtitle => 'Phomemo label printers over Bluetooth';
 
   @override
   String get labelPrinterSectionPrinter => 'Printer';
@@ -12574,6 +12574,40 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get labelPrinterSent => 'Printed.';
+
+  @override
+  String get labelPrinterModelM221 => 'Phomemo M221 · tags and small labels';
+
+  @override
+  String get labelPrinterModelPm241 => 'Phomemo PM-241 · 4×6 labels';
+
+  @override
+  String get labelPrinterSize4x6 => '4 × 6 in';
+
+  @override
+  String get pkgLabelsTipPm241 =>
+      'Each 4 × 6 in label carries the QR code, the tracking code, and both names and phone numbers.';
+
+  @override
+  String get labelPrinterPm241Hint =>
+      'This printer prints package labels at 4 × 6 in. The app sets the size and darkness itself. Product tags print on the Phomemo M221.';
+
+  @override
+  String get labelPrinterTestLabel => 'Print a test label (4 × 6 in)';
+
+  @override
+  String get labelPrinterTestLabelConfirmTitle => 'Print a test label?';
+
+  @override
+  String get labelPrinterTestLabelConfirmBody =>
+      'This uses one 4 × 6 in label from the printer.';
+
+  @override
+  String get labelPrinterTestLabelConfirm => 'Print';
+
+  @override
+  String get printTagsNotOnPm241 =>
+      'This printer only prints 4 × 6 in package labels. Product tags print on the Phomemo M221: choose it in Printer settings.';
 
   @override
   String get labelPrinterStatusDone =>
@@ -14594,13 +14628,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get prqAreasHint => 'e.g. Bronx, Harlem, Newark';
-
-  @override
-  String get prqCardBarrels => 'Card payment for barrels';
-
-  @override
-  String get prqCardBarrelsNote =>
-      'Customers can pay barrels online; those orders show as Expected and paid online.';
 
   @override
   String get prqSaved => 'Settings saved.';
@@ -18952,4 +18979,242 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get parkingFormerTeamTag => 'Former team member';
+
+  @override
+  String get boxDesignerLength => 'Length';
+
+  @override
+  String get boxDesignerWidth => 'Width';
+
+  @override
+  String get boxDesignerHeight => 'Height';
+
+  @override
+  String get boxDesignerInchesUnit => 'in';
+
+  @override
+  String get boxDesignerDrag => 'Drag to spin';
+
+  @override
+  String get boxDesignerScaleNote =>
+      'A sneaker (12 in) and a person (5 ft 6 in) show the scale. Each floor square is 1 ft.';
+
+  @override
+  String boxDesignerSemantics(String dims) {
+    return '3D box, $dims. Drag to spin it.';
+  }
+
+  @override
+  String get boxDesignerRange => 'Enter 1 to 120 inches.';
+
+  @override
+  String get boxDesignerTitle => 'Your box';
+
+  @override
+  String get boxDesignerUse => 'Use these inches';
+
+  @override
+  String boxBadgePrice(String size, String price) {
+    return '$size · $price';
+  }
+
+  @override
+  String boxBadgeFrom(String size, String price) {
+    return '$size · from $price';
+  }
+
+  @override
+  String boxBadgeQuote(String size) {
+    return '$size · the business will quote';
+  }
+
+  @override
+  String get boxLabelSmall => 'Small box';
+
+  @override
+  String get boxLabelMedium => 'Medium box';
+
+  @override
+  String get boxLabelLarge => 'Large box';
+
+  @override
+  String get boxLabelXl => 'Extra large box';
+
+  @override
+  String boxQuantityLine(int count, String label) {
+    return '$count × $label';
+  }
+
+  @override
+  String get boxFormTitle => 'Boxes';
+
+  @override
+  String get boxFormHint =>
+      'Pick the picture closest to your box. Not sure of the size? Add the inches and we pick it for you.';
+
+  @override
+  String get boxFormAdd => 'Add a box';
+
+  @override
+  String boxFormLine(int number) {
+    return 'Box $number';
+  }
+
+  @override
+  String get boxFormRemove => 'Remove this box';
+
+  @override
+  String get boxFormHowMany => 'How many';
+
+  @override
+  String get boxFormKnowInches => 'Know the inches?';
+
+  @override
+  String get boxFormChangeInches => 'Change the inches';
+
+  @override
+  String get boxFormUsePicture => 'Choose a picture instead';
+
+  @override
+  String boxFormInchesSummary(String dims, String size) {
+    return '$dims · $size';
+  }
+
+  @override
+  String get boxFormErrSize => 'Choose a size or add the inches.';
+
+  @override
+  String get boxFormQuoteNote => 'The business will quote this size.';
+
+  @override
+  String payNowButton(String amount) {
+    return 'Pay now $amount';
+  }
+
+  @override
+  String get payNowOptional =>
+      'Optional: pay by card now, or pay in person as usual.';
+
+  @override
+  String payNowPaid(String amount) {
+    return 'Paid online $amount';
+  }
+
+  @override
+  String payNowRefunded(String amount) {
+    return 'Refunded $amount';
+  }
+
+  @override
+  String payNowBalance(String amount) {
+    return 'Balance due at the counter: $amount';
+  }
+
+  @override
+  String get payNowCancelled => 'Payment link cancelled';
+
+  @override
+  String get payNowOpenFailed => 'Could not open the payment page. Try again.';
+
+  @override
+  String get payNowSwitchTitle => 'Pay now';
+
+  @override
+  String get payNowSwitchNote =>
+      'Customers get an optional link to pay by card once the price is final. You pay the card fee (2.9% + 30¢). Without Stripe, Laawol collects and pays you every Monday.';
+
+  @override
+  String get payNowChargeDirect =>
+      'Right now card payments go straight to your Stripe account.';
+
+  @override
+  String get payNowChargePlatform =>
+      'Right now Laawol collects card payments and pays you every Monday.';
+
+  @override
+  String get payNowChipSent => 'Link sent';
+
+  @override
+  String get payNowResend => 'Send the link again';
+
+  @override
+  String get payNowResent => 'Payment link sent.';
+
+  @override
+  String get payNowRefund => 'Refund';
+
+  @override
+  String get payNowRefundTitle => 'Refund by card';
+
+  @override
+  String payNowRefundMessage(String max) {
+    return 'Up to $max can go back to the customer’s card. The card fee stays with the business.';
+  }
+
+  @override
+  String get payNowRefundAmount => 'Amount';
+
+  @override
+  String get payNowRefundReason => 'Reason';
+
+  @override
+  String payNowRefundDone(String amount) {
+    return 'Refunded $amount.';
+  }
+
+  @override
+  String payNowRefundDifference(String amount) {
+    return 'The total is now lower than what was paid by card. Refund $amount?';
+  }
+
+  @override
+  String get payNowErrNotPaid => 'Nothing was paid online on this request.';
+
+  @override
+  String get payNowErrTooMuch => 'That is more than was paid by card.';
+
+  @override
+  String get payNowErrInvalid => 'Enter an amount to refund.';
+
+  @override
+  String get payNowErrNotAllowed =>
+      'Only the owner, an admin or staff who can void may refund.';
+
+  @override
+  String get boxSizesTitle => 'Box sizes';
+
+  @override
+  String get boxSizesHint =>
+      'Laawol sets the sizes for every business. You set the price of each one. A customer’s inches pick the size.';
+
+  @override
+  String get boxSizesXlQuote => 'Extra large: you quote it';
+
+  @override
+  String get boxSee3d => 'See the 3D box';
+
+  @override
+  String get boxHide3d => 'Hide the 3D box';
+
+  @override
+  String boxDetailSize(String size) {
+    return 'Size: $size';
+  }
+
+  @override
+  String get payNowOpening => 'Opening…';
+
+  @override
+  String get pplErrBoxSizeInvalid => 'Choose a box size.';
+
+  @override
+  String get pplErrDimsInvalid =>
+      'Box inches must be 1 to 120 in each direction.';
+
+  @override
+  String get pplErrBoxSizesSeaOnly => 'Box sizes are priced for Sea only.';
+
+  @override
+  String get pplErrBoxPriceInvalid =>
+      'Enter a box price between \$0.01 and \$10,000.';
 }

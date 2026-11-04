@@ -11,6 +11,7 @@ import '../models/structured_address.dart';
 import '../providers/auth_provider.dart';
 import '../services/barrel_shipment_service.dart'
     show BarrelAddressSuggestion, BarrelShipmentService;
+import '../services/box_sizes.dart';
 import '../services/business_price_list.dart' show priceLbText;
 import '../services/eastern_clock.dart' show easternWall;
 import '../services/package_price_list.dart';
@@ -22,6 +23,9 @@ import '../theme/app_motion.dart';
 import '../theme/app_spacing.dart';
 import '../utils/date_display.dart';
 import '../widgets/app_snackbars.dart';
+import '../widgets/box_designer/box_designer.dart' show BoxBadgePrice;
+import '../widgets/box_designer/box_geometry.dart' show BoxDims, inchesText;
+import '../widgets/box_size_widgets.dart';
 import '../widgets/country_phone_field.dart';
 import '../widgets/day_picker.dart';
 import '../widgets/lot_sheets.dart';
@@ -117,6 +121,32 @@ class _WeightLine {
   );
 }
 
+/// A line of boxes: a size picked from the pictures, or the inches typed in
+/// the designer (the inches win and the size follows them), how many, and up
+/// to 3 photos.
+class _BoxLine {
+  String sizeId = '';
+  BoxDims? dims;
+  int quantity = 1;
+  final photos = <_Photo>[];
+
+  /// The size this line makes: the inches' size, else the picture chosen.
+  String get effectiveSize {
+    final d = dims;
+    return d == null ? sizeId : (boxSizeIdOf(d) ?? sizeId);
+  }
+
+  BasketBox get value => BasketBox(
+    boxSize: effectiveSize,
+    dimsIn: dims == null ? null : RequestSize(dims!.l, dims!.w, dims!.h),
+    quantity: quantity,
+    photoPaths: [
+      for (final p in photos)
+        if (p.path.isNotEmpty) p.path,
+    ],
+  );
+}
+
 /// "Something else": described in words, with photos.
 class _ElsePiece {
   final description = TextEditingController();
@@ -187,6 +217,7 @@ class _PackageRequestFormScreenState extends State<PackageRequestFormScreen> {
   final _qty = <String, int>{};
   final _weights = <_WeightLine>[];
   int _barrels = 0;
+  final _boxes = <_BoxLine>[];
   final _others = <_ElsePiece>[];
 
   // How it gets to the business.
@@ -349,6 +380,7 @@ class _PackageRequestFormScreenState extends State<PackageRequestFormScreen> {
     },
     weights: [for (final w in _weights) w.value],
     barrels: _barrels,
+    boxes: [for (final b in _boxes) b.value],
     others: [for (final o in _others) o.value],
   );
 
@@ -446,6 +478,8 @@ class _PackageRequestFormScreenState extends State<PackageRequestFormScreen> {
       return gone;
     });
     if (!catalog.barrel) _barrels = 0;
+    // Box sizes are Sea only.
+    if (mode == 'air') _boxes.clear();
     _businessId = '';
     _errors = {};
     _banner = '';
@@ -606,9 +640,12 @@ class _PackageRequestFormScreenState extends State<PackageRequestFormScreen> {
   // Photos.
   // -------------------------------------------------------------------------
 
-  Future<void> _addPhoto(_ElsePiece piece) async {
+  Future<void> _addPhoto(
+    List<_Photo> photos, {
+    int max = requestMaxPhotosPerPiece,
+  }) async {
     final l10n = AppLocalizations.of(context)!;
-    if (piece.photos.length >= requestMaxPhotosPerPiece) return;
+    if (photos.length >= max) return;
     final source = await pickLotOption<ImageSource>(
       context,
       title: l10n.prqAddPhoto,
@@ -635,14 +672,18 @@ class _PackageRequestFormScreenState extends State<PackageRequestFormScreen> {
       );
       return;
     }
-    setState(() => piece.photos.add(_Photo(picked!.bytes)));
+    setState(() => photos.add(_Photo(picked!.bytes)));
   }
 
   /// Uploads every photo into [businessId]'s folder (a photo already there
   /// stays). False when one could not go up.
   Future<bool> _uploadPhotos(String businessId) async {
-    for (final piece in _others) {
-      for (final photo in piece.photos) {
+    final lists = [
+      for (final b in _boxes) b.photos,
+      for (final o in _others) o.photos,
+    ];
+    for (final photos in lists) {
+      for (final photo in photos) {
         if (photo.path.isNotEmpty && photo.uploadedFor == businessId) continue;
         setState(() {
           photo.uploading = true;
@@ -716,6 +757,8 @@ class _PackageRequestFormScreenState extends State<PackageRequestFormScreen> {
     'air_unavailable',
     'quantity_invalid',
     'category_invalid',
+    'box_size_invalid',
+    'dims_invalid',
   };
 
   Future<void> _send() async {
@@ -998,9 +1041,230 @@ class _PackageRequestFormScreenState extends State<PackageRequestFormScreen> {
             _clear(const ['pieces_required']);
           }),
         ),
+      if (_mode != 'air') ..._boxesStep(l10n),
       if (catalog.perLbCategoryIds.isNotEmpty) ..._byWeight(l10n, catalog),
       ..._elsePieces(l10n),
     ];
+  }
+
+  // -------------------------------------------------------------------------
+  // Boxes (Sea): size pictures, optional inches in the 3D designer, photos.
+  // -------------------------------------------------------------------------
+
+  /// What a size costs at the business chosen, else the lowest of the
+  /// businesses offered (docs/PACKAGE_BOX_SIZES_PAY_NOW.md §4 "from $X").
+  int? _boxPrice(String sizeId) {
+    final chosen = _optionOf(_businessId);
+    if (chosen != null) return boxPriceCents(chosen.routeFor('sea'), sizeId);
+    return cheapestBoxPriceCents([
+      for (final o in _offered) o.routeFor('sea'),
+    ], sizeId);
+  }
+
+  Future<void> _openDesigner(_BoxLine line) async {
+    final dims = await showBoxDesignerSheet(
+      context,
+      initial: line.dims,
+      badgePrice: _optionOf(_businessId) != null
+          ? BoxBadgePrice.exact
+          : BoxBadgePrice.from,
+      priceCentsFor: _boxPrice,
+    );
+    if (dims == null || !mounted) return;
+    setState(() {
+      line.dims = dims;
+      line.sizeId = boxSizeIdOf(dims) ?? line.sizeId;
+      _clear(const ['box_size_invalid', 'dims_invalid', 'pieces_required']);
+    });
+  }
+
+  List<Widget> _boxesStep(AppLocalizations l10n) {
+    final language = _language;
+    return [
+      RequestSectionTitle(l10n.boxFormTitle),
+      Text(
+        l10n.boxFormHint,
+        style: const TextStyle(
+          fontSize: 13,
+          height: 1.4,
+          color: AppColors.muted,
+        ),
+      ),
+      const SizedBox(height: AppSpacing.sm),
+      for (var i = 0; i < _boxes.length; i++)
+        _boxEditor(l10n, i, _boxes[i], language),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: OutlinedButton.icon(
+          key: const Key('request-add-box'),
+          onPressed: _canAddPiece
+              ? () => setState(() {
+                  _boxes.add(_BoxLine());
+                  _clear(const ['pieces_required']);
+                })
+              : null,
+          icon: const Icon(Icons.add, size: 18),
+          label: Text(l10n.boxFormAdd),
+        ),
+      ),
+    ];
+  }
+
+  Widget _boxEditor(
+    AppLocalizations l10n,
+    int index,
+    _BoxLine line,
+    String language,
+  ) {
+    final needsSize =
+        (_errors.contains('box_size_invalid') ||
+            _errors.contains('dims_invalid')) &&
+        line.effectiveSize.isEmpty;
+    final dims = line.dims;
+    return RequestCard(
+      key: ObjectKey(line),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  l10n.boxFormLine(index + 1),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.ink,
+                  ),
+                ),
+              ),
+              IconButton(
+                key: Key('request-remove-box:$index'),
+                tooltip: l10n.boxFormRemove,
+                visualDensity: VisualDensity.compact,
+                onPressed: () => setState(() => _boxes.removeAt(index)),
+                icon: const Icon(Icons.close, size: 18, color: AppColors.muted),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          BoxSizePicker(
+            keyPrefix: 'request-box-size:$index',
+            language: language,
+            selected: line.effectiveSize,
+            quoteNote: l10n.boxFormQuoteNote,
+            onChanged: (id) => setState(() {
+              // A picture replaces typed inches: one answer per box.
+              line.sizeId = id;
+              line.dims = null;
+              _clear(const ['box_size_invalid', 'dims_invalid']);
+            }),
+          ),
+          if (needsSize)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                l10n.boxFormErrSize,
+                key: Key('request-box-error:$index'),
+                style: const TextStyle(fontSize: 12, color: AppColors.errorRed),
+              ),
+            ),
+          const SizedBox(height: AppSpacing.sm),
+          if (dims != null)
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    l10n.boxFormInchesSummary(
+                      '${inchesText(dims.l)} × ${inchesText(dims.w)} × ${inchesText(dims.h)} ${l10n.boxDesignerInchesUnit}',
+                      boxSizeName(line.effectiveSize, language),
+                    ),
+                    key: Key('request-box-summary:$index'),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.ink,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          Wrap(
+            spacing: AppSpacing.sm,
+            children: [
+              TextButton.icon(
+                key: Key('request-box-inches:$index'),
+                onPressed: () => _openDesigner(line),
+                icon: const Icon(Icons.threed_rotation, size: 18),
+                label: Text(
+                  dims == null
+                      ? l10n.boxFormKnowInches
+                      : l10n.boxFormChangeInches,
+                ),
+              ),
+              if (dims != null)
+                TextButton(
+                  key: Key('request-box-clear-inches:$index'),
+                  onPressed: () => setState(() => line.dims = null),
+                  child: Text(l10n.boxFormUsePicture),
+                ),
+            ],
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  l10n.boxFormHowMany,
+                  style: const TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.ink,
+                  ),
+                ),
+              ),
+              RequestQuantityStepper(
+                keyPrefix: 'request-box-qty:$index',
+                quantity: line.quantity,
+                onChanged: (n) => setState(() {
+                  line.quantity = n.clamp(1, requestMaxQuantity);
+                  _clear(const ['quantity_invalid']);
+                }),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              for (final photo in line.photos)
+                _PhotoTile(
+                  photo: photo,
+                  onRemove: () => setState(() => line.photos.remove(photo)),
+                  onRetry: () => setState(() => photo.failed = false),
+                ),
+              if (line.photos.length < requestMaxPhotosPerBox)
+                OutlinedButton.icon(
+                  key: Key('request-box-photo:$index'),
+                  onPressed: () =>
+                      _addPhoto(line.photos, max: requestMaxPhotosPerBox),
+                  icon: const Icon(Icons.add_a_photo_outlined, size: 18),
+                  label: Text(l10n.prqAddPhoto),
+                ),
+            ],
+          ),
+          if (line.photos.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                l10n.prqPhotosCount(line.photos.length, requestMaxPhotosPerBox),
+                style: const TextStyle(fontSize: 11.5, color: AppColors.muted),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 
   List<Widget> _byWeight(AppLocalizations l10n, RequestCatalog catalog) {
@@ -1216,7 +1480,7 @@ class _PackageRequestFormScreenState extends State<PackageRequestFormScreen> {
               if (piece.photos.length < requestMaxPhotosPerPiece)
                 OutlinedButton.icon(
                   key: Key('request-add-photo:$index'),
-                  onPressed: () => _addPhoto(piece),
+                  onPressed: () => _addPhoto(piece.photos),
                   icon: const Icon(Icons.add_a_photo_outlined, size: 18),
                   label: Text(l10n.prqAddPhoto),
                 ),

@@ -42,6 +42,7 @@ void main() {
           c['pieces'],
           barrelPriceCents: ctx['barrelPriceCents'] as int?,
           pickupFeeCents: ctx['pickupFeeCents'] as int?,
+          lang: ctx['lang'] as String?,
         );
         expect(json(got.toMap()), c['expect']);
       });
@@ -96,6 +97,178 @@ void main() {
         expect(json(validateRoute(c['raw']).toMap()), c['expect']);
       });
     }
+  });
+
+  group('box sizes, the shared cases', () {
+    final box = map(fixture['boxSizes']);
+    List<Map<String, dynamic>> boxCases(String key) =>
+        (box[key] as List).cast<Map<String, dynamic>>();
+
+    test('the fixture has its cases and the sizes are Laawol\'s', () {
+      expect(boxCases('sizeFor').length, greaterThanOrEqualTo(20));
+      expect(boxCases('dims').length, greaterThanOrEqualTo(5));
+      expect(boxCases('routes').length, greaterThanOrEqualTo(10));
+      expect(boxCases('pieces').length, greaterThanOrEqualTo(20));
+      expect(boxCases('baskets').length, greaterThanOrEqualTo(3));
+      expect(
+        [for (final b in boxSizes) b.id],
+        ['small', 'medium', 'large', 'xl'],
+      );
+      expect(boxSlackIn, 1);
+      expect(boxDimMaxIn, 120);
+      expect(boxSizes.last.maxIn, isNull);
+      expect(boxSizes.first.label('fr'), 'Petite');
+      expect(boxSizes[1].example('fr'), 'Environ un carton de micro-ondes');
+    });
+
+    for (final c in boxCases('sizeFor')) {
+      test('size: ${c['name']}', () {
+        expect(boxSizeFor(c['dims']), c['expect']);
+      });
+    }
+    for (final c in boxCases('dims')) {
+      test('dims: ${c['name']}', () {
+        expect(json(cleanDims(c['raw'])), c['expect']);
+      });
+    }
+    for (final c in boxCases('routes')) {
+      test('route: ${c['name']}', () {
+        final got = c.containsKey('mode')
+            ? validateRoute(c['raw'], mode: c['mode'] as String)
+            : validateRoute(c['raw']);
+        expect(json(got.toMap()), c['expect']);
+      });
+    }
+    for (final c in boxCases('pieces')) {
+      test('piece: ${c['name']}', () {
+        final ctx = c['ctx'] == null
+            ? const <String, dynamic>{}
+            : map(c['ctx']);
+        final got = pricePiece(
+          c['route'] == null ? null : map(c['route']),
+          c['piece'],
+          barrelPriceCents: ctx['barrelPriceCents'] as int?,
+          lang: ctx['lang'] as String?,
+        );
+        expect(json(got.toMap()), c['expect']);
+      });
+    }
+    for (final c in boxCases('baskets')) {
+      test('basket: ${c['name']}', () {
+        final ctx = map(c['ctx']);
+        final got = priceBasket(
+          map(c['route']),
+          c['pieces'],
+          barrelPriceCents: ctx['barrelPriceCents'] as int?,
+          pickupFeeCents: ctx['pickupFeeCents'] as int?,
+          lang: ctx['lang'] as String?,
+        );
+        expect(json(got.toMap()), c['expect']);
+      });
+    }
+  });
+
+  group('box sizes, the rules the server tests beside the fixture', () {
+    final route = <String, dynamic>{
+      'items': <Object?>[],
+      'perLbCents': <String, int>{},
+      'departure': null,
+      'boxPricesCents': {'small': 2500, 'medium': 3500, 'large': 5500},
+    };
+    Map<String, dynamic> stored(Map<String, Object?> piece) {
+      final out = pricePiece(route, piece);
+      return {
+        'id': 'p1',
+        ...piece,
+        'price': out.price,
+        'estimateCents': out.estimateCents,
+      };
+    }
+
+    test('a whole list refuses box prices on an air route', () {
+      final air = validatePriceList(
+        {
+          'routes': {
+            'gn': {
+              'air': {
+                'boxPricesCents': {'small': 2500},
+              },
+              'sea': {
+                'boxPricesCents': {'small': 2500},
+              },
+            },
+          },
+        },
+        ['gn'],
+      );
+      expect(air.routes, isNull);
+      expect(air.errors, ['box_sizes_sea_only']);
+    });
+
+    test('a whole list keeps Sea box prices', () {
+      final sea = validatePriceList(
+        {
+          'routes': {
+            'gn': {
+              'sea': {
+                'boxPricesCents': {'small': 2500, 'medium': 3500},
+              },
+            },
+          },
+        },
+        ['gn'],
+      );
+      expect(sea.errors, isEmpty);
+      expect(sea.routes!['gn']!['sea']!['boxPricesCents'], {
+        'small': 2500,
+        'medium': 3500,
+      });
+    });
+
+    test('the new refusals have messages', () {
+      for (final code in [
+        'box_sizes_sea_only',
+        'box_price_invalid',
+        'box_size_invalid',
+        'dims_invalid',
+      ]) {
+        expect(priceListMessages[code], isNotNull, reason: code);
+      }
+    });
+
+    test('the counter does not move a box price', () {
+      final priced = pricePiece(route, {
+        'kind': 'box',
+        'boxSize': 'medium',
+        'quantity': 2,
+      });
+      expect(counterPriceCents(priced.price, 99), 7000);
+    });
+
+    test('re-prices a box at today\'s list', () {
+      final before = [
+        stored({'kind': 'box', 'boxSize': 'medium', 'quantity': 2}),
+      ];
+      final dearer = {
+        ...route,
+        'boxPricesCents': {'small': 2500, 'medium': 4000, 'large': 5500},
+      };
+      final out = repricePieces(before, dearer);
+      expect(out.changed, isTrue);
+      expect(out.wentUp, isTrue);
+      expect(out.cents['p1'], 8000);
+      expect(out.pieces[0]['price']['unitCents'], 4000);
+      expect(repricePieces(before, route).changed, isFalse);
+    });
+
+    test('a box whose size left the list keeps its price', () {
+      final before = [
+        stored({'kind': 'box', 'boxSize': 'medium'}),
+      ];
+      final out = repricePieces(before, {...route, 'boxPricesCents': {}});
+      expect(out.changed, isFalse);
+      expect(out.pieces[0]['estimateCents'], 3500);
+    });
   });
 
   group('the rules the server tests beside the fixture', () {

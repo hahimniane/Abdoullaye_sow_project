@@ -1,5 +1,6 @@
-/// Printing product tags straight to the shop's Phomemo M221 over
-/// Bluetooth LE, with no printer app in between.
+/// Printing product tags and package labels straight to the shop's Phomemo
+/// printer over Bluetooth LE, with no printer app in between: the M221 (tags
+/// and small package labels) or the PM-241 (4 x 6 in package labels).
 ///
 /// Three parts, all testable without a radio:
 /// - [LabelPrinterSettings]: the chosen printer, label size, density, speed
@@ -12,7 +13,9 @@
 ///   printer's "done" reply between copies, and keeps a print log the shop
 ///   owner can copy and send to the developer when something fails.
 ///
-/// The bytes come from `m221_protocol.dart`.
+/// The bytes come from `m221_protocol.dart` (M221) or `pm241_protocol.dart`
+/// (PM-241, a TSPL printer on the same Bluetooth service): the controller
+/// tells them apart by the name the printer advertises ([PrinterModel]).
 library;
 
 import 'dart:async';
@@ -23,7 +26,35 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'm221_protocol.dart';
 import 'package_labels.dart' show PackageLabelSizes, packageSize70x80mm;
+import 'pm241_protocol.dart';
 import 'tag_labels.dart';
+
+// ---------------------------------------------------------------------------
+// Printer models.
+// ---------------------------------------------------------------------------
+
+/// The Phomemo printers the app speaks to. Both advertise the same GATT
+/// service (ff00, write ff02, notify ff03), so the model comes from the name.
+enum PrinterModel {
+  /// Tags and small package labels (72 mm head, its own byte protocol).
+  m221,
+
+  /// 4 x 6 in package labels (TSPL).
+  pm241,
+}
+
+/// The model of a printer called [name]: "PM-241Z-BT-0470" is a PM-241,
+/// anything else (the M221 advertises a serial such as "Q2...") an M221.
+PrinterModel printerModelForName(String name) =>
+    RegExp(r'PM-?241', caseSensitive: false).hasMatch(name)
+    ? PrinterModel.pm241
+    : PrinterModel.m221;
+
+/// The model as the print log writes it.
+String printerModelLogName(PrinterModel model) => switch (model) {
+  PrinterModel.m221 => 'Phomemo M221',
+  PrinterModel.pm241 => 'Phomemo PM-241 (TSPL)',
+};
 
 // ---------------------------------------------------------------------------
 // Settings.
@@ -61,11 +92,18 @@ class LabelPrinterSettings {
   final double packageWidthMm;
   final double packageHeightMm;
 
-  TagLabelSize get packageSize => PackageLabelSizes.resolve(
-    packageSizeId,
-    customWidthMm: packageWidthMm,
-    customHeightMm: packageHeightMm,
-  );
+  /// A PM-241 always prints the 4 x 6 in label; the M221 prints the chosen
+  /// size.
+  TagLabelSize get packageSize => model == PrinterModel.pm241
+      ? PackageLabelSizes.pm241FourBySix
+      : PackageLabelSizes.resolve(
+          packageSizeId,
+          customWidthMm: packageWidthMm,
+          customHeightMm: packageHeightMm,
+        );
+
+  /// Which printer the chosen device is, by the name it advertised.
+  PrinterModel get model => printerModelForName(deviceName);
 
   /// The printer's Bluetooth id ("" = none chosen yet) and the name it
   /// advertised (a serial such as "Q2...").
@@ -322,7 +360,8 @@ class PrinterDevice {
       advertisesPrinterService ||
       name.toUpperCase().startsWith('Q2') ||
       name.toUpperCase().contains('M221') ||
-      name.toUpperCase().contains('PHOMEMO');
+      name.toUpperCase().contains('PHOMEMO') ||
+      printerModelForName(name) == PrinterModel.pm241;
 }
 
 abstract class PrinterTransport {
@@ -399,6 +438,8 @@ class LabelPrinterController extends ChangeNotifier {
     PrintLog? log,
     this.pause = _realPause,
     this.doneTimeout = m221DoneTimeout,
+    this.pm241DoneWait = pm241DoneTimeout,
+    this.pm241CreditWait = pm241CreditTimeout,
     this.scanTimeout = const Duration(seconds: 8),
     this.connectTimeout = const Duration(seconds: 15),
     this.writeTimeout = const Duration(seconds: 10),
@@ -410,6 +451,11 @@ class LabelPrinterController extends ChangeNotifier {
   final PrintLog log;
   final PrintPause pause;
   final Duration doneTimeout;
+
+  /// The PM-241's own waits: for `SSSGETPRINTING:DONE` after the last packet,
+  /// and for a flow-control credit between packets.
+  final Duration pm241DoneWait;
+  final Duration pm241CreditWait;
   final Duration scanTimeout;
   final Duration connectTimeout;
   final Duration writeTimeout;
@@ -424,6 +470,11 @@ class LabelPrinterController extends ChangeNotifier {
   final Map<String, PrinterDevice> _found = {};
   PrinterLink? _link;
   StreamSubscription<List<int>>? _notifySub;
+
+  /// The PM-241's flow control for the current connection, and what it said.
+  Pm241Flow _flow = Pm241Flow();
+  final StreamController<Pm241Event> _flowEvents =
+      StreamController<Pm241Event>.broadcast();
   final List<List<int>> _frames = [];
   final StreamController<List<int>> _frameEvents =
       StreamController<List<int>>.broadcast();
@@ -441,6 +492,9 @@ class LabelPrinterController extends ChangeNotifier {
       _status != PrinterStatus.idle && _status != PrinterStatus.connected;
   bool get isConnected => _link?.isConnected ?? false;
   bool get cancelRequested => _cancel;
+
+  /// The printer chosen in the settings (the M221 until a PM-241 is).
+  PrinterModel get model => _settings.model;
   int get progressDone => _progressDone;
   int get progressTotal => _progressTotal;
   int? get batteryPercent => _battery;
@@ -614,10 +668,16 @@ class LabelPrinterController extends ChangeNotifier {
       link = await transport.connect(id, timeout: connectTimeout);
     }
     _frames.clear();
+    final isPm241 = _settings.model == PrinterModel.pm241;
+    final flow = _flow = Pm241Flow();
     _notifySub = link.notifications.listen((frame) {
       _frames.add(frame);
       _frameEvents.add(frame);
-      log.add('reply: ${m221Hex(frame)}');
+      if (isPm241) {
+        _onPm241Frame(flow, frame);
+      } else {
+        log.add('reply: ${m221Hex(frame)}');
+      }
     });
     // The printer ignores everything until notifications are on.
     log.add('subscribe: ff03');
@@ -632,11 +692,13 @@ class LabelPrinterController extends ChangeNotifier {
       } catch (_) {}
       throw PrinterException(PrintFailure.connectFailed, 'subscribe: $e');
     }
-    await pause(m221AfterSubscribeGap);
+    await pause(isPm241 ? pm241AfterSubscribeGap : m221AfterSubscribeGap);
     _link = link;
     log.add(
-      'connected: write ${link.writeWithoutResponse ? 'without' : 'with'} '
-      'response, ${_chunkSize(link)} bytes per write',
+      'connected: ${printerModelLogName(_settings.model)}, '
+      'write ${link.writeWithoutResponse ? 'without' : 'with'} '
+      'response, ${isPm241 ? link.maxWriteLength : _chunkSize(link)} '
+      'bytes per write',
     );
     unawaited(
       link.disconnected.then((_) {
@@ -705,6 +767,132 @@ class LabelPrinterController extends ChangeNotifier {
     }
   }
 
+  // -- PM-241 ----------------------------------------------------------------
+
+  /// A notification from a PM-241: flow control and TSPL text replies.
+  void _onPm241Frame(Pm241Flow flow, List<int> frame) {
+    for (final event in flow.feed(frame)) {
+      // One `01 01` per packet would flood the 60-line log: only a credit
+      // that is not the usual single one is worth a line.
+      if (event.type != Pm241EventType.credit || event.value != 1) {
+        log.add(event.logLine);
+      }
+      if (!_flowEvents.isClosed) _flowEvents.add(event);
+    }
+  }
+
+  /// Waits until [ready] holds (checked after every reply the printer
+  /// sends), at most [limit]; whether it did.
+  Future<bool> _waitForFlow(bool Function() ready, Duration limit) async {
+    if (ready()) return true;
+    final reached = Completer<bool>();
+    final sub = _flowEvents.stream.listen(
+      (_) {
+        if (!reached.isCompleted && ready()) reached.complete(true);
+      },
+      onDone: () {
+        if (!reached.isCompleted) reached.complete(false);
+      },
+    );
+    try {
+      return await reached.future.timeout(limit, onTimeout: () => false);
+    } finally {
+      // Not awaited: a cancelled broadcast subscription has nothing to wait
+      // for, and under a fake clock its future would hold the print.
+      unawaited(sub.cancel());
+    }
+  }
+
+  /// Waits until the printer has granted another packet.
+  Future<void> _waitForCredit(Pm241Flow flow) async {
+    if (!await _waitForFlow(() => flow.credits > 0, pm241CreditWait)) {
+      log.add('flow: no credit in ${pm241CreditWait.inMilliseconds} ms');
+      throw const PrinterException(
+        PrintFailure.writeFailed,
+        'the printer granted no flow-control credit',
+      );
+    }
+  }
+
+  /// Sends one label to a PM-241 as TSPL, one packet per credit, and waits
+  /// for `SSSGETPRINTING:DONE`.
+  Future<void> _printOnePm241(PrinterLink link, LabelBitmap image) async {
+    if (!pm241Fits(image)) {
+      throw PrinterException(
+        PrintFailure.writeFailed,
+        'a ${image.width}x${image.height} picture does not fit '
+        '${pm241LabelWidthDots}x$pm241LabelHeightDots',
+      );
+    }
+    final flow = _flow;
+    // The printer says how big a packet it takes right after notifications
+    // are on; until it has, packets stay at the safe 20 bytes. Give it a
+    // moment, but never hold a printer that does not say.
+    await _waitForFlow(
+      () => flow.maxPacket != null,
+      pm241CreditWait < const Duration(seconds: 1)
+          ? pm241CreditWait
+          : const Duration(seconds: 1),
+    );
+    final job = pm241LabelJob(image);
+    final sender = Pm241Sender(job.bytes, flow);
+    // Listen before the last packet goes out: the reply can be quick.
+    final done = Completer<bool>();
+    final doneSub = _flowEvents.stream.listen((event) {
+      if (event.type == Pm241EventType.done && !done.isCompleted) {
+        done.complete(true);
+      }
+    });
+    unawaited(
+      link.disconnected.then(
+        (_) {
+          if (!done.isCompleted) done.complete(false);
+        },
+        onError: (Object _) {
+          if (!done.isCompleted) done.complete(false);
+        },
+      ),
+    );
+    try {
+      while (!sender.finished) {
+        if (!link.isConnected) {
+          throw const PrinterException(PrintFailure.connectionLost);
+        }
+        final packet = sender.next(link.maxWriteLength);
+        if (packet == null) {
+          await _waitForCredit(flow);
+          continue;
+        }
+        try {
+          await link.write(packet).timeout(writeTimeout);
+        } on PrinterException {
+          rethrow;
+        } catch (e) {
+          if (!link.isConnected) {
+            throw PrinterException(PrintFailure.connectionLost, '$e');
+          }
+          throw PrinterException(PrintFailure.writeFailed, '$e');
+        }
+      }
+      log.add(
+        'sent: TSPL job ${job.length} bytes in ${sender.packets} packets '
+        '(up to ${flow.packetSize(link.maxWriteLength)} bytes each), '
+        'bitmap ${image.width}x${image.height} dots, waiting for the printer',
+      );
+      final bool finished;
+      try {
+        finished = await done.future.timeout(pm241DoneWait);
+      } on TimeoutException {
+        log.add('done: no reply in ${pm241DoneWait.inSeconds} s');
+        throw const PrinterException(PrintFailure.noCompletion);
+      }
+      if (!finished) throw const PrinterException(PrintFailure.connectionLost);
+      log.add('done: printer finished the label');
+    } finally {
+      unawaited(doneSub.cancel());
+    }
+  }
+
   /// Sends one label and waits for the printer's done reply.
   Future<void> _printOne(PrinterLink link, PackedRaster raster) async {
     final steps = m221LabelSteps(
@@ -768,6 +956,11 @@ class LabelPrinterController extends ChangeNotifier {
   /// developer); answers the battery percent when it can be read.
   Future<PrintFailure?> checkStatus() async {
     if (busy) return PrintFailure.busy;
+    if (model == PrinterModel.pm241) {
+      // The battery, paper and cover queries are M221 bytes.
+      log.add('status: not available on a PM-241');
+      return null;
+    }
     try {
       final link = await _ensureLink();
       for (final (name, query) in [
@@ -834,13 +1027,24 @@ class LabelPrinterController extends ChangeNotifier {
     _cancel = false;
     _progressDone = 0;
     _progressTotal = copies;
-    final raster = packRaster(image, _settings.xOffset, _settings.yOffset);
-    log.add(
-      'print: $copies x $what ${image.width}x${image.height} dots, '
-      'x ${_settings.xOffset} y ${_settings.yOffset}, '
-      'density ${_settings.density} (byte ${m221DensityByte(_settings.density)}), '
-      'speed ${_settings.speed}',
-    );
+    final isPm241 = model == PrinterModel.pm241;
+    final raster = isPm241
+        ? null
+        : packRaster(image, _settings.xOffset, _settings.yOffset);
+    log.add('model: ${printerModelLogName(model)}');
+    if (isPm241) {
+      log.add(
+        'print: $copies x $what ${image.width}x${image.height} dots, '
+        'TSPL 100x150 mm, density 10, speed 4',
+      );
+    } else {
+      log.add(
+        'print: $copies x $what ${image.width}x${image.height} dots, '
+        'x ${_settings.xOffset} y ${_settings.yOffset}, '
+        'density ${_settings.density} (byte ${m221DensityByte(_settings.density)}), '
+        'speed ${_settings.speed}',
+      );
+    }
     _set(PrinterStatus.printing);
     var printed = 0;
     var retried = false;
@@ -859,10 +1063,18 @@ class LabelPrinterController extends ChangeNotifier {
         _set(PrinterStatus.printing);
         try {
           log.add('print: label ${printed + 1} of $copies');
-          await _printOne(link, raster);
+          if (raster == null) {
+            await _printOnePm241(link, image);
+          } else {
+            await _printOne(link, raster);
+          }
         } on PrinterException catch (e) {
           if (e.failure == PrintFailure.noCompletion) {
-            throw PrinterException(await _explainNoCompletion(link));
+            throw PrinterException(
+              raster == null
+                  ? PrintFailure.noCompletion
+                  : await _explainNoCompletion(link),
+            );
           }
           if (e.failure == PrintFailure.connectionLost && !retried) {
             retried = true;
@@ -907,6 +1119,7 @@ class LabelPrinterController extends ChangeNotifier {
     return [
       'Laawol label printer log${app.isEmpty ? '' : ' ($app)'}',
       'printer: ${s.hasPrinter ? '"${s.deviceName}" ${_shortId(s.deviceId)}' : 'none'}',
+      'model: ${printerModelLogName(s.model)}',
       'label: ${size.id} ${size.mmText} = ${size.widthDots}x${size.heightDots} dots',
       'package label: ${s.packageSize.id} ${s.packageSize.mmText} = '
           '${s.packageSize.widthDots}x${s.packageSize.heightDots} dots',
@@ -926,6 +1139,7 @@ class LabelPrinterController extends ChangeNotifier {
     _link = null;
     if (link != null) unawaited(link.disconnect().catchError((_) {}));
     unawaited(_frameEvents.close());
+    unawaited(_flowEvents.close());
     super.dispose();
   }
 }

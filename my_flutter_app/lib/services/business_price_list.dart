@@ -77,6 +77,7 @@ class PriceRoute {
   const PriceRoute({
     this.items = const [],
     this.perLbCents = const {},
+    this.boxPricesCents = const {},
     this.weekdays = const [],
     this.everyWeeks = 1,
     this.anchorDate = '',
@@ -89,11 +90,17 @@ class PriceRoute {
       final cents = _intOrNull(e.value);
       if (cents != null && cents > 0) rates[e.key] = cents;
     }
+    final boxes = <String, int>{};
+    for (final e in _map(m['boxPricesCents']).entries) {
+      final cents = _intOrNull(e.value);
+      if (cents != null && cents > 0) boxes[e.key] = cents;
+    }
     final departure = _map(m['departure']);
     final days = {for (final d in _list(departure['weekdays'])) _text(d)};
     return PriceRoute(
       items: [for (final i in _list(m['items'])) PriceItem.fromMap(i)],
       perLbCents: rates,
+      boxPricesCents: boxes,
       weekdays: [
         for (final d in priceWeekDays)
           if (days.contains(d)) d,
@@ -108,6 +115,10 @@ class PriceRoute {
 
   final List<PriceItem> items;
   final Map<String, int> perLbCents;
+
+  /// A price per box size (small / medium / large), Sea only; Extra large
+  /// is always quoted (docs/PACKAGE_BOX_SIZES_PAY_NOW.md).
+  final Map<String, int> boxPricesCents;
   final List<String> weekdays;
   final int everyWeeks;
   final String anchorDate;
@@ -269,6 +280,7 @@ class PriceRouteDraft {
   const PriceRouteDraft({
     this.items = const [],
     this.rates = const {},
+    this.boxPrices = const {},
     this.weekdays = const {},
     this.everyWeeks = 1,
     this.anchorDate = '',
@@ -282,6 +294,10 @@ class PriceRouteDraft {
             for (final e in route.perLbCents.entries)
               e.key: priceCentsInput(e.value),
           },
+          boxPrices: {
+            for (final e in route.boxPricesCents.entries)
+              e.key: priceCentsInput(e.value),
+          },
           weekdays: route.weekdays.toSet(),
           everyWeeks: route.everyWeeks,
           anchorDate: route.anchorDate,
@@ -291,6 +307,9 @@ class PriceRouteDraft {
 
   /// Price per pound by category id, as typed ('' = none).
   final Map<String, String> rates;
+
+  /// Price per box size id, as typed ('' = none); Sea only.
+  final Map<String, String> boxPrices;
   final Set<String> weekdays;
   final int everyWeeks;
   final String anchorDate;
@@ -298,24 +317,28 @@ class PriceRouteDraft {
   bool get isEmpty =>
       items.isEmpty &&
       rates.values.every((v) => v.trim().isEmpty) &&
+      boxPrices.values.every((v) => v.trim().isEmpty) &&
       weekdays.isEmpty;
 
   PriceRouteDraft copyWith({
     List<PriceItemDraft>? items,
     Map<String, String>? rates,
+    Map<String, String>? boxPrices,
     Set<String>? weekdays,
     int? everyWeeks,
     String? anchorDate,
   }) => PriceRouteDraft(
     items: items ?? this.items,
     rates: rates ?? this.rates,
+    boxPrices: boxPrices ?? this.boxPrices,
     weekdays: weekdays ?? this.weekdays,
     everyWeeks: everyWeeks ?? this.everyWeeks,
     anchorDate: anchorDate ?? this.anchorDate,
   );
 
   /// The route as the server takes it: null when there is nothing in it.
-  Map<String, Object?>? toPayload() {
+  /// Box prices ride only a [sea] route (the server refuses them on Air).
+  Map<String, Object?>? toPayload({bool sea = true}) {
     if (isEmpty) return null;
     final perLb = <String, Object?>{};
     for (final e in rates.entries) {
@@ -323,9 +346,18 @@ class PriceRouteDraft {
       if (text.isEmpty) continue;
       perLb[e.key] = readMoneyInput(text).cents ?? text;
     }
+    final boxes = <String, Object?>{};
+    if (sea) {
+      for (final e in boxPrices.entries) {
+        final text = e.value.trim();
+        if (text.isEmpty) continue;
+        boxes[e.key] = readMoneyInput(text).cents ?? text;
+      }
+    }
     return {
       'items': [for (final i in items) i.toPayload()],
       'perLbCents': perLb,
+      if (boxes.isNotEmpty) 'boxPricesCents': boxes,
       'departure': weekdays.isEmpty
           ? null
           : {
@@ -366,7 +398,7 @@ Map<String, Object?> priceListRoutesPayload(
   for (final id in countryIds) {
     final pair = <String, Object?>{};
     for (final mode in priceModes) {
-      final payload = draft[id]?[mode]?.toPayload();
+      final payload = draft[id]?[mode]?.toPayload(sea: mode == 'sea');
       if (payload != null) pair[mode] = payload;
     }
     if (pair.isNotEmpty) routes[id] = pair;
@@ -396,9 +428,9 @@ List<PriceListProblem> priceListProblems(
   final out = <PriceListProblem>[];
   for (final id in countryIds) {
     for (final mode in priceModes) {
-      final payload = draft[id]?[mode]?.toPayload();
+      final payload = draft[id]?[mode]?.toPayload(sea: mode == 'sea');
       if (payload == null) continue;
-      final errors = validateRoute(payload).errors;
+      final errors = validateRoute(payload, mode: mode).errors;
       if (errors.isNotEmpty) {
         out.add(PriceListProblem(countryId: id, mode: mode, code: errors[0]));
       }
@@ -460,4 +492,8 @@ const priceListReasonCodes = <String>[
   'item_unknown',
   'quantity_invalid',
   'weight_invalid',
+  'box_size_invalid',
+  'dims_invalid',
+  'box_sizes_sea_only',
+  'box_price_invalid',
 ];

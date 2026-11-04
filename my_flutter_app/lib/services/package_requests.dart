@@ -25,7 +25,7 @@ import 'line_pieces.dart' as lp;
 import 'lot_ledger.dart' show formatLotCents;
 import 'package_codes.dart' show packageLinkHost;
 import 'package_price_list.dart'
-    show DepartureResult, priceCategoryOf, priceModes;
+    show DepartureResult, boxSizeIds, priceCategoryOf, priceModes;
 
 // ---------------------------------------------------------------------------
 // Vocabulary (§8.2 / §8.3).
@@ -85,6 +85,9 @@ const requestWindowMaxMinutes = 120;
 const requestPickupFrom = '07:00';
 const requestPickupTo = '21:00';
 const requestMaxPhotosPerPiece = 5;
+
+/// A box line takes up to 3 photos (docs/PACKAGE_BOX_SIZES_PAY_NOW.md §1).
+const requestMaxPhotosPerBox = 3;
 const requestMaxName = 80;
 const requestMaxDescription = 120;
 const requestMaxAddress = 200;
@@ -468,6 +471,8 @@ class RequestPiece {
     this.quantity,
     this.weightLb,
     this.sizePreset = '',
+    this.boxSize = '',
+    this.dimsIn,
   });
 
   factory RequestPiece.fromMap(Object? value) {
@@ -492,6 +497,10 @@ class RequestPiece {
           ? (m['weightLb'] as num).toDouble()
           : null,
       sizePreset: _text(m['sizePreset']),
+      boxSize: _text(m['boxSize']).isNotEmpty
+          ? _text(m['boxSize'])
+          : _text(_map(m['price'])['boxSize']),
+      dimsIn: RequestSize.fromMap(m['dimsIn']),
     );
   }
 
@@ -517,7 +526,146 @@ class RequestPiece {
   final double? weightLb;
   final String sizePreset;
 
+  /// A box piece's size (`small` / `medium` / `large` / `xl`), '' for any
+  /// other piece (docs/PACKAGE_BOX_SIZES_PAY_NOW.md §2), and the inches the
+  /// customer typed, when they did - the inches decide the size.
+  final String boxSize;
+  final RequestSize? dimsIn;
+
   bool get isBarrel => kind == requestPieceBarrel;
+
+  /// A box with a size: shown as a picture, a size and its inches.
+  bool get isSizedBox => kind == requestPieceBox && boxSize.isNotEmpty;
+}
+
+/// The card link of a request (docs/PACKAGE_BOX_SIZES_PAY_NOW.md §3
+/// `packageRequests/{id}.payNow`, server writes only). The customer's token
+/// projection carries `{status, amountCents, linkUrl, paidCents,
+/// refundedCents}`; the business's document also names who charged, the
+/// refunds and the messages sent.
+class RequestPayNow {
+  const RequestPayNow({
+    required this.status,
+    this.amountCents = 0,
+    this.linkUrl = '',
+    this.paidCents = 0,
+    this.refundedCents = 0,
+    this.chargeType = '',
+    this.refunds = const [],
+    this.messageCount = 0,
+  });
+
+  /// Null when the value is not a map (no link yet).
+  static RequestPayNow? fromMap(Object? value) {
+    if (value is! Map) return null;
+    final m = _map(value);
+    final status = _text(m['status']);
+    if (status.isEmpty) return null;
+    return RequestPayNow(
+      status: status,
+      amountCents: _int(m['amountCents']),
+      linkUrl: _text(m['linkUrl']),
+      paidCents: _int(m['paidCents']),
+      refundedCents: _int(m['refundedCents']),
+      chargeType: _text(m['chargeType']),
+      refunds: [
+        for (final r in _list(m['refunds']))
+          if (r is Map) RequestRefund.fromMap(r),
+      ],
+      messageCount: _list(m['messages']).length,
+    );
+  }
+
+  /// `open`, `paid`, `partly_refunded`, `refunded` or `cancelled`.
+  final String status;
+
+  /// What the link asks for.
+  final int amountCents;
+  final String linkUrl;
+  final int paidCents;
+  final int refundedCents;
+
+  /// `direct` (the business's own Stripe) or `platform` (Laawol collects).
+  final String chargeType;
+  final List<RequestRefund> refunds;
+  final int messageCount;
+
+  bool get isOpen => status == 'open';
+  bool get isPaid => status == 'paid';
+  bool get isPartlyRefunded => status == 'partly_refunded';
+  bool get isRefunded => status == 'refunded';
+  bool get isCancelled => status == 'cancelled';
+
+  /// Money was taken (and maybe given back since).
+  bool get wasPaid => isPaid || isPartlyRefunded || isRefunded;
+
+  /// What stays paid: the card total less the refunds.
+  int get keptCents => (paidCents - refundedCents).clamp(0, paidCents);
+
+  /// A button can open the card page.
+  bool get canPay => isOpen && linkUrl.isNotEmpty;
+}
+
+class RequestRefund {
+  const RequestRefund({
+    required this.amountCents,
+    this.byName = '',
+    this.reason = '',
+    this.atMs = 0,
+  });
+
+  factory RequestRefund.fromMap(Object? value) {
+    final m = _map(value);
+    return RequestRefund(
+      amountCents: _int(m['amountCents']),
+      byName: _text(m['byName']),
+      reason: _text(m['reason']),
+      atMs: _int(m['atMs']),
+    );
+  }
+
+  final int amountCents;
+  final String byName;
+  final String reason;
+  final int atMs;
+}
+
+/// Whether a person may refund a Pay now charge (decision 9): an owner or an
+/// admin, or staff with both Shipping (`containers`) and `ledger` - the
+/// server's rule (package_pay_now_handlers.js), which decides again.
+bool canRefundPayNow({
+  required bool isStaff,
+  required Iterable<String> permissions,
+}) =>
+    !isStaff ||
+    (permissions.contains('containers') && permissions.contains('ledger'));
+
+/// What the customer still owes at the counter once part of the total was
+/// paid by card: the total rose after the link was paid. 0 otherwise.
+int payNowBalanceCents(int? totalCents, RequestPayNow? payNow) {
+  if (payNow == null || !payNow.wasPaid || totalCents == null) return 0;
+  final owed = totalCents - payNow.keptCents;
+  return owed > 0 ? owed : 0;
+}
+
+/// What staff should give back: the total fell below what the card paid
+/// (decision "Paid and the total goes down"). 0 otherwise.
+int payNowOverpaidCents(int? totalCents, RequestPayNow? payNow) {
+  if (payNow == null || !payNow.wasPaid || totalCents == null) return 0;
+  final extra = payNow.keptCents - totalCents;
+  return extra > 0 ? extra : 0;
+}
+
+/// The most that can be refunded: what the card paid, less what went back.
+int payNowRefundableCents(RequestPayNow? payNow) =>
+    payNow == null || !payNow.wasPaid ? 0 : payNow.keptCents;
+
+/// A refund amount as typed ("12.50"): cents within 1..[maxCents], else
+/// null.
+int? parseRefundCents(String text, int maxCents) {
+  final cents = parseMoneyCents(text);
+  if (cents == null || cents < 1 || cents > maxCents) return null;
+  return cents;
 }
 
 class RequestEstimate {
@@ -681,6 +829,7 @@ class PackageRequest {
     this.foundVia = '',
     this.channel = '',
     this.plannedWindow,
+    this.payNow,
   });
 
   factory PackageRequest.fromMap(String id, Map<String, dynamic> d) {
@@ -765,6 +914,7 @@ class PackageRequest {
       foundVia: _text(d['foundVia']),
       channel: _text(d['channel']),
       plannedWindow: RequestTimeWindow.fromMap(d['plannedWindow']),
+      payNow: RequestPayNow.fromMap(d['payNow']),
     );
   }
 
@@ -824,6 +974,10 @@ class PackageRequest {
 
   /// A bring-in's 2-hour window on [plannedDate], or null.
   final RequestTimeWindow? plannedWindow;
+
+  /// The optional card link; null until the price is exact and the business
+  /// has Pay now on.
+  final RequestPayNow? payNow;
 
   bool get isAirRequest => shipMode == 'air';
 
@@ -1140,7 +1294,25 @@ class RequestPieceDraft {
     this.categoryId = '',
     this.weightLb,
     this.sizePreset = '',
+    this.boxSize = '',
+    this.dimsIn,
   });
+
+  /// A box of a size (or typed inches, which decide the size), [quantity]
+  /// of it: `{kind: "box", boxSize, dimsIn?, quantity, photoPaths?}`
+  /// (docs/PACKAGE_BOX_SIZES_PAY_NOW.md §2).
+  const RequestPieceDraft.box({
+    this.boxSize = '',
+    this.dimsIn,
+    required this.quantity,
+    this.photoPaths = const [],
+  }) : kind = requestPieceBox,
+       description = '',
+       priceItemId = '',
+       label = '',
+       categoryId = '',
+       weightLb = null,
+       sizePreset = '';
 
   /// An item from the business's price list, [quantity] of it.
   const RequestPieceDraft.item({
@@ -1154,7 +1326,9 @@ class RequestPieceDraft {
        label = itemLabel,
        categoryId = '',
        weightLb = null,
-       sizePreset = '';
+       sizePreset = '',
+       boxSize = '',
+       dimsIn = null;
 
   /// A category priced by the pound.
   const RequestPieceDraft.byWeight({
@@ -1166,7 +1340,9 @@ class RequestPieceDraft {
        photoPaths = const [],
        priceItemId = '',
        label = '',
-       quantity = null;
+       quantity = null,
+       boxSize = '',
+       dimsIn = null;
 
   final String kind;
   final String description;
@@ -1184,11 +1360,17 @@ class RequestPieceDraft {
   final double? weightLb;
   final String sizePreset;
 
+  /// A box piece: its size id and/or the inches typed.
+  final String boxSize;
+  final RequestSize? dimsIn;
+
+  /// A sized box line (the old described box has no quantity).
+  bool get isBox => kind == requestPieceBox && quantity != null;
   bool get isItem => priceItemId.isNotEmpty;
   bool get isByWeight => !isItem && categoryId.isNotEmpty && weightLb != null;
 
   /// Priced from a list rather than described by the customer.
-  bool get fromList => isItem || isByWeight;
+  bool get fromList => isItem || isByWeight || isBox;
 
   RequestPieceDraft copyWith({
     String? kind,
@@ -1204,6 +1386,8 @@ class RequestPieceDraft {
     categoryId: categoryId,
     weightLb: weightLb,
     sizePreset: sizePreset,
+    boxSize: boxSize,
+    dimsIn: dimsIn,
   );
 }
 
@@ -1355,7 +1539,22 @@ List<String> validateRequestDraft(
   for (final piece in draft.pieces) {
     if (!requestPieceKinds.contains(piece.kind)) add('piece_kind_invalid');
     final description = piece.description.trim();
-    if (piece.isItem) {
+    if (piece.isBox) {
+      final quantity = piece.quantity ?? 0;
+      if (quantity < 1 || quantity > requestMaxQuantity) {
+        add('quantity_invalid');
+      }
+      final dims = piece.dimsIn;
+      if (dims != null &&
+          !(_inchesOk(dims.l) && _inchesOk(dims.w) && _inchesOk(dims.h))) {
+        add('dims_invalid');
+      } else if (dims == null && !boxSizeIds.contains(piece.boxSize)) {
+        add('box_size_invalid');
+      }
+      if (piece.photoPaths.length > requestMaxPhotosPerBox) {
+        add('too_many_photos');
+      }
+    } else if (piece.isItem) {
       final quantity = piece.quantity ?? 0;
       if (quantity < 1 || quantity > requestMaxQuantity) {
         add('quantity_invalid');
@@ -1363,8 +1562,7 @@ List<String> validateRequestDraft(
     } else if (piece.categoryId.isNotEmpty || piece.weightLb != null) {
       final weight = piece.weightLb;
       if (priceCategoryOf(piece.categoryId) == null) add('category_invalid');
-      if (weight == null ||
-          !(weight >= 0.1 && weight <= requestMaxWeightLb)) {
+      if (weight == null || !(weight >= 0.1 && weight <= requestMaxWeightLb)) {
         add('weight_invalid');
       }
     } else if (piece.kind != requestPieceBarrel && description.isEmpty) {
@@ -1383,6 +1581,8 @@ List<String> validateRequestDraft(
   }
   return reasons;
 }
+
+bool _inchesOk(double side) => side.isFinite && side >= 1 && side <= 120;
 
 /// Which piece fields a reason code points at, for the form to flag them.
 bool pieceNeedsDescription(RequestPieceDraft piece) =>
@@ -1430,8 +1630,18 @@ Map<String, Object?> submitRequestPayload(RequestDraft draft) {
 
 /// One piece as `submitPackageRequest` takes it (docs/PACKAGE_PRICE_LIST.md
 /// §4): `{priceItemId, quantity}`, `{categoryId, weightLb, sizePreset}`,
-/// `{kind: "barrel"}`, or `{kind, description, photoPaths}`.
+/// `{kind: "barrel"}`, `{kind: "box", boxSize, dimsIn?, quantity,
+/// photoPaths?}`, or `{kind, description, photoPaths}`.
 Map<String, Object?> requestPiecePayload(RequestPieceDraft p) {
+  if (p.isBox) {
+    return {
+      'kind': requestPieceBox,
+      if (p.boxSize.isNotEmpty) 'boxSize': p.boxSize,
+      if (p.dimsIn != null) 'dimsIn': p.dimsIn!.toMap(),
+      'quantity': p.quantity,
+      if (p.photoPaths.isNotEmpty) 'photoPaths': p.photoPaths,
+    };
+  }
   if (p.isItem) {
     return {
       'priceItemId': p.priceItemId,
@@ -2258,8 +2468,9 @@ class PackageProofSettings {
 
   /// From the `businesses/{id}` document.
   factory PackageProofSettings.fromBusiness(Map<String, dynamic> business) =>
-      PackageProofSettings.fromMap(business['packageProofSettings'])
-          .copyWith(shipsByAir: business['shipsByAir'] == true);
+      PackageProofSettings.fromMap(
+        business['packageProofSettings'],
+      ).copyWith(shipsByAir: business['shipsByAir'] == true);
 
   /// Photos required at drop-off (counter packages only).
   final bool photosRequired;
@@ -2347,6 +2558,7 @@ class PackageRequestSettings {
     this.pickupEnabled = false,
     this.pickupAreas = '',
     this.cardBarrelBooking = false,
+    this.payNow = false,
     this.timeZone = requestDefaultTimeZone,
     this.requestSlug = '',
     this.requestSlugEdits = 0,
@@ -2367,6 +2579,10 @@ class PackageRequestSettings {
       pickupEnabled: _bool(pickup['enabled']),
       pickupAreas: _text(pickup['areas']),
       cardBarrelBooking: _bool(s['cardBarrelBooking']),
+      // One switch: `payNow`, else the old card switch it extends.
+      payNow: s['payNow'] is bool
+          ? s['payNow'] == true
+          : _bool(s['cardBarrelBooking']),
       timeZone: zone.isEmpty ? requestDefaultTimeZone : zone,
       requestSlug: _text(business['requestSlug']),
       requestSlugEdits: _int(business['requestSlugEdits']),
@@ -2379,6 +2595,10 @@ class PackageRequestSettings {
   final bool pickupEnabled;
   final String pickupAreas;
   final bool cardBarrelBooking;
+
+  /// Pay now (docs/PACKAGE_BOX_SIZES_PAY_NOW.md decision 6): customers get
+  /// an optional card link once the price is final. Off by default.
+  final bool payNow;
   final String timeZone;
   final String requestSlug;
   final int requestSlugEdits;
@@ -2431,6 +2651,7 @@ Map<String, Object?> requestSettingsPayload({
   required bool pickupEnabled,
   required String pickupAreas,
   required bool cardBarrelBooking,
+  bool? payNow,
   String slug = '',
   String currentSlug = '',
   PackageProofSettings? proof,
@@ -2443,7 +2664,9 @@ Map<String, Object?> requestSettingsPayload({
       for (final e in openingHours.entries) e.key: e.value.toMap(),
     },
     'pickup': {'enabled': pickupEnabled, 'areas': pickupAreas.trim()},
-    'cardBarrelBooking': cardBarrelBooking,
+    // The two names are one switch: a save writes both the same.
+    'cardBarrelBooking': payNow ?? cardBarrelBooking,
+    'payNow': payNow ?? cardBarrelBooking,
     if (s.isNotEmpty && s != currentSlug) 'requestSlug': s,
     // Left out, the server keeps the switches as they are.
     if (proof != null) 'proof': proof.toMap(),

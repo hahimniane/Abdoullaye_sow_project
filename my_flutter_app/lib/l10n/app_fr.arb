@@ -5853,7 +5853,7 @@
   "printTagsPrinterSettings": "Réglages de l’imprimante",
   "inventoryPrintTagAction": "Imprimer l’étiquette",
   "labelPrinterTitle": "Imprimante d’étiquettes",
-  "labelPrinterSubtitle": "Phomemo M221 en Bluetooth",
+  "labelPrinterSubtitle": "Imprimantes d’étiquettes Phomemo en Bluetooth",
   "labelPrinterSectionPrinter": "Imprimante",
   "labelPrinterNone": "Aucune imprimante choisie. Recherchez-la ci-dessous.",
   "labelPrinterScan": "Rechercher les imprimantes",
@@ -5905,6 +5905,16 @@
   "labelPrinterCheckStatus": "Vérifier l’imprimante",
   "labelPrinterChecking": "Vérification…",
   "labelPrinterSent": "Imprimé.",
+  "labelPrinterModelM221": "Phomemo M221 · étiquettes produit et petits formats",
+  "labelPrinterModelPm241": "Phomemo PM-241 · étiquettes 4×6",
+  "labelPrinterSize4x6": "4 × 6 po",
+  "pkgLabelsTipPm241": "Chaque étiquette 4 × 6 po porte le code QR, le code de suivi, ainsi que les deux noms et numéros de téléphone.",
+  "labelPrinterPm241Hint": "Cette imprimante imprime les étiquettes de colis en 4 × 6 po. L’app règle elle-même la taille et l’intensité. Les étiquettes produit s’impriment sur la Phomemo M221.",
+  "labelPrinterTestLabel": "Imprimer une étiquette de test (4 × 6 po)",
+  "labelPrinterTestLabelConfirmTitle": "Imprimer une étiquette de test ?",
+  "labelPrinterTestLabelConfirmBody": "Cela utilise une étiquette 4 × 6 po de l’imprimante.",
+  "labelPrinterTestLabelConfirm": "Imprimer",
+  "printTagsNotOnPm241": "Cette imprimante n’imprime que les étiquettes de colis 4 × 6 po. Les étiquettes produit s’impriment sur la Phomemo M221 : choisissez-la dans Réglages de l’imprimante.",
   "labelPrinterStatusDone": "Imprimante vérifiée. Les réponses sont dans le journal d’impression.",
   "labelPrinterSectionLog": "Journal d’impression",
   "labelPrinterLogHelp": "En cas de problème, copiez le journal et envoyez-le au développeur.",
@@ -7277,8 +7287,6 @@
   "prqPickupSettingsNote": "Proposez « Venez le chercher » aux clients des zones que vous couvrez.",
   "prqAreas": "Zones couvertes",
   "prqAreasHint": "ex. Bronx, Harlem, Newark",
-  "prqCardBarrels": "Paiement par carte pour les barils",
-  "prqCardBarrelsNote": "Les clients peuvent payer les barils en ligne ; ces commandes apparaissent comme attendues et payées en ligne.",
   "prqSaved": "Réglages enregistrés.",
   "prqOwnerOnly": "Seul le propriétaire peut modifier ces réglages.",
   "prqErrBusinessNotFound": "Ce lien de demande ne correspond à aucune entreprise.",
@@ -10935,5 +10943,189 @@
   "parkingFormerTeamTag": "Ancien membre de l'équipe",
   "@parkingFormerTeamTag": {
     "description": "Small label next to the owner of a car tied to someone who is no longer on the team."
+  },
+  "boxDesignerLength": "Longueur",
+  "boxDesignerWidth": "Largeur",
+  "boxDesignerHeight": "Hauteur",
+  "boxDesignerInchesUnit": "po",
+  "boxDesignerDrag": "Faites glisser pour tourner",
+  "boxDesignerScaleNote": "Une basket (12 po) et une personne (5 pi 6 po) donnent l’échelle. Chaque carré du sol mesure 1 pi.",
+  "boxDesignerSemantics": "Carton en 3D, {dims}. Faites glisser pour le faire tourner.",
+  "boxDesignerRange": "Entrez de 1 à 120 pouces.",
+  "boxDesignerTitle": "Votre carton",
+  "boxDesignerUse": "Utiliser ces pouces",
+  "boxBadgePrice": "{size} · {price}",
+  "boxBadgeFrom": "{size} · à partir de {price}",
+  "boxBadgeQuote": "{size} · l’entreprise donnera un prix",
+  "boxLabelSmall": "Petite boîte",
+  "boxLabelMedium": "Boîte moyenne",
+  "boxLabelLarge": "Grande boîte",
+  "boxLabelXl": "Très grande boîte",
+  "boxQuantityLine": "{count} × {label}",
+  "boxFormTitle": "Cartons",
+  "boxFormHint": "Choisissez l’image la plus proche de votre carton. Un doute sur la taille ? Ajoutez les pouces et nous la choisissons pour vous.",
+  "boxFormAdd": "Ajouter un carton",
+  "boxFormLine": "Carton {number}",
+  "boxFormRemove": "Retirer ce carton",
+  "boxFormHowMany": "Combien",
+  "boxFormKnowInches": "Vous connaissez les pouces ?",
+  "boxFormChangeInches": "Modifier les pouces",
+  "boxFormUsePicture": "Choisir une image à la place",
+  "boxFormInchesSummary": "{dims} · {size}",
+  "boxFormErrSize": "Choisissez une taille ou ajoutez les pouces.",
+  "boxFormQuoteNote": "L’entreprise donnera un prix pour cette taille.",
+  "payNowButton": "Payer maintenant {amount}",
+  "payNowOptional": "Facultatif : payez par carte maintenant, ou en personne comme d’habitude.",
+  "payNowPaid": "Payé en ligne {amount}",
+  "payNowRefunded": "Remboursé {amount}",
+  "payNowBalance": "Solde à payer au comptoir : {amount}",
+  "payNowCancelled": "Lien de paiement annulé",
+  "payNowOpenFailed": "Impossible d’ouvrir la page de paiement. Réessayez.",
+  "payNowSwitchTitle": "Payer maintenant",
+  "payNowSwitchNote": "Les clients reçoivent un lien facultatif pour payer par carte une fois le prix définitif. Vous payez les frais de carte (2,9 % + 0,30 $). Sans Stripe, Laawol encaisse et vous paie chaque lundi.",
+  "payNowChargeDirect": "En ce moment, les paiements par carte vont directement sur votre compte Stripe.",
+  "payNowChargePlatform": "En ce moment, Laawol encaisse les paiements par carte et vous paie chaque lundi.",
+  "payNowChipSent": "Lien envoyé",
+  "payNowResend": "Renvoyer le lien",
+  "payNowResent": "Lien de paiement envoyé.",
+  "payNowRefund": "Rembourser",
+  "payNowRefundTitle": "Remboursement par carte",
+  "payNowRefundMessage": "Jusqu’à {max} peuvent être remboursés sur la carte du client. Les frais de carte restent à la charge de l’entreprise.",
+  "payNowRefundAmount": "Montant",
+  "payNowRefundReason": "Motif",
+  "payNowRefundDone": "{amount} remboursé.",
+  "payNowRefundDifference": "Le total est maintenant inférieur à ce qui a été payé par carte. Rembourser {amount} ?",
+  "payNowErrNotPaid": "Rien n’a été payé en ligne pour cette demande.",
+  "payNowErrTooMuch": "C’est plus que ce qui a été payé par carte.",
+  "payNowErrInvalid": "Entrez un montant à rembourser.",
+  "payNowErrNotAllowed": "Seuls le propriétaire, un administrateur ou le personnel autorisé à annuler peuvent rembourser.",
+  "boxSizesTitle": "Tailles de cartons",
+  "boxSizesHint": "Laawol fixe les tailles pour toutes les entreprises. Vous fixez le prix de chacune. Les pouces du client choisissent la taille.",
+  "boxSizesXlQuote": "Très grande : vous donnez le prix",
+  "boxSee3d": "Voir le carton en 3D",
+  "boxHide3d": "Masquer le carton en 3D",
+  "boxDetailSize": "Taille : {size}",
+  "payNowOpening": "Ouverture…",
+  "pplErrBoxSizeInvalid": "Choisissez une taille de carton.",
+  "pplErrDimsInvalid": "Les pouces du carton doivent aller de 1 à 120 dans chaque sens.",
+  "pplErrBoxSizesSeaOnly": "Les tailles de cartons ne sont tarifées que pour le maritime.",
+  "pplErrBoxPriceInvalid": "Entrez un prix de carton entre 0,01 $ et 10 000 $.",
+  "@boxDesignerInchesUnit": {},
+  "@boxDesignerSemantics": {
+    "placeholders": {
+      "dims": {
+        "type": "String"
+      }
+    }
+  },
+  "@boxBadgePrice": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      },
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "@boxBadgeFrom": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      },
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "@boxBadgeQuote": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "@boxQuantityLine": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "@boxFormLine": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "@boxFormInchesSummary": {
+    "placeholders": {
+      "dims": {
+        "type": "String"
+      },
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "@payNowButton": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "@payNowPaid": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "@payNowRefunded": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "@payNowBalance": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "@payNowRefundMessage": {
+    "placeholders": {
+      "max": {
+        "type": "String"
+      }
+    }
+  },
+  "@payNowRefundDone": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "@payNowRefundDifference": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "@boxDetailSize": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
   }
 }

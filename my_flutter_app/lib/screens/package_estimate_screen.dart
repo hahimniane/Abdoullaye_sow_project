@@ -15,8 +15,10 @@ import '../theme/app_spacing.dart';
 import '../utils/action_confirmation.dart';
 import '../utils/date_display.dart';
 import '../widgets/app_snackbars.dart';
+import '../widgets/box_size_widgets.dart';
 import '../widgets/day_picker.dart';
 import '../widgets/package_request_widgets.dart';
+import '../widgets/pay_now_widgets.dart';
 
 /// Staff write the estimate for one request (§2 Estimates): a price per
 /// piece (a barrel starts at the business's price), photos full screen, a
@@ -40,6 +42,7 @@ class PackageEstimateScreen extends StatefulWidget {
     this.nowMs,
     this.heartbeat = requestLockHeartbeat,
     this.onCall,
+    this.canRefund,
   });
 
   final String businessId;
@@ -54,6 +57,10 @@ class PackageEstimateScreen extends StatefulWidget {
   final int Function()? nowMs;
   final Duration heartbeat;
   final Future<void> Function(String phone)? onCall;
+
+  /// Whether this person may refund a Pay now charge (the owner, an admin or
+  /// staff who may void); read from the profile when null.
+  final bool? canRefund;
 
   @override
   State<PackageEstimateScreen> createState() => _PackageEstimateScreenState();
@@ -89,6 +96,24 @@ class _PackageEstimateScreenState extends State<PackageEstimateScreen> {
   Set<String> _invalid = {};
   Set<String> _errors = {};
   String _busy = '';
+
+  /// '' / 'resend' / 'refund': a Pay now action running.
+  String _payBusy = '';
+
+  bool get _canRefund {
+    final given = widget.canRefund;
+    if (given != null) return given;
+    try {
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      return canRefundPayNow(
+        isStaff: auth.isStaff,
+        permissions: auth.businessPermissions,
+      );
+    } catch (_) {
+      // No profile above (a widget test): the full view.
+      return true;
+    }
+  }
 
   int get _now =>
       (widget.nowMs ?? () => DateTime.now().millisecondsSinceEpoch)();
@@ -456,6 +481,61 @@ class _PackageEstimateScreenState extends State<PackageEstimateScreen> {
     }
   }
 
+  Future<void> _resendLink() async {
+    final l10n = AppLocalizations.of(context)!;
+    if (_payBusy.isNotEmpty) return;
+    setState(() => _payBusy = 'resend');
+    try {
+      await _service.payResend(
+        businessId: widget.businessId,
+        requestId: widget.requestId,
+      );
+      if (!mounted) return;
+      AppHaptics.commit();
+      showSuccessSnackBar(context, l10n.payNowResent);
+    } on RequestFailure catch (failure) {
+      if (!mounted) return;
+      AppHaptics.refuse();
+      showErrorSnackBar(context, requestRefusalText(l10n, failure.refusal));
+    } finally {
+      if (mounted) setState(() => _payBusy = '');
+    }
+  }
+
+  Future<void> _refund(int suggestedCents) async {
+    final l10n = AppLocalizations.of(context)!;
+    final payNow = _request?.payNow;
+    final max = payNowRefundableCents(payNow);
+    if (_payBusy.isNotEmpty || max <= 0) return;
+    final choice = await showPayNowRefundDialog(
+      context,
+      maxCents: max,
+      suggestedCents: suggestedCents,
+    );
+    if (choice == null || !mounted) return;
+    setState(() => _payBusy = 'refund');
+    try {
+      await _service.payRefund(
+        businessId: widget.businessId,
+        requestId: widget.requestId,
+        amountCents: choice.cents,
+        reason: choice.reason,
+      );
+      if (!mounted) return;
+      AppHaptics.commit();
+      showSuccessSnackBar(
+        context,
+        l10n.payNowRefundDone(formatRequestCents(choice.cents)),
+      );
+    } on RequestFailure catch (failure) {
+      if (!mounted) return;
+      AppHaptics.refuse();
+      showErrorSnackBar(context, requestRefusalText(l10n, failure.refusal));
+    } finally {
+      if (mounted) setState(() => _payBusy = '');
+    }
+  }
+
   Future<void> _call(String phone) async {
     final call = widget.onCall;
     if (call != null) return call(phone);
@@ -573,6 +653,13 @@ class _PackageEstimateScreenState extends State<PackageEstimateScreen> {
             ),
           ),
         _CustomerFacts(request: request, locale: locale, onCall: _call),
+        BusinessPayNowSection(
+          request: request,
+          canRefund: _canRefund,
+          busy: _payBusy,
+          onResend: _resendLink,
+          onRefund: _refund,
+        ),
         RequestSectionTitle(l10n.prqPieces),
         for (final piece in request.pieces)
           _PiecePriceRow(
@@ -916,6 +1003,10 @@ class _PiecePriceRow extends StatelessWidget {
               ),
             ],
           ),
+          if (piece.isSizedBox) ...[
+            const SizedBox(height: AppSpacing.sm),
+            BoxPieceDetail(piece: piece),
+          ],
           if (piece.photoPaths.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.sm),
             Wrap(

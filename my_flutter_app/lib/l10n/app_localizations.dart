@@ -21734,7 +21734,7 @@ abstract class AppLocalizations {
   /// No description provided for @labelPrinterSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Phomemo M221 over Bluetooth'**
+  /// **'Phomemo label printers over Bluetooth'**
   String get labelPrinterSubtitle;
 
   /// No description provided for @labelPrinterSectionPrinter.
@@ -21916,6 +21916,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Printed.'**
   String get labelPrinterSent;
+
+  /// No description provided for @labelPrinterModelM221.
+  ///
+  /// In en, this message translates to:
+  /// **'Phomemo M221 · tags and small labels'**
+  String get labelPrinterModelM221;
+
+  /// No description provided for @labelPrinterModelPm241.
+  ///
+  /// In en, this message translates to:
+  /// **'Phomemo PM-241 · 4×6 labels'**
+  String get labelPrinterModelPm241;
+
+  /// No description provided for @labelPrinterSize4x6.
+  ///
+  /// In en, this message translates to:
+  /// **'4 × 6 in'**
+  String get labelPrinterSize4x6;
+
+  /// No description provided for @pkgLabelsTipPm241.
+  ///
+  /// In en, this message translates to:
+  /// **'Each 4 × 6 in label carries the QR code, the tracking code, and both names and phone numbers.'**
+  String get pkgLabelsTipPm241;
+
+  /// No description provided for @labelPrinterPm241Hint.
+  ///
+  /// In en, this message translates to:
+  /// **'This printer prints package labels at 4 × 6 in. The app sets the size and darkness itself. Product tags print on the Phomemo M221.'**
+  String get labelPrinterPm241Hint;
+
+  /// No description provided for @labelPrinterTestLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Print a test label (4 × 6 in)'**
+  String get labelPrinterTestLabel;
+
+  /// No description provided for @labelPrinterTestLabelConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Print a test label?'**
+  String get labelPrinterTestLabelConfirmTitle;
+
+  /// No description provided for @labelPrinterTestLabelConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This uses one 4 × 6 in label from the printer.'**
+  String get labelPrinterTestLabelConfirmBody;
+
+  /// No description provided for @labelPrinterTestLabelConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Print'**
+  String get labelPrinterTestLabelConfirm;
+
+  /// No description provided for @printTagsNotOnPm241.
+  ///
+  /// In en, this message translates to:
+  /// **'This printer only prints 4 × 6 in package labels. Product tags print on the Phomemo M221: choose it in Printer settings.'**
+  String get printTagsNotOnPm241;
 
   /// No description provided for @labelPrinterStatusDone.
   ///
@@ -25000,18 +25060,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'e.g. Bronx, Harlem, Newark'**
   String get prqAreasHint;
-
-  /// No description provided for @prqCardBarrels.
-  ///
-  /// In en, this message translates to:
-  /// **'Card payment for barrels'**
-  String get prqCardBarrels;
-
-  /// No description provided for @prqCardBarrelsNote.
-  ///
-  /// In en, this message translates to:
-  /// **'Customers can pay barrels online; those orders show as Expected and paid online.'**
-  String get prqCardBarrelsNote;
 
   /// No description provided for @prqSaved.
   ///
@@ -31969,6 +32017,402 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Former team member'**
   String get parkingFormerTeamTag;
+
+  /// No description provided for @boxDesignerLength.
+  ///
+  /// In en, this message translates to:
+  /// **'Length'**
+  String get boxDesignerLength;
+
+  /// No description provided for @boxDesignerWidth.
+  ///
+  /// In en, this message translates to:
+  /// **'Width'**
+  String get boxDesignerWidth;
+
+  /// No description provided for @boxDesignerHeight.
+  ///
+  /// In en, this message translates to:
+  /// **'Height'**
+  String get boxDesignerHeight;
+
+  /// Unit shown after a box side typed in inches.
+  ///
+  /// In en, this message translates to:
+  /// **'in'**
+  String get boxDesignerInchesUnit;
+
+  /// No description provided for @boxDesignerDrag.
+  ///
+  /// In en, this message translates to:
+  /// **'Drag to spin'**
+  String get boxDesignerDrag;
+
+  /// No description provided for @boxDesignerScaleNote.
+  ///
+  /// In en, this message translates to:
+  /// **'A sneaker (12 in) and a person (5 ft 6 in) show the scale. Each floor square is 1 ft.'**
+  String get boxDesignerScaleNote;
+
+  /// Screen-reader label of the 3D box picture.
+  ///
+  /// In en, this message translates to:
+  /// **'3D box, {dims}. Drag to spin it.'**
+  String boxDesignerSemantics(String dims);
+
+  /// No description provided for @boxDesignerRange.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter 1 to 120 inches.'**
+  String get boxDesignerRange;
+
+  /// No description provided for @boxDesignerTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your box'**
+  String get boxDesignerTitle;
+
+  /// No description provided for @boxDesignerUse.
+  ///
+  /// In en, this message translates to:
+  /// **'Use these inches'**
+  String get boxDesignerUse;
+
+  /// The size a box makes and the business's price for it.
+  ///
+  /// In en, this message translates to:
+  /// **'{size} · {price}'**
+  String boxBadgePrice(String size, String price);
+
+  /// The size a box makes and the lowest price among the businesses.
+  ///
+  /// In en, this message translates to:
+  /// **'{size} · from {price}'**
+  String boxBadgeFrom(String size, String price);
+
+  /// A size nobody priced (Extra large): the business quotes it.
+  ///
+  /// In en, this message translates to:
+  /// **'{size} · the business will quote'**
+  String boxBadgeQuote(String size);
+
+  /// No description provided for @boxLabelSmall.
+  ///
+  /// In en, this message translates to:
+  /// **'Small box'**
+  String get boxLabelSmall;
+
+  /// No description provided for @boxLabelMedium.
+  ///
+  /// In en, this message translates to:
+  /// **'Medium box'**
+  String get boxLabelMedium;
+
+  /// No description provided for @boxLabelLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'Large box'**
+  String get boxLabelLarge;
+
+  /// No description provided for @boxLabelXl.
+  ///
+  /// In en, this message translates to:
+  /// **'Extra large box'**
+  String get boxLabelXl;
+
+  /// A box line: how many of which box.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} × {label}'**
+  String boxQuantityLine(int count, String label);
+
+  /// No description provided for @boxFormTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Boxes'**
+  String get boxFormTitle;
+
+  /// No description provided for @boxFormHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick the picture closest to your box. Not sure of the size? Add the inches and we pick it for you.'**
+  String get boxFormHint;
+
+  /// No description provided for @boxFormAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a box'**
+  String get boxFormAdd;
+
+  /// No description provided for @boxFormLine.
+  ///
+  /// In en, this message translates to:
+  /// **'Box {number}'**
+  String boxFormLine(int number);
+
+  /// No description provided for @boxFormRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove this box'**
+  String get boxFormRemove;
+
+  /// No description provided for @boxFormHowMany.
+  ///
+  /// In en, this message translates to:
+  /// **'How many'**
+  String get boxFormHowMany;
+
+  /// No description provided for @boxFormKnowInches.
+  ///
+  /// In en, this message translates to:
+  /// **'Know the inches?'**
+  String get boxFormKnowInches;
+
+  /// No description provided for @boxFormChangeInches.
+  ///
+  /// In en, this message translates to:
+  /// **'Change the inches'**
+  String get boxFormChangeInches;
+
+  /// No description provided for @boxFormUsePicture.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a picture instead'**
+  String get boxFormUsePicture;
+
+  /// Typed inches and the size they make.
+  ///
+  /// In en, this message translates to:
+  /// **'{dims} · {size}'**
+  String boxFormInchesSummary(String dims, String size);
+
+  /// No description provided for @boxFormErrSize.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a size or add the inches.'**
+  String get boxFormErrSize;
+
+  /// No description provided for @boxFormQuoteNote.
+  ///
+  /// In en, this message translates to:
+  /// **'The business will quote this size.'**
+  String get boxFormQuoteNote;
+
+  /// No description provided for @payNowButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay now {amount}'**
+  String payNowButton(String amount);
+
+  /// No description provided for @payNowOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'Optional: pay by card now, or pay in person as usual.'**
+  String get payNowOptional;
+
+  /// No description provided for @payNowPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid online {amount}'**
+  String payNowPaid(String amount);
+
+  /// No description provided for @payNowRefunded.
+  ///
+  /// In en, this message translates to:
+  /// **'Refunded {amount}'**
+  String payNowRefunded(String amount);
+
+  /// No description provided for @payNowBalance.
+  ///
+  /// In en, this message translates to:
+  /// **'Balance due at the counter: {amount}'**
+  String payNowBalance(String amount);
+
+  /// No description provided for @payNowCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment link cancelled'**
+  String get payNowCancelled;
+
+  /// No description provided for @payNowOpenFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open the payment page. Try again.'**
+  String get payNowOpenFailed;
+
+  /// No description provided for @payNowSwitchTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay now'**
+  String get payNowSwitchTitle;
+
+  /// No description provided for @payNowSwitchNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Customers get an optional link to pay by card once the price is final. You pay the card fee (2.9% + 30¢). Without Stripe, Laawol collects and pays you every Monday.'**
+  String get payNowSwitchNote;
+
+  /// No description provided for @payNowChargeDirect.
+  ///
+  /// In en, this message translates to:
+  /// **'Right now card payments go straight to your Stripe account.'**
+  String get payNowChargeDirect;
+
+  /// No description provided for @payNowChargePlatform.
+  ///
+  /// In en, this message translates to:
+  /// **'Right now Laawol collects card payments and pays you every Monday.'**
+  String get payNowChargePlatform;
+
+  /// No description provided for @payNowChipSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Link sent'**
+  String get payNowChipSent;
+
+  /// No description provided for @payNowResend.
+  ///
+  /// In en, this message translates to:
+  /// **'Send the link again'**
+  String get payNowResend;
+
+  /// No description provided for @payNowResent.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment link sent.'**
+  String get payNowResent;
+
+  /// No description provided for @payNowRefund.
+  ///
+  /// In en, this message translates to:
+  /// **'Refund'**
+  String get payNowRefund;
+
+  /// No description provided for @payNowRefundTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Refund by card'**
+  String get payNowRefundTitle;
+
+  /// No description provided for @payNowRefundMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Up to {max} can go back to the customer’s card. The card fee stays with the business.'**
+  String payNowRefundMessage(String max);
+
+  /// No description provided for @payNowRefundAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount'**
+  String get payNowRefundAmount;
+
+  /// No description provided for @payNowRefundReason.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason'**
+  String get payNowRefundReason;
+
+  /// No description provided for @payNowRefundDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Refunded {amount}.'**
+  String payNowRefundDone(String amount);
+
+  /// No description provided for @payNowRefundDifference.
+  ///
+  /// In en, this message translates to:
+  /// **'The total is now lower than what was paid by card. Refund {amount}?'**
+  String payNowRefundDifference(String amount);
+
+  /// No description provided for @payNowErrNotPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing was paid online on this request.'**
+  String get payNowErrNotPaid;
+
+  /// No description provided for @payNowErrTooMuch.
+  ///
+  /// In en, this message translates to:
+  /// **'That is more than was paid by card.'**
+  String get payNowErrTooMuch;
+
+  /// No description provided for @payNowErrInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter an amount to refund.'**
+  String get payNowErrInvalid;
+
+  /// No description provided for @payNowErrNotAllowed.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the owner, an admin or staff who can void may refund.'**
+  String get payNowErrNotAllowed;
+
+  /// No description provided for @boxSizesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Box sizes'**
+  String get boxSizesTitle;
+
+  /// No description provided for @boxSizesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Laawol sets the sizes for every business. You set the price of each one. A customer’s inches pick the size.'**
+  String get boxSizesHint;
+
+  /// No description provided for @boxSizesXlQuote.
+  ///
+  /// In en, this message translates to:
+  /// **'Extra large: you quote it'**
+  String get boxSizesXlQuote;
+
+  /// No description provided for @boxSee3d.
+  ///
+  /// In en, this message translates to:
+  /// **'See the 3D box'**
+  String get boxSee3d;
+
+  /// No description provided for @boxHide3d.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide the 3D box'**
+  String get boxHide3d;
+
+  /// No description provided for @boxDetailSize.
+  ///
+  /// In en, this message translates to:
+  /// **'Size: {size}'**
+  String boxDetailSize(String size);
+
+  /// No description provided for @payNowOpening.
+  ///
+  /// In en, this message translates to:
+  /// **'Opening…'**
+  String get payNowOpening;
+
+  /// No description provided for @pplErrBoxSizeInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a box size.'**
+  String get pplErrBoxSizeInvalid;
+
+  /// No description provided for @pplErrDimsInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Box inches must be 1 to 120 in each direction.'**
+  String get pplErrDimsInvalid;
+
+  /// No description provided for @pplErrBoxSizesSeaOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Box sizes are priced for Sea only.'**
+  String get pplErrBoxSizesSeaOnly;
+
+  /// No description provided for @pplErrBoxPriceInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a box price between \$0.01 and \$10,000.'**
+  String get pplErrBoxPriceInvalid;
 }
 
 class _AppLocalizationsDelegate

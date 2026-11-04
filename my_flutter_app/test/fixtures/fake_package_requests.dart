@@ -317,4 +317,37 @@ class FakePackageRequests implements PackageRequestService {
     });
     return priceList;
   }
+
+  /// What a refund or a resend answers (`payNow` as it then stands).
+  RequestPayNow? payNowAnswer;
+
+  @override
+  Future<RequestPayNow?> payRefund({
+    required String businessId,
+    required String requestId,
+    required int amountCents,
+    required String reason,
+  }) async {
+    await _record('setPackageRequestSettings', {
+      'action': 'pay_refund',
+      'businessId': businessId,
+      'requestId': requestId,
+      'amountCents': amountCents,
+      'reason': reason,
+    });
+    return payNowAnswer;
+  }
+
+  @override
+  Future<RequestPayNow?> payResend({
+    required String businessId,
+    required String requestId,
+  }) async {
+    await _record('setPackageRequestSettings', {
+      'action': 'pay_resend',
+      'businessId': businessId,
+      'requestId': requestId,
+    });
+    return payNowAnswer;
+  }
 }

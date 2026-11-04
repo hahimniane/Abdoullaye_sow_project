@@ -19,6 +19,7 @@ import '../widgets/guest_tracking_lookup.dart';
 import '../widgets/lot_sheets.dart';
 import '../widgets/package_request_compare_widgets.dart';
 import '../widgets/package_request_widgets.dart';
+import '../widgets/pay_now_widgets.dart';
 
 /// What `/package-request-detail` carries: the request by id (a signed-in
 /// sender's own, from My requests or a notification) and/or by its link
@@ -45,12 +46,17 @@ class PackageRequestDetailScreen extends StatefulWidget {
     this.service,
     this.onTrack,
     this.onCall,
+    this.onOpenLink,
     this.clock = DateTime.now,
   });
 
   final String requestId;
   final String token;
   final PackageRequestService? service;
+
+  /// Opens the card page of Pay now; the browser when null. Answers whether
+  /// it opened.
+  final Future<bool> Function(String url)? onOpenLink;
 
   /// Now; tests set it.
   final DateTime Function() clock;
@@ -66,8 +72,8 @@ class PackageRequestDetailScreen extends StatefulWidget {
       _PackageRequestDetailScreenState();
 }
 
-class _PackageRequestDetailScreenState
-    extends State<PackageRequestDetailScreen> {
+class _PackageRequestDetailScreenState extends State<PackageRequestDetailScreen>
+    with WidgetsBindingObserver {
   late final PackageRequestService _service =
       widget.service ?? FirebasePackageRequestService();
 
@@ -86,9 +92,21 @@ class _PackageRequestDetailScreenState
   String _busy = '';
   int _fetchTicket = 0;
 
+  /// Back from the card page: read the request again, so "Paid online" shows
+  /// without a pull to refresh.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed &&
+        _token.isNotEmpty &&
+        _request?.payNow != null) {
+      unawaited(_fetch());
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _safety = Timer(const Duration(seconds: 20), () {
       if (mounted && _loading) {
         setState(() {
@@ -125,6 +143,7 @@ class _PackageRequestDetailScreenState
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _docSub?.cancel();
     _safety?.cancel();
     super.dispose();
@@ -307,6 +326,29 @@ class _PackageRequestDetailScreenState
     );
   }
 
+  /// "Pay now": opens the card page. Optional - the request stands without it.
+  Future<void> _pay(PackageRequest request) async {
+    final l10n = AppLocalizations.of(context)!;
+    final url = request.payNow?.linkUrl ?? '';
+    if (_busy.isNotEmpty || url.isEmpty) return;
+    setState(() => _busy = 'pay');
+    var opened = false;
+    try {
+      final open = widget.onOpenLink;
+      opened = open != null
+          ? await open(url)
+          : await launchUrl(
+              Uri.parse(url),
+              mode: LaunchMode.externalApplication,
+            );
+    } catch (_) {
+      opened = false;
+    } finally {
+      if (mounted) setState(() => _busy = '');
+    }
+    if (!opened && mounted) showErrorSnackBar(context, l10n.payNowOpenFailed);
+  }
+
   Future<void> _call(String phone) async {
     final call = widget.onCall;
     if (call != null) return call(phone);
@@ -380,6 +422,11 @@ class _PackageRequestDetailScreenState
         ),
         RequestSectionTitle(l10n.prqPieces),
         RequestCard(child: RequestPriceTable(request: request, explain: true)),
+        CustomerPayNowCard(
+          request: request,
+          busy: _busy == 'pay',
+          onPay: () => _pay(request),
+        ),
         if ((request.estimate?.note ?? '').isNotEmpty)
           RequestCard(
             color: AppColors.parchment,

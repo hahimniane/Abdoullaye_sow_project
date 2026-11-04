@@ -51,7 +51,18 @@ class RequestSettingsSaved {
     required this.requestSlug,
     required this.requestLink,
     this.proof = const PackageProofSettings(),
+    this.payNow,
+    this.payNowChargeType = '',
+    this.stripeConnected = false,
   });
+
+  /// The Pay now switch as the server kept it (null when it did not say).
+  final bool? payNow;
+
+  /// What a card charge would be today: `direct` (the business's own
+  /// Stripe) or `platform` (Laawol collects and pays out on Mondays).
+  final String payNowChargeType;
+  final bool stripeConnected;
 
   final String requestSlug;
   final String requestLink;
@@ -170,6 +181,22 @@ abstract interface class PackageRequestService {
 
   /// "Looks right": the business checked a list Laawol set up.
   Future<PackagePriceList> markPriceListChecked(String businessId);
+
+  /// Pay now (docs/PACKAGE_BOX_SIZES_PAY_NOW.md §3): refunds [amountCents]
+  /// of what the card paid (`setPackageRequestSettings {action:
+  /// "pay_refund"}`); answers the request's `payNow` as it now stands.
+  Future<RequestPayNow?> payRefund({
+    required String businessId,
+    required String requestId,
+    required int amountCents,
+    required String reason,
+  });
+
+  /// Sends the payment link again (`{action: "pay_resend"}`).
+  Future<RequestPayNow?> payResend({
+    required String businessId,
+    required String requestId,
+  });
 }
 
 /// The real thing: the callables of §8.5 / §8.6 (through
@@ -496,6 +523,9 @@ class FirebasePackageRequestService implements PackageRequestService {
       requestSlug: (m['requestSlug'] ?? '').toString(),
       requestLink: (m['requestLink'] ?? '').toString(),
       proof: PackageProofSettings.fromMap(m['proof']),
+      payNow: m['payNow'] is bool ? m['payNow'] as bool : null,
+      payNowChargeType: (m['payNowChargeType'] ?? '').toString(),
+      stripeConnected: m['stripeConnected'] == true,
     );
   }
 
@@ -542,6 +572,36 @@ class FirebasePackageRequestService implements PackageRequestService {
       'businessId': businessId,
     });
     return PackagePriceList.fromMap(data is Map ? data['priceList'] : null);
+  }
+
+  @override
+  Future<RequestPayNow?> payRefund({
+    required String businessId,
+    required String requestId,
+    required int amountCents,
+    required String reason,
+  }) async {
+    final data = await _call('setPackageRequestSettings', {
+      'action': 'pay_refund',
+      'businessId': businessId,
+      'requestId': requestId,
+      'amountCents': amountCents,
+      'reason': reason.trim(),
+    });
+    return RequestPayNow.fromMap(data is Map ? data['payNow'] : null);
+  }
+
+  @override
+  Future<RequestPayNow?> payResend({
+    required String businessId,
+    required String requestId,
+  }) async {
+    final data = await _call('setPackageRequestSettings', {
+      'action': 'pay_resend',
+      'businessId': businessId,
+      'requestId': requestId,
+    });
+    return RequestPayNow.fromMap(data is Map ? data['payNow'] : null);
   }
 }
 

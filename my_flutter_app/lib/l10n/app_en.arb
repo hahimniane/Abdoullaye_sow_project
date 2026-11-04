@@ -5853,7 +5853,7 @@
   "printTagsPrinterSettings": "Printer settings",
   "inventoryPrintTagAction": "Print tag",
   "labelPrinterTitle": "Label printer",
-  "labelPrinterSubtitle": "Phomemo M221 over Bluetooth",
+  "labelPrinterSubtitle": "Phomemo label printers over Bluetooth",
   "labelPrinterSectionPrinter": "Printer",
   "labelPrinterNone": "No printer chosen yet. Find it below.",
   "labelPrinterScan": "Find printers",
@@ -5905,6 +5905,16 @@
   "labelPrinterCheckStatus": "Check the printer",
   "labelPrinterChecking": "Checking…",
   "labelPrinterSent": "Printed.",
+  "labelPrinterModelM221": "Phomemo M221 · tags and small labels",
+  "labelPrinterModelPm241": "Phomemo PM-241 · 4×6 labels",
+  "labelPrinterSize4x6": "4 × 6 in",
+  "pkgLabelsTipPm241": "Each 4 × 6 in label carries the QR code, the tracking code, and both names and phone numbers.",
+  "labelPrinterPm241Hint": "This printer prints package labels at 4 × 6 in. The app sets the size and darkness itself. Product tags print on the Phomemo M221.",
+  "labelPrinterTestLabel": "Print a test label (4 × 6 in)",
+  "labelPrinterTestLabelConfirmTitle": "Print a test label?",
+  "labelPrinterTestLabelConfirmBody": "This uses one 4 × 6 in label from the printer.",
+  "labelPrinterTestLabelConfirm": "Print",
+  "printTagsNotOnPm241": "This printer only prints 4 × 6 in package labels. Product tags print on the Phomemo M221: choose it in Printer settings.",
   "labelPrinterStatusDone": "Printer checked. The replies are in the print log.",
   "labelPrinterSectionLog": "Print log",
   "labelPrinterLogHelp": "If something goes wrong, copy the log and send it to the developer.",
@@ -7278,8 +7288,6 @@
   "prqPickupSettingsNote": "Offer “Collect from me” to customers in the areas you cover.",
   "prqAreas": "Areas you cover",
   "prqAreasHint": "e.g. Bronx, Harlem, Newark",
-  "prqCardBarrels": "Card payment for barrels",
-  "prqCardBarrelsNote": "Customers can pay barrels online; those orders show as Expected and paid online.",
   "prqSaved": "Settings saved.",
   "prqOwnerOnly": "Only the owner can change these settings.",
   "prqErrBusinessNotFound": "This request link doesn’t match any business.",
@@ -10936,5 +10944,197 @@
   "parkingFormerTeamTag": "Former team member",
   "@parkingFormerTeamTag": {
     "description": "Small label next to the owner of a car tied to someone who is no longer on the team."
-  }
+  },
+  "boxDesignerLength": "Length",
+  "boxDesignerWidth": "Width",
+  "boxDesignerHeight": "Height",
+  "boxDesignerInchesUnit": "in",
+  "@boxDesignerInchesUnit": {
+    "description": "Unit shown after a box side typed in inches."
+  },
+  "boxDesignerDrag": "Drag to spin",
+  "boxDesignerScaleNote": "A sneaker (12 in) and a person (5 ft 6 in) show the scale. Each floor square is 1 ft.",
+  "boxDesignerSemantics": "3D box, {dims}. Drag to spin it.",
+  "@boxDesignerSemantics": {
+    "description": "Screen-reader label of the 3D box picture.",
+    "placeholders": {
+      "dims": {
+        "type": "String"
+      }
+    }
+  },
+  "boxDesignerRange": "Enter 1 to 120 inches.",
+  "boxDesignerTitle": "Your box",
+  "boxDesignerUse": "Use these inches",
+  "boxBadgePrice": "{size} · {price}",
+  "@boxBadgePrice": {
+    "description": "The size a box makes and the business's price for it.",
+    "placeholders": {
+      "size": {
+        "type": "String"
+      },
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "boxBadgeFrom": "{size} · from {price}",
+  "@boxBadgeFrom": {
+    "description": "The size a box makes and the lowest price among the businesses.",
+    "placeholders": {
+      "size": {
+        "type": "String"
+      },
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "boxBadgeQuote": "{size} · the business will quote",
+  "@boxBadgeQuote": {
+    "description": "A size nobody priced (Extra large): the business quotes it.",
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "boxLabelSmall": "Small box",
+  "boxLabelMedium": "Medium box",
+  "boxLabelLarge": "Large box",
+  "boxLabelXl": "Extra large box",
+  "boxQuantityLine": "{count} × {label}",
+  "@boxQuantityLine": {
+    "description": "A box line: how many of which box.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "boxFormTitle": "Boxes",
+  "boxFormHint": "Pick the picture closest to your box. Not sure of the size? Add the inches and we pick it for you.",
+  "boxFormAdd": "Add a box",
+  "boxFormLine": "Box {number}",
+  "@boxFormLine": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "boxFormRemove": "Remove this box",
+  "boxFormHowMany": "How many",
+  "boxFormKnowInches": "Know the inches?",
+  "boxFormChangeInches": "Change the inches",
+  "boxFormUsePicture": "Choose a picture instead",
+  "boxFormInchesSummary": "{dims} · {size}",
+  "@boxFormInchesSummary": {
+    "description": "Typed inches and the size they make.",
+    "placeholders": {
+      "dims": {
+        "type": "String"
+      },
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "boxFormErrSize": "Choose a size or add the inches.",
+  "boxFormQuoteNote": "The business will quote this size.",
+  "payNowButton": "Pay now {amount}",
+  "@payNowButton": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "payNowOptional": "Optional: pay by card now, or pay in person as usual.",
+  "payNowPaid": "Paid online {amount}",
+  "@payNowPaid": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "payNowRefunded": "Refunded {amount}",
+  "@payNowRefunded": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "payNowBalance": "Balance due at the counter: {amount}",
+  "@payNowBalance": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "payNowCancelled": "Payment link cancelled",
+  "payNowOpenFailed": "Could not open the payment page. Try again.",
+  "payNowSwitchTitle": "Pay now",
+  "payNowSwitchNote": "Customers get an optional link to pay by card once the price is final. You pay the card fee (2.9% + 30¢). Without Stripe, Laawol collects and pays you every Monday.",
+  "payNowChargeDirect": "Right now card payments go straight to your Stripe account.",
+  "payNowChargePlatform": "Right now Laawol collects card payments and pays you every Monday.",
+  "payNowChipSent": "Link sent",
+  "payNowResend": "Send the link again",
+  "payNowResent": "Payment link sent.",
+  "payNowRefund": "Refund",
+  "payNowRefundTitle": "Refund by card",
+  "payNowRefundMessage": "Up to {max} can go back to the customer’s card. The card fee stays with the business.",
+  "@payNowRefundMessage": {
+    "placeholders": {
+      "max": {
+        "type": "String"
+      }
+    }
+  },
+  "payNowRefundAmount": "Amount",
+  "payNowRefundReason": "Reason",
+  "payNowRefundDone": "Refunded {amount}.",
+  "@payNowRefundDone": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "payNowRefundDifference": "The total is now lower than what was paid by card. Refund {amount}?",
+  "@payNowRefundDifference": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "payNowErrNotPaid": "Nothing was paid online on this request.",
+  "payNowErrTooMuch": "That is more than was paid by card.",
+  "payNowErrInvalid": "Enter an amount to refund.",
+  "payNowErrNotAllowed": "Only the owner, an admin or staff who can void may refund.",
+  "boxSizesTitle": "Box sizes",
+  "boxSizesHint": "Laawol sets the sizes for every business. You set the price of each one. A customer’s inches pick the size.",
+  "boxSizesXlQuote": "Extra large: you quote it",
+  "boxSee3d": "See the 3D box",
+  "boxHide3d": "Hide the 3D box",
+  "boxDetailSize": "Size: {size}",
+  "@boxDetailSize": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "payNowOpening": "Opening…",
+  "pplErrBoxSizeInvalid": "Choose a box size.",
+  "pplErrDimsInvalid": "Box inches must be 1 to 120 in each direction.",
+  "pplErrBoxSizesSeaOnly": "Box sizes are priced for Sea only.",
+  "pplErrBoxPriceInvalid": "Enter a box price between $0.01 and $10,000."
 }

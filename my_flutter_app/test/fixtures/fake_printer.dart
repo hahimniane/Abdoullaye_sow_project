@@ -1,9 +1,12 @@
 /// A stand-in for the Bluetooth printer: records everything the app sends
 /// and answers like an M221 would (a `1A 0F 0C` "done" frame after each
-/// label's footer), with knobs to make it misbehave.
+/// label's footer), with knobs to make it misbehave. With [pm241] set it
+/// answers like a Phomemo PM-241 instead: flow-control credits (`01 n`,
+/// `02 lo hi`) and TSPL text replies.
 library;
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:my_flutter_app/services/label_printer.dart';
 import 'package:my_flutter_app/services/m221_protocol.dart';
@@ -17,6 +20,11 @@ class FakePrinterTransport implements PrinterTransport {
     this.paperReply,
     this.scanError,
     this.connectError,
+    this.pm241 = false,
+    this.initialCredits = 7,
+    this.grantCredits = true,
+    this.maxPacketReply = 244,
+    this.extraReply,
   }) : devices =
            devices ??
            const [
@@ -30,6 +38,27 @@ class FakePrinterTransport implements PrinterTransport {
   List<int>? paperReply;
   PrinterException? scanError;
   PrinterException? connectError;
+
+  /// Act as a PM-241 (TSPL, flow control) instead of an M221.
+  bool pm241;
+
+  /// The credits it grants when notifications are turned on.
+  int initialCredits;
+
+  /// Whether it returns `01 01` after each packet.
+  bool grantCredits;
+
+  /// The packet size it announces (`02 lo hi`).
+  int maxPacketReply;
+
+  /// A text line sent right after `PRINT 1` (e.g. "Cmd error:END").
+  String? extraReply;
+
+  /// Packets written with no credit left (a flow-control violation).
+  int creditViolations = 0;
+
+  /// The PM-241's credit balance as it would count it.
+  int creditsLeft = 0;
 
   /// Drop the connection on the Nth write (1-based), once.
   int? dropOnWrite;
@@ -111,6 +140,17 @@ class FakePrinterLink implements PrinterLink {
   Future<void> subscribe() async {
     _printer.events.add('subscribe');
     subscribed = true;
+    if (_printer.pm241) {
+      _printer.creditsLeft = _printer.initialCredits;
+      if (_printer.initialCredits > 0) {
+        reply([0x01, _printer.initialCredits]);
+      }
+      reply([
+        0x02,
+        _printer.maxPacketReply & 0xFF,
+        _printer.maxPacketReply >> 8,
+      ]);
+    }
   }
 
   void reply(List<int> frame) {
@@ -134,6 +174,10 @@ class FakePrinterLink implements PrinterLink {
       this.drop();
       throw StateError('device is disconnected');
     }
+    if (_printer.pm241) {
+      _writePm241(bytes);
+      return;
+    }
     // An M221 only acts when notifications are on; a job sent before that
     // is dropped silently (no reply).
     _pending.addAll(bytes);
@@ -147,6 +191,27 @@ class FakePrinterLink implements PrinterLink {
     } else if (_endsWith(_pending, m221QueryBattery)) {
       _pending.clear();
       reply([0x1A, 0x04, 87]);
+    }
+  }
+
+  void _writePm241(List<int> bytes) {
+    _printer.creditsLeft--;
+    if (_printer.creditsLeft < 0) _printer.creditViolations++;
+    if (_printer.grantCredits) {
+      _printer.creditsLeft++;
+      reply([0x01, 0x01]);
+    }
+    _pending.addAll(bytes);
+    const tail = 'PRINT 1\r\n';
+    if (_pending.length >= tail.length &&
+        _endsWith(_pending, ascii.encode(tail))) {
+      _pending.clear();
+      final extra = _printer.extraReply;
+      if (extra != null) reply(ascii.encode('$extra\r\n'));
+      if (_printer.answerDone) {
+        reply(ascii.encode('SSSGETPRINTING:DOING\r\n'));
+        reply(ascii.encode('SSSGETPRINTING:DONE\r\n'));
+      }
     }
   }
 
@@ -170,6 +235,7 @@ bool _endsWith(List<int> bytes, List<int> tail) {
 LabelPrinterController fakeController(
   FakePrinterTransport transport, {
   Duration doneTimeout = const Duration(milliseconds: 200),
+  Duration pm241CreditWait = const Duration(milliseconds: 200),
   LabelPrinterSettings settings = const LabelPrinterSettings(
     deviceId: 'AA:BB:CC:DD:EE:01',
     deviceName: 'Q2A1',
@@ -181,6 +247,8 @@ LabelPrinterController fakeController(
     store: store ?? MemoryPrinterStore(settings),
     pause: (_) async {},
     doneTimeout: doneTimeout,
+    pm241DoneWait: doneTimeout,
+    pm241CreditWait: pm241CreditWait,
     idleDisconnect: Duration.zero,
   );
   c.updateSettings(settings);

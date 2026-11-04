@@ -63,7 +63,8 @@ class _PackageRequestSettingsScreenState
   Map<String, RequestWeekHours> _hours = {};
   bool _pickup = false;
   final _areas = TextEditingController();
-  bool _cardBarrels = false;
+  bool _payNow = false;
+  String _payNowChargeType = '';
   PackageProofSettings _proof = const PackageProofSettings();
   final _slug = TextEditingController();
 
@@ -128,7 +129,7 @@ class _PackageRequestSettingsScreenState
         _hours = {...settings.openingHours};
         _pickup = settings.pickupEnabled;
         _areas.text = settings.pickupAreas;
-        _cardBarrels = settings.cardBarrelBooking;
+        _payNow = settings.payNow;
         _proof = settings.proof;
         _slug.text = settings.requestSlug;
       } else if (_slug.text.isEmpty) {
@@ -232,7 +233,8 @@ class _PackageRequestSettingsScreenState
           openingHours: hours,
           pickupEnabled: _pickup,
           pickupAreas: _areas.text,
-          cardBarrelBooking: _cardBarrels,
+          cardBarrelBooking: _payNow,
+          payNow: _payNow,
           slug: slug,
           currentSlug: currentSlug,
           proof: _proof,
@@ -242,6 +244,10 @@ class _PackageRequestSettingsScreenState
       if (result.requestSlug.isNotEmpty) _slug.text = result.requestSlug;
       // The switches as the server kept them.
       _proof = result.proof;
+      setState(() {
+        if (result.payNow != null) _payNow = result.payNow!;
+        _payNowChargeType = result.payNowChargeType;
+      });
       AppHaptics.commit();
       showSuccessSnackBar(context, l10n.prqSaved);
     } on RequestFailure catch (failure) {
@@ -581,19 +587,41 @@ class _PackageRequestSettingsScreenState
         ),
         const SizedBox(height: AppSpacing.sm),
         RequestCard(
-          child: SwitchListTile.adaptive(
-            key: const Key('settings-card-barrels'),
-            contentPadding: EdgeInsets.zero,
-            value: _cardBarrels,
-            onChanged: edit ? (v) => setState(() => _cardBarrels = v) : null,
-            title: Text(
-              l10n.prqCardBarrels,
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-            ),
-            subtitle: Text(
-              l10n.prqCardBarrelsNote,
-              style: const TextStyle(fontSize: 12.5),
-            ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SwitchListTile.adaptive(
+                key: const Key('settings-pay-now'),
+                contentPadding: EdgeInsets.zero,
+                value: _payNow,
+                onChanged: edit ? (v) => setState(() => _payNow = v) : null,
+                title: Text(
+                  l10n.payNowSwitchTitle,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                subtitle: Text(
+                  l10n.payNowSwitchNote,
+                  style: const TextStyle(fontSize: 12.5),
+                ),
+              ),
+              if (_payNow && _payNowChargeType.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    _payNowChargeType == 'direct'
+                        ? l10n.payNowChargeDirect
+                        : l10n.payNowChargePlatform,
+                    key: const Key('settings-pay-now-charge'),
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      color: AppColors.muted,
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
         // Proof at every step (docs/AIR_PACKAGES.md §1.3): three switches,

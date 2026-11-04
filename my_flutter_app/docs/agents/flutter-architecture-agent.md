@@ -501,3 +501,19 @@ Add future project conventions and repeated architectural decisions here.
   the server-mirrored text builder. Paid back / Void go through
   `StaffExpenseRepaymentService` (`updateLotExpenseEntry` actions,
   injectable caller); a refused expense read means no netting plus a note.
+- Box sizes and Pay now (docs/PACKAGE_BOX_SIZES_PAY_NOW.md): the size rules are
+  only in `package_price_list.dart` (`boxSizes`, `boxSizeFor`); `lib/services/
+  box_sizes.dart` reads them for screens (names, examples, a route's
+  `boxPricesCents`) - never copy a size table. The 3D designer is
+  `lib/widgets/box_designer/`: pure geometry in `box_geometry.dart` (tested
+  without a widget), `BoxScenePainter` repaints on a spin notifier alone, and
+  `BoxDesigner` with `onChanged: null` is the read-only view staff get. Pay
+  now state is `RequestPayNow` on `PackageRequest.payNow` (server writes
+  only); the customer card and the business chip/Resend/Refund are
+  `lib/widgets/pay_now_widgets.dart`; refund visibility is `canRefundPayNow`
+  (owner/admin, or a `void`/`ledger` permission) and the server still decides.
+  The old "card for barrels" switch is the one `payNow` switch: a save writes
+  `payNow` and `cardBarrelBooking` equal.
+- Never run `dart format lib` (or any directory-wide format) in this repo: it
+  reformats ~130 unrelated files. Format only the files you changed.
+

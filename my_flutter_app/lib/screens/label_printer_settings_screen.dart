@@ -7,6 +7,7 @@ import '../l10n/app_localizations.dart';
 import '../services/label_printer.dart';
 import '../services/label_printer_ble.dart';
 import '../services/m221_protocol.dart';
+import '../services/pm241_protocol.dart';
 import '../services/tag_labels.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_motion.dart';
@@ -39,7 +40,7 @@ class LabelPrinterSettingsScreen extends StatefulWidget {
       _LabelPrinterSettingsScreenState();
 }
 
-enum _Action { none, scan, frame, tag, status }
+enum _Action { none, scan, frame, tag, status, testLabel }
 
 class _LabelPrinterSettingsScreenState
     extends State<LabelPrinterSettingsScreen> {
@@ -115,6 +116,60 @@ class _LabelPrinterSettingsScreenState
       final outcome = await _printer.printLabels(
         image: image,
         what: action == _Action.frame ? 'test frame' : 'test tag',
+      );
+      if (outcome.ok) {
+        AppHaptics.commit();
+        if (mounted) setState(() => _done = l10n.labelPrinterSent);
+        return null;
+      }
+      final failure = outcome.failure;
+      return failure == null ? null : labelPrinterFailureText(l10n, failure);
+    });
+  }
+
+  /// A 4 x 6 in test label on a PM-241. It costs one label, so it asks first.
+  Future<void> _printTestLabel() async {
+    if (_working) return;
+    final l10n = AppLocalizations.of(context)!;
+    if (!_printer.settings.hasPrinter) {
+      setState(
+        () => _error = labelPrinterFailureText(
+          l10n,
+          PrintFailure.noPrinterChosen,
+        ),
+      );
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        key: const Key('label-printer-test-label-confirm'),
+        title: Text(l10n.labelPrinterTestLabelConfirmTitle),
+        content: Text(l10n.labelPrinterTestLabelConfirmBody),
+        actions: [
+          TextButton(
+            key: const Key('label-printer-test-label-cancel'),
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            key: const Key('label-printer-test-label-go'),
+            style: FilledButton.styleFrom(minimumSize: const Size(64, 44)),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(l10n.labelPrinterTestLabelConfirm),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    if (!await ensureBluetoothExplained(context)) return;
+    if (!mounted) return;
+    await _run(_Action.testLabel, () async {
+      final outcome = await _printer.printLabels(
+        image: pm241TestLabel(
+          tagQrMatrix(inventoryTagLink(labelPrinterTestCode)),
+        ),
+        what: 'test label 4x6',
       );
       if (outcome.ok) {
         AppHaptics.commit();
@@ -205,9 +260,13 @@ class _LabelPrinterSettingsScreenState
                         ],
                         ..._printerSection(l10n),
                         _divider(),
-                        ..._labelSection(l10n),
-                        _divider(),
-                        ..._positionSection(l10n),
+                        if (_printer.model == PrinterModel.pm241)
+                          ..._pm241Section(l10n)
+                        else ...[
+                          ..._labelSection(l10n),
+                          _divider(),
+                          ..._positionSection(l10n),
+                        ],
                         _divider(),
                         ..._logSection(l10n),
                       ],
@@ -278,6 +337,17 @@ class _LabelPrinterSettingsScreenState
                       color: s.hasPrinter ? AppColors.ink : AppColors.muted,
                     ),
                   ),
+                  if (s.hasPrinter)
+                    Text(
+                      _printer.model == PrinterModel.pm241
+                          ? l10n.labelPrinterModelPm241
+                          : l10n.labelPrinterModelM221,
+                      key: const Key('label-printer-model'),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.muted,
+                      ),
+                    ),
                   if (_printer.isConnected || battery != null)
                     Text(
                       [
@@ -385,6 +455,25 @@ class _LabelPrinterSettingsScreenState
             ),
           ),
         ),
+    ];
+  }
+
+  /// What a PM-241 has: a fixed 4 x 6 in label and a test label. Its size,
+  /// darkness and speed are set by the app, and it has no alignment to tune.
+  List<Widget> _pm241Section(AppLocalizations l10n) {
+    return [
+      _title(l10n.labelPrinterSectionLabel),
+      _hint(l10n.labelPrinterPm241Hint),
+      const SizedBox(height: AppSpacing.md),
+      ContainerActionButton(
+        key: const Key('label-printer-test-label'),
+        icon: Icons.qr_code_2,
+        label: l10n.labelPrinterTestLabel,
+        busy: _action == _Action.testLabel,
+        enabled: !_working,
+        primary: true,
+        onTap: _printTestLabel,
+      ),
     ];
   }
 

@@ -13,6 +13,9 @@
 ///   up to `includedLb` pounds each (above that, the extra pounds are charged
 ///   at the item's category rate, once weighed at the counter);
 /// - `perLbCents`: a price per pound for a whole category ("Clothes $6/lb");
+/// - `boxPricesCents` (Sea only): a price per box size (small / medium /
+///   large; docs/PACKAGE_BOX_SIZES_PAY_NOW.md), the size picked from typed
+///   inches or the customer's choice;
 /// - `departure`: the weekly schedule shown as "Next flight / container".
 /// Anything not on the list is "ask me": the piece waits for a staff estimate.
 ///
@@ -87,6 +90,86 @@ const sizePresets = <SizePreset>[
   SizePreset('big_box', 70, 'Big box', 'Grand carton'),
 ];
 
+/// One box size (docs/PACKAGE_BOX_SIZES_PAY_NOW.md section 1). Laawol sets
+/// them for every business; a business only prices them. [maxIn] is what the
+/// size fits inside, longest side first; `xl` has none: anything bigger, always
+/// quoted.
+class BoxSize {
+  const BoxSize(
+    this.id,
+    this.maxIn,
+    this.en,
+    this.fr,
+    this.exampleEn,
+    this.exampleFr,
+  );
+
+  final String id;
+  final List<int>? maxIn;
+  final String en;
+  final String fr;
+  final String exampleEn;
+  final String exampleFr;
+
+  String label(String languageCode) => languageCode == 'fr' ? fr : en;
+  String example(String languageCode) =>
+      languageCode == 'fr' ? exampleFr : exampleEn;
+}
+
+const boxSizes = <BoxSize>[
+  BoxSize(
+    'small',
+    [18, 18, 18],
+    'Small',
+    'Petite',
+    'About a shoebox',
+    'Environ une boîte à chaussures',
+  ),
+  BoxSize(
+    'medium',
+    [24, 18, 18],
+    'Medium',
+    'Moyenne',
+    'About a microwave box',
+    'Environ un carton de micro-ondes',
+  ),
+  BoxSize(
+    'large',
+    [30, 24, 24],
+    'Large',
+    'Grande',
+    'About a TV box',
+    'Environ un carton de télé',
+  ),
+  BoxSize(
+    'xl',
+    null,
+    'Extra large',
+    'Très grande',
+    'Bigger than Large',
+    'Plus grande que Grande',
+  ),
+];
+
+final boxSizeIds = <String>[for (final b in boxSizes) b.id];
+
+/// The sizes a business can price (`xl` is always quoted).
+const boxPricedIds = <String>['small', 'medium', 'large'];
+
+/// A box may be this many inches over a size's limit, per dimension.
+const boxSlackIn = 1;
+
+/// A typed dimension is 1..120 inches, rounded to a tenth.
+const boxDimMaxIn = 120;
+
+/// What a box line says (the stored description), by size and language.
+const _boxLabels = <String, Map<String, String>>{
+  'small': {'en': 'Small box', 'fr': 'Petite boîte'},
+  'medium': {'en': 'Medium box', 'fr': 'Boîte moyenne'},
+  'large': {'en': 'Large box', 'fr': 'Grande boîte'},
+  'xl': {'en': 'Extra large box', 'fr': 'Très grande boîte'},
+};
+
 /// The server's limits (`LIMIT` in the JS).
 class PriceLimit {
   const PriceLimit._();
@@ -126,6 +209,10 @@ const priceListMessages = <String, String>{
   'item_unknown': 'That item is no longer on the price list.',
   'quantity_invalid': 'Enter how many (1 to 50).',
   'weight_invalid': 'Enter the weight in pounds (0.1 to 2,000).',
+  'box_sizes_sea_only': 'Box sizes are priced for Sea only.',
+  'box_price_invalid': 'Enter a box price between \$0.01 and \$10,000.',
+  'box_size_invalid': 'Choose a box size.',
+  'dims_invalid': 'Box inches must be 1 to 120 in each direction.',
 };
 
 // ---------------------------------------------------------------------------
@@ -255,6 +342,68 @@ int _localeCompare(String a, String b) {
   return c != 0 ? c : a.compareTo(b);
 }
 
+/// `{l, w, h}` in inches, each 1..120 rounded to a tenth; null when any side
+/// is missing or out of range.
+Map<String, num>? cleanDims(Object? raw) {
+  final data = _asMap(raw);
+  if (data == null) return null;
+  final sides = [data['l'], data['w'], data['h']].map(_tenth).toList();
+  if (!sides.every((n) => n >= 1 && n <= boxDimMaxIn)) return null;
+  return {'l': _clean(sides[0]), 'w': _clean(sides[1]), 'h': _clean(sides[2])};
+}
+
+/// The smallest size a box fits in, turned any way, with 1 inch of slack per
+/// dimension (both triples sorted longest first): `small`, `medium`, `large`
+/// or `xl`; null when the inches are invalid.
+String? boxSizeFor(Object? dims) {
+  final clean = cleanDims(dims);
+  if (clean == null) return null;
+  final box = [clean['l']!, clean['w']!, clean['h']!]
+    ..sort((a, b) => b.compareTo(a));
+  for (final size in boxSizes) {
+    final max = size.maxIn;
+    if (max == null) continue;
+    var fits = true;
+    for (var i = 0; i < 3; i++) {
+      if (!(box[i] <= max[i] + boxSlackIn)) fits = false;
+    }
+    if (fits) return size.id;
+  }
+  return 'xl';
+}
+
+/// What a box piece says it is.
+class BoxOfPiece {
+  const BoxOfPiece(this.boxSize, this.dimsIn, this.error);
+
+  /// `''` when the piece names neither a size nor inches.
+  final String boxSize;
+  final Map<String, num>? dimsIn;
+  final String error;
+}
+
+/// What a box piece says it is. Typed inches win over the size the client
+/// chose.
+BoxOfPiece boxOfPiece(Object? piece) {
+  final p = _asMap(piece) ?? const <String, dynamic>{};
+  bool blank(Object? v) => v == null || v == '';
+  final dims = _asMap(p['dimsIn']);
+  final typed = dims != null
+      ? ['l', 'w', 'h'].any((k) => !blank(dims[k]))
+      : !blank(p['dimsIn']);
+  if (typed) {
+    final dimsIn = cleanDims(p['dimsIn']);
+    return dimsIn != null
+        ? BoxOfPiece(boxSizeFor(dimsIn)!, dimsIn, '')
+        : const BoxOfPiece('', null, 'dims_invalid');
+  }
+  final id = _text(p['boxSize'], 10);
+  if (id.isEmpty) return const BoxOfPiece('', null, '');
+  return boxSizeIds.contains(id)
+      ? BoxOfPiece(id, null, '')
+      : const BoxOfPiece('', null, 'box_size_invalid');
+}
+
 /// A stable id for an item name ("Phone (any)" -> "i_phone_any").
 String itemIdFor(String label) {
   var slug = foldAccents(
@@ -314,16 +463,17 @@ DepartureCleaned cleanDeparture(Object? raw) {
 class RouteValidation {
   const RouteValidation(this.route, this.errors);
 
-  /// The stored shape `{items, perLbCents, departure}`; null when empty or
-  /// invalid.
+  /// The stored shape `{items, perLbCents, boxPricesCents?, departure}`; null
+  /// when empty or invalid.
   final Map<String, Object?>? route;
   final List<String> errors;
 
   Map<String, Object?> toMap() => {'route': route, 'errors': errors};
 }
 
-/// Validates one route (a country by Sea or by Air).
-RouteValidation validateRoute(Object? raw) {
+/// Validates one route (a country by Sea or by Air; box sizes are Sea only,
+/// [mode] defaults to sea).
+RouteValidation validateRoute(Object? raw, {String mode = 'sea'}) {
   final errors = <String>[];
   void add(String code) {
     if (!errors.contains(code)) errors.add(code);
@@ -391,17 +541,46 @@ RouteValidation validateRoute(Object? raw) {
       perLbCents[entry.key] = cents;
     }
   }
+  final boxPricesCents = <String, int>{};
+  final boxRaw = data['boxPricesCents'];
+  if (boxRaw != null) {
+    final boxMap = _asMap(boxRaw);
+    if (boxMap == null) {
+      add('box_price_invalid');
+    } else {
+      for (final entry in boxMap.entries) {
+        final value = entry.value;
+        if (value == null || value == '') continue;
+        if (mode == 'air') {
+          add('box_sizes_sea_only');
+          continue;
+        }
+        final cents = boxPricedIds.contains(entry.key)
+            ? _centsIn(value, PriceLimit.priceCents)
+            : null;
+        if (cents == null) {
+          add('box_price_invalid');
+        } else {
+          boxPricesCents[entry.key] = cents;
+        }
+      }
+    }
+  }
   final cleaned = cleanDeparture(data['departure']);
   if (!cleaned.ok) add('departure_invalid');
   if (errors.isNotEmpty) return RouteValidation(null, errors);
   final empty =
-      items.isEmpty && perLbCents.isEmpty && cleaned.departure == null;
+      items.isEmpty &&
+      perLbCents.isEmpty &&
+      boxPricesCents.isEmpty &&
+      cleaned.departure == null;
   return RouteValidation(
     empty
         ? null
         : {
             'items': items,
             'perLbCents': perLbCents,
+            if (boxPricesCents.isNotEmpty) 'boxPricesCents': boxPricesCents,
             'departure': cleaned.departure,
           },
     errors,
@@ -450,7 +629,7 @@ PriceListValidation validatePriceList(
     }
     final pair = <String, Map<String, Object?>>{};
     for (final mode in priceModes) {
-      final result = validateRoute(value[mode]);
+      final result = validateRoute(value[mode], mode: mode);
       result.errors.forEach(add);
       if (result.route != null) pair[mode] = result.route!;
     }
@@ -513,12 +692,19 @@ class PricedPiece {
 /// A piece is one of:
 /// - `{priceItemId, quantity}`: an item from the list;
 /// - `{categoryId, weightLb}`: a category priced by the pound;
+/// - `{kind: "box", boxSize | dimsIn, quantity}`: a Sea box priced by size
+///   (typed inches win); `xl` or a size the business did not price is "ask
+///   me";
 /// - `{kind: "barrel"}`: priced by the destination's barrel price;
 /// - anything else ("ask me"): no price, staff estimate it.
+///
+/// [lang] (`fr`, else English) is the language of the description a piece
+/// stores; a price's label is always English.
 PricedPiece pricePiece(
   Map<String, dynamic>? route,
   Object? piece, {
   int? barrelPriceCents,
+  String? lang,
 }) {
   final p = _asMap(piece) ?? const <String, dynamic>{};
   final itemId = _text(p['priceItemId'], 44);
@@ -582,7 +768,8 @@ PricedPiece pricePiece(
     final rates = _asMap(route?['perLbCents']) ?? const <String, dynamic>{};
     final rate = rates[categoryId];
     final label = category.en;
-    final description = '$label · ${_numText(weightLb)} lb';
+    final description =
+        '${lang == 'fr' ? category.fr : label} · ${_numText(weightLb)} lb';
     if (!_isInteger(rate) || (rate as num) <= 0) {
       return PricedPiece(description: description);
     }
@@ -602,6 +789,44 @@ PricedPiece pricePiece(
       estimateCents: _jsRound(rate * weightLb),
       description: description,
     );
+  }
+  if (_text(p['kind'], 20) == 'box') {
+    final box = boxOfPiece(p);
+    if (box.error.isNotEmpty) return PricedPiece(error: box.error);
+    if (box.boxSize.isNotEmpty) {
+      final quantityRaw = _jsNumber(p['quantity'] ?? 1);
+      if (!_isInteger(quantityRaw) ||
+          quantityRaw < 1 ||
+          quantityRaw > PriceLimit.quantity) {
+        return const PricedPiece(error: 'quantity_invalid');
+      }
+      final quantity = quantityRaw.toInt();
+      // The description is in the customer's language; the price's label
+      // stays English so re-pricing compares like with like.
+      final name = _boxLabels[box.boxSize]![lang == 'fr' ? 'fr' : 'en']!;
+      final description = quantity > 1 ? '$quantity × $name' : name;
+      final unit = _intOf(_asMap(route?['boxPricesCents'])?[box.boxSize]);
+      if (box.boxSize == 'xl' || unit == null || unit <= 0) {
+        return PricedPiece(description: description);
+      }
+      return PricedPiece(
+        price: {
+          'source': 'box_size',
+          'boxSize': box.boxSize,
+          'itemId': '',
+          'label': _boxLabels[box.boxSize]!['en'],
+          'categoryId': '',
+          'quantity': quantity,
+          'unitCents': unit,
+          'includedLb': 0,
+          'excessPerLbCents': null,
+          'perLbCents': null,
+          'weightLb': null,
+        },
+        estimateCents: unit * quantity,
+        description: description,
+      );
+    }
   }
   if (_text(p['kind'], 20) == 'barrel') {
     final cents = barrelPriceCents != null && barrelPriceCents > 0
@@ -642,6 +867,12 @@ int? counterPriceCents(Map<String, dynamic>? price, Object? weighedLb) {
     return rate.isFinite ? _jsRound(rate * weight) : null;
   }
   if (source == 'barrel') return _intOf(price['unitCents']);
+  if (source == 'box_size') {
+    final unit = _intOf(price['unitCents']);
+    final quantity = _jsNumber(price['quantity']);
+    if (unit == null || !quantity.isFinite) return null;
+    return unit * quantity.toInt();
+  }
   if (source != 'item') return null;
   final unit = _intOf(price['unitCents']);
   final quantity = _jsNumber(price['quantity']);
@@ -699,12 +930,13 @@ BasketResult priceBasket(
   Object? pieces, {
   int? barrelPriceCents,
   int? pickupFeeCents,
+  String? lang,
 }) {
   final list = _asList(pieces);
   final errors = <String>[];
   final rows = [
     for (final piece in list)
-      pricePiece(route, piece, barrelPriceCents: barrelPriceCents),
+      pricePiece(route, piece, barrelPriceCents: barrelPriceCents, lang: lang),
   ];
   for (final row in rows) {
     if (row.error.isNotEmpty && !errors.contains(row.error)) {
@@ -767,7 +999,8 @@ bool _deepEqual(Object? a, Object? b) {
 }
 
 /// Re-prices the stored pieces of an open request at today's list (owner
-/// decision 10). Only pieces priced from the list (item / per pound) move; a
+/// decision 10). Only pieces priced from the list (item / per pound / box
+/// size) move; a
 /// piece whose item left the list keeps its price (staff decide at the
 /// counter); barrels and "ask me" pieces are left alone.
 RepriceResult repricePieces(Object? pieces, Map<String, dynamic>? route) {
@@ -779,7 +1012,8 @@ RepriceResult repricePieces(Object? pieces, Map<String, dynamic>? route) {
     final piece = _asMap(raw) ?? <String, dynamic>{};
     final price = _asMap(piece['price']);
     final source = price?['source'];
-    if (price == null || (source != 'item' && source != 'per_lb')) {
+    if (price == null ||
+        (source != 'item' && source != 'per_lb' && source != 'box_size')) {
       next.add(piece);
       continue;
     }
@@ -787,6 +1021,12 @@ RepriceResult repricePieces(Object? pieces, Map<String, dynamic>? route) {
       route,
       source == 'item'
           ? {'priceItemId': price['itemId'], 'quantity': price['quantity']}
+          : source == 'box_size'
+          ? {
+              'kind': 'box',
+              'boxSize': price['boxSize'],
+              'quantity': price['quantity'],
+            }
           : {'categoryId': price['categoryId'], 'weightLb': price['weightLb']},
     );
     if (again.price == null || again.estimateCents == null) {

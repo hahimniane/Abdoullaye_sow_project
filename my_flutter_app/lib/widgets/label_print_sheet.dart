@@ -509,7 +509,9 @@ class _LabelPrintSheetState extends State<LabelPrintSheet> {
             note: settings != null && settings.hasPrinter
                 ? l10n.pkgLabelsMethodPrinterNoteNamed(
                     settings.deviceName,
-                    settings.packageSize.mmText,
+                    settings.model == PrinterModel.pm241
+                        ? l10n.labelPrinterSize4x6
+                        : settings.packageSize.mmText,
                   )
                 : l10n.pkgLabelsMethodPrinterNote,
             selected: _method == LabelPrintMethod.labelPrinter,
@@ -543,7 +545,8 @@ class _LabelPrintSheetState extends State<LabelPrintSheet> {
         ),
         if (_method == LabelPrintMethod.labelPrinter && settings != null) ...[
           const SizedBox(height: AppSpacing.sm),
-          if (_printer.loaded)
+          // A PM-241 only has the 4 x 6 in label: nothing to choose.
+          if (_printer.loaded && settings.model != PrinterModel.pm241)
             LabelSizePicker(
               key: const Key('labels-package-size'),
               kind: LabelSizeKind.package,
@@ -607,7 +610,10 @@ class _LabelPrintSheetState extends State<LabelPrintSheet> {
         const SizedBox(height: AppSpacing.xs),
         Text(
           switch (_method) {
-            LabelPrintMethod.labelPrinter => l10n.pkgLabelsTipPrinter,
+            LabelPrintMethod.labelPrinter =>
+              settings?.model == PrinterModel.pm241
+                  ? l10n.pkgLabelsTipPm241
+                  : l10n.pkgLabelsTipPrinter,
             LabelPrintMethod.systemPrint => l10n.pkgLabelsTipSystem,
             _ => l10n.ctrLabelTip,
           },

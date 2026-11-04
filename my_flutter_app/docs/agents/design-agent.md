@@ -202,3 +202,11 @@ Return:
   install. An account with no email shows its phone wherever an email would
   be; email-only actions are disabled with a reason, never hidden or left to
   fail. "Not signed in yet" accounts stay out of People by default (filter).
+- The box designer (3D box beside a sneaker and a 5 ft 6 in person on a 1-ft
+  floor grid) is the one way a box's inches are shown, on every client: drag
+  spins it (tilt clamped), a badge says the size and the business's price
+  ("Medium · $35", "from $X" while comparing, "Extra large · the business will
+  quote"), and with reduced motion the framing jumps instead of easing. Staff
+  get the same box read-only behind "See the 3D box". Size pictures are the
+  four drawings in `assets/box_sizes/`, never recreated in code.
+

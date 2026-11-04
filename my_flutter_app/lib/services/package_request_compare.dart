@@ -175,6 +175,45 @@ class BasketOther {
   bool get valid => description.trim().isNotEmpty;
 }
 
+/// A line of boxes: [quantity] of one size, picked from the size pictures or
+/// decided by the inches typed (the inches win, as on the server), with up to
+/// 3 photos (docs/PACKAGE_BOX_SIZES_PAY_NOW.md §1-§2). Sea only.
+class BasketBox {
+  const BasketBox({
+    this.boxSize = '',
+    this.dimsIn,
+    this.quantity = 1,
+    this.photoPaths = const [],
+  });
+
+  /// `small` / `medium` / `large` / `xl`; '' until one is chosen. Followed
+  /// from [dimsIn] when those are given.
+  final String boxSize;
+  final RequestSize? dimsIn;
+  final int quantity;
+  final List<String> photoPaths;
+
+  bool get valid =>
+      quantity >= 1 &&
+      quantity <= requestMaxQuantity &&
+      (dimsIn != null || boxSizeIds.contains(boxSize));
+
+  /// The piece as `priceBasket` takes it.
+  Map<String, Object?> toPricingPiece() => {
+    'kind': requestPieceBox,
+    if (boxSize.isNotEmpty) 'boxSize': boxSize,
+    if (dimsIn != null) 'dimsIn': dimsIn!.toMap(),
+    'quantity': quantity,
+  };
+
+  RequestPieceDraft toDraft() => RequestPieceDraft.box(
+    boxSize: boxSize,
+    dimsIn: dimsIn,
+    quantity: quantity,
+    photoPaths: photoPaths,
+  );
+}
+
 /// What the customer is sending.
 class RequestBasket {
   const RequestBasket({
@@ -182,6 +221,7 @@ class RequestBasket {
     this.weights = const [],
     this.barrels = 0,
     this.others = const [],
+    this.boxes = const [],
   });
 
   /// Quantity by catalog key (only those above 0).
@@ -190,9 +230,13 @@ class RequestBasket {
   final int barrels;
   final List<BasketOther> others;
 
+  /// Box lines (Sea only).
+  final List<BasketBox> boxes;
+
   /// The pieces the server will count: an item row is one piece whatever
-  /// its quantity, a barrel is one each.
-  int get pieceCount => items.length + weights.length + barrels + others.length;
+  /// its quantity, a box line likewise, a barrel is one each.
+  int get pieceCount =>
+      items.length + weights.length + barrels + others.length + boxes.length;
 
   bool get isEmpty => pieceCount == 0;
 
@@ -201,6 +245,7 @@ class RequestBasket {
       items.isNotEmpty ||
       barrels > 0 ||
       weights.any((w) => w.valid) ||
+      boxes.any((b) => b.valid) ||
       others.any((o) => o.valid);
 }
 
@@ -256,6 +301,9 @@ List<Map<String, Object?>> basketPricingPieces(
   for (var i = 0; i < basket.barrels; i++) {
     out.add({'kind': 'barrel'});
   }
+  for (final b in basket.boxes) {
+    if (b.valid) out.add(b.toPricingPiece());
+  }
   for (final o in basket.others) {
     if (o.valid) out.add({'kind': 'other', 'description': o.description});
   }
@@ -309,6 +357,9 @@ List<RequestPieceDraft> basketDrafts(
   }
   for (var i = 0; i < basket.barrels; i++) {
     out.add(const RequestPieceDraft(kind: requestPieceBarrel));
+  }
+  for (final b in basket.boxes) {
+    out.add(b.toDraft());
   }
   for (final o in basket.others) {
     out.add(

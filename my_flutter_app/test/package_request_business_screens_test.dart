@@ -739,7 +739,7 @@ void main() {
       return fake;
     }
 
-    testWidgets('saves accept, hours, pickup areas and card barrels',
+    testWidgets('saves accept, hours, pickup areas and Pay now',
         (tester) async {
       final fake = await open(tester);
       expect(find.text('https://laawoldigital.com/r/conakry'), findsOneWidget);
@@ -749,12 +749,13 @@ void main() {
       expect(find.text('Say which areas you cover.'), findsWidgets);
       expect(fake.of('setPackageRequestSettings'), isEmpty);
       await _type(tester, 'settings-areas', 'Bronx, Harlem');
-      await _tap(tester, 'settings-card-barrels');
+      await _tap(tester, 'settings-pay-now');
       await _tap(tester, 'settings-save');
       final body = fake.of('setPackageRequestSettings').single;
       expect(body['acceptRequests'], isTrue);
       expect(body['pickup'], {'enabled': true, 'areas': 'Bronx, Harlem'});
       expect(body['cardBarrelBooking'], isTrue);
+      expect(body['payNow'], isTrue);
       expect(body.containsKey('requestSlug'), isFalse);
       final hours = (body['openingHours'] as Map)['default'] as Map;
       expect(hours['mon'], {'open': true, 'from': '09:00', 'to': '18:00'});
