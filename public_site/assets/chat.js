@@ -13,24 +13,16 @@
   // keywords are matched accent-insensitively in both languages.
   var INTENTS = [
     {
-      id: "barrels",
-      keywords: ["baril", "barrel", "tonneau", "drum", "fut", "ship a barrel",
-        "expedier un baril", "envoyer un baril"],
-      fr: "Avec « Envoyer un colis », vous envoyez des barils, des cartons ou autre chose avec l’entreprise de votre choix. Elle vous envoie un devis sur WhatsApp, vous confirmez, puis vous payez au dépôt ou quand elle vient chercher vos colis.",
-      en: "With Send a package you send barrels, boxes or anything else with the business you choose. It sends you an estimate on WhatsApp, you confirm, then you pay at drop-off or when they collect it.",
+      id: "package",
+      keywords: ["colis", "package", "parcel", "baril", "barrel", "tonneau",
+        "drum", "fut", "carton", "box", "valise", "suitcase", "envoyer un colis",
+        "send a package", "ship a barrel", "expedier un baril",
+        "envoyer un baril", "fret", "freight", "kilo", "kg", "pound", "air",
+        "avion", "mer", "sea", "bateau", "cargo"],
+      fr: "Avec « Envoyer un colis », vous envoyez des barils, des cartons, des valises ou des colis, par mer ou par avion. Choisissez l’entreprise, voyez ses prix (par article, par taille de carton ou à la livre, par mer ou par avion) et votre total tout de suite, puis choisissez une heure de dépôt ou demandez un ramassage. Vous payez au comptoir, ou par carte si l’entreprise la propose.",
+      en: "With Send a package you send barrels, boxes, suitcases or parcels, by sea or air. Pick the business, see its prices (per item, per box size or per pound, sea or air) and your total right away, then choose a drop-off time or ask for a pickup. You pay at the counter, or by card if the business offers it.",
       actions: [
-        {fr: "Voir le service", en: "See the service", href: "services.html"},
         {fr: "Envoyer un colis", en: "Send a package", href: CUSTOMER + "/?service=barrel"},
-      ],
-    },
-    {
-      id: "freight",
-      keywords: ["fret", "freight", "colis", "parcel", "carton", "box", "kilo",
-        "kg", "air", "avion", "mer", "sea", "bateau", "cargo"],
-      fr: "Le fret couvre les colis et cartons facturés au poids — par avion (plus rapide) ou par mer (plus économique). Les tarifs au kilo et les jours de départ sont affichés par entreprise et par destination.",
-      en: "Freight covers parcels and boxes priced by weight — by air (faster) or by sea (cheaper). Per-kilo rates and departure days are shown per business and destination.",
-      actions: [
-        {fr: "Comparer les tarifs", en: "Compare rates", href: CUSTOMER + "/?service=freight"},
         {fr: "Voir le service", en: "See the service", href: "services.html"},
       ],
     },
@@ -78,8 +70,8 @@
       id: "pricing",
       keywords: ["prix", "price", "cout", "cost", "combien", "how much",
         "tarif", "rate", "cher"],
-      fr: "Les prix sont fixés par chaque entreprise et affichés avant toute demande : par baril, au kilo pour le fret, sur devis pour le transport de véhicules. Vous comparez librement avant de choisir.",
-      en: "Prices are set by each business and shown before you request anything: per barrel, per kilo for freight, by quote for vehicle transport. Compare freely before you choose.",
+      fr: "Les prix sont fixés par chaque entreprise et affichés avant toute demande : par baril, par article, par taille de carton ou à la livre pour les colis, sur devis pour le transport de véhicules. Vous comparez librement avant de choisir.",
+      en: "Prices are set by each business and shown before you request anything: per barrel, per item, per box size or per pound for packages, by quote for vehicle transport. Compare freely before you choose.",
       actions: [
         {fr: "Comparer en ligne", en: "Compare online", href: CUSTOMER},
       ],
@@ -88,8 +80,8 @@
       id: "payment",
       keywords: ["payer", "payment", "paiement", "securise", "secure", "carte",
         "card", "rembours", "refund", "confiance", "trust", "arnaque", "scam"],
-      fr: "Vous payez en ligne, de façon sécurisée, et l’argent est versé à l’entreprise via la plateforme. En cas de problème, l’assistance Laawol suit votre dossier — chaque commande garde son historique et ses reçus.",
-      en: "You pay online, securely, and the money reaches the business through the platform. If something goes wrong, Laawol support follows your case — every order keeps its history and receipts.",
+      fr: "Pour les colis, vous payez au comptoir, ou par carte si l’entreprise la propose. Pour les autres services, vous payez en ligne, de façon sécurisée, et l’argent est versé à l’entreprise via la plateforme. En cas de problème, l’assistance Laawol suit votre dossier — chaque commande garde son historique et ses reçus.",
+      en: "For packages you pay at the counter, or by card if the business offers it. For other services you pay online, securely, and the money reaches the business through the platform. If something goes wrong, Laawol support follows your case — every order keeps its history and receipts.",
       actions: [
         {fr: "Nous contacter", en: "Contact us", href: "contact.html"},
       ],
@@ -149,8 +141,7 @@
       open: "Ouvrir l’assistant",
       close: "Fermer l’assistant",
       chips: [
-        ["Envoyer un colis", "baril"],
-        ["Fret au kilo", "fret"],
+        ["Envoyer un colis", "colis"],
         ["Suivre ma commande", "suivi"],
         ["Acheter une voiture", "acheter voiture"],
         ["Inscrire mon entreprise", "inscrire entreprise"],
@@ -166,8 +157,7 @@
       open: "Open the assistant",
       close: "Close the assistant",
       chips: [
-        ["Send a package", "barrel"],
-        ["Freight by kilo", "freight"],
+        ["Send a package", "package"],
         ["Track my order", "track"],
         ["Buy a car", "buy car"],
         ["List my business", "register business"],

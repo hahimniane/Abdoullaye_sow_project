@@ -14,7 +14,6 @@
   var textTranslations = {
     "Trusted service marketplace": "Marketplace de services de confiance",
     "Find the right business for the road home.": "Trouvez la bonne entreprise pour la route vers le pays.",
-    "Laawol Digital is a platform where registered businesses offer diaspora services — shipping, cars, freight, food, and professional help. We bring the pricing, tracking, support, and accountability into one place so customers can choose with confidence.": "Laawol Digital est une plateforme où des entreprises inscrites proposent des services pour la diaspora : expédition, voitures, fret, restauration et aide professionnelle. Nous rassemblons les prix, le suivi, l’assistance et la responsabilité au même endroit pour que les clients choisissent en confiance.",
     "Get the app": "Télécharger l’application",
     "Explore services": "Découvrir les services",
     "Featured businesses": "Entreprises mises en avant",
@@ -24,8 +23,8 @@
     "We are very Happy with Laawol Digital": "Nous sommes très satisfaits de Laawol Digital",
   };
   var serviceTranslations = {
-    barrelShipping: "Expédition de barils",
-    "barrel Shipping": "Expédition de barils",
+    barrelShipping: "Expédition de colis",
+    "barrel Shipping": "Expédition de colis",
     sharedBarrels: "Barils partagés",
     "shared Barrels": "Barils partagés",
     carSales: "Vente de voitures",
@@ -36,9 +35,10 @@
     "car Transport": "Transport de voitures",
   };
   var serviceEnglishLabels = {
-    barrelShipping: "Barrel shipping",
-    "barrel Shipping": "Barrel shipping",
-    "Expédition de barils": "Barrel shipping",
+    barrelShipping: "Package shipping",
+    "barrel Shipping": "Package shipping",
+    "Expédition de colis": "Package shipping",
+    "Expédition de barils": "Package shipping",
     sharedBarrels: "Shared barrels",
     "shared Barrels": "Shared barrels",
     "Barils partagés": "Shared barrels",
@@ -206,10 +206,30 @@
     });
   }
 
+  // Hero copy that used to be saved in websiteContent/home and mentions the
+  // retired Freight service (it was folded into Send a package on 2026-11-03).
+  // While the saved text still equals one of these, ignore it so the page
+  // shows its own up-to-date default. Once the saved text is updated, these
+  // entries can be deleted.
+  var retiredCmsText = {
+    "hero.headline": [
+      "Ship barrels, freight, and cars between the US and West Africa.",
+    ],
+    "hero.subheadline": [
+      "Laawol is a marketplace of registered, verified businesses: compare per-barrel and per-kilo prices, buy verified cars, request transport quotes, and track every order — with platform support at every step.",
+    ],
+  };
+
+  function isRetiredCmsText(path, value) {
+    var retired = retiredCmsText[path];
+    return !!retired && retired.indexOf(String(value).trim()) !== -1;
+  }
+
   function applyAccueil(home) {
     document.querySelectorAll("[data-cms]").forEach(function (node) {
       var path = node.getAttribute("data-cms") || "";
       var value = getPath(home, path);
+      if (isRetiredCmsText(path, value)) return;
       if (value !== undefined && value !== null && value !== "") {
         if (path === "hero.headline") {
           setGradientHeadline(node, value);

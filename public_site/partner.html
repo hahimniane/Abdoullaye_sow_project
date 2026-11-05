@@ -5,12 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="google" content="notranslate" />
   <title>Inscrire votre entreprise — Laawol Digital</title>
-  <meta name="description" content="Postulez pour proposer expédition, voitures, fret et plus sur Laawol Digital. Inscrivez votre entreprise, choisissez vos services et soyez visible après approbation." />
+  <meta name="description" content="Postulez pour proposer l’expédition de colis, des voitures et plus sur Laawol Digital. Inscrivez votre entreprise, choisissez vos services et soyez visible après approbation." />
   <meta name="theme-color" content="#0b3b38" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="assets/styles.css?v=32" />
+  <link rel="stylesheet" href="assets/styles.css?v=33" />
   <link rel="icon" type="image/png" href="assets/logo.png" />
   <style>
     /* Partner application — scoped styles layered on top of the shared form CSS */
@@ -210,7 +210,7 @@
     <div class="container footer-grid">
       <div class="footer-brand">
         <a class="brand" href="index.html"><span class="brand-mark"><img src="assets/logo.png" alt="Laawol" width="32" height="32" style="border-radius:8px;display:block" /></span><span class="brand-text light">Laawol<span>Digital</span></span></a>
-        <p>Une plateforme de confiance pour la diaspora africaine : des entreprises inscrites proposent l’expédition de barils et de fret, la vente, le transport et le stationnement de voitures — avec des prix clairs et un vrai suivi.</p>
+        <p>Une plateforme de confiance pour la diaspora africaine : des entreprises inscrites proposent l’expédition de colis et de barils, la vente, le transport et le stationnement de voitures — avec des prix clairs et un vrai suivi.</p>
       </div>
       <div class="footer-col"><h4>Explorer</h4>
         <a href="services.html">Services</a><a href="tracking.html">Suivi de commande</a><a href="app.html">Application</a><a href="about.html">À propos</a>
@@ -233,10 +233,10 @@
   <script src="assets/mailto.js?v=2" defer></script>
   <script src="assets/motion.js?v=10" defer></script>
   <script src="assets/site-config.js?v=3"></script>
-  <script src="assets/chat.js?v=6" defer></script>
-  <script src="assets/i18n.js?v=14"></script>
+  <script src="assets/chat.js?v=7" defer></script>
+  <script src="assets/i18n.js?v=15"></script>
   <script src="assets/country-catalog.js?v=1"></script>
-  <script src="assets/content.js?v=11"></script>
+  <script src="assets/content.js?v=12"></script>
 
   <script type="module">
     import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -275,11 +275,10 @@
 
     // Service catalog — mirrors my_flutter_app/lib/models/business_service.dart
     const SERVICES = [
-      { key: "barrelShipping", label: "Barrel shipping", desc: "Ship barrels to destination countries." },
+      { key: "barrelShipping", label: "Package shipping", desc: "Barrels, boxes, suitcases and parcels, by sea or air." },
       // Shared barrels: paused platform-wide (Settings -> Feature availability
       // -> Shared barrel pools). Not deleted, just hidden until re-enabled.
       // { key: "sharedBarrels", label: "Shared barrels", desc: "Manage partial barrels, drop-offs, and customer consolidation." },
-      { key: "freight",        label: "Freight (parcels)", desc: "Ship parcels and boxes by weight, by air or sea." },
       { key: "carSales",       label: "Car sales", desc: "Publish cars so customers can browse and buy them." },
       { key: "carParking",     label: "Car parking", desc: "Manage parked cars and parking receipts." },
       { key: "carTransport",   label: "Car transport", desc: "Track vehicle transport requests." },

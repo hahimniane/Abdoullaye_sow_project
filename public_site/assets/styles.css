@@ -897,12 +897,11 @@ html.js-anim .reveal.in { opacity: 1; transform: none; }
 .svc i{font-size:15px; font-style:normal}
 .svc-a{top:3%;  left:6%}
 .svc-b{top:0;   right:12%}
-.svc-c{top:38%; right:-3%}
-.svc-d{bottom:20%; right:4%}
-.svc-e{bottom:9%; left:8%}
-.svc-f{top:36%; left:-4%}
-.svc-b{animation-delay:.5s} .svc-c{animation-delay:1s} .svc-d{animation-delay:1.6s}
-.svc-e{animation-delay:2.1s} .svc-f{animation-delay:2.7s}
+.svc-c{bottom:20%; right:4%}
+.svc-d{bottom:9%; left:8%}
+.svc-e{top:36%; left:-4%}
+.svc-b{animation-delay:.5s} .svc-c{animation-delay:1.6s} .svc-d{animation-delay:2.1s}
+.svc-e{animation-delay:2.7s}
 @keyframes floaty{0%,100%{transform:translateY(0)} 50%{transform:translateY(-7px)}}
 
 .globe-trust{position:absolute; top:5%; left:50%; transform:translateX(-50%);
