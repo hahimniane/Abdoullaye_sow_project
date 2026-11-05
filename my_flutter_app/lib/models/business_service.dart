@@ -50,8 +50,8 @@ const businessServiceCatalog = <BusinessServiceDefinition>[
   ),
   BusinessServiceDefinition(
     key: BusinessServiceKey.freight,
-    label: 'Freight (parcels)',
-    description: 'Ship parcels and boxes by weight, by air or sea.',
+    label: 'Freight (retired)',
+    description: 'Retired: parcels now go through Send a package.',
     icon: Icons.inventory_2_outlined,
   ),
   BusinessServiceDefinition(
@@ -80,10 +80,13 @@ const businessServiceCatalog = <BusinessServiceDefinition>[
   ),
 ];
 
+/// What a new business gets. Freight is not here any more: it folded into
+/// Send a package (docs/PACKAGE_PRICE_LIST.md decision 12), so nothing offers
+/// it by default. A business that already has it keeps it in its stored
+/// `enabledServices` (see [retiredBusinessServiceKeys]).
 const defaultBusinessServiceValues = <String>[
   'barrelShipping',
   'sharedBarrels',
-  'freight',
   'carSales',
   'carParking',
   'carTransport',
@@ -103,17 +106,53 @@ bool hasBusinessService(Iterable<String> services, BusinessServiceKey key) {
   return services.contains(key.value);
 }
 
+/// Services nobody can switch on any more. They stay in
+/// [businessServiceCatalog] and the enum so a business that already has one
+/// still parses (`normalizeBusinessServices` keeps it) and its old records
+/// stay readable, but no picker offers them.
+const retiredBusinessServiceKeys = <BusinessServiceKey>{
+  BusinessServiceKey.freight,
+};
+
+/// True for a service in [retiredBusinessServiceKeys].
+bool isRetiredBusinessService(BusinessServiceKey key) =>
+    retiredBusinessServiceKeys.contains(key);
+
 /// The services an owner can tick for their own business. Inventory is left
 /// out: a platform admin switches it on, so it never shows as an owner choice
 /// (the server also keeps an owner's save from adding or dropping it).
+/// Retired services (Freight) are left out too; a business that still has one
+/// keeps it, because the screens start from the stored list and only change
+/// what the owner ticks.
 List<BusinessServiceDefinition> get ownerBusinessServiceCatalog =>
     businessServiceCatalog
-        .where((service) => service.key != BusinessServiceKey.inventory)
+        .where(
+          (service) =>
+              service.key != BusinessServiceKey.inventory &&
+              !isRetiredBusinessService(service.key),
+        )
         .toList(growable: false);
 
+/// What a platform admin sees in the services list of one business: every
+/// live service, plus a retired one only for a business that still has it (as
+/// a read-only line, so the admin can see why old freight records exist).
+List<BusinessServiceDefinition> adminBusinessServiceCatalog(
+  Iterable<String> currentServices,
+) {
+  final current = currentServices.toSet();
+  return businessServiceCatalog
+      .where(
+        (service) =>
+            !isRetiredBusinessService(service.key) ||
+            current.contains(service.key.value),
+      )
+      .toList(growable: false);
+}
+
 /// The services that move goods in containers. Containers only make sense for
-/// a business that ships: barrels, parcels (freight), or cars (transport or
-/// parking, which load onto a box). A shop with only `inventory`, or a
+/// a business that ships: barrels, cars (transport or parking, which load onto
+/// a box), or - for a business that still has the retired service - old
+/// freight parcels. A shop with only `inventory`, or a
 /// business with no services at all, has nothing to put in one.
 const shippingBusinessServiceKeys = <BusinessServiceKey>[
   BusinessServiceKey.barrelShipping,

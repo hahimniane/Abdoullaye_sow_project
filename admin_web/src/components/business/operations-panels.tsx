@@ -41,14 +41,12 @@ import {
   Paperclip,
   FileText,
   Pencil,
-  Plane,
   Plus,
   Printer,
   RefreshCw,
   RotateCcw,
   Save,
   Send,
-  Ship,
   Star,
   Truck,
   X,
@@ -255,8 +253,6 @@ import {
 } from "@/lib/shared-barrel-pool";
 import {
   canonicalDestinationServiceAvailability,
-  DESTINATION_DEPARTURE_DAYS,
-  DESTINATION_DEPARTURE_DAY_LABELS,
   destinationDepartureDays,
   destinationRateError,
   destinationServiceAvailability,
@@ -687,6 +683,14 @@ function defaultPoolRolloverDraft(row?: FirestoreRow | null): PoolRolloverDraft 
   };
 }
 
+/**
+ * How many of a destination's services are live. Freight (Air/Sea) is retired,
+ * so a flag still set on an old record is kept but never counted or shown.
+ */
+function liveDestinationServiceCount(availability: DestinationServiceAvailability): number {
+  return [availability.barrelShipping, availability.carTransport].filter(Boolean).length;
+}
+
 export function DestinationsPanel({
   businessId,
   previewMode = false,
@@ -727,8 +731,16 @@ export function DestinationsPanel({
     () => filterRows(rows, search, ["name", "destinationCountryName", "code", "countryCode", "barrelShippingPrice", "freightAirPricePerKg", "freightSeaPricePerKg"]),
     [rows, search],
   );
+  // Freight is retired (folded into Send a package; its prices now live in
+  // Shipping > Price list), so the page neither offers nor shows Air/Sea
+  // freight. A destination that already carries freight keeps every freight
+  // value: the draft holds them and the save writes them back unchanged.
   const globalAvailability = useMemo(
-    () => globallyAvailableDestinationServices(enabledServices),
+    () => ({
+      ...globallyAvailableDestinationServices(enabledServices),
+      freightAir: false,
+      freightSea: false,
+    }),
     [enabledServices],
   );
   const hasDestinationServices =
@@ -989,11 +1001,10 @@ export function DestinationsPanel({
     enabledServices,
     destinationDraftAvailability(draft),
   );
-  const visibleServiceCount =
-    Object.values(draftAvailability).filter(Boolean).length;
-  // Only a route that carries freight can be asked about delivering it.
-  const draftCarriesFreight =
-    draftAvailability.freightAir || draftAvailability.freightSea;
+  const visibleServiceCount = liveDestinationServiceCount(draftAvailability);
+  // Receiver delivery was a freight offer. Freight is retired, so the form no
+  // longer asks about it (an existing setting is saved back untouched).
+  const draftCarriesFreight = false;
   const deliveryFeeError = deliverySettingsError({
     available: draftCarriesFreight && draft.destinationDelivery,
     areas: draft.destinationDeliveryAreas,
@@ -1048,8 +1059,6 @@ export function DestinationsPanel({
         </div>
         <div className="destination-capability-chips">
           {globalAvailability.barrelShipping && <span><Package size={14} /> Barrel shipping</span>}
-          {globalAvailability.freightAir && <span><Plane size={14} /> Freight — Air</span>}
-          {globalAvailability.freightSea && <span><Ship size={14} /> Freight — Sea</span>}
           {globalAvailability.carTransport && <span><Truck size={14} /> Car transport</span>}
           {!hasDestinationServices && <span className="muted">No shipping or transport services enabled</span>}
         </div>
@@ -1107,7 +1116,7 @@ export function DestinationsPanel({
         <div className="lst-empty">
           <div className="lst-empty-icon"><Package size={30} /></div>
           <h3>Choose your business services first</h3>
-          <p>Enable barrel shipping, freight, or car transport before configuring country coverage.</p>
+          <p>Enable barrel shipping or car transport before configuring country coverage.</p>
           {onManageServices && (
             <button className="lst-add" type="button" onClick={onManageServices}>
               Manage business services
@@ -1145,9 +1154,9 @@ export function DestinationsPanel({
             enabledServices,
             destinationServiceAvailability(row),
           );
-          const active = row.isActive === true && Object.values(availability).some(Boolean);
+          const serviceCount = liveDestinationServiceCount(availability);
+          const active = row.isActive === true && serviceCount > 0;
           const country = destinationCountryOptionForRow(row);
-          const serviceCount = Object.values(availability).filter(Boolean).length;
           return (
             <article className={`destination-coverage-row ${active ? "" : "off"}`} key={row.id}>
               <div className="destination-country-cell">
@@ -1166,12 +1175,6 @@ export function DestinationsPanel({
                 {availability.barrelShipping && (
                   <span className="destination-service-chip"><Package size={14} /> Barrel <b>{formatMoney(row.barrelShippingPrice)}/barrel</b></span>
                 )}
-                {availability.freightAir && (
-                  <span className="destination-service-chip"><Plane size={14} /> Air <b>{formatMoney(row.freightAirPricePerKg)}/kg</b></span>
-                )}
-                {availability.freightSea && (
-                  <span className="destination-service-chip"><Ship size={14} /> Sea <b>{formatMoney(row.freightSeaPricePerKg)}/kg</b></span>
-                )}
                 {availability.carTransport && (
                   <span className="destination-service-chip"><Truck size={14} /> Car transport <b>Quotes</b></span>
                 )}
@@ -1184,19 +1187,7 @@ export function DestinationsPanel({
                     <strong>{serviceDeliveryWindow(row, "barrelShipping") || "Not set"}</strong>
                   </div>
                 )}
-                {availability.freightAir && (
-                  <div className="destination-delivery-row">
-                    <span>Air</span>
-                    <strong>{serviceDeliveryWindow(row, "freightAir") || "Not set"}</strong>
-                  </div>
-                )}
-                {availability.freightSea && (
-                  <div className="destination-delivery-row">
-                    <span>Sea</span>
-                    <strong>{serviceDeliveryWindow(row, "freightSea") || "Not set"}</strong>
-                  </div>
-                )}
-                {!availability.barrelShipping && !availability.freightAir && !availability.freightSea && (
+                {!availability.barrelShipping && (
                   <span className="destination-service-empty">No estimate needed</span>
                 )}
               </div>
@@ -1289,84 +1280,6 @@ export function DestinationsPanel({
                           maxDays={draft.barrelMaxDays}
                           onMinChange={(barrelMinDays) => setDraft((value) => ({ ...value, barrelMinDays }))}
                           onMaxChange={(barrelMaxDays) => setDraft((value) => ({ ...value, barrelMaxDays }))}
-                        />
-                      </>
-                    </DestinationServiceControl>
-                  )}
-                  {globalAvailability.freightAir && (
-                    <DestinationServiceControl
-                      icon={<Plane size={20} />}
-                      title="Freight — Air"
-                      subtitle="Set the customer rate per kilogram for air freight."
-                      checked={draft.freightAir}
-                      onChange={(checked) => setDraft((value) => ({ ...value, freightAir: checked }))}
-                    >
-                      <>
-                        <label className="lst-field">
-                          <span>Air freight per kg (USD)</span>
-                          <input
-                            inputMode="decimal"
-                            min="0"
-                            type="number"
-                            value={draft.freightAirPrice}
-                            onChange={(event) => setDraft((value) => ({ ...value, freightAirPrice: event.target.value }))}
-                            placeholder="8"
-                          />
-                        </label>
-                        <DepartureDayPicker
-                          label="Air freight departure days"
-                          value={draft.freightAirDepartureDays}
-                          onChange={(freightAirDepartureDays) =>
-                            setDraft((current) => ({
-                              ...current,
-                              freightAirDepartureDays,
-                            }))
-                          }
-                        />
-                        <DeliveryEstimateFields
-                          minDays={draft.freightAirMinDays}
-                          maxDays={draft.freightAirMaxDays}
-                          onMinChange={(freightAirMinDays) => setDraft((value) => ({ ...value, freightAirMinDays }))}
-                          onMaxChange={(freightAirMaxDays) => setDraft((value) => ({ ...value, freightAirMaxDays }))}
-                        />
-                      </>
-                    </DestinationServiceControl>
-                  )}
-                  {globalAvailability.freightSea && (
-                    <DestinationServiceControl
-                      icon={<Ship size={20} />}
-                      title="Freight — Sea"
-                      subtitle="Set the customer rate per kilogram for sea freight."
-                      checked={draft.freightSea}
-                      onChange={(checked) => setDraft((value) => ({ ...value, freightSea: checked }))}
-                    >
-                      <>
-                        <label className="lst-field">
-                          <span>Sea freight per kg (USD)</span>
-                          <input
-                            inputMode="decimal"
-                            min="0"
-                            type="number"
-                            value={draft.freightSeaPrice}
-                            onChange={(event) => setDraft((value) => ({ ...value, freightSeaPrice: event.target.value }))}
-                            placeholder="4"
-                          />
-                        </label>
-                        <DepartureDayPicker
-                          label="Sea freight departure days"
-                          value={draft.freightSeaDepartureDays}
-                          onChange={(freightSeaDepartureDays) =>
-                            setDraft((current) => ({
-                              ...current,
-                              freightSeaDepartureDays,
-                            }))
-                          }
-                        />
-                        <DeliveryEstimateFields
-                          minDays={draft.freightSeaMinDays}
-                          maxDays={draft.freightSeaMaxDays}
-                          onMinChange={(freightSeaMinDays) => setDraft((value) => ({ ...value, freightSeaMinDays }))}
-                          onMaxChange={(freightSeaMaxDays) => setDraft((value) => ({ ...value, freightSeaMaxDays }))}
                         />
                       </>
                     </DestinationServiceControl>
@@ -1775,45 +1688,6 @@ export function OfficeLocationsPanel({
         </div>
       )}
     </Panel>
-  );
-}
-
-function DepartureDayPicker({
-  label,
-  onChange,
-  value,
-}: {
-  label: string;
-  onChange: (days: DestinationDepartureDay[]) => void;
-  value: DestinationDepartureDay[];
-}) {
-  return (
-    <fieldset className="destination-departure-days">
-      <legend>{label}</legend>
-      <p>Optional. Choose the regular days this service departs.</p>
-      <div>
-        {DESTINATION_DEPARTURE_DAYS.map((day) => {
-          const selected = value.includes(day);
-          const dayLabel = DESTINATION_DEPARTURE_DAY_LABELS[day];
-          return (
-            <label className={selected ? "selected" : ""} key={day}>
-              <input
-                checked={selected}
-                onChange={(event) =>
-                  onChange(
-                    event.target.checked
-                      ? destinationDepartureDays([...value, day])
-                      : value.filter((item) => item !== day),
-                  )
-                }
-                type="checkbox"
-              />
-              <span aria-label={dayLabel}>{dayLabel.slice(0, 3)}</span>
-            </label>
-          );
-        })}
-      </div>
-    </fieldset>
   );
 }
 

@@ -1721,12 +1721,13 @@ class _Category {
   final int count;
 }
 
+// No Freight: that permission only opens old freight records now, so it is no
+// longer granted in an invitation. Staff who already hold it keep it.
 const _businessPermissionOptions = [
   BusinessPermission.profile,
   BusinessPermission.listings,
   BusinessPermission.purchases,
   BusinessPermission.barrels,
-  BusinessPermission.freight,
   BusinessPermission.transport,
   BusinessPermission.parking,
   BusinessPermission.ledger,

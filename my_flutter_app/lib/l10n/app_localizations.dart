@@ -4601,7 +4601,7 @@ abstract class AppLocalizations {
   /// No description provided for @enableBusinessServiceBeforeDestination.
   ///
   /// In en, this message translates to:
-  /// **'Enable barrel shipping, freight, or car transport on the business profile before configuring destination coverage.'**
+  /// **'Enable barrel shipping or car transport on the business profile before configuring destination coverage.'**
   String get enableBusinessServiceBeforeDestination;
 
   /// No description provided for @destinationServiceCoverageTitle.
@@ -10347,7 +10347,7 @@ abstract class AppLocalizations {
   /// No description provided for @hubShippingSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Send barrels, freight, and cars home.'**
+  /// **'Send barrels, packages, and cars home.'**
   String get hubShippingSubtitle;
 
   /// No description provided for @hubSharedBarrels.
@@ -10401,7 +10401,7 @@ abstract class AppLocalizations {
   /// No description provided for @homeHeroSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'A barrel, freight, or a car. Pick what\'s going and we\'ll take it from there.'**
+  /// **'A barrel, a package, or a car. Pick what\'s going and we\'ll take it from there.'**
   String get homeHeroSubtitle;
 
   /// No description provided for @homeHeroCta.
@@ -10437,7 +10437,7 @@ abstract class AppLocalizations {
   /// No description provided for @hubOrdersSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Cars, barrels, freight & more'**
+  /// **'Cars, barrels, packages & more'**
   String get hubOrdersSubtitle;
 
   /// No description provided for @hubWalletSubtitle.
@@ -11805,7 +11805,7 @@ abstract class AppLocalizations {
   /// No description provided for @freight.
   ///
   /// In en, this message translates to:
-  /// **'Freight'**
+  /// **'Freight (old records)'**
   String get freight;
 
   /// No description provided for @transport.
@@ -18783,7 +18783,7 @@ abstract class AppLocalizations {
   /// No description provided for @businessServiceFreight.
   ///
   /// In en, this message translates to:
-  /// **'Freight (parcels)'**
+  /// **'Freight (retired)'**
   String get businessServiceFreight;
 
   /// No description provided for @businessServiceCarSales.
@@ -18819,7 +18819,7 @@ abstract class AppLocalizations {
   /// No description provided for @businessServiceFreightHint.
   ///
   /// In en, this message translates to:
-  /// **'Ship parcels and boxes by weight, by air or sea.'**
+  /// **'Retired: parcels now go through Send a package.'**
   String get businessServiceFreightHint;
 
   /// No description provided for @businessServiceCarSalesHint.

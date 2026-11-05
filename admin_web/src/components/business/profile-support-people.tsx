@@ -234,7 +234,9 @@ const businessPermissionOptions = [
   {id: "listings", label: "Listings"},
   {id: "purchases", label: "Purchases"},
   {id: "barrels", label: "Barrels"},
-  {id: "freight", label: "Freight"},
+  // Retired: it only opens old freight records now (Freight folded into Send
+  // a package). Offered only to staff who already hold it, never granted anew.
+  {id: "freight", label: "Freight (retired)"},
   {id: "transport", label: "Transport"},
   {id: "parking", label: "Parking"},
   {id: "ledger", label: "Lot ledger"},
@@ -268,6 +270,13 @@ const businessPermissionRequiredService: Partial<Record<string, string | readonl
   purchases: "carSales",
   inventory: "inventory",
 };
+
+/** The permission chips to show: the retired ones only for someone who holds them. */
+function visiblePermissionOptions(held: readonly string[]) {
+  return businessPermissionOptions.filter(
+    (option) => option.id !== "freight" || held.includes(option.id),
+  );
+}
 
 function businessOffersService(
   business: FirestoreRow | null | undefined,
@@ -705,9 +714,14 @@ export function BusinessServicesPanel({
   );
   const {busy, busyLabel, error, success, run} = useActionFeedback(runAction, toast);
   const sharedBarrelsEnabled = useSharedBarrelsEnabled();
-  const visibleServiceOptions = sharedBarrelsEnabled
-    ? serviceOptions
-    : serviceOptions.filter((service) => service.id !== "sharedBarrels");
+  // Freight is retired (folded into Send a package): never offered as a
+  // service. A business that already has it keeps it in `enabledServices`
+  // (the draft starts from the stored list and only changes what is toggled).
+  const visibleServiceOptions = serviceOptions.filter(
+    (service) =>
+      service.id !== "freight" &&
+      (sharedBarrelsEnabled || service.id !== "sharedBarrels"),
+  );
 
   useEffect(() => {
     setDraft(businessServiceSettingsFromRow(business));
@@ -883,7 +897,13 @@ export function BusinessServicesPanel({
     ),
   );
   const offersPickup = enabledPickupServices.length > 0;
-  const pickupSummary = pickupPlanSummary(draft, enabledPickupServices);
+  // No Freight row: it folded into Send a package, which follows the shared
+  // plan, so a separate Freight choice would change nothing a customer sees.
+  // Its stored override stays in the draft and is saved back untouched.
+  const pickupRowServices = enabledPickupServices.filter(
+    (service) => service !== "freight",
+  );
+  const pickupSummary = pickupPlanSummary(draft, pickupRowServices);
   const pickupErrors = pickupPlanFieldErrors(draft, {
     isNewYorkBusiness: businessIsNewYork,
   });
@@ -897,7 +917,10 @@ export function BusinessServicesPanel({
       tabs.push({id: "carSales", label: "Car sales", hint: "Paid holds"});
     }
     if (offersFreight) {
-      tabs.push({id: "freight", label: "Freight", hint: "What you carry"});
+      // The only place to say whether you pay back a lost parcel, which Send a
+      // package shows customers. Shown only to a business that still has the
+      // retired service.
+      tabs.push({id: "freight", label: "Freight (retired)", hint: "Pays back if lost"});
     }
     if (offersParking) {
       tabs.push({id: "parking", label: "Car parking", hint: "Facility"});
@@ -1237,7 +1260,7 @@ export function BusinessServicesPanel({
                   <p className="service-config-note wide">
                     Each service, one at a time
                   </p>
-                  {enabledPickupServices.map((service) => {
+                  {pickupRowServices.map((service) => {
                     const entry = draft.pickupServices[service];
                     const state = pickupServiceState(draft, service);
                     return (
@@ -2953,7 +2976,7 @@ export function BusinessPeoplePanel({
                   )}
                   <div className="lst-form-section">Permissions — what this staff member can manage</div>
                   <div className="lst-chips wide">
-                    {businessPermissionOptions.map((permission) => {
+                    {visiblePermissionOptions(draft.businessPermissions).map((permission) => {
                       const on = draft.businessPermissions.includes(permission.id);
                       const requiredService =
                         businessPermissionRequiredService[permission.id];
@@ -3237,7 +3260,7 @@ function StaffRow({
         <>
           <div className="lst-form-section" style={{ marginTop: 0 }}>Can manage</div>
           <div className="lst-chips">
-            {businessPermissionOptions.map((permission) => {
+            {visiblePermissionOptions(permissions).map((permission) => {
               const on = permissions.includes(permission.id);
               const requiredService =
                 businessPermissionRequiredService[permission.id];

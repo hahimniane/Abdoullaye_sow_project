@@ -185,4 +185,44 @@ void main() {
     expect(find.text('Use one shared plan'), findsOne);
     expect(find.text('Offer home pickup'), findsNothing);
   });
+
+  testWidgets(
+      'Freight is retired: no Freight row, and its stored override survives a save',
+      (tester) async {
+    final state = await pumpEditor(
+      tester,
+      plan: {
+        'version': 1,
+        'shared': {
+          'enabled': true,
+          'mode': 'flat',
+          'flatFee': 20,
+          'maxPickupMiles': 100,
+        },
+        'services': {
+          'freight': {
+            'inherit': false,
+            'enabled': true,
+            'mode': 'flat',
+            'flatFee': 12,
+            'maxPickupMiles': 50,
+          },
+        },
+      },
+      enabledServices: const ['barrelShipping', 'freight'],
+    );
+
+    // The business still has the retired service, but the editor shows no
+    // Freight choice - Send a package follows the shared plan.
+    expect(find.text('Freight'), findsNothing);
+    expect(find.text('Barrel shipping'), findsWidgets);
+    expect(state.validate(l10nOf(tester)), isNull);
+
+    // Saving the profile writes the stored freight override back untouched:
+    // dropping it would silently delete business data.
+    final plan = state.buildPlan()!;
+    final services = plan['services'] as Map;
+    expect(services['freight'], containsPair('flatFee', 12));
+    expect(services['freight'], containsPair('enabled', true));
+  });
 }

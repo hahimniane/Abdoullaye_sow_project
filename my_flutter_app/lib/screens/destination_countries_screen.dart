@@ -253,9 +253,13 @@ class _DestinationCountriesScreenState
       businessSnapshot['enabledServices'],
     );
     final offersBarrelShipping = enabledServices.contains('barrelShipping');
+    // Freight is retired (its prices now live in Shipping > Price list), so
+    // the form no longer offers it. A business that still has the service
+    // keeps whatever a destination already says about freight: the values are
+    // carried through the save untouched below, never edited or reset.
     final offersFreight = enabledServices.contains('freight');
     final offersCarTransport = enabledServices.contains('carTransport');
-    if (!offersBarrelShipping && !offersFreight && !offersCarTransport) {
+    if (!offersBarrelShipping && !offersCarTransport) {
       showErrorSnackBar(context, l10n.enableBusinessServiceBeforeDestination);
       return;
     }
@@ -266,16 +270,6 @@ class _DestinationCountriesScreenState
           ? ''
           : country!.barrelShippingPrice.toStringAsFixed(0),
     );
-    final freightAirPriceController = TextEditingController(
-      text: (country?.freightAirPricePerKg ?? 0) == 0
-          ? ''
-          : country!.freightAirPricePerKg.toStringAsFixed(0),
-    );
-    final freightSeaPriceController = TextEditingController(
-      text: (country?.freightSeaPricePerKg ?? 0) == 0
-          ? ''
-          : country!.freightSeaPricePerKg.toStringAsFixed(0),
-    );
     // Each service has its own real-world transit time, so each gets an
     // independent min/max pair instead of one shared estimate.
     final barrelMinDaysController = TextEditingController(
@@ -284,34 +278,21 @@ class _DestinationCountriesScreenState
     final barrelMaxDaysController = TextEditingController(
       text: country?.barrelShippingDeliveryEstimateMaxDays?.toString() ?? '',
     );
-    final airMinDaysController = TextEditingController(
-      text: country?.freightAirDeliveryEstimateMinDays?.toString() ?? '',
-    );
-    final airMaxDaysController = TextEditingController(
-      text: country?.freightAirDeliveryEstimateMaxDays?.toString() ?? '',
-    );
-    final seaMinDaysController = TextEditingController(
-      text: country?.freightSeaDeliveryEstimateMinDays?.toString() ?? '',
-    );
-    final seaMaxDaysController = TextEditingController(
-      text: country?.freightSeaDeliveryEstimateMaxDays?.toString() ?? '',
-    );
     var barrelShippingEnabled =
         offersBarrelShipping && (country?.barrelShippingAvailable ?? false);
-    var freightAirEnabled =
+    final freightAirEnabled =
         offersFreight && (country?.freightAirAvailable ?? false);
-    var freightSeaEnabled =
+    final freightSeaEnabled =
         offersFreight && (country?.freightSeaAvailable ?? false);
-    var freightAirDepartureDays = {...?country?.freightAirDepartureDays};
-    var freightSeaDepartureDays = {...?country?.freightSeaDepartureDays};
+    // Not editable here any more; written back exactly as stored.
+    final freightAirDepartureDays = {...?country?.freightAirDepartureDays};
+    final freightSeaDepartureDays = {...?country?.freightSeaDepartureDays};
     var carTransportEnabled =
         offersCarTransport && (country?.carTransportAvailable ?? false);
     // Where customers collect here. Saved through `setDestinationPickup`,
     // never in the coverage write below.
     final pickupBefore = DestinationPickup.of(country);
-    final pickupCityController = TextEditingController(
-      text: pickupBefore.city,
-    );
+    final pickupCityController = TextEditingController(text: pickupBefore.city);
     final pickupAddressController = TextEditingController(
       text: pickupBefore.address,
     );
@@ -461,106 +442,6 @@ class _DestinationCountriesScreenState
                                     ],
                                   ),
                                 ),
-                              if (offersFreight)
-                                _DestinationServiceToggle(
-                                  icon: Icons.flight_takeoff_outlined,
-                                  title: l10n.offerFreightAir,
-                                  subtitle: l10n.freightAirDestinationHelper,
-                                  value: freightAirEnabled,
-                                  onChanged: (value) => updateService(
-                                    () => freightAirEnabled = value,
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.stretch,
-                                    children: [
-                                      TextFormField(
-                                        controller: freightAirPriceController,
-                                        decoration: InputDecoration(
-                                          labelText: l10n.freightAirRatePerKg,
-                                          prefixText: r'$',
-                                        ),
-                                        keyboardType:
-                                            const TextInputType.numberWithOptions(
-                                              decimal: true,
-                                            ),
-                                        validator: (value) => _serviceRateError(
-                                          value: value ?? '',
-                                          isEnabled: freightAirEnabled,
-                                          serviceLabel:
-                                              l10n.destinationFreightAir,
-                                          l10n: l10n,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 12),
-                                      _DepartureDayPicker(
-                                        label: l10n.freightAirDepartureDays,
-                                        selectedDays: freightAirDepartureDays,
-                                        onChanged: (days) => setModalState(
-                                          () => freightAirDepartureDays = days,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 12),
-                                      _DeliveryEstimateFields(
-                                        minController: airMinDaysController,
-                                        maxController: airMaxDaysController,
-                                        deliveryEstimateError:
-                                            _deliveryEstimateError,
-                                        l10n: l10n,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              if (offersFreight)
-                                _DestinationServiceToggle(
-                                  icon: Icons.directions_boat_outlined,
-                                  title: l10n.offerFreightSea,
-                                  subtitle: l10n.freightSeaDestinationHelper,
-                                  value: freightSeaEnabled,
-                                  onChanged: (value) => updateService(
-                                    () => freightSeaEnabled = value,
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.stretch,
-                                    children: [
-                                      TextFormField(
-                                        controller: freightSeaPriceController,
-                                        decoration: InputDecoration(
-                                          labelText: l10n.freightSeaRatePerKg,
-                                          prefixText: r'$',
-                                        ),
-                                        keyboardType:
-                                            const TextInputType.numberWithOptions(
-                                              decimal: true,
-                                            ),
-                                        validator: (value) => _serviceRateError(
-                                          value: value ?? '',
-                                          isEnabled: freightSeaEnabled,
-                                          serviceLabel:
-                                              l10n.destinationFreightSea,
-                                          l10n: l10n,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 12),
-                                      _DepartureDayPicker(
-                                        label: l10n.freightSeaDepartureDays,
-                                        selectedDays: freightSeaDepartureDays,
-                                        onChanged: (days) => setModalState(
-                                          () => freightSeaDepartureDays = days,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 12),
-                                      _DeliveryEstimateFields(
-                                        minController: seaMinDaysController,
-                                        maxController: seaMaxDaysController,
-                                        deliveryEstimateError:
-                                            _deliveryEstimateError,
-                                        l10n: l10n,
-                                      ),
-                                    ],
-                                  ),
-                                ),
                               if (offersCarTransport)
                                 _DestinationServiceToggle(
                                   icon: Icons.car_rental_outlined,
@@ -614,8 +495,7 @@ class _DestinationCountriesScreenState
                         hintText: l10n.dstPickupCityHint,
                         counterText: '',
                       ),
-                      validator: (value) =>
-                          pickupCityError(l10n, value ?? ''),
+                      validator: (value) => pickupCityError(l10n, value ?? ''),
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
@@ -637,8 +517,7 @@ class _DestinationCountriesScreenState
                       labelText: l10n.dstPickupPhone,
                       initialCountryCode: pickupPhoneCountry,
                       autofillHints: null,
-                      validator: (value) =>
-                          pickupPhoneError(l10n, value ?? ''),
+                      validator: (value) => pickupPhoneError(l10n, value ?? ''),
                     ),
                     const SizedBox(height: 16),
                     FilledButton(
@@ -676,11 +555,11 @@ class _DestinationCountriesScreenState
       final barrelMinDays = int.tryParse(barrelMinDaysController.text.trim());
       final barrelMaxDays = int.tryParse(barrelMaxDaysController.text.trim());
       final hasBarrelEstimate = barrelMinDays != null && barrelMaxDays != null;
-      final airMinDays = int.tryParse(airMinDaysController.text.trim());
-      final airMaxDays = int.tryParse(airMaxDaysController.text.trim());
+      final airMinDays = country?.freightAirDeliveryEstimateMinDays;
+      final airMaxDays = country?.freightAirDeliveryEstimateMaxDays;
       final hasAirEstimate = airMinDays != null && airMaxDays != null;
-      final seaMinDays = int.tryParse(seaMinDaysController.text.trim());
-      final seaMaxDays = int.tryParse(seaMaxDaysController.text.trim());
+      final seaMinDays = country?.freightSeaDeliveryEstimateMinDays;
+      final seaMaxDays = country?.freightSeaDeliveryEstimateMaxDays;
       final hasSeaEstimate = seaMinDays != null && seaMaxDays != null;
       await FirebaseFirestore.instance
           .collection('businesses')
@@ -699,10 +578,10 @@ class _DestinationCountriesScreenState
                 ? parseMoneyDollars(barrelPriceController.text) ?? 0
                 : 0,
             'freightAirPricePerKg': freightAirEnabled
-                ? parseMoneyDollars(freightAirPriceController.text) ?? 0
+                ? country?.freightAirPricePerKg ?? 0
                 : 0,
             'freightSeaPricePerKg': freightSeaEnabled
-                ? parseMoneyDollars(freightSeaPriceController.text) ?? 0
+                ? country?.freightSeaPricePerKg ?? 0
                 : 0,
             'freightAirDepartureDays': freightAirEnabled
                 ? _orderedDepartureDays(freightAirDepartureDays)
@@ -755,14 +634,8 @@ class _DestinationCountriesScreenState
       nameController.dispose();
       codeController.dispose();
       barrelPriceController.dispose();
-      freightAirPriceController.dispose();
-      freightSeaPriceController.dispose();
       barrelMinDaysController.dispose();
       barrelMaxDaysController.dispose();
-      airMinDaysController.dispose();
-      airMaxDaysController.dispose();
-      seaMinDaysController.dispose();
-      seaMaxDaysController.dispose();
       pickupCityController.dispose();
       pickupAddressController.dispose();
       pickupPhoneController.dispose();
@@ -1058,22 +931,6 @@ class _DestinationCountriesScreenState
             _moneyLabel(country.barrelShippingPrice),
           ),
         ),
-      if (country.freightAvailable('air'))
-        _DestinationSummaryChip(
-          icon: Icons.flight_takeoff_outlined,
-          label: l10n.destinationServiceRateSummary(
-            l10n.destinationFreightAir,
-            _moneyLabel(country.freightAirPricePerKg),
-          ),
-        ),
-      if (country.freightAvailable('sea'))
-        _DestinationSummaryChip(
-          icon: Icons.directions_boat_outlined,
-          label: l10n.destinationServiceRateSummary(
-            l10n.destinationFreightSea,
-            _moneyLabel(country.freightSeaPricePerKg),
-          ),
-        ),
       if (country.carTransportAvailable)
         _DestinationSummaryChip(
           icon: Icons.car_rental_outlined,
@@ -1108,26 +965,6 @@ class _DestinationCountriesScreenState
           label: l10n.destinationServicePriceSummary(
             l10n.destinationBarrelService,
             country.barrelShippingDeliveryEstimateLabel!,
-          ),
-          muted: true,
-        ),
-      if (country.freightAvailable('air') &&
-          country.freightAirDeliveryEstimateLabel != null)
-        _DestinationSummaryChip(
-          icon: Icons.schedule_outlined,
-          label: l10n.destinationServicePriceSummary(
-            l10n.destinationFreightAir,
-            country.freightAirDeliveryEstimateLabel!,
-          ),
-          muted: true,
-        ),
-      if (country.freightAvailable('sea') &&
-          country.freightSeaDeliveryEstimateLabel != null)
-        _DestinationSummaryChip(
-          icon: Icons.schedule_outlined,
-          label: l10n.destinationServicePriceSummary(
-            l10n.destinationFreightSea,
-            country.freightSeaDeliveryEstimateLabel!,
           ),
           muted: true,
         ),
@@ -1355,79 +1192,6 @@ const _destinationDepartureDays = [
 
 List<String> _orderedDepartureDays(Set<String> days) =>
     _destinationDepartureDays.where(days.contains).toList(growable: false);
-
-String _departureDayLabel(AppLocalizations l10n, String day) => switch (day) {
-  'monday' => l10n.mondayShort,
-  'tuesday' => l10n.tuesdayShort,
-  'wednesday' => l10n.wednesdayShort,
-  'thursday' => l10n.thursdayShort,
-  'friday' => l10n.fridayShort,
-  'saturday' => l10n.saturdayShort,
-  'sunday' => l10n.sundayShort,
-  _ => day,
-};
-
-class _DepartureDayPicker extends StatelessWidget {
-  const _DepartureDayPicker({
-    required this.label,
-    required this.selectedDays,
-    required this.onChanged,
-  });
-
-  final String label;
-  final Set<String> selectedDays;
-  final ValueChanged<Set<String>> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            color: AppColors.ink,
-            fontSize: 13,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const SizedBox(height: 3),
-        Text(
-          l10n.freightDepartureDaysHelper,
-          style: const TextStyle(
-            color: AppColors.muted,
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 7,
-          runSpacing: 7,
-          children: _destinationDepartureDays
-              .map((day) {
-                final selected = selectedDays.contains(day);
-                return FilterChip(
-                  label: Text(_departureDayLabel(l10n, day)),
-                  selected: selected,
-                  onSelected: (nextSelected) {
-                    final next = {...selectedDays};
-                    if (nextSelected) {
-                      next.add(day);
-                    } else {
-                      next.remove(day);
-                    }
-                    onChanged(next);
-                  },
-                );
-              })
-              .toList(growable: false),
-        ),
-      ],
-    );
-  }
-}
 
 class _DestinationServiceToggle extends StatelessWidget {
   const _DestinationServiceToggle({

@@ -23,8 +23,13 @@ function visibleTabIds(offered: string[], permissions: string[] | "owner", hasLi
   return visibleBusinessTabs((id) => offered.includes(id), holder(permissions), {hasListings})
     .map((tab) => tab.id);
 }
-function visibleStepIds(offered: string[], permissions: string[] | "owner") {
-  return visibleShippingSteps((id) => offered.includes(id), holder(permissions)).map((step) => step.id);
+function visibleStepIds(
+  offered: string[],
+  permissions: string[] | "owner",
+  hasFreightRecords = false,
+) {
+  return visibleShippingSteps((id) => offered.includes(id), holder(permissions), {hasFreightRecords})
+    .map((step) => step.id);
 }
 
 describe("business sidebar navigation", () => {
@@ -81,10 +86,27 @@ describe("business sidebar navigation", () => {
       visibleStepIds(["barrelShipping", "carSales", "carParking", "carTransport"], "owner"),
       ["requests", "waiting", "containers", "deliveries", "priceList", "barrels", "volume"],
     );
+    // Freight is retired: it is a step only while there are old freight
+    // records to read, however the service is set.
     assert.deepEqual(
       visibleStepIds(["freight"], "owner"),
+      ["requests", "waiting", "containers", "deliveries", "priceList", "volume"],
+    );
+    assert.deepEqual(
+      visibleStepIds(["freight"], "owner", true),
       ["requests", "waiting", "containers", "deliveries", "priceList", "freight", "volume"],
     );
+  });
+
+  it("keeps old freight records reachable without offering Freight as a service", () => {
+    // No records: a business that still has the retired service sees no Freight step.
+    assert.equal(visibleStepIds(["barrelShipping", "freight"], "owner").includes("freight"), false);
+    // Records: the step appears, for someone who holds the freight permission.
+    assert.equal(visibleStepIds(["barrelShipping", "freight"], "owner", true).includes("freight"), true);
+    assert.equal(visibleStepIds(["barrelShipping", "freight"], ["freight"], true).includes("freight"), true);
+    assert.equal(visibleStepIds(["barrelShipping", "freight"], ["barrels"], true).includes("freight"), false);
+    // A notification about an old freight booking still maps to the step.
+    assert.equal(shippingStepForTab("freight"), "freight");
   });
 
   it("keeps each step behind the permission its old tab had", () => {
@@ -98,7 +120,7 @@ describe("business sidebar navigation", () => {
     assert.equal(businessPermissionHeld(["deliveries"], "containers"), false, "deliveries must not open Containers");
     // Barrel orders and Freight keep their own permissions.
     assert.deepEqual(visibleStepIds(["barrelShipping", "freight"], ["barrels"]), ["barrels"]);
-    assert.deepEqual(visibleStepIds(["barrelShipping", "freight"], ["freight"]), ["freight"]);
+    assert.deepEqual(visibleStepIds(["barrelShipping", "freight"], ["freight"], true), ["freight"]);
     // And their own service.
     assert.deepEqual(visibleStepIds(["carParking"], ["barrels", "freight"]), []);
   });

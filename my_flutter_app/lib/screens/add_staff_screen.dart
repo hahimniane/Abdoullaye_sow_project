@@ -555,6 +555,9 @@ class _PermissionOption {
   final String Function(AppLocalizations l10n) label;
 }
 
+// No Freight chip: that permission only opens the old freight records now
+// (Freight folded into Send a package), so it is no longer granted. Staff who
+// already hold it keep it.
 final _permissionOptions = <_PermissionOption>[
   _PermissionOption(
     BusinessPermission.profile,
@@ -575,11 +578,6 @@ final _permissionOptions = <_PermissionOption>[
     BusinessPermission.barrels,
     Icons.inventory_2_outlined,
     (l10n) => l10n.barrels,
-  ),
-  _PermissionOption(
-    BusinessPermission.freight,
-    Icons.flight_outlined,
-    (l10n) => l10n.freight,
   ),
   _PermissionOption(
     BusinessPermission.transport,

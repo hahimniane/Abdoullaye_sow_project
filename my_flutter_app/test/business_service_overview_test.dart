@@ -73,6 +73,7 @@ void main() {
       final tiles = tilesFor(
         services: const ['carParking', 'freight'],
         hasPermission: owner(),
+        freight: const ['pending_payment'],
       );
       expect(tiles.map((tile) => tile.category), [
         ServiceCategory.parking,
@@ -102,7 +103,11 @@ void main() {
       // Legacy documents predate `businessServices`; the compatibility rule is
       // `normalizeBusinessServices`', and the grid must not read them as a
       // business that offers nothing.
-      final tiles = tilesFor(services: const [], hasPermission: owner());
+      final tiles = tilesFor(
+        services: const [],
+        hasPermission: owner(),
+        freight: const ['pending_payment'],
+      );
       expect(tiles.map((tile) => tile.category), [
         ServiceCategory.parking,
         ServiceCategory.barrels,
@@ -110,6 +115,37 @@ void main() {
         ServiceCategory.transport,
       ]);
     });
+
+    test(
+      'Freight is retired: no tile unless old freight work is still open',
+      () {
+        // Freight folded into Send a package. A "Freight 0" tile is a door to an
+        // empty room, so it only shows while a freight shipment is open.
+        final none = tilesFor(
+          services: const ['carParking', 'freight'],
+          hasPermission: owner(),
+          freight: const ['delivered', 'cancelled'],
+        );
+        expect(none.map((tile) => tile.category), [ServiceCategory.parking]);
+        // The records themselves are still in the feed's categories, so a
+        // finished freight shipment stays readable under All.
+        expect(
+          businessActivityCategories(
+            services: const ['freight'],
+            hasPermission: owner(),
+          ),
+          contains(ServiceCategory.freight),
+        );
+        // A legacy business with no service list keeps its old freight records.
+        expect(
+          businessActivityCategories(
+            services: const [],
+            hasPermission: owner(),
+          ),
+          contains(ServiceCategory.freight),
+        );
+      },
+    );
 
     test('a business with nothing enabled gets no grid at all', () {
       expect(
@@ -149,6 +185,7 @@ void main() {
       final tiles = tilesFor(
         services: const ['carTransport', 'freight', 'carParking'],
         hasPermission: owner(),
+        freight: const ['pending_payment'],
       );
       expect(tiles.map((tile) => tile.category), [
         ServiceCategory.parking,

@@ -1410,18 +1410,25 @@ Future<void> _showReviewSheet(
                       ),
                     ),
                   ),
-                  for (final service in businessServiceCatalog)
+                  // Freight is retired: shown (read-only, as "Freight
+                  // (retired)") only for a business that still has it, so its
+                  // old records make sense; it can't be switched on or off.
+                  for (final service in adminBusinessServiceCatalog(
+                    business.enabledServices,
+                  ))
                     CheckboxListTile(
                       value: selectedServices.contains(service.key.value),
-                      onChanged: (value) {
-                        setModalState(() {
-                          if (value == true) {
-                            selectedServices.add(service.key.value);
-                          } else {
-                            selectedServices.remove(service.key.value);
-                          }
-                        });
-                      },
+                      onChanged: isRetiredBusinessService(service.key)
+                          ? null
+                          : (value) {
+                              setModalState(() {
+                                if (value == true) {
+                                  selectedServices.add(service.key.value);
+                                } else {
+                                  selectedServices.remove(service.key.value);
+                                }
+                              });
+                            },
                       title: Text(businessServiceLabel(l10n, service.key)),
                       subtitle: Text(
                         businessServiceDescription(l10n, service.key),

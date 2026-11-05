@@ -149,7 +149,7 @@ type BusinessConsoleProps = {
 const serviceLabels: Record<string, string> = {
   barrelShipping: "Barrel shipping",
   sharedBarrels: "Shared barrels",
-  freight: "Freight (parcels)",
+  freight: "Freight (retired)",
   carSales: "Car sales",
   carTransport: "Car transport",
   carParking: "Car parking",
@@ -416,12 +416,20 @@ export function BusinessConsole({
     ),
     [hasListings, profile, services],
   );
+  // Freight is retired (folded into Send a package), so its Shipping step
+  // exists only while the business has old freight shipments or price requests
+  // to read. Two one-document probes, asked only of someone who may open them.
+  const canOpenFreight = hasBusinessPermission(profile, "freight");
+  const freightShipmentsProbe = useBusinessHasRecords("freightShipments", businessId, enabled && canOpenFreight);
+  const freightRequestsProbe = useBusinessHasRecords("freightQuoteRequests", businessId, enabled && canOpenFreight);
+  const hasFreightRecords = freightShipmentsProbe.hasRecords || freightRequestsProbe.hasRecords;
   const shippingSteps = useMemo(
     () => visibleShippingSteps(
       (id) => services.has(id),
       (permission) => hasBusinessPermission(profile, permission),
+      {hasFreightRecords},
     ),
-    [profile, services],
+    [hasFreightRecords, profile, services],
   );
   // The open step: the one asked for, when this viewer may open it;
   // otherwise the first of theirs.

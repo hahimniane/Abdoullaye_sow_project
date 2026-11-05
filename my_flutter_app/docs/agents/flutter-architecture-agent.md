@@ -530,3 +530,15 @@ Add future project conventions and repeated architectural decisions here.
   on the customer's own bill (`parkingMonthCustomerOptions(payable:)`), never
   on the merged statement card.
 
+- Retiring a service (Freight, folded into Send a package, 2026-11-04): hide
+  it from every picker but never from the data. Keep the enum value and the
+  catalog entry so `normalizeBusinessServices` still parses a stored
+  `freight` (`retiredBusinessServiceKeys`); owners' pickers use
+  `ownerBusinessServiceCatalog`, admins `adminBusinessServiceCatalog` (a
+  retired service appears read-only, only on a business that has it). A form
+  that used to edit hidden fields must write their stored values back
+  unchanged (Firestore rules require the full `serviceAvailability` map; the
+  pickup plan save replaces the whole plan, so a hidden `freight` override
+  is still hydrated and sent). Permission pickers stop granting the old
+  permission but keep showing it to people who hold it. An activity tile for
+  a retired service shows only while its work is open.

@@ -121,7 +121,6 @@ test("public CTAs deep-link to every guest customer journey", () => {
   );
   for (const service of [
     "barrel",
-    "freight",
     "car-transport",
     "parking",
     "shared-barrels",
@@ -131,8 +130,10 @@ test("public CTAs deep-link to every guest customer journey", () => {
     assert.ok(home.includes(expected), `homepage ${service} CTA`);
     assert.ok(services.includes(expected), `services page ${service} CTA`);
   }
-  assert.match(services, /Fret aérien ou maritime/);
-  assert.match(services, /Commencer une demande de fret/);
+  // Freight folded into Send a package: no separate Freight CTA or card.
+  assert.doesNotMatch(services, /service=freight/);
+  assert.doesNotMatch(services, /Fret aérien ou maritime/);
+  assert.doesNotMatch(home, /service=freight/);
   assert.match(
     publicTranslations,
     /frToEn\["Transport de véhicules"\] = "Car transport"/,

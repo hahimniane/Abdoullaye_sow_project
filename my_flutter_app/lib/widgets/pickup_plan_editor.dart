@@ -11,6 +11,14 @@ import '../utils/money_input.dart';
 /// server's PICKUP_SERVICES (functions/pickup_plan.js).
 const kPickupPlanServices = ['barrels', 'freight', 'parking', 'carTransport'];
 
+/// Pickup plan services with no row in the editor any more. Freight folded
+/// into Send a package (docs/PACKAGE_PRICE_LIST.md decision 12), which follows
+/// the shared plan, so a separate "Freight" choice would change nothing a
+/// customer sees. The key stays in [kPickupPlanServices] so a freight
+/// override that is already stored is hydrated and written back untouched -
+/// saving the profile must never drop it.
+const kRetiredPickupPlanServices = {'freight'};
+
 /// Maps enabledServices ids to pickup plan service keys.
 const kPickupServiceByBusinessService = {
   'barrelShipping': 'barrels',
@@ -245,6 +253,7 @@ class PickupPlanEditorState extends State<PickupPlanEditor> {
   }
 
   List<String> get _visibleServices => kPickupPlanServices
+      .where((service) => !kRetiredPickupPlanServices.contains(service))
       .where(
         (service) => widget.enabledServices.any(
           (id) => kPickupServiceByBusinessService[id] == service,
@@ -366,15 +375,16 @@ class PickupPlanEditorState extends State<PickupPlanEditor> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final hintStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
-      color: Theme.of(context).hintColor,
-    );
+    final hintStyle = Theme.of(
+      context,
+    ).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor);
     final theme = Theme.of(context);
     final taking = <String>[];
     final notTaking = <String>[];
     for (final service in _visibleServices) {
-      (_serviceTakesPickups(service) ? taking : notTaking)
-          .add(_serviceLabel(l10n, service));
+      (_serviceTakesPickups(service) ? taking : notTaking).add(
+        _serviceLabel(l10n, service),
+      );
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -497,9 +507,9 @@ class PickupPlanEditorState extends State<PickupPlanEditor> {
     AppLocalizations l10n,
     _PickupConfigDraft draft,
   ) {
-    final hintStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
-      color: Theme.of(context).hintColor,
-    );
+    final hintStyle = Theme.of(
+      context,
+    ).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor);
     final effectiveMode = draft.mode == 'borough' && !widget.isNewYorkBased
         ? 'flat'
         : draft.mode;
@@ -509,10 +519,7 @@ class PickupPlanEditorState extends State<PickupPlanEditor> {
         initialValue: effectiveMode,
         decoration: InputDecoration(labelText: l10n.pickupPlanModeLabel),
         items: [
-          DropdownMenuItem(
-            value: 'flat',
-            child: Text(l10n.pickupPlanModeFlat),
-          ),
+          DropdownMenuItem(value: 'flat', child: Text(l10n.pickupPlanModeFlat)),
           DropdownMenuItem(
             value: 'distance',
             child: Text(l10n.pickupPlanModeDistance),

@@ -239,12 +239,14 @@ const accountRoleOptions: Role[] = ["admin", "customer"];
 const businessRoleOptions = ["businessOwner", "staff"] as const;
 // AUTO-PORTED from my_flutter_app/functions/index.js
 // VALID_BUSINESS_PERMISSIONS. Keep the invitation payload complete.
+// "freight" is not offered here: it only opens old freight records now (Freight
+// folded into Send a package), so a new invitation does not grant it. Staff who
+// already hold it keep it (see business/profile-support-people.tsx).
 const businessStaffPermissionOptions = [
   "profile",
   "listings",
   "purchases",
   "barrels",
-  "freight",
   "transport",
   "parking",
   "ledger",
@@ -332,11 +334,13 @@ const ACCESS_LEVELS: AccessLevel[] = ["none", "view", "manage"];
 const PLATFORM_SERVICES: Array<{ id: string; label: string }> = [
   { id: "barrelShipping", label: "Barrel shipping" },
   { id: "sharedBarrels", label: "Shared barrels" },
-  { id: "freight", label: "Freight (parcels)" },
   { id: "carSales", label: "Car sales" },
   { id: "carTransport", label: "Car transport" },
   { id: "carParking", label: "Car parking" },
 ];
+// Freight is retired (folded into Send a package). A role that was already
+// limited to it keeps the line, read-only in meaning, so it can be untoggled.
+const RETIRED_PLATFORM_SERVICE = { id: "freight", label: "Freight (retired)" };
 
 
 const ROLE_LABELS_BUILTIN: Record<string, string> = {
@@ -485,15 +489,18 @@ const purchaseStatuses = [
   "refunded",
   "forfeited",
 ];
+// Freight is retired (folded into Send a package): it is not in this list, so
+// no picker offers it and a new business never gets it. A business that
+// already has it keeps it, named in `retiredBusinessServices`.
 const businessServices = [
   { id: "barrelShipping", label: "Barrel shipping" },
   { id: "sharedBarrels", label: "Shared barrels" },
-  { id: "freight", label: "Freight (parcels)" },
   { id: "carSales", label: "Car sales" },
   { id: "carParking", label: "Car parking" },
   { id: "carTransport", label: "Car transport" },
   { id: "inventory", label: "Inventory" },
 ];
+const retiredBusinessServices = [{ id: "freight", label: "Freight (retired)" }];
 // What a business opens with when an admin adds it, or when its record names
 // no services: the shipping and vehicle services. Inventory is a shop's own
 // tool, switched on per business by an admin, so it is never on by default.
@@ -5243,7 +5250,12 @@ function SettingsView({
                     </small>
                   </span>
                   <div className="service-checks">
-                    {PLATFORM_SERVICES.map((service) => (
+                    {[
+                      ...PLATFORM_SERVICES,
+                      ...(role.services.includes(RETIRED_PLATFORM_SERVICE.id)
+                        ? [RETIRED_PLATFORM_SERVICE]
+                        : []),
+                    ].map((service) => (
                       <label
                         key={service.id}
                         className={
@@ -6969,7 +6981,11 @@ function mergeWebsiteContact(
 
 function serviceDisplay(value: unknown) {
   const id = text(value, "");
-  return businessServices.find((service) => service.id === id)?.label ?? id;
+  return (
+    [...businessServices, ...retiredBusinessServices].find(
+      (service) => service.id === id,
+    )?.label ?? id
+  );
 }
 
 function featuredServices(row: FirestoreRow) {
@@ -12213,110 +12229,10 @@ function DestinationCoverageRow({
             )}
           </>
         )}
-        {enabledServices.includes("freight") && (
-          <>
-            <label className="switch-line destination-active">
-              <input
-                checked={availability.freightAir}
-                onChange={(event) =>
-                  toggleService("freightAir", event.target.checked)
-                }
-                type="checkbox"
-              />
-              Air
-            </label>
-            {availability.freightAir && (
-              <>
-                <label className="destination-control">
-                  <span>Air / kg</span>
-                  <input
-                    className="small-input"
-                    min="0"
-                    onChange={(event) => setFreightAirPrice(event.target.value)}
-                    type="number"
-                    value={freightAirPrice}
-                  />
-                </label>
-                <label className="destination-control">
-                  <span>Air min</span>
-                  <input
-                    aria-label={`${text(destination.name, destination.id)} air freight minimum delivery days`}
-                    className="small-input"
-                    inputMode="numeric"
-                    min="1"
-                    onChange={(event) => setAirMinDays(event.target.value)}
-                    placeholder="Days"
-                    type="number"
-                    value={airMinDays}
-                  />
-                </label>
-                <label className="destination-control">
-                  <span>Air max</span>
-                  <input
-                    aria-label={`${text(destination.name, destination.id)} air freight maximum delivery days`}
-                    className="small-input"
-                    inputMode="numeric"
-                    min="1"
-                    onChange={(event) => setAirMaxDays(event.target.value)}
-                    placeholder="Days"
-                    type="number"
-                    value={airMaxDays}
-                  />
-                </label>
-              </>
-            )}
-            <label className="switch-line destination-active">
-              <input
-                checked={availability.freightSea}
-                onChange={(event) =>
-                  toggleService("freightSea", event.target.checked)
-                }
-                type="checkbox"
-              />
-              Sea
-            </label>
-            {availability.freightSea && (
-              <>
-                <label className="destination-control">
-                  <span>Sea / kg</span>
-                  <input
-                    className="small-input"
-                    min="0"
-                    onChange={(event) => setFreightSeaPrice(event.target.value)}
-                    type="number"
-                    value={freightSeaPrice}
-                  />
-                </label>
-                <label className="destination-control">
-                  <span>Sea min</span>
-                  <input
-                    aria-label={`${text(destination.name, destination.id)} sea freight minimum delivery days`}
-                    className="small-input"
-                    inputMode="numeric"
-                    min="1"
-                    onChange={(event) => setSeaMinDays(event.target.value)}
-                    placeholder="Days"
-                    type="number"
-                    value={seaMinDays}
-                  />
-                </label>
-                <label className="destination-control">
-                  <span>Sea max</span>
-                  <input
-                    aria-label={`${text(destination.name, destination.id)} sea freight maximum delivery days`}
-                    className="small-input"
-                    inputMode="numeric"
-                    min="1"
-                    onChange={(event) => setSeaMaxDays(event.target.value)}
-                    placeholder="Days"
-                    type="number"
-                    value={seaMaxDays}
-                  />
-                </label>
-              </>
-            )}
-          </>
-        )}
+        {/* Freight (Air/Sea) is retired - it folded into Send a package - so
+            it is no longer offered here. A destination that already has it
+            keeps every freight value: the state above holds them and save()
+            writes them back unchanged. */}
         {enabledServices.includes("carTransport") && (
           <label className="switch-line destination-active">
             <input

@@ -103,7 +103,9 @@ export const BUSINESS_VERIFICATION_DOCUMENTS: VerificationDocumentRequirement[] 
 const SERVICE_LABELS: Record<string, string> = {
   barrelShipping: "Barrel shipping",
   sharedBarrels: "Shared barrels",
-  freight: "Freight (parcels)",
+  // Retired (folded into Send a package): named only so a business that still
+  // has it, and its old records, read right.
+  freight: "Freight (retired)",
   carSales: "Car sales",
   carParking: "Car parking",
   carTransport: "Car transport",

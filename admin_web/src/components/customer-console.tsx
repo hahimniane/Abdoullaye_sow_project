@@ -945,10 +945,10 @@ function OrderPanel({
                 <CustomerFreightQuotes
                   request={selected.row as FreightQuoteRequestRow}
                 />
-                {/* An agreed price is not yet a booking: the parcel still
-                    needs a receiver, an address and a pickup choice. Without
-                    this the drawer told the customer to fill in a form that
-                    was nowhere near it. */}
+                {/* An agreed price is not yet a booking, and freight booking
+                    is closed now (it folded into Send a package), so this
+                    sends the customer to the shipping services, where Send a
+                    package is. */}
                 {text(selected.row.quoteStatus, "") === "selected" &&
                   !text(selected.row.bookedShipmentId, "") && (
                   <button
@@ -962,7 +962,7 @@ function OrderPanel({
                     }}
                     type="button"
                   >
-                    Continue to booking
+                    Send a package
                   </button>
                 )}
               </>

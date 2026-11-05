@@ -60,6 +60,13 @@ old customer "Freight" flow folds into this one.
     `freight_moved`; old freight records stay readable; nothing is deleted.
     The business's old freight pricing (pickup pricing, departure days,
     "pays back if lost") is reused by this flow.
+    Business-facing, Freight is retired (2026-11-04): no service picker, staff
+    permission chip, country-coverage control or Shipping step offers it. A
+    business that already has it keeps the stored `freight` service and
+    permission and every freight value on its countries; its Shipping >
+    Freight step shows only while it has old freight shipments or price
+    requests. "Pays back if lost" is still edited in Profile > Services >
+    Freight (retired) until it moves into the Price list.
 
 No card is required anywhere in this flow; payment stays at drop-off or
 pickup (cash, Zelle, later Tap to Pay).

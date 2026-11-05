@@ -168,17 +168,30 @@ export const shippingSteps: ShippingStepSpec[] = [
   // Containers section read it.
   {id: "priceList", label: "Price list", flow: false, services: shippingServiceIds, permission: "containers"},
   {id: "barrels", label: "Barrel orders", flow: false, service: "barrelShipping", permission: "barrels"},
+  // Retired: old freight records only (visibleShippingSteps hides it when
+  // there are none). Reached by notifications about an old freight booking.
   {id: "freight", label: "Freight", flow: false, service: "freight", permission: "freight"},
   {id: "volume", label: "This month", flow: false, services: shippingServiceIds, permission: "containers"},
 ];
 
-/** The Shipping steps this viewer may open: the business offers it and the person holds its permission. */
+/**
+ * The Shipping steps this viewer may open: the business offers it and the
+ * person holds its permission.
+ *
+ * Freight is retired (it folded into Send a package, docs/PACKAGE_PRICE_LIST.md
+ * decision 12): its step shows only while the business has old freight
+ * shipments or price requests to read (`hasFreightRecords`), never as a
+ * service to turn on. The records stay reachable; nothing new can start there.
+ */
 export function visibleShippingSteps(
   offers: (serviceId: string) => boolean,
   holds: (permission: string) => boolean,
+  {hasFreightRecords = false}: {hasFreightRecords?: boolean} = {},
 ): ShippingStepSpec[] {
   return shippingSteps.filter((step) =>
-    businessTabServiceAllowed(step, offers) && holds(step.permission),
+    (step.id !== "freight" || hasFreightRecords) &&
+    businessTabServiceAllowed(step, offers) &&
+    holds(step.permission),
   );
 }
 

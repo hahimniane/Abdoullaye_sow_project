@@ -44,7 +44,10 @@ describe("business destination service coverage", () => {
     );
   });
 
-  it("offers independent barrel, air, sea, and quote-based car controls", () => {
+  it("offers independent barrel and quote-based car controls, and no Air/Sea freight", () => {
+    // Freight is retired (folded into Send a package): the page neither offers
+    // nor shows Air/Sea freight, but the draft still carries every stored
+    // freight value so a save writes it back untouched.
     for (const service of [
       "barrelShipping",
       "freightAir",
@@ -53,6 +56,8 @@ describe("business destination service coverage", () => {
     ]) {
       assert.match(operationsSource, new RegExp(`draft\\.${service}`));
     }
+    assert.doesNotMatch(operationsSource, /title="Freight — (Air|Sea)"/);
+    assert.match(operationsSource, /freightAir: false,\s*freightSea: false,/);
     assert.match(operationsSource, /Car transport quotes/);
     assert.match(
       operationsSource,
@@ -64,10 +69,12 @@ describe("business destination service coverage", () => {
     );
   });
 
-  it("captures freight schedules and shows delivery logistics to customers", () => {
+  it("keeps stored freight schedules and shows delivery logistics to customers", () => {
     assert.match(operationsSource, /freightAirDepartureDays/);
     assert.match(operationsSource, /freightSeaDepartureDays/);
-    assert.match(operationsSource, /Air freight departure days/);
+    // No longer editable here: departure days now live in Shipping > Price list.
+    assert.doesNotMatch(operationsSource, /Air freight departure days/);
+    assert.doesNotMatch(operationsSource, /function DepartureDayPicker/);
     assert.match(customerSource, /Typical delivery/);
     assert.match(customerSource, /Regular departure days/);
   });

@@ -71,8 +71,14 @@ Set<ServiceCategory> businessActivityCategories({
   required Iterable<String> services,
   required bool Function(String permission) hasPermission,
 }) {
+  // Legacy data with no service list reads as everything a business ever
+  // had, Freight included: it is retired (no longer a default) but its old
+  // records must stay in the feed, never silently drop out of it.
   final enabled = services.isEmpty
-      ? business_services.defaultBusinessServiceValues
+      ? <String>[
+          ...business_services.defaultBusinessServiceValues,
+          business_services.BusinessServiceKey.freight.value,
+        ]
       : services;
   bool offers(business_services.BusinessServiceKey key) =>
       business_services.hasBusinessService(enabled, key);
@@ -210,7 +216,12 @@ List<BusinessServiceTile> businessServiceOverviewTiles({
   return <BusinessServiceTile>[
     for (final category in businessServiceOverviewOrder)
       if (enabled.contains(category) &&
-          businessServiceOverviewFeedCategories.contains(category))
+          businessServiceOverviewFeedCategories.contains(category) &&
+          // Freight is retired: its tile exists only while old freight work
+          // is still open. With none, a "Freight 0" tile is a door to an
+          // empty room (finished freight stays in the feed under All).
+          (category != ServiceCategory.freight ||
+              businessServiceOpenCount(freightStatuses) > 0))
         BusinessServiceTile(
           category: category,
           count: switch (category) {

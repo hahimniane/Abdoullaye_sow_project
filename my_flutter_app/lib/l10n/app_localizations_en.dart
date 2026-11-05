@@ -2487,7 +2487,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get enableBusinessServiceBeforeDestination =>
-      'Enable barrel shipping, freight, or car transport on the business profile before configuring destination coverage.';
+      'Enable barrel shipping or car transport on the business profile before configuring destination coverage.';
 
   @override
   String get destinationServiceCoverageTitle => 'Destination services';
@@ -5770,7 +5770,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get hubShipping => 'Shipping';
 
   @override
-  String get hubShippingSubtitle => 'Send barrels, freight, and cars home.';
+  String get hubShippingSubtitle => 'Send barrels, packages, and cars home.';
 
   @override
   String get hubSharedBarrels => 'Shared barrels';
@@ -5799,7 +5799,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get homeHeroSubtitle =>
-      'A barrel, freight, or a car. Pick what\'s going and we\'ll take it from there.';
+      'A barrel, a package, or a car. Pick what\'s going and we\'ll take it from there.';
 
   @override
   String get homeHeroCta => 'Start a shipment';
@@ -5817,7 +5817,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get hubActivitySubtitle => 'Your orders, shipments, and wallet.';
 
   @override
-  String get hubOrdersSubtitle => 'Cars, barrels, freight & more';
+  String get hubOrdersSubtitle => 'Cars, barrels, packages & more';
 
   @override
   String get hubWalletSubtitle => 'Balance & refunds';
@@ -6616,7 +6616,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get barrels => 'Barrels';
 
   @override
-  String get freight => 'Freight';
+  String get freight => 'Freight (old records)';
 
   @override
   String get transport => 'Transport';
@@ -10728,7 +10728,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get businessServiceSharedBarrels => 'Shared barrels';
 
   @override
-  String get businessServiceFreight => 'Freight (parcels)';
+  String get businessServiceFreight => 'Freight (retired)';
 
   @override
   String get businessServiceCarSales => 'Car sales';
@@ -10749,7 +10749,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get businessServiceFreightHint =>
-      'Ship parcels and boxes by weight, by air or sea.';
+      'Retired: parcels now go through Send a package.';
 
   @override
   String get businessServiceCarSalesHint =>

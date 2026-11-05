@@ -510,18 +510,15 @@ export function GuestTracking({
               <CustomerFreightQuotes request={claimedRequest} />
               {String(claimedRequest.quoteStatus ?? "") === "selected" &&
                 !String(claimedRequest.bookedShipmentId ?? "") && (
+                // Freight booking is closed (it folded into Send a package,
+                // docs/PACKAGE_PRICE_LIST.md decision 12): the old link went
+                // nowhere, so this opens Send a package instead.
                 <button
                   className="primary-button"
-                  onClick={() =>
-                    window.location.assign(
-                      "/?service=freight" +
-                        `&agreedRequest=${claimedRequest.id}` +
-                        `&agreedBusiness=${String(claimedRequest.selectedBusinessId ?? "")}`,
-                    )
-                  }
+                  onClick={() => window.location.assign("/?service=package-request")}
                   type="button"
                 >
-                  Continue to booking
+                  Send a package
                 </button>
               )}
             </div>
