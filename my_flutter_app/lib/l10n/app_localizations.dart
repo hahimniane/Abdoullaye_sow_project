@@ -32090,6 +32090,12 @@ abstract class AppLocalizations {
   /// **'3D box, {dims}. Drag to spin it.'**
   String boxDesignerSemantics(String dims);
 
+  /// Screen-reader label of the realistic 3D scene (the website's 3D page) once it has loaded: the box beside a person 5 ft 6 in tall.
+  ///
+  /// In en, this message translates to:
+  /// **'3D view of your box, {dims}, next to a person 5 ft 6 in tall. Drag to spin it.'**
+  String boxDesignerSemanticsScene(String dims);
+
   /// No description provided for @boxDesignerRange.
   ///
   /// In en, this message translates to:

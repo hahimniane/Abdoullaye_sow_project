@@ -1,12 +1,17 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../../services/box_3d_page.dart';
 import '../../services/box_sizes.dart';
 import '../../services/package_requests.dart' show formatRequestCents;
 import '../../theme/app_colors.dart';
 import '../../theme/app_motion.dart';
 import '../../theme/app_spacing.dart';
+import 'box_3d_web_view.dart';
 import 'box_geometry.dart';
 import 'box_scene_painter.dart';
 
@@ -31,6 +36,14 @@ enum BoxBadgePrice {
 /// the designer is read-only - what staff see on a request - and the
 /// controls give way to the inches; the box still spins.
 ///
+/// The picture is the website's real 3D scene (a realistic person scaled to
+/// 5 ft 6 in with a height pole, a sneaker and the box) in a WebView. The
+/// painted scene below it is the placeholder while the page loads and stays
+/// for good when there is no network, the page errors or says it failed, or
+/// it has not said "ready" within [box3dReadyTimeout] (`Box3dSceneState`
+/// holds the rules). The inches and language reach the page as JavaScript,
+/// at most once per frame, without a reload.
+///
 /// With reduced motion the framing jumps instead of easing and nothing
 /// moves unless the finger does.
 class BoxDesigner extends StatefulWidget {
@@ -41,6 +54,8 @@ class BoxDesigner extends StatefulWidget {
     this.badgePrice = BoxBadgePrice.none,
     this.priceCentsFor,
     this.sceneHeight = 250,
+    this.pageBaseUrl = box3dPageUrl,
+    this.webViewFactory,
   });
 
   final BoxDims dims;
@@ -56,6 +71,14 @@ class BoxDesigner extends StatefulWidget {
   final int? Function(String sizeId)? priceCentsFor;
 
   final double sceneHeight;
+
+  /// The 3D page's address without a query (one constant, overridable so
+  /// tests and staging can point elsewhere).
+  final String pageBaseUrl;
+
+  /// Makes the embedded page; null uses the platform WebView. Tests pass a
+  /// fake so no platform view is needed.
+  final Box3dWebViewFactory? webViewFactory;
 
   @override
   State<BoxDesigner> createState() => _BoxDesignerState();
@@ -73,6 +96,12 @@ class _BoxDesignerState extends State<BoxDesigner> {
   /// Which sides hold something that is not inches (red until fixed).
   final _invalid = [false, false, false];
 
+  /// The embedded 3D page and where it is in loading → ready | fallback.
+  /// Null page: no WebView (yet, or any more) and the painter scene shows.
+  Box3dSceneState? _scene;
+  Box3dWebViewHandle? _web;
+  Timer? _timeout;
+
   @override
   void initState() {
     super.initState();
@@ -83,13 +112,31 @@ class _BoxDesignerState extends State<BoxDesigner> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final lang = box3dLang(Localizations.localeOf(context).languageCode);
+    final scene = _scene;
+    if (scene == null) {
+      _openPage(lang);
+    } else if (scene.requestLang(lang)) {
+      _scheduleFlush();
+    }
+  }
+
+  @override
   void didUpdateWidget(BoxDesigner old) {
     super.didUpdateWidget(old);
-    if (old.dims != widget.dims) _syncFields();
+    if (old.dims != widget.dims) {
+      _syncFields();
+      if (_scene?.requestDims(widget.dims) ?? false) _scheduleFlush();
+    }
   }
 
   @override
   void dispose() {
+    _timeout?.cancel();
+    _web?.dispose();
+    _web = null;
     _spin.dispose();
     for (final c in _controllers) {
       c.dispose();
@@ -98,6 +145,65 @@ class _BoxDesignerState extends State<BoxDesigner> {
       f.dispose();
     }
     super.dispose();
+  }
+
+  /// Starts the page, or - when the platform has no WebView - keeps the
+  /// painter scene for good.
+  void _openPage(String lang) {
+    final scene = _scene = Box3dSceneState(dims: widget.dims, lang: lang);
+    try {
+      _web = (widget.webViewFactory ?? createBox3dWebView)(
+        Box3dWebViewRequest(
+          url: box3dPageUri(
+            dims: widget.dims,
+            lang: lang,
+            base: widget.pageBaseUrl,
+          ),
+          baseUrl: widget.pageBaseUrl,
+          onMessage: (m) => _changed(scene.onChannelMessage(m)),
+          onPageError: () => _changed(scene.onPageError()),
+        ),
+      );
+    } catch (error) {
+      debugPrint('Box 3D page unavailable (${error.runtimeType}).');
+      scene.onPageError();
+      return;
+    }
+    // Loading must always resolve: no "ready" in time keeps the painter.
+    _timeout = Timer(box3dReadyTimeout, () => _changed(scene.onTimeout()));
+  }
+
+  /// The page's phase moved (or not). Ready: show it and catch it up on any
+  /// change made while it loaded. Fallback: let go of the WebView.
+  void _changed(bool moved) {
+    if (!mounted || !moved) return;
+    final scene = _scene!;
+    _timeout?.cancel();
+    _timeout = null;
+    if (scene.isFallback) {
+      _web?.dispose();
+      _web = null;
+    } else if (scene.requestCatchUp()) {
+      _scheduleFlush();
+    }
+    setState(() {});
+  }
+
+  /// One flush per frame at most: whatever the inches and language are by
+  /// the next frame is what the page is told, once.
+  void _scheduleFlush() {
+    SchedulerBinding.instance
+      ..addPostFrameCallback((_) => _flush())
+      ..ensureVisualUpdate();
+  }
+
+  void _flush() {
+    final web = _web;
+    final scene = _scene;
+    if (!mounted || web == null || scene == null) return;
+    for (final script in scene.takeScripts()) {
+      web.runJavaScript(script).catchError(ignorePlatformError);
+    }
   }
 
   List<double> get _sides => [widget.dims.l, widget.dims.w, widget.dims.h];
@@ -170,6 +276,8 @@ class _BoxDesignerState extends State<BoxDesigner> {
     final badge = _badgeText(l10n, language);
     final reduced = AppMotion.reduced(context);
     final editable = widget.onChanged != null;
+    final web = _web;
+    final pageReady = web != null && (_scene?.isReady ?? false);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -186,7 +294,9 @@ class _BoxDesignerState extends State<BoxDesigner> {
         ClipRRect(
           borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
           child: Semantics(
-            label: l10n.boxDesignerSemantics(dims.text),
+            label: pageReady
+                ? l10n.boxDesignerSemanticsScene(dims.text)
+                : l10n.boxDesignerSemantics(dims.text),
             container: true,
             child: Container(
               height: widget.sceneHeight,
@@ -223,6 +333,25 @@ class _BoxDesignerState extends State<BoxDesigner> {
                         ),
                       ),
                     ),
+                    if (web != null)
+                      Positioned.fill(
+                        child: ExcludeSemantics(
+                          // The painted scene takes the touches (and the
+                          // spin) until the page is drawn.
+                          child: IgnorePointer(
+                            ignoring: !pageReady,
+                            child: AnimatedOpacity(
+                              key: const Key('box-3d-page'),
+                              opacity: pageReady ? 1 : 0,
+                              duration: reduced
+                                  ? Duration.zero
+                                  : const Duration(milliseconds: 220),
+                              curve: AppMotion.standard,
+                              child: web.build(context),
+                            ),
+                          ),
+                        ),
+                      ),
                     Positioned(
                       left: AppSpacing.sm,
                       bottom: AppSpacing.sm,

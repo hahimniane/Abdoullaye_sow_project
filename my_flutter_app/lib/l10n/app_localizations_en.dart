@@ -19022,6 +19022,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String boxDesignerSemanticsScene(String dims) {
+    return '3D view of your box, $dims, next to a person 5 ft 6 in tall. Drag to spin it.';
+  }
+
+  @override
   String get boxDesignerRange => 'Enter 1 to 120 inches.';
 
   @override

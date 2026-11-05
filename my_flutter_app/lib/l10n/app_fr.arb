@@ -10963,6 +10963,7 @@
   "boxDesignerDrag": "Faites glisser pour tourner",
   "boxDesignerScaleNote": "Une basket (12 po) et une personne (5 pi 6 po) donnent l’échelle. Chaque carré du sol mesure 1 pi.",
   "boxDesignerSemantics": "Carton en 3D, {dims}. Faites glisser pour le faire tourner.",
+  "boxDesignerSemanticsScene": "Vue 3D de votre carton, {dims}, à côté d’une personne de 5 pi 6 po. Faites glisser pour le faire tourner.",
   "boxDesignerRange": "Entrez de 1 à 120 pouces.",
   "boxDesignerTitle": "Votre carton",
   "boxDesignerUse": "Utiliser ces pouces",
@@ -11024,6 +11025,13 @@
   "pplErrBoxPriceInvalid": "Entrez un prix de carton entre 0,01 $ et 10 000 $.",
   "@boxDesignerInchesUnit": {},
   "@boxDesignerSemantics": {
+    "placeholders": {
+      "dims": {
+        "type": "String"
+      }
+    }
+  },
+  "@boxDesignerSemanticsScene": {
     "placeholders": {
       "dims": {
         "type": "String"

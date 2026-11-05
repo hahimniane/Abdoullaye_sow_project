@@ -19320,6 +19320,11 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String boxDesignerSemanticsScene(String dims) {
+    return 'Vue 3D de votre carton, $dims, à côté d’une personne de 5 pi 6 po. Faites glisser pour le faire tourner.';
+  }
+
+  @override
   String get boxDesignerRange => 'Entrez de 1 à 120 pouces.';
 
   @override
