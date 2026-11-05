@@ -271,8 +271,8 @@ export function BoxDesigner({ dims, onChange, lang, prices, comparing = false, s
             </div>
           </div>
         </div>
-        <p className="bd-hint" data-no-translate>
-          <span>{lang === "fr" ? "Faites glisser pour tourner" : "Drag to spin"}</span>
+        <p className="bd-hint">
+          <span>Drag to spin</span>
         </p>
       </div>
 

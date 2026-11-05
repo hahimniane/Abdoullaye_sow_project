@@ -7961,6 +7961,10 @@ Object.assign(ATTRIBUTE_TRANSLATIONS, {
 Object.assign(TEXT_TRANSLATIONS, {
   // The box designer.
   "Drag to spin": "Faites glisser pour tourner",
+  // Freight folded into Send a package (docs/PACKAGE_PRICE_LIST.md decision 12).
+  "Freight (retired)": "Fret (retiré)",
+  "Enable barrel shipping or car transport before configuring country coverage.":
+    "Activez l’expédition de barils ou le transport de véhicules avant de configurer la couverture par pays.",
   "Sneaker (12 in)": "Basket (12 po)",
   "Person (5 ft 6 in)": "Personne (5 pi 6 po)",
   "Grid squares are 1 ft": "Chaque carré de la grille mesure 1 pi",
