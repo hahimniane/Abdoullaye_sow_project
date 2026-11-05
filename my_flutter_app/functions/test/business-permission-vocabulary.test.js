@@ -58,10 +58,19 @@ function adminInvitationPermissions() {
 
 // The admin console's invitation payload is a hand-copied fifth list. It
 // drifted once - a section missing here is never granted to invited staff.
+// Freight folded into Send a package (docs/PACKAGE_PRICE_LIST.md decision
+// 12): the backend still accepts "freight" so staff who hold it keep their
+// old records, but no invitation offers it any more.
+const RETIRED_PERMISSIONS = new Set(["freight"]);
+
 test("the admin invitation payload offers exactly the backend vocabulary",
     () => {
       assert.deepEqual(
-          adminInvitationPermissions().sort(), backendPermissions().sort());
+          adminInvitationPermissions().sort(),
+          backendPermissions().filter((k) => !RETIRED_PERMISSIONS.has(k))
+              .sort());
+      assert.ok(backendPermissions().includes("freight"),
+          "old freight staff must keep their permission");
     });
 
 test("every permission a console tab gates on is accepted by the backend",
