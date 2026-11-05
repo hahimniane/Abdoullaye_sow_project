@@ -2,7 +2,28 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  BOX_SHARE_MIN,
+  DASH_GAP_IN,
+  DASH_IN,
   DEFAULT_ANGLES,
+  FOV_DEG,
+  MIN_SHOWN,
+  boxHeightLabel,
+  cameraDistance,
+  clampLabel,
+  dashSpans,
+  feetInchesText,
+  frameOf,
+  metersText,
+  parseBox3dQuery,
+  personLabel,
+  poleHeightOf,
+  poleTicks,
+  readSetDims,
+  sceneLabel,
+  sceneLayoutOf,
+  tapeWidthIn,
+  tickLabel,
   DEFAULT_DIMS,
   DIM_MAX_IN,
   MAX_PX_PER_IN,
@@ -173,4 +194,142 @@ test("the sneaker is 12 x 4.5 x 5 in: a foot and a collar at the heel", () => {
   assert.ok(parts.every((p) => p.dims.l === SNEAKER_IN.w));
   assert.equal(parts[0].dims.w, SNEAKER_IN.l);
   assert.ok(parts[1].spot.z < 0, "the collar is at the back");
+});
+
+
+// ---------------------------------------------------------------------------
+// The 3D scene's pure half: pole, labels, framing, the page's query.
+// ---------------------------------------------------------------------------
+
+test("the pole has a tick every foot, 1 ft to 5 ft for the 5 ft 6 in person", () => {
+  assert.deepEqual(
+    poleTicks().map((tick) => [tick.feet, tick.inches]),
+    [[1, 12], [2, 24], [3, 36], [4, 48], [5, 60]],
+  );
+  assert.deepEqual(poleTicks(72).map((tick) => tick.feet), [1, 2, 3, 4, 5], "a tick is never drawn at the very top");
+  assert.deepEqual(poleTicks(12), []);
+  assert.equal(poleTicks(124).length, 10, "a pole over a tall box keeps counting feet");
+});
+
+test("the pole stands as tall as the person, or a little over a taller box", () => {
+  assert.equal(poleHeightOf({ l: 20, w: 16, h: 14 }), PERSON_IN.h);
+  assert.equal(poleHeightOf({ l: 20, w: 16, h: 62 }), 66);
+  assert.equal(poleHeightOf({ l: 20, w: 16, h: 100 }), 104);
+});
+
+test("labels read in English and French: feet and inches, metres, the French inch and decimal comma", () => {
+  assert.equal(feetInchesText(66), "5 ft 6 in");
+  assert.equal(feetInchesText(66, "fr"), "5 pi 6 po");
+  assert.equal(feetInchesText(60), "5 ft");
+  assert.equal(feetInchesText(9), "9 in");
+  assert.equal(feetInchesText(9.5, "fr"), "9.5 po");
+  assert.equal(metersText(66), "1.68 m");
+  assert.equal(metersText(66, "fr"), "1,68 m");
+  assert.equal(personLabel(), "5 ft 6 in · 1.68 m");
+  assert.equal(personLabel("fr"), "5 pi 6 po · 1,68 m");
+  assert.equal(boxHeightLabel(14), "14 in");
+  assert.equal(boxHeightLabel(14.5, "fr"), "14.5 po");
+  assert.equal(tickLabel(3), "3 ft");
+  assert.equal(tickLabel(3, "fr"), "3 pi");
+});
+
+test("the 3D layout puts the pole beside the person, away from the box, and keeps everything inside the radius", () => {
+  for (const dims of [{ l: 6, w: 6, h: 6 }, { l: 20, w: 16, h: 14 }, { l: 60, w: 40, h: 40 }, { l: 120, w: 120, h: 120 }]) {
+    const layout = sceneLayoutOf(dims);
+    assert.ok(Math.hypot(layout.pole.x - layout.person.x, layout.pole.z - layout.person.z) >= PERSON_IN.w / 2, "the pole does not stand inside the person");
+    assert.ok(Math.hypot(layout.pole.x, layout.pole.z) > Math.hypot(layout.person.x, layout.person.z), "the person is between the pole and the box");
+    for (const spot of [layout.pole, layout.person, layout.sneaker]) assert.ok(Math.hypot(spot.x, spot.z) < layout.radius);
+    assert.ok(layout.personYaw > 0 && layout.personYaw < 90, "the person faces the box");
+    assert.equal(layout.height, Math.max(dims.h, PERSON_IN.h));
+  }
+  assert.deepEqual({ ...sceneLayoutOf(DEFAULT_DIMS), pole: undefined, personYaw: undefined, radius: undefined }.person, layoutOf(DEFAULT_DIMS).person);
+});
+
+test("the camera shows the whole scene for a normal box, and tightens (never past MIN_SHOWN) for a small one", () => {
+  for (const aspect of [0.7, 1, 1.25, 1.8]) {
+    for (const dims of [{ l: 18, w: 18, h: 18 }, DEFAULT_DIMS, { l: 30, w: 24, h: 24 }, { l: 60, w: 60, h: 60 }, { l: 120, w: 120, h: 120 }]) {
+      const frame = frameOf(sceneLayoutOf(dims), aspect);
+      const layout = sceneLayoutOf(dims);
+      assert.ok(frame.viewHeight * aspect >= 2 * layout.radius, `sideways fit ${JSON.stringify(dims)} @${aspect}`);
+      assert.ok(frame.boxShare > 0 && frame.boxShare <= 1);
+      assert.ok(Number.isFinite(frame.targetY) && frame.targetY > 0);
+    }
+  }
+  for (const dims of [{ l: 18, w: 18, h: 18 }, DEFAULT_DIMS, { l: 30, w: 24, h: 24 }]) {
+    assert.equal(frameOf(sceneLayoutOf(dims), 1.25).cropped, false, `the person and the pole are fully in view for ${JSON.stringify(dims)}`);
+  }
+  assert.ok(frameOf(sceneLayoutOf(DEFAULT_DIMS), 1.25).boxShare >= BOX_SHARE_MIN - 0.01);
+  const shoebox = frameOf(sceneLayoutOf({ l: 12, w: 10, h: 8 }), 1.25);
+  assert.equal(shoebox.cropped, true, "a small box tightens the frame");
+  assert.ok(shoebox.boxShare >= BOX_SHARE_MIN - 0.04, "so the box stays prominent");
+  // However small the box, the frame keeps MIN_SHOWN of the full scene (the full scene is what a Large box needs).
+  const full = frameOf(sceneLayoutOf({ l: 4, w: 4, h: 4 }), 1.25);
+  const reference = frameOf({ ...sceneLayoutOf({ l: 4, w: 4, h: 4 }), box: { l: 200, w: 200, h: 200 } }, 1.25);
+  assert.equal(reference.cropped, false);
+  assert.ok(full.viewHeight >= reference.viewHeight * MIN_SHOWN - 0.5, "never tighter than MIN_SHOWN of the full scene");
+  assert.ok(full.cropped);
+  // A bigger box never gets a visibly smaller share of the frame than a smaller one (1% slack where the frame stops tightening).
+  const shares = [8, 12, 18, 24, 36, 60, 100].map((side) => frameOf(sceneLayoutOf({ l: side, w: side, h: side }), 1.25).boxShare);
+  for (let i = 1; i < shares.length; i += 1) assert.ok(shares[i] >= shares[i - 1] - 0.01, `share grows ${shares.join(",")}`);
+  // A bad aspect does not break the frame.
+  assert.ok(Number.isFinite(frameOf(sceneLayoutOf(DEFAULT_DIMS), 0).viewHeight));
+  assert.ok(Number.isFinite(frameOf(sceneLayoutOf(DEFAULT_DIMS), Number.NaN).viewHeight));
+});
+
+test("camera distance follows the field of view", () => {
+  const near = cameraDistance(50);
+  const far = cameraDistance(100);
+  assert.ok(Math.abs(far - near * 2) < 0.05);
+  // At that distance the target plane is exactly viewHeight tall.
+  assert.ok(Math.abs(2 * far * Math.tan((FOV_DEG * Math.PI) / 360) - 100) < 0.2);
+});
+
+test("a label is pulled back inside the stage, and says which edge it hit", () => {
+  const stage = { w: 300, h: 200 };
+  const size = { w: 80, h: 20 };
+  assert.deepEqual(clampLabel({ x: 150, y: 100 }, size, stage), { x: 150, y: 100, edge: null });
+  assert.deepEqual(clampLabel({ x: 5, y: 100 }, size, stage), { x: 44, y: 100, edge: null });
+  assert.deepEqual(clampLabel({ x: 400, y: 100 }, size, stage), { x: 256, y: 100, edge: null });
+  assert.deepEqual(clampLabel({ x: 150, y: -50 }, size, stage), { x: 150, y: 14, edge: "top" });
+  assert.deepEqual(clampLabel({ x: 150, y: 500 }, size, stage), { x: 150, y: 186, edge: "bottom" });
+  // A label wider than the stage still lands on a real spot.
+  const wide = clampLabel({ x: 0, y: 0 }, { w: 500, h: 20 }, stage);
+  assert.ok(Number.isFinite(wide.x) && Number.isFinite(wide.y));
+});
+
+test("the standalone page reads its query, and a bad link still shows the default box", () => {
+  assert.deepEqual(parseBox3dQuery("?l=30&w=24&h=24&lang=fr"), { dims: { l: 30, w: 24, h: 24 }, lang: "fr" });
+  assert.deepEqual(parseBox3dQuery("l=20&w=16,5&h=14.5&lang=en"), { dims: { l: 20, w: 16.5, h: 14.5 }, lang: "en" });
+  assert.deepEqual(parseBox3dQuery("?l=20&w=16&h=14"), { dims: { l: 20, w: 16, h: 14 }, lang: "en" }, "no lang = English");
+  assert.deepEqual(parseBox3dQuery("?l=20&w=16&h=14&lang=FR").lang, "fr");
+  assert.deepEqual(parseBox3dQuery("?l=20&w=16&h=14&lang=de").lang, "en");
+  for (const bad of ["", "?l=20&w=16", "?l=0&w=16&h=14", "?l=20&w=abc&h=14", "?l=500&w=16&h=14", "?l=-3&w=16&h=14&lang=fr"]) {
+    assert.deepEqual(parseBox3dQuery(bad).dims, { ...DEFAULT_DIMS }, bad);
+  }
+  assert.equal(parseBox3dQuery("?l=-3&w=16&h=14&lang=fr").lang, "fr", "a bad size keeps the language");
+});
+
+test("window.laawolBox3d.setDims reads an object of inches, nothing else", () => {
+  assert.deepEqual(readSetDims({ l: 20, w: "16", h: 14.5 }), { l: 20, w: 16, h: 14.5 });
+  assert.equal(readSetDims({ l: 20, w: 16 }), null);
+  assert.equal(readSetDims({ l: 0, w: 16, h: 14 }), null);
+  assert.equal(readSetDims(null), null);
+  assert.equal(readSetDims("20x16x14"), null);
+});
+
+test("the dashed line is dashes and gaps that fit its length", () => {
+  assert.deepEqual(dashSpans(0), []);
+  assert.deepEqual(dashSpans(-3), []);
+  const spans = dashSpans(30);
+  assert.equal(spans[0].from, 0);
+  assert.equal(spans[0].length, DASH_IN);
+  assert.equal(spans[1].from, DASH_IN + DASH_GAP_IN);
+  for (const span of spans) assert.ok(span.from + span.length <= 30 + 1e-9);
+  assert.ok(spans.length > 5 && spans.length < 15);
+});
+
+test("the tape is 2 in wide, never more than a third of the width; the scene label is unchanged", () => {
+  assert.equal(tapeWidthIn({ l: 20, w: 16, h: 14 }), 2);
+  assert.equal(tapeWidthIn({ l: 20, w: 3, h: 14 }), 1);
+  assert.equal(sceneLabel({ l: 20, w: 16, h: 14 }, "en"), "Box 20 × 16 × 14 in, with a sneaker and a 5 ft 6 in person for scale");
 });

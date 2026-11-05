@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import {
   DEFAULT_ANGLES,
@@ -11,10 +11,8 @@ import {
   clampDim,
   dimText,
   dimsText,
-  dragAngles,
   fitScale,
   gridOf,
-  keyAngles,
   layoutOf,
   placeTransform,
   prismFaces,
@@ -32,6 +30,9 @@ import {
 import { boxBadge, sizeForDims, type BoxPrices, type BoxSizeId } from "@/lib/package-box";
 import type { Lang } from "@/lib/package-requests";
 
+import { mountBox3d, type Box3dHandle } from "./box-3d-mount";
+import { createSpinController, type SpinController } from "./box-spin-controller";
+
 type BoxDesignerProps = {
   dims: Dims;
   /** Called with the new inches when a slider or number changes. Leave out for the read-only box staff see. */
@@ -47,9 +48,6 @@ type BoxDesignerProps = {
 
 const DIM_LABEL: Record<DimKey, string> = { l: "Length", w: "Width", h: "Height" };
 const DEFAULT_VIEWPORT = { w: 320, h: 300 };
-/** Idle spin, degrees a second, until the person touches the box. */
-const IDLE_SPIN_DEG_PER_S = 9;
-
 function sameSize(a: { w: number; h: number }, b: { width: number; height: number }): boolean {
   return Math.abs(a.w - b.width) < 1 && Math.abs(a.h - b.height) < 1;
 }
@@ -84,19 +82,6 @@ function Prism({ faces, transform, className, tape }: { faces: Face[]; transform
   );
 }
 
-function useReducedMotion(): boolean {
-  const [reduced, setReduced] = useState(false);
-  useEffect(() => {
-    if (typeof window === "undefined" || !window.matchMedia) return undefined;
-    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const update = () => setReduced(query.matches);
-    update();
-    query.addEventListener?.("change", update);
-    return () => query.removeEventListener?.("change", update);
-  }, []);
-  return reduced;
-}
-
 /**
  * The 3D box (docs/PACKAGE_BOX_SIZES_PAY_NOW.md section 4): a cardboard box the
  * customer resizes with sliders or typed inches, next to a sneaker and a
@@ -115,11 +100,12 @@ export function BoxDesigner({ dims, onChange, lang, prices, comparing = false, s
   const stageRef = useRef<HTMLDivElement | null>(null);
   const worldRef = useRef<HTMLDivElement | null>(null);
   const angles = useRef<Angles>({ ...DEFAULT_ANGLES });
-  const drag = useRef<{ x: number; y: number; from: Angles } | null>(null);
-  const touched = useRef(false);
-  const visible = useRef(true);
+  const glRef = useRef<HTMLDivElement | null>(null);
+  const spin = useRef<SpinController | null>(null);
+  const box3d = useRef<Box3dHandle | null>(null);
   const [viewport, setViewport] = useState(DEFAULT_VIEWPORT);
-  const reduced = useReducedMotion();
+  // "css" until the three.js scene has drawn its first frame; back to "css" if it fails or its GPU context is lost.
+  const [mode, setMode] = useState<"css" | "3d">("css");
 
   const layout = useMemo(() => layoutOf(dims), [dims]);
   const scale = useMemo(() => fitScale(layout, viewport, 22), [layout, viewport]);
@@ -148,6 +134,7 @@ export function BoxDesigner({ dims, onChange, lang, prices, comparing = false, s
     if (!world) return;
     world.style.setProperty("--bd-spin", `${angles.current.spin}deg`);
     world.style.setProperty("--bd-tilt", `${angles.current.tilt}deg`);
+    box3d.current?.setAngles(angles.current);
   }, []);
   useLayoutEffect(apply, [apply]);
 
@@ -168,61 +155,54 @@ export function BoxDesigner({ dims, onChange, lang, prices, comparing = false, s
     return () => observer.disconnect();
   }, []);
 
-  // A slow idle spin shows it is 3D; it stops at the first touch, off screen, and for reduced motion.
+  // Drag, arrow keys and the idle spin (one implementation, shared with the standalone /box-3d/ page).
   useEffect(() => {
     const stage = stageRef.current;
-    if (!stage || reduced) return undefined;
-    let frame = 0;
-    let last = 0;
-    let watcher: IntersectionObserver | null = null;
-    if (typeof IntersectionObserver !== "undefined") {
-      watcher = new IntersectionObserver((entries) => {
-        visible.current = entries.some((entry) => entry.isIntersecting);
-      });
-      watcher.observe(stage);
-    }
-    const tick = (now: number) => {
-      if (touched.current) return;
-      if (last && visible.current && !document.hidden) {
-        const next = angles.current.spin + ((now - last) / 1000) * IDLE_SPIN_DEG_PER_S;
-        angles.current = { ...angles.current, spin: next > 180 ? next - 360 : next };
+    if (!stage) return undefined;
+    const controller = createSpinController({
+      element: stage,
+      onAngles: (next) => {
+        angles.current = next;
         apply();
-      }
-      last = now;
-      frame = requestAnimationFrame(tick);
-    };
-    frame = requestAnimationFrame(tick);
+      },
+    });
+    spin.current = controller;
     return () => {
-      cancelAnimationFrame(frame);
-      watcher?.disconnect();
+      controller.dispose();
+      spin.current = null;
     };
-  }, [reduced, apply]);
+  }, [apply]);
 
-  const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
-    touched.current = true;
-    drag.current = { x: event.clientX, y: event.clientY, from: angles.current };
-    try {
-      event.currentTarget.setPointerCapture(event.pointerId);
-    } catch {
-      // A pointer that cannot be captured still drags while it stays over the stage.
-    }
-  };
-  const onPointerMove = (event: PointerEvent<HTMLDivElement>) => {
-    const start = drag.current;
-    if (!start) return;
-    angles.current = dragAngles(start.from, event.clientX - start.x, event.clientY - start.y);
-    apply();
-  };
-  const endDrag = () => {
-    drag.current = null;
-  };
-  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (!event.key.startsWith("Arrow")) return;
-    event.preventDefault();
-    touched.current = true;
-    angles.current = keyAngles(angles.current, event.key);
-    apply();
-  };
+  // The real 3D scene: loaded lazily, never in the main bundle. The CSS box above stays until its first frame
+  // is drawn and comes back if WebGL, a model, the 8 second limit or the GPU context fails.
+  const first = useRef({ dims, lang });
+  useEffect(() => {
+    const holder = glRef.current;
+    if (!holder) return undefined;
+    const handle = mountBox3d({
+      container: holder,
+      dims: first.current.dims,
+      lang: first.current.lang,
+      onReady: () => setMode("3d"),
+      onFail: () => {
+        setMode("css");
+        handle.dispose();
+      },
+    });
+    handle.setAngles(angles.current);
+    box3d.current = handle;
+    return () => {
+      box3d.current = null;
+      handle.dispose();
+      setMode("css");
+    };
+  }, []);
+  useEffect(() => {
+    box3d.current?.setDims(dims);
+  }, [dims]);
+  useEffect(() => {
+    box3d.current?.setLang(lang);
+  }, [lang]);
 
   // The typed text of each field: it may be half-typed ("1") while the box keeps its last good size.
   const [texts, setTexts] = useState<Record<DimKey, string>>(() => ({ l: dimText(dims.l), w: dimText(dims.w), h: dimText(dims.h) }));
@@ -251,11 +231,7 @@ export function BoxDesigner({ dims, onChange, lang, prices, comparing = false, s
       <div
         aria-label={label}
         className="bd-stage"
-        onKeyDown={onKeyDown}
-        onPointerCancel={endDrag}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={endDrag}
+        data-mode={mode}
         ref={stageRef}
         role="img"
         style={stageStyle}
@@ -266,6 +242,7 @@ export function BoxDesigner({ dims, onChange, lang, prices, comparing = false, s
             {badge.text}
           </p>
         )}
+        <div className="bd-gl" ref={glRef} />
         <div className="bd-origin">
           <div className="bd-world" ref={worldRef} style={worldVars}>
             <div
@@ -302,7 +279,11 @@ export function BoxDesigner({ dims, onChange, lang, prices, comparing = false, s
         <li><span aria-hidden="true" className="bd-key sneaker" /> <span>Sneaker (12 in)</span></li>
         <li><span aria-hidden="true" className="bd-key person" /> <span>Person (5 ft 6 in)</span></li>
         <li><span aria-hidden="true" className="bd-key grid" /> <span>Grid squares are 1 ft</span></li>
+        <li><span aria-hidden="true" className="bd-key ruler" /> <span>Ruler: a mark every foot</span></li>
       </ul>
+      <p className="bd-credit" data-no-translate>
+        3D models: &quot;Man&quot; by Quaternius (CC0); &quot;Sneakers&quot; by Poly by Google (CC BY 3.0)
+      </p>
 
       {readOnly ? (
         <p className="bd-dims" data-no-translate>{dimsText(dims, lang)}</p>
@@ -320,7 +301,7 @@ export function BoxDesigner({ dims, onChange, lang, prices, comparing = false, s
                   max={DIM_SLIDER_MAX_IN}
                   min={DIM_MIN_IN}
                   onChange={(event) => {
-                    touched.current = true;
+                    spin.current?.markTouched();
                     onChange?.(withDim(dims, key, Number(event.target.value)));
                   }}
                   step={1}

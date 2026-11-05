@@ -204,14 +204,31 @@ Actions on `setPackageRequestSettings`:
 `.png`), `my_flutter_app/assets/box_sizes/{small,medium,large,xl}.png`,
 `functions/box_size_images.js` (base64 PNGs for the WhatsApp form).
 
-**Box designer** (web: CSS 3D transforms, no new dependency; app: Flutter
-`Transform` / `CustomPainter`): length / width / height by slider + number
-(1-60 in on the slider, typed up to 120); drag to spin (clamped tilt);
-cardboard box with a tape stripe; a sneaker (12 × 4.5 × 5 in) beside it and
-a 5 ft 6 in person behind for scale; a 1-ft floor grid; badge = size + price
-for the chosen business (or "from $X" while comparing) or "Extra large ·
-the business will quote". Read-only mode (still spinnable) for staff.
-Respects reduced motion. Every string in English and French.
+**Box designer** (web: three.js, loaded lazily, with the old CSS box as the
+fallback; app: the same 3D scene in a web view, below): length / width /
+height by slider + number (1-60 in on the slider, typed up to 120); drag to
+spin (clamped tilt); a cardboard box with a tape stripe; a 12 in sneaker
+beside it; a real 3D adult (5 ft 6 in) with a **measuring pole** (a mark every
+foot, "5 ft 6 in · 1.68 m" on top) and a dashed line at the box's height
+across to the pole ("14 in"), so "the box comes up to the knee" is visible;
+labels are upright on every angle, English and French; a 1-ft floor grid, soft
+light and a ground shadow; the camera frames the box and the person
+(`frameOf` in `lib/box-designer.ts`; a small box tightens the frame). A badge =
+size + price for the chosen business (or "from $X" while comparing) or "Extra
+large · the business will quote". Read-only mode (still spinnable) for staff.
+Respects reduced motion (no idle spin, the zoom jumps). If WebGL, a model or
+the 8 second limit fails, the CSS box stays. Models: `admin_web/public/box-3d/`
+(licenses in `LICENSES.md` there).
+
+**Standalone page for the app** - `/box-3d/` (`src/app/box-3d/page.tsx`):
+only the scene, full viewport, white, no login.
+`/box-3d/?l=20&w=16&h=14&lang=en` (inches; `lang` en|fr; anything invalid =
+20 x 16 x 14, English). `window.laawolBox3d.setDims({l, w, h})` and
+`.setLang("en"|"fr")` change it without a reload (they exist once the page
+has loaded; wait for "ready"). `window.Box3dChannel?.postMessage("ready")`
+after the first frame with both models is drawn, `"failed"` for no WebGL, a
+model that would not load, a lost GPU context or 8 seconds. Touch and drag
+spin it (`touch-action: none`), it idles until touched.
 
 **Customer (app + website), Sea:** a box line = size picture cards (Small /
 Medium / Large / Extra large) + quantity, "Know the inches?" opens the

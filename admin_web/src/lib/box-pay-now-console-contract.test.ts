@@ -10,6 +10,9 @@ const requests = read("src/components/business/package-requests-panel.tsx");
 const boxAndPay = read("src/components/business/request-box-and-pay.tsx");
 const payouts = read("src/components/business/pay-now-payouts.tsx");
 const designer = read("src/components/box-designer/box-designer.tsx");
+const spinner = read("src/components/box-designer/box-spin-controller.ts");
+const scene3d = read("src/components/box-designer/box-3d-scene.ts");
+const mount3d = read("src/components/box-designer/box-3d-mount.ts");
 const css = read("src/app/globals.css");
 
 test("the Send a package form offers box lines on Sea only, and Air keeps its Box kind", () => {
@@ -51,9 +54,22 @@ test("Bills: Laawol owes you for the business, Pay now payouts for the Laawol ad
 });
 
 test("the designer respects reduced motion and never reacts per pointer move", () => {
-  assert.match(designer, /prefers-reduced-motion: reduce/);
+  // The idle spin (the only motion that runs by itself) is the spin controller's, and it honours the setting.
+  assert.match(spinner, /prefers-reduced-motion: reduce/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{\s*\.bd-face, \.bd-prism, \.bd-floor, \.bd-person \{ transition: none; \}/);
-  // Spinning writes CSS variables on the world element; it never sets state.
+  // The 3D scene eases its zoom only when motion is allowed, and renders on demand rather than in a loop.
+  assert.match(scene3d, /prefers-reduced-motion: reduce/);
+  assert.match(scene3d, /const k = reduced \? 1 :/);
+  assert.doesNotMatch(scene3d, /setAnimationLoop/);
+  // Spinning writes CSS variables on the world element (and tells the 3D scene); it never sets React state.
   assert.match(designer, /world\.style\.setProperty\("--bd-spin"/);
-  assert.doesNotMatch(designer, /setAngles/);
+  assert.doesNotMatch(designer, /useState<Angles/);
+});
+
+test("three.js stays out of the main bundle: only the mount module reaches the scene, with import()", () => {
+  assert.match(mount3d, /await import\("\.\/box-3d-scene"\)/);
+  for (const [name, source] of [["box-designer.tsx", designer], ["box-3d-mount.ts", mount3d], ["box-3d-page.tsx", read("src/components/box-designer/box-3d-page.tsx")]] as const) {
+    assert.doesNotMatch(source, /from "three/, `${name} must not import three.js statically`);
+    assert.doesNotMatch(source, /import (?!type)[^;]*from "\.\/box-3d-scene"/, `${name} must not import the scene statically`);
+  }
 });

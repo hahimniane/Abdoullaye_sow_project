@@ -6,6 +6,16 @@
   ForceType application/json
 </Files>
 
+# The 3D box designer's models (public/box-3d/*.glb, see LICENSES.md there):
+# already compressed and rarely changed: a week of cache. A new model gets a new name.
+<IfModule mod_mime.c>
+  AddType model/gltf-binary .glb
+</IfModule>
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType model/gltf-binary "access plus 7 days"
+</IfModule>
+
 <IfModule mod_rewrite.c>
   RewriteEngine On
   # Tracking links printed on package labels and sent in WhatsApp updates:

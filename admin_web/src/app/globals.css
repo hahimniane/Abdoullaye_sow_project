@@ -17239,7 +17239,7 @@ button.pkq-card:hover { border-color: var(--brand); }
   border: 1px solid var(--rule);
   border-radius: 12px;
   cursor: grab;
-  height: clamp(300px, 84vw, 380px);
+  height: clamp(340px, 100vw, 440px);
   overflow: hidden;
   perspective: 1100px;
   position: relative;
@@ -17318,6 +17318,7 @@ button.pkq-card:hover { border-color: var(--brand); }
   text-align: center;
   top: 10px;
   transform: translateX(-50%);
+  width: max-content;
   z-index: 2;
 }
 .bd-badge.quote { background: #92400e; }
@@ -17329,6 +17330,38 @@ button.pkq-card:hover { border-color: var(--brand); }
 .bd-key.sneaker { background: #f4f6f8; border: 1px solid rgba(15, 23, 42, 0.45); }
 .bd-key.person { background: rgba(51, 65, 85, 0.62); }
 .bd-key.grid { background-image: linear-gradient(to right, rgba(11,59,56,.45) 1px, transparent 1px), linear-gradient(to bottom, rgba(11,59,56,.45) 1px, transparent 1px); background-size: 5px 5px; border: 1px solid rgba(11,59,56,.35); }
+.bd-key.ruler { background: linear-gradient(to right, #334155 0 2px, transparent 2px), repeating-linear-gradient(to bottom, #0f766e 0 2px, transparent 2px 5px); background-position: 6px 0, 8px 0; background-repeat: no-repeat; background-size: 2px 100%, 6px 100%; border: 0; width: 14px; }
+.bd-credit { color: var(--muted); font-size: 10.5px; margin: 0; opacity: 0.8; }
+/* The three.js scene (components/box-designer/box-3d-scene.ts): its canvas and its upright, readable labels. */
+.bd-gl, .b3-scene { inset: 0; pointer-events: none; position: absolute; }
+.bd-gl { visibility: hidden; }
+/* The badge sits over the top and the hint under the floor: the 3D scene is framed between them. */
+.bd-gl { bottom: 20px; top: 34px; }
+.bd-stage[data-mode="3d"] .bd-gl { visibility: visible; }
+.bd-stage[data-mode="3d"] .bd-origin { display: none; }
+.b3-canvas { display: block; height: 100%; width: 100%; }
+.b3-labels { inset: 0; overflow: hidden; pointer-events: none; position: absolute; }
+.b3-label {
+  background: rgba(255, 255, 255, 0.86);
+  border-radius: 6px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18);
+  color: #0f172a;
+  font: 600 11px/1.1 system-ui, -apple-system, "Segoe UI", sans-serif;
+  left: 0;
+  padding: 2px 5px;
+  position: absolute;
+  top: 0;
+  white-space: nowrap;
+  will-change: transform;
+}
+.b3-label.tick { color: #0f766e; font-size: 10.5px; }
+.b3-label.top { background: #fff7ed; border: 1px solid #fdba74; color: #9a3412; font-size: 12px; font-weight: 800; }
+.b3-label.top[data-edge="top"]::before { content: "\2191\00a0"; }
+.b3-label.box { background: #fff7ed; border: 1px solid #fdba74; color: #9a3412; font-size: 12px; font-weight: 800; }
+/* /box-3d/ : the scene alone, full viewport, white (the mobile app's web view). */
+.b3-page { background: #fff; cursor: grab; inset: 0; outline: none; overflow: hidden; position: fixed; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.b3-page:active { cursor: grabbing; }
+.b3-credit { bottom: 3px; color: #94a3b8; font: 400 9px/1.2 system-ui, -apple-system, sans-serif; left: 6px; margin: 0; pointer-events: none; position: absolute; right: 6px; text-align: right; }
 .bd-dims { font-weight: 700; margin: 0; }
 .bd-controls { display: grid; gap: 10px; }
 .bd-control { align-items: center; display: grid; gap: 8px 12px; grid-template-columns: 64px minmax(0, 1fr) 92px; }

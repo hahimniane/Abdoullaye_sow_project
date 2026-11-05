@@ -73,6 +73,10 @@ test("the charts are inline SVG, with no charting dependency added", () => {
     "qrcode-generator",
     "react",
     "react-dom",
+    // The 3D box designer (components/box-designer/box-3d-scene.ts), pinned
+    // exactly and only ever loaded with import() on first use, never from the
+    // main bundle (box-pay-now-console-contract.test.ts holds that line).
+    "three",
   ], "no charting library may be added");
 });
 

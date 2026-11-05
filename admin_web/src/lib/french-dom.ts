@@ -7964,6 +7964,7 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Sneaker (12 in)": "Basket (12 po)",
   "Person (5 ft 6 in)": "Personne (5 pi 6 po)",
   "Grid squares are 1 ft": "Chaque carré de la grille mesure 1 pi",
+  "Ruler: a mark every foot": "Règle : un repère par pied",
   "Length": "Longueur",
   "Width": "Largeur",
   "Height": "Hauteur",

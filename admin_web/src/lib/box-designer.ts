@@ -244,3 +244,189 @@ export function sceneLabel(dims: Dims, lang: "en" | "fr"): string {
     ? `Carton de ${dimsText(dims, "fr")}, avec une basket et une personne de 1,68 m pour l’échelle`
     : `Box ${dimsText(dims, "en")}, with a sneaker and a 5 ft 6 in person for scale`;
 }
+
+// ---------------------------------------------------------------------------
+// The 3D scene (three.js): where the pole stands, how the camera frames the
+// scene, and what the labels say. Pure like everything above; the scene itself
+// (`components/box-designer/box-3d-scene.ts`) only turns these numbers into
+// meshes and DOM labels. Units are still inches, +y is up in the 3D scene.
+// ---------------------------------------------------------------------------
+
+export type LabelLang = "en" | "fr";
+
+/** The vertical field of view of the 3D camera, in degrees. */
+export const FOV_DEG = 18;
+/** Room kept around everything (the labels and the pole's cap need it). */
+export const FRAME_MARGIN = 1.06;
+/** A small box keeps at least this share of the frame's height: the frame tightens (and may cut the person's head) until it does. */
+export const BOX_SHARE_MIN = 0.17;
+/** A frame within this share of the full scene is not worth cutting the person's head for: it stays full. */
+export const NEAR_FULL = 0.9;
+/** But never shows less than this share of the full scene: the pole and most of the person stay in view. */
+export const MIN_SHOWN = 0.64;
+/** The pole's cap and the room the top label needs above the person. */
+export const POLE_CAP_IN = 9;
+
+export type SceneLayout = Layout & {
+  /** The measuring pole, standing beside the person on the side away from the box. */
+  pole: Spot;
+  /** The way the person faces: toward the box, degrees about the vertical axis (0 = facing +z). */
+  personYaw: number;
+};
+
+/** Where everything stands in the 3D scene. Once per dimension change. */
+export function sceneLayoutOf(dims: Dims): SceneLayout {
+  const base = layoutOf(dims);
+  const pole: Spot = { x: base.person.x - (PERSON_IN.w / 2 + 7), z: base.person.z };
+  const poleReach = Math.hypot(pole.x, pole.z) + 2;
+  const dx = -base.person.x;
+  const dz = -base.person.z;
+  return {
+    ...base,
+    pole,
+    radius: round(Math.max(base.radius, poleReach), 2),
+    personYaw: round((Math.atan2(dx, dz) * 180) / Math.PI, 1),
+  };
+}
+
+/** The pole's ticks: one every foot, from 1 ft up to the last whole foot under the person's height. */
+export function poleTicks(heightIn: number = PERSON_IN.h): { inches: number; feet: number }[] {
+  const ticks: { inches: number; feet: number }[] = [];
+  for (let feet = 1; feet * FOOT_IN < heightIn; feet += 1) ticks.push({ inches: feet * FOOT_IN, feet });
+  return ticks;
+}
+
+/** "5 ft 6 in" / "5 pi 6 po"; a whole number of feet drops the inches ("5 ft"). */
+export function feetInchesText(inches: number, lang: LabelLang = "en"): string {
+  const whole = Math.floor(inches / FOOT_IN);
+  const rest = round(inches - whole * FOOT_IN, 1);
+  const ft = lang === "fr" ? "pi" : "ft";
+  const inch = lang === "fr" ? "po" : "in";
+  if (whole === 0) return `${dimText(rest)} ${inch}`;
+  return rest === 0 ? `${whole} ${ft}` : `${whole} ${ft} ${dimText(rest)} ${inch}`;
+}
+
+/** "1.68 m" / "1,68 m" (the French decimal comma). */
+export function metersText(inches: number, lang: LabelLang = "en"): string {
+  const text = (Math.round(inches * 2.54) / 100).toFixed(2);
+  return `${lang === "fr" ? text.replace(".", ",") : text} m`;
+}
+
+/** The label at the top of the pole: "5 ft 6 in · 1.68 m" / "5 pi 6 po · 1,68 m". */
+export function personLabel(lang: LabelLang = "en"): string {
+  return `${feetInchesText(PERSON_IN.h, lang)} · ${metersText(PERSON_IN.h, lang)}`;
+}
+
+/** The box's height at the end of the dashed line: "14 in" / "14 po". */
+export function boxHeightLabel(height: number, lang: LabelLang = "en"): string {
+  return `${dimText(height)} ${lang === "fr" ? "po" : "in"}`;
+}
+
+/** A tick's label: "1 ft" / "1 pi". */
+export function tickLabel(feet: number, lang: LabelLang = "en"): string {
+  return `${feet} ${lang === "fr" ? "pi" : "ft"}`;
+}
+
+export type Frame = {
+  /** Inches of height the camera sees at the target's distance. */
+  viewHeight: number;
+  /** The height the camera looks at. */
+  targetY: number;
+  /** True when the frame was tightened for a small box and the person's head is above the frame. */
+  cropped: boolean;
+  /** The box's longest side as a share of the frame's height. */
+  boxShare: number;
+};
+
+/**
+ * How the camera frames the scene (looking down at the default tilt; the tilt
+ * the person drags to moves the camera around this target, the zoom stays).
+ * Everything fits, sideways too, with room for the labels; a small box tightens
+ * the frame until it takes `BOX_SHARE_MIN` of the height (never past `MIN_SHOWN`
+ * of the full scene), so a shoebox next to a 5 ft 6 in person is still easy to see.
+ */
+export function frameOf(layout: Pick<SceneLayout, "radius" | "height" | "box">, aspect: number): Frame {
+  const elevation = (-DEFAULT_TILT_DEG * Math.PI) / 180;
+  const safeAspect = Number.isFinite(aspect) && aspect > 0.2 ? aspect : 1;
+  const tallest = layout.height + POLE_CAP_IN;
+  const extent = tallest * Math.cos(elevation) + 2 * layout.radius * Math.sin(elevation);
+  const full = extent * FRAME_MARGIN;
+  const span = Math.max(layout.box.l, layout.box.w, layout.box.h);
+  const tight = Math.max(full * MIN_SHOWN, span / BOX_SHARE_MIN);
+  const wanted = tight >= full * NEAR_FULL ? full : tight;
+  // Never crop sideways: the spin sweeps a circle of the scene's radius.
+  const viewHeight = round(Math.max(wanted, (2 * layout.radius * FRAME_MARGIN) / safeAspect), 2);
+  const cropped = viewHeight < full - 0.5;
+  const pad = cropped ? viewHeight * 0.05 : (viewHeight - extent) / 2;
+  const bottom = -layout.radius * Math.sin(elevation) - pad;
+  const targetY = round((bottom + viewHeight / 2) / Math.cos(elevation), 2);
+  return { viewHeight, targetY, cropped, boxShare: round(span / viewHeight, 3) };
+}
+
+/** How far the camera stands from its target to see `viewHeight` inches of height. */
+export function cameraDistance(viewHeight: number, fovDeg: number = FOV_DEG): number {
+  return round(viewHeight / 2 / Math.tan((fovDeg * Math.PI) / 360), 2);
+}
+
+/**
+ * Keeps a label inside the stage: its anchor (x, y in pixels, the label's
+ * middle) is pulled in by half its size plus `pad`. `edge` says which side it
+ * was pushed off, so a label above the frame can show an arrow.
+ */
+export function clampLabel(
+  anchor: { x: number; y: number },
+  size: { w: number; h: number },
+  stage: { w: number; h: number },
+  pad = 4,
+): { x: number; y: number; edge: "top" | "bottom" | null } {
+  const minX = size.w / 2 + pad;
+  const maxX = Math.max(minX, stage.w - size.w / 2 - pad);
+  const minY = size.h / 2 + pad;
+  const maxY = Math.max(minY, stage.h - size.h / 2 - pad);
+  const x = Math.min(maxX, Math.max(minX, anchor.x));
+  const y = Math.min(maxY, Math.max(minY, anchor.y));
+  const edge = anchor.y < minY ? "top" : anchor.y > maxY ? "bottom" : null;
+  return { x: round(x, 1), y: round(y, 1), edge };
+}
+
+/**
+ * The standalone page's query (`/box-3d/?l=20&w=16&h=14&lang=en`): inches as
+ * typed (a French comma is fine) and the language. Anything missing or invalid
+ * falls back to the default box, so a bad link still shows a box.
+ */
+export function parseBox3dQuery(search: string): { dims: Dims; lang: LabelLang } {
+  const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  const dims = readDims({ l: params.get("l"), w: params.get("w"), h: params.get("h") }) ?? { ...DEFAULT_DIMS };
+  const lang = String(params.get("lang") ?? "").trim().toLowerCase() === "fr" ? "fr" : "en";
+  return { dims, lang };
+}
+
+/** What the page's `window.laawolBox3d.setDims` was given (an object or loose text), or null when unusable. */
+export function readSetDims(raw: unknown): Dims | null {
+  if (!raw || typeof raw !== "object") return null;
+  const row = raw as Record<string, unknown>;
+  return readDims({ l: row.l, w: row.w, h: row.h });
+}
+
+/** The pole is the person's height, or a little over the box when the box is taller than the person. */
+export function poleHeightOf(dims: Dims): number {
+  return Math.max(PERSON_IN.h, dims.h + 4);
+}
+
+/** The tape stripe's width in inches (the CSS box's `tapeWidthPx`, before the zoom). */
+export function tapeWidthIn(dims: Dims): number {
+  return round(Math.min(2, dims.w / 3), 2);
+}
+
+export const DASH_IN = 1.6;
+export const DASH_GAP_IN = 1.2;
+
+/** The dashes of the line at the box's height: where each starts and how long it is, along a line of `lengthIn`. */
+export function dashSpans(lengthIn: number): { from: number; length: number }[] {
+  const spans: { from: number; length: number }[] = [];
+  if (!(lengthIn > 0)) return spans;
+  for (let at = 0; at < lengthIn - 0.05; at += DASH_IN + DASH_GAP_IN) {
+    spans.push({ from: round(at, 2), length: round(Math.min(DASH_IN, lengthIn - at), 2) });
+  }
+  return spans;
+}
