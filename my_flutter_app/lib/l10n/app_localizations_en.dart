@@ -19017,6 +19017,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'A sneaker (12 in) and a person (5 ft 6 in) show the scale. Each floor square is 1 ft.';
 
   @override
+  String get boxDesignerModelCredit =>
+      '3D models: “Man” by Quaternius (CC0); “Sneakers” by Poly by Google (CC BY 3.0)';
+
+  @override
   String boxDesignerSemantics(String dims) {
     return '3D box, $dims. Drag to spin it.';
   }

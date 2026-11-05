@@ -32084,6 +32084,12 @@ abstract class AppLocalizations {
   /// **'A sneaker (12 in) and a person (5 ft 6 in) show the scale. Each floor square is 1 ft.'**
   String get boxDesignerScaleNote;
 
+  /// No description provided for @boxDesignerModelCredit.
+  ///
+  /// In en, this message translates to:
+  /// **'3D models: “Man” by Quaternius (CC0); “Sneakers” by Poly by Google (CC BY 3.0)'**
+  String get boxDesignerModelCredit;
+
   /// Screen-reader label of the 3D box picture.
   ///
   /// In en, this message translates to:

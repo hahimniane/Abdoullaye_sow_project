@@ -317,62 +317,94 @@ class _BoxDesignerState extends State<BoxDesigner> {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    TweenAnimationBuilder<SceneFraming>(
-                      tween: SceneFramingTween(end: framing),
-                      duration: reduced
-                          ? Duration.zero
-                          : const Duration(milliseconds: 260),
-                      curve: AppMotion.standard,
-                      builder: (context, animated, _) => RepaintBoundary(
-                        child: CustomPaint(
-                          painter: BoxScenePainter(
-                            scene: scene,
-                            framing: animated,
-                            spin: _spin,
-                          ),
-                        ),
-                      ),
-                    ),
+                    // The page sits UNDER the painted scene while it loads.
+                    // A widget at opacity 0 is not painted at all, so a
+                    // hidden platform view never joins the window and the
+                    // page can never draw its first frame (it never says
+                    // "ready"). The painted scene covers it instead and
+                    // fades away once the page is drawn.
                     if (web != null)
                       Positioned.fill(
                         child: ExcludeSemantics(
-                          // The painted scene takes the touches (and the
-                          // spin) until the page is drawn.
                           child: IgnorePointer(
                             ignoring: !pageReady,
-                            child: AnimatedOpacity(
+                            child: KeyedSubtree(
                               key: const Key('box-3d-page'),
-                              opacity: pageReady ? 1 : 0,
-                              duration: reduced
-                                  ? Duration.zero
-                                  : const Duration(milliseconds: 220),
-                              curve: AppMotion.standard,
                               child: web.build(context),
                             ),
                           ),
                         ),
                       ),
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        // The painted scene takes the touches (and the
+                        // spin) until the page is drawn.
+                        ignoring: pageReady,
+                        child: AnimatedOpacity(
+                          key: const Key('box-painted-scene'),
+                          opacity: pageReady ? 0 : 1,
+                          duration: reduced
+                              ? Duration.zero
+                              : const Duration(milliseconds: 220),
+                          curve: AppMotion.standard,
+                          child: ColoredBox(
+                            color: Colors.white,
+                            child: TweenAnimationBuilder<SceneFraming>(
+                              tween: SceneFramingTween(end: framing),
+                              duration: reduced
+                                  ? Duration.zero
+                                  : const Duration(milliseconds: 260),
+                              curve: AppMotion.standard,
+                              builder: (context, animated, _) =>
+                                  RepaintBoundary(
+                                    child: CustomPaint(
+                                      painter: BoxScenePainter(
+                                        scene: scene,
+                                        framing: animated,
+                                        spin: _spin,
+                                      ),
+                                    ),
+                                  ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                     Positioned(
                       left: AppSpacing.sm,
                       bottom: AppSpacing.sm,
                       child: IgnorePointer(
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.threed_rotation,
-                              size: 16,
-                              color: AppColors.muted,
+                        // A white pill: the hint stays readable over the
+                        // floor, the pole or the person.
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.88),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
                             ),
-                            const SizedBox(width: 4),
-                            Text(
-                              l10n.boxDesignerDrag,
-                              style: const TextStyle(
-                                fontSize: 11.5,
-                                color: AppColors.muted,
-                              ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.threed_rotation,
+                                  size: 16,
+                                  color: AppColors.muted,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  l10n.boxDesignerDrag,
+                                  style: const TextStyle(
+                                    fontSize: 11.5,
+                                    color: AppColors.muted,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
+                          ),
                         ),
                       ),
                     ),
@@ -388,6 +420,17 @@ class _BoxDesignerState extends State<BoxDesigner> {
           key: const Key('box-scale-note'),
           style: const TextStyle(fontSize: 11.5, color: AppColors.muted),
         ),
+        // The 3D page leaves its credit out (credit=0) so it never covers the
+        // labels; the models' licences still need it shown.
+        if (pageReady)
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Text(
+              l10n.boxDesignerModelCredit,
+              key: const Key('box-model-credit'),
+              style: const TextStyle(fontSize: 9.5, color: AppColors.muted),
+            ),
+          ),
         const SizedBox(height: AppSpacing.sm),
         if (editable)
           ..._controls(l10n)

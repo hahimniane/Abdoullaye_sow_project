@@ -49,10 +49,13 @@ import {
   dashSpans,
   frameOf,
   gridOf,
+  labelsCollide,
   personLabel,
   poleHeightOf,
   poleTicks,
   sceneLayoutOf,
+  sideAwayFrom,
+  stepBelow,
   tapeWidthIn,
   tickLabel,
   type Angles,
@@ -105,7 +108,8 @@ const RAD = Math.PI / 180;
 type Label = {
   el: HTMLDivElement;
   anchor: Vector3;
-  place: "right" | "left" | "above" | "center";
+  /** "away": beside the pole, on the side away from the person (worked out every frame). */
+  place: "away" | "above" | "center";
   size: { w: number; h: number };
   kind: "tick" | "top" | "box";
 };
@@ -411,6 +415,9 @@ export async function createBox3dScene(options: Box3dSceneOptions): Promise<Box3
   let sized = false;
 
   const worldPoint = new Vector3();
+  // Mid-height points on the pole and the person: which side of the pole the labels go on.
+  const poleMid = new Vector3();
+  const personMid = new Vector3();
 
   function clearGroup(group: Group) {
     for (const child of [...group.children]) {
@@ -562,9 +569,11 @@ export async function createBox3dScene(options: Box3dSceneOptions): Promise<Box3
     labels = [];
     const poleH = poleHeightOf(dims);
     const { pole } = layout;
-    for (const tick of poleTicks(poleH)) addLabel("tick", new Vector3(pole.x, tick.inches, pole.z), "right", tick.feet);
+    for (const tick of poleTicks(poleH)) addLabel("tick", new Vector3(pole.x, tick.inches, pole.z), "away", tick.feet);
     addLabel("top", new Vector3(pole.x, PERSON_IN.h, pole.z), "above");
-    addLabel("box", new Vector3(pole.x, dims.h, pole.z), "left");
+    addLabel("box", new Vector3(pole.x, dims.h, pole.z), "away");
+    poleMid.set(pole.x, PERSON_IN.h * 0.6, pole.z);
+    personMid.set(layout.person.x, PERSON_IN.h * 0.6, layout.person.z);
     writeLabelText();
   }
 
@@ -574,7 +583,17 @@ export async function createBox3dScene(options: Box3dSceneOptions): Promise<Box3
     }
   }
 
+  function screenX(point: Vector3): number {
+    worldPoint.copy(point).applyMatrix4(world.matrixWorld).project(camera);
+    return (worldPoint.x * 0.5 + 0.5) * size.w;
+  }
+
   function placeLabels() {
+    const side = sideAwayFrom(screenX(poleMid), screenX(personMid));
+    let boxY = Number.NaN;
+    let boxH = 0;
+    let topBox: { x: number; y: number; w: number; h: number } | null = null;
+    const tickSpots: { label: Label; y: number }[] = [];
     for (const label of labels) {
       // The observer above keeps sizes current; the very first frame measures by hand so no label waits for it.
       if (!label.size.w) label.size = { w: label.el.offsetWidth, h: label.el.offsetHeight };
@@ -586,13 +605,25 @@ export async function createBox3dScene(options: Box3dSceneOptions): Promise<Box3
       worldPoint.copy(label.anchor).applyMatrix4(world.matrixWorld).project(camera);
       let x = (worldPoint.x * 0.5 + 0.5) * size.w;
       let y = (-worldPoint.y * 0.5 + 0.5) * size.h;
-      if (label.place === "right") x += 9 + label.size.w / 2;
-      else if (label.place === "left") x -= 9 + label.size.w / 2;
+      if (label.place === "away") x += (side === "right" ? 1 : -1) * (9 + label.size.w / 2);
       else if (label.place === "above") y -= 12 + label.size.h / 2;
       else y -= 8 + label.size.h / 2;
-      const spot = clampLabel({ x, y }, label.size, size);
+      let spot = clampLabel({ x, y }, label.size, size);
+      if (label.kind === "box" && topBox) {
+        const below = stepBelow(topBox, { x: spot.x, y: spot.y, ...label.size });
+        if (below !== spot.y) spot = clampLabel({ x: spot.x, y: below }, label.size, size);
+      }
       label.el.dataset.edge = spot.edge ?? "";
       label.el.style.transform = `translate(${Math.round(spot.x - label.size.w / 2)}px, ${Math.round(spot.y - label.size.h / 2)}px)`;
+      if (label.kind === "top") topBox = { x: spot.x, y: spot.y, ...label.size };
+      if (label.kind === "box") {
+        boxY = spot.y;
+        boxH = label.size.h;
+      } else if (label.kind === "tick") tickSpots.push({ label, y: spot.y });
+    }
+    // The box's height wins: a foot mark right next to it steps aside.
+    for (const { label, y } of tickSpots) {
+      if (!Number.isNaN(boxY) && labelsCollide(y, label.size.h, boxY, boxH)) label.el.style.visibility = "hidden";
     }
   }
 

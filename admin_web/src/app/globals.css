@@ -17361,7 +17361,8 @@ button.pkq-card:hover { border-color: var(--brand); }
 /* /box-3d/ : the scene alone, full viewport, white (the mobile app's web view). */
 .b3-page { background: #fff; cursor: grab; inset: 0; outline: none; overflow: hidden; position: fixed; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 .b3-page:active { cursor: grabbing; }
-.b3-credit { bottom: 3px; color: #94a3b8; font: 400 9px/1.2 system-ui, -apple-system, sans-serif; left: 6px; margin: 0; pointer-events: none; position: absolute; right: 6px; text-align: right; }
+.b3-credit { bottom: 3px; color: #94a3b8; font: 400 9px/1.2 system-ui, -apple-system, sans-serif; margin: 0; max-width: 56%; pointer-events: none; position: absolute; right: 6px; text-align: right; }
+/* The app lays its own "Drag to spin" over the bottom left: the credit keeps to the right. */
 .bd-dims { font-weight: 700; margin: 0; }
 .bd-controls { display: grid; gap: 10px; }
 .bd-control { align-items: center; display: grid; gap: 8px 12px; grid-template-columns: 64px minmax(0, 1fr) 92px; }

@@ -75,9 +75,29 @@ class _HostState extends State<_Host> {
   );
 }
 
-double _opacity(WidgetTester tester) => tester
-    .widget<AnimatedOpacity>(find.byKey(const Key('box-3d-page')))
-    .opacity;
+/// How much of the page shows: the painted scene covers it until ready.
+double _opacity(WidgetTester tester) =>
+    1 -
+    tester
+        .widget<AnimatedOpacity>(find.byKey(const Key('box-painted-scene')))
+        .opacity;
+
+/// A platform view under opacity 0 is never painted, so it never joins the
+/// window and the page can never draw (the TestFlight 1.0.25 bug).
+bool _pageUnderZeroOpacity() {
+  final page = find.byKey(const Key('fake-web'));
+  final hidden = find.ancestor(
+    of: page,
+    matching: find.byWidgetPredicate(
+      (w) =>
+          (w is Opacity && w.opacity == 0) ||
+          (w is AnimatedOpacity && w.opacity == 0) ||
+          (w is Visibility && !w.visible) ||
+          (w is Offstage && w.offstage),
+    ),
+  );
+  return hidden.evaluate().isNotEmpty;
+}
 
 bool _pageInTree() => find.byKey(const Key('fake-web')).evaluate().isNotEmpty;
 
@@ -107,9 +127,11 @@ void main() {
       'w': '10',
       'h': '8',
       'lang': 'en',
+      'credit': '0',
     });
     expect(_painterInTree(), isTrue);
     expect(_opacity(tester), 0);
+    expect(find.byKey(const Key('box-model-credit')), findsNothing);
     // The picture can still be spun while it loads.
     await tester.drag(find.byKey(const Key('box-scene')), const Offset(60, 10));
     await tester.pump();
@@ -131,6 +153,8 @@ void main() {
       find.bySemanticsLabel(RegExp('next to a person 5 ft 6 in tall')),
       findsOneWidget,
     );
+    // The page leaves its credit out (credit=0): the app shows it under the scene.
+    expect(find.byKey(const Key('box-model-credit')), findsOneWidget);
     // The timeout no longer matters.
     await tester.pump(box3dReadyTimeout * 2);
     expect(_pageInTree(), isTrue);
@@ -271,4 +295,18 @@ void main() {
     expect(made.single.disposed, isTrue);
     // No pending timer is left (the test fails on one).
   });
+
+  testWidgets(
+    'the loading page is painted under the scene, never hidden by opacity 0',
+    (tester) async {
+      await _pump(tester, (_) => _Host(factory: factory()));
+      expect(_pageInTree(), isTrue);
+      expect(_pageUnderZeroOpacity(), isFalse);
+      expect(_opacity(tester), 0);
+      made.single.say('ready');
+      await tester.pumpAndSettle();
+      expect(_opacity(tester), 1);
+      expect(_pageUnderZeroOpacity(), isFalse);
+    },
+  );
 }

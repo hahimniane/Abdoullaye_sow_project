@@ -19315,6 +19315,10 @@ class AppLocalizationsFr extends AppLocalizations {
       'Une basket (12 po) et une personne (5 pi 6 po) donnent l’échelle. Chaque carré du sol mesure 1 pi.';
 
   @override
+  String get boxDesignerModelCredit =>
+      'Modèles 3D : « Man » par Quaternius (CC0) ; « Sneakers » par Poly by Google (CC BY 3.0)';
+
+  @override
   String boxDesignerSemantics(String dims) {
     return 'Carton en 3D, $dims. Faites glisser pour le faire tourner.';
   }

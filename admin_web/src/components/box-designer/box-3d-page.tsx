@@ -13,6 +13,7 @@ import { createSpinController } from "./box-spin-controller";
  * viewport, white, no login. Contract:
  *
  *   /box-3d/?l=20&w=16&h=14&lang=en     inches; lang en|fr; anything invalid = the default box
+ *   &credit=0                            the app shows the models' credit itself, under the scene
  *   window.laawolBox3d.setDims({l,w,h})  change the box without reloading
  *   window.laawolBox3d.setLang("en"|"fr")
  *   window.Box3dChannel?.postMessage("ready")   first frame with both models drawn
@@ -43,6 +44,7 @@ export function Box3dPage() {
   const sceneRef = useRef<HTMLDivElement | null>(null);
   const [dims, setDimsState] = useState<Dims>({ ...DEFAULT_DIMS });
   const [lang, setLangState] = useState<LabelLang>("en");
+  const [showCredit, setShowCredit] = useState(true);
 
   useEffect(() => {
     const stage = stageRef.current;
@@ -56,6 +58,7 @@ export function Box3dPage() {
     let currentLang = first.lang;
     setDimsState(currentDims);
     setLangState(currentLang);
+    setShowCredit(first.credit);
     document.documentElement.lang = currentLang;
 
     const handle = mountBox3d({
@@ -102,9 +105,7 @@ export function Box3dPage() {
       tabIndex={0}
     >
       <div className="b3-scene" ref={sceneRef} />
-      <p className="b3-credit">
-        {modelCredit(lang)}
-      </p>
+      {showCredit ? <p className="b3-credit">{modelCredit(lang)}</p> : null}
     </div>
   );
 }

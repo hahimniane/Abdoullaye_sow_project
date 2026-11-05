@@ -38,7 +38,7 @@ const double boxTapeWidthIn = 2;
 const double boxDefaultYaw = -0.62;
 const double boxDefaultTilt = 0.42;
 const double boxMinTilt = 0.05;
-const double boxMaxTilt = 1.3;
+const double boxMaxTilt = 1.55;
 
 /// A number rounded to a tenth of an inch.
 double roundTenth(double value) => (value * 10).round() / 10;

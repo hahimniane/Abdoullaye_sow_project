@@ -47,6 +47,8 @@ Uri box3dPageUri({
       'w': inchesText(d.w),
       'h': inchesText(d.h),
       'lang': box3dLang(lang),
+      // The app shows the models' credit under the scene (box-model-credit).
+      'credit': '0',
     },
   );
 }

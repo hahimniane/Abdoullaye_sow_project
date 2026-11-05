@@ -10962,6 +10962,7 @@
   "boxDesignerInchesUnit": "po",
   "boxDesignerDrag": "Faites glisser pour tourner",
   "boxDesignerScaleNote": "Une basket (12 po) et une personne (5 pi 6 po) donnent l’échelle. Chaque carré du sol mesure 1 pi.",
+  "boxDesignerModelCredit": "Modèles 3D : « Man » par Quaternius (CC0) ; « Sneakers » par Poly by Google (CC BY 3.0)",
   "boxDesignerSemantics": "Carton en 3D, {dims}. Faites glisser pour le faire tourner.",
   "boxDesignerSemanticsScene": "Vue 3D de votre carton, {dims}, à côté d’une personne de 5 pi 6 po. Faites glisser pour le faire tourner.",
   "boxDesignerRange": "Entrez de 1 à 120 pouces.",

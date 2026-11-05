@@ -31,7 +31,7 @@ export const PERSON_IN = Object.freeze({ h: 66, w: 20 });
 export const FOOT_IN = 12;
 
 /** Rotation about the vertical axis is free; the tilt (rotateX) stays above the floor. */
-export const TILT_MIN_DEG = -72;
+export const TILT_MIN_DEG = -89;
 export const TILT_MAX_DEG = -6;
 export const DEFAULT_SPIN_DEG = -32;
 export const DEFAULT_TILT_DEG = -22;
@@ -296,6 +296,35 @@ export function poleTicks(heightIn: number = PERSON_IN.h): { inches: number; fee
   return ticks;
 }
 
+/**
+ * Which side of the pole its labels go on, on screen: the side away from the person, so "3 ft" never
+ * sits on their body. The person stands beside the pole, so whichever way the scene is spun, one
+ * side is clear.
+ */
+export function sideAwayFrom(poleScreenX: number, personScreenX: number): "left" | "right" {
+  return personScreenX >= poleScreenX ? "left" : "right";
+}
+
+/** Two labels on the same side collide when their boxes come within `gap` px of each other vertically. */
+export function labelsCollide(aY: number, aH: number, bY: number, bH: number, gap = 2): boolean {
+  return Math.abs(aY - bY) < (aH + bH) / 2 + gap;
+}
+
+type LabelBox = { x: number; y: number; w: number; h: number };
+
+/** Two label boxes (centre x/y, width, height) that overlap or come within `gap` px. */
+export function boxesOverlap(a: LabelBox, b: LabelBox, gap = 2): boolean {
+  return Math.abs(a.x - b.x) < (a.w + b.w) / 2 + gap && Math.abs(a.y - b.y) < (a.h + b.h) / 2 + gap;
+}
+
+/**
+ * Seen from above the whole pole shrinks to a point, so the box's height lands on the person's height
+ * label: it steps down to sit just under it. Answers the box label's centre y.
+ */
+export function stepBelow(top: LabelBox, box: LabelBox, gap = 4): number {
+  return boxesOverlap(top, box) ? top.y + (top.h + box.h) / 2 + gap : box.y;
+}
+
 /** "5 ft 6 in" / "5 pi 6 po"; a whole number of feet drops the inches ("5 ft"). */
 export function feetInchesText(inches: number, lang: LabelLang = "en"): string {
   const whole = Math.floor(inches / FOOT_IN);
@@ -394,11 +423,13 @@ export function clampLabel(
  * typed (a French comma is fine) and the language. Anything missing or invalid
  * falls back to the default box, so a bad link still shows a box.
  */
-export function parseBox3dQuery(search: string): { dims: Dims; lang: LabelLang } {
+export function parseBox3dQuery(search: string): { dims: Dims; lang: LabelLang; credit: boolean } {
   const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
   const dims = readDims({ l: params.get("l"), w: params.get("w"), h: params.get("h") }) ?? { ...DEFAULT_DIMS };
   const lang = String(params.get("lang") ?? "").trim().toLowerCase() === "fr" ? "fr" : "en";
-  return { dims, lang };
+  // The app shows the models' credit under the scene itself (credit=0), where it never covers the labels.
+  const credit = params.get("credit") !== "0";
+  return { dims, lang, credit };
 }
 
 /** What the page's `window.laawolBox3d.setDims` was given (an object or loose text), or null when unusable. */

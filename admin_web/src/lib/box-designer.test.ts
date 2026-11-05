@@ -12,6 +12,9 @@ import {
   boxHeightLabel,
   cameraDistance,
   clampLabel,
+  labelsCollide,
+  sideAwayFrom,
+  stepBelow,
   dashSpans,
   feetInchesText,
   frameOf,
@@ -299,15 +302,17 @@ test("a label is pulled back inside the stage, and says which edge it hit", () =
 });
 
 test("the standalone page reads its query, and a bad link still shows the default box", () => {
-  assert.deepEqual(parseBox3dQuery("?l=30&w=24&h=24&lang=fr"), { dims: { l: 30, w: 24, h: 24 }, lang: "fr" });
-  assert.deepEqual(parseBox3dQuery("l=20&w=16,5&h=14.5&lang=en"), { dims: { l: 20, w: 16.5, h: 14.5 }, lang: "en" });
-  assert.deepEqual(parseBox3dQuery("?l=20&w=16&h=14"), { dims: { l: 20, w: 16, h: 14 }, lang: "en" }, "no lang = English");
+  assert.deepEqual(parseBox3dQuery("?l=30&w=24&h=24&lang=fr"), { dims: { l: 30, w: 24, h: 24 }, lang: "fr", credit: true });
+  assert.deepEqual(parseBox3dQuery("l=20&w=16,5&h=14.5&lang=en"), { dims: { l: 20, w: 16.5, h: 14.5 }, lang: "en", credit: true });
+  assert.deepEqual(parseBox3dQuery("?l=20&w=16&h=14"), { dims: { l: 20, w: 16, h: 14 }, lang: "en", credit: true }, "no lang = English");
   assert.deepEqual(parseBox3dQuery("?l=20&w=16&h=14&lang=FR").lang, "fr");
   assert.deepEqual(parseBox3dQuery("?l=20&w=16&h=14&lang=de").lang, "en");
   for (const bad of ["", "?l=20&w=16", "?l=0&w=16&h=14", "?l=20&w=abc&h=14", "?l=500&w=16&h=14", "?l=-3&w=16&h=14&lang=fr"]) {
     assert.deepEqual(parseBox3dQuery(bad).dims, { ...DEFAULT_DIMS }, bad);
   }
   assert.equal(parseBox3dQuery("?l=-3&w=16&h=14&lang=fr").lang, "fr", "a bad size keeps the language");
+  assert.equal(parseBox3dQuery("?l=20&w=16&h=14&credit=0").credit, false, "the app shows the credit itself");
+  assert.equal(parseBox3dQuery("?l=20&w=16&h=14&credit=1").credit, true);
 });
 
 test("window.laawolBox3d.setDims reads an object of inches, nothing else", () => {
@@ -338,4 +343,31 @@ test("the tape is 2 in wide, never more than a third of the width; the scene lab
 test("the 3D model credit and spin hint follow the page language", () => {
   assert.match(modelCredit("en"), /^3D models: "Man" by Quaternius \(CC0\)/);
   assert.match(modelCredit("fr"), /^Modèles 3D : « Man » par Quaternius \(CC0\)/);
+});
+
+test("pole labels go on the side away from the person, so a foot mark never sits on their body", () => {
+  assert.equal(sideAwayFrom(100, 140), "left");
+  assert.equal(sideAwayFrom(100, 60), "right");
+  // Spun so the person is right in front of the pole: either side is clear, it stays put.
+  assert.equal(sideAwayFrom(100, 100), "left");
+});
+
+test("a foot mark that would touch the box-height label is detected", () => {
+  // 30 in sits between 2 ft and 3 ft: ~32 px from each, labels ~16 px tall -> no collision.
+  assert.equal(labelsCollide(200, 16, 232, 18), false);
+  // A 25 in box sits right on the 2 ft mark.
+  assert.equal(labelsCollide(200, 16, 206, 18), true);
+  // Just touching counts (2 px breathing room).
+  assert.equal(labelsCollide(200, 16, 218, 18), true);
+  assert.equal(labelsCollide(200, 16, 220, 18), false);
+});
+
+test("seen from above, the box height label steps under the person's height label", () => {
+  const top = { x: 100, y: 20, w: 120, h: 20 };
+  // From above both land on the same spot: the box label moves just under the top one.
+  assert.equal(stepBelow(top, { x: 90, y: 24, w: 50, h: 20 }), 20 + 20 + 4);
+  // From the side they are far apart: nothing moves.
+  assert.equal(stepBelow(top, { x: 60, y: 140, w: 50, h: 20 }), 140);
+  // Side by side but not touching: nothing moves.
+  assert.equal(stepBelow(top, { x: 260, y: 22, w: 50, h: 20 }), 22);
 });

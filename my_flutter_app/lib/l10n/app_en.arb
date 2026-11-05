@@ -10966,6 +10966,7 @@
   },
   "boxDesignerDrag": "Drag to spin",
   "boxDesignerScaleNote": "A sneaker (12 in) and a person (5 ft 6 in) show the scale. Each floor square is 1 ft.",
+  "boxDesignerModelCredit": "3D models: “Man” by Quaternius (CC0); “Sneakers” by Poly by Google (CC BY 3.0)",
   "boxDesignerSemantics": "3D box, {dims}. Drag to spin it.",
   "@boxDesignerSemantics": {
     "description": "Screen-reader label of the 3D box picture.",
