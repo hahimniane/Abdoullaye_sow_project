@@ -288,6 +288,9 @@ function normalizeDeal(raw) {
   if (parking) {
     if (parking.mode === "perCar") {
       deal.parking = {mode: "perCar", centsEach: unit(parking.centsEach)};
+    } else if (parking.mode === "perCarDay") {
+      // Each day a car is on the lot (owner, 2026-11-05: Keren $0.99/day).
+      deal.parking = {mode: "perCarDay", centsEach: unit(parking.centsEach)};
     } else if (parking.mode === "percent") {
       deal.parking = {mode: "percent", bps: rate(parking.bps)};
     } else {
@@ -480,7 +483,8 @@ function addVersion(versions, version) {
  * Usage cleaned: counts whole and non-negative; what was not read is null.
  *
  * @param {object} raw {barrels, packages, cars, packagePrices,
- *   parkingCars, parkingBilledCents, itemsSold, itemsRevenueCents,
+ *   parkingCars, parkingCarDays, parkingBilledCents, itemsSold,
+ *   itemsRevenueCents,
  *   bankConnected, bankRefreshes, complete}. bankConnected: whether the
  *   business had an active bank link in the month; bankRefreshes: its paid
  *   bank refreshes; itemsRevenueCents: the shop's sales total.
@@ -499,6 +503,8 @@ function normalizeUsage(raw) {
     cars: count(row.cars),
     packagePrices: prices,
     parkingCars: maybe(row.parkingCars),
+    // Days cars spent on the lot in the month, summed over the cars.
+    parkingCarDays: maybe(row.parkingCarDays),
     parkingBilledCents: maybe(row.parkingBilledCents),
     itemsSold: maybe(row.itemsSold),
     // The shop's sales total (voided sales excluded), for a % deal.
@@ -607,6 +613,11 @@ function computeBill({deal, usage, commissionCents = 0}) {
         lines.push({key: "parking", mode: "perCar", quantity: cars,
           centsEach: deal.parking.centsEach,
           cents: cars * deal.parking.centsEach});
+      } else if (deal.parking.mode === "perCarDay") {
+        const days = u.parkingCarDays || 0;
+        lines.push({key: "parking", mode: "perCarDay", quantity: days,
+          cars: u.parkingCars || 0, centsEach: deal.parking.centsEach,
+          cents: days * deal.parking.centsEach});
       } else {
         const billed = u.parkingBilledCents || 0;
         lines.push({key: "parking", mode: "percent",
@@ -684,6 +695,7 @@ const DRIFT_KEYS = Object.freeze([
   ["packagePriceCents", "cents"],
   ["cars", "count"],
   ["parkingCars", "count"],
+  ["parkingCarDays", "count"],
   ["parkingBilledCents", "cents"],
   ["itemsSold", "count"],
   ["itemsRevenueCents", "cents"],
@@ -710,6 +722,7 @@ function driftFigures(usage, commissionCents) {
       prices.reduce((sum, p) => sum + (p || 0), 0) : null,
     cars: u.cars,
     parkingCars: u.parkingCars,
+    parkingCarDays: u.parkingCarDays,
     parkingBilledCents: u.parkingBilledCents,
     itemsSold: u.itemsSold,
     itemsRevenueCents: u.itemsRevenueCents,

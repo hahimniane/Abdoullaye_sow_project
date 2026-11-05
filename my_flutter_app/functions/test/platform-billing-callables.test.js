@@ -274,6 +274,10 @@ describe("Laawol bills", () => {
     assert.equal(mine.altCents, 1000);
     assert.equal(all.totals.altCents, 1000);
     assert.equal(all.totals.nowCents, 9625);
+    // Per car per day: car 1's ten days and car 2's four days in the month.
+    const daily = await call({action: "whatIf", businessId: BIZ, month: PREV,
+      deal: {parking: {mode: "perCarDay", centsEach: 99}}}, FINANCE);
+    assert.equal(daily.alt.amountCents, 14 * 99);
     await assert.rejects(call({action: "whatIf", month: PREV,
       deal: {barrel: {centsEach: -1}}}, FINANCE),
     refusedWith("amount_invalid"));

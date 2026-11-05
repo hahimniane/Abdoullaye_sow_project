@@ -46,6 +46,7 @@ console's preview and the deal editor's hint by
 | Packages received | `volumeMonthly.packages` (fixed mode). In % mode the bill reads the month's lines with the same Volume query and month rule (`volume_rollup.js` `monthLines` + `volume_counts.js` `lineMonthKey`) to see each package's price; the count is then the package pieces found | same |
 | Shipped cars | `volumeMonthly.cars`: car pieces on container lines received in the month | same |
 | Parked cars | `parking_month_statement.js` `parkingMonthSummary(...).carsOnLot`: a car on the lot any day of the month counts once | Parking's own month (UTC calendar days), unchanged |
+| Parked car-days | `parkingMonthSummary(...).bills`, each bill's `days` summed: the same days the parking invoices count (owner, 2026-11-05: Keren at $0.99 a car a day) | same |
 | Parking billed | `parkingMonthSummary(...).billedCents`: cars' days in the month + lot activities dated in the month | same |
 | Items sold | `inventory.js` `summarizeSales(...).itemsSold`: sum of `quantity` over non-voided `inventorySales` created in the month | `createdAt` in the month, America/New_York |
 | Commission taken | `console_summaries.js` `platformEarningsLines` (the `getPlatformEarnings` lines): `feeCents` of lines in state `earned` for the business whose date is in the month | America/New_York |
@@ -73,7 +74,8 @@ deal = {
   package:    {mode: "fixed", centsEach}
             | {mode: "percent", bps, minCents} | null   // per package piece
   shippedCar: {centsEach} | null                        // per shipped car
-  parking:    {mode: "perCar", centsEach}
+  parking:    {mode: "perCar", centsEach}                // once per car in the month
+            | {mode: "perCarDay", centsEach}             // per day a car is on the lot
             | {mode: "percent", bps} | null             // parked cars
   itemSold:   {centsEach} | null                        // shops, per item
   bankConnection: {centsEach} | null                    // per month with an active bank link

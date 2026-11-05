@@ -81,8 +81,8 @@ test("bank charge keys, drift figures and deal needs follow the server", () => {
   assert.deepEqual([...billing.CHARGE_KEYS], [...server.CHARGE_KEYS]);
   for (const key of billing.CHARGE_KEYS) assert.ok(billing.CHARGE_LABELS[key], key);
   // Every drift figure differs, so the server lists them all, in its order.
-  const before = { barrels: 1, packages: 1, packagePrices: [100], cars: 1, parkingCars: 1, parkingBilledCents: 1, itemsSold: 1, itemsRevenueCents: 1, bankConnected: false, bankRefreshes: 1 };
-  const after = { barrels: 2, packages: 2, packagePrices: [null, 300], cars: 2, parkingCars: 2, parkingBilledCents: 2, itemsSold: 2, itemsRevenueCents: 2, bankConnected: true, bankRefreshes: 3 };
+  const before = { barrels: 1, packages: 1, packagePrices: [100], cars: 1, parkingCars: 1, parkingCarDays: 1, parkingBilledCents: 1, itemsSold: 1, itemsRevenueCents: 1, bankConnected: false, bankRefreshes: 1 };
+  const after = { barrels: 2, packages: 2, packagePrices: [null, 300], cars: 2, parkingCars: 2, parkingCarDays: 2, parkingBilledCents: 2, itemsSold: 2, itemsRevenueCents: 2, bankConnected: true, bankRefreshes: 3 };
   const drift = server.billDrift({ usage: before, deal: null, bill: { commissionCents: 1, amountCents: 0 } }, after, 2);
   assert.deepEqual(drift.items.map((item) => item.key), billing.DRIFT_KEYS.map(([key]) => key));
   for (const [key] of billing.DRIFT_KEYS) assert.ok(billing.DRIFT_LABELS[key], key);
@@ -93,6 +93,25 @@ test("bank charge keys, drift figures and deal needs follow the server", () => {
   const a = billing.dealNeeds(billing.normalizeDeal({ bankCheck: { centsEach: 20 } }).deal);
   const b = billing.dealNeeds(null);
   assert.deepEqual(billing.mergeNeeds(a, b, null), server.mergeNeeds(a, b, null));
+});
+
+test("parking per car per day round-trips the form, reads as a segment and bills as the server bills it", () => {
+  const raw = { parking: { mode: "perCarDay", centsEach: 99 } };
+  const deal = billing.normalizeDeal(raw).deal;
+  assert.deepEqual(deal?.parking, { mode: "perCarDay", centsEach: 99 });
+  assert.ok(deal);
+  const draft = billing.draftFromDeal(deal);
+  assert.equal(draft.parkingMode, "perCarDay");
+  assert.equal(draft.parkingCents, "0.99");
+  assert.deepEqual(billing.dealFromDraft(draft).deal, deal);
+  assert.deepEqual(
+    billing.dealSegments(deal).map((s) => [s.key, s.cents, s.unit]),
+    [["parking", 99, "per car per day"]],
+  );
+  const usage = { parkingCars: 74, parkingCarDays: 1046 };
+  const bill = billing.computeBill({ deal, usage, commissionCents: 0 });
+  assert.equal(bill.amountCents, 103554);
+  assert.deepEqual(bill, server.computeBill({ deal: server.normalizeDeal(raw).deal, usage, commissionCents: 0 }));
 });
 
 test("the bank deal lines round-trip the form and read as segments", () => {

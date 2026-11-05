@@ -554,3 +554,46 @@ describe("Pay now adjustments count in what a business owes", () => {
     assert.equal(billing.adjustmentsOutstanding([]), 0);
   });
 });
+
+describe("parking per car per day (owner, 2026-11-05)", () => {
+  it("keeps the mode and refuses a zero or fractional day rate", () => {
+    const ok = billing.normalizeDeal({parking: {mode: "perCarDay",
+      centsEach: 99}});
+    assert.deepEqual(ok.errors, []);
+    assert.deepEqual(ok.deal.parking, {mode: "perCarDay", centsEach: 99});
+    for (const centsEach of [0, 0.5, -99]) {
+      assert.ok(billing.normalizeDeal({parking: {mode: "perCarDay",
+        centsEach}}).errors.includes("amount_invalid"), String(centsEach));
+    }
+  });
+
+  it("bills each car-day and shows the days and the cars", () => {
+    const {deal} = billing.normalizeDeal({parking: {mode: "perCarDay",
+      centsEach: 99}});
+    const bill = billing.computeBill({deal, usage: {parkingCars: 74,
+      parkingCarDays: 1046}, commissionCents: 0});
+    assert.deepEqual(bill.lines, [{key: "parking", mode: "perCarDay",
+      quantity: 1046, cars: 74, centsEach: 99, cents: 103554}]);
+    assert.equal(bill.amountCents, 103554);
+    // The per-month mode is unchanged: one charge per car.
+    const month = billing.computeBill({deal: billing.normalizeDeal({
+      parking: {mode: "perCar", centsEach: 100}}).deal,
+    usage: {parkingCars: 74, parkingCarDays: 1046}, commissionCents: 0});
+    assert.equal(month.amountCents, 7400);
+  });
+
+  it("drift counts car-days, but not for a month closed before them", () => {
+    const deal = {parking: {mode: "perCarDay", centsEach: 99}};
+    const closed = {deal, usage: {parkingCars: 3, parkingCarDays: 40},
+      bill: {amountCents: 3960, commissionCents: 0}};
+    const moved = billing.billDrift(closed, {parkingCars: 3,
+      parkingCarDays: 42}, 0);
+    assert.deepEqual(moved.items.map((i) => [i.key, i.delta]),
+        [["parkingCarDays", 2]]);
+    assert.equal(moved.amountDeltaCents, 198);
+    const older = billing.billDrift({deal: {parking: {mode: "perCar",
+      centsEach: 100}}, usage: {parkingCars: 3}, bill: {amountCents: 300,
+      commissionCents: 0}}, {parkingCars: 3, parkingCarDays: 42}, 0);
+    assert.equal(older.changed, false);
+  });
+});

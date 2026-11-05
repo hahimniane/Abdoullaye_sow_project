@@ -268,6 +268,16 @@ function LineDetail({ line }: { line: BillLine }) {
       </>
     );
   }
+  if (line.key === "parking" && line.mode === "perCarDay") {
+    return (
+      <span>
+        <span data-no-translate>
+          <Count value={line.quantity} /> ×{" "}
+        </span>
+        <Money cents={line.centsEach ?? 0} /> <span>per car per day</span> · <Count value={line.cars ?? 0} /> <span>cars on the lot</span>
+      </span>
+    );
+  }
   if (line.key === "parking" && line.mode === "percent") {
     return (
       <span>
@@ -529,15 +539,20 @@ function DealForm({
           <select disabled={disabled} onChange={(e) => set("parkingMode", e.target.value as DealDraft["parkingMode"])} value={draft.parkingMode}>
             <option value="none">No charge</option>
             <option value="perCar">Per car on the lot in the month</option>
+            <option value="perCarDay">Per car per day on the lot</option>
             <option value="percent">Percent of parking billed</option>
           </select>
         </label>
-        {draft.parkingMode === "perCar" && (
+        {(draft.parkingMode === "perCar" || draft.parkingMode === "perCarDay") && (
           <MoneyField
             disabled={disabled}
             error={errors.parkingCents}
-            hint="A car on the lot any day of the month counts once."
-            label="Per car"
+            hint={
+              draft.parkingMode === "perCarDay"
+                ? "Each day a car is on the lot counts, the same days as the parking invoices."
+                : "A car on the lot any day of the month counts once."
+            }
+            label={draft.parkingMode === "perCarDay" ? "Per car per day" : "Per car"}
             onChange={(v) => set("parkingCents", v)}
             value={draft.parkingCents}
           />

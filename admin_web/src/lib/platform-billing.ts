@@ -21,6 +21,7 @@ export type PackageCharge =
   | { mode: "percent"; bps: number; minCents: number };
 export type ParkingCharge =
   | { mode: "perCar"; centsEach: number }
+  | { mode: "perCarDay"; centsEach: number }
   | { mode: "percent"; bps: number };
 /** Shop items: per item sold, or a percentage of the shop's sales. Deals saved before have no mode: per item. */
 export type ItemCharge = { mode: "fixed"; centsEach: number } | { mode: "percent"; bps: number };
@@ -46,6 +47,8 @@ export type Usage = {
   cars: number;
   packagePrices?: Array<number | null> | null;
   parkingCars: number | null;
+  /** Days cars spent on the lot in the month, summed over the cars; null when not read. */
+  parkingCarDays?: number | null;
   parkingBilledCents: number | null;
   itemsSold: number | null;
   /** The shop's sales total for the month (voided sales excluded); null when not read. */
@@ -64,8 +67,10 @@ export const CHARGE_KEYS: readonly ChargeKey[] = ["barrels", "packages", "shippe
 
 export type BillLine = {
   key: ChargeKey;
-  mode: "fixed" | "percent" | "perCar";
+  mode: "fixed" | "percent" | "perCar" | "perCarDay";
   quantity: number;
+  /** perCarDay: the cars the days came from. */
+  cars?: number;
   centsEach?: number;
   bps?: number;
   minCents?: number;
@@ -99,6 +104,7 @@ export type DriftKey =
   | "packagePriceCents"
   | "cars"
   | "parkingCars"
+  | "parkingCarDays"
   | "parkingBilledCents"
   | "itemsSold"
   | "itemsRevenueCents"
@@ -130,6 +136,7 @@ export type MonthRow = {
     packages: number;
     cars: number;
     parkingCars: number | null;
+    parkingCarDays?: number | null;
     itemsSold: number | null;
     /** Paid bank refreshes (null when the deal does not charge for the bank, or an older server). */
     bankRefreshes?: number | null;
@@ -356,6 +363,7 @@ export function normalizeDeal(raw: unknown): { deal: Deal | null; errors: string
   const parking = charge(raw.parking);
   if (parking) {
     if (parking.mode === "perCar") deal.parking = { mode: "perCar", centsEach: unit(parking.centsEach) };
+    else if (parking.mode === "perCarDay") deal.parking = { mode: "perCarDay", centsEach: unit(parking.centsEach) };
     else if (parking.mode === "percent") deal.parking = { mode: "percent", bps: rate(parking.bps) };
     else errors.add("charge_mode_invalid");
   }
@@ -416,6 +424,7 @@ export function normalizeUsage(raw: unknown): Usage {
     cars: count(row.cars),
     packagePrices: prices,
     parkingCars: maybe(row.parkingCars),
+    parkingCarDays: maybe(row.parkingCarDays),
     parkingBilledCents: maybe(row.parkingBilledCents),
     itemsSold: maybe(row.itemsSold),
     itemsRevenueCents: maybe(row.itemsRevenueCents),
@@ -454,6 +463,7 @@ export const DRIFT_KEYS: ReadonlyArray<readonly [DriftKey, "count" | "cents"]> =
   ["packagePriceCents", "cents"],
   ["cars", "count"],
   ["parkingCars", "count"],
+  ["parkingCarDays", "count"],
   ["parkingBilledCents", "cents"],
   ["itemsSold", "count"],
   ["itemsRevenueCents", "cents"],
@@ -526,6 +536,16 @@ export function computeBill({
       if (deal.parking.mode === "perCar") {
         const cars = u.parkingCars ?? 0;
         lines.push({ key: "parking", mode: "perCar", quantity: cars, centsEach: deal.parking.centsEach, cents: cars * deal.parking.centsEach });
+      } else if (deal.parking.mode === "perCarDay") {
+        const days = u.parkingCarDays ?? 0;
+        lines.push({
+          key: "parking",
+          mode: "perCarDay",
+          quantity: days,
+          cars: u.parkingCars ?? 0,
+          centsEach: deal.parking.centsEach,
+          cents: days * deal.parking.centsEach,
+        });
       } else {
         const billed = u.parkingBilledCents ?? 0;
         lines.push({
@@ -637,7 +657,7 @@ export type DealDraft = {
   packageMin: string;
   shippedCarMode: "none" | "fixed";
   shippedCar: string;
-  parkingMode: "none" | "perCar" | "percent";
+  parkingMode: "none" | "perCar" | "perCarDay" | "percent";
   parkingCents: string;
   parkingPct: string;
   itemMode: "none" | "fixed" | "percent";
@@ -721,8 +741,8 @@ export function draftFromDeal(deal: Deal | null | undefined): DealDraft {
     draft.shippedCarMode = "fixed";
     draft.shippedCar = centsToInput(deal.shippedCar.centsEach);
   }
-  if (deal.parking?.mode === "perCar") {
-    draft.parkingMode = "perCar";
+  if (deal.parking?.mode === "perCar" || deal.parking?.mode === "perCarDay") {
+    draft.parkingMode = deal.parking.mode;
     draft.parkingCents = centsToInput(deal.parking.centsEach);
   } else if (deal.parking?.mode === "percent") {
     draft.parkingMode = "percent";
@@ -793,6 +813,7 @@ export function dealFromDraft(draft: DealDraft): { deal: Deal | null; errors: Dr
   }
   if (draft.shippedCarMode === "fixed") deal.shippedCar = { centsEach: money("shippedCar") ?? 0 };
   if (draft.parkingMode === "perCar") deal.parking = { mode: "perCar", centsEach: money("parkingCents") ?? 0 };
+  if (draft.parkingMode === "perCarDay") deal.parking = { mode: "perCarDay", centsEach: money("parkingCents") ?? 0 };
   if (draft.parkingMode === "percent") deal.parking = { mode: "percent", bps: percent("parkingPct") };
   if (draft.itemMode === "fixed") deal.itemSold = { mode: "fixed", centsEach: money("item") ?? 0 };
   if (draft.itemMode === "percent") deal.itemSold = { mode: "percent", bps: percent("itemPct") };
@@ -858,6 +879,7 @@ export const DRIFT_LABELS: Record<DriftKey, string> = {
   packagePriceCents: "Package prices",
   cars: "Shipped cars",
   parkingCars: "Parked cars",
+  parkingCarDays: "Days cars were parked",
   parkingBilledCents: "Parking billed",
   itemsSold: "Items sold",
   itemsRevenueCents: "Shop sales",
@@ -954,6 +976,8 @@ export function dealSegments(deal: Deal | null | undefined): DealSegment[] {
   if (deal.shippedCar) out.push({ key: "shippedCars", label: DEAL_LABELS.shippedCars, cents: deal.shippedCar.centsEach, unit: "per car" });
   if (deal.parking?.mode === "perCar") {
     out.push({ key: "parking", label: DEAL_LABELS.parking, cents: deal.parking.centsEach, unit: "per car" });
+  } else if (deal.parking?.mode === "perCarDay") {
+    out.push({ key: "parking", label: DEAL_LABELS.parking, cents: deal.parking.centsEach, unit: "per car per day" });
   } else if (deal.parking?.mode === "percent") {
     out.push({ key: "parking", label: DEAL_LABELS.parking, bps: deal.parking.bps, unit: "of parking billed" });
   }

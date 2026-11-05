@@ -65,6 +65,20 @@
       "expect": {"lines": {"parking": 14000}, "chargesCents": 14000, "amountCents": 14000, "minimumAdjustmentCents": 0, "capAdjustmentCents": 0, "earnedCents": 14000}
     },
     {
+      "name": "parking per car per day (Keren, October 2026 at $0.99)",
+      "deal": {"parking": {"mode": "perCarDay", "centsEach": 99}},
+      "usage": {"parkingCars": 103, "parkingCarDays": 1259, "parkingBilledCents": 420000},
+      "commissionCents": 0,
+      "expect": {"lines": {"parking": 124641}, "chargesCents": 124641, "amountCents": 124641, "minimumAdjustmentCents": 0, "capAdjustmentCents": 0, "earnedCents": 124641}
+    },
+    {
+      "name": "parking per car per day with the days not read bills nothing",
+      "deal": {"parking": {"mode": "perCarDay", "centsEach": 99}},
+      "usage": {"parkingCars": 5},
+      "commissionCents": 0,
+      "expect": {"lines": {"parking": 0}, "chargesCents": 0, "amountCents": 0, "minimumAdjustmentCents": 0, "capAdjustmentCents": 0, "earnedCents": 0}
+    },
+    {
       "name": "parking, 10% of billed, rounded once on the month",
       "deal": {"parking": {"mode": "percent", "bps": 1000}},
       "usage": {"parkingCars": 9, "parkingBilledCents": 123455},

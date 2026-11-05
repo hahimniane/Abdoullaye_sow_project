@@ -237,7 +237,7 @@ function createPlatformBillingHandlers(deps) {
     } catch (error) {
       logger.warn("Bills: parking occupancy not indexed yet",
           {businessId, error: String(error?.message || error)});
-      return {carsOnLot: 0, billedCents: 0, complete: false};
+      return {carsOnLot: 0, carDays: 0, billedCents: 0, complete: false};
     }
     const activities = db().collection("lotActivities")
         .where("businessId", "==", businessId);
@@ -255,7 +255,10 @@ function createPlatformBillingHandlers(deps) {
     ]);
     const summary = parkingMonthSummary(cars.rows, month, now(),
         mergeRowsById(inMonth.rows, undated.rows));
-    return {carsOnLot: summary.carsOnLot, billedCents: summary.billedCents,
+    // Same days the parking invoices count (parking_month_statement.js).
+    const carDays = summary.bills.reduce((sum, b) => sum + (b.days || 0), 0);
+    return {carsOnLot: summary.carsOnLot, carDays,
+      billedCents: summary.billedCents,
       complete: cars.complete && inMonth.complete && undated.complete};
   }
 
@@ -322,6 +325,7 @@ function createPlatformBillingHandlers(deps) {
       cars: row.cars,
       packagePrices: prices ? prices.prices : null,
       parkingCars: parking ? parking.carsOnLot : null,
+      parkingCarDays: parking ? parking.carDays : null,
       parkingBilledCents: parking ? parking.billedCents : null,
       itemsSold: items ? items.itemsSold : null,
       itemsRevenueCents: items ? items.revenueCents : null,
@@ -527,6 +531,7 @@ function createPlatformBillingHandlers(deps) {
         packages: Number(row.usage?.packages) || 0,
         cars: Number(row.usage?.cars) || 0,
         parkingCars: row.usage?.parkingCars ?? null,
+        parkingCarDays: row.usage?.parkingCarDays ?? null,
         itemsSold: row.usage?.itemsSold ?? null,
         bankRefreshes: row.usage?.bankRefreshes ?? null,
       },
