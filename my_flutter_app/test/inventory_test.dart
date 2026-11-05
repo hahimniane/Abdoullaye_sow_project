@@ -840,9 +840,17 @@ void ownerServiceListTests() {
         ),
         isFalse,
       );
+      // Inventory (admin switch) and the retired Freight are the only
+      // catalog entries an owner cannot pick.
       expect(
         ownerBusinessServiceCatalog.length,
-        businessServiceCatalog.length - 1,
+        businessServiceCatalog.length - 2,
+      );
+      expect(
+        ownerBusinessServiceCatalog.any(
+          (s) => s.key == BusinessServiceKey.freight,
+        ),
+        isFalse,
       );
     });
   });
