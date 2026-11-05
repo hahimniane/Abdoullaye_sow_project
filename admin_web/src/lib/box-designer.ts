@@ -430,3 +430,10 @@ export function dashSpans(lengthIn: number): { from: number; length: number }[] 
   }
   return spans;
 }
+
+/** The credit the 3D models' licenses ask for, in the page language. */
+export function modelCredit(lang: "en" | "fr"): string {
+  return lang === "fr"
+    ? "Modèles 3D : « Man » par Quaternius (CC0) ; « Sneakers » par Poly by Google (CC BY 3.0)"
+    : '3D models: "Man" by Quaternius (CC0); "Sneakers" by Poly by Google (CC BY 3.0)';
+}

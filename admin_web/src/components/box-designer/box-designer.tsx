@@ -9,6 +9,7 @@ import {
   DIM_SLIDER_MAX_IN,
   PERSON_IN,
   clampDim,
+  modelCredit,
   dimText,
   dimsText,
   fitScale,
@@ -271,7 +272,7 @@ export function BoxDesigner({ dims, onChange, lang, prices, comparing = false, s
           </div>
         </div>
         <p className="bd-hint" data-no-translate>
-          <span>Drag to spin</span>
+          <span>{lang === "fr" ? "Faites glisser pour tourner" : "Drag to spin"}</span>
         </p>
       </div>
 
@@ -282,7 +283,7 @@ export function BoxDesigner({ dims, onChange, lang, prices, comparing = false, s
         <li><span aria-hidden="true" className="bd-key ruler" /> <span>Ruler: a mark every foot</span></li>
       </ul>
       <p className="bd-credit" data-no-translate>
-        3D models: &quot;Man&quot; by Quaternius (CC0); &quot;Sneakers&quot; by Poly by Google (CC BY 3.0)
+        {modelCredit(lang)}
       </p>
 
       {readOnly ? (

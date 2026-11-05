@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { DEFAULT_DIMS, parseBox3dQuery, readSetDims, sceneLabel, type Dims, type LabelLang } from "@/lib/box-designer";
+import { DEFAULT_DIMS, modelCredit, parseBox3dQuery, readSetDims, sceneLabel, type Dims, type LabelLang } from "@/lib/box-designer";
 import { LANGUAGE_PENDING_ATTRIBUTE } from "@/lib/language";
 
 import { mountBox3d } from "./box-3d-mount";
@@ -103,7 +103,7 @@ export function Box3dPage() {
     >
       <div className="b3-scene" ref={sceneRef} />
       <p className="b3-credit">
-        3D models: &quot;Man&quot; by Quaternius (CC0); &quot;Sneakers&quot; by Poly by Google (CC BY 3.0)
+        {modelCredit(lang)}
       </p>
     </div>
   );

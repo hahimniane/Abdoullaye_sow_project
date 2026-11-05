@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   BOX_SHARE_MIN,
+  modelCredit,
   DASH_GAP_IN,
   DASH_IN,
   DEFAULT_ANGLES,
@@ -332,4 +333,9 @@ test("the tape is 2 in wide, never more than a third of the width; the scene lab
   assert.equal(tapeWidthIn({ l: 20, w: 16, h: 14 }), 2);
   assert.equal(tapeWidthIn({ l: 20, w: 3, h: 14 }), 1);
   assert.equal(sceneLabel({ l: 20, w: 16, h: 14 }, "en"), "Box 20 × 16 × 14 in, with a sneaker and a 5 ft 6 in person for scale");
+});
+
+test("the 3D model credit and spin hint follow the page language", () => {
+  assert.match(modelCredit("en"), /^3D models: "Man" by Quaternius \(CC0\)/);
+  assert.match(modelCredit("fr"), /^Modèles 3D : « Man » par Quaternius \(CC0\)/);
 });
