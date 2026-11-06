@@ -121,6 +121,19 @@ describe("what a scan may see", () => {
     }
   });
 
+  it("finds the logo where the business's documents find it", () => {
+    const logoOf = (fields) => cards.cardBusiness("biz", fields, []).logoUrl;
+    // An older account keeps its logo in logoUrl, with no profile image.
+    assert.equal(logoOf({logoUrl: "https://img.example/old.jpg",
+      profileImageUrl: ""}), "https://img.example/old.jpg");
+    assert.equal(logoOf({profileImageUrl: "https://img.example/new.jpg"}),
+        "https://img.example/new.jpg");
+    // No logo, or one that is not a plain https address: the card draws
+    // the business's initials, never the Laawol mark.
+    assert.equal(logoOf({}), "");
+    assert.equal(logoOf({logoUrl: "javascript:alert(1)"}), "");
+  });
+
   it("is the business's own card when there is no person", () => {
     const card = cards.publicCard({code: "K7M4P2XB", businessId: "biz",
       business, services: [], user: null});

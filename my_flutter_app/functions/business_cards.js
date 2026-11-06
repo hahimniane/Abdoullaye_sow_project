@@ -12,6 +12,8 @@
  * holding a printed card hands it to strangers.
  */
 
+const {documentLogo} = require("./parking_document");
+
 // The tracking alphabet (tracking_code.js): no 0/O, 1/I/L, and no vowels, so
 // a code is easy to read aloud and can never spell a word.
 const CARD_ALPHABET = "23456789BCDFGHJKMNPQRSTVWXYZ";
@@ -182,6 +184,10 @@ function isTeamMember(user, businessId, ownerUid, uid) {
  */
 function cardBusiness(businessId, business, services) {
   const b = business || {};
+  // The business's own logo, found the way its documents find it (older
+  // accounts keep it in logoUrl, newer ones in profileImageUrl). A business
+  // with none gets its initials on the card, never the Laawol mark.
+  const logo = documentLogo(b);
   return {
     businessId,
     name: oneLine(b.name, 80),
@@ -191,7 +197,7 @@ function cardBusiness(businessId, business, services) {
     city: oneLine(b.city, 60),
     state: oneLine(b.state, 40),
     postalCode: oneLine(b.postalCode, 20),
-    logoUrl: oneLine(b.profileImageUrl, 600),
+    logoUrl: logo.own ? logo.url : "",
     requestSlug: oneLine(b.requestSlug, 60),
     services: Array.isArray(services) ? services : [],
   };
