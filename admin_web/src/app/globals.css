@@ -17465,3 +17465,123 @@ button.pkq-card:hover { border-color: var(--brand); }
 .pkr-card .icon-button:disabled { opacity: 0.4; }
 .pkr-stepper .icon-button { height: 38px; width: 38px; }
 /* ==== BOX SIZES, BOX DESIGNER, PAY NOW END ==== */
+
+/* ==== BUSINESS CARDS (docs/BUSINESS_CARDS.md) ====
+   One drawing for the page a scan opens, the console's list and the print
+   sheet (components/business-card-face.tsx). Every size inside a card is a
+   share of the card's own width (cqw), so the same markup is the large card
+   on a screen and the 3.5 x 2 in card on paper. Print rules kept here: text
+   stays 1/8 in (3.6cqw) inside every edge and the QR keeps clear white
+   around it. */
+.bcard { aspect-ratio: 7 / 4; container-type: inline-size; width: 100%; --bcard-color: #0b3b38; --bcard-accent: #cf1026; }
+.bcard-face { background: #fff; border: 1px solid var(--rule); border-radius: 3.2cqw; box-shadow: 0 18px 42px rgba(11, 59, 56, 0.13); box-sizing: border-box; color: #0f172a; display: flex; height: 100%; overflow: hidden; width: 100%; }
+.bcard-print .bcard-face { border: 0; border-radius: 0; box-shadow: none; }
+/* :where keeps this reset weaker than every rule below it. */
+.bcard :where(p, dl, dd, ul) { margin: 0; padding: 0; }
+.bcard img { max-width: none; }
+
+/* Classic, side 1: the person, both numbers, the code. */
+.bcard-front { gap: 4cqw; justify-content: space-between; padding: 5.4cqw; }
+.bcard-left { display: flex; flex: 1; flex-direction: column; justify-content: space-between; min-width: 0; }
+.bcard-brand { align-items: center; display: flex; gap: 2.4cqw; }
+.bcard-logo { border-radius: 2cqw; display: block; flex: none; height: 11cqw; object-fit: contain; width: 11cqw; }
+.bcard-initials { background: var(--bcard-color); color: #fff; display: grid; font-size: 4.4cqw; font-weight: 800; place-items: center; }
+.bcard-biz { color: #0f172a; display: block; font-size: 4.6cqw; font-weight: 800; line-height: 1.15; }
+.bcard-tag { color: #64748b; display: block; font-size: 3.1cqw; font-weight: 500; line-height: 1.3; }
+.bcard-name { color: var(--bcard-color); font-size: 5.8cqw; font-weight: 800; letter-spacing: -0.01em; line-height: 1.1; }
+.bcard-phones { align-items: baseline; column-gap: 2.6cqw; display: grid; grid-template-columns: auto 1fr; margin-top: 2.6cqw; row-gap: 0.9cqw; }
+.bcard-phones > div { display: contents; }
+.bcard-phones dt { color: #64748b; font-size: 3.1cqw; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.bcard-phones dd { color: #0f172a; font-size: 4cqw; font-variant-numeric: tabular-nums; font-weight: 700; }
+.bcard-right { align-items: center; display: flex; flex: none; flex-direction: column; gap: 1.6cqw; justify-content: flex-end; }
+.bcard-qr { display: block; height: 22cqw; width: 22cqw; }
+.bcard-qr svg, .bcardx-qr svg { display: block; height: 100%; width: 100%; }
+.bcard-scan { color: #64748b; font-size: 3.1cqw; font-weight: 700; line-height: 1.2; max-width: 24cqw; text-align: center; }
+
+/* Classic, side 2: the business. */
+.bcard-back { align-items: center; flex-direction: column; gap: 2.2cqw; justify-content: center; padding: 4cqw 5.4cqw 5.4cqw; position: relative; text-align: center; }
+.bcard-back .bcard-logo { border-radius: 3.6cqw; height: 18cqw; width: 18cqw; }
+.bcard-back .bcard-initials { font-size: 7cqw; }
+.bcard-back .bcard-biz { font-size: 6.4cqw; }
+.bcard-web { color: #0f172a; font-size: 3.5cqw; font-weight: 700; line-height: 1.3; }
+.bcard-addr { color: #64748b; font-size: 3.1cqw; font-weight: 500; line-height: 1.3; }
+.bcard-strip { background: var(--bcard-color); bottom: 0; height: 2.2cqw; left: 0; position: absolute; right: 0; }
+
+/* Signature: drawn on a 1050 x 600 grid, so 1 unit = 0.0952cqw. */
+.bcardx { background: #fff; color: #0c1f3d; display: block; position: relative; }
+.bcardx-art { display: block; height: 100%; left: 0; position: absolute; top: 0; width: 100%; }
+.bcardx-logo { border-radius: 50%; object-fit: cover; position: absolute; }
+.bcardx-logo.bcard-initials { font-size: 8cqw; }
+.bcardx-front .bcardx-logo { height: 21.52cqw; left: 3.52cqw; top: 3.9cqw; width: 21.52cqw; }
+.bcardx-photo { display: block; filter: drop-shadow(0 0.7cqw 0.9cqw rgba(10, 33, 74, 0.3)); position: absolute; right: 0; top: 28.9cqw; width: 25.5cqw; }
+.bcardx-biz { color: var(--bcard-color); font-size: 5.05cqw; font-weight: 800; left: 31.05cqw; line-height: 1; position: absolute; top: 7.64cqw; white-space: nowrap; }
+.bcardx-tag { color: #3d4a61; font-size: 2.95cqw; font-weight: 500; left: 31.05cqw; line-height: 1; position: absolute; top: 15.5cqw; white-space: nowrap; }
+.bcardx-person { align-items: center; color: #fff; display: flex; font-size: 3.71cqw; font-weight: 800; height: 7.52cqw; left: 3.81cqw; line-height: 1; position: absolute; top: 29.24cqw; white-space: nowrap; }
+.bcardx-phones { left: 4.57cqw; position: absolute; top: 40cqw; }
+.bcardx-phones > div { align-items: center; display: flex; font-size: 2.95cqw; font-weight: 700; gap: 1.6cqw; height: 8.19cqw; line-height: 1; white-space: nowrap; }
+.bcardx-qr { background: #fff; border-radius: 1.05cqw; box-sizing: border-box; height: 17.9cqw; left: 55.62cqw; padding: 0.57cqw; position: absolute; top: 27.43cqw; width: 17.9cqw; }
+.bcardx-scan { font-size: 2.48cqw; font-weight: 700; left: 55.62cqw; line-height: 1.15; position: absolute; text-align: center; top: 46.05cqw; width: 17.9cqw; }
+.bcardx-back .bcardx-logo { height: 23.33cqw; left: 3.24cqw; top: 9.33cqw; width: 23.33cqw; }
+.bcardx-services { left: 31.9cqw; list-style: none; position: absolute; top: 2.29cqw; width: 63.14cqw; }
+.bcardx-services li { display: flex; gap: 1.14cqw; margin: 0 0 1.81cqw; }
+.bcardx-tile { background: var(--bcard-accent); border-radius: 1.14cqw; color: #fff; display: grid; flex: none; height: 4.95cqw; place-items: center; width: 4.95cqw; }
+.bcardx-tile svg { display: block; height: 3.81cqw; width: 3.81cqw; }
+.bcardx-services b { align-items: center; border-bottom: 0.14cqw solid #ccd5e2; box-sizing: border-box; color: #0c1f3d; display: flex; flex: 1; font-size: 2.67cqw; font-weight: 700; height: 4.95cqw; line-height: 1; min-width: 0; white-space: nowrap; }
+.bcardx-services li:last-child b { border-bottom: 0; }
+.bcardx-foot { align-items: baseline; color: #fff; display: flex; gap: 3cqw; justify-content: space-between; left: 3.81cqw; position: absolute; right: 4.76cqw; top: 51.1cqw; white-space: nowrap; }
+.bcardx-web { font-size: 2.67cqw; font-weight: 700; line-height: 1.2; }
+.bcardx-addr { font-size: 2.29cqw; font-weight: 600; line-height: 1.2; }
+
+/* The page a scan opens. */
+.bcard-page { display: grid; gap: 14px; margin: 0 auto; max-width: 460px; width: 100%; }
+.bcard-page .primary-button { justify-content: center; min-height: 48px; width: 100%; }
+.bcard-page .panel { padding: 0; }
+.bcard-page h1 { font-size: 20px; font-weight: 800; margin: 0; }
+.bcard-list-label { color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: 0.06em; margin: 0; padding: 12px 14px 6px; text-transform: uppercase; }
+.bcard-row { align-items: center; border-top: 1px solid var(--rule); box-sizing: border-box; color: var(--ink); display: flex; gap: 10px; justify-content: space-between; min-height: 56px; padding: 8px 14px; text-decoration: none; }
+.bcard-row b { display: block; font-size: 14px; font-weight: 700; line-height: 20px; }
+.bcard-row small { color: var(--muted); display: block; font-size: 13px; line-height: 18px; }
+.bcard-row > svg { color: var(--muted); flex: none; }
+.bcard-acts { display: flex; flex: none; gap: 8px; }
+.bcard-ic { align-items: center; background: var(--mist); border: 1px solid var(--brand); border-radius: 8px; box-sizing: border-box; color: var(--brand-strong); display: flex; height: 44px; justify-content: center; width: 44px; }
+.bcard-flip { align-self: center; background: none; border: 0; color: var(--brand-strong); cursor: pointer; font: inherit; font-size: 13px; font-weight: 700; justify-self: center; min-height: 44px; padding: 0 12px; text-decoration: underline; }
+.bcard-foot { color: var(--muted); font-size: 12px; margin: 4px 0 0; text-align: center; }
+.bcard-foot a { color: inherit; }
+
+/* The console: each person's card, and how the cards look. */
+.bcard-grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+.bcard-item { background: var(--paper); border: 1px solid var(--rule); border-radius: 12px; display: grid; gap: 12px; min-width: 0; padding: 14px; }
+.bcard-item-head { align-items: baseline; display: flex; gap: 8px; justify-content: space-between; }
+.bcard-item-head b { font-size: 14px; }
+.bcard-item-head small { color: var(--muted); font-size: 12px; }
+.bcard-item-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.bcard-item .bcard-face { box-shadow: 0 1px 2px rgba(11, 59, 56, 0.06); }
+.bcard-settings { background: var(--paper); border: 1px solid var(--rule); border-radius: 12px; display: grid; gap: 14px; padding: 16px; }
+.bcard-settings h3 { font-size: 16px; font-weight: 800; margin: 0; }
+.bcard-settings-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.bcard-field { align-content: start; display: grid; gap: 6px; font-size: 13px; font-weight: 700; }
+.bcard-field input, .bcard-field select, .bcard-field textarea { border: 1px solid var(--rule-strong); border-radius: 8px; font: inherit; font-weight: 400; padding: 9px 10px; width: 100%; }
+.bcard-field small { color: var(--muted); font-weight: 400; }
+.bcard-swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+.bcard-swatch { border: 2px solid #fff; border-radius: 50%; cursor: pointer; height: 32px; outline: 1px solid var(--rule-strong); padding: 0; width: 32px; }
+.bcard-swatch[aria-pressed="true"] { outline: 3px solid var(--ink); }
+.bcard-preview { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+
+/* The print sheet: ten cards on US Letter, cut marks in the margins. */
+.bcard-sheet-root { background: #e2e8f0; inset: 0; overflow: auto; position: fixed; z-index: 1000; }
+.bcard-sheet-bar { align-items: center; background: var(--paper); border-bottom: 1px solid var(--rule); display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; padding: 12px 16px; position: sticky; top: 0; z-index: 1; }
+.bcard-sheet-bar p { color: var(--muted); font-size: 13px; margin: 0; }
+.bcard-sheet-bar div { display: flex; gap: 8px; }
+.bcard-sheet-page { background: #fff; height: 11in; margin: 16px auto; position: relative; width: 8.5in; }
+.bcard-sheet-grid { display: grid; grid-template-columns: 3.5in 3.5in; left: 0.75in; position: absolute; top: 0.5in; }
+.bcard-cut { background: #0f172a; position: absolute; }
+@media print {
+  body.bcard-printing > :not(.bcard-sheet-root) { display: none !important; }
+  body.bcard-printing { background: #fff !important; }
+  .bcard-sheet-root { background: none; overflow: visible; position: static; }
+  .bcard-sheet-bar { display: none; }
+  .bcard-sheet-page { break-after: page; margin: 0; }
+  .bcard-sheet-page:last-child { break-after: auto; }
+  .bcard-sheet-root, .bcard-sheet-root * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+/* ==== BUSINESS CARDS END ==== */

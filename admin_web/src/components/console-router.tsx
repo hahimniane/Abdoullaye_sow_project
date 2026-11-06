@@ -31,6 +31,7 @@ import {
 } from "@/lib/social-sign-in-client";
 import { consoleAccessLost, resolveConsoleKind, serviceEntryApplies } from "@/lib/console-routing";
 import { customerServiceFromLocation } from "@/lib/customer-service-intent";
+import { BusinessCardPage } from "@/components/business-card-page";
 import { ItemTagPage } from "@/components/item-tag-page";
 import { StaffInvitePage } from "@/components/staff-invite-page";
 import { legalAcceptance } from "@/lib/disclosures";
@@ -477,6 +478,8 @@ export function ConsoleRouter() {
     // A shop's inventory tag scanned with a phone camera: a plain notice, no
     // sign-in and nothing read about the product (see item-tag-page.tsx).
     if (serviceIntent === "item-tag") return <ItemTagPage />;
+    // A business card's QR (/c/<code>): the card, no sign-in.
+    if (serviceIntent === "business-card") return <BusinessCardPage />;
     // A staff invitation's Accept button (/j/<token>): the page handles the
     // signed-out, matching-number and other-account states itself.
     if (serviceIntent === "staff-invite") {

@@ -36,4 +36,8 @@
   # Accept button's /j/<token>. The app claims /j/; without it the browser
   # lands on the invitation page, which signs in with the invited number.
   RewriteRule ^j/([A-Za-z0-9_-]{43})/?$ /?service=staff-invite&j=$1 [R=302,L]
+  # Business cards (docs/BUSINESS_CARDS.md): the QR printed on a card,
+  # /c/<code>. Not claimed by the app: a customer's phone camera opens the
+  # card's page in the browser.
+  RewriteRule ^c/([A-Za-z0-9]{8})/?$ /?service=business-card&c=$1 [R=302,L]
 </IfModule>

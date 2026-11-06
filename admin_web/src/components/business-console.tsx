@@ -15,6 +15,7 @@ import {
   CalendarClock,
   Car,
   ClipboardList,
+  Contact,
   Container,
   ExternalLink,
   LogOut,
@@ -64,6 +65,7 @@ import {
   BusinessProfilePanel,
   BusinessServicesPanel,
 } from "@/components/business/profile-support-people";
+import { BusinessCardsPanel } from "@/components/business/business-cards-panel";
 import { ReviewsPanel } from "@/components/business/reviews-panel";
 import { SupportCasesPanel } from "@/components/support/support-cases-panel";
 import { MessageCustomerProvider } from "@/components/support/message-customer";
@@ -1047,6 +1049,9 @@ export function BusinessConsole({
               canLinkParking={profile.role === "businessOwner" || profile.role === "admin"}
             />
           )}
+          {activeTab === "cards" && (
+            <BusinessCardsPanel businessId={businessId} previewMode={previewMode} />
+          )}
           {activeTab === "reviews" && (
             <ReviewsPanel businessId={businessId} business={business} previewMode={previewMode} />
           )}
@@ -1633,6 +1638,7 @@ function tabIcon(tab: BusinessTab) {
     growth: <Sparkles {...props} />,
     staffBalances: <Scale {...props} />,
     shipping: <Container {...props} />,
+    cards: <Contact {...props} />,
   };
   return icons[tab];
 }

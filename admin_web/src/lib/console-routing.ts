@@ -33,6 +33,9 @@ export function serviceEntryApplies(
   // signed out, a customer accepting, or someone signed in with another
   // account who must sign out first (docs/STAFF_PHONE_INVITES.md §6).
   if (service === "staff-invite") return kind !== "unsupported";
+  // A business card (/c/<code>) is the same page for everyone who scans it:
+  // a staff member checking their own card must see it, not their console.
+  if (service === "business-card") return kind !== "unsupported";
   if (kind === null || kind === "customer") return true;
   return service === "tracking" && (kind === "business" || kind === "admin");
 }

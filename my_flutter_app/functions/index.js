@@ -47422,6 +47422,31 @@ exports.platformBilling = onCall(
     {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public",
       maxInstances: 1, timeoutSeconds: 120, memory: "1GiB"},
     platformBillingHandlers.platformBilling);
+
+// ---- Business cards (docs/BUSINESS_CARDS.md) ------------------------------
+// A card for every business and each person on its team: the public page a
+// printed QR opens (action "get", no sign-in, rate limited), the console's
+// list and the owner's look. One callable for every action, so the feature
+// costs one Cloud Run service, and one instance (a scan is three document
+// reads; one instance serves many at once) keeps the project inside its CPU
+// budget (test/scaling-contract.test.js). Rules in business_cards.js, reads
+// and writes in business_cards_handlers.js; no trigger.
+const businessCardsHandlers = require("./business_cards_handlers")
+    .createBusinessCardsHandlers({
+      admin,
+      HttpsError,
+      logger,
+      requireAuth,
+      requireBusinessManager,
+      hasBusinessPermission,
+      accountAccessBlocked,
+      normalizeBusinessServices,
+      enforceCallableRateLimit,
+    });
+exports.businessCards = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public",
+      maxInstances: 1},
+    businessCardsHandlers.businessCards);
 // ===========================================================================
 // Customer package requests (docs/PACKAGE_REQUESTS.md §2-§4, §7, §8).
 // A customer asks one business to take a load; the business estimates it,

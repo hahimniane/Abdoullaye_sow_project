@@ -15,6 +15,8 @@ export const customerServices = [
   // A staff invitation sent on WhatsApp (docs/STAFF_PHONE_INVITES.md §6):
   // the Accept button's /j/<token>.
   "staff-invite",
+  // A business card's QR (docs/BUSINESS_CARDS.md): /c/<code>.
+  "business-card",
 ] as const;
 
 export type CustomerService = (typeof customerServices)[number];
@@ -48,6 +50,8 @@ const REQUEST_PATH = /^\/r\/[A-Za-z0-9-]{3,40}\/?$/;
 const ESTIMATE_PATH = /^\/e\/[A-Za-z0-9_-]{43}\/?$/;
 /** `/j/<token>`: the WhatsApp staff invitation's Accept button. */
 const JOIN_PATH = /^\/j\/[A-Za-z0-9_-]{43}\/?$/;
+/** `/c/<code>`: a business card. */
+const CARD_PATH = /^\/c\/[A-Za-z0-9]{8}\/?$/;
 
 /**
  * The customer service a page address asks for: the `?service=` link, or an
@@ -65,7 +69,8 @@ export function customerServiceFromLocation(
     (ITEM_TAG_PATH.test(path) ? "item-tag" :
       REQUEST_PATH.test(path) ? "package-request" :
         ESTIMATE_PATH.test(path) ? "package-estimate" :
-          JOIN_PATH.test(path) ? "staff-invite" : null)
+          JOIN_PATH.test(path) ? "staff-invite" :
+            CARD_PATH.test(path) ? "business-card" : null)
   );
 }
 

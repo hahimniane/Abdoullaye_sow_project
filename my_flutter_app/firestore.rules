@@ -795,6 +795,15 @@ service cloud.firestore {
             'containers'));
       allow write: if false;
     }
+    // Business cards (docs/BUSINESS_CARDS.md): the code a printed QR carries
+    // and who holds which code. Server-only; a scan goes through the
+    // businessCards callable, which answers with an allowlist.
+    match /businessCards/{code} {
+      allow read, write: if false;
+    }
+    match /businessCardOwners/{ownerKey} {
+      allow read, write: if false;
+    }
     // Request bookkeeping: slug claims, unique codes, idempotency keys.
     match /packageRequestSlugs/{slug} {
       allow read, write: if false;

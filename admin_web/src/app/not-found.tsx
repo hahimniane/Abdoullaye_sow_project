@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
+import { cardPathRedirect } from "@/lib/business-card";
 import { useFrenchDomTranslation } from "@/lib/french-dom-runtime";
 import { requestPathRedirect } from "@/lib/package-requests";
 import { staffInvitePathRedirect } from "@/lib/staff-phone-invite";
@@ -12,12 +13,14 @@ export default function NotFound() {
   // A package request link (/r/<slug>) or the WhatsApp estimate button
   // (/e/<token>) on a host that answers unknown paths with this page: carry
   // on to the same page in its query form instead of a dead end. A staff
-  // invitation's Accept button (/j/<token>) is forwarded the same way.
+  // invitation's Accept button (/j/<token>) is forwarded the same way, and
+  // so is a business card's QR (/c/<code>).
   const [forwarding, setForwarding] = useState(false);
   useEffect(() => {
     const target =
       requestPathRedirect(window.location.pathname) ||
-      staffInvitePathRedirect(window.location.pathname);
+      staffInvitePathRedirect(window.location.pathname) ||
+      cardPathRedirect(window.location.pathname);
     if (!target) return;
     setForwarding(true);
     window.location.replace(target);

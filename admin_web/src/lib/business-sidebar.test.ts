@@ -41,7 +41,7 @@ describe("business sidebar navigation", () => {
         ["Overview", ["today", "shipping"]],
         ["Cars", ["parking", "ledger", "transport", "listings", "purchases", "viewings"]],
         ["Money", ["invoices", "inventory", "staffBalances"]],
-        ["Business", ["profile", "destinations", "people", "reviews", "cases", "growth"]],
+        ["Business", ["profile", "destinations", "people", "cards", "reviews", "cases", "growth"]],
       ],
     );
   });

@@ -29,6 +29,9 @@
   # printed QR and shared link read laawoldigital.com/r/<slug>; the form
   # lives on the customer host. 302 so a renamed slug is never cached.
   RewriteRule ^r/([A-Za-z0-9-]{3,40})/?$ https://customer.laawoldigital.com/r/$1 [R=302,L]
+  # Business cards (docs/BUSINESS_CARDS.md): the QR printed on a card is
+  # laawoldigital.com/c/<code>; the card's page lives on the customer host.
+  RewriteRule ^c/([A-Za-z0-9]{8})/?$ https://customer.laawoldigital.com/c/$1 [R=302,L]
 </IfModule>
 
 # Default document

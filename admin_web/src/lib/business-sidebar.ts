@@ -20,7 +20,8 @@ export type BusinessTab =
   | "cases"
   | "growth"
   | "staffBalances"
-  | "shipping";
+  | "shipping"
+  | "cards";
 
 /**
  * The steps of the Shipping page, in the order a package moves: asked for,
@@ -134,6 +135,10 @@ export const businessSidebarTabs: BusinessSidebarTab[] = [
   {id: "profile", label: "Profile", description: "Identity and verification", group: "business", permission: "profile", keywords: ["Business"]},
   {id: "destinations", label: "Services & coverage", description: "Availability, pickup, rates, and routes", group: "business", permission: "destinations"},
   {id: "people", label: "People", description: "Owners and staff", group: "business", permission: "people"},
+  // A card for everyone on the team (docs/BUSINESS_CARDS.md): no service
+  // gate and no permission. What each person sees there is decided by the
+  // server (their own card, or every card with People).
+  {id: "cards", label: "Business cards", description: "A card for each person, to share or print", group: "business", keywords: ["QR", "Contact", "Print"]},
   {id: "reviews", label: "Reviews", description: "Ratings and customer feedback", group: "business", permission: "reviews"},
   // Everyone at the business answers WhatsApp (docs/WHATSAPP_CONVERSATIONS.md
   // decision 6), so Support has no permission gate: staff without "support"

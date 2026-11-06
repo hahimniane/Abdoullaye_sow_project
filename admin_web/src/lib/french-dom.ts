@@ -8091,6 +8091,64 @@ Object.assign(TEXT_TRANSLATIONS, {
     "Utilisez Chrome pour imprimer directement sur l’imprimante d’étiquettes, ou l’application Laawol sur iPhone.",
 });
 // ==== Label printer (Web Bluetooth, PM-241) END ====
+// ==== Business cards (docs/BUSINESS_CARDS.md) ====
+// The words printed on a card itself (Direct, Office, Scan to save) are set
+// in the page's language by business-card-face.tsx, not here: a card is the
+// business's own data and is never run through this dictionary.
+Object.assign(TEXT_TRANSLATIONS, {
+  "Business cards": "Cartes de visite",
+  "A card for each person, to share or print": "Une carte par personne, à partager ou à imprimer",
+  "A card for the business and each person. Share the link, or print ten to a sheet.":
+    "Une carte pour l’entreprise et pour chaque personne. Partagez le lien, ou imprimez-en dix par feuille.",
+  "Cards are not shown in preview.": "Les cartes ne s’affichent pas dans l’aperçu.",
+  "The cards did not load.": "Les cartes ne se sont pas chargées.",
+  "Your card": "Votre carte",
+  "Team card": "Carte d’équipe",
+  "The business's card": "La carte de l’entreprise",
+  "No phone number on this account yet, so the card shows the office number only.":
+    "Ce compte n’a pas encore de numéro de téléphone : la carte n’affiche que le numéro du bureau.",
+  "Open card": "Ouvrir la carte",
+  "Print cards": "Imprimer les cartes",
+  "How your cards look": "L’apparence de vos cartes",
+  "Plain white": "Blanc uni",
+  "Full color": "En couleurs",
+  "Main color": "Couleur principale",
+  "Second color": "Deuxième couleur",
+  "Picture": "Image",
+  "No picture": "Sans image",
+  "Line under the name": "Ligne sous le nom",
+  "Leave empty to use your services.": "Laissez vide pour utiliser vos services.",
+  "Services on the back": "Services au dos",
+  "One per line, six at most.": "Un par ligne, six au maximum.",
+  "Save card": "Enregistrer la carte",
+  "Card saved.": "Carte enregistrée.",
+  "The card was not saved.": "La carte n’a pas été enregistrée.",
+  "The line under the name is too long.": "La ligne sous le nom est trop longue.",
+  "List six services at most.": "Indiquez six services au maximum.",
+  "One of the services is too long.": "L’un des services est trop long.",
+  "Print at 100% on Letter paper, both sides, then cut along the marks.":
+    "Imprimez à 100 % sur du papier Lettre, recto verso, puis coupez le long des repères.",
+  "Opening the card…": "Ouverture de la carte…",
+  "This card is not in use": "Cette carte n’est pas utilisée",
+  "Check the code on the card, or ask the business for a new one.":
+    "Vérifiez le code sur la carte, ou demandez-en une nouvelle à l’entreprise.",
+  "The card did not open": "La carte ne s’est pas ouverte",
+  "Check your connection and try again.": "Vérifiez votre connexion et réessayez.",
+  "Turn the card over": "Retourner la carte",
+  "Save contact": "Enregistrer le contact",
+  "Call or message": "Appeler ou écrire",
+  "Do business with us": "Faire affaire avec nous",
+  "Send a package and see prices": "Envoyer un colis et voir les prix",
+  "Track a package": "Suivre un colis",
+  "Visit the website": "Visiter le site web",
+  "Get your own card with Laawol": "Obtenez votre carte avec Laawol",
+});
+Object.assign(ATTRIBUTE_TRANSLATIONS, {
+  "Message on WhatsApp": "Écrire sur WhatsApp",
+  "Print sheet": "Feuille à imprimer",
+  "Car sales · Parking · Shipping": "Vente de voitures · Stationnement · Expédition",
+});
+// ==== Business cards END ====
 const englishDictionary = { ...TEXT_TRANSLATIONS, ...ATTRIBUTE_TRANSLATIONS };
 const frenchDictionary = buildReverseDictionary([
   TEXT_TRANSLATIONS,
