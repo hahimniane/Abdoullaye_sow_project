@@ -124,6 +124,12 @@ test("a US number prints the US way and gets both buttons", () => {
   assert.equal(cardDial("+1 3475550100").display, "(347) 555-0100");
   assert.equal(cardDial("347 555 0142").whatsApp, "https://wa.me/13475550142");
   assert.equal(cardDial("1 (347) 555-0142").tel, "tel:+13475550142");
+  // The country code typed twice, as one account has it.
+  assert.deepEqual(cardDial("+1 13475550142"), {
+    display: "(347) 555-0142",
+    tel: "tel:+13475550142",
+    whatsApp: "https://wa.me/13475550142",
+  });
 });
 
 test("a number from another country keeps its own form, and WhatsApp only with its +", () => {
@@ -258,4 +264,11 @@ test("whatever the server sends, a card still draws", () => {
   assert.deepEqual(card.business.services, ["carSales", "7"]);
   assert.equal(card.settings.style, "signature");
   assert.equal(card.settings.accent, "red");
+  // An address typed in small letters prints with its capitals.
+  const typed = readBusinessCard({
+    code: "K7M4P2XB",
+    business: { name: "x", addressLine1: "12 example ave", city: "bronx", state: "NY", postalCode: "10457" },
+  });
+  assert.ok(typed);
+  assert.equal(cardAddress(typed.business), "12 Example Ave, Bronx, NY 10457");
 });

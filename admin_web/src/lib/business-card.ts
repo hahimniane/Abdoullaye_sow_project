@@ -116,7 +116,7 @@ const oneOf = <T extends string>(value: unknown, allowed: readonly T[], fallback
  * ("DHL Express", "McDonald") is the owner's choice and is left alone.
  */
 export function cardName(value: unknown): string {
-  const name = text(value, 80);
+  const name = text(value, 120);
   const letters = name.replace(/[^\p{L}]/gu, "");
   if (!letters || (letters !== letters.toLowerCase() && letters !== letters.toUpperCase())) return name;
   return name
@@ -161,8 +161,10 @@ export function readBusinessCard(raw: unknown): BusinessCardData | null {
       name: cardName(b.name),
       phone: text(b.phone, 40),
       website: text(b.website, 120),
-      addressLine1: text(b.addressLine1, 120),
-      city: text(b.city, 60),
+      // An address typed in small letters ("1739 washington ave") gets its
+      // capitals too; the state and the postal code are left as typed.
+      addressLine1: cardName(b.addressLine1),
+      city: cardName(b.city),
       state: text(b.state, 40),
       postalCode: text(b.postalCode, 20),
       logoUrl: text(b.logoUrl, 600),
@@ -231,8 +233,11 @@ export function cardDial(phone: unknown): CardDial {
   const digits = typed.replace(/\D/g, "");
   if (digits.length < 5) return { display: "", tel: null, whatsApp: null };
   const plus = typed.startsWith("+");
+  // "+1 1347..." is a US number whose country code was typed twice: no US
+  // area code starts with 1, so it can be nothing else.
+  const doubled = plus && digits.length === 12 && digits.startsWith("11");
   const us =
-    (!plus && digits.length === 10) || (digits.length === 11 && digits.startsWith("1"))
+    (!plus && digits.length === 10) || (digits.length === 11 && digits.startsWith("1")) || doubled
       ? digits.slice(-10)
       : "";
   if (us) {
