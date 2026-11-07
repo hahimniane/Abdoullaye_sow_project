@@ -267,3 +267,63 @@ describe("proof settings and ticks", () => {
       {status: "weird"}}).status, "none");
   });
 });
+
+// The package receipt link (the sender's "package received" message): signed
+// like the car receipt link, with the line's own token and its id.
+describe("package receipt links", () => {
+  const BASE = "https://example.test/parkingDocument";
+  const link = (extra = {}) => proof.packageReceiptLink({base: BASE,
+    token: "line-token-0123456789", lineId: "line_abc123",
+    expiresMs: Date.now() + 60000, ...extra});
+  const query = (url) => Object.fromEntries(new URL(url).searchParams);
+
+  it("opens with its own token, line id and an unexpired date", () => {
+    const q = query(link());
+    assert.equal(q.view, "packageReceiptPdf");
+    assert.equal(q.p, "line_abc123");
+    assert.equal(proof.packageReceiptLinkValid(q, "line-token-0123456789",
+        Date.now()), true);
+  });
+
+  it("refuses another token, another line, a stretched or expired date",
+      () => {
+        const q = query(link());
+        assert.equal(proof.packageReceiptLinkValid(q, "other-token-0123456",
+            Date.now()), false);
+        assert.equal(proof.packageReceiptLinkValid({...q, p: "line_other"},
+            "line-token-0123456789", Date.now()), false);
+        assert.equal(proof.packageReceiptLinkValid({...q,
+          e: String(Number(q.e) + 1000)}, "line-token-0123456789",
+        Date.now()), false);
+        assert.equal(proof.packageReceiptLinkValid({...q, s: "0".repeat(24)},
+            "line-token-0123456789", Date.now()), false);
+        assert.equal(proof.packageReceiptLinkValid(q, "line-token-0123456789",
+            Number(q.e) + 1), false);
+        assert.equal(proof.packageReceiptLinkValid(q, "", Date.now()), false);
+        assert.equal(proof.packageReceiptLinkValid({...q, p: "../x"},
+            "line-token-0123456789", Date.now()), false);
+      });
+
+  it("is not a key to any other document of the family", () => {
+    const token = "line-token-0123456789";
+    const expiresMs = Date.now() + 60000;
+    const receipt = query(link({expiresMs}));
+    // The same id and token as a car receipt, a bill receipt or a photo.
+    const car = query(proof.receiptLink({base: BASE, token,
+      paymentId: "line_abc123", expiresMs}));
+    const bill = query(proof.billReceiptLink({base: BASE, token,
+      paymentId: "line_abc123", expiresMs}));
+    assert.notEqual(car.s, receipt.s);
+    assert.notEqual(bill.s, receipt.s);
+    assert.equal(proof.packageReceiptLinkValid({...receipt, s: car.s}, token,
+        Date.now()), false);
+    assert.equal(proof.packageReceiptLinkValid({...receipt, s: bill.s},
+        token, Date.now()), false);
+    assert.equal(proof.receiptLinkValid({...car, s: receipt.s}, token,
+        Date.now()), false);
+    assert.equal(proof.billReceiptLinkValid({...bill, s: receipt.s}, token,
+        Date.now()), false);
+    assert.equal(proof.packageReceiptSigningPath("line_abc123"),
+        "pkgreceipt:line_abc123");
+  });
+});

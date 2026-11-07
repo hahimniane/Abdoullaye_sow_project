@@ -1142,3 +1142,101 @@ describe("the sender's confirmation and the pickup code (docs/AIR_PACKAGES.md)",
   });
 });
 /* eslint-enable max-len */
+
+// The sender's "package received" with the receipt PDF
+// (docs/WHATSAPP_CONTAINER_UPDATES.md "Package receipt for the sender").
+describe("the package receipt on the sender's received message", () => {
+  const {
+    RECEIPT_FALLBACK_CODES,
+    TEMPLATE_NOT_READY_CODES,
+    receiptDocumentFilename,
+    receiptDocumentWanted,
+    receiptFallbackDecision,
+  } = require("../container_updates");
+  const RECEIPT = {
+    link: "https://us-central1-demo.cloudfunctions.net/parkingDocument" +
+      "?view=packageReceiptPdf&t=tok&p=line1&e=1&s=sig",
+    filename: "Receipt CL-K7M4P2.pdf",
+  };
+  const args = (role, extra = {}) => ({
+    phone: role === "sender" ? "+16465550100" : "+224620000000",
+    name: role === "sender" ? "Fatou Diallo" : "Mariama Bah",
+    businessName: "Dala Shipping", businessPhone: "+16465550199",
+    line: line(), container: {destinationCountryId: "gn",
+      destinationCountryName: "Guinea"},
+    update: "received", trackingCode: "CL-K7M4P2", role,
+    documentBase: "https://example.test/d", ...extra,
+  });
+
+  it("is for the sender's received in the bilingual set only", () => {
+    const want = (extra) => receiptDocumentWanted(
+        {update: "received", role: "sender", templateSet: "bilingual",
+          ...extra});
+    assert.equal(want({}), true);
+    assert.equal(want({role: "receiver"}), false);
+    // The sender's confirmation ask has no PDF in v1.
+    assert.equal(want({update: "confirm"}), false);
+    assert.equal(want({update: "shipped"}), false);
+    assert.equal(want({templateSet: "legacy"}), false);
+  });
+
+  it("names the file after the tracking code", () => {
+    assert.equal(receiptDocumentFilename({trackingCode: "CL-K7M4P2"}),
+        "Receipt CL-K7M4P2.pdf");
+    assert.equal(receiptDocumentFilename({trackingCode: "CL-K7/..M4"}),
+        "Receipt CL-K7M4.pdf");
+    assert.equal(receiptDocumentFilename({}), "Receipt.pdf");
+  });
+
+  it("sends the sender the receipt template with the link and file name",
+      () => {
+        const body = whatsappUpdateMessage(
+            args("sender", {receiptDocument: RECEIPT}));
+        assert.equal(body.template.name, "shipment_received_doc_2lang");
+        const [header, text, button] = body.template.components;
+        assert.deepEqual(header, {type: "header", parameters: [
+          {type: "document", document: {link: RECEIPT.link,
+            filename: "Receipt CL-K7M4P2.pdf"}}]});
+        // The body is the plain received message's, word for word.
+        const plain = whatsappUpdateMessage(args("sender"));
+        assert.equal(plain.template.name, "shipment_received_2lang");
+        assert.deepEqual(text, plain.template.components[0]);
+        assert.deepEqual(button, plain.template.components[1]);
+      });
+
+  it("never gives the receiver or the confirmation a receipt", () => {
+    const receiver = whatsappUpdateMessage(
+        args("receiver", {receiptDocument: RECEIPT}));
+    assert.equal(receiver.template.name, "shipment_received_2lang");
+    assert.equal(receiver.template.components.length, 2);
+    const legacy = whatsappUpdateMessage(args("sender",
+        {receiptDocument: RECEIPT, templateSet: "legacy"}));
+    assert.equal(legacy.template.name, "package_received");
+    // No link (the PDF could not be made): the plain template.
+    assert.equal(whatsappUpdateMessage(args("sender",
+        {receiptDocument: {link: "", filename: "x.pdf"}})).template.name,
+    "shipment_received_2lang");
+    assert.equal(whatsappUpdateMessage(args("sender",
+        {receiptDocument: null})).template.name, "shipment_received_2lang");
+  });
+
+  it("falls back to the plain template when Meta cannot use the receipt " +
+      "template", () => {
+    for (const code of [...TEMPLATE_NOT_READY_CODES, 132015, 132016, 131053]) {
+      assert.ok(RECEIPT_FALLBACK_CODES.includes(code));
+      assert.equal(receiptFallbackDecision(true,
+          {ok: false, httpStatus: 404, errorCode: code}), true, `${code}`);
+    }
+    // Sent, a number Meta refuses, the network: not a template problem.
+    assert.equal(receiptFallbackDecision(true, {ok: true}), false);
+    assert.equal(receiptFallbackDecision(true,
+        {ok: false, httpStatus: 400, errorCode: 131026}), false);
+    assert.equal(receiptFallbackDecision(true,
+        {ok: false, httpStatus: 0}), false);
+    assert.equal(receiptFallbackDecision(true,
+        {ok: false, httpStatus: 400, errorCode: 130429}), false);
+    // The plain template was what went out: nothing to fall back to.
+    assert.equal(receiptFallbackDecision(false,
+        {ok: false, httpStatus: 404, errorCode: 132001}), false);
+  });
+});

@@ -300,6 +300,52 @@ describe("submitting a request", () => {
     assert.equal(senegal.status, "new");
   });
 
+  // "We got your request" (docs/PACKAGE_REQUESTS.md §7): a request with no
+  // estimate yet is acknowledged at once, once.
+  it("queues exactly one 'we got your request' row for a request without " +
+      "an estimate", async () => {
+    const sent = await submit();
+    assert.equal(sent.status, "new");
+    const rows = await db.collection("containerUpdates")
+        .where("requestId", "==", sent.requestId).get();
+    assert.deepEqual(rows.docs.map((d) => d.id),
+        [`req_${sent.requestId}_request_received`]);
+    const row = rows.docs[0].data();
+    assert.equal(row.update, "request_received");
+    assert.equal(row.role, "sender");
+    assert.equal(row.lineId, "");
+    assert.equal(row.status, "waiting_for_whatsapp");
+    assert.equal(row.phone, (await requestDoc(sent.requestId))
+        .sender.phoneE164);
+    assert.equal(row.trackingCode, sent.code);
+    assert.equal((await requestDoc(sent.requestId)).whatsapp.update,
+        "request_received");
+  });
+
+  it("queues no 'we got your request' row when an estimate goes out " +
+      "with the request", async () => {
+    const sent = await submit({pieces: [{kind: "barrel"}]});
+    assert.equal(sent.status, "estimate_sent");
+    const rows = await db.collection("containerUpdates")
+        .where("requestId", "==", sent.requestId).get();
+    assert.deepEqual(rows.docs.map((d) => d.id),
+        [`req_${sent.requestId}_estimate_v1`]);
+  });
+
+  it("never queues 'we got your request' twice for one submission",
+      async () => {
+        const key = `test-key-twice-${Date.now()}`;
+        const first = await submit({idempotencyKey: key}, "anon-twice");
+        const again = await submit({idempotencyKey: key}, "anon-twice");
+        assert.equal(again.replayed, true);
+        assert.equal(again.requestId, first.requestId);
+        const rows = await db.collection("containerUpdates")
+            .where("requestId", "==", first.requestId).get();
+        assert.equal(rows.size, 1);
+        assert.equal(rows.docs[0].id,
+            `req_${first.requestId}_request_received`);
+      });
+
   it("keeps a signed-in customer's uid for the app's list", async () => {
     const sent = await call("submitPackageRequest", submission(), CUSTOMER);
     assert.equal((await requestDoc(sent.requestId)).sender.uid, CUSTOMER);
@@ -1021,6 +1067,125 @@ describe("WhatsApp for requests", () => {
       assert.equal(row.data().status, "waiting_for_template");
       stored = await requestDoc(third.requestId);
       assert.equal(stored.whatsappUnreachable, false);
+    } finally {
+      disconnectWhatsApp();
+    }
+  });
+});
+
+describe("WhatsApp: we got your request", () => {
+  const rowIdOf = (requestId) => `req_${requestId}_request_received`;
+  const rowOf = async (requestId) => (await db.collection("containerUpdates")
+      .doc(rowIdOf(requestId)).get()).data();
+
+  it("sends the template with the request code and the /e/ button",
+      async () => {
+        connectWhatsApp();
+        try {
+          const {requestId, token, code} = await submit();
+          assert.equal((await rowOf(requestId)).status, "queued");
+          fakeWhatsApp({status: 200, body: {messages: [{id: "wamid.RCV"}]}});
+          await deliver(rowIdOf(requestId));
+          assert.equal(whatsappCalls.length, 1);
+          const body = whatsappCalls[0];
+          assert.equal(body.template.name, "package_request_received_2lang");
+          assert.deepEqual(body.template.language, {code: "en"});
+          assert.deepEqual(body.template.components[0].parameters
+              .map((p) => p.text), ["Fatou Diallo", "Dala Shipping",
+            "1 barrel, 1 box", "Guinea", "Dala Shipping", "1 baril, 1 carton",
+            "Guinée", code]);
+          assert.deepEqual(body.template.components[1], {type: "button",
+            sub_type: "url", index: "0",
+            parameters: [{type: "text", text: token}]});
+          const stored = await requestDoc(requestId);
+          assert.equal(stored.whatsapp.status, "sent");
+          assert.equal(stored.whatsapp.update, "request_received");
+          assert.equal((await rowOf(requestId)).whatsappMessageId,
+              "wamid.RCV");
+          // Delivered again (a duplicate trigger): the sent row is not sent
+          // twice.
+          fakeWhatsApp({status: 200, body: {messages: [{id: "wamid.X"}]}});
+          await deliver(rowIdOf(requestId));
+          assert.equal(whatsappCalls.length, 0);
+        } finally {
+          disconnectWhatsApp();
+        }
+      });
+
+  it("waits for its template, then goes once Meta approves it", async () => {
+    connectWhatsApp();
+    try {
+      const {requestId} = await submit();
+      fakeWhatsApp({status: 404, body: {error: {code: 132001,
+        message: "Template name does not exist in the translation"}}});
+      await deliver(rowIdOf(requestId));
+      let row = await rowOf(requestId);
+      assert.equal(row.status, "waiting_for_template");
+      assert.equal(row.attempts, 0, "waiting does not use up a try");
+      assert.equal((await requestDoc(requestId)).whatsappUnreachable, false);
+      // The half-hourly sweep re-queues it; approved now, it goes.
+      await db.collection("containerUpdates").doc(rowIdOf(requestId))
+          .update({status: "queued"});
+      fakeWhatsApp({status: 200, body: {messages: [{id: "wamid.LATE"}]}});
+      await deliver(rowIdOf(requestId));
+      row = await rowOf(requestId);
+      assert.equal(row.status, "sent");
+      assert.equal(whatsappCalls.length, 1);
+    } finally {
+      disconnectWhatsApp();
+    }
+  });
+
+  it("is held back for a customer who replied STOP", async () => {
+    connectWhatsApp();
+    try {
+      const {requestId} = await submit();
+      const phone = (await requestDoc(requestId)).sender.phoneE164;
+      await db.collection("whatsappStops").doc(phone)
+          .set({stopped: true, atMs: Date.now()});
+      fakeWhatsApp({status: 200, body: {messages: [{id: "wamid.NO"}]}});
+      await deliver(rowIdOf(requestId));
+      assert.equal(whatsappCalls.length, 0, "nothing reached Meta");
+      assert.equal((await rowOf(requestId)).status, "failed");
+      await db.collection("whatsappStops").doc(phone).delete();
+    } finally {
+      disconnectWhatsApp();
+    }
+  });
+
+  it("is skipped when an estimate went out, or the request closed, " +
+      "before it was sent", async () => {
+    connectWhatsApp();
+    try {
+      const estimated = await submit();
+      await db.collection("packageRequests").doc(estimated.requestId)
+          .update({status: "estimate_sent"});
+      fakeWhatsApp({status: 200, body: {messages: [{id: "wamid.NO"}]}});
+      await deliver(rowIdOf(estimated.requestId));
+      assert.equal(whatsappCalls.length, 0);
+      const skipped = await rowOf(estimated.requestId);
+      assert.equal(skipped.status, "skipped");
+      assert.match(skipped.error, /already estimate_sent/);
+
+      const closed = await submit();
+      await db.collection("packageRequests").doc(closed.requestId)
+          .update({status: "cancelled"});
+      await deliver(rowIdOf(closed.requestId));
+      assert.equal(whatsappCalls.length, 0);
+      assert.equal((await rowOf(closed.requestId)).status, "skipped");
+    } finally {
+      disconnectWhatsApp();
+    }
+  });
+
+  it("flags a number WhatsApp refuses, like the estimate does", async () => {
+    connectWhatsApp();
+    try {
+      const {requestId} = await submit();
+      fakeWhatsApp({status: 400, body: {error: {code: 131026,
+        message: "Message undeliverable"}}});
+      await deliver(rowIdOf(requestId));
+      assert.equal((await requestDoc(requestId)).whatsappUnreachable, true);
     } finally {
       disconnectWhatsApp();
     }

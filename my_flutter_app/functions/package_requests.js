@@ -195,6 +195,30 @@ function isOpenStatus(status) {
   return OPEN_STATUSES.includes(text(status, 40));
 }
 
+// The update of the "We got your request" message: it is queued with the
+// request and is only true while no estimate has gone out.
+const REQUEST_RECEIVED_UPDATE = "request_received";
+
+/**
+ * Why a queued request message should not go out any more, "" when it
+ * should. A message about a request that closed says nothing useful, and
+ * "the business will send the price soon" is stale once an estimate exists
+ * (the row may have waited for its template for days).
+ *
+ * @param {object} request The stored request.
+ * @param {string} update The row's update.
+ * @return {string} The reason, or "".
+ */
+function requestMessageSkipReason(request, update) {
+  const status = text(request?.status, 40);
+  if (!isOpenStatus(status)) return `The request is ${status}.`;
+  if (text(update, 40) === REQUEST_RECEIVED_UPDATE &&
+      status !== STATUS.NEW) {
+    return `The request is already ${status}.`;
+  }
+  return "";
+}
+
 /**
  * @param {object} request A stored request.
  * @return {boolean} Whether it was paid online by card.
@@ -1822,6 +1846,8 @@ module.exports = {
   REQUEST_MESSAGES,
   e164,
   isOpenStatus,
+  REQUEST_RECEIVED_UPDATE,
+  requestMessageSkipReason,
   isCardPaid,
   businessTimeZone,
   dateKeyIn,

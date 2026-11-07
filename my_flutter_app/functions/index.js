@@ -243,6 +243,7 @@ const {
 const packageFlow = require("./whatsapp_package_flow");
 const requestReceive = require("./request_receive");
 const {
+  TEMPLATE: WHATSAPP_TEMPLATE,
   loginCodeTemplateMessage,
   parkingTemplateMessage,
   requestTemplateMessage,
@@ -470,6 +471,10 @@ const {
   whatsappUpdateMessage,
   whatsappConfigured,
   destinationName: containerDestinationName,
+  describeLine: describeContainerLine,
+  receiptDocumentWanted,
+  receiptDocumentFilename,
+  receiptFallbackDecision,
 } = require("./container_updates");
 const {
   PICKUP_MESSAGES,
@@ -16149,6 +16154,41 @@ async function parkingReceiptPdfFile(db, req, token) {
 }
 
 /**
+ * The package receipt PDF a /d?view=packageReceiptPdf link points at, when
+ * the link is genuine (package_proof.packageReceiptLinkValid: the line's
+ * own document token, the line id and the expiry signed together) and the
+ * server kept that line's receipt (the sender's "package received"
+ * message).
+ *
+ * @param {object} db Firestore.
+ * @param {object} req The request ({t, p, e, s}).
+ * @param {string} token The line's document token.
+ * @return {Promise<object|null>} {bytes, filename}, or null for 404.
+ */
+async function packageReceiptPdfFile(db, req, token) {
+  if (!packageProof.packageReceiptLinkValid(req.query, token, Date.now())) {
+    return null;
+  }
+  const lines = await db.collection("containerLines")
+      .where("documentToken", "==", token).limit(1).get();
+  if (lines.empty || lines.docs[0].id !== String(req.query?.p || "")) {
+    return null;
+  }
+  const line = lines.docs[0].data() || {};
+  try {
+    const file = requestPhotoBucket().file(packageReceiptStoragePath(
+        String(line.businessId || ""), lines.docs[0].id));
+    const [meta] = await file.getMetadata();
+    const [bytes] = await file.download();
+    const kept = String(meta?.metadata?.filename || "")
+        .replace(/["\\\r\n]/g, "");
+    return {bytes, filename: kept || "Receipt.pdf"};
+  } catch (error) {
+    return null;
+  }
+}
+
+/**
  * The invoice PDF a /d?view=invoicePdf link points at, when the link is
  * genuine (package_proof.invoiceLinkValid: the month's run token, the
  * customer's number and the expiry signed together) and the server kept
@@ -16224,6 +16264,18 @@ exports.parkingDocument = onRequest(
       // own token, the payment, a signed expiry; the PDF itself, or 404.
       if (String(req.query?.view || "") === "receiptPdf") {
         const receipt = await parkingReceiptPdfFile(db, req, token);
+        if (!receipt) return notFound();
+        res.set("Content-Type", "application/pdf");
+        res.set("Content-Disposition",
+            `inline; filename="${receipt.filename}"`);
+        res.set("Cache-Control", "private, max-age=3600");
+        return res.status(200).send(receipt.bytes);
+      }
+      // A package's receipt PDF (the sender's "package received" message,
+      // docs/WHATSAPP_CONTAINER_UPDATES.md): the line's own token, the line
+      // id, a signed expiry; the PDF itself, or 404.
+      if (String(req.query?.view || "") === "packageReceiptPdf") {
+        const receipt = await packageReceiptPdfFile(db, req, token);
         if (!receipt) return notFound();
         res.set("Content-Type", "application/pdf");
         res.set("Content-Disposition",
@@ -24745,6 +24797,60 @@ function whatsappPhotoBase() {
     "https://laawoldigital.com/d";
 }
 
+/**
+ * @param {string} businessId The business.
+ * @param {string} lineId The package (containerLines id).
+ * @return {string} Where the package receipt PDF is kept in Storage
+ *   (server only).
+ */
+function packageReceiptStoragePath(businessId, lineId) {
+  return `packageReceipts/${businessId}/${lineId}.pdf`;
+}
+
+/**
+ * The receipt PDF of one package for its sender's "package received"
+ * message: renders it from the line as it is now, keeps it in Storage (the
+ * same path again on a retry) and returns a 30-day signed link to it,
+ * served by parkingDocument (view=packageReceiptPdf), with its file name.
+ *
+ * @param {object} db Firestore.
+ * @param {object} args {lineRef, line, business, businessId, businessName,
+ *   container, group, nowMs?}.
+ * @return {Promise<{link: string, filename: string}>} The header's link
+ *   and file name.
+ */
+async function buildPackageReceiptDocument(db, args) {
+  const {lineRef, line, business, businessId, container, group} = args;
+  const nowMs = args.nowMs || Date.now();
+  const zone = String(business?.packageRequestSettings?.timeZone || "")
+      .trim() || "America/New_York";
+  const bytes = await parkingReceiptPdf.renderReceiptPdf(
+      parkingReceiptPdf.packageReceiptModel({
+        business: {...business, name: args.businessName || business?.name},
+        line,
+        contentsEn: describeContainerLine(line, "en", group),
+        contentsFr: describeContainerLine(line, "fr", group),
+        destinationEn: containerDestinationName(line, container, "en"),
+        destinationFr: containerDestinationName(line, container, "fr"),
+        receivedByName: await staffNameForReceipt(db, line.addedByStaffId),
+        timeZone: zone,
+      }));
+  const filename = receiptDocumentFilename(line);
+  const token = String(line.documentToken || "").trim() ||
+    await ensureLineDocumentToken(db, lineRef);
+  await requestPhotoBucket()
+      .file(packageReceiptStoragePath(businessId, lineRef.id))
+      .save(bytes, {contentType: "application/pdf", resumable: false,
+        metadata: {metadata: {filename}}});
+  return {
+    filename,
+    link: packageProof.packageReceiptLink({
+      base: whatsappPhotoBase(), token, lineId: lineRef.id,
+      expiresMs: nowMs + packageProof.PHOTO_LINK_MS,
+    }),
+  };
+}
+
 exports.deliverContainerCustomerUpdate = onDocumentWritten(
     {
       document: "containerUpdates/{messageId}",
@@ -24843,7 +24949,7 @@ exports.deliverContainerCustomerUpdate = onDocumentWritten(
       // message counts the parts as they are now.
       const group = lineWasSplit(line) ?
         await containerLineGroup(db, lineDoc.id, line) : null;
-      const message = whatsappUpdateMessage({
+      const messageArgs = {
         group,
         phone: row.phone, name: row.name,
         businessName: row.businessName || business.name,
@@ -24860,7 +24966,28 @@ exports.deliverContainerCustomerUpdate = onDocumentWritten(
         // redirect, which Meta's media fetch may not follow.
         role: String(row.role || ""),
         documentBase: whatsappPhotoBase(),
-      });
+      };
+      // The sender's "package received" carries the package receipt PDF
+      // (the receiver's has no money in it, and never gets one). A receipt
+      // that cannot be drawn or kept never holds the message back: it goes
+      // out as the plain template.
+      const wantsReceipt = receiptDocumentWanted(
+          {update: row.update, role: row.role});
+      let receipt = null;
+      if (wantsReceipt) {
+        receipt = await buildPackageReceiptDocument(db, {
+          lineRef: lineDoc.ref, line, business, container, group,
+          businessId: String(row.businessId || line.businessId || ""),
+          businessName: row.businessName || business.name,
+        }).catch((error) => {
+          logger.warn("Package receipt not built; the plain message goes", {
+            lineId: lineDoc.id, error: String(error?.message || error)
+                .slice(0, 300)});
+          return null;
+        });
+      }
+      const message = whatsappUpdateMessage(
+          {...messageArgs, receiptDocument: receipt});
       if (!message) {
         await recordContainerUpdateAttempt(db, rowRef, row, {
           status: CONTAINER_UPDATE_STATUS.FAILED, leaseUntilMs: 0,
@@ -24869,7 +24996,25 @@ exports.deliverContainerCustomerUpdate = onDocumentWritten(
             `No WhatsApp template for the update "${row.update}".`});
         return;
       }
-      const sent = await sendWhatsAppMessage(message);
+      let sent = await sendWhatsAppMessage(message);
+      let receiptState = wantsReceipt ?
+        (receipt ? "attached" : "unavailable") : "";
+      const withReceiptTemplate = message.template?.name ===
+        WHATSAPP_TEMPLATE.SHIPMENT_RECEIVED_DOC_2LANG;
+      if (receiptFallbackDecision(withReceiptTemplate, sent)) {
+        // The receipt template is not approved yet (or paused, or Meta
+        // could not fetch the PDF): the sender still hears it now, in the
+        // plain message, and this row says so.
+        logger.info("Receipt template not usable; sending the plain message", {
+          messageId: rowRef.id, errorCode: sent.errorCode || 0,
+          error: sent.error});
+        const plain = whatsappUpdateMessage(
+            {...messageArgs, receiptDocument: null});
+        if (plain) {
+          sent = await sendWhatsAppMessage(plain);
+          receiptState = "fallback";
+        }
+      }
       const status = statusAfterAttempt(
           whatsappSendOutcome(sent), claim.attempts);
       const waitingForTemplate =
@@ -24877,6 +25022,7 @@ exports.deliverContainerCustomerUpdate = onDocumentWritten(
       await recordContainerUpdateAttempt(db, rowRef, row, {
         status,
         leaseUntilMs: 0,
+        ...(receiptState ? {receiptDocument: receiptState} : {}),
         // Waiting for Meta to approve the template is not the message's
         // fault: the try does not count towards the attempt limit.
         ...(waitingForTemplate ?
@@ -47995,10 +48141,12 @@ async function deliverPackageRequestMessage(db, rowRef, row, claim) {
   }
   const request = requestDoc.data() || {};
   // A reminder about a request that closed since it was queued says nothing
-  // useful; an estimate too.
-  if (!packageRequests.isOpenStatus(request.status)) {
+  // useful; an estimate too, and "we got your request" once an estimate
+  // exists.
+  const skip = packageRequests.requestMessageSkipReason(request, row.update);
+  if (skip) {
     await rowRef.update({status: "skipped", leaseUntilMs: 0,
-      error: `The request is ${request.status}.`,
+      error: skip,
       updatedAt: FirestoreFieldValue.serverTimestamp()});
     return;
   }
@@ -48526,6 +48674,13 @@ async function createPackageRequest(db, {uid, anonymous, data, mapsKey}) {
   if (estimate && !confirmedByForm) {
     await queuePackageRequestMessage(db, {requestId: requestRef.id,
       update: "estimate_v1"});
+  }
+  // No estimate yet (status `new`): tell the customer at once that the
+  // request is in and the business will send the price. One row per request
+  // (a fixed id), so it can never go twice.
+  if (!estimate) {
+    await queuePackageRequestMessage(db, {requestId: requestRef.id,
+      update: packageRequests.REQUEST_RECEIVED_UPDATE});
   }
   const stored = (await requestRef.get()).data() || {};
   await notifyPackageRequestStaff(db, {businessId,

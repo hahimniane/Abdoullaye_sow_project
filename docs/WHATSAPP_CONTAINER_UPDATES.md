@@ -9,6 +9,7 @@ a French block):
 | Moment | Template | Fires when |
 | --- | --- | --- |
 | `received` | `shipment_received_2lang` | The package is registered: dropped off to wait for a container (`addWaitingPackage`) or added straight onto one (`addContainerLine`). Assigning a waiting package to a box, or taking it off one, sends nothing. |
+| `received` (sender, with receipt) | `shipment_received_doc_2lang` | The same moment, for the **sender** only: `shipment_received_2lang`'s body plus the package receipt PDF (below). Falls back to `shipment_received_2lang` when the template is not usable yet. |
 | `shipped` | `shipment_departed_2lang` | Staff mark the container **Shipped**, or the carrier feed reports it on the vessel — whichever comes first. |
 | `arrived` | `shipment_ready_pickup_2lang` | Staff mark the container **Ready for pickup**. Only staff: the carrier's "discharged / available at the port" is recorded on the timeline and sends nothing, because a box at the port cannot be collected yet. |
 | `confirm` | `package_confirm_2lang` | **Instead of** the sender's `received` when the business has *Ask the sender to confirm* on and the line has a drop-off photo (docs/AIR_PACKAGES.md §4.4): the first photo, the item list and weight, and two quick replies, **OK ✓** / **Something's wrong**. The receiver still gets `received`. Row `{lineId}_sender_confirm`; on the line's `lastCustomerUpdate` it counts as `received`. |
@@ -31,6 +32,57 @@ is marked `failed` and says so. There is no legacy version: with
 `WHATSAPP_TEMPLATE_SET=legacy` the delivered message is still
 `shipment_delivered_2lang`. `delivered` ranks after `arrived` on the line's
 `lastCustomerUpdate`.
+
+### Package receipt for the sender (2026-11-07)
+
+The **sender's** `received` message carries a receipt PDF:
+`shipment_received_doc_2lang`, the same body as `shipment_received_2lang`
+under a DOCUMENT header (file name `Receipt CL-XXXXXX.pdf`). The receiver
+keeps `shipment_received_2lang` unchanged (no money in it, no PDF).
+
+- **When.** Only the sender's `{lineId}_sender_received` row, in the
+  bilingual set. The row, its id and the rest of the queue are unchanged.
+  The sender-confirm variant (`package_confirm_2lang`, when the business asks
+  senders to confirm) stays as it is: **no PDF there in v1**. A sender who is
+  also the receiver (*Sender is the receiver*, or the same number on both
+  sides) hears once, as the receiver, so gets no PDF either.
+- **The PDF** is drawn at send time by `parking_receipt_pdf.js`
+  (`packageReceiptModel`, the same look as the parking receipt): business
+  logo, name, address and phone; "Package receipt / Reçu de colis" and
+  `REC-{trackingCode}`; the status pill (paid, partly paid, pay on arrival,
+  not paid yet, price to be confirmed); sender (name and their own phone),
+  receiver (name only), destination, contents (as the "what" of the
+  message, English / French), ship mode, tracking code, date and 12-hour time
+  received (US, month first, in the business's zone), who received it;
+  then total price, paid so far and the balance (or "Pay on arrival" /
+  "Paid in full"). Every label is English / French.
+- **Stored** in Storage at `packageReceipts/{businessId}/{lineId}.pdf`
+  (server only; `storage.rules` deny every client) and served by
+  `parkingDocument` as `view=packageReceiptPdf`:
+  `?view=packageReceiptPdf&t={line.documentToken}&p={lineId}&e={expiresMs}&s={sig}`,
+  signed like the parking receipt link (`package_proof.packageReceiptLink`,
+  30 days, the signed path is `pkgreceipt:{lineId}` so no other link opens
+  it). The header link points straight at the function URL
+  (`whatsappPhotoBase()`). The line's `documentToken` is minted when it has
+  none. A line that is removed has no receipt link any more (404).
+- **Never holds the message back.** If the PDF cannot be drawn or stored
+  the plain template is sent. If Meta refuses the receipt template with a
+  "not usable yet" code (`RECEIPT_FALLBACK_CODES` in `container_updates.js`:
+  132001 not found / in review - `TEMPLATE_NOT_READY_CODES` - 132015 paused,
+  132016 disabled, 131052 / 131053 the PDF could not be fetched) the same
+  row is sent again at once as `shipment_received_2lang` and logged. The
+  row records which happened in `receiptDocument`: `attached`, `fallback`
+  or `unavailable` (no PDF). If the plain template is not approved either
+  the row waits as `waiting_for_template`, as before; the next sweep tries
+  the receipt template first again. Until
+  `shipment_received_doc_2lang` is approved every sender simply gets the
+  plain message.
+- A re-send of the sender's message (a corrected number, *Send again*;
+  docs/WHATSAPP_RESEND.md) goes through the same path: the receipt is drawn
+  again from the line as it is then and attached the same way.
+- Created with `~/laawol-deploy-logs/create_received_doc_template.py`
+  (dry run by default; `--apply` submits). Status (2026-11-07): written,
+  **not submitted**.
 
 ### "Arrived" now means ready for pickup (2026-10-18)
 
@@ -494,6 +546,41 @@ default, `--apply` submits both templates below; language `en`, category
 Status (2026-10-29): written, **not submitted**. Until Meta approves it a
 confirm send answers `132001` and waits as `waiting_for_template` like any
 other template in review.
+
+### `shipment_received_doc_2lang`
+
+The sender's `received`, with the package receipt (see *Package receipt for
+the sender*). **The same body as `shipment_received_2lang`** (same eight
+variables, same order), plus a header: **DOCUMENT**, the receipt PDF as a
+30-day signed link to the `/d?view=packageReceiptPdf` endpoint and the file
+name `Receipt CL-XXXXXX.pdf`. One URL button like the other tracking
+messages. Variables: {{1}} name, {{2}} business, {{3}} what (EN), {{4}}
+destination (EN), {{5}} business, {{6}} what (FR), {{7}} destination (FR),
+{{8}} tracking code.
+
+```
+Hello / Bonjour {{1}} 👋
+
+*ENGLISH*
+{{2}} has received your shipment of {{3}} going to {{4}}. We will message you here when it leaves and when it is ready for pickup.
+
+—————
+*FRANÇAIS*
+{{5}} a bien reçu votre envoi de {{6}} à destination de {{7}}. Nous vous écrirons ici quand il partira et quand il sera prêt à récupérer.
+
+🔎 Tracking code / Code de suivi : {{8}}
+
+Tap the button below to follow it.
+Appuyez sur le bouton ci-dessous pour le suivre.
+```
+
+Sample values: `Fatou`, `Dala Shipping`, `3 barrels`, `Guinea`,
+`Dala Shipping`, `3 fûts`, `Guinée`, `CL-K7M4P2`. Button: *Visit website*,
+`Track · Suivre`, dynamic `https://customer.laawoldigital.com/t/{{1}}`.
+
+The request body (`whatsapp_templates.templateMessage` with
+`receiptDocument: true`): a `header` component `{type: "document",
+document: {link, filename}}`, the `body` with eight texts, the URL button.
 
 ### Pickup number (no template of its own)
 

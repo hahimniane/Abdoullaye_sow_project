@@ -502,7 +502,9 @@ function deliveryDayText(value, language) {
  *   record (pickupCity, pickupAddress, pickupPhone); `business` the
  *   business record (its address and phone are the pickup fallbacks).
  *   `role` decides who hears the pickup code; `documentBase` is the /d
- *   endpoint the confirmation's photo link is served by.
+ *   endpoint the confirmation's photo link is served by. `receiptDocument`
+ *   ({link, filename}) is the package receipt PDF: given for the sender's
+ *   `received` it picks shipment_received_doc_2lang.
  * @return {object|null} The /messages request body, or null for an update
  *   that has no message (a confirmation without a photo or a document
  *   token among them: the template needs its image header).
@@ -523,12 +525,20 @@ function whatsappUpdateMessage(args) {
   if (text(args.update, 20) === CONTAINER_UPDATE.CONFIRM && !photo) {
     return null;
   }
+  const receiptLink = text(args.receiptDocument?.link, 1000);
+  const withReceipt = Boolean(receiptLink) && receiptDocumentWanted({
+    update: args.update, role: args.role, templateSet: args.templateSet});
   return templateMessage({
     phone: text(args.phone, 40),
     update: args.update,
     language,
     templateSet: args.templateSet,
+    receiptDocument: withReceipt,
     values: {
+      documentLink: withReceipt ? receiptLink : "",
+      documentFilename: withReceipt ?
+        text(args.receiptDocument?.filename, 100) ||
+          receiptDocumentFilename(line) : "",
       name: args.name,
       business: args.businessName,
       what: describeLine(args.line, language, args.group),
@@ -578,6 +588,34 @@ function confirmationPhotoLink(line, documentBase, nowMs = Date.now()) {
   const base = text(documentBase, 300).replace(/\/+$/, "");
   if (!path || !token || !base) return "";
   return photoLink({base, token, path, expiresMs: nowMs + PHOTO_LINK_MS});
+}
+
+/**
+ * Whether the sender's `received` carries the package receipt PDF: the
+ * sender's own message (never the receiver's, which has no money in it, and
+ * never the confirmation ask), in the bilingual set - the legacy set has no
+ * such template.
+ *
+ * @param {{update: string, role: string, templateSet: (string|undefined)}}
+ *   args The row's update and role, and the template set (the switch when
+ *   omitted).
+ * @return {boolean} True to build and attach the receipt.
+ */
+function receiptDocumentWanted(args) {
+  const set = args?.templateSet || whatsappTemplateSet();
+  return text(args?.update, 20) === CONTAINER_UPDATE.RECEIVED &&
+    text(args?.role, 20) === "sender" && set === TEMPLATE_SET.BILINGUAL;
+}
+
+/**
+ * The receipt's file name in the message: "Receipt CL-K7M4P2.pdf".
+ *
+ * @param {object} line A containerLines row.
+ * @return {string} A safe file name.
+ */
+function receiptDocumentFilename(line) {
+  const code = text(line?.trackingCode, 40).replace(/[^A-Za-z0-9_-]/g, "");
+  return code ? `Receipt ${code}.pdf` : "Receipt.pdf";
 }
 
 /**
@@ -632,6 +670,29 @@ const UPDATE_STATUS = Object.freeze({
 const TEMPLATE_NOT_READY_CODES = Object.freeze([132001]);
 // How long a row may wait for its template before it is given up on.
 const TEMPLATE_WAIT_MAX_MS = 14 * 24 * 60 * 60 * 1000;
+
+// Meta's answers that mean the receipt template cannot be used right now:
+// not found / still in review (TEMPLATE_NOT_READY_CODES), paused or disabled
+// for quality (132015, 132016), or its document header could not be fetched
+// (131052, 131053). The sender still hears about the package, in the plain
+// message.
+const RECEIPT_FALLBACK_CODES = Object.freeze([
+  ...TEMPLATE_NOT_READY_CODES, 132015, 132016, 131052, 131053,
+]);
+
+/**
+ * Whether a refused receipt message should go out again as the plain
+ * `received` template instead of waiting or failing.
+ *
+ * @param {boolean} attached Whether the message that was sent carried the
+ *   receipt template.
+ * @param {object} result The send's answer {ok, errorCode}.
+ * @return {boolean} True to send the plain template now.
+ */
+function receiptFallbackDecision(attached, result) {
+  if (attached !== true || result?.ok) return false;
+  return RECEIPT_FALLBACK_CODES.includes(Number(result?.errorCode || 0));
+}
 
 // Longer than one send can take (the fetch gives up at WHATSAPP_TIMEOUT_MS
 // and the function at its own timeout), so a live sender is never robbed.
@@ -1016,6 +1077,10 @@ module.exports = {
   pickupAddressWithCode,
   pickupCodeFor,
   confirmationPhotoLink,
+  receiptDocumentWanted,
+  receiptDocumentFilename,
+  receiptFallbackDecision,
+  RECEIPT_FALLBACK_CODES,
   containerUpdateMessageId,
   trackingLink,
   pickupDestinationIds,

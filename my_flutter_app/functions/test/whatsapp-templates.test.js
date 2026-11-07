@@ -58,15 +58,19 @@ const buttonOf = (template, values = VALUES, language = "en") =>
       .find((part) => part.type === "button");
 const ALL_TEMPLATES = [...BILINGUAL_TEMPLATES, ...LEGACY_TEMPLATES];
 // Every template but the confirmation carries the tracking URL button.
+// The receipt template has a document header, so it is tested on its own
+// (below).
 const URL_BUTTON_TEMPLATES = ALL_TEMPLATES.filter((template) =>
-  template !== "package_confirm_2lang");
+  !["package_confirm_2lang", "shipment_received_doc_2lang"]
+      .includes(template));
 
 describe("which template each update sends", () => {
   it("names the bilingual and the legacy templates exactly", () => {
     assert.deepEqual([...BILINGUAL_TEMPLATES].sort(), [
       "package_confirm_2lang",
       "shipment_delivered_2lang", "shipment_departed_2lang",
-      "shipment_ready_pickup_2lang", "shipment_received_2lang"]);
+      "shipment_ready_pickup_2lang", "shipment_received_2lang",
+      "shipment_received_doc_2lang"]);
     assert.deepEqual([...LEGACY_TEMPLATES].sort(), [
       "container_arrived", "container_departed", "package_received"]);
     assert.deepEqual(Object.values(TEMPLATE).sort(),
@@ -299,7 +303,8 @@ describe("the legacy variables, in the order Meta numbered them", () => {
 describe("every template", () => {
   it("has one URL button whose parameter is the code, except the " +
       "confirmation", () => {
-    assert.deepEqual(Object.keys(TEMPLATE_SHAPE), ["package_confirm_2lang"]);
+    assert.deepEqual(Object.keys(TEMPLATE_SHAPE),
+        ["package_confirm_2lang", "shipment_received_doc_2lang"]);
     for (const template of URL_BUTTON_TEMPLATES) {
       for (const language of TEMPLATE_LANGUAGES) {
         const parts = templateComponents(template, VALUES, language);
@@ -724,6 +729,111 @@ describe("the parking templates", () => {
 
   it("does not change what the container templates send", () => {
     assert.equal(TEMPLATE_VARIABLES.package_confirm_2lang.length, 8);
-    assert.deepEqual(Object.keys(TEMPLATE_SHAPE), ["package_confirm_2lang"]);
+    assert.deepEqual(Object.keys(TEMPLATE_SHAPE),
+        ["package_confirm_2lang", "shipment_received_doc_2lang"]);
+  });
+});
+
+// The sender's "package received" with the receipt PDF
+// (docs/WHATSAPP_CONTAINER_UPDATES.md `shipment_received_doc_2lang`): the
+// same body as shipment_received_2lang under a DOCUMENT header, picked by
+// the `receiptDocument` flag and never by an update of its own.
+describe("the package receipt template", () => {
+  const LINK = "https://us-central1-demo.cloudfunctions.net/parkingDocument" +
+    "?view=packageReceiptPdf&t=tok&p=line1&e=1&s=sig";
+  const values = {...VALUES, documentLink: LINK,
+    documentFilename: "Receipt CL-K7M4P2.pdf"};
+  const send = (extra = {}) => templateMessage({update: "received",
+    phone: "+1 (646) 555-0100", language: "en", values, ...extra});
+
+  it("has the received body, a document header and the tracking button",
+      () => {
+        assert.deepEqual(TEMPLATE_VARIABLES.shipment_received_doc_2lang,
+            TEMPLATE_VARIABLES.shipment_received_2lang);
+        assert.deepEqual(TEMPLATE_SHAPE.shipment_received_doc_2lang,
+            {header: "document", buttons: "url",
+              documentName: "Receipt.pdf"});
+        const body = send({receiptDocument: true});
+        assert.equal(body.to, "16465550100");
+        assert.equal(body.template.name, "shipment_received_doc_2lang");
+        assert.deepEqual(body.template.language, {code: "en"});
+        const [header, text, button] = body.template.components;
+        assert.deepEqual(header, {type: "header", parameters: [
+          {type: "document", document: {link: LINK,
+            filename: "Receipt CL-K7M4P2.pdf"}}]});
+        assert.deepEqual(text.parameters.map((p) => p.text), bodyOf(
+            "shipment_received_2lang", VALUES));
+        assert.equal(button.sub_type, "url");
+        assert.deepEqual(button.parameters,
+            [{type: "text", text: "CL-K7M4P2"}]);
+      });
+
+  it("is only picked on request, for the bilingual received", () => {
+    assert.equal(send().template.name, "shipment_received_2lang");
+    assert.equal(send({receiptDocument: false}).template.name,
+        "shipment_received_2lang");
+    // No update maps to it, and no other update takes it.
+    assert.ok(!Object.values(TEMPLATE_BY_UPDATE)
+        .includes("shipment_received_doc_2lang"));
+    assert.equal(send({update: "shipped", receiptDocument: true})
+        .template.name, "shipment_departed_2lang");
+    assert.equal(send({update: "confirm", receiptDocument: true})
+        .template.name, "package_confirm_2lang");
+    // The legacy set has no receipt template.
+    assert.equal(send({receiptDocument: true, templateSet: "legacy"})
+        .template.name, "package_received");
+  });
+
+  it("names the file when it is not given one", () => {
+    const body = send({receiptDocument: true,
+      values: {...values, documentFilename: ""}});
+    assert.equal(body.template.components[0].parameters[0].document.filename,
+        "Receipt.pdf");
+  });
+});
+
+// "We got your request" (docs/PACKAGE_REQUESTS.md §7).
+describe("the request received template", () => {
+  const {
+    REQUEST_TEMPLATE, REQUEST_TEMPLATE_VARIABLES, requestTemplateForUpdate,
+    requestTemplateMessage,
+  } = require("../whatsapp_templates");
+  const values = {name: "Fatou Diallo", business: "Dala Shipping",
+    piecesEn: "1 barrel, 1 box", piecesFr: "1 baril, 1 carton",
+    destinationEn: "Guinea", destinationFr: "Guinée",
+    requestCode: "R-48KQ2", token: "T".repeat(43)};
+
+  it("is the template of the request_received update", () => {
+    assert.equal(REQUEST_TEMPLATE.PACKAGE_REQUEST_RECEIVED_2LANG,
+        "package_request_received_2lang");
+    assert.equal(requestTemplateForUpdate("request_received"),
+        "package_request_received_2lang");
+    assert.equal(requestTemplateForUpdate("estimate_v1"),
+        "package_estimate_2lang");
+    assert.equal(REQUEST_TEMPLATE_VARIABLES.package_request_received_2lang
+        .length, 8);
+  });
+
+  it("fills eight variables in both languages and the /e/ button", () => {
+    const body = requestTemplateMessage({phone: "+1 646 555 0100",
+      update: "request_received", values});
+    assert.equal(body.to, "16465550100");
+    assert.equal(body.template.name, "package_request_received_2lang");
+    assert.deepEqual(body.template.language, {code: "en"});
+    assert.deepEqual(body.template.components[0].parameters
+        .map((p) => p.text), ["Fatou Diallo", "Dala Shipping",
+      "1 barrel, 1 box", "Guinea", "Dala Shipping", "1 baril, 1 carton",
+      "Guinée", "R-48KQ2"]);
+    assert.deepEqual(body.template.components[1], {type: "button",
+      sub_type: "url", index: "0",
+      parameters: [{type: "text", text: "T".repeat(43)}]});
+  });
+
+  it("never sends an empty parameter", () => {
+    const body = requestTemplateMessage({phone: "+16465550100",
+      update: "request_received", values: {}});
+    for (const parameter of body.template.components[0].parameters) {
+      assert.ok(parameter.text.length > 0);
+    }
   });
 });

@@ -29,6 +29,12 @@
  *                                  list and weight, and two quick replies
  *                                  (OK / Something's wrong) instead of the
  *                                  tracking button. No legacy version.
+ *   shipment_received_doc_2lang  - the sender's `received` with the package
+ *                                  receipt PDF as a DOCUMENT header (the
+ *                                  body is shipment_received_2lang's); sent
+ *                                  instead of it, and the plain template
+ *                                  goes out when this one is not usable yet
+ *                                  (docs/WHATSAPP_CONTAINER_UPDATES.md).
  *   (A line with a pickupCode sends shipment_ready_pickup_2lang too: Meta's
  *   classifier rejects any template that carries a "code to show" as an
  *   authentication message, so the pickup number rides in the address
@@ -55,6 +61,10 @@ const TEMPLATE = Object.freeze({
   SHIPMENT_READY_PICKUP_2LANG: "shipment_ready_pickup_2lang",
   SHIPMENT_DELIVERED_2LANG: "shipment_delivered_2lang",
   PACKAGE_CONFIRM_2LANG: "package_confirm_2lang",
+  // The sender's `received` with the package receipt PDF as a DOCUMENT
+  // header: the same body as SHIPMENT_RECEIVED_2LANG. Only ever picked by
+  // templateMessage's `receiptDocument` flag, never by an update.
+  SHIPMENT_RECEIVED_DOC_2LANG: "shipment_received_doc_2lang",
   // Legacy, one language per message.
   PACKAGE_RECEIVED: "package_received",
   CONTAINER_DEPARTED: "container_departed",
@@ -72,6 +82,7 @@ const BILINGUAL_TEMPLATES = Object.freeze([
   TEMPLATE.SHIPMENT_READY_PICKUP_2LANG,
   TEMPLATE.SHIPMENT_DELIVERED_2LANG,
   TEMPLATE.PACKAGE_CONFIRM_2LANG,
+  TEMPLATE.SHIPMENT_RECEIVED_DOC_2LANG,
 ]);
 const LEGACY_TEMPLATES = Object.freeze([
   TEMPLATE.PACKAGE_RECEIVED,
@@ -202,6 +213,13 @@ const TEMPLATE_VARIABLES = Object.freeze({
     VARIABLE.BUSINESS, VARIABLE.WHAT_FR, VARIABLE.DESTINATION_FR,
     VARIABLE.TRACKING_CODE,
   ]),
+  // Exactly shipment_received_2lang's body; the receipt rides as a header.
+  [TEMPLATE.SHIPMENT_RECEIVED_DOC_2LANG]: Object.freeze([
+    VARIABLE.NAME,
+    VARIABLE.BUSINESS, VARIABLE.WHAT_EN, VARIABLE.DESTINATION_EN,
+    VARIABLE.BUSINESS, VARIABLE.WHAT_FR, VARIABLE.DESTINATION_FR,
+    VARIABLE.TRACKING_CODE,
+  ]),
   [TEMPLATE.SHIPMENT_DEPARTED_2LANG]: Object.freeze([
     VARIABLE.NAME,
     VARIABLE.WHAT_EN, VARIABLE.BUSINESS, VARIABLE.DESTINATION_EN,
@@ -279,6 +297,11 @@ const LEGACY_TEMPLATE_BY_UPDATE = Object.freeze({
 const TEMPLATE_SHAPE = Object.freeze({
   [TEMPLATE.PACKAGE_CONFIRM_2LANG]: Object.freeze({
     header: "image", buttons: "quick_reply",
+  }),
+  // The package receipt PDF (a 30-day signed link plus a file name) and the
+  // tracking button.
+  [TEMPLATE.SHIPMENT_RECEIVED_DOC_2LANG]: Object.freeze({
+    header: "document", buttons: "url", documentName: "Receipt.pdf",
   }),
 });
 const QUICK_REPLY_PAYLOADS = Object.freeze(
@@ -582,14 +605,24 @@ function templateComponents(template, values, language) {
 /**
  * The whole /messages request body for one person and one update.
  *
- * @param {object} args {phone, update, language, values, templateSet?}.
+ * @param {object} args {phone, update, language, values, templateSet?,
+ *   receiptDocument?}. `receiptDocument: true` sends the sender's
+ *   `received` as shipment_received_doc_2lang (the receipt PDF header,
+ *   from the values' documentLink / documentFilename); it applies to the
+ *   bilingual set's `received` only - any other update, and the legacy
+ *   set, ignore it.
  * @return {object|null} The request body, or null for an update that has no
  *   template.
  */
 function templateMessage(args) {
   const templateSet = args?.templateSet || whatsappTemplateSet();
-  const template = templateForUpdate(args?.update, templateSet);
+  let template = templateForUpdate(args?.update, templateSet);
   if (!template) return null;
+  if (args?.receiptDocument === true &&
+      templateSet === TEMPLATE_SET.BILINGUAL &&
+      template === TEMPLATE.SHIPMENT_RECEIVED_2LANG) {
+    template = TEMPLATE.SHIPMENT_RECEIVED_DOC_2LANG;
+  }
   const language = isBilingualTemplate(template) ?
     BILINGUAL_TEMPLATE_LANGUAGE : templateLanguage(args.language);
   return {
@@ -605,7 +638,7 @@ function templateMessage(args) {
 }
 
 // ---------------------------------------------------------------------------
-// Package requests (docs/PACKAGE_REQUESTS.md §7, §8.3). Two bilingual
+// Package requests (docs/PACKAGE_REQUESTS.md §7, §8.3). Three bilingual
 // templates (language "en", category Utility), each with one dynamic URL
 // button https://customer.laawoldigital.com/e/{{1}} whose parameter is the
 // request's token (never its code). They are not part of TEMPLATE above:
@@ -615,6 +648,10 @@ function templateMessage(args) {
 const REQUEST_TEMPLATE = Object.freeze({
   PACKAGE_ESTIMATE_2LANG: "package_estimate_2lang",
   PACKAGE_DROPOFF_REMINDER_2LANG: "package_dropoff_reminder_2lang",
+  // "We got your request": the customer's request is in and the business
+  // will send the price / next step soon (a request created without an
+  // automatic estimate).
+  PACKAGE_REQUEST_RECEIVED_2LANG: "package_request_received_2lang",
 });
 
 const REQUEST_TEMPLATE_VARIABLES = Object.freeze({
@@ -636,11 +673,19 @@ const REQUEST_TEMPLATE_VARIABLES = Object.freeze({
     VARIABLE.BUSINESS, VARIABLE.PIECES_FR, VARIABLE.HOURS_FR,
     VARIABLE.REQUEST_CODE,
   ]),
+  // 1 name, 2 business, 3 pieces EN, 4 destination EN, 5 business,
+  // 6 pieces FR, 7 destination FR, 8 request code.
+  [REQUEST_TEMPLATE.PACKAGE_REQUEST_RECEIVED_2LANG]: Object.freeze([
+    VARIABLE.NAME,
+    VARIABLE.BUSINESS, VARIABLE.PIECES_EN, VARIABLE.DESTINATION_EN,
+    VARIABLE.BUSINESS, VARIABLE.PIECES_FR, VARIABLE.DESTINATION_FR,
+    VARIABLE.REQUEST_CODE,
+  ]),
 });
 
 /**
  * @param {string} update A request row's update: `estimate_v{n}`,
- *   `estimate_reminder` or `dropoff_reminder`.
+ *   `estimate_reminder`, `dropoff_reminder` or `request_received`.
  * @return {string|null} Its template, or null.
  */
 function requestTemplateForUpdate(update) {
@@ -651,6 +696,9 @@ function requestTemplateForUpdate(update) {
   if (value === "dropoff_reminder" || value === "dropoff_today" ||
       value === "still_coming") {
     return REQUEST_TEMPLATE.PACKAGE_DROPOFF_REMINDER_2LANG;
+  }
+  if (value === "request_received") {
+    return REQUEST_TEMPLATE.PACKAGE_REQUEST_RECEIVED_2LANG;
   }
   return null;
 }

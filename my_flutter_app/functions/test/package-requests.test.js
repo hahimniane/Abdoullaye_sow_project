@@ -1262,3 +1262,46 @@ describe("price lists on requests (docs/PACKAGE_PRICE_LIST.md)", () => {
     assert.equal(line.foundVia, "laawol");
   });
 });
+
+describe("the 'we got your request' message (request_received)", () => {
+  it("is for a request that has no estimate, and goes stale after one",
+      () => {
+        assert.equal(pr.REQUEST_RECEIVED_UPDATE, "request_received");
+        assert.equal(pr.requestMessageSkipReason({status: "new"},
+            "request_received"), "");
+        for (const status of ["estimate_sent", "confirmed"]) {
+          assert.match(pr.requestMessageSkipReason({status},
+              "request_received"), /already/);
+        }
+      });
+
+  it("skips every message of a request that has closed", () => {
+    for (const status of ["declined", "customer_declined", "cancelled",
+      "expired", "received"]) {
+      for (const update of ["request_received", "estimate_v1",
+        "dropoff_reminder"]) {
+        assert.equal(pr.requestMessageSkipReason({status}, update),
+            `The request is ${status}.`);
+      }
+    }
+  });
+
+  it("leaves the other messages of an open request alone", () => {
+    for (const status of ["new", "estimate_sent", "confirmed"]) {
+      assert.equal(pr.requestMessageSkipReason({status}, "estimate_v2"), "");
+    }
+  });
+
+  it("fills the template from the stored request, in both languages", () => {
+    const values = pr.requestMessageValues({
+      businessName: "Dala Shipping", code: "R-48KQ2", token: "T".repeat(43),
+      sender: {name: "Fatou Diallo"}, destinationCountryName: "Guinea",
+      pieces: [{kind: "barrel"}, {kind: "box", description: "Clothes"}],
+    }, {update: "request_received", destinationFr: "Guinée"});
+    assert.equal(values.requestCode, "R-48KQ2");
+    assert.equal(values.destinationEn, "Guinea");
+    assert.equal(values.destinationFr, "Guinée");
+    assert.ok(values.piecesEn.length > 0 && values.piecesFr.length > 0);
+    assert.equal(values.token, "T".repeat(43));
+  });
+});

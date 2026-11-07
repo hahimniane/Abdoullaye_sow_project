@@ -15,7 +15,12 @@
  * with a short timeout and never allowed to fail a receipt.
  */
 
+const {cardDial} = require("./business_card_wallet");
 const PDFDocument = require("pdfkit");
+const {
+  PAYMENT_STATUS,
+  linePaymentStanding,
+} = require("./container_payments");
 const {
   COLORS,
   documentLogo,
@@ -49,6 +54,18 @@ const LOGO_MAX_BYTES = 2 * 1024 * 1024;
 const text = (value, max = 200) => String(value ?? "").trim().slice(0, max);
 
 /**
+ * A phone as people read it: "(347) 555-0100" for a US number (the business
+ * card's rule, cardDial), anything else as typed.
+ *
+ * @param {*} value A phone number.
+ * @return {string} The number to print.
+ */
+function usPhone(value) {
+  const typed = text(value, 40);
+  return cardDial(typed).display || typed;
+}
+
+/**
  * @param {number} cents Whole cents.
  * @return {string} "$1,234.50".
  */
@@ -73,6 +90,26 @@ function usDate(ms, timeZone = "America/New_York") {
   }).formatToParts(new Date(Number(ms)));
   const get = (type) => Number(parts.find((p) => p.type === type)?.value);
   return `${MONTHS[get("month") - 1]} ${get("day")}, ${get("year")}`;
+}
+
+/**
+ * A moment as a US date and a 12-hour clock, in the business's day.
+ *
+ * @param {number} ms Epoch milliseconds.
+ * @param {string} [timeZone] IANA zone; New York when omitted.
+ * @return {string} "Nov 7, 2026, 3:42 PM" ("" for no moment).
+ */
+function usDateTime(ms, timeZone = "America/New_York") {
+  const day = usDate(ms, timeZone);
+  if (!day) return "";
+  // Built from parts: newer ICU puts a narrow no-break space before AM/PM,
+  // a character the PDF's Helvetica cannot draw.
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone, hour: "numeric", minute: "2-digit", hour12: true,
+  }).formatToParts(new Date(Number(ms)));
+  const get = (type) => String(parts.find((p) => p.type === type)?.value ||
+    "").replace(/[^\x20-\x7e]/g, "").trim();
+  return `${day}, ${get("hour")}:${get("minute")} ${get("dayPeriod")}`;
 }
 
 /**
@@ -129,7 +166,7 @@ function receiptModel(args) {
   const customer = text(car.customerName || car.ownerName, 120);
   const rows = [
     ["Customer / Client", customer],
-    ["Phone / Téléphone", text(car.customerPhone, 40)],
+    ["Phone / Téléphone", usPhone(car.customerPhone)],
     ["Vehicle / Véhicule", vehicle],
     ["VIN / NIV", text(car.vinNumber, 17).toUpperCase()],
     ["Parked from / Stationné depuis", since],
@@ -155,7 +192,7 @@ function receiptModel(args) {
     receiptNumber: `${code}-${number}`,
     businessName: name,
     businessAddress: formatBusinessAddress({business, entry: car}),
-    businessContact: [text(business.phone, 40), text(business.email, 180)]
+    businessContact: [usPhone(business.phone), text(business.email, 180)]
         .filter(Boolean).join("  |  "),
     logoUrl: documentLogo(business).url,
     status: {
@@ -178,6 +215,121 @@ function receiptModel(args) {
     footer: [
       "Thank you — this receipt confirms your payment. / " +
         "Merci — ce reçu confirme votre paiement.",
+      "Issued through Laawol Digital · laawoldigital.com",
+    ],
+  };
+}
+
+// A package line's payment standing, as the receipt's pill says it.
+const PACKAGE_STATUS_LABEL = Object.freeze({
+  [PAYMENT_STATUS.PAID]: "PAID / PAYÉ",
+  [PAYMENT_STATUS.PARTIAL]: "PARTLY PAID / PAYÉ EN PARTIE",
+  [PAYMENT_STATUS.PAY_ON_ARRIVAL]:
+    "PAY ON ARRIVAL / À PAYER À L'ARRIVÉE",
+  [PAYMENT_STATUS.UNPAID]: "NOT PAID YET / PAS ENCORE PAYÉ",
+  [PAYMENT_STATUS.NO_PRICE]: "PRICE TO BE CONFIRMED / PRIX À CONFIRMER",
+});
+
+const SHIP_MODE_LABEL = Object.freeze({
+  sea: "Sea / Mer",
+  air: "Air / Avion",
+});
+
+/**
+ * One value in both languages: "Guinea / Guinée", or just the one when the
+ * two read the same.
+ *
+ * @param {string} english The English text.
+ * @param {string} french The French text.
+ * @return {string} "" when both are blank.
+ */
+function bothLanguages(english, french) {
+  const en = text(english, 200);
+  const fr = text(french, 200);
+  if (!en) return fr;
+  if (!fr || fr === en) return en;
+  return `${en} / ${fr}`;
+}
+
+/**
+ * The lines of the package receipt the SENDER gets with "package received"
+ * (docs/WHATSAPP_CONTAINER_UPDATES.md "Package receipt"): the same page as
+ * the parking receipt, for one containerLines line. It prints the sender's
+ * own phone, as the parking receipt prints the customer's, and never the
+ * receiver's.
+ *
+ * @param {object} args {business, line: a containerLines row, contentsEn,
+ *   contentsFr (what the line is, per language), destinationEn,
+ *   destinationFr, receivedByName, timeZone?}.
+ * @return {object} The model renderReceiptPdf draws.
+ */
+function packageReceiptModel(args) {
+  const line = args?.line && typeof args.line === "object" ? args.line : {};
+  const business = args?.business || {};
+  const zone = args?.timeZone || "America/New_York";
+  const code = text(line.trackingCode, 40);
+  const standing = linePaymentStanding(line);
+  const atMs = Number(line.receivedAt?.toMillis?.() ||
+    line.createdAt?.toMillis?.() || 0);
+  const rows = [
+    ["Status / Statut", "Package received / Colis reçu"],
+    ["Sender / Expéditeur", text(line.customerName, 120)],
+    ["Phone / Téléphone", usPhone(line.customerPhone)],
+    ["Receiver / Destinataire", text(line.receiverName, 120)],
+    ["Destination / Destination",
+      bothLanguages(args?.destinationEn, args?.destinationFr)],
+    ["Contents / Contenu",
+      bothLanguages(args?.contentsEn, args?.contentsFr)],
+    ["Ship mode / Mode d'expédition",
+      SHIP_MODE_LABEL[text(line.shipMode, 10).toLowerCase()] || ""],
+    ["Tracking code / Code de suivi", code],
+    ["Received on / Reçu le", usDateTime(atMs, zone)],
+    ["Received by / Reçu par", text(args?.receivedByName, 120)],
+  ];
+  const paidInFull = standing.status === PAYMENT_STATUS.PAID;
+  const onArrival = standing.status === PAYMENT_STATUS.PAY_ON_ARRIVAL;
+  const noPrice = standing.status === PAYMENT_STATUS.NO_PRICE;
+  let balance;
+  if (paidInFull) {
+    balance = {label: "Balance / Solde",
+      value: "Paid in full / Payé en totalité", tone: "paid"};
+  } else if (onArrival) {
+    balance = {label: "Balance / Solde",
+      value: "Pay on arrival / Payer à l'arrivée", tone: "due"};
+  } else if (noPrice) {
+    balance = {label: "Balance / Solde",
+      value: "To be confirmed / À confirmer", tone: "due"};
+  } else {
+    balance = {label: "Balance owed / Solde à payer",
+      value: money(standing.balanceCents), tone: "due"};
+  }
+  return {
+    // Two lines in the header (the title column is narrow).
+    title: "PACKAGE RECEIPT\nREÇU DE COLIS",
+    reference: `REC-${code}`,
+    receiptNumber: code,
+    businessName: text(business.name, 160) || "Laawol",
+    businessAddress: formatBusinessAddress({business, entry: {}}),
+    businessContact: [usPhone(business.phone), text(business.email, 180)]
+        .filter(Boolean).join("  |  "),
+    logoUrl: documentLogo(business).url,
+    status: {
+      label: PACKAGE_STATUS_LABEL[standing.status] ||
+        PACKAGE_STATUS_LABEL[PAYMENT_STATUS.UNPAID],
+      paidInFull,
+    },
+    rows: rows.filter(([, value]) => value)
+        .map(([label, value]) => ({label, value})),
+    amount: {label: "TOTAL PRICE / PRIX TOTAL",
+      value: standing.priceCents === null ? "—" : money(standing.priceCents)},
+    totals: [
+      {label: "Paid so far / Payé à ce jour",
+        value: money(standing.paidCents)},
+      balance,
+    ],
+    footer: [
+      "Thank you — this receipt confirms we received your package. / " +
+        "Merci — ce reçu confirme que nous avons bien reçu votre colis.",
       "Issued through Laawol Digital · laawoldigital.com",
     ],
   };
@@ -209,7 +361,7 @@ function billReceiptModel(args) {
     `${MONTHS[month - 1]} ${year}` : "";
   const rows = [
     ["Customer / Client", text(payment.customerName, 120)],
-    ["Phone / Téléphone", text(payment.customerPhone, 40)],
+    ["Phone / Téléphone", usPhone(payment.customerPhone)],
     ["Bill / Facture", monthText],
     ["Payment method / Mode de paiement", method],
     ["Payment received / Paiement reçu le", usDate(payment.atMs, zone)],
@@ -245,7 +397,7 @@ function billReceiptModel(args) {
     receiptNumber: `${number}`,
     businessName: name,
     businessAddress: formatBusinessAddress({business, entry: {}}),
-    businessContact: [text(business.phone, 40), text(business.email, 180)]
+    businessContact: [usPhone(business.phone), text(business.email, 180)]
         .filter(Boolean).join("  |  "),
     logoUrl: documentLogo(business).url,
     status: {
@@ -589,10 +741,12 @@ module.exports = {
   drawStatusPill,
   fetchLogoBytes,
   money,
+  packageReceiptModel,
   receiptModel,
   renderPdf,
   renderReceiptPdf,
   shortDay,
   usDate,
+  usDateTime,
   usDayKey,
 };
