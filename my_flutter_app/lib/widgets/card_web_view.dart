@@ -63,8 +63,11 @@ class PlatformCardWebView implements CardWebViewHandle {
       )
       ..setNavigationDelegate(
         NavigationDelegate(
+          // Only the page itself is held to the card's address: its
+          // hidden frames (the App Check reCAPTCHA) load from Google.
           onNavigationRequest: (nav) =>
-              isCardEmbedNavigationAllowed(nav.url, base: base)
+              !nav.isMainFrame ||
+                  isCardEmbedNavigationAllowed(nav.url, base: base)
               ? NavigationDecision.navigate
               : NavigationDecision.prevent,
           onWebResourceError: (error) {

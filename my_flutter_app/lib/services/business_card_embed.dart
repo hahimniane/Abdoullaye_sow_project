@@ -26,7 +26,7 @@ const String cardEmbedErrorMessage = 'error';
 
 /// No "ready" within this long and the app's own card stays for good, so a
 /// slow, offline or silent page can never leave the screen without a card.
-const Duration cardEmbedReadyTimeout = Duration(seconds: 8);
+const Duration cardEmbedReadyTimeout = Duration(seconds: 15);
 
 /// A card is 3.5 x 2 in (1050 x 600): the picture's width over its height.
 const double cardEmbedAspect = 7 / 4;
