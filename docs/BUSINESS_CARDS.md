@@ -92,7 +92,7 @@ A card never carries an email, a role, a permission or a uid.
   unreadable). The normal page is unchanged. The app's My card screen shows
   `https://customer.laawoldigital.com/?service=business-card&c=<code>&embed=1&lang=<en|fr>`
   in a WebView (`embedded_business_card.dart`), so the phone shows the same
-  card people are handed. No `ready` in 8 s, a page error, or no WebView on
+  card people are handed. No `ready` in 15 s, a page error, or no WebView on
   the platform keeps the app's own `BusinessCardFace`. The app must be
   built against a website that already has embed mode.
 
