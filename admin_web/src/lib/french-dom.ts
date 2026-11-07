@@ -8098,6 +8098,22 @@ Object.assign(TEXT_TRANSLATIONS, {
     "Imprime directement sur l’imprimante d’étiquettes PM-241 par Bluetooth : une étiquette par colis, sans fenêtre d’impression.",
   "Use Chrome to print straight to the label printer, or the Laawol app on iPhone.":
     "Utilisez Chrome pour imprimer directement sur l’imprimante d’étiquettes, ou l’application Laawol sur iPhone.",
+  // The beta "other 4x6 Bluetooth printer" choice (label-printer-picker.tsx).
+  "Printer type": "Type d’imprimante",
+  "Other 4×6 Bluetooth printer (beta)": "Autre imprimante Bluetooth 4×6 (bêta)",
+  "Beta: this may not work with every printer, and it cannot tell us that a label came out. It needs Chrome on Mac, Windows or Android (not Safari on iPhone).":
+    "Bêta : cela peut ne pas fonctionner avec toutes les imprimantes, et elle ne peut pas nous confirmer qu’une étiquette est sortie. Il faut Chrome sur Mac, Windows ou Android (pas Safari sur iPhone).",
+  "If a label does not print, copy the printer details and send them to Laawol.":
+    "Si une étiquette ne s’imprime pas, copiez les détails de l’imprimante et envoyez-les à Laawol.",
+  "Copy printer details": "Copier les détails de l’imprimante",
+  "Printer details copied. Send them to Laawol.": "Détails de l’imprimante copiés. Envoyez-les à Laawol.",
+  "Could not copy automatically. Select the text below and copy it.":
+    "Copie automatique impossible. Sélectionnez le texte ci-dessous et copiez-le.",
+  "Nothing to copy yet. Try printing a label first, then copy the details.":
+    "Rien à copier pour l’instant. Essayez d’abord d’imprimer une étiquette, puis copiez les détails.",
+  "The label did not print. Copy the details below and send them to Laawol so we can support your printer.":
+    "L’étiquette ne s’est pas imprimée. Copiez les détails ci-dessous et envoyez-les à Laawol pour que nous puissions prendre en charge votre imprimante.",
+  "Printer details": "Détails de l’imprimante",
 });
 // ==== Label printer (Web Bluetooth, PM-241) END ====
 // ==== Business cards (docs/BUSINESS_CARDS.md) ====

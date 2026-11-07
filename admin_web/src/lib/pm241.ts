@@ -261,7 +261,21 @@ export type LinkOptions = {
   onReply?: (reply: PrinterReply) => void;
 };
 
-export class Pm241Link {
+/**
+ * What `printLabels` needs of a printer link: the PM-241's (`Pm241Link`) and
+ * the "other printer" one (`GenericLink` in `generic-label-printer.ts`) both fit.
+ */
+export interface LabelLink {
+  readonly isClosed: boolean;
+  /** False when the printer never says a label came out (so "sent", not "printed"). */
+  readonly confirmsLabels?: boolean;
+  beginJob(): void;
+  send(data: Uint8Array, onProgress?: (sent: number, total: number) => void): Promise<void>;
+  waitDone(): Promise<void>;
+  close(error?: PrinterError): void;
+}
+
+export class Pm241Link implements LabelLink {
   readonly flow = new FlowControl();
   /** Every "Cmd error:" token since the current job began. */
   cmdErrors: string[] = [];
@@ -420,7 +434,7 @@ export type PrintProgress =
  * out. A failure stops the batch; the PrinterError says how many had printed.
  */
 export async function printLabels(
-  link: Pm241Link,
+  link: LabelLink,
   count: number,
   render: (index: number) => LabelBitmap,
   onProgress?: (progress: PrintProgress) => void,

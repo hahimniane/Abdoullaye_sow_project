@@ -19,7 +19,8 @@ export type LabelPrinterState =
   /** Fetching the labels and drawing them. */
   | { phase: "preparing" }
   | { phase: "printing"; index: number; total: number; percent: number }
-  | { phase: "done"; count: number }
+  /** `unconfirmed`: the printer cannot say a label came out (the beta printers), so it was only sent. */
+  | { phase: "done"; count: number; unconfirmed?: boolean }
   | { phase: "empty" }
   | { phase: "failed"; message: string }
   /** The browser's printer chooser was closed with nothing picked. */
@@ -52,6 +53,14 @@ function labelsWord(count: number, lang: Lang): string {
 export function printedText(count: number, lang: Lang): string {
   if (lang === "fr") return `${count} ${labelsWord(count, lang)} ${count === 1 ? "imprimée" : "imprimées"}.`;
   return `Printed ${count} ${labelsWord(count, lang)}.`;
+}
+
+/** "Sent 5 labels to the printer. Check that they came out." / French. */
+export function sentText(count: number, lang: Lang): string {
+  if (lang === "fr") {
+    return `${count} ${labelsWord(count, lang)} ${count === 1 ? "envoyée" : "envoyées"} à l’imprimante. Vérifiez ${count === 1 ? "qu’elle est sortie" : "qu’elles sont sorties"}.`;
+  }
+  return `Sent ${count} ${labelsWord(count, lang)} to the printer. Check that ${count === 1 ? "it" : "they"} came out.`;
 }
 
 /** The sentence for a PrinterError, in the reader's language. */
@@ -118,7 +127,7 @@ export function labelPrinterStatusText(state: LabelPrinterState, lang: Lang): st
         ? `Impression de l’étiquette ${state.index} sur ${state.total}... (${state.percent} %)`
         : `Printing label ${state.index} of ${state.total}... (${state.percent}%)`;
     case "done":
-      return printedText(state.count, lang);
+      return state.unconfirmed ? sentText(state.count, lang) : printedText(state.count, lang);
     case "empty":
       return fr ? "Il n’y a aucune étiquette à imprimer." : "There are no labels to print.";
     case "cancelled":

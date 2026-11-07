@@ -21,6 +21,7 @@ import { overlayDismiss } from "@/lib/overlay-dismiss";
 import { closePendingTab, openPendingTab, sendPendingTab } from "@/lib/pending-tab";
 import { labelPrinterStatusRole, labelPrinterStatusText } from "@/lib/label-printer-status";
 import { useLabelPrinter } from "@/components/business/use-label-printer";
+import { GenericPrinterBeta, LabelPrinterKindPicker } from "@/components/business/label-printer-picker";
 
 type Row = Record<string, unknown>;
 
@@ -148,7 +149,14 @@ export function ContainerLabelsDialog({
           <fieldset className="lst-fieldset" aria-busy={printer.busy}>
             <legend>Label printer</legend>
             {printer.supported ? (
-              <p className="lst-hint" style={{ margin: 0 }}>Prints straight to the PM-241 label printer over Bluetooth: one label per piece, with no print window.</p>
+              <>
+                <LabelPrinterKindPicker printer={printer} />
+                {printer.kind === "pm241" ? (
+                  <p className="lst-hint" style={{ margin: 0 }}>Prints straight to the PM-241 label printer over Bluetooth: one label per piece, with no print window.</p>
+                ) : (
+                  <GenericPrinterBeta printer={printer} />
+                )}
+              </>
             ) : (
               <p className="lst-hint" style={{ margin: 0 }}>Use Chrome to print straight to the label printer, or the Laawol app on iPhone.</p>
             )}

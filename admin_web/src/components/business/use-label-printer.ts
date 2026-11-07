@@ -18,8 +18,10 @@ import {
   packageLabelSetFromResponse,
   packageLabelsRequest,
 } from "@/lib/package-labels";
+import { genericPrinterDetailsText, noteGenericPrintFailure } from "@/lib/generic-printer";
+import type { PrinterKind } from "@/lib/generic-label-printer";
 import { PrinterError, printLabels } from "@/lib/pm241";
-import { connectLabelPrinter, labelPrinterSupported } from "@/lib/pm241-printer";
+import { connectLabelPrinter, labelPrinterKind, labelPrinterSupported, setLabelPrinterKind } from "@/lib/pm241-printer";
 
 /** How long the labels callable may take before the print gives up. */
 const LABELS_TIMEOUT_MS = 30000;
@@ -47,6 +49,37 @@ export function useLabelPrinter(target: LabelTarget) {
   // browser can be asked right away (no flash of "not supported" on Chrome).
   const [supported] = useState(() => labelPrinterSupported());
   const running = useRef(false);
+  // Which printer: the PM-241 or the beta "other" one. Remembered in this browser.
+  const [kind, setKindState] = useState<PrinterKind>(() => labelPrinterKind());
+  // The printer details block (beta printers): shown after a failure or when asked for.
+  const [details, setDetails] = useState("");
+  const [copy, setCopy] = useState<"idle" | "copied" | "manual" | "empty">("idle");
+
+  const setKind = useCallback((next: PrinterKind) => {
+    setLabelPrinterKind(next);
+    setKindState(next);
+    setDetails("");
+    setCopy("idle");
+    setState({ phase: "idle" });
+  }, []);
+
+  /** Shows the details and puts them on the clipboard; the box stays as the fallback. */
+  const copyDetails = useCallback(() => {
+    const block = genericPrinterDetailsText();
+    setDetails(block);
+    if (!block) {
+      setCopy("empty");
+      return;
+    }
+    try {
+      void navigator.clipboard.writeText(block).then(
+        () => setCopy("copied"),
+        () => setCopy("manual"),
+      );
+    } catch {
+      setCopy("manual");
+    }
+  }, []);
 
   const print = useCallback(async () => {
     if (running.current) return;
@@ -79,11 +112,17 @@ export function useLabelPrinter(target: LabelTarget) {
         (index) => renderPackageLabelBitmap(set.labels[index], set),
         (progress) => setState(stateFromProgress(progress)),
       );
-      setState({ phase: "done", count: printed });
+      setState({ phase: "done", count: printed, unconfirmed: link.confirmsLabels === false });
     } catch (error) {
       if (error instanceof PrinterError && error.code === "cancelled") {
         setState({ phase: "cancelled" });
       } else {
+        if (labelPrinterKind() === "generic") {
+          // A beta printer that failed: offer the details right away.
+          noteGenericPrintFailure(error);
+          setCopy("idle");
+          setDetails(genericPrinterDetailsText());
+        }
         const own = printerFailureText(error, total, lang);
         setState({
           phase: "failed",
@@ -95,5 +134,5 @@ export function useLabelPrinter(target: LabelTarget) {
     }
   }, [target.businessId, target.containerId, target.lineId, target.lineIds]);
 
-  return { state, supported, busy: labelPrinterBusy(state), print };
+  return { state, supported, busy: labelPrinterBusy(state), print, kind, setKind, details, copy, copyDetails };
 }

@@ -12,6 +12,8 @@
  * protocol it drives is (`pm241.test.ts`).
  */
 
+import { connectGenericPrinter } from "./generic-printer.ts";
+import { readPrinterKind, writePrinterKind, type PrinterKind } from "./generic-label-printer.ts";
 import {
   PM241_NAME_PREFIXES,
   PM241_NOTIFY_UUID,
@@ -21,33 +23,39 @@ import {
   Pm241Link,
   PrinterError,
   withTimeout,
+  type LabelLink,
   type PrinterReply,
 } from "./pm241.ts";
 
 // The slice of Web Bluetooth we use (TypeScript's DOM lib has no types for it).
-interface BtCharacteristic {
+export interface BtCharacteristic {
+  uuid?: string;
+  properties?: { read?: boolean; write?: boolean; writeWithoutResponse?: boolean; notify?: boolean; indicate?: boolean };
   value?: DataView | null;
   startNotifications(): Promise<unknown>;
   addEventListener(type: "characteristicvaluechanged", listener: (event: Event) => void): void;
   writeValueWithoutResponse?(value: BufferSource): Promise<void>;
   writeValue?(value: BufferSource): Promise<void>;
 }
-interface BtService {
+export interface BtService {
+  uuid?: string;
   getCharacteristic(uuid: string): Promise<BtCharacteristic>;
+  getCharacteristics?(): Promise<BtCharacteristic[]>;
 }
-interface BtServer {
+export interface BtServer {
   connected: boolean;
   connect(): Promise<BtServer>;
   disconnect(): void;
   getPrimaryService(uuid: string): Promise<BtService>;
+  getPrimaryServices?(): Promise<BtService[]>;
 }
-interface BtDevice {
+export interface BtDevice {
   id: string;
   name?: string;
   gatt?: BtServer;
   addEventListener(type: "gattserverdisconnected", listener: () => void): void;
 }
-interface BtApi {
+export interface BtApi {
   requestDevice(options: unknown): Promise<BtDevice>;
   getDevices?(): Promise<BtDevice[]>;
 }
@@ -64,11 +72,38 @@ export function labelPrinterSupported(nav?: Navigator): boolean {
   return bluetooth(nav) !== null;
 }
 
-type Session = { device: BtDevice; link: Pm241Link };
+type Session = { device: BtDevice; link: LabelLink; kind: PrinterKind };
 
 let rememberedDevice: BtDevice | null = null;
 let session: Session | null = null;
-let connecting: Promise<Pm241Link> | null = null;
+let connecting: Promise<LabelLink> | null = null;
+let selectedKind: PrinterKind | null = null;
+
+function localStore(): Storage | null {
+  try {
+    return typeof localStorage === "undefined" ? null : localStorage;
+  } catch {
+    return null;
+  }
+}
+
+/** Which printer the person chose (remembered in this browser); the PM-241 until they choose. */
+export function labelPrinterKind(): PrinterKind {
+  if (!selectedKind) selectedKind = readPrinterKind(localStore());
+  return selectedKind;
+}
+
+/**
+ * Chooses the printer type for the next print and remembers it. Switching
+ * drops the other type's connection, so the chooser asks again.
+ */
+export function setLabelPrinterKind(kind: PrinterKind): void {
+  if (kind === labelPrinterKind()) return;
+  selectedKind = kind;
+  writePrinterKind(localStore(), kind);
+  disconnectLabelPrinter();
+  rememberedDevice = null;
+}
 
 function isPm241(name: string | undefined): boolean {
   const upper = (name ?? "").toUpperCase();
@@ -122,7 +157,7 @@ async function pickDevice(api: BtApi): Promise<BtDevice> {
   }
 }
 
-async function openSession(device: BtDevice): Promise<Session> {
+async function openSession(device: BtDevice): Promise<{ device: BtDevice; link: Pm241Link }> {
   const gatt = device.gatt;
   if (!gatt) throw new PrinterError("connect_failed", "This printer cannot be reached over Bluetooth.");
   const server = await withTimeout(gatt.connect(), CONNECT_TIMEOUT_MS, () => new PrinterError("connect_failed", "The label printer did not answer. Is it switched on and close by?"));
@@ -165,17 +200,32 @@ async function openSession(device: BtDevice): Promise<Session> {
  * thing in the click handler - the chooser needs the click's user gesture.
  * Rejects with a PrinterError; a closed chooser is code "cancelled".
  */
-export function connectLabelPrinter(): Promise<Pm241Link> {
+export function connectLabelPrinter(): Promise<LabelLink> {
   const api = bluetooth();
   if (!api) return Promise.reject(new PrinterError("connect_failed", "This browser cannot print to the label printer."));
+  const kind = labelPrinterKind();
+  if (session && session.kind !== kind) disconnectLabelPrinter();
   if (session && !session.link.isClosed && session.device.gatt?.connected) return Promise.resolve(session.link);
   // A second tap while connecting joins the first attempt.
   if (connecting) return connecting;
   connecting = (async () => {
     try {
+      if (kind === "generic") {
+        // The beta path: any 4 x 6 BLE printer. It cleans up after itself on failure.
+        const opened = await connectGenericPrinter(api, rememberedDevice, (device) => {
+          if (session?.device === device) session = null;
+        }).catch((error: unknown) => {
+          // A remembered printer that will not connect: the next try asks again.
+          rememberedDevice = null;
+          throw error;
+        });
+        rememberedDevice = opened.device;
+        session = { device: opened.device, link: opened.link, kind };
+        return opened.link;
+      }
       const device = await pickDevice(api);
       try {
-        session = await openSession(device);
+        session = { ...(await openSession(device)), kind };
       } catch (error) {
         // A remembered printer that will not connect: let the next try ask again.
         rememberedDevice = null;
