@@ -74,7 +74,8 @@ import {
   vinDecodeHint,
 } from "@/lib/vin-lookup";
 import { RecordPhoneFlags } from "@/components/phone-flags";
-import { LineUpdateFailures } from "@/components/business/line-update-failures";
+import { LineUpdateFailures, SendAgainButton } from "@/components/business/line-update-failures";
+import { counterAlerts, type CounterAlert } from "@/lib/package-staff";
 import { ProofFields } from "@/components/business/proof-fields";
 import { ProofTicks, SenderProblemBanner } from "@/components/business/proof-ticks";
 import {
@@ -231,6 +232,14 @@ export function WaitingPackagesPanel({
   const [labelLines, setLabelLines] = useState<Row[]>([]);
 
   const sorted = useMemo(() => sortWaitingNewestFirst(rows), [rows]);
+  // The packages saved at the counter in this sitting: a message WhatsApp
+  // could not deliver to one of them is shown right away, while the
+  // customer is still there to check their number (docs/WHATSAPP_RESEND.md).
+  const [savedIds, setSavedIds] = useState<ReadonlySet<string>>(() => new Set());
+  const alerts = useMemo(() => counterAlerts(sorted, savedIds), [sorted, savedIds]);
+  const rememberSaved = (lineId: string) => {
+    if (lineId) setSavedIds((ids) => new Set([...ids, lineId]));
+  };
   // A notification's line: scrolled into view once, as soon as it renders.
   const focusScrolled = useRef("");
   useEffect(() => {
@@ -435,6 +444,7 @@ export function WaitingPackagesPanel({
     await runPackageCall(setBusy, async () => {
       const response = await httpsCallable(functions, "addWaitingPackage")({ ...addWaitingPackagePayload(businessId, draft), ...proofFields });
       const stub = savedPackageStub(response.data, draft);
+      rememberSaved(text(stub.id, ""));
       const code = text(stub.trackingCode, "");
       if (mode === "print") {
         onFlash(code ? `Package saved: ${code}` : "Package saved.");
@@ -483,6 +493,10 @@ export function WaitingPackagesPanel({
         </span>
       </div>
       {tabs}
+      <CounterAlerts alerts={alerts} businessId={businessId} onFix={(lineId) => {
+        const row = sorted.find((item) => text(item.id, "") === lineId);
+        if (row) openEdit(row);
+      }} />
       <div className="panel-tools">
         <input type="search" placeholder="VIN, customer, phone" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Search waiting packages" />
         <div className="service-segments wpk-proof-chips" role="group" aria-label="Filter packages">
@@ -812,6 +826,7 @@ export function WaitingPackagesPanel({
             <footer className="lst-modal-foot wpk-foot">
               {/* Beside the buttons, not at the top of a scrolled body: a refusal or a confirmation is always in view. */}
               {draftError && <div className="lst-form-error wpk-foot-note" role="alert">{draftError}</div>}
+              <CounterAlerts alerts={alerts} businessId={businessId} />
               {addedThisSitting.length > 0 && (
                 <p className="lst-hint wpk-foot-note" role="status" aria-live="polite">Added so far: <span data-no-translate>{addedThisSitting.join("; ")}</span>.</p>
               )}
@@ -858,5 +873,43 @@ export function WaitingPackagesPanel({
         />
       )}
     </article>
+  );
+}
+
+/**
+ * The counter warning: WhatsApp could not deliver a just-saved package's
+ * message. Staff check the number with the customer and fix it on the
+ * package (the corrected number is sent the message by itself), or send it
+ * again as it is.
+ */
+function CounterAlerts({ alerts, businessId, onFix }: {
+  alerts: readonly CounterAlert[];
+  businessId: string;
+  onFix?: (lineId: string) => void;
+}) {
+  if (alerts.length === 0) return null;
+  return (
+    <div className="wpk-counter-alert" role="alert">
+      <strong>WhatsApp could not reach this number</strong>
+      <p>Check the number with the customer while they are here. A corrected number gets the message by itself.</p>
+      <ul>
+        {alerts.map((alert) => (
+          <li key={`${alert.lineId}-${alert.who}`}>
+            <span className="wpk-counter-who">{alert.who}</span>
+            <span data-no-translate>{alert.phone || "—"}</span>
+            {alert.trackingCode && <code data-no-translate>{alert.trackingCode}</code>}
+            {alert.failure && <small data-no-translate>{alert.failure}</small>}
+            <span className="wpk-counter-actions">
+              {onFix && (
+                <button type="button" className="ctn-wa-again-button" onClick={() => onFix(alert.lineId)}>
+                  <Pencil size={11} aria-hidden="true" /> <span>Fix the number</span>
+                </button>
+              )}
+              <SendAgainButton businessId={businessId} lineId={alert.lineId} />
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

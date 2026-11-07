@@ -16911,6 +16911,21 @@ button.pkq-card:hover { border-color: var(--brand); }
 /* A package update's ticks on the lists ("Receiver ✓✓ Read"). */
 .ctn-wa-tick, .ctn-table .mini-table-row > span > small.ctn-wa-tick { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); }
 .wa-tick-label { letter-spacing: normal; font-weight: 600; }
+/* "Send again" on a message WhatsApp could not deliver, and the counter
+   warning for a package just saved (docs/WHATSAPP_RESEND.md). */
+.ctn-wa-again { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.ctn-wa-again-button { display: inline-flex; align-items: center; gap: 4px; min-height: 28px; padding: 3px 10px; border: 1px solid var(--danger); border-radius: 999px; background: transparent; color: var(--danger); font-size: 12px; font-weight: 600; cursor: pointer; }
+.ctn-wa-again-button:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 10%, transparent); }
+.ctn-wa-again-button:disabled { opacity: 0.6; cursor: progress; }
+.ctn-wa-again-done { color: var(--muted); font-size: 12px; font-weight: 600; }
+.wpk-counter-alert { margin: 12px 0; padding: 12px 14px; border: 1px solid var(--danger); border-left-width: 4px; border-radius: 10px; background: color-mix(in srgb, var(--danger) 7%, transparent); }
+.wpk-counter-alert > strong { display: block; color: var(--danger); }
+.wpk-counter-alert > p { margin: 4px 0 8px; font-size: 13px; }
+.wpk-counter-alert ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.wpk-counter-alert li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 13px; }
+.wpk-counter-who { font-weight: 700; }
+.wpk-counter-actions { display: inline-flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+@media (max-width: 640px) { .wpk-counter-actions { margin-left: 0; width: 100%; } }
 
 /* Air packages (W2): the Mark delivered dialog's pickup code, override and
    photo; the Deliveries page's arrivals; the counter's request lookup; the

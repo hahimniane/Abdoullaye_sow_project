@@ -508,3 +508,46 @@ export function containerDeepLinkFromSearch(search: string): ContainerDeepLink |
   const lineId = text(params.get("line"), 200);
   return { containerId, lineId: lineId.includes("/") ? "" : lineId };
 }
+
+// ---------------------------------------------------------------------------
+// The counter warning (docs/WHATSAPP_RESEND.md): a package saved in this
+// sitting whose WhatsApp message could not reach someone, while the customer
+// is still at the counter.
+// ---------------------------------------------------------------------------
+
+export type CounterAlert = {
+  lineId: string;
+  trackingCode: string;
+  /** "Sender" / "Receiver": a whole dictionary key. */
+  who: string;
+  /** The number the message went to, as stored on the line. */
+  phone: string;
+  /** WhatsApp's reason ("Message undeliverable"), or "". */
+  failure: string;
+};
+
+/**
+ * The people a just-saved package's message failed to reach, newest package
+ * first. Only the lines saved in this sitting (`savedIds`), so the warning is
+ * about the customer in front of staff, not the whole list. One pass over
+ * the rows.
+ */
+export function counterAlerts(rows: readonly Row[], savedIds: ReadonlySet<string>): CounterAlert[] {
+  if (savedIds.size === 0) return [];
+  const alerts: CounterAlert[] = [];
+  for (const row of rows) {
+    const lineId = text(row.id, 200);
+    if (!savedIds.has(lineId)) continue;
+    for (const failure of packageUpdateFailures(row.lastCustomerUpdate)) {
+      const sender = failure.role !== "receiver";
+      alerts.push({
+        lineId,
+        trackingCode: text(row.trackingCode, 40),
+        who: sender ? "Sender" : "Receiver",
+        phone: text(sender ? row.customerPhone : row.receiverPhone, 40),
+        failure: failure.failure,
+      });
+    }
+  }
+  return alerts;
+}

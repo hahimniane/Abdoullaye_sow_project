@@ -765,18 +765,53 @@ function statusAfterAttempt(outcome, attempts,
 }
 
 /**
+ * How many times staff may send one person's message again by hand ("Send
+ * again" on a message WhatsApp could not deliver). A failed message is free,
+ * but a number that never works should be fixed, not retried forever.
+ */
+const MAX_HAND_RESENDS = 5;
+
+/**
+ * Digits only, for comparing two spellings of one number.
+ *
+ * @param {*} value A phone number.
+ * @return {string} Its digits.
+ */
+function phoneDigits(value) {
+  return String(value ?? "").replace(/\D/g, "");
+}
+
+/**
  * What "send the current status" does with one person's row.
+ *
+ * A sent message is never sent twice to the same number. It goes again only
+ * when the person's number is now different from the one it went to (staff
+ * corrected it), or - with `retryFailed`, staff pressing "Send again" - when
+ * WhatsApp reported it undeliverable, at most MAX_HAND_RESENDS times.
  *
  * @param {object|null} row The containerUpdates row, or null.
  * @param {number} nowMs The time.
+ * @param {object} [opts] {phone: the person's number now, retryFailed}.
  * @return {"create"|"requeue"|"already_sent"|"in_flight"} `create` when
  *   there is no row (the number was added after the update), `requeue` for
- *   one that waited for WhatsApp, failed, or whose sender died.
+ *   one that waited for WhatsApp, failed, whose sender died, or that went to
+ *   a number since corrected.
  */
-function requeueDecision(row, nowMs) {
+function requeueDecision(row, nowMs, opts = {}) {
   if (!row) return "create";
   const status = text(row.status, 40);
-  if (status === UPDATE_STATUS.SENT) return "already_sent";
+  const now = phoneDigits(opts.phone);
+  const numberChanged = Boolean(now) && Boolean(phoneDigits(row.phone)) &&
+    now !== phoneDigits(row.phone);
+  if (status === UPDATE_STATUS.SENT) {
+    if (numberChanged) return "requeue";
+    if (opts.retryFailed === true &&
+        text(row.deliveryStatus, 20) === "failed" &&
+        positiveInt(row.handResends) < MAX_HAND_RESENDS) {
+      return "requeue";
+    }
+    return "already_sent";
+  }
   // Waiting for its template counts as on its way: the half-hourly sweep
   // sends it the moment the template is approved.
   if (status === UPDATE_STATUS.QUEUED || status === UPDATE_STATUS.RETRYING ||
@@ -787,7 +822,33 @@ function requeueDecision(row, nowMs) {
       Number(row.leaseUntilMs || 0) > nowMs) {
     return "in_flight";
   }
+  if (status === UPDATE_STATUS.FAILED && opts.retryFailed === true &&
+      positiveInt(row.handResends) >= MAX_HAND_RESENDS && !numberChanged) {
+    return "already_sent";
+  }
   return "requeue";
+}
+
+/**
+ * The people on a line whose number this write changed, for sending them
+ * the line's latest news again (a corrected number never heard it). Pure.
+ *
+ * @param {object|null} before The line before the write (null: created).
+ * @param {object|null} after The line after (null: removed).
+ * @return {string[]} "sender" and/or "receiver".
+ */
+function phoneChangedRoles(before, after) {
+  if (!before || !after) return [];
+  const roles = [];
+  if (phoneDigits(before.customerPhone) !== phoneDigits(after.customerPhone) &&
+      phoneDigits(after.customerPhone)) {
+    roles.push("sender");
+  }
+  if (phoneDigits(before.receiverPhone) !== phoneDigits(after.receiverPhone) &&
+      phoneDigits(after.receiverPhone)) {
+    roles.push("receiver");
+  }
+  return roles;
 }
 
 /**
@@ -934,6 +995,8 @@ module.exports = {
   whatsappSendOutcome,
   statusAfterAttempt,
   requeueDecision,
+  phoneChangedRoles,
+  MAX_HAND_RESENDS,
   latestCustomerUpdate,
   mergeLastCustomerUpdate,
   CONTAINER_UPDATE,

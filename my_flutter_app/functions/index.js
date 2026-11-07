@@ -456,6 +456,7 @@ const {
   statusAfterAttempt,
   templateWaitDecision,
   requeueDecision,
+  phoneChangedRoles,
   latestCustomerUpdate,
   mergeLastCustomerUpdate,
   withDeliveryTick,
@@ -22036,6 +22037,11 @@ exports.updateContainerLine = onCall(
       const uid = requireAuth(request);
       const data = request.data || {};
       const businessId = String(data.businessId || "").trim();
+      // "Send again" on a message WhatsApp could not deliver.
+      if (data.action === "resend_update") {
+        return resendPackageUpdate(admin.firestore(), {uid, businessId,
+          lineId: data.lineId});
+      }
       if (data.action !== undefined && data.action !== null &&
           data.action !== "") {
         return containerLineDelivery(admin.firestore(), {uid, businessId,
@@ -24285,6 +24291,89 @@ exports.whatsappWebhook = onRequest(
 );
 
 /**
+ * A corrected number hears the line's latest news (docs/WHATSAPP_RESEND.md):
+ * when a write changes the sender's or the receiver's phone on a line that
+ * has already told people something, that person - only that person - gets
+ * the latest update again on the new number. Never fails the write: a
+ * failure is logged.
+ *
+ * @param {object} db Firestore.
+ * @param {object} args {lineRef, before, after}.
+ * @return {Promise<object|null>} The queue's tally, or null when nothing
+ *   was due.
+ */
+async function resendToCorrectedNumbers(db, {lineRef, before, after}) {
+  const roles = phoneChangedRoles(before, after);
+  const update = String(after?.lastCustomerUpdate?.update || "");
+  if (roles.length === 0 || !update || !after?.businessId) return null;
+  try {
+    const businessDoc = await db.collection("businesses")
+        .doc(String(after.businessId)).get();
+    const tally = await queueContainerLineUpdate(db, {
+      lineRef,
+      businessId: String(after.businessId),
+      containerId: String(after.containerId || ""),
+      businessName: String(businessDoc.data()?.name || ""),
+      update,
+      status: containerWhatsAppConfigured() ?
+        CONTAINER_UPDATE_STATUS.QUEUED : CONTAINER_UPDATE_STATUS.WAITING,
+      requeue: true,
+      roles,
+      staffId: String(after.editedByStaffId || ""),
+    });
+    logger.info("Latest package update sent to a corrected number",
+        {lineId: lineRef.id, roles, update, queued: tally.queued});
+    return tally;
+  } catch (error) {
+    logger.error("Could not resend to a corrected number", {
+      lineId: lineRef.id, error: String(error).slice(0, 300)});
+    return null;
+  }
+}
+
+/**
+ * "Send again" on a package whose WhatsApp message did not arrive: the
+ * line's latest update, again, to each person it failed to reach (or whose
+ * number changed since). A message already delivered is never sent twice.
+ *
+ * @param {object} db Firestore.
+ * @param {object} args {uid, businessId, lineId}.
+ * @return {Promise<object>} {success, lineId, update, queued, alreadySent}.
+ */
+async function resendPackageUpdate(db, {uid, businessId, lineId}) {
+  await requireBusinessPermission(uid, businessId, CONTAINER_SECTION);
+  const id = String(lineId || "").trim();
+  if (!id || id.includes("/")) throw containerRefusal("line_not_found");
+  const lineRef = db.collection("containerLines").doc(id);
+  const lineDoc = await lineRef.get();
+  const line = lineDoc.exists ? lineDoc.data() || {} : null;
+  if (!line || String(line.businessId || "") !== businessId) {
+    throw containerRefusal("line_not_found", [id]);
+  }
+  if (!containerWhatsAppConfigured()) {
+    throw new HttpsError("failed-precondition",
+        "WhatsApp is not connected yet, so nothing can be sent.",
+        {reason: "whatsapp_not_configured"});
+  }
+  const update = String(line.lastCustomerUpdate?.update || "");
+  if (!update) {
+    throw new HttpsError("failed-precondition",
+        "This package has no WhatsApp message to send again yet.",
+        {reason: "no_customer_update"});
+  }
+  const businessDoc = await db.collection("businesses").doc(businessId).get();
+  const tally = await queueContainerLineUpdate(db, {
+    lineRef, businessId,
+    containerId: String(line.containerId || ""),
+    businessName: String(businessDoc.data()?.name || ""),
+    update, status: CONTAINER_UPDATE_STATUS.QUEUED,
+    requeue: true, retryFailed: true, staffId: uid,
+  });
+  return {success: true, lineId: id, update, queued: tally.queued,
+    alreadySent: tally.alreadySent};
+}
+
+/**
  * Writes one line's `containerUpdates` rows for one update - one per person
  * who should hear - and the line's `lastCustomerUpdate`, in one transaction
  * so the sender trigger (which also writes the line) never loses an entry.
@@ -24326,7 +24415,12 @@ async function queueContainerLineUpdate(db, args) {
     const recipients = recipientsForLine(line, {
       businessCountry: String(business.country || ""),
     });
-    const {send, skipped} = recipients;
+    // `roles`: only these people (a corrected number hears again; the other
+    // person on the line is left exactly as they were).
+    const only = Array.isArray(args.roles) ? new Set(args.roles) : null;
+    const send = recipients.send.filter((who) => !only || only.has(who.role));
+    const skipped =
+      recipients.skipped.filter((who) => !only || only.has(who.role));
     const ask = update === CONTAINER_UPDATE.RECEIVED &&
       askSenderToConfirm(business, line, recipients);
     const rowRefs = send.map((who) => db.collection("containerUpdates")
@@ -24347,7 +24441,9 @@ async function queueContainerLineUpdate(db, args) {
         businessName,
       };
       const decision = args.requeue ?
-        requeueDecision(row, nowMs) : (row ? "in_flight" : "create");
+        requeueDecision(row, nowMs,
+            {phone: who.phone, retryFailed: args.retryFailed === true}) :
+        (row ? "in_flight" : "create");
       if (decision === "create") {
         tx.create(rowRefs[i], {
           ...fields,
@@ -24357,6 +24453,8 @@ async function queueContainerLineUpdate(db, args) {
           createdAt: FirestoreFieldValue.serverTimestamp(),
         });
       } else if (decision === "requeue") {
+        const samePhone = String(row?.phone || "").replace(/\D/g, "") ===
+          String(who.phone || "").replace(/\D/g, "");
         tx.update(rowRefs[i], {
           ...fields,
           status: CONTAINER_UPDATE_STATUS.QUEUED,
@@ -24365,6 +24463,19 @@ async function queueContainerLineUpdate(db, args) {
           error: "",
           requeuedByStaffId: args.staffId || "",
           requeuedAt: FirestoreFieldValue.serverTimestamp(),
+          // The last attempt's WhatsApp report belongs to that attempt: the
+          // new one starts clean (and a corrected number keeps the old one
+          // for the record).
+          whatsappMessageId: FirestoreFieldValue.delete(),
+          sentAt: FirestoreFieldValue.delete(),
+          deliveryStatus: FirestoreFieldValue.delete(),
+          deliveryStatusAtMs: FirestoreFieldValue.delete(),
+          deliveryError: FirestoreFieldValue.delete(),
+          deliveryErrorCode: FirestoreFieldValue.delete(),
+          ...(row && !samePhone && row.phone ?
+            {previousPhone: String(row.phone)} : {}),
+          ...(row && samePhone && args.retryFailed === true ?
+            {handResends: FirestoreFieldValue.increment(1)} : {}),
         });
       }
       const status = decision === "create" ? args.status :
@@ -47404,12 +47515,23 @@ const volume = require("./volume_rollup").createVolumeHandlers({
 // Every container line write also derives the line's phone fields and the
 // accounts of its numbers (docs/PHONE_ACCOUNTS.md §3.1). That stamp re-fires
 // this trigger; the rollup compares count signatures, so it recounts nothing.
+//
+// It also sends a corrected number the line's latest WhatsApp news
+// (resendToCorrectedNumbers), hence the WhatsApp secrets: the row it queues
+// is sent by deliverContainerCustomerUpdate.
 exports.rollupVolumeOnLineWrite = onDocumentWritten(
     {document: "containerLines/{lineId}", maxInstances: 2,
-      timeoutSeconds: 120},
+      timeoutSeconds: 120,
+      secrets: [whatsappAccessToken, whatsappPhoneNumberId]},
     async (event) => {
       const after = event.data?.after?.exists === false ? null :
         event.data?.after?.data?.() || null;
+      const before = event.data?.before?.exists === false ? null :
+        event.data?.before?.data?.() || null;
+      if (before && after) {
+        await resendToCorrectedNumbers(admin.firestore(), {
+          lineRef: event.data.after.ref, before, after});
+      }
       await phoneAccounts.syncRecordPhones("containerLines",
           String(event.params?.lineId || ""), phoneEventOptions(event, after));
       return volume.rollupVolumeOnLineWrite(event);
