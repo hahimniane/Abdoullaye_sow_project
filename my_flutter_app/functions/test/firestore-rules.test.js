@@ -4731,6 +4731,30 @@ describe("parking WhatsApp rules", () => {
   });
 });
 
+describe("package receipt rules", () => {
+  it("keeps the package receipt PDFs from every client, read and write",
+      async () => {
+        const path = "packageReceipts/biz_a/line_a.pdf";
+        await testEnv.withSecurityRulesDisabled(async (context) => {
+          await context.storage().ref(path).put(
+              Buffer.from("%PDF-1.4 receipt"),
+              {contentType: "application/pdf"});
+        });
+        for (const uid of ["owner-a", "staff-parking-a", "super-admin",
+          "platform-admin", "customer-owner", null]) {
+          const storage = storageFor(uid);
+          await assertFails(storage.ref(path).getMetadata());
+          await assertFails(storage.ref(path).getDownloadURL());
+          await assertFails(storage.ref(path).put(Buffer.from("%PDF-1.4 x"),
+              {contentType: "application/pdf"}));
+          await assertFails(storage.ref(
+              "packageReceipts/biz_a/line_b.pdf").put(
+              Buffer.from("%PDF-1.4 x"), {contentType: "application/pdf"}));
+          await assertFails(storage.ref(path).delete());
+        }
+      });
+});
+
 // Monthly parking invoices (docs/PARKING_INVOICES.md §2): the month's run is
 // the business's to read and the server's alone to write; the invoice PDFs
 // in Storage are nobody's but the server's.

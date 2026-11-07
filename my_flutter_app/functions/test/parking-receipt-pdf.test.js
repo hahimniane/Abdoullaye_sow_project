@@ -89,7 +89,7 @@ describe("the receipt's lines", () => {
     ]);
     const rows = rowsOf(m);
     assert.equal(rows["Customer / Client"], "Alimou Barry");
-    assert.equal(rows["Phone / Téléphone"], "+12015550142");
+    assert.equal(rows["Phone / Téléphone"], "(201) 555-0142");
     assert.equal(rows["Vehicle / Véhicule"], "2018 Toyota Camry");
     assert.equal(rows["VIN / NIV"], "1HGCM82633A004352");
     assert.equal(rows["Parked from / Stationné depuis"], "Oct 20, 2026");
@@ -143,7 +143,7 @@ describe("the receipt's lines", () => {
       addressLine1: "12 Main St", city: "Newark", state: "NJ",
       postalCode: "07102", logoUrl: "https://cdn.example.com/n.png"}});
     assert.equal(m.businessAddress, "12 Main St, Newark, NJ 07102");
-    assert.equal(m.businessContact, "+12015550100  |  hi@nensona.com");
+    assert.equal(m.businessContact, "(201) 555-0100  |  hi@nensona.com");
     assert.equal(m.logoUrl, "https://cdn.example.com/n.png");
     // No logo of its own: the platform mark, as the web document does.
     assert.match(model().logoUrl, /^https:\/\/laawoldigital\.com\//);
@@ -202,9 +202,9 @@ describe("the receipt PDF", () => {
     const lines = drawnText(bytes);
     const page = lines.join("\n");
     for (const expected of [
-      "Nensona Parking", "12 Main St", "+12015550100  |  hi@nensona.com",
+      "Nensona Parking", "12 Main St", "(201) 555-0100  |  hi@nensona.com",
       "RECEIPT / RE", "REC-PK-K7M4P2-2", "PARTLY PAID / PAY",
-      "Customer / Client", "Alimou Barry", "+12015550142",
+      "Customer / Client", "Alimou Barry", "(201) 555-0142",
       "2018 Toyota Camry", "1HGCM82633A004352", "Oct 20, 2026",
       "Still parked", "PK-K7M4P2", "Cash / Esp", "Oct 29, 2026",
       "Amount of this payment", "Business account",
@@ -283,5 +283,138 @@ describe("the receipt PDF", () => {
           const bytes = await renderReceiptPdf(model(), {fetchLogo});
           assert.equal(bytes.subarray(0, 4).toString(), "%PDF");
         }
+      });
+});
+
+// The package receipt the sender gets with "package received"
+// (docs/WHATSAPP_CONTAINER_UPDATES.md "Package receipt for the sender").
+describe("the package receipt", () => {
+  const {packageReceiptModel, usDateTime} =
+    require("../parking_receipt_pdf");
+  const RECEIVED = Date.parse("2026-11-07T20:42:00Z");
+  const LINE = {
+    trackingCode: "CL-K7M4P2", customerName: "Fatou Diallo",
+    customerPhone: "+16465550100", receiverName: "Mariama Bah",
+    receiverPhone: "+224620000000", shipMode: "sea", priceCents: 30000,
+    paidCents: 10000, receivedAt: {toMillis: () => RECEIVED},
+  };
+  const pkg = (extra = {}, line = {}) => packageReceiptModel({
+    business: {name: "Dala Shipping", phone: "+16465550199"},
+    line: {...LINE, ...line},
+    contentsEn: "2 barrels, 1 box", contentsFr: "2 barils, 1 carton",
+    destinationEn: "Guinea", destinationFr: "Guinée",
+    receivedByName: "Awa Cashier", ...extra,
+  });
+
+  it("shows the date US style, month first, with a 12-hour clock", () => {
+    assert.equal(usDateTime(RECEIVED), "Nov 7, 2026, 3:42 PM");
+    assert.equal(usDateTime(Date.parse("2026-11-07T17:05:00Z")),
+        "Nov 7, 2026, 12:05 PM");
+    assert.equal(usDateTime(Date.parse("2026-11-08T05:09:00Z")),
+        "Nov 8, 2026, 12:09 AM");
+    // The business's own day.
+    assert.equal(usDateTime(RECEIVED, "America/Los_Angeles"),
+        "Nov 7, 2026, 12:42 PM");
+    assert.equal(usDateTime(0), "");
+  });
+
+  it("lists the package's rows, every label in English and French", () => {
+    const m = pkg();
+    assert.equal(m.title, "PACKAGE RECEIPT\nREÇU DE COLIS");
+    assert.equal(m.reference, "REC-CL-K7M4P2");
+    assert.deepEqual(m.rows.map((r) => r.label.split(" / ")[0]), [
+      "Status", "Sender", "Phone", "Receiver", "Destination", "Contents",
+      "Ship mode", "Tracking code", "Received on", "Received by"]);
+    for (const row of m.rows) assert.match(row.label, / \/ /);
+    const rows = rowsOf(m);
+    assert.equal(rows["Status / Statut"], "Package received / Colis reçu");
+    assert.equal(rows["Sender / Expéditeur"], "Fatou Diallo");
+    assert.equal(rows["Receiver / Destinataire"], "Mariama Bah");
+    assert.equal(rows["Destination / Destination"], "Guinea / Guinée");
+    assert.equal(rows["Contents / Contenu"],
+        "2 barrels, 1 box / 2 barils, 1 carton");
+    assert.equal(rows["Ship mode / Mode d'expédition"], "Sea / Mer");
+    assert.equal(rows["Tracking code / Code de suivi"], "CL-K7M4P2");
+    assert.equal(rows["Received on / Reçu le"], "Nov 7, 2026, 3:42 PM");
+    assert.equal(rows["Received by / Reçu par"], "Awa Cashier");
+  });
+
+  it("prints the sender's own phone and never the receiver's", () => {
+    const m = pkg();
+    assert.equal(rowsOf(m)["Phone / Téléphone"], "(646) 555-0100");
+    assert.ok(!JSON.stringify(m).includes("+224620000000"));
+    assert.ok(!JSON.stringify(m).includes("224620000000"));
+  });
+
+  it("says a value once when both languages read the same", () => {
+    const rows = rowsOf(pkg({contentsEn: "2 × TV", contentsFr: "2 × TV",
+      destinationEn: "Mali", destinationFr: "Mali"}, {shipMode: "air"}));
+    assert.equal(rows["Contents / Contenu"], "2 × TV");
+    assert.equal(rows["Destination / Destination"], "Mali");
+    assert.equal(rows["Ship mode / Mode d'expédition"], "Air / Avion");
+  });
+
+  it("totals the box: price, paid so far, and the balance owed", () => {
+    const m = pkg();
+    assert.deepEqual(m.amount,
+        {label: "TOTAL PRICE / PRIX TOTAL", value: "$300.00"});
+    assert.deepEqual(m.totals, [
+      {label: "Paid so far / Payé à ce jour", value: "$100.00"},
+      {label: "Balance owed / Solde à payer", value: "$200.00",
+        tone: "due"},
+    ]);
+    assert.deepEqual(m.status,
+        {label: "PARTLY PAID / PAYÉ EN PARTIE", paidInFull: false});
+  });
+
+  it("says Paid in full, Pay on arrival, or that the price is to come",
+      () => {
+        const paid = pkg({}, {paidCents: 30000});
+        assert.deepEqual(paid.status,
+            {label: "PAID / PAYÉ", paidInFull: true});
+        assert.deepEqual(paid.totals[1], {label: "Balance / Solde",
+          value: "Paid in full / Payé en totalité", tone: "paid"});
+        const arrival = pkg({}, {paidCents: 0, payOnArrival: true});
+        assert.equal(arrival.status.label,
+            "PAY ON ARRIVAL / À PAYER À L'ARRIVÉE");
+        assert.equal(arrival.totals[1].value,
+            "Pay on arrival / Payer à l'arrivée");
+        assert.equal(arrival.totals[0].value, "$0.00");
+        const unpriced = pkg({}, {priceCents: null, paidCents: 0});
+        assert.equal(unpriced.amount.value, "—");
+        assert.equal(unpriced.totals[1].value,
+            "To be confirmed / À confirmer");
+        assert.equal(pkg({}, {paidCents: 0}).status.label,
+            "NOT PAID YET / PAS ENCORE PAYÉ");
+      });
+
+  it("leaves out what it does not know", () => {
+    const m = packageReceiptModel({business: {},
+      line: {trackingCode: "CL-1"}, contentsEn: "", contentsFr: "",
+      destinationEn: "", destinationFr: ""});
+    const labels = m.rows.map((r) => r.label.split(" / ")[0]);
+    for (const gone of ["Sender", "Phone", "Receiver", "Destination",
+      "Contents", "Ship mode", "Received on", "Received by"]) {
+      assert.ok(!labels.includes(gone), gone);
+    }
+    assert.equal(m.businessName, "Laawol");
+    assert.equal(m.reference, "REC-CL-1");
+  });
+
+  it("is a real PDF with the receipt's words and no receiver phone",
+      async () => {
+        const bytes = await renderReceiptPdf(pkg(), {
+          compress: false, fetchLogo: () => Promise.resolve(null)});
+        assert.equal(bytes.subarray(0, 4).toString(), "%PDF");
+        assert.match(bytes.subarray(-8).toString("latin1"), /%%EOF/);
+        const words = drawnText(bytes).join("\n");
+        for (const expected of ["PACKAGE RECEIPT", "REÇU DE COLIS",
+          "REC-CL-K7M4P2",
+          "Fatou Diallo", "Mariama Bah", "Guinea / Gu", "CL-K7M4P2",
+          "Nov 7, 2026, 3:42 PM", "Awa Cashier", "$300.00", "$100.00",
+          "$200.00", "Dala Shipping"]) {
+          assert.ok(words.includes(expected), `${expected}\n${words}`);
+        }
+        assert.ok(!words.includes("224620000000"));
       });
 });

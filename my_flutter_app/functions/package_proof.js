@@ -297,6 +297,55 @@ function billReceiptLinkValid(query, token, nowMs) {
 }
 
 /**
+ * What a package receipt link signs in the path's place ("pkgreceipt:" keeps
+ * a car receipt's, a bill receipt's, an invoice's or a photo's signature
+ * from opening it, and the other way round).
+ * @param {string} lineId The containerLines id.
+ * @return {string}
+ */
+function packageReceiptSigningPath(lineId) {
+  return `pkgreceipt:${String(lineId || "")}`;
+}
+
+/**
+ * A time-limited link to a package's receipt PDF (the sender's "package
+ * received" message, docs/WHATSAPP_CONTAINER_UPDATES.md), served by the /d
+ * document endpoint (view=packageReceiptPdf). Signed like a car receipt
+ * link, with the line's own document token, its id and the expiry.
+ * @param {object} o `{base, token, lineId, expiresMs}`
+ * @return {string}
+ */
+function packageReceiptLink(o) {
+  const expires = Math.floor(Number(o.expiresMs));
+  const sig = photoSignature(o.token, packageReceiptSigningPath(o.lineId),
+      expires);
+  const q = new URLSearchParams({
+    view: "packageReceiptPdf", t: String(o.token), p: String(o.lineId),
+    e: String(expires), s: sig,
+  });
+  return `${o.base}?${q.toString()}`;
+}
+
+/**
+ * Whether a /d?view=packageReceiptPdf query is genuine and still valid.
+ * @param {object} query `{t, p, e, s}`
+ * @param {string} token The line's stored document token.
+ * @param {number} nowMs
+ * @return {boolean}
+ */
+function packageReceiptLinkValid(query, token, nowMs) {
+  const expires = Number(query?.e);
+  if (!token || !Number.isFinite(expires) || expires <= nowMs) return false;
+  const lineId = String(query?.p || "");
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(lineId)) return false;
+  const expected = photoSignature(token, packageReceiptSigningPath(lineId),
+      expires);
+  const given = String(query?.s || "");
+  if (given.length !== expected.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(given), Buffer.from(expected));
+}
+
+/**
  * What an invoice link signs in the path's place (the "invoice:" prefix keeps
  * a receipt's or a photo's signature from ever opening an invoice).
  * @param {string} phoneDigits The customer's number, digits only.
@@ -649,6 +698,9 @@ module.exports = {
   photoSignature,
   billReceiptLink,
   billReceiptLinkValid,
+  packageReceiptLink,
+  packageReceiptLinkValid,
+  packageReceiptSigningPath,
   invoiceLink,
   invoiceLinkValid,
   receiptLink,

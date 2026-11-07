@@ -82,6 +82,10 @@ let whatsappCalls = [];
 function fakeWhatsApp(...answers) {
   whatsappCalls = [];
   global.fetch = async (url, init) => {
+    // The receipt PDF's logo: no network in this suite.
+    if (String(url).endsWith("/assets/logo.png")) {
+      return new Response("", {status: 404});
+    }
     if (!String(url).includes("graph.facebook.com")) {
       return realFetch(url, init);
     }
@@ -864,16 +868,18 @@ describe("WhatsApp updates", () => {
     assert.equal((await ref.get()).get("status"), "sent");
     const [sent] = whatsappCalls;
     assert.equal(sent.to, "16465550100");
-    assert.equal(sent.template.name, "shipment_received_2lang");
+    // The sender's message carries the receipt PDF as a document header.
+    assert.equal(sent.template.name, "shipment_received_doc_2lang");
     assert.equal(sent.template.language.code, "en");
     const code = (await db.collection("containerLines").doc(lineId).get())
         .get("trackingCode");
-    assert.deepEqual(sent.template.components[0].parameters
-        .map((p) => p.text),
-    ["Fatou Diallo", "Dala Shipping", "2 barrels", "Guinea",
-      "Dala Shipping", "2 barils", "Guinée", code]);
-    assert.deepEqual(sent.template.components[1].parameters
-        .map((p) => p.text), [code]);
+    const [header, text, button] = sent.template.components;
+    assert.equal(header.parameters[0].document.filename,
+        `Receipt ${code}.pdf`);
+    assert.deepEqual(text.parameters.map((p) => p.text),
+        ["Fatou Diallo", "Dala Shipping", "2 barrels", "Guinea",
+          "Dala Shipping", "2 barils", "Guinée", code]);
+    assert.deepEqual(button.parameters.map((p) => p.text), [code]);
   });
 
   // "Arrived" is ready for pickup: the carrier's "at the port" alone tells
@@ -4229,6 +4235,10 @@ describe("the sender's confirmation at drop-off", () => {
     const sentRow = (await db.collection("containerUpdates").doc(`${ref.id}_sender_confirm`).get()).data();
     assert.equal(sentRow.status, "sent");
     assert.equal(sentRow.whatsappMessageId, "wamid.TEST");
+    // The confirmation carries no receipt PDF in v1.
+    assert.equal(sentRow.receiptDocument, undefined);
+    assert.ok(!body.template.components.some((part) => part.type === "header" &&
+      part.parameters[0].type === "document"));
     assert.equal((await ref.get()).data().senderConfirmation.status, "asked");
     // The receiver's message is the usual one.
     fakeWhatsApp(OK);
@@ -5147,7 +5157,8 @@ describe("a corrected number and Send again", () => {
         await deliver(row(lineId, "sender").id);
         assert.equal(whatsappCalls.length, 1);
         assert.equal(whatsappCalls[0].to, "16465550142");
-        assert.equal(whatsappCalls[0].template.name, "shipment_received_2lang");
+        assert.equal(whatsappCalls[0].template.name,
+            "shipment_received_doc_2lang");
         // A write that leaves the numbers alone sends nothing.
         const settled = (await ref.get()).data();
         await ref.update({notes: "fragile"});
@@ -5171,5 +5182,301 @@ describe("a corrected number and Send again", () => {
     const receiver = (await row(lineId, "receiver").get()).data();
     assert.equal(receiver.status, "queued");
     assert.equal(receiver.phone, "+224620000001");
+  });
+});
+
+// The sender's "package received" carries the package receipt PDF
+// (docs/WHATSAPP_CONTAINER_UPDATES.md "Package receipt for the sender"): the
+// receipt template with a signed link the document endpoint serves; the
+// receiver's message unchanged; the plain message whenever the receipt
+// cannot go.
+describe("the package receipt on the sender's message", () => {
+  const bucket = () => admin.storage()
+      .bucket(`${process.env.GCLOUD_PROJECT}.firebasestorage.app`);
+  const proof = require("../package_proof");
+  const receiptPdf = require("../parking_receipt_pdf");
+  const dropOff = (extra = {}) => call("addWaitingPackage", {kind: "barrels",
+    quantity: 2, ownerKind: "customer", customerName: "Fatou Diallo",
+    customerPhone: "+16465550100", receiverName: "Mariama Bah",
+    receiverPhone: "+224620000000", destinationCountryId: "gn",
+    destinationCountryName: "Guinea", priceCents: 30000, payOnArrival: true,
+    ...extra});
+  const row = (lineId, role) =>
+    db.collection("containerUpdates").doc(`${lineId}_${role}_received`);
+  const lineData = async (lineId) =>
+    (await db.collection("containerLines").doc(lineId).get()).data();
+  const NOT_READY = {status: 404, body: {error: {code: 132001,
+    message: "Template name does not exist in the translation"}}};
+
+  function fakeRes() {
+    const res = {statusCode: 0, body: "", headers: {}, headersSent: false,
+      on: () => res, once: () => res, emit: () => true};
+    res.set = (k, v) => {
+      res.headers[k.toLowerCase()] = v;
+      return res;
+    };
+    res.status = (code) => {
+      res.statusCode = code;
+      return res;
+    };
+    res.send = (value) => {
+      res.body = value;
+      res.headersSent = true;
+      return res;
+    };
+    res.end = res.send;
+    return res;
+  }
+  async function open(link) {
+    const query = Object.fromEntries(new URL(link).searchParams.entries());
+    const res = fakeRes();
+    await functions.parkingDocument({method: "GET", query, headers: {},
+      url: "/d", body: {}, rawBody: Buffer.from(""),
+      on: () => {}, once: () => {}, get: () => "", header: () => ""}, res);
+    return res;
+  }
+  const headerOf = (body) => body.template.components
+      .find((part) => part.type === "header");
+
+  afterEach(() => {
+    global.fetch = realFetch;
+    disconnectWhatsApp();
+  });
+
+  it("sends the sender the receipt template, and the receiver the plain one",
+      async () => {
+        connectWhatsApp();
+        const {lineId} = await dropOff();
+        const line = await lineData(lineId);
+        assert.equal((await row(lineId, "sender").get()).get("status"),
+            "queued");
+        fakeWhatsApp(OK);
+        await deliver(row(lineId, "sender").id);
+        assert.equal(whatsappCalls.length, 1);
+        const body = whatsappCalls[0];
+        assert.equal(body.to, "16465550100");
+        assert.equal(body.template.name, "shipment_received_doc_2lang");
+        const header = headerOf(body);
+        assert.equal(header.parameters[0].type, "document");
+        assert.equal(header.parameters[0].document.filename,
+            `Receipt ${line.trackingCode}.pdf`);
+        const link = header.parameters[0].document.link;
+        // Straight at the function: Meta may not follow /d's redirect.
+        assert.match(link, new RegExp(
+            "^https://us-central1-demo-laawol-containers\\." +
+            "cloudfunctions\\.net/parkingDocument\\?view=packageReceiptPdf" +
+            `&t=[A-Za-z0-9_-]{32}&p=${lineId}&e=\\d+&s=[0-9a-f]{24}$`));
+        const sentRow = (await row(lineId, "sender").get()).data();
+        assert.equal(sentRow.status, "sent");
+        assert.equal(sentRow.receiptDocument, "attached");
+        const stored = await lineData(lineId);
+        assert.equal(new URL(link).searchParams.get("t"),
+            stored.documentToken);
+        assert.deepEqual(stored.lastCustomerUpdate.results
+            .find((r) => r.role === "sender"),
+        {role: "sender", status: "sent"});
+        // The PDF is kept in Storage under packageReceipts, per line.
+        const [exists] = await bucket()
+            .file(`packageReceipts/${BIZ}/${lineId}.pdf`).exists();
+        assert.equal(exists, true);
+
+        // The receiver's message is the usual one: no money, no PDF.
+        fakeWhatsApp(OK);
+        await deliver(row(lineId, "receiver").id);
+        const receiver = whatsappCalls[0];
+        assert.equal(receiver.to, "224620000000");
+        assert.equal(receiver.template.name, "shipment_received_2lang");
+        assert.equal(headerOf(receiver), undefined);
+        assert.equal(receiver.template.components.length, 2);
+        const receiverRow = (await row(lineId, "receiver").get()).data();
+        assert.equal(receiverRow.status, "sent");
+        assert.equal(receiverRow.receiptDocument, undefined);
+      });
+
+  it("serves the receipt on its signed link as a PDF", async () => {
+    connectWhatsApp();
+    const {lineId} = await dropOff();
+    fakeWhatsApp(OK);
+    await deliver(row(lineId, "sender").id);
+    const link = headerOf(whatsappCalls[0]).parameters[0].document.link;
+    const res = await open(link);
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.headers["content-type"], "application/pdf");
+    const code = (await lineData(lineId)).trackingCode;
+    assert.equal(res.headers["content-disposition"],
+        `inline; filename="Receipt ${code}.pdf"`);
+    const bytes = Buffer.from(res.body);
+    assert.equal(bytes.subarray(0, 4).toString(), "%PDF");
+    assert.ok(bytes.length > 1000);
+  });
+
+  it("opens only with the line's own token, id and an unexpired date",
+      async () => {
+        connectWhatsApp();
+        const {lineId} = await dropOff();
+        const other = await dropOff();
+        fakeWhatsApp(OK);
+        await deliver(row(lineId, "sender").id);
+        await deliver(row(other.lineId, "sender").id);
+        const link = headerOf(whatsappCalls[0]).parameters[0].document.link;
+        const url = new URL(link);
+        const token = url.searchParams.get("t");
+        const otherToken = (await lineData(other.lineId)).documentToken;
+        const base = `${url.origin}${url.pathname}`;
+        const expires = Date.now() + 60000;
+        assert.equal((await open(link)).statusCode, 200);
+        const refused = {
+          expired: proof.packageReceiptLink({base, token, lineId,
+            expiresMs: Date.now() - 1000}),
+          // The other line's id under this line's token, and the reverse.
+          wrongLine: proof.packageReceiptLink({base, token,
+            lineId: other.lineId, expiresMs: expires}),
+          wrongToken: proof.packageReceiptLink({base, token: otherToken,
+            lineId, expiresMs: expires}),
+          unknownToken: proof.packageReceiptLink({base,
+            token: "x".repeat(32), lineId, expiresMs: expires}),
+          // A car receipt's signature is no key to a package receipt.
+          carReceipt: link.replace("view=packageReceiptPdf",
+              "view=receiptPdf"),
+        };
+        const forged = new URL(link);
+        forged.searchParams.set("s", "0".repeat(24));
+        refused.forged = forged.toString();
+        const stretched = new URL(link);
+        stretched.searchParams.set("e",
+            String(Number(url.searchParams.get("e")) + 86400000));
+        refused.stretched = stretched.toString();
+        for (const [name, bad] of Object.entries(refused)) {
+          assert.equal((await open(bad)).statusCode, 404, name);
+        }
+        // The other line's own link opens its own receipt.
+        assert.equal((await open(headerOf(whatsappCalls[1]).parameters[0]
+            .document.link)).statusCode, 200);
+        // The line removed: its link is gone.
+        await db.collection("containerLines").doc(lineId).delete();
+        assert.equal((await open(link)).statusCode, 404);
+      });
+
+  it("sends the plain template at once while the receipt template is in " +
+      "review, and logs which it did", async () => {
+    connectWhatsApp();
+    const {lineId} = await dropOff();
+    fakeWhatsApp(NOT_READY, OK);
+    await deliver(row(lineId, "sender").id);
+    assert.equal(whatsappCalls.length, 2);
+    assert.equal(whatsappCalls[0].template.name,
+        "shipment_received_doc_2lang");
+    assert.equal(whatsappCalls[1].template.name, "shipment_received_2lang");
+    assert.equal(headerOf(whatsappCalls[1]), undefined);
+    // The same words in the two bodies.
+    assert.deepEqual(whatsappCalls[1].template.components[0],
+        whatsappCalls[0].template.components[1]);
+    const sentRow = (await row(lineId, "sender").get()).data();
+    assert.equal(sentRow.status, "sent");
+    assert.equal(sentRow.receiptDocument, "fallback");
+    assert.equal(sentRow.whatsappMessageId, "wamid.TEST");
+  });
+
+  it("falls back when Meta cannot fetch the PDF or paused the template",
+      async () => {
+        connectWhatsApp();
+        for (const code of [131053, 132015]) {
+          const {lineId} = await dropOff();
+          fakeWhatsApp({status: 400, body: {error: {code,
+            message: "nope"}}}, OK);
+          await deliver(row(lineId, "sender").id);
+          assert.equal(whatsappCalls.length, 2, `${code}`);
+          assert.equal(whatsappCalls[1].template.name,
+              "shipment_received_2lang");
+          assert.equal((await row(lineId, "sender").get())
+              .get("receiptDocument"), "fallback");
+        }
+      });
+
+  it("waits for a template when neither is approved yet, and tries the " +
+      "receipt first again", async () => {
+    connectWhatsApp();
+    const {lineId} = await dropOff();
+    fakeWhatsApp(NOT_READY, NOT_READY);
+    await deliver(row(lineId, "sender").id);
+    assert.equal(whatsappCalls.length, 2);
+    let sentRow = (await row(lineId, "sender").get()).data();
+    assert.equal(sentRow.status, "waiting_for_template");
+    assert.equal(sentRow.attempts, 0);
+    await row(lineId, "sender").update({status: "queued"});
+    fakeWhatsApp(OK);
+    await deliver(row(lineId, "sender").id);
+    assert.equal(whatsappCalls.length, 1);
+    assert.equal(whatsappCalls[0].template.name,
+        "shipment_received_doc_2lang");
+    sentRow = (await row(lineId, "sender").get()).data();
+    assert.equal(sentRow.status, "sent");
+    assert.equal(sentRow.receiptDocument, "attached");
+  });
+
+  it("does not fall back for a number Meta refuses, or on a retry",
+      async () => {
+        connectWhatsApp();
+        const {lineId} = await dropOff();
+        fakeWhatsApp({status: 400, body: {error: {code: 131026,
+          message: "Message undeliverable"}}});
+        await deliver(row(lineId, "sender").id);
+        assert.equal(whatsappCalls.length, 1);
+        assert.equal((await row(lineId, "sender").get()).get("status"),
+            "failed");
+        const again = await dropOff();
+        fakeWhatsApp({status: 503, body: {error: {message: "Overloaded"}}});
+        await assert.rejects(deliver(row(again.lineId, "sender").id),
+            /will be retried/);
+        assert.equal(whatsappCalls.length, 1);
+        assert.equal((await row(again.lineId, "sender").get())
+            .get("status"), "retrying");
+      });
+
+  it("sends the plain template when the PDF cannot be drawn", async () => {
+    connectWhatsApp();
+    const {lineId} = await dropOff();
+    const draw = receiptPdf.renderReceiptPdf;
+    receiptPdf.renderReceiptPdf = async () => {
+      throw new Error("pdfkit exploded");
+    };
+    try {
+      fakeWhatsApp(OK);
+      await deliver(row(lineId, "sender").id);
+    } finally {
+      receiptPdf.renderReceiptPdf = draw;
+    }
+    assert.equal(whatsappCalls.length, 1);
+    assert.equal(whatsappCalls[0].template.name, "shipment_received_2lang");
+    const sentRow = (await row(lineId, "sender").get()).data();
+    assert.equal(sentRow.status, "sent");
+    assert.equal(sentRow.receiptDocument, "unavailable");
+    const [exists] = await bucket()
+        .file(`packageReceipts/${BIZ}/${lineId}.pdf`).exists();
+    assert.equal(exists, false);
+  });
+
+  it("keeps the legacy set's sender message as it was", async () => {
+    connectWhatsApp();
+    process.env.WHATSAPP_TEMPLATE_SET = "legacy";
+    try {
+      const {lineId} = await dropOff();
+      fakeWhatsApp(OK);
+      await deliver(row(lineId, "sender").id);
+      assert.equal(whatsappCalls[0].template.name, "package_received");
+      assert.equal((await row(lineId, "sender").get())
+          .get("receiptDocument"), undefined);
+    } finally {
+      delete process.env.WHATSAPP_TEMPLATE_SET;
+    }
+  });
+
+  it("gives a sender who is also the receiver no receipt", async () => {
+    connectWhatsApp();
+    const {lineId} = await dropOff({senderIsReceiver: true});
+    assert.equal((await row(lineId, "sender").get()).exists, false);
+    fakeWhatsApp(OK);
+    await deliver(row(lineId, "receiver").id);
+    assert.equal(whatsappCalls[0].template.name, "shipment_received_2lang");
   });
 });

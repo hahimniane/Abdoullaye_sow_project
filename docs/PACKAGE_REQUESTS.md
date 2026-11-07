@@ -301,6 +301,39 @@ link — never the code alone), `handoff: bring_in|collect`, `locationId` +
 - `package_dropoff_reminder_2lang`: 1 name, 2 business, 3 pieces EN,
   4 hours EN, 5 business, 6 pieces FR, 7 hours FR, 8 request code; button
   `/e/{{1}}`.
+- `package_request_received_2lang` (2026-11-07, written, **not
+  submitted**; `~/laawol-deploy-logs/create_request_received_template.py`):
+  "We got your request". 1 name, 2 business, 3 pieces EN, 4 destination EN,
+  5 business, 6 pieces FR, 7 destination FR, 8 request code; button
+  `https://customer.laawoldigital.com/e/{{1}}` (token, the same link as the
+  estimate). Utility, language `en`:
+
+  ```
+  Hello / Bonjour {{1}} 👋
+
+  *ENGLISH*
+  {{2}} received your request to ship {{3}} to {{4}}. They will send you the price and the next step soon. Tap the button to follow your request.
+
+  —————
+  *FRANÇAIS*
+  {{5}} a bien reçu votre demande d'envoi de {{6}} vers {{7}}. Ils vous enverront bientôt le prix et la suite à donner. Appuyez sur le bouton pour suivre votre demande.
+
+  🔎 Request / Demande : {{8}}
+
+  Thank you. / Merci.
+  ```
+
+  Button text `Follow · Suivre`. Queued by `createPackageRequest` (so the web
+  form, the app and the WhatsApp Flow alike) when the request is created
+  with **no estimate** (`status: new`): row `req_{requestId}_request_received`
+  (a fixed id: one per request, never twice), `update: "request_received"`.
+  A request created `estimate_sent` (automatic barrel estimate: its estimate
+  message already tells them) or already `confirmed` in the price-list form
+  (they saw and agreed the price) gets none. It waits for its template
+  (`waiting_for_template`) like the others, STOP is honoured, and a row whose
+  request has an estimate (or has closed) by the time it is sent is marked
+  `skipped` instead (`requestMessageSkipReason`): "the price will come" is
+  stale by then.
 - Sends wait (waiting_for_template on Meta 132001) until approved.
 
 ## 8. API contract (phase 2)
@@ -354,7 +387,8 @@ and the code disagree, the code is wrong: fix it, or change both together.
 A request whose pieces are **all barrels with a barrel price** for the
 destination is created already `estimate_sent` with an automatic version 1
 (`estimate.auto: true`, `sentByName: ""`), and its estimate WhatsApp is
-queued at once. A barrel with no price for the destination is a piece that
+queued at once. Any other request is created `new` and the customer gets
+"We got your request" (`package_request_received_2lang`, §7) at once. A barrel with no price for the destination is a piece that
 needs an estimate (`estimateCents: null`).
 
 ### 8.3 Firestore
@@ -429,8 +463,8 @@ Server-only bookkeeping (no client access): `packageRequestSlugs/{slug}`,
 
 WhatsApp rows for requests use the existing queue,
 `containerUpdates/req_{requestId}_{update}`, with `requestId`, `lineId: ""`,
-`role: "sender"`, `update` = `estimate_v{n}` | `estimate_reminder` |
-`dropoff_reminder`, and the same statuses (`queued` → `sent`,
+`role: "sender"`, `update` = `request_received` | `estimate_v{n}` |
+`estimate_reminder` | `dropoff_reminder`, and the same statuses (`queued` → `sent`,
 `waiting_for_whatsapp`, `waiting_for_template` until Meta approves, …).
 Readable by the business's people as today.
 
@@ -655,7 +689,9 @@ as a counter line with those pieces. The optional payment follows
 online payment as a `containerLinePayments` row (`method: "other"`, note
 "Paid online by card") and cannot also take `payment`. A second tap returns
 the same line (`alreadyReceived: true`). Then the bilingual `received`
-WhatsApp is queued for sender and receiver as for any new package.
+WhatsApp is queued for sender and receiver as for any new package (the
+sender's carries the package receipt PDF: docs/WHATSAPP_CONTAINER_UPDATES.md
+"Package receipt for the sender").
 
 ### 8.7 Notifications (bell + push)
 
