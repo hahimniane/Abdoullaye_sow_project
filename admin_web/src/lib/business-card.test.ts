@@ -15,6 +15,8 @@ import {
   cardAddress,
   cardCodeFromLocation,
   cardDial,
+  cardEmbedFromSearch,
+  cardFlipLabel,
   cardInitials,
   cardLink,
   cardName,
@@ -271,4 +273,17 @@ test("whatever the server sends, a card still draws", () => {
   });
   assert.ok(typed);
   assert.equal(cardAddress(typed.business), "12 Example Ave, Bronx, NY 10457");
+});
+
+test("the embed form of the card page is only on with embed=1, and names its language", () => {
+  assert.deepEqual(cardEmbedFromSearch("?service=business-card&c=K7M4P2XB"), { embed: false, lang: null });
+  assert.deepEqual(cardEmbedFromSearch("?service=business-card&c=K7M4P2XB&embed=1"), { embed: true, lang: null });
+  assert.deepEqual(cardEmbedFromSearch("?embed=1&lang=fr"), { embed: true, lang: "fr" });
+  assert.deepEqual(cardEmbedFromSearch("?embed=1&lang=EN"), { embed: true, lang: "en" });
+  assert.deepEqual(cardEmbedFromSearch("?embed=1&lang=de"), { embed: true, lang: null });
+  assert.deepEqual(cardEmbedFromSearch("?embed=true"), { embed: false, lang: null });
+  // A language on the normal page changes nothing.
+  assert.deepEqual(cardEmbedFromSearch("?lang=fr"), { embed: false, lang: null });
+  assert.equal(cardFlipLabel("fr"), "Retourner la carte");
+  assert.equal(cardFlipLabel("en"), "Turn the card over");
 });

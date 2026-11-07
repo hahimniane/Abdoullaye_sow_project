@@ -7,6 +7,9 @@ import { BusinessCardFace } from "@/components/business-card-face";
 import {
   cardCodeFromLocation,
   cardDial,
+  cardEmbedFromSearch,
+  cardFlipLabel,
+  tellCardEmbedHost,
   cardTitle,
   vcardFileName,
   vcardText,
@@ -38,7 +41,29 @@ const SHIPPING = ["barrelShipping", "sharedBarrels", "freight"];
 export function BusinessCardPage() {
   const [state, setState] = useState<State>({ phase: "loading" });
   const [side, setSide] = useState<1 | 2>(1);
-  const [lang] = useState(() => currentWebLanguage());
+  // `&embed=1`: only the card, for the app's "My card" screen (see EmbeddedCard).
+  const [{ embed, lang: embedLang }] = useState(() =>
+    typeof window === "undefined" ? { embed: false, lang: null } : cardEmbedFromSearch(window.location.search),
+  );
+  const [lang] = useState<"en" | "fr">(() => embedLang ?? currentWebLanguage());
+
+  useEffect(() => {
+    if (!embed) return;
+    // The app's own background shows through the page.
+    document.documentElement.classList.add("bcard-embed-root");
+    return () => document.documentElement.classList.remove("bcard-embed-root");
+  }, [embed]);
+
+  useEffect(() => {
+    // The app waits for this (and falls back to its own card without it).
+    if (!embed) return;
+    if (state.phase === "ready") {
+      // After the card has painted.
+      const frame = window.requestAnimationFrame(() => tellCardEmbedHost("ready"));
+      return () => window.cancelAnimationFrame(frame);
+    }
+    if (state.phase === "missing" || state.phase === "error") tellCardEmbedHost("error");
+  }, [embed, state.phase]);
 
   useEffect(() => {
     let live = true;
@@ -58,6 +83,14 @@ export function BusinessCardPage() {
       live = false;
     };
   }, []);
+
+  if (embed) {
+    // Loading, missing or failed: nothing is drawn, and the app (which has a
+    // timeout of its own) shows its own card instead.
+    return state.phase === "ready" ? (
+      <EmbeddedCard card={state.card} lang={lang} onFlip={() => setSide(side === 1 ? 2 : 1)} side={side} />
+    ) : null;
+  }
 
   return (
     <div className="customer-entry-shell">
@@ -92,6 +125,32 @@ export function BusinessCardPage() {
           </p>
         </div>
       </main>
+    </div>
+  );
+}
+
+/**
+ * The embed: the card face and "Turn the card over", nothing else - no page
+ * chrome, buttons or links - so the app can show the real card in a WebView.
+ * It names its own language, so it never waits on the page's translation.
+ */
+function EmbeddedCard({
+  card,
+  lang,
+  side,
+  onFlip,
+}: {
+  card: BusinessCardData;
+  lang: "en" | "fr";
+  side: 1 | 2;
+  onFlip: () => void;
+}) {
+  return (
+    <div className="bcard-embed">
+      <BusinessCardFace card={card} lang={lang} side={side} />
+      <button className="bcard-flip" data-no-translate onClick={onFlip} type="button">
+        {cardFlipLabel(lang)}
+      </button>
     </div>
   );
 }

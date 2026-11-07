@@ -15,6 +15,8 @@ import '../theme/app_spacing.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/async_action_button.dart';
 import '../widgets/business_card_face.dart';
+import '../widgets/card_web_view.dart';
+import '../widgets/embedded_business_card.dart';
 import '../widgets/inventory_widgets.dart';
 
 /// What the My card buttons hand to the phone. Behind a class so a widget
@@ -61,7 +63,9 @@ class MyCardActions {
 }
 
 /// "My card": the signed-in business owner's or staff member's own digital
-/// business card (docs/BUSINESS_CARDS.md). It shows the card, a large QR of
+/// business card (docs/BUSINESS_CARDS.md). It shows the website's real card
+/// (the card page in a WebView, the app's own [BusinessCardFace] when that
+/// cannot load), a large QR of
 /// its link (scannable from this screen), and Share, Save contact and, on
 /// the phone's own wallet, Add to Apple Wallet (iOS) / Add to Google Wallet
 /// (Android) when the server can make a pass.
@@ -75,10 +79,16 @@ class MyCardScreen extends StatefulWidget {
     this.service = const BusinessCardService(),
     this.actions = const MyCardActions(),
     this.platform,
+    this.cardViewFactory,
   });
 
   final BusinessCardService service;
   final MyCardActions actions;
+
+  /// Makes the WebView that shows the website's real card; null uses the
+  /// platform's (and the app's own card where there is none). Tests pass a
+  /// fake.
+  final CardWebViewFactory? cardViewFactory;
 
   /// The platform the wallet button is for; null reads the device.
   final TargetPlatform? platform;
@@ -266,7 +276,7 @@ class _MyCardScreenState extends State<MyCardScreen> {
     final ios = _platform == TargetPlatform.iOS;
     final android = _platform == TargetPlatform.android;
     return [
-      BusinessCardFace(card: card.card),
+      EmbeddedBusinessCard(card: card.card, factory: widget.cardViewFactory),
       const SizedBox(height: AppSpacing.xl),
       Center(
         child: Container(

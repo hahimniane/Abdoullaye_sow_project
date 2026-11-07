@@ -202,6 +202,41 @@ export function cardCodeFromLocation(pathname: string, search: string): string {
   return normalizeCardCode(new URLSearchParams(search).get("c"));
 }
 
+/**
+ * The embed form of the card page (`&embed=1`): only the card, for the
+ * Laawol app's "My card" screen to show in a WebView. `lang` is the app's
+ * language (`&lang=fr|en`), or null when the link names none (the page then
+ * follows its usual language choice).
+ */
+export type CardEmbed = { embed: boolean; lang: "en" | "fr" | null };
+
+export function cardEmbedFromSearch(search: string): CardEmbed {
+  const query = new URLSearchParams(search);
+  const embed = query.get("embed") === "1";
+  const lang = String(query.get("lang") ?? "").trim().toLowerCase();
+  return { embed, lang: embed && (lang === "en" || lang === "fr") ? lang : null };
+}
+
+/** The app's WebView channel the embed tells "ready" or "error" on (`LaawolCard.postMessage`). */
+export const CARD_EMBED_CHANNEL = "LaawolCard";
+
+/** Tells the app the embed's state; a no-op in a normal browser. */
+export function tellCardEmbedHost(message: "ready" | "error"): void {
+  try {
+    const host = (window as unknown as Record<string, { postMessage?: (m: string) => void } | undefined>)[
+      CARD_EMBED_CHANNEL
+    ];
+    host?.postMessage?.(message);
+  } catch {
+    // No app around the page: nothing to tell.
+  }
+}
+
+/** The "Turn the card over" button's words, for the embed (which names its own language). */
+export function cardFlipLabel(lang: "en" | "fr"): string {
+  return lang === "fr" ? "Retourner la carte" : "Turn the card over";
+}
+
 /** `/c/<code>` on a host that did not rewrite it: the same page in its query form, or "". */
 export function cardPathRedirect(pathname: string): string {
   const match = CODE_PATH.exec(String(pathname ?? ""));

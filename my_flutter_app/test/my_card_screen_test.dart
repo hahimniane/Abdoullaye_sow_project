@@ -6,8 +6,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:my_flutter_app/l10n/app_localizations.dart';
 import 'package:my_flutter_app/screens/my_card_screen.dart';
 import 'package:my_flutter_app/services/business_card.dart';
+import 'package:my_flutter_app/services/business_card_embed.dart';
 import 'package:my_flutter_app/services/business_card_service.dart';
 import 'package:my_flutter_app/theme/app_theme.dart';
+import 'package:my_flutter_app/widgets/card_web_view.dart';
 
 /// "My card" (docs/BUSINESS_CARDS.md) on screen: the card, the QR, Share,
 /// Save contact and the wallet button of the phone's own platform, in
@@ -118,9 +120,45 @@ class _FakeActions extends MyCardActions {
   }
 }
 
+/// A stand-in for the embedded card page: keeps what the screen asked for and
+/// lets a test play the page's side.
+class _FakeWeb implements CardWebViewHandle {
+  _FakeWeb(this.request);
+
+  final CardWebViewRequest request;
+  bool disposed = false;
+
+  @override
+  Widget build(BuildContext context) =>
+      const SizedBox.expand(key: Key('fake-web'));
+
+  @override
+  void dispose() => disposed = true;
+
+  void say(String message) => request.onMessage(message);
+}
+
+/// Makes [_FakeWeb]s and keeps them, or throws like a platform with none.
+class _Webs {
+  _Webs({this.throws = false});
+
+  final bool throws;
+  final List<_FakeWeb> made = [];
+
+  _FakeWeb get last => made.last;
+
+  CardWebViewHandle make(CardWebViewRequest request) {
+    if (throws) throw UnsupportedError('no WebView here');
+    final web = _FakeWeb(request);
+    made.add(web);
+    return web;
+  }
+}
+
 Future<void> _pump(
   WidgetTester tester,
   _Cards cards, {
+  _Webs? webs,
   _FakeActions? actions,
   TargetPlatform platform = TargetPlatform.iOS,
   Locale locale = const Locale('en'),
@@ -142,6 +180,7 @@ Future<void> _pump(
         service: cards.service(timeout: timeout),
         actions: actions ?? _FakeActions(),
         platform: platform,
+        cardViewFactory: webs?.make,
       ),
     ),
   );
@@ -152,6 +191,127 @@ final _appleButton = find.byKey(const Key('my-card-apple-wallet'));
 final _googleButton = find.byKey(const Key('my-card-google-wallet'));
 
 void main() {
+  group('the real card (the website card page in a WebView)', () {
+    final embed = find.byKey(const Key('my-card-embed'));
+    final fallback = find.byKey(const Key('my-card-fallback'));
+    final loading = find.byKey(const Key('my-card-embed-loading'));
+
+    testWidgets('asks for the embed page of this card, in English', (
+      tester,
+    ) async {
+      final webs = _Webs();
+      await _pump(tester, _Cards(), webs: webs, settle: false);
+      await tester.pump();
+      await tester.pump();
+      expect(webs.made, hasLength(1));
+      expect(
+        webs.last.request.url.toString(),
+        'https://customer.laawoldigital.com/'
+        '?service=business-card&c=K7M4P2XB&embed=1&lang=en',
+      );
+      expect(webs.last.request.baseUrl, cardEmbedBaseUrl);
+    });
+
+    testWidgets('asks for French in a French app', (tester) async {
+      final webs = _Webs();
+      await _pump(
+        tester,
+        _Cards(),
+        webs: webs,
+        locale: const Locale('fr'),
+        settle: false,
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(
+        webs.last.request.url.toString(),
+        'https://customer.laawoldigital.com/'
+        '?service=business-card&c=K7M4P2XB&embed=1&lang=fr',
+      );
+    });
+
+    testWidgets(
+      'shows a placeholder while loading, then the page once it says ready',
+      (tester) async {
+        final webs = _Webs();
+        await _pump(tester, _Cards(), webs: webs, settle: false);
+        await tester.pump();
+        await tester.pump();
+        expect(embed, findsOneWidget);
+        expect(loading, findsOneWidget);
+        expect(find.byKey(const Key('fake-web')), findsOneWidget);
+        expect(fallback, findsNothing);
+
+        webs.last.say(cardEmbedReadyMessage);
+        await tester.pump();
+        expect(loading, findsNothing);
+        expect(embed, findsOneWidget);
+        expect(fallback, findsNothing);
+        // The picture is the card's 7:4 plus the page's flip row.
+        final size = tester.getSize(embed);
+        expect(size.height, closeTo(size.width / cardEmbedAspect + 44, 0.01));
+        // The QR and the buttons stay below.
+        expect(find.byKey(const Key('my-card-share')), findsOneWidget);
+        expect(find.byKey(const Key('my-card-save-contact')), findsOneWidget);
+        expect(find.byKey(const Key('my-card-apple-wallet')), findsOneWidget);
+      },
+    );
+
+    testWidgets('keeps the app card when the page never answers', (
+      tester,
+    ) async {
+      final webs = _Webs();
+      await _pump(tester, _Cards(), webs: webs, settle: false);
+      await tester.pump();
+      await tester.pump();
+      expect(loading, findsOneWidget);
+
+      await tester.pump(cardEmbedReadyTimeout + const Duration(seconds: 1));
+      expect(fallback, findsOneWidget);
+      expect(embed, findsNothing);
+      expect(find.text('Sahel Auto Sales'), findsOneWidget);
+      expect(webs.last.disposed, isTrue);
+      // A late "ready" never swaps the card under the customer's eyes.
+      webs.last.say(cardEmbedReadyMessage);
+      await tester.pump();
+      expect(fallback, findsOneWidget);
+      expect(embed, findsNothing);
+    });
+
+    testWidgets('keeps the app card when the page cannot load', (tester) async {
+      final webs = _Webs();
+      await _pump(tester, _Cards(), webs: webs, settle: false);
+      await tester.pump();
+      await tester.pump();
+      webs.last.request.onPageError();
+      await tester.pump();
+      expect(fallback, findsOneWidget);
+      expect(find.text('Awa Camara'), findsOneWidget);
+    });
+
+    testWidgets('keeps the app card when the page says the card is missing', (
+      tester,
+    ) async {
+      final webs = _Webs();
+      await _pump(tester, _Cards(), webs: webs, settle: false);
+      await tester.pump();
+      await tester.pump();
+      webs.last.say(cardEmbedErrorMessage);
+      await tester.pump();
+      expect(fallback, findsOneWidget);
+    });
+
+    testWidgets('keeps the app card where the phone has no WebView', (
+      tester,
+    ) async {
+      final webs = _Webs(throws: true);
+      await _pump(tester, _Cards(), webs: webs);
+      expect(fallback, findsOneWidget);
+      expect(embed, findsNothing);
+      expect(find.text('Sahel Auto Sales'), findsOneWidget);
+    });
+  });
+
   group('the card', () {
     testWidgets('shows loading, then the card, the QR and the buttons', (
       tester,

@@ -85,6 +85,16 @@ A card never carries an email, a role, a permission or a uid.
   the page's language by the face component; they never go through
   `french-dom.ts`. The pages' own words do.
 - Stock pictures live in `admin_web/public/card-art/`.
+- **Embed mode** (`&embed=1`, `cardEmbedFromSearch`): the page draws only the
+  card face and "Turn the card over" on a transparent background, in the
+  language of `&lang=fr|en`, and tells the app on the `LaawolCard` WebView
+  channel (`ready` once painted, `error` when the card is missing or
+  unreadable). The normal page is unchanged. The app's My card screen shows
+  `https://customer.laawoldigital.com/?service=business-card&c=<code>&embed=1&lang=<en|fr>`
+  in a WebView (`embedded_business_card.dart`), so the phone shows the same
+  card people are handed. No `ready` in 8 s, a page error, or no WebView on
+  the platform keeps the app's own `BusinessCardFace`. The app must be
+  built against a website that already has embed mode.
 
 ## 5. Wallet passes
 
@@ -142,6 +152,5 @@ function deploys, even as `unset`.
 
 ## 6. Not built yet
 
-- The app's "My card" screen.
 - A print-shop file with bleed.
 - Letting the owner hide a person's own number.

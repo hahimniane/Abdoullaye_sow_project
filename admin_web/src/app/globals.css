@@ -17560,6 +17560,11 @@ button.pkq-card:hover { border-color: var(--brand); }
 .bcard-acts { display: flex; flex: none; gap: 8px; }
 .bcard-ic { align-items: center; background: var(--mist); border: 1px solid var(--brand); border-radius: 8px; box-sizing: border-box; color: var(--brand-strong); display: flex; height: 44px; justify-content: center; width: 44px; }
 .bcard-flip { align-self: center; background: none; border: 0; color: var(--brand-strong); cursor: pointer; font: inherit; font-size: 13px; font-weight: 700; justify-self: center; min-height: 44px; padding: 0 12px; text-decoration: underline; }
+/* The embed (&embed=1): only the card and its flip button, on the app's own background. */
+html.bcard-embed-root, html.bcard-embed-root body { background: transparent !important; overflow: hidden; }
+.bcard-embed { display: grid; margin: 0; width: 100%; }
+.bcard-embed .bcard-face { box-shadow: none; }
+.bcard-embed .bcard-flip { height: 44px; min-height: 44px; padding: 0 12px; }
 .bcard-foot { color: var(--muted); font-size: 12px; margin: 4px 0 0; text-align: center; }
 .bcard-foot a { color: inherit; }
 
