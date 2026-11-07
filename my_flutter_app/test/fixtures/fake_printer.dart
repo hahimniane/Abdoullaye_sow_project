@@ -8,6 +8,7 @@ library;
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:my_flutter_app/services/generic_label_printer.dart';
 import 'package:my_flutter_app/services/label_printer.dart';
 import 'package:my_flutter_app/services/m221_protocol.dart';
 
@@ -25,6 +26,8 @@ class FakePrinterTransport implements PrinterTransport {
     this.grantCredits = true,
     this.maxPacketReply = 244,
     this.extraReply,
+    this.gatt,
+    this.subscribeReplies = const [],
   }) : devices =
            devices ??
            const [
@@ -53,6 +56,15 @@ class FakePrinterTransport implements PrinterTransport {
 
   /// A text line sent right after `PRINT 1` (e.g. "Cmd error:END").
   String? extraReply;
+
+  /// What the fake printer's Bluetooth layout looks like (only reported to
+  /// a generic connection), and what it sends right after notifications are
+  /// turned on.
+  PrinterGattInfo? gatt;
+  List<List<int>> subscribeReplies;
+
+  /// Whether the last connection was asked for as an "other" 4 x 6 printer.
+  bool? lastConnectGeneric;
 
   /// Packets written with no credit left (a flow-control violation).
   int creditViolations = 0;
@@ -93,7 +105,9 @@ class FakePrinterTransport implements PrinterTransport {
   Future<PrinterLink> connect(
     String deviceId, {
     required Duration timeout,
+    bool generic = false,
   }) async {
+    lastConnectGeneric = generic;
     events.add('connect $deviceId');
     connects++;
     final error = connectError;
@@ -128,6 +142,9 @@ class FakePrinterLink implements PrinterLink {
   bool get writeWithoutResponse => true;
 
   @override
+  PrinterGattInfo? get gatt => _printer.gatt;
+
+  @override
   bool get isConnected => !_lost.isCompleted;
 
   @override
@@ -140,6 +157,9 @@ class FakePrinterLink implements PrinterLink {
   Future<void> subscribe() async {
     _printer.events.add('subscribe');
     subscribed = true;
+    for (final frame in _printer.subscribeReplies) {
+      reply(frame);
+    }
     if (_printer.pm241) {
       _printer.creditsLeft = _printer.initialCredits;
       if (_printer.initialCredits > 0) {

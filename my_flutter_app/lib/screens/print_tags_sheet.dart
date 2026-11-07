@@ -168,8 +168,8 @@ class _PrintTagsSheetState extends State<PrintTagsSheet> {
       );
       return;
     }
-    if (_printer.settings.model == PrinterModel.pm241) {
-      // A PM-241 prints 4 x 6 in package labels only: say so, send nothing.
+    if (_printer.settings.model.isFourBySix) {
+      // A 4 x 6 in printer prints package labels only: say so, send nothing.
       AppHaptics.refuse();
       setState(() => _error = l10n.printTagsNotOnPm241);
       return;

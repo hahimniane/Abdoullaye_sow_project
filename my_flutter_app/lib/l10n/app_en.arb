@@ -11283,5 +11283,18 @@
   "myCardWalletFailed": "We could not open your wallet card. Try again.",
   "myCardShareFailed": "We could not share your card. Try again.",
   "myCardSaveFailed": "We could not prepare the contact. Try again.",
-  "myCardBusinessNotApproved": "Your business is not approved yet."
+  "myCardBusinessNotApproved": "Your business is not approved yet.",
+  "labelPrinterModelGeneric": "Other 4 × 6 in Bluetooth printer (beta)",
+  "labelPrinterKindTitle": "What kind of printer is this?",
+  "labelPrinterKindHint": "The app does not know this printer by its name. Choose how it should talk to it.",
+  "labelPrinterKindM221": "Phomemo M221",
+  "labelPrinterKindM221Note": "Product tags and small package labels.",
+  "labelPrinterKindGeneric": "Other 4 × 6 in Bluetooth printer (beta)",
+  "labelPrinterKindGenericNote": "Package labels at 4 × 6 in. Not tested on every printer.",
+  "labelPrinterGenericBeta": "Beta: this sends 4 × 6 in labels to printers we have not tested, so it may not work with every printer. If a label does not print, tap “Send printer details” and send us the message.",
+  "labelPrinterSendDetails": "Send printer details",
+  "labelPrinterSendDetailsBusy": "Collecting details…",
+  "labelPrinterSendDetailsFailed": "We could not collect the printer details. Try again.",
+  "labelPrinterDetailsSubject": "Laawol printer details",
+  "labelPrinterGenericFailedHint": "If it keeps failing, open Printer settings and tap “Send printer details” so we can add support for this printer."
 }

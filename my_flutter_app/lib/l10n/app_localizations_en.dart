@@ -19373,4 +19373,51 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get myCardBusinessNotApproved => 'Your business is not approved yet.';
+
+  @override
+  String get labelPrinterModelGeneric =>
+      'Other 4 × 6 in Bluetooth printer (beta)';
+
+  @override
+  String get labelPrinterKindTitle => 'What kind of printer is this?';
+
+  @override
+  String get labelPrinterKindHint =>
+      'The app does not know this printer by its name. Choose how it should talk to it.';
+
+  @override
+  String get labelPrinterKindM221 => 'Phomemo M221';
+
+  @override
+  String get labelPrinterKindM221Note =>
+      'Product tags and small package labels.';
+
+  @override
+  String get labelPrinterKindGeneric =>
+      'Other 4 × 6 in Bluetooth printer (beta)';
+
+  @override
+  String get labelPrinterKindGenericNote =>
+      'Package labels at 4 × 6 in. Not tested on every printer.';
+
+  @override
+  String get labelPrinterGenericBeta =>
+      'Beta: this sends 4 × 6 in labels to printers we have not tested, so it may not work with every printer. If a label does not print, tap “Send printer details” and send us the message.';
+
+  @override
+  String get labelPrinterSendDetails => 'Send printer details';
+
+  @override
+  String get labelPrinterSendDetailsBusy => 'Collecting details…';
+
+  @override
+  String get labelPrinterSendDetailsFailed =>
+      'We could not collect the printer details. Try again.';
+
+  @override
+  String get labelPrinterDetailsSubject => 'Laawol printer details';
+
+  @override
+  String get labelPrinterGenericFailedHint =>
+      'If it keeps failing, open Printer settings and tap “Send printer details” so we can add support for this printer.';
 }

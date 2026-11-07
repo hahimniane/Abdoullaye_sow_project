@@ -15,6 +15,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
+import 'generic_label_printer.dart';
 import 'label_printer.dart';
 import 'm221_protocol.dart';
 
@@ -114,6 +115,7 @@ class BlePrinterTransport implements PrinterTransport {
                 name: name,
                 rssi: r.rssi,
                 advertisesPrinterService: advertisesPrinter,
+                serviceUuids: [for (final g in ad.serviceUuids) g.str128],
               ),
             );
           }
@@ -149,6 +151,7 @@ class BlePrinterTransport implements PrinterTransport {
   Future<PrinterLink> connect(
     String deviceId, {
     required Duration timeout,
+    bool generic = false,
   }) async {
     final device = BluetoothDevice.fromId(deviceId);
     try {
@@ -160,7 +163,9 @@ class BlePrinterTransport implements PrinterTransport {
       throw _mapError(e, PrintFailure.connectFailed);
     }
     try {
+      if (generic) await _raiseMtu(device);
       final services = await device.discoverServices();
+      if (generic) return await _connectGeneric(device, services);
       BluetoothCharacteristic? write;
       BluetoothCharacteristic? notify;
       for (final service in services) {
@@ -189,8 +194,109 @@ class BlePrinterTransport implements PrinterTransport {
   }
 }
 
+/// Asks Android for a bigger MTU when the connection still has the default
+/// (flutter_blue_plus already asks for 512 when connecting; this is the
+/// second try). iOS negotiates it itself. A refusal is not an error.
+Future<void> _raiseMtu(BluetoothDevice device) async {
+  if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+  try {
+    if (device.mtuNow <= 23) {
+      await device.requestMtu(247).timeout(const Duration(seconds: 5));
+    }
+  } catch (_) {}
+}
+
+PrinterGattInfo _gattInfo(
+  List<BluetoothService> services,
+  int mtu, {
+  GenericWriteTarget? target,
+}) => PrinterGattInfo(
+  mtu: mtu,
+  services: [
+    for (final service in services)
+      GattServiceInfo(service.uuid.str128, [
+        for (final c in service.characteristics)
+          GattCharacteristicInfo(
+            c.uuid.str128,
+            GattProps(
+              read: c.properties.read,
+              write: c.properties.write,
+              writeWithoutResponse: c.properties.writeWithoutResponse,
+              notify: c.properties.notify,
+              indicate: c.properties.indicate,
+            ),
+          ),
+      ]),
+  ],
+  writeServiceUuid: target?.serviceUuid ?? '',
+  writeCharUuid: target?.characteristicUuid ?? '',
+  notifyCharUuid: target?.notifyUuid ?? '',
+  writeWithoutResponse: target?.writeWithoutResponse ?? false,
+);
+
+/// An "other" 4 x 6 printer: write to the first writable characteristic of
+/// the common printer services ([pickGenericWriteTarget]), listen on a
+/// notify characteristic of the same service when there is one.
+Future<PrinterLink> _connectGeneric(
+  BluetoothDevice device,
+  List<BluetoothService> services,
+) async {
+  final mtu = device.mtuNow;
+  final info = _gattInfo(services, mtu);
+  final target = pickGenericWriteTarget(info.services);
+  if (target == null) {
+    try {
+      await device.disconnect();
+    } catch (_) {}
+    throw PrinterException(
+      PrintFailure.notAPrinter,
+      'no writable characteristic on ${services.length} service(s)',
+      info,
+    );
+  }
+  BluetoothCharacteristic? write;
+  BluetoothCharacteristic? notify;
+  for (final service in services) {
+    if (normalizeUuid(service.uuid.str128) !=
+        normalizeUuid(target.serviceUuid)) {
+      continue;
+    }
+    for (final c in service.characteristics) {
+      final id = normalizeUuid(c.uuid.str128);
+      if (id == normalizeUuid(target.characteristicUuid)) write = c;
+      if (target.notifyUuid.isNotEmpty &&
+          id == normalizeUuid(target.notifyUuid)) {
+        notify = c;
+      }
+    }
+  }
+  if (write == null) {
+    try {
+      await device.disconnect();
+    } catch (_) {}
+    throw PrinterException(
+      PrintFailure.notAPrinter,
+      'the chosen characteristic vanished',
+      info,
+    );
+  }
+  return _BlePrinterLink(
+    device,
+    write,
+    notify,
+    generic: true,
+    gatt: _gattInfo(services, mtu, target: target),
+  );
+}
+
 class _BlePrinterLink implements PrinterLink {
-  _BlePrinterLink(this._device, this._write, this._notify) {
+  _BlePrinterLink(
+    this._device,
+    this._write,
+    this._notify, {
+    this.generic = false,
+    this.gatt,
+  }) {
     _state = _device.connectionState.listen((s) {
       if (s == BluetoothConnectionState.disconnected && !_lost.isCompleted) {
         _lost.complete();
@@ -200,7 +306,13 @@ class _BlePrinterLink implements PrinterLink {
 
   final BluetoothDevice _device;
   final BluetoothCharacteristic _write;
-  final BluetoothCharacteristic _notify;
+  final BluetoothCharacteristic? _notify;
+
+  /// An "other" 4 x 6 printer: sized by [genericChunkBytes], and listening
+  /// is best effort (there may be nothing to listen on).
+  final bool generic;
+  @override
+  final PrinterGattInfo? gatt;
   final Completer<void> _lost = Completer<void>();
   late final StreamSubscription<BluetoothConnectionState> _state;
 
@@ -210,6 +322,7 @@ class _BlePrinterLink implements PrinterLink {
   @override
   int get maxWriteLength {
     final mtu = _device.mtuNow;
+    if (generic) return genericChunkBytes(mtu);
     return mtu > 3 ? mtu - 3 : 20;
   }
 
@@ -224,11 +337,20 @@ class _BlePrinterLink implements PrinterLink {
 
   @override
   Future<void> subscribe() async {
-    await _notify.setNotifyValue(true);
+    final notify = _notify;
+    if (notify == null) return;
+    if (!generic) {
+      await notify.setNotifyValue(true);
+      return;
+    }
+    try {
+      await notify.setNotifyValue(true);
+    } catch (_) {}
   }
 
   @override
-  Stream<List<int>> get notifications => _notify.onValueReceived;
+  Stream<List<int>> get notifications =>
+      _notify?.onValueReceived ?? const Stream<List<int>>.empty();
 
   @override
   Future<void> write(List<int> bytes) =>

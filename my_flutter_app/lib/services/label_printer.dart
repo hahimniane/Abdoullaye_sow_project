@@ -24,6 +24,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'generic_label_printer.dart';
 import 'm221_protocol.dart';
 import 'package_labels.dart' show PackageLabelSizes, packageSize70x80mm;
 import 'pm241_protocol.dart';
@@ -41,6 +42,18 @@ enum PrinterModel {
 
   /// 4 x 6 in package labels (TSPL).
   pm241,
+
+  /// BETA: any other 4 x 6 in Bluetooth LE label printer (the same TSPL job
+  /// as the PM-241, sent to whatever writable characteristic the printer
+  /// has). Never guessed from a name: the shop picks it for a device.
+  generic4x6,
+}
+
+extension PrinterModelTraits on PrinterModel {
+  /// Prints the one fixed 4 x 6 in package label (no product tags, no
+  /// size or alignment to tune).
+  bool get isFourBySix =>
+      this == PrinterModel.pm241 || this == PrinterModel.generic4x6;
 }
 
 /// The model of a printer called [name]: "PM-241Z-BT-0470" is a PM-241,
@@ -50,10 +63,22 @@ PrinterModel printerModelForName(String name) =>
     ? PrinterModel.pm241
     : PrinterModel.m221;
 
+/// Whether the app knows [name] as a Phomemo PM-241 or M221 (so there is
+/// nothing to ask the shop). Any other name is a printer the shop must say
+/// the kind of.
+bool printerNameRecognized(String name) {
+  final upper = name.trim().toUpperCase();
+  return printerModelForName(name) == PrinterModel.pm241 ||
+      upper.startsWith('Q2') ||
+      upper.contains('M221') ||
+      upper.contains('PHOMEMO');
+}
+
 /// The model as the print log writes it.
 String printerModelLogName(PrinterModel model) => switch (model) {
   PrinterModel.m221 => 'Phomemo M221',
   PrinterModel.pm241 => 'Phomemo PM-241 (TSPL)',
+  PrinterModel.generic4x6 => 'Other 4x6 Bluetooth printer (TSPL, beta)',
 };
 
 // ---------------------------------------------------------------------------
@@ -84,7 +109,14 @@ class LabelPrinterSettings {
     this.packageSizeId = packageSize70x80mm,
     this.packageWidthMm = 70,
     this.packageHeightMm = 80,
+    this.deviceModels = const {},
   });
+
+  /// The kind of printer the shop said a device is, by Bluetooth id (only
+  /// [PrinterModel.generic4x6] and [PrinterModel.m221] are ever chosen this
+  /// way, for devices the app does not know by name). Kept when the printer
+  /// is forgotten, so choosing it again needs no second answer.
+  final Map<String, PrinterModel> deviceModels;
 
   /// The size package labels print at - its own choice, kept apart from the
   /// shop tag size: one printer, two rolls. Same clamps as a tag.
@@ -92,9 +124,9 @@ class LabelPrinterSettings {
   final double packageWidthMm;
   final double packageHeightMm;
 
-  /// A PM-241 always prints the 4 x 6 in label; the M221 prints the chosen
-  /// size.
-  TagLabelSize get packageSize => model == PrinterModel.pm241
+  /// A 4 x 6 in printer always prints the 4 x 6 in label; the M221 prints
+  /// the chosen size.
+  TagLabelSize get packageSize => model.isFourBySix
       ? PackageLabelSizes.pm241FourBySix
       : PackageLabelSizes.resolve(
           packageSizeId,
@@ -102,8 +134,14 @@ class LabelPrinterSettings {
           customHeightMm: packageHeightMm,
         );
 
-  /// Which printer the chosen device is, by the name it advertised.
-  PrinterModel get model => printerModelForName(deviceName);
+  /// Which printer the chosen device is: what the shop said for this device
+  /// when it did, else by the name it advertised. A device that
+  /// advertises as a PM-241 is always one.
+  PrinterModel get model {
+    final byName = printerModelForName(deviceName);
+    if (byName == PrinterModel.pm241) return byName;
+    return deviceModels[deviceId] ?? byName;
+  }
 
   /// The printer's Bluetooth id ("" = none chosen yet) and the name it
   /// advertised (a serial such as "Q2...").
@@ -138,7 +176,9 @@ class LabelPrinterSettings {
     String? packageSizeId,
     double? packageWidthMm,
     double? packageHeightMm,
+    Map<String, PrinterModel>? deviceModels,
   }) => LabelPrinterSettings(
+    deviceModels: deviceModels ?? this.deviceModels,
     packageSizeId: packageSizeId ?? this.packageSizeId,
     packageWidthMm: clampTagWidthMm(packageWidthMm ?? this.packageWidthMm),
     packageHeightMm: clampTagHeightMm(packageHeightMm ?? this.packageHeightMm),
@@ -172,6 +212,10 @@ class LabelPrinterSettings {
     'packageSizeId': packageSizeId,
     'packageWidthMm': packageWidthMm,
     'packageHeightMm': packageHeightMm,
+    if (deviceModels.isNotEmpty)
+      'deviceModels': {
+        for (final e in deviceModels.entries) e.key: e.value.name,
+      },
   };
 
   /// Tolerant: anything missing or out of range falls back or is clamped,
@@ -187,10 +231,25 @@ class LabelPrinterSettings {
       return v is num ? v : null;
     }
 
+    // Only the two answers the shop can give are read back.
+    final models = <String, PrinterModel>{};
+    final rawModels = json['deviceModels'];
+    if (rawModels is Map) {
+      for (final e in rawModels.entries) {
+        final key = e.key;
+        if (key is! String || key.isEmpty) continue;
+        if (e.value == PrinterModel.generic4x6.name) {
+          models[key] = PrinterModel.generic4x6;
+        } else if (e.value == PrinterModel.m221.name) {
+          models[key] = PrinterModel.m221;
+        }
+      }
+    }
     const d = LabelPrinterSettings();
     final size = text('sizeId');
     final packageSize = text('packageSizeId');
     return d.copyWith(
+      deviceModels: models,
       packageSizeId: PackageLabelSizes.isKnown(packageSize)
           ? packageSize
           : packageSize70x80mm,
@@ -275,10 +334,14 @@ enum PrintFailure {
 }
 
 class PrinterException implements Exception {
-  const PrinterException(this.failure, [this.detail = '']);
+  const PrinterException(this.failure, [this.detail = '', this.gatt]);
 
   final PrintFailure failure;
   final String detail;
+
+  /// What the printer's Bluetooth layout looked like, when the failure came
+  /// after reading it (for the printer details).
+  final PrinterGattInfo? gatt;
 
   @override
   String toString() =>
@@ -342,10 +405,15 @@ class PrinterDevice {
     required this.name,
     this.rssi = 0,
     this.advertisesPrinterService = false,
+    this.serviceUuids = const [],
   });
 
   final String id;
   final String name;
+
+  /// The service ids the advertisement carried (full form), when the phone
+  /// reports them. Only used in the printer details.
+  final List<String> serviceUuids;
 
   /// Signal strength in dBm (closer to 0 is stronger).
   final int rssi;
@@ -374,8 +442,15 @@ abstract class PrinterTransport {
   Future<void> stopScan();
 
   /// Connects to [deviceId] and finds the write and notify characteristics.
+  /// With [generic] (an "other" 4 x 6 printer) the write characteristic is
+  /// the first writable one of the common printer services, and a notify
+  /// characteristic is optional.
   /// Throws [PrinterException]: `notFound`, `connectFailed`, `notAPrinter`.
-  Future<PrinterLink> connect(String deviceId, {required Duration timeout});
+  Future<PrinterLink> connect(
+    String deviceId, {
+    required Duration timeout,
+    bool generic = false,
+  });
 }
 
 abstract class PrinterLink {
@@ -400,6 +475,10 @@ abstract class PrinterLink {
   Future<void> write(List<int> bytes);
 
   Future<void> disconnect();
+
+  /// The printer's Bluetooth layout and the choice made (generic printers;
+  /// null for the Phomemo models).
+  PrinterGattInfo? get gatt;
 }
 
 // ---------------------------------------------------------------------------
@@ -444,7 +523,11 @@ class LabelPrinterController extends ChangeNotifier {
     this.connectTimeout = const Duration(seconds: 15),
     this.writeTimeout = const Duration(seconds: 10),
     this.idleDisconnect = const Duration(seconds: 90),
-  }) : log = log ?? PrintLog();
+    this.genericAfterJob = genericAfterJobGap,
+    this.notifyWindow = genericNotifyWindow,
+    DateTime Function()? clock,
+  }) : log = log ?? PrintLog(),
+       _clock = clock ?? DateTime.now;
 
   final PrinterTransport transport;
   final LabelPrinterStore store;
@@ -463,6 +546,13 @@ class LabelPrinterController extends ChangeNotifier {
   /// The connection is let go this long after the last job, so the owner
   /// can still open Print Master (the printer takes one connection).
   final Duration idleDisconnect;
+
+  /// BETA 4 x 6 printers: the wait after the last byte of a label (they give
+  /// no "done" signal), and how long their first notifications are kept for
+  /// the printer details.
+  final Duration genericAfterJob;
+  final Duration notifyWindow;
+  final DateTime Function() _clock;
 
   LabelPrinterSettings _settings = const LabelPrinterSettings();
   bool _loaded = false;
@@ -484,6 +574,13 @@ class LabelPrinterController extends ChangeNotifier {
   Timer? _idleTimer;
   int? _battery;
   bool _disposed = false;
+
+  /// For the printer details: the first notifications after connecting, the
+  /// layout last read, and the last failure.
+  final List<List<int>> _notifyFrames = [];
+  DateTime? _connectedAt;
+  PrinterGattInfo? _lastGatt;
+  String _lastError = '';
 
   LabelPrinterSettings get settings => _settings;
   bool get loaded => _loaded;
@@ -605,14 +702,41 @@ class LabelPrinterController extends ChangeNotifier {
     if (_link != null && _link!.deviceId != device.id) {
       await _drop('switching printer');
     }
+    _forgetDetails();
     log.add('chosen: "${device.name}" ${_shortId(device.id)}');
     await updateSettings(
       _settings.copyWith(deviceId: device.id, deviceName: device.name),
     );
   }
 
+  /// What was learned about the previous printer is not this one's.
+  void _forgetDetails() {
+    _lastGatt = null;
+    _lastError = '';
+    _notifyFrames.clear();
+    _connectedAt = null;
+  }
+
+  /// Records what kind of printer the shop says the chosen device is
+  /// (null forgets the answer). Lets go of a connection made the other way.
+  Future<void> setDeviceModel(PrinterModel? model) async {
+    final id = _settings.deviceId;
+    if (id.isEmpty) return;
+    final next = Map<String, PrinterModel>.of(_settings.deviceModels);
+    if (model == null) {
+      next.remove(id);
+    } else {
+      next[id] = model;
+    }
+    if (_link != null) await _drop('printer kind changed');
+    _forgetDetails();
+    log.add('kind: ${model == null ? 'by name' : printerModelLogName(model)}');
+    await updateSettings(_settings.copyWith(deviceModels: next));
+  }
+
   Future<void> forget() async {
     await _drop('printer forgotten');
+    _forgetDetails();
     await updateSettings(_settings.copyWith(deviceId: '', deviceName: ''));
     log.add('chosen: none');
   }
@@ -636,8 +760,13 @@ class LabelPrinterController extends ChangeNotifier {
     final id = _settings.deviceId;
     log.add('connect: ${_shortId(id)}');
     PrinterLink link;
+    final isGeneric = _settings.model == PrinterModel.generic4x6;
     try {
-      link = await transport.connect(id, timeout: connectTimeout);
+      link = await transport.connect(
+        id,
+        timeout: connectTimeout,
+        generic: isGeneric,
+      );
     } on PrinterException catch (e) {
       log.add('connect: failed ${e.failure.name} ${e.detail}');
       if (e.failure != PrintFailure.notFound &&
@@ -665,9 +794,16 @@ class LabelPrinterController extends ChangeNotifier {
         log.add('connect: printer not seen');
         throw const PrinterException(PrintFailure.notFound);
       }
-      link = await transport.connect(id, timeout: connectTimeout);
+      link = await transport.connect(
+        id,
+        timeout: connectTimeout,
+        generic: isGeneric,
+      );
     }
     _frames.clear();
+    _notifyFrames.clear();
+    final connectedAt = _connectedAt = _clock();
+    _lastGatt = link.gatt ?? _lastGatt;
     final isPm241 = _settings.model == PrinterModel.pm241;
     final flow = _flow = Pm241Flow();
     _notifySub = link.notifications.listen((frame) {
@@ -675,6 +811,11 @@ class LabelPrinterController extends ChangeNotifier {
       _frameEvents.add(frame);
       if (isPm241) {
         _onPm241Frame(flow, frame);
+      } else if (isGeneric) {
+        log.add('reply: ${m221Hex(frame)}');
+        if (_clock().difference(connectedAt) <= notifyWindow) {
+          _notifyFrames.add(List<int>.of(frame));
+        }
       } else {
         log.add('reply: ${m221Hex(frame)}');
       }
@@ -692,12 +833,22 @@ class LabelPrinterController extends ChangeNotifier {
       } catch (_) {}
       throw PrinterException(PrintFailure.connectFailed, 'subscribe: $e');
     }
-    await pause(isPm241 ? pm241AfterSubscribeGap : m221AfterSubscribeGap);
+    await pause(
+      isPm241
+          ? pm241AfterSubscribeGap
+          : isGeneric
+          ? genericAfterConnectGap
+          : m221AfterSubscribeGap,
+    );
     _link = link;
+    final gatt = link.gatt;
+    if (isGeneric && gatt != null) {
+      log.add('gatt: ${genericTargetLogLine(gatt)}');
+    }
     log.add(
       'connected: ${printerModelLogName(_settings.model)}, '
       'write ${link.writeWithoutResponse ? 'without' : 'with'} '
-      'response, ${isPm241 ? link.maxWriteLength : _chunkSize(link)} '
+      'response, ${isPm241 || isGeneric ? link.maxWriteLength : _chunkSize(link)} '
       'bytes per write',
     );
     unawaited(
@@ -893,6 +1044,51 @@ class LabelPrinterController extends ChangeNotifier {
     }
   }
 
+  // -- Other 4 x 6 printers (beta) -------------------------------------------
+
+  /// Sends one label to an "other" 4 x 6 printer: the PM-241's TSPL job in
+  /// chunks of the link's size, no flow control. These printers give no
+  /// known "done" signal, so the label counts as printed when every chunk
+  /// was accepted and [genericAfterJob] has passed.
+  Future<void> _printOneGeneric(PrinterLink link, LabelBitmap image) async {
+    if (!pm241Fits(image)) {
+      throw PrinterException(
+        PrintFailure.writeFailed,
+        'a ${image.width}x${image.height} picture does not fit '
+        '${pm241LabelWidthDots}x$pm241LabelHeightDots',
+      );
+    }
+    final job = pm241LabelJob(image);
+    final size = link.maxWriteLength < 1
+        ? genericUnknownMtuChunk
+        : link.maxWriteLength;
+    var packets = 0;
+    for (final chunk in m221Chunks(job.bytes, size)) {
+      if (!link.isConnected) {
+        throw const PrinterException(PrintFailure.connectionLost);
+      }
+      try {
+        await link.write(chunk).timeout(writeTimeout);
+      } on PrinterException {
+        rethrow;
+      } catch (e) {
+        if (!link.isConnected) {
+          throw PrinterException(PrintFailure.connectionLost, '$e');
+        }
+        throw PrinterException(PrintFailure.writeFailed, '$e');
+      }
+      packets++;
+      await pause(genericChunkGap);
+    }
+    log.add(
+      'sent: TSPL job ${job.length} bytes in $packets packets '
+      '(up to $size bytes each), bitmap ${image.width}x${image.height} dots',
+    );
+    // No "done" signal to wait for: give the printer the time to take it.
+    await pause(genericAfterJob);
+    log.add('done: job sent (this printer does not confirm)');
+  }
+
   /// Sends one label and waits for the printer's done reply.
   Future<void> _printOne(PrinterLink link, PackedRaster raster) async {
     final steps = m221LabelSteps(
@@ -956,9 +1152,9 @@ class LabelPrinterController extends ChangeNotifier {
   /// developer); answers the battery percent when it can be read.
   Future<PrintFailure?> checkStatus() async {
     if (busy) return PrintFailure.busy;
-    if (model == PrinterModel.pm241) {
+    if (model.isFourBySix) {
       // The battery, paper and cover queries are M221 bytes.
-      log.add('status: not available on a PM-241');
+      log.add('status: not available on this printer');
       return null;
     }
     try {
@@ -1028,11 +1224,12 @@ class LabelPrinterController extends ChangeNotifier {
     _progressDone = 0;
     _progressTotal = copies;
     final isPm241 = model == PrinterModel.pm241;
-    final raster = isPm241
+    final isGeneric = model == PrinterModel.generic4x6;
+    final raster = isPm241 || isGeneric
         ? null
         : packRaster(image, _settings.xOffset, _settings.yOffset);
     log.add('model: ${printerModelLogName(model)}');
-    if (isPm241) {
+    if (isPm241 || isGeneric) {
       log.add(
         'print: $copies x $what ${image.width}x${image.height} dots, '
         'TSPL 100x150 mm, density 10, speed 4',
@@ -1063,7 +1260,9 @@ class LabelPrinterController extends ChangeNotifier {
         _set(PrinterStatus.printing);
         try {
           log.add('print: label ${printed + 1} of $copies');
-          if (raster == null) {
+          if (isGeneric) {
+            await _printOneGeneric(link, image);
+          } else if (raster == null) {
             await _printOnePm241(link, image);
           } else {
             await _printOne(link, raster);
@@ -1089,9 +1288,12 @@ class LabelPrinterController extends ChangeNotifier {
         _notify();
       }
       log.add('print: finished $printed of $copies');
+      _lastError = '';
       return PrintOutcome(printed: printed, requested: copies);
     } on PrinterException catch (e) {
       log.add('print: failed ${e.failure.name} ${e.detail}');
+      _lastError = _failureText(e);
+      _lastGatt = e.gatt ?? _lastGatt;
       return PrintOutcome(
         printed: printed,
         requested: copies,
@@ -1099,6 +1301,7 @@ class LabelPrinterController extends ChangeNotifier {
       );
     } catch (e) {
       log.add('print: failed $e');
+      _lastError = '$e';
       return PrintOutcome(
         printed: printed,
         requested: copies,
@@ -1109,6 +1312,57 @@ class LabelPrinterController extends ChangeNotifier {
       _set(isConnected ? PrinterStatus.connected : PrinterStatus.idle);
       if (isConnected) _scheduleIdleDisconnect();
     }
+  }
+
+  String _failureText(PrinterException e) =>
+      e.detail.isEmpty ? e.failure.name : '${e.failure.name}: ${e.detail}';
+
+  /// BETA 4 x 6 printers: connects (when not connected), reads the
+  /// printer's Bluetooth layout, listens for [notifyWindow] after the
+  /// connection and answers the details a shop can send us. Never throws:
+  /// whatever could not be read is simply missing, with the reason in
+  /// [PrinterDiagnostics.error]. Holds no customer data.
+  Future<PrinterDiagnostics> collectDiagnostics({
+    required String platform,
+    required String appVersion,
+  }) async {
+    var error = '';
+    if (busy) {
+      error = 'the printer was busy';
+    } else if (!_settings.hasPrinter) {
+      error = PrintFailure.noPrinterChosen.name;
+    } else {
+      try {
+        final link = await _ensureLink();
+        _lastGatt = link.gatt ?? _lastGatt;
+        final at = _connectedAt;
+        if (at != null) {
+          final left = notifyWindow - _clock().difference(at);
+          if (left > Duration.zero) await pause(left);
+        }
+        _scheduleIdleDisconnect();
+      } on PrinterException catch (e) {
+        error = _failureText(e);
+        _lastGatt = e.gatt ?? _lastGatt;
+        log.add('details: failed $error');
+      } catch (e) {
+        error = '$e';
+        log.add('details: failed $e');
+      } finally {
+        if (_status == PrinterStatus.connecting) {
+          _set(isConnected ? PrinterStatus.connected : PrinterStatus.idle);
+        }
+      }
+    }
+    return PrinterDiagnostics(
+      deviceName: _settings.deviceName,
+      platform: platform,
+      appVersion: appVersion,
+      advertisedServiceUuids: _found[_settings.deviceId]?.serviceUuids ?? [],
+      gatt: _lastGatt,
+      notifyFrames: List.of(_notifyFrames),
+      error: error.isNotEmpty ? error : _lastError,
+    );
   }
 
   /// The log with a short header (the settings that shaped the job), ready

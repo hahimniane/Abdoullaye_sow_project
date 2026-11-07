@@ -1,9 +1,13 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../l10n/app_localizations.dart';
+import '../services/generic_label_printer.dart';
 import '../services/label_printer.dart';
 import '../services/label_printer_ble.dart';
 import '../services/m221_protocol.dart';
@@ -15,6 +19,7 @@ import '../theme/app_spacing.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/inventory_widgets.dart';
 import '../widgets/label_printer_widgets.dart';
+import '../widgets/lot_sheets.dart' show LotChoiceCard;
 import 'containers_screen.dart' show ContainerActionButton;
 
 /// The code a test tag carries: the real link shape and length (so it prints
@@ -30,17 +35,30 @@ const labelPrinterOffsetStep = 4;
 /// label (test frame + X/Y), print a test tag, and copy the print log for
 /// the developer when something goes wrong.
 class LabelPrinterSettingsScreen extends StatefulWidget {
-  const LabelPrinterSettingsScreen({super.key, this.printer});
+  const LabelPrinterSettingsScreen({
+    super.key,
+    this.printer,
+    this.shareText,
+    this.appVersionLoader,
+  });
 
   /// The app's printer unless a test passes its own.
   final LabelPrinterController? printer;
+
+  /// Hands the printer details to the share sheet (text, subject); a test
+  /// passes its own.
+  final Future<void> Function(String text, String subject)? shareText;
+
+  /// The app version for the printer details ("1.0.25+60"); a test passes
+  /// its own.
+  final Future<String> Function()? appVersionLoader;
 
   @override
   State<LabelPrinterSettingsScreen> createState() =>
       _LabelPrinterSettingsScreenState();
 }
 
-enum _Action { none, scan, frame, tag, status, testLabel }
+enum _Action { none, scan, frame, tag, status, testLabel, details }
 
 class _LabelPrinterSettingsScreenState
     extends State<LabelPrinterSettingsScreen> {
@@ -177,7 +195,53 @@ class _LabelPrinterSettingsScreenState
         return null;
       }
       final failure = outcome.failure;
-      return failure == null ? null : labelPrinterFailureText(l10n, failure);
+      if (failure == null) return null;
+      final reason = labelPrinterFailureText(l10n, failure);
+      return _printer.model == PrinterModel.generic4x6
+          ? '$reason ${l10n.labelPrinterGenericFailedHint}'
+          : reason;
+    });
+  }
+
+  /// The beta printers' details (name, services, notifications): collected
+  /// from the printer and handed to the share sheet as text. Nothing about
+  /// customers is in it.
+  Future<void> _sendDetails() async {
+    if (_working) return;
+    final l10n = AppLocalizations.of(context)!;
+    if (!_printer.settings.hasPrinter) {
+      setState(
+        () => _error = labelPrinterFailureText(
+          l10n,
+          PrintFailure.noPrinterChosen,
+        ),
+      );
+      return;
+    }
+    if (!await ensureBluetoothExplained(context)) return;
+    if (!mounted) return;
+    await _run(_Action.details, () async {
+      try {
+        var version = '';
+        try {
+          version = await (widget.appVersionLoader ?? _appVersion)().timeout(
+            const Duration(seconds: 3),
+          );
+        } catch (_) {}
+        final details = await _printer.collectDiagnostics(
+          platform: defaultTargetPlatform.name,
+          appVersion: version,
+        );
+        final text = formatPrinterDiagnostics(details);
+        if (!mounted) return null;
+        await (widget.shareText ?? _share)(
+          text,
+          l10n.labelPrinterDetailsSubject,
+        );
+        return null;
+      } catch (_) {
+        return l10n.labelPrinterSendDetailsFailed;
+      }
     });
   }
 
@@ -260,8 +324,8 @@ class _LabelPrinterSettingsScreenState
                         ],
                         ..._printerSection(l10n),
                         _divider(),
-                        if (_printer.model == PrinterModel.pm241)
-                          ..._pm241Section(l10n)
+                        if (_printer.model.isFourBySix)
+                          ..._fourBySixSection(l10n)
                         else ...[
                           ..._labelSection(l10n),
                           _divider(),
@@ -339,9 +403,12 @@ class _LabelPrinterSettingsScreenState
                   ),
                   if (s.hasPrinter)
                     Text(
-                      _printer.model == PrinterModel.pm241
-                          ? l10n.labelPrinterModelPm241
-                          : l10n.labelPrinterModelM221,
+                      switch (_printer.model) {
+                        PrinterModel.pm241 => l10n.labelPrinterModelPm241,
+                        PrinterModel.generic4x6 =>
+                          l10n.labelPrinterModelGeneric,
+                        PrinterModel.m221 => l10n.labelPrinterModelM221,
+                      },
                       key: const Key('label-printer-model'),
                       style: const TextStyle(
                         fontSize: 12,
@@ -377,6 +444,10 @@ class _LabelPrinterSettingsScreenState
           ],
         ),
       ),
+      if (s.hasPrinter && !printerNameRecognized(s.deviceName)) ...[
+        const SizedBox(height: AppSpacing.md),
+        ..._kindPicker(l10n),
+      ],
       const SizedBox(height: AppSpacing.md),
       _hint(l10n.labelPrinterScanHint),
       const SizedBox(height: AppSpacing.sm),
@@ -458,12 +529,58 @@ class _LabelPrinterSettingsScreenState
     ];
   }
 
-  /// What a PM-241 has: a fixed 4 x 6 in label and a test label. Its size,
+  /// A printer the app does not know by name: what to treat it as. Asked
+  /// per device and remembered; the choice replaces any guess.
+  List<Widget> _kindPicker(AppLocalizations l10n) {
+    final model = _printer.model;
+    return [
+      Text(
+        l10n.labelPrinterKindTitle,
+        style: const TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w700,
+          color: AppColors.ink,
+        ),
+      ),
+      const SizedBox(height: AppSpacing.xs),
+      _hint(l10n.labelPrinterKindHint),
+      const SizedBox(height: AppSpacing.sm),
+      LotChoiceCard(
+        key: const Key('label-printer-kind-m221'),
+        title: l10n.labelPrinterKindM221,
+        note: l10n.labelPrinterKindM221Note,
+        selected: model == PrinterModel.m221,
+        enabled: !_working,
+        onTap: () {
+          AppHaptics.selection();
+          unawaited(_printer.setDeviceModel(PrinterModel.m221));
+        },
+      ),
+      LotChoiceCard(
+        key: const Key('label-printer-kind-generic'),
+        title: l10n.labelPrinterKindGeneric,
+        note: l10n.labelPrinterKindGenericNote,
+        selected: model == PrinterModel.generic4x6,
+        enabled: !_working,
+        onTap: () {
+          AppHaptics.selection();
+          unawaited(_printer.setDeviceModel(PrinterModel.generic4x6));
+        },
+      ),
+    ];
+  }
+
+  /// What a 4 x 6 in printer has: a fixed label and a test label. Its size,
   /// darkness and speed are set by the app, and it has no alignment to tune.
-  List<Widget> _pm241Section(AppLocalizations l10n) {
+  /// An "other" (beta) printer also explains the beta and offers to send
+  /// its details.
+  List<Widget> _fourBySixSection(AppLocalizations l10n) {
+    final generic = _printer.model == PrinterModel.generic4x6;
     return [
       _title(l10n.labelPrinterSectionLabel),
-      _hint(l10n.labelPrinterPm241Hint),
+      _hint(
+        generic ? l10n.labelPrinterGenericBeta : l10n.labelPrinterPm241Hint,
+      ),
       const SizedBox(height: AppSpacing.md),
       ContainerActionButton(
         key: const Key('label-printer-test-label'),
@@ -474,6 +591,19 @@ class _LabelPrinterSettingsScreenState
         primary: true,
         onTap: _printTestLabel,
       ),
+      if (generic) ...[
+        const SizedBox(height: AppSpacing.sm),
+        ContainerActionButton(
+          key: const Key('label-printer-send-details'),
+          icon: Icons.ios_share,
+          label: _action == _Action.details
+              ? l10n.labelPrinterSendDetailsBusy
+              : l10n.labelPrinterSendDetails,
+          busy: _action == _Action.details,
+          enabled: !_working,
+          onTap: _sendDetails,
+        ),
+      ],
     ];
   }
 
@@ -654,4 +784,15 @@ class _LabelPrinterSettingsScreenState
       ),
     ];
   }
+}
+
+Future<String> _appVersion() async {
+  final info = await PackageInfo.fromPlatform();
+  return info.buildNumber.isEmpty
+      ? info.version
+      : '${info.version}+${info.buildNumber}';
+}
+
+Future<void> _share(String text, String subject) async {
+  await SharePlus.instance.share(ShareParams(text: text, subject: subject));
 }

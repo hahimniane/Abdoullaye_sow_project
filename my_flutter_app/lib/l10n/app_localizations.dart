@@ -32677,6 +32677,84 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Your business is not approved yet.'**
   String get myCardBusinessNotApproved;
+
+  /// No description provided for @labelPrinterModelGeneric.
+  ///
+  /// In en, this message translates to:
+  /// **'Other 4 × 6 in Bluetooth printer (beta)'**
+  String get labelPrinterModelGeneric;
+
+  /// No description provided for @labelPrinterKindTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'What kind of printer is this?'**
+  String get labelPrinterKindTitle;
+
+  /// No description provided for @labelPrinterKindHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The app does not know this printer by its name. Choose how it should talk to it.'**
+  String get labelPrinterKindHint;
+
+  /// No description provided for @labelPrinterKindM221.
+  ///
+  /// In en, this message translates to:
+  /// **'Phomemo M221'**
+  String get labelPrinterKindM221;
+
+  /// No description provided for @labelPrinterKindM221Note.
+  ///
+  /// In en, this message translates to:
+  /// **'Product tags and small package labels.'**
+  String get labelPrinterKindM221Note;
+
+  /// No description provided for @labelPrinterKindGeneric.
+  ///
+  /// In en, this message translates to:
+  /// **'Other 4 × 6 in Bluetooth printer (beta)'**
+  String get labelPrinterKindGeneric;
+
+  /// No description provided for @labelPrinterKindGenericNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Package labels at 4 × 6 in. Not tested on every printer.'**
+  String get labelPrinterKindGenericNote;
+
+  /// No description provided for @labelPrinterGenericBeta.
+  ///
+  /// In en, this message translates to:
+  /// **'Beta: this sends 4 × 6 in labels to printers we have not tested, so it may not work with every printer. If a label does not print, tap “Send printer details” and send us the message.'**
+  String get labelPrinterGenericBeta;
+
+  /// No description provided for @labelPrinterSendDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Send printer details'**
+  String get labelPrinterSendDetails;
+
+  /// No description provided for @labelPrinterSendDetailsBusy.
+  ///
+  /// In en, this message translates to:
+  /// **'Collecting details…'**
+  String get labelPrinterSendDetailsBusy;
+
+  /// No description provided for @labelPrinterSendDetailsFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'We could not collect the printer details. Try again.'**
+  String get labelPrinterSendDetailsFailed;
+
+  /// No description provided for @labelPrinterDetailsSubject.
+  ///
+  /// In en, this message translates to:
+  /// **'Laawol printer details'**
+  String get labelPrinterDetailsSubject;
+
+  /// No description provided for @labelPrinterGenericFailedHint.
+  ///
+  /// In en, this message translates to:
+  /// **'If it keeps failing, open Printer settings and tap “Send printer details” so we can add support for this printer.'**
+  String get labelPrinterGenericFailedHint;
 }
 
 class _AppLocalizationsDelegate

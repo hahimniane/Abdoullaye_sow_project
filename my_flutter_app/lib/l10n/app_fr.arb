@@ -11273,5 +11273,18 @@
   "myCardWalletFailed": "Nous n'avons pas pu ouvrir votre carte Wallet. Réessayez.",
   "myCardShareFailed": "Nous n'avons pas pu partager votre carte. Réessayez.",
   "myCardSaveFailed": "Nous n'avons pas pu préparer le contact. Réessayez.",
-  "myCardBusinessNotApproved": "Votre entreprise n'est pas encore approuvée."
+  "myCardBusinessNotApproved": "Votre entreprise n'est pas encore approuvée.",
+  "labelPrinterModelGeneric": "Autre imprimante Bluetooth 4 × 6 po (bêta)",
+  "labelPrinterKindTitle": "De quel type d’imprimante s’agit-il ?",
+  "labelPrinterKindHint": "L’app ne reconnaît pas cette imprimante par son nom. Choisissez comment lui parler.",
+  "labelPrinterKindM221": "Phomemo M221",
+  "labelPrinterKindM221Note": "Étiquettes produit et petites étiquettes de colis.",
+  "labelPrinterKindGeneric": "Autre imprimante Bluetooth 4 × 6 po (bêta)",
+  "labelPrinterKindGenericNote": "Étiquettes de colis en 4 × 6 po. Pas testée sur toutes les imprimantes.",
+  "labelPrinterGenericBeta": "Bêta : l’app envoie des étiquettes 4 × 6 po à des imprimantes que nous n’avons pas testées ; cela peut donc ne pas fonctionner avec toutes. Si une étiquette ne s’imprime pas, touchez « Envoyer les détails de l’imprimante » et envoyez-nous le message.",
+  "labelPrinterSendDetails": "Envoyer les détails de l’imprimante",
+  "labelPrinterSendDetailsBusy": "Collecte des détails…",
+  "labelPrinterSendDetailsFailed": "Impossible de collecter les détails de l’imprimante. Réessayez.",
+  "labelPrinterDetailsSubject": "Détails de l’imprimante Laawol",
+  "labelPrinterGenericFailedHint": "Si cela échoue encore, ouvrez Réglages de l’imprimante et touchez « Envoyer les détails de l’imprimante » pour que nous prenions en charge cette imprimante."
 }

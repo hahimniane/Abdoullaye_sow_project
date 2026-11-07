@@ -346,9 +346,12 @@ class _LabelPrintSheetState extends State<LabelPrintSheet> {
         if (failure != null) {
           AppHaptics.refuse();
           final reason = labelPrinterFailureText(l10n, failure);
+          final hint = _printer.model == PrinterModel.generic4x6
+              ? ' ${l10n.labelPrinterGenericFailedHint}'
+              : '';
           _error = _printed > 0
-              ? '$reason ${l10n.printTagsPartial(_printed, _total)}'
-              : reason;
+              ? '$reason ${l10n.printTagsPartial(_printed, _total)}$hint'
+              : '$reason$hint';
         } else if (cancelled) {
           _done = l10n.printTagsStopped(_printed, _total);
         } else {
@@ -509,7 +512,7 @@ class _LabelPrintSheetState extends State<LabelPrintSheet> {
             note: settings != null && settings.hasPrinter
                 ? l10n.pkgLabelsMethodPrinterNoteNamed(
                     settings.deviceName,
-                    settings.model == PrinterModel.pm241
+                    settings.model.isFourBySix
                         ? l10n.labelPrinterSize4x6
                         : settings.packageSize.mmText,
                   )
@@ -546,7 +549,7 @@ class _LabelPrintSheetState extends State<LabelPrintSheet> {
         if (_method == LabelPrintMethod.labelPrinter && settings != null) ...[
           const SizedBox(height: AppSpacing.sm),
           // A PM-241 only has the 4 x 6 in label: nothing to choose.
-          if (_printer.loaded && settings.model != PrinterModel.pm241)
+          if (_printer.loaded && !settings.model.isFourBySix)
             LabelSizePicker(
               key: const Key('labels-package-size'),
               kind: LabelSizeKind.package,
@@ -611,7 +614,7 @@ class _LabelPrintSheetState extends State<LabelPrintSheet> {
         Text(
           switch (_method) {
             LabelPrintMethod.labelPrinter =>
-              settings?.model == PrinterModel.pm241
+              settings?.model.isFourBySix == true
                   ? l10n.pkgLabelsTipPm241
                   : l10n.pkgLabelsTipPrinter,
             LabelPrintMethod.systemPrint => l10n.pkgLabelsTipSystem,

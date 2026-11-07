@@ -19680,4 +19680,51 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get myCardBusinessNotApproved =>
       'Votre entreprise n\'est pas encore approuvée.';
+
+  @override
+  String get labelPrinterModelGeneric =>
+      'Autre imprimante Bluetooth 4 × 6 po (bêta)';
+
+  @override
+  String get labelPrinterKindTitle => 'De quel type d’imprimante s’agit-il ?';
+
+  @override
+  String get labelPrinterKindHint =>
+      'L’app ne reconnaît pas cette imprimante par son nom. Choisissez comment lui parler.';
+
+  @override
+  String get labelPrinterKindM221 => 'Phomemo M221';
+
+  @override
+  String get labelPrinterKindM221Note =>
+      'Étiquettes produit et petites étiquettes de colis.';
+
+  @override
+  String get labelPrinterKindGeneric =>
+      'Autre imprimante Bluetooth 4 × 6 po (bêta)';
+
+  @override
+  String get labelPrinterKindGenericNote =>
+      'Étiquettes de colis en 4 × 6 po. Pas testée sur toutes les imprimantes.';
+
+  @override
+  String get labelPrinterGenericBeta =>
+      'Bêta : l’app envoie des étiquettes 4 × 6 po à des imprimantes que nous n’avons pas testées ; cela peut donc ne pas fonctionner avec toutes. Si une étiquette ne s’imprime pas, touchez « Envoyer les détails de l’imprimante » et envoyez-nous le message.';
+
+  @override
+  String get labelPrinterSendDetails => 'Envoyer les détails de l’imprimante';
+
+  @override
+  String get labelPrinterSendDetailsBusy => 'Collecte des détails…';
+
+  @override
+  String get labelPrinterSendDetailsFailed =>
+      'Impossible de collecter les détails de l’imprimante. Réessayez.';
+
+  @override
+  String get labelPrinterDetailsSubject => 'Détails de l’imprimante Laawol';
+
+  @override
+  String get labelPrinterGenericFailedHint =>
+      'Si cela échoue encore, ouvrez Réglages de l’imprimante et touchez « Envoyer les détails de l’imprimante » pour que nous prenions en charge cette imprimante.';
 }
