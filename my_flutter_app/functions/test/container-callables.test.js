@@ -5006,3 +5006,170 @@ describe("ships by: sea or air", () => {
         assert.equal((await lineOf(lineId)).shipMode, "air");
       });
 });
+
+// docs/WHATSAPP_RESEND.md: a number typed wrong at the counter, then
+// corrected, hears the package's latest news on the new number; "Send again"
+// retries a message WhatsApp could not deliver; a delivered one never goes
+// twice.
+describe("a corrected number and Send again", () => {
+  const SHORT = "+164655501"; // three digits short, as typed at a counter
+  const dropOff = () => call("addWaitingPackage", {kind: "barrels",
+    quantity: 2, ownerKind: "customer", customerName: "Fatou Diallo",
+    customerPhone: SHORT, receiverName: "Mariama Bah",
+    receiverPhone: "+224620000000", destinationCountryId: "gn",
+    destinationCountryName: "Guinea"});
+  const row = (lineId, role) =>
+    db.collection("containerUpdates").doc(`${lineId}_${role}_received`);
+  // Meta's later report: accepted, then undeliverable (131026).
+  async function undeliverable(lineId, role) {
+    await row(lineId, role).update({deliveryStatus: "failed",
+      deliveryError: "Message undeliverable", deliveryErrorCode: 131026});
+  }
+  // What the platform hands rollupVolumeOnLineWrite for an edit.
+  async function lineWritten(lineId, before) {
+    const ref = db.collection("containerLines").doc(lineId);
+    const after = await ref.get();
+    return functions.rollupVolumeOnLineWrite.run({
+      data: {
+        before: {exists: true, data: () => before},
+        after: {exists: true, data: () => after.data(), ref},
+      },
+      params: {lineId},
+    });
+  }
+
+  afterEach(() => {
+    global.fetch = realFetch;
+    disconnectWhatsApp();
+  });
+
+  it("sends a failed message again by hand, never a delivered one",
+      async () => {
+        connectWhatsApp();
+        const {lineId} = await dropOff();
+        fakeWhatsApp(OK);
+        await deliver(row(lineId, "sender").id);
+        await deliver(row(lineId, "receiver").id);
+        await undeliverable(lineId, "sender");
+        await row(lineId, "receiver").update({deliveryStatus: "delivered"});
+
+        await assert.rejects(
+            call("updateContainerLine", {action: "resend_update", lineId},
+                NO_CONTAINERS),
+            (error) => error.code === "permission-denied");
+        const result = await call("updateContainerLine",
+            {action: "resend_update", lineId});
+        assert.equal(result.update, "received");
+        assert.equal(result.queued, 1);
+        assert.equal(result.alreadySent, 1);
+        const again = (await row(lineId, "sender").get()).data();
+        assert.equal(again.status, "queued");
+        assert.equal(again.handResends, 1);
+        assert.equal(again.deliveryStatus, undefined);
+        assert.equal(again.whatsappMessageId, undefined);
+        assert.equal(again.phone, SHORT);
+        assert.equal((await row(lineId, "receiver").get()).get("status"),
+            "sent");
+        fakeWhatsApp(OK);
+        await deliver(row(lineId, "sender").id);
+        assert.equal(whatsappCalls.length, 1);
+        assert.equal(whatsappCalls[0].to, "164655501");
+        // Delivered now: pressing again sends nothing.
+        await row(lineId, "sender").update({deliveryStatus: "delivered"});
+        const none = await call("updateContainerLine",
+            {action: "resend_update", lineId});
+        assert.equal(none.queued, 0);
+        assert.equal(none.alreadySent, 2);
+      });
+
+  it("stops after five hand resends to the same number", async () => {
+    connectWhatsApp();
+    const {lineId} = await dropOff();
+    fakeWhatsApp(OK);
+    await deliver(row(lineId, "sender").id);
+    for (let i = 0; i < 5; i += 1) {
+      await undeliverable(lineId, "sender");
+      assert.equal((await call("updateContainerLine",
+          {action: "resend_update", lineId})).queued, 1);
+      await deliver(row(lineId, "sender").id);
+    }
+    await undeliverable(lineId, "sender");
+    assert.equal((await call("updateContainerLine",
+        {action: "resend_update", lineId})).queued, 0);
+  });
+
+  it("refuses when WhatsApp is not connected or nothing was sent",
+      async () => {
+        const {lineId} = await dropOff();
+        await assert.rejects(
+            call("updateContainerLine", {action: "resend_update", lineId}),
+            (error) => error.details?.reason === "whatsapp_not_configured");
+        connectWhatsApp();
+        await db.collection("containerLines").doc(lineId)
+            .update({lastCustomerUpdate: admin.firestore.FieldValue.delete()});
+        await assert.rejects(
+            call("updateContainerLine", {action: "resend_update", lineId}),
+            (error) => error.details?.reason === "no_customer_update");
+        await assert.rejects(
+            call("updateContainerLine",
+                {action: "resend_update", lineId: "nope"}),
+            (error) => error.details?.reason === "line_not_found");
+      });
+
+  it("sends the latest news to a corrected number, and only to that person",
+      async () => {
+        connectWhatsApp();
+        const {lineId} = await dropOff();
+        fakeWhatsApp(OK);
+        await deliver(row(lineId, "sender").id);
+        await deliver(row(lineId, "receiver").id);
+        await undeliverable(lineId, "sender");
+        await row(lineId, "receiver").update({deliveryStatus: "read"});
+        const ref = db.collection("containerLines").doc(lineId);
+        const before = (await ref.get()).data();
+        await call("updateContainerLineContacts", {lineId,
+          contacts: {customerPhone: "+16465550142"}});
+        await lineWritten(lineId, before);
+        const sender = (await row(lineId, "sender").get()).data();
+        assert.equal(sender.status, "queued");
+        assert.equal(sender.phone, "+16465550142");
+        assert.equal(sender.previousPhone, SHORT);
+        assert.equal(sender.handResends, undefined);
+        const receiver = (await row(lineId, "receiver").get()).data();
+        assert.equal(receiver.status, "sent");
+        assert.equal(receiver.deliveryStatus, "read");
+        const results = (await ref.get()).get("lastCustomerUpdate.results");
+        assert.equal(results.find((r) => r.role === "sender").status,
+            "queued");
+        assert.equal(results.find((r) => r.role === "receiver").status,
+            "sent");
+        fakeWhatsApp(OK);
+        await deliver(row(lineId, "sender").id);
+        assert.equal(whatsappCalls.length, 1);
+        assert.equal(whatsappCalls[0].to, "16465550142");
+        assert.equal(whatsappCalls[0].template.name, "shipment_received_2lang");
+        // A write that leaves the numbers alone sends nothing.
+        const settled = (await ref.get()).data();
+        await ref.update({notes: "fragile"});
+        await lineWritten(lineId, settled);
+        assert.equal((await row(lineId, "sender").get()).get("status"),
+            "sent");
+      });
+
+  it("tells a receiver whose number was added after drop-off", async () => {
+    connectWhatsApp();
+    const {lineId} = await call("addWaitingPackage", {kind: "barrels",
+      quantity: 1, ownerKind: "customer", customerName: "Fatou Diallo",
+      customerPhone: "+16465550100", receiverName: "Mariama Bah",
+      receiverPhone: "", destinationCountryId: "gn",
+      destinationCountryName: "Guinea"});
+    const ref = db.collection("containerLines").doc(lineId);
+    const before = (await ref.get()).data();
+    await call("updateContainerLineContacts", {lineId,
+      contacts: {receiverPhone: "+224620000001", notifyReceiver: true}});
+    await lineWritten(lineId, before);
+    const receiver = (await row(lineId, "receiver").get()).data();
+    assert.equal(receiver.status, "queued");
+    assert.equal(receiver.phone, "+224620000001");
+  });
+});

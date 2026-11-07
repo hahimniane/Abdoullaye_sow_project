@@ -17,6 +17,8 @@ const {
   whatsappSendOutcome,
   statusAfterAttempt,
   requeueDecision,
+  phoneChangedRoles,
+  MAX_HAND_RESENDS,
   latestCustomerUpdate,
   mergeLastCustomerUpdate,
   messageUpdateFor,
@@ -570,6 +572,50 @@ describe("sending the current status by hand", () => {
     assert.equal(requeueDecision({status: "retrying"}, NOW), "in_flight");
     assert.equal(requeueDecision({status: "sending", leaseUntilMs: NOW + 1},
         NOW), "in_flight");
+  });
+
+  it("sends again to a corrected number, and a failed one only by hand",
+      () => {
+        const sent = {status: "sent", phone: "+164655501"};
+        assert.equal(requeueDecision(sent, NOW, {phone: "+164655501"}),
+            "already_sent");
+        assert.equal(requeueDecision(sent, NOW, {phone: "+1 646-555-0142"}),
+            "requeue");
+        // The same number in another spelling is the same number.
+        assert.equal(requeueDecision(sent, NOW, {phone: "+1 6465 5501"}),
+            "already_sent");
+        const failed = {...sent, deliveryStatus: "failed"};
+        assert.equal(requeueDecision(failed, NOW, {phone: "+164655501"}),
+            "already_sent");
+        assert.equal(requeueDecision(failed, NOW,
+            {phone: "+164655501", retryFailed: true}), "requeue");
+        assert.equal(requeueDecision({...sent, deliveryStatus: "read"}, NOW,
+            {phone: "+164655501", retryFailed: true}), "already_sent");
+        const tired = {...failed, handResends: MAX_HAND_RESENDS};
+        assert.equal(requeueDecision(tired, NOW,
+            {phone: "+164655501", retryFailed: true}), "already_sent");
+        assert.equal(requeueDecision(tired, NOW,
+            {phone: "+16465550142", retryFailed: true}), "requeue");
+        // A message still on its way is left alone.
+        assert.equal(requeueDecision({status: "queued", phone: "+1"}, NOW,
+            {phone: "+16465550142"}), "in_flight");
+      });
+
+  it("names the people whose number a write changed", () => {
+    const line = {customerPhone: "+164655501", receiverPhone: "+224620000000"};
+    assert.deepEqual(phoneChangedRoles(null, line), []);
+    assert.deepEqual(phoneChangedRoles(line, null), []);
+    assert.deepEqual(phoneChangedRoles(line, {...line}), []);
+    assert.deepEqual(phoneChangedRoles(line,
+        {...line, customerPhone: "+16465550142"}), ["sender"]);
+    assert.deepEqual(phoneChangedRoles(line,
+        {customerPhone: "+16465550142", receiverPhone: "+224620000001"}),
+    ["sender", "receiver"]);
+    // Spacing alone, or a number removed, tells nobody.
+    assert.deepEqual(phoneChangedRoles(line,
+        {...line, receiverPhone: "+224 620 00 00 00"}), []);
+    assert.deepEqual(phoneChangedRoles(line, {...line, customerPhone: ""}),
+        []);
   });
 
   it("picks the furthest update on the timeline, not the newest write", () => {

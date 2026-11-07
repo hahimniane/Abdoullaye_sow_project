@@ -12,6 +12,7 @@ import {
   packageLastUpdate,
   packageUpdateFailures,
   packageUpdateMarks,
+  counterAlerts,
   packageUpdateTick,
   packageStaffCandidate,
   packageStaffScope,
@@ -415,4 +416,23 @@ test("Meta's report on a package update: delivered and read ticks, failures stay
   assert.equal(packageUpdateTick("sender", "failed", "failed"), null);
   assert.equal(packageUpdateTick("sender", "sent"), null);
   assert.equal(packageUpdateTick("sender", undefined), null);
+});
+
+test("the counter warning names who a just-saved package's message missed", () => {
+  const failed = (role: string) => ({ role, status: "failed", delivery: "failed", reason: "Message undeliverable" });
+  const rows = [
+    { id: "a", trackingCode: "CL-AAAAAA", customerPhone: "+164655501", receiverPhone: "+224620000000",
+      lastCustomerUpdate: { update: "received", atMs: 1, results: [failed("sender"), { role: "receiver", status: "sent", delivery: "read" }] } },
+    { id: "b", trackingCode: "CL-BBBBBB", customerPhone: "+16465550100", receiverPhone: "+2246200000",
+      lastCustomerUpdate: { update: "received", atMs: 1, results: [{ role: "receiver", status: "failed", reason: "Message undeliverable" }] } },
+    // Saved before this sitting: its failure stays on its row, not in the warning.
+    { id: "old", customerPhone: "+1", lastCustomerUpdate: { update: "received", results: [failed("sender")] } },
+    // Skipped for no number is not a wrong number.
+    { id: "c", receiverPhone: "", lastCustomerUpdate: { update: "received", results: [{ role: "receiver", status: "skipped", reason: "no_phone" }] } },
+  ];
+  assert.deepEqual(counterAlerts(rows, new Set()), []);
+  assert.deepEqual(counterAlerts(rows, new Set(["a", "b", "c"])), [
+    { lineId: "a", trackingCode: "CL-AAAAAA", who: "Sender", phone: "+164655501", failure: "Message undeliverable" },
+    { lineId: "b", trackingCode: "CL-BBBBBB", who: "Receiver", phone: "+2246200000", failure: "Message undeliverable" },
+  ]);
 });
