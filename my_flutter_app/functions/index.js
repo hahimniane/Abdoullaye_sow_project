@@ -763,6 +763,23 @@ const whatsappAppSecret = defineSecret("WHATSAPP_APP_SECRET");
 // The RSA key of the "Send a package" WhatsApp Flow endpoint
 // (docs/PACKAGE_PRICE_LIST.md §5); its public half is uploaded to Meta.
 const whatsappFlowPrivateKey = defineSecret("WHATSAPP_FLOW_PRIVATE_KEY");
+// Apple Wallet + Google Wallet copies of a business card
+// (docs/BUSINESS_CARDS.md "Wallet passes", business_card_wallet.js). Each may
+// hold the placeholder "unset" until the owner has the real certificate or
+// key: safeSecretValue + walletConfig() read that as "not set up yet" and the
+// app simply hides the wallet buttons.
+const applePassCertPem = defineSecret("APPLE_PASS_CERT_PEM");
+const applePassKeyPem = defineSecret("APPLE_PASS_KEY_PEM");
+const applePassTypeId = defineSecret("APPLE_PASS_TYPE_ID");
+const appleWwdrPem = defineSecret("APPLE_WWDR_PEM");
+const googleWalletIssuerId = defineSecret("GOOGLE_WALLET_ISSUER_ID");
+const googleWalletSaKey = defineSecret("GOOGLE_WALLET_SA_KEY");
+// parkingDocument serves the Apple pass, so it binds the four Apple values
+// (the link it checks is signed with the pass key).
+const APPLE_PASS_SECRETS = [applePassCertPem, applePassKeyPem,
+  applePassTypeId, appleWwdrPem];
+const WALLET_SECRETS = [...APPLE_PASS_SECRETS, googleWalletIssuerId,
+  googleWalletSaKey];
 const WHATSAPP_GRAPH_URL = "https://graph.facebook.com/v21.0";
 const TERMINAL49_BASE_URL = "https://api.terminal49.com/v2";
 const TERMINAL49_TIMEOUT_MS = 15 * 1000;
@@ -16165,7 +16182,7 @@ async function parkingInvoicePdfFile(db, req, token) {
 }
 
 exports.parkingDocument = onRequest(
-    {cors: false, maxInstances: 10},
+    {cors: false, maxInstances: 10, secrets: APPLE_PASS_SECRETS},
     async (req, res) => {
       res.set("Cache-Control", "no-store");
       const token = String(req.query?.t || "").trim();
@@ -16185,6 +16202,22 @@ exports.parkingDocument = onRequest(
         res.set("Content-Type", photo.contentType);
         res.set("Cache-Control", "private, max-age=3600");
         return res.status(200).send(photo.bytes);
+      }
+      // A business card's Apple Wallet pass (docs/BUSINESS_CARDS.md "Wallet
+      // passes"): `t` is a ten-minute signed token naming one card; the
+      // signed .pkpass itself, or 404.
+      if (String(req.query?.view || "") === "card-pass") {
+        const pass = await businessCardsHandlers.cardPassFile(token)
+            .catch((error) => {
+              logger.error("card pass failed", {error: String(error)});
+              return null;
+            });
+        if (!pass) return notFound();
+        res.set("Content-Type", "application/vnd.apple.pkpass");
+        res.set("Content-Disposition",
+            `attachment; filename="${pass.filename}"`);
+        res.set("Cache-Control", "private, no-store");
+        return res.status(200).send(pass.bytes);
       }
       // A parked car's receipt PDF (docs/PARKING_WHATSAPP.md §2): the car's
       // own token, the payment, a signed expiry; the PDF itself, or 404.
@@ -47442,10 +47475,21 @@ const businessCardsHandlers = require("./business_cards_handlers")
       accountAccessBlocked,
       normalizeBusinessServices,
       enforceCallableRateLimit,
+      walletSecrets: () => ({
+        appleCertPem: safeSecretValue(applePassCertPem),
+        appleKeyPem: safeSecretValue(applePassKeyPem),
+        applePassTypeId: safeSecretValue(applePassTypeId),
+        appleWwdrPem: safeSecretValue(appleWwdrPem),
+        googleIssuerId: safeSecretValue(googleWalletIssuerId),
+        googleSaKey: safeSecretValue(googleWalletSaKey),
+      }),
+      // The Apple pass is served by parkingDocument, the one onRequest
+      // function that already serves signed document links.
+      cardPassLinkBase: whatsappPhotoBase,
     });
 exports.businessCards = onCall(
     {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public",
-      maxInstances: 1},
+      maxInstances: 1, secrets: WALLET_SECRETS},
     businessCardsHandlers.businessCards);
 // ===========================================================================
 // Customer package requests (docs/PACKAGE_REQUESTS.md §2-§4, §7, §8).

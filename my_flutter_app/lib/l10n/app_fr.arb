@@ -11236,5 +11236,42 @@
         "type": "String"
       }
     }
-  }
+  },
+  "myCardTitle": "Ma carte",
+  "myCardSubtitle": "Votre carte de visite à partager, enregistrer ou ajouter à votre portefeuille",
+  "myCardScanHint": "Scannez pour enregistrer mon contact",
+  "myCardQrLabel": "Code QR qui ouvre cette carte",
+  "myCardDirect": "Direct",
+  "myCardOffice": "Bureau",
+  "myCardShare": "Partager",
+  "myCardSaveContact": "Enregistrer le contact",
+  "myCardAddAppleWallet": "Ajouter à Apple Wallet",
+  "myCardAddGoogleWallet": "Ajouter à Google Wallet",
+  "myCardShareMessage": "Ma carte de visite, {name} : {link}",
+  "@myCardShareMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "link": {
+        "type": "String"
+      }
+    }
+  },
+  "myCardShareSubject": "Carte de visite de {name}",
+  "@myCardShareSubject": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "myCardLoadFailed": "Nous n'avons pas pu charger votre carte. Réessayez.",
+  "myCardOffline": "Pas de connexion. Vérifiez votre internet et réessayez.",
+  "myCardNotTeamMember": "Votre compte ne fait partie d'aucune équipe d'entreprise : il n'y a pas de carte à afficher.",
+  "myCardWalletNotReady": "Les cartes pour Wallet ne sont pas encore disponibles. Réessayez plus tard.",
+  "myCardWalletFailed": "Nous n'avons pas pu ouvrir votre carte Wallet. Réessayez.",
+  "myCardShareFailed": "Nous n'avons pas pu partager votre carte. Réessayez.",
+  "myCardSaveFailed": "Nous n'avons pas pu préparer le contact. Réessayez.",
+  "myCardBusinessNotApproved": "Votre entreprise n'est pas encore approuvée."
 }

@@ -19304,4 +19304,73 @@ class AppLocalizationsEn extends AppLocalizations {
   String pmeStatementCash(String amount) {
     return '$amount cash held';
   }
+
+  @override
+  String get myCardTitle => 'My card';
+
+  @override
+  String get myCardSubtitle =>
+      'Your business card to share, save or add to your wallet';
+
+  @override
+  String get myCardScanHint => 'Scan to save my contact';
+
+  @override
+  String get myCardQrLabel => 'QR code that opens this card';
+
+  @override
+  String get myCardDirect => 'Direct';
+
+  @override
+  String get myCardOffice => 'Office';
+
+  @override
+  String get myCardShare => 'Share';
+
+  @override
+  String get myCardSaveContact => 'Save contact';
+
+  @override
+  String get myCardAddAppleWallet => 'Add to Apple Wallet';
+
+  @override
+  String get myCardAddGoogleWallet => 'Add to Google Wallet';
+
+  @override
+  String myCardShareMessage(String name, String link) {
+    return 'My business card, $name: $link';
+  }
+
+  @override
+  String myCardShareSubject(String name) {
+    return '$name\'s business card';
+  }
+
+  @override
+  String get myCardLoadFailed => 'We could not load your card. Try again.';
+
+  @override
+  String get myCardOffline =>
+      'No connection. Check your internet and try again.';
+
+  @override
+  String get myCardNotTeamMember =>
+      'Your account is not on a business team, so there is no card to show.';
+
+  @override
+  String get myCardWalletNotReady =>
+      'Wallet cards are not available yet. Try again later.';
+
+  @override
+  String get myCardWalletFailed =>
+      'We could not open your wallet card. Try again.';
+
+  @override
+  String get myCardShareFailed => 'We could not share your card. Try again.';
+
+  @override
+  String get myCardSaveFailed => 'We could not prepare the contact. Try again.';
+
+  @override
+  String get myCardBusinessNotApproved => 'Your business is not approved yet.';
 }

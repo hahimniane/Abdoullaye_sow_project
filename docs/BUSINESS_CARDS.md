@@ -86,9 +86,62 @@ A card never carries an email, a role, a permission or a uid.
   `french-dom.ts`. The pages' own words do.
 - Stock pictures live in `admin_web/public/card-art/`.
 
-## 5. Not built yet
+## 5. Wallet passes
 
-- The app's "My card" screen, and Apple Wallet / Google Wallet copies (the
-  Wouri member card in `~/Downloads/wouri-app` is the model).
+A team member can add their own card to Apple Wallet or Google Wallet. The
+signing is ported from the Wouri member card (`wouri-app/functions/src/
+services/appleWallet.ts`, `googleWallet.ts`). Code: `business_card_wallet.js`
+(pure), the `mine` and `wallet` actions in `business_cards_handlers.js`, and
+the `view=card-pass` branch of `parkingDocument` in `index.js`.
+
+**What is on a pass** (built from `publicCard()`, so only what the public
+page shows; never an email, role, permission or uid):
+
+- Apple (generic pass): the business's name (organization and logo text), the
+  person's name (the business's name on the business's own card), "Direct"
+  and "Office" numbers in US format, the card's color with white text, the
+  business logo (a fetchable https image on a storage or Laawol host) or the
+  bundled Laawol mark (`functions/assets/laawol-mark.png`). Back: address,
+  website, services, the card link. A QR (`PKBarcodeFormatQR`) of
+  `https://laawoldigital.com/c/<code>`. Serial `laawol-card-<code>`, team
+  `GRKB7BXVZK`. French labels in `fr.lproj`.
+- Google (generic pass): the same, inside a signed "Save to Google Wallet"
+  JWT that carries the class (`<issuer>.laawol_card`) and the object
+  (`<issuer>.laawol_card_<code>`), so no call to Google's API is made. Google
+  limits the link to about 1800 characters, so a long card drops its extras
+  in order (services, website, address, Office line, own logo, finally
+  shortens names); the QR always opens the full page.
+
+**Static.** No `webServiceURL`, no push: a number changed later is not
+pushed to a pass already saved. The QR opens the live page, which is always
+right. (The Wouri registration/push endpoints were left out on purpose.)
+
+**Actions** of `businessCards` (signed in; owner or current staff of their
+own business; `businessId` is optional and can only name their own; refused
+with `details.reason` `not_team_member` otherwise):
+
+| action | answer |
+| --- | --- |
+| `mine` | `{version, code, url, card, wallet: {apple, google}}`: `card` is the same object a scan returns; the code is minted by the same race-safe mint as `list`. |
+| `wallet` + `platform: "google"` | `{version, platform, url}`: the Save link. |
+| `wallet` + `platform: "apple"` | `{version, platform, url, expiresInSeconds: 600}`: a ten-minute link to `parkingDocument?view=card-pass&t=<token>`; open it in the browser and iOS offers Add to Wallet. |
+
+`wallet` refuses with `wallet_not_ready` while that wallet's secrets are unset
+and `business_not_approved` before the business is approved. The link's token
+is `base64url({c: code, e: expiry}).hmac`; the HMAC key is derived from
+`APPLE_PASS_KEY_PEM`, so there is no extra secret. A bad, tampered or
+expired token, or a card that no longer shows, is the usual 404.
+
+**Secrets** (Secret Manager; each may hold `unset` until the real value
+exists, which reads as "not set up" and hides the wallet buttons):
+`APPLE_PASS_CERT_PEM`, `APPLE_PASS_KEY_PEM`, `APPLE_PASS_TYPE_ID`,
+`APPLE_WWDR_PEM` (bound to `businessCards` and `parkingDocument`),
+`GOOGLE_WALLET_ISSUER_ID`, `GOOGLE_WALLET_SA_KEY` (service account key JSON;
+`businessCards` only). All six must exist in the project before either
+function deploys, even as `unset`.
+
+## 6. Not built yet
+
+- The app's "My card" screen.
 - A print-shop file with bleed.
 - Letting the owner hide a person's own number.

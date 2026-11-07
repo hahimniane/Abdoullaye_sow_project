@@ -8,6 +8,10 @@
  *   get            anyone, no sign-in: what one card shows (a scan)
  *   list           the team: the business's cards, minting missing codes
  *   saveSettings   the owner: how the business's cards look
+ *   mine           the team: the signed-in person's own card and which
+ *                  wallets are set up
+ *   wallet         the team: a "Save to Google Wallet" link, or a ten-minute
+ *                  link to the Apple pass (served by parkingDocument)
  *
  * Two server-only collections:
  *
@@ -27,6 +31,7 @@
 
 const crypto = require("node:crypto");
 const cards = require("./business_cards");
+const wallet = require("./business_card_wallet");
 
 const CARDS = "businessCards";
 const OWNERS = "businessCardOwners";
@@ -50,6 +55,13 @@ function createBusinessCardsHandlers(deps) {
     normalizeBusinessServices,
     enforceCallableRateLimit,
   } = deps;
+  // Secret values (index.js reads them with safeSecretValue, so a project
+  // without them reads as "not set up", never an error), the base of the
+  // parkingDocument endpoint, and the clock.
+  const secretValues = deps.walletSecrets || (() => ({}));
+  const passLinkBase = deps.cardPassLinkBase ||
+    (() => "https://laawoldigital.com/d");
+  const clock = deps.nowMs || (() => Date.now());
   const randomInt = deps.randomInt || ((max) => crypto.randomInt(max));
   const db = () => admin.firestore();
   const now = () => admin.firestore.FieldValue.serverTimestamp();
@@ -156,18 +168,28 @@ function createBusinessCardsHandlers(deps) {
   async function get(request) {
     await enforceCallableRateLimit(request,
         {name: "businessCardGet", limit: 60, windowSeconds: 60});
-    const code = cards.normalizeCardCode(request.data?.code);
-    if (!code) return NOT_FOUND;
+    const card = await loadPublicCard(request.data?.code);
+    return card ? {version: 1, found: true, card} : NOT_FOUND;
+  }
+
+  /**
+   * One card as a scan sees it, or null. Shared by a scan and by the Apple
+   * pass download, so a pass is always drawn from what the page shows.
+   *
+   * @param {*} rawCode The code as typed or scanned.
+   * @return {Promise<?object>} The publicCard(), null when there is none.
+   */
+  async function loadPublicCard(rawCode) {
+    const code = cards.normalizeCardCode(rawCode);
+    if (!code) return null;
     const card = await db().collection(CARDS).doc(code).get();
-    if (!card.exists) return NOT_FOUND;
+    if (!card.exists) return null;
     const businessId = String(card.data()?.businessId || "");
     const uid = String(card.data()?.uid || "");
-    if (!businessId) return NOT_FOUND;
+    if (!businessId) return null;
     const snap = await db().collection("businesses").doc(businessId).get();
     const business = snap.exists ? snap.data() || {} : null;
-    if (!business || String(business.status) !== "approved") {
-      return NOT_FOUND;
-    }
+    if (!business || String(business.status) !== "approved") return null;
     let user = null;
     if (uid) {
       const person = await db().collection("users").doc(uid).get();
@@ -178,8 +200,8 @@ function createBusinessCardsHandlers(deps) {
         user = data;
       }
     }
-    return {version: 1, found: true, card: cards.publicCard({
-      code, businessId, business, services: servicesOf(business), user})};
+    return cards.publicCard({
+      code, businessId, business, services: servicesOf(business), user});
   }
 
   /**
@@ -242,7 +264,124 @@ function createBusinessCardsHandlers(deps) {
     return {version: 1, settings};
   }
 
-  const ACTIONS = {get, list, saveSettings};
+  /**
+   * The signed-in person's own card, for the app's "My card" screen. Any
+   * member of a business's team (the owner or current staff): the card is
+   * theirs, so it needs no permission beyond being on the team.
+   *
+   * @param {object} request The callable request.
+   * @param {string} limitName The rate-limit bucket.
+   * @return {Promise<object>} The person, their business and its document.
+   */
+  async function ownCard(request, limitName) {
+    const uid = requireAuth(request);
+    await enforceCallableRateLimit(request,
+        {name: limitName, limit: 30, windowSeconds: 60});
+    const snap = await db().collection("users").doc(uid).get();
+    const user = snap.exists ? snap.data() || {} : null;
+    const own = String(user?.businessId || "").trim();
+    const asked = String(request.data?.businessId || "").trim();
+    // A businessId may be sent, but it can only name the caller's own.
+    if (!own || own.includes("/") || (asked && asked !== own)) {
+      throw refuse("permission-denied", "This card is for a business's team.",
+          "not_team_member");
+    }
+    const business = await loadBusiness(own);
+    const ownerUid = String(business.ownerUid || "").trim();
+    if (!cards.isTeamMember(user, own, ownerUid, uid) ||
+        accountAccessBlocked(user)) {
+      throw refuse("permission-denied", "This card is for a business's team.",
+          "not_team_member");
+    }
+    return {uid, user, businessId: own, business};
+  }
+
+  const walletReady = () => wallet.walletConfig(secretValues());
+
+  /**
+   * `{code, url, card, wallet}` for the caller's own card. The code is made
+   * the first time, by the same race-safe mint as the console's list.
+   *
+   * @param {object} request The callable request.
+   * @return {Promise<object>} The card and which wallets are set up.
+   */
+  async function mine(request) {
+    const {uid, user, businessId, business} =
+      await ownCard(request, "businessCardMine");
+    const code = await codeFor(businessId, uid, uid);
+    const ready = walletReady();
+    return {
+      version: 1,
+      code,
+      url: cards.CARD_LINK_BASE + code,
+      card: cards.publicCard({code, businessId, business,
+        services: servicesOf(business), user}),
+      wallet: {apple: Boolean(ready.apple), google: Boolean(ready.google)},
+    };
+  }
+
+  /**
+   * The link that adds the caller's card to a wallet. Google: the signed
+   * "Save" URL. Apple: a ten-minute link to the pass, which parkingDocument
+   * (view=card-pass) signs and serves; the app opens it in the browser.
+   *
+   * @param {object} request The callable request.
+   * @return {Promise<object>} `{platform, url}`.
+   */
+  async function walletLink(request) {
+    const platform = String(request.data?.platform || "");
+    if (platform !== "apple" && platform !== "google") {
+      throw refuse("invalid-argument", "platform must be apple or google",
+          "platform_invalid");
+    }
+    const {uid, user, businessId, business} =
+      await ownCard(request, "businessCardWallet");
+    const ready = walletReady();
+    const config = ready[platform];
+    if (!config) {
+      throw refuse("failed-precondition",
+          "Wallet cards are not set up yet.", "wallet_not_ready");
+    }
+    if (String(business.status) !== "approved") {
+      throw refuse("failed-precondition",
+          "The business is not approved yet.", "business_not_approved");
+    }
+    const code = await codeFor(businessId, uid, uid);
+    if (platform === "google") {
+      const card = cards.publicCard({code, businessId, business,
+        services: servicesOf(business), user});
+      return {version: 1, platform,
+        url: wallet.buildGoogleSaveUrl(config, card, clock())};
+    }
+    const token = wallet.signCardPassToken(config.keyPem, code, clock());
+    const query = new URLSearchParams({view: "card-pass", t: token});
+    return {version: 1, platform,
+      url: `${passLinkBase()}?${query.toString()}`,
+      expiresInSeconds: wallet.PASS_LINK_TTL_SECONDS};
+  }
+
+  /**
+   * The pass a ten-minute link opens (called by parkingDocument, which owns
+   * the public URL). Null for anything wrong: not set up, a bad or expired
+   * link, a card that no longer shows (unapproved business).
+   *
+   * @param {string} token The `t` of the link.
+   * @param {function} fetchImpl `fetch`, injectable.
+   * @return {Promise<?{bytes: Buffer, filename: string}>} The pkpass.
+   */
+  async function cardPassFile(token, fetchImpl) {
+    const {apple} = walletReady();
+    if (!apple) return null;
+    const claims = wallet.verifyCardPassToken(apple.keyPem, token, clock());
+    if (!claims) return null;
+    const card = await loadPublicCard(claims.c);
+    if (!card) return null;
+    const bytes = await wallet.buildApplePass({card, config: apple,
+      fetchImpl});
+    return {bytes, filename: `laawol-card-${card.code}.pkpass`};
+  }
+
+  const ACTIONS = {get, list, saveSettings, mine, wallet: walletLink};
 
   /**
    * @param {object} request The callable request.
@@ -256,7 +395,7 @@ function createBusinessCardsHandlers(deps) {
     return ACTIONS[action](request);
   }
 
-  return {businessCards, ACTIONS: Object.keys(ACTIONS)};
+  return {businessCards, cardPassFile, ACTIONS: Object.keys(ACTIONS)};
 }
 
 module.exports = {CARDS, OWNERS, createBusinessCardsHandlers};

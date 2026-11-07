@@ -19607,4 +19607,77 @@ class AppLocalizationsFr extends AppLocalizations {
   String pmeStatementCash(String amount) {
     return '$amount d’argent détenu';
   }
+
+  @override
+  String get myCardTitle => 'Ma carte';
+
+  @override
+  String get myCardSubtitle =>
+      'Votre carte de visite à partager, enregistrer ou ajouter à votre portefeuille';
+
+  @override
+  String get myCardScanHint => 'Scannez pour enregistrer mon contact';
+
+  @override
+  String get myCardQrLabel => 'Code QR qui ouvre cette carte';
+
+  @override
+  String get myCardDirect => 'Direct';
+
+  @override
+  String get myCardOffice => 'Bureau';
+
+  @override
+  String get myCardShare => 'Partager';
+
+  @override
+  String get myCardSaveContact => 'Enregistrer le contact';
+
+  @override
+  String get myCardAddAppleWallet => 'Ajouter à Apple Wallet';
+
+  @override
+  String get myCardAddGoogleWallet => 'Ajouter à Google Wallet';
+
+  @override
+  String myCardShareMessage(String name, String link) {
+    return 'Ma carte de visite, $name : $link';
+  }
+
+  @override
+  String myCardShareSubject(String name) {
+    return 'Carte de visite de $name';
+  }
+
+  @override
+  String get myCardLoadFailed =>
+      'Nous n\'avons pas pu charger votre carte. Réessayez.';
+
+  @override
+  String get myCardOffline =>
+      'Pas de connexion. Vérifiez votre internet et réessayez.';
+
+  @override
+  String get myCardNotTeamMember =>
+      'Votre compte ne fait partie d\'aucune équipe d\'entreprise : il n\'y a pas de carte à afficher.';
+
+  @override
+  String get myCardWalletNotReady =>
+      'Les cartes pour Wallet ne sont pas encore disponibles. Réessayez plus tard.';
+
+  @override
+  String get myCardWalletFailed =>
+      'Nous n\'avons pas pu ouvrir votre carte Wallet. Réessayez.';
+
+  @override
+  String get myCardShareFailed =>
+      'Nous n\'avons pas pu partager votre carte. Réessayez.';
+
+  @override
+  String get myCardSaveFailed =>
+      'Nous n\'avons pas pu préparer le contact. Réessayez.';
+
+  @override
+  String get myCardBusinessNotApproved =>
+      'Votre entreprise n\'est pas encore approuvée.';
 }

@@ -8,8 +8,10 @@ import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../screens/support_inbox_screen.dart';
 import 'bank_zelle_settings_screen.dart';
+import 'my_card_screen.dart';
 import '../services/support_service.dart';
 import '../services/biometric_lock_service.dart';
+import '../services/business_card.dart';
 import '../theme/app_colors.dart';
 import '../utils/action_confirmation.dart';
 import '../widgets/app_back_button.dart';
@@ -342,6 +344,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             onTap: () => Navigator.pushNamed(
                               context,
                               '/business-profile',
+                            ),
+                          ),
+                        ],
+                        // Every owner and staff member has a business card of
+                        // their own (docs/BUSINESS_CARDS.md); customers and
+                        // platform admins have none.
+                        if (hasOwnBusinessCard(
+                          isBusinessOwner: authProvider.isBusinessOwner,
+                          isStaff: authProvider.isStaff,
+                          businessId: authProvider.businessId,
+                        )) ...[
+                          const Divider(height: 1),
+                          _SettingRow(
+                            key: const Key('settings-my-card'),
+                            icon: Icons.badge_outlined,
+                            title: l10n.myCardTitle,
+                            subtitle: l10n.myCardSubtitle,
+                            onTap: () => Navigator.of(
+                              context,
+                              rootNavigator: true,
+                            ).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => const MyCardScreen(),
+                              ),
                             ),
                           ),
                         ],

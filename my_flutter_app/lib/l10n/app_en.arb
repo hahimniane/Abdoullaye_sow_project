@@ -11246,5 +11246,42 @@
         "type": "String"
       }
     }
-  }
+  },
+  "myCardTitle": "My card",
+  "myCardSubtitle": "Your business card to share, save or add to your wallet",
+  "myCardScanHint": "Scan to save my contact",
+  "myCardQrLabel": "QR code that opens this card",
+  "myCardDirect": "Direct",
+  "myCardOffice": "Office",
+  "myCardShare": "Share",
+  "myCardSaveContact": "Save contact",
+  "myCardAddAppleWallet": "Add to Apple Wallet",
+  "myCardAddGoogleWallet": "Add to Google Wallet",
+  "myCardShareMessage": "My business card, {name}: {link}",
+  "@myCardShareMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "link": {
+        "type": "String"
+      }
+    }
+  },
+  "myCardShareSubject": "{name}'s business card",
+  "@myCardShareSubject": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "myCardLoadFailed": "We could not load your card. Try again.",
+  "myCardOffline": "No connection. Check your internet and try again.",
+  "myCardNotTeamMember": "Your account is not on a business team, so there is no card to show.",
+  "myCardWalletNotReady": "Wallet cards are not available yet. Try again later.",
+  "myCardWalletFailed": "We could not open your wallet card. Try again.",
+  "myCardShareFailed": "We could not share your card. Try again.",
+  "myCardSaveFailed": "We could not prepare the contact. Try again.",
+  "myCardBusinessNotApproved": "Your business is not approved yet."
 }

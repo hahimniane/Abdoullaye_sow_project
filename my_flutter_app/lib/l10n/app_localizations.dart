@@ -32557,6 +32557,126 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{amount} cash held'**
   String pmeStatementCash(String amount);
+
+  /// No description provided for @myCardTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'My card'**
+  String get myCardTitle;
+
+  /// No description provided for @myCardSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your business card to share, save or add to your wallet'**
+  String get myCardSubtitle;
+
+  /// No description provided for @myCardScanHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan to save my contact'**
+  String get myCardScanHint;
+
+  /// No description provided for @myCardQrLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'QR code that opens this card'**
+  String get myCardQrLabel;
+
+  /// No description provided for @myCardDirect.
+  ///
+  /// In en, this message translates to:
+  /// **'Direct'**
+  String get myCardDirect;
+
+  /// No description provided for @myCardOffice.
+  ///
+  /// In en, this message translates to:
+  /// **'Office'**
+  String get myCardOffice;
+
+  /// No description provided for @myCardShare.
+  ///
+  /// In en, this message translates to:
+  /// **'Share'**
+  String get myCardShare;
+
+  /// No description provided for @myCardSaveContact.
+  ///
+  /// In en, this message translates to:
+  /// **'Save contact'**
+  String get myCardSaveContact;
+
+  /// No description provided for @myCardAddAppleWallet.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to Apple Wallet'**
+  String get myCardAddAppleWallet;
+
+  /// No description provided for @myCardAddGoogleWallet.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to Google Wallet'**
+  String get myCardAddGoogleWallet;
+
+  /// No description provided for @myCardShareMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'My business card, {name}: {link}'**
+  String myCardShareMessage(String name, String link);
+
+  /// No description provided for @myCardShareSubject.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}\'s business card'**
+  String myCardShareSubject(String name);
+
+  /// No description provided for @myCardLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'We could not load your card. Try again.'**
+  String get myCardLoadFailed;
+
+  /// No description provided for @myCardOffline.
+  ///
+  /// In en, this message translates to:
+  /// **'No connection. Check your internet and try again.'**
+  String get myCardOffline;
+
+  /// No description provided for @myCardNotTeamMember.
+  ///
+  /// In en, this message translates to:
+  /// **'Your account is not on a business team, so there is no card to show.'**
+  String get myCardNotTeamMember;
+
+  /// No description provided for @myCardWalletNotReady.
+  ///
+  /// In en, this message translates to:
+  /// **'Wallet cards are not available yet. Try again later.'**
+  String get myCardWalletNotReady;
+
+  /// No description provided for @myCardWalletFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'We could not open your wallet card. Try again.'**
+  String get myCardWalletFailed;
+
+  /// No description provided for @myCardShareFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'We could not share your card. Try again.'**
+  String get myCardShareFailed;
+
+  /// No description provided for @myCardSaveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'We could not prepare the contact. Try again.'**
+  String get myCardSaveFailed;
+
+  /// No description provided for @myCardBusinessNotApproved.
+  ///
+  /// In en, this message translates to:
+  /// **'Your business is not approved yet.'**
+  String get myCardBusinessNotApproved;
 }
 
 class _AppLocalizationsDelegate
