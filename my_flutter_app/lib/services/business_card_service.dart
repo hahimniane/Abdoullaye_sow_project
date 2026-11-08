@@ -14,7 +14,11 @@ const Duration businessCardTimeout = Duration(seconds: 20);
 
 /// A refused or failed card call, in a form the screen can word.
 class BusinessCardFailure implements Exception {
-  const BusinessCardFailure({required this.code, this.reason = ''});
+  const BusinessCardFailure({
+    required this.code,
+    this.reason = '',
+    this.reasons = const [],
+  });
 
   /// The Functions code (`failed-precondition`, `unavailable`...).
   final String code;
@@ -22,6 +26,10 @@ class BusinessCardFailure implements Exception {
   /// `details.reason` when the server named one: `not_team_member`,
   /// `wallet_not_ready`...; else ''.
   final String reason;
+
+  /// `details.reasons` when the server listed several (`savePhones`):
+  /// `phone_0_invalid`, `phone_1_needs_country_code`, `too_many_phones`.
+  final List<String> reasons;
 
   bool get offline =>
       code == 'unavailable' ||
@@ -40,27 +48,67 @@ class BusinessCardFailure implements Exception {
   /// The wallet pass cannot be made yet (the server's keys are not set up).
   bool get walletNotReady => reason == 'wallet_not_ready';
 
+  /// `savePhones` refused one or more numbers (or too many).
+  bool get phonesInvalid => reason == 'phones_invalid';
+
+  /// More than [cardPhonesMax] numbers were sent.
+  bool get tooManyPhones => reasons.contains('too_many_phones');
+
+  /// The refused rows of `savePhones`, by the row's index in the list that
+  /// was sent: [cardPhoneInvalid] (not a phone number) or
+  /// [cardPhoneNeedsCountryCode] (a non-US number typed without `+country`).
+  Map<int, String> get phoneErrors {
+    final errors = <int, String>{};
+    for (final reason in reasons) {
+      final m = RegExp(
+        r'^phone_(\d+)_(invalid|needs_country_code)$',
+      ).firstMatch(reason);
+      if (m == null) continue;
+      errors[int.parse(m[1]!)] = m[2]! == 'invalid'
+          ? cardPhoneInvalid
+          : cardPhoneNeedsCountryCode;
+    }
+    return errors;
+  }
+
   @override
-  String toString() => 'BusinessCardFailure($code $reason)';
+  String toString() => 'BusinessCardFailure($code $reason $reasons)';
 }
+
+/// A row of `savePhones` that is not a phone number.
+const String cardPhoneInvalid = 'invalid';
+
+/// A row of `savePhones` that needs a `+country` code.
+const String cardPhoneNeedsCountryCode = 'needs_country_code';
 
 BusinessCardFailure parseBusinessCardFailure(
   String code,
   Object? details, [
   String? message,
 ]) {
-  var reason = callableString(callableMap(details)['reason']);
+  final detail = callableMap(details);
+  var reason = callableString(detail['reason']);
+  final rawReasons = detail['reasons'];
   if (reason.isEmpty) {
     final m = (message ?? '').trim();
     if (const {
       'not_team_member',
       'wallet_not_ready',
       'business_not_approved',
+      'phones_invalid',
     }.contains(m)) {
       reason = m;
     }
   }
-  return BusinessCardFailure(code: code.trim().toLowerCase(), reason: reason);
+  return BusinessCardFailure(
+    code: code.trim().toLowerCase(),
+    reason: reason,
+    reasons: [
+      if (rawReasons is List)
+        for (final r in rawReasons)
+          if (callableString(r).isNotEmpty) callableString(r),
+    ],
+  );
 }
 
 /// The `businessCards` callable: the signed-in person's own card, and the
@@ -116,5 +164,24 @@ class BusinessCardService {
       throw const BusinessCardFailure(code: 'unknown');
     }
     return uri;
+  }
+
+  /// `savePhones`: replaces the caller's extra numbers with [phones] (an
+  /// empty list clears them) and answers what was saved: the server drops
+  /// blank rows and duplicates of the person's own number. A refused number
+  /// throws a [BusinessCardFailure] whose [BusinessCardFailure.phoneErrors]
+  /// name the rows by their index in [phones].
+  Future<List<CardPhone>> savePhones(List<CardPhone> phones) async {
+    final answer = callableMap(
+      await _call({
+        'action': 'savePhones',
+        'phones': [for (final phone in phones) phone.toCallable()],
+      }),
+    );
+    // An answer with no list at all is not a saved one.
+    if (answer['phones'] is! List) {
+      throw const BusinessCardFailure(code: 'unknown');
+    }
+    return CardPhone.listFromCallable(answer['phones']);
   }
 }

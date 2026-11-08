@@ -13,6 +13,7 @@
  */
 
 const {documentLogo} = require("./parking_document");
+const {STATUS: PHONE_STATUS, digitsOf, toE164} = require("./phone_e164");
 
 // The tracking alphabet (tracking_code.js): no 0/O, 1/I/L, and no vowels, so
 // a code is easy to read aloud and can never spell a word.
@@ -37,6 +38,11 @@ const CARD_PHOTOS = Object.freeze(["none", "car"]);
 const CARD_TAGLINE_MAX = 60;
 const CARD_SERVICE_MAX = 40;
 const CARD_SERVICES_MAX = 6;
+// A person's numbers beyond their own (docs/BUSINESS_CARDS.md §7): up to
+// three, each with a short label ("WhatsApp", "Guinea"), so a card holds the
+// person's own number, these, and the office.
+const CARD_EXTRA_PHONES_MAX = 3;
+const CARD_PHONE_LABEL_MAX = 20;
 
 const DEFAULT_CARD_SETTINGS = Object.freeze({
   style: "classic",
@@ -158,6 +164,57 @@ function cardPersonPhone(user) {
 }
 
 /**
+ * The extra numbers a person or the owner typed, cleaned for saving: each a
+ * valid number (ten US digits are taken as US; any other country needs its
+ * +code), kept as typed, with a one-line label;
+ * blank rows dropped; a number that repeats the person's own number or an
+ * earlier row dropped. Errors name the row: `phone_<i>_invalid`,
+ * `phone_<i>_needs_country_code`, or `too_many_phones`.
+ *
+ * @param {*} raw `[{label, phone}]` as sent.
+ * @param {string=} ownPhone The person's own number, never repeated.
+ * @return {{phones: Array<{label: string, phone: string}>,
+ *     errors: string[]}} The rows and what was wrong.
+ */
+function cleanCardPhonesInput(raw, ownPhone = "") {
+  const rows = Array.isArray(raw) ? raw : [];
+  const errors = [];
+  const phones = [];
+  const own = toE164(ownPhone, {regionIso: "US"}).e164 || ownPhone;
+  const seen = new Set([digitsOf(own)].filter(Boolean));
+  rows.slice(0, 10).forEach((row, index) => {
+    const label = oneLine(row?.label, CARD_PHONE_LABEL_MAX);
+    const typed = oneLine(row?.phone, 40);
+    if (!typed) return;
+    const parsed = toE164(typed, {regionIso: "US"});
+    if (parsed.status !== PHONE_STATUS.OK) {
+      errors.push(`phone_${index}_${parsed.status}`);
+      return;
+    }
+    const digits = digitsOf(parsed.e164);
+    if (seen.has(digits)) return;
+    seen.add(digits);
+    // Kept as typed (a valid number), so "+224 621 23 45 67" is printed
+    // with the person's own spacing; a US number is printed (347) 555-0142.
+    phones.push({label, phone: typed});
+  });
+  if (phones.length > CARD_EXTRA_PHONES_MAX) errors.push("too_many_phones");
+  return {phones: phones.slice(0, CARD_EXTRA_PHONES_MAX), errors};
+}
+
+/**
+ * A person's saved extra numbers as the card shows them: read again through
+ * the same rule, so a profile written any other way can never put something
+ * odd on a card.
+ *
+ * @param {object} user A `users/{uid}` document's data.
+ * @return {Array<{label: string, phone: string}>} Up to three.
+ */
+function cardPersonPhones(user) {
+  return cleanCardPhonesInput(user?.cardPhones, cardPersonPhone(user)).phones;
+}
+
+/**
  * Whether a person is on a business's team today. A card whose person has
  * left shows the business alone.
  *
@@ -216,7 +273,8 @@ function publicCard({code, businessId, business, services, user}) {
     code,
     link: CARD_LINK_BASE + code,
     person: user && name ?
-      {name, phone: cardPersonPhone(user)} : null,
+      {name, phone: cardPersonPhone(user), phones: cardPersonPhones(user)} :
+      null,
     business: cardBusiness(businessId, business, services),
     settings: normalizeCardSettings(business?.card),
   };
@@ -239,6 +297,10 @@ module.exports = {
   cardBusiness,
   cardPersonName,
   cardPersonPhone,
+  CARD_EXTRA_PHONES_MAX,
+  CARD_PHONE_LABEL_MAX,
+  cleanCardPhonesInput,
+  cardPersonPhones,
   cleanCardSettingsInput,
   isTeamMember,
   normalizeCardCode,

@@ -3,9 +3,11 @@ import { httpsCallable } from "firebase/functions";
 import { functions } from "@/lib/firebase";
 import {
   readBusinessCard,
+  readCardPhones,
   readCardSettings,
   type BusinessCardData,
   type BusinessCardRow,
+  type CardPhone,
   type CardSettings,
 } from "@/lib/business-card";
 
@@ -47,7 +49,9 @@ export async function listBusinessCards(businessId: string): Promise<BusinessCar
     cards: rows.flatMap((raw) => {
       const card = readBusinessCard(raw);
       const row = raw as Record<string, unknown>;
-      return card ? [{ ...card, uid: String(row.uid ?? ""), mine: row.mine === true }] : [];
+      return card
+        ? [{ ...card, uid: String(row.uid ?? ""), mine: row.mine === true, canEditPhones: row.canEditPhones === true }]
+        : [];
     }),
   };
 }
@@ -59,6 +63,16 @@ export async function saveBusinessCardSettings(
 ): Promise<CardSettings> {
   const answer = await call({ action: "saveSettings", businessId, settings });
   return readCardSettings(answer.settings);
+}
+
+/**
+ * Saves a person's extra numbers (the whole list; empty clears it): the
+ * caller's own, or a colleague's for someone who manages the team. The
+ * numbers as the server kept them.
+ */
+export async function saveCardPhones(businessId: string, uid: string, phones: CardPhone[]): Promise<CardPhone[]> {
+  const answer = await call({ action: "savePhones", businessId, uid, phones });
+  return readCardPhones(answer.phones);
 }
 
 /** The codes the server refused a save with, e.g. `tagline_too_long`. */

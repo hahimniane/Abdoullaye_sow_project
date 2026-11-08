@@ -19682,6 +19682,70 @@ class AppLocalizationsFr extends AppLocalizations {
       'Votre entreprise n\'est pas encore approuvée.';
 
   @override
+  String get myCardEditPhones => 'Modifier mes numéros';
+
+  @override
+  String get myCardPhonesTitle => 'Mes numéros';
+
+  @override
+  String get myCardPhonesOwnNote =>
+      'Votre numéro de connexion figure toujours sur votre carte';
+
+  @override
+  String get myCardPhonesIntro =>
+      'Ajoutez jusqu\'à 3 numéros de plus à afficher sur votre carte, comme WhatsApp ou un numéro à l\'étranger.';
+
+  @override
+  String get myCardPhoneLabelField => 'Étiquette';
+
+  @override
+  String get myCardPhoneLabelHint => 'Facultatif, par exemple Guinée';
+
+  @override
+  String get myCardPhoneNumberField => 'Numéro de téléphone';
+
+  @override
+  String get myCardPhoneChipWhatsApp => 'WhatsApp';
+
+  @override
+  String get myCardPhoneChipMobile => 'Mobile';
+
+  @override
+  String get myCardPhoneChipHome => 'Domicile';
+
+  @override
+  String get myCardPhoneChipWork => 'Travail';
+
+  @override
+  String get myCardPhoneDefaultLabel => 'Téléphone';
+
+  @override
+  String get myCardPhoneRemove => 'Retirer ce numéro';
+
+  @override
+  String get myCardPhoneAdd => 'Ajouter un numéro';
+
+  @override
+  String get myCardPhonesSave => 'Enregistrer';
+
+  @override
+  String get myCardPhoneInvalid => 'Ce n\'est pas un numéro de téléphone';
+
+  @override
+  String get myCardPhoneNeedsCountryCode =>
+      'Ajoutez l\'indicatif du pays, par exemple +224';
+
+  @override
+  String get myCardPhonesTooMany => 'Vous pouvez ajouter jusqu\'à 3 numéros.';
+
+  @override
+  String get myCardPhonesSaved => 'Vos numéros sont enregistrés.';
+
+  @override
+  String get myCardPhonesSaveFailed =>
+      'Nous n\'avons pas pu enregistrer vos numéros. Réessayez.';
+
+  @override
   String get labelPrinterModelGeneric =>
       'Autre imprimante Bluetooth 4 × 6 po (bêta)';
 

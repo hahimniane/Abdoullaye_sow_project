@@ -89,7 +89,14 @@ export type CardBusiness = {
   services: string[];
 };
 
-export type CardPerson = { name: string; phone: string };
+/** One of a person's extra numbers (docs/BUSINESS_CARDS.md §7): a label as typed ("" for none) and the number. */
+export type CardPhone = { label: string; phone: string };
+
+/** At most this many extra numbers, each label at most this long (business_cards.js). */
+export const CARD_EXTRA_PHONES_MAX = 3;
+export const CARD_PHONE_LABEL_MAX = 20;
+
+export type CardPerson = { name: string; phone: string; phones: CardPhone[] };
 
 /** One card as the server answers a scan (business_cards.js publicCard). */
 export type BusinessCardData = {
@@ -101,7 +108,12 @@ export type BusinessCardData = {
 };
 
 /** A card in the console's list: whose it is, and whether it is the viewer's. */
-export type BusinessCardRow = BusinessCardData & { uid: string; mine: boolean };
+export type BusinessCardRow = BusinessCardData & {
+  uid: string;
+  mine: boolean;
+  /** Whether the viewer may change this person's extra numbers (theirs, or they manage the team). */
+  canEditPhones: boolean;
+};
 
 const text = (value: unknown, max: number) =>
   String(value ?? "").replace(/\s+/g, " ").trim().slice(0, max);
@@ -140,6 +152,17 @@ export function readCardSettings(raw: unknown): CardSettings {
   };
 }
 
+/** A person's extra numbers from the server; anything that is not one is left out. */
+export function readCardPhones(raw: unknown): CardPhone[] {
+  return (Array.isArray(raw) ? raw : [])
+    .map((row) => {
+      const r = (row && typeof row === "object" ? row : {}) as Record<string, unknown>;
+      return { label: text(r.label, CARD_PHONE_LABEL_MAX), phone: text(r.phone, 40) };
+    })
+    .filter((row) => row.phone)
+    .slice(0, CARD_EXTRA_PHONES_MAX);
+}
+
 /** A card from the server, or null when the answer is not one. */
 export function readBusinessCard(raw: unknown): BusinessCardData | null {
   const source = (raw && typeof raw === "object" ? raw : null) as Record<string, unknown> | null;
@@ -155,7 +178,7 @@ export function readBusinessCard(raw: unknown): BusinessCardData | null {
   return {
     code,
     link: cardLink(code),
-    person: name ? { name, phone: text(p?.phone, 40) } : null,
+    person: name ? { name, phone: text(p?.phone, 40), phones: readCardPhones(p?.phones) } : null,
     business: {
       businessId: text(b.businessId, 120),
       name: cardName(b.name),
@@ -439,6 +462,15 @@ export function vcardText(card: BusinessCardData): string {
   const direct = person ? cardDial(person.phone).tel : null;
   const office = cardDial(business.phone).tel;
   if (direct) lines.push(`TEL;TYPE=CELL:${direct.slice(4)}`);
+  const seen = new Set([direct, office]);
+  for (const row of person?.phones ?? []) {
+    const tel = cardDial(row.phone).tel;
+    if (!tel || seen.has(tel)) continue;
+    seen.add(tel);
+    // The label rides as the number's type, so Contacts shows "WhatsApp".
+    const type = row.label.replace(/[\\;:,"\r\n]+/g, " ").replace(/\s+/g, " ").trim();
+    lines.push(`TEL;TYPE=${type ? `"${type}"` : "VOICE"}:${tel.slice(4)}`);
+  }
   if (office && office !== direct) lines.push(`TEL;TYPE=WORK:${office.slice(4)}`);
   const site = websiteHref(business.website);
   if (site) lines.push(`URL:${site}`);

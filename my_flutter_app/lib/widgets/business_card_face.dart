@@ -8,7 +8,8 @@ import '../theme/app_spacing.dart';
 
 /// One business card (docs/BUSINESS_CARDS.md) as the My card screen draws it:
 /// the logo, the business's name and tagline, the person's name, their own
-/// number ("Direct") and the business's ("Office"), and the address. No role
+/// number ("Direct"), the extra numbers they added (each with its own label)
+/// and the business's ("Office"), and the address. No role
 /// or title is ever printed. The QR is a separate, larger widget
 /// ([BusinessCardQr]) so it can be scanned from the screen.
 ///
@@ -34,6 +35,9 @@ class BusinessCardFace extends StatelessWidget {
     final address = cardAddress(card.business);
     final website = card.business.website.trim();
     final phones = cardPhoneRows(card);
+    // Direct + two extras + Office and more: smaller type keeps every number
+    // on one line on a 320-wide phone.
+    final compact = phones.length >= 4;
 
     final header = Row(
       children: [
@@ -126,29 +130,32 @@ class BusinessCardFace extends StatelessWidget {
                   if (phones.isNotEmpty) const SizedBox(height: 8),
                   for (final row in phones)
                     Padding(
-                      padding: const EdgeInsets.only(top: 3),
+                      padding: EdgeInsets.only(top: compact ? 2 : 3),
                       child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.baseline,
-                        textBaseline: TextBaseline.alphabetic,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           SizedBox(
-                            width: 64,
-                            child: Text(
-                              row.label == 'direct'
-                                  ? l10n.myCardDirect
-                                  : l10n.myCardOffice,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.muted,
+                            width: compact ? 84 : 72,
+                            child: Padding(
+                              padding: EdgeInsets.only(top: compact ? 2 : 3),
+                              child: Text(
+                                _phoneLabel(l10n, row),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: compact ? 11 : 12,
+                                  height: 1.15,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.muted,
+                                ),
                               ),
                             ),
                           ),
                           Expanded(
                             child: Text(
                               row.number,
-                              style: const TextStyle(
-                                fontSize: 16,
+                              style: TextStyle(
+                                fontSize: compact ? 14 : 16,
                                 fontWeight: FontWeight.w700,
                                 color: AppColors.ink,
                               ),
@@ -193,6 +200,17 @@ class BusinessCardFace extends StatelessWidget {
     );
   }
 }
+
+/// The words in front of a number: "Direct", "Office", or the label the
+/// person gave an extra number ("Phone" when they gave none).
+String _phoneLabel(
+  AppLocalizations l10n,
+  ({String label, String number, String custom}) row,
+) => switch (row.label) {
+  'direct' => l10n.myCardDirect,
+  'extra' => row.custom.isEmpty ? l10n.myCardPhoneDefaultLabel : row.custom,
+  _ => l10n.myCardOffice,
+};
 
 /// The business's logo, or its initials when it has none (or it will not
 /// load): a card never shows a broken picture.

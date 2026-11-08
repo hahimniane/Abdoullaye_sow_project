@@ -17508,6 +17508,9 @@ button.pkq-card:hover { border-color: var(--brand); }
 .bcard-phones > div { display: contents; }
 .bcard-phones dt { color: #64748b; font-size: 3.1cqw; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
 .bcard-phones dd { color: #0f172a; font-size: 4cqw; font-variant-numeric: tabular-nums; font-weight: 700; }
+.bcard-phones[data-many] { margin-top: 1.6cqw; row-gap: 0.5cqw; }
+.bcard-phones[data-many] dt { font-size: 2.3cqw; }
+.bcard-phones[data-many] dd { font-size: 3cqw; }
 .bcard-right { align-items: center; display: flex; flex: none; flex-direction: column; gap: 1.6cqw; justify-content: flex-end; }
 .bcard-qr { display: block; height: 22cqw; width: 22cqw; }
 .bcard-qr svg, .bcardx-qr svg { display: block; height: 100%; width: 100%; }
@@ -17534,6 +17537,16 @@ button.pkq-card:hover { border-color: var(--brand); }
 .bcardx-person { align-items: center; color: #fff; display: flex; font-size: 3.71cqw; font-weight: 800; height: 7.52cqw; left: 3.81cqw; line-height: 1; position: absolute; top: 29.24cqw; white-space: nowrap; }
 .bcardx-phones { left: 4.57cqw; position: absolute; top: 40cqw; }
 .bcardx-phones > div { align-items: center; display: flex; font-size: 2.95cqw; font-weight: 700; gap: 1.6cqw; height: 8.19cqw; line-height: 1; white-space: nowrap; }
+/* More numbers (docs/BUSINESS_CARDS.md §7). Three or four: the same rows, closer, each with its rule. */
+.bcardx-phones[data-rows] { left: 3.81cqw; width: 48.57cqw; }
+.bcardx-phones[data-rows] > div { border-top: 0.19cqw solid #bac5d4; box-sizing: border-box; padding-left: 0.76cqw; }
+.bcardx-phones[data-rows="3"] > div { height: 5.46cqw; }
+.bcardx-phones[data-rows="4"] > div { font-size: 2.6cqw; height: 4.1cqw; }
+/* Five: two columns, the label over the number. */
+.bcardx-phones[data-columns] { column-gap: 2.2cqw; display: grid; grid-template-columns: 24cqw 24cqw; left: 3.81cqw; row-gap: 0.6cqw; top: 38.6cqw; }
+.bcardx-phones[data-columns] > div { align-items: flex-start; border-top: 0.19cqw solid #bac5d4; flex-direction: column; gap: 0.35cqw; height: auto; padding-top: 0.55cqw; }
+.bcardx-phones[data-columns] dt { color: #64748b; font-size: 1.6cqw; font-weight: 800; letter-spacing: 0.04em; line-height: 1; text-transform: uppercase; }
+.bcardx-phones[data-columns] dd { font-size: 2.5cqw; font-variant-numeric: tabular-nums; line-height: 1; }
 .bcardx-qr { background: #fff; border-radius: 1.05cqw; box-sizing: border-box; height: 17.9cqw; left: 55.62cqw; padding: 0.57cqw; position: absolute; top: 27.43cqw; width: 17.9cqw; }
 .bcardx-scan { font-size: 2.48cqw; font-weight: 700; left: 55.62cqw; line-height: 1.15; position: absolute; text-align: center; top: 46.05cqw; width: 17.9cqw; }
 .bcardx-back .bcardx-logo { height: 23.33cqw; left: 3.24cqw; top: 9.33cqw; width: 23.33cqw; }
@@ -17570,6 +17583,12 @@ html.bcard-embed-root .console-lang-toggle { display: none !important; }
 /* A card being drawn as a picture (business-card-snapshot.tsx): print size, off screen, both sides. */
 .bcard-snap { box-sizing: border-box; display: grid; left: -20000px; pointer-events: none; position: fixed; top: 0; }
 .bcard-snap .bcard-face { box-shadow: none; }
+/* The console's editor for a person's extra numbers. */
+.bcard-phones-edit { margin-top: 0; }
+.bcard-phones-own { color: var(--muted); font-size: 13px; margin: 0; }
+.bcard-phone-row { align-items: end; display: grid; gap: 8px; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr) auto; }
+.bcard-phone-error { color: var(--danger, #b42318); font-weight: 600; }
+@media (max-width: 420px) { .bcard-phone-row { grid-template-columns: minmax(0, 1fr) auto; } .bcard-phone-row > .lst-field:first-child { grid-column: 1 / -1; } }
 .bcard-foot { color: var(--muted); font-size: 12px; margin: 4px 0 0; text-align: center; }
 .bcard-foot a { color: inherit; }
 

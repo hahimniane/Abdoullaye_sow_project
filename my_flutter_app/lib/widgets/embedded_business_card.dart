@@ -28,7 +28,13 @@ class EmbeddedBusinessCard extends StatefulWidget {
     this.timeout = cardEmbedReadyTimeout,
     this.pictures,
     this.pictureTimeout = cardEmbedImageTimeout,
+    this.revision = 0,
   });
+
+  /// Bump it to load the page again for the same card (after the card's
+  /// content changed on the server, e.g. the person saved new numbers); the
+  /// page otherwise reloads only when the card's code or the language does.
+  final int revision;
 
   /// Answers [CardPictures.capture] while this card is on screen.
   final CardPictures? pictures;
@@ -95,7 +101,9 @@ class _EmbeddedBusinessCardState extends State<EmbeddedBusinessCard> {
       if (identical(old.pictures?._card, this)) old.pictures?._card = null;
       widget.pictures?._card = this;
     }
-    if (old.card.code != widget.card.code) _start();
+    if (old.card.code != widget.card.code || old.revision != widget.revision) {
+      _start();
+    }
   }
 
   Future<Uint8List?> _picture() {

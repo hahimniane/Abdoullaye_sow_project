@@ -178,7 +178,36 @@ card.
   real card is not on screen (loading, or the app's own fallback card), the
   page cannot draw it, or 20 s pass, Share sends the link alone.
 
-## 7. Not built yet
+## 7. Extra numbers
+
+A person's card can carry up to three numbers beyond their own sign-in
+number, each with a short label ("WhatsApp", "Guinea"; 20 characters at
+most). Approved by the owner on 2026-11-08: both the person and whoever
+manages the team can change them.
+
+- **Stored** on `users/{uid}.cardPhones` as `[{label, phone}]`, the number
+  kept as typed once it reads as a real number (`toE164`: ten US digits are
+  US; any other country needs its `+code`). Blank rows and repeats of the
+  person's own number or an earlier row are dropped. Every read goes through
+  the same rule (`cardPersonPhones`), so a profile written any other way
+  cannot put something odd on a card.
+- **Saved** by `businessCards {action: "savePhones", phones, uid?,
+  businessId?}`: no `uid` (or the caller's) is the caller's own, for any team
+  member; another person's needs People (owner, admin, staff with People)
+  and that person on the team. The list is replaced; an empty list clears
+  it. A bad row is refused with `phones_invalid` and `phone_<i>_invalid` /
+  `phone_<i>_needs_country_code`, saving nothing. `list` rows carry
+  `canEditPhones`.
+- **Shown** after the person's own number and before the office: on the
+  card (two numbers keep the approved drawing; three and four keep its rows,
+  closer; five go in two columns, label over number), on the public page
+  (a Call and WhatsApp row each), in Save contact (one `TEL` each, the label
+  as its type), on the Apple pass (back fields) and Google pass (text
+  modules, dropped with the office when the link is too long).
+- **Edited** in the console (Business cards: "Add numbers" / "Edit numbers"
+  on a person's card) and in the app (My card: "Edit my numbers").
+
+## 8. Not built yet
 
 - A print-shop file with bleed.
 - Letting the owner hide a person's own number.

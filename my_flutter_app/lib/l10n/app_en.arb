@@ -11284,6 +11284,86 @@
   "myCardShareFailed": "We could not share your card. Try again.",
   "myCardSaveFailed": "We could not prepare the contact. Try again.",
   "myCardBusinessNotApproved": "Your business is not approved yet.",
+  "myCardEditPhones": "Edit my numbers",
+  "@myCardEditPhones": {
+    "description": "Button on My card that opens the page where a team member adds extra phone numbers to their business card."
+  },
+  "myCardPhonesTitle": "My numbers",
+  "@myCardPhonesTitle": {
+    "description": "Title of the page where a team member edits the extra phone numbers on their card."
+  },
+  "myCardPhonesOwnNote": "Your sign-in number is always on your card",
+  "@myCardPhonesOwnNote": {
+    "description": "Note under the person's own sign-in number, which cannot be edited here."
+  },
+  "myCardPhonesIntro": "Add up to 3 more numbers to show on your card, like WhatsApp or a number abroad.",
+  "@myCardPhonesIntro": {
+    "description": "Short explanation at the top of the edit numbers page."
+  },
+  "myCardPhoneLabelField": "Label",
+  "@myCardPhoneLabelField": {
+    "description": "Field label for the short name of an extra number (WhatsApp, Mobile)."
+  },
+  "myCardPhoneLabelHint": "Optional, like Guinea",
+  "@myCardPhoneLabelHint": {
+    "description": "Hint inside the label field of an extra number."
+  },
+  "myCardPhoneNumberField": "Phone number",
+  "@myCardPhoneNumberField": {
+    "description": "Field label for an extra phone number."
+  },
+  "myCardPhoneChipWhatsApp": "WhatsApp",
+  "@myCardPhoneChipWhatsApp": {
+    "description": "Quick-pick label for an extra number; fills the label field."
+  },
+  "myCardPhoneChipMobile": "Mobile",
+  "@myCardPhoneChipMobile": {
+    "description": "Quick-pick label for an extra number; fills the label field."
+  },
+  "myCardPhoneChipHome": "Home",
+  "@myCardPhoneChipHome": {
+    "description": "Quick-pick label for an extra number; fills the label field."
+  },
+  "myCardPhoneChipWork": "Work",
+  "@myCardPhoneChipWork": {
+    "description": "Quick-pick label for an extra number; fills the label field."
+  },
+  "myCardPhoneDefaultLabel": "Phone",
+  "@myCardPhoneDefaultLabel": {
+    "description": "Label printed on the card for an extra number that has no label."
+  },
+  "myCardPhoneRemove": "Remove this number",
+  "@myCardPhoneRemove": {
+    "description": "Tooltip and accessibility label of the button that removes an extra number row."
+  },
+  "myCardPhoneAdd": "Add a number",
+  "@myCardPhoneAdd": {
+    "description": "Button that adds another extra number row (up to 3)."
+  },
+  "myCardPhonesSave": "Save",
+  "@myCardPhonesSave": {
+    "description": "Button that saves the extra numbers."
+  },
+  "myCardPhoneInvalid": "This is not a phone number",
+  "@myCardPhoneInvalid": {
+    "description": "Error under an extra number the server or the app could not read as a phone number."
+  },
+  "myCardPhoneNeedsCountryCode": "Add the country code, like +224",
+  "@myCardPhoneNeedsCountryCode": {
+    "description": "Error under a non-US number typed without a country code."
+  },
+  "myCardPhonesTooMany": "You can add up to 3 numbers.",
+  "@myCardPhonesTooMany": {
+    "description": "Error when more than 3 extra numbers were sent."
+  },
+  "myCardPhonesSaved": "Your numbers are saved.",
+  "@myCardPhonesSaved": {
+    "description": "Confirmation after the extra numbers were saved."
+  },
+  "myCardPhonesSaveFailed": "We could not save your numbers. Try again.",
+  "@myCardPhonesSaveFailed": {
+    "description": "Error when saving the extra numbers failed."
+  },
   "labelPrinterModelGeneric": "Other 4 × 6 in Bluetooth printer (beta)",
   "labelPrinterKindTitle": "What kind of printer is this?",
   "labelPrinterKindHint": "The app does not know this printer by its name. Choose how it should talk to it.",

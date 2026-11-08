@@ -19375,6 +19375,69 @@ class AppLocalizationsEn extends AppLocalizations {
   String get myCardBusinessNotApproved => 'Your business is not approved yet.';
 
   @override
+  String get myCardEditPhones => 'Edit my numbers';
+
+  @override
+  String get myCardPhonesTitle => 'My numbers';
+
+  @override
+  String get myCardPhonesOwnNote =>
+      'Your sign-in number is always on your card';
+
+  @override
+  String get myCardPhonesIntro =>
+      'Add up to 3 more numbers to show on your card, like WhatsApp or a number abroad.';
+
+  @override
+  String get myCardPhoneLabelField => 'Label';
+
+  @override
+  String get myCardPhoneLabelHint => 'Optional, like Guinea';
+
+  @override
+  String get myCardPhoneNumberField => 'Phone number';
+
+  @override
+  String get myCardPhoneChipWhatsApp => 'WhatsApp';
+
+  @override
+  String get myCardPhoneChipMobile => 'Mobile';
+
+  @override
+  String get myCardPhoneChipHome => 'Home';
+
+  @override
+  String get myCardPhoneChipWork => 'Work';
+
+  @override
+  String get myCardPhoneDefaultLabel => 'Phone';
+
+  @override
+  String get myCardPhoneRemove => 'Remove this number';
+
+  @override
+  String get myCardPhoneAdd => 'Add a number';
+
+  @override
+  String get myCardPhonesSave => 'Save';
+
+  @override
+  String get myCardPhoneInvalid => 'This is not a phone number';
+
+  @override
+  String get myCardPhoneNeedsCountryCode => 'Add the country code, like +224';
+
+  @override
+  String get myCardPhonesTooMany => 'You can add up to 3 numbers.';
+
+  @override
+  String get myCardPhonesSaved => 'Your numbers are saved.';
+
+  @override
+  String get myCardPhonesSaveFailed =>
+      'We could not save your numbers. Try again.';
+
+  @override
   String get labelPrinterModelGeneric =>
       'Other 4 × 6 in Bluetooth printer (beta)';
 

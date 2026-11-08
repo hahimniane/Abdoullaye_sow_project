@@ -18,6 +18,7 @@ import '../widgets/business_card_face.dart';
 import '../widgets/card_web_view.dart';
 import '../widgets/embedded_business_card.dart';
 import '../widgets/inventory_widgets.dart';
+import 'my_card_phones_screen.dart';
 
 /// What the My card buttons hand to the phone. Behind a class so a widget
 /// test answers in place of the share sheet, the file system and the
@@ -132,6 +133,10 @@ class _MyCardScreenState extends State<MyCardScreen> {
   /// The real card as a picture, for Share.
   final CardPictures _pictures = CardPictures();
 
+  /// Bumped when the card changed on the server, so the page that shows it
+  /// is loaded again ([EmbeddedBusinessCard.revision]).
+  int _revision = 0;
+
   /// Bumped by every load, so an answer that arrives after a newer load
   /// started is ignored.
   int _generation = 0;
@@ -224,6 +229,29 @@ class _MyCardScreenState extends State<MyCardScreen> {
     } catch (_) {
       if (mounted) showErrorSnackBar(context, l10n.myCardSaveFailed);
     }
+  }
+
+  /// "Edit my numbers": the page for the person's extra numbers. When it
+  /// saves, the card shows the saved numbers at once, the real card page is
+  /// loaded again and the card is read from the server again.
+  Future<void> _editPhones(MyCard card) async {
+    final l10n = AppLocalizations.of(context)!;
+    final saved = await Navigator.of(context).push<List<CardPhone>>(
+      MaterialPageRoute(
+        builder: (_) => MyCardPhonesScreen(
+          service: widget.service,
+          ownPhone: card.card.person?.phone ?? '',
+          initial: card.card.person?.phones ?? const [],
+        ),
+      ),
+    );
+    if (saved == null || !mounted) return;
+    setState(() {
+      _card = _card?.withPhones(saved);
+      _revision++;
+    });
+    showSuccessSnackBar(context, l10n.myCardPhonesSaved);
+    unawaited(_load());
   }
 
   Future<void> _addToWallet(String platform) async {
@@ -319,6 +347,7 @@ class _MyCardScreenState extends State<MyCardScreen> {
         card: card.card,
         factory: widget.cardViewFactory,
         pictures: _pictures,
+        revision: _revision,
       ),
       const SizedBox(height: AppSpacing.xl),
       Center(
@@ -364,6 +393,17 @@ class _MyCardScreenState extends State<MyCardScreen> {
             label: l10n.myCardSaveContact,
             onPressed: () => _saveContact(card),
           ),
+          // Only a person has numbers of their own; a business's own card
+          // (no person) has none to edit.
+          if (card.card.person != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            OutlinedButton.icon(
+              key: const Key('my-card-edit-phones'),
+              onPressed: () => _editPhones(card),
+              icon: const Icon(Icons.phone_outlined),
+              label: Text(l10n.myCardEditPhones),
+            ),
+          ],
           if (ios && card.appleWallet) ...[
             const SizedBox(height: AppSpacing.sm),
             _WalletButton(

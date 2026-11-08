@@ -28,6 +28,7 @@ import {
   cardTitle,
   normalizeCardCode,
   readBusinessCard,
+  readCardPhones,
   readCardSettings,
   vcardFileName,
   vcardText,
@@ -43,7 +44,7 @@ import { serviceEntryApplies } from "./console-routing.ts";
 const sample = (): BusinessCardData => ({
   code: "K7M4P2XB",
   link: "https://laawoldigital.com/c/K7M4P2XB",
-  person: { name: "Awa Camara", phone: "+13475550142" },
+  person: { name: "Awa Camara", phone: "+13475550142", phones: [] },
   business: {
     businessId: "sahel_auto_sales",
     name: "Sahel Auto Sales",
@@ -224,7 +225,7 @@ test("a business's own card is saved as a company, and odd characters cannot bre
   assert.equal(vcardFileName(card), "diallo-freres-sarl.vcf");
   // One number, not the same number twice.
   const same = sample();
-  same.person = { name: "Yao", phone: "(347) 555-0100" };
+  same.person = { name: "Yao", phone: "(347) 555-0100", phones: [] };
   assert.equal(vcardText(same).match(/TEL;/g)?.length, 1);
 });
 
@@ -256,7 +257,7 @@ test("whatever the server sends, a card still draws", () => {
   assert.equal(readBusinessCard({ code: "nope", business: {} }), null);
   const card = readBusinessCard({
     code: "k7m4p2xb",
-    person: { name: "", phone: "+1347" },
+    person: { name: "", phone: "+1347", phones: [] },
     business: { name: "Sahel Auto Sales", services: ["carSales", 7] },
     settings: { style: "signature", color: "navy", photo: "car" },
   });
@@ -286,4 +287,26 @@ test("the embed form of the card page is only on with embed=1, and names its lan
   assert.deepEqual(cardEmbedFromSearch("?lang=fr"), { embed: false, lang: null });
   assert.equal(cardFlipLabel("fr"), "Retourner la carte");
   assert.equal(cardFlipLabel("en"), "Turn the card over");
+});
+
+test("a person's extra numbers are read safely and saved to the contact under their labels", () => {
+  assert.deepEqual(readCardPhones(null), []);
+  assert.deepEqual(readCardPhones([null, 7, { label: "x" }, { label: "  WhatsApp  ", phone: " (929) 555-0101 " }]), [
+    { label: "WhatsApp", phone: "(929) 555-0101" },
+  ]);
+  const four = ["1", "2", "3", "4"].map((n) => ({ label: n, phone: `+1929555010${n}` }));
+  assert.equal(readCardPhones(four).length, 3);
+  const card = readBusinessCard({
+    code: "K7M4P2XB",
+    person: { name: "Awa Camara", phone: "+13475550142", phones: [{ label: "Home; 2", phone: "929 555 0101" }, { label: "", phone: "+224 621 23 45 67" }] },
+    business: { name: "Sahel", phone: "+13475550100" },
+  });
+  assert.ok(card);
+  const text = vcardText(card);
+  assert.ok(text.includes('TEL;TYPE="Home 2":+19295550101\r\n'), text);
+  assert.ok(text.includes("TEL;TYPE=VOICE:+224621234567\r\n"), text);
+  // The person's own number first, the office last.
+  const tels = text.split("\r\n").filter((line) => line.startsWith("TEL"));
+  assert.equal(tels[0], "TEL;TYPE=CELL:+13475550142");
+  assert.equal(tels[tels.length - 1], "TEL;TYPE=WORK:+13475550100");
 });

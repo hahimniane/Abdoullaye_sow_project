@@ -2,13 +2,15 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, Copy, ExternalLink, Printer, RefreshCw, X } from "lucide-react";
+import { Check, Copy, ExternalLink, Phone, Plus, Printer, RefreshCw, Trash2, X } from "lucide-react";
 
 import { BusinessCardFace } from "@/components/business-card-face";
 import { ShareCardButton } from "@/components/business-card-snapshot";
 import {
   CARD_ACCENTS,
   CARD_COLORS,
+  CARD_EXTRA_PHONES_MAX,
+  CARD_PHONE_LABEL_MAX,
   CARD_PHOTOS,
   CARD_SERVICE_MAX,
   CARD_SERVICES_MAX,
@@ -20,6 +22,7 @@ import {
   type BusinessCardRow,
   type CardAccent,
   type CardColor,
+  type CardPhone,
   type CardPhoto,
   type CardSettings,
   type CardStyle,
@@ -28,6 +31,7 @@ import {
   cardSaveReasons,
   listBusinessCards,
   saveBusinessCardSettings,
+  saveCardPhones,
   type BusinessCardList,
 } from "@/lib/business-card-client";
 import { currentWebLanguage } from "@/lib/language";
@@ -116,7 +120,30 @@ export function BusinessCardsPanel({ businessId, previewMode = false }: Props) {
           )}
           <div className="bcard-grid">
             {load.list.cards.map((card) => (
-              <CardItem card={card} key={card.code} lang={lang} onPrint={() => setPrinting(card)} />
+              <CardItem
+                businessId={businessId}
+                card={card}
+                key={card.code}
+                lang={lang}
+                onPhonesSaved={(phones) =>
+                  setLoad((now) =>
+                    now.phase === "ready"
+                      ? {
+                          phase: "ready",
+                          list: {
+                            ...now.list,
+                            cards: now.list.cards.map((row) =>
+                              row.code === card.code && row.person
+                                ? { ...row, person: { ...row.person, phones } }
+                                : row,
+                            ),
+                          },
+                        }
+                      : now,
+                  )
+                }
+                onPrint={() => setPrinting(card)}
+              />
             ))}
           </div>
         </>
@@ -127,15 +154,20 @@ export function BusinessCardsPanel({ businessId, previewMode = false }: Props) {
 }
 
 function CardItem({
+  businessId,
   card,
   lang,
   onPrint,
+  onPhonesSaved,
 }: {
+  businessId: string;
   card: BusinessCardRow;
   lang: "en" | "fr";
   onPrint: () => void;
+  onPhonesSaved: (phones: CardPhone[]) => void;
 }) {
   const [copied, setCopied] = useState(false);
+  const [editingPhones, setEditingPhones] = useState(false);
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(card.link);
@@ -166,8 +198,169 @@ function CardItem({
         <button className="secondary-button" onClick={onPrint} type="button">
           <Printer aria-hidden="true" size={16} /> Print cards
         </button>
+        {card.canEditPhones && card.person && !editingPhones && (
+          <button className="secondary-button" onClick={() => setEditingPhones(true)} type="button">
+            <Phone aria-hidden="true" size={16} /> {card.person.phones.length ? "Edit numbers" : "Add numbers"}
+          </button>
+        )}
       </div>
+      {editingPhones && card.person && (
+        <CardPhonesEditor
+          businessId={businessId}
+          initial={card.person.phones}
+          mine={card.mine}
+          onClose={() => setEditingPhones(false)}
+          onSaved={(phones) => {
+            onPhonesSaved(phones);
+            setEditingPhones(false);
+          }}
+          ownPhone={cardDial(card.person.phone).display}
+          uid={card.uid}
+        />
+      )}
     </article>
+  );
+}
+
+const PHONE_LABELS = ["WhatsApp", "Mobile", "Home", "Work"];
+
+/** What a refused row says (business_cards.js cleanCardPhonesInput). */
+function phoneRowErrors(reasons: string[]): Record<number, string> {
+  const errors: Record<number, string> = {};
+  for (const reason of reasons) {
+    const match = /^phone_(\d+)_(invalid|needs_country_code)$/.exec(reason);
+    if (!match) continue;
+    errors[Number(match[1])] =
+      match[2] === "needs_country_code" ? "Add the country code, like +224" : "This is not a phone number";
+  }
+  return errors;
+}
+
+/**
+ * A person's extra numbers (docs/BUSINESS_CARDS.md §7): up to three, each
+ * with a label, under their own number. The person edits their own; whoever
+ * manages the team edits anyone's. Saving replaces the list.
+ */
+function CardPhonesEditor({
+  businessId,
+  uid,
+  mine,
+  ownPhone,
+  initial,
+  onClose,
+  onSaved,
+}: {
+  businessId: string;
+  uid: string;
+  mine: boolean;
+  ownPhone: string;
+  initial: CardPhone[];
+  onClose: () => void;
+  onSaved: (phones: CardPhone[]) => void;
+}) {
+  const [rows, setRows] = useState<CardPhone[]>(() =>
+    initial.length ? initial.map((row) => ({ ...row })) : [{ label: "", phone: "" }],
+  );
+  const [saving, setSaving] = useState(false);
+  const [rowErrors, setRowErrors] = useState<Record<number, string>>({});
+  const [failed, setFailed] = useState("");
+  const set = (index: number, patch: Partial<CardPhone>) => {
+    setRows(rows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+    setRowErrors({ ...rowErrors, [index]: "" });
+    setFailed("");
+  };
+  const save = async () => {
+    if (saving) return;
+    setSaving(true);
+    setFailed("");
+    try {
+      const phones = await saveCardPhones(
+        businessId,
+        uid,
+        rows.map((row) => ({ label: row.label.trim(), phone: row.phone.trim() })),
+      );
+      onSaved(phones);
+    } catch (error) {
+      const errors = phoneRowErrors(cardSaveReasons(error));
+      setRowErrors(errors);
+      setFailed(Object.keys(errors).length ? "" : "The numbers were not saved. Try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <fieldset className="lst-fieldset bcard-phones-edit">
+      <legend>{mine ? "Your numbers on the card" : "Numbers on this card"}</legend>
+      {ownPhone && (
+        <p className="bcard-phones-own">
+          {mine ? "Your sign-in number is always on the card:" : "Their sign-in number is always on the card:"}{" "}
+          <b data-no-translate>{ownPhone}</b>
+        </p>
+      )}
+      {rows.map((row, index) => (
+        <div className="bcard-phone-row" key={index}>
+          <label className="lst-field">
+            <span>Label</span>
+            <input
+              list="bcard-phone-labels"
+              maxLength={CARD_PHONE_LABEL_MAX}
+              onChange={(event) => set(index, { label: event.target.value })}
+              placeholder="WhatsApp"
+              value={row.label}
+            />
+          </label>
+          <label className="lst-field">
+            <span>Number</span>
+            <input
+              aria-invalid={Boolean(rowErrors[index]) || undefined}
+              autoComplete="tel"
+              inputMode="tel"
+              onChange={(event) => set(index, { phone: event.target.value })}
+              placeholder="+224 621 23 45 67"
+              type="tel"
+              value={row.phone}
+            />
+            {rowErrors[index] && <small className="bcard-phone-error">{rowErrors[index]}</small>}
+          </label>
+          <button
+            aria-label="Remove this number"
+            className="icon-button"
+            onClick={() => {
+              setRows(rows.filter((_, i) => i !== index));
+              setRowErrors({});
+            }}
+            title="Remove this number"
+            type="button"
+          >
+            <Trash2 aria-hidden="true" size={16} />
+          </button>
+        </div>
+      ))}
+      <datalist id="bcard-phone-labels">
+        {PHONE_LABELS.map((label) => (
+          <option key={label} value={label} />
+        ))}
+      </datalist>
+      {rows.length < CARD_EXTRA_PHONES_MAX && (
+        <button
+          className="secondary-button"
+          onClick={() => setRows([...rows, { label: "", phone: "" }])}
+          type="button"
+        >
+          <Plus aria-hidden="true" size={16} /> Add a number
+        </button>
+      )}
+      <small>A number from outside the US needs its country code, like +224.</small>
+      {failed && <p className="error-box">{failed}</p>}
+      <div className="bcard-item-acts">
+        <button className="primary-button" disabled={saving} onClick={() => void save()} type="button">
+          {saving ? "Saving…" : "Save numbers"}
+        </button>
+        <button className="secondary-button" disabled={saving} onClick={onClose} type="button">
+          Cancel
+        </button>
+      </div>
+    </fieldset>
   );
 }
 

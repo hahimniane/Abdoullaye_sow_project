@@ -432,6 +432,19 @@ describe("the Google Wallet link", () => {
     assert.ok(!object.textModulesData.some((m) => m.id === "office"));
   });
 
+  it("lists a person's extra numbers, each under its label", () => {
+    const card = cards.publicCard({code: CODE, businessId: "biz-1",
+      business: rawBusiness, services: [], user: {fullName: "awa camara",
+        phone: "+13475550142", role: "staff", cardPhones: [
+          {label: "WhatsApp", phone: "+13475550143"},
+          {label: "", phone: "+224 621 23 45 67"}]}});
+    const {claims} = decode(wallet.buildGoogleSaveUrl(google, card));
+    const modules = claims.payload.genericObjects[0].textModulesData;
+    assert.deepEqual(modules.slice(0, 2), [
+      {id: "phone1", header: "WhatsApp", body: "(347) 555-0143"},
+      {id: "phone2", header: "Phone", body: "+224 621 23 45 67"}]);
+  });
+
   it("uses the business's own logo when the link has room", () => {
     const logoUrl = "https://firebasestorage.googleapis.com/v0/b/x/o/l.png";
     const card = cards.publicCard({code: CODE, businessId: "b",
@@ -462,5 +475,31 @@ describe("the Google Wallet link", () => {
         // The card page the QR opens has everything that was dropped.
         assert.ok(!object.textModulesData ||
           object.textModulesData.length < 4);
+      });
+});
+
+describe("extra numbers on the Apple pass", () => {
+  it("puts each on the back, as a number a tap dials", () => {
+    const card = cards.publicCard({code: CODE, businessId: "biz-1",
+      business: rawBusiness, services: [], user: {fullName: "awa camara",
+        phone: "+13475550142", role: "staff",
+        cardPhones: [{label: "Home", phone: "3475550144"}]}});
+    const model = wallet.walletCardModel(card);
+    assert.deepEqual(model.extras, [{label: "Home", value: "(347) 555-0144"}]);
+    const {fields} = wallet.applePassLayout(model, {passTypeId: "pass.x"});
+    const back = fields.back.find((field) => field.key === "phone1");
+    assert.equal(back.label, "Home");
+    assert.equal(back.value, "(347) 555-0144");
+    assert.deepEqual(back.dataDetectorTypes,
+        ["PKDataDetectorTypePhoneNumber"]);
+    // The front keeps Direct and Office only.
+    assert.deepEqual(fields.secondary.map((field) => field.key),
+        ["direct", "office"]);
+  });
+
+  it("has none for a person with none, or for the business's own card",
+      () => {
+        assert.deepEqual(wallet.walletCardModel(personCard()).extras, []);
+        assert.deepEqual(wallet.walletCardModel(businessCard()).extras, []);
       });
 });

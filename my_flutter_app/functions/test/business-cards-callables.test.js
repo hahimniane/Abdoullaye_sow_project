@@ -120,7 +120,7 @@ describe("business cards", () => {
         const answer = await scan(ownerCards[1].code.toLowerCase());
         assert.equal(answer.found, true);
         assert.deepEqual(answer.card.person,
-            {name: "Awa Camara", phone: "+13475550142"});
+            {name: "Awa Camara", phone: "+13475550142", phones: []});
         assert.equal(answer.card.business.name, "Sahel Auto Sales");
         assert.equal(answer.card.business.phone, "+13475550100");
         assert.deepEqual(answer.card.business.services,
@@ -317,7 +317,7 @@ describe("wallet passes", () => {
     assert.equal(answer.card.code, answer.code);
     assert.equal(answer.card.link, answer.url);
     assert.deepEqual(answer.card.person,
-        {name: "Ibrahima Sy", phone: "+13475550182"});
+        {name: "Ibrahima Sy", phone: "+13475550182", phones: []});
     assert.equal(answer.card.business.name, "Wallet Test Motors");
     assert.equal(answer.card.settings.color, "teal");
     staffCode = answer.code;
@@ -607,5 +607,101 @@ describe("the card logo for the Share picture", () => {
     };
     assert.equal((await logo(code)).statusCode, 404);
     assert.equal(fetched, false);
+  });
+});
+
+describe("a person's extra numbers", () => {
+  // A team of its own: the first suite has sent some of its people away.
+  const BIZ = "phones-test-biz";
+  const OWNER = "phones-test-owner";
+  const PEOPLE = "phones-test-people";
+  const STAFF = "phones-test-staff";
+  const save = (data, uid) => call({action: "savePhones", ...data}, uid);
+  const userPhones = async (uid) =>
+    (await db.collection("users").doc(uid).get()).data().cardPhones;
+
+  before(async () => {
+    await Promise.all([
+      db.collection("businesses").doc(BIZ).set({name: "Phone Test Motors",
+        status: "approved", ownerUid: OWNER, phone: "+13475550190",
+        enabledServices: ["carSales"]}),
+      db.collection("users").doc(OWNER).set({role: "businessOwner",
+        businessId: BIZ, fullName: "Binta Sow", phone: "+13475550191"}),
+      db.collection("users").doc(PEOPLE).set({role: "staff",
+        businessId: BIZ, businessPermissions: ["people"],
+        fullName: "Coumba Ba", phone: "+13475550192"}),
+      db.collection("users").doc(STAFF).set({role: "staff",
+        businessId: BIZ, businessPermissions: ["parking"],
+        fullName: "Demba Fall", phone: "+13475550193"}),
+    ]);
+  });
+
+  it("lets a team member save their own, and shows them on the card",
+      async () => {
+        const saved = await save({phones: [
+          {label: "WhatsApp", phone: "(929) 555-0101"},
+          {label: "Guinea", phone: "+224 621 23 45 67"}]}, STAFF);
+        assert.deepEqual(saved, {version: 1, uid: STAFF, phones: [
+          {label: "WhatsApp", phone: "(929) 555-0101"},
+          {label: "Guinea", phone: "+224 621 23 45 67"}]});
+        const mine = await call({action: "mine"}, STAFF);
+        assert.deepEqual(mine.card.person.phones, saved.phones);
+        const scanned = await scan(mine.code);
+        assert.deepEqual(scanned.card.person.phones, saved.phones);
+      });
+
+  it("lets the owner and staff with People change a colleague's",
+      async () => {
+        await save({businessId: BIZ, uid: STAFF,
+          phones: [{label: "Home", phone: "929 555 0102"}]}, OWNER);
+        assert.deepEqual(await userPhones(STAFF),
+            [{label: "Home", phone: "929 555 0102"}]);
+        await save({businessId: BIZ, uid: OWNER,
+          phones: [{label: "Shop", phone: "929 555 0103"}]}, PEOPLE);
+        assert.deepEqual(await userPhones(OWNER),
+            [{label: "Shop", phone: "929 555 0103"}]);
+      });
+
+  it("keeps everyone else from changing someone's numbers", async () => {
+    await assert.rejects(save({businessId: BIZ, uid: OWNER,
+      phones: [{label: "x", phone: "929 555 0104"}]}, STAFF),
+    refused("permission-denied"));
+    await assert.rejects(save({businessId: BIZ, uid: STAFF,
+      phones: [{label: "x", phone: "929 555 0104"}]}, OUTSIDER),
+    refused("permission-denied"));
+    await assert.rejects(save({businessId: BIZ, uid: OUTSIDER,
+      phones: [{label: "x", phone: "929 555 0104"}]}, OWNER),
+    refused("permission-denied"));
+    await assert.rejects(save({phones: []}), refused("unauthenticated"));
+    assert.deepEqual(await userPhones(OWNER),
+        [{label: "Shop", phone: "929 555 0103"}]);
+  });
+
+  it("refuses a bad number and says which row, saving nothing", async () => {
+    await assert.rejects(save({phones: [
+      {label: "ok", phone: "929 555 0105"},
+      {label: "bad", phone: "0621234567"}]}, STAFF), (error) => {
+      assert.equal(error.code, "invalid-argument");
+      assert.equal(error.details.reason, "phones_invalid");
+      assert.deepEqual(error.details.reasons,
+          ["phone_1_needs_country_code"]);
+      return true;
+    });
+    assert.deepEqual(await userPhones(STAFF),
+        [{label: "Home", phone: "929 555 0102"}]);
+  });
+
+  it("clears them with an empty list", async () => {
+    await save({phones: []}, STAFF);
+    assert.deepEqual(await userPhones(STAFF), []);
+  });
+
+  it("tells the console whose numbers the caller may change", async () => {
+    const owner = await call({action: "list", businessId: BIZ}, OWNER);
+    assert.deepEqual(owner.cards.map((card) => card.canEditPhones),
+        [false, true, true, true]);
+    const staff = await call({action: "list", businessId: BIZ}, STAFF);
+    assert.deepEqual(staff.cards.map((card) => card.canEditPhones),
+        [false, true]);
   });
 });

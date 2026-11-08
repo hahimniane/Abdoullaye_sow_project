@@ -186,13 +186,14 @@ function saveContact(card: BusinessCardData) {
   window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
-function DialRow({ name, phone }: { name: string; phone: string }) {
+function DialRow({ name, phone, plain = false }: { name: string; phone: string; plain?: boolean }) {
   const dial = cardDial(phone);
   if (!dial.tel) return null;
   return (
     <div className="bcard-row">
       <div>
-        <b data-no-translate>{name}</b>
+        {/* A name or a label typed by the business is never translated; the word "Phone" is. */}
+        {plain ? <b>{name}</b> : <b data-no-translate>{name}</b>}
         <small data-no-translate>{dial.display}</small>
       </div>
       <div className="bcard-acts">
@@ -258,6 +259,15 @@ function Card({
       <section className="panel">
         <h2 className="bcard-list-label">Call or message</h2>
         {person && <DialRow name={person.name} phone={person.phone} />}
+        {person?.phones
+          .filter((row) => cardDial(row.phone).tel !== cardDial(person.phone).tel)
+          .map((row, index) =>
+            row.label ? (
+              <DialRow key={index} name={row.label} phone={row.phone} />
+            ) : (
+              <DialRow key={index} name="Phone" phone={row.phone} plain />
+            ),
+          )}
         {!sameNumber && <DialRow name={business.name} phone={business.phone} />}
       </section>
       {(business.requestSlug || ships || site) && (

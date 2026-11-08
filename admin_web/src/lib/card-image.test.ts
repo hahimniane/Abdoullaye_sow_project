@@ -16,7 +16,7 @@ import {
 const sample = (): BusinessCardData => ({
   code: "K7M4P2XB",
   link: "https://laawoldigital.com/c/K7M4P2XB",
-  person: { name: "Awa Camara", phone: "+13475550142" },
+  person: { name: "Awa Camara", phone: "+13475550142", phones: [] },
   business: {
     businessId: "sahel_auto_sales",
     name: "Sahel Auto Sales",
@@ -46,9 +46,9 @@ test("the file is named after the person, in plain letters", () => {
   assert.equal(cardImageFileName(sample()), "awa-camara-card.jpg");
   const business = { ...sample(), person: null };
   assert.equal(cardImageFileName(business), "sahel-auto-sales-card.jpg");
-  const accents = { ...sample(), person: { name: "Aïssatou Ndiaye-Diallo", phone: "" } };
+  const accents = { ...sample(), person: { name: "Aïssatou Ndiaye-Diallo", phone: "", phones: [] } };
   assert.equal(cardImageFileName(accents), "aissatou-ndiaye-diallo-card.jpg");
-  const empty = { ...sample(), person: { name: "!!!", phone: "" } };
+  const empty = { ...sample(), person: { name: "!!!", phone: "", phones: [] } };
   assert.equal(cardImageFileName(empty), "business-card.jpg");
 });
 

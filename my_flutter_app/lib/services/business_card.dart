@@ -138,11 +138,70 @@ class CardSettings {
   }
 }
 
+/// The most extra numbers a person may add to their card.
+const int cardPhonesMax = 3;
+
+/// The longest label of an extra number ("WhatsApp", "Guinea").
+const int cardPhoneLabelMax = 20;
+
+/// One extra number on a person's card: a short [label] the person typed
+/// (may be '') and the [phone] as typed, e.g. `(929) 555-0101` or
+/// `+224 621 23 45 67`. Show it with [cardPhoneDisplay]; a blank label is
+/// worded by the screen ("Phone").
+class CardPhone {
+  const CardPhone({this.label = '', required this.phone});
+
+  final String label;
+  final String phone;
+
+  /// A row from the server, or null when it holds no usable number.
+  static CardPhone? fromCallable(Object? raw) {
+    final source = callableMap(raw);
+    final phone = _text(source['phone'], 40);
+    if (cardPhoneDial(phone).isEmpty) return null;
+    return CardPhone(
+      label: _text(source['label'], cardPhoneLabelMax),
+      phone: phone,
+    );
+  }
+
+  /// The extras of a card, from whatever the server sent: a missing or
+  /// garbled list is no extras (an older server has none), unusable rows are
+  /// skipped, and at most [cardPhonesMax] are kept.
+  static List<CardPhone> listFromCallable(Object? raw) => [
+    if (raw is List)
+      for (final row in raw) ?CardPhone.fromCallable(row),
+  ].take(cardPhonesMax).toList(growable: false);
+
+  /// What `savePhones` sends.
+  Map<String, Object?> toCallable() => {'label': label, 'phone': phone};
+
+  @override
+  bool operator ==(Object other) =>
+      other is CardPhone && other.label == label && other.phone == phone;
+
+  @override
+  int get hashCode => Object.hash(label, phone);
+
+  @override
+  String toString() => 'CardPhone($label, $phone)';
+}
+
 class CardPerson {
-  const CardPerson({required this.name, this.phone = ''});
+  const CardPerson({
+    required this.name,
+    this.phone = '',
+    this.phones = const [],
+  });
 
   final String name;
+
+  /// The person's own sign-in number ("Direct").
   final String phone;
+
+  /// The extra numbers the person (or the owner) added, 0 to 3, never
+  /// including [phone].
+  final List<CardPhone> phones;
 }
 
 class CardBusiness {
@@ -189,6 +248,20 @@ class BusinessCardData {
   final CardBusiness business;
   final CardSettings settings;
 
+  /// The same card with the person's extra numbers replaced (after they were
+  /// saved); a business's own card has no person and is returned as is.
+  BusinessCardData withPhones(List<CardPhone> phones) {
+    final p = person;
+    if (p == null) return this;
+    return BusinessCardData(
+      code: code,
+      link: link,
+      person: CardPerson(name: p.name, phone: p.phone, phones: phones),
+      business: business,
+      settings: settings,
+    );
+  }
+
   /// A card from the server, or null when the answer is not one.
   static BusinessCardData? fromCallable(Object? raw, {String url = ''}) {
     final source = callableMap(raw);
@@ -205,7 +278,11 @@ class BusinessCardData {
       link: link,
       person: personName.isEmpty
           ? null
-          : CardPerson(name: personName, phone: _text(p['phone'], 40)),
+          : CardPerson(
+              name: personName,
+              phone: _text(p['phone'], 40),
+              phones: CardPhone.listFromCallable(p['phones']),
+            ),
       business: CardBusiness(
         businessId: _text(b['businessId'], 120),
         name: cardName(b['name']),
@@ -241,6 +318,14 @@ class MyCard {
   final String url;
   final bool appleWallet;
   final bool googleWallet;
+
+  /// The same answer with the person's extra numbers replaced.
+  MyCard withPhones(List<CardPhone> phones) => MyCard(
+    card: card.withPhones(phones),
+    url: url,
+    appleWallet: appleWallet,
+    googleWallet: googleWallet,
+  );
 
   /// Null when the answer is not a card.
   static MyCard? fromCallable(Object? raw) {
@@ -365,18 +450,31 @@ String cardInitials(String name) => _text(name, 80)
     .map((word) => word.substring(0, 1).toUpperCase())
     .join();
 
-/// The two numbers, the person's own first; a business's own card has only
-/// its number. `label` is `direct` or `office`.
-List<({String label, String number})> cardPhoneRows(BusinessCardData card) {
-  final direct = card.person == null
-      ? ''
-      : cardPhoneDisplay(card.person!.phone);
-  final office = cardPhoneDisplay(card.business.phone);
-  return [
-    if (direct.isNotEmpty) (label: 'direct', number: direct),
-    if (office.isNotEmpty && office != direct)
-      (label: 'office', number: office),
-  ];
+/// The numbers a card prints, in order: the person's own ("direct"), each
+/// extra number ("extra", with the person's own [custom] label, '' when blank),
+/// then the business's ("office"). A number already shown above is not shown
+/// again, so the same number never prints twice; a business's own card has
+/// only its number.
+List<({String label, String number, String custom})> cardPhoneRows(
+  BusinessCardData card,
+) {
+  final rows = <({String label, String number, String custom})>[];
+  final seen = <String>{};
+  void add(String label, String phone, [String custom = '']) {
+    final number = cardPhoneDisplay(phone);
+    if (number.isEmpty || !seen.add(cardPhoneDial(phone))) return;
+    rows.add((label: label, number: number, custom: custom));
+  }
+
+  final person = card.person;
+  if (person != null) {
+    add('direct', person.phone);
+    for (final extra in person.phones) {
+      add('extra', extra.phone, extra.label);
+    }
+  }
+  add('office', card.business.phone);
+  return rows;
 }
 
 /// `sahelauto.example` from whatever was typed as the website.
@@ -432,6 +530,22 @@ String cardVcard(BusinessCardData card) {
   final direct = person == null ? '' : cardPhoneDial(person.phone);
   final office = cardPhoneDial(business.phone);
   if (direct.isNotEmpty) lines.add('TEL;TYPE=CELL:$direct');
+  // The person's extra numbers follow their own, the label as the quoted
+  // TYPE, written exactly as the website writes it (admin_web vcardText):
+  // anything that could end the parameter becomes a space.
+  final shown = <String>{
+    if (direct.isNotEmpty) direct,
+    if (office.isNotEmpty) office,
+  };
+  for (final extra in person?.phones ?? const <CardPhone>[]) {
+    final dial = cardPhoneDial(extra.phone);
+    if (dial.isEmpty || !shown.add(dial)) continue;
+    final type = extra.label
+        .replaceAll(RegExp(r'[\\;:,"\r\n]+'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    lines.add('TEL;TYPE=${type.isEmpty ? 'VOICE' : '"$type"'}:$dial');
+  }
   if (office.isNotEmpty && office != direct) {
     lines.add('TEL;TYPE=WORK:$office');
   }

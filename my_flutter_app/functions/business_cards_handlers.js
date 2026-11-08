@@ -231,7 +231,11 @@ function createBusinessCardsHandlers(deps) {
       cards: rows.map((row, index) => cards.publicCard({
         code: codes[index], businessId, business, services, user: row.user,
       })).map((card, index) => ({...card, uid: rows[index].uid,
-        mine: rows[index].uid === uid})),
+        mine: rows[index].uid === uid,
+        // Who may change this person's extra numbers: the person, and
+        // whoever manages the team (savePhones checks it again).
+        canEditPhones: Boolean(rows[index].uid) &&
+          (rows[index].uid === uid || seesAll)})),
     };
   }
 
@@ -401,7 +405,62 @@ function createBusinessCardsHandlers(deps) {
     return {bytes, contentType: bytes[0] === 0x89 ? "image/png" : "image/jpeg"};
   }
 
-  const ACTIONS = {get, list, saveSettings, mine, wallet: walletLink};
+  /**
+   * A person's extra card numbers (docs/BUSINESS_CARDS.md §7): the person
+   * themselves (any member of the team, from My card or the console), or
+   * whoever manages the team's people (the owner, an admin, staff with
+   * People) for anyone on the team. `uid` names the person; left out, the
+   * caller. The whole list is replaced: an empty list clears it.
+   *
+   * @param {object} request The callable request.
+   * @return {Promise<object>} `{version, uid, phones}` as saved.
+   */
+  async function savePhones(request) {
+    const uid = requireAuth(request);
+    await enforceCallableRateLimit(request,
+        {name: "businessCardPhones", limit: 20, windowSeconds: 60});
+    const target = String(request.data?.uid || uid).trim();
+    if (!target || target.includes("/")) {
+      throw refuse("invalid-argument", "uid is invalid", "uid_invalid");
+    }
+    let user;
+    let businessId;
+    if (target === uid) {
+      ({user, businessId} = await ownCard(request, "businessCardPhonesOwn"));
+    } else {
+      businessId = requireBusinessId(request.data);
+      const caller = await requireBusinessManager(uid, businessId);
+      if (!hasBusinessPermission(caller, "people")) {
+        throw refuse("permission-denied",
+            "Only someone who manages the team can change a colleague's " +
+            "numbers.", "people_only");
+      }
+      const business = await loadBusiness(businessId);
+      const snap = await db().collection("users").doc(target).get();
+      user = snap.exists ? snap.data() || {} : null;
+      if (!cards.isTeamMember(user, businessId,
+          String(business.ownerUid || "").trim(), target)) {
+        throw refuse("permission-denied", "This person is not on the team.",
+            "not_team_member");
+      }
+    }
+    const {phones, errors} = cards.cleanCardPhonesInput(
+        request.data?.phones, cards.cardPersonPhone(user));
+    if (errors.length) {
+      throw new HttpsError("invalid-argument",
+          "These numbers cannot be saved.", {reason: "phones_invalid",
+            reasons: errors});
+    }
+    await db().collection("users").doc(target).set({
+      cardPhones: phones, cardPhonesUpdatedAt: now(), cardPhonesUpdatedBy: uid,
+    }, {merge: true});
+    logger.info("business card phones saved", {businessId, uid, target,
+      count: phones.length});
+    return {version: 1, uid: target, phones};
+  }
+
+  const ACTIONS = {get, list, saveSettings, mine, wallet: walletLink,
+    savePhones};
 
   /**
    * @param {object} request The callable request.

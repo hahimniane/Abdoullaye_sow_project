@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_flutter_app/services/business_card.dart';
+import 'package:my_flutter_app/services/business_card_service.dart';
 
 /// The Dart half of business cards (docs/BUSINESS_CARDS.md): the same
 /// phone, name, tagline and vCard rules as `admin_web/src/lib/business-card.ts`,
@@ -193,6 +194,185 @@ void main() {
         _sample(person: {'name': 'Yao', 'phone': '(347) 555-0100'}),
       );
       expect('TEL;'.allMatches(text).length, 1);
+    });
+  });
+
+  group('extra numbers', () {
+    Object person(Object? phones) => {
+      'name': 'Awa Camara',
+      'phone': '+13475550142',
+      'phones': phones,
+    };
+
+    test('a missing or garbled list is no extras', () {
+      for (final bad in [
+        null,
+        'x',
+        7,
+        {'a': 1},
+        <Object?>[],
+        [null, 3, 'x'],
+      ]) {
+        final card = _sample(person: person(bad));
+        expect(card.person!.phones, isEmpty, reason: '$bad');
+      }
+      expect(
+        _sample(
+          person: {'name': 'Awa Camara', 'phone': '+13475550142'},
+        ).person!.phones,
+        isEmpty,
+      );
+    });
+
+    test('reads label and number; unusable rows are skipped; at most 3', () {
+      final phones = _sample(
+        person: person([
+          {'label': '  WhatsApp ', 'phone': '(929) 555-0101'},
+          {'label': 'No number', 'phone': ''},
+          'junk',
+          {'phone': '+224 621 23 45 67'},
+          {
+            'label': 'A very long label indeed, over twenty',
+            'phone': '555 0103',
+          },
+          {'label': 'Fourth', 'phone': '555 0104'},
+          {'label': 'Fifth', 'phone': '555 0105'},
+        ]),
+      ).person!.phones;
+      expect(phones, hasLength(3));
+      expect(
+        phones[0],
+        const CardPhone(label: 'WhatsApp', phone: '(929) 555-0101'),
+      );
+      expect(phones[1], const CardPhone(phone: '+224 621 23 45 67'));
+      expect(phones[2].label.length, lessThanOrEqualTo(cardPhoneLabelMax));
+    });
+
+    test('rows: Direct, each extra with its label, then Office, once each', () {
+      final card = _sample(
+        person: person([
+          {'label': 'WhatsApp', 'phone': '(929) 555-0101'},
+          {'label': '', 'phone': '+224 621 23 45 67'},
+          // The person's own number again: shown once.
+          {'label': 'Same', 'phone': '347 555 0142'},
+        ]),
+      );
+      expect(card.person!.phones, hasLength(3));
+      expect(cardPhoneRows(card).map((r) => (r.label, r.custom, r.number)), [
+        ('direct', '', '(347) 555-0142'),
+        ('extra', 'WhatsApp', '(929) 555-0101'),
+        ('extra', '', '+224 621 23 45 67'),
+        ('office', '', '(347) 555-0100'),
+      ]);
+    });
+
+    test('a card with no extras has the same two rows as before', () {
+      expect(cardPhoneRows(_sample()).map((r) => r.label), [
+        'direct',
+        'office',
+      ]);
+    });
+
+    test('vCard: one TEL per extra after the own number, label as TYPE', () {
+      final card = _sample(
+        person: person([
+          {'label': 'WhatsApp', 'phone': '(929) 555-0101'},
+          {'label': 'Guinea, work; 1', 'phone': '+224 621 23 45 67'},
+          {'label': '', 'phone': '+224 622 34 56 78'},
+        ]),
+      );
+      final lines = cardVcard(card).split('\r\n');
+      final tel = lines.where((l) => l.startsWith('TEL;')).toList();
+      expect(tel, [
+        'TEL;TYPE=CELL:+13475550142',
+        'TEL;TYPE="WhatsApp":+19295550101',
+        'TEL;TYPE="Guinea work 1":+224621234567',
+        'TEL;TYPE=VOICE:+224622345678',
+        'TEL;TYPE=WORK:+13475550100',
+      ]);
+    });
+
+    test('vCard: a label cannot end the parameter', () {
+      final text = cardVcard(
+        _sample(
+          person: person([
+            {'label': 'a:b"c', 'phone': '(929) 555-0101'},
+          ]),
+        ),
+      );
+      expect(text, contains('TEL;TYPE="a b c":+19295550101\r\n'));
+    });
+
+    test('withPhones replaces the extras and keeps the rest', () {
+      final card = _sample().withPhones(const [
+        CardPhone(label: 'Mobile', phone: '(929) 555-0101'),
+      ]);
+      expect(card.person!.phones.single.label, 'Mobile');
+      expect(card.person!.name, 'Awa Camara');
+      expect(card.business.name, 'Sahel Auto Sales');
+      // A business's own card has no person: unchanged.
+      expect(_sample(person: null).withPhones(const []).person, isNull);
+    });
+
+    test('the failure names refused rows by index', () {
+      final failure = parseBusinessCardFailure('invalid-argument', {
+        'reason': 'phones_invalid',
+        'reasons': [
+          'phone_0_invalid',
+          'phone_2_needs_country_code',
+          'too_many_phones',
+          'something_new',
+        ],
+      });
+      expect(failure.phonesInvalid, isTrue);
+      expect(failure.tooManyPhones, isTrue);
+      expect(failure.phoneErrors, {
+        0: cardPhoneInvalid,
+        2: cardPhoneNeedsCountryCode,
+      });
+      final plain = parseBusinessCardFailure('permission-denied', {
+        'reason': 'not_team_member',
+      });
+      expect(plain.phonesInvalid, isFalse);
+      expect(plain.phoneErrors, isEmpty);
+      expect(plain.notTeamMember, isTrue);
+    });
+
+    test('savePhones sends the rows and reads the saved list', () async {
+      final sent = <Map<String, Object?>>[];
+      final service = BusinessCardService(
+        caller: (name, payload) async {
+          sent.add(payload);
+          return {
+            'version': 1,
+            'uid': 'u1',
+            'phones': [
+              {'label': 'Mobile', 'phone': '(929) 555-0101'},
+            ],
+          };
+        },
+      );
+      final saved = await service.savePhones(const [
+        CardPhone(label: 'Mobile', phone: '(929) 555-0101'),
+        CardPhone(label: '', phone: ''),
+      ]);
+      expect(sent.single, {
+        'action': 'savePhones',
+        'phones': [
+          {'label': 'Mobile', 'phone': '(929) 555-0101'},
+          {'label': '', 'phone': ''},
+        ],
+      });
+      expect(saved, [
+        const CardPhone(label: 'Mobile', phone: '(929) 555-0101'),
+      ]);
+    });
+
+    test('savePhones: an answer with no list is a failure', () {
+      final service = BusinessCardService(
+        caller: (name, payload) async => {'version': 1},
+      );
+      expect(service.savePhones(const []), throwsA(isA<BusinessCardFailure>()));
     });
   });
 

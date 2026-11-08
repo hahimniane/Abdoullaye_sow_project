@@ -36,10 +36,14 @@ import {
  * come in the page's language through `lang`.
  */
 
-const WORDS: Record<CardLang, { direct: string; office: string; scan: string; scanLong: string; qr: string }> = {
+const WORDS: Record<
+  CardLang,
+  { direct: string; office: string; phone: string; scan: string; scanLong: string; qr: string }
+> = {
   en: {
     direct: "Direct",
     office: "Office",
+    phone: "Phone",
     scan: "Scan to save",
     scanLong: "Scan to save contact",
     qr: "QR code that opens this card",
@@ -47,6 +51,7 @@ const WORDS: Record<CardLang, { direct: string; office: string; scan: string; sc
   fr: {
     direct: "Direct",
     office: "Bureau",
+    phone: "Tél.",
     scan: "Scannez pour enregistrer",
     scanLong: "Scannez pour enregistrer",
     qr: "Code QR qui ouvre cette carte",
@@ -109,15 +114,33 @@ function Qr({ link, label }: { link: string; label: string }) {
   );
 }
 
-/** The two numbers, the person's own first. A business's own card has only its number. */
+/**
+ * The numbers, the person's own first, then their extra numbers under their
+ * own labels (docs/BUSINESS_CARDS.md §7), then the office. A business's own
+ * card has only its number. The same number is never printed twice.
+ */
 function phoneRows(card: BusinessCardData, lang: CardLang) {
   const rows: Array<{ label: string; number: string }> = [];
-  const direct = card.person ? cardDial(card.person.phone).display : "";
-  const office = cardDial(card.business.phone).display;
-  if (direct) rows.push({ label: WORDS[lang].direct, number: direct });
-  if (office && office !== direct) rows.push({ label: WORDS[lang].office, number: office });
+  const seen = new Set<string>();
+  const add = (label: string, phone: string) => {
+    const dial = cardDial(phone);
+    const key = dial.tel ?? dial.display;
+    if (!dial.display || seen.has(key)) return;
+    seen.add(key);
+    rows.push({ label, number: dial.display });
+  };
+  if (card.person) {
+    add(WORDS[lang].direct, card.person.phone);
+    for (const row of card.person.phones) add(row.label || WORDS[lang].phone, row.phone);
+  }
+  add(WORDS[lang].office, card.business.phone);
   return rows;
 }
+
+/** Up to two numbers keep the drawing the owner approved; three and four
+ * keep its rows, closer together; five go into two columns. */
+const MANY_PHONES = 3;
+const TWO_COLUMNS = 5;
 
 // ---------------------------------------------------------------------------
 // Classic: the plain white card.
@@ -125,6 +148,7 @@ function phoneRows(card: BusinessCardData, lang: CardLang) {
 
 function ClassicFront({ card, lang }: { card: BusinessCardData; lang: CardLang }) {
   const tagline = cardTagline(card, lang);
+  const phones = phoneRows(card, lang);
   return (
     <div className="bcard-face bcard-front">
       <div className="bcard-left">
@@ -137,9 +161,9 @@ function ClassicFront({ card, lang }: { card: BusinessCardData; lang: CardLang }
         </div>
         <div>
           {card.person && <p className="bcard-name">{card.person.name}</p>}
-          <dl className="bcard-phones">
-            {phoneRows(card, lang).map((row) => (
-              <div key={row.label}>
+          <dl className="bcard-phones" data-many={phones.length >= MANY_PHONES || undefined}>
+            {phones.map((row, index) => (
+              <div key={index}>
                 <dt>{row.label}</dt>
                 <dd>{row.number}</dd>
               </div>
@@ -191,6 +215,9 @@ function SignatureFront({ card, lang }: { card: BusinessCardData; lang: CardLang
   const tagline = cardTagline(card, lang);
   const photo = cardPhotoSrc(card.settings.photo);
   const ribbon = card.person?.name || websiteLabel(card.business.website) || card.business.name;
+  const phones = phoneRows(card, lang);
+  const many = phones.length >= MANY_PHONES;
+  const columns = phones.length >= TWO_COLUMNS;
   return (
     <div className="bcard-face bcardx bcardx-front">
       <svg aria-hidden="true" className="bcardx-art" preserveAspectRatio="none" viewBox="0 0 1050 600">
@@ -208,7 +235,8 @@ function SignatureFront({ card, lang }: { card: BusinessCardData; lang: CardLang
         <path d="M0 307H581Q600 307 590 327L562 373Q557 386 538 386H0Z" fill="var(--bcard-color)" />
         <path d="M580 310L599 310 566 390 546 390Z" fill="var(--bcard-accent)" />
         <path d="M292 32V254" stroke="var(--bcard-accent)" strokeWidth="3" />
-        <path d="M40 420H550M40 506H550" stroke="#bac5d4" strokeWidth="2" />
+        {/* The rules between two numbers; the compact layout draws its own. */}
+        {!many && <path d="M40 420H550M40 506H550" stroke="#bac5d4" strokeWidth="2" />}
       </svg>
       {photo && (
         // A stock picture from /public/card-art, sized by the card's own width.
@@ -223,11 +251,18 @@ function SignatureFront({ card, lang }: { card: BusinessCardData; lang: CardLang
       <p className="bcardx-person" style={fitStyle(ribbon, 20, 3.71)}>
         {ribbon}
       </p>
-      <dl className="bcardx-phones">
-        {phoneRows(card, lang).map((row) => (
-          <div key={row.label}>
-            <dt>{row.label}:</dt>
-            <dd>{row.number}</dd>
+      <dl
+        className="bcardx-phones"
+        data-columns={columns || undefined}
+        data-rows={many && !columns ? phones.length : undefined}
+      >
+        {phones.map((row, index) => (
+          <div key={index}>
+            <dt>
+              {row.label}
+              {columns ? "" : ":"}
+            </dt>
+            <dd style={columns ? fitStyle(row.number, 15, 2.5) : undefined}>{row.number}</dd>
           </div>
         ))}
       </dl>

@@ -32678,6 +32678,126 @@ abstract class AppLocalizations {
   /// **'Your business is not approved yet.'**
   String get myCardBusinessNotApproved;
 
+  /// Button on My card that opens the page where a team member adds extra phone numbers to their business card.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit my numbers'**
+  String get myCardEditPhones;
+
+  /// Title of the page where a team member edits the extra phone numbers on their card.
+  ///
+  /// In en, this message translates to:
+  /// **'My numbers'**
+  String get myCardPhonesTitle;
+
+  /// Note under the person's own sign-in number, which cannot be edited here.
+  ///
+  /// In en, this message translates to:
+  /// **'Your sign-in number is always on your card'**
+  String get myCardPhonesOwnNote;
+
+  /// Short explanation at the top of the edit numbers page.
+  ///
+  /// In en, this message translates to:
+  /// **'Add up to 3 more numbers to show on your card, like WhatsApp or a number abroad.'**
+  String get myCardPhonesIntro;
+
+  /// Field label for the short name of an extra number (WhatsApp, Mobile).
+  ///
+  /// In en, this message translates to:
+  /// **'Label'**
+  String get myCardPhoneLabelField;
+
+  /// Hint inside the label field of an extra number.
+  ///
+  /// In en, this message translates to:
+  /// **'Optional, like Guinea'**
+  String get myCardPhoneLabelHint;
+
+  /// Field label for an extra phone number.
+  ///
+  /// In en, this message translates to:
+  /// **'Phone number'**
+  String get myCardPhoneNumberField;
+
+  /// Quick-pick label for an extra number; fills the label field.
+  ///
+  /// In en, this message translates to:
+  /// **'WhatsApp'**
+  String get myCardPhoneChipWhatsApp;
+
+  /// Quick-pick label for an extra number; fills the label field.
+  ///
+  /// In en, this message translates to:
+  /// **'Mobile'**
+  String get myCardPhoneChipMobile;
+
+  /// Quick-pick label for an extra number; fills the label field.
+  ///
+  /// In en, this message translates to:
+  /// **'Home'**
+  String get myCardPhoneChipHome;
+
+  /// Quick-pick label for an extra number; fills the label field.
+  ///
+  /// In en, this message translates to:
+  /// **'Work'**
+  String get myCardPhoneChipWork;
+
+  /// Label printed on the card for an extra number that has no label.
+  ///
+  /// In en, this message translates to:
+  /// **'Phone'**
+  String get myCardPhoneDefaultLabel;
+
+  /// Tooltip and accessibility label of the button that removes an extra number row.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove this number'**
+  String get myCardPhoneRemove;
+
+  /// Button that adds another extra number row (up to 3).
+  ///
+  /// In en, this message translates to:
+  /// **'Add a number'**
+  String get myCardPhoneAdd;
+
+  /// Button that saves the extra numbers.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get myCardPhonesSave;
+
+  /// Error under an extra number the server or the app could not read as a phone number.
+  ///
+  /// In en, this message translates to:
+  /// **'This is not a phone number'**
+  String get myCardPhoneInvalid;
+
+  /// Error under a non-US number typed without a country code.
+  ///
+  /// In en, this message translates to:
+  /// **'Add the country code, like +224'**
+  String get myCardPhoneNeedsCountryCode;
+
+  /// Error when more than 3 extra numbers were sent.
+  ///
+  /// In en, this message translates to:
+  /// **'You can add up to 3 numbers.'**
+  String get myCardPhonesTooMany;
+
+  /// Confirmation after the extra numbers were saved.
+  ///
+  /// In en, this message translates to:
+  /// **'Your numbers are saved.'**
+  String get myCardPhonesSaved;
+
+  /// Error when saving the extra numbers failed.
+  ///
+  /// In en, this message translates to:
+  /// **'We could not save your numbers. Try again.'**
+  String get myCardPhonesSaveFailed;
+
   /// No description provided for @labelPrinterModelGeneric.
   ///
   /// In en, this message translates to:

@@ -51,6 +51,14 @@ Map<String, Object?> _mine({
   'wallet': {'apple': apple, 'google': google},
 };
 
+/// `savePhones` refused: `invalid-argument` with the per-row reasons.
+FirebaseFunctionsException _phonesRefused(List<String> reasons) =>
+    FirebaseFunctionsException(
+      message: 'phones_invalid',
+      code: 'invalid-argument',
+      details: {'reason': 'phones_invalid', 'reasons': reasons},
+    );
+
 FirebaseFunctionsException _refusal(String reason) =>
     FirebaseFunctionsException(
       message: reason,
@@ -60,13 +68,22 @@ FirebaseFunctionsException _refusal(String reason) =>
 
 /// Answers `businessCards` by action, and keeps what was sent.
 class _Cards {
-  _Cards({Object? Function()? mine, Object? Function(String platform)? wallet})
-    : mine = mine ?? (() => _mine()),
-      wallet =
-          wallet ?? ((platform) => {'url': 'https://example.test/$platform'});
+  _Cards({
+    Object? Function()? mine,
+    Object? Function(String platform)? wallet,
+    Object? Function(List<Object?> phones)? savePhones,
+  }) : mine = mine ?? (() => _mine()),
+       wallet =
+           wallet ?? ((platform) => {'url': 'https://example.test/$platform'}),
+       savePhones =
+           savePhones ??
+           ((phones) => {'version': 1, 'uid': 'u1', 'phones': phones});
 
   Object? Function() mine;
   Object? Function(String platform) wallet;
+
+  /// Answers `savePhones` with what was sent unless a test says otherwise.
+  Object? Function(List<Object?> phones) savePhones;
   final List<Map<String, Object?>> log = [];
 
   Future<Object?> call(String name, Map<String, Object?> payload) async {
@@ -75,6 +92,9 @@ class _Cards {
     if (payload['action'] == 'mine') return mine();
     if (payload['action'] == 'wallet') {
       return wallet(payload['platform']! as String);
+    }
+    if (payload['action'] == 'savePhones') {
+      return savePhones(payload['phones']! as List<Object?>);
     }
     throw StateError('unexpected action ${payload['action']}');
   }
@@ -797,6 +817,547 @@ void main() {
         find.text('Pas de connexion. Vérifiez votre internet et réessayez.'),
         findsOneWidget,
       );
+    });
+  });
+
+  group('extra numbers on the app card', () {
+    Map<String, Object?> three() => {
+      'name': 'Awa Camara',
+      'phone': '+13475550142',
+      'phones': [
+        {'label': 'WhatsApp', 'phone': '(929) 555-0101'},
+        {'label': '', 'phone': '+224 621 23 45 67'},
+        {'label': 'Guinea business', 'phone': '+224 622 34 56 78'},
+      ],
+    };
+
+    for (final entry in {
+      'en': (
+        ['Direct', 'WhatsApp', 'Phone', 'Guinea business', 'Office'],
+        'Edit my numbers',
+      ),
+      'fr': (
+        ['Direct', 'WhatsApp', 'Téléphone', 'Guinea business', 'Bureau'],
+        'Modifier mes numéros',
+      ),
+    }.entries) {
+      testWidgets(
+        'Direct, each extra with its label, then Office: ${entry.key}, 320 wide',
+        (tester) async {
+          await _pump(
+            tester,
+            _Cards(mine: () => _mine(person: three())),
+            webs: _Webs(throws: true),
+            locale: Locale(entry.key),
+            size: const Size(320, 1800),
+          );
+          expect(find.byKey(const Key('my-card-fallback')), findsOneWidget);
+          expect(tester.takeException(), isNull);
+          for (final word in entry.value.$1) {
+            expect(find.text(word), findsOneWidget);
+          }
+          for (final number in [
+            '(347) 555-0142',
+            '(929) 555-0101',
+            '+224 621 23 45 67',
+            '+224 622 34 56 78',
+            '(347) 555-0100',
+          ]) {
+            expect(find.text(number), findsOneWidget);
+          }
+          // In that order, top to bottom.
+          double top(String text) => tester.getTopLeft(find.text(text)).dy;
+          expect(top('(347) 555-0142'), lessThan(top('(929) 555-0101')));
+          expect(top('(929) 555-0101'), lessThan(top('+224 621 23 45 67')));
+          expect(top('+224 621 23 45 67'), lessThan(top('+224 622 34 56 78')));
+          expect(top('+224 622 34 56 78'), lessThan(top('(347) 555-0100')));
+          // Every number stays inside the card (a long one may wrap; the
+          // test font is wider than a real one).
+          final card = tester.getRect(find.byKey(const Key('my-card-face')));
+          for (final number in ['+224 621 23 45 67', '+224 622 34 56 78']) {
+            expect(
+              tester.getRect(find.text(number)).right,
+              lessThanOrEqualTo(card.right),
+            );
+          }
+          expect(find.text(entry.value.$2), findsOneWidget);
+        },
+      );
+    }
+
+    testWidgets('with no extras the card is as before', (tester) async {
+      await _pump(tester, _Cards(), webs: _Webs(throws: true));
+      expect(find.text('Direct'), findsOneWidget);
+      expect(find.text('Phone'), findsNothing);
+      expect(find.text('Office'), findsOneWidget);
+    });
+  });
+
+  group('Edit my numbers', () {
+    final editButton = find.byKey(const Key('my-card-edit-phones'));
+    final page = find.byKey(const Key('my-card-phones-page'));
+    final save = find.byKey(const Key('my-card-phones-save'));
+    final add = find.byKey(const Key('my-card-phone-add'));
+    Finder label(int i) => find.byKey(Key('my-card-phone-label-$i'));
+    Finder number(int i) => find.byKey(Key('my-card-phone-number-$i'));
+    Finder remove(int i) => find.byKey(Key('my-card-phone-remove-$i'));
+    Finder row(int i) => find.byKey(Key('my-card-phone-row-$i'));
+
+    Future<void> open(WidgetTester tester) async {
+      await tester.ensureVisible(editButton);
+      await tester.tap(editButton);
+      await tester.pumpAndSettle();
+      expect(page, findsOneWidget);
+    }
+
+    Future<void> fill(WidgetTester tester, int i, String l, String p) async {
+      await tester.enterText(label(i), l);
+      await tester.enterText(number(i), p);
+    }
+
+    /// Taps Save and lets the answer, the page closing and the reload run,
+    /// stopping well inside the success message's 4 seconds.
+    Future<void> tapSave(WidgetTester tester) async {
+      await tester.ensureVisible(save);
+      await tester.tap(save);
+      for (var i = 0; i < 8; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+    }
+
+    List<Object?> savedPayload(_Cards cards) =>
+        cards.log.lastWhere((p) => p['action'] == 'savePhones')['phones']!
+            as List<Object?>;
+
+    testWidgets('the button sits below Save contact', (tester) async {
+      await _pump(tester, _Cards());
+      expect(editButton, findsOneWidget);
+      expect(find.text('Edit my numbers'), findsOneWidget);
+      final saveContact = tester.getTopLeft(
+        find.byKey(const Key('my-card-save-contact')),
+      );
+      expect(tester.getTopLeft(editButton).dy, greaterThan(saveContact.dy));
+    });
+
+    testWidgets('a business\'s own card has no numbers to edit', (
+      tester,
+    ) async {
+      await _pump(tester, _Cards(mine: () => _mine(person: null)));
+      expect(editButton, findsNothing);
+    });
+
+    testWidgets('shows the sign-in number read-only, then one empty row', (
+      tester,
+    ) async {
+      await _pump(tester, _Cards());
+      await open(tester);
+      expect(find.text('My numbers'), findsOneWidget);
+      expect(find.text('Direct: (347) 555-0142'), findsOneWidget);
+      expect(
+        find.text('Your sign-in number is always on your card'),
+        findsOneWidget,
+      );
+      expect(row(0), findsOneWidget);
+      expect(row(1), findsNothing);
+      expect(tester.widget<TextField>(number(0)).controller!.text, '');
+    });
+
+    testWidgets('starts from the numbers the card has', (tester) async {
+      final cards = _Cards(
+        mine: () => _mine(
+          person: {
+            'name': 'Awa Camara',
+            'phone': '+13475550142',
+            'phones': [
+              {'label': 'Mobile', 'phone': '(929) 555-0101'},
+              {'label': '', 'phone': '+224 621 23 45 67'},
+            ],
+          },
+        ),
+      );
+      await _pump(tester, cards);
+      await open(tester);
+      expect(tester.widget<TextField>(label(0)).controller!.text, 'Mobile');
+      expect(
+        tester.widget<TextField>(number(0)).controller!.text,
+        '(929) 555-0101',
+      );
+      expect(
+        tester.widget<TextField>(number(1)).controller!.text,
+        '+224 621 23 45 67',
+      );
+      expect(row(2), findsNothing);
+      expect(add, findsOneWidget);
+    });
+
+    testWidgets('adds rows up to 3, then no more; remove frees a place', (
+      tester,
+    ) async {
+      await _pump(tester, _Cards());
+      await open(tester);
+      await tester.ensureVisible(add);
+      await tester.tap(add);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(add);
+      await tester.tap(add);
+      await tester.pumpAndSettle();
+      expect(row(2), findsOneWidget);
+      expect(row(3), findsNothing);
+      expect(add, findsNothing);
+
+      await fill(tester, 1, 'Home', '(929) 555-0102');
+      await tester.ensureVisible(remove(0));
+      await tester.tap(remove(0));
+      await tester.pumpAndSettle();
+      expect(row(2), findsNothing);
+      expect(add, findsOneWidget);
+      // The second row moved up with what was typed in it.
+      expect(tester.widget<TextField>(label(0)).controller!.text, 'Home');
+      expect(
+        tester.widget<TextField>(number(0)).controller!.text,
+        '(929) 555-0102',
+      );
+    });
+
+    testWidgets('a quick pick fills the label; free text and 20 chars max', (
+      tester,
+    ) async {
+      await _pump(tester, _Cards());
+      await open(tester);
+      for (final entry in {
+        'whatsapp': 'WhatsApp',
+        'mobile': 'Mobile',
+        'home': 'Home',
+        'work': 'Work',
+      }.entries) {
+        final chip = find.byKey(Key('my-card-phone-chip-0-${entry.key}'));
+        await tester.ensureVisible(chip);
+        await tester.tap(chip);
+        await tester.pump();
+        expect(
+          tester.widget<TextField>(label(0)).controller!.text,
+          entry.value,
+        );
+        expect(tester.widget<ChoiceChip>(chip).selected, isTrue);
+      }
+      await tester.enterText(label(0), 'Guinea business line extra long');
+      await tester.pump();
+      expect(
+        tester.widget<TextField>(label(0)).controller!.text,
+        'Guinea business line',
+      );
+      expect(
+        tester
+            .widget<ChoiceChip>(
+              find.byKey(const Key('my-card-phone-chip-0-work')),
+            )
+            .selected,
+        isFalse,
+      );
+    });
+
+    testWidgets('chips and texts are French in a French app', (tester) async {
+      await _pump(tester, _Cards(), locale: const Locale('fr'));
+      await tester.ensureVisible(editButton);
+      await tester.tap(editButton);
+      await tester.pumpAndSettle();
+      expect(find.text('Mes numéros'), findsOneWidget);
+      expect(
+        find.text('Votre numéro de connexion figure toujours sur votre carte'),
+        findsOneWidget,
+      );
+      expect(find.text('Domicile'), findsOneWidget);
+      expect(find.text('Travail'), findsOneWidget);
+      expect(find.text('Ajouter un numéro'), findsOneWidget);
+      expect(find.text('Enregistrer'), findsOneWidget);
+    });
+
+    testWidgets('Save sends the rows, drops empty ones, reloads the card', (
+      tester,
+    ) async {
+      final webs = _Webs();
+      final cards = _Cards();
+      await _pump(tester, cards, webs: webs);
+      expect(cards.count('mine'), 1);
+      final before = webs.made.length;
+      await open(tester);
+      await fill(tester, 0, 'WhatsApp', '(929) 555-0101');
+      await tester.ensureVisible(add);
+      await tester.tap(add);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(add);
+      await tester.tap(add);
+      await tester.pumpAndSettle();
+      // Row 1 stays empty; row 2 has a number and no label.
+      await fill(tester, 2, '', '+224 621 23 45 67');
+      await tapSave(tester);
+
+      expect(savedPayload(cards), [
+        {'label': 'WhatsApp', 'phone': '(929) 555-0101'},
+        {'label': '', 'phone': '+224 621 23 45 67'},
+      ]);
+      // Closed, said so, and the card was asked for again.
+      expect(page, findsNothing);
+      expect(find.text('Your numbers are saved.'), findsOneWidget);
+      expect(cards.count('mine'), 2);
+      // The real card page was loaded again (same card code).
+      expect(webs.made.length, before + 1);
+      expect(webs.made[before - 1].disposed, isTrue);
+    });
+
+    testWidgets('the card shows what the server saved', (tester) async {
+      final cards = _Cards(
+        savePhones: (phones) => {
+          'version': 1,
+          'uid': 'u1',
+          'phones': [phones.first],
+        },
+      );
+      var saved = false;
+      cards.mine = () => _mine(
+        person: {
+          'name': 'Awa Camara',
+          'phone': '+13475550142',
+          'phones': saved
+              ? [
+                  {'label': 'WhatsApp', 'phone': '(929) 555-0101'},
+                ]
+              : [],
+        },
+      );
+      await _pump(tester, cards, webs: _Webs(throws: true));
+      await open(tester);
+      await fill(tester, 0, 'WhatsApp', '(929) 555-0101');
+      saved = true;
+      await tapSave(tester);
+      expect(find.text('WhatsApp'), findsOneWidget);
+      expect(find.text('(929) 555-0101'), findsOneWidget);
+    });
+
+    testWidgets('clearing every row sends an empty list', (tester) async {
+      final cards = _Cards(
+        mine: () => _mine(
+          person: {
+            'name': 'Awa Camara',
+            'phone': '+13475550142',
+            'phones': [
+              {'label': 'Mobile', 'phone': '(929) 555-0101'},
+            ],
+          },
+        ),
+      );
+      await _pump(tester, cards);
+      await open(tester);
+      await tester.ensureVisible(remove(0));
+      await tester.tap(remove(0));
+      await tester.pumpAndSettle();
+      await tapSave(tester);
+      expect(savedPayload(cards), isEmpty);
+      expect(page, findsNothing);
+    });
+
+    testWidgets('a label with no number is not sent', (tester) async {
+      final cards = _Cards();
+      await _pump(tester, cards);
+      await open(tester);
+      await fill(tester, 0, 'WhatsApp', '');
+      await tapSave(tester);
+      expect(cards.count('savePhones'), 0);
+      expect(page, findsOneWidget);
+      expect(find.text('This is not a phone number'), findsOneWidget);
+    });
+
+    testWidgets('per-row errors show under the right number, then clear', (
+      tester,
+    ) async {
+      final cards = _Cards(
+        savePhones: (phones) => throw _phonesRefused([
+          'phone_0_needs_country_code',
+          'phone_1_invalid',
+        ]),
+      );
+      await _pump(tester, cards);
+      await open(tester);
+      await fill(tester, 0, 'Guinea', '621234567');
+      await tester.ensureVisible(add);
+      await tester.tap(add);
+      await tester.pumpAndSettle();
+      await fill(tester, 1, 'Mobile', 'abc');
+      await tapSave(tester);
+
+      expect(page, findsOneWidget);
+      expect(find.text('Add the country code, like +224'), findsOneWidget);
+      expect(find.text('This is not a phone number'), findsOneWidget);
+      // Typing in a row clears that row's message only.
+      await tester.enterText(number(0), '+224621234567');
+      await tester.pump();
+      expect(find.text('Add the country code, like +224'), findsNothing);
+      expect(find.text('This is not a phone number'), findsOneWidget);
+      // The button is free again.
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.descendant(of: save, matching: find.byType(FilledButton)),
+            )
+            .onPressed,
+        isNotNull,
+      );
+    });
+
+    testWidgets('server row indexes follow the rows that were sent', (
+      tester,
+    ) async {
+      // Row 0 empty, row 1 refused: the server sees it as its row 0.
+      final cards = _Cards(
+        savePhones: (phones) => throw _phonesRefused(['phone_0_invalid']),
+      );
+      await _pump(tester, cards);
+      await open(tester);
+      await tester.ensureVisible(add);
+      await tester.tap(add);
+      await tester.pumpAndSettle();
+      await fill(tester, 1, 'Mobile', '12');
+      await tapSave(tester);
+      expect(savedPayload(cards), hasLength(1));
+      final error = find.text('This is not a phone number');
+      expect(error, findsOneWidget);
+      expect(
+        tester.getTopLeft(error).dy,
+        greaterThan(tester.getTopLeft(row(1)).dy),
+      );
+      expect(find.descendant(of: row(0), matching: error), findsNothing);
+    });
+
+    testWidgets('errors are French in a French app', (tester) async {
+      final cards = _Cards(
+        savePhones: (phones) =>
+            throw _phonesRefused(['phone_0_needs_country_code']),
+      );
+      await _pump(tester, cards, locale: const Locale('fr'));
+      await tester.ensureVisible(editButton);
+      await tester.tap(editButton);
+      await tester.pumpAndSettle();
+      await fill(tester, 0, 'Guinée', '621234567');
+      await tapSave(tester);
+      expect(
+        find.text("Ajoutez l'indicatif du pays, par exemple +224"),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('too many numbers is said, not silent', (tester) async {
+      final cards = _Cards(
+        savePhones: (phones) => throw _phonesRefused(['too_many_phones']),
+      );
+      await _pump(tester, cards);
+      await open(tester);
+      await fill(tester, 0, 'Mobile', '(929) 555-0101');
+      await tapSave(tester);
+      expect(page, findsOneWidget);
+      expect(find.text('You can add up to 3 numbers.'), findsOneWidget);
+    });
+
+    testWidgets('a failed save says so, stays open, and the button is free', (
+      tester,
+    ) async {
+      final cards = _Cards(savePhones: (phones) => throw _refusal('oops'));
+      await _pump(tester, cards);
+      await open(tester);
+      await fill(tester, 0, 'Mobile', '(929) 555-0101');
+      await tapSave(tester);
+      expect(page, findsOneWidget);
+      expect(
+        find.text('We could not save your numbers. Try again.'),
+        findsOneWidget,
+      );
+      expect(cards.count('mine'), 1);
+      // Typed text is kept and a second try goes out.
+      expect(
+        tester.widget<TextField>(number(0)).controller!.text,
+        '(929) 555-0101',
+      );
+      await tapSave(tester);
+      expect(cards.count('savePhones'), 2);
+    });
+
+    testWidgets('offline reads as a connection problem', (tester) async {
+      final cards = _Cards(
+        savePhones: (phones) => throw FirebaseFunctionsException(
+          message: 'offline',
+          code: 'unavailable',
+        ),
+      );
+      await _pump(tester, cards, locale: const Locale('fr'));
+      await tester.ensureVisible(editButton);
+      await tester.tap(editButton);
+      await tester.pumpAndSettle();
+      await fill(tester, 0, 'Mobile', '(929) 555-0101');
+      await tapSave(tester);
+      expect(
+        find.text('Pas de connexion. Vérifiez votre internet et réessayez.'),
+        findsOneWidget,
+      );
+      expect(find.text('Mes numéros'), findsOneWidget);
+    });
+
+    testWidgets('a save that never answers times out and frees the button', (
+      tester,
+    ) async {
+      final cards = _Cards(savePhones: (phones) => Completer<Object?>().future);
+      await _pump(tester, cards, timeout: const Duration(milliseconds: 200));
+      await open(tester);
+      await fill(tester, 0, 'Mobile', '(929) 555-0101');
+      await tester.ensureVisible(save);
+      await tester.tap(save);
+      await tester.pump();
+      // Busy: a second tap does nothing.
+      await tester.tap(save);
+      await tester.pump();
+      expect(cards.count('savePhones'), 1);
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+      expect(page, findsOneWidget);
+      expect(
+        find.text('No connection. Check your internet and try again.'),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.descendant(of: save, matching: find.byType(FilledButton)),
+            )
+            .onPressed,
+        isNotNull,
+      );
+    });
+
+    testWidgets('fits a 320-wide phone with three rows, in French', (
+      tester,
+    ) async {
+      final cards = _Cards(
+        mine: () => _mine(
+          person: {
+            'name': 'Awa Camara',
+            'phone': '+13475550142',
+            'phones': [
+              {'label': 'WhatsApp', 'phone': '(929) 555-0101'},
+              {'label': 'Guinea business', 'phone': '+224 621 23 45 67'},
+              {'label': '', 'phone': '+224 622 34 56 78'},
+            ],
+          },
+        ),
+      );
+      await _pump(
+        tester,
+        cards,
+        locale: const Locale('fr'),
+        size: const Size(320, 1400),
+      );
+      await tester.ensureVisible(editButton);
+      await tester.tap(editButton);
+      await tester.pumpAndSettle();
+      expect(row(2), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
   });
 

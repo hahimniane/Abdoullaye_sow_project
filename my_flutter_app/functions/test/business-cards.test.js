@@ -105,7 +105,7 @@ describe("what a scan may see", () => {
     assert.deepEqual(card, {
       code: "K7M4P2XB",
       link: "https://laawoldigital.com/c/K7M4P2XB",
-      person: {name: "Awa Camara", phone: "+13475550142"},
+      person: {name: "Awa Camara", phone: "+13475550142", phones: []},
       business: {businessId: "biz", name: "Sahel Auto Sales",
         phone: "+1 3475550100", website: "https://www.sahelauto.example",
         addressLine1: "1739 w ave", city: "Bronx", state: "NY",
@@ -166,5 +166,65 @@ describe("who is on the team", () => {
     assert.equal(cards.isTeamMember({role: "customer"}, "biz", "owner",
         "owner"), true);
     assert.equal(cards.isTeamMember(null, "biz", "owner", "owner"), false);
+  });
+});
+
+describe("a person's extra numbers", () => {
+  const own = "+13475550142";
+
+  it("keeps up to three, each a real number with a one-line label", () => {
+    const {phones, errors} = cards.cleanCardPhonesInput([
+      {label: "  WhatsApp\n ", phone: "(929) 555-0101"},
+      {label: "Guinea", phone: "+224 621 23 45 67"},
+      {label: "", phone: "+33 6 12 34 56 78"},
+    ], own);
+    assert.deepEqual(errors, []);
+    assert.deepEqual(phones, [
+      {label: "WhatsApp", phone: "(929) 555-0101"},
+      {label: "Guinea", phone: "+224 621 23 45 67"},
+      {label: "", phone: "+33 6 12 34 56 78"},
+    ]);
+  });
+
+  it("drops blank rows and repeats of the person's own or earlier numbers",
+      () => {
+        const {phones, errors} = cards.cleanCardPhonesInput([
+          {label: "Again", phone: "347-555-0142"},
+          {label: "", phone: ""},
+          {label: "Home", phone: "929 555 0101"},
+          {label: "Home too", phone: "+1 929 555 0101"},
+        ], "3475550142");
+        assert.deepEqual(errors, []);
+        assert.deepEqual(phones, [{label: "Home", phone: "929 555 0101"}]);
+      });
+
+  it("names every row that is wrong, and too many", () => {
+    assert.deepEqual(cards.cleanCardPhonesInput([
+      {label: "x", phone: "call me"},
+      {label: "y", phone: "0621234567"},
+    ], own).errors, ["phone_0_invalid", "phone_1_needs_country_code"]);
+    const four = ["+19295550101", "+19295550102", "+19295550103",
+      "+19295550104"].map((phone) => ({label: "", phone}));
+    const result = cards.cleanCardPhonesInput(four, own);
+    assert.deepEqual(result.errors, ["too_many_phones"]);
+    assert.equal(result.phones.length, cards.CARD_EXTRA_PHONES_MAX);
+  });
+
+  it("cuts a long label and never throws on a damaged profile", () => {
+    const [row] = cards.cleanCardPhonesInput(
+        [{label: "x".repeat(50), phone: "+19295550101"}]).phones;
+    assert.equal(row.label.length, cards.CARD_PHONE_LABEL_MAX);
+    for (const raw of [null, "nope", 7, {}, [null, 3, "x"]]) {
+      assert.deepEqual(cards.cardPersonPhones({cardPhones: raw}), []);
+    }
+  });
+
+  it("are on the card a scan opens, after the person's own number", () => {
+    const card = cards.publicCard({code: "K7M4P2XB", businessId: "b",
+      business: {name: "Sahel"}, services: [], user: {fullName: "Awa",
+        phone: own, cardPhones: [{label: "WhatsApp", phone: "+19295550101"},
+          {label: "Bad", phone: "nope"}]}});
+    assert.deepEqual(card.person, {name: "Awa", phone: own,
+      phones: [{label: "WhatsApp", phone: "+19295550101"}]});
   });
 });

@@ -232,6 +232,11 @@ function walletCardModel(card) {
     personName,
     title: personName || businessName,
     direct: direct.display,
+    // The person's extra numbers (docs/BUSINESS_CARDS.md §7), as printed.
+    extras: (card.person?.phones || [])
+        .map((row) => ({label: cardName(row.label) || "Phone",
+          value: cardDial(row.phone).display}))
+        .filter((row) => row.value),
     office: office.display,
     address: cardAddress(business),
     website,
@@ -380,6 +385,10 @@ function applePassLayout(model, apple) {
     fields.secondary.push({key: "office", label: "Office",
       value: model.office, dataDetectorTypes: [phone]});
   }
+  model.extras.forEach((row, index) => {
+    fields.back.push({key: `phone${index + 1}`, label: row.label,
+      value: row.value, dataDetectorTypes: [phone]});
+  });
   if (model.address) {
     fields.back.push({key: "address", label: "Address",
       value: model.address});
@@ -540,6 +549,12 @@ const localized = (value) => ({defaultValue: {language: "en", value}});
  */
 function googleObject(issuerId, model, keep) {
   const modules = [];
+  if (keep.office) {
+    model.extras.forEach((row, index) => {
+      modules.push({id: `phone${index + 1}`, header: row.label,
+        body: row.value});
+    });
+  }
   if (keep.office && model.personName && model.office) {
     modules.push({id: "office", header: "Office", body: model.office});
   }
