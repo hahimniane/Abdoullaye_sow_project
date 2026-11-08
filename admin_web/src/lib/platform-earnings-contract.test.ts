@@ -67,6 +67,10 @@ test("the charts are inline SVG, with no charting dependency added", () => {
     // from its own chunk, never from the main bundle. It draws no charts.
     "jspdf",
     "lucide-react",
+    // "Share card" draws the real business card as a picture
+    // (components/business-card-snapshot.tsx); loaded on first use from its
+    // own chunk, zero dependencies, pinned exactly. It draws no charts.
+    "modern-screenshot",
     "next",
     // The package label's QR for the PM-241 label printer (src/lib/
     // package-label-canvas.ts): a zero-dependency encoder, pinned exactly.

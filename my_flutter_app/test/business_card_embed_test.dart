@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_flutter_app/services/business_card_embed.dart';
 
@@ -105,6 +107,41 @@ void main() {
       expect(
         cardEmbedNextPhase(CardEmbedPhase.ready, timedOut: true),
         CardEmbedPhase.ready,
+      );
+    });
+  });
+
+  group('the card as a picture (Share)', () {
+    final jpeg = [0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3, 4];
+
+    test('a picture message is the JPEG it carries', () {
+      final reply = cardEmbedImageReply('image:${base64Encode(jpeg)}');
+      expect(reply, isNotNull);
+      expect(reply!.bytes, jpeg);
+    });
+
+    test('a failure, garbage or a non-picture is a reply without bytes', () {
+      expect(cardEmbedImageReply('image-error')!.bytes, isNull);
+      expect(cardEmbedImageReply('image:not base64!!')!.bytes, isNull);
+      final text = base64Encode(utf8.encode('<html>nope</html>'));
+      expect(cardEmbedImageReply('image:$text')!.bytes, isNull);
+    });
+
+    test('ready and error are not about the picture', () {
+      expect(cardEmbedImageReply(cardEmbedReadyMessage), isNull);
+      expect(cardEmbedImageReply(cardEmbedErrorMessage), isNull);
+      // ...and a picture message never moves the card out of loading.
+      expect(
+        cardEmbedNextPhase(CardEmbedPhase.loading, message: 'image-error'),
+        CardEmbedPhase.loading,
+      );
+    });
+
+    test('the script calls the page and answers at once on an old page', () {
+      expect(cardEmbedImageScript, contains('window.laawolCardImage()'));
+      expect(
+        cardEmbedImageScript,
+        contains('LaawolCard.postMessage("image-error")'),
       );
     });
   });

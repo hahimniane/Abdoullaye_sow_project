@@ -150,7 +150,35 @@ exists, which reads as "not set up" and hides the wallet buttons):
 `businessCards` only). All six must exist in the project before either
 function deploys, even as `unset`.
 
-## 6. Not built yet
+## 6. Share as a picture
+
+Share sends the card itself, not only its link: one JPEG of both sides of
+the real card (1150 x 1340 CSS px at 1.5x, about 400 KB) on a soft
+background, with the link as the message under it, so WhatsApp shows the
+card.
+
+- **Drawing.** `components/business-card-snapshot.tsx` mounts both
+  `BusinessCardFace` sides off screen at print size only while a picture is
+  made, and draws them with `modern-screenshot` (`lib/card-image.ts` holds
+  the sizes, the file name `<name>-card.jpg` and the message). It always
+  settles within 15 s.
+- **The logo.** Storage does not let a page draw its images, so the picture
+  reads the logo from `parkingDocument?view=card-logo&c=<CODE>` (straight at
+  the function; the `/d` redirect has no CORS header). It answers only for
+  a card the public page would show, only the business's own logo through
+  the same host allowlist and size cap as the wallet passes, with
+  `Access-Control-Allow-Origin: *`. A logo that cannot be read is left blank.
+- **Web.** "Share card" on the console's card list and on the public card
+  page: the phone's share sheet where the browser can share files, else a
+  downloaded picture. A browser that wants a fresh tap after the picture is
+  made gets "Picture ready: tap to share".
+- **App.** My card's Share runs `cardEmbedImageScript` in the embedded card
+  page, which answers on the `LaawolCard` channel with `image:<base64>` or
+  `image-error`; the app shares the file with the link as its text. When the
+  real card is not on screen (loading, or the app's own fallback card), the
+  page cannot draw it, or 20 s pass, Share sends the link alone.
+
+## 7. Not built yet
 
 - A print-shop file with bleed.
 - Letting the owner hide a person's own number.

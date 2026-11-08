@@ -13,7 +13,13 @@
 /// - JavaScript channel [cardEmbedChannelName] posts [cardEmbedReadyMessage]
 ///   once the card is painted, [cardEmbedErrorMessage] when it is missing or
 ///   could not be read.
+/// - Share: the app runs [cardEmbedImageScript]; the page answers on the same
+///   channel with [cardEmbedImagePrefix] + a base64 JPEG of both sides of the
+///   card, or [cardEmbedImageErrorMessage] (admin_web lib/card-image.ts).
 library;
+
+import 'dart:convert';
+import 'dart:typed_data';
 
 import 'business_card.dart';
 
@@ -23,6 +29,47 @@ const String cardEmbedBaseUrl = 'https://customer.laawoldigital.com/';
 const String cardEmbedChannelName = 'LaawolCard';
 const String cardEmbedReadyMessage = 'ready';
 const String cardEmbedErrorMessage = 'error';
+
+/// The page's function that draws the card as a picture.
+const String cardEmbedImageFunction = 'laawolCardImage';
+const String cardEmbedImagePrefix = 'image:';
+const String cardEmbedImageErrorMessage = 'image-error';
+
+/// What the app runs in the page for Share. A page from before pictures (an
+/// old copy in a cache) has no such function and says so at once.
+const String cardEmbedImageScript =
+    'if (typeof window.$cardEmbedImageFunction === "function") {'
+    ' window.$cardEmbedImageFunction(); '
+    '} else { $cardEmbedChannelName.postMessage("$cardEmbedImageErrorMessage"); }';
+
+/// No picture within this long and Share sends the link alone.
+const Duration cardEmbedImageTimeout = Duration(seconds: 20);
+
+/// A picture bigger than this is refused (the page's is about 300 KB).
+const int cardEmbedImageMaxBytes = 8 * 1024 * 1024;
+
+/// The page's answer to [cardEmbedImageScript] in [message]: null when the
+/// message is about something else; `bytes` null when the page could not
+/// draw the picture (or sent something that is not one).
+({Uint8List? bytes})? cardEmbedImageReply(String message) {
+  if (message == cardEmbedImageErrorMessage) return (bytes: null);
+  if (!message.startsWith(cardEmbedImagePrefix)) return null;
+  try {
+    final bytes = base64Decode(message.substring(cardEmbedImagePrefix.length));
+    final jpeg =
+        bytes.length > 3 &&
+        bytes[0] == 0xFF &&
+        bytes[1] == 0xD8 &&
+        bytes[2] == 0xFF;
+    final png = bytes.length > 8 && bytes[0] == 0x89 && bytes[1] == 0x50;
+    if (!(jpeg || png) || bytes.length > cardEmbedImageMaxBytes) {
+      return (bytes: null);
+    }
+    return (bytes: bytes);
+  } on FormatException {
+    return (bytes: null);
+  }
+}
 
 /// No "ready" within this long and the app's own card stays for good, so a
 /// slow, offline or silent page can never leave the screen without a card.

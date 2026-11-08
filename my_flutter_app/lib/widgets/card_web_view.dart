@@ -33,6 +33,9 @@ abstract class CardWebViewHandle {
   /// The view to put in the tree. Built once per handle.
   Widget build(BuildContext context);
 
+  /// Runs [script] in the page (Share asks the page for its picture).
+  Future<void> runScript(String script);
+
   void dispose();
 }
 
@@ -100,6 +103,12 @@ class PlatformCardWebView implements CardWebViewHandle {
       Factory<VerticalDragGestureRecognizer>(VerticalDragGestureRecognizer.new),
     },
   );
+
+  @override
+  Future<void> runScript(String script) async {
+    if (_disposed) return;
+    await _controller.runJavaScript(script);
+  }
 
   @override
   void dispose() {

@@ -546,3 +546,66 @@ describe("wallet passes", () => {
         refusedWith("permission-denied", "not_team_member"));
   });
 });
+
+describe("the card logo for the Share picture", () => {
+  const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+    1, 2, 3]);
+  const LOGO = "https://firebasestorage.googleapis.com/v0/b/test/o/logo.png" +
+    "?alt=media";
+  const realFetch = global.fetch;
+  let code = "";
+
+  before(async () => {
+    const list = await call({action: "list", businessId: BIZ}, OWNER);
+    code = list.cards[0].code;
+  });
+
+  after(async () => {
+    global.fetch = realFetch;
+    await db.collection("businesses").doc(BIZ).update({
+      logoUrl: admin.firestore.FieldValue.delete()});
+  });
+
+  const logo = (c) => openLink(
+      `https://example.test/d?view=card-logo&c=${encodeURIComponent(c)}`);
+
+  it("is 404, readable by any page, when the business has no logo",
+      async () => {
+        const res = await logo(code);
+        assert.equal(res.statusCode, 404);
+        assert.equal(res.headers["access-control-allow-origin"], "*");
+      });
+
+  it("is 404 for a code that is no card", async () => {
+    assert.equal((await logo("ZZZZZZZZ")).statusCode, 404);
+    assert.equal((await logo("")).statusCode, 404);
+  });
+
+  it("passes the business's own logo through, for any page to draw",
+      async () => {
+        await db.collection("businesses").doc(BIZ).update({logoUrl: LOGO});
+        const asked = [];
+        global.fetch = async (url) => {
+          asked.push(String(url));
+          return new Response(PNG, {status: 200});
+        };
+        const res = await logo(code.toLowerCase());
+        assert.equal(res.statusCode, 200);
+        assert.deepEqual(asked, [LOGO]);
+        assert.equal(res.headers["content-type"], "image/png");
+        assert.equal(res.headers["access-control-allow-origin"], "*");
+        assert.ok(Buffer.from(res.body).equals(PNG));
+      });
+
+  it("never fetches anything but a logo on a host we use", async () => {
+    await db.collection("businesses").doc(BIZ).update({
+      logoUrl: "http://169.254.169.254/latest/meta-data"});
+    let fetched = false;
+    global.fetch = async () => {
+      fetched = true;
+      return new Response(PNG, {status: 200});
+    };
+    assert.equal((await logo(code)).statusCode, 404);
+    assert.equal(fetched, false);
+  });
+});

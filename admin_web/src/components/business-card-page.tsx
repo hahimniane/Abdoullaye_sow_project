@@ -4,7 +4,9 @@ import { useEffect, useState } from "react";
 import { ChevronRight, MessageCircle, Phone, UserPlus } from "lucide-react";
 
 import { BusinessCardFace } from "@/components/business-card-face";
+import { ShareCardButton, useCardSnapshot } from "@/components/business-card-snapshot";
 import {
+  CARD_EMBED_IMAGE_FN,
   cardCodeFromLocation,
   cardDial,
   cardEmbedFromSearch,
@@ -19,6 +21,7 @@ import {
 } from "@/lib/business-card";
 import { fetchBusinessCard } from "@/lib/business-card-client";
 import { currentWebLanguage } from "@/lib/language";
+import { blobToBase64 } from "@/lib/card-image";
 import { requestLink } from "@/lib/package-requests";
 
 /**
@@ -145,12 +148,28 @@ function EmbeddedCard({
   side: 1 | 2;
   onFlip: () => void;
 }) {
+  // The app's Share button asks for the card as a picture (both sides) and
+  // shares it itself; the answer always comes, picture or "image-error".
+  const { node, capture } = useCardSnapshot(card, lang);
+  useEffect(() => {
+    const host = window as unknown as Record<string, unknown>;
+    host[CARD_EMBED_IMAGE_FN] = () => {
+      capture()
+        .then(blobToBase64)
+        .then((data) => tellCardEmbedHost(`image:${data}`))
+        .catch(() => tellCardEmbedHost("image-error"));
+    };
+    return () => {
+      delete host[CARD_EMBED_IMAGE_FN];
+    };
+  }, [capture]);
   return (
     <div className="bcard-embed">
       <BusinessCardFace card={card} lang={lang} side={side} />
       <button className="bcard-flip" data-no-translate onClick={onFlip} type="button">
         {cardFlipLabel(lang)}
       </button>
+      {node}
     </div>
   );
 }
@@ -235,6 +254,7 @@ function Card({
       <button className="primary-button" onClick={() => saveContact(card)} type="button">
         <UserPlus aria-hidden="true" size={20} /> Save contact
       </button>
+      <ShareCardButton card={card} lang={lang} />
       <section className="panel">
         <h2 className="bcard-list-label">Call or message</h2>
         {person && <DialRow name={person.name} phone={person.phone} />}

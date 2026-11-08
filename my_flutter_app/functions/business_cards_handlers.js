@@ -381,6 +381,26 @@ function createBusinessCardsHandlers(deps) {
     return {bytes, filename: `laawol-card-${card.code}.pkpass`};
   }
 
+  /**
+   * A card's logo for the website's "Share card" picture (docs/
+   * BUSINESS_CARDS.md "Share as a picture"): the browser may only draw an
+   * image into a picture when its host allows it, and storage does not, so
+   * the logo is passed through here. Only a card the public page would show,
+   * only its business's own logo, only a PNG or JPEG under 2 MB.
+   *
+   * @param {string} code The card's code.
+   * @param {function=} fetchImpl `fetch`, injectable.
+   * @return {Promise<?{bytes: Buffer, contentType: string}>} Or null.
+   */
+  async function cardLogoFile(code, fetchImpl) {
+    const card = await loadPublicCard(code);
+    const url = card?.business?.logoUrl;
+    if (!url) return null;
+    const bytes = await wallet.fetchWalletImage(url, fetchImpl);
+    if (!bytes) return null;
+    return {bytes, contentType: bytes[0] === 0x89 ? "image/png" : "image/jpeg"};
+  }
+
   const ACTIONS = {get, list, saveSettings, mine, wallet: walletLink};
 
   /**
@@ -395,7 +415,8 @@ function createBusinessCardsHandlers(deps) {
     return ACTIONS[action](request);
   }
 
-  return {businessCards, cardPassFile, ACTIONS: Object.keys(ACTIONS)};
+  return {businessCards, cardPassFile, cardLogoFile,
+    ACTIONS: Object.keys(ACTIONS)};
 }
 
 module.exports = {CARDS, OWNERS, createBusinessCardsHandlers};

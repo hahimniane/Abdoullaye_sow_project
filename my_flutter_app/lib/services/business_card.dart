@@ -451,7 +451,16 @@ String cardVcard(BusinessCardData card) {
 }
 
 /// `awa-camara.vcf`.
-String cardVcardFileName(BusinessCardData card) {
+String cardVcardFileName(BusinessCardData card) =>
+    '${_cardSlug(card, 'contact')}.vcf';
+
+/// The card's picture as shared (`awa-camara-card.jpg`), named like the
+/// website's (admin_web lib/card-image.ts `cardImageFileName`).
+String cardImageFileName(BusinessCardData card) =>
+    '${_cardSlug(card, 'business')}-card.jpg';
+
+/// The card's name in plain lower-case letters and dashes, or [empty].
+String _cardSlug(BusinessCardData card, String empty) {
   const accents = {
     'à': 'a',
     'á': 'a',
@@ -487,7 +496,7 @@ String cardVcardFileName(BusinessCardData card) {
   final slug = plain
       .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
       .replaceAll(RegExp(r'^-+|-+$'), '');
-  return '${slug.isEmpty ? 'contact' : slug}.vcf';
+  return slug.isEmpty ? empty : slug;
 }
 
 // ---------------------------------------------------------------------------

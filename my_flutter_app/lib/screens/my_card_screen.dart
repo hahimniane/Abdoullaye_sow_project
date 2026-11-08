@@ -36,6 +36,28 @@ class MyCardActions {
     );
   }
 
+  /// Share with the card itself: the picture of the real card (both sides)
+  /// with [text] (the link) as its message, so a chat shows the card.
+  Future<void> shareImage({
+    required Uint8List bytes,
+    required String fileName,
+    required String text,
+    required String subject,
+    Rect? origin,
+  }) async {
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/$fileName');
+    await file.writeAsBytes(bytes, flush: true);
+    await SharePlus.instance.share(
+      ShareParams(
+        files: [XFile(file.path, mimeType: 'image/jpeg', name: fileName)],
+        text: text,
+        subject: subject,
+        sharePositionOrigin: origin,
+      ),
+    );
+  }
+
   /// "Save contact": the card as a `.vcf` file in the share sheet. Both the
   /// iOS and the Android sheets offer Contacts for a vCard.
   Future<void> shareContactFile({
@@ -107,6 +129,9 @@ class _MyCardScreenState extends State<MyCardScreen> {
 
   final GlobalKey _buttonsKey = GlobalKey();
 
+  /// The real card as a picture, for Share.
+  final CardPictures _pictures = CardPictures();
+
   /// Bumped by every load, so an answer that arrives after a newer load
   /// started is ignored.
   int _generation = 0;
@@ -159,13 +184,27 @@ class _MyCardScreenState extends State<MyCardScreen> {
     final name = cardTitle(card.card);
     final text = l10n.myCardShareMessage(name, card.url);
     final subject = l10n.myCardShareSubject(name);
-    final origin = _shareOrigin();
     try {
-      await widget.actions.shareText(
-        text: text,
-        subject: subject,
-        origin: origin,
-      );
+      // The real card as a picture when it is on screen; the link alone
+      // otherwise (still loading, offline, or the page could not draw it).
+      final picture = await _pictures.capture().catchError((Object _) => null);
+      if (!mounted) return;
+      final origin = _shareOrigin();
+      if (picture != null) {
+        await widget.actions.shareImage(
+          bytes: picture,
+          fileName: cardImageFileName(card.card),
+          text: text,
+          subject: subject,
+          origin: origin,
+        );
+      } else {
+        await widget.actions.shareText(
+          text: text,
+          subject: subject,
+          origin: origin,
+        );
+      }
     } catch (_) {
       if (mounted) showErrorSnackBar(context, l10n.myCardShareFailed);
     }
@@ -276,7 +315,11 @@ class _MyCardScreenState extends State<MyCardScreen> {
     final ios = _platform == TargetPlatform.iOS;
     final android = _platform == TargetPlatform.android;
     return [
-      EmbeddedBusinessCard(card: card.card, factory: widget.cardViewFactory),
+      EmbeddedBusinessCard(
+        card: card.card,
+        factory: widget.cardViewFactory,
+        pictures: _pictures,
+      ),
       const SizedBox(height: AppSpacing.xl),
       Center(
         child: Container(

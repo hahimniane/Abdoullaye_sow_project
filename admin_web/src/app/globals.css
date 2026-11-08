@@ -17567,6 +17567,9 @@ html.bcard-embed-root .console-lang-toggle { display: none !important; }
 .bcard-embed { display: grid; margin: 0; width: 100%; }
 .bcard-embed .bcard-face { box-shadow: none; }
 .bcard-embed .bcard-flip { height: 44px; min-height: 44px; padding: 0 12px; }
+/* A card being drawn as a picture (business-card-snapshot.tsx): print size, off screen, both sides. */
+.bcard-snap { box-sizing: border-box; display: grid; left: -20000px; pointer-events: none; position: fixed; top: 0; }
+.bcard-snap .bcard-face { box-shadow: none; }
 .bcard-foot { color: var(--muted); font-size: 12px; margin: 4px 0 0; text-align: center; }
 .bcard-foot a { color: inherit; }
 

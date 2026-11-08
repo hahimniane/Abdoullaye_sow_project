@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { Check, Copy, ExternalLink, Printer, RefreshCw, X } from "lucide-react";
 
 import { BusinessCardFace } from "@/components/business-card-face";
+import { ShareCardButton } from "@/components/business-card-snapshot";
 import {
   CARD_ACCENTS,
   CARD_COLORS,
@@ -154,6 +155,7 @@ function CardItem({
       <BusinessCardFace card={card} lang={lang} side={1} />
       {missingNumber && <small>No phone number on this account yet, so the card shows the office number only.</small>}
       <div className="bcard-item-acts">
+        <ShareCardButton card={card} lang={lang} />
         <button className="secondary-button" onClick={copy} type="button">
           {copied ? <Check aria-hidden="true" size={16} /> : <Copy aria-hidden="true" size={16} />}
           {copied ? "Link copied" : "Copy link"}

@@ -16232,6 +16232,22 @@ exports.parkingDocument = onRequest(
         message: "This document link is not valid. Ask the parking " +
           "business to send you a new one.",
       }));
+      // A business card's logo for the website's "Share card" picture
+      // (docs/BUSINESS_CARDS.md "Share as a picture"): public like the card
+      // page itself, so any page may read it. `c` is the card's code.
+      if (String(req.query?.view || "") === "card-logo") {
+        const logo = await businessCardsHandlers
+            .cardLogoFile(String(req.query?.c || ""))
+            .catch((error) => {
+              logger.warn("card logo failed", {error: String(error)});
+              return null;
+            });
+        res.set("Access-Control-Allow-Origin", "*");
+        if (!logo) return res.status(404).send("");
+        res.set("Content-Type", logo.contentType);
+        res.set("Cache-Control", "public, max-age=3600");
+        return res.status(200).send(logo.bytes);
+      }
       if (!token || token.length < 16) return notFound();
 
       const db = admin.firestore();

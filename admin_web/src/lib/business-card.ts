@@ -220,8 +220,18 @@ export function cardEmbedFromSearch(search: string): CardEmbed {
 /** The app's WebView channel the embed tells "ready" or "error" on (`LaawolCard.postMessage`). */
 export const CARD_EMBED_CHANNEL = "LaawolCard";
 
+/**
+ * What the embed tells the app: the card is painted ("ready") or missing
+ * ("error"); and, when the app asks for the card as a picture by calling
+ * `window[CARD_EMBED_IMAGE_FN]()`, `image:<base64 JPEG>` or "image-error".
+ */
+export type CardEmbedMessage = "ready" | "error" | "image-error" | `image:${string}`;
+
+/** The function the embed puts on `window` for the app's Share button. */
+export const CARD_EMBED_IMAGE_FN = "laawolCardImage";
+
 /** Tells the app the embed's state; a no-op in a normal browser. */
-export function tellCardEmbedHost(message: "ready" | "error"): void {
+export function tellCardEmbedHost(message: CardEmbedMessage): void {
   try {
     const host = (window as unknown as Record<string, { postMessage?: (m: string) => void } | undefined>)[
       CARD_EMBED_CHANNEL

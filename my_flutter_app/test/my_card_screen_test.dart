@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
@@ -90,6 +92,7 @@ class _FakeActions extends MyCardActions {
   final bool opens;
   final bool shareFails;
   final List<String> shared = [];
+  final List<({List<int> bytes, String fileName, String text})> images = [];
   final List<({String fileName, String vcard})> contacts = [];
   final List<Uri> opened = [];
 
@@ -101,6 +104,18 @@ class _FakeActions extends MyCardActions {
   }) async {
     if (shareFails) throw StateError('no share sheet');
     shared.add(text);
+  }
+
+  @override
+  Future<void> shareImage({
+    required Uint8List bytes,
+    required String fileName,
+    required String text,
+    required String subject,
+    Rect? origin,
+  }) async {
+    if (shareFails) throw StateError('no share sheet');
+    images.add((bytes: bytes, fileName: fileName, text: text));
   }
 
   @override
@@ -127,10 +142,14 @@ class _FakeWeb implements CardWebViewHandle {
 
   final CardWebViewRequest request;
   bool disposed = false;
+  final List<String> scripts = [];
 
   @override
   Widget build(BuildContext context) =>
       const SizedBox.expand(key: Key('fake-web'));
+
+  @override
+  Future<void> runScript(String script) async => scripts.add(script);
 
   @override
   void dispose() => disposed = true;
@@ -404,6 +423,98 @@ void main() {
         expect(tester.takeException(), isNull);
       });
     }
+  });
+
+  group('Share sends the real card as a picture', () {
+    const jpeg = [0xFF, 0xD8, 0xFF, 0xE0, 9, 8, 7, 6];
+    final share = find.byKey(const Key('my-card-share'));
+
+    Future<_Webs> ready(WidgetTester tester, _FakeActions actions) async {
+      final webs = _Webs();
+      // Not settled: the page answers before the card's own wait runs out.
+      await _pump(
+        tester,
+        _Cards(),
+        webs: webs,
+        actions: actions,
+        settle: false,
+      );
+      await tester.pump();
+      await tester.pump();
+      webs.last.say(cardEmbedReadyMessage);
+      await tester.pump();
+      return webs;
+    }
+
+    testWidgets("the page's picture goes with the link as its message", (
+      tester,
+    ) async {
+      final actions = _FakeActions();
+      final webs = await ready(tester, actions);
+      await tester.tap(share);
+      await tester.pump();
+      expect(webs.last.scripts, [cardEmbedImageScript]);
+      webs.last.say('image:${base64Encode(jpeg)}');
+      await tester.pumpAndSettle();
+      expect(actions.images, hasLength(1));
+      expect(actions.images.single.bytes, jpeg);
+      expect(actions.images.single.fileName, 'awa-camara-card.jpg');
+      expect(actions.images.single.text, 'My business card, Awa Camara: $_url');
+      expect(actions.shared, isEmpty);
+    });
+
+    testWidgets('the page cannot draw it: the link alone', (tester) async {
+      final actions = _FakeActions();
+      final webs = await ready(tester, actions);
+      await tester.tap(share);
+      await tester.pump();
+      webs.last.say(cardEmbedImageErrorMessage);
+      await tester.pumpAndSettle();
+      expect(actions.images, isEmpty);
+      expect(actions.shared, ['My business card, Awa Camara: $_url']);
+      // The card stays the real card.
+      expect(find.byKey(const Key('my-card-fallback')), findsNothing);
+    });
+
+    testWidgets('the page never answers: the link alone, after the wait', (
+      tester,
+    ) async {
+      final actions = _FakeActions();
+      await ready(tester, actions);
+      await tester.tap(share);
+      await tester.pump(cardEmbedImageTimeout - const Duration(seconds: 1));
+      expect(actions.shared, isEmpty);
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+      expect(actions.images, isEmpty);
+      expect(actions.shared, ['My business card, Awa Camara: $_url']);
+    });
+
+    testWidgets('the real card is not showing yet: the link at once', (
+      tester,
+    ) async {
+      final actions = _FakeActions();
+      final webs = _Webs();
+      await _pump(tester, _Cards(), webs: webs, actions: actions);
+      await tester.tap(share);
+      await tester.pumpAndSettle();
+      expect(webs.last.scripts, isEmpty);
+      expect(actions.shared, ['My business card, Awa Camara: $_url']);
+    });
+
+    testWidgets('a late picture after the wait is not shared twice', (
+      tester,
+    ) async {
+      final actions = _FakeActions();
+      final webs = await ready(tester, actions);
+      await tester.tap(share);
+      await tester.pump(cardEmbedImageTimeout + const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+      webs.last.say('image:${base64Encode(jpeg)}');
+      await tester.pumpAndSettle();
+      expect(actions.images, isEmpty);
+      expect(actions.shared, hasLength(1));
+    });
   });
 
   group('Share and Save contact', () {
