@@ -568,6 +568,7 @@ const {
 } = require("./invoice_ledger");
 const {
   monthLabel: parkingMonthLabel,
+  markLegacyUndonePayments,
   parkingMonthSummary,
   previousMonthKey: previousParkingMonthKey,
   moneyText: parkingMoneyText,
@@ -20321,6 +20322,10 @@ async function staffBalancesAnswer(uid, data) {
       byBusiness("staffExpenseRepayments"),
       byBusiness("lotExpenseLines"),
     ]);
+  // Payments a pre-2026-10-30 undo left in a car's list are not money
+  // anyone holds (parking_month_statement.markLegacyUndonePayments).
+  parkedCars.splice(0, parkedCars.length,
+      ...parkedCars.map(markLegacyUndonePayments));
   const now = new Date();
   const staffNames = {};
   for (const user of team) {
@@ -20399,6 +20404,8 @@ async function staffHeldAtMonthEnd(db, business, businessId, monthKey) {
     byBusiness("inventorySales"), byBusiness(INVENTORY_CREDIT_PAYMENTS),
     byBusiness("invoicePayments"), byBusiness("staffHandovers"),
   ]);
+  parkedCars.splice(0, parkedCars.length,
+      ...parkedCars.map(markLegacyUndonePayments));
   const asOfMs = staffStatement.monthEndMs(monthKey);
   const held = staffStatement.staffHeldAsOf({
     asOfMs,

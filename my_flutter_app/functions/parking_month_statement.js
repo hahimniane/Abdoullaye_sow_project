@@ -195,6 +195,64 @@ function paymentCents(payment) {
 }
 
 /**
+ * A timestamp in milliseconds (Firestore Timestamp, {seconds}, Date, number
+ * or text), or 0.
+ *
+ * @param {*} value The value.
+ * @return {number} Milliseconds.
+ */
+function stampMs(value) {
+  if (!value) return 0;
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? 0 : value.getTime();
+  }
+  if (typeof value.toMillis === "function") return value.toMillis();
+  const seconds = Number(value.seconds ?? value._seconds);
+  if (Number.isFinite(seconds)) return seconds * 1000;
+  const parsed = Date.parse(String(value));
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+/**
+ * Before 2026-10-30 undoing a car's payment reset the record (amountPaid,
+ * status, `paymentRevertedAt`) but left the payment in `parkingPayments`,
+ * so a car paid again afterwards listed the money twice and Staff balances
+ * counted the undone payment as cash someone still held. The record is the
+ * authority: while the live list adds up to more than `amountPaidCents`,
+ * the payments recorded at or before the last undo are marked `reverted`
+ * (oldest first), exactly as today's undo leaves them. Anything else is
+ * returned unchanged (the same object).
+ *
+ * @param {object} row A parkedCars document.
+ * @return {object} The row, or a copy with the leftovers marked.
+ */
+function markLegacyUndonePayments(row) {
+  if (!row || typeof row !== "object") return row;
+  const undoneMs = stampMs(row.paymentRevertedAt);
+  const list = Array.isArray(row.parkingPayments) ? row.parkingPayments : [];
+  if (!undoneMs || list.length === 0) return row;
+  const stored = Math.round(Number(row.amountPaidCents) || 0);
+  let live = list.reduce((sum, p) => sum +
+    (p && typeof p === "object" && p.reverted !== true ? paymentCents(p) : 0),
+  0);
+  if (live <= stored) return row;
+  let changed = false;
+  const marked = list.map((p) => {
+    if (live <= stored || !p || typeof p !== "object" || p.reverted === true) {
+      return p;
+    }
+    const at = stampMs(p.at);
+    if (!at || at > undoneMs) return p;
+    live -= paymentCents(p);
+    changed = true;
+    return {...p, reverted: true, revertedAt: row.paymentRevertedAt,
+      revertedByUid: row.paymentRevertedByStaffId || ""};
+  });
+  return changed ? {...row, parkingPayments: marked} : row;
+}
+
+/**
  * What has been paid on the car NOW, for the balance a customer sees. The
  * recorded payments that were not reverted, or what the record says was
  * paid (paidCents) when that is more - a part-paid car later marked paid in
@@ -890,6 +948,7 @@ module.exports = {
   paidCents,
   paidNowCents,
   paymentCents,
+  markLegacyUndonePayments,
   parkingBalanceNow,
   parkingMonthStatement,
   parkingMonthSummary,

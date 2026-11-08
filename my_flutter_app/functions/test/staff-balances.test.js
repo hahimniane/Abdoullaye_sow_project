@@ -221,3 +221,57 @@ describe("what counts as the business's money (STAFF_BALANCES.md §7)", () => {
       shop: true, invoice: true});
   });
 });
+
+describe("a payment a September 2026 undo left in a car's list", () => {
+  const {markLegacyUndonePayments} = require("../parking_month_statement");
+  // A car paid $72, the payment undone the same day (the record was reset
+  // but the payment stayed in the list), then paid again a month later.
+  const car = () => ({
+    id: "car-1", businessId: "biz", status: "reserved",
+    paymentMethod: "direct", paymentStatus: "paid",
+    amountPaidCents: 7200, totalCostCents: 7200, amountDueCents: 7200,
+    dailyRate: 12, parkingDate: "2026-09-01T12:00:00Z",
+    parkingEndDate: "2026-09-06T12:00:00Z",
+    receivedByStaffId: "staff-b",
+    paymentRevertedAt: {_seconds: Date.parse("2026-09-12T22:34:25Z") / 1000},
+    paymentRevertedByStaffId: "staff-a",
+    parkingPayments: [
+      {amountCents: 7200, receivedVia: "other", receivedByStaffId: "staff-a",
+        at: {_seconds: Date.parse("2026-09-12T17:30:00Z") / 1000}},
+      {amountCents: 7200, receivedVia: "cash", receivedByStaffId: "staff-b",
+        at: {_seconds: Date.parse("2026-10-23T20:13:17Z") / 1000}},
+    ],
+  });
+  const now = new Date("2026-11-08T12:00:00Z");
+  const held = (row) => balances.collectReceipts({parkedCars: [row]}, now)
+      .filter((r) => r.source === "parking")
+      .reduce((acc, r) => ({...acc, [r.staffId]:
+        (acc[r.staffId] || 0) + r.amountCents}), {});
+
+  it("marks the undone payment, keeps the one after it", () => {
+    const fixed = markLegacyUndonePayments(car());
+    assert.equal(fixed.parkingPayments[0].reverted, true);
+    assert.equal(fixed.parkingPayments[0].revertedByUid, "staff-a");
+    assert.equal(fixed.parkingPayments[1].reverted, undefined);
+  });
+
+  it("counts only the real $72, held by whoever took it the second time",
+      () => {
+        assert.deepEqual(held(markLegacyUndonePayments(car())),
+            {"staff-b": 7200});
+      });
+
+  it("leaves every other car exactly as it is", () => {
+    const noUndo = {...car(), paymentRevertedAt: null};
+    assert.equal(markLegacyUndonePayments(noUndo), noUndo);
+    const matches = {...car(), amountPaidCents: 14400};
+    assert.equal(markLegacyUndonePayments(matches), matches);
+    const afterUndo = car();
+    afterUndo.parkingPayments[0].at =
+      {_seconds: Date.parse("2026-09-13T10:00:00Z") / 1000};
+    assert.equal(markLegacyUndonePayments(afterUndo), afterUndo);
+    assert.equal(markLegacyUndonePayments(null), null);
+    const empty = {...car(), parkingPayments: []};
+    assert.equal(markLegacyUndonePayments(empty), empty);
+  });
+});
