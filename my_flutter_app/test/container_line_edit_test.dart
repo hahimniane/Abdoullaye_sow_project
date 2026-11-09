@@ -106,11 +106,17 @@ void main() {
     // to say what it is.
     await tester.tap(find.byKey(const Key('piece-kind-1-box')));
     await tester.pumpAndSettle();
+    // An old line saved without a price is priced the next time it is edited
+    // (docs/PACKAGE_PRICE_REQUIRED.md): every piece of a customer's line is
+    // marked required and says so when it is empty.
+    expect(find.text('Price *'), findsNWidgets(3));
     await tester.ensureVisible(find.byKey(const Key('line-save-edit')));
     await tester.tap(find.byKey(const Key('line-save-edit')));
     await tester.pumpAndSettle();
     expect(find.text('Say what each box or item is.'), findsOneWidget);
-    expect(find.byKey(const Key('piece-error-1')), findsOneWidget);
+    expect(find.text('Enter a price for every piece.'), findsNWidgets(3));
+    // The box says both: what it is, and its price.
+    expect(find.byKey(const Key('piece-error-1')), findsNWidgets(2));
     expect(tester.takeException(), isNull);
   });
 

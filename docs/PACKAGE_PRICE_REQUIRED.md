@@ -48,5 +48,5 @@ three. It returns `[]`, `["piece_price_required"]` or
 The web console and the app check this before sending, so staff see the
 problem on the form:
 - the price field on each piece is marked required;
-- each code has a message in English and French;
+- each code has a message in English and French (French calls a piece "colis": "Indiquez un prix pour chaque colis.");
 - the old "price every piece, or none of them" wording is gone.

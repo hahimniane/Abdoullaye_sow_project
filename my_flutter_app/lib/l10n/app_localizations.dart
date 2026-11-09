@@ -23471,6 +23471,18 @@ abstract class AppLocalizations {
   /// **'Enter each piece\'s price in dollars, zero or more.'**
   String get pcsErrPriceInvalid;
 
+  /// Under a customer package's pieces (add, edit, receive a request) when a piece has no price typed in. $0 is allowed; blank is not.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a price for every piece.'**
+  String get pcsErrPriceRequired;
+
+  /// Under a customer package's pieces when every piece price is $0: the pieces must come to more than $0.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the package\'s price: more than \$0.'**
+  String get pcsErrPackagePriceRequired;
+
   /// No description provided for @pcsErrCountInvalid.
   ///
   /// In en, this message translates to:
@@ -24874,12 +24886,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Final price (\$)'**
   String get prqFinalPrice;
-
-  /// No description provided for @prqPriceAllOrNone.
-  ///
-  /// In en, this message translates to:
-  /// **'Price every piece, or none.'**
-  String get prqPriceAllOrNone;
 
   /// No description provided for @prqLineTotal.
   ///

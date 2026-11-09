@@ -580,7 +580,7 @@ void main() {
       'priceCents': price,
     };
 
-    test('opens on the request pieces in the pieces editor; none or all '
+    test('opens on the request pieces in the pieces editor; every piece '
         'priced', () {
       final request = PackageRequest.fromMap('r1', _doc());
       final pieces = receivePrefillPieces(request);
@@ -596,10 +596,28 @@ void main() {
             description: 'TV')]).reasons,
         ['price_required'],
       );
+      // docs/PACKAGE_PRICE_REQUIRED.md: none priced is refused too, and the
+      // pieces must come to more than $0 ($0 on one piece is a price).
       expect(
         checkReceive([draft('p1', 'barrel', null), draft('p2', 'other', null,
+            description: 'TV')]).reasons,
+        ['price_required'],
+      );
+      expect(
+        checkReceive([draft('p1', 'barrel', 0), draft('p2', 'other', 0,
+            description: 'TV')]).reasons,
+        ['package_price_required'],
+      );
+      expect(
+        checkReceive([draft('p1', 'barrel', 9000), draft('p2', 'other', 0,
             description: 'TV')]).ok,
         isTrue,
+      );
+      // A price typed wrong keeps its own reason, with no "required" on top.
+      expect(
+        checkReceive([draft('p1', 'barrel', 'unreadable'),
+            draft('p2', 'barrel', null)]).reasons,
+        ['piece_price_invalid'],
       );
       final check = checkReceive([
         draft('p1', 'barrel', 12000),

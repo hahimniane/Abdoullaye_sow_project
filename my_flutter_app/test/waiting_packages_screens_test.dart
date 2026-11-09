@@ -281,8 +281,10 @@ void main() {
       // The sender is optional (owner, 2026-10-21); the receiver is not.
       expect(find.text("Enter the receiver's name."), findsOneWidget);
       expect(find.text("Enter the customer's name."), findsNothing);
-      expect(find.byKey(const Key('piece-error-0')), findsOneWidget);
+      // The box says what is wrong with it: what it is, and its price.
+      expect(find.byKey(const Key('piece-error-0')), findsNWidgets(2));
       expect(find.text('Say what each box or item is.'), findsOneWidget);
+      expect(find.text('Enter a price for every piece.'), findsOneWidget);
       expect(find.text('Choose where this package is going.'), findsNothing);
       expect(calls.log, isEmpty);
 
@@ -324,6 +326,45 @@ void main() {
       expect(calls.log, isEmpty);
     });
 
+    // docs/PACKAGE_PRICE_REQUIRED.md: no price, no save, on the phone.
+    testWidgets('a customer package needs a price on every piece, over \$0',
+        (tester) async {
+      final calls = _Calls();
+      await _openSheet<WaitingPackageSaved>(tester, sheet(calls));
+      await _type(tester, 'line-customer', 'Fatou Diallo');
+      await _type(tester, 'line-receiver', 'Mariama Bah');
+      // The price field says it is required.
+      expect(find.text('Price *'), findsOneWidget);
+      await _tap(tester, 'line-save');
+      expect(find.text('Enter a price for every piece.'), findsOneWidget);
+      expect(find.byKey(const Key('piece-error-0')), findsOneWidget);
+      expect(calls.log, isEmpty);
+
+      // $0 on every piece is not a price for the package.
+      await _type(tester, 'piece-price-0', '0');
+      await _tap(tester, 'line-save');
+      expect(find.text("Enter the package's price: more than \$0."),
+          findsOneWidget);
+      expect(calls.log, isEmpty);
+
+      await _type(tester, 'piece-price-0', '45');
+      await _tap(tester, 'line-save');
+      expect(calls.of('addWaitingPackage'), hasLength(1));
+    });
+
+    testWidgets('the server\'s price refusals are said in words',
+        (tester) async {
+      final calls = _Calls();
+      await _openSheet<WaitingPackageSaved>(tester, sheet(calls));
+      await _type(tester, 'line-customer', 'Fatou Diallo');
+      await _type(tester, 'line-receiver', 'Mariama Bah');
+      await _type(tester, 'piece-price-0', '45');
+      calls.refuse = (_) => _refusal('package_price_required');
+      await _tap(tester, 'line-save');
+      expect(find.text("Enter the package's price: more than \$0."),
+          findsOneWidget);
+    });
+
     testWidgets('registers pieces with their sizes, prices and the country',
         (tester) async {
       final calls = _Calls()
@@ -338,6 +379,8 @@ void main() {
       await _tap(tester, 'pieces-add');
       await _tap(tester, 'piece-kind-1-other');
       await _type(tester, 'piece-description-1', 'TV');
+      // $0 is a price: the bundle is priced on the barrel.
+      await _type(tester, 'piece-price-1', '0');
       await _tap(tester, 'piece-add-size-1');
       await _type(tester, 'piece-length-1', '40');
       await _type(tester, 'piece-width-1', '30');
@@ -361,7 +404,7 @@ void main() {
       expect(pieces[0]['priceCents'], 4550);
       expect(pieces[1]['kind'], 'other');
       expect(pieces[1]['description'], 'TV');
-      expect(pieces[1]['priceCents'], isNull);
+      expect(pieces[1]['priceCents'], 0);
       expect(pieces[1]['sizeIn'], {'l': 40, 'w': 30, 'h': 20});
       // The old-app summary rides along; the server recomputes it.
       expect(sent['kind'], 'other');
@@ -390,6 +433,7 @@ void main() {
       await _openSheet<WaitingPackageSaved>(tester, sheet(calls));
       await _type(tester, 'line-customer', 'Fatou');
       await _type(tester, 'line-receiver', 'Mariama Bah');
+      await _type(tester, 'piece-price-0', '45');
       await _tap(tester, 'wpk-destination');
       expect(find.text('Your destinations'), findsOneWidget);
       await tester.tap(find.text('Senegal').first);
@@ -407,6 +451,7 @@ void main() {
       final opened = await _openSheet<WaitingPackageSaved>(tester, sheet(calls));
       await _type(tester, 'piece-price-0', '45');
       await _tap(tester, 'pieces-add');
+      await _type(tester, 'piece-price-1', '10');
       await _type(tester, 'line-customer', 'Fatou Diallo');
       await _type(tester, 'line-receiver', 'Mariama Bah');
       await _tap(tester, 'wpk-destination');
@@ -427,6 +472,7 @@ void main() {
       expect(find.textContaining('CL-BBBBBB'), findsOneWidget);
 
       await _type(tester, 'line-receiver', 'Aissatou Bah');
+      await _type(tester, 'piece-price-0', '45');
       await _tap(tester, 'line-save');
       expect(calls.of('addWaitingPackage'), hasLength(2));
       expect(calls.of('addWaitingPackage').last['customerName'], 'Fatou Diallo');
@@ -441,6 +487,7 @@ void main() {
       final opened = await _openSheet<WaitingPackageSaved>(tester, sheet(calls));
       await _type(tester, 'line-customer', 'Fatou');
       await _type(tester, 'line-receiver', 'Mariama Bah');
+      await _type(tester, 'piece-price-0', '45');
       await _tap(tester, 'line-save-and-print');
       expect(opened.value!.printLabel, isTrue);
       expect(opened.value!.lineId, 'l5');
@@ -453,6 +500,7 @@ void main() {
       final opened = await _openSheet<WaitingPackageSaved>(tester, sheet(calls));
       await _type(tester, 'line-customer', 'Fatou');
       await _type(tester, 'line-receiver', 'Mariama Bah');
+      await _type(tester, 'piece-price-0', '45');
       await _tap(tester, 'line-save');
       expect(find.text('A package can only go on a container headed to the same country.'),
           findsOneWidget);
@@ -1635,7 +1683,9 @@ void main() {
       await _type(tester, 'piece-price-0', '45');
       await _tap(tester, 'line-save');
       expect(find.byKey(const Key('piece-error-0')), findsOneWidget);
-      expect(find.byKey(const Key('piece-error-1')), findsOneWidget);
+      // The second piece has no description and no price: two messages.
+      expect(find.byKey(const Key('piece-error-1')), findsNWidgets(2));
+      expect(find.text('Prix *'), findsNWidgets(2));
       expect(tester.takeException(), isNull);
     });
 

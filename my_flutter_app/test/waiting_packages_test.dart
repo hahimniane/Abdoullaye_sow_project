@@ -363,34 +363,44 @@ void main() {
 
   group('the register form', () {
     test('a waiting package needs a customer and a destination', () {
-      expect(validateWaitingPackage(_draft()), isEmpty);
-      expect(validateWaitingPackage(_draft(destinationCountryId: '')),
+      expect(validateWaitingPackage(_draft(priceCents: 9000)), isEmpty);
+      expect(validateWaitingPackage(_draft(priceCents: 9000, destinationCountryId: '')),
           ['package_destination_required']);
       // The sender is optional (owner, 2026-10-21); the receiver is not.
-      expect(validateWaitingPackage(_draft(customerName: '')), isEmpty);
-      expect(validateWaitingPackage(_draft(receiverName: ' ')),
+      expect(validateWaitingPackage(_draft(priceCents: 9000, customerName: '')), isEmpty);
+      expect(validateWaitingPackage(_draft(priceCents: 9000, receiverName: ' ')),
           ['receiver_name_required']);
       expect(validateWaitingPackage(_draft(ownerKind: containerOwnerStock)),
           ['owner_kind_invalid'],
           reason: 'stock is not dropped off at a counter');
-      expect(validateWaitingPackage(_draft(quantity: 0)), ['quantity_required']);
+      expect(validateWaitingPackage(_draft(priceCents: 9000, quantity: 0)), ['quantity_required']);
       expect(
           validateWaitingPackage(
-              _draft(destinationCountryId: '', receiverName: '', quantity: 0)),
+              _draft(
+                  priceCents: 9000,
+                  destinationCountryId: '',
+                  receiverName: '',
+                  quantity: 0)),
           ['quantity_required', 'receiver_name_required',
             'package_destination_required']);
     });
 
     test('size and price are checked with the line, every problem at once', () {
-      expect(validateWaitingPackage(_draft(lengthIn: '40')), ['size_invalid']);
+      expect(validateWaitingPackage(_draft(priceCents: 9000, lengthIn: '40')), ['size_invalid']);
       expect(
           validateWaitingPackage(
-              _draft(lengthIn: '40', widthIn: '30', heightIn: '20')),
+              _draft(
+                  priceCents: 9000,
+                  lengthIn: '40',
+                  widthIn: '30',
+                  heightIn: '20')),
           isEmpty);
       expect(validateWaitingPackage(_draft(priceCents: 0)), ['price_invalid']);
+      // A customer's package carries its price (PACKAGE_PRICE_REQUIRED.md).
+      expect(validateWaitingPackage(_draft()), ['package_price_required']);
       expect(validateWaitingPackage(_draft(priceCents: 4550)), isEmpty);
       // The same checks guard a line added to a container.
-      expect(validateContainerLine(_draft(lengthIn: '40')), ['size_invalid']);
+      expect(validateContainerLine(_draft(priceCents: 9000, lengthIn: '40')), ['size_invalid']);
     });
 
     test('add: a flat request with the country, size, price and the switch', () {

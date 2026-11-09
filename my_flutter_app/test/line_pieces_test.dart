@@ -43,6 +43,7 @@ final Map<String, Object? Function(List<Object?>)> _rules = {
   'pieceKindOf': (a) => pieceKindOf(a[0]),
   'pieceErrors': (a) =>
       a.length > 1 ? pieceErrors(a[0], _int(a[1])) : pieceErrors(a[0]),
+  'piecePriceRequiredErrors': (a) => piecePriceRequiredErrors(a[0]),
   'normalizePieces': (a) => normalizePieces(a[0]),
   'distributeCents': (a) =>
       distributeCents(a[0] == null ? null : _int(a[0]), _int(a[1])),

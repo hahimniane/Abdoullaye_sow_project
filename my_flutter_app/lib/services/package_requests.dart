@@ -2084,7 +2084,8 @@ class ReceiveCheck {
   final List<Map<String, Object?>> pieces;
 
   /// Every problem, as the server names it: phase 1's piece codes, then
-  /// `too_many_pieces` (a request holds 20) and `price_required`.
+  /// `too_many_pieces` (a request holds 20), `price_required` (a piece has no
+  /// price) and `package_price_required` (every price is $0).
   final List<String> reasons;
 
   /// The line's price: the pieces plus the pickup fee, null while no piece
@@ -2099,8 +2100,8 @@ class ReceiveCheck {
 }
 
 /// The checks `receivePackageRequest` makes on the editor's pieces
-/// ([lp.pieceErrors] for each piece, at most [requestMaxPieces], all
-/// priced or none) and, for a collected request, on its pickup fee
+/// ([lp.pieceErrors] for each piece, at most [requestMaxPieces], every piece
+/// priced and the pieces over $0) and, for a collected request, on its pickup fee
 /// ([pickupFeeCents]; [pickupFeeInvalid] when what was typed is not money).
 ReceiveCheck checkReceive(
   List<Map<String, Object?>> drafts, {
@@ -2120,9 +2121,14 @@ ReceiveCheck checkReceive(
       'priceCents': clean.priceCents,
     });
   }
-  final priced = pieces.where((p) => p['priceCents'] != null).length;
-  if (reasons.isEmpty && priced > 0 && priced < pieces.length) {
-    reasons.add('price_required');
+  // Every piece is priced and the package is more than $0
+  // (docs/PACKAGE_PRICE_REQUIRED.md): a request is always a customer's. A
+  // price typed wrong already has its own reason. Mirrors the server, which
+  // names a piece with no price `price_required`.
+  if (!reasons.contains('piece_price_invalid')) {
+    for (final code in lp.piecePriceRequiredErrors(pieces)) {
+      reasons.add(code == 'piece_price_required' ? 'price_required' : code);
+    }
   }
   if (pickupFeeInvalid) reasons.add('pickup_fee_invalid');
   return ReceiveCheck(

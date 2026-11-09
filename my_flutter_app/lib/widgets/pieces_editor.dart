@@ -269,11 +269,17 @@ class PiecesEditorController extends ChangeNotifier {
       lineTotalCents(normalizePieces(draftPieces), pickupFeeCents);
 
   /// One piece's own problems (not the list's: "too many", "none").
-  List<String> errorsFor(int index) {
+  /// [requirePrice] (a customer's package: docs/PACKAGE_PRICE_REQUIRED.md)
+  /// adds `piece_price_required` when its price is blank; $0 is a price.
+  List<String> errorsFor(int index, {bool requirePrice = false}) {
     if (index < 0 || index >= _rows.length) return const [];
-    return pieceErrors([
-      _rows[index].toDraft(),
-    ]).where((c) => c != 'pieces_required' && c != 'pieces_too_many').toList();
+    final draft = _rows[index].toDraft();
+    return [
+      ...pieceErrors([
+        draft,
+      ]).where((c) => c != 'pieces_required' && c != 'pieces_too_many'),
+      if (requirePrice && draft['priceCents'] == null) 'piece_price_required',
+    ];
   }
 
   /// Another piece, of the same kind as the last (barrels come in runs).
@@ -333,9 +339,15 @@ class PiecesEditor extends StatelessWidget {
     this.showErrors = false,
     this.error,
     this.enabled = true,
+    this.requirePrices = false,
   });
 
   final PiecesEditorController controller;
+
+  /// Every piece must have a price typed in ($0 is allowed): a customer's
+  /// package (docs/PACKAGE_PRICE_REQUIRED.md). The price fields are marked
+  /// required and a blank one says so. Off for the business's own stock.
+  final bool requirePrices;
 
   /// A refusal code in words (the screen's `containerErrorText`).
   final String Function(String code) describe;
@@ -378,8 +390,15 @@ class PiecesEditor extends StatelessWidget {
                   row: rows[i],
                   removable: rows.length > 1 && enabled,
                   enabled: enabled,
+                  requirePrice: requirePrices,
                   errors: showErrors
-                      ? [for (final c in controller.errorsFor(i)) describe(c)]
+                      ? [
+                          for (final c in controller.errorsFor(
+                            i,
+                            requirePrice: requirePrices,
+                          ))
+                            describe(c),
+                        ]
                       : const [],
                   onKind: (kind) {
                     AppHaptics.selection();
@@ -451,6 +470,7 @@ class _PieceCard extends StatelessWidget {
     required this.removable,
     required this.enabled,
     required this.errors,
+    required this.requirePrice,
     required this.onKind,
     required this.onRemove,
     required this.onOpenSize,
@@ -461,6 +481,9 @@ class _PieceCard extends StatelessWidget {
   final bool removable;
   final bool enabled;
   final List<String> errors;
+
+  /// The price field is marked required (a customer's package).
+  final bool requirePrice;
   final ValueChanged<String> onKind;
   final VoidCallback onRemove;
   final VoidCallback onOpenSize;
@@ -593,7 +616,7 @@ class _PieceCard extends StatelessWidget {
                     decimal: true,
                   ),
                   decoration: InputDecoration(
-                    labelText: l10n.pcsPrice,
+                    labelText: requirePrice ? '${l10n.pcsPrice} *' : l10n.pcsPrice,
                     prefixText: r'$ ',
                     isDense: true,
                   ),

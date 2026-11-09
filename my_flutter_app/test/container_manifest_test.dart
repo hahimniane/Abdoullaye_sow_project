@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:my_flutter_app/l10n/app_localizations_en.dart';
+import 'package:my_flutter_app/l10n/app_localizations_fr.dart';
 import 'package:my_flutter_app/services/container_manifest.dart';
 
 /// The app's mirror of `functions/container_manifest.js`. Every rule the
@@ -203,6 +205,7 @@ void main() {
           ownerKind: containerOwnerCustomer,
           customerName: 'Mamadou',
           receiverName: 'Mariama',
+          priceCents: 9000,
         )),
         ['quantity_required'],
       );
@@ -227,6 +230,7 @@ void main() {
           kind: containerLineKindBarrels,
           quantity: 4,
           ownerKind: containerOwnerCustomer,
+          priceCents: 9000,
         )),
         ['receiver_name_required'],
       );
@@ -235,6 +239,7 @@ void main() {
           kind: containerLineKindBarrels,
           quantity: 4,
           ownerKind: containerOwnerCustomer,
+          priceCents: 9000,
           customerName: 'Fatou',
         )),
         ['receiver_name_required'],
@@ -244,6 +249,7 @@ void main() {
           kind: containerLineKindBarrels,
           quantity: 4,
           ownerKind: containerOwnerCustomer,
+          priceCents: 9000,
           receiverName: 'Mariama',
         )),
         isEmpty,
@@ -257,6 +263,107 @@ void main() {
         )),
         isEmpty,
       );
+    });
+
+    // docs/PACKAGE_PRICE_REQUIRED.md: mirrors the server's check.
+    group('a customer package carries its price', () {
+      Map<String, Object?> piece(String id, Object? price) => {
+        'id': id,
+        'kind': 'barrel',
+        'description': '',
+        'sizeIn': {'l': '', 'w': '', 'h': ''},
+        'priceCents': price,
+      };
+      ContainerLineDraft pieced(
+        List<Object?> prices, {
+        String owner = containerOwnerCustomer,
+        int? pickupFeeCents,
+      }) => ContainerLineDraft(
+        kind: containerLineKindBarrels,
+        ownerKind: owner,
+        receiverName: 'Mariama',
+        pieces: [
+          for (var i = 0; i < prices.length; i++) piece('p${i + 1}', prices[i]),
+        ],
+        pickupFeeCents: pickupFeeCents,
+      );
+
+      test('every piece needs a price typed in', () {
+        expect(validateContainerLine(pieced([9000, 4000])), isEmpty);
+        expect(validateContainerLine(pieced([9000, null])),
+            ['piece_price_required']);
+        expect(validateContainerLine(pieced([null])),
+            ['piece_price_required']);
+      });
+
+      test('Zero is a price on a piece, so a bundle can be priced on one', () {
+        expect(validateContainerLine(pieced([9000, 0])), isEmpty);
+      });
+
+      test('the pieces must come to more than \$0; a pickup fee does not '
+          'count', () {
+        expect(validateContainerLine(pieced([0, 0])),
+            ['package_price_required']);
+        expect(validateContainerLine(pieced([0], pickupFeeCents: 1500)),
+            ['package_price_required']);
+      });
+
+      test('a price typed wrong keeps its own error only', () {
+        expect(validateContainerLine(pieced(['unreadable', null])),
+            ['piece_price_invalid']);
+      });
+
+      test('stock and cars are exempt', () {
+        expect(
+          validateContainerLine(pieced([null, null], owner: containerOwnerStock)),
+          isEmpty,
+        );
+        expect(
+          validateContainerLine(const ContainerLineDraft(
+            kind: containerLineKindCar,
+            vinNumber: '1HGCM82633A004352',
+            ownerKind: containerOwnerCustomer,
+            receiverName: 'Mariama',
+          )),
+          isEmpty,
+        );
+      });
+
+      test('an old-style line with no price needs one', () {
+        const base = ContainerLineDraft(
+          kind: containerLineKindBarrels,
+          quantity: 2,
+          ownerKind: containerOwnerCustomer,
+          receiverName: 'Mariama',
+        );
+        expect(validateContainerLine(base), ['package_price_required']);
+        expect(
+          validateContainerLine(const ContainerLineDraft(
+            kind: containerLineKindBarrels,
+            quantity: 2,
+            ownerKind: containerOwnerCustomer,
+            receiverName: 'Mariama',
+            priceCents: 9000,
+          )),
+          isEmpty,
+        );
+      });
+
+      test('each code has words in English and French', () {
+        final en = AppLocalizationsEn();
+        final fr = AppLocalizationsFr();
+        expect(en.pcsErrPriceRequired, 'Enter a price for every piece.');
+        expect(en.pcsErrPackagePriceRequired,
+            "Enter the package's price: more than \$0.");
+        expect(fr.pcsErrPriceRequired, 'Indiquez un prix pour chaque colis.');
+        expect(fr.pcsErrPackagePriceRequired,
+            'Indiquez le prix du colis : plus de 0 \$.');
+      });
+
+      test('the codes are known to the error list', () {
+        expect(containerRefusalCodes, contains('piece_price_required'));
+        expect(containerRefusalCodes, contains('package_price_required'));
+      });
     });
 
     test('the record carries only what its kind and owner need', () {
@@ -470,6 +577,7 @@ void main() {
           kind: containerLineKindBarrels,
           quantity: 2,
           ownerKind: containerOwnerCustomer,
+          priceCents: 9000,
           customerName: 'Fatou Diallo',
           customerPhone: customerPhone,
           receiverName: receiverName,
@@ -791,6 +899,7 @@ void main() {
         kind: containerLineKindBarrels,
         quantity: 1,
         ownerKind: containerOwnerCustomer,
+        priceCents: 9000,
         customerName: 'stale',
         customerPhone: 'not a phone',
         receiverName: ' Mariama Bah ',
@@ -875,6 +984,7 @@ void main() {
         kind: containerLineKindBarrels,
         quantity: 5,
         ownerKind: containerOwnerCustomer,
+        priceCents: 9000,
         customerName: 'Fatou',
         customerPhone: '+1 646 555 0100',
       );
@@ -885,6 +995,7 @@ void main() {
         kind: containerLineKindBarrels,
         quantity: 5,
         ownerKind: containerOwnerCustomer,
+        priceCents: 9000,
         customerName: 'Fatou',
         customerPhone: '+16465550199',
       );

@@ -297,7 +297,10 @@ String? requestReasonText(AppLocalizations l10n, String reason) =>
       'pickup_fee_invalid' => l10n.prqErrPickupFee,
       'pickup_schedule_invalid' => l10n.prqErrPickupSchedule,
       'reason_required' => l10n.prqErrReasonRequired,
-      'price_required' => l10n.prqPriceAllOrNone,
+      // Receive: a piece has no price (`price_required`), or every price is
+      // $0 (docs/PACKAGE_PRICE_REQUIRED.md).
+      'price_required' || 'piece_price_required' => l10n.pcsErrPriceRequired,
+      'package_price_required' => l10n.pcsErrPackagePriceRequired,
       // The payment taken at Received follows addWaitingPackage's rules
       // and reasons: those already have words.
       _ when containerRefusalCodes.contains(reason) => containerErrorText(

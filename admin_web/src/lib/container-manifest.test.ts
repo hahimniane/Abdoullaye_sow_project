@@ -1384,6 +1384,6 @@ test("a customer's package line needs every piece priced and the pieces over $0;
   assert.equal(CONTAINER_MESSAGES.piece_price_required, "Enter a price for every piece.");
   assert.equal(CONTAINER_MESSAGES.package_price_required, "Enter the package's price: more than $0.");
   assert.equal(containerMessage(["piece_price_required"]), "Enter a price for every piece.");
-  assert.equal(translateValue(CONTAINER_MESSAGES.piece_price_required, "fr"), "Indiquez un prix pour chaque pièce.");
+  assert.equal(translateValue(CONTAINER_MESSAGES.piece_price_required, "fr"), "Indiquez un prix pour chaque colis.");
   assert.equal(translateValue(CONTAINER_MESSAGES.package_price_required, "fr"), "Indiquez le prix du colis : plus de 0 $.");
 });

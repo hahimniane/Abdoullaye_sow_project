@@ -676,12 +676,35 @@ void main() {
       expect(body.containsKey('pickupFeeCents'), isFalse);
     });
 
-    testWidgets('some priced and some not is refused', (tester) async {
+    testWidgets('a piece with no price is refused (every piece is priced)',
+        (tester) async {
       final opened = await open(tester, _req('d', 'confirmed'));
       // Only the barrel has a price: the TV has none.
-      expect(find.text('Price every piece, or none.'), findsOneWidget);
+      expect(find.text('Enter a price for every piece.'), findsOneWidget);
       await _tap(tester, 'receive-save');
       expect(opened.fake.of('receivePackageRequest'), isEmpty);
+      // The unpriced piece says so on its card, its field marked required.
+      expect(find.byKey(const Key('piece-error-1')), findsOneWidget);
+      expect(find.text('Price *'), findsNWidgets(2));
+      // $0 is a price on a piece: the bundle is priced on the barrel.
+      await _type(tester, 'piece-price-1', '0');
+      await _tap(tester, 'receive-save');
+      expect(opened.fake.of('receivePackageRequest'), hasLength(1));
+    });
+
+    testWidgets('pieces that all come to \$0 are refused', (tester) async {
+      final opened = await open(tester, _req('d', 'confirmed'));
+      await _type(tester, 'piece-price-0', '0');
+      await _type(tester, 'piece-price-1', '0');
+      expect(
+        find.text("Enter the package's price: more than \$0."),
+        findsWidgets,
+      );
+      await _tap(tester, 'receive-save');
+      expect(opened.fake.of('receivePackageRequest'), isEmpty);
+      await _type(tester, 'piece-price-1', '25');
+      await _tap(tester, 'receive-save');
+      expect(opened.fake.of('receivePackageRequest'), hasLength(1));
     });
 
     testWidgets('a card-paid order takes no payment', (tester) async {

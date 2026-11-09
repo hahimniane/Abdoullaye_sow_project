@@ -190,6 +190,9 @@ const containerRefusalCodes = <String>[
   'piece_description_too_long',
   'piece_size_invalid',
   'piece_price_invalid',
+  // Every customer package carries its price (docs/PACKAGE_PRICE_REQUIRED.md).
+  'piece_price_required',
+  'package_price_required',
   'piece_count_invalid',
   'line_has_parts',
   // Scan to load (docs/WAITING_PACKAGES.md "Scan to load"); the loading
@@ -781,6 +784,19 @@ List<String> validateContainerLine(
       input.heightIn,
     ));
     errors.addAll(packagePriceErrors(input.priceCents));
+  }
+  // Every customer package carries its price (docs/PACKAGE_PRICE_REQUIRED.md);
+  // a car is priced elsewhere and the business's own stock sells nothing.
+  // Mirrors the server's check right after the price errors.
+  if (owner == containerOwnerCustomer && kind != containerLineKindCar) {
+    if (pieced) {
+      // A price typed wrong already has its own error.
+      if (!errors.contains('piece_price_invalid')) {
+        errors.addAll(piecePriceRequiredErrors(input.pieces));
+      }
+    } else if (input.priceCents == null) {
+      errors.add('package_price_required');
+    }
   }
   // Proof on the package (docs/AIR_PACKAGES.md §2): one code for the first
   // problem, as the server's validateContainerLine pushes it.

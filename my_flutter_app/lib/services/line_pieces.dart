@@ -404,6 +404,30 @@ List<String> pieceErrors(Object? raw, [int max = maxPieces]) {
   return errors.toList();
 }
 
+/// Every customer package carries its price (docs/PACKAGE_PRICE_REQUIRED.md):
+/// each piece has a price typed in ($0 is fine, so a bundle can be priced on
+/// one piece) and the pieces together come to more than $0. A pickup fee is
+/// not a package price. Returns `[]`, `['piece_price_required']` (a piece has
+/// no price) or `['package_price_required']` (every price is $0). An empty
+/// list returns `[]`: that is [pieceErrors]' job.
+List<String> piecePriceRequiredErrors(Object? raw) {
+  final list = raw is List ? raw : const [];
+  if (list.isEmpty) return const [];
+  var total = 0;
+  var missing = false;
+  for (final item in list) {
+    final cents = piecePriceOf(_asRow(item)['priceCents']);
+    if (cents == null) {
+      missing = true;
+    } else {
+      total += cents;
+    }
+  }
+  if (missing) return const ['piece_price_required'];
+  if (total <= 0) return const ['package_price_required'];
+  return const [];
+}
+
 /// The pieces as stored: kind, description, size and price cleaned, and an
 /// id each. A usable id that is not a repeat is kept (an edit keeps its
 /// pieces); any other gets the first free `p<n>`.

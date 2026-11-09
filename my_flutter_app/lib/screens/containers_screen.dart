@@ -4093,6 +4093,8 @@ class _LineFormSheetState extends State<_LineFormSheet> {
     'piece_description_too_long',
     'piece_size_invalid',
     'piece_price_invalid',
+    'piece_price_required',
+    'package_price_required',
     'pickup_fee_invalid',
   };
 
@@ -5075,8 +5077,12 @@ class _LineFormSheetState extends State<_LineFormSheet> {
               describe: (code) => containerErrorText(l10n, code),
               showErrors: _showPieceErrors,
               enabled: !_busy,
+              // Every customer package carries its price
+              // (docs/PACKAGE_PRICE_REQUIRED.md); stock and cars are exempt.
+              requirePrices: _owner == containerOwnerCustomer,
               error: errorFor('pieces_required') ??
                   errorFor('pieces_too_many') ??
+                  errorFor('package_price_required') ??
                   errorFor('price_below_paid'),
             ),
           ],
@@ -6396,6 +6402,8 @@ String containerErrorText(
     'piece_description_too_long' => l10n.pcsErrDescriptionTooLong,
     'piece_size_invalid' => l10n.pcsErrSizeInvalid,
     'piece_price_invalid' => l10n.pcsErrPriceInvalid,
+    'piece_price_required' => l10n.pcsErrPriceRequired,
+    'package_price_required' => l10n.pcsErrPackagePriceRequired,
     'piece_count_invalid' => l10n.pcsErrCountInvalid,
     'line_has_parts' => l10n.pcsErrLineHasParts,
     // Scan to load: the loading screen's words (ldgErr*).

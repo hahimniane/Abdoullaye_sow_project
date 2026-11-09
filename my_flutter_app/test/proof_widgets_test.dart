@@ -443,6 +443,8 @@ void main() {
       await tap(tester, 'ship-mode-air');
       await type(tester, 'line-customer', 'Fatou Diallo');
       await type(tester, 'line-receiver', 'Mariama Bah');
+      // Every customer package carries its price (PACKAGE_PRICE_REQUIRED).
+      await type(tester, 'piece-price-0', '90');
       expect(find.byKey(const Key('proof-photos-required')), findsOneWidget);
 
       // No photo yet: refused on the phone, nothing sent.

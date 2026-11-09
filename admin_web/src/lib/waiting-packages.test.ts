@@ -942,7 +942,7 @@ test("a customer's package needs every piece priced and the pieces over $0, show
   assert.equal(firstInvalidWaitingPackageField(["piece_price_required"]), "wpk-pieces");
   assert.equal(waitingPackageMessage(["piece_price_required"]), "Enter a price for every piece.");
   assert.equal(waitingPackageMessage(["package_price_required"]), "Enter the package's price: more than $0.");
-  assert.equal(translateValue(waitingPackageMessage(["piece_price_required"]), "fr"), "Indiquez un prix pour chaque pièce.");
+  assert.equal(translateValue(waitingPackageMessage(["piece_price_required"]), "fr"), "Indiquez un prix pour chaque colis.");
   assert.equal(translateValue(waitingPackageMessage(["package_price_required"]), "fr"), "Indiquez le prix du colis : plus de 0 $.");
   // The old wording is gone everywhere in the console.
   const editor = readFileSync(new URL("../components/business/pieces-editor.tsx", import.meta.url), "utf8");

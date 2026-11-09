@@ -291,6 +291,8 @@ void main() {
       expect(find.byKey(const Key('proof-photo-camera')), findsNothing);
       await type(tester, 'line-customer', 'Fatou Diallo');
       await type(tester, 'line-receiver', 'Mariama Bah');
+      // Every customer package carries its price (PACKAGE_PRICE_REQUIRED).
+      await type(tester, 'piece-price-0', '90');
       await tap(tester, 'line-save');
       final sent = log.where((c) => c.$1 == 'addWaitingPackage').single.$2;
       expect(sent['shipMode'], 'sea');
@@ -317,6 +319,8 @@ void main() {
       // Sea never needs a photo, even with the switch on.
       await type(tester, 'line-customer', 'Fatou Diallo');
       await type(tester, 'line-receiver', 'Mariama Bah');
+      // Every customer package carries its price (PACKAGE_PRICE_REQUIRED).
+      await type(tester, 'piece-price-0', '90');
       await tap(tester, 'line-save');
       final sent = log.where((c) => c.$1 == 'addWaitingPackage').single.$2;
       expect(sent['shipMode'], 'sea');
@@ -332,6 +336,9 @@ void main() {
       );
       expect(find.byKey(const Key('proof-weight')), findsOneWidget);
       await tap(tester, 'ship-mode-sea');
+      // An old line saved without a price is priced when it is next edited.
+      await type(tester, 'piece-price-0', '45');
+      await type(tester, 'piece-price-1', '45');
       await tap(tester, 'line-save-edit');
       final sent = log.where((c) => c.$1 == 'updateContainerLine').single.$2;
       final line = sent['line'] as Map;

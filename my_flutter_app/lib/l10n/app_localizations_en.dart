@@ -13635,6 +13635,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'Enter each piece\'s price in dollars, zero or more.';
 
   @override
+  String get pcsErrPriceRequired => 'Enter a price for every piece.';
+
+  @override
+  String get pcsErrPackagePriceRequired =>
+      'Enter the package\'s price: more than \$0.';
+
+  @override
   String get pcsErrCountInvalid =>
       'Choose how many pieces go in: from 1 to the number the package has.';
 
@@ -14519,9 +14526,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get prqFinalPrice => 'Final price (\$)';
-
-  @override
-  String get prqPriceAllOrNone => 'Price every piece, or none.';
 
   @override
   String prqLineTotal(String total) {

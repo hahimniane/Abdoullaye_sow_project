@@ -6356,7 +6356,7 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Picked up · Received": "Collecté · Reçu",
   "Piece": "Colis",
   "Preferred day": "Jour souhaité",
-  "Enter a price for every piece.": "Indiquez un prix pour chaque pièce.",
+  "Enter a price for every piece.": "Indiquez un prix pour chaque colis.",
   "Enter the package's price: more than $0.": "Indiquez le prix du colis : plus de 0 $.",
   "QR code": "Code QR",
   "QR code of the request link": "Code QR du lien de demande",

@@ -6592,6 +6592,14 @@
   "pcsErrDescriptionTooLong": "Limitez la description de chaque colis à 120 caractères.",
   "pcsErrSizeInvalid": "Saisissez la longueur, la largeur et la hauteur du colis en pouces, ou laissez les trois vides.",
   "pcsErrPriceInvalid": "Saisissez le prix de chaque colis en dollars, zéro ou plus.",
+  "pcsErrPriceRequired": "Indiquez un prix pour chaque colis.",
+  "@pcsErrPriceRequired": {
+    "description": "Under a customer package's pieces (add, edit, receive a request) when a piece has no price typed in. $0 is allowed; blank is not."
+  },
+  "pcsErrPackagePriceRequired": "Indiquez le prix du colis : plus de 0 $.",
+  "@pcsErrPackagePriceRequired": {
+    "description": "Under a customer package's pieces when every piece price is $0: the pieces must come to more than $0."
+  },
   "pcsErrCountInvalid": "Choisissez combien de colis partent : de 1 au nombre de colis de l'envoi.",
   "pcsErrLineHasParts": "D'autres parties de ce colis sont encore enregistrées. Retirez-les d'abord.",
   "pcsGoingIn": "Colis qui partent",
@@ -7218,7 +7226,6 @@
     }
   },
   "prqFinalPrice": "Prix final ($)",
-  "prqPriceAllOrNone": "Indiquez le prix de chaque colis, ou d’aucun.",
   "prqLineTotal": "Total {total}",
   "@prqLineTotal": {
     "placeholders": {

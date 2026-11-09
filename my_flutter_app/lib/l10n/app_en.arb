@@ -6593,6 +6593,14 @@
   "pcsErrDescriptionTooLong": "Keep each piece's description to 120 characters.",
   "pcsErrSizeInvalid": "Enter a piece's length, width and height in inches, or leave all three empty.",
   "pcsErrPriceInvalid": "Enter each piece's price in dollars, zero or more.",
+  "pcsErrPriceRequired": "Enter a price for every piece.",
+  "@pcsErrPriceRequired": {
+    "description": "Under a customer package's pieces (add, edit, receive a request) when a piece has no price typed in. $0 is allowed; blank is not."
+  },
+  "pcsErrPackagePriceRequired": "Enter the package's price: more than $0.",
+  "@pcsErrPackagePriceRequired": {
+    "description": "Under a customer package's pieces when every piece price is $0: the pieces must come to more than $0."
+  },
   "pcsErrCountInvalid": "Choose how many pieces go in: from 1 to the number the package has.",
   "pcsErrLineHasParts": "Other parts of this package are still listed. Remove them first.",
   "pcsGoingIn": "Pieces going in",
@@ -7219,7 +7227,6 @@
     }
   },
   "prqFinalPrice": "Final price ($)",
-  "prqPriceAllOrNone": "Price every piece, or none.",
   "prqLineTotal": "Total {total}",
   "@prqLineTotal": {
     "placeholders": {

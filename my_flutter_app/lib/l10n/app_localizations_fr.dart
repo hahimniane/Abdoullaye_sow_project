@@ -13848,6 +13848,13 @@ class AppLocalizationsFr extends AppLocalizations {
       'Saisissez le prix de chaque colis en dollars, zéro ou plus.';
 
   @override
+  String get pcsErrPriceRequired => 'Indiquez un prix pour chaque colis.';
+
+  @override
+  String get pcsErrPackagePriceRequired =>
+      'Indiquez le prix du colis : plus de 0 \$.';
+
+  @override
   String get pcsErrCountInvalid =>
       'Choisissez combien de colis partent : de 1 au nombre de colis de l\'envoi.';
 
@@ -14735,10 +14742,6 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get prqFinalPrice => 'Prix final (\$)';
-
-  @override
-  String get prqPriceAllOrNone =>
-      'Indiquez le prix de chaque colis, ou d’aucun.';
 
   @override
   String prqLineTotal(String total) {

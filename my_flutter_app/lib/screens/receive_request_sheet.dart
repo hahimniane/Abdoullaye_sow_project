@@ -347,16 +347,22 @@ class _ReceiveRequestSheetState extends State<ReceiveRequestSheet> {
             describe: (code) => containerErrorText(l10n, code),
             showErrors: _showPieceErrors,
             enabled: !_busy,
+            // A request is always a customer's: every piece is priced
+            // (docs/PACKAGE_PRICE_REQUIRED.md).
+            requirePrices: true,
             error: _errors.contains('too_many_pieces')
                 ? requestReasonText(l10n, 'too_many_pieces')
                 : null,
           ),
           const SizedBox(height: AppSpacing.sm),
           PiecesTotalLine(controller: _pieces),
-          if (check.reasons.contains('price_required'))
+          if (check.reasons.contains('price_required') ||
+              check.reasons.contains('package_price_required'))
             Text(
-              l10n.prqPriceAllOrNone,
-              key: const Key('receive-price-all-or-none'),
+              check.reasons.contains('price_required')
+                  ? l10n.pcsErrPriceRequired
+                  : l10n.pcsErrPackagePriceRequired,
+              key: const Key('receive-price-required'),
               style: const TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
