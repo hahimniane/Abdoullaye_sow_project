@@ -415,11 +415,13 @@ test("the browser-write parking form cannot create records or edit paid ones", (
     panelSource.slice(panelSource.indexOf("const activeCount = parkedCars.rows")),
   ), "the parking panel must not reopen a blank create form");
 
-  // A paid record's money has moved; editing rewrites a completed sale.
-  const save = panelSource.slice(panelSource.indexOf("async function saveParking("), panelSource.indexOf("async function saveParking(") + 1400);
-  assert.match(save, /businessParkingPaymentTone\(existing\) === "paid"/);
-  assert.match(save, /can no longer be edited/);
-  assert.match(panelSource, /Paid records cannot be edited/);
+  // A paid record's money has moved: its stay cannot be edited, only the
+  // customer's contact (update_contact), and the form keeps the rest read-only.
+  const save = panelSource.slice(panelSource.indexOf("async function saveParking("), panelSource.indexOf("async function updateParkingStatus("));
+  assert.match(save, /businessParkingPaymentTone\(existing as FirestoreRow\) === "paid"/);
+  assert.match(save, /route === "blocked"[\s\S]{0,120}can no longer be edited/);
+  assert.match(panelSource, /<Pencil size=\{14\} \/> Edit contact/);
+  assert.ok(!/Paid records cannot be edited/.test(panelSource), "a paid car is no longer a dead end");
 });
 
 const saveParkingSource = panelSource.slice(

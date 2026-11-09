@@ -7631,6 +7631,38 @@ Object.assign(TEXT_TRANSLATIONS, {
     "Pour votre confidentialité, seuls le statut de la réservation et le solde du stationnement sont affichés ici.",
 });
 
+// "Send on WhatsApp" on a parked car, its refusals, the car-left message kind
+// and the note after a corrected number (docs/PARKING_LEFT_WHATSAPP.md §2-§4).
+// The status line with its date is built in the page's language
+// (parking-whatsapp-send.ts).
+Object.assign(TEXT_TRANSLATIONS, {
+  "Send on WhatsApp": "Envoyer sur WhatsApp",
+  "Sent on WhatsApp.": "Envoyé sur WhatsApp.",
+  "Not delivered. Check the number.": "Non distribué. Vérifiez le numéro.",
+  "This customer asked to stop WhatsApp messages.":
+    "Ce client a demandé l’arrêt des messages WhatsApp.",
+  "Saved. The last message will be resent to the new number.":
+    "Enregistré. Le dernier message sera renvoyé au nouveau numéro.",
+  "This car's customer can't be messaged (a team member's car, a voided car, or an online booking).":
+    "Le client de cette voiture ne peut pas être contacté (voiture d’un membre de l’équipe, voiture annulée ou réservation en ligne).",
+  "Add the customer's WhatsApp number first.":
+    "Ajoutez d’abord le numéro WhatsApp du client.",
+  "Add the country code to the number.":
+    "Ajoutez l’indicatif du pays au numéro.",
+  "This car's message was sent 5 times today. Try again tomorrow.":
+    "Le message de cette voiture a été envoyé 5 fois aujourd’hui. Réessayez demain.",
+  "Car left message": "Message de sortie de voiture",
+  "Nothing changed.": "Rien n’a changé.",
+  "A team member's car takes its name and number from the team member.":
+    "La voiture d’un membre de l’équipe prend le nom et le numéro de ce membre.",
+  "Only cars the business recorded can be changed here.":
+    "Seules les voitures enregistrées par l’entreprise peuvent être modifiées ici.",
+  "This car was voided.": "Cette voiture a été annulée.",
+  "This car is paid. You can only correct the customer's name, phone and email.":
+    "Cette voiture est payée. Vous pouvez seulement corriger le nom, le téléphone et l’e-mail du client.",
+  "Edit contact": "Modifier le contact",
+});
+
 // "Ships by: Sea · Air" on the package forms (ships-by.tsx), the Air/Sea
 // filter of the Waiting list and the refusals when a package goes the wrong
 // way (docs/AIR_PACKAGES.md §7). "Sea" and "Air" reuse the freight words.

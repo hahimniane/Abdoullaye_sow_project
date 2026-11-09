@@ -68,7 +68,17 @@ import { FieldInfo } from "@/components/field-info";
 import { ContainerTrackingCard } from "@/components/business/container-tracking-card";
 import { parkingWhatsAppEnabled, parkingWhatsAppEverEnabled } from "@/lib/parking-whatsapp";
 import { ParkingMonthEnd } from "@/components/business/parking-month-end";
-import { ParkingCarMessages, ParkingWelcomeDialog } from "@/components/business/parking-whatsapp";
+import {
+  contactDraftReasons,
+  contactSaveResends,
+  parkingContactRefusalText,
+  parkingSaveRoute,
+  parkingWhatsAppSendVisible,
+  parseContactResult,
+  phoneChangeResends,
+  updateContactRequest,
+} from "@/lib/parking-whatsapp-send";
+import { ParkingCarMessages, ParkingCarSendWhatsApp, ParkingWelcomeDialog } from "@/components/business/parking-whatsapp";
 import { VoidRecordModal, VoidedNote } from "@/components/business/void-record";
 import { isVoidedRecord, voidedLast } from "@/lib/voided-record";
 import { previousMonthKey } from "@/lib/parking-month-statement";
@@ -5062,6 +5072,10 @@ export function ParkingPanel({
   // "Send welcome to current customers": the one-time WhatsApp welcome.
   const [welcomeOpen, setWelcomeOpen] = useState(false);
   const whatsappOn = parkingWhatsAppEnabled(business);
+  // A paid car opens the edit form with only the customer's contact editable.
+  const editingPaid = formOpen && Boolean(draft.id) && parkedCars.rows.some(
+    (row) => row.id === draft.id && businessParkingPaymentTone(row) === "paid",
+  );
   // Which card the list sent us to, so opening a row lands on that car
   // rather than at the top of thirty of them.
   const [openRowId, setOpenRowId] = useState("");
@@ -5232,7 +5246,16 @@ export function ParkingPanel({
       setMessage("This car was voided and can no longer be changed.");
       return;
     }
-    setDraft({
+    setDraft(parkingDraftOf(row));
+    setEditErrors([]);
+    setMessage("");
+    setFormOpen(true);
+  }
+
+  // The edit form as a stored car fills it: also the "before" a save is
+  // compared with, to tell a contact-only fix from a change to the stay.
+  function parkingDraftOf(row: FirestoreRow): ParkingDraft {
+    return {
       id: row.id,
       ownerName: text(row.customerName ?? row.ownerName, ""),
       customerPhone: text(row.customerPhone, ""),
@@ -5248,10 +5271,7 @@ export function ParkingPanel({
       status: text(row.status, "reserved"),
       forStaffId: text(row.forStaffId, ""),
       whose: text(row.forStaffId, "") ? "team" : "other",
-    });
-    setEditErrors([]);
-    setMessage("");
-    setFormOpen(true);
+    };
   }
 
   /**
@@ -5291,16 +5311,53 @@ export function ParkingPanel({
       setMessage("Open a parking record to edit it.");
       return;
     }
-    // Hiding the Edit button is the affordance; this is the guard. A paid
-    // record's amount has already been charged, split and paid out. The
-    // server refuses it too - this only saves the round trip.
     const existing = parkedCars.rows.find((row) => row.id === draft.id);
-    if (existing && businessParkingPaymentTone(existing) === "paid") {
+    if (existing && isBusinessParkingVoided(existing)) {
+      setMessage("This car was voided and can no longer be changed.");
+      return;
+    }
+    // A paid car's amount was charged, split and paid out: only the customer's
+    // name, phone and email can be corrected, through `update_contact`. The
+    // same call serves any save that changes nothing but the contact, so a
+    // wrong number can always be fixed. The server refuses the rest too.
+    const paid = Boolean(existing) && businessParkingPaymentTone(existing as FirestoreRow) === "paid";
+    const route = existing ? parkingSaveRoute(parkingDraftOf(existing), draft, paid) : "full";
+    if (route === "blocked") {
       setMessage("This parking has been paid for and can no longer be edited.");
       return;
     }
-    if (existing && isBusinessParkingVoided(existing)) {
-      setMessage("This car was voided and can no longer be changed.");
+    if (route === "none") {
+      setMessage(parkingContactRefusalText({details: {reason: "nothing_to_change"}}));
+      return;
+    }
+    if (route === "contact" && existing) {
+      const reasons = contactDraftReasons(draft);
+      if (reasons.length > 0) {
+        setEditErrors([]);
+        setMessage(parkingContactRefusalText({details: {reason: reasons[0]}}));
+        return;
+      }
+      setBusy(true);
+      setMessage("");
+      try {
+        const response = await httpsCallable(functions, "updateBusinessParkingEntry")(
+          updateContactRequest(businessId, draft.id, parkingDraftOf(existing), draft),
+        );
+        const {changed} = parseContactResult(response.data);
+        if (draft.status !== text(existing.status, "active")) {
+          await updateParkingStatus(existing, draft.status);
+        }
+        closeForm();
+        setMessage(
+          contactSaveResends(business, existing, changed)
+            ? "Saved. The last message will be resent to the new number."
+            : "Parking record updated.",
+        );
+      } catch (error) {
+        setMessage(parkingContactRefusalText(error));
+      } finally {
+        setBusy(false);
+      }
       return;
     }
 
@@ -5331,12 +5388,19 @@ export function ParkingPanel({
         await updateParkingStatus(existing, draft.status);
       }
       closeForm();
+      // A corrected phone number on a car the business messages: the server
+      // resends the car's last message to the new number
+      // (docs/PARKING_LEFT_WHATSAPP.md §3).
+      const phoneResent = draft.whose !== "team" &&
+        phoneChangeResends(business, existing, existing?.customerPhone, draft.customerPhone);
       // A reissued link is the one outcome staff must not miss: the customer
       // is now holding a link for a different amount than the one quoted.
       setMessage(
         result.relinked
           ? "The amount changed, so a new payment link was issued and the customer was notified of the new amount."
-          : "Parking record updated.",
+          : phoneResent
+            ? "Saved. The last message will be resent to the new number."
+            : "Parking record updated.",
       );
     } catch (error) {
       setMessage(
@@ -6203,7 +6267,7 @@ export function ParkingPanel({
                     here would rewrite the price of a completed sale with no
                     server check and no audit trail, so it is not offered. */}
                 {voided ? null : businessParkingPaymentTone(row) === "paid" ? (
-                  <span className="lst-hint">Paid records cannot be edited</span>
+                  <button className="lst-btn ghost" type="button" disabled={busy} onClick={() => editParking(row)}><Pencil size={14} /> Edit contact</button>
                 ) : (
                   <button className="lst-btn ghost" type="button" disabled={busy} onClick={() => editParking(row)}><Pencil size={14} /> Edit</button>
                 )}
@@ -6214,6 +6278,9 @@ export function ParkingPanel({
               </div>
               {/* The WhatsApp messages sent for this car (parked, receipts):
                   listed once the business has used the switch. */}
+              {parkingWhatsAppSendVisible(business, row) && (
+                <ParkingCarSendWhatsApp businessId={businessId} carId={String(row.id)} />
+              )}
               {!voided && parkingWhatsAppEverEnabled(business) && (
                 <ParkingCarMessages businessId={businessId} parkedCarId={String(row.id)} />
               )}
@@ -6284,12 +6351,15 @@ export function ParkingPanel({
             </header>
             <div className="lst-modal-body">
               {message && <div className="lst-form-error" role="alert">{message}</div>}
+              {editingPaid && (
+                <p className="lst-hint">This car is paid. You can only correct the customer&apos;s name, phone and email.</p>
+              )}
               <div className="lst-form-grid">
                 <WhoseCarField
                   whose={draft.whose}
                   staffId={draft.forStaffId}
                   options={teamOptions}
-                  disabled={busy}
+                  disabled={busy || editingPaid}
                   onWhose={(next) => setDraft((value) => ({ ...value, whose: next, forStaffId: next === "other" ? "" : value.forStaffId }))}
                   onStaffId={(id) => setDraft((value) => ({ ...value, forStaffId: id }))}
                 />
@@ -6311,7 +6381,7 @@ export function ParkingPanel({
                 {/* VIN first: it fills make, model and year, so it leads the
                     vehicle fields here just as it does on the record form. */}
                 <label className="lst-field wide"><span>VIN</span>
-                  <input value={draft.vinNumber} onChange={(event) => { const v = event.target.value; setDraft((value) => ({ ...value, vinNumber: v })); void decodeDraftVin(v); }} placeholder="17 characters — fills the make, model and year" />
+                  <input disabled={editingPaid} value={draft.vinNumber} onChange={(event) => { const v = event.target.value; setDraft((value) => ({ ...value, vinNumber: v })); void decodeDraftVin(v); }} placeholder="17 characters — fills the make, model and year" />
                   {draftVinBusy && <small className="lst-hint">Looking up the VIN…</small>}
                   {!draftVinBusy && draftVinNote && <small className="lst-hint">{draftVinNote}</small>}
                 </label>
@@ -6319,19 +6389,19 @@ export function ParkingPanel({
                     them for listings. The VIN above fills these; they stay
                     editable for a correction or a VIN it couldn't place. */}
                 <label className="lst-field"><span>Make</span>
-                  <select value={canonicalMake(draft.carMake) || draft.carMake} onChange={(event) => setDraft((value) => ({ ...value, carMake: event.target.value, carModel: "", carYear: "" }))}>
+                  <select disabled={editingPaid} value={canonicalMake(draft.carMake) || draft.carMake} onChange={(event) => setDraft((value) => ({ ...value, carMake: event.target.value, carModel: "", carYear: "" }))}>
                     <option value="">Select a make</option>
                     {getMakes().map((make) => (<option key={make} value={make}>{make}</option>))}
                   </select>
                 </label>
                 <label className="lst-field"><span>Model</span>
-                  <select disabled={!draft.carMake} value={canonicalModel(draft.carMake, draft.carModel) || draft.carModel} onChange={(event) => setDraft((value) => ({ ...value, carModel: event.target.value, carYear: "" }))}>
+                  <select disabled={editingPaid || !draft.carMake} value={canonicalModel(draft.carMake, draft.carModel) || draft.carModel} onChange={(event) => setDraft((value) => ({ ...value, carModel: event.target.value, carYear: "" }))}>
                     <option value="">Select a model</option>
                     {getModels(draft.carMake).map((model) => (<option key={model} value={model}>{model}</option>))}
                   </select>
                 </label>
                 <label className="lst-field"><span>Year</span>
-                  <select disabled={!draft.carModel} value={draft.carYear} onChange={(event) => setDraft((value) => ({ ...value, carYear: event.target.value }))}>
+                  <select disabled={editingPaid || !draft.carModel} value={draft.carYear} onChange={(event) => setDraft((value) => ({ ...value, carYear: event.target.value }))}>
                     <option value="">Select a year</option>
                     {getYears(draft.carMake, draft.carModel).map((year) => (<option key={year} value={year}>{year}</option>))}
                   </select>
@@ -6339,20 +6409,20 @@ export function ParkingPanel({
                 {/* Both ends of the stay: the server re-prices from these, so
                     a corrected pick-up day changes what is owed. */}
                 <label className="lst-field"><span>Start date</span>
-                  <input type="date" value={draft.startDate} onChange={(event) => setDraft((value) => ({ ...value, startDate: event.target.value }))} />
+                  <input type="date" disabled={editingPaid} value={draft.startDate} onChange={(event) => setDraft((value) => ({ ...value, startDate: event.target.value }))} />
                 </label>
                 <label className="lst-field"><span>End date (optional)</span>
-                  <input type="date" value={draft.endDate} onChange={(event) => setDraft((value) => ({ ...value, endDate: event.target.value }))} />
+                  <input type="date" disabled={editingPaid} value={draft.endDate} onChange={(event) => setDraft((value) => ({ ...value, endDate: event.target.value }))} />
                   <small className="lst-hint">Leave blank if you don&apos;t know when the car leaves — the stay stays open and you bill it any time.</small>
                 </label>
                 <label className="lst-field"><span>Payment method</span>
-                  <select value={draft.paymentMethod} onChange={(event) => setDraft((value) => ({ ...value, paymentMethod: event.target.value === "payment_link" ? "payment_link" : "direct" }))}>
+                  <select disabled={editingPaid} value={draft.paymentMethod} onChange={(event) => setDraft((value) => ({ ...value, paymentMethod: event.target.value === "payment_link" ? "payment_link" : "direct" }))}>
                     <option value="direct">Direct payment (Zelle or cash)</option>
                     <option value="payment_link">Payment link</option>
                   </select>
                 </label>
                 <label className="lst-field"><span>Status</span>
-                  <select value={draft.status} onChange={(event) => setDraft((value) => ({ ...value, status: event.target.value }))}>
+                  <select disabled={editingPaid} value={draft.status} onChange={(event) => setDraft((value) => ({ ...value, status: event.target.value }))}>
                     {parkingSettableStatuses.map((status) => (<option key={status} value={status}>{statusLabel(status)}</option>))}
                   </select>
                 </label>

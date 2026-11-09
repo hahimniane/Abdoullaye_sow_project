@@ -64,6 +64,11 @@ export const PARKING_WHATSAPP_REFUSALS: Record<string, string> = {
   parking_whatsapp_off: "Turn on WhatsApp messages for parking customers first.",
   welcome_owner_only: "Only the business owner can send the welcome.",
   parking_whatsapp_owner_only: "Only the business owner can change this.",
+  car_not_messageable:
+    "This car's customer can't be messaged (a team member's car, a voided car, or an online booking).",
+  no_phone: "Add the customer's WhatsApp number first.",
+  needs_country_code: "Add the country code to the number.",
+  send_limit: "This car's message was sent 5 times today. Try again tomorrow.",
   unknown: "That did not work. Try again.",
 };
 
@@ -183,11 +188,12 @@ export function welcomeResultText(result: WelcomeResult, lang: Lang = "en"): str
 // A car's WhatsApp messages: parkingMessages where parkedCarId ==
 // ---------------------------------------------------------------------------
 
-export type ParkingMessageKind = "parked" | "receipt" | "welcome" | "invoice";
+export type ParkingMessageKind = "parked" | "left" | "receipt" | "welcome" | "invoice";
 export type ParkingMessageState = "queued" | "sent" | "delivered" | "read" | "failed" | "stopped" | "skipped";
 
 export const PARKING_MESSAGE_KIND_LABEL: Record<ParkingMessageKind, string> = {
   parked: "Car parked message",
+  left: "Car left message",
   receipt: "Payment receipt",
   welcome: "Welcome message",
   invoice: "Monthly invoice",
@@ -227,7 +233,7 @@ export type ParkingMessageLine = {
   phone: string;
 };
 
-const KINDS = new Set<string>(["parked", "receipt", "welcome", "invoice"]);
+const KINDS = new Set<string>(["parked", "left", "receipt", "welcome", "invoice"]);
 const STATES = new Set<string>(["queued", "sent", "failed", "stopped", "skipped"]);
 
 function millisOf(value: unknown): number {

@@ -9,6 +9,19 @@ import { db, functions } from "@/lib/firebase";
 import { currentLanguage, formatDateTime } from "@/lib/format";
 import { overlayDismiss } from "@/lib/overlay-dismiss";
 import {
+  PARKING_WHATSAPP_SEND_COPY as COPY_SEND,
+  PARKING_WHATSAPP_SEND_TIMEOUT_MS,
+  lastStatusLine,
+  lastStatusRequest,
+  parseLastStatus,
+  parseSendResult,
+  sendRefusalText,
+  sendResultText,
+  sendWhatsAppRequest,
+  statusFromSend,
+  type LastStatus,
+} from "@/lib/parking-whatsapp-send";
+import {
   PARKING_WELCOME_SEND_TIMEOUT_MS,
   PARKING_WHATSAPP_COPY as COPY,
   PARKING_WHATSAPP_TIMEOUT_MS,
@@ -233,6 +246,104 @@ export function ParkingWelcomeDialog({
           )}
         </footer>
       </div>
+    </div>
+  );
+}
+
+/**
+ * The car's last WhatsApp status. The ONE place it is read: today the
+ * callable action `whatsapp_status`; staff may also read `parkingMessages`
+ * (rules: canManageBusiness), so a query there would replace only this.
+ */
+export async function fetchLastWhatsAppStatus(businessId: string, carId: string): Promise<LastStatus | null> {
+  const answer = await parkingEntryCall(PARKING_WHATSAPP_SEND_TIMEOUT_MS)(lastStatusRequest(businessId, carId));
+  return parseLastStatus(answer.data);
+}
+
+/**
+ * On a parked car's card, when the business switch is on and the car is
+ * messageable (the parent decides, `parkingWhatsAppSendVisible`): the last
+ * WhatsApp status line and a "Send on WhatsApp" button. The status is read
+ * when the card scrolls into view, so a lot of thirty cars does not make
+ * thirty calls at once. A send always ends: the callable has a timeout and
+ * `finally` clears the busy state.
+ */
+export function ParkingCarSendWhatsApp({
+  businessId,
+  carId,
+}: {
+  businessId: string;
+  carId: string;
+}) {
+  const language = lang();
+  const holder = useRef<HTMLDivElement | null>(null);
+  const alive = useRef(true);
+  const [seen, setSeen] = useState(false);
+  const [last, setLast] = useState<LastStatus | null | undefined>(undefined);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
+
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const node = holder.current;
+    if (seen || !node) return undefined;
+    if (typeof IntersectionObserver === "undefined") {
+      setSeen(true);
+      return undefined;
+    }
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) setSeen(true);
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [seen]);
+
+  useEffect(() => {
+    if (!seen || !businessId || !carId) return;
+    fetchLastWhatsAppStatus(businessId, carId)
+      .then((status) => {
+        if (alive.current) setLast((current) => (current === undefined ? status : current));
+      })
+      // The line is a convenience: when it cannot load, the button still works.
+      .catch(() => {
+        if (alive.current) setLast((current) => (current === undefined ? null : current));
+      });
+  }, [seen, businessId, carId]);
+
+  async function send() {
+    if (busy) return;
+    setBusy(true);
+    setNotice(null);
+    try {
+      const answer = await parkingEntryCall(PARKING_WHATSAPP_SEND_TIMEOUT_MS)(sendWhatsAppRequest(businessId, carId));
+      const result = parseSendResult(answer.data);
+      if (!alive.current) return;
+      setNotice({ tone: result.status === "sent" ? "ok" : "error", text: sendResultText(result) });
+      setLast(statusFromSend(result, Date.now()));
+    } catch (failure) {
+      if (alive.current) setNotice({ tone: "error", text: sendRefusalText(failure) });
+    } finally {
+      if (alive.current) setBusy(false);
+    }
+  }
+
+  return (
+    <div className="pk-wa-send" ref={holder}>
+      {last !== undefined && (
+        <small className="pk-wa-last" data-no-translate>{lastStatusLine(last, language)}</small>
+      )}
+      <button className="lst-btn ghost" type="button" disabled={busy} aria-busy={busy} onClick={() => void send()}>
+        {busy ? <RefreshCw className="spin" size={14} /> : <MessageCircle size={14} />}
+        {busy ? "Sending…" : COPY_SEND.button}
+      </button>
+      {notice && notice.tone === "ok" && <p className="lst-hint" role="status">{notice.text}</p>}
+      {notice && notice.tone === "error" && <div className="lst-form-error" role="alert">{notice.text}</div>}
     </div>
   );
 }
