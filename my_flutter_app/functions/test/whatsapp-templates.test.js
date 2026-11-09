@@ -571,6 +571,11 @@ describe("the parking templates", () => {
     documentLink: "https://us-central1-p.cloudfunctions.net/parkingDocument" +
       "?view=receiptPdf&t=tok&p=p_1&e=1&s=sig",
     documentFilename: "Receipt PK-K7M4P2 Oct 29.pdf",
+    totalEn: "$120.00", totalFr: "120,00 $",
+    leftOnEn: "Nov 9, 2026", leftOnFr: "9 nov. 2026",
+    daysEn: "12 days", daysFr: "12 jours",
+    closingEn: "Balance due: $20.00. How to pay: Zelle 347-559-6214",
+    closingFr: "Solde à payer : 20,00 $. Comment payer : Zelle 347-559-6214",
   });
   const message = (template, values = PARKING) =>
     parkingTemplateMessage({template, phone: "+1 (347) 555-0199", values});
@@ -578,11 +583,11 @@ describe("the parking templates", () => {
     parameters: [{type: "text", text: "PK-K7M4P2"}]};
   const text = (value) => ({type: "text", text: value});
 
-  it("names the five templates, bilingual and registered under en", () => {
+  it("names the six templates, bilingual and registered under en", () => {
     assert.deepEqual(Object.values(PARKING_TEMPLATE), [
       "parking_parked_2lang", "parking_receipt_2lang",
       "parking_welcome_2lang", "parking_invoice_2lang",
-      "parking_invoice_nb_2lang"]);
+      "parking_invoice_nb_2lang", "parking_left_2lang"]);
     for (const name of Object.values(PARKING_TEMPLATE)) {
       assert.equal(message(name).template.language.code, "en");
       assert.equal(message(name).to, "13475550199");
@@ -625,6 +630,8 @@ describe("the parking templates", () => {
       parking_invoice_2lang: {header: "document", buttons: "url",
         documentName: "Invoice.pdf"},
       parking_invoice_nb_2lang: {header: "document", buttons: "none",
+        documentName: "Invoice.pdf"},
+      parking_left_2lang: {header: "document", buttons: "none",
         documentName: "Invoice.pdf"}});
     assert.deepEqual(message("parking_receipt_2lang").template.components, [
       {type: "header", parameters: [{type: "document", document: {
@@ -693,6 +700,38 @@ describe("the parking templates", () => {
     assert.equal(body("Zelle\n347-559-6214\n\n(Keren)"),
         "Zelle 347-559-6214 (Keren)");
     assert.equal(body("x".repeat(400)).length, 300);
+  });
+
+  it("fills parking_left_2lang: a document header, 16 variables, no " +
+      "button", () => {
+    // 1 name, 2 business, 3 car EN, 4 left on EN, 5 days EN, 6 total EN,
+    // 7 paid EN, 8 closing EN, 9 business, 10 car FR, 11 left on FR,
+    // 12 days FR, 13 total FR, 14 paid FR, 15 closing FR, 16 phone.
+    assert.deepEqual(PARKING_TEMPLATE_VARIABLES.parking_left_2lang, [
+      "name", "business", "carEn", "leftOnEn", "daysEn", "totalEn",
+      "paidTotalEn", "closingEn", "business", "carFr", "leftOnFr",
+      "daysFr", "totalFr", "paidTotalFr", "closingFr", "businessPhone"]);
+    assert.deepEqual(message("parking_left_2lang").template.components, [
+      {type: "header", parameters: [{type: "document", document: {
+        link: PARKING.documentLink,
+        filename: "Receipt PK-K7M4P2 Oct 29.pdf"}}]},
+      {type: "body", parameters: [
+        text("Alimou Barry"),
+        text("Dala Parking"), text("2014 Toyota Corolla"),
+        text("Nov 9, 2026"), text("12 days"), text("$120.00"),
+        text("$60.00"),
+        text("Balance due: $20.00. How to pay: Zelle 347-559-6214"),
+        text("Dala Parking"), text("2014 Toyota Corolla"),
+        text("9 nov. 2026"), text("12 jours"), text("120,00 $"),
+        text("60,00 $"),
+        text("Solde à payer : 20,00 $. Comment payer : " +
+          "Zelle 347-559-6214"),
+        text("+13475550100"),
+      ]},
+    ]);
+    const header = message("parking_left_2lang",
+        {...PARKING, documentFilename: " "}).template.components[0];
+    assert.equal(header.parameters[0].document.filename, "Invoice.pdf");
   });
 
   it("fills parking_welcome_2lang: 6 variables", () => {

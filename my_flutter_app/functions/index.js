@@ -341,6 +341,8 @@ const {
   parkingLinkCancelledFields,
   businessParkingEditChanges,
   businessParkingEditPlan,
+  businessParkingContactPlan,
+  BUSINESS_PARKING_CONTACT_REFUSALS,
   businessParkingEditSummary,
   businessParkingOwnRateCents,
   PARKING_LINK_STATES,
@@ -13016,15 +13018,17 @@ async function deliverParkingMessage(ref, row, body, businessName) {
  * Makes one message's row and, when there is a number to reach, sends it.
  *
  * @param {object} args {db, carId, car, business, kind, template, paymentId,
- *   extra, buildBody}: `buildBody()` returns the /messages body for the
- *   number it is given (and may throw: the row then says why it failed).
+ *   rowId, extra, buildBody}: `rowId` names the row when it is not the
+ *   kind's own (a manual send, a resend to a corrected number);
+ *   `buildBody()` returns the /messages body for the number it is given
+ *   (and may throw: the row then says why it failed).
  * @return {Promise<?string>} The row's status, or null when the message was
  *   already handled by an earlier event.
  */
 async function sendParkingMessage(args) {
   const {db, carId, car, business, kind, template, paymentId = ""} = args;
   const reach = parkingWhatsApp.reachablePhone(car, business);
-  const ref = db.collection("parkingMessages").doc(
+  const ref = db.collection("parkingMessages").doc(args.rowId ||
       parkingWhatsApp.messageRowId(kind, {carId, paymentId}));
   const row = {
     businessId: String(car.businessId || ""),
@@ -13158,9 +13162,94 @@ async function buildParkingReceiptMessage(args) {
 }
 
 /**
+ * The statement a customer gets when their car leaves
+ * (docs/PARKING_LEFT_WHATSAPP.md §1): renders the stay's invoice (balance
+ * owed) or receipt (paid) PDF, keeps it in Storage next to the payment
+ * receipts and builds the WhatsApp message carrying a 30-day signed link
+ * to it, served by the same /d?view=receiptPdf.
+ *
+ * @param {object} args {db, carId, car, business, phone, now, docId}:
+ *   `docId` names the PDF (left_{endDayKey}, manual_{ms}, phone_{digits}).
+ * @return {Promise<object>} The /messages body.
+ */
+async function buildParkingLeftMessage(args) {
+  const {db, carId, car, business, phone, now, docId} = args;
+  const balance = parkingBalanceNow(car, now);
+  if (!balance) throw new Error("The car has no balance (voided).");
+  const businessId = String(car.businessId || "");
+  const zone = parkingTimeZone(business);
+  const token = await ensureParkedCarDocumentToken(db,
+      db.collection("parkedCars").doc(carId));
+  const model = parkingReceiptPdf.stayStatementModel({
+    business: {...business, name: car.businessName || business.name},
+    car, balance, paymentInstructions: business.paymentInstructions,
+    timeZone: zone,
+  });
+  const bytes = await parkingReceiptPdf.renderReceiptPdf(model);
+  const filename = parkingReceiptPdf.stayStatementFilename(model,
+      car.trackingCode, now.getTime(), zone);
+  await requestPhotoBucket()
+      .file(parkingReceiptStoragePath(businessId, carId, docId))
+      .save(bytes, {contentType: "application/pdf", resumable: false,
+        metadata: {metadata: {filename}}});
+  const link = packageProof.receiptLink({
+    base: whatsappPhotoBase(),
+    token,
+    paymentId: docId,
+    expiresMs: now.getTime() + packageProof.PHOTO_LINK_MS,
+  });
+  return parkingTemplateMessage({
+    template: parkingWhatsApp.PARKING_TEMPLATE.LEFT,
+    phone,
+    values: {
+      ...parkingWhatsApp.leftValues(car, business, now),
+      documentLink: link,
+      documentFilename: filename,
+    },
+  });
+}
+
+/**
+ * @param {object} business A businesses document.
+ * @return {string} The business's time zone (New York when it has none).
+ */
+function parkingTimeZone(business) {
+  return String(business?.packageRequestSettings?.timeZone || "").trim() ||
+    "America/New_York";
+}
+
+/**
+ * The template and body builder for a car's current message: the "car
+ * left" statement once it has left, otherwise the "parked" welcome.
+ *
+ * @param {object} args {kind: KIND.LEFT or KIND.PARKED, db, carId, car,
+ *   business, now, docId}.
+ * @return {{template: string, buildBody: function(string): Promise<object>}}
+ *   What sendParkingMessage takes.
+ */
+function parkingCurrentMessage(args) {
+  const {kind, db, carId, car, business, now, docId} = args;
+  if (kind === parkingWhatsApp.KIND.LEFT) {
+    return {
+      template: parkingWhatsApp.PARKING_TEMPLATE.LEFT,
+      buildBody: (phone) => buildParkingLeftMessage(
+          {db, carId, car, business, phone, now, docId}),
+    };
+  }
+  return {
+    template: parkingWhatsApp.PARKING_TEMPLATE.PARKED,
+    buildBody: async (phone) => parkingTemplateMessage({
+      template: parkingWhatsApp.PARKING_TEMPLATE.PARKED, phone,
+      values: parkingWhatsApp.parkedValues(car, business, now)}),
+  };
+}
+
+/**
  * The messages one parkedCars write calls for, sent right away: "parked"
- * when the car was just created, and a receipt for every payment just
- * added - each only when the business switched parking messages on. Never
+ * when the car was just created, a receipt for every payment just added,
+ * the "car left" statement when the car was just marked as left, and the
+ * car's current message again when its phone number was corrected - each
+ * only when the business switched parking messages on. Never
  * throws: a messaging failure must not break the occupancy work it runs
  * after, and a failed message stays on its row for staff to see.
  *
@@ -13178,7 +13267,8 @@ async function tellParkedCarCustomer(event, before, after) {
     const eventMs = Date.parse(String(event?.time || "")) || 0;
     const plan = parkingWhatsApp.plannedMessages(
         {businessId, carId, before, after, eventMs, now});
-    if (!plan.parked && plan.receipts.length === 0) return;
+    if (!plan.parked && plan.receipts.length === 0 && !plan.left &&
+        !plan.phoneChanged) return;
     const db = admin.firestore();
     const businessDoc = await db.collection("businesses").doc(businessId)
         .get();
@@ -13210,6 +13300,35 @@ async function tellParkedCarCustomer(event, before, after) {
         buildBody: (phone) => buildParkingReceiptMessage(
             {...common, payment, phone, now}),
       }));
+    }
+    if (plan.left) {
+      // The car just left (docs/PARKING_LEFT_WHATSAPP.md §1): its invoice
+      // or receipt, once per end day.
+      const {endDayKey} = plan.left;
+      const kind = parkingWhatsApp.KIND.LEFT;
+      const message = parkingCurrentMessage({kind, ...common, now,
+        docId: `left_${endDayKey}`});
+      await attempt("left", () => sendParkingMessage({
+        ...common, kind, template: message.template,
+        rowId: parkingWhatsApp.messageRowId(kind, {carId, endDayKey}),
+        extra: {endDayKey}, buildBody: message.buildBody,
+      }));
+    } else if (plan.phoneChanged) {
+      // A corrected number (§3): the car's current message, once per new
+      // number.
+      const fix = parkingWhatsApp.phoneFixPlan(
+          {carId, before, after: car, business, now});
+      if (fix) {
+        const message = parkingCurrentMessage({kind: fix.kind, ...common,
+          now, docId: `phone_${parkingWhatsApp.phoneDigits(fix.phone)}`});
+        await attempt("phone fix", () => sendParkingMessage({
+          ...common, kind: fix.kind, template: message.template,
+          rowId: fix.rowId,
+          extra: {phoneFix: true,
+            ...(fix.endDayKey ? {endDayKey: fix.endDayKey} : {})},
+          buildBody: message.buildBody,
+        }));
+      }
     }
   } catch (error) {
     logger.warn("Parking WhatsApp step failed", {
@@ -14895,6 +15014,178 @@ async function parkingWhatsAppAction(request, uid, action) {
     else tally.failed += 1;
   }
   return {success: true, ...tally};
+}
+
+/**
+ * updateBusinessParkingEntry `action: "send_whatsapp"` - the "Send on
+ * WhatsApp" button (docs/PARKING_LEFT_WHATSAPP.md §2). Any staff with the
+ * parking permission may press it, any time: a car on the lot gets its
+ * "parked" welcome, a car that has left its stay statement. At most five
+ * presses per car per day. A failure from Meta is an answer, not an error.
+ *
+ * @param {object} request The callable request ({businessId, carId}).
+ * @param {string} uid The caller.
+ * @return {Promise<object>} {success, kind: "parked"|"left", status:
+ *   "sent"|"failed"|"stopped", error}.
+ */
+async function parkingSendWhatsApp(request, uid) {
+  const {db, carId, car, businessId} = await parkingCarForAction(request, uid);
+  const businessDoc = await db.collection("businesses").doc(businessId)
+      .get();
+  const business = businessDoc.exists ? businessDoc.data() || {} : {};
+  if (!parkingWhatsApp.parkingWhatsAppEnabled(business)) {
+    throw parkingWhatsAppRefusal(parkingWhatsApp.REFUSAL.OFF);
+  }
+  if (!parkingWhatsApp.carIsMessageable(car)) {
+    throw parkingWhatsAppRefusal(
+        parkingWhatsApp.REFUSAL.CAR_NOT_MESSAGEABLE);
+  }
+  const reach = parkingWhatsApp.reachablePhone(car, business);
+  if (!reach.phone) {
+    throw parkingWhatsAppRefusal(reach.error === "no_phone" ?
+      parkingWhatsApp.REFUSAL.NO_PHONE :
+      parkingWhatsApp.REFUSAL.NEEDS_COUNTRY_CODE);
+  }
+  const now = new Date();
+  const earlier = await db.collection("parkingMessages")
+      .where("businessId", "==", businessId)
+      .where("parkedCarId", "==", carId).get();
+  if (parkingWhatsApp.manualSendLimitReached(
+      earlier.docs.map((doc) => doc.data() || {}), now.getTime(),
+      parkingTimeZone(business))) {
+    throw parkingWhatsAppRefusal(parkingWhatsApp.REFUSAL.SEND_LIMIT);
+  }
+  const kind = parkingWhatsApp.carHasLeft(car, now) ?
+    parkingWhatsApp.KIND.LEFT : parkingWhatsApp.KIND.PARKED;
+  const atMs = now.getTime();
+  const rowId = parkingWhatsApp.manualRowId(carId, atMs);
+  const message = parkingCurrentMessage({kind, db, carId, car, business,
+    now, docId: `manual_${atMs}`});
+  const status = await sendParkingMessage({
+    db, carId, car, business, kind, template: message.template, rowId,
+    extra: {manual: true, sentByUid: uid, atMs}, buildBody: message.buildBody,
+  });
+  if (status === null) {
+    // Two presses in the same millisecond share a row id.
+    throw new HttpsError("aborted", "Try again", {reason: "try_again"});
+  }
+  const saved = (await db.collection("parkingMessages").doc(rowId).get())
+      .data() || {};
+  return {success: true, kind, status, error: String(saved.error || "")};
+}
+
+/**
+ * @param {object} request The callable request ({carId | entryId,
+ *   businessId?}).
+ * @param {string} uid The caller.
+ * @return {Promise<{db: object, carRef: object, carId: string,
+ *   car: object, businessId: string}>} The car, after the caller was
+ *   checked for the parking permission on its business.
+ */
+async function parkingCarForAction(request, uid) {
+  const data = request.data || {};
+  const carId = cleanText(data.carId || data.entryId || data.reservationId,
+      180);
+  if (!carId) {
+    throw new HttpsError("invalid-argument", "Parking entry is required",
+        {reason: "car_required"});
+  }
+  const db = admin.firestore();
+  const carRef = db.collection("parkedCars").doc(carId);
+  const carDoc = await carRef.get();
+  const askedBusiness = cleanText(data.businessId, 180);
+  if (!carDoc.exists || (askedBusiness &&
+      askedBusiness !== String(carDoc.data()?.businessId || ""))) {
+    throw new HttpsError("not-found", "Parking entry not found",
+        {reason: "car_not_found"});
+  }
+  const car = carDoc.data() || {};
+  const businessId = String(car.businessId || "");
+  await requireBusinessPermission(uid, businessId, "parking");
+  return {db, carRef, carId, car, businessId};
+}
+
+/**
+ * updateBusinessParkingEntry `action: "whatsapp_status"`: the car's latest
+ * WhatsApp message row (docs/PARKING_LEFT_WHATSAPP.md §4), found by
+ * `parkedCarId`, for a console or app that does not read parkingMessages
+ * itself.
+ *
+ * @param {object} request The callable request ({carId, businessId}).
+ * @param {string} uid The caller.
+ * @return {Promise<object>} {success, enabled, kind, status, error, atMs,
+ *   last: null | {id, kind,
+ *   status, error, atMs, manual, template}}.
+ */
+async function parkingWhatsAppStatus(request, uid) {
+  const {db, carId, businessId} = await parkingCarForAction(request, uid);
+  const businessDoc = await db.collection("businesses").doc(businessId)
+      .get();
+  const enabled = parkingWhatsApp.parkingWhatsAppEnabled(
+      businessDoc.exists ? businessDoc.data() || {} : {});
+  const snap = await db.collection("parkingMessages")
+      .where("businessId", "==", businessId)
+      .where("parkedCarId", "==", carId).get();
+  let last = null;
+  for (const doc of snap.docs) {
+    const row = doc.data() || {};
+    const atMs = parkingWhatsApp.msOf(row.createdAt) ||
+      parkingWhatsApp.msOf(row.atMs);
+    if (!last || atMs > last.atMs) {
+      last = {id: doc.id, kind: String(row.kind || ""),
+        status: String(row.status || ""), error: String(row.error || ""),
+        atMs, manual: row.manual === true,
+        template: String(row.template || "")};
+    }
+  }
+  // The latest row's fields also sit at the top, which is how the console
+  // and the app read them ({kind, status, error, atMs}; empty when none).
+  return {success: true, enabled, last,
+    kind: last ? last.kind : "", status: last ? last.status : "",
+    error: last ? last.error : "", atMs: last ? last.atMs : 0};
+}
+
+/**
+ * updateBusinessParkingEntry `action: "update_contact"`: fixes the
+ * customer's phone, name or email on any car the business recorded - paid
+ * or left too (docs/PARKING_LEFT_WHATSAPP.md §3). Nothing else on the car
+ * can change here; the trigger resends the car's message to a new number.
+ *
+ * @param {object} request The callable request ({carId, customerPhone?,
+ *   customerName?, customerEmail?}).
+ * @param {string} uid The caller.
+ * @return {Promise<object>} {success, entryId, changed: [field names]}.
+ */
+async function parkingUpdateContact(request, uid) {
+  const {carRef, carId, car, businessId} =
+    await parkingCarForAction(request, uid);
+  refuseVoidedParking(car);
+  const data = request.data || {};
+  const plan = businessParkingContactPlan({entry: car,
+    changes: data.changes && typeof data.changes === "object" ?
+      data.changes : data});
+  if (!plan.ok) {
+    throw new HttpsError(
+        plan.reason === "nothing_to_change" ? "failed-precondition" :
+          "invalid-argument",
+        BUSINESS_PARKING_CONTACT_REFUSALS[plan.reason] ||
+          "This contact cannot be changed", {reason: plan.reason});
+  }
+  await carRef.update({
+    ...plan.update,
+    editedAt: FirestoreFieldValue.serverTimestamp(),
+    editedByUid: uid,
+    updatedAt: FirestoreFieldValue.serverTimestamp(),
+  });
+  const editChanges = businessParkingEditChanges(car, plan.changes);
+  if (editChanges.length > 0) {
+    await writeLotLedgerAudit({
+      businessId, entityType: "parking", entityId: carId, action: "edited",
+      byStaffId: uid, summary: businessParkingEditSummary(editChanges),
+      changes: editChanges,
+    });
+  }
+  return {success: true, entryId: carId, changed: Object.keys(plan.changes)};
 }
 
 const PARKING_WHATSAPP_ACTIONS = Object.freeze(
@@ -16698,6 +16989,19 @@ exports.updateBusinessParkingEntry = onCall(
       const businessAction = String(request.data?.action || "");
       if (PARKING_WHATSAPP_ACTIONS.includes(businessAction)) {
         return parkingWhatsAppAction(request, uid, businessAction);
+      }
+      // The "Send on WhatsApp" button is about one car (docs/
+      // PARKING_LEFT_WHATSAPP.md §2): it brings its own `carId`.
+      if (businessAction === "send_whatsapp") {
+        return parkingSendWhatsApp(request, uid);
+      }
+      if (businessAction === "whatsapp_status") {
+        return parkingWhatsAppStatus(request, uid);
+      }
+      // Fixing the customer's phone, name or email works on any car,
+      // paid or left too; nothing else on the car changes.
+      if (businessAction === "update_contact") {
+        return parkingUpdateContact(request, uid);
       }
       if (PARKING_INVOICE_ACTIONS.includes(businessAction)) {
         return parkingInvoicesAction(request, uid, businessAction);

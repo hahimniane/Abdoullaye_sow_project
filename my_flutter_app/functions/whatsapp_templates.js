@@ -158,6 +158,16 @@ const VARIABLE = Object.freeze({
   DUE_EN: "dueEn",
   DUE_FR: "dueFr",
   PAYMENT_INSTRUCTIONS: "paymentInstructions",
+  // A parked car that left (docs/PARKING_LEFT_WHATSAPP.md): the day it left
+  // ("Nov 9, 2026" / "9 nov. 2026"), how long it stayed ("12 days" /
+  // "12 jours") and the closing line - what is owed and how to pay, or
+  // "Paid in full. Thank you!".
+  LEFT_ON_EN: "leftOnEn",
+  LEFT_ON_FR: "leftOnFr",
+  DAYS_EN: "daysEn",
+  DAYS_FR: "daysFr",
+  CLOSING_EN: "closingEn",
+  CLOSING_FR: "closingFr",
   DOCUMENT_LINK: "documentLink",
   DOCUMENT_FILENAME: "documentFilename",
 });
@@ -203,6 +213,12 @@ const VARIABLE_LANGUAGE = Object.freeze({
   [VARIABLE.MONTH_FR]: "fr",
   [VARIABLE.DUE_EN]: "en",
   [VARIABLE.DUE_FR]: "fr",
+  [VARIABLE.LEFT_ON_EN]: "en",
+  [VARIABLE.LEFT_ON_FR]: "fr",
+  [VARIABLE.DAYS_EN]: "en",
+  [VARIABLE.DAYS_FR]: "fr",
+  [VARIABLE.CLOSING_EN]: "en",
+  [VARIABLE.CLOSING_FR]: "fr",
 });
 
 // {{1}}, {{2}}, ... in the order the approved body uses them.
@@ -397,6 +413,14 @@ const FALLBACK = Object.freeze({
   [VARIABLE.DUE_EN]: {en: "$0.00"},
   [VARIABLE.DUE_FR]: {fr: "0,00 $"},
   [VARIABLE.PAYMENT_INSTRUCTIONS]: {en: "—", fr: "—", both: "—"},
+  // A car that left always has its day, its days and its closing line;
+  // these keep a blank from being refused.
+  [VARIABLE.LEFT_ON_EN]: {en: "the day it left"},
+  [VARIABLE.LEFT_ON_FR]: {fr: "le jour de sa sortie"},
+  [VARIABLE.DAYS_EN]: {en: "its stay"},
+  [VARIABLE.DAYS_FR]: {fr: "son séjour"},
+  [VARIABLE.CLOSING_EN]: {en: "Thank you!"},
+  [VARIABLE.CLOSING_FR]: {fr: "Merci !"},
 });
 
 const MAX_PARAMETER = {
@@ -450,6 +474,13 @@ const MAX_PARAMETER = {
   [VARIABLE.DUE_EN]: 30,
   [VARIABLE.DUE_FR]: 30,
   [VARIABLE.PAYMENT_INSTRUCTIONS]: 300,
+  [VARIABLE.LEFT_ON_EN]: 40,
+  [VARIABLE.LEFT_ON_FR]: 40,
+  [VARIABLE.DAYS_EN]: 30,
+  [VARIABLE.DAYS_FR]: 30,
+  // "Balance due: $1,234.56. How to pay: " + the owner's 300 characters.
+  [VARIABLE.CLOSING_EN]: 400,
+  [VARIABLE.CLOSING_FR]: 400,
   [VARIABLE.DOCUMENT_FILENAME]: 100,
 };
 
@@ -754,6 +785,9 @@ function requestTemplateMessage(args) {
 //                            parked, one message per phone listing the cars.
 //   parking_invoice_2lang  - the month's invoice (docs/PARKING_INVOICES.md):
 //                            the invoice PDF rides as a DOCUMENT header.
+//   parking_left_2lang     - the car left (docs/PARKING_LEFT_WHATSAPP.md):
+//                            the stay statement PDF rides as a DOCUMENT
+//                            header; no Track button.
 // ---------------------------------------------------------------------------
 
 const PARKING_TEMPLATE = Object.freeze({
@@ -765,6 +799,8 @@ const PARKING_TEMPLATE = Object.freeze({
   // versions opened the home screen). Used while appConfig/parkingInvoices
   // .withoutButton is true.
   INVOICE_NO_BUTTON: "parking_invoice_nb_2lang",
+  // The car left: its invoice (balance owed) or receipt (paid), as a PDF.
+  LEFT: "parking_left_2lang",
 });
 
 const PARKING_TEMPLATE_VARIABLES = Object.freeze({
@@ -810,6 +846,20 @@ const PARKING_TEMPLATE_VARIABLES = Object.freeze({
     VARIABLE.BUSINESS, VARIABLE.MONTH_FR, VARIABLE.DUE_FR,
     VARIABLE.PAYMENT_INSTRUCTIONS, VARIABLE.BUSINESS_PHONE,
   ]),
+  // 1 name, 2 business, 3 car EN, 4 left on EN, 5 days EN, 6 total EN,
+  // 7 paid EN, 8 closing line EN, 9 business, 10 car FR, 11 left on FR,
+  // 12 days FR, 13 total FR, 14 paid FR, 15 closing line FR,
+  // 16 business phone.
+  [PARKING_TEMPLATE.LEFT]: Object.freeze([
+    VARIABLE.NAME,
+    VARIABLE.BUSINESS, VARIABLE.CAR_EN, VARIABLE.LEFT_ON_EN,
+    VARIABLE.DAYS_EN, VARIABLE.TOTAL_EN, VARIABLE.PAID_TOTAL_EN,
+    VARIABLE.CLOSING_EN,
+    VARIABLE.BUSINESS, VARIABLE.CAR_FR, VARIABLE.LEFT_ON_FR,
+    VARIABLE.DAYS_FR, VARIABLE.TOTAL_FR, VARIABLE.PAID_TOTAL_FR,
+    VARIABLE.CLOSING_FR,
+    VARIABLE.BUSINESS_PHONE,
+  ]),
 });
 
 const PARKING_TEMPLATE_SHAPE = Object.freeze({
@@ -820,6 +870,9 @@ const PARKING_TEMPLATE_SHAPE = Object.freeze({
     header: "document", buttons: "url", documentName: "Invoice.pdf",
   }),
   [PARKING_TEMPLATE.INVOICE_NO_BUTTON]: Object.freeze({
+    header: "document", buttons: "none", documentName: "Invoice.pdf",
+  }),
+  [PARKING_TEMPLATE.LEFT]: Object.freeze({
     header: "document", buttons: "none", documentName: "Invoice.pdf",
   }),
 });

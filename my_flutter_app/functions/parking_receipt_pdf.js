@@ -220,6 +220,93 @@ function receiptModel(args) {
   };
 }
 
+/**
+ * The lines of the statement a customer gets when their car leaves
+ * (docs/PARKING_LEFT_WHATSAPP.md §1): the same page as the receipt, an
+ * INVOICE while a balance is owed and a RECEIPT once it is paid.
+ *
+ * @param {object} args {business, car, balance: parkingBalanceNow's answer,
+ *   paymentInstructions, timeZone?}.
+ * @return {object} The model renderReceiptPdf draws (`instructions` is
+ *   `{label, text}` while a balance is owed and the owner wrote any).
+ */
+function stayStatementModel(args) {
+  const car = args?.car && typeof args.car === "object" ? args.car : {};
+  const balance = args?.balance || {};
+  const business = args?.business || {};
+  const code = text(car.trackingCode, 40);
+  const owed = Math.max(0, Math.round(Number(balance.balanceCents) || 0));
+  const settled = owed === 0;
+  const vehicle = [car.carYear, car.carMake, car.carModel]
+      .map((v) => text(v, 60)).filter(Boolean).join(" ");
+  const days = Math.max(0, Math.round(Number(balance.days) || 0));
+  const rows = [
+    ["Customer / Client", text(car.customerName || car.ownerName, 120)],
+    ["Vehicle / Véhicule", vehicle],
+    ["Tracking code / Code de suivi", code],
+    ["Parked on / Stationné le", usDayKey(balance.sinceDayKey)],
+    ["Left on / Sorti le", usDayKey(balance.leftDayKey)],
+    ["Days / Jours", String(days)],
+    ["Daily rate / Tarif journalier", money(balance.dailyRateCents)],
+    ["Total / Total", money(balance.accruedCents)],
+    ["Paid / Payé", money(balance.paidCents)],
+    ["Balance due / Solde à payer", money(owed)],
+  ];
+  const instructions = text(args?.paymentInstructions, 300);
+  return {
+    title: settled ? "RECEIPT / REÇU" : "INVOICE / FACTURE",
+    reference: `${settled ? "REC" : "INV"}-${code}`,
+    receiptNumber: code,
+    kind: settled ? "receipt" : "invoice",
+    businessName: text(business.name, 160) || "Laawol",
+    businessAddress: formatBusinessAddress({business, entry: car}),
+    businessContact: [usPhone(business.phone), text(business.email, 180)]
+        .filter(Boolean).join("  |  "),
+    logoUrl: documentLogo(business).url,
+    status: {
+      label: settled ? "PAID / PAYÉ" : "PAYMENT DUE / À PAYER",
+      paidInFull: settled,
+    },
+    rows: rows.filter(([, value]) => value)
+        .map(([label, value]) => ({label, value})),
+    amount: settled ?
+      {label: "TOTAL PAID / TOTAL PAYÉ", value: money(balance.paidCents)} :
+      {label: "BALANCE DUE / SOLDE À PAYER", value: money(owed)},
+    totals: [
+      {label: "Total stay / Total du séjour",
+        value: money(balance.accruedCents)},
+      settled ?
+        {label: "Balance / Solde", value: "Paid in full / Payé en totalité",
+          tone: "paid"} :
+        {label: "Paid so far / Payé à ce jour",
+          value: money(balance.paidCents)},
+    ],
+    instructions: !settled && instructions ?
+      {label: "How to pay / Comment payer", text: instructions} : null,
+    footer: [
+      settled ?
+        "Thank you — this receipt confirms your stay is paid. / " +
+          "Merci — ce reçu confirme que votre séjour est payé." :
+        "Thank you — please keep this invoice. / " +
+          "Merci — veuillez conserver cette facture.",
+      "Issued through Laawol Digital · laawoldigital.com",
+    ],
+  };
+}
+
+/**
+ * @param {object} model From stayStatementModel.
+ * @param {string} trackingCode The car's code.
+ * @param {number} atMs The moment it was issued.
+ * @param {string} [timeZone] IANA zone.
+ * @return {string} "Invoice PK-K7M4P2 Nov 9.pdf" / "Receipt ...".
+ */
+function stayStatementFilename(model, trackingCode, atMs, timeZone) {
+  return `${model.kind === "invoice" ? "Invoice" : "Receipt"} ${
+    text(trackingCode, 40)} ${shortDay(atMs, timeZone)}.pdf`
+      .replace(/["\\\r\n]/g, "");
+}
+
 // A package line's payment standing, as the receipt's pill says it.
 const PACKAGE_STATUS_LABEL = Object.freeze({
   [PAYMENT_STATUS.PAID]: "PAID / PAYÉ",
@@ -728,6 +815,17 @@ function draw(doc, model, logo) {
   }
   y += boxHeight + 28;
 
+  // Where to pay, when the model carries it (a stay statement with a
+  // balance owed).
+  if (model.instructions) {
+    doc.font("Helvetica-Bold").fontSize(10).fillColor(muted)
+        .text(model.instructions.label, left, y, {width});
+    y = doc.y + 3;
+    doc.font("Helvetica").fontSize(11).fillColor(ink)
+        .text(model.instructions.text, left, y, {width});
+    y = doc.y + 22;
+  }
+
   drawFooter(doc, model.footer, y);
 }
 
@@ -746,6 +844,8 @@ module.exports = {
   renderPdf,
   renderReceiptPdf,
   shortDay,
+  stayStatementFilename,
+  stayStatementModel,
   usDate,
   usDateTime,
   usDayKey,

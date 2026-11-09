@@ -35,6 +35,8 @@ const KIND = Object.freeze({
   // One receipt for a payment on a whole month bill
   // (docs/PARKING_BILL_PAYMENTS.md), instead of one per car it touched.
   BILL_RECEIPT: "bill_receipt",
+  // The car left (docs/PARKING_LEFT_WHATSAPP.md): its invoice or receipt.
+  LEFT: "left",
 });
 
 const STATUS = Object.freeze({
@@ -50,6 +52,11 @@ const REFUSAL = Object.freeze({
   OFF: "parking_whatsapp_off",
   WELCOME_OWNER_ONLY: "welcome_owner_only",
   SWITCH_OWNER_ONLY: "parking_whatsapp_owner_only",
+  // The "Send on WhatsApp" button (docs/PARKING_LEFT_WHATSAPP.md §2).
+  CAR_NOT_MESSAGEABLE: "car_not_messageable",
+  NO_PHONE: "no_phone",
+  NEEDS_COUNTRY_CODE: "needs_country_code",
+  SEND_LIMIT: "send_limit",
 });
 
 const REFUSAL_MESSAGE = Object.freeze({
@@ -59,7 +66,16 @@ const REFUSAL_MESSAGE = Object.freeze({
     "welcome message to current customers.",
   [REFUSAL.SWITCH_OWNER_ONLY]: "Only the business owner can switch parking " +
     "messages on WhatsApp on or off.",
+  [REFUSAL.CAR_NOT_MESSAGEABLE]: "This car's customer can't be messaged (a " +
+    "team member's car, a voided car, or an online booking).",
+  [REFUSAL.NO_PHONE]: "Add the customer's WhatsApp number first.",
+  [REFUSAL.NEEDS_COUNTRY_CODE]: "Add the country code to the number.",
+  [REFUSAL.SEND_LIMIT]: "This car's message was sent 5 times today. Try " +
+    "again tomorrow.",
 });
+
+// The most "Send on WhatsApp" presses one car takes in a day.
+const MANUAL_SENDS_PER_DAY = 5;
 
 // One call may message this many numbers (sequential sends).
 const WELCOME_MAX_PER_CALL = 300;
@@ -71,6 +87,16 @@ const MONTHS_EN = Object.freeze([
 const MONTHS_FR = Object.freeze([
   "janvier", "février", "mars", "avril", "mai", "juin", "juillet",
   "août", "septembre", "octobre", "novembre", "décembre",
+]);
+
+// Short months, for the "left on" date: "Nov 9, 2026" / "9 nov. 2026".
+const MONTHS_SHORT_EN = Object.freeze([
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+]);
+const MONTHS_SHORT_FR = Object.freeze([
+  "janv.", "févr.", "mars", "avr.", "mai", "juin",
+  "juil.", "août", "sept.", "oct.", "nov.", "déc.",
 ]);
 
 const text = (value, max = 200) => String(value ?? "").trim().slice(0, max);
@@ -260,19 +286,72 @@ function newPayments({businessId, carId, before, after, eventMs, now}) {
 }
 
 /**
+ * The end day of a car's stay.
+ *
+ * @param {object} car A parkedCars document.
+ * @return {?number} The day number (parkingBalanceNow's count), or null for
+ *   a stay with no end date.
+ */
+function endDayOf(car) {
+  return dayNumber(car?.parkingEndDate);
+}
+
+/**
+ * Whether a car has left: it has an end day and that day is today or
+ * earlier (the rule behind the "car left" message and the button).
+ *
+ * @param {object} car A parkedCars document.
+ * @param {Date} now The moment.
+ * @return {boolean} True once the car has left.
+ */
+function carHasLeft(car, now) {
+  const end = endDayOf(car);
+  const today = dayNumber(now);
+  return end !== null && today !== null && end <= today;
+}
+
+/**
+ * The "car left" message one write calls for: the write set the end date
+ * or moved it to another day, and that day is today or earlier. A future
+ * end date sends nothing yet (staff use the button once the car has
+ * actually left); a car just created is covered by its "parked" message.
+ *
+ * @param {?object} before The car before the write.
+ * @param {object} after The car after the write.
+ * @param {Date} now The moment.
+ * @return {?{endDayKey: string}} The day it left, or null.
+ */
+function leftPlan(before, after, now) {
+  if (!before || !carHasLeft(after, now)) return null;
+  const end = endDayOf(after);
+  if (end === endDayOf(before)) return null;
+  return {endDayKey: dayKeyOf(end)};
+}
+
+/**
  * What one parkedCars write calls for, before the business is read.
  *
  * @param {{businessId: string, carId: string, before: ?object,
  *   after: ?object, eventMs: number, now: Date}} args The write.
- * @return {{parked: boolean, receipts: Array<object>}} A `parked` message
- *   for a car just created; one receipt per payment just added.
+ * @return {{parked: boolean, receipts: Array<object>, left: ?object,
+ *   phoneChanged: boolean}} A `parked` message for a car just created; one
+ *   receipt per payment just added; a `left` message (see leftPlan) when
+ *   the car was just marked as left; `phoneChanged` when the customer's
+ *   number is another one (phoneFixPlan decides what to resend once the
+ *   business is read).
  */
 function plannedMessages({businessId, carId, before, after, eventMs, now}) {
-  const none = {parked: false, receipts: []};
+  const none = {parked: false, receipts: [], left: null,
+    phoneChanged: false};
   if (!after || !carIsMessageable(after)) return none;
-  if (!before) return {parked: true, receipts: []};
-  return {parked: false, receipts: newPayments({
-    businessId, carId, before, after, eventMs, now})};
+  if (!before) return {...none, parked: true};
+  return {
+    parked: false,
+    receipts: newPayments({businessId, carId, before, after, eventMs, now}),
+    left: leftPlan(before, after, now),
+    phoneChanged: phoneDigits(after.customerPhone).length > 0 &&
+      phoneDigits(before.customerPhone) !== phoneDigits(after.customerPhone),
+  };
 }
 
 /**
@@ -299,15 +378,36 @@ const phoneDigits = (phone) => text(phone, 40).replace(/\D/g, "");
 
 /**
  * @param {string} kind A KIND.
- * @param {object} args {carId, paymentId, businessId, phone}: what the row
- *   is about.
+ * @param {object} args {carId, paymentId, businessId, phone, endDayKey}:
+ *   what the row is about (`endDayKey` for a `left` message).
  * @return {string} The parkingMessages document id.
  */
-function messageRowId(kind, {carId, paymentId, businessId, phone}) {
+function messageRowId(kind, {carId, paymentId, businessId, phone,
+  endDayKey}) {
   if (kind === KIND.PARKED) return `${carId}_parked`;
+  if (kind === KIND.LEFT) return `${carId}_left_${endDayKey}`;
   if (kind === KIND.RECEIPT) return `${carId}_pay_${paymentId}`;
   if (kind === KIND.BILL_RECEIPT) return `bill_${paymentId}`;
   return `welcome_${businessId}_${phoneDigits(phone)}`;
+}
+
+/**
+ * @param {string} carId The parked car.
+ * @param {number} epochMs When staff pressed Send on WhatsApp.
+ * @return {string} The row of one manual send.
+ */
+function manualRowId(carId, epochMs) {
+  return `${carId}_manual_${Math.round(Number(epochMs) || 0)}`;
+}
+
+/**
+ * @param {string} carId The parked car.
+ * @param {string} phone The new number, in any format.
+ * @return {string} The row of the resend to a corrected number: one per
+ *   new number.
+ */
+function phoneRowId(carId, phone) {
+  return `${carId}_phone_${phoneDigits(phone)}`;
 }
 
 /**
@@ -326,6 +426,73 @@ function reachablePhone(car, business) {
     return {phone: "", error: "needs_country_code"};
   }
   return {phone, error: ""};
+}
+
+/**
+ * What to resend when staff correct a car's phone number
+ * (docs/PARKING_LEFT_WHATSAPP.md §3): the car's current message, to the new
+ * number, once per number. Nothing when the number is only written another
+ * way, when the new one cannot be reached, or when the car is one the lot
+ * does not message.
+ *
+ * @param {{carId: string, before: ?object, after: object, business: object,
+ *   now: Date}} args The write, and the business it belongs to.
+ * @return {?{kind: string, phone: string, rowId: string,
+ *   endDayKey: string}} `kind` is `left` for a car that has left, else
+ *   `parked`; null for nothing to send.
+ */
+function phoneFixPlan({carId, before, after, business, now}) {
+  if (!before || !after || !carIsMessageable(after)) return null;
+  const next = reachablePhone(after, business);
+  if (!next.phone) return null;
+  const previous = reachablePhone(before, business);
+  if (previous.phone &&
+      phoneDigits(previous.phone) === phoneDigits(next.phone)) return null;
+  const left = carHasLeft(after, now);
+  return {
+    kind: left ? KIND.LEFT : KIND.PARKED,
+    phone: next.phone,
+    rowId: phoneRowId(carId, next.phone),
+    endDayKey: left ? dayKeyOf(endDayOf(after)) : "",
+  };
+}
+
+/**
+ * The day a moment falls on in a time zone.
+ *
+ * @param {number} ms Epoch milliseconds.
+ * @param {string} zone IANA zone ("America/New_York").
+ * @return {string} "YYYY-MM-DD" ("" for no moment).
+ */
+function localDayKey(ms, zone) {
+  const value = Number(ms);
+  if (!Number.isFinite(value) || value <= 0) return "";
+  let parts;
+  try {
+    parts = new Intl.DateTimeFormat("en-US", {timeZone: zone ||
+      "America/New_York", year: "numeric", month: "2-digit",
+    day: "2-digit"}).formatToParts(new Date(value));
+  } catch (error) {
+    return dayKeyOf(dayNumber(new Date(value)));
+  }
+  const get = (type) => parts.find((part) => part.type === type)?.value;
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
+/**
+ * Whether a car has used up today's presses of "Send on WhatsApp".
+ *
+ * @param {Array<object>} rows The car's parkingMessages rows.
+ * @param {number} nowMs The moment.
+ * @param {string} zone The business's time zone.
+ * @return {boolean} True at five manual sends in the business's day.
+ */
+function manualSendLimitReached(rows, nowMs, zone) {
+  const today = localDayKey(nowMs, zone);
+  const used = (Array.isArray(rows) ? rows : []).filter((row) =>
+    row?.manual === true &&
+    localDayKey(msOf(row.atMs) || msOf(row.createdAt), zone) === today);
+  return used.length >= MANUAL_SENDS_PER_DAY;
 }
 
 // ---------------------------------------------------------------------------
@@ -380,6 +547,35 @@ function dayText(key, language) {
   return language === "fr" ?
     `${day === 1 ? "1er" : day} ${MONTHS_FR[month]} ${match[1]}` :
     `${MONTHS_EN[month]} ${day}, ${match[1]}`;
+}
+
+/**
+ * A day the short way: "Nov 9, 2026" / "9 nov. 2026" (the car-left
+ * message's date).
+ *
+ * @param {string} key "YYYY-MM-DD".
+ * @param {"en"|"fr"} language The words.
+ * @return {string} "" for no day.
+ */
+function dayTextShort(key, language) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text(key, 10));
+  if (!match) return "";
+  const month = Number(match[2]) - 1;
+  const day = Number(match[3]);
+  return language === "fr" ?
+    `${day === 1 ? "1er" : day} ${MONTHS_SHORT_FR[month]} ${match[1]}` :
+    `${MONTHS_SHORT_EN[month]} ${day}, ${match[1]}`;
+}
+
+/**
+ * @param {number} days How long the stay was.
+ * @param {"en"|"fr"} language The words.
+ * @return {string} "1 day" / "12 days", "1 jour" / "12 jours".
+ */
+function daysText(days, language) {
+  const n = Math.max(0, Math.round(Number(days) || 0));
+  if (language === "fr") return `${n} ${n === 1 ? "jour" : "jours"}`;
+  return `${n} ${n === 1 ? "day" : "days"}`;
 }
 
 /**
@@ -517,6 +713,57 @@ function billReceiptValues(payment, business) {
   };
 }
 
+/**
+ * The last line of the car-left message: what is owed and how to pay, or
+ * that it is paid.
+ *
+ * @param {object} balance parkingBalanceNow's answer.
+ * @param {string} instructions The owner's "how to pay" text ("" for none).
+ * @param {"en"|"fr"} language The words.
+ * @return {string} "Balance due: $45.00. How to pay: ..." / "Paid in full.
+ *   Thank you!" and French.
+ */
+function closingLine(balance, instructions, language) {
+  const fr = language === "fr";
+  const owed = Math.max(0, Math.round(Number(balance?.balanceCents) || 0));
+  if (owed === 0) {
+    return fr ? "Payé en totalité. Merci !" : "Paid in full. Thank you!";
+  }
+  const how = text(instructions, 300);
+  return fr ?
+    `Solde à payer : ${moneyFr(owed)}.${how ? ` Comment payer : ${how}` : ""}` :
+    `Balance due: ${moneyEn(owed)}.${how ? ` How to pay: ${how}` : ""}`;
+}
+
+/**
+ * The values of `parking_left_2lang` (docs/PARKING_LEFT_WHATSAPP.md §1).
+ * The numbers are parkingBalanceNow's: days, what the stay ran up, what was
+ * paid, what is owed.
+ *
+ * @param {object} car A parkedCars document.
+ * @param {object} business A businesses document.
+ * @param {Date} now The moment.
+ * @return {object} By VARIABLE name (without the document header).
+ */
+function leftValues(car, business, now) {
+  const balance = parkingBalanceNow(car, now) || {};
+  const how = text(business?.paymentInstructions, 300);
+  return {
+    ...commonValues(car, business),
+    carEn: carLabel(car), carFr: carLabel(car),
+    leftOnEn: dayTextShort(balance.leftDayKey, "en"),
+    leftOnFr: dayTextShort(balance.leftDayKey, "fr"),
+    daysEn: daysText(balance.days, "en"),
+    daysFr: daysText(balance.days, "fr"),
+    totalEn: moneyEn(balance.accruedCents),
+    totalFr: moneyFr(balance.accruedCents),
+    paidTotalEn: moneyEn(balance.paidCents),
+    paidTotalFr: moneyFr(balance.paidCents),
+    closingEn: closingLine(balance, how, "en"),
+    closingFr: closingLine(balance, how, "fr"),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // The welcome to cars already parked
 // ---------------------------------------------------------------------------
@@ -628,16 +875,27 @@ module.exports = {
   STATUS,
   REFUSAL,
   REFUSAL_MESSAGE,
+  MANUAL_SENDS_PER_DAY,
   WELCOME_MAX_PER_CALL,
   PARKING_TEMPLATE,
   balanceLine,
+  carHasLeft,
   carIsMessageable,
   carIsParkedNow,
   carLabel,
   carsPhrase,
+  closingLine,
   dayText,
+  dayTextShort,
+  daysText,
+  endDayOf,
   isSettled,
+  leftPlan,
+  leftValues,
   livePayments,
+  localDayKey,
+  manualRowId,
+  manualSendLimitReached,
   messageRowId,
   moneyEn,
   moneyFr,
@@ -648,6 +906,8 @@ module.exports = {
   parkingWhatsAppEnabledAtMs,
   paymentIdOf,
   phoneDigits,
+  phoneFixPlan,
+  phoneRowId,
   plannedMessages,
   rateEn,
   rateFr,

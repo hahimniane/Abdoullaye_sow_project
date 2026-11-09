@@ -13,6 +13,8 @@ const {
   receiptModel,
   renderReceiptPdf,
   shortDay,
+  stayStatementFilename,
+  stayStatementModel,
   usDate,
 } = require("../parking_receipt_pdf");
 const {parkingBalanceNow} = require("../parking_month_statement");
@@ -416,5 +418,88 @@ describe("the package receipt", () => {
           assert.ok(words.includes(expected), `${expected}\n${words}`);
         }
         assert.ok(!words.includes("224620000000"));
+      });
+});
+
+describe("the stay statement a customer gets when the car leaves", () => {
+  const noLogo = () => Promise.resolve(null);
+  const LEFT_OWED = {dailyRateCents: 1000, sinceDayKey: "2026-10-18",
+    leftDayKey: "2026-10-29", days: 12, accruedCents: 12000,
+    paidCents: 2000, balanceCents: 10000, paidInFull: false,
+    stillParked: true};
+  const LEFT_PAID = {...LEFT_OWED, paidCents: 12000, balanceCents: 0,
+    paidInFull: true};
+  const statement = (balance, extra = {}) => stayStatementModel({
+    business: {name: "Nensona Parking", phone: "+12015550100"},
+    car: CAR, balance, paymentInstructions: "Zelle 347-555-0100", ...extra});
+
+  it("is an INVOICE while a balance is owed, with how to pay", () => {
+    const m = statement(LEFT_OWED);
+    assert.equal(m.title, "INVOICE / FACTURE");
+    assert.equal(m.reference, "INV-PK-K7M4P2");
+    assert.equal(m.kind, "invoice");
+    assert.equal(m.status.paidInFull, false);
+    assert.equal(m.status.label, "PAYMENT DUE / À PAYER");
+    assert.deepEqual(m.amount,
+        {label: "BALANCE DUE / SOLDE À PAYER", value: "$100.00"});
+    assert.deepEqual(m.instructions, {label: "How to pay / Comment payer",
+      text: "Zelle 347-555-0100"});
+  });
+
+  it("is a RECEIPT once it is paid, and never asks to pay", () => {
+    const m = statement(LEFT_PAID);
+    assert.equal(m.title, "RECEIPT / REÇU");
+    assert.equal(m.reference, "REC-PK-K7M4P2");
+    assert.equal(m.kind, "receipt");
+    assert.equal(m.status.label, "PAID / PAYÉ");
+    assert.equal(m.instructions, null);
+    assert.deepEqual(m.amount,
+        {label: "TOTAL PAID / TOTAL PAYÉ", value: "$120.00"});
+    assert.equal(m.totals[1].value, "Paid in full / Payé en totalité");
+  });
+
+  it("has no how-to-pay block when the owner wrote none", () => {
+    assert.equal(statement(LEFT_OWED, {paymentInstructions: " "})
+        .instructions, null);
+  });
+
+  it("lists the car, code, days, rate, total, paid and balance", () => {
+    assert.deepEqual(rowsOf(statement(LEFT_OWED)), {
+      "Customer / Client": "Alimou Barry",
+      "Vehicle / Véhicule": "2018 Toyota Camry",
+      "Tracking code / Code de suivi": "PK-K7M4P2",
+      "Parked on / Stationné le": "Oct 18, 2026",
+      "Left on / Sorti le": "Oct 29, 2026",
+      "Days / Jours": "12",
+      "Daily rate / Tarif journalier": "$10.00",
+      "Total / Total": "$120.00",
+      "Paid / Payé": "$20.00",
+      "Balance due / Solde à payer": "$100.00",
+    });
+  });
+
+  it("names its file Invoice or Receipt, the code and the day", () => {
+    assert.equal(stayStatementFilename(statement(LEFT_OWED), "PK-K7M4P2",
+        AT, "America/New_York"), "Invoice PK-K7M4P2 Oct 29.pdf");
+    assert.equal(stayStatementFilename(statement(LEFT_PAID), "PK-K7M4P2",
+        AT, "America/New_York"), "Receipt PK-K7M4P2 Oct 29.pdf");
+  });
+
+  it("renders a real PDF carrying the amounts and the instructions",
+      async () => {
+        const owed = drawnText(await renderReceiptPdf(statement(LEFT_OWED),
+            {compress: false, fetchLogo: noLogo})).join("\n");
+        for (const expected of ["INVOICE / FACTURE", "PAYMENT DUE",
+          "Left on / Sorti le", "Oct 29, 2026", "$120.00", "$100.00",
+          "How to pay / Comment payer", "Zelle 347-555-0100"]) {
+          assert.ok(owed.includes(expected), `missing ${expected}\n${owed}`);
+        }
+        const paid = await renderReceiptPdf(statement(LEFT_PAID),
+            {compress: false, fetchLogo: noLogo});
+        assert.equal(paid.subarray(0, 4).toString(), "%PDF");
+        const page = drawnText(paid).join("\n");
+        assert.ok(page.includes("RECEIPT / RE"), page);
+        assert.ok(page.includes("Paid in full"), page);
+        assert.ok(!page.includes("How to pay"), page);
       });
 });

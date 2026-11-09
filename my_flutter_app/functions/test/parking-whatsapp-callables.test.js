@@ -51,6 +51,7 @@ globalThis.fetch = async (url, init = {}) => {
 
 const functions = require("../index");
 const packageProof = require("../package_proof");
+const parkingWhatsApp = require("../parking_whatsapp");
 const {
   OPEN_ENDED_OCCUPANCY_END_MS,
 } = require("../parking_occupancy");
@@ -842,4 +843,432 @@ describe("the welcome to cars already parked", () => {
     assert.equal(result.alreadyWelcomed, 1);
     assert.deepEqual(sent, []);
   });
+});
+
+// ---------------------------------------------------------------------------
+// The car left, Send on WhatsApp, a corrected number
+// (docs/PARKING_LEFT_WHATSAPP.md)
+// ---------------------------------------------------------------------------
+
+const daysAgo = (n) => Timestamp.fromMillis(Date.now() - n * DAY);
+const dayKeyOfMs = (ms) => new Date(ms).toISOString().slice(0, 10);
+
+describe("the car leaves", () => {
+  // Parked 9 days ago at $10 a day (seedCar); leaving 5 days ago is a
+  // 5-day stay, $50.
+  const leave = (id, when = daysAgo(5)) =>
+    changeAndTrigger(id, {parkingEndDate: when});
+
+  it("sends the stay statement once, however often the event arrives",
+      async () => {
+        await turnOn();
+        const id = await seedCar();
+        const previous = await leave(id);
+        await trigger(id, previous);
+        assert.equal(sent.length, 1);
+        const body = sent[0];
+        assert.equal(body.to, "12015551234");
+        assert.equal(body.template.name, "parking_left_2lang");
+        const header = body.template.components[0];
+        assert.equal(header.type, "header");
+        assert.equal(header.parameters[0].type, "document");
+        const link = header.parameters[0].document.link;
+        assert.ok(link.startsWith(`${BASE}?view=receiptPdf&t=`), link);
+        const stored = await car(id);
+        assert.equal(header.parameters[0].document.filename,
+            `Invoice ${stored.trackingCode} ${
+              new Intl.DateTimeFormat("en-US", {timeZone: "America/New_York",
+                month: "short", day: "numeric"}).format(new Date())}.pdf`);
+        assert.equal(body.template.components.length, 2, "no button");
+        const endKey = dayKeyOfMs(stored.parkingEndDate.toMillis());
+        assert.deepEqual(bodyTexts(body), [
+          "Alimou Barry",
+          "Dala Parking", "2014 Toyota Corolla",
+          parkingWhatsApp.dayTextShort(endKey, "en"), "5 days", "$50.00",
+          "$0.00", "Balance due: $50.00.",
+          "Dala Parking", "2014 Toyota Corolla",
+          parkingWhatsApp.dayTextShort(endKey, "fr"), "5 jours", "50,00 $",
+          "0,00 $", "Solde à payer : 50,00 $.",
+          "+13475550100",
+        ]);
+        const message = await row(`${id}_left_${endKey}`);
+        assert.equal(message.status, "sent");
+        assert.equal(message.kind, "left");
+        assert.equal(message.template, "parking_left_2lang");
+        assert.equal(message.parkedCarId, id);
+        assert.equal(message.businessId, BIZ);
+        assert.equal(message.endDayKey, endKey);
+        assert.equal(message.wamid, "wamid.out.1");
+        assert.equal((await rowsOf()).length, 1);
+      });
+
+  it("serves the statement PDF on the signed link: an invoice while " +
+      "money is owed", async () => {
+    await turnOn();
+    const id = await seedCar();
+    await leave(id);
+    const res = await open(receiptLinkOf(sent[0]));
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.headers["content-type"], "application/pdf");
+    assert.match(res.headers["content-disposition"],
+        /^inline; filename="Invoice PK-WA\d{4} [A-Z][a-z]{2} \d{1,2}\.pdf"$/);
+    assert.equal(Buffer.from(res.body).subarray(0, 4).toString(), "%PDF");
+    // A forged signature opens nothing.
+    const forged = receiptLinkOf(sent[0]).replace(/s=[^&]+/, "s=abc");
+    assert.equal((await open(forged)).statusCode, 404);
+  });
+
+  it("is a receipt, and says paid in full, when nothing is owed",
+      async () => {
+        await turnOn();
+        await db.collection("businesses").doc(BIZ)
+            .update({paymentInstructions: "Zelle 347-555-0100"});
+        const id = await seedCar({amountPaidCents: 5000,
+          paymentStatus: "paid"});
+        await leave(id);
+        const texts = bodyTexts(sent[0]);
+        assert.equal(texts[6], "$50.00");
+        assert.equal(texts[7], "Paid in full. Thank you!");
+        assert.equal(texts[14], "Payé en totalité. Merci !");
+        const res = await open(receiptLinkOf(sent[0]));
+        assert.match(res.headers["content-disposition"], /Receipt PK-WA/);
+        await db.collection("businesses").doc(BIZ)
+            .update({paymentInstructions:
+              admin.firestore.FieldValue.delete()});
+      });
+
+  it("tells how to pay when the owner wrote it", async () => {
+    await turnOn();
+    await db.collection("businesses").doc(BIZ)
+        .update({paymentInstructions: "Zelle 347-555-0100"});
+    const id = await seedCar();
+    await leave(id);
+    assert.equal(bodyTexts(sent[0])[7],
+        "Balance due: $50.00. How to pay: Zelle 347-555-0100");
+    assert.equal(bodyTexts(sent[0])[14],
+        "Solde à payer : 50,00 $. Comment payer : Zelle 347-555-0100");
+    await db.collection("businesses").doc(BIZ)
+        .update({paymentInstructions: admin.firestore.FieldValue.delete()});
+  });
+
+  it("sends again when the end day is corrected, once per day", async () => {
+    await turnOn();
+    const id = await seedCar();
+    await leave(id, daysAgo(5));
+    assert.equal(sent.length, 1);
+    await leave(id, daysAgo(4));
+    assert.equal(sent.length, 2);
+    assert.equal(bodyTexts(sent[1])[4], "6 days");
+    assert.equal((await rowsOf()).filter((r) => r.kind === "left").length,
+        2);
+    // Back to the first day: that day was already sent.
+    await leave(id, daysAgo(5));
+    assert.equal(sent.length, 2);
+  });
+
+  it("sends nothing for an end date in the future, or an edit after it",
+      async () => {
+        await turnOn();
+        const id = await seedCar();
+        await leave(id, Timestamp.fromMillis(Date.now() + 3 * DAY));
+        assert.deepEqual(sent, []);
+        const left = await seedCar({parkingEndDate: daysAgo(5)});
+        await changeAndTrigger(left, {customerName: "Alimou B."});
+        assert.deepEqual(sent, []);
+      });
+
+  it("is silent for a team member's car, a voided car and a booking",
+      async () => {
+        await turnOn();
+        for (const extra of [{forStaffId: "staff-9"}, {voided: true},
+          {source: "customer", enteredByBusiness: false}]) {
+          const id = await seedCar(extra);
+          await leave(id);
+        }
+        assert.deepEqual(sent, []);
+        assert.deepEqual(await rowsOf(), []);
+      });
+
+  it("is silent while the switch is off", async () => {
+    const id = await seedCar();
+    await leave(id);
+    assert.deepEqual(sent, []);
+    assert.deepEqual(await rowsOf(), []);
+  });
+
+  it("keeps a failed send on its row", async () => {
+    await turnOn();
+    const id = await seedCar();
+    failNext = 131026;
+    await leave(id);
+    const failed = (await rowsOf()).filter((r) => r.kind === "left");
+    assert.equal(failed.length, 1);
+    assert.equal(failed[0].status, "failed");
+  });
+});
+
+describe("the number is corrected", () => {
+  const NEW_PHONE = "+12015559999";
+
+  it("resends the parked message to the new number, once", async () => {
+    await turnOn();
+    const id = await seedCar();
+    await trigger(id, null);
+    sent.length = 0;
+    await changeAndTrigger(id, {customerPhone: NEW_PHONE});
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].to, "12015559999");
+    assert.equal(sent[0].template.name, "parking_parked_2lang");
+    const message = await row(`${id}_phone_12015559999`);
+    assert.equal(message.status, "sent");
+    assert.equal(message.kind, "parked");
+    assert.equal(message.phone, NEW_PHONE);
+    assert.equal(message.phoneFix, true);
+    assert.equal(message.parkedCarId, id);
+    // The same number saved again, or only written another way: nothing.
+    await changeAndTrigger(id, {customerPhone: "+1 (201) 555-9999"});
+    await changeAndTrigger(id, {customerName: "Alimou B."});
+    assert.equal(sent.length, 1);
+  });
+
+  it("resends the left statement when the car has already left",
+      async () => {
+        await turnOn();
+        const id = await seedCar({parkingEndDate: daysAgo(5)});
+        await changeAndTrigger(id, {customerPhone: NEW_PHONE});
+        assert.equal(sent.length, 1);
+        assert.equal(sent[0].template.name, "parking_left_2lang");
+        assert.equal(sent[0].to, "12015559999");
+        assert.equal((await row(`${id}_phone_12015559999`)).kind, "left");
+      });
+
+  it("sends nothing for an unreachable number, a team car, or when the " +
+      "switch is off", async () => {
+    const id = await seedCar();
+    await changeAndTrigger(id, {customerPhone: NEW_PHONE});
+    assert.deepEqual(sent, []);
+    await turnOn();
+    await changeAndTrigger(id, {customerPhone: "620123456"});
+    const team = await seedCar({forStaffId: "staff-9"});
+    await changeAndTrigger(team, {customerPhone: "+12015558888"});
+    assert.deepEqual(sent, []);
+  });
+
+  it("does not add a second message when the end day moved in the same " +
+      "write", async () => {
+    await turnOn();
+    const id = await seedCar();
+    await changeAndTrigger(id,
+        {customerPhone: NEW_PHONE, parkingEndDate: daysAgo(5)});
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].template.name, "parking_left_2lang");
+    assert.equal(sent[0].to, "12015559999");
+  });
+});
+
+describe("update_contact", () => {
+  const contact = (uid, data) => run("updateBusinessParkingEntry", uid,
+      {action: "update_contact", ...data});
+
+  it("fixes the phone of a paid, left car and nothing else", async () => {
+    await turnOn();
+    const id = await seedCar({parkingEndDate: daysAgo(5),
+      amountPaidCents: 5000, paymentStatus: "paid", amountDueCents: 5000,
+      totalCostCents: 5000});
+    const before = await car(id);
+    const previous = before;
+    const result = await contact(STAFF,
+        {businessId: BIZ, carId: id, customerPhone: "+12015559999"});
+    assert.equal(result.success, true);
+    assert.deepEqual(result.changed, ["customerPhone"]);
+    const after = await car(id);
+    assert.equal(after.customerPhone, "+12015559999");
+    for (const field of ["amountDueCents", "amountPaidCents",
+      "paymentStatus", "paymentMethod", "dailyRate", "customerName"]) {
+      assert.deepEqual(after[field], before[field], field);
+    }
+    assert.equal(after.parkingEndDate.toMillis(),
+        before.parkingEndDate.toMillis());
+    // The write the trigger then sees resends the left statement.
+    await trigger(id, previous);
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].to, "12015559999");
+    assert.equal(sent[0].template.name, "parking_left_2lang");
+  });
+
+  it("moves the owner name with the customer name and takes the plain " +
+      "request shape or a `changes` object", async () => {
+    const id = await seedCar({paymentStatus: "paid"});
+    await contact(STAFF, {entryId: id, changes: {customerName: "Fatou D."}});
+    const after = await car(id);
+    assert.equal(after.customerName, "Fatou D.");
+    assert.equal(after.ownerName, "Fatou D.");
+  });
+
+  it("refuses nothing-to-change, an empty phone, a team car, a voided car " +
+      "and a car of another business", async () => {
+    const id = await seedCar();
+    await assert.rejects(contact(STAFF, {carId: id, customerPhone: PHONE}),
+        refusal("failed-precondition", "nothing_to_change"));
+    await assert.rejects(contact(STAFF, {carId: id, customerPhone: " "}),
+        refusal("invalid-argument", "customer_phone_required"));
+    const team = await seedCar({forStaffId: "staff-9"});
+    await assert.rejects(contact(STAFF, {carId: team,
+      customerPhone: "+12015550000"}),
+    refusal("invalid-argument", "team_car"));
+    const voided = await seedCar({voided: true});
+    await assert.rejects(contact(STAFF, {carId: voided,
+      customerPhone: "+12015550000"}),
+    refusal("failed-precondition", "car_voided"));
+    await assert.rejects(contact(OTHER_OWNER, {carId: id,
+      customerPhone: "+12015550000"}),
+    (error) => error.code === "permission-denied");
+    await assert.rejects(contact(STAFF, {customerPhone: "+1"}),
+        refusal("invalid-argument", "car_required"));
+  });
+
+  it("still refuses a full edit of a paid car, as before", async () => {
+    const id = await seedCar({paymentStatus: "paid"});
+    await assert.rejects(run("updateBusinessParkingEntry", STAFF, {
+      entryId: id, customerPhone: "+12015550000"}),
+    (error) => /paid for/.test(error.message));
+  });
+});
+
+describe("send_whatsapp (the button)", () => {
+  const press = (uid, carId, extra = {}) => run("updateBusinessParkingEntry",
+      uid, {action: "send_whatsapp", businessId: BIZ, carId, ...extra});
+
+  it("sends the parked message of a car on the lot, for any parking " +
+      "staff", async () => {
+    await turnOn();
+    const id = await seedCar();
+    const result = await press(STAFF, id);
+    assert.deepEqual(result, {success: true, kind: "parked",
+      status: "sent", error: ""});
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].template.name, "parking_parked_2lang");
+    assert.equal(sent[0].to, "12015551234");
+    const manual = (await rowsOf()).filter((r) => r.manual === true);
+    assert.equal(manual.length, 1);
+    assert.match(manual[0].id, new RegExp(`^${id}_manual_\\d{13}$`));
+    assert.equal(manual[0].sentByUid, STAFF);
+    assert.equal(manual[0].kind, "parked");
+    assert.equal(manual[0].parkedCarId, id);
+    assert.equal(manual[0].status, "sent");
+    // The owner can too, and it is a row of its own each time.
+    await press(OWNER, id);
+    assert.equal((await rowsOf()).filter((r) => r.manual).length, 2);
+  });
+
+  it("sends the left statement of a car that has left", async () => {
+    await turnOn();
+    const id = await seedCar({parkingEndDate: daysAgo(5)});
+    const result = await press(STAFF, id);
+    assert.equal(result.kind, "left");
+    assert.equal(result.status, "sent");
+    assert.equal(sent[0].template.name, "parking_left_2lang");
+    const link = receiptLinkOf(sent[0]);
+    assert.equal((await open(link)).statusCode, 200);
+    const manual = (await rowsOf()).find((r) => r.manual === true);
+    assert.equal(manual.kind, "left");
+  });
+
+  it("answers a Meta failure instead of throwing, and a STOP", async () => {
+    await turnOn();
+    const id = await seedCar();
+    failNext = 131026;
+    const failed = await press(STAFF, id);
+    assert.equal(failed.success, true);
+    assert.equal(failed.status, "failed");
+    assert.match(failed.error, /nope/);
+    await db.collection("whatsappStops").doc(PHONE)
+        .set({stopped: true, phone: PHONE});
+    assert.equal((await press(STAFF, id)).status, "stopped");
+  });
+
+  it("takes five presses a car a day, then says so", async () => {
+    await turnOn();
+    const id = await seedCar();
+    for (let n = 0; n < 5; n += 1) {
+      assert.equal((await press(STAFF, id)).status, "sent");
+    }
+    await assert.rejects(press(STAFF, id),
+        refusal("failed-precondition", "send_limit"));
+    assert.equal(sent.length, 5);
+    // Another car has its own five.
+    assert.equal((await press(STAFF, await seedCar())).status, "sent");
+  });
+
+  it("is refused when the switch is off", async () => {
+    const id = await seedCar();
+    await assert.rejects(press(STAFF, id),
+        refusal("failed-precondition", "parking_whatsapp_off"));
+    assert.deepEqual(sent, []);
+  });
+
+  it("is refused for cars the lot does not message", async () => {
+    await turnOn();
+    for (const extra of [{forStaffId: "staff-9"}, {voided: true},
+      {source: "customer", enteredByBusiness: false}]) {
+      await assert.rejects(press(STAFF, await seedCar(extra)),
+          refusal("failed-precondition", "car_not_messageable"));
+    }
+  });
+
+  it("is refused without a usable number", async () => {
+    await turnOn();
+    await assert.rejects(press(STAFF, await seedCar({customerPhone: ""})),
+        refusal("failed-precondition", "no_phone"));
+    await assert.rejects(press(STAFF,
+        await seedCar({customerPhone: "620123456"})),
+    refusal("failed-precondition", "needs_country_code"));
+    assert.deepEqual(await rowsOf(), []);
+  });
+
+  it("is for the parking permission of this business only", async () => {
+    await turnOn();
+    const id = await seedCar();
+    await db.collection("users").doc("pkwa-staff-ledger").set({
+      role: "staff", businessId: BIZ, businessPermissions: ["ledger"]});
+    await assert.rejects(press("pkwa-staff-ledger", id),
+        (error) => error.code === "permission-denied");
+    await assert.rejects(press(OTHER_OWNER, id),
+        (error) => error.code === "permission-denied");
+    await assert.rejects(press(STAFF, id, {businessId: OTHER_BIZ}),
+        refusal("not-found", "car_not_found"));
+    await assert.rejects(press(STAFF, "no-such-car"),
+        refusal("not-found", "car_not_found"));
+    assert.deepEqual(sent, []);
+  });
+});
+
+describe("whatsapp_status", () => {
+  const status = (uid, carId) => run("updateBusinessParkingEntry", uid,
+      {action: "whatsapp_status", businessId: BIZ, carId});
+
+  it("answers the car's latest message row, found by parkedCarId",
+      async () => {
+        await turnOn();
+        const id = await seedCar();
+        const none = await status(STAFF, id);
+        assert.equal(none.last, null);
+        assert.equal(none.enabled, true);
+        await trigger(id, null);
+        const first = await status(STAFF, id);
+        assert.equal(first.last.kind, "parked");
+        assert.equal(first.last.status, "sent");
+        await db.collection("whatsappStops").doc(PHONE)
+            .set({stopped: true, phone: PHONE});
+        await run("updateBusinessParkingEntry", STAFF,
+            {action: "send_whatsapp", businessId: BIZ, carId: id});
+        const second = await status(STAFF, id);
+        assert.equal(second.last.manual, true);
+        assert.equal(second.last.status, "stopped");
+        assert.ok(second.last.atMs >= first.last.atMs);
+        // Another car's rows are not this car's.
+        assert.equal((await status(STAFF, await seedCar())).last, null);
+        await assert.rejects(status(OTHER_OWNER, id),
+            (error) => error.code === "permission-denied");
+      });
 });

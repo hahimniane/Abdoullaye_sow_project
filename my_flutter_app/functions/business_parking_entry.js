@@ -980,6 +980,79 @@ function businessParkingEditPlan({entry, changes}) {
 }
 
 
+const BUSINESS_PARKING_CONTACT_REFUSALS = Object.freeze({
+  not_business_entered:
+    "Only a parking the business recorded can be edited here",
+  team_car: "A team member's car takes the name and number of the team " +
+    "member. Change them on the team member.",
+  customer_name_required: "The customer's name is required",
+  customer_phone_required: "The customer's phone number is required",
+  customer_email_invalid: "That email address does not look right",
+  payment_link_contact_required:
+    "A payment link needs a phone number or an email address",
+  nothing_to_change: "Nothing was changed",
+});
+
+/**
+ * Decides a CONTACT-ONLY correction (docs/PARKING_LEFT_WHATSAPP.md §3): the
+ * customer's phone, name and email describe the person, not the charge, so
+ * they can be fixed on any car the business recorded - paid or left too -
+ * while amounts, dates, rate and method stay as locked as ever. Anything in
+ * `changes` besides those three fields is ignored.
+ *
+ * @param {{entry: object, changes: object}} args The car and the request.
+ * @return {{ok: boolean, reason: string, update: object, changes: object}}
+ *   `update` is what to write (`ownerName` follows `customerName`);
+ *   `changes` the contact fields that really differ, for the History.
+ */
+function businessParkingContactPlan({entry, changes}) {
+  const record = entry && typeof entry === "object" ? entry : {};
+  const wanted = changes && typeof changes === "object" ? changes : {};
+  const refuse = (reason) => ({ok: false, reason, update: {}, changes: {}});
+  if (text(record.source, 40) !== BUSINESS_PARKING_SOURCE &&
+      record.enteredByBusiness !== true) return refuse("not_business_entered");
+  if (text(record.forStaffId, 128)) return refuse("team_car");
+  const has = (field) => Object.prototype.hasOwnProperty.call(wanted, field) &&
+    wanted[field] !== undefined && wanted[field] !== null;
+  const next = {
+    customerName: has("customerName") ? text(wanted.customerName) :
+      text(record.customerName ?? record.ownerName),
+    customerPhone: has("customerPhone") ? text(wanted.customerPhone, 40) :
+      text(record.customerPhone, 40),
+    customerEmail: has("customerEmail") ?
+      text(wanted.customerEmail, 180).toLowerCase() :
+      text(record.customerEmail, 180).toLowerCase(),
+  };
+  if (!next.customerName) return refuse("customer_name_required");
+  if (!next.customerPhone) return refuse("customer_phone_required");
+  if (next.customerEmail && !isEmailish(next.customerEmail)) {
+    return refuse("customer_email_invalid");
+  }
+  if (text(record.paymentMethod, 40) === "payment_link" &&
+      !next.customerPhone && !next.customerEmail) {
+    return refuse("payment_link_contact_required");
+  }
+  const was = {
+    customerName: text(record.customerName ?? record.ownerName),
+    customerPhone: text(record.customerPhone, 40),
+    customerEmail: text(record.customerEmail, 180).toLowerCase(),
+  };
+  const changed = {};
+  for (const field of Object.keys(next)) {
+    if (has(field) && next[field] !== was[field]) changed[field] = next[field];
+  }
+  if (!Object.keys(changed).length) return refuse("nothing_to_change");
+  return {
+    ok: true,
+    reason: "",
+    update: {
+      ...changed,
+      ...(changed.customerName ? {ownerName: changed.customerName} : {}),
+    },
+    changes: changed,
+  };
+}
+
 /**
  * A lot can charge more than one price - a bigger space, a long-stay deal, a
  * rate for a dealer who brings six cars at once. Each is a named card of the
@@ -1139,6 +1212,8 @@ module.exports = {
   BUSINESS_PARKING_EDITABLE_FIELDS,
   BUSINESS_PARKING_EDIT_REFUSALS,
   businessParkingEditPlan,
+  businessParkingContactPlan,
+  BUSINESS_PARKING_CONTACT_REFUSALS,
   PARKING_LINK_STATES,
   parkingPaymentLinkState,
   parkingCheckoutSessionReusable,

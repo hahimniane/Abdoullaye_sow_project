@@ -104,3 +104,41 @@ ARB files). Dates are US style, month first, 12-hour.
 - Package messages.
 - Monthly invoices (unchanged).
 - Customer-side screens.
+
+## Appendix A. Meta template submission (`parking_left_2lang`)
+
+Submitted 11/9/2026 (id 2248445102380316, PENDING) with
+`~/laawol-deploy-logs/create_parking_left_template.py --apply` (dry run by
+default, modelled on `create_parking_invoice_template.py`). The §1 "proposed
+body" was adjusted to follow the live parking templates: it opens with
+"Hello / Bonjour {{1}}" (the name is variable 1 once, as in the other
+templates, so the 16 variables are all distinct), has `*ENGLISH*` and
+`*FRANÇAIS*` blocks, and **ends on plain text** (Meta rejected bodies that
+end on a variable). There is no button (§1 names none) and no footer (the
+other parking templates have none).
+
+```json
+{
+  "name": "parking_left_2lang",
+  "language": "en",
+  "category": "UTILITY",
+  "components": [
+    {"type": "HEADER", "format": "DOCUMENT",
+     "example": {"header_handle": ["<uploaded sample PDF handle>"]}},
+    {"type": "BODY",
+     "text": "Hello / Bonjour {{1}} 👋\n\n*ENGLISH*\nYour car at {{2}} has left.\n🚗 {{3}} · Left on {{4}} · {{5}}\nTotal: {{6}} · Paid: {{7}}\n{{8}}\n\n—————\n*FRANÇAIS*\nVotre voiture chez {{9}} est sortie.\n🚗 {{10}} · Sortie le {{11}} · {{12}}\nTotal : {{13}} · Payé : {{14}}\n{{15}}\n\n📞 Questions / Des questions : {{16}}\n\nThank you / Merci.",
+     "example": {"body_text": [[
+       "Fatou", "Dala Parking", "2014 Toyota Corolla", "Nov 9, 2026",
+       "12 days", "$120.00", "$20.00",
+       "Balance due: $100.00. How to pay: Zelle 347-555-0100",
+       "Dala Parking", "2014 Toyota Corolla", "9 nov. 2026", "12 jours",
+       "120,00 $", "20,00 $",
+       "Solde à payer : 100,00 $. Comment payer : Zelle 347-555-0100",
+       "+1 347 555 0100"]]}}
+  ]
+}
+```
+
+Server side: `PARKING_TEMPLATE.LEFT` and its 16 variables in
+`whatsapp_templates.js` (shape: document header, no button, file name
+`Invoice.pdf` unless the message carries one).

@@ -1060,3 +1060,68 @@ describe("what an edit changed, for the History", () => {
   });
 });
 
+describe("correcting only the customer's contact", () => {
+  const {
+    businessParkingContactPlan,
+    businessParkingEditPlan,
+    BUSINESS_PARKING_CONTACT_REFUSALS,
+  } = require("../business_parking_entry");
+  const paid = {
+    source: "business", paymentMethod: "direct", paymentStatus: "succeeded",
+    customerName: "Alimou Barry", customerPhone: "+12015551234",
+    customerEmail: "", parkingEndDate: "2026-10-25",
+  };
+
+  it("fixes the phone on a paid, left car - where a full edit is refused",
+      () => {
+        assert.equal(businessParkingEditPlan({entry: paid,
+          changes: {customerPhone: "+12015559999"}}).reason, "paid");
+        const plan = businessParkingContactPlan({entry: paid,
+          changes: {customerPhone: "+12015559999"}});
+        assert.equal(plan.ok, true);
+        assert.deepEqual(plan.update, {customerPhone: "+12015559999"});
+        assert.deepEqual(plan.changes, {customerPhone: "+12015559999"});
+      });
+
+  it("moves the owner name along with the customer name", () => {
+    const plan = businessParkingContactPlan({entry: paid,
+      changes: {customerName: "Alimou B.", customerEmail: "A@X.com"}});
+    assert.deepEqual(plan.update, {customerName: "Alimou B.",
+      ownerName: "Alimou B.", customerEmail: "a@x.com"});
+  });
+
+  it("ignores everything that is not contact - amounts, dates, rate",
+      () => {
+        const plan = businessParkingContactPlan({entry: paid, changes: {
+          customerPhone: "+12015559999", amountDueCents: 1,
+          endDate: "2026-12-01", dailyRate: 1, paymentMethod: "payment_link",
+          paymentStatus: "pending", forStaffId: "s"}});
+        assert.deepEqual(Object.keys(plan.update), ["customerPhone"]);
+      });
+
+  it("says nothing changed for the same contact, even sent in full", () => {
+    const plan = businessParkingContactPlan({entry: paid, changes: {
+      customerName: "Alimou Barry", customerPhone: "+12015551234"}});
+    assert.equal(plan.ok, false);
+    assert.equal(plan.reason, "nothing_to_change");
+  });
+
+  it("refuses an empty name or phone, a bad email, a team car, and a " +
+      "car the business did not record", () => {
+    const why = (entry, changes) =>
+      businessParkingContactPlan({entry, changes}).reason;
+    assert.equal(why(paid, {customerPhone: " "}), "customer_phone_required");
+    assert.equal(why(paid, {customerName: ""}), "customer_name_required");
+    assert.equal(why(paid, {customerEmail: "nope"}),
+        "customer_email_invalid");
+    assert.equal(why({...paid, forStaffId: "s"}, {customerPhone: "1"}),
+        "team_car");
+    assert.equal(why({paymentMethod: "direct"}, {customerPhone: "1"}),
+        "not_business_entered");
+    for (const reason of ["team_car", "customer_phone_required",
+      "customer_name_required", "customer_email_invalid",
+      "not_business_entered", "nothing_to_change"]) {
+      assert.ok(BUSINESS_PARKING_CONTACT_REFUSALS[reason]);
+    }
+  });
+});

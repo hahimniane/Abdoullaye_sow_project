@@ -47,6 +47,8 @@ const payment = (extra = {}) => ({
   amountCents: 3000, receivedVia: "cash", receivedByStaffId: "staff-1",
   at: stamp("2026-10-29T14:00:00Z"), ...extra});
 
+const NONE = {parked: false, receipts: [], left: null, phoneChanged: false};
+
 const plan = (before, after, extra = {}) => wa.plannedMessages({
   businessId: BIZ, carId: CAR_ID, before, after,
   eventMs: NOW.getTime(), now: NOW, ...extra});
@@ -99,7 +101,7 @@ describe("which messages one write calls for", () => {
     const before = car({parkingPayments: [payment()]});
     const after = {...before, customerName: "Alimou B.",
       occupancyEndMs: 1, customerPhoneE164: "+12015551234"};
-    assert.deepEqual(plan(before, after), {parked: false, receipts: []});
+    assert.deepEqual(plan(before, after), NONE);
   });
 
   it("sends one receipt per payment just added, numbered in order", () => {
@@ -129,7 +131,7 @@ describe("which messages one write calls for", () => {
       paymentStatus: "awaiting_direct_payment", amountPaidCents: 3000});
     const after = car({parkingPayments: [], amountPaidCents: 0,
       revertedParkingPayments: [payment()]});
-    assert.deepEqual(plan(before, after), {parked: false, receipts: []});
+    assert.deepEqual(plan(before, after), NONE);
   });
 
   it("skips an entry marked reverted", () => {
@@ -141,16 +143,16 @@ describe("which messages one write calls for", () => {
   it("sends nothing about a voided or cancelled car", () => {
     for (const extra of [{voided: true}, {status: "cancelled"}]) {
       assert.deepEqual(plan(null, car(extra)),
-          {parked: false, receipts: []});
+          NONE);
       assert.deepEqual(plan(car({parkingPayments: []}),
           car({...extra, parkingPayments: [payment()]})),
-      {parked: false, receipts: []});
+      NONE);
     }
   });
 
   it("is only about cars the lot entered itself", () => {
     const own = {source: undefined, enteredByBusiness: false};
-    assert.deepEqual(plan(null, car(own)), {parked: false, receipts: []});
+    assert.deepEqual(plan(null, car(own)), NONE);
   });
 
   it("counts a car marked paid in full as one payment for what it added",
@@ -448,5 +450,238 @@ describe("the receipt link", () => {
       path: "packagePhotos/biz/uid/file12345.jpg", expiresMs}));
     assert.equal(receiptLinkValid({...photo, p: "p_abc"}, token, nowMs),
         false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The car left (docs/PARKING_LEFT_WHATSAPP.md)
+// ---------------------------------------------------------------------------
+
+describe("the car left message: when one write calls for it", () => {
+  const open = car({parkingPayments: []});
+  const left = (day) => ({...open, parkingEndDate: `${day}T12:00:00Z`});
+
+  it("is called for when the end date is set to today or earlier", () => {
+    assert.deepEqual(plan(open, left("2026-10-29")).left,
+        {endDayKey: "2026-10-29"});
+    assert.deepEqual(plan(open, left("2026-10-25")).left,
+        {endDayKey: "2026-10-25"});
+  });
+
+  it("is not called for an end date in the future", () => {
+    assert.equal(plan(open, left("2026-10-30")).left, null);
+  });
+
+  it("is called again when the end day moves to another day", () => {
+    const first = left("2026-10-25");
+    assert.deepEqual(plan(first, left("2026-10-27")).left,
+        {endDayKey: "2026-10-27"});
+    // Moving it into the future sends nothing yet.
+    assert.equal(plan(first, left("2026-11-02")).left, null);
+  });
+
+  it("is not called when the end day did not change", () => {
+    const first = left("2026-10-25");
+    assert.equal(plan(first, {...first, customerName: "A. Barry"}).left,
+        null);
+    // The same day at another hour is the same day.
+    assert.equal(plan(first, {...first,
+      parkingEndDate: "2026-10-25T20:00:00Z"}).left, null);
+    // An end date taken away is not a car leaving.
+    assert.equal(plan(first, open).left, null);
+  });
+
+  it("is not called for a car just created: its parked message covers it",
+      () => {
+        const result = plan(null, left("2026-10-25"));
+        assert.equal(result.parked, true);
+        assert.equal(result.left, null);
+      });
+
+  it("is not called for a team member's car, a voided car or a booking",
+      () => {
+        for (const extra of [{forStaffId: "staff-1"}, {voided: true},
+          {status: "cancelled"},
+          {source: undefined, enteredByBusiness: false}]) {
+          assert.deepEqual(plan({...open, ...extra},
+              {...left("2026-10-25"), ...extra}), NONE);
+        }
+      });
+
+  it("knows whether a car has left", () => {
+    assert.equal(wa.carHasLeft(open, NOW), false);
+    assert.equal(wa.carHasLeft(left("2026-10-29"), NOW), true);
+    assert.equal(wa.carHasLeft(left("2026-10-30"), NOW), false);
+    assert.equal(wa.carHasLeft(left("2026-10-01"), NOW), true);
+  });
+});
+
+describe("a corrected phone number", () => {
+  const usLot = {country: "United States"};
+  const open = car();
+  const left = car({parkingEndDate: "2026-10-25T12:00:00Z"});
+  const fix = (before, after, business = usLot) => wa.phoneFixPlan({
+    carId: CAR_ID, before, after, business, now: NOW});
+
+  it("is flagged by the plan only when the number is another one", () => {
+    assert.equal(plan(open, {...open, customerPhone: "+12015559999"})
+        .phoneChanged, true);
+    assert.equal(plan(open, {...open, customerName: "B"}).phoneChanged,
+        false);
+    // A number removed is not a number to message.
+    assert.equal(plan(open, {...open, customerPhone: ""}).phoneChanged,
+        false);
+    assert.equal(plan(open, {...open, customerPhone: "(201) 555-1234"})
+        .phoneChanged, true, "digits differ: the business country decides");
+  });
+
+  it("resends the parked message to the new number of a car on the lot",
+      () => {
+        assert.deepEqual(fix(open, {...open,
+          customerPhone: "+12015559999"}), {
+          kind: "parked", phone: "+12015559999",
+          rowId: "car-1_phone_12015559999", endDayKey: ""});
+      });
+
+  it("resends the left statement when the car has left", () => {
+    const result = fix(left, {...left, customerPhone: "2015559999"});
+    assert.equal(result.kind, "left");
+    assert.equal(result.phone, "+12015559999");
+    assert.equal(result.endDayKey, "2026-10-25");
+    assert.equal(result.rowId, "car-1_phone_12015559999");
+  });
+
+  it("sends to a number added to a car that had none", () => {
+    assert.equal(fix({...open, customerPhone: ""}, open).kind, "parked");
+  });
+
+  it("sends nothing when the number is only written another way", () => {
+    assert.equal(fix(open, {...open, customerPhone: "2015551234"}), null);
+    assert.equal(fix(open, {...open, customerPhone: "+1 (201) 555-1234"}),
+        null);
+  });
+
+  it("sends nothing to a number it cannot reach, or for cars it skips",
+      () => {
+        assert.equal(fix(open, {...open, customerPhone: "620123456"}), null);
+        assert.equal(fix(open, {...open, customerPhone: ""}), null);
+        assert.equal(fix(null, open), null);
+        assert.equal(fix(open, {...open, customerPhone: "+12015559999",
+          forStaffId: "s"}), null);
+        assert.equal(fix(open, {...open, customerPhone: "+12015559999",
+          voided: true}), null);
+      });
+});
+
+describe("the left and manual rows", () => {
+  it("names the left message by its end day", () => {
+    assert.equal(wa.messageRowId("left", {carId: "c1",
+      endDayKey: "2026-11-09"}), "c1_left_2026-11-09");
+  });
+
+  it("names a manual send by the moment and a resend by the new number",
+      () => {
+        assert.equal(wa.manualRowId("c1", 1793200000123),
+            "c1_manual_1793200000123");
+        assert.equal(wa.phoneRowId("c1", "+1 (201) 555-9999"),
+            "c1_phone_12015559999");
+      });
+
+  it("lets a car take five manual sends a day, in the business's day",
+      () => {
+        const at = (iso) => ({manual: true, atMs: Date.parse(iso)});
+        const today = Date.parse("2026-10-29T15:00:00Z");
+        const five = [1, 2, 3, 4, 5].map((n) =>
+          at(`2026-10-29T1${n}:00:00Z`));
+        assert.equal(wa.manualSendLimitReached(five.slice(0, 4), today,
+            "America/New_York"), false);
+        assert.equal(wa.manualSendLimitReached(five, today,
+            "America/New_York"), true);
+        // Automatic rows and yesterday's presses do not count.
+        const mixed = [...five.slice(0, 4), {manual: false, atMs: today},
+          at("2026-10-28T15:00:00Z")];
+        assert.equal(wa.manualSendLimitReached(mixed, today,
+            "America/New_York"), false);
+        // 1 AM UTC on the 29th is still the 28th in New York.
+        assert.equal(wa.localDayKey(Date.parse("2026-10-29T01:00:00Z"),
+            "America/New_York"), "2026-10-28");
+        assert.equal(wa.localDayKey(0, "America/New_York"), "");
+      });
+});
+
+describe("the left message's words", () => {
+  const business = {name: "Dala Parking", phone: "+13475550100"};
+  const stay = (extra = {}) => car({
+    parkingDate: "2026-10-18T12:00:00Z",
+    parkingEndDate: "2026-10-29T12:00:00Z", ...extra});
+  const when = new Date("2026-10-29T15:00:00Z");
+
+  it("writes the short date and the days in both languages", () => {
+    assert.equal(wa.dayTextShort("2026-11-09", "en"), "Nov 9, 2026");
+    assert.equal(wa.dayTextShort("2026-11-09", "fr"), "9 nov. 2026");
+    assert.equal(wa.dayTextShort("2026-02-01", "fr"), "1er févr. 2026");
+    assert.equal(wa.dayTextShort("nope", "en"), "");
+    assert.equal(wa.daysText(1, "en"), "1 day");
+    assert.equal(wa.daysText(12, "en"), "12 days");
+    assert.equal(wa.daysText(1, "fr"), "1 jour");
+    assert.equal(wa.daysText(12, "fr"), "12 jours");
+  });
+
+  it("says what is owed and how to pay", () => {
+    const row = stay({amountPaidCents: 2000});
+    const values = wa.leftValues(row, {...business,
+      paymentInstructions: "Zelle 347-555-0100"}, when);
+    assert.deepEqual(values, {
+      name: "Alimou Barry",
+      business: "Dala Parking",
+      businessPhone: "+13475550100",
+      trackingCode: "PK-K7M4P2",
+      carEn: "2014 Toyota Corolla", carFr: "2014 Toyota Corolla",
+      leftOnEn: "Oct 29, 2026", leftOnFr: "29 oct. 2026",
+      daysEn: "12 days", daysFr: "12 jours",
+      totalEn: "$120.00", totalFr: "120,00 $",
+      paidTotalEn: "$20.00", paidTotalFr: "20,00 $",
+      closingEn: "Balance due: $100.00. How to pay: Zelle 347-555-0100",
+      closingFr: "Solde à payer : 100,00 $. Comment payer : " +
+        "Zelle 347-555-0100",
+    });
+  });
+
+  it("leaves the how-to-pay part out when the owner wrote none", () => {
+    const values = wa.leftValues(stay({amountPaidCents: 2000}), business,
+        when);
+    assert.equal(values.closingEn, "Balance due: $100.00.");
+    assert.equal(values.closingFr, "Solde à payer : 100,00 $.");
+  });
+
+  it("says paid in full, however much instructions there are", () => {
+    const row = stay({amountPaidCents: 12000});
+    const values = wa.leftValues(row, {...business,
+      paymentInstructions: "Zelle"}, when);
+    assert.equal(values.closingEn, "Paid in full. Thank you!");
+    assert.equal(values.closingFr, "Payé en totalité. Merci !");
+    assert.equal(values.paidTotalEn, "$120.00");
+    // Paying more than owed is still paid in full.
+    assert.equal(wa.leftValues(stay({amountPaidCents: 13000}), business,
+        when).closingEn, "Paid in full. Thank you!");
+  });
+
+  it("says one day for a one-day stay", () => {
+    const one = stay({parkingDate: "2026-10-29T12:00:00Z"});
+    const values = wa.leftValues(one, business, when);
+    assert.equal(values.daysEn, "1 day");
+    assert.equal(values.daysFr, "1 jour");
+    assert.equal(values.totalEn, "$10.00");
+  });
+
+  it("builds a message the template can send", () => {
+    const body = parkingTemplateMessage({template: "parking_left_2lang",
+      phone: "+1 (201) 555-1234",
+      values: {...wa.leftValues(stay(), business, when),
+        documentLink: "https://x.test/d?a=b"}});
+    assert.equal(body.template.name, "parking_left_2lang");
+    assert.equal(body.template.components[0].type, "header");
+    assert.equal(body.template.components[1].parameters.length, 16);
+    assert.equal(body.template.components.length, 2);
   });
 });
