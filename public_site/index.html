@@ -9,28 +9,29 @@
   <meta name="theme-color" content="#0b3b38" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="assets/styles.css?v=33" />
+  <link rel="stylesheet" href="assets/home.css?v=1" />
   <link rel="icon" type="image/png" href="assets/logo.png" />
 </head>
-<body>
+<body class="home">
   <header class="site-header">
     <div class="container nav">
       <a class="brand" href="index.html" aria-label="Accueil Laawol Digital">
-        <span class="brand-mark" aria-hidden="true"><img src="assets/logo.png" alt="Laawol" width="32" height="32" style="border-radius:8px;display:block" /></span>
+        <span class="brand-mark" aria-hidden="true"><img src="assets/logo.png" alt="Laawol" width="36" height="36" style="border-radius:9px;display:block" /></span>
         <span class="brand-text">Laawol<span>Digital</span></span>
       </a>
       <nav class="nav-links" aria-label="Navigation principale">
-        <a href="index.html" class="active">Accueil</a>
         <a href="services.html">Services</a>
         <a href="tracking.html">Suivi de commande</a>
         <a href="app.html">Application</a>
         <a href="about.html">À propos</a>
+        <a href="partner.html">Pour les entreprises</a>
         <a href="contact.html">Contact</a>
       </nav>
       <div class="nav-cta">
-        <a class="btn btn-ghost" href="https://customer.laawoldigital.com">Utiliser Laawol en ligne</a>
-        <a class="btn btn-primary" href="partner.html">Inscrire votre entreprise</a>
+        <a class="h-signin" href="https://customer.laawoldigital.com">Se connecter</a>
+        <a class="h-btn-amber" href="https://customer.laawoldigital.com/?service=barrel"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8l8-4 8 4v8l-8 4-8-4z"/><path d="M4 8l8 4 8-4M12 12v8"/></svg>Envoyer un colis</a>
       </div>
       <button class="nav-toggle" id="navToggle" aria-label="Ouvrir le menu" aria-expanded="false"><span></span><span></span><span></span></button>
     </div>
@@ -43,147 +44,91 @@
       <a href="contact.html">Contact</a>
       <a href="partner.html">Pour les entreprises</a>
       <a href="app.html">Télécharger l’application</a>
+      <a class="btn h-btn-amber" href="https://customer.laawoldigital.com/?service=barrel">Envoyer un colis</a>
       <a class="btn btn-primary" href="https://customer.laawoldigital.com">Utiliser Laawol en ligne</a>
     </div>
   </header>
-  <section class="hero">
-    <div class="hero-bg" aria-hidden="true"></div>
-    <div class="container hero-inner">
-      <div class="hero-copy">
-        <span class="eyebrow"><span data-cms="hero.eyebrow">Marketplace de services de confiance</span> <span class="arrow">★</span></span>
-        <h1 data-cms="hero.headline">Expédiez des colis, des barils et des voitures entre les États-Unis et <span class="grad">l’Afrique de l’Ouest</span>.</h1>
-        <p class="lead" data-cms="hero.subheadline">Laawol est une marketplace d’entreprises inscrites et vérifiées : comparez les prix pour vos colis et vos barils, achetez des voitures vérifiées, demandez des devis de transport et suivez chaque commande — avec l’assistance de la plateforme à chaque étape.</p>
-        <div class="hero-actions"><a class="btn btn-primary btn-lg" href="https://customer.laawoldigital.com">Utiliser Laawol en ligne</a><a class="btn btn-outline btn-lg" href="services.html">Découvrir les services</a><a class="btn btn-outline btn-lg" href="app.html">Télécharger l’application</a></div>
-        
-        <div class="store-badges">
-          <a class="store-badge" href="https://apps.apple.com/app/laawol/id6791795025" target="_blank" rel="noopener" aria-label="Télécharger sur App Store"><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M16.4 12.7c0-2 1.6-3 1.7-3a3.7 3.7 0 0 0-2.9-1.6c-1.2-.1-2.4.7-3 .7-.6 0-1.6-.7-2.6-.7-1.3 0-2.6.8-3.3 2-1.4 2.4-.4 6 1 8 .6 1 1.4 2 2.4 2 1 0 1.3-.6 2.5-.6s1.5.6 2.5.6 1.7-.9 2.3-1.9c.7-1 1-2 1-2.1 0 0-2-.8-2.1-2.9zM14.6 6.2c.5-.7.9-1.6.8-2.5-.8 0-1.7.5-2.3 1.2-.5.6-.9 1.5-.8 2.4.9.1 1.7-.4 2.3-1.1z"/></svg><span><small>Télécharger sur</small><b>App Store</b></span></a>
-          <a class="store-badge" href="https://play.google.com/store/apps/details?id=com.laawoldigital.app" target="_blank" rel="noopener" aria-label="Disponible sur Google Play"><svg viewBox="0 0 24 24" width="20" height="20"><path fill="#34d399" d="M3.6 2.3 13 11.7l2.6-2.6L5.2 3a2 2 0 0 0-1.6-.7z"/><path fill="#60a5fa" d="M3 2.8C2.8 3.1 2.7 3.5 2.7 4v16c0 .5.1.9.3 1.2L12.4 12 3 2.8z"/><path fill="#fbbf24" d="M16.7 9.5 13.7 12l3 2.5 3.2-1.8c.9-.5.9-1.9 0-2.4l-3.2-1.8z"/><path fill="#f87171" d="M3.6 21.7c.4.1.9 0 1.6-.4l10.4-6L13 12.3l-9.4 9.4z"/></svg><span><small>Disponible sur</small><b>Google Play</b></span></a>
-        </div>
-        <ul class="hero-trust"><li><strong>Entreprises</strong> inscrites</li><li><strong>Prix et trajets</strong> clairs</li><li><strong>Assistance de la plateforme</strong></li></ul>
+
+  <main>
+  <!-- HERO -->
+  <section class="h-hero" id="top">
+    <div class="h-wrap h-hero-grid">
+      <div class="h-hero-copy">
+        <span class="h-eyebrow" data-cms="hero.eyebrow">Marketplace de services de confiance</span>
+        <h1 class="h-title" data-cms="hero.headline"><span class="h-line h-l1"><span>Comparez.</span></span><span class="h-line h-l2"><span>Envoyez.</span></span><span class="h-line h-l3"><span class="grad">Suivez.</span></span></h1>
+        <p class="h-lead" data-cms="hero.subheadline">La marketplace des entreprises vérifiées d’expédition, de voitures et de stationnement. Comparez les prix côte à côte, choisissez la vôtre, et Laawol vous tient informé jusqu’à la porte.</p>
+        <form class="h-search" action="https://customer.laawoldigital.com/" method="get">
+          <label class="h-seg" for="homeService">
+            <span class="h-seg-label">Que voulez-vous faire ?</span>
+            <select id="homeService" name="service">
+              <option value="barrel">Envoyer un colis ou un baril</option>
+              <option value="cars">Acheter une voiture</option>
+              <option value="car-transport">Expédier une voiture</option>
+              <option value="parking">Réserver un stationnement</option>
+            </select>
+            <svg class="h-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+          </label>
+          <button type="submit" class="h-search-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>Commencer</button>
+        </form>
+        <ul class="h-trust">
+          <li><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg><span><strong>Entreprises vérifiées</strong><small>Approuvées avant d’être visibles</small></span></li>
+          <li><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18"/></svg><span><strong>Paiement sécurisé</strong><small>Un reçu pour chaque commande</small></span></li>
+          <li><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 10h8"/></svg><span><strong>Mises à jour sur WhatsApp</strong><small>À chaque étape</small></span></li>
+        </ul>
       </div>
-      <div class="hero-card">
-        <div class="globe-wrap" role="img" aria-label="Une marketplace mondiale à double sens qui relie la diaspora et le pays à travers de nombreux services">
-          <div class="globe-stage">
-          <canvas class="globe-canvas" id="globeCanvas" aria-hidden="true"></canvas>
-          <svg class="globe-svg globe-fallback" viewBox="0 0 460 460" preserveAspectRatio="xMidYMid meet">
-            <defs>
-              <radialGradient id="ocean" cx="40%" cy="33%" r="75%">
-                <stop offset="0" stop-color="#2bd6c1" />
-                <stop offset=".5" stop-color="#0d9488" />
-                <stop offset="1" stop-color="#07302c" />
-              </radialGradient>
-              <radialGradient id="haze" cx="50%" cy="50%" r="50%">
-                <stop offset=".62" stop-color="#14b8a6" stop-opacity="0" />
-                <stop offset="1" stop-color="#14b8a6" stop-opacity=".22" />
-              </radialGradient>
-              <linearGradient id="netArc" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0" stop-color="#14b8a6" /><stop offset="1" stop-color="#f59e0b" />
-              </linearGradient>
-              <clipPath id="ball"><circle cx="230" cy="230" r="150" /></clipPath>
-              <pattern id="land" width="19" height="19" patternUnits="userSpaceOnUse">
-                <circle cx="3" cy="3" r="1.5" fill="#dffff8" opacity=".55" />
-                <animateTransform attributeName="patternTransform" type="translate" from="0 0" to="-19 0" dur="3.4s" repeatCount="indefinite" />
-              </pattern>
-            </defs>
 
-            <circle cx="230" cy="230" r="178" fill="url(#haze)" />
-            <circle cx="230" cy="230" r="150" fill="url(#ocean)" />
-
-            <g clip-path="url(#ball)">
-              <rect class="globe-land" x="-150" y="80" width="760" height="300" fill="url(#land)" />
-              <g class="grat" fill="none" stroke="#d3fff5" stroke-opacity=".16" stroke-width="1.2">
-                <line x1="80" y1="230" x2="380" y2="230" />
-                <ellipse cx="230" cy="230" rx="150" ry="50" />
-                <ellipse cx="230" cy="230" rx="150" ry="104" />
-                <line x1="230" y1="80" x2="230" y2="380" />
-                <ellipse cx="230" cy="230" rx="50" ry="150" />
-                <ellipse cx="230" cy="230" rx="104" ry="150" />
-              </g>
-              <ellipse cx="178" cy="172" rx="58" ry="40" fill="#ffffff" opacity=".1" />
-            </g>
-            <circle cx="230" cy="230" r="150" fill="none" stroke="#06302c" stroke-opacity=".28" stroke-width="1.5" />
-
-            <!-- global routes, pulses travel BOTH ways -->
-            <path id="arc1" class="net-arc" d="M104 128 C 250 24 392 90 388 214" />
-            <path id="arc2" class="net-arc" d="M86 300 C 150 408 330 416 384 312" />
-            <path id="arc3" class="net-arc" d="M120 360 C 60 250 70 150 150 96" />
-            <circle class="net-pulse" r="5"><animateMotion dur="5s" repeatCount="indefinite" calcMode="linear" keyPoints="0;1" keyTimes="0;1"><mpath href="#arc1" /></animateMotion></circle>
-            <circle class="net-pulse gold" r="5"><animateMotion dur="5.6s" begin="1s" repeatCount="indefinite" calcMode="linear" keyPoints="1;0" keyTimes="0;1"><mpath href="#arc2" /></animateMotion></circle>
-            <circle class="net-pulse" r="4.5"><animateMotion dur="6s" begin="2.4s" repeatCount="indefinite" calcMode="linear" keyPoints="0;1" keyTimes="0;1"><mpath href="#arc3" /></animateMotion></circle>
-
-            <!-- hub nodes on the network -->
-            <g class="hub"><circle class="hub-ping" cx="104" cy="128" r="6" /><circle cx="104" cy="128" r="5" /></g>
-            <g class="hub"><circle cx="388" cy="214" r="5" /></g>
-            <g class="hub"><circle class="hub-ping gold" cx="384" cy="312" r="6" /><circle cx="384" cy="312" r="5" /></g>
-            <g class="hub"><circle cx="86" cy="300" r="5" /></g>
-            <g class="hub"><circle cx="150" cy="96" r="4.5" /></g>
-          </svg>
-
-          <!-- services float around the globe -->
-          <span class="svc svc-a"><i>🛢️</i>Expédition</span>
-          <span class="svc svc-b"><i>🚗</i>Voitures</span>
-          <span class="svc svc-c"><i>🚚</i>Transport</span>
-          <span class="svc svc-d"><i>🅿️</i>Stationnement</span>
-          <span class="svc svc-e"><i>💳</i>Paiements</span>
-          <span class="globe-trust"><i>✓</i> Vérifié et suivi</span>
-          </div>
-
+      <div class="h-hero-visual">
+        <div class="h-photo">
+          <video muted loop playsinline preload="none" poster="assets/home-hero-poster.jpg?v=1" aria-hidden="true" tabindex="-1"><source src="assets/hero-harbor.mp4" type="video/mp4" /></video>
+          <span class="h-photo-shade" aria-hidden="true"></span>
+        </div>
+        <div class="h-float h-float-top">
+          <span class="h-float-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 10h8"/></svg></span>
+          <span class="h-float-text"><strong>Suivi par Laawol</strong><small>Mises à jour sur WhatsApp</small></span>
+        </div>
+        <div class="h-float h-float-bottom">
+          <span class="h-float-icon h-float-icon-dark"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 15h18l-2 4H5z"/><path d="M6 15V9h8v6M14 11h4l2 4"/></svg></span>
+          <span class="h-float-text"><small>En transit · par mer</small><strong>New York → Conakry</strong><span class="h-bar" aria-hidden="true"><span></span></span></span>
         </div>
       </div>
     </div>
   </section>
 
-  <section class="section">
-    <div class="container">
-      <div class="section-head"><span class="kicker">Une plateforme, plusieurs entreprises de confiance</span><h2>Comparez les services sans courir après les prestataires</h2><p data-cms="sections.servicesIntro">Les entreprises s’inscrivent sur Laawol pour proposer les services qu’elles maîtrisent. Vous voyez leurs trajets, leurs prix, leurs détails de service et leurs statuts au même endroit, avec l’assistance de la plateforme si un point demande de l’attention.</p></div>
-      <div class="service-grid">
-        
-        <a class="service-card" href="https://customer.laawoldigital.com/?service=barrel">
-          <div class="service-icon" data-tone="teal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/><path d="M11 8v6M8 11h6"/></svg></div>
-          <h3>Envoyer un colis</h3>
-          <p>Barils, cartons, valises et colis, par mer ou par avion. Comparez les prix des entreprises et voyez votre total tout de suite.</p>
-          <span class="link-arrow">Envoyer un colis <span>→</span></span>
+  <!-- SERVICES -->
+  <section class="h-services" id="services">
+    <div class="h-wrap h-services-grid">
+      <div class="h-services-intro">
+        <span class="h-kicker">Nos services</span>
+        <h2>Tout ce que vous envoyez, au même endroit</h2>
+        <p data-cms="sections.servicesIntro">De la simple boîte à la voiture entière, chaque service est proposé par des entreprises que vous pouvez comparer.</p>
+        <a class="h-more" href="services.html">Découvrir tous les services <span aria-hidden="true">→</span></a>
+      </div>
+      <div class="h-tiles">
+        <a class="h-tile" href="https://customer.laawoldigital.com/?service=barrel">
+          <span class="h-tile-art"><svg viewBox="0 0 200 200" aria-hidden="true"><rect width="200" height="200" fill="#dff3ef"/><ellipse cx="100" cy="178" rx="78" ry="10" fill="#0b3b38" opacity=".12"/><g><path d="M118 70h52a4 4 0 0 1 4 4v84a6 6 0 0 1-6 6h-48a6 6 0 0 1-6-6V74a4 4 0 0 1 4-4z" fill="#1d4ed8"/><rect x="114" y="98" width="60" height="5" rx="2.5" fill="#1e40af"/><rect x="114" y="128" width="60" height="5" rx="2.5" fill="#1e40af"/><rect x="110" y="62" width="68" height="12" rx="6" fill="#0f172a"/><rect x="116" y="56" width="56" height="9" rx="4.5" fill="#1e293b"/><rect x="174" y="64" width="8" height="10" rx="2" fill="#64748b"/></g><g><path d="M42 52h64a5 5 0 0 1 5 5v104a7 7 0 0 1-7 7H44a7 7 0 0 1-7-7V57a5 5 0 0 1 5-5z" fill="#2563eb"/><rect x="37" y="86" width="74" height="6" rx="3" fill="#1d4ed8"/><rect x="37" y="122" width="74" height="6" rx="3" fill="#1d4ed8"/><rect x="33" y="42" width="82" height="14" rx="7" fill="#0f172a"/><rect x="40" y="35" width="68" height="10" rx="5" fill="#1e293b"/><rect x="110" y="44" width="9" height="12" rx="2" fill="#64748b"/><rect x="52" y="100" width="44" height="26" rx="3" fill="#fff" opacity=".92"/><rect x="58" y="107" width="32" height="3" rx="1.5" fill="#94a3b8"/><rect x="58" y="114" width="22" height="3" rx="1.5" fill="#94a3b8"/></g><g><rect x="128" y="144" width="46" height="30" rx="3" fill="#c4a484" stroke="#a07c58" stroke-width="1.5"/><rect x="148" y="144" width="6" height="30" fill="#f59e0b" opacity=".9"/></g></svg></span>
+          <span class="h-tile-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 5h10l1 4v10a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V9z"/><path d="M6 9h12"/></svg>Colis et barils</span>
         </a>
-        
-        <a class="service-card" href="https://customer.laawoldigital.com/?service=cars">
-          <div class="service-icon" data-tone="navy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 13l2-5a3 3 0 0 1 2.8-2h8.4A3 3 0 0 1 19 8l2 5"/><path d="M3 13h18v4a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1v-1H6v1a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-4z"/><circle cx="7" cy="15.5" r="1"/><circle cx="17" cy="15.5" r="1"/></svg></div>
-          <h3>Voitures</h3>
-          <p>Parcourez les annonces, photos, prix et informations de titre avant de préparer une visite ou un achat.</p>
-          <span class="link-arrow">Voir les voitures <span>→</span></span>
+        <a class="h-tile" href="https://customer.laawoldigital.com/?service=cars">
+          <span class="h-tile-art"><svg viewBox="0 0 200 200" aria-hidden="true"><rect width="200" height="200" fill="#dff3ef"/><rect y="150" width="200" height="50" fill="#c7ebe4"/><ellipse cx="101" cy="156" rx="82" ry="7" fill="#0b3b38" opacity=".14"/><path d="M28 136v-14c0-6 4-10 10-11l14-3 16-20c4-5 9-7 15-7h36c6 0 11 3 15 7l17 20 14 3c6 1 10 6 10 12v13c0 3-2 5-5 5H33c-3 0-5-2-5-5z" fill="#0d9488"/><path d="M72 107l12-15c2-3 5-4 8-4h6v19z" fill="#e0f7f3"/><path d="M104 88h10c4 0 7 1 10 4l12 15h-32z" fill="#e0f7f3"/><path d="M30 126h145" stroke="#0b3b38" stroke-opacity=".25" stroke-width="2"/><rect x="164" y="116" width="10" height="5" rx="2" fill="#fde68a"/><circle cx="62" cy="141" r="15" fill="#0f172a"/><circle cx="62" cy="141" r="6" fill="#94a3b8"/><circle cx="140" cy="141" r="15" fill="#0f172a"/><circle cx="140" cy="141" r="6" fill="#94a3b8"/><g transform="rotate(-8 146 50)"><path d="M122 36h44a6 6 0 0 1 6 6v18a6 6 0 0 1-6 6h-44l-12-15z" fill="#f59e0b"/><circle cx="120" cy="51" r="3.5" fill="#dff3ef"/><path d="M146 42v18M151 45.5c-1-1.6-2.8-2.5-5-2.5-2.8 0-4.5 1.4-4.5 3.4 0 4.6 10 2.4 10 7.2 0 2.1-2 3.6-5.2 3.6-2.4 0-4.4-1-5.5-2.7" stroke="#0b3b38" stroke-width="2.4" fill="none" stroke-linecap="round"/></g></svg></span>
+          <span class="h-tile-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 15l1.5-5A2 2 0 0 1 7.4 8.5h9.2a2 2 0 0 1 1.9 1.5L20 15v3H4z"/><circle cx="8" cy="15" r="1"/><circle cx="16" cy="15" r="1"/></svg>Voitures à vendre</span>
         </a>
-        
-        <!-- Shared barrels: paused platform-wide (Settings -> Feature
-             availability -> Shared barrel pools). Not deleted, just hidden
-             until re-enabled.
-        <a class="service-card" href="https://customer.laawoldigital.com/?service=shared-barrels">
-          <div class="service-icon" data-tone="green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 3v8a2 2 0 0 0 2 2v8M7 3v6M9 3v6"/><path d="M17 3c-1.5 0-2.5 2-2.5 5s1 4 2.5 4v8"/></svg></div>
-          <h3>Barils partagés</h3>
-          <p>Publiez des parts disponibles ou préparez une demande pour rejoindre un chargement partagé.</p>
-          <span class="link-arrow">Partager un baril <span>→</span></span>
+        <a class="h-tile" href="https://customer.laawoldigital.com/?service=car-transport">
+          <span class="h-tile-art"><svg viewBox="0 0 200 200" aria-hidden="true"><rect width="200" height="200" fill="#dff3ef"/><circle cx="158" cy="44" r="16" fill="#fde68a"/><rect x="138" y="80" width="28" height="38" rx="2" fill="#f8fafc"/><rect x="142" y="87" width="20" height="5" rx="1" fill="#0b3b38" opacity=".7"/><rect x="149" y="66" width="6" height="14" fill="#64748b"/><rect x="28" y="96" width="26" height="22" fill="#f59e0b"/><rect x="28" y="74" width="26" height="22" fill="#0d9488"/><rect x="56" y="96" width="26" height="22" fill="#1d4ed8"/><g transform="translate(78 68) scale(.38)"><path d="M28 136v-14c0-6 4-10 10-11l14-3 16-20c4-5 9-7 15-7h36c6 0 11 3 15 7l17 20 14 3c6 1 10 6 10 12v13c0 3-2 5-5 5H33c-3 0-5-2-5-5z" fill="#dc2626"/><path d="M72 107l12-15c2-3 5-4 8-4h6v19z" fill="#fee2e2"/><path d="M104 88h10c4 0 7 1 10 4l12 15h-32z" fill="#fee2e2"/><circle cx="62" cy="141" r="15" fill="#0f172a"/><circle cx="140" cy="141" r="15" fill="#0f172a"/></g><path d="M18 118h164l-18 36H38z" fill="#0b3b38"/><path d="M33 144h134l-4 10H38z" fill="#b42318"/><path d="M0 158q12-6 25 0t25 0 25 0 25 0 25 0 25 0 25 0 25 0V200H0z" fill="#0d9488" opacity=".4"/><path d="M0 172q12-6 25 0t25 0 25 0 25 0 25 0 25 0 25 0 25 0V200H0z" fill="#0d9488" opacity=".35"/></svg></span>
+          <span class="h-tile-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h11v9H3z"/><path d="M14 10h4l3 3v3h-7"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></svg>Transport de véhicules</span>
         </a>
-        -->
-
-        <a class="service-card" href="https://customer.laawoldigital.com/?service=car-transport">
-          <div class="service-icon" data-tone="navy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 13l2-5a3 3 0 0 1 2.8-2h8.4A3 3 0 0 1 19 8l2 5"/><path d="M3 13h18v4H3z"/><circle cx="7" cy="16" r="1"/><circle cx="17" cy="16" r="1"/></svg></div>
-          <h3>Transport de véhicules</h3>
-          <p>Préparez les détails du véhicule et de la destination pour demander un devis à une entreprise approuvée.</p>
-          <span class="link-arrow">Demander un transport <span>→</span></span>
-        </a>
-
-        <a class="service-card" href="https://customer.laawoldigital.com/?service=parking">
-          <div class="service-icon" data-tone="teal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 17V7h4a3 3 0 0 1 0 6H9"/></svg></div>
-          <h3>Stationnement</h3>
-          <p>Choisissez une ville et des dates, puis préparez votre véhicule pour réserver une place.</p>
-          <span class="link-arrow">Trouver un stationnement <span>→</span></span>
+        <a class="h-tile" href="https://customer.laawoldigital.com/?service=parking">
+          <span class="h-tile-art"><svg viewBox="0 0 200 200" aria-hidden="true"><rect width="200" height="200" fill="#dff3ef"/><rect y="150" width="200" height="50" fill="#c7ebe4"/><path d="M76 200l8-50M190 200l-6-50" stroke="#fff" stroke-width="4"/><rect x="41" y="92" width="6" height="64" rx="2" fill="#64748b"/><rect x="20" y="38" width="48" height="58" rx="9" fill="#1d4ed8" stroke="#fff" stroke-width="3"/><path d="M36 82V52h10a9 9 0 0 1 0 18H36" stroke="#fff" stroke-width="6" fill="none" stroke-linejoin="round" stroke-linecap="round"/><g transform="translate(56 52) scale(.8)"><path d="M28 136v-14c0-6 4-10 10-11l14-3 16-20c4-5 9-7 15-7h36c6 0 11 3 15 7l17 20 14 3c6 1 10 6 10 12v13c0 3-2 5-5 5H33c-3 0-5-2-5-5z" fill="#0b3b38"/><path d="M72 107l12-15c2-3 5-4 8-4h6v19z" fill="#ccfbf1"/><path d="M104 88h10c4 0 7 1 10 4l12 15h-32z" fill="#ccfbf1"/><rect x="164" y="116" width="10" height="5" rx="2" fill="#fde68a"/><circle cx="62" cy="141" r="15" fill="#0f172a"/><circle cx="62" cy="141" r="6" fill="#94a3b8"/><circle cx="140" cy="141" r="15" fill="#0f172a"/><circle cx="140" cy="141" r="6" fill="#94a3b8"/></g></svg></span>
+          <span class="h-tile-label"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M10 16V8h3a2.5 2.5 0 0 1 0 5h-3"/></svg>Stationnement</span>
         </a>
       </div>
     </div>
   </section>
 
-  <section class="section featured-partners-section" id="featuredBusinessesSection" hidden>
-    <div class="container">
-      <div class="section-head">
-        <span class="kicker">Partenaires de confiance</span>
+  <!-- FEATURED BUSINESSES (filled by content.js; stays hidden until the CMS has some) -->
+  <section class="h-featured" id="featuredBusinessesSection" hidden>
+    <div class="h-wrap">
+      <div class="h-head">
+        <span class="h-kicker">Partenaires de confiance</span>
         <h2 data-cms="featured.heading">Entreprises mises en avant</h2>
         <p data-cms="featured.subheading">Une sélection de partenaires approuvés avec des profils publics validés.</p>
       </div>
@@ -191,48 +136,85 @@
     </div>
   </section>
 
-  <section class="section section-alt">
-    <div class="container">
-      <div class="section-head"><span class="kicker">Comment la confiance fonctionne</span><h2>Les bonnes entreprises doivent être faciles à trouver</h2><p>Laawol aide les entreprises sérieuses à se démarquer et évite aux clients de deviner.</p></div>
-      <div class="trust-grid">
-        <article class="trust-card"><span>01</span><h3>Les entreprises s’inscrivent</h3><p>Les partenaires postulent, choisissent les services proposés, configurent leurs destinations ou annonces et gèrent leur équipe dans un seul profil d’entreprise.</p></article>
-        <article class="trust-card"><span>02</span><h3>Les clients comparent clairement</h3><p>Les prix, trajets, photos, détails de service, statuts et coordonnées sont organisés avant qu’un client paie ou demande de l’aide.</p></article>
-        <article class="trust-card"><span>03</span><h3>La plateforme accompagne les deux côtés</h3><p>Laawol suit les commandes, paiements, remboursements, messages et historiques pour aider les bonnes entreprises à inspirer confiance et les clients à obtenir de l’aide.</p></article>
+  <!-- AFTER YOU BOOK -->
+  <section class="h-informed" id="informed">
+    <div class="h-wrap h-informed-inner">
+      <span class="h-kicker">Après votre réservation</span>
+      <h2>L’entreprise expédie. Laawol vous tient informé.</h2>
+      <p class="h-informed-lead">Plus besoin de relancer l’expéditeur pour avoir des nouvelles. Laawol suit la commande et vous envoie une mise à jour à chaque étape, dans l’application et sur WhatsApp, de la prise en charge à l’arrivée.</p>
+      <div class="h-route">
+        <svg class="h-route-arc" aria-hidden="true" viewBox="0 0 860 140" preserveAspectRatio="none" fill="none"><path class="h-draw" d="M120 120 Q 430 -40 740 120" stroke="#0d9488" stroke-width="2.5" stroke-linecap="round" vector-effect="non-scaling-stroke"/></svg>
+        <div class="h-node h-node-low"><span class="h-node-dot"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8l8-4 8 4v8l-8 4-8-4z"/><path d="M4 8l8 4 8-4M12 12v8"/></svg></span><small>Pris en charge</small><strong>New York</strong></div>
+        <div class="h-node"><span class="h-node-dot h-node-dot-live"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 15h18l-2 4H5z"/><path d="M6 15V9h8v6M14 11h4l2 4"/></svg></span><small>En transit · par mer</small><strong>Traversée de l’Atlantique</strong></div>
+        <div class="h-node h-node-low"><span class="h-node-dot h-node-dot-next"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="10" r="3"/><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/></svg></span><small>Arrivée</small><strong>Conakry</strong></div>
+      </div>
+      <div class="h-informed-grid">
+        <div class="h-chat">
+          <div class="h-chat-head"><img src="assets/logo.png" alt="" width="32" height="32" /><span><strong>Laawol</strong><small>via WhatsApp</small></span><em><i aria-hidden="true"></i>Automatique</em></div>
+          <p class="h-msg">Votre baril a été pris en charge à New York.</p>
+          <p class="h-msg h-msg2">Chargé sur le navire. Arrivée prévue à Conakry dans environ 4 semaines.</p>
+          <p class="h-msg h-msg3 h-msg-dark">Arrivé à Conakry et prêt pour le retrait.</p>
+        </div>
+        <ul class="h-points">
+          <li><span class="h-point-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10 21h4"/></svg></span><span><strong>Chaque changement de statut vous parvient</strong><small>Pris en charge, chargé, en transit, arrivé, livré.</small></span></li>
+          <li><span class="h-point-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 10h8M8 13h5"/></svg></span><span><strong>Sur WhatsApp et dans l’application</strong><small>Les mises à jour arrivent là où vous êtes déjà.</small></span></li>
+          <li><span class="h-point-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="3"/><circle cx="17" cy="8" r="3"/><path d="M2 20c0-3 2.7-5 6-5s6 2 6 5M14 15c3 0 6 2 6 5"/></svg></span><span><strong>Un seul dossier pour tous</strong><small>Vous et l’entreprise voyez le même statut.</small></span></li>
+          <li class="h-points-cta"><a class="h-btn-outline" href="tracking.html">Suivre ma commande</a></li>
+        </ul>
       </div>
     </div>
   </section>
 
-  <section class="section section-alt">
-    <div class="container service-featured">
-      <div class="sf-copy">
-        <span class="sf-tag">Standard de la marketplace</span>
-        <h3>Un service honnête commence par une information claire</h3>
-        <p>Les clients doivent savoir qui fournit le service, combien il coûte, où il va et quelle est la prochaine étape. Laawol aide les entreprises à publier ces informations et conserve les dossiers d’assistance au même endroit.</p>
-        <a class="btn btn-primary" href="tracking.html">Comment ça marche</a>
+  <!-- APP -->
+  <section class="h-app-sec" id="app">
+    <div class="h-wrap">
+      <div class="h-app">
+        <span class="h-app-glow" aria-hidden="true"></span>
+        <div class="h-app-phone">
+          <div class="h-phone-frame">
+            <img src="assets/app-shipping-fr.png?v=2" data-src-fr="assets/app-shipping-fr.png?v=2" data-src-en="assets/app-shipping-en.png?v=2" width="804" height="1748" loading="lazy" decoding="async" alt="Écran Expédition de l’application Laawol présentant les colis, les barils et le transport de voitures." />
+          </div>
+        </div>
+        <div class="h-app-copy">
+          <span class="h-kicker">L’application Laawol</span>
+          <h2>Gérez vos envois où que vous soyez</h2>
+          <p>Comparez, réservez et suivez depuis votre téléphone, en français ou en anglais.</p>
+          <div class="store-badges">
+            <a class="store-badge" href="https://apps.apple.com/app/laawol/id6791795025" target="_blank" rel="noopener" aria-label="Télécharger sur App Store"><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M16.4 12.7c0-2 1.6-3 1.7-3a3.7 3.7 0 0 0-2.9-1.6c-1.2-.1-2.4.7-3 .7-.6 0-1.6-.7-2.6-.7-1.3 0-2.6.8-3.3 2-1.4 2.4-.4 6 1 8 .6 1 1.4 2 2.4 2 1 0 1.3-.6 2.5-.6s1.5.6 2.5.6 1.7-.9 2.3-1.9c.7-1 1-2 1-2.1 0 0-2-.8-2.1-2.9zM14.6 6.2c.5-.7.9-1.6.8-2.5-.8 0-1.7.5-2.3 1.2-.5.6-.9 1.5-.8 2.4.9.1 1.7-.4 2.3-1.1z"/></svg><span><small>Télécharger sur</small><b>App Store</b></span></a>
+            <a class="store-badge" href="https://play.google.com/store/apps/details?id=com.laawoldigital.app" target="_blank" rel="noopener" aria-label="Disponible sur Google Play"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="#34d399" d="M3.6 2.3 13 11.7l2.6-2.6L5.2 3a2 2 0 0 0-1.6-.7z"/><path fill="#60a5fa" d="M3 2.8C2.8 3.1 2.7 3.5 2.7 4v16c0 .5.1.9.3 1.2L12.4 12 3 2.8z"/><path fill="#fbbf24" d="M16.7 9.5 13.7 12l3 2.5 3.2-1.8c.9-.5.9-1.9 0-2.4l-3.2-1.8z"/><path fill="#f87171" d="M3.6 21.7c.4.1.9 0 1.6-.4l10.4-6L13 12.3l-9.4 9.4z"/></svg><span><small>Disponible sur</small><b>Google Play</b></span></a>
+          </div>
+        </div>
+        <ul class="h-app-list">
+          <li><span aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg></span>Chaque étape suivie</li>
+          <li><span aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg></span>Mises à jour sur WhatsApp</li>
+          <li><span aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg></span>Payer et échanger au même endroit</li>
+        </ul>
       </div>
-      <div class="sf-visual">
-        <div class="real-app-capture">
-          <img src="assets/app-shipping-fr.png?v=2" data-src-fr="assets/app-shipping-fr.png?v=2" data-src-en="assets/app-shipping-en.png?v=2" width="804" height="1748" loading="lazy" decoding="async" alt="Écran Expédition de l’application Laawol présentant les colis, les barils et le transport de voitures." />
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="h-cta-sec" id="business">
+    <div class="h-wrap">
+      <div class="h-cta">
+        <svg class="h-cta-rings" aria-hidden="true" width="220" height="220" viewBox="0 0 220 220" fill="none"><circle cx="110" cy="110" r="100" stroke="#0d9488" stroke-width="2"/><circle cx="110" cy="110" r="64" stroke="#0d9488" stroke-width="1.5"/></svg>
+        <div class="h-cta-copy">
+          <h2>Prêt à commencer ?</h2>
+          <p>Envoyez un colis aujourd’hui, ou inscrivez votre entreprise pour être vue par les clients qui comparent les prix sur vos trajets.</p>
+        </div>
+        <div class="h-cta-actions">
+          <a class="h-btn-amber h-pill" href="https://customer.laawoldigital.com/?service=barrel">Envoyer un colis</a>
+          <a class="h-btn-white h-pill" href="partner.html">Inscrire votre entreprise <span aria-hidden="true">→</span></a>
         </div>
       </div>
     </div>
   </section>
+  </main>
 
-  
-  <section class="section"><div class="container cta-band">
-    <div><h2>Gardez des entreprises de confiance dans votre poche</h2><p>Trouvez un prestataire inscrit, comparez les détails du service, faites une demande, payez en sécurité et suivez chaque étape depuis votre téléphone.</p></div>
-    <div class="cta-actions"><a class="btn btn-dark btn-lg" href="https://customer.laawoldigital.com">Continuer en ligne</a><a class="btn btn-outline btn-lg" href="app.html">Télécharger l’application</a><a class="btn btn-outline btn-lg" href="contact.html">Parler à notre équipe</a></div>
-  </div></section>
-
-  <section class="section section-alt"><div class="container cta-band">
-    <div><h2>Vous avez une entreprise ?</h2><p>Rejoignez les entreprises inscrites qui servent la diaspora : expédition de colis et de barils, voitures, transport et stationnement. Postulez une fois, choisissez vos services et soyez visible après approbation.</p></div>
-    <div class="cta-actions"><a class="btn btn-dark btn-lg" href="partner.html">Inscrire votre entreprise</a><a class="btn btn-outline btn-lg" href="contact.html">Parler à notre équipe</a></div>
-  </div></section>
-  
   <footer class="site-footer">
     <div class="container footer-grid">
       <div class="footer-brand">
-        <a class="brand" href="index.html"><span class="brand-mark"><img src="assets/logo.png" alt="Laawol" width="32" height="32" style="border-radius:8px;display:block" /></span><span class="brand-text light">Laawol<span>Digital</span></span></a>
+        <a class="brand" href="index.html"><span class="brand-mark"><img src="assets/logo.png" alt="Laawol" width="36" height="36" style="border-radius:9px;display:block" /></span><span class="brand-text light">Laawol<span>Digital</span></span></a>
         <p>Une plateforme de confiance pour la diaspora africaine : des entreprises inscrites proposent l’expédition de colis et de barils, la vente, le transport et le stationnement de voitures — avec des prix clairs et un vrai suivi.</p>
       </div>
       <div class="footer-col"><h4>Explorer</h4>
@@ -248,7 +230,7 @@
     <div class="container footer-bottom">
       <span>© <span id="year"></span> Laawol Digital. Tous droits réservés.</span>
       <span class="footer-legal"><a href="privacy.html">Confidentialité</a><span aria-hidden="true"> · </span><a href="terms.html">Conditions d’utilisation</a></span>
-      <span class="footer-tag">« Laawol » signifie « le chemin » en pular. Laawol — la route vers le pays.</span>
+      <span class="footer-tag">« Laawol » signifie « le chemin » en pular. Laawol — la route vers le pays.</span>
     </div>
   </footer>
   <script src="assets/script.js?v=13"></script>
@@ -256,8 +238,8 @@
   <script src="assets/motion.js?v=10" defer></script>
   <script src="assets/site-config.js?v=3"></script>
   <script src="assets/chat.js?v=7" defer></script>
-  <script src="assets/i18n.js?v=15"></script>
-  <script src="assets/globe.js?v=4" defer></script>
+  <script src="assets/i18n.js?v=16"></script>
   <script src="assets/content.js?v=12"></script>
+  <script src="assets/home.js?v=1" defer></script>
 </body>
 </html>

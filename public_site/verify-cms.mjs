@@ -114,6 +114,37 @@ assertIncludes(index, 'id="featuredBusinessesGrid"', "index.html");
 assertIncludes(index, 'data-cms="hero.headline"', "index.html");
 assertIncludes(index, 'data-cms="featured.heading"', "index.html");
 
+// Homepage redesign (2026-11): the hero "What do you need?" box is a plain GET
+// form to the customer site, so it works without JavaScript. Every service it
+// (or any homepage link) opens must be one the customer site understands
+// (admin_web/src/lib/customer-service-intent.ts).
+{
+  const KNOWN_SERVICES = ["barrel", "car-transport", "parking", "cars", "tracking"];
+  assertIncludes(
+    index,
+    '<form class="h-search" action="https://customer.laawoldigital.com/" method="get">',
+    "homepage hero service picker",
+  );
+  assertIncludes(index, '<select id="homeService" name="service">', "homepage hero service picker");
+  const picker = index.slice(index.indexOf('id="homeService"'), index.indexOf("</select>"));
+  const options = Array.from(picker.matchAll(/<option value="([^"]+)"/g), (m) => m[1]);
+  assert(options.length >= 4, "homepage service picker must offer the four public services");
+  for (const value of options) {
+    assert(KNOWN_SERVICES.includes(value), `homepage service picker offers unknown service ${value}`);
+  }
+  for (const m of index.matchAll(/customer\.laawoldigital\.com\/\?service=([a-z-]+)/g)) {
+    assert(KNOWN_SERVICES.includes(m[1]), `homepage links to unknown customer service ${m[1]}`);
+  }
+  // Every French line the redesign added has its English entry.
+  for (const fr of [
+    "Comparez.", "Envoyez.", "Suivez.", "Que voulez-vous faire ?", "Commencer",
+    "Nos services", "Après votre réservation", "Prêt à commencer ?", "Espace client",
+  ]) {
+    assertIncludes(i18n, `: "${fr}"`, "i18n.js homepage translation");
+  }
+  assertIncludes(index, "assets/home.css?v=", "index.html");
+}
+
 for (const file of ["index.html"]) {
   const html = read(file);
   assertIncludes(html, 'data-src-en="assets/app-shipping-en.png?v=2"', file);
