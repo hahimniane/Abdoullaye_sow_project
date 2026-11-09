@@ -119,7 +119,7 @@ assertIncludes(index, 'data-cms="featured.heading"', "index.html");
 // (or any homepage link) opens must be one the customer site understands
 // (admin_web/src/lib/customer-service-intent.ts).
 {
-  const KNOWN_SERVICES = ["barrel", "car-transport", "parking", "cars", "tracking"];
+  const KNOWN_SERVICES = ["barrel", "car-transport", "parking", "shared-barrels", "cars", "tracking"];
   assertIncludes(
     index,
     '<form class="h-search" action="https://customer.laawoldigital.com/" method="get">',
