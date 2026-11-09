@@ -385,8 +385,8 @@ class _TrackingScreenState extends State<TrackingScreen> {
               child: _EmptyShipmentsState(
                 title: l10n.trackShipment,
                 message: l10n.shipmentsAppearAfterPayment,
-                actionLabel: l10n.sendBarrels,
-                onAction: () => Navigator.pushNamed(context, '/barrel'),
+                actionLabel: l10n.prqSendPackage,
+                onAction: () => Navigator.pushNamed(context, '/package-request'),
                 showBackButton: widget.showBackButton,
                 onCodeLookup: _openCodeLookup,
               ),

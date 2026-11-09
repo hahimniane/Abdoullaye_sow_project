@@ -36,7 +36,8 @@ export const TILT_MAX_DEG = -6;
 export const DEFAULT_SPIN_DEG = -32;
 export const DEFAULT_TILT_DEG = -22;
 
-const SPIN_PER_PX = 0.6;
+/** One degree a pixel: a swipe across a phone (~360 px) turns the scene all the way round. */
+export const SPIN_PER_PX = 1;
 const TILT_PER_PX = 0.4;
 const KEY_STEP_DEG = 8;
 

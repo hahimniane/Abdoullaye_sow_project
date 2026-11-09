@@ -190,6 +190,9 @@ Future<BoxDims?> showBoxDesignerSheet(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
+    // Over the tab bar, so the picture gets the whole phone height to turn
+    // in instead of the strip between the title bar and the tabs.
+    useRootNavigator: true,
     backgroundColor: AppColors.cream,
     builder: (_) => _BoxDesignerSheet(
       initial: initial ?? BoxDims.start,
@@ -242,6 +245,11 @@ class _BoxDesignerSheetState extends State<_BoxDesignerSheet> {
           BoxDesigner(
             dims: _dims,
             onChanged: (d) => setState(() => _dims = d),
+            // Most of the phone's height goes to the picture, so there is
+            // room to spin the scene; the sliders and button still fit.
+            sceneHeight: (MediaQuery.sizeOf(context).height * 0.45)
+                .clamp(250.0, 440.0)
+                .toDouble(),
             badgePrice: widget.badgePrice,
             priceCentsFor: widget.priceCentsFor,
           ),

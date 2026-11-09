@@ -35,7 +35,6 @@ import 'screens/inventory_transfers_screen.dart';
 import 'screens/lot_ledger_screen.dart';
 import 'services/business_service_overview.dart';
 import 'screens/park_car_screen.dart';
-import 'screens/send_barrel_screen.dart';
 import 'screens/open_barrels_screen.dart';
 import 'screens/customize_navbar_screen.dart';
 import 'screens/transport_car_screen.dart';
@@ -267,7 +266,8 @@ class MyApp extends StatelessWidget {
               '/forgot-password': (context) => const ForgotPasswordScreen(),
               '/customer_home': (context) => const CustomerHomeScreen(),
               '/park': (context) => const ParkCarScreen(),
-              '/barrel': (context) => const SendBarrelScreen(),
+              // Send a barrel folded into Send a package: an old link opens the form.
+              '/barrel': (context) => const PackageRequestFormScreen(),
               '/open-barrels': (context) => const OpenBarrelsScreen(),
               // Freight folded into Send a package: an old deep link opens the form.
               '/send-freight': (context) => const PackageRequestFormScreen(),

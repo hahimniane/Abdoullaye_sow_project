@@ -357,13 +357,6 @@ class ShippingTab extends StatelessWidget {
       subtitle: l10n.hubShippingSubtitle,
       showBell: true,
       items: [
-        _HubItem(
-          l10n.hubSendBarrel,
-          l10n.hubShipFullBarrel,
-          Icons.local_shipping_outlined,
-          AppColors.cobalt,
-          '/barrel',
-        ),
         if (sharedBarrelsEnabled)
           _HubItem(
             l10n.hubSharedBarrels,
@@ -372,8 +365,9 @@ class ShippingTab extends StatelessWidget {
             AppColors.saffron,
             '/open-barrels',
           ),
-        // Freight folded into Send a package (docs/PACKAGE_PRICE_LIST.md
-        // decision 12): no Freight tile here any more.
+        // Freight and Send a barrel folded into Send a package
+        // (docs/PACKAGE_PRICE_LIST.md decision 12): barrels, boxes and
+        // suitcases are one request, so there is one tile.
         _HubItem(
           l10n.hubTransportCar,
           l10n.hubShipCarHome,

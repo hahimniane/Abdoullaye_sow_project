@@ -6677,7 +6677,7 @@
   "pcsTrackingPaid": "Payé",
   "pcsTrackingBalance": "Reste dû",
   "prqSendPackage": "Envoyer un colis",
-  "prqSendPackageSubtitle": "Demandez à une entreprise et recevez une estimation",
+  "prqSendPackageSubtitle": "Barils, cartons, valises et plus",
   "prqMyRequests": "Mes demandes",
   "prqMyRequestsSubtitle": "Estimations et réponses des entreprises",
   "prqSignInTitle": "Connectez-vous pour envoyer une demande",
@@ -10961,6 +10961,10 @@
   "boxDesignerHeight": "Hauteur",
   "boxDesignerInchesUnit": "po",
   "boxDesignerDrag": "Faites glisser pour tourner",
+  "boxDesignerFullScreen": "Voir en plein écran",
+  "@boxDesignerFullScreen": {
+    "description": "Button on the 3D box picture that opens it full screen, so there is room to spin it."
+  },
   "boxDesignerScaleNote": "Une basket (12 po) et une personne (5 pi 6 po) donnent l’échelle. Chaque carré du sol mesure 1 pi.",
   "boxDesignerModelCredit": "Modèles 3D : « Man » par Quaternius (CC0) ; « Sneakers » par Poly by Google (CC BY 3.0)",
   "boxDesignerSemantics": "Carton en 3D, {dims}. Faites glisser pour le faire tourner.",

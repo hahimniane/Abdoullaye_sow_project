@@ -24,12 +24,6 @@ const customerServiceCatalog = <CustomerService>[
     route: '/sell',
   ),
   CustomerService(
-    id: 'barrel',
-    label: 'Send barrels',
-    icon: Icons.local_shipping_outlined,
-    route: '/barrel',
-  ),
-  CustomerService(
     id: 'shared',
     label: 'Shared barrels',
     icon: Icons.group_add_outlined,
@@ -73,7 +67,7 @@ const customerServiceCatalog = <CustomerService>[
   ),
 ];
 
-const defaultPinnedServiceIds = <String>['cars', 'barrel', 'tracking'];
+const defaultPinnedServiceIds = <String>['cars', 'package', 'tracking'];
 const maxPinnedServices = 3;
 
 CustomerService? serviceById(String id) {

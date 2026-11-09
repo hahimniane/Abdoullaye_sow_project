@@ -17,7 +17,6 @@ import 'services_hub_screen.dart';
 import 'settings_screen.dart';
 
 // Customer service screens, reachable in-tab so the bottom navbar stays put.
-import 'send_barrel_screen.dart';
 import 'open_barrels_screen.dart';
 import 'sell_cars_screen.dart';
 import 'park_car_screen.dart';
@@ -56,13 +55,6 @@ List<ShipOption> shipSheetOptions(
   AppLocalizations l10n, {
   required bool sharedBarrels,
 }) => [
-    ShipOption(
-      route: '/barrel',
-      icon: Icons.local_shipping_outlined,
-      title: l10n.hubSendBarrel,
-      subtitle: l10n.hubShipFullBarrel,
-      tint: AppColors.cobalt,
-    ),
     if (sharedBarrels)
       ShipOption(
         route: '/open-barrels',
@@ -99,8 +91,10 @@ List<ShipOption> shipSheetOptions(
 Route<dynamic>? _customerTabRoute(RouteSettings settings) {
   Widget? page;
   switch (settings.name) {
+    // Send a barrel folded into Send a package (barrels are one of its
+    // items): an old link or shortcut to /barrel opens that form.
     case '/barrel':
-      page = const SendBarrelScreen();
+      page = const PackageRequestFormScreen();
       break;
     case '/open-barrels':
       page = const OpenBarrelsScreen();

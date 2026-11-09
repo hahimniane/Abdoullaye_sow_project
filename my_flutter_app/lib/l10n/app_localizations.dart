@@ -23618,7 +23618,7 @@ abstract class AppLocalizations {
   /// No description provided for @prqSendPackageSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Ask a business to take it and get an estimate'**
+  /// **'Barrels, boxes, suitcases and more'**
   String get prqSendPackageSubtitle;
 
   /// No description provided for @prqMyRequests.
@@ -32077,6 +32077,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Drag to spin'**
   String get boxDesignerDrag;
+
+  /// Button on the 3D box picture that opens it full screen, so there is room to spin it.
+  ///
+  /// In en, this message translates to:
+  /// **'See it full screen'**
+  String get boxDesignerFullScreen;
 
   /// No description provided for @boxDesignerScaleNote.
   ///

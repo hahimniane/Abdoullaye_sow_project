@@ -13966,8 +13966,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get prqSendPackage => 'Envoyer un colis';
 
   @override
-  String get prqSendPackageSubtitle =>
-      'Demandez à une entreprise et recevez une estimation';
+  String get prqSendPackageSubtitle => 'Barils, cartons, valises et plus';
 
   @override
   String get prqMyRequests => 'Mes demandes';
@@ -19309,6 +19308,9 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get boxDesignerDrag => 'Faites glisser pour tourner';
+
+  @override
+  String get boxDesignerFullScreen => 'Voir en plein écran';
 
   @override
   String get boxDesignerScaleNote =>

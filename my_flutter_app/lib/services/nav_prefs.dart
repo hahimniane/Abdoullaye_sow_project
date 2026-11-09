@@ -3,10 +3,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/customer_service_catalog.dart';
 
 /// A shortcut saved under an id that has since been renamed. Freight folded
-/// into Send a package (docs/PACKAGE_PRICE_LIST.md decision 12), so a pinned
-/// "freight" shortcut now opens Send a package instead of silently vanishing.
+/// into Send a package (docs/PACKAGE_PRICE_LIST.md decision 12), and so did
+/// Send a barrel (barrels are one of the things a package request carries),
+/// so a pinned "freight" or "barrel" shortcut now opens Send a package
+/// instead of silently vanishing.
 String migratedServiceId(String stored) =>
-    stored == 'freight' ? 'package' : stored;
+    stored == 'freight' || stored == 'barrel' ? 'package' : stored;
 
 /// Persists the customer's chosen bottom-navbar shortcuts.
 class NavPrefs {

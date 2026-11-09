@@ -13752,8 +13752,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get prqSendPackage => 'Send a package';
 
   @override
-  String get prqSendPackageSubtitle =>
-      'Ask a business to take it and get an estimate';
+  String get prqSendPackageSubtitle => 'Barrels, boxes, suitcases and more';
 
   @override
   String get prqMyRequests => 'My requests';
@@ -19011,6 +19010,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get boxDesignerDrag => 'Drag to spin';
+
+  @override
+  String get boxDesignerFullScreen => 'See it full screen';
 
   @override
   String get boxDesignerScaleNote =>

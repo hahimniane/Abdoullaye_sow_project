@@ -42,6 +42,7 @@ import {
   dimsOf,
   dimsText,
   dragAngles,
+  SPIN_PER_PX,
   fitScale,
   gridOf,
   keyAngles,
@@ -98,6 +99,13 @@ test("stored inches are read defensively", () => {
   assert.equal(dimsOf(null), null);
   assert.equal(dimsOf({ l: 20, w: 16 }), null);
   assert.equal(dimsOf({ l: 20, w: 16, h: 500 }), null);
+});
+
+test("a swipe across a phone turns the scene all the way round", () => {
+  // 0.6 deg/px needed 600 px for one turn, wider than a phone: too stiff.
+  assert.equal(SPIN_PER_PX, 1);
+  const half = dragAngles(DEFAULT_ANGLES, 180, 0);
+  assert.equal(Math.round(Math.abs(wrapSpin(half.spin - DEFAULT_ANGLES.spin))), 180);
 });
 
 test("dragging spins sideways and tilts up and down, clamped", () => {

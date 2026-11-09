@@ -6678,7 +6678,7 @@
   "pcsTrackingPaid": "Paid",
   "pcsTrackingBalance": "Still owed",
   "prqSendPackage": "Send a package",
-  "prqSendPackageSubtitle": "Ask a business to take it and get an estimate",
+  "prqSendPackageSubtitle": "Barrels, boxes, suitcases and more",
   "prqMyRequests": "My requests",
   "prqMyRequestsSubtitle": "Estimates and answers from businesses",
   "prqSignInTitle": "Sign in to send a request",
@@ -10965,6 +10965,10 @@
     "description": "Unit shown after a box side typed in inches."
   },
   "boxDesignerDrag": "Drag to spin",
+  "boxDesignerFullScreen": "See it full screen",
+  "@boxDesignerFullScreen": {
+    "description": "Button on the 3D box picture that opens it full screen, so there is room to spin it."
+  },
   "boxDesignerScaleNote": "A sneaker (12 in) and a person (5 ft 6 in) show the scale. Each floor square is 1 ft.",
   "boxDesignerModelCredit": "3D models: “Man” by Quaternius (CC0); “Sneakers” by Poly by Google (CC BY 3.0)",
   "boxDesignerSemantics": "3D box, {dims}. Drag to spin it.",

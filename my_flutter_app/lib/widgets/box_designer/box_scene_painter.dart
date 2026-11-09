@@ -59,7 +59,9 @@ class SceneSpin {
   final double tilt;
 
   SceneSpin dragged(double dx, double dy) =>
-      SceneSpin(wrapYaw(yaw + dx * 0.012), clampTilt(tilt + dy * 0.008));
+      // One degree a point, like the 3D page: a swipe across the phone turns
+      // the scene all the way round.
+      SceneSpin(wrapYaw(yaw + dx * 0.01745), clampTilt(tilt + dy * 0.008));
 }
 
 /// Draws the box, the sneaker, the person and the floor. Repaints on the

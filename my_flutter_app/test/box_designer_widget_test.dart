@@ -6,6 +6,8 @@ import 'package:my_flutter_app/services/lot_ledger.dart'
 import 'package:my_flutter_app/theme/app_theme.dart';
 import 'package:my_flutter_app/widgets/box_designer/box_designer.dart';
 import 'package:my_flutter_app/widgets/box_designer/box_geometry.dart';
+import 'package:my_flutter_app/widgets/box_size_widgets.dart'
+    show showBoxDesignerSheet;
 import 'package:my_flutter_app/widgets/box_designer/box_scene_painter.dart'
     show SceneFraming;
 
@@ -211,6 +213,84 @@ void main() {
       );
       await tester.pump();
       expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('room to spin', () {
+    testWidgets('the picture opens full screen, much taller, and closes', (
+      tester,
+    ) async {
+      await _pump(tester, const _Host());
+      final small = tester.getSize(find.byKey(const Key('box-scene'))).height;
+      await tester.tap(find.byKey(const Key('box-full-screen')));
+      await tester.pumpAndSettle();
+      final full = find.byKey(const Key('box-full-screen-designer'));
+      expect(full, findsOneWidget);
+      final tall = tester
+          .getSize(
+            find.descendant(of: full, matching: find.byKey(const Key('box-scene'))),
+          )
+          .height;
+      expect(tall, greaterThan(small * 2));
+      // No second button on the full-screen page, and no sliders there.
+      expect(
+        find.descendant(
+          of: full,
+          matching: find.byKey(const Key('box-full-screen')),
+        ),
+        findsNothing,
+      );
+      expect(
+        find.descendant(of: full, matching: find.byType(Slider)),
+        findsNothing,
+      );
+      expect(find.text('Your box'), findsOneWidget);
+      await tester.tap(find.byType(CloseButton));
+      await tester.pumpAndSettle();
+      expect(full, findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('staff (read-only) can open it full screen too', (
+      tester,
+    ) async {
+      await _pump(tester, const BoxDesigner(dims: BoxDims(24, 18, 18)));
+      expect(find.byKey(const Key('box-full-screen')), findsOneWidget);
+    });
+
+    testWidgets('French: the button says so', (tester) async {
+      await _pump(tester, const _Host(), locale: const Locale('fr'));
+      expect(find.byTooltip('Voir en plein écran'), findsOneWidget);
+    });
+
+    testWidgets('the sheet gives the picture most of the phone height', (
+      tester,
+    ) async {
+      // An 844-point-tall phone: 45% of it, not the old fixed 250.
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          supportedLocales: AppLocalizations.supportedLocales,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: TextButton(
+                onPressed: () => showBoxDesignerSheet(context),
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      final scene = tester.getSize(find.byKey(const Key('box-scene'))).height;
+      expect(scene, closeTo(844 * 0.45 - 2, 3));
+      expect(find.byKey(const Key('box-designer-use')), findsOneWidget);
     });
   });
 }

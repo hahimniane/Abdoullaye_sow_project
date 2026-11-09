@@ -70,7 +70,9 @@ void main() {
     );
 
     expect(find.text('Expédition'), findsOneWidget);
-    expect(find.text('Envoyer un baril'), findsOneWidget);
+    // Send a barrel folded into Send a package: barrels are one of its items.
+    expect(find.text('Envoyer un baril'), findsNothing);
+    expect(find.text('Barils, cartons, valises et plus'), findsOneWidget);
     // Shared barrels is paused platform-wide (default off); it should not
     // render until the remote flag is turned back on.
     expect(find.text('Barils partagés'), findsNothing);

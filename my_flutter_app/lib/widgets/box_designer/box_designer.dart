@@ -54,6 +54,7 @@ class BoxDesigner extends StatefulWidget {
     this.badgePrice = BoxBadgePrice.none,
     this.priceCentsFor,
     this.sceneHeight = 250,
+    this.allowFullScreen = true,
     this.pageBaseUrl = box3dPageUrl,
     this.webViewFactory,
   });
@@ -71,6 +72,10 @@ class BoxDesigner extends StatefulWidget {
   final int? Function(String sizeId)? priceCentsFor;
 
   final double sceneHeight;
+
+  /// Shows a button on the picture that opens it full screen, so there is
+  /// room to spin it and see the whole scene. Off on the full-screen page.
+  final bool allowFullScreen;
 
   /// The 3D page's address without a query (one constant, overridable so
   /// tests and staging can point elsewhere).
@@ -370,6 +375,25 @@ class _BoxDesignerState extends State<BoxDesigner> {
                         ),
                       ),
                     ),
+                    if (widget.allowFullScreen)
+                      Positioned(
+                        top: AppSpacing.sm,
+                        right: AppSpacing.sm,
+                        child: Material(
+                          color: Colors.white.withValues(alpha: 0.92),
+                          shape: const CircleBorder(),
+                          child: IconButton(
+                            key: const Key('box-full-screen'),
+                            tooltip: l10n.boxDesignerFullScreen,
+                            icon: const Icon(
+                              Icons.open_in_full,
+                              size: 20,
+                              color: AppColors.ink,
+                            ),
+                            onPressed: _openFullScreen,
+                          ),
+                        ),
+                      ),
                     Positioned(
                       left: AppSpacing.sm,
                       bottom: AppSpacing.sm,
@@ -445,6 +469,24 @@ class _BoxDesignerState extends State<BoxDesigner> {
             ),
           ),
       ],
+    );
+  }
+
+  /// The same scene on its own page, as tall as the phone allows: on a
+  /// phone the picture in the form is small, and turning the scene there
+  /// leaves no room to see all of it.
+  void _openFullScreen() {
+    Navigator.of(context, rootNavigator: true).push(
+      MaterialPageRoute<void>(
+        fullscreenDialog: true,
+        builder: (_) => BoxDesignerFullScreen(
+          dims: widget.dims,
+          badgePrice: widget.badgePrice,
+          priceCentsFor: widget.priceCentsFor,
+          pageBaseUrl: widget.pageBaseUrl,
+          webViewFactory: widget.webViewFactory,
+        ),
+      ),
     );
   }
 
@@ -543,6 +585,62 @@ class _Badge extends StatelessWidget {
           fontSize: 13.5,
           fontWeight: FontWeight.w700,
           color: color,
+        ),
+      ),
+    );
+  }
+}
+
+/// The 3D box full screen: the scene fills the phone so it can be spun and
+/// seen whole. Read-only (the inches are changed back on the form); closing
+/// returns there.
+class BoxDesignerFullScreen extends StatelessWidget {
+  const BoxDesignerFullScreen({
+    super.key,
+    required this.dims,
+    this.badgePrice = BoxBadgePrice.none,
+    this.priceCentsFor,
+    this.pageBaseUrl = box3dPageUrl,
+    this.webViewFactory,
+  });
+
+  final BoxDims dims;
+  final BoxBadgePrice badgePrice;
+  final int? Function(String sizeId)? priceCentsFor;
+  final String pageBaseUrl;
+  final Box3dWebViewFactory? webViewFactory;
+
+  /// Room the designer needs around its picture when read-only: the badge,
+  /// the scale note, the model credit and the inches.
+  static const double _chrome = 150;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Scaffold(
+      backgroundColor: AppColors.cream,
+      appBar: AppBar(title: Text(l10n.boxDesignerTitle)),
+      body: SafeArea(
+        top: false,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final height = (constraints.maxHeight - 2 * AppSpacing.md - _chrome)
+                .clamp(250.0, double.infinity)
+                .toDouble();
+            return SingleChildScrollView(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: BoxDesigner(
+                key: const Key('box-full-screen-designer'),
+                dims: dims,
+                badgePrice: badgePrice,
+                priceCentsFor: priceCentsFor,
+                sceneHeight: height,
+                allowFullScreen: false,
+                pageBaseUrl: pageBaseUrl,
+                webViewFactory: webViewFactory,
+              ),
+            );
+          },
         ),
       ),
     );
