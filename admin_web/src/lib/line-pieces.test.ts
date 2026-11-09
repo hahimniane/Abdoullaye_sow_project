@@ -23,7 +23,7 @@ test("the shared fixture covers every rule the mirror keeps", () => {
   assert.ok(cases.length >= 60, "expected the full shared fixture");
   const covered = new Set(cases.map((c) => c.fn));
   for (const fn of [
-    "pieceErrors", "normalizePieces", "distributeCents", "linePieces", "lineCounts", "piecesTotalCents",
+    "pieceErrors", "piecePriceRequiredErrors", "normalizePieces", "distributeCents", "linePieces", "lineCounts", "piecesTotalCents",
     "piecesSummaryFields", "pieceSummaryText", "linePiecesWhat", "lineGroupSummary", "paidFloorForLine",
     "splitPieces", "nextPartIndex", "partTrackingCode", "lineTotalCents", "pickupFeeOf", "pickupFeeErrors",
     "linePickupFeeCents", "lineHasPickupFee", "piecesLineFields",

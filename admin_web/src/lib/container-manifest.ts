@@ -323,6 +323,8 @@ export type ContainerRefusal =
   | "piece_description_too_long"
   | "piece_size_invalid"
   | "piece_price_invalid"
+  | "piece_price_required"
+  | "package_price_required"
   | "piece_count_invalid"
   | "line_has_parts"
   // Scan to load (functions container_loading.js).
@@ -425,6 +427,9 @@ export const CONTAINER_MESSAGES: Record<ContainerRefusal, string> = {
     "Enter a piece's length, width and height in inches, or leave all " +
     "three empty.",
   piece_price_invalid: "Enter each piece's price in dollars, zero or more.",
+  // Every customer package carries its price (docs/PACKAGE_PRICE_REQUIRED.md).
+  piece_price_required: "Enter a price for every piece.",
+  package_price_required: "Enter the package's price: more than $0.",
   piece_count_invalid:
     "Choose how many pieces go in: from 1 to the number the package has.",
   line_has_parts:
@@ -742,6 +747,8 @@ export type ContainerLineError =
   | "piece_description_too_long"
   | "piece_size_invalid"
   | "piece_price_invalid"
+  | "piece_price_required"
+  | "package_price_required"
   | "pickup_fee_invalid";
 
 type ContactPhoneError = "customer_phone_invalid" | "receiver_phone_invalid";
@@ -796,7 +803,9 @@ export function validateContainerLineDraft(
   } else if ((CONTAINER_LINE_KINDS as readonly string[]).includes(kind)) {
     // What the line is comes from its pieces, as on the server
     // (`linesInPiecesMode`): 1-60 of them, each saying what it is.
-    errors.push(...pieceDraftProblems(draft.pieces ?? []).codes);
+    // A customer's package also needs its price: every piece priced, the
+    // pieces over $0 (docs/PACKAGE_PRICE_REQUIRED.md); stock is exempt.
+    errors.push(...pieceDraftProblems(draft.pieces ?? [], { priceRequired: text(draft.ownerKind, 20) === "customer" }).codes);
     if (draft.pickupFee !== null && draft.pickupFee !== undefined && readPickupFeeInput(draft.pickupFee).error) {
       errors.push("pickup_fee_invalid");
     }

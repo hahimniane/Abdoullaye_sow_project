@@ -20,7 +20,9 @@ import {
   linePieces,
   lineTotalCents,
   pieceErrors,
+  piecePriceRequiredErrors,
   type PieceErrorCode,
+  type PiecePriceRequiredCode,
   type PieceKind,
   type PieceSize,
 } from "./line-pieces.ts";
@@ -159,21 +161,39 @@ export function piecesPayload(drafts: readonly PieceDraft[]): PiecePayload[] {
   return drafts.map((draft) => readPiece(draft).payload);
 }
 
+export type PieceDraftCode = PieceErrorCode | PiecePriceRequiredCode;
+
 export type PieceDraftProblems = {
   /** Every problem once, as the server names it. */
-  codes: PieceErrorCode[];
+  codes: PieceDraftCode[];
   /** Each piece's own problems, in the order shown. */
-  byPiece: PieceErrorCode[][];
+  byPiece: PieceDraftCode[][];
 };
 
-/** The server's `pieceErrors` (1-60 pieces), plus what typing can get wrong, per piece. */
-export function pieceDraftProblems(drafts: readonly PieceDraft[]): PieceDraftProblems {
+/**
+ * The server's `pieceErrors` (1-60 pieces), plus what typing can get wrong,
+ * per piece. With `priceRequired` (a customer's package: docs/PACKAGE_PRICE_REQUIRED.md)
+ * also the server's `piecePriceRequiredErrors`: a piece with no price typed is
+ * its own `piece_price_required`, and pieces that all come to $0 are
+ * `package_price_required` (the package's, not one piece's). As on the server,
+ * a price typed wrong keeps its own error and adds no "required" on top.
+ */
+export function pieceDraftProblems(
+  drafts: readonly PieceDraft[],
+  options: { priceRequired?: boolean } = {},
+): PieceDraftProblems {
   const list = Array.isArray(drafts) ? drafts : [];
   if (list.length === 0) return { codes: ["pieces_required"], byPiece: [] };
-  const codes = new Set<PieceErrorCode>();
+  const codes = new Set<PieceDraftCode>();
   if (list.length > MAX_PIECES) codes.add("pieces_too_many");
-  const byPiece = list.map((draft) => readPiece(draft).problems);
+  const byPiece: PieceDraftCode[][] = list.map((draft) => readPiece(draft).problems);
   for (const own of byPiece) own.forEach((code) => codes.add(code));
+  if (options.priceRequired && !codes.has("piece_price_invalid")) {
+    list.forEach((draft, i) => {
+      if (readPiecePrice(draft.price) === null) byPiece[i].push("piece_price_required");
+    });
+    for (const code of piecePriceRequiredErrors(piecesPayload(list))) codes.add(code);
+  }
   return { codes: [...codes], byPiece };
 }
 

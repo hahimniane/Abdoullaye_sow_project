@@ -990,6 +990,7 @@ function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onF
             lang={l}
             onChange={setPieces}
             pieces={pieces}
+            priceRequired
             showErrors={showErrors}
             {...(collect ? { pickupFee, onPickupFeeChange: setPickupFee } : {})}
           />

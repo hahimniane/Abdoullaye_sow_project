@@ -147,6 +147,28 @@ export function pieceErrors(raw: unknown, max = MAX_PIECES): PieceErrorCode[] {
   return [...errors];
 }
 
+export type PiecePriceRequiredCode = "piece_price_required" | "package_price_required";
+
+/**
+ * Every customer package carries its price (docs/PACKAGE_PRICE_REQUIRED.md).
+ * Each piece needs a price typed in - $0 is fine, so a bundle can be priced on
+ * one piece - and the pieces together must come to more than $0. A pickup fee
+ * is not a package price. [] for an empty list (`pieceErrors`' job).
+ */
+export function piecePriceRequiredErrors(raw: unknown): PiecePriceRequiredCode[] {
+  const list: unknown[] = Array.isArray(raw) ? raw : [];
+  if (list.length === 0) return [];
+  let total = 0;
+  let missing = false;
+  for (const item of list) {
+    const cents = piecePriceOf(asRow(item).priceCents);
+    if (cents === null) missing = true;
+    else total += cents;
+  }
+  if (missing) return ["piece_price_required"];
+  return total <= 0 ? ["package_price_required"] : [];
+}
+
 /**
  * The pieces as stored: kind, description, size and price cleaned, and an id
  * each. A usable id that is not a repeat is kept (an edit keeps its pieces);

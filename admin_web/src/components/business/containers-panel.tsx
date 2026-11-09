@@ -1808,6 +1808,7 @@ export function ContainersPanel({
                   showErrors={lineTried}
                   disabled={busy}
                   lang={lang}
+                  priceRequired={lineDraft.ownerKind === "customer"}
                   pickupFee={lineDraft.pickupFee ?? undefined}
                   onPickupFeeChange={(pickupFee) => setLineDraft((d) => ({ ...d, pickupFee }))}
                 />

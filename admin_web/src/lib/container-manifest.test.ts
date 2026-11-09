@@ -780,7 +780,7 @@ test("only a + international number can receive WhatsApp", () => {
 });
 
 test("a phone that is there must look like one; a local number is still accepted", () => {
-  const barrels = { ...emptyContainerLineDraft, kind: "barrels" as const, quantity: "2", customerName: "Aissatou", receiverName: "Mariama" };
+  const barrels = { ...emptyContainerLineDraft, kind: "barrels" as const, quantity: "2", customerName: "Aissatou", receiverName: "Mariama", pieces: [{ ...newPieceDraft("barrel"), price: "150" }] };
   assert.deepEqual(validateContainerLineDraft(barrels), []);
   assert.deepEqual(validateContainerLineDraft({ ...barrels, customerPhone: "622 11 22 33" }), []);
   assert.deepEqual(validateContainerLineDraft({ ...barrels, customerPhone: "+1 646 555 0100" }), []);
@@ -1221,6 +1221,7 @@ test("sender is the receiver stores the receiver as the sender, off by default",
   const draft = {
     ...emptyContainerLineDraft,
     kind: "barrels" as const,
+    pieces: [{ ...newPieceDraft("barrel"), price: "150" }],
     customerName: "stale",
     customerPhone: "not a phone",
     receiverName: " Mariama Bah ",
@@ -1363,4 +1364,26 @@ test("a stored flight round-trips into the form and is titled by its waybill", (
   assert.equal(containerTitle({ shipMode: "air" }), "Shipment");
   // Never on the ocean feed: nothing to choose, however the number reads.
   assert.equal(containerCarrierNeedsChoice({ ...row, containerNumber: "TCKU6418832", carrierTrackingError: "carrier_unknown", carrierTrackingFailedFor: "TCKU6418832" }), false);
+});
+
+test("a customer's package line needs every piece priced and the pieces over $0; stock and cars are exempt", () => {
+  const base = { ...emptyContainerLineDraft, kind: "barrels" as const, receiverName: "Mariama", ownerKind: "customer" as const };
+  const barrel = (price: string) => ({ ...newPieceDraft("barrel"), price });
+  assert.deepEqual(validateContainerLineDraft({ ...base, pieces: [barrel("150")] }), []);
+  assert.deepEqual(validateContainerLineDraft({ ...base, pieces: [barrel("")] }), ["piece_price_required"]);
+  assert.deepEqual(validateContainerLineDraft({ ...base, pieces: [barrel("150"), barrel("")] }), ["piece_price_required"]);
+  assert.deepEqual(validateContainerLineDraft({ ...base, pieces: [barrel("150"), barrel("0")] }), [], "$0 on a piece is a price");
+  assert.deepEqual(validateContainerLineDraft({ ...base, pieces: [barrel("0"), barrel("0")] }), ["package_price_required"]);
+  assert.deepEqual(validateContainerLineDraft({ ...base, pieces: [barrel("x"), barrel("")] }), ["piece_price_invalid"]);
+  // A pickup fee is not a package price.
+  assert.deepEqual(validateContainerLineDraft({ ...base, pickupFee: "25", pieces: [barrel("0")] }), ["package_price_required"]);
+  // The business's own stock sells nothing, and a car is priced elsewhere.
+  assert.deepEqual(validateContainerLineDraft({ ...base, ownerKind: "stock", pieces: [barrel("")] }), []);
+  assert.deepEqual(validateContainerLineDraft({ ...emptyContainerLineDraft, vinNumber: "1HGCM82633A004352", receiverName: "Mariama" }), []);
+  // The server's own messages, in both languages.
+  assert.equal(CONTAINER_MESSAGES.piece_price_required, "Enter a price for every piece.");
+  assert.equal(CONTAINER_MESSAGES.package_price_required, "Enter the package's price: more than $0.");
+  assert.equal(containerMessage(["piece_price_required"]), "Enter a price for every piece.");
+  assert.equal(translateValue(CONTAINER_MESSAGES.piece_price_required, "fr"), "Indiquez un prix pour chaque pièce.");
+  assert.equal(translateValue(CONTAINER_MESSAGES.package_price_required, "fr"), "Indiquez le prix du colis : plus de 0 $.");
 });

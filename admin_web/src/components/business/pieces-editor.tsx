@@ -33,6 +33,7 @@ export function PiecesEditor({
   lang,
   pickupFee,
   onPickupFeeChange,
+  priceRequired = false,
 }: {
   /** The wrapper's element id: a refused save scrolls here. */
   id: string;
@@ -49,9 +50,18 @@ export function PiecesEditor({
    */
   pickupFee?: string;
   onPickupFeeChange?: (value: string) => void;
+  /**
+   * A customer's package: every piece needs a price typed (zero is one) and
+   * the pieces must come to more than $0 (docs/PACKAGE_PRICE_REQUIRED.md).
+   * False for the business's own stock.
+   */
+  priceRequired?: boolean;
 }) {
-  const problems = showErrors ? pieceDraftProblems(pieces) : { codes: [], byPiece: [] };
-  const listProblems = problems.codes.filter((code) => code === "pieces_required" || code === "pieces_too_many");
+  const problems = showErrors ? pieceDraftProblems(pieces, { priceRequired }) : { codes: [], byPiece: [] };
+  const listProblems = problems.codes.filter((code) => code === "pieces_required" || code === "pieces_too_many" || code === "package_price_required");
+  // Pieces that all come to $0: the package's problem, shown by every price field.
+  const packagePriceMissing = problems.codes.includes("package_price_required");
+  const listErrorId = `${id}-list-error`;
   const fee = pickupFee === undefined ? null : readPickupFeeInput(pickupFee);
   const total = piecesDraftTotalCents(pieces, fee?.cents ?? 0);
   // A decimal comma in French; readMoneyInput reads "45,50" and "45.50" alike.
@@ -65,6 +75,12 @@ export function PiecesEditor({
           const own = problems.byPiece[index] ?? [];
           const errorId = `${id}-${index}-error`;
           const invalid = own.length > 0 ? { "aria-invalid": true, "aria-describedby": errorId } : {};
+          const priceInvalid = own.some((code) => code === "piece_price_invalid" || code === "piece_price_required");
+          const priceProps = priceInvalid
+            ? { "aria-invalid": true, "aria-describedby": errorId }
+            : packagePriceMissing
+              ? { "aria-invalid": true, "aria-describedby": listErrorId }
+              : {};
           return (
             <li className="pcs-piece" key={piece.key}>
               <div className="pcs-piece-head">
@@ -112,7 +128,10 @@ export function PiecesEditor({
                 <label className="lst-field pcs-side"><span>Length (in)</span><input inputMode="decimal" value={piece.lengthIn} disabled={disabled} onChange={(e) => set(piece.key, { lengthIn: e.target.value })} placeholder="optional" /></label>
                 <label className="lst-field pcs-side"><span>Width (in)</span><input inputMode="decimal" value={piece.widthIn} disabled={disabled} onChange={(e) => set(piece.key, { widthIn: e.target.value })} placeholder="optional" /></label>
                 <label className="lst-field pcs-side"><span>Height (in)</span><input inputMode="decimal" value={piece.heightIn} disabled={disabled} onChange={(e) => set(piece.key, { heightIn: e.target.value })} placeholder="optional" /></label>
-                <label className="lst-field pcs-price"><span>Price ($)</span><input inputMode="decimal" value={piece.price} disabled={disabled} onChange={(e) => set(piece.key, { price: e.target.value })} placeholder={moneyPlaceholder} /></label>
+                <label className="lst-field pcs-price">
+                  <span>Price ($){priceRequired && <i className="lst-required" aria-hidden="true"> *</i>}</span>
+                  <input inputMode="decimal" value={piece.price} disabled={disabled} onChange={(e) => set(piece.key, { price: e.target.value })} placeholder={moneyPlaceholder} aria-required={priceRequired || undefined} {...priceProps} />
+                </label>
               </div>
               {own.length > 0 && <small className="lst-field-error" id={errorId}>{containerMessage(own)}</small>}
             </li>
@@ -143,7 +162,7 @@ export function PiecesEditor({
         </div>
       )}
       {pickupFee !== undefined && <strong className="pcs-total pcs-total-row" data-no-translate>{piecesTotalText(total, lang)}</strong>}
-      {listProblems.length > 0 && <small className="lst-field-error">{listProblems.map((code) => CONTAINER_MESSAGES[code]).join(" ")}</small>}
+      {listProblems.length > 0 && <small className="lst-field-error" id={listErrorId}>{containerMessage(listProblems)}</small>}
     </div>
   );
 }

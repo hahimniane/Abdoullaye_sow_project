@@ -587,7 +587,8 @@ export const REQUEST_ERROR_MESSAGES: Record<string, string> = {
   not_allowed: "Only the owner, an admin or staff who can void may do this.",
   location_unknown: "That location is not one of yours.",
   pickup_areas_required: "Say which areas you pick up from.",
-  price_required: "Price every piece, or none of them.",
+  price_required: "Enter a price for every piece.",
+  package_price_required: "Enter the package's price: more than $0.",
   price_invalid: "Enter a valid price.",
   amount_required: "Enter the amount received.",
   amount_too_large: "That amount is too large.",
@@ -926,20 +927,24 @@ export function receiveDraftsFrom(row: unknown): LinePieceDraft[] {
 /**
  * The receivePackageRequest pieces (§8.6) from the editor: the request's
  * pieces by id (with what they turned out to be), new ones without an id,
- * all priced or none; and, for a collected request, the pickup fee as typed
- * (`pickupFee`; blank is no fee). Or the first problem (a phase 1 piece code,
- * `too_many_pieces` / `price_required`, or `pickup_fee_invalid`).
+ * every piece priced and the package over $0 (a request is always a
+ * customer's: docs/PACKAGE_PRICE_REQUIRED.md); and, for a collected request,
+ * the pickup fee as typed (`pickupFee`; blank is no fee). Or the first problem
+ * (a phase 1 piece code, `too_many_pieces`, `price_required` (a piece has no
+ * price), `package_price_required` (all $0), or `pickup_fee_invalid`).
  */
 export function receivePayload(
   drafts: readonly LinePieceDraft[],
   pickupFee: string | null = null,
 ): { pieces: PiecePayload[]; pickupFeeCents?: number; error: string } {
-  const problems = pieceDraftProblems(drafts);
-  if (problems.codes.length > 0) return { pieces: [], error: problems.codes[0] };
+  const problems = pieceDraftProblems(drafts, { priceRequired: true });
+  if (problems.codes.length > 0) {
+    // The server names a piece with no price `price_required` on a receive.
+    const first = problems.codes[0];
+    return { pieces: [], error: first === "piece_price_required" ? "price_required" : first };
+  }
   if (drafts.length > REQUEST_LIMITS.pieces) return { pieces: [], error: "too_many_pieces" };
   const pieces = piecesPayload(drafts);
-  const priced = pieces.filter((p) => p.priceCents !== null).length;
-  if (priced > 0 && priced < pieces.length) return { pieces: [], error: "price_required" };
   if (pickupFee === null) return { pieces, error: "" };
   const fee = readPickupFeeInput(pickupFee);
   if (fee.error) return { pieces: [], error: fee.error };

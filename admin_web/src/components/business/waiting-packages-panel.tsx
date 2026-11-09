@@ -654,6 +654,7 @@ export function WaitingPackagesPanel({
                   showErrors={triedSave}
                   disabled={busy}
                   lang={lang}
+                  priceRequired
                   pickupFee={draft.pickupFee ?? undefined}
                   onPickupFeeChange={(pickupFee) => setDraft((d) => ({ ...d, pickupFee }))}
                 />

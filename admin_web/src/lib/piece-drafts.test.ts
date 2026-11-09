@@ -131,3 +131,31 @@ test("the words with a number in them are built per language", () => {
   assert.equal(pieceKindLabel("box", "fr"), "Carton");
   assert.equal(pieceKindLabel("barrel", "fr"), "Baril");
 });
+
+test("a customer's package needs every piece priced and the pieces over $0 (docs/PACKAGE_PRICE_REQUIRED.md)", () => {
+  const required = { priceRequired: true };
+  const barrel = (price: string) => piece({ kind: "barrel", price });
+  // Off (stock): no price is fine, as before.
+  assert.deepEqual(pieceDraftProblems([barrel("")]).codes, []);
+  // A piece with no price typed is its own problem; the others stay clean.
+  const missing = pieceDraftProblems([barrel("150"), barrel("")], required);
+  assert.deepEqual(missing.codes, ["piece_price_required"]);
+  assert.deepEqual(missing.byPiece, [[], ["piece_price_required"]]);
+  // Whitespace is no price.
+  assert.deepEqual(pieceDraftProblems([barrel("  ")], required).codes, ["piece_price_required"]);
+  // $0 is a price: a bundle can be priced on one piece.
+  assert.deepEqual(pieceDraftProblems([barrel("150"), barrel("0")], required), { codes: [], byPiece: [[], []] });
+  // All $0 is no package price; that is the package's problem, not a piece's.
+  const zero = pieceDraftProblems([barrel("0"), barrel("0.00")], required);
+  assert.deepEqual(zero.codes, ["package_price_required"]);
+  assert.deepEqual(zero.byPiece, [[], []]);
+  // A price typed wrong keeps its own error, with no "required" on top (the server's rule).
+  const wrong = pieceDraftProblems([barrel("abc"), barrel("")], required);
+  assert.deepEqual(wrong.codes, ["piece_price_invalid"]);
+  assert.deepEqual(wrong.byPiece, [["piece_price_invalid"], []]);
+  // An empty list is `pieces_required`, nothing about prices.
+  assert.deepEqual(pieceDraftProblems([], required), { codes: ["pieces_required"], byPiece: [] });
+  // The editor's total keeps the pickup fee out of it: fee alone is no package price.
+  assert.equal(piecesDraftTotalCents([barrel("0")], 2500), 2500);
+  assert.deepEqual(pieceDraftProblems([barrel("0")], required).codes, ["package_price_required"]);
+});

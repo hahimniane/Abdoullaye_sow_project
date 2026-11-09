@@ -14634,6 +14634,7 @@ html[data-lang-pending] body {
 /* The refusal and the "Added so far" line sit beside the buttons, full width. */
 .wpk-foot .wpk-foot-note { flex: 1 1 100%; margin: 0; }
 .lst-field-error { color: var(--danger, #b91c1c); font-size: 12.5px; font-weight: 700; }
+.lst-required { color: var(--danger, #b91c1c); font-style: normal; font-weight: 700; }
 .lst-field [aria-invalid="true"] { border-color: var(--danger, #b91c1c); }
 .wpk-money-line { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; }
 .wpk-money-line small { color: var(--muted); }

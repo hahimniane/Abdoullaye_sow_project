@@ -21,6 +21,7 @@ import {
   emptyWaitingPackageDraft,
   filterWaitingPackages,
   firstInvalidWaitingPackageField,
+  waitingPackageErrorField,
   WAITING_PACKAGE_FIELD_ORDER,
   intakeMoneyAvailable,
   intakePaymentPayload,
@@ -92,12 +93,12 @@ function box(description: string, price = ""): PieceDraft {
   return { ...newPieceDraft("box"), description, price };
 }
 
-/** A complete two-barrel draft; each test changes what it is about. */
+/** A complete two-barrel draft, priced as a customer's package must be (docs/PACKAGE_PRICE_REQUIRED.md); each test changes what it is about. */
 function draft(over: Partial<WaitingPackageDraft> = {}): WaitingPackageDraft {
   return {
     ...emptyWaitingPackageDraft(guinea),
     kind: "barrels",
-    pieces: [barrel(), barrel()],
+    pieces: [barrel("100"), barrel("50")],
     customerName: "Fatou Diallo",
     customerPhone: "+1 (207) 555-0101",
     receiverName: "Mariama Bah",
@@ -459,10 +460,10 @@ test("a package needs pieces that say what they are, a country, and a car its VI
   assert.deepEqual(validateWaitingPackage(draft({ customerName: "", customerPhone: "" })), []);
   assert.deepEqual(validateWaitingPackage(draft({ receiverName: " " })), ["receiver_name_required"]);
   assert.deepEqual(validateWaitingPackage(draft({ pieces: [] })), ["pieces_required"]);
-  assert.deepEqual(validateWaitingPackage(draft({ pieces: [box("")] })), ["piece_description_required"]);
+  assert.deepEqual(validateWaitingPackage(draft({ pieces: [box("", "20")] })), ["piece_description_required"]);
   assert.deepEqual(validateWaitingPackage(draft({ pieces: [barrel("-3")] })), ["piece_price_invalid"]);
-  assert.deepEqual(validateWaitingPackage(draft({ pieces: [barrel("0")] })), [], "zero is a price");
-  assert.deepEqual(validateWaitingPackage(draft({ pieces: [{ ...box("TV"), lengthIn: "40" }] })), ["piece_size_invalid"], "two sides are no size");
+  assert.deepEqual(validateWaitingPackage(draft({ pieces: [barrel("0"), barrel("10")] })), [], "zero is a price on a piece");
+  assert.deepEqual(validateWaitingPackage(draft({ pieces: [{ ...box("TV", "20"), lengthIn: "40" }] })), ["piece_size_invalid"], "two sides are no size");
   assert.deepEqual(validateWaitingPackage(draft({ kind: "car", vinNumber: "123" })), ["vin_required"]);
   assert.deepEqual(validateWaitingPackage(draft({ customerPhone: "call me" })), ["customer_phone_invalid"]);
   assert.deepEqual(validateWaitingPackage(draft({ destinationCountryId: "" })), ["package_destination_required"]);
@@ -519,11 +520,14 @@ test("the add request sends the pieces (ids, kinds, sizes, cents) and the summar
   assert.equal(barrels.kind, "barrels");
   assert.equal(barrels.description, "");
   assert.equal("priceCents" in barrels, false, "the server sums the pieces");
-  assert.deepEqual(barrels.pieces?.map((p) => p.priceCents), [null, null]);
+  assert.deepEqual(barrels.pieces?.map((p) => p.priceCents), [10000, 5000]);
+  // A blank price stays null in the payload (the form refuses it before it is sent).
+  assert.deepEqual(addWaitingPackagePayload("biz", draft({ pieces: [barrel(), barrel()] })).pieces?.map((p) => p.priceCents), [null, null]);
 });
 
 test("the total is the sum of the priced pieces; a car's is its price", () => {
-  assert.equal(waitingDraftTotalCents(draft()), null);
+  assert.equal(waitingDraftTotalCents(draft()), 15000);
+  assert.equal(waitingDraftTotalCents(draft({ pieces: [barrel(), barrel()] })), null);
   assert.equal(waitingDraftTotalCents(draft({ pieces: [barrel("100"), barrel(""), box("TV", "45.50")] })), 14550);
   assert.equal(waitingDraftTotalCents(draft({ pieces: [barrel("0")] })), null, "nothing to pay is no price");
   assert.equal(waitingDraftTotalCents(draft({ pieces: [barrel("x")] })), null);
@@ -547,12 +551,12 @@ function paidDraft(money: Partial<WaitingPackageDraft["money"]> = {}, over: Part
 test("money received now opens only on a total, on the full total, cash, nobody chosen", () => {
   const blank = emptyWaitingPackageDraft(guinea);
   assert.deepEqual(blank.money, { received: false, ...emptyPackagePaymentDraft });
-  assert.equal(intakeMoneyAvailable(draft()), false);
+  assert.equal(intakeMoneyAvailable(draft({ pieces: [barrel(), barrel()] })), false);
   assert.equal(intakeMoneyAvailable(draft({ pieces: [barrel("x")] })), false);
   assert.equal(intakeMoneyAvailable(draft({ pieces: [barrel("45,50")] })), true);
   assert.equal(intakeMoneyAvailable(draft({ kind: "car", price: "45,50" })), true);
   // No price: the switch does nothing.
-  const unpriced = draft();
+  const unpriced = draft({ pieces: [barrel(), barrel()] });
   assert.equal(switchIntakeMoney(unpriced, true), unpriced);
   const on = switchIntakeMoney(draft({ pieces: [barrel("40"), barrel("5,50")] }), true);
   assert.deepEqual(on.money, { received: true, amount: "45.50", method: "cash", note: "", receivedByStaffId: "" });
@@ -573,7 +577,7 @@ test("money received now is judged against the total, the way the server refuses
   assert.deepEqual(validateWaitingPackage(paidDraft({ amount: "" }), STAFF), ["amount_required"]);
   assert.deepEqual(validateWaitingPackage(paidDraft({ method: "barter" as never }), STAFF), ["payment_method_invalid"]);
   // The prices taken away after the switch was turned on.
-  assert.deepEqual(validateWaitingPackage({ ...paidDraft(), pieces: [barrel(""), box("Clothes", "")] }, STAFF), ["price_required"]);
+  assert.deepEqual(validateWaitingPackage({ ...paidDraft(), pieces: [barrel(""), box("Clothes", "")] }, STAFF), ["piece_price_required", "price_required"]);
   // Switched off: nothing about money is checked.
   assert.deepEqual(validateWaitingPackage(draft({ money: { ...emptyIntakeMoney(), amount: "999" } }), STAFF), []);
   assert.deepEqual(validateIntakeMoney(paidDraft({ receivedByStaffId: "stranger" })), [], "no list, no membership check");
@@ -916,4 +920,40 @@ test("revealing a field scrolls it into view and then focuses it without a secon
   assert.equal(revealField(field), true);
   assert.deepEqual(calls, ["scroll:center", "focus:true"]);
   assert.equal(revealField(null), false);
+});
+
+test("a customer's package needs every piece priced and the pieces over $0, shown on the pieces field (docs/PACKAGE_PRICE_REQUIRED.md)", () => {
+  // Nothing typed: every piece is asked for its price.
+  assert.deepEqual(validateWaitingPackage(draft({ pieces: [barrel(), barrel()] })), ["piece_price_required"]);
+  assert.deepEqual(validateWaitingPackage(draft({ pieces: [barrel("100"), barrel("")] })), ["piece_price_required"]);
+  // $0 on one piece is fine when the pieces add up to something.
+  assert.deepEqual(validateWaitingPackage(draft({ pieces: [barrel("100"), barrel("0")] })), []);
+  // All $0 is no package price; the pickup fee does not count.
+  assert.deepEqual(validateWaitingPackage(draft({ pieces: [barrel("0"), barrel("0")] })), ["package_price_required"]);
+  assert.deepEqual(validateWaitingPackage(draft({ pieces: [barrel("0")], pickupFee: "25" })), ["package_price_required"]);
+  // A price typed wrong keeps its own error alone.
+  assert.deepEqual(validateWaitingPackage(draft({ pieces: [barrel("x"), barrel("")] })), ["piece_price_invalid"]);
+  // A car is priced on its own field, not by this rule.
+  assert.deepEqual(validateWaitingPackage(draft({ kind: "car", vinNumber: "1HGCM82633A004352" })), []);
+  // Both refusals land on the pieces field and read in both languages.
+  for (const code of ["piece_price_required", "package_price_required"] as const) {
+    assert.equal(waitingPackageErrorField(code), "wpk-pieces");
+  }
+  assert.equal(firstInvalidWaitingPackageField(["piece_price_required"]), "wpk-pieces");
+  assert.equal(waitingPackageMessage(["piece_price_required"]), "Enter a price for every piece.");
+  assert.equal(waitingPackageMessage(["package_price_required"]), "Enter the package's price: more than $0.");
+  assert.equal(translateValue(waitingPackageMessage(["piece_price_required"]), "fr"), "Indiquez un prix pour chaque pièce.");
+  assert.equal(translateValue(waitingPackageMessage(["package_price_required"]), "fr"), "Indiquez le prix du colis : plus de 0 $.");
+  // The old wording is gone everywhere in the console.
+  const editor = readFileSync(new URL("../components/business/pieces-editor.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(editor, /or none of them/);
+  assert.match(editor, /aria-required/);
+  // Every form that saves or receives a customer's package marks the price required.
+  const panel = (name: string) => readFileSync(new URL(`../components/business/${name}.tsx`, import.meta.url), "utf8");
+  assert.match(panel("waiting-packages-panel"), /<PiecesEditor[\s\S]*?priceRequired\b/);
+  assert.match(panel("package-requests-panel"), /<PiecesEditor[\s\S]*?priceRequired\b/);
+  assert.match(panel("containers-panel"), /priceRequired=\{lineDraft\.ownerKind === "customer"\}/);
+  for (const name of ["waiting-packages-panel", "package-requests-panel", "containers-panel", "pieces-editor"]) {
+    assert.doesNotMatch(panel(name), /Price every piece/);
+  }
 });

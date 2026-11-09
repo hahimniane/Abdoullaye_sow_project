@@ -279,14 +279,30 @@ test("collect wording: the /e/ page and WhatsApp-not-connected (1.0.17 click-thr
   assert.match(line, /status === "waiting_for_whatsapp"\) \{\s*return <small className="pkq-muted">WhatsApp is not connected yet\./);
 });
 
-test("Received sends final prices: all or none", () => {
+test("Received sends final prices: every piece priced, the package over $0", () => {
   const priced = receiveDraftsFrom(row()).map((d, i) => ({ ...d, price: ["150", "40"][i] }));
   assert.deepEqual(receivePayload(priced), { error: "", pieces: [
     { id: "p1", kind: "barrel", description: "", sizeIn: null, priceCents: 15000 },
     { id: "p2", kind: "box", description: "TV", sizeIn: null, priceCents: 4000 }] });
   assert.equal(receiveTotalCents(priced), 19000);
   assert.equal(receivePayload(priced.map((d, i) => (i === 1 ? { ...d, price: "" } : d))).error, "price_required");
-  assert.deepEqual(receivePayload(priced.map((d) => ({ ...d, price: "" }))).pieces.map((p) => p.priceCents), [null, null]);
+  // No price at all is no longer fine (docs/PACKAGE_PRICE_REQUIRED.md).
+  const none = receivePayload(priced.map((d) => ({ ...d, price: "" })));
+  assert.equal(none.error, "price_required");
+  assert.deepEqual(none.pieces, []);
+  // $0 on a piece is a price (a bundle can be priced on one piece), but all $0 is no package price.
+  assert.equal(receivePayload(priced.map((d, i) => ({ ...d, price: i === 0 ? "150" : "0" }))).error, "");
+  assert.equal(receivePayload(priced.map((d) => ({ ...d, price: "0" }))).error, "package_price_required");
+  // A price typed wrong keeps its own error, with no "required" on top.
+  assert.equal(receivePayload(priced.map((d, i) => (i === 0 ? { ...d, price: "abc" } : { ...d, price: "" }))).error, "piece_price_invalid");
+  // The pickup fee is not a package price.
+  const collectDrafts = priced.map((d) => ({ ...d, price: "0" }));
+  assert.equal(receivePayload(collectDrafts, "25").error, "package_price_required");
+  assert.equal(REQUEST_ERROR_MESSAGES.price_required, "Enter a price for every piece.");
+  assert.equal(REQUEST_ERROR_MESSAGES.package_price_required, "Enter the package's price: more than $0.");
+  for (const message of [REQUEST_ERROR_MESSAGES.price_required, REQUEST_ERROR_MESSAGES.package_price_required]) {
+    assert.notEqual(translateValue(message, "fr"), message);
+  }
 });
 
 test("Received opens in phase 1's pieces editor, the pickup fee beside the prices", () => {

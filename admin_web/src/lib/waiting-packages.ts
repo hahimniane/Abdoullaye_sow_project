@@ -905,6 +905,8 @@ const WAITING_PACKAGE_ERROR_FIELD: Partial<Record<WaitingPackageError, WaitingPa
   piece_description_too_long: "wpk-pieces",
   piece_size_invalid: "wpk-pieces",
   piece_price_invalid: "wpk-pieces",
+  piece_price_required: "wpk-pieces",
+  package_price_required: "wpk-pieces",
   size_invalid: "wpk-length",
   package_destination_required: "wpk-destination",
   price_invalid: "wpk-price",
