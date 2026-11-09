@@ -19489,4 +19489,81 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get labelPrinterGenericFailedHint =>
       'If it keeps failing, open Printer settings and tap “Send printer details” so we can add support for this printer.';
+
+  @override
+  String get parkingWaKindLeft => 'Car left';
+
+  @override
+  String get parkingWaSendButton => 'Send on WhatsApp';
+
+  @override
+  String get parkingWaSendSending => 'Sending…';
+
+  @override
+  String get parkingWaSendSent => 'Sent on WhatsApp.';
+
+  @override
+  String get parkingWaSendFailed =>
+      'WhatsApp could not deliver the message. Check the number.';
+
+  @override
+  String get parkingWaSendStopped =>
+      'This customer has stopped WhatsApp messages.';
+
+  @override
+  String get parkingWaSendError => 'Could not send the message. Try again.';
+
+  @override
+  String get parkingWaErrNotMessageable =>
+      'This car\'s customer can\'t be messaged (a team member\'s car, a voided car, or an online booking).';
+
+  @override
+  String get parkingWaErrNoPhone =>
+      'Add the customer\'s WhatsApp number first.';
+
+  @override
+  String get parkingWaErrNeedsCountryCode =>
+      'Add the country code to the number.';
+
+  @override
+  String get parkingWaErrSendLimit =>
+      'This car\'s message was sent 5 times today. Try again tomorrow.';
+
+  @override
+  String get parkingWaLastNone => 'WhatsApp: nothing sent yet.';
+
+  @override
+  String get parkingWaLastQueued => 'WhatsApp: sending…';
+
+  @override
+  String parkingWaLastSent(String when) {
+    return 'WhatsApp: sent $when';
+  }
+
+  @override
+  String get parkingWaLastFailed =>
+      'WhatsApp: not delivered. Check the number.';
+
+  @override
+  String get parkingWaLastStopped => 'WhatsApp: the customer stopped messages.';
+
+  @override
+  String get parkingWaPhoneResent =>
+      'Saved. The last message will be resent to the new number.';
+
+  @override
+  String get parkingErrContactTeamCar =>
+      'A team member\'s car takes its name and number from the team member.';
+
+  @override
+  String get parkingErrContactNotBusiness =>
+      'Only cars the business recorded can be changed here.';
+
+  @override
+  String get parkingErrContactPaymentLink =>
+      'A payment link needs a phone number or an email address.';
+
+  @override
+  String get parkingPaidContactOnly =>
+      'This parking has been paid for. Only the customer\'s name, phone and email can still be changed.';
 }

@@ -15,6 +15,7 @@ String parkingMessageKindText(AppLocalizations l10n, ParkingMessageKind kind) =>
       ParkingMessageKind.receipt => l10n.parkingWaKindReceipt,
       ParkingMessageKind.welcome => l10n.parkingWaKindWelcome,
       ParkingMessageKind.invoice => l10n.parkingWaKindInvoice,
+      ParkingMessageKind.left => l10n.parkingWaKindLeft,
     };
 
 /// What to tell the lot about a message: its status, refined by what WhatsApp

@@ -20,6 +20,10 @@ String parkingWhatsAppErrorText(
   ParkingWhatsAppRefusal.invoiceMonthInvalid => l10n.parkingInvErrMonthInvalid,
   ParkingWhatsAppRefusal.paymentInstructionsInvalid =>
     l10n.parkingInvErrPayInvalid,
+  ParkingWhatsAppRefusal.carNotMessageable => l10n.parkingWaErrNotMessageable,
+  ParkingWhatsAppRefusal.noPhone => l10n.parkingWaErrNoPhone,
+  ParkingWhatsAppRefusal.needsCountryCode => l10n.parkingWaErrNeedsCountryCode,
+  ParkingWhatsAppRefusal.sendLimit => l10n.parkingWaErrSendLimit,
   null => fallback,
 };
 

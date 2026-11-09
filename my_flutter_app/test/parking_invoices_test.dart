@@ -85,6 +85,19 @@ class _Fake implements ParkingWhatsAppService {
     required String businessId,
     List<String>? phones,
   }) => throw UnimplementedError();
+
+  // "Send on WhatsApp" is covered by test/parking_whatsapp_send_test.dart.
+  @override
+  Future<ParkingWhatsAppSendResult> sendOnWhatsApp({
+    required String businessId,
+    required String carId,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<ParkingWhatsAppLastStatus?> lastStatus({
+    required String businessId,
+    required String carId,
+  }) => throw UnimplementedError();
 }
 
 FirebaseFunctionsException _refusal(String reason) =>

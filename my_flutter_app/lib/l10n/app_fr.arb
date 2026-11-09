@@ -11377,5 +11377,99 @@
   "labelPrinterSendDetailsBusy": "Collecte des détails…",
   "labelPrinterSendDetailsFailed": "Impossible de collecter les détails de l’imprimante. Réessayez.",
   "labelPrinterDetailsSubject": "Détails de l’imprimante Laawol",
-  "labelPrinterGenericFailedHint": "Si cela échoue encore, ouvrez Réglages de l’imprimante et touchez « Envoyer les détails de l’imprimante » pour que nous prenions en charge cette imprimante."
+  "labelPrinterGenericFailedHint": "Si cela échoue encore, ouvrez Réglages de l’imprimante et touchez « Envoyer les détails de l’imprimante » pour que nous prenions en charge cette imprimante.",
+  "parkingWaKindLeft": "Voiture sortie",
+  "@parkingWaKindLeft": {
+    "description": "Kind of WhatsApp message: sent when the car left the lot (the invoice or receipt)."
+  },
+  "parkingWaSendButton": "Envoyer sur WhatsApp",
+  "@parkingWaSendButton": {
+    "description": "Button on a parked car's details: sends the customer the car's current WhatsApp message (parked or left) right now."
+  },
+  "parkingWaSendSending": "Envoi…",
+  "@parkingWaSendSending": {
+    "description": "Button label while the WhatsApp message is being sent from a parked car's details."
+  },
+  "parkingWaSendSent": "Envoyé sur WhatsApp.",
+  "@parkingWaSendSent": {
+    "description": "Result shown under the Send on WhatsApp button when the message went out."
+  },
+  "parkingWaSendFailed": "WhatsApp n'a pas pu distribuer le message. Vérifiez le numéro.",
+  "@parkingWaSendFailed": {
+    "description": "Result shown when WhatsApp (Meta) did not accept the message sent from the Send on WhatsApp button."
+  },
+  "parkingWaSendStopped": "Ce client a arrêté les messages WhatsApp.",
+  "@parkingWaSendStopped": {
+    "description": "Result shown when the customer replied STOP, so the message was not sent."
+  },
+  "parkingWaSendError": "Impossible d'envoyer le message. Réessayez.",
+  "@parkingWaSendError": {
+    "description": "Generic failure when the Send on WhatsApp call fails for a reason the app does not recognise."
+  },
+  "parkingWaErrNotMessageable": "Le client de cette voiture ne peut pas être contacté (voiture d'un membre de l'équipe, voiture annulée ou réservation en ligne).",
+  "@parkingWaErrNotMessageable": {
+    "description": "Refusal: the car is not one whose customer gets WhatsApp messages."
+  },
+  "parkingWaErrNoPhone": "Ajoutez d'abord le numéro WhatsApp du client.",
+  "@parkingWaErrNoPhone": {
+    "description": "Refusal: the car has no customer phone number to message."
+  },
+  "parkingWaErrNeedsCountryCode": "Ajoutez l'indicatif du pays au numéro.",
+  "@parkingWaErrNeedsCountryCode": {
+    "description": "Refusal: the customer's phone number has no country code, so WhatsApp cannot reach it."
+  },
+  "parkingWaErrSendLimit": "Le message de cette voiture a été envoyé 5 fois aujourd'hui. Réessayez demain.",
+  "@parkingWaErrSendLimit": {
+    "description": "Refusal: the daily limit of five manual WhatsApp sends for one car was reached."
+  },
+  "parkingWaLastNone": "WhatsApp : rien d'envoyé pour l'instant.",
+  "@parkingWaLastNone": {
+    "description": "Line on a parked car's details: no WhatsApp message has gone out for this car."
+  },
+  "parkingWaLastQueued": "WhatsApp : envoi en cours…",
+  "@parkingWaLastQueued": {
+    "description": "Line on a parked car's details: the last WhatsApp message is queued and has not gone out yet."
+  },
+  "parkingWaLastSent": "WhatsApp : envoyé le {when}",
+  "@parkingWaLastSent": {
+    "description": "Line on a parked car's details: the last WhatsApp message went out at the given date and time.",
+    "placeholders": {
+      "when": {
+        "type": "String",
+        "example": "Nov 9, 2026 2:05 PM"
+      }
+    }
+  },
+  "parkingWaLastFailed": "WhatsApp : non distribué. Vérifiez le numéro.",
+  "@parkingWaLastFailed": {
+    "description": "Line on a parked car's details: the last WhatsApp message did not get through."
+  },
+  "parkingWaLastStopped": "WhatsApp : le client a arrêté les messages.",
+  "@parkingWaLastStopped": {
+    "description": "Line on a parked car's details: the customer replied STOP, so nothing is sent."
+  },
+  "parkingWaPhoneResent": "Enregistré. Le dernier message sera renvoyé au nouveau numéro.",
+  "@parkingWaPhoneResent": {
+    "description": "Snackbar after staff change a parked car's customer phone while WhatsApp messages are on."
+  },
+  "parkingErrorCustomerName": "Indiquez le nom du client.",
+  "@parkingErrorCustomerName": {
+    "description": "Validation and refusal: the customer's name cannot be empty when fixing a parked car's contact details."
+  },
+  "parkingErrContactTeamCar": "La voiture d’un membre de l’équipe prend le nom et le numéro de ce membre.",
+  "@parkingErrContactTeamCar": {
+    "description": "Refusal: the contact details of a team member's car cannot be edited on the car."
+  },
+  "parkingErrContactNotBusiness": "Seules les voitures enregistrées par l’entreprise peuvent être modifiées ici.",
+  "@parkingErrContactNotBusiness": {
+    "description": "Refusal: contact details can only be changed on a walk-up the business recorded itself."
+  },
+  "parkingErrContactPaymentLink": "Un lien de paiement nécessite un numéro de téléphone ou une adresse e-mail.",
+  "@parkingErrContactPaymentLink": {
+    "description": "Refusal: a car paid by payment link must keep a phone number or an email address."
+  },
+  "parkingPaidContactOnly": "Ce stationnement a été payé. Seuls le nom, le téléphone et l’e-mail du client peuvent encore être modifiés.",
+  "@parkingPaidContactOnly": {
+    "description": "Banner on a paid parked car's details: the money and dates are locked but contact details can be fixed."
+  }
 }

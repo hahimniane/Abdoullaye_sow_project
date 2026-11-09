@@ -369,6 +369,98 @@ String businessParkingVoidRefusal(Object? details) {
   return businessParkingVoidRefusals.contains(reason) ? reason : '';
 }
 
+/// The customer's contact fields: the only ones `update_contact` changes
+/// (docs/PARKING_LEFT_WHATSAPP.md §3). Amounts, dates and the rate never move
+/// through it.
+const businessParkingContactFields = <String>{
+  'customerName',
+  'customerPhone',
+  'customerEmail',
+};
+
+/// The routing rule for a saved edit: an edit that moved only contact fields
+/// goes to `update_contact` (it works on paid and left cars and never
+/// reprices); anything else is the full edit.
+bool businessParkingChangesAreContactOnly(Map<String, dynamic> changes) =>
+    changes.isNotEmpty &&
+    changes.keys.every(businessParkingContactFields.contains);
+
+/// What a contact edit moved: each of [name], [phone] and [email] that differs
+/// from the record [current], trimmed (the email lower-cased) the way the
+/// server compares them.
+Map<String, dynamic> businessParkingContactChanges({
+  required Map<String, dynamic> current,
+  required String name,
+  required String phone,
+  required String email,
+}) {
+  String was(Object? v) => '${v ?? ''}'.trim();
+  final changes = <String, dynamic>{};
+  final nextName = name.trim();
+  if (nextName != was(current['customerName'] ?? current['ownerName'])) {
+    changes['customerName'] = nextName;
+  }
+  final nextPhone = phone.trim();
+  if (nextPhone != was(current['customerPhone'])) {
+    changes['customerPhone'] = nextPhone;
+  }
+  final nextEmail = email.trim().toLowerCase();
+  if (nextEmail != was(current['customerEmail']).toLowerCase()) {
+    changes['customerEmail'] = nextEmail;
+  }
+  return changes;
+}
+
+/// The refusals `update_contact` gives (`details.reason`).
+const businessParkingContactRefusals = <String>{
+  'nothing_to_change',
+  'customer_phone_required',
+  'customer_name_required',
+  'customer_email_invalid',
+  'payment_link_contact_required',
+  'team_car',
+  'not_business_entered',
+  'car_voided',
+};
+
+/// The refusal reason a callable error carries when it is one of
+/// [businessParkingContactRefusals]; '' otherwise.
+String businessParkingContactRefusal(Object? details) {
+  if (details is! Map) return '';
+  final reason = '${details['reason'] ?? ''}'.trim();
+  return businessParkingContactRefusals.contains(reason) ? reason : '';
+}
+
+/// What `update_contact` answered: [changed] names the fields that moved.
+class BusinessParkingContactResult {
+  const BusinessParkingContactResult({
+    required this.success,
+    required this.entryId,
+    required this.changed,
+  });
+
+  factory BusinessParkingContactResult.fromCallable(Object? data) {
+    final decoded = deepCastCallableValue(data);
+    final row = decoded is Map ? decoded : const <Object?, Object?>{};
+    final changed = row['changed'];
+    return BusinessParkingContactResult(
+      success: row['success'] != false,
+      entryId: _trimmed(row['entryId'], 180),
+      changed: [
+        if (changed is List)
+          for (final field in changed)
+            if (_trimmed(field, 40).isNotEmpty) _trimmed(field, 40),
+      ],
+    );
+  }
+
+  final bool success;
+  final String entryId;
+  final List<String> changed;
+
+  bool get phoneChanged => changed.contains('customerPhone');
+}
+
 /// Is this a walk-up the lot entered itself, rather than a customer booking?
 bool isBusinessEnteredParking(Map<String, dynamic> row) =>
     _trimmed(row['source'], 40) == 'business' ||
@@ -1614,6 +1706,28 @@ class BusinessParkingService {
           'changes': changes,
         });
     return BusinessParkingUpdateResult.fromCallable(response.data);
+  }
+
+  /// Fixes the customer's phone, name or email on a car the business recorded,
+  /// paid or left too (`action: "update_contact"`). Only the fields in
+  /// [changes] that are contact fields are sent; refusals arrive as
+  /// `FirebaseFunctionsException` with a [businessParkingContactRefusal].
+  Future<BusinessParkingContactResult> updateContact({
+    required String businessId,
+    required String carId,
+    required Map<String, dynamic> changes,
+  }) async {
+    final response = await _functions
+        .httpsCallable('updateBusinessParkingEntry')
+        .call<Object?>(<String, dynamic>{
+          'action': 'update_contact',
+          'businessId': businessId,
+          'carId': carId,
+          for (final entry in changes.entries)
+            if (businessParkingContactFields.contains(entry.key))
+              entry.key: entry.value,
+        });
+    return BusinessParkingContactResult.fromCallable(response.data);
   }
 
   /// Voids a car entered by mistake (a duplicate, the wrong customer, a

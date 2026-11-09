@@ -7002,7 +7002,7 @@ class AppLocalizationsFr extends AppLocalizations {
       'Choisissez une entreprise avant d’enregistrer une voiture.';
 
   @override
-  String get parkingErrorCustomerName => 'Saisissez le nom du client.';
+  String get parkingErrorCustomerName => 'Indiquez le nom du client.';
 
   @override
   String get parkingErrorCustomerPhone =>
@@ -19796,4 +19796,83 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get labelPrinterGenericFailedHint =>
       'Si cela échoue encore, ouvrez Réglages de l’imprimante et touchez « Envoyer les détails de l’imprimante » pour que nous prenions en charge cette imprimante.';
+
+  @override
+  String get parkingWaKindLeft => 'Voiture sortie';
+
+  @override
+  String get parkingWaSendButton => 'Envoyer sur WhatsApp';
+
+  @override
+  String get parkingWaSendSending => 'Envoi…';
+
+  @override
+  String get parkingWaSendSent => 'Envoyé sur WhatsApp.';
+
+  @override
+  String get parkingWaSendFailed =>
+      'WhatsApp n\'a pas pu distribuer le message. Vérifiez le numéro.';
+
+  @override
+  String get parkingWaSendStopped =>
+      'Ce client a arrêté les messages WhatsApp.';
+
+  @override
+  String get parkingWaSendError =>
+      'Impossible d\'envoyer le message. Réessayez.';
+
+  @override
+  String get parkingWaErrNotMessageable =>
+      'Le client de cette voiture ne peut pas être contacté (voiture d\'un membre de l\'équipe, voiture annulée ou réservation en ligne).';
+
+  @override
+  String get parkingWaErrNoPhone =>
+      'Ajoutez d\'abord le numéro WhatsApp du client.';
+
+  @override
+  String get parkingWaErrNeedsCountryCode =>
+      'Ajoutez l\'indicatif du pays au numéro.';
+
+  @override
+  String get parkingWaErrSendLimit =>
+      'Le message de cette voiture a été envoyé 5 fois aujourd\'hui. Réessayez demain.';
+
+  @override
+  String get parkingWaLastNone => 'WhatsApp : rien d\'envoyé pour l\'instant.';
+
+  @override
+  String get parkingWaLastQueued => 'WhatsApp : envoi en cours…';
+
+  @override
+  String parkingWaLastSent(String when) {
+    return 'WhatsApp : envoyé le $when';
+  }
+
+  @override
+  String get parkingWaLastFailed =>
+      'WhatsApp : non distribué. Vérifiez le numéro.';
+
+  @override
+  String get parkingWaLastStopped =>
+      'WhatsApp : le client a arrêté les messages.';
+
+  @override
+  String get parkingWaPhoneResent =>
+      'Enregistré. Le dernier message sera renvoyé au nouveau numéro.';
+
+  @override
+  String get parkingErrContactTeamCar =>
+      'La voiture d’un membre de l’équipe prend le nom et le numéro de ce membre.';
+
+  @override
+  String get parkingErrContactNotBusiness =>
+      'Seules les voitures enregistrées par l’entreprise peuvent être modifiées ici.';
+
+  @override
+  String get parkingErrContactPaymentLink =>
+      'Un lien de paiement nécessite un numéro de téléphone ou une adresse e-mail.';
+
+  @override
+  String get parkingPaidContactOnly =>
+      'Ce stationnement a été payé. Seuls le nom, le téléphone et l’e-mail du client peuvent encore être modifiés.';
 }

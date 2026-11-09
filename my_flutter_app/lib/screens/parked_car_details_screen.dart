@@ -21,7 +21,13 @@ import '../services/container_manifest.dart';
 import '../services/lot_ledger.dart'
     show LotStaff, lotStaffFromProfile, withBusinessOwner;
 import '../services/parking_team.dart';
-import '../services/parking_whatsapp.dart' show ParkingMessage;
+import '../services/parking_whatsapp.dart'
+    show
+        ParkingMessage,
+        ParkingWhatsAppService,
+        parkingContactEditResends,
+        parkingPhoneEditResends,
+        parkingWhatsAppEnabledStream;
 import '../services/vin_catalog_matcher.dart';
 import '../services/vin_decoder_service.dart';
 import '../theme/app_colors.dart';
@@ -40,6 +46,7 @@ import '../widgets/container_link_chip.dart';
 import '../widgets/phone_account_widgets.dart' show RecordPhoneFlagNotes;
 import '../widgets/lot_sheets.dart' show showLotSheet;
 import '../widgets/parking_messages_section.dart';
+import '../widgets/parking_whatsapp_send_card.dart';
 import '../widgets/parking_whose_car.dart';
 import '../widgets/void_record_sheet.dart';
 import '../services/phone_accounts.dart'
@@ -56,11 +63,19 @@ class ParkedCarDetailsScreen extends StatefulWidget {
   /// Firebase.
   final Stream<List<ParkingMessage>>? parkingMessages;
 
+  /// Injectable so a widget test answers "Send on WhatsApp" without Firebase.
+  final ParkingWhatsAppService? parkingWhatsAppService;
+
+  /// Overrides the read of the business's `parkingWhatsApp.enabled`.
+  final Stream<bool>? parkingWhatsAppEnabled;
+
   const ParkedCarDetailsScreen({
     super.key,
     required this.parkedCar,
     this.businessParkingService,
     this.parkingMessages,
+    this.parkingWhatsAppService,
+    this.parkingWhatsAppEnabled,
   });
 
   @override
@@ -111,6 +126,15 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
   /// received updates the card without a round trip through the list screen.
   late Map<String, dynamic> _paymentFields;
   late final BusinessParkingService _businessParkingService;
+
+  // The business's WhatsApp switch (docs/PARKING_LEFT_WHATSAPP.md §4): off
+  // until the record says on, so nothing is offered that the server refuses.
+  StreamSubscription<bool>? _whatsAppSwitchSub;
+  bool _whatsAppOn = false;
+
+  /// Bumped to make the "Send on WhatsApp" card read the last message again.
+  int _whatsAppRefresh = 0;
+  Timer? _whatsAppRefreshTimer;
   String _receivedVia = businessParkingReceivedViaValues.first;
   bool _isMarkingPaid = false;
   // The lot's team, uid -> name, for "who received" and the part-payment
@@ -161,6 +185,7 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     _loadStaffNames();
     _loadOwner();
     _loadContainerLink();
+    _watchWhatsAppSwitch();
     _customerPhoneController = TextEditingController(
       text: (_paymentFields['customerPhone'] ?? '').toString(),
     );
@@ -215,6 +240,8 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
 
   @override
   void dispose() {
+    _whatsAppSwitchSub?.cancel();
+    _whatsAppRefreshTimer?.cancel();
     _ownerNameController.dispose();
     _costPerDayController.dispose();
     _vinController.dispose();
@@ -222,6 +249,39 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     _customerPhoneController.dispose();
     _customerEmailController.dispose();
     super.dispose();
+  }
+
+  /// Follows the business's WhatsApp switch. A refused or failed read leaves it
+  /// off.
+  void _watchWhatsAppSwitch() {
+    final businessId = '${_paymentFields['businessId'] ?? ''}'.trim();
+    if (!_isBusinessEntry || businessId.isEmpty) return;
+    try {
+      _whatsAppSwitchSub =
+          (widget.parkingWhatsAppEnabled ??
+                  parkingWhatsAppEnabledStream(businessId))
+              .listen(
+                (on) {
+                  if (mounted) setState(() => _whatsAppOn = on);
+                },
+                onError: (Object error) {
+                  debugPrint('Parking WhatsApp switch read failed: $error');
+                  if (mounted) setState(() => _whatsAppOn = false);
+                },
+              );
+    } catch (error) {
+      debugPrint('Parking WhatsApp switch read failed: $error');
+    }
+  }
+
+  /// After a phone fix the server resends in the background; read the line
+  /// again now and once more when the resend has had time to land.
+  void _refreshWhatsAppLine() {
+    setState(() => _whatsAppRefresh += 1);
+    _whatsAppRefreshTimer?.cancel();
+    _whatsAppRefreshTimer = Timer(const Duration(seconds: 6), () {
+      if (mounted) setState(() => _whatsAppRefresh += 1);
+    });
   }
 
   /// A walk-up the lot entered itself, rather than a customer's own booking.
@@ -479,6 +539,20 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
   Future<bool> _saveBusinessParkingEntry({bool showSuccess = true}) async {
     final l10n = AppLocalizations.of(context)!;
     if (!_formKey.currentState!.validate()) return false;
+    // A paid car's money and dates are frozen, but its contact details can
+    // always be fixed - through `update_contact`, which cannot reprice. The
+    // car's make, model and year are not asked about: they cannot change.
+    if (_isPaidEntry && !_teamCar) {
+      return _saveContact(
+        businessParkingContactChanges(
+          current: _paymentFields,
+          name: _ownerNameController.text,
+          phone: _customerPhoneController.text,
+          email: _customerEmailController.text,
+        ),
+        showSuccess: showSuccess,
+      );
+    }
     if (_selectedMake == null ||
         _selectedModel == null ||
         _selectedYear == null) {
@@ -519,6 +593,11 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
       // "nothing was changed" from arriving as a red failure.
       if (showSuccess) showSuccessSnackBar(context, l10n.parkingNothingChanged);
       return true;
+    }
+    // Only the customer's name, phone or email moved: the contact edit, which
+    // works on a left car too and never reprices.
+    if (businessParkingChangesAreContactOnly(changes)) {
+      return _saveContact(changes, showSuccess: showSuccess);
     }
 
     setState(() => _isSavingEntry = true);
@@ -602,6 +681,16 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
         } else {
           showErrorSnackBar(context, message);
         }
+      } else if (parkingPhoneEditResends(
+        changes: changes,
+        switchOn: _whatsAppOn,
+        isTeamCar: team,
+        isVoided: _isVoided,
+      )) {
+        // The new number gets the car's last message; say so rather than
+        // leave staff wondering whether to send it by hand.
+        showSuccessSnackBar(context, l10n.parkingWaPhoneResent);
+        _refreshWhatsAppLine();
       } else if (showSuccess) {
         showSuccessSnackBar(context, l10n.recordUpdated);
       }
@@ -615,6 +704,72 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
       showErrorSnackBar(
         context,
         message.isEmpty ? l10n.parkingRecordCouldNotBeUpdated : message,
+      );
+      return false;
+    } catch (_) {
+      if (!mounted) return false;
+      showErrorSnackBar(context, l10n.parkingRecordCouldNotBeUpdated);
+      return false;
+    } finally {
+      if (mounted) setState(() => _isSavingEntry = false);
+    }
+  }
+
+  /// Saves the customer's phone, name or email through `update_contact`.
+  ///
+  /// [changes] holds only the contact fields that moved. The resend notice
+  /// shows only when the server says the phone changed and the business switch
+  /// is on; a refusal is shown in words.
+  Future<bool> _saveContact(
+    Map<String, dynamic> changes, {
+    required bool showSuccess,
+  }) async {
+    final l10n = AppLocalizations.of(context)!;
+    if (changes.isEmpty) {
+      if (showSuccess) showSuccessSnackBar(context, l10n.parkingNothingChanged);
+      return true;
+    }
+    setState(() => _isSavingEntry = true);
+    try {
+      final result = await _businessParkingService.updateContact(
+        businessId: '${_paymentFields['businessId'] ?? ''}'.trim(),
+        carId: widget.parkedCar.id,
+        changes: changes,
+      );
+      if (!mounted) return false;
+      setState(() {
+        _paymentFields = <String, dynamic>{
+          ..._paymentFields,
+          for (final field in result.changed)
+            if (changes.containsKey(field)) field: changes[field],
+          if (result.changed.contains('customerName') &&
+              changes.containsKey('customerName'))
+            'ownerName': changes['customerName'],
+        };
+      });
+      if (parkingContactEditResends(
+        changed: result.changed,
+        switchOn: _whatsAppOn,
+        isTeamCar: '${_paymentFields['forStaffId'] ?? ''}'.trim().isNotEmpty,
+        isVoided: _isVoided,
+      )) {
+        showSuccessSnackBar(context, l10n.parkingWaPhoneResent);
+        _refreshWhatsAppLine();
+      } else if (showSuccess) {
+        showSuccessSnackBar(context, l10n.recordUpdated);
+      }
+      return true;
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return false;
+      final words = parkingContactRefusalText(
+        l10n,
+        businessParkingContactRefusal(error.details),
+      );
+      final message = (error.message ?? '').trim();
+      showErrorSnackBar(
+        context,
+        words ??
+            (message.isEmpty ? l10n.parkingRecordCouldNotBeUpdated : message),
       );
       return false;
     } catch (_) {
@@ -1032,6 +1187,16 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
         (isBusinessEntry
             ? (canRecordPayment && !isPaidEntry)
             : (isAdmin && _persistedStatus != 'completed'));
+    // The customer's name, phone and email can be fixed on any car the lot
+    // recorded - a paid one too (the contact edit cannot touch the money) -
+    // except a team member's car, which takes them from the member.
+    final bool contactEditable =
+        canEdit ||
+        (!isVoided &&
+            isBusinessEntry &&
+            canRecordPayment &&
+            isPaidEntry &&
+            '${_paymentFields['forStaffId'] ?? ''}'.trim().isEmpty);
     // Voiding is a parking-permission act, like taking the money: the lot's
     // own staff are the ones who catch the duplicate. The callable enforces
     // the same permission.
@@ -1165,7 +1330,9 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Text(
-                                l10n.parkingPaidCannotBeEdited,
+                                contactEditable
+                                    ? l10n.parkingPaidContactOnly
+                                    : l10n.parkingPaidCannotBeEdited,
                                 style: TextStyle(
                                   fontSize: 13,
                                   color: Colors.grey.shade800,
@@ -1174,7 +1341,7 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                             ),
                             const SizedBox(height: 16),
                           ],
-                          _buildInfoCard(canEdit, isBusinessEntry),
+                          _buildInfoCard(canEdit, isBusinessEntry, contactEditable),
                           const SizedBox(height: 24),
                           _buildBillingCard(
                             l10n,
@@ -1191,6 +1358,21 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                           // What the customer was sent on WhatsApp. Only the lot's
                           // own people can read these rows; the section hides
                           // itself while there is nothing to show.
+                          ParkingWhatsAppSendCard(
+                            businessId:
+                                '${_paymentFields['businessId'] ?? ''}'.trim(),
+                            carId: widget.parkedCar.id,
+                            switchOn: _whatsAppOn,
+                            canSend: canRecordPayment,
+                            isBusinessEntry: isBusinessEntry,
+                            isTeamCar:
+                                '${_paymentFields['forStaffId'] ?? ''}'
+                                    .trim()
+                                    .isNotEmpty,
+                            isVoided: isVoided,
+                            refresh: _whatsAppRefresh,
+                            service: widget.parkingWhatsAppService,
+                          ),
                           if (canRecordPayment)
                             ParkingMessagesSection(
                               parkedCarId: widget.parkedCar.id,
@@ -1214,7 +1396,7 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                                 key: const ValueKey<String>(
                                   'parking-save-entry',
                                 ),
-                                onPressed: (canEdit && !_isSavingEntry)
+                                onPressed: (contactEditable && !_isSavingEntry)
                                     ? _updateRecord
                                     : null,
                                 icon: Icons.save_outlined,
@@ -1443,7 +1625,11 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
     );
   }
 
-  Widget _buildInfoCard(bool canEdit, bool isBusinessEntry) {
+  Widget _buildInfoCard(
+    bool canEdit,
+    bool isBusinessEntry,
+    bool contactEditable,
+  ) {
     final l10n = AppLocalizations.of(context)!;
     final dropdownEnabled = canEdit && !_isCatalogLoading;
 
@@ -1474,7 +1660,7 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
           if (!(canEdit && isBusinessEntry && _teamCar)) ...[
             TextFormField(
               controller: _ownerNameController,
-              readOnly: !canEdit,
+              readOnly: !contactEditable,
               decoration: InputDecoration(
                 labelText: l10n.ownerName,
                 suffixIcon: _copyIcon(
@@ -1484,8 +1670,8 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                 ),
               ),
               validator: (value) {
-                if (!canEdit) return null;
-                return value == null || value.isEmpty
+                if (!contactEditable) return null;
+                return value == null || value.trim().isEmpty
                     ? l10n.ownerNameRequired
                     : null;
               },
@@ -1517,11 +1703,11 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
             TextFormField(
               key: const ValueKey<String>('parking-customer-phone'),
               controller: _customerPhoneController,
-              readOnly: !canEdit,
+              readOnly: !contactEditable,
               keyboardType: TextInputType.phone,
               decoration: InputDecoration(labelText: l10n.customerPhone),
               validator: (value) {
-                if (!canEdit) return null;
+                if (!contactEditable) return null;
                 return (value ?? '').trim().isEmpty
                     ? l10n.parkingErrorCustomerPhone
                     : null;
@@ -1540,7 +1726,7 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
             TextFormField(
               key: const ValueKey<String>('parking-customer-email'),
               controller: _customerEmailController,
-              readOnly: !canEdit,
+              readOnly: !contactEditable,
               keyboardType: TextInputType.emailAddress,
               decoration: InputDecoration(
                 labelText: l10n.customerEmailOptional,
@@ -3131,5 +3317,20 @@ String? parkingVoidRefusalText(AppLocalizations l10n, String reason) =>
     switch (businessParkingVoidRefusal({'reason': reason})) {
       'car_voided' => l10n.parkingErrCarVoided,
       'car_not_found' => l10n.parkingErrCarNotFound,
+      _ => null,
+    };
+
+/// The refusal `update_contact` gives, in the reader's language; null for one
+/// this screen has no words for (the server's own message is shown).
+String? parkingContactRefusalText(AppLocalizations l10n, String reason) =>
+    switch (reason) {
+      'nothing_to_change' => l10n.parkingNothingChanged,
+      'customer_phone_required' => l10n.parkingErrorCustomerPhone,
+      'customer_name_required' => l10n.parkingErrorCustomerName,
+      'customer_email_invalid' => l10n.parkingErrorCustomerEmail,
+      'payment_link_contact_required' => l10n.parkingErrContactPaymentLink,
+      'team_car' => l10n.parkingErrContactTeamCar,
+      'not_business_entered' => l10n.parkingErrContactNotBusiness,
+      'car_voided' => l10n.parkingErrCarVoided,
       _ => null,
     };

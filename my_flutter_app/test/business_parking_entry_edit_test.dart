@@ -245,9 +245,10 @@ void main() {
       }
     });
 
-    test('a paid record cannot be edited at all', () {
+    test('a paid record\'s money and dates cannot be edited', () {
       // The server refuses it; an editable field that cannot be saved is
-      // worse than no field.
+      // worse than no field. Its contact details are the one exception:
+      // test/parking_contact_edit_test.dart.
       expect(source, contains('businessParkingPaymentTone('));
       expect(source, contains('BusinessParkingPaymentTone.paid'));
       expect(source, contains('canRecordPayment && !isPaidEntry'));

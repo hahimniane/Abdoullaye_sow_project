@@ -12282,7 +12282,7 @@ abstract class AppLocalizations {
   /// **'Choose a business before recording a car.'**
   String get parkingErrorBusinessRequired;
 
-  /// No description provided for @parkingErrorCustomerName.
+  /// Validation and refusal: the customer's name cannot be empty when fixing a parked car's contact details.
   ///
   /// In en, this message translates to:
   /// **'Enter the customer\'s name.'**
@@ -32887,6 +32887,132 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'If it keeps failing, open Printer settings and tap “Send printer details” so we can add support for this printer.'**
   String get labelPrinterGenericFailedHint;
+
+  /// Kind of WhatsApp message: sent when the car left the lot (the invoice or receipt).
+  ///
+  /// In en, this message translates to:
+  /// **'Car left'**
+  String get parkingWaKindLeft;
+
+  /// Button on a parked car's details: sends the customer the car's current WhatsApp message (parked or left) right now.
+  ///
+  /// In en, this message translates to:
+  /// **'Send on WhatsApp'**
+  String get parkingWaSendButton;
+
+  /// Button label while the WhatsApp message is being sent from a parked car's details.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending…'**
+  String get parkingWaSendSending;
+
+  /// Result shown under the Send on WhatsApp button when the message went out.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent on WhatsApp.'**
+  String get parkingWaSendSent;
+
+  /// Result shown when WhatsApp (Meta) did not accept the message sent from the Send on WhatsApp button.
+  ///
+  /// In en, this message translates to:
+  /// **'WhatsApp could not deliver the message. Check the number.'**
+  String get parkingWaSendFailed;
+
+  /// Result shown when the customer replied STOP, so the message was not sent.
+  ///
+  /// In en, this message translates to:
+  /// **'This customer has stopped WhatsApp messages.'**
+  String get parkingWaSendStopped;
+
+  /// Generic failure when the Send on WhatsApp call fails for a reason the app does not recognise.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not send the message. Try again.'**
+  String get parkingWaSendError;
+
+  /// Refusal: the car is not one whose customer gets WhatsApp messages.
+  ///
+  /// In en, this message translates to:
+  /// **'This car\'s customer can\'t be messaged (a team member\'s car, a voided car, or an online booking).'**
+  String get parkingWaErrNotMessageable;
+
+  /// Refusal: the car has no customer phone number to message.
+  ///
+  /// In en, this message translates to:
+  /// **'Add the customer\'s WhatsApp number first.'**
+  String get parkingWaErrNoPhone;
+
+  /// Refusal: the customer's phone number has no country code, so WhatsApp cannot reach it.
+  ///
+  /// In en, this message translates to:
+  /// **'Add the country code to the number.'**
+  String get parkingWaErrNeedsCountryCode;
+
+  /// Refusal: the daily limit of five manual WhatsApp sends for one car was reached.
+  ///
+  /// In en, this message translates to:
+  /// **'This car\'s message was sent 5 times today. Try again tomorrow.'**
+  String get parkingWaErrSendLimit;
+
+  /// Line on a parked car's details: no WhatsApp message has gone out for this car.
+  ///
+  /// In en, this message translates to:
+  /// **'WhatsApp: nothing sent yet.'**
+  String get parkingWaLastNone;
+
+  /// Line on a parked car's details: the last WhatsApp message is queued and has not gone out yet.
+  ///
+  /// In en, this message translates to:
+  /// **'WhatsApp: sending…'**
+  String get parkingWaLastQueued;
+
+  /// Line on a parked car's details: the last WhatsApp message went out at the given date and time.
+  ///
+  /// In en, this message translates to:
+  /// **'WhatsApp: sent {when}'**
+  String parkingWaLastSent(String when);
+
+  /// Line on a parked car's details: the last WhatsApp message did not get through.
+  ///
+  /// In en, this message translates to:
+  /// **'WhatsApp: not delivered. Check the number.'**
+  String get parkingWaLastFailed;
+
+  /// Line on a parked car's details: the customer replied STOP, so nothing is sent.
+  ///
+  /// In en, this message translates to:
+  /// **'WhatsApp: the customer stopped messages.'**
+  String get parkingWaLastStopped;
+
+  /// Snackbar after staff change a parked car's customer phone while WhatsApp messages are on.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved. The last message will be resent to the new number.'**
+  String get parkingWaPhoneResent;
+
+  /// Refusal: the contact details of a team member's car cannot be edited on the car.
+  ///
+  /// In en, this message translates to:
+  /// **'A team member\'s car takes its name and number from the team member.'**
+  String get parkingErrContactTeamCar;
+
+  /// Refusal: contact details can only be changed on a walk-up the business recorded itself.
+  ///
+  /// In en, this message translates to:
+  /// **'Only cars the business recorded can be changed here.'**
+  String get parkingErrContactNotBusiness;
+
+  /// Refusal: a car paid by payment link must keep a phone number or an email address.
+  ///
+  /// In en, this message translates to:
+  /// **'A payment link needs a phone number or an email address.'**
+  String get parkingErrContactPaymentLink;
+
+  /// Banner on a paid parked car's details: the money and dates are locked but contact details can be fixed.
+  ///
+  /// In en, this message translates to:
+  /// **'This parking has been paid for. Only the customer\'s name, phone and email can still be changed.'**
+  String get parkingPaidContactOnly;
 }
 
 class _AppLocalizationsDelegate

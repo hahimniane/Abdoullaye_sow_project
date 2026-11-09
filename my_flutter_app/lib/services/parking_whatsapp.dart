@@ -34,6 +34,20 @@ enum ParkingWhatsAppRefusal {
 
   /// The server refused the payment instructions text.
   paymentInstructionsInvalid,
+
+  /// "Send on WhatsApp": the car's customer is not messageable (a team
+  /// member's car, a voided car or an online booking)
+  /// (docs/PARKING_LEFT_WHATSAPP.md §2).
+  carNotMessageable,
+
+  /// "Send on WhatsApp": the car has no phone number.
+  noPhone,
+
+  /// "Send on WhatsApp": the number has no country code.
+  needsCountryCode,
+
+  /// "Send on WhatsApp": five manual sends for this car today.
+  sendLimit,
 }
 
 /// The refusal a callable error carries in `details.reason`, or null for
@@ -48,6 +62,10 @@ ParkingWhatsAppRefusal? parkingWhatsAppRefusal(Object? details) {
     'invoice_month_invalid' => ParkingWhatsAppRefusal.invoiceMonthInvalid,
     'payment_instructions_invalid' =>
       ParkingWhatsAppRefusal.paymentInstructionsInvalid,
+    'car_not_messageable' => ParkingWhatsAppRefusal.carNotMessageable,
+    'no_phone' => ParkingWhatsAppRefusal.noPhone,
+    'needs_country_code' => ParkingWhatsAppRefusal.needsCountryCode,
+    'send_limit' => ParkingWhatsAppRefusal.sendLimit,
     _ => null,
   };
 }
@@ -369,6 +387,20 @@ abstract interface class ParkingWhatsAppService {
     required String monthKey,
     List<String>? phones,
   });
+
+  /// "Send on WhatsApp" for one car, by any staff with the parking
+  /// permission (docs/PARKING_LEFT_WHATSAPP.md §2). A failure from Meta is an
+  /// answer ([ParkingWhatsAppSendResult.status] failed), not a throw.
+  Future<ParkingWhatsAppSendResult> sendOnWhatsApp({
+    required String businessId,
+    required String carId,
+  });
+
+  /// The last WhatsApp message of one car; null when it has none.
+  Future<ParkingWhatsAppLastStatus?> lastStatus({
+    required String businessId,
+    required String carId,
+  });
 }
 
 class FirebaseParkingWhatsAppService implements ParkingWhatsAppService {
@@ -471,15 +503,62 @@ class FirebaseParkingWhatsAppService implements ParkingWhatsAppService {
       timeout: const Duration(seconds: 300),
     ),
   );
+
+  @override
+  Future<ParkingWhatsAppSendResult> sendOnWhatsApp({
+    required String businessId,
+    required String carId,
+  }) async => ParkingWhatsAppSendResult.fromWire(
+    await _call(<String, dynamic>{
+      'businessId': businessId,
+      'carId': carId,
+      'action': 'send_whatsapp',
+    }, timeout: const Duration(seconds: 60)),
+  );
+
+  @override
+  Future<ParkingWhatsAppLastStatus?> lastStatus({
+    required String businessId,
+    required String carId,
+  }) async => ParkingWhatsAppLastStatus.fromWire(
+    await _call(<String, dynamic>{
+      'businessId': businessId,
+      'carId': carId,
+      'action': 'whatsapp_status',
+    }),
+  );
 }
 
 // ---------------------------------------------------------------------------
 // The messages on one parked car.
 // ---------------------------------------------------------------------------
 
-enum ParkingMessageKind { parked, receipt, welcome, invoice }
+enum ParkingMessageKind { parked, receipt, welcome, invoice, left }
 
 enum ParkingMessageStatus { queued, sent, failed, stopped, skipped }
+
+/// A message kind as the server writes it; null for one this app does not know.
+ParkingMessageKind? parkingMessageKindOf(Object? wire) =>
+    switch ('${wire ?? ''}'.trim()) {
+      'parked' => ParkingMessageKind.parked,
+      'receipt' => ParkingMessageKind.receipt,
+      'welcome' => ParkingMessageKind.welcome,
+      'invoice' => ParkingMessageKind.invoice,
+      'left' => ParkingMessageKind.left,
+      _ => null,
+    };
+
+/// A message status as the server writes it; null for one this app does not
+/// know.
+ParkingMessageStatus? parkingMessageStatusOf(Object? wire) =>
+    switch ('${wire ?? ''}'.trim()) {
+      'queued' => ParkingMessageStatus.queued,
+      'sent' => ParkingMessageStatus.sent,
+      'failed' => ParkingMessageStatus.failed,
+      'stopped' => ParkingMessageStatus.stopped,
+      'skipped' => ParkingMessageStatus.skipped,
+      _ => null,
+    };
 
 /// One `parkingMessages` row, as the car's details list it.
 class ParkingMessage {
@@ -512,21 +591,8 @@ class ParkingMessage {
 
   /// Null for a row of a kind or status this app does not know.
   static ParkingMessage? fromMap(String id, Map<String, dynamic> data) {
-    final kind = switch ('${data['kind'] ?? ''}') {
-      'parked' => ParkingMessageKind.parked,
-      'receipt' => ParkingMessageKind.receipt,
-      'welcome' => ParkingMessageKind.welcome,
-      'invoice' => ParkingMessageKind.invoice,
-      _ => null,
-    };
-    final status = switch ('${data['status'] ?? ''}') {
-      'queued' => ParkingMessageStatus.queued,
-      'sent' => ParkingMessageStatus.sent,
-      'failed' => ParkingMessageStatus.failed,
-      'stopped' => ParkingMessageStatus.stopped,
-      'skipped' => ParkingMessageStatus.skipped,
-      _ => null,
-    };
+    final kind = parkingMessageKindOf(data['kind']);
+    final status = parkingMessageStatusOf(data['status']);
     if (kind == null || status == null) return null;
     DateTime? at(Object? v) {
       if (v is DateTime) return v;
@@ -640,3 +706,144 @@ Map<String, ParkingMessage> parkingInvoiceStatusByCustomer(
   }
   return byKey;
 }
+
+// ---------------------------------------------------------------------------
+// "Send on WhatsApp" and the car's last message (docs/PARKING_LEFT_WHATSAPP.md
+// §2 and §4).
+// ---------------------------------------------------------------------------
+
+/// What `send_whatsapp` answered. [status] is null for an answer this app
+/// cannot read (shown as a generic failure, never as a success).
+class ParkingWhatsAppSendResult {
+  const ParkingWhatsAppSendResult({
+    required this.kind,
+    required this.status,
+    this.error = '',
+  });
+
+  /// Which message went: the parked one while the car is on the lot, the left
+  /// one once it has gone. Null when the server did not say.
+  final ParkingMessageKind? kind;
+  final ParkingMessageStatus? status;
+
+  /// What Meta said when [status] is failed.
+  final String error;
+
+  bool get sent => status == ParkingMessageStatus.sent;
+
+  factory ParkingWhatsAppSendResult.fromWire(Object? data) {
+    final map = data is Map ? data : const {};
+    return ParkingWhatsAppSendResult(
+      kind: parkingMessageKindOf(map['kind']),
+      status: parkingMessageStatusOf(map['status']),
+      error: '${map['error'] ?? ''}'.trim(),
+    );
+  }
+}
+
+/// `whatsapp_status`: the newest WhatsApp message of one car.
+class ParkingWhatsAppLastStatus {
+  const ParkingWhatsAppLastStatus({
+    required this.kind,
+    required this.status,
+    this.error = '',
+    this.at,
+  });
+
+  final ParkingMessageKind? kind;
+  final ParkingMessageStatus status;
+  final String error;
+  final DateTime? at;
+
+  /// Null when the car has no message (an empty answer), or one this app
+  /// cannot read.
+  static ParkingWhatsAppLastStatus? fromWire(Object? data) {
+    if (data is! Map) return null;
+    final status = parkingMessageStatusOf(data['status']);
+    if (status == null) return null;
+    return ParkingWhatsAppLastStatus(
+      kind: parkingMessageKindOf(data['kind']),
+      status: status,
+      error: '${data['error'] ?? ''}'.trim(),
+      at: _wireTime(data['atMs'] ?? data['at']),
+    );
+  }
+}
+
+/// What the last-message line says, before it is put into words.
+enum ParkingWhatsAppLine {
+  /// Nothing has been sent for this car yet.
+  none,
+
+  /// Waiting to go out.
+  queued,
+  sent,
+
+  /// Not delivered: check the number.
+  failed,
+
+  /// The customer replied STOP.
+  stopped,
+}
+
+/// The line for [last] (null: nothing sent). A skipped message did not go and
+/// is not worth a line, so it reads as nothing sent.
+ParkingWhatsAppLine parkingWhatsAppLineOf(ParkingWhatsAppLastStatus? last) =>
+    switch (last?.status) {
+      null || ParkingMessageStatus.skipped => ParkingWhatsAppLine.none,
+      ParkingMessageStatus.queued => ParkingWhatsAppLine.queued,
+      ParkingMessageStatus.sent => ParkingWhatsAppLine.sent,
+      ParkingMessageStatus.failed => ParkingWhatsAppLine.failed,
+      ParkingMessageStatus.stopped => ParkingWhatsAppLine.stopped,
+    };
+
+/// Whether a parked car's details offer "Send on WhatsApp" and the last-message
+/// line: the business switch is on, the viewer may act on parking, and the car
+/// is the lot's own walk-up that is neither a team member's car nor voided.
+bool parkingWhatsAppSendOffered({
+  required bool switchOn,
+  required bool canSend,
+  required bool isBusinessEntry,
+  required bool isTeamCar,
+  required bool isVoided,
+}) => switchOn && canSend && isBusinessEntry && !isTeamCar && !isVoided;
+
+/// Whether a saved edit makes the server resend the car's last message: the
+/// phone moved to a number, on a car that is messaged, with the switch on
+/// (docs/PARKING_LEFT_WHATSAPP.md §3). [changes] is what the save sent.
+bool parkingPhoneEditResends({
+  required Map<String, dynamic> changes,
+  required bool switchOn,
+  required bool isTeamCar,
+  required bool isVoided,
+}) =>
+    switchOn &&
+    !isTeamCar &&
+    !isVoided &&
+    changes.containsKey('customerPhone') &&
+    '${changes['customerPhone'] ?? ''}'.trim().isNotEmpty;
+
+/// Whether a contact fix makes the server resend: its answer's `changed`
+/// includes the phone, with the switch on, on a messaged car.
+bool parkingContactEditResends({
+  required Iterable<String> changed,
+  required bool switchOn,
+  required bool isTeamCar,
+  required bool isVoided,
+}) =>
+    switchOn && !isTeamCar && !isVoided && changed.contains('customerPhone');
+
+/// Live `businesses/{id}.parkingWhatsApp.enabled`. Staff with business access
+/// may read the record; a refused or missing read is "off", so nothing is
+/// offered that the server would refuse.
+Stream<bool> parkingWhatsAppEnabledStream(
+  String businessId, {
+  FirebaseFirestore? firestore,
+}) => (firestore ?? FirebaseFirestore.instance)
+    .collection('businesses')
+    .doc(businessId)
+    .snapshots()
+    .map((doc) {
+      final value = doc.data()?['parkingWhatsApp'];
+      return value is Map && value['enabled'] == true;
+    });

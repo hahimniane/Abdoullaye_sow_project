@@ -11387,5 +11387,99 @@
   "labelPrinterSendDetailsBusy": "Collecting details…",
   "labelPrinterSendDetailsFailed": "We could not collect the printer details. Try again.",
   "labelPrinterDetailsSubject": "Laawol printer details",
-  "labelPrinterGenericFailedHint": "If it keeps failing, open Printer settings and tap “Send printer details” so we can add support for this printer."
+  "labelPrinterGenericFailedHint": "If it keeps failing, open Printer settings and tap “Send printer details” so we can add support for this printer.",
+  "parkingWaKindLeft": "Car left",
+  "@parkingWaKindLeft": {
+    "description": "Kind of WhatsApp message: sent when the car left the lot (the invoice or receipt)."
+  },
+  "parkingWaSendButton": "Send on WhatsApp",
+  "@parkingWaSendButton": {
+    "description": "Button on a parked car's details: sends the customer the car's current WhatsApp message (parked or left) right now."
+  },
+  "parkingWaSendSending": "Sending…",
+  "@parkingWaSendSending": {
+    "description": "Button label while the WhatsApp message is being sent from a parked car's details."
+  },
+  "parkingWaSendSent": "Sent on WhatsApp.",
+  "@parkingWaSendSent": {
+    "description": "Result shown under the Send on WhatsApp button when the message went out."
+  },
+  "parkingWaSendFailed": "WhatsApp could not deliver the message. Check the number.",
+  "@parkingWaSendFailed": {
+    "description": "Result shown when WhatsApp (Meta) did not accept the message sent from the Send on WhatsApp button."
+  },
+  "parkingWaSendStopped": "This customer has stopped WhatsApp messages.",
+  "@parkingWaSendStopped": {
+    "description": "Result shown when the customer replied STOP, so the message was not sent."
+  },
+  "parkingWaSendError": "Could not send the message. Try again.",
+  "@parkingWaSendError": {
+    "description": "Generic failure when the Send on WhatsApp call fails for a reason the app does not recognise."
+  },
+  "parkingWaErrNotMessageable": "This car's customer can't be messaged (a team member's car, a voided car, or an online booking).",
+  "@parkingWaErrNotMessageable": {
+    "description": "Refusal: the car is not one whose customer gets WhatsApp messages."
+  },
+  "parkingWaErrNoPhone": "Add the customer's WhatsApp number first.",
+  "@parkingWaErrNoPhone": {
+    "description": "Refusal: the car has no customer phone number to message."
+  },
+  "parkingWaErrNeedsCountryCode": "Add the country code to the number.",
+  "@parkingWaErrNeedsCountryCode": {
+    "description": "Refusal: the customer's phone number has no country code, so WhatsApp cannot reach it."
+  },
+  "parkingWaErrSendLimit": "This car's message was sent 5 times today. Try again tomorrow.",
+  "@parkingWaErrSendLimit": {
+    "description": "Refusal: the daily limit of five manual WhatsApp sends for one car was reached."
+  },
+  "parkingWaLastNone": "WhatsApp: nothing sent yet.",
+  "@parkingWaLastNone": {
+    "description": "Line on a parked car's details: no WhatsApp message has gone out for this car."
+  },
+  "parkingWaLastQueued": "WhatsApp: sending…",
+  "@parkingWaLastQueued": {
+    "description": "Line on a parked car's details: the last WhatsApp message is queued and has not gone out yet."
+  },
+  "parkingWaLastSent": "WhatsApp: sent {when}",
+  "@parkingWaLastSent": {
+    "description": "Line on a parked car's details: the last WhatsApp message went out at the given date and time.",
+    "placeholders": {
+      "when": {
+        "type": "String",
+        "example": "Nov 9, 2026 2:05 PM"
+      }
+    }
+  },
+  "parkingWaLastFailed": "WhatsApp: not delivered. Check the number.",
+  "@parkingWaLastFailed": {
+    "description": "Line on a parked car's details: the last WhatsApp message did not get through."
+  },
+  "parkingWaLastStopped": "WhatsApp: the customer stopped messages.",
+  "@parkingWaLastStopped": {
+    "description": "Line on a parked car's details: the customer replied STOP, so nothing is sent."
+  },
+  "parkingWaPhoneResent": "Saved. The last message will be resent to the new number.",
+  "@parkingWaPhoneResent": {
+    "description": "Snackbar after staff change a parked car's customer phone while WhatsApp messages are on."
+  },
+  "parkingErrorCustomerName": "Enter the customer's name.",
+  "@parkingErrorCustomerName": {
+    "description": "Validation and refusal: the customer's name cannot be empty when fixing a parked car's contact details."
+  },
+  "parkingErrContactTeamCar": "A team member's car takes its name and number from the team member.",
+  "@parkingErrContactTeamCar": {
+    "description": "Refusal: the contact details of a team member's car cannot be edited on the car."
+  },
+  "parkingErrContactNotBusiness": "Only cars the business recorded can be changed here.",
+  "@parkingErrContactNotBusiness": {
+    "description": "Refusal: contact details can only be changed on a walk-up the business recorded itself."
+  },
+  "parkingErrContactPaymentLink": "A payment link needs a phone number or an email address.",
+  "@parkingErrContactPaymentLink": {
+    "description": "Refusal: a car paid by payment link must keep a phone number or an email address."
+  },
+  "parkingPaidContactOnly": "This parking has been paid for. Only the customer's name, phone and email can still be changed.",
+  "@parkingPaidContactOnly": {
+    "description": "Banner on a paid parked car's details: the money and dates are locked but contact details can be fixed."
+  }
 }
