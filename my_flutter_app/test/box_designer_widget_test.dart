@@ -190,7 +190,10 @@ void main() {
       expect(find.text('Longueur'), findsOneWidget);
       expect(find.text('Largeur'), findsOneWidget);
       expect(find.text('Hauteur'), findsOneWidget);
-      expect(_badge(tester), allOf(startsWith('Moyenne · '), contains('35,00')));
+      expect(
+        _badge(tester),
+        allOf(startsWith('Moyenne · '), contains('35,00')),
+      );
       expect(find.text('Faites glisser pour tourner'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
@@ -228,7 +231,10 @@ void main() {
       expect(full, findsOneWidget);
       final tall = tester
           .getSize(
-            find.descendant(of: full, matching: find.byKey(const Key('box-scene'))),
+            find.descendant(
+              of: full,
+              matching: find.byKey(const Key('box-scene')),
+            ),
           )
           .height;
       expect(tall, greaterThan(small * 2));
@@ -261,6 +267,18 @@ void main() {
     testWidgets('French: the button says so', (tester) async {
       await _pump(tester, const _Host(), locale: const Locale('fr'));
       expect(find.byTooltip('Voir en plein écran'), findsOneWidget);
+    });
+
+    testWidgets('French: the read-only inches say "po", not "in"', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        const BoxDesigner(dims: BoxDims(24, 18, 18)),
+        locale: const Locale('fr'),
+      );
+      expect(find.text('24 × 18 × 18 po'), findsOneWidget);
+      expect(find.text('24 × 18 × 18 in'), findsNothing);
     });
 
     testWidgets('the sheet gives the picture most of the phone height', (

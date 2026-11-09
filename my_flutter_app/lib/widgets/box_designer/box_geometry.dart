@@ -93,8 +93,11 @@ class BoxDims {
   Map<String, Object?> toMap() => {'l': l, 'w': w, 'h': h};
 
   /// "20 × 16 × 14 in" - the same line every screen shows.
-  String get text =>
-      '${inchesText(l)} × ${inchesText(w)} × ${inchesText(h)} in';
+  String get text => textIn('in');
+
+  /// The sides with the unit the reader uses ("in" / "po").
+  String textIn(String unit) =>
+      '${inchesText(l)} × ${inchesText(w)} × ${inchesText(h)} $unit';
 
   BoxDims copyWith({double? l, double? w, double? h}) =>
       BoxDims(l ?? this.l, w ?? this.w, h ?? this.h);

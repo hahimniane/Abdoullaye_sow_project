@@ -333,7 +333,7 @@ class _BoxPieceDetailState extends State<BoxPieceDetail> {
                   ),
                   if (dims != null)
                     Text(
-                      dims.text,
+                      dims.textIn(l10n.boxDesignerInchesUnit),
                       key: const Key('box-detail-inches'),
                       style: const TextStyle(
                         fontSize: 12.5,

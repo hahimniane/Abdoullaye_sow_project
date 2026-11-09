@@ -300,8 +300,12 @@ class _BoxDesignerState extends State<BoxDesigner> {
           borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
           child: Semantics(
             label: pageReady
-                ? l10n.boxDesignerSemanticsScene(dims.text)
-                : l10n.boxDesignerSemantics(dims.text),
+                ? l10n.boxDesignerSemanticsScene(
+                    dims.textIn(l10n.boxDesignerInchesUnit),
+                  )
+                : l10n.boxDesignerSemantics(
+                    dims.textIn(l10n.boxDesignerInchesUnit),
+                  ),
             container: true,
             child: Container(
               height: widget.sceneHeight,
@@ -376,12 +380,17 @@ class _BoxDesignerState extends State<BoxDesigner> {
                       ),
                     ),
                     if (widget.allowFullScreen)
+                      // Bottom right, across from the drag hint: the
+                      // person's height label rides along the top edge as
+                      // the scene turns, so a corner up there would cover it.
                       Positioned(
-                        top: AppSpacing.sm,
                         right: AppSpacing.sm,
+                        bottom: AppSpacing.sm,
                         child: Material(
                           color: Colors.white.withValues(alpha: 0.92),
-                          shape: const CircleBorder(),
+                          shape: const CircleBorder(
+                            side: BorderSide(color: AppColors.rule),
+                          ),
                           child: IconButton(
                             key: const Key('box-full-screen'),
                             tooltip: l10n.boxDesignerFullScreen,
@@ -460,7 +469,7 @@ class _BoxDesignerState extends State<BoxDesigner> {
           ..._controls(l10n)
         else
           Text(
-            dims.text,
+            dims.textIn(l10n.boxDesignerInchesUnit),
             key: const Key('box-readonly-dims'),
             style: const TextStyle(
               fontSize: 14,
@@ -612,7 +621,7 @@ class BoxDesignerFullScreen extends StatelessWidget {
 
   /// Room the designer needs around its picture when read-only: the badge,
   /// the scale note, the model credit and the inches.
-  static const double _chrome = 150;
+  static const double _chrome = 120;
 
   @override
   Widget build(BuildContext context) {
