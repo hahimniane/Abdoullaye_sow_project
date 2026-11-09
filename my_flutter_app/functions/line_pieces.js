@@ -151,6 +151,34 @@ function pieceErrors(raw, max = MAX_PIECES) {
 }
 
 /**
+ * Every customer package carries its price (owner, 2026-11-09): Laawol's
+ * bill to a business can be a share of its package prices, so a package
+ * saved without one bills nothing. Each piece needs a price typed in - $0 is
+ * fine, so a bundle can be priced on one piece - and the pieces together
+ * must come to more than $0. A pickup fee is not a package price.
+ * Docs: docs/PACKAGE_PRICE_REQUIRED.md.
+ *
+ * @param {*} raw Pieces from a request or a stored line.
+ * @return {string[]} [] or the codes `piece_price_required` (a piece has no
+ *   price) and/or `package_price_required` (every price is $0).
+ */
+function piecePriceRequiredErrors(raw) {
+  const list = Array.isArray(raw) ? raw : [];
+  if (list.length === 0) return [];
+  const errors = [];
+  let total = 0;
+  let missing = false;
+  for (const item of list) {
+    const cents = piecePriceOf(asRow(item).priceCents);
+    if (cents === null) missing = true;
+    else total += cents;
+  }
+  if (missing) errors.push("piece_price_required");
+  else if (total <= 0) errors.push("package_price_required");
+  return errors;
+}
+
+/**
  * The pieces as stored: kind, description, size and price cleaned, and an
  * id each. A usable id that is not a repeat is kept (an edit keeps its
  * pieces); any other gets the first free `p<n>`.
@@ -725,6 +753,7 @@ module.exports = {
   piecePriceOf,
   pieceKindOf,
   pieceErrors,
+  piecePriceRequiredErrors,
   normalizePieces,
   distributeCents,
   linePriceOf,

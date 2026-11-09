@@ -31,6 +31,7 @@ const {
   pickupFeeOf,
   pieceErrors,
   piecePriceOf,
+  piecePriceRequiredErrors,
 } = require("./line_pieces");
 
 const text = (value, max = 200) => String(value ?? "").trim().slice(0, max);
@@ -140,7 +141,8 @@ function cleanReceivePickupFee(raw, request) {
  *   `estimate_piece_unknown` (an id not on the request, or twice),
  *   `pieces_required`, `too_many_pieces`, `piece_kind_invalid`,
  *   `piece_description_required`, `text_too_long`, `size_invalid`,
- *   `price_invalid`, `price_required` (some priced, some not).
+ *   `price_invalid`, `price_required` (a piece has no price),
+ *   `package_price_required` (every price is $0).
  */
 function cleanReceivePieces(raw, request) {
   const errors = [];
@@ -196,9 +198,13 @@ function cleanReceivePieces(raw, request) {
       add(RECEIVE_ERROR_CODES[code] || code);
     }
   }
-  const priced = typed.filter((p) => piecePriceOf(p.priceCents) !== null);
-  if (priced.length > 0 && priced.length < typed.length) {
-    add("price_required");
+  // Every piece is priced and the package is more than $0
+  // (docs/PACKAGE_PRICE_REQUIRED.md): a request is always a customer's.
+  // A price typed wrong already has its own error.
+  if (!errors.includes("price_invalid")) {
+    for (const code of piecePriceRequiredErrors(typed)) {
+      add(code === "piece_price_required" ? "price_required" : code);
+    }
   }
   const pieces = normalizePieces(typed);
   const kept = new Set(pieces.map((p) => p.id));

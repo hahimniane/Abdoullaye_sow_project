@@ -246,6 +246,7 @@ module.exports = {
   PAYMENT_STATUS,
   MAX_CENTS,
   priceCentsOf,
+  priceGiven,
   paidCentsOf,
   priceErrors,
   linePriceRecord,

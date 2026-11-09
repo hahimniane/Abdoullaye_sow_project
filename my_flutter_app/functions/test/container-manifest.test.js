@@ -159,7 +159,7 @@ describe("a line on the list", () => {
         ["vin_required"]);
     assert.deepEqual(
         validateContainerLine({kind: "barrels", ownerKind: "customer",
-          customerName: "Fatou", receiverName: "Mariama"}),
+          customerName: "Fatou", receiverName: "Mariama", priceCents: 9000}),
         ["quantity_required"]);
     assert.deepEqual(
         validateContainerLine({kind: "other", quantity: 2, ownerKind: "stock"}),
@@ -194,7 +194,7 @@ describe("a line on the list", () => {
   it("refuses an old app's line with no receiver in words it can show", () => {
     const errors = validateContainerLine({kind: "barrels", quantity: 2,
       ownerKind: "customer", customerName: "Fatou",
-      customerPhone: "+16465550100"});
+      customerPhone: "+16465550100", priceCents: 9000});
     assert.deepEqual(errors, ["receiver_name_required"]);
     assert.equal(CONTAINER_MESSAGES[errors[0]], "Enter the receiver's name.");
   });
@@ -202,6 +202,7 @@ describe("a line on the list", () => {
   it("stores the receiver as the sender when they are the same person",
       () => {
         const input = {kind: "barrels", quantity: 1, ownerKind: "customer",
+          priceCents: 9000,
           customerName: "stale", customerPhone: "not a phone",
           receiverName: " Mariama Bah ", receiverPhone: "+224 620 00 00 00",
           senderIsReceiver: true};
@@ -274,7 +275,7 @@ describe("a line on the list", () => {
 
 describe("who hears about a line", () => {
   const customerLine = (extra = {}) => ({
-    kind: "barrels", quantity: 2, ownerKind: "customer",
+    kind: "barrels", quantity: 2, ownerKind: "customer", priceCents: 9000,
     customerName: "Fatou Diallo", receiverName: "Mariama", ...extra,
   });
 
@@ -462,7 +463,7 @@ describe("keeping the tallies without re-reading every line", () => {
 
 describe("editing a line after it was added", () => {
   const barrels = (extra = {}) => containerLineRecord({
-    kind: "barrels", quantity: 3, ownerKind: "customer",
+    kind: "barrels", quantity: 3, ownerKind: "customer", priceCents: 9000,
     customerName: "Fatou", customerPhone: "+16465550100",
     receiverName: "Mariama", receiverPhone: "+224620000000", ...extra,
   }, {containerId: "c1"});
@@ -774,7 +775,7 @@ describe("working in groups", () => {
 // a loading list by its own token.
 describe("a package waiting for a container", () => {
   const waiting = (extra = {}) => ({kind: "barrels", quantity: 3,
-    ownerKind: "customer", customerName: "Fatou Diallo",
+    priceCents: 9000, ownerKind: "customer", customerName: "Fatou Diallo",
     customerPhone: "+16465550100", receiverName: "Mariama Bah",
     receiverPhone: "+224620000000", destinationCountryId: "gn",
     destinationCountryName: "Guinea", ...extra});
@@ -847,16 +848,21 @@ describe("a package waiting for a container", () => {
   });
 
   describe("price", () => {
-    it("is whole cents above zero, or none yet", () => {
-      assert.deepEqual(validateContainerLine(waiting({priceCents: 15000})),
-          []);
-      assert.deepEqual(validateContainerLine(waiting({priceCents: null})),
-          []);
-      for (const bad of [0, -5, 12.5, "abc", 100000001]) {
-        assert.deepEqual(validateContainerLine(waiting({priceCents: bad})),
-            ["price_invalid"], String(bad));
-      }
-    });
+    it("is whole cents above zero, and a customer's package always has one",
+        () => {
+          assert.deepEqual(validateContainerLine(waiting({priceCents: 15000})),
+              []);
+          // docs/PACKAGE_PRICE_REQUIRED.md: no price, no save - except the
+          // business's own stock.
+          assert.deepEqual(validateContainerLine(waiting({priceCents: null})),
+              ["package_price_required"]);
+          assert.deepEqual(validateContainerLine(waiting({priceCents: null,
+            ownerKind: "stock"})), []);
+          for (const bad of [0, -5, 12.5, "abc", 100000001]) {
+            assert.deepEqual(validateContainerLine(waiting({priceCents: bad})),
+                ["price_invalid"], String(bad));
+          }
+        });
 
     it("never believes a request about what was paid", () => {
       assert.deepEqual(validateContainerLine(waiting({priceCents: 15000,
@@ -872,7 +878,8 @@ describe("a package waiting for a container", () => {
       assert.deepEqual(validateContainerLineEdit(row,
           {priceCents: 4999}, false), ["price_below_paid"]);
       assert.deepEqual(validateContainerLineEdit(row,
-          {priceCents: null}, false), ["price_below_paid"]);
+          {priceCents: null}, false),
+      ["price_below_paid", "package_price_required"]);
       // A request cannot lower the bar by claiming it paid less.
       assert.deepEqual(validateContainerLineEdit(row,
           {priceCents: 4000, paidCents: 0}, false), ["price_below_paid"]);
@@ -985,7 +992,7 @@ describe("a package waiting for a container", () => {
       const row = stored();
       const {next, changes} = edit(row, {quantity: 5, lengthIn: 30,
         widthIn: 20, heightIn: 10, destinationCountryId: "sn",
-        destinationCountryName: "Senegal", priceCents: 9000});
+        destinationCountryName: "Senegal", priceCents: 9500});
       assert.deepEqual(changes, ["quantity", "destinationCountryId",
         "destinationCountryName", "lengthIn", "widthIn", "heightIn",
         "priceCents"]);
@@ -1657,6 +1664,7 @@ describe("package proof fields", () => {
     declaredValueCents: 125000,
   };
   const dropped = (extra = {}) => ({kind: "barrels", quantity: 3,
+    priceCents: 9000,
     ownerKind: "customer", customerName: "Fatou Diallo",
     customerPhone: "+16465550100", receiverName: "Mariama Bah",
     receiverPhone: "+224620000000", destinationCountryId: "gn",
@@ -1752,7 +1760,7 @@ describe("ships by: sea or air", () => {
   const {lineShipModeOf, shipModeMismatch, shipModeMismatchMessage} =
     manifest;
   const waiting = (extra = {}) => ({kind: "barrels", quantity: 3,
-    ownerKind: "customer", customerName: "Fatou Diallo",
+    priceCents: 9000, ownerKind: "customer", customerName: "Fatou Diallo",
     customerPhone: "+16465550100", receiverName: "Mariama Bah",
     receiverPhone: "+224620000000", destinationCountryId: "gn",
     destinationCountryName: "Guinea", ...extra});

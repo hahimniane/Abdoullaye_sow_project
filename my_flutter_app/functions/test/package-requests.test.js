@@ -738,10 +738,13 @@ describe("the line Received writes (§7 line fields)", () => {
     ["estimate_piece_unknown", "price_invalid"]);
     assert.deepEqual(rr.cleanReceivePieces([{id: "p1"}, {id: "p1"}], request)
         .errors, ["estimate_piece_unknown"]);
+    // Every piece is priced now (docs/PACKAGE_PRICE_REQUIRED.md).
     const none = rr.cleanReceivePieces([{id: "p1", priceCents: null},
       {id: "p2", priceCents: null}], request);
-    assert.deepEqual(none.errors, []);
-    assert.equal(rr.receivedTotalCents(none.pieces), null);
+    assert.deepEqual(none.errors, ["price_required"]);
+    assert.deepEqual(rr.cleanReceivePieces([{id: "p1", priceCents: 0},
+      {id: "p2", priceCents: 0}], request).errors,
+    ["package_price_required"]);
   });
 
   it("writes one waiting line with every §7 field", () => {

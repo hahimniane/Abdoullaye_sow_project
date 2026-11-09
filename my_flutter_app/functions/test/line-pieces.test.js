@@ -30,7 +30,8 @@ const plain = (value) => JSON.parse(JSON.stringify(value ?? null));
 describe("the shared line-pieces cases", () => {
   it("covers every rule the mirrors must keep", () => {
     const covered = new Set(cases.map((c) => c.fn));
-    for (const fn of ["pieceErrors", "normalizePieces", "distributeCents",
+    for (const fn of ["pieceErrors", "piecePriceRequiredErrors",
+      "normalizePieces", "distributeCents",
       "linePieces", "lineCounts", "piecesTotalCents", "piecesSummaryFields",
       "pieceSummaryText", "linePiecesWhat", "lineGroupSummary",
       "paidFloorForLine", "splitPieces", "nextPartIndex",
@@ -60,10 +61,31 @@ describe("lines with pieces", () => {
     assert.deepEqual(validateContainerLine({...customer, pieces: []}),
         ["pieces_required"]);
     assert.deepEqual(validateContainerLine({...customer,
-      pieces: [{kind: "box"}]}), ["piece_description_required"]);
+      pieces: [{kind: "box", priceCents: 4000}]}),
+    ["piece_description_required"]);
     // A car is a car, whatever pieces ride along.
     assert.ok(validateContainerLine({...customer, kind: "car",
       pieces: [{kind: "barrel"}]}).includes("vin_required"));
+  });
+
+  // docs/PACKAGE_PRICE_REQUIRED.md (owner, 2026-11-09).
+  it("needs a price on every piece of a customer's package", () => {
+    const priced = (...cents) => ({...customer, pieces: cents.map((c) =>
+      ({kind: "barrel", priceCents: c}))});
+    assert.deepEqual(validateContainerLine(priced(9000, null)),
+        ["piece_price_required"]);
+    // $0 on a piece is fine (a bundle priced on one piece)...
+    assert.deepEqual(validateContainerLine(priced(9000, 0)), []);
+    // ...but not on all of them.
+    assert.deepEqual(validateContainerLine(priced(0, 0)),
+        ["package_price_required"]);
+    // The business's own stock has nothing to price.
+    assert.deepEqual(validateContainerLine({...priced(null),
+      ownerKind: "stock", receiverName: ""}), []);
+    assert.equal(CONTAINER_MESSAGES.piece_price_required,
+        "Enter a price for every piece.");
+    assert.equal(CONTAINER_MESSAGES.package_price_required,
+        "Enter the package's price: more than $0.");
   });
 
   it("stores the pieces, the counts, the total and the old summary", () => {

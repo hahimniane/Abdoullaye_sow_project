@@ -2586,6 +2586,106 @@
    ],
    "note": "code -2",
    "expected": "CL-K7M4P2-2"
+  },
+  {
+   "fn": "piecePriceRequiredErrors",
+   "args": [
+    [
+     {
+      "kind": "barrel",
+      "priceCents": 9000
+     },
+     {
+      "kind": "box",
+      "description": "Clothes",
+      "priceCents": 4000
+     }
+    ]
+   ],
+   "note": "every piece priced",
+   "expected": []
+  },
+  {
+   "fn": "piecePriceRequiredErrors",
+   "args": [
+    [
+     {
+      "kind": "barrel",
+      "priceCents": 9000
+     },
+     {
+      "kind": "box",
+      "description": "Clothes"
+     }
+    ]
+   ],
+   "note": "a piece with no price",
+   "expected": [
+    "piece_price_required"
+   ]
+  },
+  {
+   "fn": "piecePriceRequiredErrors",
+   "args": [
+    [
+     {
+      "kind": "barrel",
+      "priceCents": 9000
+     },
+     {
+      "kind": "barrel",
+      "priceCents": 0
+     }
+    ]
+   ],
+   "note": "a bundle priced on one piece",
+   "expected": []
+  },
+  {
+   "fn": "piecePriceRequiredErrors",
+   "args": [
+    [
+     {
+      "kind": "barrel",
+      "priceCents": 0
+     },
+     {
+      "kind": "barrel",
+      "priceCents": 0
+     }
+    ]
+   ],
+   "note": "every price $0",
+   "expected": [
+    "package_price_required"
+   ]
+  },
+  {
+   "fn": "piecePriceRequiredErrors",
+   "args": [
+    [
+     {
+      "kind": "barrel",
+      "priceCents": ""
+     },
+     {
+      "kind": "barrel",
+      "priceCents": 0
+     }
+    ]
+   ],
+   "note": "blank counts as no price",
+   "expected": [
+    "piece_price_required"
+   ]
+  },
+  {
+   "fn": "piecePriceRequiredErrors",
+   "args": [
+    []
+   ],
+   "note": "no pieces is pieceErrors' job",
+   "expected": []
   }
  ]
 }

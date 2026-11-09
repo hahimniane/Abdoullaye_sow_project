@@ -33,6 +33,7 @@
 const {
   paidCentsOf,
   priceErrors,
+  priceGiven,
   linePriceRecord,
 } = require("./container_payments");
 const {OCEAN_CARRIERS} = require("./ocean_carrier_catalog");
@@ -42,6 +43,7 @@ const {
   lineHasPieces,
   lineSourceOf,
   pieceErrors,
+  piecePriceRequiredErrors,
   pieceSummaryText,
   piecesLineFields,
   normalizePieces,
@@ -530,6 +532,18 @@ function validateContainerLine(input, paidCents = 0) {
   } else {
     errors.push(...sizeErrors(input));
     errors.push(...priceErrors(input?.priceCents, paidCents));
+  }
+  // Every customer package carries its price (docs/PACKAGE_PRICE_REQUIRED.md);
+  // a car is priced elsewhere and the business's own stock sells nothing.
+  if (owner === "customer" && kind !== "car") {
+    if (pieced) {
+      // A price typed wrong already has its own error.
+      if (!errors.includes("piece_price_invalid")) {
+        errors.push(...piecePriceRequiredErrors(input.pieces));
+      }
+    } else if (!priceGiven(input?.priceCents)) {
+      errors.push("package_price_required");
+    }
   }
   // How it ships: sea or air; nothing sent is sea.
   const mode = input?.shipMode;
@@ -1635,6 +1649,8 @@ const CONTAINER_MESSAGES = Object.freeze({
     "Enter a piece's length, width and height in inches, or leave all " +
     "three empty.",
   piece_price_invalid: "Enter each piece's price in dollars, zero or more.",
+  piece_price_required: "Enter a price for every piece.",
+  package_price_required: "Enter the package's price: more than $0.",
   piece_count_invalid:
     "Choose how many pieces go in: from 1 to the number the package has.",
   line_has_parts:
