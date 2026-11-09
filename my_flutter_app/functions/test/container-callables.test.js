@@ -62,10 +62,23 @@ const carLine = (vin = VIN) => ({kind: "car", vinNumber: vin,
   ownerKind: "customer", customerName: "Fatou Diallo",
   customerPhone: "+16465550100", receiverName: "Mariama Bah",
   receiverPhone: "+224620000000"});
+// A customer's package always carries its price
+// (docs/PACKAGE_PRICE_REQUIRED.md): an old-style line gives `priceCents`.
 const barrelLine = (quantity = 3) => ({kind: "barrels", quantity,
-  ownerKind: "customer", customerName: "Fatou Diallo",
+  priceCents: 9000, ownerKind: "customer", customerName: "Fatou Diallo",
   customerPhone: "+16465550100", receiverName: "Mariama Bah",
   receiverPhone: "+224620000000"});
+
+// A line as it was saved before docs/PACKAGE_PRICE_REQUIRED.md: no price on
+// it or on any piece. Such lines still exist in production and must keep
+// working (payments, delivery, status), but can no longer be added through
+// the callables, so a test takes the price off after adding the line.
+async function unpriceLine(lineId) {
+  const ref = db.collection("containerLines").doc(lineId);
+  const pieces = (await ref.get()).get("pieces");
+  await ref.update({priceCents: null, ...(Array.isArray(pieces) ?
+    {pieces: pieces.map((piece) => ({...piece, priceCents: null}))} : {})});
+}
 
 async function linesOf(containerId) {
   const snap = await db.collection("containerLines")
@@ -1066,8 +1079,10 @@ describe("waiting packages", () => {
     destinationCountryName: "Guinea"};
   const SENEGAL = {destinationCountryId: "sn",
     destinationCountryName: "Senegal"};
+  // A customer's package always carries its price
+  // (docs/PACKAGE_PRICE_REQUIRED.md).
   const waitingPackage = (extra = {}) => ({kind: "barrels", quantity: 2,
-    ownerKind: "customer", customerName: "Fatou Diallo",
+    priceCents: 9000, ownerKind: "customer", customerName: "Fatou Diallo",
     customerPhone: "+16465550100", receiverName: "Mariama Bah",
     receiverPhone: "+224620000000", ...GUINEA, ...extra});
   const waitingCar = (vin) => waitingPackage({kind: "car", vinNumber: vin,
@@ -1117,6 +1132,42 @@ describe("waiting packages", () => {
       await assert.rejects(call("addWaitingPackage",
           waitingPackage({ownerKind: "stock"})),
       (error) => error.details?.reasons?.includes("owner_kind_invalid"));
+    });
+
+    // docs/PACKAGE_PRICE_REQUIRED.md: a customer's package is saved with a
+    // price on every piece, adding up to more than $0; stock is exempt.
+    it("refuses a customer's package without a price, not the business's " +
+        "own stock", async () => {
+      const before = (await db.collection("containerLines").get()).size;
+      const refusedWith = (reason) => (error) =>
+        error.code === "invalid-argument" &&
+        error.details?.reasons?.includes(reason) &&
+        error.message === CONTAINER_MESSAGES[reason];
+      // Pieced: a piece with no price named, then pieces all at $0.
+      await assert.rejects(call("addWaitingPackage", waitingPackage({
+        priceCents: undefined, pieces: [{kind: "barrel", priceCents: 9000},
+          {kind: "barrel"}]})), refusedWith("piece_price_required"));
+      await assert.rejects(call("addWaitingPackage", waitingPackage({
+        priceCents: undefined, pieces: [{kind: "barrel", priceCents: 0},
+          {kind: "barrel", priceCents: 0}]})),
+      refusedWith("package_price_required"));
+      // Old style (no pieces): the one price is what is missing.
+      await assert.rejects(call("addWaitingPackage",
+          waitingPackage({priceCents: undefined})),
+      refusedWith("package_price_required"));
+      assert.equal((await db.collection("containerLines").get()).size,
+          before);
+      // A bundle priced on one piece is fine ($0 on the others).
+      await call("addWaitingPackage", waitingPackage({
+        priceCents: undefined, pieces: [{kind: "barrel", priceCents: 9000},
+          {kind: "barrel", priceCents: 0}]}));
+      // The business's own stock sells nothing, so it needs no price.
+      const box = await newContainer();
+      const stock = await call("addContainerLine", {containerId: box,
+        line: {kind: "other", quantity: 2, description: "Tires",
+          ownerKind: "stock"}});
+      assert.equal((await lineRef(stock.lineId).get()).get("ownerKind"),
+          "stock");
     });
 
     it("is refused to staff without the containers section", async () => {
@@ -1709,7 +1760,9 @@ describe("waiting packages", () => {
         });
 
     it("refuses an overpayment, no price, and a bad payment", async () => {
+      // An old line saved before the price rule has no price.
       const unpriced = await call("addWaitingPackage", waitingPackage());
+      await unpriceLine(unpriced.lineId);
       await assert.rejects(pay(
           {lineId: unpriced.lineId, amountCents: 100, method: "cash"}),
       (error) => error.details?.reasons?.includes("price_required"));
@@ -1854,7 +1907,11 @@ describe("waiting packages", () => {
     it("refuses before creating anything", async () => {
       const cases = [
         [{priceCents: 5000, payment: cash()}, "payment_exceeds_balance"],
-        [{payment: cash()}, "price_required"],
+        // No price at all is refused on its own since
+        // docs/PACKAGE_PRICE_REQUIRED.md; the payment's own "price_required"
+        // is named alongside it.
+        [{priceCents: null, payment: cash()}, "price_required"],
+        [{priceCents: null, payment: cash()}, "package_price_required"],
         [{priceCents: 10000, payment: cash({receivedByStaffId: ""})},
           "received_by_required"],
         [{priceCents: 10000, payment: cash({receivedByStaffId: undefined})},
@@ -1878,7 +1935,7 @@ describe("waiting packages", () => {
       }
       // The package's own problems and the payment's, named together.
       await assert.rejects(call("addWaitingPackage", waitingPackage({
-        destinationCountryId: "", payment: cash()})),
+        destinationCountryId: "", priceCents: null, payment: cash()})),
       (error) => error.details?.reasons?.includes(
           "package_destination_required") &&
           error.details?.reasons?.includes("price_required"));
@@ -2199,13 +2256,15 @@ describe("pieces on lines", () => {
   const people = {ownerKind: "customer", customerName: "Fatou Diallo",
     customerPhone: "+16465550100", receiverName: "Mariama Bah",
     receiverPhone: "+224620000000", ...GUINEA};
-  // Two barrels at $100, a box of clothes at $50, a TV not priced yet.
+  // Two barrels at $100, a box of clothes at $50, a TV at $0 (every piece
+  // needs a price typed since docs/PACKAGE_PRICE_REQUIRED.md; $0 is fine on
+  // a piece, so the TV adds nothing to the total).
   const fourPieces = () => [
     {kind: "barrel", priceCents: 10000},
     {kind: "barrel", priceCents: 10000},
     {kind: "box", description: "Clothes", priceCents: 5000,
       sizeIn: {l: 20, w: 20, h: 20}},
-    {kind: "other", description: "TV", priceCents: null},
+    {kind: "other", description: "TV", priceCents: 0},
   ];
   const counter = (extra = {}) => ({...people, pieces: fourPieces(),
     ...extra});
@@ -2237,7 +2296,7 @@ describe("pieces on lines", () => {
     const line = await lineOf(result.lineId);
     assert.deepEqual(line.pieces.map((p) => [p.id, p.kind, p.priceCents]), [
       ["p1", "barrel", 10000], ["p2", "barrel", 10000], ["p3", "box", 5000],
-      ["p4", "other", null]]);
+      ["p4", "other", 0]]);
     assert.deepEqual(line.pieces[2].sizeIn, {l: 20, w: 20, h: 20});
     assert.equal(line.priceCents, 25000);
     assert.equal(line.kind, "other");
@@ -2300,7 +2359,7 @@ describe("pieces on lines", () => {
       [3, 4, "Clothes", "20 × 20 × 20 in"], [4, 4, "TV", ""]]);
     // A legacy line still prints its quantity.
     const legacy = await call("addWaitingPackage",
-        {...people, kind: "barrels", quantity: 2});
+        {...people, kind: "barrels", quantity: 2, priceCents: 9000});
     const old = await call("getPackageLabels",
         {lineIds: [legacy.lineId], copies: 1});
     assert.deepEqual(old.labels.map((l) => [l.packageNumber, l.what]),
@@ -2387,7 +2446,7 @@ describe("pieces on lines", () => {
       assert.equal(staying.containerStatus, "waiting");
       assert.equal(staying.trackingCode, part.trackingCode);
       assert.deepEqual(staying.pieces.map((p) => [p.id, p.priceCents]),
-          [["p3", 5000], ["p4", null]]);
+          [["p3", 5000], ["p4", 0]]);
       assert.equal(staying.priceCents, 5000);
       assert.equal(staying.paidCents, 0);
       assert.equal(staying.rootLineId, root.lineId);
@@ -2623,8 +2682,9 @@ describe("pieces on lines", () => {
   it("an unsplit package's message names its pieces", async () => {
     const box = await newContainer();
     const {lineId} = await call("addContainerLine", {containerId: box,
-      line: {...people, pieces: [{kind: "barrel"}, {kind: "barrel"},
-        {kind: "box", description: "Shoes"}]}});
+      line: {...people, pieces: [{kind: "barrel", priceCents: 9000},
+        {kind: "barrel", priceCents: 9000},
+        {kind: "box", description: "Shoes", priceCents: 4000}]}});
     connectWhatsApp();
     await call("setContainerStatus", {containerId: box, status: "shipped"});
     await recordMoments(box);
@@ -2714,6 +2774,10 @@ describe("delivered at destination", () => {
     for (const line of lines) {
       const {lineId} = await call("addContainerLine",
           {containerId: box, line});
+      // These tests are about delivery, not money: take the price off, as on
+      // a line saved before the price rule, so nothing is owed unless a test
+      // sets a price itself.
+      await unpriceLine(lineId);
       ids.push(lineId);
     }
     await call("setContainerStatus", {containerId: box, status: "shipped"});
@@ -3292,8 +3356,10 @@ describe("scan to load", () => {
   const people = {ownerKind: "customer", customerName: "Fatou Diallo",
     customerPhone: "+16465550100", receiverName: "Mariama Bah",
     receiverPhone: "+224620000000"};
+  // Every piece carries a price (docs/PACKAGE_PRICE_REQUIRED.md).
   const barrels = (n, extra = {}) => ({...people, ...GUINEA,
-    pieces: Array.from({length: n}, () => ({kind: "barrel"})), ...extra});
+    pieces: Array.from({length: n},
+        () => ({kind: "barrel", priceCents: 10000})), ...extra});
   let boxSerial = 0;
   async function box(extra = {}) {
     boxSerial += 1;
@@ -3459,7 +3525,10 @@ describe("scan to load", () => {
             refused("container_locked"));
         await run("setContainerStatus", {containerId: arrived,
           status: "arrived"});
-        await run("updateContainerLine", {lineId, action: "deliver"});
+        // Priced now (docs/PACKAGE_PRICE_REQUIRED.md), so the unpaid balance
+        // is acknowledged to get it delivered.
+        await run("updateContainerLine", {lineId, action: "deliver",
+          acknowledgeBalance: true});
         const loadingBox = await box();
         await assert.rejects(scan(loadingBox, trackingCode),
             refused("line_delivered"));
@@ -3779,7 +3848,8 @@ describe("scan to load", () => {
           const containerId = await box();
           const {lineId} = await run("addContainerLine", {containerId,
             line: {...people, ...GUINEA,
-              pieces: [{kind: "barrel"}, {kind: "barrel"}]}}, S_LOADER);
+              pieces: [{kind: "barrel", priceCents: 10000},
+                {kind: "barrel", priceCents: 10000}]}}, S_LOADER);
           marked(await lineOf(lineId), "hand", S_LOADER);
         });
 
@@ -4328,9 +4398,14 @@ describe("proof on the package", () => {
   const people = {ownerKind: "customer", customerName: "Fatou Diallo",
     customerPhone: "+16465550100", receiverName: "Mariama Bah",
     receiverPhone: "+224620000000"};
-  // Unpriced, so a handover owes nothing unless a test prices it.
+  // Every customer package is saved with a price
+  // (docs/PACKAGE_PRICE_REQUIRED.md), so a handover would owe the balance.
+  // `arrivedBox` takes the price off again, as an old line saved before the
+  // rule still has none, so a handover owes nothing unless a test keeps the
+  // price (the `priced` lines).
   const barrels = (n, extra = {}) => ({...people, ...GUINEA,
-    pieces: Array.from({length: n}, () => ({kind: "barrel"})), ...extra});
+    pieces: Array.from({length: n},
+        () => ({kind: "barrel", priceCents: 10000})), ...extra});
   const priced = (cents) => barrels(cents.length, {pieces: cents.map(
       (priceCents) => ({kind: "barrel", priceCents}))});
   const lineOf = async (id) =>
@@ -4351,7 +4426,7 @@ describe("proof on the package", () => {
     return path;
   }
   let boxSerial = 0;
-  async function arrivedBox(lines, uid = P_OWNER) {
+  async function arrivedBox(lines, uid = P_OWNER, keepPrices = false) {
     boxSerial += 1;
     const {containerId} = await run("createContainer", {
       label: `Proof box ${boxSerial}`, ...GUINEA}, uid);
@@ -4360,6 +4435,7 @@ describe("proof on the package", () => {
       const {lineId} = await run("addContainerLine", {containerId, line},
           uid);
       ids.push(lineId);
+      if (!keepPrices) await unpriceLine(lineId);
     }
     await run("setContainerStatus", {containerId, status: "shipped"});
     await run("setContainerStatus", {containerId, status: "arrived"});
@@ -4596,7 +4672,7 @@ describe("proof on the package", () => {
         async () => {
           await switches({});
           const {lineIds: [lineId]} =
-            await arrivedBox([priced([6000, 4000])]);
+            await arrivedBox([priced([6000, 4000])], P_OWNER, true);
           await assert.rejects(deliver(lineId, {collectedCents: -1}),
               refused("collected_cents_invalid"));
           await assert.rejects(deliver(lineId, {collectedCents: 12.5}),
@@ -4874,7 +4950,7 @@ describe("ships by: sea or air", () => {
   const pkg = (extra = {}) => ({ownerKind: "customer",
     customerName: "Fatou Diallo", customerPhone: "+16465550100",
     receiverName: "Mariama Bah", receiverPhone: "+224620000000", ...GUINEA,
-    pieces: [{kind: "barrel"}], ...extra});
+    pieces: [{kind: "barrel", priceCents: 9000}], ...extra});
   const lineOf = async (id) =>
     (await db.collection("containerLines").doc(id).get()).data();
   let serial = 0;
@@ -5024,8 +5100,9 @@ describe("ships by: sea or air", () => {
 describe("a corrected number and Send again", () => {
   const SHORT = "+164655501"; // three digits short, as typed at a counter
   const dropOff = () => call("addWaitingPackage", {kind: "barrels",
-    quantity: 2, ownerKind: "customer", customerName: "Fatou Diallo",
-    customerPhone: SHORT, receiverName: "Mariama Bah",
+    quantity: 2, priceCents: 9000, ownerKind: "customer",
+    customerName: "Fatou Diallo", customerPhone: SHORT,
+    receiverName: "Mariama Bah",
     receiverPhone: "+224620000000", destinationCountryId: "gn",
     destinationCountryName: "Guinea"});
   const row = (lineId, role) =>
@@ -5170,7 +5247,8 @@ describe("a corrected number and Send again", () => {
   it("tells a receiver whose number was added after drop-off", async () => {
     connectWhatsApp();
     const {lineId} = await call("addWaitingPackage", {kind: "barrels",
-      quantity: 1, ownerKind: "customer", customerName: "Fatou Diallo",
+      quantity: 1, priceCents: 9000, ownerKind: "customer",
+      customerName: "Fatou Diallo",
       customerPhone: "+16465550100", receiverName: "Mariama Bah",
       receiverPhone: "", destinationCountryId: "gn",
       destinationCountryName: "Guinea"});

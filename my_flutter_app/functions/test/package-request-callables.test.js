@@ -695,16 +695,20 @@ describe("Received", () => {
     const mine = `packagePhotos/${BIZ}/${MARIAMA}/photo-counter01.jpg`;
     await bucket.file(mine).save(Buffer.alloc(512, 4),
         {contentType: "image/jpeg"});
+    // Every customer package is received with a price on each piece
+    // (docs/PACKAGE_PRICE_REQUIRED.md); this request has no estimate.
+    const priced = [{id: "p1", priceCents: 50000},
+      {id: "p2", priceCents: 30000}];
     // Someone else's upload is refused before anything is copied.
     const owners = `packagePhotos/${BIZ}/${OWNER}/photo-counter02.jpg`;
     await bucket.file(owners).save(Buffer.alloc(512, 4),
         {contentType: "image/jpeg"});
     assert.equal(await reasonOf(staff("receivePackageRequest", {requestId,
-      pieces: [], photoPaths: [owners]}, MARIAMA)), "photo_invalid");
+      pieces: priced, photoPaths: [owners]}, MARIAMA)), "photo_invalid");
     assert.equal(await reasonOf(staff("receivePackageRequest", {requestId,
-      pieces: [], weightLb: 0}, MARIAMA)), "weight_invalid");
+      pieces: priced, weightLb: 0}, MARIAMA)), "weight_invalid");
     const received = await staff("receivePackageRequest", {requestId,
-      pieces: [], photoPaths: [mine],
+      pieces: priced, photoPaths: [mine],
       contents: [{label: "TV", quantity: 1}, {label: "Phones", quantity: 2,
         serial: "IMEI-1"}], weightLb: 12.5, declaredValueCents: 80000},
     MARIAMA);
@@ -733,8 +737,8 @@ describe("Received", () => {
     // A request without photos is received without any: the requirement
     // is the counter's, not the request's.
     const bare = await staff("receivePackageRequest", {requestId:
-      (await submit({pieces: [{kind: "barrel"}]})).requestId, pieces: []},
-    MARIAMA);
+      (await submit({pieces: [{kind: "barrel"}]})).requestId,
+    pieces: [{id: "p1", priceCents: 9000}]}, MARIAMA);
     const bareLine = (await db.collection("containerLines")
         .doc(bare.lineId).get()).data();
     assert.deepEqual(bareLine.photoPaths, []);
