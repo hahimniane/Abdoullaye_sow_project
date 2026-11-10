@@ -112,22 +112,33 @@ function pickupPlace(city, country) {
   return cityName || countryName;
 }
 
+// What the address line says when goods are collected in another country
+// and the business has not said where: its own (origin) address would send
+// the receiver to the wrong country (a package ready in Guinea gave a Bronx
+// address, 2026-11-10). One line for both languages, like the template's.
+const PICKUP_ADDRESS_ASK =
+  "ask at the number below · demandez au numéro ci-dessous";
+
 /**
  * The address and phone the ready-for-pickup message gives: the
- * destination's own, else the business's address and phone.
+ * destination's own, else the business's address and phone. `abroad` (the
+ * goods are collected in a country that is not the business's own) never
+ * falls back to the business's address: it says to ask.
  *
  * @param {object|null} destination The destinationCountries record.
  * @param {object|null} business The business record.
+ * @param {object} [options] `{abroad}`: true when the goods are collected
+ *   outside the business's own country.
  * @return {{city: string, address: string, phone: string}} "" for unknown.
  */
-function pickupDetails(destination, business) {
+function pickupDetails(destination, business, {abroad = false} = {}) {
   const dst = destination && typeof destination === "object" ?
     destination : {};
   const biz = business && typeof business === "object" ? business : {};
   const address = oneLine(dst.pickupAddress).slice(0,
       PICKUP_LIMITS.pickupAddress) ||
-    oneLine(composeHeadquartersAddress(biz)) ||
-    oneLine(biz.address);
+    (abroad ? PICKUP_ADDRESS_ASK :
+      oneLine(composeHeadquartersAddress(biz)) || oneLine(biz.address));
   const phone = e164Phone(dst.pickupPhone) || oneLine(biz.phone);
   return {
     city: oneLine(dst.pickupCity).slice(0, PICKUP_LIMITS.pickupCity),
@@ -136,12 +147,30 @@ function pickupDetails(destination, business) {
   };
 }
 
+/**
+ * What a destination still lacks for the ready-for-pickup message to be
+ * right: the consoles ask for these before the message goes out.
+ *
+ * @param {object|null} destination The destinationCountries record.
+ * @return {string[]} Of "pickupAddress", "pickupPhone"; empty when complete.
+ */
+function missingPickupFields(destination) {
+  const dst = destination && typeof destination === "object" ?
+    destination : {};
+  const missing = [];
+  if (!oneLine(dst.pickupAddress)) missing.push("pickupAddress");
+  if (!e164Phone(dst.pickupPhone)) missing.push("pickupPhone");
+  return missing;
+}
+
 module.exports = {
   PICKUP_LIMITS,
   PICKUP_FIELDS,
   PICKUP_MESSAGES,
+  PICKUP_ADDRESS_ASK,
   e164Phone,
   validateDestinationPickup,
   pickupPlace,
   pickupDetails,
+  missingPickupFields,
 };

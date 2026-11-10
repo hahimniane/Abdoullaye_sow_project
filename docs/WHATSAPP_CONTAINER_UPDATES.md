@@ -329,8 +329,19 @@ the line goes to (its own, else its container's):
 | Variable | Source | Fallback |
 | --- | --- | --- |
 | pickup place (EN / FR) | `pickupCity` + the country's name ("Conakry, Guinea" / "Conakry, Guinée"); the country alone when no city | `the destination country` / `destination` |
-| pickup address | `pickupAddress` | the business's own address (its headquarters, then `address`), else `—` |
+| pickup address | `pickupAddress` | **abroad:** `ask at the number below · demandez au numéro ci-dessous`; **in the business's own country:** its own address (its headquarters, then `address`), else `—` |
 | pickup phone | `pickupPhone` (re-checked: only an E.164 value is used) | the business phone, else `—` |
+
+**A pickup abroad never gives the business's home address** (2026-11-10: a
+package ready in Guinea told its receiver to collect it at the business's
+Bronx address). "Abroad" is `collectedAbroad(line, container, business)` in
+`container_updates.js`: the destination the line goes to (its own, else its
+container's) is a different country from `business.country`; an unknown
+destination counts as not abroad, and a business whose own country is not
+known counts as abroad (asking is always right; a wrong address is not). `missingPickupFields(destination)` in
+`destination_pickup.js` names what a destination still lacks
+(`pickupAddress`, `pickupPhone`) so the consoles can ask for it before the
+message goes out.
 
 ## Templates still in review
 

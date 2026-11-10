@@ -970,8 +970,9 @@ describe("WhatsApp updates", () => {
         const params = (i) => whatsappCalls[i].template.components[0]
             .parameters.map((p) => p.text);
         try {
-          // Nothing set yet, and no business phone or address: the country
-          // and dashes.
+          // Nothing set yet, and no business phone: the country, a dash
+          // for the phone, and never the business's own address for a
+          // pickup in another country.
           await deliver(ref.id);
           assert.equal(whatsappCalls[0].template.name,
               "shipment_ready_pickup_2lang");
@@ -979,7 +980,7 @@ describe("WhatsApp updates", () => {
           assert.equal(params(0).length, 10);
           assert.deepEqual(params(0).slice(1, 9), ["3 barrels",
             "Dala Shipping", "Guinea", "3 barils", "Dala Shipping", "Guinée",
-            "—", "—"]);
+            "ask at the number below · demandez au numéro ci-dessous", "—"]);
           await call("setDestinationPickup", {countryId: "gn",
             pickupCity: "Conakry", pickupAddress: "Madina, near the market",
             pickupPhone: "+224 620 11 22 33"});

@@ -11,6 +11,8 @@ const {
   validateDestinationPickup,
   pickupPlace,
   pickupDetails,
+  missingPickupFields,
+  PICKUP_ADDRESS_ASK,
 } = require("../destination_pickup");
 
 describe("the pickup details an owner types", () => {
@@ -120,6 +122,28 @@ describe("the pickup address and phone in the message", () => {
     });
     assert.deepEqual(pickupDetails(null, null),
         {city: "", address: "", phone: ""});
+  });
+
+  // Abroad the business's own address is the wrong country: say to ask.
+  it("never fall back to the business's address for a pickup abroad", () => {
+    assert.deepEqual(pickupDetails({}, business, {abroad: true}), {
+      city: "", address: PICKUP_ADDRESS_ASK, phone: "+16465550199"});
+    assert.deepEqual(pickupDetails({pickupCity: "Conakry",
+      pickupAddress: "Madina, near the market"}, business, {abroad: true}), {
+      city: "Conakry", address: "Madina, near the market",
+      phone: "+16465550199"});
+    assert.match(PICKUP_ADDRESS_ASK, /^[^\n\t]{1,150}$/);
+  });
+
+  it("tell what a destination still lacks for the message to be right", () => {
+    assert.deepEqual(missingPickupFields(null),
+        ["pickupAddress", "pickupPhone"]);
+    assert.deepEqual(missingPickupFields({pickupCity: "Conakry"}),
+        ["pickupAddress", "pickupPhone"]);
+    assert.deepEqual(missingPickupFields({pickupAddress: "Madina",
+      pickupPhone: "620000000"}), ["pickupPhone"]);
+    assert.deepEqual(missingPickupFields({pickupAddress: "Madina",
+      pickupPhone: "+224620000000"}), []);
   });
 
   // A value that reached the record without the callable is checked again.

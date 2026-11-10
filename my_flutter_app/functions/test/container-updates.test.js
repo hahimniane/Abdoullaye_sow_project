@@ -35,6 +35,7 @@ const {
   pickupDestinationIds,
   whatsappUpdateMessage,
   whatsappConfigured,
+  collectedAbroad,
 } = require("../container_updates");
 
 const line = (extra = {}) => ({
@@ -347,14 +348,50 @@ describe("what they read", () => {
       "Madina, near the market", "+224620112233", "CL-K7M4P2"]);
   });
 
-  it("falls back to the country, the business's address and its phone",
+  // A package ready in Guinea gave a Bronx pickup address (2026-11-10):
+  // the business's own address is the pickup place only in its own country.
+  it("never gives the business's home address for a pickup abroad",
       () => {
+        const home = {addressLine1: "12 Main St", city: "Bronx",
+          state: "NY", country: "United States"};
         const body = message("arrived", {pickupDestination: null,
-          business: {addressLine1: "12 Main St", city: "Bronx",
-            state: "NY", country: "United States"}});
+          business: home});
         assert.deepEqual(texts(body).slice(3, 10), ["Guinea",
           "3 barils", "Dala", "Guinée",
-          "12 Main St, Bronx, NY, United States", "+16465550199",
+          "ask at the number below · demandez au numéro ci-dessous",
+          "+16465550199", "CL-K7M4P2"]);
+        // The pickup number still rides on the address line.
+        const coded = message("arrived", {pickupDestination: null,
+          business: home, role: "receiver",
+          line: line({pickupCode: "4821"})});
+        assert.equal(texts(coded)[7],
+            "ask at the number below · demandez au numéro ci-dessous · " +
+            "Pickup number / N° de retrait : 4821");
+        // A phone alone does not make the home address right.
+        const phoneOnly = message("arrived", {business: home,
+          pickupDestination: {pickupPhone: "+224620112233"}});
+        assert.deepEqual(texts(phoneOnly).slice(7, 9), [
+          "ask at the number below · demandez au numéro ci-dessous",
+          "+224620112233"]);
+        const guinea = {destinationCountryId: "gn"};
+        assert.equal(collectedAbroad(line(), guinea, home), true);
+        assert.equal(collectedAbroad(line(), guinea, {}), true);
+        // The line's own destination wins over its container's.
+        assert.equal(collectedAbroad(
+            line({destinationCountryName: "United States"}), guinea, home),
+        false);
+        // An unknown destination keeps the message as it was.
+        assert.equal(collectedAbroad({}, null, home), false);
+      });
+
+  it("falls back to the business's address and phone in its own country",
+      () => {
+        const body = message("arrived", {pickupDestination: null,
+          business: {addressLine1: "12 Rue KA 020", city: "Conakry",
+            country: "Guinea"}});
+        assert.deepEqual(texts(body).slice(3, 10), ["Guinea",
+          "3 barils", "Dala", "Guinée",
+          "12 Rue KA 020, Conakry, Guinea", "+16465550199",
           "CL-K7M4P2"]);
         const bare = message("arrived", {businessPhone: "", business: {},
           container: null});

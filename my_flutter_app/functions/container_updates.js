@@ -480,6 +480,27 @@ function destinationName(line, container, language) {
 }
 
 /**
+ * Whether the goods are collected in a country that is not the business's
+ * own: there the business's (origin) address is not where anyone collects.
+ * An unknown destination reads as "not abroad" (the message as it was); a
+ * business with no country on file is abroad everywhere.
+ *
+ * @param {object} line A containerLines row.
+ * @param {object|null} container Its container, if any.
+ * @param {object|null} business The business record (its `country`).
+ * @return {boolean}
+ */
+function collectedAbroad(line, container, business) {
+  const own = text(line?.destinationCountryName, 120) ||
+    text(line?.destinationCountryId, 60);
+  const source = own ? line : (container || {});
+  const destination = countryCode(source?.destinationCountryId,
+      source?.destinationCountryName);
+  if (!destination) return false;
+  return destination !== countryCode("", business?.country);
+}
+
+/**
  * The business destination record a line's goods are collected from: the
  * line's own destination (a waiting package carries one), else its
  * container's. Records are keyed by the id the destination picker stores;
@@ -557,7 +578,8 @@ function whatsappUpdateMessage(args) {
       args.business : {}),
     phone: text(args.businessPhone, 40) || text(args.business?.phone, 40),
   };
-  const pickup = pickupDetails(args.pickupDestination, business);
+  const pickup = pickupDetails(args.pickupDestination, business, {
+    abroad: collectedAbroad(args.line, args.container, business)});
   const line = args.line && typeof args.line === "object" ? args.line : {};
   const contents = contentsText(line.contents);
   const photo = confirmationPhotoLink(line, args.documentBase, args.nowMs);
@@ -1155,6 +1177,7 @@ module.exports = {
   keepsPlainReceived,
   rowUpdateFor,
   pickupAddressWithCode,
+  collectedAbroad,
   pickupCodeFor,
   confirmationPhotoLink,
   photoHeaderWanted,
