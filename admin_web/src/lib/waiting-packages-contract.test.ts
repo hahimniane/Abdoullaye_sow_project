@@ -218,7 +218,7 @@ test("the register form's primary action prints one label per piece; Save & add 
   assert.match(panelSource, /<button className="lst-add" type="button" disabled=\{busy\} aria-busy=\{busy\} onClick=\{\(\) => void save\("print"\)\}>/);
   assert.match(panelSource, /savePrintLabelsText\(labelCount, lang\)/);
   assert.match(panelSource, /const labelCount = waitingDraftLabelCount\(draft\);/);
-  assert.match(panelSource, /setDraft\(nextPackageForSameSender\(draft, defaultDestination\)\)/);
+  assert.match(panelSource, /setDraft\(startDraft\(nextPackageForSameSender\(draft, defaultDestination\)\)\)/);
   // The destination opens on the main destination.
   assert.match(panelSource, /emptyWaitingPackageDraft\(defaultDestination\)/);
   assert.match(containersSource, /defaultWaitingDestination\(destinations\.rows\)/);
@@ -236,7 +236,7 @@ test("the register form's 'Money received now?' asks what the payment dialog ask
   // Checked against the people offered, sent with the package, cleared for the next one.
   assert.match(panelSource, /validateWaitingPackage\(draft, staffIds, editingRow\)/);
   assert.match(panelSource, /addWaitingPackagePayload\(businessId, draft\)/);
-  assert.match(panelSource, /setDraft\(nextPackageForSameSender\(draft, defaultDestination\)\)/);
+  assert.match(panelSource, /setDraft\(startDraft\(nextPackageForSameSender\(draft, defaultDestination\)\)\)/);
 });
 
 test("the customer's and receiver's phones use the shared picker through ContactPhone", () => {

@@ -12,6 +12,7 @@ import { AlertCircle, Banknote, ChevronRight, Container, ListChecks } from "luci
 
 import { Panel } from "@/components/panel";
 import { TotalsStatus } from "@/components/totals-status";
+import { shippingCopy, todayLabelFor } from "@/lib/air-only";
 import {
   formatTodayMoney,
   todayAttention,
@@ -117,10 +118,13 @@ function containerDestination(container: TodayContainer, language: Language) {
 function ContainerRow({
   container,
   language,
+  leftLabel,
   onOpen,
 }: {
   container: TodayContainer;
   language: Language;
+  /** "Sailed", or "Sent" for an air-only business. */
+  leftLabel: string;
   onOpen: (containerId: string) => void;
 }) {
   const status = (container.status in CONTAINER_STATUS_LABELS ? container.status : "loading") as ContainerStatus;
@@ -141,7 +145,7 @@ function ContainerRow({
           {status === "shipped" && container.sailedAtMs ? (
             <>
               <span aria-hidden="true"> · </span>
-              <span>Sailed</span> <span data-no-translate>{formatDate(container.sailedAtMs)}</span>
+              <span>{leftLabel}</span> <span data-no-translate>{formatDate(container.sailedAtMs)}</span>
             </>
           ) : null}
         </small>
@@ -299,6 +303,7 @@ export function TodayView({
   onOpenContainer,
   onOpenLedger,
   extraAttention = NO_EXTRA_ATTENTION,
+  airOnly = false,
   children,
 }: {
   today: BusinessToday | null;
@@ -310,13 +315,22 @@ export function TodayView({
   onOpenLedger: () => void;
   /** Rows the viewer's own work adds above the server's (money handed to them to confirm). */
   extraAttention?: TodayAttentionItem[];
+  /** The business flies and never had a sea container: nothing here says "container". */
+  airOnly?: boolean;
   /** What follows the month (the payouts panel). */
   children?: ReactNode;
 }) {
   const language: Language = currentLanguage() === "fr" ? "fr" : "en";
   // Worked out once per answer, never per render of a row.
-  const tiles = useMemo(() => todayTiles(today), [today]);
-  const attention = useMemo(() => todayAttention(today), [today]);
+  const copy = shippingCopy(airOnly);
+  const tiles = useMemo(
+    () => todayTiles(today).map((tile) => ({...tile, label: todayLabelFor(tile.label, airOnly)})),
+    [airOnly, today],
+  );
+  const attention = useMemo(
+    () => todayAttention(today).map((item) => ({...item, label: todayLabelFor(item.label, airOnly)})),
+    [airOnly, today],
+  );
   // The viewer's own work (money handed to them to confirm) leads the server's rows.
   const attentionRows = useMemo(() => [...extraAttention, ...attention], [extraAttention, attention]);
   const ledgerAlerts = useMemo(
@@ -385,22 +399,28 @@ export function TodayView({
           <Panel
             action={
               <button className="ghost-button compact" onClick={() => onOpenContainer("")} type="button">
-                Open containers
+                {copy.todayButton}
               </button>
             }
             icon={<Container size={18} />}
-            title="Containers in progress"
+            title={copy.todayTitle}
           >
             <div className="today-containers">
               {containers.list.map((container) => (
-                <ContainerRow container={container} key={container.id} language={language} onOpen={onOpenContainer} />
+                <ContainerRow
+                  container={container}
+                  key={container.id}
+                  language={language}
+                  leftLabel={copy.leftLabel}
+                  onOpen={onOpenContainer}
+                />
               ))}
               {containers.list.length === 0 && (
-                <div className="empty-state">No container is loading or at sea.</div>
+                <div className="empty-state">{copy.todayEmpty}</div>
               )}
               {containers.more && (
                 <button className="today-more" onClick={() => onOpenContainer("")} type="button">
-                  <span>See every open container</span> <ChevronRight aria-hidden="true" size={14} />
+                  <span>{copy.todayMore}</span> <ChevronRight aria-hidden="true" size={14} />
                 </button>
               )}
             </div>

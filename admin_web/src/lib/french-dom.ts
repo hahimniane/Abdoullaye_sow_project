@@ -8263,6 +8263,41 @@ Object.assign(ATTRIBUTE_TRANSLATIONS, {
   "Car sales · Parking · Shipping": "Vente de voitures · Stationnement · Expédition",
 });
 // ==== Business cards END ====
+// ==== Air-only business (docs/SHIPPING_SIMPLE_HOME.md W) START ====
+// What an air-only business reads where the others read "container"
+// (lib/air-only.ts). No entry here may say "conteneur".
+Object.assign(TEXT_TRANSLATIONS, {
+  "Requests, packages, shipments, deliveries": "Demandes, colis, expéditions, livraisons",
+  "Packages here": "Colis ici",
+  "Customer, receiver or phone": "Client, destinataire ou téléphone",
+  "Packages customers dropped off that have not left yet. Print the label now; add them to a shipment going to the same country when it is ready.":
+    "Les colis déposés par les clients et pas encore partis. Imprimez l’étiquette maintenant ; ajoutez-les à une expédition vers le même pays quand elle est prête.",
+  "What the customer dropped off. It stays here until you send it.":
+    "Ce que le client a déposé. Il reste ici jusqu’à ce que vous l’envoyiez.",
+  "The customer and the receiver get a WhatsApp message when the package is registered, when it leaves and when it arrives. Adding it to a shipment sends nothing.":
+    "Le client et le destinataire reçoivent un message WhatsApp quand le colis est enregistré, quand il part et quand il arrive. L’ajouter à une expédition n’envoie rien.",
+  "Your own shipment lists: what went on each one, when it left, and when it landed. Customers do not see this.":
+    "Vos propres listes d’expédition : ce qui est parti dans chacune, quand elle est partie et quand elle est arrivée. Les clients ne voient pas ceci.",
+  "No shipments yet. Start one when packages are ready to leave.":
+    "Aucune expédition pour l’instant. Créez-en une quand des colis sont prêts à partir.",
+  "Not sent yet": "Pas encore envoyé",
+  "Shipments in progress": "Expéditions en cours",
+  "See shipments": "Voir les expéditions",
+  "No shipment is loading or on the way.": "Aucune expédition en préparation ou en route.",
+  "See every open shipment": "Voir toutes les expéditions en cours",
+  "Packages not sent yet": "Colis pas encore envoyés",
+  "Shipments loading": "Expéditions en préparation",
+  "Shipments sent": "Expéditions parties",
+  "All shipments": "Toutes les expéditions",
+  "Packages waiting for this shipment's destination. Add puts the whole package on the shipment.":
+    "Colis en attente pour la destination de cette expédition. Ajouter met le colis entier dans l’expédition.",
+  "Set this shipment's destination to see what's still waiting.":
+    "Définissez la destination de cette expédition pour voir ce qui attend encore.",
+});
+Object.assign(ATTRIBUTE_TRANSLATIONS, {
+  "Customer, receiver or phone": "Client, destinataire ou téléphone",
+});
+// ==== Air-only business END ====
 const englishDictionary = { ...TEXT_TRANSLATIONS, ...ATTRIBUTE_TRANSLATIONS };
 const frenchDictionary = buildReverseDictionary([
   TEXT_TRANSLATIONS,

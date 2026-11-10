@@ -88,8 +88,11 @@ import {
 import {
   useBusinessCollection,
   useBusinessHasRecords,
+  useBusinessHasSeaContainer,
   useBusinessStaff,
 } from "@/lib/business-data";
+import { airOnlyBusiness, shippingCopy, shippingStepsFor } from "@/lib/air-only";
+import { shipsByAirOf } from "@/lib/package-proof";
 import { useServerTotals } from "@/lib/use-server-totals";
 import { Panel } from "@/components/panel";
 import { TodayView } from "@/components/business/today-view";
@@ -451,6 +454,29 @@ export function BusinessConsole({
   }, []);
   const onContainerView = useCallback((view: ListView) => setShippingStep(view), []);
 
+  // An air-only business (it flies, and never had a sea container) never
+  // reads "container" on its Shipping pages (docs/SHIPPING_SIMPLE_HOME.md W).
+  // Two counts, asked only of a business that flies and of someone who may
+  // open the lists, and again when a container is started.
+  const flies = shipsByAirOf(business);
+  const canOpenContainerLists = shippingSteps.some((step) => step.permission === "containers");
+  const hasSeaContainer = useBusinessHasSeaContainer(
+    businessId,
+    enabled && flies && canOpenContainerLists,
+    shippingCounts.containers ?? "",
+  );
+  const airOnly = airOnlyBusiness(flies, hasSeaContainer);
+  const shippingStepsShown = useMemo(() => shippingStepsFor(shippingSteps, airOnly), [airOnly, shippingSteps]);
+  const sidebarTabs = useMemo(
+    () =>
+      airOnly
+        ? visibleTabs.map((tab) =>
+            tab.id === "shipping" ? {...tab, description: shippingCopy(true).sidebarDescription} : tab,
+          )
+        : visibleTabs,
+    [airOnly, visibleTabs],
+  );
+
   // "The menu has a new layout", once per person and browser, listing only
   // the moves that touch the sections this person can open.
   const menuMoved = useMemo(
@@ -493,8 +519,8 @@ export function BusinessConsole({
   }, [activeTab, visibleTabs]);
 
   const sidebarGroups = useMemo(
-    () => buildBusinessSidebarGroups(visibleTabs, pinnedTabs, sidebarFilter),
-    [pinnedTabs, sidebarFilter, visibleTabs],
+    () => buildBusinessSidebarGroups(sidebarTabs, pinnedTabs, sidebarFilter),
+    [pinnedTabs, sidebarFilter, sidebarTabs],
   );
 
   const togglePinnedTab = useCallback((tabId: BusinessTab) => {
@@ -802,6 +828,7 @@ export function BusinessConsole({
 
           {activeTab === "today" && (
             <TodayView
+              airOnly={airOnly}
               extraAttention={todayExtraAttention}
               ledgerEvents={ledgerEvents.rows}
               onOpenAttention={openTodayItem}
@@ -911,10 +938,11 @@ export function BusinessConsole({
                 active={activeShippingStep}
                 counts={shippingCounts}
                 onSelect={selectShippingStep}
-                steps={shippingSteps}
+                steps={shippingStepsShown}
               />
               {containerListSteps.includes(activeShippingStep) && (
                 <ContainersPanel
+                  airOnly={airOnly}
                   businessId={businessId}
                   business={business}
                   previewMode={previewMode}

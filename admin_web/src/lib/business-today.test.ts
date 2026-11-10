@@ -162,6 +162,7 @@ test("figures and typed names are never run through the dictionary", () => {
 
 test("the page works its figures out once per answer, not per row", () => {
   const source = readFileSync("src/components/business/today-view.tsx", "utf8");
-  assert.match(source, /const tiles = useMemo\(\(\) => todayTiles\(today\), \[today\]\);/);
-  assert.match(source, /const attention = useMemo\(\(\) => todayAttention\(today\), \[today\]\);/);
+  // An air-only business reads the same figures under its own labels (lib/air-only.ts).
+  assert.match(source, /const tiles = useMemo\(\s*\(\) => todayTiles\(today\)\.map\(\(tile\) => \(\{\.\.\.tile, label: todayLabelFor\(tile\.label, airOnly\)\}\)\),\s*\[airOnly, today\],?\s*\);/);
+  assert.match(source, /const attention = useMemo\(\s*\(\) => todayAttention\(today\)\.map\(\(item\) => \(\{\.\.\.item, label: todayLabelFor\(item\.label, airOnly\)\}\)\),\s*\[airOnly, today\],?\s*\);/);
 });

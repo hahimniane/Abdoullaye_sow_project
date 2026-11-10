@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { collection, doc, getCountFromServer, limit, onSnapshot, query, where } from "firebase/firestore";
 
+import { hasSeaContainerFromCounts } from "@/lib/air-only";
 import { db } from "@/lib/firebase";
 import { buildVinPlacementIndex, type VinPlacement } from "@/lib/container-manifest";
 import {
@@ -619,4 +620,54 @@ export function useBusinessCountsByValue(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, enabled]);
   return state.key === key ? state.counts : new Map();
+}
+
+/**
+ * Whether the business has a sea container (docs/SHIPPING_SIMPLE_HOME.md W1):
+ * two counts, every container of the business and those marked Air. An old
+ * sea container carries no `shipMode`, so sea is "all but air". Both are
+ * equalities the merged single-field indexes serve.
+ *
+ * Null until both counts answered and when either failed: the caller then
+ * shows the console as it was. Asked again when `refreshKey` changes (a
+ * container was started), never on a timer; the last answer for the business
+ * stands while it is asked again, so the page never flips back and forth.
+ */
+export function useBusinessHasSeaContainer(
+  businessId: string,
+  enabled: boolean,
+  refreshKey: string | number = "",
+): boolean | null {
+  const scopedBusinessId = businessId.trim();
+  const key = JSON.stringify([scopedBusinessId, refreshKey]);
+  const [state, setState] = useState<{ businessId: string; hasSea: boolean | null }>(
+    { businessId: "", hasSea: null },
+  );
+  useEffect(() => {
+    if (!enabled || !scopedBusinessId) return undefined;
+    let cancelled = false;
+    const mine = where("businessId", "==", scopedBusinessId);
+    void Promise.all([
+      getCountFromServer(query(collection(db, "containers"), mine)),
+      getCountFromServer(query(collection(db, "containers"), mine, where("shipMode", "==", "air"))),
+    ]).then(
+      ([all, air]) => {
+        if (cancelled) return;
+        setState({
+          businessId: scopedBusinessId,
+          hasSea: hasSeaContainerFromCounts(all.data().count, air.data().count),
+        });
+      },
+      () => {
+        if (!cancelled) setState({ businessId: scopedBusinessId, hasSea: null });
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+    // `key` carries every input by value.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, enabled]);
+  if (!enabled) return null;
+  return state.businessId === scopedBusinessId ? state.hasSea : null;
 }

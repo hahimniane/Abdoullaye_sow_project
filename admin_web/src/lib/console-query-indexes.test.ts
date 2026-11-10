@@ -187,6 +187,8 @@ const SITES: Site[] = [
   { file: L("business-data.ts"), kind: "usePagedQuery", what: "business subcollections (destinations whole, reviews newest first)", shapes: [raw("destinationCountries"), raw("officeLocations"), raw("reviews", [], { field: "createdAt", direction: "desc" })] },
   { file: L("business-data.ts"), kind: "query", what: "useBusinessHasRecords probe (limit 1)", shapes: [raw("cars", [eq("businessId")])] },
   { file: L("business-data.ts"), kind: "query", what: "useBusinessCountsByValue", shapes: [raw("lotActivities", [eq("businessId"), eq("activityTypeId")])] },
+  { file: L("business-data.ts"), kind: "query", what: "useBusinessHasSeaContainer: every container (count)", shapes: [raw("containers", [eq("businessId")])] },
+  { file: L("business-data.ts"), kind: "query", what: "useBusinessHasSeaContainer: air containers (count)", shapes: [raw("containers", [eq("businessId"), eq("shipMode")])] },
   { file: L("business-data.ts"), kind: "useBusinessCollection", what: "useWaitingPackages", shapes: [bc("containerLines", { pageSize: null, where: [["containerStatus", "==", "waiting"]] })] },
   { file: L("business-data.ts"), kind: "useBusinessCollection", what: "usePackageRequests", shapes: [bc("packageRequests", { pageSize: null, orderBy: "createdAt", direction: "desc", where: [["status", "in", ["new", "estimate_sent", "confirmed"]]] })] },
   { file: L("business-data.ts"), kind: "useBusinessCollection", what: "useInventoryItems on sale and archived", shapes: [true, false].map((archived) => bc("inventoryItems", { pageSize: null, where: [["archived", "==", archived]] })) },

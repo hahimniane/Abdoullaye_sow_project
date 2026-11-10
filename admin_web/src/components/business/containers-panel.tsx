@@ -148,6 +148,7 @@ import {
   runPackageCall,
 } from "@/lib/waiting-packages";
 import { newPieceDraft } from "@/lib/piece-drafts";
+import { shippingCopy } from "@/lib/air-only";
 import { PiecesEditor } from "@/components/business/pieces-editor";
 import { OCEAN_CARRIERS, isKnownCarrierScac, oceanCarrierLabel } from "@/lib/ocean-carrier-catalog";
 import {
@@ -201,6 +202,12 @@ type Row = Record<string, unknown>;
 
 type ContainersPanelProps = {
   businessId: string;
+  /**
+   * The business flies and never had a sea container (worked out once by the
+   * console, docs/SHIPPING_SIMPLE_HOME.md W): these lists then never say
+   * "container", and a new shipment starts on Air.
+   */
+  airOnly?: boolean;
   /** The business record, for the country its customers' phones default to. */
   business?: FirestoreRow | null;
   previewMode?: boolean;
@@ -280,6 +287,7 @@ function LineWhatsApp({ line }: { line: Row }) {
  */
 export function ContainersPanel({
   businessId,
+  airOnly: airOnlyBusiness = false,
   business = null,
   previewMode = false,
   canRefundPayNow = false,
@@ -457,6 +465,14 @@ export function ContainersPanel({
   // The business ships by air once it has started a flight (set by the
   // server): its package forms then offer "Ships by: Sea · Air".
   const shipsByAir = shipsByAirOf(business);
+  // Air-only holds only while every container this panel holds flies: one
+  // started by sea turns the usual words back on at once, before the console
+  // counts again.
+  const airOnly = useMemo(
+    () => airOnlyBusiness && !containerRows.some((row) => !isAirContainer(row)),
+    [airOnlyBusiness, containerRows],
+  );
+  const copy = shippingCopy(airOnly);
 
   const containerById = useMemo(() => {
     const map = new Map<string, FirestoreRow>();
@@ -685,7 +701,8 @@ export function ContainersPanel({
   // -------------------------------------------------------------------------
 
   function openCreate() {
-    setContainerDraft(emptyContainerDraft);
+    // An air-only business starts on Air; "How it travels" stays in the form.
+    setContainerDraft(airOnly ? {...emptyContainerDraft, shipMode: "air"} : emptyContainerDraft);
     setEditingContainerId("");
     setDraftError("");
     setModal("container");
@@ -1221,7 +1238,7 @@ export function ContainersPanel({
   // The two lists the panel offers, with how many each holds.
   const viewTabs = embedded ? null : (
     <div className="service-segments" role="tablist" aria-label="Container lists">
-      {([["containers", "Containers", containers.rows.length], ["waiting", "Waiting list", waiting.rows.length], ["requests", "Requests", openRequestCount]] as [ListView, string, number][]).map(([id, label, count]) => (
+      {([["containers", copy.listTitle, containers.rows.length], ["waiting", copy.waitingTitle, waiting.rows.length], ["requests", "Requests", openRequestCount]] as [ListView, string, number][]).map(([id, label, count]) => (
         <span
           key={id}
           role="button"
@@ -1255,7 +1272,7 @@ export function ContainersPanel({
         <article className="panel">
           <div className="panel-header">
             <div>
-              <button className="ghost-button" type="button" onClick={() => setSelectedId("")}><ArrowLeft size={14} /> All containers</button>
+              <button className="ghost-button" type="button" onClick={() => setSelectedId("")}><ArrowLeft size={14} /> {selectedAir ? "All shipments" : "All containers"}</button>
             </div>
             <span className="panel-action"><StatusBadge status={selectedStatus} /></span>
           </div>
@@ -1461,9 +1478,17 @@ export function ContainersPanel({
               <div className="panel-header">
                 <div><h3>Still to load</h3><span className="panel-count">{still.total}</span></div>
               </div>
-              <p className="panel-lede">Packages waiting for this container&apos;s destination. Add puts the whole package on the container.</p>
+              <p className="panel-lede">
+                {selectedAir
+                  ? "Packages waiting for this shipment's destination. Add puts the whole package on the shipment."
+                  : "Packages waiting for this container's destination. Add puts the whole package on the container."}
+              </p>
               {!still.hasDestination ? (
-                <EmptyState text="Set this container's destination to see what's still waiting." />
+                <EmptyState
+                  text={selectedAir
+                    ? "Set this shipment's destination to see what's still waiting."
+                    : "Set this container's destination to see what's still waiting."}
+                />
               ) : still.total === 0 ? (
                 <EmptyState text="Nothing is waiting for this destination." />
               ) : (
@@ -1532,14 +1557,15 @@ export function ContainersPanel({
           shipsByAir={shipsByAir}
           onFlash={setFlash}
           enabled={enabled}
+          airOnly={airOnly}
           focusLineId={lineFocusView === "waiting" ? focusLineId : ""}
         />
       ) : (
         <article className="panel">
           <div className="panel-header">
-            <div><Container size={18} /><h2>Containers</h2><span className="panel-count">{visibleContainers.length}</span></div>
+            <div><Container size={18} /><h2>{copy.listTitle}</h2><span className="panel-count">{visibleContainers.length}</span></div>
             <span className="panel-action">
-              <button className="lst-add" type="button" disabled={busy || !enabled} onClick={openCreate}><Plus size={16} /> New container</button>
+              <button className="lst-add" type="button" disabled={busy || !enabled} onClick={openCreate}><Plus size={16} /> {copy.newButton}</button>
             </span>
           </div>
           {viewTabs}
@@ -1556,7 +1582,7 @@ export function ContainersPanel({
             </select>
             <input type="search" placeholder="VIN, customer, phone" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search loaded cargo" />
           </div>
-          <p className="panel-lede">Your own loading lists: what went into each box, when it sailed, and when it landed. Customers do not see this.</p>
+          <p className="panel-lede">{copy.listLede}</p>
 
           {searching ? (
             searchHits.length === 0 ? (
@@ -1564,7 +1590,7 @@ export function ContainersPanel({
             ) : (
               <div className="mini-table">
                 <div className="ctn-table ctn-search-table">
-                  <div className="mini-table-head"><span>Cargo</span><span>Whose</span><span>Container</span><span>State</span></div>
+                  <div className="mini-table-head"><span>Cargo</span><span>Whose</span><span>{copy.column}</span><span>State</span></div>
                   {searchHits.map((hit) => {
                     const vin = cleanVin(hit.line.vinNumber);
                     const title = containerLineTitle(hit.line, lang);
@@ -1594,7 +1620,7 @@ export function ContainersPanel({
                           <ProofTicks line={hit.line} />
                         </span>
                         <span>
-                          {hit.container ? <strong data-no-translate>{containerTitle(hit.container)}</strong> : hit.waiting ? <strong>Waiting for a container</strong> : <strong>—</strong>}
+                          {hit.container ? <strong data-no-translate>{containerTitle(hit.container)}</strong> : hit.waiting ? <strong>{copy.notLoaded}</strong> : <strong>—</strong>}
                           {hit.container && <small>{destinationLabel(hit.container)}</small>}
                           {hit.waiting && Boolean(text(hit.line.destinationCountryName, "")) && <small>{destinationLabel(hit.line)}</small>}
                         </span>
@@ -1624,13 +1650,13 @@ export function ContainersPanel({
           ) : loading && containers.rows.length === 0 ? (
             <div className="empty-state"><RefreshCw className="spin" size={16} /> Loading…</div>
           ) : containers.rows.length === 0 ? (
-            <EmptyState text="No containers yet. Start one when you begin loading a box." />
+            <EmptyState text={copy.listEmpty} />
           ) : visibleContainers.length === 0 ? (
-            <EmptyState text="No containers match this filter." />
+            <EmptyState text={copy.listNoMatch} />
           ) : (
             <div className="mini-table">
               <div className="ctn-table ctn-list-table">
-                <div className="mini-table-head"><span>Container</span><span>Destination</span><span>On board</span><span>State</span></div>
+                <div className="mini-table-head"><span>{copy.column}</span><span>Destination</span><span>On board</span><span>State</span></div>
                 {visibleContainers.map((row) => {
                   const status = containerStatus(row);
                   const rowLines = linesByContainer.get(String(row.id)) ?? [];

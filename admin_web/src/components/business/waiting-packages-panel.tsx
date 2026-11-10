@@ -26,6 +26,7 @@ import {
 } from "@/lib/container-manifest";
 import { linePickupFeeCents, type LineGroupSummary } from "@/lib/line-pieces";
 import { newPieceDraft, savePrintLabelsText } from "@/lib/piece-drafts";
+import { shippingCopy } from "@/lib/air-only";
 import { destinationCountryName } from "@/lib/destination-countries";
 import { functions } from "@/lib/firebase";
 import { currentLanguage, formatDate, text } from "@/lib/format";
@@ -163,6 +164,12 @@ type WaitingPackagesPanelProps = {
    * "Ships by: Sea · Air" and the list an Air/Sea filter (docs/AIR_PACKAGES.md §7).
    */
   shipsByAir?: boolean;
+  /**
+   * The business flies and never had a sea container
+   * (docs/SHIPPING_SIMPLE_HOME.md W): the list is "Packages here", the form
+   * starts on Air with a box, and asks neither "Ships by" nor "A car".
+   */
+  airOnly?: boolean;
   onFlash: (message: string) => void;
   /** Counters stay off while the business is a preview. */
   enabled: boolean;
@@ -197,12 +204,14 @@ export function WaitingPackagesPanel({
   groups,
   proofSettings = PROOF_SETTINGS_OFF,
   shipsByAir = false,
+  airOnly = false,
   onFlash,
   enabled,
   expected = null,
   focusLineId = "",
 }: WaitingPackagesPanelProps) {
   const lang = currentLanguage() === "fr" ? "fr" : "en";
+  const copy = shippingCopy(airOnly);
   // A decimal comma in French; readMoneyInput reads "45,50" and "45.50" alike.
   const moneyPlaceholder = lang === "fr" ? "0,00" : "0.00";
   const [filter, setFilter] = useState("");
@@ -250,14 +259,17 @@ export function WaitingPackagesPanel({
     row.scrollIntoView({ block: "center", behavior: "smooth" });
   }, [focusLineId, rows]);
   const searched = useMemo(() => filterWaitingPackages(sorted, filter), [sorted, filter]);
+  const airCount = useMemo(() => sorted.filter((row) => packageShipModeOf(row.shipMode) === "air").length, [sorted]);
+  // The Air / Sea filter: for a business that flies. An air-only one sees it
+  // only while an old sea package is still here to tell apart.
+  const modeFilterShown = shipsByAir && (!airOnly || airCount < sorted.length);
   // Both computed once per change of the rows, never per row render.
   const shown = useMemo(() => {
     const proofed = proofFilter === "missing" ? searched.filter((row) => lineMissingProof(row, proofSettings)) : searched;
-    return shipsByAir && modeFilter !== "all"
+    return modeFilterShown && modeFilter !== "all"
       ? proofed.filter((row) => packageShipModeOf(row.shipMode) === modeFilter)
       : proofed;
-  }, [searched, proofFilter, proofSettings, shipsByAir, modeFilter]);
-  const airCount = useMemo(() => sorted.filter((row) => packageShipModeOf(row.shipMode) === "air").length, [sorted]);
+  }, [searched, proofFilter, proofSettings, modeFilterShown, modeFilter]);
   const missingCount = useMemo(() => sorted.filter((row) => lineMissingProof(row, proofSettings)).length, [sorted, proofSettings]);
   const searching = text(filter, "").length >= 2;
   const paymentLine = paymentLineId ? sorted.find((row) => text(row.id, "") === paymentLineId) : undefined;
@@ -312,10 +324,14 @@ export function WaitingPackagesPanel({
     setCustomerMenuOpen(false);
   }
 
+  // An air-only business never ships a barrel by default: its first piece is a box.
+  const startDraft = (next: WaitingPackageDraft): WaitingPackageDraft =>
+    airOnly ? { ...next, pieces: [newPieceDraft("box")] } : next;
+
   function openRegister() {
-    setDraft(emptyWaitingPackageDraft(defaultDestination));
+    setDraft(startDraft(emptyWaitingPackageDraft(defaultDestination)));
     setProof(emptyProofDraft());
-    setShipMode("sea");
+    setShipMode(airOnly ? "air" : "sea");
     setEditingId("");
     setAddedThisSitting([]);
     resetFormState();
@@ -346,7 +362,7 @@ export function WaitingPackagesPanel({
       carModel: "",
       carYear: "",
       // A car has no pieces of its own; switching back starts on one barrel.
-      pieces: d.pieces.length ? d.pieces : [newPieceDraft()],
+      pieces: d.pieces.length ? d.pieces : [newPieceDraft(airOnly ? "box" : "barrel")],
       lengthIn: "",
       widthIn: "",
       heightIn: "",
@@ -461,7 +477,7 @@ export function WaitingPackagesPanel({
       // sender's name, phone and WhatsApp switch stay.
       const whom = draft.receiverName || draft.customerName || "—";
       setAddedThisSitting((list) => [...list, `${containerLineTitle(stub, lang)} → ${whom}${code ? ` (${code})` : ""}`]);
-      setDraft(nextPackageForSameSender(draft, defaultDestination));
+      setDraft(startDraft(nextPackageForSameSender(draft, defaultDestination)));
       // The next package has its own photos and contents (and ships the
       // same way as the one before).
       setProof(emptyProofDraft());
@@ -487,7 +503,7 @@ export function WaitingPackagesPanel({
   return (
     <article className="panel">
       <div className="panel-header">
-        <div><h2>Waiting list</h2><span className="panel-count">{shown.length}</span></div>
+        <div><h2>{copy.waitingTitle}</h2><span className="panel-count">{shown.length}</span></div>
         <span className="panel-action">
           <button className="lst-add" type="button" disabled={busy || !enabled} onClick={openRegister}><Plus size={16} /> Register a package</button>
         </span>
@@ -498,7 +514,7 @@ export function WaitingPackagesPanel({
         if (row) openEdit(row);
       }} />
       <div className="panel-tools">
-        <input type="search" placeholder="VIN, customer, phone" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Search waiting packages" />
+        <input type="search" placeholder={copy.waitingSearch} value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Search waiting packages" />
         <div className="service-segments wpk-proof-chips" role="group" aria-label="Filter packages">
           {([["all", "All", rows.length], ["missing", "Missing proof", missingCount]] as const).map(([id, label, count]) => (
             <span
@@ -514,7 +530,7 @@ export function WaitingPackagesPanel({
             </span>
           ))}
         </div>
-        {shipsByAir && (
+        {modeFilterShown && (
           <div className="service-segments wpk-proof-chips" role="group" aria-label="Filter by how packages ship">
             {([["all", "All", rows.length], ["air", "Air", airCount], ["sea", "Sea", rows.length - airCount]] as const).map(([id, label, count]) => (
               <span
@@ -532,7 +548,7 @@ export function WaitingPackagesPanel({
           </div>
         )}
       </div>
-      <p className="panel-lede">Packages customers dropped off before a container was chosen. Print the label now; add them to a container that goes to the same country when it is loading.</p>
+      <p className="panel-lede">{copy.waitingLede}</p>
       {error && <div className="lst-form-error" role="alert">{error}</div>}
       {expected}
 
@@ -634,18 +650,21 @@ export function WaitingPackagesPanel({
             <header className="lst-modal-head">
               <div>
                 <h3>{editingId ? "Edit package" : "Register a package"}</h3>
-                <p>{editingId ? "Correct what was written on it." : "What the customer dropped off. It waits here until a container takes it."}</p>
+                <p>{editingId ? "Correct what was written on it." : copy.registerSubtitle}</p>
               </div>
               <button className="lst-icon-btn" type="button" onClick={closeModal} aria-label="Close"><X size={18} /></button>
             </header>
             <div className="lst-modal-body">
-              {shipsByChoiceShown(shipsByAir, editingRow) && (
+              {shipsByChoiceShown(shipsByAir, editingRow, airOnly) && (
                 <ShipsByChoice id="wpk-ships-by" value={shipMode} onChange={setShipMode} disabled={busy} />
               )}
-              <fieldset className="lst-fieldset">
-                <label className="lst-radio"><input type="radio" name="wpkkind" checked={piecesMode} onChange={() => setKind("barrels")} /><span>Barrels, boxes or other things</span></label>
-                <label className="lst-radio"><input type="radio" name="wpkkind" checked={draft.kind === "car"} onChange={() => setKind("car")} /><span>A car</span></label>
-              </fieldset>
+              {/* A car never flies: an air-only business is not asked, unless it is correcting an old car. */}
+              {(!airOnly || draft.kind === "car") && (
+                <fieldset className="lst-fieldset">
+                  <label className="lst-radio"><input type="radio" name="wpkkind" checked={piecesMode} onChange={() => setKind("barrels")} /><span>Barrels, boxes or other things</span></label>
+                  <label className="lst-radio"><input type="radio" name="wpkkind" checked={draft.kind === "car"} onChange={() => setKind("car")} /><span>A car</span></label>
+                </fieldset>
+              )}
               {piecesMode && (
                 <PiecesEditor
                   id="wpk-pieces"
@@ -821,7 +840,7 @@ export function WaitingPackagesPanel({
                   initialCountryCode={receiverPhoneCountry}
                 />
               </div>
-              {!editingId && <p className="lst-hint">The customer and the receiver get a WhatsApp message when the package is registered, when the container ships and when it arrives. Adding it to a container sends nothing.</p>}
+              {!editingId && <p className="lst-hint">{copy.registerHint}</p>}
               {!editingId && <p className="lst-hint">All the pieces for one receiver are one package. Save &amp; add another keeps the sender, for a different receiver or country.</p>}
             </div>
             <footer className="lst-modal-foot wpk-foot">

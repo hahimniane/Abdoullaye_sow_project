@@ -25,7 +25,7 @@ test("the choice is a Sea / Air radio group, offered only when the business ship
   // The flag comes from the business document the panel already holds.
   assert.match(panel, /const shipsByAir = shipsByAirOf\(business\);/);
   assert.match(panel, /shipsByAir=\{shipsByAir\}\s*onFlash=\{setFlash\}/);
-  assert.match(waiting, /\{shipsByChoiceShown\(shipsByAir, editingRow\) && \(\s*<ShipsByChoice id="wpk-ships-by" value=\{shipMode\} onChange=\{setShipMode\}/);
+  assert.match(waiting, /\{shipsByChoiceShown\(shipsByAir, editingRow, airOnly\) && \(\s*<ShipsByChoice id="wpk-ships-by" value=\{shipMode\} onChange=\{setShipMode\}/);
   // Received also offers it when the customer asked for air, so the choice is never hidden from a request that is.
   assert.match(requests, /\{\(shipsByAir \|\| requestMode === "air"\) && <ShipsByChoice id="pkq-receive-ships-by" value=\{shipMode\} onChange=\{setShipMode\}/);
   // Default sea; an edit opens on the package's own mode.
@@ -51,7 +51,7 @@ test("waiting rows and the pick list mark air packages; the list filters Air / S
   assert.match(shipsBy, /<Plane size=\{11\} aria-hidden="true" \/> <span>Air<\/span>/);
   assert.match(waiting, /\{packageShipModeOf\(row\.shipMode\) === "air" && <AirPackageBadge \/>\}/);
   assert.match(assign, /\{packageShipModeOf\(line\.shipMode\) === "air" && <AirPackageBadge \/>\}/);
-  assert.match(waiting, /\{shipsByAir && \(\s*<div className="service-segments wpk-proof-chips" role="group" aria-label="Filter by how packages ship">/);
+  assert.match(waiting, /\{modeFilterShown && \(\s*<div className="service-segments wpk-proof-chips" role="group" aria-label="Filter by how packages ship">/);
 });
 
 test("a package going the other way is blocked in the list, both ways, with the server's sentence", () => {

@@ -336,8 +336,13 @@ export function shipsByAirOf(business: unknown): boolean {
 /**
  * Whether a package form offers "Ships by": when the business flies, or when
  * the package being edited already flies (so it can be set back to sea).
+ *
+ * An air-only business (docs/SHIPPING_SIMPLE_HOME.md W3) is never asked for
+ * a new package - it flies. Only an old sea package being corrected shows
+ * the choice, so it can be moved to air.
  */
-export function shipsByChoiceShown(shipsByAir: boolean, line: unknown = null): boolean {
+export function shipsByChoiceShown(shipsByAir: boolean, line: unknown = null, airOnly = false): boolean {
+  if (airOnly) return line != null && packageShipModeOf(asRow(line).shipMode) !== "air";
   return shipsByAir === true || packageShipModeOf(asRow(line).shipMode) === "air";
 }
 

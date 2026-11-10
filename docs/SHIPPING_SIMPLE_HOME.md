@@ -271,6 +271,58 @@ never disagree on the arithmetic. Console parity is a follow-up.
 
 ---
 
+## W. Air-only on the website console
+
+The business console (`admin_web`) keeps its Shipping page and its steps; an
+air-only business only reads different words on it. Send packages and the
+counter price fill stay app-only for now (follow-up).
+
+### W1. Who gets it
+
+The same rule as H2: `shipsByAir && !hasSeaContainer`
+(`admin_web/src/lib/air-only.ts`, mirror of the app's `airOnlyBusiness`).
+`hasSeaContainer` comes from two `count()` reads on `containers`, equalities
+only: every container of the business, and those with `shipMode == "air"`
+(an old sea container carries no `shipMode`); sea = all > air. It is asked
+only for a business that flies and a person who can open the lists, and asked
+again when the container count changes. While it loads, and when it fails,
+the console is the one every business has today. A sea container among the
+rows the panel already holds overrules the count at once.
+
+### W2. Words
+
+One table, `shippingCopy(airOnly)`, two fixed sets. For an air-only business
+the word "container" (French "conteneur") never appears in:
+
+| Place | Others read | Air-only reads |
+| --- | --- | --- |
+| Sidebar, under Shipping | Requests, waiting list, containers, deliveries | Requests, packages, shipments, deliveries |
+| Steps | Waiting · Containers | Packages here · Shipments |
+| Waiting list title | Waiting list | Packages here |
+| Container list | Containers · New container · Container | Shipments · New shipment · Shipment |
+| A package not loaded | Waiting for a container | Not sent yet |
+| Today | Containers in progress · Sailed | Shipments in progress · Sent |
+| Today tiles / needs attention | Packages waiting for a container · Containers loading · Containers sailed | Packages not sent yet · Shipments loading · Shipments sent |
+
+The ledes, the register form's subtitle and its WhatsApp hint follow the same
+table. A container marked Air reads "shipment" on its own page for every
+business. Every string has its French in `french-dom.ts`.
+
+### W3. Register a package
+
+- Starts on **Air**; "Ships by" is not asked. It shows only when correcting an
+  old sea package, so that package can be moved to air.
+- The first piece is a **box** (and so is each piece added after it).
+- "A car" is not asked; it shows only when correcting a package that is a car.
+- The Air / Sea filter above the list shows only while a sea package is still
+  in the list.
+- A new shipment ("New shipment") starts on Air.
+
+Not in this pass: the dialogs that add or move packages, the staff view of a
+package, the price list panel and the label dialog still say "container".
+
+---
+
 ## Tests (definition of done)
 
 - H: unit tests for `shippingHomeLayout` and `airOnlyBusiness`; widget tests
@@ -286,5 +338,8 @@ never disagree on the arithmetic. Console parity is a follow-up.
   in kg; reprice across a unit change; invalid unit); server tests for
   `weightKg` on add/update/receive incl. the old-app clear; label/WhatsApp text.
 - P: widget tests for item fill, by-weight fill, quantity, editing after fill.
+- W: `admin_web/src/lib/air-only.test.ts` - the rule and the counts; no
+  air-only string says container in English or French and each has French;
+  the standard strings unchanged; the form's Air / box / no-car start.
 - No real customer names or phone numbers in any test.
 - EN and FR on the simulator for every changed app screen before a store build.

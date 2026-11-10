@@ -50,7 +50,7 @@ test("the Shipping page routes its list steps to one ContainersPanel", () => {
   assert.match(consoleSource, /import \{ContainersPanel\} from "@\/components\/business\/containers-panel";/);
   // Requests, Waiting and Containers are the panel's three lists, chosen by
   // the page; the panel stays mounted across them.
-  assert.match(consoleSource, /\{containerListSteps\.includes\(activeShippingStep\) && \(\s*<ContainersPanel\s+businessId=\{businessId\}\s+business=\{business\}\s+previewMode=\{previewMode\}\s+canRefundPayNow=\{mayRefund\(profile\) && !previewMode\}\s+view=\{activeShippingStep as ListView\}\s+onViewChange=\{onContainerView\}\s+onCounts=\{onContainerCounts\}\s+(?:\/\/[^\n]*\n\s*)*focusContainerId=\{\s*notificationFocusView === "line"\s*\? ""\s*: todayContainerFocus \|\| \(containerLink\?\.containerId \?\? ""\)\s*\}\s+focusLineId=\{\s*notificationFocusView === "line"\s*\? notificationFocusId\s*: containerLink\?\.lineId \?\? ""\s*\}\s+focusView=\{notificationFocusView === "requests" \? "requests" : todayContainersView\}\s+focusRequestId=\{notificationFocusView === "requests" \? notificationFocusId : ""\}\s+\/>\s*\)\}/);
+  assert.match(consoleSource, /\{containerListSteps\.includes\(activeShippingStep\) && \(\s*<ContainersPanel\s+airOnly=\{airOnly\}\s+businessId=\{businessId\}\s+business=\{business\}\s+previewMode=\{previewMode\}\s+canRefundPayNow=\{mayRefund\(profile\) && !previewMode\}\s+view=\{activeShippingStep as ListView\}\s+onViewChange=\{onContainerView\}\s+onCounts=\{onContainerCounts\}\s+(?:\/\/[^\n]*\n\s*)*focusContainerId=\{\s*notificationFocusView === "line"\s*\? ""\s*: todayContainerFocus \|\| \(containerLink\?\.containerId \?\? ""\)\s*\}\s+focusLineId=\{\s*notificationFocusView === "line"\s*\? notificationFocusId\s*: containerLink\?\.lineId \?\? ""\s*\}\s+focusView=\{notificationFocusView === "requests" \? "requests" : todayContainersView\}\s+focusRequestId=\{notificationFocusView === "requests" \? notificationFocusId : ""\}\s+\/>\s*\)\}/);
   assert.match(consoleSource, /shipping: <Container \{\.\.\.props\} \/>,/, "the sidebar icon map must cover the section");
   // Old tab ids (notifications, Today rows, links) open their step.
   assert.match(consoleSource, /const step = shippingStepForTab\(tab, view\);\s*if \(step\) \{\s*setShippingStep\(step\);\s*setActiveTabState\("shipping"\);/);
@@ -142,7 +142,7 @@ test("the search box finds lines by VIN, customer or phone and shows their conta
   // The packages still waiting for a container are searched with the loaded lines.
   assert.match(panelSource, /searchContainerLines\(\[\.\.\.lines\.rows, \.\.\.waiting\.rows\], containers\.rows, search\)/);
   assert.match(panelSource, /<input type="search" placeholder="VIN, customer, phone" value=\{search\}/);
-  assert.match(panelSource, /<span>Cargo<\/span><span>Whose<\/span><span>Container<\/span><span>State<\/span>/);
+  assert.match(panelSource, /<span>Cargo<\/span><span>Whose<\/span><span>\{copy\.column\}<\/span><span>State<\/span>/);
   assert.match(panelSource, /<StatusBadge status=\{hit\.status\} \/>\{Boolean\(hit\.sailedAt\) && <small>\{formatDate\(hit\.sailedAt\)\}<\/small>\}/);
 });
 
