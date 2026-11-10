@@ -17,10 +17,13 @@ import '../services/container_delivery.dart';
 import '../services/container_delivery_service.dart';
 import '../services/business_parking_entry.dart' show businessParkingVoided;
 import '../services/container_lot_cars.dart';
+import '../services/business_price_list.dart' show priceLbText;
 import '../services/business_volume.dart' show volumeFeedSignature;
+import '../services/business_weight_unit.dart';
 import '../services/container_feed_plan.dart';
 import '../services/container_manifest.dart';
 import '../services/container_packages.dart';
+import '../services/shipping_home.dart' show airOnlyBusiness;
 import '../services/known_car_lookup.dart';
 import '../services/line_pieces.dart';
 import '../services/label_printer.dart' show LabelPrinterController;
@@ -28,6 +31,7 @@ import '../services/lot_customers.dart';
 import '../services/lot_ledger.dart';
 import '../services/package_labels.dart' show PackageLabelsTarget;
 import '../services/package_proof.dart';
+import '../services/price_list_fill.dart' show PriceFill;
 import '../services/package_request_feed.dart';
 import '../services/package_request_service.dart';
 import '../services/phone_accounts.dart'
@@ -100,13 +104,37 @@ import 'zelle_check_sheet.dart' show zelleViewerIsOwner;
 /// from a link ([focus]); and the rest of every split package on screen.
 /// It used to listen to every container and line the business ever had.
 class ContainerFeed extends ChangeNotifier {
-  ContainerFeed(this.businessId, {FirebaseFirestore? db})
-    : _db = db ?? FirebaseFirestore.instance {
+  ContainerFeed(this.businessId, {FirebaseFirestore? db}) : _dbOverride = db {
     _listen();
   }
 
+  /// A feed that holds the boxes and lines it is given and listens to
+  /// nothing: how a widget test shows a screen that reads one.
+  @visibleForTesting
+  ContainerFeed.fixed(
+    this.businessId, {
+    this.containers = const [],
+    this.lines = const [],
+  }) : _dbOverride = null {
+    _open = [
+      for (final c in containers)
+        if (!c.isArrived) c,
+    ];
+    _arrived = [
+      for (final c in containers)
+        if (c.isArrived) c,
+    ];
+    _openLoaded = true;
+    _arrivedLoaded = true;
+    _openLinesLoaded = true;
+    _waitingLoaded = true;
+  }
+
   final String businessId;
-  final FirebaseFirestore _db;
+  final FirebaseFirestore? _dbOverride;
+
+  /// Read when a query is first opened, never at construction.
+  FirebaseFirestore get _db => _dbOverride ?? FirebaseFirestore.instance;
   final List<StreamSubscription<Object?>> _subs = [];
 
   List<ShippingContainer> containers = const [];
@@ -501,17 +529,76 @@ class ContainerFeed extends ChangeNotifier {
   }
 }
 
+/// Where the containers screen opens (docs/SHIPPING_SIMPLE_HOME.md, H4). The
+/// screen owns the feeds every package screen needs, so the simple shipping
+/// home opens its places through it rather than starting its own copies.
+enum ContainersEntry {
+  /// Today's Containers screen, as it always was.
+  containers,
+
+  /// The waiting list ("Packages here" for an air-only business), with no
+  /// Containers screen underneath: Back goes home.
+  waiting,
+
+  /// What has left: Shipped and Arrived only, titled "On the way".
+  shipments,
+
+  /// The customers' requests, with no Containers screen underneath.
+  requests,
+}
+
+/// What a widget test hands the screen in place of its Firestore reads: the
+/// feeds it shows and the lists around them. With a seed the screen listens
+/// to nothing and touches no Firebase.
+@visibleForTesting
+class ContainersScreenSeed {
+  const ContainersScreenSeed({
+    required this.feed,
+    required this.requests,
+    this.destinations = const [],
+    this.staff = const [],
+    this.customers = const [],
+    this.businessName = '',
+    this.proofSettings = const PackageProofSettings(),
+  });
+
+  final ContainerFeed feed;
+  final PackageRequestFeed requests;
+  final List<DestinationCountry> destinations;
+  final List<LotStaff> staff;
+  final List<LotCustomer> customers;
+  final String businessName;
+  final PackageProofSettings proofSettings;
+}
+
 class ContainersScreen extends StatefulWidget {
-  const ContainersScreen({super.key, required this.businessId});
+  const ContainersScreen({
+    super.key,
+    required this.businessId,
+    this.entry = ContainersEntry.containers,
+    this.registerOnOpen = false,
+    @visibleForTesting this.seed,
+  });
 
   final String businessId;
+
+  /// Which place to open on; the Containers screen unless asked.
+  final ContainersEntry entry;
+
+  /// With [ContainersEntry.waiting]: open the register form once, as soon as
+  /// what it needs (destinations, customers, whether the business ships by
+  /// air) has answered.
+  final bool registerOnOpen;
+
+  final ContainersScreenSeed? seed;
 
   @override
   State<ContainersScreen> createState() => _ContainersScreenState();
 }
 
 class _ContainersScreenState extends State<ContainersScreen> {
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  /// Read when a query is first opened, never at construction.
+  late final FirebaseFirestore _db = FirebaseFirestore.instance;
   final List<StreamSubscription<Object?>> _subs = [];
 
   /// The containers and lines, shared with every detail opened from here.
@@ -534,6 +621,8 @@ class _ContainersScreenState extends State<ContainersScreen> {
   String _ownerUid = '';
   String _ownerName = '';
   List<LotStaff> get _staff {
+    final seeded = widget.seed;
+    if (seeded != null) return seeded.staff;
     final l10n = AppLocalizations.of(context)!;
     // The owner as the business names them, else their own signed-in
     // account (an owner whose profile names nobody), else "Business owner".
@@ -601,12 +690,29 @@ class _ContainersScreenState extends State<ContainersScreen> {
   String _filter = containerStatusLoading;
   String _search = '';
 
+  /// The waiting entry opens once what its register form needs has answered
+  /// (the business, its destinations, the customer memory) - or after
+  /// [_waitingGate] at the latest, so the screen always resolves.
+  bool _businessLoaded = false;
+  bool _destinationsLoaded = false;
+  bool _customersReady = false;
+  bool _gateOpen = false;
+  Timer? _gateTimer;
+  static const _waitingGate = Duration(seconds: 6);
+
+  bool get _waitingReady =>
+      _gateOpen ||
+      (_feed.loaded &&
+          _businessLoaded &&
+          _destinationsLoaded &&
+          _customersReady);
+
   /// Every vehicle this business has on file: parked cars first, then what
   /// a past activity recorded, then what an earlier container carried.
   /// Typing a VIN it recognises should never leave staff re-typing the car.
   List<LotKnownCar> get _knownCars => [
         ..._parkedCars,
-        ..._carLookup.recent,
+        if (widget.seed == null) ..._carLookup.recent,
         for (final line in _lines)
           if (line.isCar)
             LotKnownCar(
@@ -622,11 +728,31 @@ class _ContainersScreenState extends State<ContainersScreen> {
   @override
   void initState() {
     super.initState();
+    // What has left starts on Shipped; the list never offers Loading.
+    if (widget.entry == ContainersEntry.shipments) {
+      _filter = containerStatusShipped;
+    }
+    if (widget.entry == ContainersEntry.waiting) {
+      _gateTimer = Timer(_waitingGate, () {
+        if (mounted && !_gateOpen) setState(() => _gateOpen = true);
+      });
+    }
     _listen();
   }
 
   void _listen() {
     final id = widget.businessId;
+    final seeded = widget.seed;
+    if (seeded != null) {
+      _feed = seeded.feed..addListener(_onFeed);
+      _requests = seeded.requests..addListener(_onFeed);
+      _destinations = seeded.destinations;
+      _customers = seeded.customers;
+      _businessName = seeded.businessName;
+      _proofSettings = seeded.proofSettings;
+      _businessLoaded = _destinationsLoaded = _customersReady = true;
+      return;
+    }
     _feed = ContainerFeed(id)..addListener(_onFeed);
     _requests = PackageRequestFeed(id, service: FirebasePackageRequestService())
       ..addListener(_onFeed);
@@ -676,8 +802,11 @@ class _ContainersScreenState extends State<ContainersScreen> {
             ) ??
             '';
         _proofSettings = proofSettingsOf(data);
+        _businessLoaded = true;
       });
-    }, onError: (_) {}));
+    }, onError: (_) {
+      if (mounted) setState(() => _businessLoaded = true);
+    }));
 
     // The business's own countries, the same list Services & coverage
     // manages, lead the destination picker; the rest of the catalogue
@@ -695,8 +824,13 @@ class _ContainersScreenState extends State<ContainersScreen> {
           final byOrder = a.sortOrder.compareTo(b.sortOrder);
           return byOrder != 0 ? byOrder : a.name.compareTo(b.name);
         });
-      setState(() => _destinations = list);
-    }, onError: (_) {}));
+      setState(() {
+        _destinations = list;
+        _destinationsLoaded = true;
+      });
+    }, onError: (_) {
+      if (mounted) setState(() => _destinationsLoaded = true);
+    }));
 
     _loadCustomers();
   }
@@ -716,11 +850,14 @@ class _ContainersScreenState extends State<ContainersScreen> {
     } catch (_) {
       // No memory yet, or no permission to read it: the form still works by
       // hand, so this stays silent rather than alarming.
+    } finally {
+      if (mounted) setState(() => _customersReady = true);
     }
   }
 
   @override
   void dispose() {
+    _gateTimer?.cancel();
     for (final s in _subs) {
       s.cancel();
     }
@@ -740,6 +877,7 @@ class _ContainersScreenState extends State<ContainersScreen> {
         builder: (_) => BusinessRequestsScreen(
           businessId: widget.businessId,
           feed: _requests,
+          airOnly: _airOnly,
         ),
       ),
     );
@@ -833,11 +971,60 @@ class _ContainersScreenState extends State<ContainersScreen> {
     _openDetail(created);
   }
 
+  /// Whether the business ships by air and has never had a container that
+  /// is not an air shipment, by the feed this screen holds. Not before the
+  /// feed has answered: an empty list is not a list of air shipments.
+  bool get _airOnly =>
+      _feed.loaded &&
+      airOnlyBusiness(
+        shipsByAir: _proofSettings.shipsByAir,
+        hasSeaContainer: _containers.any((c) => !c.isAir),
+      );
+
   @override
   Widget build(BuildContext context) {
+    switch (widget.entry) {
+      case ContainersEntry.requests:
+        return BusinessRequestsScreen(
+          businessId: widget.businessId,
+          feed: _requests,
+          airOnly: _airOnly,
+        );
+      case ContainersEntry.waiting:
+        if (!_waitingReady) {
+          return const _ContainersOpening();
+        }
+        return WaitingPackagesScreen(
+          businessId: widget.businessId,
+          feed: _feed,
+          staff: _staff,
+          customers: _customers,
+          knownCars: _knownCars,
+          parkedCarRows: _parkedCarRows,
+          destinations: _destinations,
+          businessCountryCode: _businessCountryCode,
+          onCustomerRecorded: _loadCustomers,
+          requestFeed: _requests,
+          proofSettings: _proofSettings,
+          registerOnOpen: widget.registerOnOpen,
+          airOnly: _airOnly,
+        );
+      case ContainersEntry.shipments:
+      case ContainersEntry.containers:
+        break;
+    }
+    final shipments = widget.entry == ContainersEntry.shipments;
     final l10n = AppLocalizations.of(context)!;
     final searching = _search.trim().length >= 2;
     final byId = {for (final c in _containers) c.id: c};
+    final hits = searching
+        ? searchContainerLines(_lines, byId, _search)
+        : const <ContainerSearchHit>[];
+    // On the way: what has left, not what still waits or loads.
+    final onTheWayHits = [
+      for (final hit in hits)
+        if (hit.container != null && !hit.container!.isLoading) hit,
+    ];
     // Loading and at sea from the whole open read; arrived from the
     // server's count, while the list holds a page of them.
     final counts = _feed.statusCounts;
@@ -871,37 +1058,41 @@ class _ContainersScreenState extends State<ContainersScreen> {
             onOpenWaiting: _openWaiting,
             requestsCount: _requests.openCount,
             onOpenRequests: _openRequests,
+            shipments: shipments,
+            airOnly: _airOnly,
           ),
           // This month's pieces and sailings; kept (not rebuilt) while a
           // search hides it, so clearing the search does not ask again.
-          Visibility(
-            visible: !searching,
-            maintainState: true,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, 0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Whoever takes package payments can check a Zelle the
-                  // customer says they sent (only with an active bank; the
-                  // owner gets a hint to connect one otherwise).
-                  BankCheckEntry(
-                    key: const Key('containers-bank-check'),
-                    businessId: widget.businessId,
-                    isOwner: zelleViewerIsOwner(context, widget.businessId),
-                    canCheck: true,
-                    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                  ),
-                  ContainerVolumeCard(
-                    businessId: widget.businessId,
-                    // Live: reloads after a write it is counted from.
-                    refreshKey: _feed.volumeSignature,
-                  ),
-                ],
+          // "On the way" is only the list of what has left.
+          if (!shipments)
+            Visibility(
+              visible: !searching,
+              maintainState: true,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, 0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Whoever takes package payments can check a Zelle the
+                    // customer says they sent (only with an active bank; the
+                    // owner gets a hint to connect one otherwise).
+                    BankCheckEntry(
+                      key: const Key('containers-bank-check'),
+                      businessId: widget.businessId,
+                      isOwner: zelleViewerIsOwner(context, widget.businessId),
+                      canCheck: true,
+                      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                    ),
+                    ContainerVolumeCard(
+                      businessId: widget.businessId,
+                      // Live: reloads after a write it is counted from.
+                      refreshKey: _feed.volumeSignature,
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
           Expanded(
             child: Stack(
               children: [
@@ -914,7 +1105,7 @@ class _ContainersScreenState extends State<ContainersScreen> {
                   )
                 else if (searching)
                   _SearchResults(
-                    hits: searchContainerLines(_lines, byId, _search),
+                    hits: shipments ? onTheWayHits : hits,
                     groups: _feed.groups,
                     staff: _staff,
                     onOpen: _openDetail,
@@ -930,17 +1121,19 @@ class _ContainersScreenState extends State<ContainersScreen> {
                     footer: _filter == containerStatusArrived
                         ? moreArrived
                         : null,
+                    shipments: shipments,
                   ),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: LotPrimaryBar(
-                    label: l10n.ctrNewContainer,
-                    icon: Icons.add,
-                    onTap: _create,
+                if (!shipments)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: LotPrimaryBar(
+                      label: l10n.ctrNewContainer,
+                      icon: Icons.add,
+                      onTap: _create,
+                    ),
                   ),
-                ),
               ],
             ),
           ),
@@ -948,6 +1141,34 @@ class _ContainersScreenState extends State<ContainersScreen> {
       ),
     );
   }
+}
+
+/// What the waiting entry shows for the moment before its register form has
+/// what it needs: the business, its destinations and the customer memory.
+class _ContainersOpening extends StatelessWidget {
+  const _ContainersOpening();
+
+  @override
+  Widget build(BuildContext context) => const Scaffold(
+    backgroundColor: AppColors.cream,
+    body: SafeArea(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: EdgeInsets.fromLTRB(4, 4, 0, 0),
+            child: AppBackButton(),
+          ),
+          Expanded(
+            child: Center(
+              key: Key('containers-opening'),
+              child: CircularProgressIndicator(),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -968,7 +1189,17 @@ class _ContainersHeader extends StatelessWidget {
     required this.onOpenWaiting,
     required this.requestsCount,
     required this.onOpenRequests,
+    this.shipments = false,
+    this.airOnly = false,
   });
+
+  /// "On the way": only Shipped and Arrived, no Waiting or Requests
+  /// shortcuts.
+  final bool shipments;
+
+  /// A business that only ever ships by air carries no cars: the search
+  /// does not offer a VIN.
+  final bool airOnly;
 
   final String businessName;
   final VoidCallback onScan;
@@ -1008,7 +1239,8 @@ class _ContainersHeader extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          l10n.ctrTitle,
+                          shipments ? l10n.shhOnTheWayTitle : l10n.ctrTitle,
+                          key: const Key('containers-title'),
                           style: const TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.w700,
@@ -1076,7 +1308,11 @@ class _ContainersHeader extends StatelessWidget {
             const SizedBox(height: AppSpacing.md),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-              child: _SearchField(value: search, onChanged: onSearch),
+              child: _SearchField(
+                value: search,
+                onChanged: onSearch,
+                airOnly: airOnly,
+              ),
             ),
             // Search cuts across every state, so the state chips step aside
             // while a query is in force rather than appearing to narrow it.
@@ -1095,13 +1331,21 @@ class _ContainersHeader extends StatelessWidget {
                             selected: filter,
                             counts: counts,
                             onChanged: onFilter,
+                            statuses: shipments
+                                ? const [
+                                    containerStatusShipped,
+                                    containerStatusArrived,
+                                  ]
+                                : containerStatuses,
                           ),
-                          const SizedBox(height: AppSpacing.sm),
-                          WaitingEntryRow(
-                              count: waitingCount, onTap: onOpenWaiting),
-                          const SizedBox(height: AppSpacing.sm),
-                          RequestsEntryRow(
-                              count: requestsCount, onTap: onOpenRequests),
+                          if (!shipments) ...[
+                            const SizedBox(height: AppSpacing.sm),
+                            WaitingEntryRow(
+                                count: waitingCount, onTap: onOpenWaiting),
+                            const SizedBox(height: AppSpacing.sm),
+                            RequestsEntryRow(
+                                count: requestsCount, onTap: onOpenRequests),
+                          ],
                         ],
                       ),
                     )
@@ -1115,10 +1359,15 @@ class _ContainersHeader extends StatelessWidget {
 }
 
 class _SearchField extends StatefulWidget {
-  const _SearchField({required this.value, required this.onChanged});
+  const _SearchField({
+    required this.value,
+    required this.onChanged,
+    this.airOnly = false,
+  });
 
   final String value;
   final ValueChanged<String> onChanged;
+  final bool airOnly;
 
   @override
   State<_SearchField> createState() => _SearchFieldState();
@@ -1146,7 +1395,7 @@ class _SearchFieldState extends State<_SearchField> {
       },
       textInputAction: TextInputAction.search,
       decoration: InputDecoration(
-        hintText: l10n.ctrSearchHint,
+        hintText: widget.airOnly ? l10n.shhSearchHint : l10n.ctrSearchHint,
         prefixIcon: const Icon(Icons.search, size: 20, color: AppColors.muted),
         suffixIcon: _controller.text.isEmpty
             ? null
@@ -1169,7 +1418,11 @@ class _StatusChips extends StatelessWidget {
     required this.selected,
     required this.counts,
     required this.onChanged,
+    this.statuses = containerStatuses,
   });
+
+  /// The states offered, in order.
+  final List<String> statuses;
 
   final String selected;
   final Map<String, int> counts;
@@ -1180,7 +1433,7 @@ class _StatusChips extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     return Row(
       children: [
-        for (final status in containerStatuses) ...[
+        for (final status in statuses) ...[
           Expanded(
             child: PressableScale(
               scale: 0.96,
@@ -1199,12 +1452,20 @@ class _StatusChips extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      _statusLabel(l10n, status),
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: status == selected ? Colors.white : AppColors.muted,
+                    // Two chips share the row on "On the way": a long French
+                    // label shortens instead of overflowing.
+                    Flexible(
+                      child: Text(
+                        _statusLabel(l10n, status),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: status == selected
+                              ? Colors.white
+                              : AppColors.muted,
+                        ),
                       ),
                     ),
                     if ((counts[status] ?? 0) > 0) ...[
@@ -1225,8 +1486,7 @@ class _StatusChips extends StatelessWidget {
               ),
             ),
           ),
-          if (status != containerStatuses.last)
-            const SizedBox(width: AppSpacing.sm),
+          if (status != statuses.last) const SizedBox(width: AppSpacing.sm),
         ],
       ],
     );
@@ -1244,7 +1504,11 @@ class _ContainerList extends StatelessWidget {
     required this.anyAtAll,
     required this.onOpen,
     this.footer,
+    this.shipments = false,
   });
+
+  /// "On the way": an empty list says nothing is on the way.
+  final bool shipments;
 
   final List<ShippingContainer> containers;
   final String filter;
@@ -1265,14 +1529,16 @@ class _ContainerList extends StatelessWidget {
         children: [
           LotEmptyState(
             icon: Icons.view_in_ar_outlined,
-            title: !anyAtAll
+            title: shipments && filter != containerStatusArrived
+                ? l10n.shhNothingOnTheWay
+                : !anyAtAll
                 ? l10n.ctrNoContainers
                 : switch (filter) {
                     containerStatusShipped => l10n.ctrNoShipped,
                     containerStatusArrived => l10n.ctrNoArrived,
                     _ => l10n.ctrNoLoading,
                   },
-            hint: anyAtAll ? null : l10n.ctrNoContainersHint,
+            hint: anyAtAll || shipments ? null : l10n.ctrNoContainersHint,
           ),
           ?footer,
         ],
@@ -3815,7 +4081,17 @@ class _LineFormSheet extends StatefulWidget {
     this.staff = const [],
     this.proofSettings = const PackageProofSettings(),
     this.proofController,
+    this.weightUnit,
+    this.airOnly = false,
   }) : assert(waiting || container != null);
+
+  /// The business's weight unit and price list; the sheet makes (and owns)
+  /// its own from `packagePriceLists/{businessId}` unless a test gave one.
+  final BusinessWeightUnit? weightUnit;
+
+  /// A business that only ever ships by air (`airOnlyBusiness`): a new
+  /// package starts on Air and the Sea · Air choice is not offered.
+  final bool airOnly;
 
   /// Everyone in the business - the owner and every staff member - offered
   /// as "received by" when money is taken as a package is registered.
@@ -3898,6 +4174,11 @@ class _LineFormSheetState extends State<_LineFormSheet> {
   late final ProofFieldsController _proof;
   bool _ownsProof = false;
 
+  /// The business's unit and price list: the weight field's unit, and the
+  /// pieces' "From the price list".
+  late final BusinessWeightUnit _units;
+  bool _ownsUnits = false;
+
   /// Each piece says what is wrong with it once a save was refused.
   bool _showPieceErrors = false;
   final _customer = TextEditingController();
@@ -3973,6 +4254,7 @@ class _LineFormSheetState extends State<_LineFormSheet> {
   /// air (or one already marked air, so it can be changed back).
   bool get _offersShipMode =>
       _waiting &&
+      !widget.airOnly &&
       (widget.proofSettings.shipsByAir ||
           (widget.existing?.isAirPackage ?? false));
 
@@ -3986,30 +4268,46 @@ class _LineFormSheetState extends State<_LineFormSheet> {
   /// for packages that fly: a sea package's form is the one it always was.
   bool get _showsProof => _lineShipMode == containerShipModeAir;
 
+  /// The kind a fresh piece starts as.
+  String get _startPieceKind =>
+      widget.airOnly ? pieceKind.box : pieceKind.barrel;
+
+  /// "What is it? A car | Barrels & boxes" is not asked of a business that
+  /// only flies registering a package: it is never a car.
+  bool get _asksKind => !(_waiting && widget.airOnly && !_isCar);
+
   @override
   void initState() {
     super.initState();
     final line = widget.existing;
     // An edit opens on the line's pieces (an old-form line on the pieces it
-    // reads as, its price spread over them); a new one on one barrel.
+    // reads as, its price spread over them); a new one on one barrel (one
+    // box for a business that only flies: a barrel does not go by air).
     // A collected request's line keeps its pickup fee in a field of its own
     // (never in the piece prices); any other line has none to show.
     _pieceEditor = PiecesEditorController(
       initial: line == null || line.isCar ? const [] : line.allPieces,
+      kind: _startPieceKind,
       pickupFeeCents: line != null && line.hasPickupFee
           ? line.pickupFeeCents
           : null,
     )..addListener(_onPiecesEdited);
     // An edit opens on the line's stored photos, items, weight and value;
     // a new line on nothing.
+    _ownsUnits = widget.weightUnit == null;
+    _units = widget.weightUnit ??
+        BusinessWeightUnit(businessId: widget.businessId);
+    _units.addListener(_onUnitsChanged);
     final given = widget.proofController;
     _ownsProof = given == null;
     _proof = given ??
         ProofFieldsController(
           businessId: widget.businessId,
           initial: line?.proofDraft ?? PackageProofDraft.empty,
+          units: _units,
         );
-    _shipMode = line?.shipMode ?? containerShipModeSea;
+    _shipMode = line?.shipMode ??
+        (widget.airOnly ? containerShipModeAir : containerShipModeSea);
     if (line == null) {
       // At the counter most packages are barrels and boxes; on a container
       // the yard starts with a car, as it always has.
@@ -4072,6 +4370,8 @@ class _LineFormSheetState extends State<_LineFormSheet> {
       ..removeListener(_onPiecesEdited)
       ..dispose();
     if (_ownsProof) _proof.dispose();
+    _units.removeListener(_onUnitsChanged);
+    if (_ownsUnits) _units.dispose();
     for (final c in [
       _vin, _make, _model, _year, _customer, _phone,
       _receiver, _receiverPhone, _lotFilter, _length, _width, _height, _price,
@@ -4083,6 +4383,32 @@ class _LineFormSheetState extends State<_LineFormSheet> {
   }
 
   bool get _isCar => _kind == containerLineKindCar;
+
+  /// The price list's route for this package: its destination (the picked
+  /// one on a waiting package, the container's on a line) by its ship mode;
+  /// null when the business priced none.
+  Map<String, dynamic>? get _priceRoute {
+    final country = _waiting
+        ? _destinationId
+        : (widget.container?.destinationCountryId ?? '');
+    if (country.isEmpty) return null;
+    return _units.list?.route(country, _lineShipMode)?.raw;
+  }
+
+  /// A piece was filled from the price list. On an air package with an empty
+  /// weight field, the package weight becomes the weights typed that way,
+  /// added up (the list's unit, which is the business's); nothing is stored
+  /// from the fill itself. When the last weighed fill is replaced by an item,
+  /// the weight it wrote goes with it.
+  void _onPriceFilled(int index, PriceFill fill) {
+    if (!_showsProof) return;
+    final total = _pieceEditor.filledWeightTotal;
+    if (total == null) {
+      _proof.clearAutoFilledWeight();
+      return;
+    }
+    _proof.autoFillWeight(priceLbText(total), fill.unit);
+  }
 
   /// The refusals that belong to the pieces, cleared as they are edited.
   static const _pieceCodes = {
@@ -4100,6 +4426,12 @@ class _LineFormSheetState extends State<_LineFormSheet> {
 
   /// A piece was typed in or changed: what the server last said about the
   /// pieces no longer stands (the pieces show their own problems live).
+  /// The price list or the unit arrived (or changed): "From the price list"
+  /// and the weight field follow it.
+  void _onUnitsChanged() {
+    if (mounted) setState(() {});
+  }
+
   void _onPiecesEdited() {
     if (!mounted) return;
     final stale = _serverNote.isNotEmpty ||
@@ -4600,7 +4932,7 @@ class _LineFormSheetState extends State<_LineFormSheet> {
           // same kind and name, the people cleared.
           final first = _pieceEditor.rows.firstOrNull;
           _pieceEditor.reset(
-            kind: first?.kind ?? pieceKind.barrel,
+            kind: first?.kind ?? _startPieceKind,
             description: first?.description.text ?? '',
           );
           _customer.clear();
@@ -4750,7 +5082,7 @@ class _LineFormSheetState extends State<_LineFormSheet> {
         ]) {
           c.clear();
         }
-        _pieceEditor.reset();
+        _pieceEditor.reset(kind: _startPieceKind);
         _notifyReceiver = true;
         final start = widget.defaultDestination;
         _destinationId = start?.id ?? '';
@@ -4801,6 +5133,7 @@ class _LineFormSheetState extends State<_LineFormSheet> {
     'photo_required',
     'contents_invalid',
     'weight_invalid',
+    'weight_kg_invalid',
     'declared_value_invalid',
   };
 
@@ -4831,7 +5164,9 @@ class _LineFormSheetState extends State<_LineFormSheet> {
               ? l10n.ctrEditLine
               : (widget.container!.isAir ? l10n.airAddLine : l10n.ctrAddLine)),
       subtitle: _waiting
-          ? l10n.wpkRegisterSubtitle
+          ? (widget.airOnly
+              ? l10n.wpkRegisterSubtitleAir
+              : l10n.wpkRegisterSubtitle)
           : widget.container!.displayName,
       footer: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -4933,28 +5268,30 @@ class _LineFormSheetState extends State<_LineFormSheet> {
             ),
             const SizedBox(height: AppSpacing.md),
           ],
-          Text(
-            l10n.ctrKind,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.2,
-              color: AppColors.ink,
+          if (_asksKind) ...[
+            Text(
+              l10n.ctrKind,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.2,
+                color: AppColors.ink,
+              ),
             ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          _KindChips(
-            selected: _kind,
-            onChanged: (k) => setState(() {
-              _kind = k;
-              _errors = {};
-              _serverNote = '';
-              _showPieceErrors = false;
-              // The lot question belongs to a car; a new kind starts over.
-              _inLot = null;
-              _clearCarDraft();
-            }),
-          ),
+            const SizedBox(height: AppSpacing.sm),
+            _KindChips(
+              selected: _kind,
+              onChanged: (k) => setState(() {
+                _kind = k;
+                _errors = {};
+                _serverNote = '';
+                _showPieceErrors = false;
+                // The lot question belongs to a car; a new kind starts over.
+                _inLot = null;
+                _clearCarDraft();
+              }),
+            ),
+          ],
           // A car is asked about before any VIN is: is it parked here?
           // Until that is answered nothing else is shown, and a "Yes" shows
           // the lot's cars until one is picked.
@@ -5080,6 +5417,10 @@ class _LineFormSheetState extends State<_LineFormSheet> {
               // Every customer package carries its price
               // (docs/PACKAGE_PRICE_REQUIRED.md); stock and cars are exempt.
               requirePrices: _owner == containerOwnerCustomer,
+              // "From the price list": the business's own route for this
+              // package's country and ship mode, when it has priced one.
+              priceRoute: _priceRoute,
+              onPriceFilled: _onPriceFilled,
               error: errorFor('pieces_required') ??
                   errorFor('pieces_too_many') ??
                   errorFor('package_price_required') ??
@@ -5145,7 +5486,8 @@ class _LineFormSheetState extends State<_LineFormSheet> {
               photoError:
                   errorFor('photo_required') ?? errorFor('photo_invalid'),
               contentsError: errorFor('contents_invalid'),
-              weightError: errorFor('weight_invalid'),
+              weightError:
+                  errorFor('weight_invalid') ?? errorFor('weight_kg_invalid'),
               valueError: errorFor('declared_value_invalid'),
             ),
           ],
@@ -5344,7 +5686,9 @@ class _LineFormSheetState extends State<_LineFormSheet> {
             if (_waiting && !_editing) ...[
               const SizedBox(height: AppSpacing.sm),
               Text(
-                l10n.wpkUpdatesNotice,
+                widget.airOnly
+                    ? l10n.wpkUpdatesNoticeAir
+                    : l10n.wpkUpdatesNotice,
                 key: const Key('wpk-no-notice'),
                 style: const TextStyle(fontSize: 12, color: AppColors.muted),
               ),
@@ -6642,6 +6986,7 @@ Future<WaitingPackageSaved?> showWaitingPackageSheet(
   List<LotStaff> staff = const [],
   PackageProofSettings proofSettings = const PackageProofSettings(),
   ProofFieldsController? proofController,
+  bool airOnly = false,
 }) {
   final start = existing == null
       ? defaultWaitingDestination(destinations)
@@ -6667,6 +7012,7 @@ Future<WaitingPackageSaved?> showWaitingPackageSheet(
       staff: staff,
       proofSettings: proofSettings,
       proofController: proofController,
+      airOnly: airOnly,
     ),
   );
 }
@@ -6751,6 +7097,7 @@ Widget containerLineFormSheetForTesting({
   List<ContainerLine> lines = const [],
   PackageProofSettings proofSettings = const PackageProofSettings(),
   ProofFieldsController? proofController,
+  BusinessWeightUnit? weightUnit,
 }) =>
     _LineFormSheet(
       businessId: container.businessId,
@@ -6764,6 +7111,7 @@ Widget containerLineFormSheetForTesting({
       existing: existing,
       proofSettings: proofSettings,
       proofController: proofController,
+      weightUnit: weightUnit,
     );
 
 /// The register-a-waiting-package sheet, on its own. [caller] stands in for
@@ -6779,6 +7127,8 @@ Widget waitingPackageSheetForTesting({
   List<LotStaff> staff = const [],
   PackageProofSettings proofSettings = const PackageProofSettings(),
   ProofFieldsController? proofController,
+  BusinessWeightUnit? weightUnit,
+  bool airOnly = false,
 }) =>
     _LineFormSheet(
       businessId: 'b1',
@@ -6796,6 +7146,8 @@ Widget waitingPackageSheetForTesting({
       caller: caller,
       proofSettings: proofSettings,
       proofController: proofController,
+      weightUnit: weightUnit,
+      airOnly: airOnly,
     );
 
 /// The contacts sheet for [line], on its own.

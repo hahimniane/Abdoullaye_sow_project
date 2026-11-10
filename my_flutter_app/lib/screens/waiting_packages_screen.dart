@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
@@ -31,6 +33,8 @@ import 'package_estimate_screen.dart';
 import 'package_payment_sheet.dart';
 import 'package_result_screen.dart';
 import 'receive_request_sheet.dart';
+import 'send_packages_sheet.dart';
+import '../services/send_packages.dart';
 import '../widgets/request_code_lookup_sheet.dart';
 import '../services/whatsapp_conversations.dart' show messageCustomerTargets;
 import '../widgets/whatsapp_widgets.dart'
@@ -124,7 +128,18 @@ class WaitingPackagesScreen extends StatefulWidget {
     this.requestFeed,
     this.proofSettings = const PackageProofSettings(),
     this.clock,
+    this.registerOnOpen = false,
+    this.airOnly = false,
   });
+
+  /// Opens the register form once, after the first frame (the simple
+  /// shipping home's Register a package).
+  final bool registerOnOpen;
+
+  /// A business that only ever ships by air (`airOnlyBusiness`): the list is
+  /// called Packages here, and the register form starts on Air without the
+  /// Sea · Air choice.
+  final bool airOnly;
 
   final String businessId;
   final ContainerFeed feed;
@@ -173,6 +188,11 @@ class _WaitingPackagesScreenState extends State<WaitingPackagesScreen> {
     super.initState();
     widget.feed.addListener(_onFeed);
     widget.requestFeed?.addListener(_onFeed);
+    if (widget.registerOnOpen) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_register());
+      });
+    }
   }
 
   @override
@@ -333,10 +353,26 @@ class _WaitingPackagesScreenState extends State<WaitingPackagesScreen> {
       caller: widget.caller,
       staff: widget.staff,
       proofSettings: widget.proofSettings,
+      airOnly: widget.airOnly,
     );
     if (saved == null || !mounted) return;
     final line = saved.line;
     if (saved.printLabel && line != null) await _printLabel(line);
+  }
+
+  /// Send packages: the waiting air packages leave together on one flight.
+  Future<void> _send() async {
+    final l10n = AppLocalizations.of(context)!;
+    final sent = await showSendPackagesSheet(
+      context,
+      businessId: widget.businessId,
+      packages: sendablePackages(widget.feed.lines),
+      containers: () => widget.feed.containers,
+      lines: () => widget.feed.lines,
+      caller: widget.caller,
+    );
+    if (sent == null || !mounted) return;
+    showSuccessSnackBar(context, l10n.sndDone(sent));
   }
 
   Future<void> _edit(ContainerLine line) async {
@@ -355,6 +391,7 @@ class _WaitingPackagesScreenState extends State<WaitingPackagesScreen> {
       caller: widget.caller,
       staff: widget.staff,
       proofSettings: widget.proofSettings,
+      airOnly: widget.airOnly,
     );
   }
 
@@ -525,7 +562,11 @@ class _WaitingPackagesScreenState extends State<WaitingPackagesScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final all = _waiting;
-    final shipsByAir = widget.proofSettings.shipsByAir;
+    // An air-only business has no sea packages to tell apart.
+    final shipsByAir = widget.proofSettings.shipsByAir && !widget.airOnly;
+    final sendable = widget.proofSettings.shipsByAir
+        ? sendablePackages(widget.feed.lines)
+        : const <ContainerLine>[];
     final matched = filterWaitingByShipMode(
       filterWaitingPackages(all, _filter.text),
       shipsByAir ? _shipModeFilter : '',
@@ -575,7 +616,10 @@ class _WaitingPackagesScreenState extends State<WaitingPackagesScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                l10n.wpkWaitingTitle,
+                                widget.airOnly
+                                    ? l10n.shhPackagesHereTitle
+                                    : l10n.wpkWaitingTitle,
+                                key: const Key('waiting-title'),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
@@ -609,7 +653,9 @@ class _WaitingPackagesScreenState extends State<WaitingPackagesScreen> {
                         onChanged: (_) => setState(() {}),
                         textInputAction: TextInputAction.search,
                         decoration: InputDecoration(
-                          hintText: l10n.ctrSearchHint,
+                          hintText: widget.airOnly
+                              ? l10n.shhSearchHint
+                              : l10n.ctrSearchHint,
                           prefixIcon: const Icon(Icons.search,
                               size: 20, color: AppColors.muted),
                           isDense: true,
@@ -650,6 +696,21 @@ class _WaitingPackagesScreenState extends State<WaitingPackagesScreen> {
                         ),
                       ),
                     ),
+                    // Several waiting air packages leave together on one flight.
+                    if (sendable.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(
+                            left: AppSpacing.md, top: AppSpacing.sm),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: OutlinedButton.icon(
+                            key: const Key('send-packages'),
+                            icon: const Icon(Icons.flight_takeoff, size: 18),
+                            label: Text(l10n.sndSendPackages),
+                            onPressed: _busy.isNotEmpty ? null : _send,
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),

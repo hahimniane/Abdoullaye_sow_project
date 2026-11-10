@@ -1126,7 +1126,7 @@ Map<String, dynamic> containerLineContactsUpdate(
 }
 
 /// A stored `containerLines/{id}` document.
-class ContainerLine {
+class ContainerLine implements PackageWeight {
   const ContainerLine({
     required this.id,
     required this.businessId,
@@ -1187,6 +1187,7 @@ class ContainerLine {
     this.photoPaths = const [],
     this.contents = const [],
     this.weightLb,
+    this.weightKg,
     this.declaredValueCents,
     this.senderConfirmation = SenderConfirmation.none,
     this.pickupCode = '',
@@ -1214,7 +1215,16 @@ class ContainerLine {
 
   /// Whether the package is marked to fly.
   bool get isAirPackage => shipMode == containerShipModeAir;
+
+  /// Pounds, always (docs/SHIPPING_SIMPLE_HOME.md K3).
+  @override
   final double? weightLb;
+
+  /// What staff typed in kilos; null on a line weighed in pounds. Show the
+  /// weight through `weightText(line)`: a line keeps the unit it was weighed
+  /// in and is never converted.
+  @override
+  final double? weightKg;
   final int? declaredValueCents;
 
   /// The sender's WhatsApp answer to "is this right?".
@@ -1248,7 +1258,11 @@ class ContainerLine {
   PackageProofDraft get proofDraft => PackageProofDraft(
         photoPaths: photoPaths,
         contents: contents,
-        weightLb: weightLb,
+        // A line weighed in kilos opens on its kilos, any other on its
+        // pounds: nothing is converted, so an edit that leaves the weight
+        // alone leaves it as stored.
+        weightLb: weightKg ?? weightLb,
+        weightUnit: weightKg != null ? 'kg' : 'lb',
         declaredValueCents: declaredValueCents,
       );
 
@@ -1472,6 +1486,7 @@ class ContainerLine {
       photoPaths: _photoPathList(d['photoPaths']),
       contents: packageContentsOf(d['contents']),
       weightLb: normalizeWeightLb(d['weightLb']).value,
+      weightKg: normalizeWeightKg(d['weightKg']).value,
       declaredValueCents: normalizeDeclaredValueCents(d['declaredValueCents']).value,
       senderConfirmation: senderConfirmationOf(d),
       pickupCode: _text(d['pickupCode'], 8),

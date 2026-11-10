@@ -73,6 +73,7 @@ const requestPieceKinds = <String>[
 const requestMaxPieces = 20;
 const requestMaxQuantity = 50;
 const requestMaxWeightLb = 2000;
+const requestMaxWeightKg = 900;
 
 /// Where a request was sent from (`channel`).
 const requestChannels = <String>['web', 'app', 'whatsapp'];
@@ -1293,6 +1294,7 @@ class RequestPieceDraft {
     this.quantity,
     this.categoryId = '',
     this.weightLb,
+    this.weightUnit = 'lb',
     this.sizePreset = '',
     this.boxSize = '',
     this.dimsIn,
@@ -1312,6 +1314,7 @@ class RequestPieceDraft {
        label = '',
        categoryId = '',
        weightLb = null,
+       weightUnit = 'lb',
        sizePreset = '';
 
   /// An item from the business's price list, [quantity] of it.
@@ -1326,14 +1329,18 @@ class RequestPieceDraft {
        label = itemLabel,
        categoryId = '',
        weightLb = null,
+       weightUnit = 'lb',
        sizePreset = '',
        boxSize = '',
        dimsIn = null;
 
-  /// A category priced by the pound.
+  /// A category priced by the weight: [weightLb] is the number typed, in
+  /// [weightUnit] ("lb" or "kg"; the name is legacy), which always travels
+  /// with it so each business prices it in its own unit.
   const RequestPieceDraft.byWeight({
     required this.categoryId,
     required this.weightLb,
+    this.weightUnit = 'lb',
     this.sizePreset = '',
   }) : kind = requestPieceOther,
        description = '',
@@ -1358,6 +1365,9 @@ class RequestPieceDraft {
   final int? quantity;
   final String categoryId;
   final double? weightLb;
+
+  /// The unit [weightLb] was typed in: "lb" or "kg".
+  final String weightUnit;
   final String sizePreset;
 
   /// A box piece: its size id and/or the inches typed.
@@ -1385,6 +1395,7 @@ class RequestPieceDraft {
     quantity: quantity,
     categoryId: categoryId,
     weightLb: weightLb,
+    weightUnit: weightUnit,
     sizePreset: sizePreset,
     boxSize: boxSize,
     dimsIn: dimsIn,
@@ -1562,8 +1573,11 @@ List<String> validateRequestDraft(
     } else if (piece.categoryId.isNotEmpty || piece.weightLb != null) {
       final weight = piece.weightLb;
       if (priceCategoryOf(piece.categoryId) == null) add('category_invalid');
-      if (weight == null || !(weight >= 0.1 && weight <= requestMaxWeightLb)) {
-        add('weight_invalid');
+      final kilos = piece.weightUnit == 'kg';
+      if (weight == null ||
+          !(weight >= 0.1 &&
+              weight <= (kilos ? requestMaxWeightKg : requestMaxWeightLb))) {
+        add(kilos ? 'weight_kg_invalid' : 'weight_invalid');
       }
     } else if (piece.kind != requestPieceBarrel && description.isEmpty) {
       add('piece_description_required');
@@ -1629,7 +1643,8 @@ Map<String, Object?> submitRequestPayload(RequestDraft draft) {
 }
 
 /// One piece as `submitPackageRequest` takes it (docs/PACKAGE_PRICE_LIST.md
-/// §4): `{priceItemId, quantity}`, `{categoryId, weightLb, sizePreset}`,
+/// §4): `{priceItemId, quantity}`, `{categoryId, weightLb, weightUnit,
+/// sizePreset}`,
 /// `{kind: "barrel"}`, `{kind: "box", boxSize, dimsIn?, quantity,
 /// photoPaths?}`, or `{kind, description, photoPaths}`.
 Map<String, Object?> requestPiecePayload(RequestPieceDraft p) {
@@ -1653,6 +1668,7 @@ Map<String, Object?> requestPiecePayload(RequestPieceDraft p) {
     return {
       'categoryId': p.categoryId,
       'weightLb': p.weightLb,
+      'weightUnit': p.weightUnit,
       if (p.sizePreset.isNotEmpty) 'sizePreset': p.sizePreset,
     };
   }

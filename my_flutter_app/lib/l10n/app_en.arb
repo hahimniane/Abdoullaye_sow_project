@@ -11481,5 +11481,312 @@
   "parkingPaidContactOnly": "This parking has been paid for. Only the customer's name, phone and email can still be changed.",
   "@parkingPaidContactOnly": {
     "description": "Banner on a paid parked car's details: the money and dates are locked but contact details can be fixed."
+  },
+  "shhPackagesHereTitle": "Packages here",
+  "@shhPackagesHereTitle": {
+    "description": "Row on the simple shipping home: the packages dropped off and waiting to leave. Also the title of that list."
+  },
+  "shhSearchHint": "Customer, receiver or phone",
+  "@shhSearchHint": {
+    "description": "Search hint on the package lists of a business that ships by air only: no VIN, it carries no cars."
+  },
+  "wpkUpdatesNoticeAir": "The customer and the receiver get a WhatsApp message when the package is registered, when it is sent and when it arrives.",
+  "@wpkUpdatesNoticeAir": {
+    "description": "Note at the bottom of the Register a package sheet for a business that ships by air only. Never says container."
+  },
+  "wpkRegisterSubtitleAir": "It waits here until you send it.",
+  "@wpkRegisterSubtitleAir": {
+    "description": "Under the title of the Register a package sheet for a business that ships by air only. Never says container."
+  },
+  "shhPackagesHereSubtitle": "Dropped off, waiting to leave.",
+  "@shhPackagesHereSubtitle": {
+    "description": "Subtitle of the Packages here row."
+  },
+  "shhOnTheWayTitle": "On the way",
+  "@shhOnTheWayTitle": {
+    "description": "Row on the simple shipping home for an air-only business: the shipments that have left. Also the title of that list."
+  },
+  "shhOnTheWaySubtitle": "Sent, until they arrive.",
+  "@shhOnTheWaySubtitle": {
+    "description": "Subtitle of the On the way row."
+  },
+  "shhNothingOnTheWay": "Nothing on the way. Send packages from Packages here.",
+  "@shhNothingOnTheWay": {
+    "description": "Empty state of the On the way list."
+  },
+  "shhMoneyTitle": "Money",
+  "@shhMoneyTitle": {
+    "description": "Quiet heading over the invoices and staff balances rows on the simple shipping home."
+  },
+  "sndSendPackages": "Send packages",
+  "@sndSendPackages": {
+    "description": "Button on the Packages here list, and the title of the sheet that sends several waiting air packages together on one flight."
+  },
+  "sndSubtitle": "Packages for one country leave together on one flight.",
+  "@sndSubtitle": {
+    "description": "Line under the title of the Send packages sheet."
+  },
+  "sndWhereTitle": "Where are they going?",
+  "@sndWhereTitle": {
+    "description": "Heading over the country choice in the Send packages sheet, shown when packages wait for more than one country."
+  },
+  "sndCountryOption": "{country} · {count, plural, =1{1 package} other{{count} packages}}",
+  "@sndCountryOption": {
+    "description": "One country choice in the Send packages sheet: the country and how many packages wait for it.",
+    "placeholders": {
+      "country": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "sndSelectAll": "Select all",
+  "@sndSelectAll": {
+    "description": "Button in the Send packages sheet: tick every package."
+  },
+  "sndSelectNone": "Select none",
+  "@sndSelectNone": {
+    "description": "Button in the Send packages sheet: untick every package."
+  },
+  "sndFlightDate": "Flight date",
+  "@sndFlightDate": {
+    "description": "Label of the date field in the Send packages sheet; today by default."
+  },
+  "sndWaybillLabel": "Airway bill number (optional)",
+  "@sndWaybillLabel": {
+    "description": "Label of the airway bill field in the Send packages sheet."
+  },
+  "sndWaybillHelp": "6 to 20 letters or numbers.",
+  "@sndWaybillHelp": {
+    "description": "Helper text under the airway bill field."
+  },
+  "sndWaybillInvalid": "Use 6 to 20 letters or numbers. Dashes are fine.",
+  "@sndWaybillInvalid": {
+    "description": "Error under the airway bill field when what was typed is not an airway bill."
+  },
+  "sndSubmit": "Send {count, plural, =1{1 package} other{{count} packages}}",
+  "@sndSubmit": {
+    "description": "Main button of the Send packages sheet; count is how many packages are ticked.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "sndSending": "Sending…",
+  "@sndSending": {
+    "description": "Label of the main button of the Send packages sheet while it works."
+  },
+  "sndTryAgain": "Try again",
+  "@sndTryAgain": {
+    "description": "Button of the Send packages sheet after a step failed; it continues with the same shipment."
+  },
+  "sndResumeNote": "The shipment is already started. Try again to finish sending.",
+  "@sndResumeNote": {
+    "description": "Note in the Send packages sheet when a step failed after the shipment was made."
+  },
+  "sndSendAnywayTitle": "Send anyway?",
+  "@sndSendAnywayTitle": {
+    "description": "Title of the question when a sender reported a problem with a package being sent."
+  },
+  "sndSendAnywayMessage": "The sender reported a problem with {codes}. Send anyway?",
+  "@sndSendAnywayMessage": {
+    "description": "Question when a sender reported a problem; codes are the package codes.",
+    "placeholders": {
+      "codes": {
+        "type": "String"
+      }
+    }
+  },
+  "sndSendAnyway": "Send anyway",
+  "@sndSendAnyway": {
+    "description": "Confirm button of the sender-problem question in the Send packages sheet."
+  },
+  "sndDone": "{count, plural, =1{1 package sent} other{{count} packages sent}}",
+  "@sndDone": {
+    "description": "Snackbar after the packages left on their flight.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "sndTickOne": "Tick at least one package.",
+  "@sndTickOne": {
+    "description": "Note in the Send packages sheet when nothing is ticked."
+  },
+  "sndFlightWord": "Flight",
+  "@sndFlightWord": {
+    "description": "The word that starts the working name of a shipment made by Send packages, followed by the date (for example Flight 11/14/2026)."
+  },
+  "proofErrWeightKg": "Enter a weight between 0.1 and 900 kg.",
+  "@proofErrWeightKg": {
+    "description": "Refusal: a package weight in kilos is out of range (weight_kg_invalid)."
+  },
+  "deliverRefusalWeightKgInvalid": "Enter a weight between 0.1 and 900 kg.",
+  "@deliverRefusalWeightKgInvalid": {
+    "description": "Refusal: weight_kg_invalid."
+  },
+  "pplErrWeightKgInvalid": "Enter the weight in kilos (0.1 to 900).",
+  "@pplErrWeightKgInvalid": {
+    "description": "Price list refusal: weight_kg_invalid."
+  },
+  "pplErrUnitInvalid": "Choose pounds or kilos.",
+  "@pplErrUnitInvalid": {
+    "description": "Price list refusal: unit_invalid."
+  },
+  "pplErrIncludedInvalidKg": "The weight a price covers must be 0 to 500 kg.",
+  "@pplErrIncludedInvalidKg": {
+    "description": "Price list refusal included_invalid, said for a kilo list."
+  },
+  "pplErrPerKgInvalid": "Enter a price per kilo between $0.01 and $1,000.",
+  "@pplErrPerKgInvalid": {
+    "description": "Price list refusal per_lb_invalid, said for a kilo list."
+  },
+  "spkErrWeightKg": "Enter the weight in kilos (0.1 to 900).",
+  "@spkErrWeightKg": {
+    "description": "Refusal on the customer form: a by-weight piece typed in kilos is out of range."
+  },
+  "pplItemCoversKg": "Covers up to (kg), optional",
+  "@pplItemCoversKg": {
+    "description": "Label of the item sheet field on a kilo price list."
+  },
+  "pplItemCoversHintKg": "Each item up to this weight costs the fixed price. Extra kilos are charged at the category's price per kilo.",
+  "@pplItemCoversHintKg": {
+    "description": "Hint under the item's covers field on a kilo price list."
+  },
+  "pplItemCoversUpToKg": "up to {kg} kg each",
+  "@pplItemCoversUpToKg": {
+    "description": "An item row on a kilo price list.",
+    "placeholders": {
+      "kg": {}
+    }
+  },
+  "pplPerKgTitle": "Price per kilo",
+  "@pplPerKgTitle": {
+    "description": "Section title of the by-weight rates on a kilo price list."
+  },
+  "pplUnitTitle": "Price list unit",
+  "@pplUnitTitle": {
+    "description": "Title of the one choice that sets whether the whole price list is per lb or per kg."
+  },
+  "pplUnitPerLb": "per lb",
+  "@pplUnitPerLb": {
+    "description": "Choice: the price list is priced per pound."
+  },
+  "pplUnitPerKg": "per kg",
+  "@pplUnitPerKg": {
+    "description": "Choice: the price list is priced per kilo."
+  },
+  "pplUnitChangedKg": "Your prices are now per kg. The amounts did not change. Check them.",
+  "@pplUnitChangedKg": {
+    "description": "Notice shown once after the price list unit is changed to kilos."
+  },
+  "pplUnitChangedLb": "Your prices are now per lb. The amounts did not change. Check them.",
+  "@pplUnitChangedLb": {
+    "description": "Notice shown once after the price list unit is changed to pounds."
+  },
+  "pplWeightKg": "Weight (kg)",
+  "@pplWeightKg": {
+    "description": "Label of the counter weight field for a piece priced by the kilo."
+  },
+  "proofUnitPounds": "Weigh in pounds",
+  "@proofUnitPounds": {
+    "description": "Tooltip of the lb choice beside a weight field (shown only when the business has no price list)."
+  },
+  "proofUnitKilos": "Weigh in kilos",
+  "@proofUnitKilos": {
+    "description": "Tooltip of the kg choice beside a weight field (shown only when the business has no price list)."
+  },
+  "spkUpToKgEach": "Up to {kg} kg each",
+  "@spkUpToKgEach": {
+    "description": "A catalog row note on a kilo price list.",
+    "placeholders": {
+      "kg": {}
+    }
+  },
+  "spkWeightKgLabel": "Weight (kg)",
+  "@spkWeightKgLabel": {
+    "description": "Label of the weight field on the customer form, in kilos."
+  },
+  "spkSizeButtonKg": "{name} · {kg} kg",
+  "@spkSizeButtonKg": {
+    "description": "A size button that fills the kilos: Small bag · 5 kg.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "kg": {
+        "type": "String"
+      }
+    }
+  },
+  "spkByWeightHintKg": "Choose what it is, then a size or type the kilos.",
+  "@spkByWeightHintKg": {
+    "description": "Hint under Priced by weight when the weight is asked in kilos."
+  },
+  "spkNoteExtraKg": "Extra kilos are {rate} per kg, weighed at drop-off.",
+  "@spkNoteExtraKg": {
+    "description": "A piece's price explained: extra weight priced by the kilo.",
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "spkNotePerKg": "{kg} kg at {rate} per kg, weighed when received.",
+  "@spkNotePerKg": {
+    "description": "A piece's price explained: priced by the kilo.",
+    "placeholders": {
+      "kg": {
+        "type": "String"
+      },
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "spkUnitPounds": "Pounds (lb)",
+  "@spkUnitPounds": {
+    "description": "Choice of weight unit on the customer form."
+  },
+  "spkUnitKilos": "Kilos (kg)",
+  "@spkUnitKilos": {
+    "description": "Choice of weight unit on the customer form."
+  },
+  "pcsFromList": "From the price list",
+  "@pcsFromList": {
+    "description": "Button on a piece (and title of its sheet): fill the description and price from the business's price list."
+  },
+  "pcsFromListItems": "Items",
+  "@pcsFromListItems": {
+    "description": "Group title in the price-list picker: items with a fixed price."
+  },
+  "pcsFromListByWeight": "By weight",
+  "@pcsFromListByWeight": {
+    "description": "Group title in the price-list picker: categories priced by weight."
+  },
+  "pcsFromListHowMany": "How many",
+  "@pcsFromListHowMany": {
+    "description": "Label of the quantity stepper in the price-list picker."
+  },
+  "pcsFromListPrice": "Price: {price}",
+  "@pcsFromListPrice": {
+    "description": "Live price in the price-list picker.",
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "pcsFromListUse": "Use this price",
+  "@pcsFromListUse": {
+    "description": "Button of the price-list picker that fills the piece."
+  },
+  "pcsFromListBack": "Back to the list",
+  "@pcsFromListBack": {
+    "description": "Button of the price-list picker's detail step."
   }
 }

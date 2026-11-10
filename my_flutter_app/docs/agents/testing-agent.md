@@ -751,3 +751,86 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   TSPL text replies and counts `creditViolations`. A new printer model gets a
   fake mode and a pure protocol file with byte-exact tests, never a hardware-only
   check.
+- Widget tests run in the **Ahem** font, where every glyph is as wide as the font
+  size: a Row that fits with the real font overflows in a test at 320-430 px.
+  Fix the layout (wrap the label in `Flexible` + ellipsis, or use `Wrap` for a
+  pair of buttons) rather than loosening the test; a French label on a narrow
+  phone is a real risk either way.
+- A screen that owns its Firestore reads in `initState` (`ContainersScreen`)
+  gets a `@visibleForTesting` seed (`ContainersScreenSeed`) plus a no-listener
+  feed constructor (`ContainerFeed.fixed`); the real path is unchanged. Without
+  a seam such a screen cannot be pumped at all, and a source-reading test is
+  the weaker substitute.
+- Re-pumping the same widget type in one test **reuses its State** (feeds and
+  loaders built in `initState` keep the first run's fakes). Give the widget
+  `key: UniqueKey()` when a test pumps it more than once with different fakes.
+- `FakePackageRequests` (and any fake behind a `loaded` flag) shows a spinner
+  forever until it has emitted: set `initialOpen = []` (or `initialMine`) before
+  `pumpAndSettle`, or the pump times out.
+- A "never twice" rule (a retry must not create a second server record) is
+  tested with a recording fake caller that can fail the Nth call of a name
+  (`failures['name'] = [error]`) and by counting `of('createContainer')` after
+  the retry - both on the pure runner and through the sheet.
+- A unit added to a mirrored rule (kilos beside pounds) is pinned in a NEW
+  section of the shared fixture (`kilos` in `package-price-list-cases.json`),
+  never by adding cases to the arrays the app mirror already runs: the Dart
+  suite then keeps passing until its mirror learns the new shapes, and each
+  suite names the section it replays. Pin the rounding order with a hand
+  worked case (10 lb on a $25/kg route is 4.5 kg first, then $112.50), and an
+  optional key the pounds side never wrote (`unit`) is asserted ABSENT on the
+  pounds side, not just present on the other.
+- A source-grep contract test (`/action: "price_list", \.\.\.listPayload\(draft\)/`)
+  constrains how new data reaches an existing call: add the new field AFTER
+  the spread (`..., weightUnit: unit`) instead of changing the helper's
+  signature, so the contract keeps passing without being loosened.
+- The French dictionary skips a key whose neighbour is a letter
+  (`isInsideIdentifier`), so a substring key that starts with punctuation
+  (`", $ per pound"`) never matches after a word; key the phrase itself
+  (`"$ per pound"`). A string that reads the same in both languages
+  ("Kilos (kg)") has no entry and goes in the `same` set of the "every request
+  screen string has a French translation" test.
+- The Dart mirror of a shared-fixture section (`kilos`) is replayed by EVERY case
+  kind in `package_price_list_test.dart` (lists, pieces, baskets, counter,
+  reprice, convert, rates, weightIn, weights, weightText); the cases that pin
+  the arithmetic by hand (`$25/kg x 10 kg`, rounding to a tenth before pricing)
+  sit beside them, not instead.
+- A unit "pin" that read the text field's content was wrong exactly when it ran
+  (`onChanged` fires after the text changed): the first test of the payload
+  (`weightKg` missing) caught it. Test the payload a form SENDS for each unit,
+  not only the unit it shows, and a business whose list arrives after typing.
+- `InputDecoration.suffix`/`suffixText` are invisible (and untappable in
+  effect) while the field is empty and unfocused: a control that must always be
+  seen (the lb | kg choice) goes beside or under the field, and a unit that
+  must always be read goes in the label.
+- `TextButton.icon` already makes its label `Flexible`; wrapping it again
+  throws "Competing ParentDataWidgets". The Sea | Air choice is not asked when
+  no business on the form ships by air (tap straight on, or the finder is empty).
+- A widget test that opens a sheet which watches Firestore must inject the
+  source (`BusinessWeightUnit(watchList: ...)`); with no Firebase app the
+  default answers "no list" instead of throwing. A stream that ends without
+  an answer resolves the controller too (`onDone`), so no safety timer is left
+  pending when the test ends.
+- A weight field stays closed until the business's unit is known
+  (`ProofFieldsController.weightReady`; on the console the input is `disabled`
+  until the hook is `settled`): a weight typed while the price list is still
+  loading would be pinned to the wrong unit. Test it with a `StreamController`
+  that has not answered yet (field disabled), then answer (field enabled, in
+  the list's unit). The wait always ends: error, done or timeout all resolve.
+- Never read a test run's result through `| tail`: the pipe's exit code is
+  tail's, and it hid one failing console test. Write the run to a log and grep
+  it (`^not ok`, `# fail`, `Some tests failed`), and run the long suites in the
+  background (the full app suite outlives a 10-minute foreground command).
+- The console French engine translates `placeholder` / `title` / `aria-label`
+  when they CHANGE, not only when a node is added: the observer watches those
+  attributes (`attributeFilter: TRANSLATED_ATTRIBUTES`) and still drops its own
+  writes. A label that changes with state (lb to kg) needs a test that flips
+  the attribute after first paint.
+- A wording rule about a whole screen ("an air-only business never sees the
+  word Container") is tested as a rule, not string by string: every air-only
+  screen and sheet carries `find.textContaining(RegExp('[Cc]ontainer'))` /
+  `'[Cc]onteneur'` `findsNothing`, in English and French. It caught a WhatsApp
+  notice the simulator walk-through had missed. Assert on keys, not on a
+  label, when two fields share a label ("What is it?").
+- A source-contract test (`container_manifest_parity_test`) that pins two
+  lines must allow whitespace between them (`RegExp(r'a;\s+b\(\);')`): wrapping
+  a block in an `if` re-indents it and breaks an exact string for no reason.

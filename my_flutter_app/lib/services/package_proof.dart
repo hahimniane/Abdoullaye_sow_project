@@ -7,6 +7,9 @@
 /// Dart: no Firebase, no clock, tested on its own.
 library;
 
+import 'dart:math' show max;
+
+import 'package_price_list.dart' show kgToLb;
 import 'package_requests.dart' show PackageProofSettings;
 
 export 'package_requests.dart' show PackageProofSettings;
@@ -26,6 +29,8 @@ const proofMaxContentQuantity = 99;
 const proofMaxSerial = 40;
 const proofMinWeightLb = 0.1;
 const proofMaxWeightLb = 2000.0;
+const proofMinWeightKg = 0.1;
+const proofMaxWeightKg = 900.0;
 const proofMaxDeclaredValueCents = 100000 * 100;
 
 const senderConfirmationNone = 'none';
@@ -48,6 +53,7 @@ const proofRefusalCodes = <String>[
   'override_incomplete',
   'contents_invalid',
   'weight_invalid',
+  'weight_kg_invalid',
   'declared_value_invalid',
   'proof_settings_invalid',
   'air_waybill_invalid',
@@ -264,12 +270,95 @@ String contentsText(Iterable<PackageContent> contents, {int max = 120}) {
   return (value: rounded, error: '');
 }
 
-/// "4.2 lb" (en) or "4,2 lb" (fr); "" without a weight. Mirrors `weightText`.
-String weightText(double? weightLb, [String lang = 'en']) {
-  if (weightLb == null || weightLb.isNaN || weightLb <= 0) return '';
-  var n = weightLb.toStringAsFixed(1);
+/// Kilos with one decimal (`value`), or `error` "weight_kg_invalid"; both
+/// null when nothing was given. Mirrors `normalizeWeightKg`.
+({double? value, String error}) normalizeWeightKg(Object? raw) {
+  if (raw == null || (raw is String && raw.trim().isEmpty)) {
+    return (value: null, error: '');
+  }
+  final n = raw is num
+      ? raw.toDouble()
+      : double.tryParse(raw.toString().trim().replaceAll(',', '.'));
+  if (n == null || n.isNaN || n.isInfinite) {
+    return (value: null, error: 'weight_kg_invalid');
+  }
+  final rounded = (n * 10).round() / 10;
+  if (rounded < proofMinWeightKg || rounded > proofMaxWeightKg) {
+    return (value: null, error: 'weight_kg_invalid');
+  }
+  return (value: rounded, error: '');
+}
+
+/// The pounds a weight typed in kilos is stored as (docs/
+/// SHIPPING_SIMPLE_HOME.md K3): `weightLb` on a line is always pounds, so
+/// every reader that was never told about kilos stays right. At least 0.1,
+/// one decimal. Mirrors `weightLbFromKg`.
+double weightLbFromKg(double weightKg) =>
+    max(proofMinWeightLb, (weightKg * kgToLb * 10).round() / 10);
+
+/// The weight of a line as one pure rule (K3). [weightKg] given (what staff
+/// typed in kilos) wins: it is stored and the pounds are derived from it.
+/// Otherwise [weightLb] is stored and there are no kilos - so a write from an
+/// older app, which only knows pounds, never leaves a stale `weightKg`.
+/// `error` is "", "weight_kg_invalid" or "weight_invalid". Mirrors
+/// `normalizeWeight`.
+({double? weightLb, double? weightKg, String error}) normalizeWeight({
+  Object? weightLb,
+  Object? weightKg,
+}) {
+  final kg = normalizeWeightKg(weightKg);
+  if (kg.error.isNotEmpty) {
+    return (weightLb: null, weightKg: null, error: kg.error);
+  }
+  final kilos = kg.value;
+  if (kilos != null) {
+    return (weightLb: weightLbFromKg(kilos), weightKg: kilos, error: '');
+  }
+  final lb = normalizeWeightLb(weightLb);
+  if (lb.error.isNotEmpty) {
+    return (weightLb: null, weightKg: null, error: lb.error);
+  }
+  return (weightLb: lb.value, weightKg: null, error: '');
+}
+
+/// Anything that carries a package's weight: a stored line. [weightLb] is
+/// pounds, always; [weightKg] is there only when staff weighed it in kilos.
+abstract interface class PackageWeight {
+  double? get weightLb;
+  double? get weightKg;
+}
+
+double? _finiteNumber(Object? value) {
+  final n = value is num ? value.toDouble() : null;
+  return n != null && n.isFinite ? n : null;
+}
+
+/// "4.2 lb" (en) or "4,2 lb" (fr); "10 kg" / "4,5 kg" for a line weighed in
+/// kilos; "" without a weight. Takes pounds as a number, or a line (a
+/// [PackageWeight] or a map `{weightLb, weightKg}`): kilos are said when the
+/// line has them, and a line already weighed is never converted. Mirrors
+/// `weightText`.
+String weightText(Object? weight, [String lang = 'en']) {
+  final Object? kgRaw;
+  final Object? lbRaw;
+  if (weight is PackageWeight) {
+    kgRaw = weight.weightKg;
+    lbRaw = weight.weightLb;
+  } else if (weight is Map) {
+    kgRaw = weight['weightKg'];
+    lbRaw = weight['weightLb'];
+  } else {
+    kgRaw = null;
+    lbRaw = weight;
+  }
+  final kg = _finiteNumber(kgRaw);
+  final useKg = kg != null && kg > 0;
+  final value = useKg ? kg : _finiteNumber(lbRaw);
+  if (value == null || value <= 0) return '';
+  var n = value.toStringAsFixed(1);
   if (n.endsWith('.0')) n = n.substring(0, n.length - 2);
-  return '${lang.toLowerCase().startsWith('fr') ? n.replaceAll('.', ',') : n} lb';
+  return '${lang.toLowerCase().startsWith('fr') ? n.replaceAll('.', ',') : n} '
+      '${useKg ? 'kg' : 'lb'}';
 }
 
 /// Whole cents at or above zero, or `error` "declared_value_invalid"; both
@@ -348,6 +437,7 @@ class PackageProofDraft {
     this.photoPaths = const [],
     this.contents = const [],
     this.weightLb,
+    this.weightUnit = 'lb',
     this.declaredValueCents,
   });
 
@@ -356,8 +446,13 @@ class PackageProofDraft {
   final List<String> photoPaths;
   final List<PackageContent> contents;
 
-  /// As typed or as stored: a number, or a string the validator reads.
+  /// As typed or as stored: a number, or a string the validator reads. It is
+  /// kilos when [weightUnit] is "kg" (the name is legacy).
   final Object? weightLb;
+
+  /// The unit the weight field is typed in: the business's, or the line's own
+  /// when it was weighed in kilos ("lb" | "kg").
+  final String weightUnit;
   final Object? declaredValueCents;
 
   bool get isEmpty =>
@@ -373,12 +468,24 @@ class PackageProofFields {
     this.photoPaths = const [],
     this.contents = const [],
     this.weightLb,
+    this.weightKg,
+    this.kilos = false,
     this.declaredValueCents,
   });
 
   final List<String> photoPaths;
   final List<PackageContent> contents;
+
+  /// Pounds, always (derived from [weightKg] when staff typed kilos).
   final double? weightLb;
+
+  /// What staff typed in kilos; null when none was typed.
+  final double? weightKg;
+
+  /// The weight field was in kilos: the payload then names `weightKg` (null
+  /// for a blank field, which clears both), so the server never keeps kilos
+  /// beside pounds that disagree. A pounds field sends `weightLb` alone.
+  final bool kilos;
   final int? declaredValueCents;
 
   /// The keys every line callable takes (`addContainerLine` /
@@ -388,6 +495,7 @@ class PackageProofFields {
         'photoPaths': photoPaths,
         'contents': [for (final c in contents) c.toMap()],
         'weightLb': weightLb,
+        if (kilos) 'weightKg': weightKg,
         'declaredValueCents': declaredValueCents,
       };
 }
@@ -405,7 +513,10 @@ class PackageProofFields {
   if (contents.error.isNotEmpty) {
     return (fields: const PackageProofFields(), error: contents.error);
   }
-  final weight = normalizeWeightLb(draft.weightLb);
+  final kilos = draft.weightUnit == 'kg';
+  final weight = kilos
+      ? normalizeWeight(weightKg: draft.weightLb)
+      : normalizeWeight(weightLb: draft.weightLb);
   if (weight.error.isNotEmpty) {
     return (fields: const PackageProofFields(), error: weight.error);
   }
@@ -417,7 +528,9 @@ class PackageProofFields {
     fields: PackageProofFields(
       photoPaths: photos.paths,
       contents: contents.contents,
-      weightLb: weight.value,
+      weightLb: weight.weightLb,
+      weightKg: weight.weightKg,
+      kilos: kilos,
       declaredValueCents: value.value,
     ),
     error: '',

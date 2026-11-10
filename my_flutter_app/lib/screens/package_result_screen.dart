@@ -742,7 +742,7 @@ class PackageResultView extends StatelessWidget {
                   key: const Key('pkg-weight'),
                   icon: Icons.scale_outlined,
                   text: l10n.proofWeightFact(
-                    weightText(line.weightLb, dateLocaleOf(context)),
+                    weightText(line, dateLocaleOf(context)),
                   ),
                 ),
               if (access.canSeeMoney && line.declaredValueCents != null)

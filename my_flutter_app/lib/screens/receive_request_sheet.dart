@@ -4,6 +4,7 @@ import '../l10n/app_localizations.dart';
 import '../services/invoice_ledger.dart' show invoicePaymentMethods;
 import '../services/lot_ledger.dart' show LotStaff;
 import '../services/business_price_list.dart' show priceSnapshotWeighs;
+import '../services/business_weight_unit.dart';
 import '../services/container_manifest.dart'
     show containerShipModeAir, containerShipModeSea;
 import '../services/package_proof.dart'
@@ -38,6 +39,7 @@ Future<RequestReceived?> showReceiveRequestSheet(
   required PackageRequestService service,
   List<LotStaff> staff = const [],
   bool shipsByAir = false,
+  BusinessWeightUnit? weightUnit,
 }) => showLotSheet<RequestReceived>(
   context,
   ReceiveRequestSheet(
@@ -46,6 +48,7 @@ Future<RequestReceived?> showReceiveRequestSheet(
     service: service,
     staff: staff,
     shipsByAir: shipsByAir,
+    weightUnit: weightUnit,
   ),
 );
 
@@ -64,8 +67,13 @@ class ReceiveRequestSheet extends StatefulWidget {
     required this.service,
     this.staff = const [],
     this.proofController,
+    this.weightUnit,
     this.shipsByAir = false,
   });
+
+  /// The business's weight unit; the sheet makes (and owns) its own unless a
+  /// test gave one (docs/SHIPPING_SIMPLE_HOME.md K4).
+  final BusinessWeightUnit? weightUnit;
 
   /// `businesses/{id}.shipsByAir` (docs/AIR_PACKAGES.md §7): the sheet
   /// offers "Ships by: Sea · Air" at the top, and the proof section only
@@ -123,9 +131,12 @@ class _ReceiveRequestSheetState extends State<ReceiveRequestSheet> {
   /// (docs/AIR_PACKAGES.md §4.2). Never required here: a received request
   /// is not a counter drop-off, and the request's own photos are copied by
   /// the server ahead of these.
+  late final bool _ownsUnits = widget.weightUnit == null;
+  late final BusinessWeightUnit _units =
+      widget.weightUnit ?? BusinessWeightUnit(businessId: widget.businessId);
   late final ProofFieldsController _proof =
       widget.proofController ??
-      ProofFieldsController(businessId: widget.businessId);
+      ProofFieldsController(businessId: widget.businessId, units: _units);
 
   bool get _card => widget.request.isCardOrder;
 
@@ -153,6 +164,7 @@ class _ReceiveRequestSheetState extends State<ReceiveRequestSheet> {
     _amount.dispose();
     _note.dispose();
     if (widget.proofController == null) _proof.dispose();
+    if (_ownsUnits) _units.dispose();
     super.dispose();
   }
 
@@ -390,7 +402,10 @@ class _ReceiveRequestSheetState extends State<ReceiveRequestSheet> {
                 'photo_required',
               ]),
               contentsError: _proofError(l10n, const ['contents_invalid']),
-              weightError: _proofError(l10n, const ['weight_invalid']),
+              weightError: _proofError(l10n, const [
+                'weight_invalid',
+                'weight_kg_invalid',
+              ]),
               valueError: _proofError(l10n, const ['declared_value_invalid']),
             ),
             const SizedBox(height: AppSpacing.md),

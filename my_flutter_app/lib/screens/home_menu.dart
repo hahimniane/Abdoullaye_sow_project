@@ -24,12 +24,14 @@ import '../services/business_parking_entry.dart';
 import '../services/business_service_overview.dart';
 import '../services/container_manifest.dart';
 import '../services/inventory.dart';
+import '../services/shipping_home.dart';
 import '../services/shop_home.dart';
 import '../services/firestore_query_spec.dart';
 import '../utils/business_parking_localization.dart';
 import '../utils/business_permissions.dart';
 import '../utils/date_display.dart';
 import '../widgets/container_link_chip.dart';
+import '../widgets/home_destinations.dart';
 import '../widgets/customer_notification_bell.dart';
 import 'business_assistant_screen.dart';
 import 'business_reviews_screen.dart';
@@ -47,6 +49,7 @@ import '../services/parking_team.dart';
 import 'office_locations_screen.dart';
 import 'park_car_screen.dart';
 import 'lot_ledger_screen.dart';
+import 'shipping_home_section.dart';
 import 'shop_home_section.dart';
 import 'staff_car_management_screen.dart';
 
@@ -847,6 +850,30 @@ class _HomeMenuState extends State<HomeMenu> {
       hasServiceSections: _enabledActivityCategories().isNotEmpty,
     );
     final shopOnly = layout == ShopHomeLayout.shopOnly;
+    // Package shippers get the simple home (docs/SHIPPING_SIMPLE_HOME.md);
+    // the shop layout is asked first, and everyone else keeps this screen.
+    final simpleShipping =
+        layout == ShopHomeLayout.standard &&
+        shippingHomeLayout(
+              isAdmin: auth.isAdmin,
+              hasBusinessDashboardAccess: auth.hasBusinessDashboardAccess,
+              canUseContainers:
+                  auth.hasContainersAccess && _businessId.isNotEmpty,
+              canUseInventory: inventoryAvailable(
+                services: auth.businessServices,
+                hasPermission: auth.hasBusinessPermission(
+                  BusinessPermission.inventory,
+                ),
+                businessId: _businessId,
+              ),
+              services: auth.effectiveBusinessServices,
+            ) ==
+            ShippingHomeLayout.simple;
+    // The places it lists are the standard home's own rows, by key, so a
+    // place cannot be offered on one home and refused on the other.
+    final shippingRows = simpleShipping
+        ? _businessDestinations(context, auth, l10n, includeInventory: false)
+        : const <HomeDestination>[];
     // A shop keeps to the 8-point grid; the long-standing home keeps its own
     // proportional margin.
     final pad = shopOnly ? AppSpacing.lg : width * 0.06;
@@ -854,6 +881,56 @@ class _HomeMenuState extends State<HomeMenu> {
     final showRecords = !shopOnly && !_isLoading && records.isNotEmpty;
     final approval = widget.shopApprovalStatus;
     final showApprovalNote = approval != null && approval != 'approved';
+
+    // The activity feed, built once for whichever home shows it.
+    final activity = _ActivitySection(
+      l10n: l10n,
+      hasRecords: records.isNotEmpty,
+      historyLoaded: _historyStarted,
+      isLoading: _isLoading,
+      denseList: _parkingDenseList,
+      onDenseListChanged: (dense) =>
+          setState(() => _parkingDenseList = dense),
+      selectedCategory: _selectedCategory,
+      onCategoryChanged: _selectCategory,
+      facets: _parkingFacets,
+      onToggleKind: (kind) {
+        setState(() {
+          _parkingFacets = _parkingFacets.toggleKind(kind);
+        });
+      },
+      onTogglePayment: (payment) {
+        setState(() {
+          _parkingFacets = _parkingFacets.togglePayment(
+            payment,
+          );
+        });
+      },
+      onClearFacets: () {
+        setState(() {
+          _parkingFacets = const ParkingFacets();
+        });
+      },
+      searchController: _parkingSearchController,
+      onSearchChanged: (value) {
+        setState(() {
+          _parkingSearch = value;
+        });
+      },
+      isNarrowed: _parkingListIsNarrowed,
+      parkedFrom: _parkedFrom,
+      parkedTo: _parkedTo,
+      onParkedRangeChanged: (from, to) {
+        setState(() {
+          _parkedFrom = from;
+          _parkedTo = to;
+        });
+      },
+      // The scoreboard over the parked cars in view, from
+      // the SAME filtered records the feed shows, so a
+      // filter re-totals the numbers - as the console does.
+      parkingTotals: _parkingTotalsCache,
+    );
 
     return Scaffold(
       body: Container(
@@ -911,7 +988,46 @@ class _HomeMenuState extends State<HomeMenu> {
                       ],
                       if (shopOnly)
                         _ShopMoreSection(l10n: l10n)
-                      else ...[
+                      else if (simpleShipping) ...[
+                        // Package shippers: Register a package, a few places,
+                        // money, then the same tail. No service tiles. The
+                        // activity feed (online orders) appears under them
+                        // only when it has records.
+                        ShippingHomeSection(
+                          key: const Key('shipping-home-section'),
+                          businessId: _businessId,
+                          businessName: auth.businessName ?? '',
+                          approvalStatus: approval,
+                          containersRow: _rowKeyed(
+                            shippingRows,
+                            'open-containers',
+                          ),
+                          // Beside its other places, whoever also holds
+                          // Containers (the standard home lists it only
+                          // for destination staff without them).
+                          deliveriesRow:
+                              auth.hasDeliveriesAccess && _businessId.isNotEmpty
+                              ? _deliveriesDestination(
+                                  context,
+                                  auth,
+                                  l10n,
+                                  _businessId,
+                                )
+                              : null,
+                          moneyRows: [
+                            for (final key in const [
+                              'open-invoices',
+                              'open-staff-balances',
+                            ])
+                              ?_rowKeyed(shippingRows, key),
+                          ],
+                          tools: _businessTools(context, auth, l10n),
+                        ),
+                        if (showRecords) ...[
+                          const SizedBox(height: 24),
+                          activity,
+                        ],
+                      ] else ...[
                         // A shop-only business seen by someone who cannot
                         // sell: the same calm note, above the services card.
                         if (layout == ShopHomeLayout.standard &&
@@ -941,54 +1057,7 @@ class _HomeMenuState extends State<HomeMenu> {
                           ),
                         ),
                         const SizedBox(height: 24),
-                        _ActivitySection(
-                          l10n: l10n,
-                          hasRecords: records.isNotEmpty,
-                          historyLoaded: _historyStarted,
-                          isLoading: _isLoading,
-                          denseList: _parkingDenseList,
-                          onDenseListChanged: (dense) =>
-                              setState(() => _parkingDenseList = dense),
-                          selectedCategory: _selectedCategory,
-                          onCategoryChanged: _selectCategory,
-                          facets: _parkingFacets,
-                          onToggleKind: (kind) {
-                            setState(() {
-                              _parkingFacets = _parkingFacets.toggleKind(kind);
-                            });
-                          },
-                          onTogglePayment: (payment) {
-                            setState(() {
-                              _parkingFacets = _parkingFacets.togglePayment(
-                                payment,
-                              );
-                            });
-                          },
-                          onClearFacets: () {
-                            setState(() {
-                              _parkingFacets = const ParkingFacets();
-                            });
-                          },
-                          searchController: _parkingSearchController,
-                          onSearchChanged: (value) {
-                            setState(() {
-                              _parkingSearch = value;
-                            });
-                          },
-                          isNarrowed: _parkingListIsNarrowed,
-                          parkedFrom: _parkedFrom,
-                          parkedTo: _parkedTo,
-                          onParkedRangeChanged: (from, to) {
-                            setState(() {
-                              _parkedFrom = from;
-                              _parkedTo = to;
-                            });
-                          },
-                          // The scoreboard over the parked cars in view, from
-                          // the SAME filtered records the feed shows, so a
-                          // filter re-totals the numbers - as the console does.
-                          parkingTotals: _parkingTotalsCache,
-                        ),
+                        activity,
                       ],
                     ],
                   ),
@@ -1011,7 +1080,10 @@ class _HomeMenuState extends State<HomeMenu> {
               SliverPadding(
                 padding: EdgeInsets.fromLTRB(pad, 12, pad, pad),
                 sliver: SliverToBoxAdapter(
-                  child: shopOnly || _isLoading || _businessId.isEmpty
+                  child: shopOnly ||
+                          (simpleShipping && !showRecords) ||
+                          _isLoading ||
+                          _businessId.isEmpty
                       ? const SizedBox.shrink()
                       : _HistoryFooter(
                           l10n: l10n,
@@ -1237,7 +1309,7 @@ class _ServicesSection extends StatelessWidget {
           // intake for a business - no flag to pass, and no named customer route.
           if (canRecordParkedCar) ...[
             const SizedBox(height: 16),
-            _PrimaryAction(
+            HomePrimaryAction(
               buttonKey: const Key('record-parked-car'),
               icon: Icons.add,
               label: l10n.recordAParkedCar,
@@ -1256,95 +1328,51 @@ class _ServicesSection extends StatelessWidget {
           // is inside, because a name alone makes people guess.
           if (destinations.isNotEmpty) ...[
             const SizedBox(height: 12),
-            _DestinationGroup(rows: destinations),
+            HomeDestinationGroup(rows: destinations),
           ],
           // Everything else the console offers, by the same permissions it
-          // uses. Before this the phone said "use the web console" for most
-          // of it, even though the screens already existed in the app.
-          if (moreTools.isNotEmpty) ...[
-            const SizedBox(height: 18),
-            Text(
-              l10n.businessMoreTools,
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: AppColors.muted,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final tool in moreTools)
-                  OutlinedButton.icon(
-                    key: Key('business-tool-${tool.key}'),
-                    icon: Icon(tool.icon, size: 18),
-                    label: Text(tool.label),
-                    onPressed: tool.onPressed,
-                  ),
-              ],
-            ),
-          ],
-          // Occasional, and it leaves the app - so it is outlined, and it says
-          // so before it is tapped.
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: AsyncActionButton.outlined(
-              icon: Icons.open_in_browser,
-              label: l10n.openBusinessConsole,
-              loadingLabel: l10n.openingBusinessConsole,
-              onPressed: () async {
-                final opened = await launchUrl(
-                  Uri.parse('https://business.laawoldigital.com/'),
-                  mode: LaunchMode.externalApplication,
-                );
-                if (!opened && context.mounted) {
-                  showErrorSnackBar(context, l10n.businessConsoleOpenFailed);
-                }
-              },
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            l10n.businessOperationsWebNote,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: AppColors.muted,
-              height: 1.4,
-            ),
-          ),
-          if ((auth.businessId ?? '').isNotEmpty) ...[
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                key: const Key('open-business-assistant'),
-                icon: const Icon(Icons.support_agent),
-                label: Text(l10n.businessAssistantOpen),
-                onPressed: () {
-                  final businessId = auth.businessId ?? '';
-                  if (businessId.isEmpty) return;
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) =>
-                          BusinessAssistantScreen(businessId: businessId),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
+          // uses, then the console and the assistant: the tail the simple
+          // shipping home ends with too.
+          BusinessHomeTail(tools: moreTools, businessId: auth.businessId ?? ''),
         ],
       ),
     );
   }
 }
 
+/// The Deliveries row: scan a package and hand it over. One definition for
+/// the standard home (destination staff without Containers) and the simple
+/// shipping home (whoever holds the deliveries access).
+HomeDestination _deliveriesDestination(
+  BuildContext context,
+  AuthProvider auth,
+  AppLocalizations l10n,
+  String businessId,
+) => HomeDestination(
+  rowKey: const Key('open-deliveries'),
+  icon: Icons.how_to_reg_outlined,
+  title: l10n.dlvTitle,
+  subtitle: l10n.dlvSubtitle,
+  onTap: () {
+    // The Deliveries home (docs/AIR_PACKAGES.md §5): what is ready
+    // to hand over, Scan, Enter a code - every package in the
+    // access this person holds.
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => DeliveriesHomeScreen(
+          businessId: businessId,
+          access: auth.packageAccess,
+        ),
+      ),
+    );
+  },
+);
+
 /// The places a business goes from its home: the ledger, containers,
 /// inventory, invoices and the transport board, each behind the same gates it
 /// has always had. Shared by the services card and a shop's "More" list, so a
 /// place can never be offered on one and forgotten on the other.
-List<_Destination> _businessDestinations(
+List<HomeDestination> _businessDestinations(
   BuildContext context,
   AuthProvider auth,
   AppLocalizations l10n, {
@@ -1397,7 +1425,7 @@ List<_Destination> _businessDestinations(
       transportBusinessId.isNotEmpty;
   return [
     if (canUseLotLedger)
-      _Destination(
+      HomeDestination(
         rowKey: const Key('open-lot-ledger'),
         icon: Icons.receipt_long_outlined,
         title: l10n.lotLedgerTitle,
@@ -1412,7 +1440,7 @@ List<_Destination> _businessDestinations(
       ),
     // The loading list: which box each car and barrel went into.
     if (canUseContainers)
-      _Destination(
+      HomeDestination(
         rowKey: const Key('open-containers'),
         icon: Icons.view_in_ar_outlined,
         title: l10n.ctrTitle,
@@ -1426,28 +1454,10 @@ List<_Destination> _businessDestinations(
         },
       ),
     if (canUseDeliveries)
-      _Destination(
-        rowKey: const Key('open-deliveries'),
-        icon: Icons.how_to_reg_outlined,
-        title: l10n.dlvTitle,
-        subtitle: l10n.dlvSubtitle,
-        onTap: () {
-          // The Deliveries home (docs/AIR_PACKAGES.md §5): what is ready
-          // to hand over, Scan, Enter a code - every package in the
-          // access this person holds.
-          Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => DeliveriesHomeScreen(
-                businessId: ledgerBusinessId,
-                access: auth.packageAccess,
-              ),
-            ),
-          );
-        },
-      ),
+      _deliveriesDestination(context, auth, l10n, ledgerBusinessId),
     // Products, their QR tags, and counter sales by scanning.
     if (canUseInventory && includeInventory)
-      _Destination(
+      HomeDestination(
         rowKey: const Key('open-inventory'),
         icon: Icons.qr_code_scanner,
         title: l10n.inventoryTitle,
@@ -1467,7 +1477,7 @@ List<_Destination> _businessDestinations(
     // business sold - on the platform or off it. The ledger
     // permission or the narrower invoices one.
     if (canUseInvoices)
-      _Destination(
+      HomeDestination(
         rowKey: const Key('open-invoices'),
         icon: Icons.receipt_long_outlined,
         title: l10n.invMenuTitle,
@@ -1484,7 +1494,7 @@ List<_Destination> _businessDestinations(
     // every member of the team (docs/STAFF_BALANCES.md §1.6), with a count of
     // the handovers waiting on this person.
     if (canUseStaffBalances)
-      _Destination(
+      HomeDestination(
         rowKey: const Key('open-staff-balances'),
         icon: Icons.account_balance_wallet_outlined,
         title: l10n.sbalTitle,
@@ -1509,7 +1519,7 @@ List<_Destination> _businessDestinations(
     // For a carrier rather than a lot: quote what came in, move
     // what was won.
     if (canWorkTransport)
-      _Destination(
+      HomeDestination(
         rowKey: const Key('open-transport-jobs'),
         icon: Icons.local_shipping_outlined,
         title: l10n.businessTransportTitle,
@@ -1526,8 +1536,17 @@ List<_Destination> _businessDestinations(
   ];
 }
 
+/// The row of [rows] with the key [key], or null when this person does not
+/// hold it.
+HomeDestination? _rowKeyed(List<HomeDestination> rows, String key) {
+  for (final row in rows) {
+    if (row.rowKey == Key(key)) return row;
+  }
+  return null;
+}
+
 /// Everything else the console offers, by the same permissions it uses.
-List<_BusinessTool> _businessTools(
+List<HomeTool> _businessTools(
   BuildContext context,
   AuthProvider auth,
   AppLocalizations l10n,
@@ -1542,30 +1561,30 @@ List<_BusinessTool> _businessTools(
     Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => screen));
   }
 
-  return <_BusinessTool>[
+  return <HomeTool>[
     if (hasCarSales && auth.hasBusinessPermission(BusinessPermission.listings))
-      _BusinessTool(
+      HomeTool(
         'listings',
         Icons.directions_car_outlined,
         l10n.businessListingsTitle,
         () => go(const StaffCarManagementScreen(showBackButton: true)),
       ),
     if (hasCarSales && auth.hasBusinessPermission(BusinessPermission.purchases))
-      _BusinessTool(
+      HomeTool(
         'purchases',
         Icons.handshake_outlined,
         l10n.businessPurchasesTitle,
         () => Navigator.of(context).pushNamed('/purchase-management'),
       ),
     if (auth.hasBusinessPermission(BusinessPermission.profile))
-      _BusinessTool(
+      HomeTool(
         'profile',
         Icons.storefront_outlined,
         l10n.businessProfile,
         () => Navigator.of(context).pushNamed('/business-profile'),
       ),
     if (auth.hasBusinessPermission(BusinessPermission.destinations))
-      _BusinessTool(
+      HomeTool(
         'destinations',
         Icons.public,
         l10n.businessServicesCoverageTitle,
@@ -1573,21 +1592,21 @@ List<_BusinessTool> _businessTools(
       ),
     if (businessId.isNotEmpty &&
         auth.hasBusinessPermission(BusinessPermission.destinations))
-      _BusinessTool(
+      HomeTool(
         'offices',
         Icons.place_outlined,
         l10n.businessOfficesTitle,
         () => go(OfficeLocationsScreen(businessId: businessId)),
       ),
     if (auth.hasBusinessPermission(BusinessPermission.people))
-      _BusinessTool(
+      HomeTool(
         'people',
         Icons.group_outlined,
         l10n.businessPeopleTitle,
         () => Navigator.of(context).pushNamed('/add-staff'),
       ),
     if (businessId.isNotEmpty)
-      _BusinessTool(
+      HomeTool(
         'reviews',
         Icons.star_outline_rounded,
         l10n.businessReviewsTitle,
@@ -1600,7 +1619,7 @@ List<_BusinessTool> _businessTools(
       canManageSupport: auth.hasBusinessPermission(BusinessPermission.support),
       businessId: businessId,
     ))
-      _BusinessTool(
+      HomeTool(
         'support',
         Icons.forum_outlined,
         l10n.supportInbox,
@@ -1623,18 +1642,18 @@ class _ShopMoreSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final businessId = auth.businessId ?? '';
-    final rows = <_Destination>[
+    final rows = <HomeDestination>[
       // Inventory itself is the Products tile above.
       ..._businessDestinations(context, auth, l10n, includeInventory: false),
       for (final tool in _businessTools(context, auth, l10n))
-        _Destination(
+        HomeDestination(
           rowKey: Key('business-tool-${tool.key}'),
           icon: tool.icon,
           title: tool.label,
           onTap: tool.onPressed,
         ),
       if (businessId.isNotEmpty)
-        _Destination(
+        HomeDestination(
           rowKey: const Key('open-business-assistant'),
           icon: Icons.support_agent,
           title: l10n.businessAssistantOpen,
@@ -1660,7 +1679,7 @@ class _ShopMoreSection extends StatelessWidget {
           ),
         ),
         const SizedBox(height: AppSpacing.sm),
-        _DestinationGroup(rows: rows),
+        HomeDestinationGroup(rows: rows),
         const SizedBox(height: AppSpacing.lg),
         SizedBox(
           width: double.infinity,
@@ -2947,204 +2966,5 @@ class _RecordCard extends StatelessWidget {
       ),
     );
     return voidedNote == null ? card : Opacity(opacity: 0.6, child: card);
-  }
-}
-
-/// One "more tools" button: the console section it stands in for.
-class _BusinessTool {
-  const _BusinessTool(this.key, this.icon, this.label, this.onPressed);
-
-  final String key;
-  final IconData icon;
-  final String label;
-  final VoidCallback onPressed;
-}
-
-/// The one thing this screen is for, and the only filled button on it.
-///
-/// A filled button is a commit: it does something. When three of them stack up
-/// the eye has no entry point and the screen reads as a menu of equals, which
-/// is how the business home used to look. Everything else on the page is
-/// quieter than this by design.
-class _PrimaryAction extends StatelessWidget {
-  const _PrimaryAction({
-    required this.buttonKey,
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  final Key buttonKey;
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return PressableScale(
-      key: buttonKey,
-      onTap: onTap,
-      child: Container(
-        height: 52,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: AppColors.cobalt,
-          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.cobaltDeep.withValues(alpha: 0.18),
-              blurRadius: 10,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 19, color: Colors.white),
-            const SizedBox(width: AppSpacing.sm),
-            Text(
-              label,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                letterSpacing: -0.1,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// One place the business can go.
-class _Destination {
-  const _Destination({
-    required this.rowKey,
-    required this.icon,
-    required this.title,
-    this.subtitle = '',
-    required this.onTap,
-    this.trailing,
-  });
-
-  final Key rowKey;
-  final IconData icon;
-  final String title;
-
-  /// A badge before the chevron (a count of things waiting), if any.
-  final Widget? trailing;
-
-  /// What is inside, under the title; '' for a place whose name says it.
-  final String subtitle;
-  final VoidCallback onTap;
-}
-
-/// Destinations, grouped the way a list of places is grouped everywhere else
-/// on the platform: one surface, hairlines between the rows, a chevron saying
-/// each one leads somewhere.
-class _DestinationGroup extends StatelessWidget {
-  const _DestinationGroup({required this.rows});
-
-  final List<_Destination> rows;
-
-  @override
-  Widget build(BuildContext context) {
-    if (rows.isEmpty) return const SizedBox.shrink();
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.paper,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        border: Border.all(color: AppColors.rule),
-      ),
-      child: Column(
-        children: [
-          for (var i = 0; i < rows.length; i++) ...[
-            if (i > 0)
-              // Inset to start under the text, so the icons read as one column.
-              const Padding(
-                padding: EdgeInsets.only(left: 60),
-                child: Divider(height: 1, thickness: 1),
-              ),
-            _DestinationRow(row: rows[i]),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _DestinationRow extends StatelessWidget {
-  const _DestinationRow({required this.row});
-
-  final _Destination row;
-
-  @override
-  Widget build(BuildContext context) {
-    return PressableScale(
-      key: row.rowKey,
-      onTap: row.onTap,
-      scale: 0.99,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: 14,
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 34,
-              height: 34,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: AppColors.mist,
-                borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-              ),
-              child: Icon(row.icon, size: 18, color: AppColors.cobaltDeep),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    row.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.2,
-                      color: AppColors.ink,
-                    ),
-                  ),
-                  if (row.subtitle.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      row.subtitle,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        height: 1.35,
-                        color: AppColors.muted,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            if (row.trailing != null) ...[
-              row.trailing!,
-              const SizedBox(width: AppSpacing.xs),
-            ],
-            const Icon(Icons.chevron_right, size: 20, color: AppColors.muted),
-          ],
-        ),
-      ),
-    );
   }
 }

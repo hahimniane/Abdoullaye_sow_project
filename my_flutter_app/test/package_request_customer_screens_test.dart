@@ -1443,4 +1443,161 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   });
+
+  // Kilos (docs/SHIPPING_SIMPLE_HOME.md K2, K7): a business that prices by the
+  // kilo is asked kilos on its own link; comparing asks pounds; the unit is
+  // always sent.
+  group('Send a package: weights in kilos', () {
+    Map<String, Object?> kiloBusiness() => _optionMap(
+      id: 'k1',
+      name: 'Kilo Cargo',
+      sea: {
+        'items': [_priceItem('Phone', 4000, includedLb: 2)],
+        'perLbCents': {'clothing': 700},
+        'unit': 'kg',
+      },
+    );
+
+    Map<String, Object?> link() => {
+      'businessId': 'k1',
+      'name': 'Kilo Cargo',
+      'acceptRequests': true,
+    };
+
+    Future<FakePackageRequests> ownLink(WidgetTester tester) async {
+      final fake = FakePackageRequests()
+        ..options = _response([kiloBusiness()], business: link());
+      await _pump(tester, _form(fake, slug: 'kilo'));
+      // No business here ships by air, so Sea is not asked.
+      await _tap(tester, 'request-bring-in');
+      return fake;
+    }
+
+    testWidgets('on its own link: kilos, with kilo size buttons and a kilo price', (
+      tester,
+    ) async {
+      await ownLink(tester);
+      expect(find.text('Up to 2 kg each'), findsOneWidget);
+      await _tap(tester, 'request-add-weight:clothing');
+      expect(find.text('Weight (kg)'), findsOneWidget);
+      expect(find.text('Suitcase · 23 kg'), findsOneWidget);
+      await _tap(tester, 'request-size:0:suitcase');
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const Key('request-weight:0')))
+            .controller!
+            .text,
+        '23',
+      );
+      // 23 kg at $7 a kilo, weighed at the counter.
+      expect(_totalOf(tester, 'k1'), r'about $161.00');
+    });
+
+    testWidgets('the unit can be switched; the number is converted, not the price', (
+      tester,
+    ) async {
+      await ownLink(tester);
+      await _tap(tester, 'request-add-weight:clothing');
+      await _type(tester, 'request-weight:0', '10');
+      expect(_totalOf(tester, 'k1'), r'about $70.00');
+      await _tap(tester, 'request-unit:0:lb');
+      expect(find.text('Weight (lb)'), findsOneWidget);
+      // 10 kg is 22 lb (22.0462, to a tenth).
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const Key('request-weight:0')))
+            .controller!
+            .text,
+        '22',
+      );
+      // 22 lb is 10 kg on the business's list, to a tenth: $70.
+      expect(_totalOf(tester, 'k1'), r'about $70.00');
+    });
+
+    testWidgets('what is sent names the unit it was typed in', (tester) async {
+      final fake = await ownLink(tester);
+      await _tap(tester, 'request-add-weight:clothing');
+      await _tap(tester, 'request-size:0:suitcase');
+      await _pickDay(tester, 'request-planned-day', '24');
+      await _tap(tester, 'request-window:10:00-12:00');
+      await _fillPeople(tester);
+      await _tap(tester, 'request-send');
+      final piece = (fake.of('submitPackageRequest').single['pieces'] as List)
+          .single as Map;
+      expect(piece['categoryId'], 'clothing');
+      expect(piece['weightLb'], 23);
+      expect(piece['weightUnit'], 'kg');
+      expect(piece['sizePreset'], 'suitcase');
+    });
+
+    testWidgets('a kilo weight too high is refused in kilos', (tester) async {
+      final fake = await ownLink(tester);
+      await _tap(tester, 'request-add-weight:clothing');
+      await _type(tester, 'request-weight:0', '901');
+      await _pickDay(tester, 'request-planned-day', '24');
+      await _tap(tester, 'request-window:10:00-12:00');
+      await _fillPeople(tester);
+      await _tap(tester, 'request-send');
+      expect(
+        find.text('Enter the weight in kilos (0.1 to 900).'),
+        findsOneWidget,
+      );
+      expect(fake.of('submitPackageRequest'), isEmpty);
+    });
+
+    testWidgets('comparing asks pounds, and each business prices its own unit', (
+      tester,
+    ) async {
+      final fake = FakePackageRequests()
+        ..options = _response([_baobab(), kiloBusiness()]);
+      await _pump(tester, _form(fake));
+      await _tap(tester, 'request-bring-in');
+      await _tap(tester, 'request-add-weight:clothing');
+      expect(find.text('Weight (lb)'), findsOneWidget);
+      expect(find.text('Suitcase · 50 lb'), findsOneWidget);
+      await _tap(tester, 'request-size:0:suitcase');
+      // 50 lb: $6.50 a pound at Baobab; 22.7 kg at $7 a kilo at Kilo Cargo.
+      expect(_totalOf(tester, _baobabId), r'about $325.00');
+      expect(_totalOf(tester, 'k1'), r'about $158.90');
+    });
+
+    testWidgets('a pounds business is asked pounds on its own link', (
+      tester,
+    ) async {
+      final fake = FakePackageRequests()
+        ..options = _response(
+          [_conakry()],
+          business: {
+            'businessId': _atlanticId,
+            'name': 'Conakry Express',
+            'acceptRequests': true,
+          },
+        );
+      await _pump(tester, _form(fake, slug: 'conakry'));
+      await _tap(tester, 'request-mode:sea');
+      await _tap(tester, 'request-bring-in');
+      await _tap(tester, 'request-add-weight:clothing');
+      expect(find.text('Weight (lb)'), findsOneWidget);
+      expect(find.text('Up to 2 lb each'), findsOneWidget);
+    });
+
+    testWidgets('reads in French on a narrow phone', (tester) async {
+      final fake = FakePackageRequests()
+        ..options = _response([kiloBusiness()], business: link());
+      await _pump(
+        tester,
+        _form(fake, slug: 'kilo'),
+        locale: const Locale('fr'),
+        width: 320,
+      );
+      await _tap(tester, 'request-bring-in');
+      expect(find.text('Jusqu’à 2 kg chacun'), findsOneWidget);
+      await _tap(tester, 'request-add-weight:clothing');
+      expect(find.text('Poids (kg)'), findsOneWidget);
+      expect(find.text('Valise · 23 kg'), findsOneWidget);
+      expect(find.text('Kilos (kg)'), findsOneWidget);
+      expect(find.text('Livres (lb)'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  });
 }

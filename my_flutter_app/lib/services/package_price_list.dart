@@ -19,6 +19,15 @@
 /// - `departure`: the weekly schedule shown as "Next flight / container".
 /// Anything not on the list is "ask me": the piece waits for a staff estimate.
 ///
+/// Kilos (docs/SHIPPING_SIMPLE_HOME.md K): one unit per list, `weightUnit`
+/// "lb" (absent means lb) or "kg". A kilo list stamps `unit: "kg"` on every
+/// stored route, and a kilo price snapshot carries `unit: "kg"`; pounds are
+/// stored exactly as before (no `unit` key). The field names do not change:
+/// `perLbCents`, `includedLb`, `excessPerLbCents` and a snapshot's `weightLb`
+/// are IN THE ROUTE'S (OR SNAPSHOT'S) UNIT - "Lb" is a legacy name, not a
+/// promise. A weight typed in the other unit is converted (1 kg = 2.20462 lb)
+/// and rounded to a tenth before pricing.
+///
 /// Pure: no Firestore, no clock except what callers pass. Routes, items,
 /// pieces and price snapshots stay JSON-shaped maps (they are what the server
 /// stores and answers); every result has a `toMap()` that is exactly the
@@ -28,6 +37,8 @@
 /// whole numbers are kept as `int` (JSON has no 2.0), and `repricePieces`
 /// compares price snapshots without regard to key order.
 library;
+
+import 'dart:math' show max;
 
 // ---------------------------------------------------------------------------
 // Vocabulary.
@@ -72,23 +83,34 @@ PriceCategory? priceCategoryOf(String id) {
 const priceModes = <String>['sea', 'air'];
 const priceWeekDays = <String>['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
-/// One-tap weights for things priced by the pound (owner decision 9).
+/// One-tap weights for things priced by the weight (owner decision 9): [lb]
+/// on a pounds list, [kg] on a kilo list.
 class SizePreset {
-  const SizePreset(this.id, this.lb, this.en, this.fr);
+  const SizePreset(this.id, this.lb, this.kg, this.en, this.fr);
 
   final String id;
   final int lb;
+  final int kg;
   final String en;
   final String fr;
 
   String label(String languageCode) => languageCode == 'fr' ? fr : en;
+
+  /// The preset's weight in [unit] (`kg`, else pounds).
+  int inUnit(String unit) => unit == 'kg' ? kg : lb;
 }
 
 const sizePresets = <SizePreset>[
-  SizePreset('small_bag', 10, 'Small bag', 'Petit sac'),
-  SizePreset('suitcase', 50, 'Suitcase', 'Valise'),
-  SizePreset('big_box', 70, 'Big box', 'Grand carton'),
+  SizePreset('small_bag', 10, 5, 'Small bag', 'Petit sac'),
+  SizePreset('suitcase', 50, 23, 'Suitcase', 'Valise'),
+  SizePreset('big_box', 70, 32, 'Big box', 'Grand carton'),
 ];
+
+/// The two units a list can be priced in; absent means "lb".
+const weightUnits = <String>['lb', 'kg'];
+
+/// Pounds in a kilo. A weight typed in the other unit is converted with it.
+const kgToLb = 2.20462;
 
 /// One box size (docs/PACKAGE_BOX_SIZES_PAY_NOW.md section 1). Laawol sets
 /// them for every business; a business only prices them. [maxIn] is what the
@@ -181,6 +203,7 @@ class PriceLimit {
   static const perLbCents = 100000; // $1,000 a pound
   static const includedLb = 500;
   static const weightLb = 2000;
+  static const weightKg = 900;
   static const quantity = 50;
   static const everyWeeks = 8;
 }
@@ -209,11 +232,27 @@ const priceListMessages = <String, String>{
   'item_unknown': 'That item is no longer on the price list.',
   'quantity_invalid': 'Enter how many (1 to 50).',
   'weight_invalid': 'Enter the weight in pounds (0.1 to 2,000).',
+  'weight_kg_invalid': 'Enter the weight in kilos (0.1 to 900).',
+  'unit_invalid': 'Choose pounds or kilos.',
   'box_sizes_sea_only': 'Box sizes are priced for Sea only.',
   'box_price_invalid': 'Enter a box price between \$0.01 and \$10,000.',
   'box_size_invalid': 'Choose a box size.',
   'dims_invalid': 'Box inches must be 1 to 120 in each direction.',
 };
+
+/// What a refusal says on a kilo list: the same codes, the wording that
+/// names kilos (the others read the same in both units).
+const priceListMessagesKg = <String, String>{
+  'included_invalid': 'The weight a price covers must be 0 to 500 kg.',
+  'per_lb_invalid': 'Enter a price per kilo between \$0.01 and \$1,000.',
+};
+
+/// What refusal [code] says in [unit]'s words (`priceListMessage` in the
+/// JS); '' for a code that is not one of the price list's.
+String priceListMessage(String code, [String unit = 'lb']) =>
+    (unit == 'kg' ? priceListMessagesKg[code] : null) ??
+    priceListMessages[code] ??
+    '';
 
 // ---------------------------------------------------------------------------
 // JS-flavoured helpers (the rules are written once, in JS).
@@ -284,6 +323,58 @@ double _tenth(Object? value) {
 }
 
 int? _intOf(Object? value) => _isInteger(value) ? (value as num).toInt() : null;
+
+/// A unit as a client sent it: nothing is "lb"; anything else unknown is not
+/// [ok]. Mirrors `cleanUnit`.
+({String unit, bool ok}) cleanUnit(Object? raw) {
+  if (raw == null || raw == '') return (unit: 'lb', ok: true);
+  final unit = _text(raw, 10).toLowerCase();
+  return weightUnits.contains(unit)
+      ? (unit: unit, ok: true)
+      : (unit: 'lb', ok: false);
+}
+
+/// "kg" or "lb" for a route, a price snapshot or a whole list (anything that
+/// may carry `unit` / `weightUnit`). Mirrors `unitOf`.
+String unitOf(Object? holder) {
+  final m = _asMap(holder);
+  return m != null && (m['unit'] == 'kg' || m['weightUnit'] == 'kg')
+      ? 'kg'
+      : 'lb';
+}
+
+/// A weight in another unit, rounded to a tenth, never below 0.1 (no weight,
+/// 0, stays 0). NaN when not a number. Mirrors `convertWeight`.
+double convertWeight(Object? value, String from, String to) {
+  final n = _tenth(value);
+  if (!(n > 0) || from == to) return n;
+  final converted = to == 'lb' ? n * kgToLb : n / kgToLb;
+  return max(0.1, _tenth(converted));
+}
+
+/// A price per unit of weight, said per the other unit (whole cents): $25 a
+/// kilo is about $11.34 a pound. Only for showing rates side by side - a
+/// piece is priced by converting its WEIGHT ([pricePiece]), never its rate.
+/// Mirrors `rateIn`.
+int rateIn(int cents, String from, String to) {
+  if (from == to) return cents;
+  return _jsRound(to == 'lb' ? cents / kgToLb : cents * kgToLb);
+}
+
+/// A line's weight in the unit a price is in: kilos staff typed are used as
+/// typed, pounds are converted (and the reverse). Null when the line has no
+/// weight. [line] is `{weightLb, weightKg}`. Mirrors `weightIn`.
+double? weightIn(String unit, Object? line) {
+  final row = _asMap(line) ?? const <String, dynamic>{};
+  final kg = _tenth(row['weightKg']);
+  final lb = _tenth(row['weightLb']);
+  if (unit == 'kg') {
+    if (kg > 0) return kg;
+    return lb > 0 ? convertWeight(lb, 'lb', 'kg') : null;
+  }
+  if (lb > 0) return lb;
+  return kg > 0 ? convertWeight(kg, 'kg', 'lb') : null;
+}
 
 // Letters that decompose canonically (NFD) into a base letter and a combining
 // mark. Dart has no normalizer, so the Latin ones are written out; letters
@@ -472,8 +563,13 @@ class RouteValidation {
 }
 
 /// Validates one route (a country by Sea or by Air; box sizes are Sea only,
-/// [mode] defaults to sea).
-RouteValidation validateRoute(Object? raw, {String mode = 'sea'}) {
+/// [mode] defaults to sea). [unit] is the list's ("lb" default, "kg"): a kilo
+/// route is stamped `unit: "kg"`, a pounds route carries no `unit` key.
+RouteValidation validateRoute(
+  Object? raw, {
+  String mode = 'sea',
+  String unit = 'lb',
+}) {
   final errors = <String>[];
   void add(String code) {
     if (!errors.contains(code)) errors.add(code);
@@ -582,34 +678,53 @@ RouteValidation validateRoute(Object? raw, {String mode = 'sea'}) {
             'perLbCents': perLbCents,
             if (boxPricesCents.isNotEmpty) 'boxPricesCents': boxPricesCents,
             'departure': cleaned.departure,
+            if (unit == 'kg') 'unit': 'kg',
           },
     errors,
   );
 }
 
 class PriceListValidation {
-  const PriceListValidation(this.routes, this.errors);
+  const PriceListValidation(this.routes, this.errors, [this.weightUnit = 'lb']);
 
   final Map<String, Map<String, Map<String, Object?>>>? routes;
   final List<String> errors;
+
+  /// The list's unit ("lb" when none was sent).
+  final String weightUnit;
+
+  Map<String, Object?> toMap() => {
+    'routes': routes,
+    'weightUnit': weightUnit,
+    'errors': errors,
+  };
 }
 
-/// Validates a whole price list `{routes: {[countryId]: {sea?, air?}}}`.
-/// [countryIds] are the countries this business ships to.
+/// Validates a whole price list `{weightUnit?, routes: {[countryId]: {sea?,
+/// air?}}}`. [countryIds] are the countries this business ships to.
 PriceListValidation validatePriceList(
   Object? raw,
   Iterable<String> countryIds,
 ) {
   final data = _asMap(raw) ?? const <String, dynamic>{};
   final input = _asMap(data['routes']);
+  final (:unit, ok: unitOk) = cleanUnit(data['weightUnit']);
   if (input == null) {
-    return const PriceListValidation(null, ['price_list_invalid']);
+    return PriceListValidation(
+      null,
+      unitOk
+          ? const ['price_list_invalid']
+          : const ['price_list_invalid', 'unit_invalid'],
+      unit,
+    );
   }
   final known = countryIds.toSet();
   final errors = <String>[];
   void add(String code) {
     if (!errors.contains(code)) errors.add(code);
   }
+
+  if (!unitOk) add('unit_invalid');
 
   final entries = input.entries.toList();
   if (entries.length > PriceLimit.routes) add('too_many_routes');
@@ -629,15 +744,15 @@ PriceListValidation validatePriceList(
     }
     final pair = <String, Map<String, Object?>>{};
     for (final mode in priceModes) {
-      final result = validateRoute(value[mode], mode: mode);
+      final result = validateRoute(value[mode], mode: mode, unit: unit);
       result.errors.forEach(add);
       if (result.route != null) pair[mode] = result.route!;
     }
     if (pair.isNotEmpty) routes[entry.key] = pair;
   }
   return errors.isNotEmpty
-      ? PriceListValidation(null, errors)
-      : PriceListValidation(routes, errors);
+      ? PriceListValidation(null, errors, unit)
+      : PriceListValidation(routes, errors, unit);
 }
 
 /// The route a business priced for [countryId] by [mode] (`"air"`, else sea),
@@ -687,11 +802,18 @@ class PricedPiece {
   };
 }
 
+/// The `unit` key a kilo snapshot carries (a pounds one has none).
+Map<String, Object?> _unitStamp(Map<String, dynamic>? route) =>
+    unitOf(route) == 'kg' ? const {'unit': 'kg'} : const {};
+
 /// Prices one piece a customer added, at today's prices.
 ///
 /// A piece is one of:
 /// - `{priceItemId, quantity}`: an item from the list;
-/// - `{categoryId, weightLb}`: a category priced by the pound;
+/// - `{categoryId, weightLb, weightUnit?}`: a category priced by the weight:
+///   the number typed (`weightLb` is the legacy name) and the unit it was
+///   typed in (absent: the route's own); a weight in the other unit is
+///   converted to the route's, to a tenth, before pricing;
 /// - `{kind: "box", boxSize | dimsIn, quantity}`: a Sea box priced by size
 ///   (typed inches win); `xl` or a size the business did not price is "ask
 ///   me";
@@ -752,6 +874,7 @@ PricedPiece pricePiece(
             : null,
         'perLbCents': null,
         'weightLb': null,
+        ..._unitStamp(route),
       },
       estimateCents: unit * quantity,
       description: quantity > 1 ? '$quantity × $label' : label,
@@ -761,18 +884,32 @@ PricedPiece pricePiece(
   if (categoryId.isNotEmpty && weightRaw != null && weightRaw != '') {
     final category = priceCategoryOf(categoryId);
     if (category == null) return const PricedPiece(error: 'category_invalid');
-    final weightLb = _tenth(weightRaw);
-    if (!(weightLb >= 0.1 && weightLb <= PriceLimit.weightLb)) {
-      return const PricedPiece(error: 'weight_invalid');
-    }
     final rates = _asMap(route?['perLbCents']) ?? const <String, dynamic>{};
     final rate = rates[categoryId];
+    final priced = _isInteger(rate) && (rate as num) > 0;
+    final routeUnit = unitOf(route);
+    final typedRaw = p['weightUnit'];
+    final typed = typedRaw == null || typedRaw == ''
+        ? (unit: routeUnit, ok: true)
+        : cleanUnit(typedRaw);
+    if (!typed.ok) return const PricedPiece(error: 'unit_invalid');
+    final asTyped = _tenth(weightRaw);
+    final limit = typed.unit == 'kg'
+        ? PriceLimit.weightKg
+        : PriceLimit.weightLb;
+    if (!(asTyped >= 0.1 && asTyped <= limit)) {
+      return PricedPiece(
+        error: typed.unit == 'kg' ? 'weight_kg_invalid' : 'weight_invalid',
+      );
+    }
+    // Priced in the route's unit; with no rate ("ask me") the weight stays
+    // as the customer typed it, for staff to read.
+    final unit = priced ? routeUnit : typed.unit;
+    final weight = convertWeight(asTyped, typed.unit, unit);
     final label = category.en;
     final description =
-        '${lang == 'fr' ? category.fr : label} · ${_numText(weightLb)} lb';
-    if (!_isInteger(rate) || (rate as num) <= 0) {
-      return PricedPiece(description: description);
-    }
+        '${lang == 'fr' ? category.fr : label} · ${_numText(weight)} $unit';
+    if (!priced) return PricedPiece(description: description);
     return PricedPiece(
       price: {
         'source': 'per_lb',
@@ -784,9 +921,10 @@ PricedPiece pricePiece(
         'includedLb': 0,
         'excessPerLbCents': null,
         'perLbCents': rate.toInt(),
-        'weightLb': _clean(weightLb),
+        'weightLb': _clean(weight),
+        ..._unitStamp(route),
       },
-      estimateCents: _jsRound(rate * weightLb),
+      estimateCents: _jsRound(rate * weight),
       description: description,
     );
   }
@@ -857,6 +995,10 @@ PricedPiece pricePiece(
 /// included weight never change; "up to X lb" items add the extra pounds at
 /// the excess rate; by-the-pound pieces are rate x weight. Null when the extra
 /// weight has no rate (staff type the price).
+///
+/// [weighedLb] is IN THE SNAPSHOT'S UNIT (`price['unit']`, pounds when
+/// absent): a caller holding the other unit converts first
+/// (`weightIn(unitOf(price), line)`).
 int? counterPriceCents(Map<String, dynamic>? price, Object? weighedLb) {
   if (price == null) return null;
   final weight = _tenth(weighedLb);
@@ -1027,7 +1169,11 @@ RepriceResult repricePieces(Object? pieces, Map<String, dynamic>? route) {
               'boxSize': price['boxSize'],
               'quantity': price['quantity'],
             }
-          : {'categoryId': price['categoryId'], 'weightLb': price['weightLb']},
+          : {
+              'categoryId': price['categoryId'],
+              'weightLb': price['weightLb'],
+              'weightUnit': unitOf(price),
+            },
     );
     if (again.price == null || again.estimateCents == null) {
       next.add(piece);

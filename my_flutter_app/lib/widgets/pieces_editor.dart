@@ -7,12 +7,14 @@ import '../services/business_price_list.dart'
 import '../services/line_pieces.dart';
 import '../services/lot_ledger.dart' show formatLotCents;
 import '../services/invoice_ledger.dart' show invoiceCentsToInput;
-import '../services/package_price_list.dart' show counterPriceCents;
+import '../services/package_price_list.dart' show counterPriceCents, unitOf;
+import '../services/price_list_fill.dart';
 import '../services/waiting_packages.dart' show trimNumber;
 import '../theme/app_colors.dart';
 import '../theme/app_motion.dart';
 import '../theme/app_spacing.dart';
 import '../utils/money_input.dart';
+import 'price_fill_sheet.dart';
 
 /// What a package that is not a car holds, piece by piece, as the counter
 /// types it (docs/WAITING_PACKAGES.md "Pieces"): each piece a barrel, a box
@@ -69,12 +71,21 @@ class PieceDraftRow {
   /// priced by the pound. Null for every other piece.
   final Map<String, dynamic>? snapshot;
 
-  /// The weighed pounds, for a piece with a [snapshot] that weighs; typing
-  /// one sets [price] from the list (`counterPriceCents`), still editable.
+  /// The weighed weight, for a piece with a [snapshot] that weighs, in the
+  /// snapshot's unit ([weightUnit]); typing one sets [price] from the list
+  /// (`counterPriceCents`), still editable.
   final TextEditingController? weight;
+
+  /// "kg" for a piece the business priced by the kilo, else "lb".
+  String get weightUnit => unitOf(snapshot);
 
   /// The size fields are open: asked for, or already filled in.
   bool showSize;
+
+  /// The weight a "From the price list" fill asked for this piece (the
+  /// list's unit); null when it was never filled by weight. Nothing is stored
+  /// from it: it only lets the sheet fill an air package's empty weight.
+  double? fillWeight;
 
   List<TextEditingController> get _fields => [
     description,
@@ -201,15 +212,17 @@ class PiecesEditorController extends ChangeNotifier {
   final List<PieceDraftRow> _retired = [];
   int _nextUid = 0;
 
-  /// A by-the-pound piece opens on the pounds the customer gave.
+  /// A by-the-weight piece opens on the weight the customer gave, in the
+  /// snapshot's unit.
   static String _startWeight(Map<String, dynamic>? snapshot) {
     final lb = snapshot?['weightLb'];
     return lb is num && lb > 0 ? priceLbText(lb) : '';
   }
 
-  /// The pounds typed for [row] set its price from the list; a weight that
-  /// is not a number, or a price the list cannot give (extra pounds with no
-  /// rate), leaves the price as it was for staff to type.
+  /// The weight typed for [row] (in its snapshot's unit) sets its price from
+  /// the list; a weight that is not a number, or a price the list cannot give
+  /// (extra weight with no rate), leaves the price as it was for staff to
+  /// type.
   void _weighed(PieceDraftRow row) {
     final text = row.weight?.text.trim().replaceAll(',', '.') ?? '';
     final lb = double.tryParse(text);
@@ -282,6 +295,26 @@ class PiecesEditorController extends ChangeNotifier {
     ];
   }
 
+  /// "From the price list" picked something for piece [index]: its price is
+  /// typed in (staff can still change it), and its description when it has
+  /// none. Nothing else is stored.
+  void applyFill(int index, PriceFill fill) {
+    if (index < 0 || index >= _rows.length) return;
+    final row = _rows[index];
+    final price = invoiceCentsToInput(fill.priceCents);
+    if (row.price.text != price) row.price.text = price;
+    if (row.description.text.trim().isEmpty) {
+      row.description.text = fill.description;
+    }
+    row.fillWeight = fill.weight;
+    notifyListeners();
+  }
+
+  /// The weights "From the price list" asked for, added up; null when no
+  /// piece was filled by weight.
+  double? get filledWeightTotal =>
+      sumFilledWeights([for (final row in _rows) row.fillWeight]);
+
   /// Another piece, of the same kind as the last (barrels come in runs).
   void add() {
     if (!canAdd) return;
@@ -340,9 +373,20 @@ class PiecesEditor extends StatelessWidget {
     this.error,
     this.enabled = true,
     this.requirePrices = false,
+    this.priceRoute,
+    this.onPriceFilled,
   });
 
   final PiecesEditorController controller;
+
+  /// The route the business priced for this package's country and ship mode
+  /// (`PriceRoute.raw`): each piece then offers "From the price list". Null,
+  /// or a route with nothing on it, offers nothing.
+  final Map<String, dynamic>? priceRoute;
+
+  /// Told after a piece was filled from the list (its index), so the sheet
+  /// can fill the package weight of an air package.
+  final void Function(int index, PriceFill fill)? onPriceFilled;
 
   /// Every piece must have a price typed in ($0 is allowed): a customer's
   /// package (docs/PACKAGE_PRICE_REQUIRED.md). The price fields are marked
@@ -391,6 +435,17 @@ class PiecesEditor extends StatelessWidget {
                   removable: rows.length > 1 && enabled,
                   enabled: enabled,
                   requirePrice: requirePrices,
+                  onFromList: priceFillAvailable(priceRoute)
+                      ? () async {
+                          final fill = await showPriceFillSheet(
+                            context,
+                            route: priceRoute!,
+                          );
+                          if (fill == null) return;
+                          controller.applyFill(i, fill);
+                          onPriceFilled?.call(i, fill);
+                        }
+                      : null,
                   errors: showErrors
                       ? [
                           for (final c in controller.errorsFor(
@@ -471,10 +526,14 @@ class _PieceCard extends StatelessWidget {
     required this.enabled,
     required this.errors,
     required this.requirePrice,
+    required this.onFromList,
     required this.onKind,
     required this.onRemove,
     required this.onOpenSize,
   });
+
+  /// "From the price list", when the business priced this package's route.
+  final VoidCallback? onFromList;
 
   final int index;
   final PieceDraftRow row;
@@ -624,6 +683,24 @@ class _PieceCard extends StatelessWidget {
               ),
             ],
           ),
+          if (onFromList != null)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                key: Key('piece-from-list-$index'),
+                onPressed: enabled ? onFromList : null,
+                icon: const Icon(Icons.price_check, size: 16),
+                label: Text(
+                  l10n.pcsFromList,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
+            ),
           if (row.weight != null) ...[
             const SizedBox(height: AppSpacing.sm),
             Align(
@@ -639,8 +716,10 @@ class _PieceCard extends StatelessWidget {
                   ),
                   inputFormatters: [_decimal],
                   decoration: InputDecoration(
-                    labelText: l10n.pplWeightLb,
-                    suffixText: 'lb',
+                    labelText: row.weightUnit == 'kg'
+                        ? l10n.pplWeightKg
+                        : l10n.pplWeightLb,
+                    suffixText: row.weightUnit,
                     helperText: l10n.pplWeightHelper,
                     helperMaxLines: 2,
                     isDense: true,

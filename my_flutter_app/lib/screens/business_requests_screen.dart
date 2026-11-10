@@ -112,7 +112,12 @@ class BusinessRequestsScreen extends StatefulWidget {
     this.canManageSettings,
     this.myUid,
     this.priceListCountries,
+    this.airOnly = false,
   });
+
+  /// A business that only ever ships by air (`airOnlyBusiness`): its Price
+  /// list opens on Air.
+  final bool airOnly;
 
   final String businessId;
 
@@ -263,6 +268,7 @@ class _BusinessRequestsScreenState extends State<BusinessRequestsScreen> {
           service: _service,
           canEdit: _canManage,
           countries: widget.priceListCountries,
+          startOnAir: widget.airOnly,
         ),
       ),
     );

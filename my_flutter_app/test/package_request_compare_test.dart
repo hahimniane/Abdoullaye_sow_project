@@ -291,6 +291,9 @@ void main() {
           {
             'categoryId': 'clothing',
             'weightLb': 50.0,
+            // The unit always travels with the number (K7): each business
+            // prices it in its own.
+            'weightUnit': 'lb',
             'sizePreset': 'suitcase',
           },
           {'kind': 'barrel'},
@@ -927,6 +930,165 @@ void main() {
       });
       expect(r.plannedDate, '2026-11-06');
       expect(r.window!.to, '16:00');
+    });
+  });
+
+  // Kilos (docs/SHIPPING_SIMPLE_HOME.md K2, K7): the customer's weight is
+  // asked in the business's unit on its own link, pounds when comparing, and
+  // the unit always goes with the number.
+  group('weights in kilos', () {
+    // A kilo business: phones $40 up to 2 kg each, clothes $7/kg.
+    final kiloBiz = _option(
+      'k',
+      'Kilo Cargo',
+      sea: {
+        'items': [_item('Phone', 'electronics', 4000, includedLb: 2)],
+        'perLbCents': {'clothing': 700},
+        'unit': 'kg',
+      },
+    );
+
+    test(
+      'the unit is the business\'s on its own link, pounds when comparing',
+      () {
+        expect(catalogWeightUnit([kiloBiz, _atlantic]), 'lb');
+        expect(
+          catalogWeightUnit([kiloBiz, _atlantic], onlyBusinessId: 'k'),
+          'kg',
+        );
+        expect(
+          catalogWeightUnit([kiloBiz, _atlantic], onlyBusinessId: 'a'),
+          'lb',
+        );
+        expect(catalogWeightUnit([kiloBiz], onlyBusinessId: 'nobody'), 'lb');
+      },
+    );
+
+    test('included weights are shown in the catalog\'s unit', () {
+      final inKilos = buildRequestCatalog([kiloBiz], 'sea', unit: 'kg');
+      expect(inKilos.weightUnit, 'kg');
+      expect(inKilos.items.single.includedLb, 2);
+      // Compared in pounds: 2 kg is 4.4 lb, to a tenth.
+      final inPounds = buildRequestCatalog([kiloBiz], 'sea');
+      expect(inPounds.weightUnit, 'lb');
+      expect(inPounds.items.single.includedLb, 4.4);
+      // A pounds route is not touched on a pounds catalog.
+      expect(
+        buildRequestCatalog([
+          _atlantic,
+        ], 'sea').item(catalogItemKey('Phone', 'electronics'))!.includedLb,
+        2,
+      );
+    });
+
+    test('the weight field reads each unit\'s own limit', () {
+      expect(parseWeight('900', 'kg'), 900);
+      expect(parseWeight('900.1', 'kg'), isNull);
+      expect(parseWeight('901', 'lb'), 901);
+      expect(parseWeight('12,5', 'kg'), 12.5);
+      expect(
+        const BasketWeight(
+          categoryId: 'clothing',
+          weightLb: 901,
+          weightUnit: 'kg',
+        ).valid,
+        isFalse,
+      );
+      expect(
+        const BasketWeight(categoryId: 'clothing', weightLb: 901).valid,
+        isTrue,
+      );
+    });
+
+    test(
+      'switching the unit keeps a size button and converts a typed weight',
+      () {
+        expect(
+          weightFieldInUnit('23', from: 'kg', to: 'lb', presetId: 'suitcase'),
+          '50',
+        );
+        expect(weightFieldInUnit('10', from: 'lb', to: 'kg'), '4.5');
+        expect(weightFieldInUnit('4,5', from: 'kg', to: 'lb'), '9.9');
+        // A weight that does not read stays as typed; the same unit is a no-op.
+        expect(weightFieldInUnit('abc', from: 'lb', to: 'kg'), 'abc');
+        expect(weightFieldInUnit('10', from: 'kg', to: 'kg'), '10');
+      },
+    );
+
+    test('a kilo piece is priced in kilos and sent with its unit', () {
+      final catalog = buildRequestCatalog([kiloBiz], 'sea', unit: 'kg');
+      final basket = const RequestBasket(
+        weights: [
+          BasketWeight(
+            categoryId: 'clothing',
+            weightLb: 23,
+            weightUnit: 'kg',
+            sizePreset: 'suitcase',
+          ),
+        ],
+      );
+      final priced = basketPricingPieces(basket, catalog, kiloBiz, 'sea');
+      expect(priced.single['weightUnit'], 'kg');
+      // 23 kg at $7 a kilo.
+      expect(priceBasket(kiloBiz.routeFor('sea'), priced).totalCents, 16100);
+      final drafts = basketDrafts(basket, catalog, kiloBiz, 'sea');
+      expect(requestPiecePayload(drafts.single), {
+        'categoryId': 'clothing',
+        'weightLb': 23.0,
+        'weightUnit': 'kg',
+        'sizePreset': 'suitcase',
+      });
+    });
+
+    test(
+      'pounds typed while comparing are priced in each business\'s unit',
+      () {
+        final catalog = buildRequestCatalog([kiloBiz, _atlantic], 'sea');
+        const basket = RequestBasket(
+          weights: [BasketWeight(categoryId: 'clothing', weightLb: 50)],
+        );
+        final onKilo = priceBasket(
+          kiloBiz.routeFor('sea'),
+          basketPricingPieces(basket, catalog, kiloBiz, 'sea'),
+        );
+        // 50 lb is 22.7 kg, to a tenth, at $7 a kilo.
+        expect(onKilo.totalCents, 15890);
+        final onPounds = priceBasket(
+          _atlantic.routeFor('sea'),
+          basketPricingPieces(basket, catalog, _atlantic, 'sea'),
+        );
+        expect(onPounds.totalCents, 30000);
+      },
+    );
+
+    test('a kilo weight out of range is refused with the kilo code', () {
+      List<String> reasons(String unit, double weight) => validateRequestDraft(
+        RequestDraft(
+          businessId: 'k',
+          destinationCountryId: 'guinea',
+          handoff: requestHandoffBringIn,
+          locationId: 'loc1',
+          plannedDate: '2026-10-24',
+          senderName: 'A',
+          senderPhone: '+19175551234',
+          receiverName: 'B',
+          receiverPhone: '+224621234567',
+          pieces: [
+            RequestPieceDraft.byWeight(
+              categoryId: 'clothing',
+              weightLb: weight,
+              weightUnit: unit,
+            ),
+          ],
+          idempotencyKey: 'app_abcdefgh12345678',
+        ),
+        option: kiloBiz,
+        today: DateTime(2026, 10, 22),
+      );
+      expect(reasons('kg', 901), contains('weight_kg_invalid'));
+      expect(reasons('kg', 900), isNot(contains('weight_kg_invalid')));
+      expect(reasons('lb', 901), isNot(contains('weight_invalid')));
+      expect(reasons('lb', 2001), contains('weight_invalid'));
     });
   });
 }

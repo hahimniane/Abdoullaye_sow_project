@@ -542,3 +542,45 @@ Add future project conventions and repeated architectural decisions here.
   is still hydrated and sent). Permission pickers stop granting the old
   permission but keep showing it to people who hold it. An activity tile for
   a retired service shows only while its work is open.
+- Home pieces both business homes share (the loud action, a list of places,
+  the "more tools" buttons and the console/assistant tail) live in
+  `lib/widgets/home_destinations.dart` as public widgets (`HomePrimaryAction`,
+  `HomeDestinationGroup`, `HomeTool`, `BusinessHomeTail`). A second home reuses
+  them and takes its rows from `_businessDestinations(...)` **by key**
+  (`_rowKeyed`), so a place can never be offered on one home and gated away on
+  the other; never copy a private home widget into a new file.
+- A screen that owns Firestore feeds (`ContainersScreen`) opens other places
+  through an enum entry (`ContainersEntry`), not through a second copy of its
+  feeds. The pure rule behind a layout (`shippingHomeLayout`, `airOnlyBusiness`)
+  sits in `lib/services/` beside `shopHomeLayout`, asked after it, and the home
+  is wired by a source-reading test as well as the pure tests.
+- "Is every container an air shipment?" cannot be `shipMode != 'air'`:
+  Firestore's `!=` skips documents with no such field, and containers from
+  before ship modes have none. Use two `count()` aggregates (all vs `shipMode ==
+  'air'`) - equality only, no composite index, one read per thousand entries.
+- A multi-step server flow run from one sheet (Send packages: create, assign,
+  ship) keeps the id of what step 1 made and resumes from the failed step;
+  inputs lock once something exists server-side. Put the step machine in a
+  pure runner (`SendRunner`) with an injected caller so "never create twice" is
+  a unit test, and let the sheet pick up an empty leftover by a pure matcher
+  (`reusableEmptyShipment`) rather than creating another.
+- Weight units (docs/SHIPPING_SIMPLE_HOME.md K): `weightLb` on a stored line is
+  pounds, always; kilos are the optional `weightKg`. One rule decides which
+  unit a screen speaks, `businessWeightUnitOf` (the price list's `weightUnit`
+  when it prices a route, else the device-remembered pick, else lb), and one
+  `BusinessWeightUnit` controller (lib/services/business_weight_unit.dart)
+  carries it; a sheet owns one (injectable for tests, `Firebase.apps.isEmpty`
+  reads as "no list") - never a per-screen copy. A weight a person has typed
+  (or a stored one) is pinned to the unit it was weighed in and is never
+  converted; show any line weight through the one line-aware `weightText(line)`.
+  The unit pins from the business unit at the first keystroke, never from a
+  getter that reads the field's text (it is already non-empty in `onChanged`).
+- A price snapshot / route says its unit with `unitOf(x)` (`unit: "kg"`, absent
+  is lb); every by-weight number is in that unit, whatever the field is called
+  (`perLbCents`, `includedLb`, `weightLb`). Convert a weight, never a rate
+  (`convertWeight`, then price); a caller holding the other unit uses
+  `weightIn(unitOf(price), line)` before `counterPriceCents`.
+- The counter's "From the price list" is a calculator over `pricePiece`
+  (`lib/services/price_list_fill.dart`): it types into the piece's own fields and
+  stores nothing; the weights it asked for ride on the piece row
+  (`fillWeight`) so an air package's empty weight can be filled from their sum.

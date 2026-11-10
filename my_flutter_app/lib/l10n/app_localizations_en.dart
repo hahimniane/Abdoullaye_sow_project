@@ -19566,4 +19566,243 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get parkingPaidContactOnly =>
       'This parking has been paid for. Only the customer\'s name, phone and email can still be changed.';
+
+  @override
+  String get shhPackagesHereTitle => 'Packages here';
+
+  @override
+  String get shhSearchHint => 'Customer, receiver or phone';
+
+  @override
+  String get wpkUpdatesNoticeAir =>
+      'The customer and the receiver get a WhatsApp message when the package is registered, when it is sent and when it arrives.';
+
+  @override
+  String get wpkRegisterSubtitleAir => 'It waits here until you send it.';
+
+  @override
+  String get shhPackagesHereSubtitle => 'Dropped off, waiting to leave.';
+
+  @override
+  String get shhOnTheWayTitle => 'On the way';
+
+  @override
+  String get shhOnTheWaySubtitle => 'Sent, until they arrive.';
+
+  @override
+  String get shhNothingOnTheWay =>
+      'Nothing on the way. Send packages from Packages here.';
+
+  @override
+  String get shhMoneyTitle => 'Money';
+
+  @override
+  String get sndSendPackages => 'Send packages';
+
+  @override
+  String get sndSubtitle =>
+      'Packages for one country leave together on one flight.';
+
+  @override
+  String get sndWhereTitle => 'Where are they going?';
+
+  @override
+  String sndCountryOption(String country, int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count packages',
+      one: '1 package',
+    );
+    return '$country · $_temp0';
+  }
+
+  @override
+  String get sndSelectAll => 'Select all';
+
+  @override
+  String get sndSelectNone => 'Select none';
+
+  @override
+  String get sndFlightDate => 'Flight date';
+
+  @override
+  String get sndWaybillLabel => 'Airway bill number (optional)';
+
+  @override
+  String get sndWaybillHelp => '6 to 20 letters or numbers.';
+
+  @override
+  String get sndWaybillInvalid =>
+      'Use 6 to 20 letters or numbers. Dashes are fine.';
+
+  @override
+  String sndSubmit(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count packages',
+      one: '1 package',
+    );
+    return 'Send $_temp0';
+  }
+
+  @override
+  String get sndSending => 'Sending…';
+
+  @override
+  String get sndTryAgain => 'Try again';
+
+  @override
+  String get sndResumeNote =>
+      'The shipment is already started. Try again to finish sending.';
+
+  @override
+  String get sndSendAnywayTitle => 'Send anyway?';
+
+  @override
+  String sndSendAnywayMessage(String codes) {
+    return 'The sender reported a problem with $codes. Send anyway?';
+  }
+
+  @override
+  String get sndSendAnyway => 'Send anyway';
+
+  @override
+  String sndDone(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count packages sent',
+      one: '1 package sent',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get sndTickOne => 'Tick at least one package.';
+
+  @override
+  String get sndFlightWord => 'Flight';
+
+  @override
+  String get proofErrWeightKg => 'Enter a weight between 0.1 and 900 kg.';
+
+  @override
+  String get deliverRefusalWeightKgInvalid =>
+      'Enter a weight between 0.1 and 900 kg.';
+
+  @override
+  String get pplErrWeightKgInvalid => 'Enter the weight in kilos (0.1 to 900).';
+
+  @override
+  String get pplErrUnitInvalid => 'Choose pounds or kilos.';
+
+  @override
+  String get pplErrIncludedInvalidKg =>
+      'The weight a price covers must be 0 to 500 kg.';
+
+  @override
+  String get pplErrPerKgInvalid =>
+      'Enter a price per kilo between \$0.01 and \$1,000.';
+
+  @override
+  String get spkErrWeightKg => 'Enter the weight in kilos (0.1 to 900).';
+
+  @override
+  String get pplItemCoversKg => 'Covers up to (kg), optional';
+
+  @override
+  String get pplItemCoversHintKg =>
+      'Each item up to this weight costs the fixed price. Extra kilos are charged at the category\'s price per kilo.';
+
+  @override
+  String pplItemCoversUpToKg(Object kg) {
+    return 'up to $kg kg each';
+  }
+
+  @override
+  String get pplPerKgTitle => 'Price per kilo';
+
+  @override
+  String get pplUnitTitle => 'Price list unit';
+
+  @override
+  String get pplUnitPerLb => 'per lb';
+
+  @override
+  String get pplUnitPerKg => 'per kg';
+
+  @override
+  String get pplUnitChangedKg =>
+      'Your prices are now per kg. The amounts did not change. Check them.';
+
+  @override
+  String get pplUnitChangedLb =>
+      'Your prices are now per lb. The amounts did not change. Check them.';
+
+  @override
+  String get pplWeightKg => 'Weight (kg)';
+
+  @override
+  String get proofUnitPounds => 'Weigh in pounds';
+
+  @override
+  String get proofUnitKilos => 'Weigh in kilos';
+
+  @override
+  String spkUpToKgEach(Object kg) {
+    return 'Up to $kg kg each';
+  }
+
+  @override
+  String get spkWeightKgLabel => 'Weight (kg)';
+
+  @override
+  String spkSizeButtonKg(String name, String kg) {
+    return '$name · $kg kg';
+  }
+
+  @override
+  String get spkByWeightHintKg =>
+      'Choose what it is, then a size or type the kilos.';
+
+  @override
+  String spkNoteExtraKg(String rate) {
+    return 'Extra kilos are $rate per kg, weighed at drop-off.';
+  }
+
+  @override
+  String spkNotePerKg(String kg, String rate) {
+    return '$kg kg at $rate per kg, weighed when received.';
+  }
+
+  @override
+  String get spkUnitPounds => 'Pounds (lb)';
+
+  @override
+  String get spkUnitKilos => 'Kilos (kg)';
+
+  @override
+  String get pcsFromList => 'From the price list';
+
+  @override
+  String get pcsFromListItems => 'Items';
+
+  @override
+  String get pcsFromListByWeight => 'By weight';
+
+  @override
+  String get pcsFromListHowMany => 'How many';
+
+  @override
+  String pcsFromListPrice(String price) {
+    return 'Price: $price';
+  }
+
+  @override
+  String get pcsFromListUse => 'Use this price';
+
+  @override
+  String get pcsFromListBack => 'Back to the list';
 }

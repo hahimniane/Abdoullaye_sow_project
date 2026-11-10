@@ -22,8 +22,11 @@ import '../widgets/package_request_widgets.dart';
 
 /// A price-list refusal code (`PRICE_LIST_MESSAGES` key) in our words, or
 /// null when this app has none for it.
-String? priceListReasonText(AppLocalizations l10n, String code) =>
-    switch (code) {
+String? priceListReasonText(
+  AppLocalizations l10n,
+  String code, [
+  String unit = 'lb',
+]) => switch (code) {
       'price_list_invalid' => l10n.pplErrPriceListInvalid,
       'country_unknown' => l10n.pplErrCountryUnknown,
       'mode_invalid' => l10n.pplErrModeInvalid,
@@ -34,12 +37,18 @@ String? priceListReasonText(AppLocalizations l10n, String code) =>
       'label_duplicate' => l10n.pplErrLabelDuplicate,
       'category_invalid' => l10n.pplErrCategoryInvalid,
       'price_invalid' => l10n.pplErrPriceInvalid,
-      'included_invalid' => l10n.pplErrIncludedInvalid,
-      'per_lb_invalid' => l10n.pplErrPerLbInvalid,
+      'included_invalid' =>
+        unit == 'kg'
+            ? l10n.pplErrIncludedInvalidKg
+            : l10n.pplErrIncludedInvalid,
+      'per_lb_invalid' =>
+        unit == 'kg' ? l10n.pplErrPerKgInvalid : l10n.pplErrPerLbInvalid,
       'departure_invalid' => l10n.pplErrDepartureInvalid,
       'item_unknown' => l10n.pplErrItemUnknown,
       'quantity_invalid' => l10n.pplErrQuantityInvalid,
       'weight_invalid' => l10n.pplErrWeightInvalid,
+      'weight_kg_invalid' => l10n.pplErrWeightKgInvalid,
+      'unit_invalid' => l10n.pplErrUnitInvalid,
       'box_size_invalid' => l10n.pplErrBoxSizeInvalid,
       'dims_invalid' => l10n.pplErrDimsInvalid,
       'box_sizes_sea_only' => l10n.pplErrBoxSizesSeaOnly,
@@ -72,9 +81,14 @@ class PackagePriceListScreen extends StatefulWidget {
     required this.canEdit,
     this.service,
     this.countries,
+    this.startOnAir = false,
   });
 
   final String businessId;
+
+  /// Open on the Air tab (a business that only ships by air); Sea stays one
+  /// tap away.
+  final bool startOnAir;
 
   /// The owner or an admin: may type, save and say "Looks right".
   final bool canEdit;
@@ -101,7 +115,11 @@ class _PackagePriceListScreenState extends State<PackagePriceListScreen> {
   PriceListDraft _draft = const {};
   bool _seeded = false;
   String _countryId = '';
-  String _mode = 'sea';
+  late String _mode = widget.startOnAir ? 'air' : 'sea';
+
+  /// The unit the owner picked, until saved: the whole list is priced per lb
+  /// or per kg (docs/SHIPPING_SIMPLE_HOME.md K1). Null = what is stored.
+  String? _unitEdit;
 
   /// '' / 'save' / 'check'.
   String _busy = '';
@@ -165,6 +183,7 @@ class _PackagePriceListScreenState extends State<PackagePriceListScreen> {
       // Typing in progress is judged against the list it started from.
       final typing = _changed;
       _list = list;
+      if (_unitEdit == list.weightUnit) _unitEdit = null;
       _failed = false;
       _reseed(keepTyping: typing);
     });
@@ -209,10 +228,15 @@ class _PackagePriceListScreenState extends State<PackagePriceListScreen> {
     if (!ids.contains(_countryId)) _countryId = ids.isEmpty ? '' : ids.first;
   }
 
+  /// The list's unit: what is stored, until the owner picks the other.
+  String get _unit => _unitEdit ?? _list?.weightUnit ?? 'lb';
+
+  bool get _unitChanged => _unit != (_list?.weightUnit ?? 'lb');
+
   bool get _changed {
     final list = _list;
     if (list == null || !_seeded) return false;
-    return priceListChanged(list, _draft, _ids);
+    return _unitChanged || priceListChanged(list, _draft, _ids);
   }
 
   PriceRouteDraft get _route =>
@@ -237,7 +261,7 @@ class _PackagePriceListScreenState extends State<PackagePriceListScreen> {
 
   String _refusalText(AppLocalizations l10n, RequestRefusal refusal) {
     for (final reason in refusal.reasons) {
-      final text = priceListReasonText(l10n, reason);
+      final text = priceListReasonText(l10n, reason, _unit);
       if (text != null) return text;
     }
     return requestRefusalText(l10n, refusal);
@@ -247,14 +271,15 @@ class _PackagePriceListScreenState extends State<PackagePriceListScreen> {
     final l10n = AppLocalizations.of(context)!;
     if (_busy.isNotEmpty || !widget.canEdit) return;
     final ids = _ids;
-    final problems = priceListProblems(_draft, ids);
+    final problems = priceListProblems(_draft, ids, unit: _unit);
     if (problems.isNotEmpty) {
       AppHaptics.refuse();
       final first = problems.first;
       setState(() {
         _countryId = first.countryId;
         _mode = first.mode;
-        _banner = priceListReasonText(l10n, first.code) ?? l10n.prqErrGeneric;
+        _banner =
+            priceListReasonText(l10n, first.code, _unit) ?? l10n.prqErrGeneric;
       });
       return;
     }
@@ -266,10 +291,14 @@ class _PackagePriceListScreenState extends State<PackagePriceListScreen> {
       final saved = await _service.savePriceList(
         businessId: widget.businessId,
         routes: priceListRoutesPayload(_draft, ids),
+        weightUnit: _unit,
       );
       if (!mounted) return;
       AppHaptics.commit();
-      setState(() => _list = saved);
+      setState(() {
+        _list = saved;
+        _unitEdit = null;
+      });
       showSuccessSnackBar(context, l10n.pplSaved);
     } on RequestFailure catch (failure) {
       if (!mounted) return;
@@ -298,6 +327,7 @@ class _PackagePriceListScreenState extends State<PackagePriceListScreen> {
           routes: checked.routes.isEmpty
               ? (_list?.routes ?? const {})
               : checked.routes,
+          weightUnit: checked.weightUnit,
           needsCheck: false,
           updatedAtMs: checked.updatedAtMs,
           updatedByName: checked.updatedByName,
@@ -324,6 +354,7 @@ class _PackagePriceListScreenState extends State<PackagePriceListScreen> {
     final result = await showPriceItemSheet(
       context,
       initial: index == null ? null : route.items[index],
+      unit: _unit,
     );
     if (result == null || !mounted) return;
     if (result is PriceItemRemoved) {
@@ -556,6 +587,7 @@ class _PackagePriceListScreenState extends State<PackagePriceListScreen> {
           _ItemTile(
             key: ValueKey('ppl-item:$i'),
             item: route.items[i],
+            unit: _unit,
             onTap: edit ? () => _openItem(i) : null,
           ),
         if (widget.canEdit)
@@ -651,7 +683,9 @@ class _PackagePriceListScreenState extends State<PackagePriceListScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        RequestSectionTitle(l10n.pplPerLbTitle),
+        RequestSectionTitle(
+          _unit == 'kg' ? l10n.pplPerKgTitle : l10n.pplPerLbTitle,
+        ),
         Text(
           l10n.pplPerLbHint,
           style: const TextStyle(
@@ -661,6 +695,7 @@ class _PackagePriceListScreenState extends State<PackagePriceListScreen> {
           ),
         ),
         const SizedBox(height: AppSpacing.sm),
+        _unitChoice(l10n, edit),
         RequestCard(
           child: Column(
             children: [
@@ -672,6 +707,7 @@ class _PackagePriceListScreenState extends State<PackagePriceListScreen> {
                   ),
                   label: priceCategoryLabel(context, category.id),
                   initial: route.rates[category.id] ?? '',
+                  suffix: '/$_unit',
                   enabled: edit,
                   onChanged: (text) => _edit(
                     (r) => r.copyWith(rates: {...r.rates, category.id: text}),
@@ -680,6 +716,56 @@ class _PackagePriceListScreenState extends State<PackagePriceListScreen> {
             ],
           ),
         ),
+      ],
+    );
+  }
+
+  /// The one "Price list unit" choice, beside the first by-weight rate (as in
+  /// the console): the whole list is per lb or per kg. Changing it keeps the
+  /// amounts and changes what they mean, so the owner is told once.
+  Widget _unitChoice(AppLocalizations l10n, bool edit) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text(
+              l10n.pplUnitTitle,
+              style: const TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w600,
+                color: AppColors.ink,
+              ),
+            ),
+            for (final unit in weightUnits)
+              ChoiceChip(
+                key: ValueKey('ppl-unit:$unit'),
+                label: Text(
+                  unit == 'kg' ? l10n.pplUnitPerKg : l10n.pplUnitPerLb,
+                ),
+                selected: _unit == unit,
+                onSelected: edit
+                    ? (_) => setState(() {
+                        _banner = '';
+                        _unitEdit = unit == (_list?.weightUnit ?? 'lb')
+                            ? null
+                            : unit;
+                      })
+                    : null,
+              ),
+          ],
+        ),
+        if (_unitChanged)
+          RequestBanner(
+            key: const Key('ppl-unit-changed'),
+            text: _unit == 'kg' ? l10n.pplUnitChangedKg : l10n.pplUnitChangedLb,
+            icon: Icons.info_outline,
+            color: AppColors.warn,
+          ),
+        const SizedBox(height: AppSpacing.sm),
       ],
     );
   }
@@ -858,9 +944,15 @@ class _PackagePriceListScreenState extends State<PackagePriceListScreen> {
 
 /// One item of a route: its name, price and what the price covers.
 class _ItemTile extends StatelessWidget {
-  const _ItemTile({super.key, required this.item, required this.onTap});
+  const _ItemTile({
+    super.key,
+    required this.item,
+    required this.unit,
+    required this.onTap,
+  });
 
   final PriceItemDraft item;
+  final String unit;
   final VoidCallback? onTap;
 
   @override
@@ -902,7 +994,10 @@ class _ItemTile extends StatelessWidget {
                     Text(
                       [
                         priceCategoryLabel(context, item.categoryId),
-                        if (covers.isNotEmpty) l10n.pplItemCoversUpTo(covers),
+                        if (covers.isNotEmpty)
+                          unit == 'kg'
+                              ? l10n.pplItemCoversUpToKg(covers)
+                              : l10n.pplItemCoversUpTo(covers),
                       ].join(' · '),
                       style: const TextStyle(
                         fontSize: 12.5,
@@ -1060,12 +1155,16 @@ class PriceItemRemoved {
 Future<Object?> showPriceItemSheet(
   BuildContext context, {
   PriceItemDraft? initial,
-}) => showLotSheet<Object?>(context, _ItemSheet(initial: initial));
+  String unit = 'lb',
+}) => showLotSheet<Object?>(context, _ItemSheet(initial: initial, unit: unit));
 
 class _ItemSheet extends StatefulWidget {
-  const _ItemSheet({this.initial});
+  const _ItemSheet({this.initial, this.unit = 'lb'});
 
   final PriceItemDraft? initial;
+
+  /// The list's unit: what "Covers up to" is in.
+  final String unit;
 
   @override
   State<_ItemSheet> createState() => _ItemSheetState();
@@ -1122,12 +1221,13 @@ class _ItemSheetState extends State<_ItemSheet> {
     final l10n = AppLocalizations.of(context)!;
     final errors = validateRoute({
       'items': [_draft.toPayload()],
-    }).errors;
+    }, unit: widget.unit).errors;
     if (errors.isNotEmpty) {
       AppHaptics.refuse();
       setState(
         () => _error =
-            priceListReasonText(l10n, errors.first) ?? l10n.prqErrGeneric,
+            priceListReasonText(l10n, errors.first, widget.unit) ??
+            l10n.prqErrGeneric,
       );
       return;
     }
@@ -1217,9 +1317,13 @@ class _ItemSheetState extends State<_ItemSheet> {
             ],
             onChanged: clear,
             decoration: InputDecoration(
-              labelText: l10n.pplItemCovers,
-              suffixText: 'lb',
-              helperText: l10n.pplItemCoversHint,
+              labelText: widget.unit == 'kg'
+                  ? l10n.pplItemCoversKg
+                  : l10n.pplItemCovers,
+              suffixText: widget.unit,
+              helperText: widget.unit == 'kg'
+                  ? l10n.pplItemCoversHintKg
+                  : l10n.pplItemCoversHint,
               helperMaxLines: 3,
             ),
           ),

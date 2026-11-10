@@ -33013,6 +33013,384 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This parking has been paid for. Only the customer\'s name, phone and email can still be changed.'**
   String get parkingPaidContactOnly;
+
+  /// Row on the simple shipping home: the packages dropped off and waiting to leave. Also the title of that list.
+  ///
+  /// In en, this message translates to:
+  /// **'Packages here'**
+  String get shhPackagesHereTitle;
+
+  /// Search hint on the package lists of a business that ships by air only: no VIN, it carries no cars.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer, receiver or phone'**
+  String get shhSearchHint;
+
+  /// Note at the bottom of the Register a package sheet for a business that ships by air only. Never says container.
+  ///
+  /// In en, this message translates to:
+  /// **'The customer and the receiver get a WhatsApp message when the package is registered, when it is sent and when it arrives.'**
+  String get wpkUpdatesNoticeAir;
+
+  /// Under the title of the Register a package sheet for a business that ships by air only. Never says container.
+  ///
+  /// In en, this message translates to:
+  /// **'It waits here until you send it.'**
+  String get wpkRegisterSubtitleAir;
+
+  /// Subtitle of the Packages here row.
+  ///
+  /// In en, this message translates to:
+  /// **'Dropped off, waiting to leave.'**
+  String get shhPackagesHereSubtitle;
+
+  /// Row on the simple shipping home for an air-only business: the shipments that have left. Also the title of that list.
+  ///
+  /// In en, this message translates to:
+  /// **'On the way'**
+  String get shhOnTheWayTitle;
+
+  /// Subtitle of the On the way row.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent, until they arrive.'**
+  String get shhOnTheWaySubtitle;
+
+  /// Empty state of the On the way list.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing on the way. Send packages from Packages here.'**
+  String get shhNothingOnTheWay;
+
+  /// Quiet heading over the invoices and staff balances rows on the simple shipping home.
+  ///
+  /// In en, this message translates to:
+  /// **'Money'**
+  String get shhMoneyTitle;
+
+  /// Button on the Packages here list, and the title of the sheet that sends several waiting air packages together on one flight.
+  ///
+  /// In en, this message translates to:
+  /// **'Send packages'**
+  String get sndSendPackages;
+
+  /// Line under the title of the Send packages sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Packages for one country leave together on one flight.'**
+  String get sndSubtitle;
+
+  /// Heading over the country choice in the Send packages sheet, shown when packages wait for more than one country.
+  ///
+  /// In en, this message translates to:
+  /// **'Where are they going?'**
+  String get sndWhereTitle;
+
+  /// One country choice in the Send packages sheet: the country and how many packages wait for it.
+  ///
+  /// In en, this message translates to:
+  /// **'{country} · {count, plural, =1{1 package} other{{count} packages}}'**
+  String sndCountryOption(String country, int count);
+
+  /// Button in the Send packages sheet: tick every package.
+  ///
+  /// In en, this message translates to:
+  /// **'Select all'**
+  String get sndSelectAll;
+
+  /// Button in the Send packages sheet: untick every package.
+  ///
+  /// In en, this message translates to:
+  /// **'Select none'**
+  String get sndSelectNone;
+
+  /// Label of the date field in the Send packages sheet; today by default.
+  ///
+  /// In en, this message translates to:
+  /// **'Flight date'**
+  String get sndFlightDate;
+
+  /// Label of the airway bill field in the Send packages sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Airway bill number (optional)'**
+  String get sndWaybillLabel;
+
+  /// Helper text under the airway bill field.
+  ///
+  /// In en, this message translates to:
+  /// **'6 to 20 letters or numbers.'**
+  String get sndWaybillHelp;
+
+  /// Error under the airway bill field when what was typed is not an airway bill.
+  ///
+  /// In en, this message translates to:
+  /// **'Use 6 to 20 letters or numbers. Dashes are fine.'**
+  String get sndWaybillInvalid;
+
+  /// Main button of the Send packages sheet; count is how many packages are ticked.
+  ///
+  /// In en, this message translates to:
+  /// **'Send {count, plural, =1{1 package} other{{count} packages}}'**
+  String sndSubmit(int count);
+
+  /// Label of the main button of the Send packages sheet while it works.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending…'**
+  String get sndSending;
+
+  /// Button of the Send packages sheet after a step failed; it continues with the same shipment.
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get sndTryAgain;
+
+  /// Note in the Send packages sheet when a step failed after the shipment was made.
+  ///
+  /// In en, this message translates to:
+  /// **'The shipment is already started. Try again to finish sending.'**
+  String get sndResumeNote;
+
+  /// Title of the question when a sender reported a problem with a package being sent.
+  ///
+  /// In en, this message translates to:
+  /// **'Send anyway?'**
+  String get sndSendAnywayTitle;
+
+  /// Question when a sender reported a problem; codes are the package codes.
+  ///
+  /// In en, this message translates to:
+  /// **'The sender reported a problem with {codes}. Send anyway?'**
+  String sndSendAnywayMessage(String codes);
+
+  /// Confirm button of the sender-problem question in the Send packages sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Send anyway'**
+  String get sndSendAnyway;
+
+  /// Snackbar after the packages left on their flight.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 package sent} other{{count} packages sent}}'**
+  String sndDone(int count);
+
+  /// Note in the Send packages sheet when nothing is ticked.
+  ///
+  /// In en, this message translates to:
+  /// **'Tick at least one package.'**
+  String get sndTickOne;
+
+  /// The word that starts the working name of a shipment made by Send packages, followed by the date (for example Flight 11/14/2026).
+  ///
+  /// In en, this message translates to:
+  /// **'Flight'**
+  String get sndFlightWord;
+
+  /// Refusal: a package weight in kilos is out of range (weight_kg_invalid).
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a weight between 0.1 and 900 kg.'**
+  String get proofErrWeightKg;
+
+  /// Refusal: weight_kg_invalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a weight between 0.1 and 900 kg.'**
+  String get deliverRefusalWeightKgInvalid;
+
+  /// Price list refusal: weight_kg_invalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the weight in kilos (0.1 to 900).'**
+  String get pplErrWeightKgInvalid;
+
+  /// Price list refusal: unit_invalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose pounds or kilos.'**
+  String get pplErrUnitInvalid;
+
+  /// Price list refusal included_invalid, said for a kilo list.
+  ///
+  /// In en, this message translates to:
+  /// **'The weight a price covers must be 0 to 500 kg.'**
+  String get pplErrIncludedInvalidKg;
+
+  /// Price list refusal per_lb_invalid, said for a kilo list.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a price per kilo between \$0.01 and \$1,000.'**
+  String get pplErrPerKgInvalid;
+
+  /// Refusal on the customer form: a by-weight piece typed in kilos is out of range.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the weight in kilos (0.1 to 900).'**
+  String get spkErrWeightKg;
+
+  /// Label of the item sheet field on a kilo price list.
+  ///
+  /// In en, this message translates to:
+  /// **'Covers up to (kg), optional'**
+  String get pplItemCoversKg;
+
+  /// Hint under the item's covers field on a kilo price list.
+  ///
+  /// In en, this message translates to:
+  /// **'Each item up to this weight costs the fixed price. Extra kilos are charged at the category\'s price per kilo.'**
+  String get pplItemCoversHintKg;
+
+  /// An item row on a kilo price list.
+  ///
+  /// In en, this message translates to:
+  /// **'up to {kg} kg each'**
+  String pplItemCoversUpToKg(Object kg);
+
+  /// Section title of the by-weight rates on a kilo price list.
+  ///
+  /// In en, this message translates to:
+  /// **'Price per kilo'**
+  String get pplPerKgTitle;
+
+  /// Title of the one choice that sets whether the whole price list is per lb or per kg.
+  ///
+  /// In en, this message translates to:
+  /// **'Price list unit'**
+  String get pplUnitTitle;
+
+  /// Choice: the price list is priced per pound.
+  ///
+  /// In en, this message translates to:
+  /// **'per lb'**
+  String get pplUnitPerLb;
+
+  /// Choice: the price list is priced per kilo.
+  ///
+  /// In en, this message translates to:
+  /// **'per kg'**
+  String get pplUnitPerKg;
+
+  /// Notice shown once after the price list unit is changed to kilos.
+  ///
+  /// In en, this message translates to:
+  /// **'Your prices are now per kg. The amounts did not change. Check them.'**
+  String get pplUnitChangedKg;
+
+  /// Notice shown once after the price list unit is changed to pounds.
+  ///
+  /// In en, this message translates to:
+  /// **'Your prices are now per lb. The amounts did not change. Check them.'**
+  String get pplUnitChangedLb;
+
+  /// Label of the counter weight field for a piece priced by the kilo.
+  ///
+  /// In en, this message translates to:
+  /// **'Weight (kg)'**
+  String get pplWeightKg;
+
+  /// Tooltip of the lb choice beside a weight field (shown only when the business has no price list).
+  ///
+  /// In en, this message translates to:
+  /// **'Weigh in pounds'**
+  String get proofUnitPounds;
+
+  /// Tooltip of the kg choice beside a weight field (shown only when the business has no price list).
+  ///
+  /// In en, this message translates to:
+  /// **'Weigh in kilos'**
+  String get proofUnitKilos;
+
+  /// A catalog row note on a kilo price list.
+  ///
+  /// In en, this message translates to:
+  /// **'Up to {kg} kg each'**
+  String spkUpToKgEach(Object kg);
+
+  /// Label of the weight field on the customer form, in kilos.
+  ///
+  /// In en, this message translates to:
+  /// **'Weight (kg)'**
+  String get spkWeightKgLabel;
+
+  /// A size button that fills the kilos: Small bag · 5 kg.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} · {kg} kg'**
+  String spkSizeButtonKg(String name, String kg);
+
+  /// Hint under Priced by weight when the weight is asked in kilos.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose what it is, then a size or type the kilos.'**
+  String get spkByWeightHintKg;
+
+  /// A piece's price explained: extra weight priced by the kilo.
+  ///
+  /// In en, this message translates to:
+  /// **'Extra kilos are {rate} per kg, weighed at drop-off.'**
+  String spkNoteExtraKg(String rate);
+
+  /// A piece's price explained: priced by the kilo.
+  ///
+  /// In en, this message translates to:
+  /// **'{kg} kg at {rate} per kg, weighed when received.'**
+  String spkNotePerKg(String kg, String rate);
+
+  /// Choice of weight unit on the customer form.
+  ///
+  /// In en, this message translates to:
+  /// **'Pounds (lb)'**
+  String get spkUnitPounds;
+
+  /// Choice of weight unit on the customer form.
+  ///
+  /// In en, this message translates to:
+  /// **'Kilos (kg)'**
+  String get spkUnitKilos;
+
+  /// Button on a piece (and title of its sheet): fill the description and price from the business's price list.
+  ///
+  /// In en, this message translates to:
+  /// **'From the price list'**
+  String get pcsFromList;
+
+  /// Group title in the price-list picker: items with a fixed price.
+  ///
+  /// In en, this message translates to:
+  /// **'Items'**
+  String get pcsFromListItems;
+
+  /// Group title in the price-list picker: categories priced by weight.
+  ///
+  /// In en, this message translates to:
+  /// **'By weight'**
+  String get pcsFromListByWeight;
+
+  /// Label of the quantity stepper in the price-list picker.
+  ///
+  /// In en, this message translates to:
+  /// **'How many'**
+  String get pcsFromListHowMany;
+
+  /// Live price in the price-list picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Price: {price}'**
+  String pcsFromListPrice(String price);
+
+  /// Button of the price-list picker that fills the piece.
+  ///
+  /// In en, this message translates to:
+  /// **'Use this price'**
+  String get pcsFromListUse;
+
+  /// Button of the price-list picker's detail step.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to the list'**
+  String get pcsFromListBack;
 }
 
 class _AppLocalizationsDelegate

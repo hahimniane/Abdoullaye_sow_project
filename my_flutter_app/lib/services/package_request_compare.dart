@@ -12,6 +12,7 @@ library;
 
 import 'dart:math';
 
+import 'business_price_list.dart' show priceLbText;
 import 'package_price_list.dart';
 import 'package_requests.dart';
 
@@ -34,7 +35,8 @@ class CatalogItem {
   final String categoryId;
 
   /// "Up to X lb each": the smallest weight a price covers, when every
-  /// business listing the item covers one; 0 = any weight.
+  /// business listing the item covers one; 0 = any weight. In the catalog's
+  /// [RequestCatalog.weightUnit] (a route in the other unit is converted).
   final num includedLb;
 }
 
@@ -47,7 +49,11 @@ class RequestCatalog {
     this.items = const [],
     this.perLbCategoryIds = const [],
     this.barrel = false,
+    this.weightUnit = 'lb',
   });
+
+  /// The unit the weight questions are asked in ([catalogWeightUnit]).
+  final String weightUnit;
 
   /// By name.
   final List<CatalogItem> items;
@@ -82,13 +88,34 @@ List<RequestOption> offeredForMode(
 bool anyOfferedForMode(Iterable<RequestOption> options, String mode) =>
     options.any((o) => mode != 'air' || o.shipsByAir);
 
+/// The unit the weight questions are asked in (docs/SHIPPING_SIMPLE_HOME.md
+/// K2): the business's own on its own link ([onlyBusinessId]), pounds when
+/// several businesses are compared (each prices the customer's weight in its
+/// own unit). Mirrors `catalogWeightUnit` in the console.
+String catalogWeightUnit(
+  Iterable<RequestOption> options, {
+  String onlyBusinessId = '',
+}) {
+  if (onlyBusinessId.isEmpty) return 'lb';
+  for (final option in options) {
+    if (option.businessId != onlyBusinessId) continue;
+    for (final mode in priceModes) {
+      if (unitOf(option.routeFor(mode)) == 'kg') return 'kg';
+    }
+  }
+  return 'lb';
+}
+
 /// The union of what the [options] priced for [mode]: items by name and
-/// category, categories priced by the pound, and barrels (Sea, when some
+/// category, categories priced by the weight, and barrels (Sea, when some
 /// business has a barrel price). [options] are those offered for the mode.
+/// Included weights are shown in [unit] (a route in the other unit is
+/// converted).
 RequestCatalog buildRequestCatalog(
   Iterable<RequestOption> options,
-  String mode,
-) {
+  String mode, {
+  String unit = 'lb',
+}) {
   final labels = <String, String>{};
   final categories = <String, String>{};
   final covered = <String, List<num>>{};
@@ -107,7 +134,12 @@ RequestCatalog buildRequestCatalog(
       categories[key] = categoryId;
       listed[key] = (listed[key] ?? 0) + 1;
       final lb = raw['includedLb'];
-      if (lb is num && lb > 0) (covered[key] ??= []).add(lb);
+      if (lb is num && lb > 0) {
+        final inRoute = unitOf(route);
+        (covered[key] ??= []).add(
+          inRoute == unit ? lb : convertWeight(lb, inRoute, unit),
+        );
+      }
     }
     final perLb = route?['perLbCents'];
     if (perLb is Map) {
@@ -137,6 +169,7 @@ RequestCatalog buildRequestCatalog(
         if (rates.contains(c.id)) c.id,
     ],
     barrel: barrel,
+    weightUnit: unit,
   );
 }
 
@@ -144,25 +177,31 @@ RequestCatalog buildRequestCatalog(
 // The basket.
 // ---------------------------------------------------------------------------
 
-/// One category priced by the pound: "Clothes · 50 lb".
+/// One category priced by the weight: "Clothes · 50 lb" / "· 23 kg".
 class BasketWeight {
   const BasketWeight({
     required this.categoryId,
     this.weightLb,
+    this.weightUnit = 'lb',
     this.sizePreset = '',
   });
 
   final String categoryId;
 
-  /// Null while the field is empty or not a number.
+  /// The number typed, in [weightUnit] (the name is legacy); null while the
+  /// field is empty or not a number.
   final double? weightLb;
+
+  /// The unit the number was typed in: "lb" or "kg".
+  final String weightUnit;
   final String sizePreset;
 
   bool get valid =>
       priceCategoryOf(categoryId) != null &&
       weightLb != null &&
       weightLb! >= 0.1 &&
-      weightLb! <= PriceLimit.weightLb;
+      weightLb! <=
+          (weightUnit == 'kg' ? PriceLimit.weightKg : PriceLimit.weightLb);
 }
 
 /// "Something else": described in words, priced by staff.
@@ -296,7 +335,12 @@ List<Map<String, Object?>> basketPricingPieces(
   }
   for (final w in basket.weights) {
     if (!w.valid) continue;
-    out.add({'categoryId': w.categoryId, 'weightLb': w.weightLb});
+    // The unit travels with the number: each business prices it in its own.
+    out.add({
+      'categoryId': w.categoryId,
+      'weightLb': w.weightLb,
+      'weightUnit': w.weightUnit,
+    });
   }
   for (var i = 0; i < basket.barrels; i++) {
     out.add({'kind': 'barrel'});
@@ -347,10 +391,16 @@ List<RequestPieceDraft> basketDrafts(
     final weight = w.weightLb;
     out.add(
       weight == null
-          ? RequestPieceDraft(kind: requestPieceOther, categoryId: w.categoryId)
+          ? RequestPieceDraft(
+              kind: requestPieceOther,
+              categoryId: w.categoryId,
+              // Kept with the unit, so the form names the right limit.
+              weightUnit: w.weightUnit,
+            )
           : RequestPieceDraft.byWeight(
               categoryId: w.categoryId,
               weightLb: weight,
+              weightUnit: w.weightUnit,
               sizePreset: w.sizePreset,
             ),
     );
@@ -373,14 +423,38 @@ List<RequestPieceDraft> basketDrafts(
   return out;
 }
 
-/// The weight typed in a pound field: a number from 0.1 to 2,000 rounded to a
-/// tenth ("12,5" and "12.5" both read), else null.
-double? parseWeightLb(String text) {
+/// The weight typed in a weight field: a number from 0.1 to 2,000 lb (0.1 to
+/// 900 kg for [unit] "kg") rounded to a tenth ("12,5" and "12.5" both read),
+/// else null.
+double? parseWeight(String text, [String unit = 'lb']) {
   final n = double.tryParse(text.trim().replaceAll(',', '.'));
   if (n == null || !n.isFinite) return null;
   final tenth = (n * 10).round() / 10;
-  return tenth >= 0.1 && tenth <= PriceLimit.weightLb ? tenth : null;
+  final limit = unit == 'kg' ? PriceLimit.weightKg : PriceLimit.weightLb;
+  return tenth >= 0.1 && tenth <= limit ? tenth : null;
 }
+
+/// [parseWeight] in pounds.
+double? parseWeightLb(String text) => parseWeight(text, 'lb');
+
+/// The lb / kg choice on a weight line: a size button keeps its meaning (its
+/// weight in the new unit); a number typed by hand is converted, to a tenth,
+/// as the server would before pricing; one that does not read stays as typed.
+/// Returns the new field text. Mirrors `setWeightUnit` in the console.
+String weightFieldInUnit(
+  String typed, {
+  required String from,
+  required String to,
+  String presetId = '',
+}) {
+  if (from == to) return typed;
+  for (final preset in sizePresets) {
+    if (preset.id == presetId) return '${preset.inUnit(to)}';
+  }
+  final read = parseWeight(typed, from);
+  return read == null ? typed : priceLbText(convertWeight(read, from, to));
+}
+
 
 // ---------------------------------------------------------------------------
 // The comparison.

@@ -351,7 +351,7 @@ class _AddWaitingPackagesSheetState extends State<AddWaitingPackagesSheet> {
               LotEmptyState(icon: Icons.search_off, title: l10n.wpkNoMatch)
             else
               for (final entry in visible)
-                _PickRow(
+                PickPackageRow(
                   key: ValueKey('assign-row:${entry.line.id}'),
                   entry: entry,
                   reason: entry.blocked ? _reason(l10n, entry) : '',
@@ -380,8 +380,21 @@ class _AddWaitingPackagesSheetState extends State<AddWaitingPackagesSheet> {
   }
 }
 
-class _PickRow extends StatelessWidget {
-  const _PickRow({
+/// "Sender → receiver" for a package; one name when they are the same
+/// person (no sender: the receiver is the customer).
+String senderToReceiver(ContainerLine line) {
+  final names = [
+    lineCustomerName(line).trim(),
+    line.receiverName.trim(),
+  ].where((n) => n.isNotEmpty).toList();
+  if (names.length == 2 && names[0] == names[1]) names.removeLast();
+  return names.join(' → ');
+}
+
+/// One waiting package with a tick: who it is for, what it holds and where
+/// it is going, in the add-to-container sheet and in Send packages.
+class PickPackageRow extends StatelessWidget {
+  const PickPackageRow({
     super.key,
     required this.entry,
     required this.reason,
@@ -392,6 +405,8 @@ class _PickRow extends StatelessWidget {
     this.split,
     this.onFewer,
     this.onMore,
+    this.showReceiver = false,
+    this.weight = '',
   });
 
   final AssignableLine entry;
@@ -407,20 +422,30 @@ class _PickRow extends StatelessWidget {
   final VoidCallback? onFewer;
   final VoidCallback? onMore;
 
+  /// Send packages: the line under the title reads "sender → receiver"
+  /// instead of the sender's name and phone.
+  final bool showReceiver;
+
+  /// The package's weight as it is shown ("22 lb"), or '' to show none.
+  final String weight;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final line = entry.line;
     final size = packageSize(line);
     // With no sender, the receiver is the customer (lineCustomer).
-    final people = [
-      lineCustomerName(line),
-      lineCustomerPhone(line),
-    ].where((p) => p.isNotEmpty).join(' · ');
+    final people = showReceiver
+        ? senderToReceiver(line)
+        : [
+            lineCustomerName(line),
+            lineCustomerPhone(line),
+          ].where((p) => p.isNotEmpty).join(' · ');
     final facts = [
       if (!line.isCar) l10n.pcsPieceCount(line.pieceCount),
       if (line.destinationCountryName.isNotEmpty) line.destinationCountryName,
       if (size != null) '${size.dimensionsText} · ${size.volumeText}',
+      if (weight.isNotEmpty) weight,
       if (line.trackingCode.isNotEmpty) line.trackingCode,
     ].join(' · ');
     return Opacity(

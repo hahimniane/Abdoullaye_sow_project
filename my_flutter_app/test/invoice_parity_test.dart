@@ -22,7 +22,7 @@ void main() {
     final tile = menu.indexOf("Key('open-invoices')");
     final gate = menu.lastIndexOf('if (canUseInvoices)', tile);
     expect(gate, greaterThan(0));
-    expect('_Destination('.allMatches(menu.substring(gate, tile)).length, 1,
+    expect('HomeDestination('.allMatches(menu.substring(gate, tile)).length, 1,
         reason: 'the invoices gate must be the one right above the tile');
     expect(menu, contains('auth.hasInvoicesAccess'));
   });

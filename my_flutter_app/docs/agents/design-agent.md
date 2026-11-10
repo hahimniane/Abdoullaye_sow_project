@@ -210,3 +210,21 @@ Return:
   get the same box read-only behind "See the 3D box". Size pictures are the
   four drawings in `assets/box_sizes/`, never recreated in code.
 
+- The simple shipping home (docs/SHIPPING_SIMPLE_HOME.md) is the standard
+  home's own pieces in a shorter order: business name, one loud Register a
+  package, one group of places, a quiet Money group, the shared tail. Nothing
+  new is drawn. Plain shop-owner words on it: "Packages here", "On the way",
+  "Send packages"; an air-only business never sees the word Container.
+  That holds past the home: its search hints name no VIN, its register sheet
+  asks no "a car or boxes?" and starts on a Box, its price list opens on Air,
+  and every notice has an air wording (keys ending `Air`). French says "Avion"
+  for the Air choice everywhere, never "Air".
+- A filled action label or a status chip must shorten (`Flexible`, one line,
+  ellipsis) on a narrow French phone instead of overflowing.
+- A unit choice (lb | kg) sits UNDER its weight field as two small tappable
+  chips, shown only while the business has no price list; with a list the unit
+  is not a question. Kilos are said in the field's label ("Weight (kg)"), the
+  price list's rates read "/kg", and a price list has one "Price list unit" row
+  (per lb | per kg) beside its first by-weight rate with a one-time notice that
+  the amounts did not change. "From the price list" is a quiet text action on
+  a piece, not a new field.

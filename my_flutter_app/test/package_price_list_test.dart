@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_flutter_app/services/package_price_list.dart';
+import 'package:my_flutter_app/services/package_proof.dart';
 
 /// The app's mirror of `functions/package_price_list.js`. The server, the
 /// console and the app each run every case of the shared fixture
@@ -476,6 +477,257 @@ void main() {
         [for (final p in sizePresets) (p.id, p.lb)],
         [('small_bag', 10), ('suitcase', 50), ('big_box', 70)],
       );
+    });
+  });
+
+  // Kilos (docs/SHIPPING_SIMPLE_HOME.md K): the `kilos` section of the shared
+  // fixture. Every case kind it holds is replayed here, as the server and the
+  // console replay it.
+  group('kilos, the shared cases', () {
+    final k = map(fixture['kilos']);
+    List<Map<String, dynamic>> kilos(String key) =>
+        (k[key] as List).cast<Map<String, dynamic>>();
+    Map<String, dynamic>? routeIn(Object? value) =>
+        value == null ? null : map(value);
+
+    test('the fixture has its cases', () {
+      expect(kilos('lists').length, greaterThanOrEqualTo(8));
+      expect(kilos('pieces').length, greaterThanOrEqualTo(15));
+      expect(kilos('baskets').length, greaterThanOrEqualTo(2));
+      expect(kilos('counter').length, greaterThanOrEqualTo(4));
+      expect(kilos('reprice').length, greaterThanOrEqualTo(4));
+      expect(kilos('convert').length, greaterThanOrEqualTo(6));
+      expect(kilos('rates').length, greaterThanOrEqualTo(4));
+      expect(kilos('weightIn').length, greaterThanOrEqualTo(5));
+      expect(kilos('weights').length, greaterThanOrEqualTo(10));
+      expect(kilos('weightText').length, greaterThanOrEqualTo(6));
+    });
+
+    for (final c in kilos('lists')) {
+      test('kilo list: ${c['name']}', () {
+        final got = validatePriceList(
+          c['raw'],
+          (c['countryIds'] as List).cast<String>(),
+        );
+        expect(json(got.toMap()), c['expect']);
+      });
+    }
+    for (final c in kilos('pieces')) {
+      test('kilo piece: ${c['name']}', () {
+        final ctx = c['ctx'] == null
+            ? const <String, dynamic>{}
+            : map(c['ctx']);
+        final got = pricePiece(
+          routeIn(c['route']),
+          c['piece'],
+          barrelPriceCents: ctx['barrelPriceCents'] as int?,
+          lang: ctx['lang'] as String?,
+        );
+        expect(json(got.toMap()), c['expect']);
+      });
+    }
+    for (final c in kilos('baskets')) {
+      test('kilo basket: ${c['name']}', () {
+        final ctx = c['ctx'] == null
+            ? const <String, dynamic>{}
+            : map(c['ctx']);
+        final got = priceBasket(
+          routeIn(c['route']),
+          c['pieces'],
+          barrelPriceCents: ctx['barrelPriceCents'] as int?,
+          pickupFeeCents: ctx['pickupFeeCents'] as int?,
+          lang: ctx['lang'] as String?,
+        );
+        expect(json(got.toMap()), c['expect']);
+      });
+    }
+    for (final c in kilos('counter')) {
+      test('kilo counter: ${c['name']}', () {
+        expect(counterPriceCents(map(c['price']), c['weighed']), c['expect']);
+      });
+    }
+    for (final c in kilos('reprice')) {
+      test('kilo reprice: ${c['name']}', () {
+        final out = repricePieces(c['pieces'], routeIn(c['route']));
+        expect(
+          json({
+            'pieces': out.pieces,
+            'changed': out.changed,
+            'wentUp': out.wentUp,
+            'cents': out.cents,
+          }),
+          c['expect'],
+        );
+      });
+    }
+    for (final c in kilos('convert')) {
+      test('convert: ${c['name']}', () {
+        expect(
+          convertWeight(c['value'], c['from'] as String, c['to'] as String),
+          c['expect'],
+        );
+      });
+    }
+    for (final c in kilos('rates')) {
+      test('rate in: ${c['name']}', () {
+        expect(
+          rateIn(c['cents'] as int, c['from'] as String, c['to'] as String),
+          c['expect'],
+        );
+      });
+    }
+    for (final c in kilos('weightIn')) {
+      test('weight in: ${c['name']}', () {
+        expect(weightIn(c['unit'] as String, c['line']), c['expect']);
+      });
+    }
+    for (final c in kilos('weights')) {
+      test('weight: ${c['name']}', () {
+        final input = map(c['input']);
+        final got = normalizeWeight(
+          weightLb: input['weightLb'],
+          weightKg: input['weightKg'],
+        );
+        expect({
+          'weightLb': got.weightLb,
+          'weightKg': got.weightKg,
+          'error': got.error,
+        }, c['expect']);
+      });
+    }
+    for (final c in kilos('weightText')) {
+      test('weight text: ${c['name']}', () {
+        expect(weightText(c['weight'], c['lang'] as String), c['expect']);
+      });
+    }
+  });
+
+  group('kilos, the rules pinned by hand', () {
+    final kg = map(fixture['kilos']['route']);
+    final lbRoute = map(fixture['kilos']['lbRoute']);
+
+    test('\$25/kg x 10 kg is exactly \$250.00', () {
+      final out = pricePiece(kg, {'categoryId': 'general', 'weightLb': 10});
+      expect(out.estimateCents, 25000);
+      expect(out.price!['unit'], 'kg');
+      expect(out.price!['weightLb'], 10);
+      expect(out.description, 'General goods · 10 kg');
+    });
+
+    test('a pounds list and its routes carry no unit key anywhere', () {
+      final list = validatePriceList(
+        {
+          'weightUnit': 'lb',
+          'routes': {
+            'gn': {
+              'sea': {
+                'perLbCents': {'general': 450},
+                'items': [
+                  {
+                    'label': 'Phone',
+                    'categoryId': 'electronics',
+                    'priceCents': 4000,
+                    'includedLb': 2,
+                  },
+                ],
+              },
+            },
+          },
+        },
+        ['gn'],
+      );
+      expect(jsonEncode(list.routes), isNot(contains('unit')));
+      final sea = list.routes!['gn']!['sea']!;
+      final piece = pricePiece(sea, {'categoryId': 'general', 'weightLb': 50});
+      expect(piece.price!.containsKey('unit'), isFalse);
+      final item = pricePiece(sea, {'priceItemId': 'i_phone'});
+      expect(item.price!.containsKey('unit'), isFalse);
+    });
+
+    test('the rounding is to a tenth, before pricing', () {
+      // 10 lb = 4.5359 kg -> 4.5 kg, not 4.5359 (which would price 11339.8).
+      final out = pricePiece(kg, {
+        'categoryId': 'general',
+        'weightLb': 10,
+        'weightUnit': 'lb',
+      });
+      expect(out.price!['weightLb'], 4.5);
+      expect(out.estimateCents, 11250);
+    });
+
+    test('a weight is checked in the unit it was typed in', () {
+      expect(
+        pricePiece(lbRoute, {
+          'categoryId': 'general',
+          'weightLb': 901,
+          'weightUnit': 'kg',
+        }).error,
+        'weight_kg_invalid',
+      );
+      expect(
+        pricePiece(lbRoute, {'categoryId': 'general', 'weightLb': 901}).error,
+        '',
+      );
+      expect(
+        pricePiece(kg, {'categoryId': 'general', 'weightLb': 901}).error,
+        'weight_kg_invalid',
+      );
+    });
+
+    test('each refusal has a message; the kilo list names kilos', () {
+      for (final code in ['unit_invalid', 'weight_kg_invalid']) {
+        expect(priceListMessages[code], isNotEmpty, reason: code);
+      }
+      expect(priceListMessage('per_lb_invalid', 'kg'), contains('per kilo'));
+      expect(priceListMessage('per_lb_invalid', 'lb'), contains('per pound'));
+      expect(priceListMessage('included_invalid', 'kg'), contains('kg'));
+      expect(
+        priceListMessage('price_invalid', 'kg'),
+        priceListMessages['price_invalid'],
+      );
+      expect(priceListMessage('nope'), '');
+    });
+
+    test('the size presets have a kilo weight', () {
+      expect([for (final p in sizePresets) p.kg], [5, 23, 32]);
+      expect([for (final p in sizePresets) p.lb], [10, 50, 70]);
+      expect([for (final p in sizePresets) p.inUnit('kg')], [5, 23, 32]);
+      expect([for (final p in sizePresets) p.inUnit('lb')], [10, 50, 70]);
+      expect(PriceLimit.weightKg, 900);
+      expect(kgToLb, 2.20462);
+    });
+
+    test('unitOf answers kg only for a kilo route, snapshot or list', () {
+      expect(unitOf(kg), 'kg');
+      expect(unitOf({'weightUnit': 'kg'}), 'kg');
+      expect(unitOf(route), 'lb');
+      expect(unitOf(null), 'lb');
+      expect(unitOf({'unit': 'oz'}), 'lb');
+    });
+
+    test('a counter price in kilos for a line weighed in the other unit', () {
+      final price = pricePiece(kg, {
+        'categoryId': 'general',
+        'weightLb': 10,
+      }).price;
+      // Staff weighed 27.6 lb: the caller converts to the price's unit first.
+      final weighed = weightIn(unitOf(price), {'weightLb': 27.6});
+      expect(weighed, 12.5);
+      expect(counterPriceCents(price, weighed), 31250);
+    });
+
+    test('a kilo field typed in kilos makes the pounds a line stores', () {
+      expect(weightLbFromKg(0.1), 0.2);
+      expect(weightLbFromKg(0.01), 0.1);
+      expect(weightLbFromKg(900), 1984.2);
+    });
+
+    test('weightText keeps its pounds call and takes a line', () {
+      expect(weightText(4.5, 'fr'), '4,5 lb');
+      expect(weightText({'weightLb': 22, 'weightKg': 10}), '10 kg');
+      expect(weightText({'weightLb': 22, 'weightKg': null}), '22 lb');
+      expect(weightText({}), '');
+      expect(weightText(null), '');
     });
   });
 }

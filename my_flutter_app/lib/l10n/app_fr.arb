@@ -6558,7 +6558,7 @@
       }
     }
   },
-  "pcsSaveAndAnother": "Enregistrer et en enregistrer un autre pour cet expéditeur",
+  "pcsSaveAndAnother": "Enregistrer + un autre, même expéditeur",
   "pcsSaveOnly": "Enregistrer sans imprimer",
   "pcsAnotherHint": "« En enregistrer un autre » ne garde que l'expéditeur, pour un autre destinataire ou pays.",
   "pcsBoxesCount": "{count, plural, =1{1 carton} other{{count} cartons}}",
@@ -9071,7 +9071,7 @@
   },
   "airModeTitle": "Mer ou air",
   "airModeSea": "Mer",
-  "airModeAir": "Air",
+  "airModeAir": "Avion",
   "airWaybill": "Lettre de transport aérien (AWB)",
   "airWaybillHint": "Lettres, chiffres et tirets, comme 176-12345678",
   "airAirline": "Compagnie aérienne (facultatif)",
@@ -11471,5 +11471,312 @@
   "parkingPaidContactOnly": "Ce stationnement a été payé. Seuls le nom, le téléphone et l’e-mail du client peuvent encore être modifiés.",
   "@parkingPaidContactOnly": {
     "description": "Banner on a paid parked car's details: the money and dates are locked but contact details can be fixed."
+  },
+  "shhPackagesHereTitle": "Colis ici",
+  "@shhPackagesHereTitle": {
+    "description": "Row on the simple shipping home: the packages dropped off and waiting to leave. Also the title of that list."
+  },
+  "shhSearchHint": "Client, destinataire ou téléphone",
+  "@shhSearchHint": {
+    "description": "Search hint on the package lists of a business that ships by air only: no VIN, it carries no cars."
+  },
+  "wpkUpdatesNoticeAir": "Le client et le destinataire reçoivent un message WhatsApp à l'enregistrement du colis, à son envoi et à son arrivée.",
+  "@wpkUpdatesNoticeAir": {
+    "description": "Note at the bottom of the Register a package sheet for a business that ships by air only. Never says container."
+  },
+  "wpkRegisterSubtitleAir": "Il attend ici jusqu'à l'envoi.",
+  "@wpkRegisterSubtitleAir": {
+    "description": "Under the title of the Register a package sheet for a business that ships by air only. Never says container."
+  },
+  "shhPackagesHereSubtitle": "Déposés, en attente de départ.",
+  "@shhPackagesHereSubtitle": {
+    "description": "Subtitle of the Packages here row."
+  },
+  "shhOnTheWayTitle": "En route",
+  "@shhOnTheWayTitle": {
+    "description": "Row on the simple shipping home for an air-only business: the shipments that have left. Also the title of that list."
+  },
+  "shhOnTheWaySubtitle": "Envoyés, jusqu’à leur arrivée.",
+  "@shhOnTheWaySubtitle": {
+    "description": "Subtitle of the On the way row."
+  },
+  "shhNothingOnTheWay": "Rien en route. Envoyez des colis depuis « Colis ici ».",
+  "@shhNothingOnTheWay": {
+    "description": "Empty state of the On the way list."
+  },
+  "shhMoneyTitle": "Argent",
+  "@shhMoneyTitle": {
+    "description": "Quiet heading over the invoices and staff balances rows on the simple shipping home."
+  },
+  "sndSendPackages": "Envoyer les colis",
+  "@sndSendPackages": {
+    "description": "Button on the Packages here list, and the title of the sheet that sends several waiting air packages together on one flight."
+  },
+  "sndSubtitle": "Les colis pour un même pays partent ensemble sur un seul vol.",
+  "@sndSubtitle": {
+    "description": "Line under the title of the Send packages sheet."
+  },
+  "sndWhereTitle": "Vers quel pays ?",
+  "@sndWhereTitle": {
+    "description": "Heading over the country choice in the Send packages sheet, shown when packages wait for more than one country."
+  },
+  "sndCountryOption": "{country} · {count, plural, =1{1 colis} other{{count} colis}}",
+  "@sndCountryOption": {
+    "description": "One country choice in the Send packages sheet: the country and how many packages wait for it.",
+    "placeholders": {
+      "country": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "sndSelectAll": "Tout sélectionner",
+  "@sndSelectAll": {
+    "description": "Button in the Send packages sheet: tick every package."
+  },
+  "sndSelectNone": "Tout désélectionner",
+  "@sndSelectNone": {
+    "description": "Button in the Send packages sheet: untick every package."
+  },
+  "sndFlightDate": "Date du vol",
+  "@sndFlightDate": {
+    "description": "Label of the date field in the Send packages sheet; today by default."
+  },
+  "sndWaybillLabel": "Lettre de transport aérien (facultatif)",
+  "@sndWaybillLabel": {
+    "description": "Label of the airway bill field in the Send packages sheet."
+  },
+  "sndWaybillHelp": "De 6 à 20 lettres ou chiffres.",
+  "@sndWaybillHelp": {
+    "description": "Helper text under the airway bill field."
+  },
+  "sndWaybillInvalid": "Utilisez de 6 à 20 lettres ou chiffres. Les tirets sont acceptés.",
+  "@sndWaybillInvalid": {
+    "description": "Error under the airway bill field when what was typed is not an airway bill."
+  },
+  "sndSubmit": "Envoyer {count, plural, =1{1 colis} other{{count} colis}}",
+  "@sndSubmit": {
+    "description": "Main button of the Send packages sheet; count is how many packages are ticked.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "sndSending": "Envoi en cours…",
+  "@sndSending": {
+    "description": "Label of the main button of the Send packages sheet while it works."
+  },
+  "sndTryAgain": "Réessayer",
+  "@sndTryAgain": {
+    "description": "Button of the Send packages sheet after a step failed; it continues with the same shipment."
+  },
+  "sndResumeNote": "L’envoi est déjà commencé. Réessayez pour le terminer.",
+  "@sndResumeNote": {
+    "description": "Note in the Send packages sheet when a step failed after the shipment was made."
+  },
+  "sndSendAnywayTitle": "Envoyer quand même ?",
+  "@sndSendAnywayTitle": {
+    "description": "Title of the question when a sender reported a problem with a package being sent."
+  },
+  "sndSendAnywayMessage": "L’expéditeur a signalé un problème avec {codes}. Envoyer quand même ?",
+  "@sndSendAnywayMessage": {
+    "description": "Question when a sender reported a problem; codes are the package codes.",
+    "placeholders": {
+      "codes": {
+        "type": "String"
+      }
+    }
+  },
+  "sndSendAnyway": "Envoyer quand même",
+  "@sndSendAnyway": {
+    "description": "Confirm button of the sender-problem question in the Send packages sheet."
+  },
+  "sndDone": "{count, plural, =1{1 colis envoyé} other{{count} colis envoyés}}",
+  "@sndDone": {
+    "description": "Snackbar after the packages left on their flight.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "sndTickOne": "Cochez au moins un colis.",
+  "@sndTickOne": {
+    "description": "Note in the Send packages sheet when nothing is ticked."
+  },
+  "sndFlightWord": "Vol",
+  "@sndFlightWord": {
+    "description": "The word that starts the working name of a shipment made by Send packages, followed by the date (for example Flight 11/14/2026)."
+  },
+  "proofErrWeightKg": "Entrez un poids entre 0,1 et 900 kg.",
+  "@proofErrWeightKg": {
+    "description": "Refusal: a package weight in kilos is out of range (weight_kg_invalid)."
+  },
+  "deliverRefusalWeightKgInvalid": "Entrez un poids entre 0,1 et 900 kg.",
+  "@deliverRefusalWeightKgInvalid": {
+    "description": "Refusal: weight_kg_invalid."
+  },
+  "pplErrWeightKgInvalid": "Entrez le poids en kilos (0,1 à 900).",
+  "@pplErrWeightKgInvalid": {
+    "description": "Price list refusal: weight_kg_invalid."
+  },
+  "pplErrUnitInvalid": "Choisissez les livres ou les kilos.",
+  "@pplErrUnitInvalid": {
+    "description": "Price list refusal: unit_invalid."
+  },
+  "pplErrIncludedInvalidKg": "Le poids couvert par un prix doit être de 0 à 500 kg.",
+  "@pplErrIncludedInvalidKg": {
+    "description": "Price list refusal included_invalid, said for a kilo list."
+  },
+  "pplErrPerKgInvalid": "Entrez un prix par kilo entre 0,01 $ et 1 000 $.",
+  "@pplErrPerKgInvalid": {
+    "description": "Price list refusal per_lb_invalid, said for a kilo list."
+  },
+  "spkErrWeightKg": "Saisissez le poids en kilos (de 0,1 à 900).",
+  "@spkErrWeightKg": {
+    "description": "Refusal on the customer form: a by-weight piece typed in kilos is out of range."
+  },
+  "pplItemCoversKg": "Couvre jusqu'à (kg), facultatif",
+  "@pplItemCoversKg": {
+    "description": "Label of the item sheet field on a kilo price list."
+  },
+  "pplItemCoversHintKg": "Chaque article jusqu'à ce poids coûte le prix fixe. Les kilos en plus sont facturés au prix par kilo de la catégorie.",
+  "@pplItemCoversHintKg": {
+    "description": "Hint under the item's covers field on a kilo price list."
+  },
+  "pplItemCoversUpToKg": "jusqu'à {kg} kg chacun",
+  "@pplItemCoversUpToKg": {
+    "description": "An item row on a kilo price list.",
+    "placeholders": {
+      "kg": {}
+    }
+  },
+  "pplPerKgTitle": "Prix par kilo",
+  "@pplPerKgTitle": {
+    "description": "Section title of the by-weight rates on a kilo price list."
+  },
+  "pplUnitTitle": "Unité de la liste de prix",
+  "@pplUnitTitle": {
+    "description": "Title of the one choice that sets whether the whole price list is per lb or per kg."
+  },
+  "pplUnitPerLb": "par lb",
+  "@pplUnitPerLb": {
+    "description": "Choice: the price list is priced per pound."
+  },
+  "pplUnitPerKg": "par kg",
+  "@pplUnitPerKg": {
+    "description": "Choice: the price list is priced per kilo."
+  },
+  "pplUnitChangedKg": "Vos prix sont maintenant au kilo. Les montants n'ont pas changé. Vérifiez-les.",
+  "@pplUnitChangedKg": {
+    "description": "Notice shown once after the price list unit is changed to kilos."
+  },
+  "pplUnitChangedLb": "Vos prix sont maintenant à la livre. Les montants n'ont pas changé. Vérifiez-les.",
+  "@pplUnitChangedLb": {
+    "description": "Notice shown once after the price list unit is changed to pounds."
+  },
+  "pplWeightKg": "Poids (kg)",
+  "@pplWeightKg": {
+    "description": "Label of the counter weight field for a piece priced by the kilo."
+  },
+  "proofUnitPounds": "Peser en livres",
+  "@proofUnitPounds": {
+    "description": "Tooltip of the lb choice beside a weight field (shown only when the business has no price list)."
+  },
+  "proofUnitKilos": "Peser en kilos",
+  "@proofUnitKilos": {
+    "description": "Tooltip of the kg choice beside a weight field (shown only when the business has no price list)."
+  },
+  "spkUpToKgEach": "Jusqu’à {kg} kg chacun",
+  "@spkUpToKgEach": {
+    "description": "A catalog row note on a kilo price list.",
+    "placeholders": {
+      "kg": {}
+    }
+  },
+  "spkWeightKgLabel": "Poids (kg)",
+  "@spkWeightKgLabel": {
+    "description": "Label of the weight field on the customer form, in kilos."
+  },
+  "spkSizeButtonKg": "{name} · {kg} kg",
+  "@spkSizeButtonKg": {
+    "description": "A size button that fills the kilos: Small bag · 5 kg.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "kg": {
+        "type": "String"
+      }
+    }
+  },
+  "spkByWeightHintKg": "Choisissez ce que c’est, puis une taille ou saisissez les kilos.",
+  "@spkByWeightHintKg": {
+    "description": "Hint under Priced by weight when the weight is asked in kilos."
+  },
+  "spkNoteExtraKg": "Les kilos en plus coûtent {rate} le kilo, pesés au dépôt.",
+  "@spkNoteExtraKg": {
+    "description": "A piece's price explained: extra weight priced by the kilo.",
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "spkNotePerKg": "{kg} kg à {rate} le kilo, pesés à la réception.",
+  "@spkNotePerKg": {
+    "description": "A piece's price explained: priced by the kilo.",
+    "placeholders": {
+      "kg": {
+        "type": "String"
+      },
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "spkUnitPounds": "Livres (lb)",
+  "@spkUnitPounds": {
+    "description": "Choice of weight unit on the customer form."
+  },
+  "spkUnitKilos": "Kilos (kg)",
+  "@spkUnitKilos": {
+    "description": "Choice of weight unit on the customer form."
+  },
+  "pcsFromList": "Depuis la liste de prix",
+  "@pcsFromList": {
+    "description": "Button on a piece (and title of its sheet): fill the description and price from the business's price list."
+  },
+  "pcsFromListItems": "Articles",
+  "@pcsFromListItems": {
+    "description": "Group title in the price-list picker: items with a fixed price."
+  },
+  "pcsFromListByWeight": "Au poids",
+  "@pcsFromListByWeight": {
+    "description": "Group title in the price-list picker: categories priced by weight."
+  },
+  "pcsFromListHowMany": "Combien",
+  "@pcsFromListHowMany": {
+    "description": "Label of the quantity stepper in the price-list picker."
+  },
+  "pcsFromListPrice": "Prix : {price}",
+  "@pcsFromListPrice": {
+    "description": "Live price in the price-list picker.",
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "pcsFromListUse": "Utiliser ce prix",
+  "@pcsFromListUse": {
+    "description": "Button of the price-list picker that fills the piece."
+  },
+  "pcsFromListBack": "Retour à la liste",
+  "@pcsFromListBack": {
+    "description": "Button of the price-list picker's detail step."
   }
 }

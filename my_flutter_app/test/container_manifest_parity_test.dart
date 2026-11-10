@@ -248,7 +248,8 @@ void main() {
           'isCar && (_inLot == false || (_inLot == true && _pickedCar != null))'),
       reason: 'car fields wait for "No", or for a pick under "Yes"',
     );
-    expect(screen, contains('_inLot = null;\n              _clearCarDraft();'),
+    // Whitespace between the two lines is free: the block may be re-indented.
+    expect(screen, contains(RegExp(r'_inLot = null;\s+_clearCarDraft\(\);')),
         reason: 'a change of kind resets the answer and what it filled');
   });
 

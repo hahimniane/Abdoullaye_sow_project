@@ -428,7 +428,9 @@ void main() {
       // grid and ahead of the console button, which leaves the app.
       final grid = home.indexOf("Key('service-overview-grid')");
       final heading = home.indexOf('l10n.recentActivity');
-      final console = home.indexOf('l10n.openBusinessConsole');
+      // The console button ends the card: it lives in the tail both homes
+      // share (widgets/home_destinations.dart).
+      final console = home.indexOf('BusinessHomeTail(');
       expect(grid, greaterThan(-1));
       expect(guard, greaterThan(grid));
       expect(push, lessThan(console));
@@ -437,7 +439,7 @@ void main() {
       // It is the one filled control on the page; the console it outranks is
       // outlined. Three identical filled slabs meant nothing read as primary,
       // so the filled costume is now worn by this action alone.
-      final action = home.indexOf('_PrimaryAction(');
+      final action = home.indexOf('HomePrimaryAction(');
       expect(action, greaterThan(-1));
       expect(button, greaterThan(action));
       expect(
@@ -450,7 +452,10 @@ void main() {
         1,
         reason: 'exactly one filled action on the business home',
       );
-      expect(home, contains('AsyncActionButton.outlined('));
+      final tail = File('lib/widgets/home_destinations.dart')
+          .readAsStringSync();
+      expect(tail, contains('AsyncActionButton.outlined('));
+      expect(tail, contains('l10n.openBusinessConsole'));
 
       expect(home, contains('l10n.recordAParkedCar'));
       // Not through the named customer route - business_mobile_role_safety

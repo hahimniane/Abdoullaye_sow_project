@@ -68,7 +68,8 @@ class PriceItem {
   final String label;
   final int priceCents;
 
-  /// The pounds each item's fixed price covers; 0 = any weight.
+  /// The weight each item's fixed price covers, in the list's unit (pounds
+  /// unless the list is in kilos; the name is legacy); 0 = any weight.
   final double includedLb;
 }
 
@@ -81,6 +82,8 @@ class PriceRoute {
     this.weekdays = const [],
     this.everyWeeks = 1,
     this.anchorDate = '',
+    this.raw = const {},
+    this.unit = 'lb',
   });
 
   factory PriceRoute.fromMap(Object? value) {
@@ -110,11 +113,23 @@ class PriceRoute {
         PriceLimit.everyWeeks,
       ),
       anchorDate: _text(departure['anchorDate']),
+      raw: m,
+      unit: unitOf(m),
     );
   }
 
   final List<PriceItem> items;
+
+  /// Rates by category id, per pound (per kilo on a kilo route: [unit]).
   final Map<String, int> perLbCents;
+
+  /// The route as stored: what `pricePiece` reads (the counter's price fill
+  /// prices through it, so the counter and the customer's estimate can never
+  /// disagree on the arithmetic).
+  final Map<String, dynamic> raw;
+
+  /// "kg" on a kilo route, else "lb" (`unitOf`).
+  final String unit;
 
   /// A price per box size (small / medium / large), Sea only; Extra large
   /// is always quoted (docs/PACKAGE_BOX_SIZES_PAY_NOW.md).
@@ -162,6 +177,7 @@ class PriceListHistoryEntry {
 class PackagePriceList {
   const PackagePriceList({
     this.routes = const {},
+    this.weightUnit = 'lb',
     this.needsCheck = false,
     this.updatedAtMs = 0,
     this.updatedByName = '',
@@ -187,6 +203,7 @@ class PackagePriceList {
     }
     return PackagePriceList(
       routes: routes,
+      weightUnit: m['weightUnit'] == 'kg' ? 'kg' : 'lb',
       needsCheck: m['needsCheck'] == true,
       updatedAtMs: _intOrNull(m['updatedAtMs']) ?? 0,
       updatedByName: _text(m['updatedByName']),
@@ -200,6 +217,10 @@ class PackagePriceList {
   }
 
   final Map<String, Map<String, PriceRoute>> routes;
+
+  /// The list's one unit, "lb" or "kg" (absent on the document means lb):
+  /// every rate, included weight and weight on its routes is in it.
+  final String weightUnit;
   final bool needsCheck;
   final int updatedAtMs;
   final String updatedByName;
@@ -423,14 +444,15 @@ class PriceListProblem {
 /// problem of each route, in the order the screen shows them.
 List<PriceListProblem> priceListProblems(
   PriceListDraft draft,
-  Iterable<String> countryIds,
-) {
+  Iterable<String> countryIds, {
+  String unit = 'lb',
+}) {
   final out = <PriceListProblem>[];
   for (final id in countryIds) {
     for (final mode in priceModes) {
       final payload = draft[id]?[mode]?.toPayload(sea: mode == 'sea');
       if (payload == null) continue;
-      final errors = validateRoute(payload, mode: mode).errors;
+      final errors = validateRoute(payload, mode: mode, unit: unit).errors;
       if (errors.isNotEmpty) {
         out.add(PriceListProblem(countryId: id, mode: mode, code: errors[0]));
       }
@@ -492,6 +514,8 @@ const priceListReasonCodes = <String>[
   'item_unknown',
   'quantity_invalid',
   'weight_invalid',
+  'weight_kg_invalid',
+  'unit_invalid',
   'box_size_invalid',
   'dims_invalid',
   'box_sizes_sea_only',

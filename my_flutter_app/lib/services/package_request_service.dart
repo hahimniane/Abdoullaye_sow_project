@@ -171,12 +171,14 @@ abstract interface class PackageRequestService {
   /// that never saved one reads as [PackagePriceList.empty].
   Stream<PackagePriceList> watchPriceList(String businessId);
 
-  /// Saves the whole `routes` map (owner / admin); answers what the server
+  /// Saves the whole `routes` map and the list's one [weightUnit] ("lb" or
+  /// "kg", docs/SHIPPING_SIMPLE_HOME.md K1; owner / admin); answers what the server
   /// stored, or throws a [RequestFailure] whose reasons are the
   /// `PRICE_LIST_MESSAGES` codes.
   Future<PackagePriceList> savePriceList({
     required String businessId,
     required Map<String, Object?> routes,
+    required String weightUnit,
   });
 
   /// "Looks right": the business checked a list Laawol set up.
@@ -556,11 +558,13 @@ class FirebasePackageRequestService implements PackageRequestService {
   Future<PackagePriceList> savePriceList({
     required String businessId,
     required Map<String, Object?> routes,
+    required String weightUnit,
   }) async {
     final data = await _call('setPackageRequestSettings', {
       'action': 'price_list',
       'businessId': businessId,
       'routes': routes,
+      'weightUnit': weightUnit,
     });
     return PackagePriceList.fromMap(data is Map ? data['priceList'] : null);
   }

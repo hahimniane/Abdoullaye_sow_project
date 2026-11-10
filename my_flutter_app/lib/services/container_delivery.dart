@@ -50,6 +50,7 @@ abstract final class DeliveryReason {
   static const photoRequired = 'photo_required';
   static const contentsInvalid = 'contents_invalid';
   static const weightInvalid = 'weight_invalid';
+  static const weightKgInvalid = 'weight_kg_invalid';
   static const declaredValueInvalid = 'declared_value_invalid';
   static const pickupCodeInvalid = 'pickup_code_invalid';
   static const overrideIncomplete = 'override_incomplete';
@@ -61,6 +62,7 @@ abstract final class DeliveryReason {
     photoRequired,
     contentsInvalid,
     weightInvalid,
+    weightKgInvalid,
     declaredValueInvalid,
     pickupCodeInvalid,
     overrideIncomplete,

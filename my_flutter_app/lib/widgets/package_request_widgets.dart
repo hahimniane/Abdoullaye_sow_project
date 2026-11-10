@@ -9,6 +9,7 @@ import '../l10n/app_localizations.dart';
 import '../screens/containers_screen.dart' show containerErrorText;
 import '../services/container_manifest.dart' show containerRefusalCodes;
 import '../services/business_price_list.dart' show priceLbText;
+import '../services/package_price_list.dart' show unitOf;
 import '../services/package_coming_today.dart' show requestWindowTextOf;
 import '../services/package_price_list.dart' show priceCategoryOf;
 import '../services/package_request_service.dart';
@@ -75,7 +76,8 @@ String requestPieceListTitle(
       final lb = price['weightLb'];
       return category == null || lb is! num
           ? requestPieceTitle(l10n, piece)
-          : '${category.label(languageCode)} · ${priceLbText(lb)} lb';
+          : '${category.label(languageCode)} · ${priceLbText(lb)} '
+                '${unitOf(price)}';
     case 'barrel':
       return l10n.prqKindBarrel;
     case 'box_size':
@@ -120,20 +122,28 @@ String? _pricingNote(AppLocalizations l10n, RequestPiece piece) {
       }
       final included = price['includedLb'];
       if (included is num && included > 0) {
-        parts.add(l10n.spkUpToLbEach(priceLbText(included)));
+        final kilos = unitOf(price) == 'kg';
+        parts.add(
+          kilos
+              ? l10n.spkUpToKgEach(priceLbText(included))
+              : l10n.spkUpToLbEach(priceLbText(included)),
+        );
         final extra = price['excessPerLbCents'];
         parts.add(
           extra is num && extra > 0
-              ? l10n.spkNoteExtra(cents(extra))
+              ? (kilos
+                    ? l10n.spkNoteExtraKg(cents(extra))
+                    : l10n.spkNoteExtra(cents(extra)))
               : l10n.spkNoteExtraStaff,
         );
       }
       return parts.isEmpty ? null : parts.join(' · ');
     case 'per_lb':
       final lb = price['weightLb'];
-      return lb is num
-          ? l10n.spkNotePerLb(priceLbText(lb), cents(price['perLbCents']))
-          : null;
+      if (lb is! num) return null;
+      return unitOf(price) == 'kg'
+          ? l10n.spkNotePerKg(priceLbText(lb), cents(price['perLbCents']))
+          : l10n.spkNotePerLb(priceLbText(lb), cents(price['perLbCents']));
     case 'box_size':
       final quantity = price['quantity'];
       return quantity is num && quantity > 1
@@ -261,6 +271,8 @@ String? requestReasonText(AppLocalizations l10n, String reason) =>
       'window_invalid' => l10n.spkErrWindow,
       'quantity_invalid' => l10n.spkErrQuantity,
       'weight_invalid' => l10n.spkErrWeight,
+      'weight_kg_invalid' => l10n.spkErrWeightKg,
+      'unit_invalid' => l10n.pplErrUnitInvalid,
       'category_invalid' => l10n.spkErrCategory,
       'box_size_invalid' => l10n.pplErrBoxSizeInvalid,
       'dims_invalid' => l10n.pplErrDimsInvalid,

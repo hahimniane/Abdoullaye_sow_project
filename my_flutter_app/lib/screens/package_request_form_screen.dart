@@ -105,18 +105,23 @@ class _Photo {
   bool failed = false;
 }
 
-/// A category priced by the pound: its pounds field and the size button
-/// last tapped.
+/// A category priced by the weight: its weight field, the unit it is typed
+/// in (the catalog's: the business's on its own link, pounds when comparing)
+/// and the size button last tapped.
 class _WeightLine {
-  _WeightLine(this.categoryId);
+  _WeightLine(this.categoryId, this.unit);
 
   final String categoryId;
   final controller = TextEditingController();
+
+  /// "lb" or "kg": what [controller] is typed in.
+  String unit;
   String sizePreset = '';
 
   BasketWeight get value => BasketWeight(
     categoryId: categoryId,
-    weightLb: parseWeightLb(controller.text),
+    weightLb: parseWeight(controller.text, unit),
+    weightUnit: unit,
     sizePreset: sizePreset,
   );
 }
@@ -368,7 +373,16 @@ class _PackageRequestFormScreenState extends State<PackageRequestFormScreen> {
       _catalogFor = key;
       _catalog = _mode.isEmpty
           ? const RequestCatalog()
-          : buildRequestCatalog(_offered, _mode);
+          : buildRequestCatalog(
+              _offered,
+              _mode,
+              // The business's own unit on its own link; pounds when
+              // comparing (each business then prices the number it gets).
+              unit: catalogWeightUnit(
+                _offered,
+                onlyBusinessId: _options?.business?.businessId ?? '',
+              ),
+            );
     }
     return _catalog;
   }
@@ -1015,7 +1029,9 @@ class _PackageRequestFormScreenState extends State<PackageRequestFormScreen> {
           keyPrefix: 'request-item-${item.key}',
           title: item.label,
           note: item.includedLb > 0
-              ? l10n.spkUpToLbEach(priceLbText(item.includedLb))
+              ? (catalog.weightUnit == 'kg'
+                    ? l10n.spkUpToKgEach(priceLbText(item.includedLb))
+                    : l10n.spkUpToLbEach(priceLbText(item.includedLb)))
               : null,
           quantity: _qty[item.key] ?? 0,
           max: (_qty[item.key] ?? 0) > 0 || canAdd ? requestMaxQuantity : 0,
@@ -1272,7 +1288,9 @@ class _PackageRequestFormScreenState extends State<PackageRequestFormScreen> {
     return [
       RequestSectionTitle(l10n.spkByWeightTitle),
       Text(
-        l10n.spkByWeightHint,
+        catalog.weightUnit == 'kg'
+            ? l10n.spkByWeightHintKg
+            : l10n.spkByWeightHint,
         style: const TextStyle(
           fontSize: 13,
           height: 1.4,
@@ -1294,7 +1312,7 @@ class _PackageRequestFormScreenState extends State<PackageRequestFormScreen> {
               onTap: !_canAddPiece
                   ? () {}
                   : () => setState(() {
-                      _weights.add(_WeightLine(id));
+                      _weights.add(_WeightLine(id, catalog.weightUnit));
                       _clear(const ['pieces_required']);
                     }),
             ),
@@ -1312,8 +1330,9 @@ class _PackageRequestFormScreenState extends State<PackageRequestFormScreen> {
     _WeightLine line,
     String language,
   ) {
-    final bad =
-        _errors.contains('weight_invalid') && line.value.weightLb == null;
+    final kilos = line.unit == 'kg';
+    final badCode = kilos ? 'weight_kg_invalid' : 'weight_invalid';
+    final bad = _errors.contains(badCode) && line.value.weightLb == null;
     return RequestCard(
       key: ObjectKey(line),
       child: Column(
@@ -1351,15 +1370,44 @@ class _PackageRequestFormScreenState extends State<PackageRequestFormScreen> {
               for (final preset in sizePresets)
                 RequestPill(
                   key: Key('request-size:$index:${preset.id}'),
-                  label: l10n.spkSizeButton(
-                    preset.label(language),
-                    '${preset.lb}',
-                  ),
+                  label: kilos
+                      ? l10n.spkSizeButtonKg(
+                          preset.label(language),
+                          '${preset.kg}',
+                        )
+                      : l10n.spkSizeButton(
+                          preset.label(language),
+                          '${preset.lb}',
+                        ),
                   selected: line.sizePreset == preset.id,
                   onTap: () => setState(() {
                     line.sizePreset = preset.id;
-                    line.controller.text = '${preset.lb}';
-                    _clear(const ['weight_invalid']);
+                    line.controller.text = '${preset.inUnit(line.unit)}';
+                    _clear(const ['weight_invalid', 'weight_kg_invalid']);
+                  }),
+                ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          // The customer types a weight once, in pounds or kilos.
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              for (final unit in weightUnits)
+                RequestPill(
+                  key: Key('request-unit:$index:$unit'),
+                  label: unit == 'kg' ? l10n.spkUnitKilos : l10n.spkUnitPounds,
+                  selected: line.unit == unit,
+                  onTap: () => setState(() {
+                    line.controller.text = weightFieldInUnit(
+                      line.controller.text,
+                      from: line.unit,
+                      to: unit,
+                      presetId: line.sizePreset,
+                    );
+                    line.unit = unit;
+                    _clear(const ['weight_invalid', 'weight_kg_invalid']);
                   }),
                 ),
             ],
@@ -1377,14 +1425,17 @@ class _PackageRequestFormScreenState extends State<PackageRequestFormScreen> {
               final preset = sizePresets
                   .where((p) => p.id == line.sizePreset)
                   .firstOrNull;
-              if (preset != null && parseWeightLb(text) != preset.lb) {
+              if (preset != null &&
+                  parseWeight(text, line.unit) != preset.inUnit(line.unit)) {
                 line.sizePreset = '';
               }
-              _clear(const ['weight_invalid']);
+              _clear(const ['weight_invalid', 'weight_kg_invalid']);
             }),
             decoration: InputDecoration(
-              labelText: l10n.spkWeightLabel,
-              errorText: bad ? l10n.spkErrWeight : null,
+              labelText: kilos ? l10n.spkWeightKgLabel : l10n.spkWeightLabel,
+              errorText: bad
+                  ? (kilos ? l10n.spkErrWeightKg : l10n.spkErrWeight)
+                  : null,
             ),
           ),
         ],

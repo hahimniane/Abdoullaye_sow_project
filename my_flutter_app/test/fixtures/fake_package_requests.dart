@@ -300,11 +300,13 @@ class FakePackageRequests implements PackageRequestService {
   Future<PackagePriceList> savePriceList({
     required String businessId,
     required Map<String, Object?> routes,
+    required String weightUnit,
   }) async {
     await _record('setPackageRequestSettings', {
       'action': 'price_list',
       'businessId': businessId,
       'routes': routes,
+      'weightUnit': weightUnit,
     });
     return priceList;
   }

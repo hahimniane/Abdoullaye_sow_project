@@ -205,6 +205,28 @@ FirestoreQuerySpec openContainersSpec(String businessId) => FirestoreQuerySpec(
   ],
 );
 
+/// Every container the business has ever made, for a `count()` only (the
+/// simple shipping home asks "is every container an air shipment?"). A count
+/// reads index entries, not documents, so it costs one read per thousand
+/// containers; it is never listened to or listed. Equality on the business
+/// only, so no composite index.
+FirestoreQuerySpec containersCountSpec(String businessId) =>
+    FirestoreQuerySpec(
+      collection: 'containers',
+      filters: [_business(businessId)],
+    );
+
+/// The business's air shipments, for a `count()` only. Two equalities, so
+/// merged single-field indexes serve it (no composite index).
+FirestoreQuerySpec airContainersCountSpec(String businessId) =>
+    FirestoreQuerySpec(
+      collection: 'containers',
+      filters: [
+        _business(businessId),
+        const QueryFilterSpec('shipMode', QueryFilterOp.equal, 'air'),
+      ],
+    );
+
 /// Lines on open boxes. `containerStatus` is kept on each line by the server
 /// whenever its box moves, so the arrived history never has to be read to
 /// draw a link.

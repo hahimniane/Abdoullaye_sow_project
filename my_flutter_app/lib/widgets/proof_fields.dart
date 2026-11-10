@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../l10n/app_localizations.dart';
+import '../services/business_weight_unit.dart';
 import '../services/package_photo_service.dart';
 import '../services/package_proof.dart';
 import '../services/package_requests.dart'
@@ -15,8 +16,8 @@ import '../theme/app_spacing.dart';
 
 /// Proof on a package at drop-off (docs/AIR_PACKAGES.md §2): photos (up to
 /// five, camera or gallery, uploaded as they are taken), what is inside
-/// (item · quantity · optional serial), weight in pounds and declared value
-/// in dollars. One editor, used by the container line form, the waiting
+/// (item · quantity · optional serial), weight (in the business's unit:
+/// pounds or kilos) and declared value in dollars. One editor, used by the container line form, the waiting
 /// package form and the Received sheet; the draft it hands back goes
 /// through `validateProofFields` and onto every line callable.
 ///
@@ -49,18 +50,19 @@ Future<Uint8List?> pickProofPhoto(ImageSource source) async {
 /// A refusal of the proof rules in the app's words, by code; null for a code
 /// that is not one of theirs.
 String? proofErrorText(AppLocalizations l10n, String code) => switch (code) {
-      'photo_invalid' => l10n.proofErrPhotoInvalid,
-      'photo_required' => l10n.proofErrPhotoRequired,
-      'photo_too_large' => l10n.proofPhotoTooLarge,
-      'contents_invalid' => l10n.proofErrContents,
-      'weight_invalid' => l10n.proofErrWeight,
-      'declared_value_invalid' => l10n.proofErrDeclaredValue,
-      'pickup_code_invalid' => l10n.proofErrPickupCode,
-      'override_incomplete' => l10n.proofErrOverride,
-      'proof_settings_invalid' => l10n.proofErrSettings,
-      'air_waybill_invalid' => l10n.airErrWaybill,
-      _ => null,
-    };
+  'photo_invalid' => l10n.proofErrPhotoInvalid,
+  'photo_required' => l10n.proofErrPhotoRequired,
+  'photo_too_large' => l10n.proofPhotoTooLarge,
+  'contents_invalid' => l10n.proofErrContents,
+  'weight_invalid' => l10n.proofErrWeight,
+  'weight_kg_invalid' => l10n.proofErrWeightKg,
+  'declared_value_invalid' => l10n.proofErrDeclaredValue,
+  'pickup_code_invalid' => l10n.proofErrPickupCode,
+  'override_incomplete' => l10n.proofErrOverride,
+  'proof_settings_invalid' => l10n.proofErrSettings,
+  'air_waybill_invalid' => l10n.airErrWaybill,
+  _ => null,
+};
 
 /// A photo on the editor: taken now (bytes, then a path once uploaded) or
 /// already on the line (a path only, shown through its download URL).
@@ -76,9 +78,9 @@ class ProofPhotoDraft {
 /// One row of "what's inside".
 class ProofItemRow {
   ProofItemRow({String label = '', int quantity = 1, String serial = ''})
-      : label = TextEditingController(text: label),
-        quantity = TextEditingController(text: quantity.toString()),
-        serial = TextEditingController(text: serial);
+    : label = TextEditingController(text: label),
+      quantity = TextEditingController(text: quantity.toString()),
+      serial = TextEditingController(text: serial);
 
   static int _next = 0;
   final int uid = _next++;
@@ -89,10 +91,10 @@ class ProofItemRow {
   /// As the validator reads it: the quantity text stays text, so a bad one
   /// is named ("contents_invalid") rather than silently made 1.
   Map<String, Object?> get draftMap => {
-        'label': label.text,
-        'quantity': quantity.text.trim().isEmpty ? 1 : quantity.text.trim(),
-        'serial': serial.text,
-      };
+    'label': label.text,
+    'quantity': quantity.text.trim().isEmpty ? 1 : quantity.text.trim(),
+    'serial': serial.text,
+  };
 
   void dispose() {
     label.dispose();
@@ -110,27 +112,46 @@ class ProofFieldsController extends ChangeNotifier {
     ProofPhotoPicker? picker,
     ProofPhotoUploader? uploader,
     ProofPhotoUrlResolver? urlOf,
-  })  : _picker = picker ?? pickProofPhoto,
-        _uploader = uploader,
-        _urlOf = urlOf,
-        photos = [for (final p in initial.photoPaths) ProofPhotoDraft.stored(p)],
-        items = [
-          for (final c in initial.contents)
-            ProofItemRow(label: c.label, quantity: c.quantity, serial: c.serial),
-        ],
-        weight = TextEditingController(
-          text: initial.weightLb == null
-              ? ''
-              : weightText(normalizeWeightLb(initial.weightLb).value)
-                  .replaceAll(' lb', ''),
-        ),
-        value = TextEditingController(
-          text: declaredValueInput(
-            normalizeDeclaredValueCents(initial.declaredValueCents).value,
-          ),
-        );
+    this.units,
+  }) : _picker = picker ?? pickProofPhoto,
+       _uploader = uploader,
+       _urlOf = urlOf,
+       _typedUnit = initial.weightUnit == 'kg' ? 'kg' : 'lb',
+       _unitPinned =
+           initial.weightLb != null &&
+           initial.weightLb.toString().trim().isNotEmpty,
+       photos = [for (final p in initial.photoPaths) ProofPhotoDraft.stored(p)],
+       items = [
+         for (final c in initial.contents)
+           ProofItemRow(label: c.label, quantity: c.quantity, serial: c.serial),
+       ],
+       weight = TextEditingController(text: _weightField(initial)),
+       value = TextEditingController(
+         text: declaredValueInput(
+           normalizeDeclaredValueCents(initial.declaredValueCents).value,
+         ),
+       ) {
+    units?.addListener(notifyListeners);
+  }
+
+  /// The weight field as an edit opens on it: the stored number in the unit
+  /// it was weighed in, no trailing ".0".
+  static String _weightField(PackageProofDraft initial) {
+    if (initial.weightLb == null) return '';
+    final n = initial.weightUnit == 'kg'
+        ? normalizeWeightKg(initial.weightLb).value
+        : normalizeWeightLb(initial.weightLb).value;
+    if (n == null) return '';
+    return n == n.roundToDouble() ? n.toInt().toString() : n.toStringAsFixed(1);
+  }
 
   final String businessId;
+
+  /// The business's unit (its price list's, else the person's pick), when
+  /// the sheet gave one; pounds without.
+  final BusinessWeightUnit? units;
+  String _typedUnit;
+  bool _unitPinned;
   final ProofPhotoPicker _picker;
   final ProofPhotoUploader? _uploader;
   final ProofPhotoUrlResolver? _urlOf;
@@ -150,6 +171,62 @@ class ProofFieldsController extends ChangeNotifier {
   /// nothing did. Cleared by the next attempt.
   String photoError = '';
 
+  /// The unit the weight field is in: the business's until a weight is typed
+  /// (or a stored one opened); from then on it keeps the unit it was weighed
+  /// in, so a weight is never converted behind staff's back.
+  String get weightUnit => _unitPinned ? _typedUnit : (units?.unit ?? 'lb');
+
+  /// The lb / kg choice belongs beside the field: the business has no price
+  /// list (the list decides the unit when it has one).
+  bool get offersUnitChoice => units?.offersChoice ?? false;
+
+  /// The weight field can be typed in: the business's unit is known (the
+  /// list answered, failed or timed out), so a weight is never typed in a
+  /// unit the list is about to change.
+  bool get weightReady => units?.resolved ?? true;
+
+  /// A weight was typed: it is in the unit the field showed.
+  void weightTyped() {
+    if (_unitPinned) return;
+    _typedUnit = units?.unit ?? 'lb';
+    _unitPinned = true;
+  }
+
+  String _autoFilled = '';
+
+  /// A "From the price list" fill gives the package weight: [text] in [unit]
+  /// when the field is empty, or still holds what a fill wrote before (so
+  /// several by-weight pieces add up). A weight staff typed is never
+  /// overwritten. Answers whether it wrote.
+  bool autoFillWeight(String text, String unit) {
+    final current = weight.text.trim();
+    if (current.isNotEmpty && current != _autoFilled) return false;
+    weight.text = text;
+    _autoFilled = text;
+    _typedUnit = unit == 'kg' ? 'kg' : 'lb';
+    _unitPinned = true;
+    notifyListeners();
+    return true;
+  }
+
+  /// No piece is filled by weight any more: the weight a fill wrote is taken
+  /// back. A weight the person typed themselves stays.
+  void clearAutoFilledWeight() {
+    if (_autoFilled.isEmpty || weight.text.trim() != _autoFilled) return;
+    weight.clear();
+    _autoFilled = '';
+    _unitPinned = false;
+    notifyListeners();
+  }
+
+  /// The person picked [unit] beside the field: remembered for next time.
+  void chooseWeightUnit(String unit) {
+    _typedUnit = unit == 'kg' ? 'kg' : 'lb';
+    _unitPinned = true;
+    units?.choose(_typedUnit);
+    notifyListeners();
+  }
+
   bool get canAddPhoto => photos.length < proofMaxPhotos;
   bool get canAddItem => items.length < proofMaxContents;
   bool get uploading => photos.any((p) => p.uploading);
@@ -157,9 +234,9 @@ class ProofFieldsController extends ChangeNotifier {
   /// The uploaded photo paths, in order (a photo still uploading is not a
   /// path yet).
   List<String> get photoPaths => [
-        for (final p in photos)
-          if (!p.uploading) p.path,
-      ];
+    for (final p in photos)
+      if (!p.uploading) p.path,
+  ];
 
   /// The draft as the validator and the callables read it. Items without a
   /// name are dropped (as the server drops them); the weight and value stay
@@ -177,6 +254,7 @@ class ProofFieldsController extends ChangeNotifier {
       // A bad list is handed over raw so validateProofFields names it.
       contents: checked.error.isEmpty ? contents : _rawContents(raw),
       weightLb: weight.text.trim().isEmpty ? null : weight.text.trim(),
+      weightUnit: weightUnit,
       declaredValueCents: cents,
     );
   }
@@ -184,14 +262,14 @@ class ProofFieldsController extends ChangeNotifier {
   /// A list that fails the rules, kept as typed (a 100-quantity or a long
   /// name) so the validator refuses it the same way the server will.
   List<PackageContent> _rawContents(List<Map<String, Object?>> raw) => [
-        for (final m in raw)
-          if ((m['label'] ?? '').toString().trim().isNotEmpty)
-            PackageContent(
-              label: (m['label'] ?? '').toString().trim(),
-              quantity: int.tryParse(m['quantity'].toString()) ?? 0,
-              serial: (m['serial'] ?? '').toString(),
-            ),
-      ];
+    for (final m in raw)
+      if ((m['label'] ?? '').toString().trim().isNotEmpty)
+        PackageContent(
+          label: (m['label'] ?? '').toString().trim(),
+          quantity: int.tryParse(m['quantity'].toString()) ?? 0,
+          serial: (m['serial'] ?? '').toString(),
+        ),
+  ];
 
   /// The item list fails its rules (a name too long, a quantity outside
   /// 1..99, more than ten).
@@ -272,6 +350,7 @@ class ProofFieldsController extends ChangeNotifier {
     }
     items.clear();
     weight.clear();
+    _unitPinned = false;
     value.clear();
     photoError = '';
     notifyListeners();
@@ -279,6 +358,7 @@ class ProofFieldsController extends ChangeNotifier {
 
   @override
   void dispose() {
+    units?.removeListener(notifyListeners);
     for (final r in items) {
       r.dispose();
     }
@@ -353,9 +433,11 @@ class ProofFields extends StatelessWidget {
               photosRequired
                   ? l10n.proofPhotoRequiredNote
                   : l10n.proofPhotoOptionalNote(proofMaxPhotos),
-              key: Key(photosRequired
-                  ? 'proof-photos-required'
-                  : 'proof-photos-optional'),
+              key: Key(
+                photosRequired
+                    ? 'proof-photos-required'
+                    : 'proof-photos-optional',
+              ),
               style: TextStyle(
                 fontSize: 12,
                 height: 1.35,
@@ -458,27 +540,57 @@ class ProofFields extends StatelessWidget {
             ),
             if (contentsError != null) ...[
               const SizedBox(height: 6),
-              _ErrorText(contentsError!, key: const Key('proof-contents-error')),
+              _ErrorText(
+                contentsError!,
+                key: const Key('proof-contents-error'),
+              ),
             ],
             const SizedBox(height: AppSpacing.lg),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
-                  child: TextField(
-                    key: const Key('proof-weight'),
-                    controller: controller.weight,
-                    enabled: enabled,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
-                    inputFormatters: [_decimal],
-                    onChanged: (_) => onEdited?.call(),
-                    decoration: InputDecoration(
-                      labelText: l10n.proofWeight,
-                      suffixText: 'lb',
-                      errorText: weightError,
-                      errorMaxLines: 3,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TextField(
+                        key: const Key('proof-weight'),
+                        controller: controller.weight,
+                        enabled: enabled && controller.weightReady,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        inputFormatters: [_decimal],
+                        onChanged: (_) {
+                          controller.weightTyped();
+                          onEdited?.call();
+                        },
+                        decoration: InputDecoration(
+                          // Kilos are said in the label (a field's suffix only
+                          // shows once it is focused); pounds read as they
+                          // always have.
+                          labelText: controller.weightUnit == 'kg'
+                              ? l10n.pplWeightKg
+                              : l10n.proofWeight,
+                          suffixText: controller.weightUnit,
+                          errorText: weightError,
+                          errorMaxLines: 3,
+                        ),
+                      ),
+                      // The business's unit is its price list's; only a
+                      // business with no price list picks lb or kg here.
+                      if (controller.offersUnitChoice) ...[
+                        const SizedBox(height: 6),
+                        _UnitChoice(
+                          unit: controller.weightUnit,
+                          enabled: enabled,
+                          onChoose: (unit) {
+                            controller.chooseWeightUnit(unit);
+                            onEdited?.call();
+                          },
+                        ),
+                      ],
+                    ],
                   ),
                 ),
                 const SizedBox(width: AppSpacing.sm),
@@ -487,8 +599,9 @@ class ProofFields extends StatelessWidget {
                     key: const Key('proof-declared-value'),
                     controller: controller.value,
                     enabled: enabled,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                     inputFormatters: [_decimal],
                     onChanged: (_) => onEdited?.call(),
                     decoration: InputDecoration(
@@ -513,6 +626,71 @@ class ProofFields extends StatelessWidget {
   static List<TextInputFormatter> get quantityFormatters => [_digits];
 }
 
+/// The small lb | kg choice beside a weight field, for a business with no
+/// price list.
+class _UnitChoice extends StatelessWidget {
+  const _UnitChoice({
+    required this.unit,
+    required this.enabled,
+    required this.onChoose,
+  });
+
+  final String unit;
+  final bool enabled;
+  final ValueChanged<String> onChoose;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    Widget choice(String id, String tooltip) {
+      final selected = unit == id;
+      return Tooltip(
+        message: tooltip,
+        child: Semantics(
+          button: true,
+          selected: selected,
+          label: tooltip,
+          child: InkWell(
+            key: Key('proof-unit-$id'),
+            onTap: enabled && !selected ? () => onChoose(id) : null,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+            child: Container(
+              constraints: const BoxConstraints(minWidth: 34, minHeight: 32),
+              alignment: Alignment.center,
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              decoration: BoxDecoration(
+                color: selected ? AppColors.mist : Colors.transparent,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                border: Border.all(
+                  color: selected ? AppColors.cobalt : AppColors.rule,
+                ),
+              ),
+              child: Text(
+                id,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                  color: selected ? AppColors.cobaltDeep : AppColors.muted,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Row(
+      key: const Key('proof-unit'),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        choice('lb', l10n.proofUnitPounds),
+        const SizedBox(width: 4),
+        choice('kg', l10n.proofUnitKilos),
+      ],
+    );
+  }
+}
+
 class _Title extends StatelessWidget {
   const _Title({super.key, required this.text});
 
@@ -520,14 +698,14 @@ class _Title extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Text(
-        text,
-        style: const TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.2,
-          color: AppColors.ink,
-        ),
-      );
+    text,
+    style: const TextStyle(
+      fontSize: 13,
+      fontWeight: FontWeight.w700,
+      letterSpacing: 0.2,
+      color: AppColors.ink,
+    ),
+  );
 }
 
 class _ErrorText extends StatelessWidget {
@@ -537,14 +715,14 @@ class _ErrorText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Text(
-        text,
-        style: const TextStyle(
-          fontSize: 12,
-          height: 1.35,
-          fontWeight: FontWeight.w600,
-          color: AppColors.errorRed,
-        ),
-      );
+    text,
+    style: const TextStyle(
+      fontSize: 12,
+      height: 1.35,
+      fontWeight: FontWeight.w600,
+      color: AppColors.errorRed,
+    ),
+  );
 }
 
 class _PhotoButton extends StatelessWidget {
@@ -663,7 +841,11 @@ class _PhotoThumb extends StatelessWidget {
                       color: Colors.black.withValues(alpha: 0.55),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.close, size: 15, color: Colors.white),
+                    child: const Icon(
+                      Icons.close,
+                      size: 15,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ),
@@ -726,12 +908,15 @@ class _BrokenPhoto extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        key: const Key('proof-photo-broken'),
-        color: AppColors.mist,
-        alignment: Alignment.center,
-        child: const Icon(Icons.broken_image_outlined,
-            size: 22, color: AppColors.muted),
-      );
+    key: const Key('proof-photo-broken'),
+    color: AppColors.mist,
+    alignment: Alignment.center,
+    child: const Icon(
+      Icons.broken_image_outlined,
+      size: 22,
+      color: AppColors.muted,
+    ),
+  );
 }
 
 /// Stored photos, read-only (the package page): thumbnails that open
