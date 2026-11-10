@@ -10,9 +10,10 @@ a French block):
 | --- | --- | --- |
 | `received` | `shipment_received_2lang` | The package is registered: dropped off to wait for a container (`addWaitingPackage`) or added straight onto one (`addContainerLine`). Assigning a waiting package to a box, or taking it off one, sends nothing. |
 | `received` (sender, with receipt) | `shipment_received_doc_2lang` | The same moment, for the **sender** only: `shipment_received_2lang`'s body plus the package receipt PDF (below). Falls back to `shipment_received_2lang` when the template is not usable yet. |
+| `received` (with the photo) | `shipment_received_photo_2lang` | The same moment, for the **sender and the receiver**, when the package has a drop-off photo: `shipment_received_2lang`'s body plus the first photo (below). It goes before the receipt. Falls back to the two rows above when the template is not usable yet. |
 | `shipped` | `shipment_departed_2lang` | Staff mark the container **Shipped**, or the carrier feed reports it on the vessel — whichever comes first. |
 | `arrived` | `shipment_ready_pickup_2lang` | Staff mark the container **Ready for pickup**. Only staff: the carrier's "discharged / available at the port" is recorded on the timeline and sends nothing, because a box at the port cannot be collected yet. |
-| `confirm` | `package_confirm_2lang` | **Instead of** the sender's `received` when the business has *Ask the sender to confirm* on and the line has a drop-off photo (docs/AIR_PACKAGES.md §4.4): the first photo, the item list and weight, and two quick replies, **OK ✓** / **Something's wrong**. The receiver still gets `received`. Row `{lineId}_sender_confirm`; on the line's `lastCustomerUpdate` it counts as `received`. |
+| `confirm` | `package_confirm_2lang` | **Instead of** the sender's `received` when the business has *Ask the sender to confirm* on and the line has a drop-off photo (docs/AIR_PACKAGES.md §4.4): the first photo, the item list and weight, and two quick replies, **OK ✓** / **Something's wrong**. The receiver still gets `received` (with the photo). Row `{lineId}_sender_confirm`, or `{lineId}_receiver_confirm` for a sender who is their own receiver; on the line's `lastCustomerUpdate` it counts as `received`. |
 | `delivered` | `shipment_delivered_2lang` | Destination staff mark the **package** delivered (*Mark delivered*: the `deliver` action of `updateContainerLine`; docs/WAITING_PACKAGES.md "Delivered at destination"). Per line, like `received`. Undoing a delivery sends nothing, and a delivery repeated after an undo finds the rows already there, so nobody hears twice. |
 
 ### Delivered (2026-10-21)
@@ -83,6 +84,40 @@ keeps `shipment_received_2lang` unchanged (no money in it, no PDF).
 - Created with `~/laawol-deploy-logs/create_received_doc_template.py`
   (dry run by default; `--apply` submits). Status (2026-11-07): written,
   **not submitted**.
+
+### The drop-off photo for both people (2026-11-10)
+
+Owner rule: when a package has a drop-off photo, **both the sender and the
+receiver get the picture**. Before this only a sender asked to confirm saw
+it, and a sender who was their own receiver got the plain message.
+
+- **When.** Any `received` row (`_sender_received` or `_receiver_received`)
+  of a line with at least one `photoPaths` entry, in the bilingual set,
+  whatever the business's switches (`container_updates.photoHeaderWanted`).
+  The rows, their ids and the queue are unchanged; the choice is made at
+  send time, so a photo added before the row's turn is used.
+- **What.** `shipment_received_photo_2lang`: IMAGE header with the first
+  photo as a 30-day signed link (`package_proof.photoLink`, the link the
+  confirmation uses), the received body plus one sentence about the photo,
+  the tracking button. The line's `documentToken` is minted when it has
+  none.
+- **Before the receipt.** A message has one header. A sender whose package
+  has a photo gets the photo message, not `shipment_received_doc_2lang`; a
+  sender whose package has no photo still gets the receipt PDF.
+- **Never holds the message back.** If Meta answers a "not usable yet" code
+  (`RECEIPT_FALLBACK_CODES`) the same row is sent again at once the old
+  way: the sender's receipt template then the plain one, the receiver's
+  plain one. The row records `photoHeader`: `attached` or `fallback`.
+  Until Meta approves the template everyone simply gets what they got
+  before.
+- **The sender who is the receiver** is asked to confirm like any sender
+  (row `{lineId}_receiver_confirm`, docs/AIR_PACKAGES.md §4.4), so with
+  *Ask the sender to confirm* on they get the photo with the OK buttons,
+  and with it off the photo message above.
+- Later messages (left, ready for pickup, delivered) carry no photo.
+- Created with `~/laawol-deploy-logs/create_received_photo_template.py`
+  (dry run by default; `--apply` submits). Status (2026-11-10): **submitted
+  to Meta, in review** (id `1480984873896027`, Utility, `en`).
 
 ### "Arrived" now means ready for pickup (2026-10-18)
 
@@ -581,6 +616,40 @@ Sample values: `Fatou`, `Dala Shipping`, `3 barrels`, `Guinea`,
 The request body (`whatsapp_templates.templateMessage` with
 `receiptDocument: true`): a `header` component `{type: "document",
 document: {link, filename}}`, the `body` with eight texts, the URL button.
+
+### `shipment_received_photo_2lang`
+
+"Package received" with the first drop-off photo, for the sender and the
+receiver (see *The drop-off photo for both people*). The body of
+`shipment_received_2lang` plus one sentence about the photo (same eight
+variables, same order), under a header: **IMAGE**, the photo as a 30-day
+signed link. One URL button like the other tracking messages. Variables:
+{{1}} name, {{2}} business, {{3}} what (EN), {{4}} destination (EN), {{5}}
+business, {{6}} what (FR), {{7}} destination (FR), {{8}} tracking code.
+
+```
+Hello / Bonjour {{1}} 👋
+
+*ENGLISH*
+{{2}} has received your shipment of {{3}} going to {{4}}. The photo above shows it as it was dropped off. We will message you here when it leaves and when it is ready for pickup.
+
+—————
+*FRANÇAIS*
+{{5}} a bien reçu votre envoi de {{6}} à destination de {{7}}. La photo ci-dessus le montre tel qu’il a été déposé. Nous vous écrirons ici quand il partira et quand il sera prêt à récupérer.
+
+🔎 Tracking code / Code de suivi : {{8}}
+
+Tap the button below to follow it.
+Appuyez sur le bouton ci-dessous pour le suivre.
+```
+
+Sample values: `Fatou`, `Dala Shipping`, `3 barrels`, `Guinea`,
+`Dala Shipping`, `3 fûts`, `Guinée`, `CL-K7M4P2`. Button: *Visit website*,
+`Track · Suivre`, dynamic `https://customer.laawoldigital.com/t/{{1}}`.
+
+The request body (`whatsapp_templates.templateMessage` with
+`photoHeader: true`): a `header` component `{type: "image", image:
+{link}}`, the `body` with eight texts, the URL button.
 
 ### Pickup number (no template of its own)
 

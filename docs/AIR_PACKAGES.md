@@ -53,6 +53,12 @@ and USB scale, seal-and-weigh, an AI item list, a signature at handover, and a
     list shows the packages missing one.
 12. **Customs list per flight**, printed from the declarations.
 13. **Ships all at once:** server + console first, then the app build.
+14. **The photo goes to both people (owner, 2026-11-10).** Whenever a
+    package has a drop-off photo, the sender **and** the receiver get it on
+    their "package received" message, whether *Ask the sender to confirm* is
+    on or not. A person who is both the sender and the receiver is asked to
+    confirm like any other sender. The later messages (left, ready for
+    pickup, delivered) are unchanged.
 
 ## 2. Data
 
@@ -137,6 +143,11 @@ header.
   right? Tap OK, or Something's wrong." FR: "Bonjour, {{5}} a reçu votre colis :
   {{6}} ({{7}}). Est-ce correct ? Appuyez sur OK ou Something's wrong."
   Footer: "Code {{8}}" is not allowed in footers → put the code in the body.
+- **`shipment_received_photo_2lang`** (2026-11-10, decision 14) — header
+  IMAGE (the first drop-off photo, a 30-day link), the body of
+  `shipment_received_2lang` plus one sentence about the photo, the same eight
+  parameters, and the tracking URL button. Wording and status:
+  docs/WHATSAPP_CONTAINER_UPDATES.md.
 - **Pickup number:** Meta's classifier rejects any template that carries a
   "code to show" as an authentication message (two wordings tried on
   2026-10-29, both `INCORRECT_CATEGORY`). So there is no separate template:
@@ -180,6 +191,24 @@ header.
    built at send time (`whatsappUpdateMessage`) with the first photo link as
    header (no photo → template without header is not allowed → fall back to
    the plain `received` row and leave status `none`).
+   **A sender who is the receiver** (`ownerKind: "customer"` with
+   `senderIsReceiver: true`) is one person, messaged once as the receiver:
+   they are asked too, on row `{lineId}_receiver_confirm`
+   (`container_updates.confirmRoleFor` answers `"sender"`, `"receiver"` or
+   `""`). A package registered before 2026-11-10 already has
+   `{lineId}_receiver_received`: a repeat for it (*Send again*, a corrected
+   number) stays that plain message (`keepsPlainReceived`), so nobody is
+   asked about a package they were only told about.
+   **The photo on "package received"** (decision 14): at send time a
+   `received` row of a line with a photo, sender or receiver, goes out as
+   `shipment_received_photo_2lang` with the first photo as header
+   (`photoHeaderWanted`; the line's `documentToken` is minted then when it
+   has none). If Meta answers a "not usable yet" code
+   (`RECEIPT_FALLBACK_CODES`) the same row goes out at once the way it did
+   before - the sender's receipt template, then the plain one - and the row
+   records `photoHeader: "fallback"`; `"attached"` when the photo went. A
+   message has one header, so the photo goes before the receipt PDF: a
+   sender whose package has a photo gets the picture, not the PDF.
 5. **Inbound buttons:** in `handleInbound`, before routing, when
    `buttonPayload` is `confirm_ok` / `confirm_problem` and `replyToWamid` maps
    to a `containerUpdates` row with `update: "confirm"` → write
@@ -188,7 +217,9 @@ header.
    send the short free-form thanks; on `problem` also open (or reopen) the
    business's conversation for that phone with a system note "Sender reported
    a problem with package CL-…" so the thread shows up as *needs reply*.
-   `confirm_ok` does **not** open a conversation.
+   `confirm_ok` does **not** open a conversation. The answer is matched by
+   the message, the row's `update: "confirm"` and the phone, never by the
+   role, so a `_receiver_confirm` row is answered the same way.
 6. **Inbound photos with a code:** after `appendInbound`, if the text (or
    caption) contains a tracking code (`scanCodeFrom` / `normalizeTracking
    Code`) that resolves to a line, copy the stored media to `packagePhotos`

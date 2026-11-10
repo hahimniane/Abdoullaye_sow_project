@@ -4310,10 +4310,16 @@ describe("the sender's confirmation at drop-off", () => {
     assert.ok(!body.template.components.some((part) => part.type === "header" &&
       part.parameters[0].type === "document"));
     assert.equal((await ref.get()).data().senderConfirmation.status, "asked");
-    // The receiver's message is the usual one.
+    // The receiver's message is the usual one, with the same photo on top
+    // (owner 2026-11-10: both people get the picture).
     fakeWhatsApp(OK);
     await deliver(`${ref.id}_receiver_received`);
-    assert.equal(whatsappCalls[0].template.name, "shipment_received_2lang");
+    assert.equal(whatsappCalls.length, 1);
+    assert.equal(whatsappCalls[0].to, "224620000000");
+    assert.equal(whatsappCalls[0].template.name, "shipment_received_photo_2lang");
+    assert.equal(whatsappCalls[0].template.components[0].parameters[0].image.link.split("&e=")[0],
+        header.parameters[0].image.link.split("&e=")[0]);
+    assert.equal((await db.collection("containerUpdates").doc(`${ref.id}_receiver_received`).get()).get("photoHeader"), "attached");
     // Asking again never re-asks an answered sender.
     await ref.set({senderConfirmation: {status: "confirmed", askedAtMs: 1, answeredAtMs: 2}}, {merge: true});
     await db.collection("containerUpdates").doc(`${ref.id}_sender_confirm`).update({status: "failed"});
@@ -4338,6 +4344,143 @@ describe("the sender's confirmation at drop-off", () => {
       `${withPhoto.id}_receiver_received`, `${withPhoto.id}_sender_received`]);
     assert.equal((await withPhoto.get()).data().senderConfirmation, undefined);
     assert.equal((await withPhoto.get()).data().documentToken, undefined);
+  });
+
+  // Owner rule 2026-11-10: "both the sender and the receiver should get the
+  // pictures at all times" - with the confirmation switch off too.
+  it("heads the received message of the sender and the receiver with the photo, switch off", async () => {
+    const box = await newContainer();
+    const ref = await seededLine(box);
+    await sendReceived(box);
+    assert.deepEqual((await rowsOf(ref.id)).map((r) => r.id), [
+      `${ref.id}_receiver_received`, `${ref.id}_sender_received`]);
+    // No token yet: nothing asked for one when the rows were queued.
+    assert.equal((await ref.get()).data().documentToken, undefined);
+    for (const [role, to] of [["sender", "16465550100"], ["receiver", "224620000000"]]) {
+      fakeWhatsApp(OK);
+      await deliver(`${ref.id}_${role}_received`);
+      assert.equal(whatsappCalls.length, 1, role);
+      const [body] = whatsappCalls;
+      assert.equal(body.to, to);
+      assert.equal(body.template.name, "shipment_received_photo_2lang", role);
+      const line = (await ref.get()).data();
+      // Minted at send time, the first time a photo link is needed.
+      assert.match(line.documentToken, /^[A-Za-z0-9_-]{32}$/);
+      const [header, text, button] = body.template.components;
+      assert.match(header.parameters[0].image.link, new RegExp(
+          "^https://us-central1-demo-laawol-containers\\.cloudfunctions\\.net/" +
+          `parkingDocument\\?view=photo&t=${line.documentToken}` +
+          `&p=${encodeURIComponent(PHOTO).replace(/\\./g, "\\.")}&e=\\d+&s=[0-9a-f]{24}$`));
+      assert.equal(text.parameters.length, 8);
+      assert.equal(text.parameters[7].text, line.trackingCode);
+      assert.equal(button.sub_type, "url");
+      const row = (await db.collection("containerUpdates").doc(`${ref.id}_${role}_received`).get()).data();
+      assert.equal(row.status, "sent");
+      assert.equal(row.photoHeader, "attached");
+      // A message has one header: the photo went, so no receipt PDF.
+      assert.equal(row.receiptDocument, undefined);
+    }
+    assert.equal((await ref.get()).data().senderConfirmation, undefined);
+  });
+
+  it("sends the message without the photo at once while the photo template is in review", async () => {
+    const NOT_READY = {status: 404, body: {error: {code: 132001,
+      message: "Template name does not exist in the translation"}}};
+    const box = await newContainer();
+    const ref = await seededLine(box);
+    await sendReceived(box);
+    // The receiver: the photo template, then the plain one.
+    fakeWhatsApp(NOT_READY, OK);
+    await deliver(`${ref.id}_receiver_received`);
+    assert.deepEqual(whatsappCalls.map((body) => body.template.name),
+        ["shipment_received_photo_2lang", "shipment_received_2lang"]);
+    assert.equal(whatsappCalls[1].template.components.length, 2);
+    let row = (await db.collection("containerUpdates").doc(`${ref.id}_receiver_received`).get()).data();
+    assert.equal(row.status, "sent");
+    assert.equal(row.photoHeader, "fallback");
+    assert.equal(row.whatsappMessageId, "wamid.TEST");
+    // The sender: the photo, then the receipt, then the plain one.
+    fakeWhatsApp(NOT_READY, NOT_READY, OK);
+    await deliver(`${ref.id}_sender_received`);
+    assert.deepEqual(whatsappCalls.map((body) => body.template.name),
+        ["shipment_received_photo_2lang", "shipment_received_doc_2lang", "shipment_received_2lang"]);
+    row = (await db.collection("containerUpdates").doc(`${ref.id}_sender_received`).get()).data();
+    assert.equal(row.status, "sent");
+    assert.equal(row.photoHeader, "fallback");
+    assert.equal(row.receiptDocument, "fallback");
+    // Nothing approved at all: the row waits, and tries the photo first again.
+    const other = await seededLine(box);
+    await call("sendContainerCurrentStatus", {containerId: box});
+    fakeWhatsApp(NOT_READY, NOT_READY);
+    await deliver(`${other.id}_receiver_received`);
+    assert.equal(whatsappCalls.length, 2);
+    assert.equal((await db.collection("containerUpdates").doc(`${other.id}_receiver_received`).get()).get("status"), "waiting_for_template");
+    await db.collection("containerUpdates").doc(`${other.id}_receiver_received`).update({status: "queued"});
+    fakeWhatsApp(OK);
+    await deliver(`${other.id}_receiver_received`);
+    assert.deepEqual(whatsappCalls.map((body) => body.template.name), ["shipment_received_photo_2lang"]);
+    assert.equal((await db.collection("containerUpdates").doc(`${other.id}_receiver_received`).get()).get("photoHeader"), "attached");
+    // A number Meta refuses is not a template problem: no second try.
+    const third = await seededLine(box);
+    await call("sendContainerCurrentStatus", {containerId: box});
+    fakeWhatsApp({status: 400, body: {error: {code: 131026, message: "Message undeliverable"}}});
+    await deliver(`${third.id}_receiver_received`);
+    assert.equal(whatsappCalls.length, 1);
+    assert.equal((await db.collection("containerUpdates").doc(`${third.id}_receiver_received`).get()).get("status"), "failed");
+  });
+
+  it("leaves a package without a photo, and the later messages, as they were", async () => {
+    const box = await newContainer();
+    const ref = await seededLine(box, {photoPaths: []});
+    await sendReceived(box);
+    fakeWhatsApp(OK);
+    await deliver(`${ref.id}_receiver_received`);
+    assert.deepEqual(whatsappCalls.map((body) => body.template.name), ["shipment_received_2lang"]);
+    const row = (await db.collection("containerUpdates").doc(`${ref.id}_receiver_received`).get()).data();
+    assert.equal(row.photoHeader, undefined);
+    assert.equal((await ref.get()).data().documentToken, undefined);
+  });
+
+  // A sender who is their own receiver used to get the plain message and
+  // never the photo (CL-42NKSM, 2026-11-10): they are one person, messaged
+  // once as the receiver, and are now asked like any other sender.
+  it("asks a sender who is the receiver, on the receiver's row", async () => {
+    await switchOn();
+    const box = await newContainer();
+    const ref = await seededLine(box, {senderIsReceiver: true, receiverName: "Fatou Diallo", receiverPhone: "+16465550100"});
+    assert.equal((await sendReceived(box)).queued, 1);
+    const rows = await rowsOf(ref.id);
+    assert.deepEqual(rows.map((r) => [r.id, r.update, r.role, r.status]), [
+      [`${ref.id}_receiver_confirm`, "confirm", "receiver", "queued"]]);
+    const line = (await ref.get()).data();
+    assert.equal(line.senderConfirmation.status, "asked");
+    assert.match(line.documentToken, /^[A-Za-z0-9_-]{32}$/);
+    assert.equal(line.lastCustomerUpdate.update, "received");
+    fakeWhatsApp(OK);
+    await deliver(`${ref.id}_receiver_confirm`);
+    assert.equal(whatsappCalls.length, 1);
+    const [body] = whatsappCalls;
+    assert.equal(body.to, "16465550100");
+    assert.equal(body.template.name, "package_confirm_2lang");
+    assert.equal(body.template.components[0].parameters[0].type, "image");
+    assert.deepEqual(body.template.components.slice(2).map((part) => part.sub_type), ["quick_reply", "quick_reply"]);
+    assert.equal((await db.collection("containerUpdates").doc(`${ref.id}_receiver_confirm`).get()).get("status"), "sent");
+  });
+
+  it("keeps the plain message for a sender-receiver told before the rule", async () => {
+    await switchOn();
+    const box = await newContainer();
+    const ref = await seededLine(box, {senderIsReceiver: true, receiverName: "Fatou Diallo", receiverPhone: "+16465550100"});
+    // The package was registered before 2026-11-10: its one message went out
+    // as the plain "received".
+    await db.collection("containerUpdates").doc(`${ref.id}_receiver_received`).set({
+      businessId: BIZ, lineId: ref.id, containerId: box, update: "received", role: "receiver",
+      phone: "+16465550100", name: "Fatou Diallo", status: "sent", attempts: 1});
+    await sendReceived(box);
+    // Sent already, so nothing is queued again - and nothing is asked.
+    assert.deepEqual((await rowsOf(ref.id)).map((r) => [r.id, r.update, r.status]), [
+      [`${ref.id}_receiver_received`, "received", "sent"]]);
+    assert.equal((await ref.get()).data().senderConfirmation, undefined);
   });
 
   it("sends the pickup code to the receiver when the box is ready", async () => {

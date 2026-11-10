@@ -990,8 +990,9 @@ describe("Meta's delivery ticks on a line's latest update", () => {
 /* eslint-disable max-len */
 describe("the sender's confirmation and the pickup code (docs/AIR_PACKAGES.md)", () => {
   const {
-    askSenderToConfirm, rowUpdateFor, pickupCodeFor, pickupAddressWithCode,
-    confirmationPhotoLink,
+    askSenderToConfirm, confirmRoleFor, keepsPlainReceived, rowUpdateFor,
+    pickupCodeFor, pickupAddressWithCode,
+    confirmationPhotoLink, photoHeaderWanted, photoFallbackDecision,
     summaryUpdate, updateRank, withDeliveryTick,
   } = require("../container_updates");
   const {photoLink, PHOTO_LINK_MS} = require("../package_proof");
@@ -1014,7 +1015,104 @@ describe("the sender's confirmation and the pickup code (docs/AIR_PACKAGES.md)",
     // The sender switched off, or no sender (the business's own goods).
     assert.equal(askSenderToConfirm(on, proofLine(), recipientsForLine(proofLine({notifyCustomer: false}))), false);
     assert.equal(askSenderToConfirm(on, proofLine(), recipientsForLine(proofLine({ownerKind: "stock"}))), false);
-    assert.equal(askSenderToConfirm(on, proofLine(), recipientsForLine(proofLine({senderIsReceiver: true}))), false);
+  });
+
+  // Owner rule 2026-11-10: a sender who is their own receiver is one person,
+  // messaged once as the receiver. They are asked like any other sender.
+  it("asks the sender who is the receiver, on the receiver's row", () => {
+    const own = proofLine({senderIsReceiver: true});
+    const people = recipientsForLine(own);
+    assert.deepEqual(people.send.map((who) => who.role), ["receiver"]);
+    assert.equal(confirmRoleFor(on, own, people), "receiver");
+    assert.equal(askSenderToConfirm(on, own, people), true);
+    assert.equal(confirmRoleFor(on, proofLine(), recipientsForLine(proofLine())), "sender");
+    // The switch off, no photo, or the person switched off: nobody is asked.
+    assert.equal(confirmRoleFor({}, own, people), "");
+    assert.equal(confirmRoleFor(on, proofLine({senderIsReceiver: true, photoPaths: []}), people), "");
+    assert.equal(confirmRoleFor(on, own, recipientsForLine(proofLine({senderIsReceiver: true, notifyReceiver: false}))), "");
+    // A receiver who is somebody else is never asked: only the sender is.
+    assert.equal(confirmRoleFor(on, proofLine(), recipientsForLine(proofLine({notifyCustomer: false}))), "");
+    // The business's own goods have no sender to ask.
+    const stock = proofLine({ownerKind: "stock", senderIsReceiver: true});
+    assert.equal(confirmRoleFor(on, stock, recipientsForLine(stock)), "");
+    assert.equal(rowUpdateFor("received", "receiver", "receiver"), "confirm");
+    assert.equal(rowUpdateFor("received", "sender", "receiver"), "received");
+    assert.equal(rowUpdateFor("received", "receiver", "sender"), "received");
+    assert.equal(rowUpdateFor("received", "sender", "sender"), "confirm");
+    assert.equal(rowUpdateFor("received", "receiver", ""), "received");
+    assert.equal(rowUpdateFor("shipped", "receiver", "receiver"), "shipped");
+    assert.equal(containerUpdateMessageId("line-1", "receiver", rowUpdateFor("received", "receiver", "receiver")), "line-1_receiver_confirm");
+  });
+
+  it("keeps the plain message for a package told before the rule", () => {
+    // `_receiver_received` exists and `_receiver_confirm` does not: a repeat
+    // (Send again, a corrected number) stays the message they already got.
+    assert.equal(keepsPlainReceived(true, false), true);
+    assert.equal(keepsPlainReceived(false, false), false);
+    assert.equal(keepsPlainReceived(true, true), false);
+    assert.equal(keepsPlainReceived(false, true), false);
+    assert.equal(keepsPlainReceived(undefined, undefined), false);
+  });
+
+  // Owner rule 2026-11-10: with a drop-off photo, the sender and the
+  // receiver both get the picture on "package received".
+  it("puts the photo on the received message of the sender and the receiver", () => {
+    assert.equal(photoHeaderWanted({update: "received", templateSet: "bilingual"}), true);
+    for (const update of ["confirm", "shipped", "arrived", "delivered", ""]) {
+      assert.equal(photoHeaderWanted({update, templateSet: "bilingual"}), false, update);
+    }
+    assert.equal(photoHeaderWanted({update: "received", templateSet: "legacy"}), false);
+    const send = (role, extra = {}) => whatsappUpdateMessage({
+      phone: role === "sender" ? "+16465550100" : "+224620000000",
+      name: "Fatou Diallo", businessName: "Dala", line: proofLine(),
+      container: null, update: "received", trackingCode: "CL-K7M4P2", role,
+      documentBase: "https://laawoldigital.com/d", nowMs: 1000, ...extra,
+    });
+    const link = confirmationPhotoLink(proofLine(), "https://laawoldigital.com/d", 1000);
+    for (const role of ["sender", "receiver"]) {
+      const body = send(role);
+      assert.equal(body.template.name, "shipment_received_photo_2lang", role);
+      const [header, text, button] = body.template.components;
+      assert.deepEqual(header, {type: "header", parameters: [{type: "image", image: {link}}]});
+      // The words and the button are the plain message's.
+      const plain = send(role, {photoHeader: false});
+      assert.equal(plain.template.name, "shipment_received_2lang");
+      assert.deepEqual(text, plain.template.components[0]);
+      assert.deepEqual(button, plain.template.components[1]);
+    }
+  });
+
+  it("sends the photo before the receipt, and the receipt when there is no photo", () => {
+    const receipt = {link: "https://example.test/receipt.pdf", filename: "Receipt CL-K7M4P2.pdf"};
+    const send = (extra = {}) => whatsappUpdateMessage({
+      phone: "+16465550100", name: "Fatou Diallo", businessName: "Dala",
+      line: proofLine(), container: null, update: "received",
+      trackingCode: "CL-K7M4P2", role: "sender", receiptDocument: receipt,
+      documentBase: "https://laawoldigital.com/d", nowMs: 1000, ...extra,
+    });
+    // A message has one header: the photo wins.
+    assert.equal(send().template.name, "shipment_received_photo_2lang");
+    assert.equal(send().template.components[0].parameters[0].type, "image");
+    // The fallback when Meta cannot use the photo template.
+    assert.equal(send({photoHeader: false}).template.name, "shipment_received_doc_2lang");
+    assert.equal(send({photoHeader: false, receiptDocument: null}).template.name, "shipment_received_2lang");
+    // No photo, no token or no base to sign a link with: as before.
+    assert.equal(send({line: proofLine({photoPaths: []})}).template.name, "shipment_received_doc_2lang");
+    assert.equal(send({line: proofLine({documentToken: ""}), receiptDocument: null}).template.name, "shipment_received_2lang");
+    assert.equal(send({documentBase: "", receiptDocument: null}).template.name, "shipment_received_2lang");
+    // The legacy set and the other moments never take it.
+    assert.equal(send({templateSet: "legacy"}).template.name, "package_received");
+    assert.equal(send({update: "confirm"}).template.name, "package_confirm_2lang");
+  });
+
+  it("falls back when Meta cannot use the photo template, and only then", () => {
+    for (const code of [132001, 132015, 132016, 131052, 131053]) {
+      assert.equal(photoFallbackDecision(true, {ok: false, httpStatus: 404, errorCode: code}), true, `${code}`);
+    }
+    assert.equal(photoFallbackDecision(true, {ok: true}), false);
+    // A number Meta refuses is not a template problem.
+    assert.equal(photoFallbackDecision(true, {ok: false, httpStatus: 400, errorCode: 131026}), false);
+    assert.equal(photoFallbackDecision(false, {ok: false, httpStatus: 404, errorCode: 132001}), false);
   });
 
   it("turns the sender's received into confirm, and nothing else", () => {

@@ -35,6 +35,12 @@
  *                                  instead of it, and the plain template
  *                                  goes out when this one is not usable yet
  *                                  (docs/WHATSAPP_CONTAINER_UPDATES.md).
+ *   shipment_received_photo_2lang - `received` with the first drop-off
+ *                                  photo as an IMAGE header, for the sender
+ *                                  and the receiver alike, whenever the
+ *                                  line has a photo; it goes before the
+ *                                  receipt PDF (one header per message),
+ *                                  and falls back the same way.
  *   (A line with a pickupCode sends shipment_ready_pickup_2lang too: Meta's
  *   classifier rejects any template that carries a "code to show" as an
  *   authentication message, so the pickup number rides in the address
@@ -65,6 +71,11 @@ const TEMPLATE = Object.freeze({
   // header: the same body as SHIPMENT_RECEIVED_2LANG. Only ever picked by
   // templateMessage's `receiptDocument` flag, never by an update.
   SHIPMENT_RECEIVED_DOC_2LANG: "shipment_received_doc_2lang",
+  // `received` with the first drop-off photo as an IMAGE header, for the
+  // sender and the receiver alike: the same variables as
+  // SHIPMENT_RECEIVED_2LANG. Only ever picked by templateMessage's
+  // `photoHeader` flag, never by an update.
+  SHIPMENT_RECEIVED_PHOTO_2LANG: "shipment_received_photo_2lang",
   // Legacy, one language per message.
   PACKAGE_RECEIVED: "package_received",
   CONTAINER_DEPARTED: "container_departed",
@@ -83,6 +94,7 @@ const BILINGUAL_TEMPLATES = Object.freeze([
   TEMPLATE.SHIPMENT_DELIVERED_2LANG,
   TEMPLATE.PACKAGE_CONFIRM_2LANG,
   TEMPLATE.SHIPMENT_RECEIVED_DOC_2LANG,
+  TEMPLATE.SHIPMENT_RECEIVED_PHOTO_2LANG,
 ]);
 const LEGACY_TEMPLATES = Object.freeze([
   TEMPLATE.PACKAGE_RECEIVED,
@@ -236,6 +248,13 @@ const TEMPLATE_VARIABLES = Object.freeze({
     VARIABLE.BUSINESS, VARIABLE.WHAT_FR, VARIABLE.DESTINATION_FR,
     VARIABLE.TRACKING_CODE,
   ]),
+  // The same variables as shipment_received_2lang; the photo is the header.
+  [TEMPLATE.SHIPMENT_RECEIVED_PHOTO_2LANG]: Object.freeze([
+    VARIABLE.NAME,
+    VARIABLE.BUSINESS, VARIABLE.WHAT_EN, VARIABLE.DESTINATION_EN,
+    VARIABLE.BUSINESS, VARIABLE.WHAT_FR, VARIABLE.DESTINATION_FR,
+    VARIABLE.TRACKING_CODE,
+  ]),
   [TEMPLATE.SHIPMENT_DEPARTED_2LANG]: Object.freeze([
     VARIABLE.NAME,
     VARIABLE.WHAT_EN, VARIABLE.BUSINESS, VARIABLE.DESTINATION_EN,
@@ -318,6 +337,10 @@ const TEMPLATE_SHAPE = Object.freeze({
   // tracking button.
   [TEMPLATE.SHIPMENT_RECEIVED_DOC_2LANG]: Object.freeze({
     header: "document", buttons: "url", documentName: "Receipt.pdf",
+  }),
+  // The first drop-off photo (a 30-day signed link) and the tracking button.
+  [TEMPLATE.SHIPMENT_RECEIVED_PHOTO_2LANG]: Object.freeze({
+    header: "image", buttons: "url",
   }),
 });
 const QUICK_REPLY_PAYLOADS = Object.freeze(
@@ -637,11 +660,14 @@ function templateComponents(template, values, language) {
  * The whole /messages request body for one person and one update.
  *
  * @param {object} args {phone, update, language, values, templateSet?,
- *   receiptDocument?}. `receiptDocument: true` sends the sender's
+ *   photoHeader?, receiptDocument?}. `photoHeader: true` sends `received`
+ *   as shipment_received_photo_2lang (the drop-off photo header, from the
+ *   values' photoLink). `receiptDocument: true` sends the sender's
  *   `received` as shipment_received_doc_2lang (the receipt PDF header,
- *   from the values' documentLink / documentFilename); it applies to the
- *   bilingual set's `received` only - any other update, and the legacy
- *   set, ignore it.
+ *   from the values' documentLink / documentFilename). A message has one
+ *   header: the photo goes before the receipt. Both apply to the bilingual
+ *   set's `received` only - any other update, and the legacy set, ignore
+ *   them.
  * @return {object|null} The request body, or null for an update that has no
  *   template.
  */
@@ -649,10 +675,13 @@ function templateMessage(args) {
   const templateSet = args?.templateSet || whatsappTemplateSet();
   let template = templateForUpdate(args?.update, templateSet);
   if (!template) return null;
-  if (args?.receiptDocument === true &&
-      templateSet === TEMPLATE_SET.BILINGUAL &&
+  if (templateSet === TEMPLATE_SET.BILINGUAL &&
       template === TEMPLATE.SHIPMENT_RECEIVED_2LANG) {
-    template = TEMPLATE.SHIPMENT_RECEIVED_DOC_2LANG;
+    if (args?.photoHeader === true) {
+      template = TEMPLATE.SHIPMENT_RECEIVED_PHOTO_2LANG;
+    } else if (args?.receiptDocument === true) {
+      template = TEMPLATE.SHIPMENT_RECEIVED_DOC_2LANG;
+    }
   }
   const language = isBilingualTemplate(template) ?
     BILINGUAL_TEMPLATE_LANGUAGE : templateLanguage(args.language);

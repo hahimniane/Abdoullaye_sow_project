@@ -554,6 +554,25 @@ describe("the sender's confirmation and photos with a code (docs/AIR_PACKAGES.md
     assert.ok((await messagesOf(caseRef("laawol", P1))).some((m) => m.metadata?.senderProblem === true));
   });
 
+  // A sender who is their own receiver is asked on the receiver's row
+  // (owner rule 2026-11-10): the answer is matched by the message, not the role.
+  it("takes the answer of a sender who is the receiver, asked on the receiver's row", async () => {
+    await db.collection("containerLines").doc(LINE).set({businessId: BIZ, trackingCode: CODE,
+      kind: "other", description: "box", ownerKind: "customer", customerName: "Aissatou Bah",
+      customerPhone: P1, customerPhoneE164: P1, senderIsReceiver: true,
+      contents: [{label: "phones", quantity: 2}],
+      senderConfirmation: {status: "asked", askedAtMs: 1000}});
+    await db.collection("containerUpdates").doc(`${LINE}_receiver_confirm`).set({businessId: BIZ,
+      businessName: "Nensona", phone: P1, lineId: LINE, update: "confirm", role: "receiver",
+      status: "sent", whatsappMessageId: CONFIRM_WAMID, trackingCode: CODE});
+    await tap(P1, "confirm_ok", "OK ✓");
+    const line = (await db.collection("containerLines").doc(LINE).get()).data();
+    assert.equal(line.senderConfirmation.status, "confirmed");
+    const row = (await db.collection("containerUpdates").doc(`${LINE}_receiver_confirm`).get()).data();
+    assert.equal(row.confirmation, "confirmed");
+    assert.equal(lastSentText(), "Merci, c'est noté.");
+  });
+
   it("ignores a button that answers nothing of ours, or another number's message", async () => {
     await seedConfirm();
     // Replying to an unknown message: an ordinary inbound (text "OK ✓").

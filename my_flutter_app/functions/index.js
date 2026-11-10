@@ -448,7 +448,8 @@ const {
 const {
   UPDATE_STATUS: CONTAINER_UPDATE_STATUS,
   CONTAINER_UPDATE,
-  askSenderToConfirm,
+  confirmRoleFor,
+  keepsPlainReceived,
   rowUpdateFor,
   messageUpdateFor,
   WHATSAPP_SEND_LEASE_MS,
@@ -474,6 +475,8 @@ const {
   whatsappConfigured,
   destinationName: containerDestinationName,
   describeLine: describeContainerLine,
+  photoHeaderWanted,
+  photoFallbackDecision,
   receiptDocumentWanted,
   receiptDocumentFilename,
   receiptFallbackDecision,
@@ -24769,7 +24772,10 @@ async function resendPackageUpdate(db, {uid, businessId, lineId}) {
  * instead of `_sender_received`, the line's `senderConfirmation` becomes
  * `asked`, and the line gets the document token the photo link is signed
  * with; the receiver still gets `received`. A line without a photo sends
- * the plain `received` and its status stays `none`.
+ * the plain `received` and its status stays `none`. A customer who is their
+ * own receiver is messaged once, as the receiver: that row is the ask
+ * (`{lineId}_receiver_confirm`), unless they were already told the plain
+ * way (`_receiver_received` exists), which "Send again" then repeats.
  *
  * @param {object} db Firestore.
  * @param {object} args {lineRef, businessId, containerId, businessName,
@@ -24800,8 +24806,17 @@ async function queueContainerLineUpdate(db, args) {
     const send = recipients.send.filter((who) => !only || only.has(who.role));
     const skipped =
       recipients.skipped.filter((who) => !only || only.has(who.role));
-    const ask = update === CONTAINER_UPDATE.RECEIVED &&
-      askSenderToConfirm(business, line, recipients);
+    let ask = update === CONTAINER_UPDATE.RECEIVED ?
+      confirmRoleFor(business, line, recipients) : "";
+    if (ask === "receiver") {
+      // A customer who is their own receiver, told the plain way before
+      // the ask reached them: "Send again" repeats that message.
+      const [plain, asked] = await tx.getAll(
+          ...[CONTAINER_UPDATE.RECEIVED, CONTAINER_UPDATE.CONFIRM].map(
+              (kind) => db.collection("containerUpdates").doc(
+                  containerUpdateMessageId(lineRef.id, "receiver", kind))));
+      if (keepsPlainReceived(plain.exists, asked.exists)) ask = "";
+    }
     const rowRefs = send.map((who) => db.collection("containerUpdates")
         .doc(containerUpdateMessageId(lineRef.id, who.role,
             rowUpdateFor(update, who.role, ask))));
@@ -25294,52 +25309,89 @@ exports.deliverContainerCustomerUpdate = onDocumentWritten(
         role: String(row.role || ""),
         documentBase: whatsappPhotoBase(),
       };
-      // The sender's "package received" carries the package receipt PDF
-      // (the receiver's has no money in it, and never gets one). A receipt
-      // that cannot be drawn or kept never holds the message back: it goes
-      // out as the plain template.
-      const wantsReceipt = receiptDocumentWanted(
-          {update: row.update, role: row.role});
-      let receipt = null;
-      if (wantsReceipt) {
-        receipt = await buildPackageReceiptDocument(db, {
-          lineRef: lineDoc.ref, line, business, container, group,
-          businessId: String(row.businessId || line.businessId || ""),
-          businessName: row.businessName || business.name,
-        }).catch((error) => {
-          logger.warn("Package receipt not built; the plain message goes", {
-            lineId: lineDoc.id, error: String(error?.message || error)
-                .slice(0, 300)});
-          return null;
-        });
+      // Everyone's "package received" is headed by the drop-off photo when
+      // the line has one (owner 2026-11-10: the sender and the receiver
+      // both get the picture). The link is signed with the line's document
+      // token, minted here for a line that has none. A photo message Meta
+      // cannot use yet never holds the news back: it goes out without it.
+      let sent = null;
+      let photoState = "";
+      if (photoHeaderWanted({update: row.update}) &&
+          Array.isArray(line.photoPaths) && line.photoPaths.length > 0) {
+        if (!String(line.documentToken || "").trim()) {
+          line.documentToken = await ensureLineDocumentToken(db, lineDoc.ref)
+              .catch((error) => {
+                logger.warn("No document token for the photo; it is left out",
+                    {lineId: lineDoc.id, error: String(error?.message ||
+                      error).slice(0, 300)});
+                return "";
+              });
+        }
+        const withPhoto = whatsappUpdateMessage(messageArgs);
+        if (withPhoto?.template?.name ===
+            WHATSAPP_TEMPLATE.SHIPMENT_RECEIVED_PHOTO_2LANG) {
+          const attempt = await sendWhatsAppMessage(withPhoto);
+          if (photoFallbackDecision(true, attempt)) {
+            logger.info("Photo template not usable; sending without it", {
+              messageId: rowRef.id, errorCode: attempt.errorCode || 0,
+              error: attempt.error});
+            photoState = "fallback";
+          } else {
+            sent = attempt;
+            photoState = "attached";
+          }
+        }
       }
-      const message = whatsappUpdateMessage(
-          {...messageArgs, receiptDocument: receipt});
-      if (!message) {
-        await recordContainerUpdateAttempt(db, rowRef, row, {
-          status: CONTAINER_UPDATE_STATUS.FAILED, leaseUntilMs: 0,
-          error: row.update === CONTAINER_UPDATE.CONFIRM ?
-            "The package has no photo for the confirmation message." :
-            `No WhatsApp template for the update "${row.update}".`});
-        return;
-      }
-      let sent = await sendWhatsAppMessage(message);
-      let receiptState = wantsReceipt ?
-        (receipt ? "attached" : "unavailable") : "";
-      const withReceiptTemplate = message.template?.name ===
-        WHATSAPP_TEMPLATE.SHIPMENT_RECEIVED_DOC_2LANG;
-      if (receiptFallbackDecision(withReceiptTemplate, sent)) {
-        // The receipt template is not approved yet (or paused, or Meta
-        // could not fetch the PDF): the sender still hears it now, in the
-        // plain message, and this row says so.
-        logger.info("Receipt template not usable; sending the plain message", {
-          messageId: rowRef.id, errorCode: sent.errorCode || 0,
-          error: sent.error});
-        const plain = whatsappUpdateMessage(
-            {...messageArgs, receiptDocument: null});
-        if (plain) {
-          sent = await sendWhatsAppMessage(plain);
-          receiptState = "fallback";
+      // Without the photo, the sender's "package received" carries the
+      // package receipt PDF (the receiver's has no money in it, and never
+      // gets one). A receipt that cannot be drawn or kept never holds the
+      // message back: it goes out as the plain template.
+      let receiptState = "";
+      if (!sent) {
+        const wantsReceipt = receiptDocumentWanted(
+            {update: row.update, role: row.role});
+        let receipt = null;
+        if (wantsReceipt) {
+          receipt = await buildPackageReceiptDocument(db, {
+            lineRef: lineDoc.ref, line, business, container, group,
+            businessId: String(row.businessId || line.businessId || ""),
+            businessName: row.businessName || business.name,
+          }).catch((error) => {
+            logger.warn("Package receipt not built; the plain message goes", {
+              lineId: lineDoc.id, error: String(error?.message || error)
+                  .slice(0, 300)});
+            return null;
+          });
+        }
+        const message = whatsappUpdateMessage(
+            {...messageArgs, photoHeader: false, receiptDocument: receipt});
+        if (!message) {
+          await recordContainerUpdateAttempt(db, rowRef, row, {
+            status: CONTAINER_UPDATE_STATUS.FAILED, leaseUntilMs: 0,
+            error: row.update === CONTAINER_UPDATE.CONFIRM ?
+              "The package has no photo for the confirmation message." :
+              `No WhatsApp template for the update "${row.update}".`});
+          return;
+        }
+        sent = await sendWhatsAppMessage(message);
+        receiptState = wantsReceipt ?
+          (receipt ? "attached" : "unavailable") : "";
+        const withReceiptTemplate = message.template?.name ===
+          WHATSAPP_TEMPLATE.SHIPMENT_RECEIVED_DOC_2LANG;
+        if (receiptFallbackDecision(withReceiptTemplate, sent)) {
+          // The receipt template is not approved yet (or paused, or Meta
+          // could not fetch the PDF): the sender still hears it now, in
+          // the plain message, and this row says so.
+          logger.info(
+              "Receipt template not usable; sending the plain message", {
+                messageId: rowRef.id, errorCode: sent.errorCode || 0,
+                error: sent.error});
+          const plain = whatsappUpdateMessage(
+              {...messageArgs, photoHeader: false, receiptDocument: null});
+          if (plain) {
+            sent = await sendWhatsAppMessage(plain);
+            receiptState = "fallback";
+          }
         }
       }
       const status = statusAfterAttempt(
@@ -25349,6 +25401,7 @@ exports.deliverContainerCustomerUpdate = onDocumentWritten(
       await recordContainerUpdateAttempt(db, rowRef, row, {
         status,
         leaseUntilMs: 0,
+        ...(photoState ? {photoHeader: photoState} : {}),
         ...(receiptState ? {receiptDocument: receiptState} : {}),
         // Waiting for Meta to approve the template is not the message's
         // fault: the try does not count towards the attempt limit.

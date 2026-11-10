@@ -58,11 +58,12 @@ const buttonOf = (template, values = VALUES, language = "en") =>
       .find((part) => part.type === "button");
 const ALL_TEMPLATES = [...BILINGUAL_TEMPLATES, ...LEGACY_TEMPLATES];
 // Every template but the confirmation carries the tracking URL button.
-// The receipt template has a document header, so it is tested on its own
-// (below).
+// The receipt and the photo templates have a header, so they are tested on
+// their own (below).
+const SHAPED_TEMPLATES = ["package_confirm_2lang",
+  "shipment_received_doc_2lang", "shipment_received_photo_2lang"];
 const URL_BUTTON_TEMPLATES = ALL_TEMPLATES.filter((template) =>
-  !["package_confirm_2lang", "shipment_received_doc_2lang"]
-      .includes(template));
+  !SHAPED_TEMPLATES.includes(template));
 
 describe("which template each update sends", () => {
   it("names the bilingual and the legacy templates exactly", () => {
@@ -70,7 +71,7 @@ describe("which template each update sends", () => {
       "package_confirm_2lang",
       "shipment_delivered_2lang", "shipment_departed_2lang",
       "shipment_ready_pickup_2lang", "shipment_received_2lang",
-      "shipment_received_doc_2lang"]);
+      "shipment_received_doc_2lang", "shipment_received_photo_2lang"]);
     assert.deepEqual([...LEGACY_TEMPLATES].sort(), [
       "container_arrived", "container_departed", "package_received"]);
     assert.deepEqual(Object.values(TEMPLATE).sort(),
@@ -303,8 +304,7 @@ describe("the legacy variables, in the order Meta numbered them", () => {
 describe("every template", () => {
   it("has one URL button whose parameter is the code, except the " +
       "confirmation", () => {
-    assert.deepEqual(Object.keys(TEMPLATE_SHAPE),
-        ["package_confirm_2lang", "shipment_received_doc_2lang"]);
+    assert.deepEqual(Object.keys(TEMPLATE_SHAPE), SHAPED_TEMPLATES);
     for (const template of URL_BUTTON_TEMPLATES) {
       for (const language of TEMPLATE_LANGUAGES) {
         const parts = templateComponents(template, VALUES, language);
@@ -768,8 +768,7 @@ describe("the parking templates", () => {
 
   it("does not change what the container templates send", () => {
     assert.equal(TEMPLATE_VARIABLES.package_confirm_2lang.length, 8);
-    assert.deepEqual(Object.keys(TEMPLATE_SHAPE),
-        ["package_confirm_2lang", "shipment_received_doc_2lang"]);
+    assert.deepEqual(Object.keys(TEMPLATE_SHAPE), SHAPED_TEMPLATES);
   });
 });
 
@@ -828,6 +827,64 @@ describe("the package receipt template", () => {
       values: {...values, documentFilename: ""}});
     assert.equal(body.template.components[0].parameters[0].document.filename,
         "Receipt.pdf");
+  });
+});
+
+// "Package received" with the drop-off photo, for the sender and the
+// receiver (docs/AIR_PACKAGES.md §4.6 `shipment_received_photo_2lang`): the
+// same body as shipment_received_2lang under an IMAGE header, picked by the
+// `photoHeader` flag and never by an update of its own.
+describe("the package received photo template", () => {
+  const PHOTO = "https://us-central1-demo.cloudfunctions.net/parkingDocument" +
+    "?view=photo&t=tok&p=p&e=1&s=sig";
+  const values = {...VALUES, photoLink: PHOTO,
+    documentLink: "https://example.test/receipt.pdf",
+    documentFilename: "Receipt CL-K7M4P2.pdf"};
+  const send = (extra = {}) => templateMessage({update: "received",
+    phone: "+1 (646) 555-0100", language: "en", values, ...extra});
+
+  it("has the received body, an image header and the tracking button",
+      () => {
+        assert.deepEqual(TEMPLATE_VARIABLES.shipment_received_photo_2lang,
+            TEMPLATE_VARIABLES.shipment_received_2lang);
+        assert.deepEqual(TEMPLATE_SHAPE.shipment_received_photo_2lang,
+            {header: "image", buttons: "url"});
+        const body = send({photoHeader: true});
+        assert.equal(body.template.name, "shipment_received_photo_2lang");
+        assert.deepEqual(body.template.language, {code: "en"});
+        const [header, text, button] = body.template.components;
+        assert.deepEqual(header, {type: "header", parameters: [
+          {type: "image", image: {link: PHOTO}}]});
+        assert.deepEqual(text.parameters.map((p) => p.text), bodyOf(
+            "shipment_received_2lang", VALUES));
+        assert.equal(button.sub_type, "url");
+        assert.deepEqual(button.parameters,
+            [{type: "text", text: "CL-K7M4P2"}]);
+      });
+
+  it("goes before the receipt: a message has one header", () => {
+    assert.equal(send({photoHeader: true, receiptDocument: true})
+        .template.name, "shipment_received_photo_2lang");
+    assert.equal(send({photoHeader: false, receiptDocument: true})
+        .template.name, "shipment_received_doc_2lang");
+  });
+
+  it("is only picked on request, for the bilingual received", () => {
+    assert.equal(send().template.name, "shipment_received_2lang");
+    assert.ok(!Object.values(TEMPLATE_BY_UPDATE)
+        .includes("shipment_received_photo_2lang"));
+    assert.equal(send({update: "shipped", photoHeader: true})
+        .template.name, "shipment_departed_2lang");
+    assert.equal(send({update: "arrived", photoHeader: true})
+        .template.name, "shipment_ready_pickup_2lang");
+    assert.equal(send({update: "delivered", photoHeader: true})
+        .template.name, "shipment_delivered_2lang");
+    // The confirmation already carries the photo in its own header.
+    assert.equal(send({update: "confirm", photoHeader: true})
+        .template.name, "package_confirm_2lang");
+    // The legacy set has no photo template.
+    assert.equal(send({photoHeader: true, templateSet: "legacy"})
+        .template.name, "package_received");
   });
 });
 

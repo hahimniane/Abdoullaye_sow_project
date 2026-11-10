@@ -263,11 +263,35 @@ function recipientsForLine(line, {businessCountry = ""} = {}) {
 }
 
 /**
- * Whether the sender's `received` message is the confirmation ask instead
- * (docs/AIR_PACKAGES.md §4.4): the business switch is on, the sender is
- * someone we can message, and the line has a drop-off photo for the
- * template's header (a confirmation without a photo is not allowed, so such
- * a line sends the plain `received`).
+ * Who is asked to confirm the package, as the role they are messaged in
+ * (docs/AIR_PACKAGES.md §4.4): their `received` message is the confirmation
+ * ask instead. The business switch is on and the line has a drop-off photo
+ * for the template's header (a confirmation without a photo is not allowed,
+ * so such a line sends the plain `received`). The sender is asked when we
+ * can message them. A customer who is their own receiver is one person,
+ * messaged once as the receiver: they are still the sender, so that one
+ * message is the ask.
+ *
+ * @param {object} business The businesses record.
+ * @param {object} line A containerLines row.
+ * @param {{send: object[]}} recipients recipientsForLine of the line.
+ * @return {string} "sender", "receiver", or "" when nobody is asked.
+ */
+function confirmRoleFor(business, line, recipients) {
+  if (!proofSettingsOf(business).senderConfirm) return "";
+  const photos = Array.isArray(line?.photoPaths) ? line.photoPaths : [];
+  if (!text(photos[0], 300)) return "";
+  const people = Array.isArray(recipients?.send) ? recipients.send : [];
+  if (people.some((who) => who.role === "sender")) return "sender";
+  const ownReceiver = text(line?.ownerKind, 20) === "customer" &&
+    line?.senderIsReceiver === true;
+  return ownReceiver && people.some((who) => who.role === "receiver") ?
+    "receiver" : "";
+}
+
+/**
+ * Whether anyone's `received` message is the confirmation ask instead
+ * (confirmRoleFor says who).
  *
  * @param {object} business The businesses record.
  * @param {object} line A containerLines row.
@@ -275,25 +299,37 @@ function recipientsForLine(line, {businessCountry = ""} = {}) {
  * @return {boolean} True to queue `confirm` for the sender.
  */
 function askSenderToConfirm(business, line, recipients) {
-  if (!proofSettingsOf(business).senderConfirm) return false;
-  const people = Array.isArray(recipients?.send) ? recipients.send : [];
-  if (!people.some((who) => who.role === "sender")) return false;
-  const photos = Array.isArray(line?.photoPaths) ? line.photoPaths : [];
-  return Boolean(text(photos[0], 300));
+  return Boolean(confirmRoleFor(business, line, recipients));
 }
 
 /**
- * The update a row sends for one person: the sender's `received` becomes
- * `confirm` when the business asks senders to confirm.
+ * Whether a customer who is their own receiver keeps the plain `received`
+ * although they would now be asked to confirm: they were already told the
+ * plain way (before the ask reached them), so "Send again" and a corrected
+ * number repeat that message instead of adding a second, different one.
+ *
+ * @param {boolean} plainExists Their `received` row exists.
+ * @param {boolean} askExists Their `confirm` row exists.
+ * @return {boolean} True to keep `received`.
+ */
+function keepsPlainReceived(plainExists, askExists) {
+  return plainExists === true && askExists !== true;
+}
+
+/**
+ * The update a row sends for one person: `received` becomes `confirm` for
+ * the person the business asks to confirm.
  *
  * @param {string} update The update being queued.
  * @param {string} role "sender" or "receiver".
- * @param {boolean} ask askSenderToConfirm's answer.
+ * @param {(string|boolean)} ask confirmRoleFor's answer (the role that is
+ *   asked); `true` reads as the sender.
  * @return {string} The row's update.
  */
 function rowUpdateFor(update, role, ask) {
-  return ask && update === CONTAINER_UPDATE.RECEIVED && role === "sender" ?
-    CONTAINER_UPDATE.CONFIRM : text(update, 20);
+  const asked = ask === true ? "sender" : text(ask, 20);
+  return Boolean(asked) && update === CONTAINER_UPDATE.RECEIVED &&
+    text(role, 20) === asked ? CONTAINER_UPDATE.CONFIRM : text(update, 20);
 }
 
 /**
@@ -502,9 +538,12 @@ function deliveryDayText(value, language) {
  *   record (pickupCity, pickupAddress, pickupPhone); `business` the
  *   business record (its address and phone are the pickup fallbacks).
  *   `role` decides who hears the pickup code; `documentBase` is the /d
- *   endpoint the confirmation's photo link is served by. `receiptDocument`
- *   ({link, filename}) is the package receipt PDF: given for the sender's
- *   `received` it picks shipment_received_doc_2lang.
+ *   endpoint the photo link is served by: a `received` for a line with a
+ *   photo goes as shipment_received_photo_2lang, to the sender and the
+ *   receiver alike (`photoHeader: false` leaves the photo out, for the
+ *   fallback). `receiptDocument` ({link, filename}) is the package receipt
+ *   PDF: given for the sender's `received` without a photo header it picks
+ *   shipment_received_doc_2lang.
  * @return {object|null} The /messages request body, or null for an update
  *   that has no message (a confirmation without a photo or a document
  *   token among them: the template needs its image header).
@@ -525,14 +564,21 @@ function whatsappUpdateMessage(args) {
   if (text(args.update, 20) === CONTAINER_UPDATE.CONFIRM && !photo) {
     return null;
   }
+  // The drop-off photo heads everyone's `received` (the sender's and the
+  // receiver's); a message has one header, so the photo goes before the
+  // receipt PDF.
+  const withPhoto = args.photoHeader !== false && Boolean(photo) &&
+    photoHeaderWanted({update: args.update, templateSet: args.templateSet});
   const receiptLink = text(args.receiptDocument?.link, 1000);
-  const withReceipt = Boolean(receiptLink) && receiptDocumentWanted({
-    update: args.update, role: args.role, templateSet: args.templateSet});
+  const withReceipt = !withPhoto && Boolean(receiptLink) &&
+    receiptDocumentWanted({
+      update: args.update, role: args.role, templateSet: args.templateSet});
   return templateMessage({
     phone: text(args.phone, 40),
     update: args.update,
     language,
     templateSet: args.templateSet,
+    photoHeader: withPhoto,
     receiptDocument: withReceipt,
     values: {
       documentLink: withReceipt ? receiptLink : "",
@@ -589,6 +635,23 @@ function confirmationPhotoLink(line, documentBase, nowMs = Date.now()) {
   const base = text(documentBase, 300).replace(/\/+$/, "");
   if (!path || !token || !base) return "";
   return photoLink({base, token, path, expiresMs: nowMs + PHOTO_LINK_MS});
+}
+
+/**
+ * Whether a `received` message carries the drop-off photo as its header
+ * (shipment_received_photo_2lang): everyone's, the sender's and the
+ * receiver's alike, in the bilingual set - the legacy set has no such
+ * template. The line still needs a photo and a document token for the link
+ * (confirmationPhotoLink).
+ *
+ * @param {{update: string, templateSet: (string|undefined)}} args The row's
+ *   update and the template set (the switch when omitted).
+ * @return {boolean} True to head the message with the photo.
+ */
+function photoHeaderWanted(args) {
+  const set = args?.templateSet || whatsappTemplateSet();
+  return text(args?.update, 20) === CONTAINER_UPDATE.RECEIVED &&
+    set === TEMPLATE_SET.BILINGUAL;
 }
 
 /**
@@ -672,11 +735,11 @@ const TEMPLATE_NOT_READY_CODES = Object.freeze([132001]);
 // How long a row may wait for its template before it is given up on.
 const TEMPLATE_WAIT_MAX_MS = 14 * 24 * 60 * 60 * 1000;
 
-// Meta's answers that mean the receipt template cannot be used right now:
-// not found / still in review (TEMPLATE_NOT_READY_CODES), paused or disabled
-// for quality (132015, 132016), or its document header could not be fetched
-// (131052, 131053). The sender still hears about the package, in the plain
-// message.
+// Meta's answers that mean a `received` template with a header (the receipt
+// PDF's, the drop-off photo's) cannot be used right now: not found / still
+// in review (TEMPLATE_NOT_READY_CODES), paused or disabled for quality
+// (132015, 132016), or its header's file could not be fetched (131052,
+// 131053). The person still hears about the package, in the plain message.
 const RECEIPT_FALLBACK_CODES = Object.freeze([
   ...TEMPLATE_NOT_READY_CODES, 132015, 132016, 131052, 131053,
 ]);
@@ -693,6 +756,20 @@ const RECEIPT_FALLBACK_CODES = Object.freeze([
 function receiptFallbackDecision(attached, result) {
   if (attached !== true || result?.ok) return false;
   return RECEIPT_FALLBACK_CODES.includes(Number(result?.errorCode || 0));
+}
+
+/**
+ * Whether a refused photo message should go out again without the photo
+ * (as the receipt message for a sender, else the plain `received`) instead
+ * of waiting or failing. The same answers as the receipt's.
+ *
+ * @param {boolean} attached Whether the message that was sent carried the
+ *   photo template.
+ * @param {object} result The send's answer {ok, errorCode}.
+ * @return {boolean} True to send without the photo now.
+ */
+function photoFallbackDecision(attached, result) {
+  return receiptFallbackDecision(attached, result);
 }
 
 // Longer than one send can take (the fetch gives up at WHATSAPP_TIMEOUT_MS
@@ -1074,10 +1151,14 @@ module.exports = {
   describeLine,
   recipientsForLine,
   askSenderToConfirm,
+  confirmRoleFor,
+  keepsPlainReceived,
   rowUpdateFor,
   pickupAddressWithCode,
   pickupCodeFor,
   confirmationPhotoLink,
+  photoHeaderWanted,
+  photoFallbackDecision,
   receiptDocumentWanted,
   receiptDocumentFilename,
   receiptFallbackDecision,
