@@ -16572,6 +16572,24 @@ abstract class AppLocalizations {
   /// **'This container has lines on it. Remove them first, or leave it.'**
   String get ctrErrHasLines;
 
+  /// No description provided for @ctrErrUndoNotShipped.
+  ///
+  /// In en, this message translates to:
+  /// **'This container is still loading.'**
+  String get ctrErrUndoNotShipped;
+
+  /// No description provided for @ctrErrUndoHasCars.
+  ///
+  /// In en, this message translates to:
+  /// **'This container arrived with cars on it, so it can\'t go back to loading.'**
+  String get ctrErrUndoHasCars;
+
+  /// No description provided for @ctrErrUndoOwnerOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the owner can put a shipped container back to loading.'**
+  String get ctrErrUndoOwnerOnly;
+
   /// No description provided for @ctrErrNotFound.
   ///
   /// In en, this message translates to:

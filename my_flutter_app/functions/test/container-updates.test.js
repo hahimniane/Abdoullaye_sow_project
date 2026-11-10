@@ -750,7 +750,11 @@ describe("the server wiring", () => {
         const body = section("exports.setContainerStatus = onCall(",
             "\nexports.");
         assert.match(body, /applyContainerStatus\(db, ref, next/);
-        assert.match(body, /recordContainerEvent\(ref, `staff_\$\{next\}`/);
+        // A box put back to loading and shipped again writes a new
+        // moment, so its customers are told again.
+        assert.match(body, /undone > 0 \? `staff_\$\{next\}_\$\{undone\}` :/);
+        assert.match(body, /: `staff_\$\{next\}`;/);
+        assert.match(body, /recordContainerEvent\(ref, momentId/);
         assert.match(body, /customerUpdate: updateForContainerStatus\(next\)/);
       });
 

@@ -21585,7 +21585,8 @@ async function restampLinesShipMode(db, containerId, mode) {
 }
 
 exports.deleteContainer = onCall(
-    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    // Deleting an empty box is rare: one instance is plenty.
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, maxInstances: 1},
     async (request) => {
       const uid = requireAuth(request);
       const data = request.data || {};
@@ -24045,7 +24046,8 @@ exports.setContainerStatus = onCall(
  * part way leaves the box still shipped and the same request finishes it.
  */
 exports.undoContainerShipped = onCall(
-    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    // A rare, owner-only correction: one instance is plenty.
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, maxInstances: 1},
     async (request) => {
       const uid = requireAuth(request);
       const data = request.data || {};

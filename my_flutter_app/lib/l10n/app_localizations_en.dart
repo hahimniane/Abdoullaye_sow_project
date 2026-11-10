@@ -9406,6 +9406,17 @@ class AppLocalizationsEn extends AppLocalizations {
       'This container has lines on it. Remove them first, or leave it.';
 
   @override
+  String get ctrErrUndoNotShipped => 'This container is still loading.';
+
+  @override
+  String get ctrErrUndoHasCars =>
+      'This container arrived with cars on it, so it can\'t go back to loading.';
+
+  @override
+  String get ctrErrUndoOwnerOnly =>
+      'Only the owner can put a shipped container back to loading.';
+
+  @override
   String get ctrErrNotFound => 'Container not found.';
 
   @override

@@ -9560,6 +9560,17 @@ class AppLocalizationsFr extends AppLocalizations {
       'Ce conteneur contient des lignes. Retirez-les d\'abord, ou laissez-le.';
 
   @override
+  String get ctrErrUndoNotShipped => 'Ce conteneur est encore en chargement.';
+
+  @override
+  String get ctrErrUndoHasCars =>
+      'Ce conteneur est arrivé avec des voitures, il ne peut pas revenir en chargement.';
+
+  @override
+  String get ctrErrUndoOwnerOnly =>
+      'Seul le propriétaire peut remettre en chargement un conteneur expédié.';
+
+  @override
   String get ctrErrNotFound => 'Conteneur introuvable.';
 
   @override

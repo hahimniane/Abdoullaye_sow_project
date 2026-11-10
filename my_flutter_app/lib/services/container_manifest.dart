@@ -123,6 +123,10 @@ const containerRefusalCodes = <String>[
   'container_empty',
   'container_locked',
   'container_has_lines',
+  // A box shipped by mistake goes back to loading (owner only).
+  'container_undo_not_shipped',
+  'container_undo_has_cars',
+  'container_undo_owner_only',
   'container_not_found',
   'line_not_found',
   'line_kind_invalid',
