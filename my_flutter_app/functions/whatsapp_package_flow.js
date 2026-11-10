@@ -76,6 +76,13 @@ const T = Object.freeze({
       "For things sold by the pound, give the pounds (a suitcase is " +
       "about 50 lb).",
     count: "How many", pounds: "Weight (lb)",
+    // The same questions on a kilo price list
+    // (docs/SHIPPING_SIMPLE_HOME.md K4).
+    amountsKilos:
+      "For things sold by the kilo, give the kilos (a suitcase is about " +
+      "23 kg).",
+    kilos: "Weight (kg)", perKg: "/kg",
+    errQtyKg: "Check the amounts: 1 to 50 items, or kilos.",
     otherHelp: "Anything not in the list: the business sends its price.",
     askHelp: "The business sends its price",
     howTitle: "Drop-off or pickup", how: "How", bring: "I'll bring it",
@@ -135,6 +142,11 @@ const T = Object.freeze({
       "Pour ce qui se paie à la livre, donnez les livres (une valise fait " +
       "environ 50 lb).",
     count: "Combien", pounds: "Poids (lb)",
+    amountsKilos:
+      "Pour ce qui se paie au kilo, donnez les kilos (une valise fait " +
+      "environ 23 kg).",
+    kilos: "Poids (kg)", perKg: "/kg",
+    errQtyKg: "Vérifiez les quantités : 1 à 50 articles, ou des kilos.",
     otherHelp: "Ce qui n'est pas dans la liste : l'entreprise donne son prix.",
     askHelp: "L'entreprise donne son prix",
     howTitle: "Dépôt ou ramassage", how: "Comment", bring: "Je l'apporte",
@@ -558,13 +570,20 @@ function flowMessageBody({phone, flowId, flowToken, lang, businessName}) {
  * lists (same name and category = one line), the categories sold by the
  * pound, barrels by sea, and "something else" (asked separately).
  *
+ * Rates and included weights are shown in `unit`: the business's own on a
+ * single-business link (kilos for a kilo list), pounds when several
+ * businesses are compared - a kilo business's numbers are then converted so
+ * the "From" price is comparable.
+ *
  * @param {object[]} options The country's options.
  * @param {string} mode "sea" | "air".
  * @param {string} lang "en" | "fr".
+ * @param {string} [unit] "lb" (default) | "kg": the unit shown.
  * @return {object[]} [{id, kind, label, categoryId, title, description}].
  */
-function catalogFor(options, mode, lang) {
+function catalogFor(options, mode, lang, unit = "lb") {
   const w = words(lang);
+  const per = unit === "kg" ? w.perKg : w.perLb;
   const items = new Map();
   const perLb = new Map();
   let barrel = false;
@@ -576,10 +595,12 @@ function catalogFor(options, mode, lang) {
       const from = prev ? Math.min(prev.from, item.priceCents) :
         item.priceCents;
       items.set(key, {label: item.label, categoryId: item.categoryId, from,
-        includedLb: item.includedLb || 0});
+        includedLb: priceList.convertWeight(item.includedLb || 0,
+            priceList.unitOf(route), unit) || 0});
     }
-    for (const [categoryId, cents] of Object.entries(route?.perLbCents ||
+    for (const [categoryId, rate] of Object.entries(route?.perLbCents ||
         {})) {
+      const cents = priceList.rateIn(rate, priceList.unitOf(route), unit);
       const prev = perLb.get(categoryId);
       perLb.set(categoryId, prev === undefined ? cents : Math.min(prev,
           cents));
@@ -595,16 +616,15 @@ function catalogFor(options, mode, lang) {
     head.push({id: `i:${key}`, kind: "item", label: item.label,
       categoryId: item.categoryId, title: clip(item.label, 30),
       description: clip(`${w.from} ${money(item.from, lang)}` +
-        (item.includedLb ? ` (${w.upTo} ${item.includedLb} lb ${w.each})` :
-          ""), 300)});
+        (item.includedLb ? ` (${w.upTo} ${item.includedLb} ${unit} ` +
+          `${w.each})` : ""), 300)});
   }
   for (const category of priceList.CATEGORIES) {
     if (!perLb.has(category.id)) continue;
     head.push({id: `lb:${category.id}`, kind: "per_lb",
       label: category[lang === "fr" ? "fr" : "en"], categoryId: category.id,
-      title: clip(`${category[lang === "fr" ? "fr" : "en"]} (lb)`, 30),
-      description: `${w.from} ${money(perLb.get(category.id), lang)}` +
-        w.perLb});
+      title: clip(`${category[lang === "fr" ? "fr" : "en"]} (${unit})`, 30),
+      description: `${w.from} ${money(perLb.get(category.id), lang)}` + per});
   }
   if (barrel) {
     tail.push({id: "barrel", kind: "barrel", label: lang === "fr" ?
@@ -729,7 +749,10 @@ function dimsText(dims, lang) {
  */
 function lineText(line, lang) {
   const w = words(lang);
-  if (line.kind === "per_lb") return `${line.label} · ${line.amount} lb`;
+  if (line.kind === "per_lb") {
+    return `${line.label} · ${line.amount} ` +
+      `${line.unit === "kg" ? "kg" : "lb"}`;
+  }
   if (line.kind !== "box_size") return `${line.amount} × ${line.label}`;
   const key = lang === "fr" ? "fr" : "en";
   const name = priceList.BOX_LABELS[line.boxSize][key];
@@ -772,8 +795,11 @@ function piecesFor(lines, route, other, photoPaths = []) {
       pieces.push({priceItemId: match ? match.id : "i_not_listed",
         quantity: line.amount, label: line.label, kind: "other"});
     } else if (line.kind === "per_lb") {
+      // The number typed and the unit it was typed in: each business prices
+      // it in its own unit (pricePiece converts), so a pounds customer can
+      // compare a kilo business.
       pieces.push({categoryId: line.categoryId, weightLb: line.amount,
-        kind: "other"});
+        weightUnit: line.unit === "kg" ? "kg" : "lb", kind: "other"});
     } else if (line.kind === "box_size") {
       // Typed inches win over the size picked: the server derives it.
       pieces.push({kind: "box", boxSize: line.boxSize,
@@ -921,6 +947,23 @@ function labels(screen, lang) {
 }
 
 /**
+ * The unit the weight questions and prices are said in. On a business's own
+ * link (one business), that business's price list unit; when several
+ * businesses are compared the customer types pounds as before and each
+ * business converts to its own unit (docs/SHIPPING_SIMPLE_HOME.md K4).
+ *
+ * @param {boolean} single Whether the customer came through one business.
+ * @param {object[]} options The country's options.
+ * @return {string} "lb" | "kg".
+ */
+function flowWeightUnit(single, options) {
+  if (!single) return "lb";
+  const kilos = options.some((o) => ["sea", "air"].some((mode) =>
+    priceList.unitOf(o.routes?.[mode]) === "kg"));
+  return kilos ? "kg" : "lb";
+}
+
+/**
  * The Flow endpoint's brain.
  *
  * @param {object} deps {
@@ -1021,9 +1064,10 @@ function createPackageFlow(deps) {
       if (mode === "air" && !here.some((o) => o.shipsByAir)) {
         return fail(session, "WHERE", w.errAir);
       }
+      const weightUnit = flowWeightUnit(Boolean(business), here);
       const catalog = catalogFor(mode === "air" ?
-        here.filter((o) => o.shipsByAir) : here, mode, lang);
-      await deps.saveSession(token, {country, mode, catalog,
+        here.filter((o) => o.shipsByAir) : here, mode, lang, weightUnit);
+      await deps.saveSession(token, {country, mode, catalog, weightUnit,
         countryName: here[0].country.name});
       const items = catalog.length ? itemRows(catalog) :
         [{id: "none", title: w.something, description: w.otherHelp}];
@@ -1049,12 +1093,15 @@ function createPackageFlow(deps) {
       if (!picked.length) return howScreen({...session, other});
       const rows = picked.map((id) => catalog.find((c) => c.id === id));
       // The pounds hint only when something is sold by the pound.
+      // A session from before kilos has no unit: pounds.
+      const kilos = session.weightUnit === "kg";
       const amounts = {l_intro: rows.some((row) => row?.kind === "per_lb") ?
-        w.amountsPounds : w.amountsIntro};
+        (kilos ? w.amountsKilos : w.amountsPounds) : w.amountsIntro};
       for (let n = 1; n <= SLOTS; n++) {
         const row = catalog.find((c) => c.id === picked[n - 1]);
         amounts[`show_${n}`] = Boolean(row);
-        amounts[`l_qty_${n}`] = row?.kind === "per_lb" ? w.pounds : w.count;
+        amounts[`l_qty_${n}`] = row?.kind === "per_lb" ?
+          (kilos ? w.kilos : w.pounds) : w.count;
         amounts[`h_qty_${n}`] = row ? clip(row.title, 80) : "";
       }
       return screenOut(token, session, "AMOUNTS", amounts);
@@ -1063,6 +1110,7 @@ function createPackageFlow(deps) {
     if (screen === "AMOUNTS") {
       const catalog = Array.isArray(session.catalog) ? session.catalog : [];
       const picked = Array.isArray(session.picked) ? session.picked : [];
+      const unit = session.weightUnit === "kg" ? "kg" : "lb";
       const lines = [];
       for (let n = 1; n <= picked.length && n <= SLOTS; n++) {
         const row = catalog.find((c) => c.id === picked[n - 1]);
@@ -1070,13 +1118,18 @@ function createPackageFlow(deps) {
         const amount = Number(String(data[`qty_${n}`] ?? "")
             .replace(",", "."));
         const ok = row.kind === "per_lb" ?
-          amount >= 0.1 && amount <= priceList.LIMIT.WEIGHT_LB :
+          amount >= 0.1 && amount <= (unit === "kg" ?
+            priceList.LIMIT.WEIGHT_KG : priceList.LIMIT.WEIGHT_LB) :
           Number.isInteger(amount) && amount >= 1 &&
             amount <= priceList.LIMIT.QUANTITY;
-        if (!ok) return fail(session, "AMOUNTS", w.errQty);
+        if (!ok) {
+          return fail(session, "AMOUNTS",
+              unit === "kg" ? w.errQtyKg : w.errQty);
+        }
         lines.push({kind: row.kind, label: row.label,
           categoryId: row.categoryId, amount: row.kind === "per_lb" ?
             Math.round(amount * 10) / 10 : amount,
+          ...(row.kind === "per_lb" ? {unit} : {}),
           ...(row.kind === "box_size" ? {boxSize: row.boxSize,
             chosenSize: row.boxSize} : {})});
       }
@@ -1343,6 +1396,7 @@ module.exports = {
   openRequest,
   flowMessageBody,
   catalogFor,
+  flowWeightUnit,
   itemRows,
   parseDims,
   dimsText,

@@ -161,6 +161,38 @@ test("the observer path honors the opt-out for added nodes and text edits", () =
   assert.equal(typed.textContent, "Completed");
 });
 
+test("an attribute React rewrites on a mounted element is translated again", () => {
+  // The price list's unit choice swaps the placeholder in place: no node is
+  // added, so only an attribute mutation says it changed.
+  const input = h("input", { placeholder: "$ per lb" });
+  const kept = h("input", { "data-no-translate": "", placeholder: "$ per lb" });
+  h("div", {}, input, kept);
+  translateSubtree(input, "fr");
+  assert.equal(input.getAttribute("placeholder"), "$ par lb");
+
+  input.setAttribute("placeholder", "$ per kg");
+  kept.setAttribute("placeholder", "$ per kg");
+  translateMutations(
+    [
+      { type: "attributes", target: input, addedNodes: [] },
+      { type: "attributes", target: kept, addedNodes: [] },
+    ],
+    "fr",
+  );
+  assert.equal(input.getAttribute("placeholder"), "$ par kg");
+  assert.equal(kept.getAttribute("placeholder"), "$ per kg");
+
+  // Our own write comes back as a mutation when the guard is not in the
+  // way: translating it again changes nothing.
+  translateMutations([{ type: "attributes", target: input, addedNodes: [] }], "fr");
+  assert.equal(input.getAttribute("placeholder"), "$ par kg");
+});
+
+test("the page watches the attributes it translates", () => {
+  const source = readFileSync("src/lib/french-dom.ts", "utf8");
+  assert.match(source, /attributes: true,\s+attributeFilter: TRANSLATED_ATTRIBUTES/);
+});
+
 test("money in a translation is not read as a replacement pattern", () => {
   const cell = h("small", { "data-audit-summary": "" }, "  Paid $45.00 on the website  ");
   translateSubtree(h("div", {}, cell), "fr");

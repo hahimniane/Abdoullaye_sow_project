@@ -91,6 +91,41 @@ shared fixture `functions/test/fixtures/package-price-list-cases.json`
 
 Money is whole cents; weight is pounds rounded to a tenth.
 
+### Kilos (full contract: [SHIPPING_SIMPLE_HOME.md](SHIPPING_SIMPLE_HOME.md) K)
+
+A list is priced in ONE unit: `weightUnit` on `packagePriceLists/{businessId}`
+is `"lb"` or `"kg"` (a document with none is pounds; the server always writes
+it on a save, so a list that goes back to pounds overwrites `"kg"`). No
+migration.
+
+- A kilo list stamps `unit: "kg"` on every stored route; a pounds route has no
+  `unit` key (stored exactly as before). A kilo price snapshot on a request
+  piece (`item` or `per_lb`) carries `unit: "kg"` the same way.
+- The field names do not change: `perLbCents`, `includedLb`,
+  `excessPerLbCents` and a snapshot's `weightLb` are in the route's (snapshot's)
+  unit. The name "Lb" is legacy.
+- `validatePriceList` answers `{routes, weightUnit, errors}`; an unknown unit
+  is `unit_invalid`. `validateRoute(raw, mode, unit)` stamps the route.
+  The save callable treats a save that names no unit (an older app) as "no
+  change": a kilo list stays kilos. Every current client sends the unit.
+- A piece is `{categoryId, weightLb, weightUnit?}`: the number typed and the
+  unit it was typed in (absent = the route's). In the other unit it is
+  converted (1 kg = 2.20462 lb) and rounded to a tenth BEFORE pricing, never
+  below 0.1: $25/kg x 10 kg = $250.00 exactly; 10 lb on a kilo route is
+  4.5 kg. The limit is checked in the typed unit: 0.1-2,000 lb
+  (`weight_invalid`) or 0.1-900 kg (`weight_kg_invalid`). With no rate for the
+  category ("ask me") the weight stays as typed.
+- `counterPriceCents(price, weighed)`: `weighed` is in the snapshot's unit
+  (`weightIn(unitOf(price), line)` converts a line's weight first).
+- `repricePieces` carries the unit through: a request priced in pounds and
+  re-priced against a list that moved to kilos converts its stored weight (and
+  the open requests are re-priced when the list changes unit).
+- The shared fixture's `kilos` section pins all of it (lists, pieces, baskets,
+  counter, reprice, convert, weightIn, weights, weightText).
+- The compare page and the WhatsApp Flow ask in the business's unit on its own
+  link and in pounds when comparing; every business prices the number in its
+  own unit.
+
 ## 3. Data
 
 ### `packagePriceLists/{businessId}` (server writes only)
@@ -99,14 +134,15 @@ Money is whole cents; weight is pounds rounded to a tenth.
 | --- | --- | --- |
 | `businessId` | string | |
 | `routes` | `{[countryId]: {sea?: Route, air?: Route}}` | only priced modes are stored |
+| `weightUnit` | `"lb"` \| `"kg"` | the one unit the whole list is priced in (absent = `"lb"`); see Kilos above |
 | `needsCheck` | bool | true after a Laawol admin saved it, until the business taps Looks right |
 | `updatedAtMs`, `updatedByUid`, `updatedByName`, `updatedByLaawol` | | last save |
 | `checkedAtMs`, `checkedByName` | | last Looks right |
 | `history[]` | `{atMs, byUid, byName, byLaawol, action: "saved" \| "checked", countries: string[]}` | newest last, capped at 50 |
 | `createdAt`, `updatedAt` | Timestamp | |
 
-`Route = {items: [{id, categoryId, label, priceCents, includedLb}],
-perLbCents: {[categoryId]: cents}, departure: {weekdays: ["mon".."sun"],
+`Route = {unit?: "kg" (kilo lists only), items: [{id, categoryId, label,
+priceCents, includedLb}], perLbCents: {[categoryId]: cents}, departure: {weekdays: ["mon".."sun"],
 everyWeeks: 1..8, anchorDate: "YYYY-MM-DD" | ""} | null}`. Item ids are
 `i_<slug of the name>`; a saved id is kept when the name changes so open
 requests still find it.

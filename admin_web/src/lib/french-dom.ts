@@ -8024,6 +8024,42 @@ Object.assign(ATTRIBUTE_TRANSLATIONS, {
   "e.g. Phone": "ex. Téléphone",
   "$ per lb": "$ par lb",
 });
+// ==== Kilos (docs/SHIPPING_SIMPLE_HOME.md K) START ====
+Object.assign(TEXT_TRANSLATIONS, {
+  // The price list editor: one unit for the whole list.
+  "Price list unit": "Unité de la liste de prix",
+  "Price per kilo": "Prix par kilo",
+  "Covers up to (kg)": "Couvre jusqu’à (kg)",
+  "A fixed price for each item. “Covers up to” is optional: leave it empty when the price is the same at any weight. The extra kilos are charged at the item's category rate per kilo below, else the General goods rate. With neither, you type the price at the counter.":
+    "Un prix fixe pour chaque article. « Couvre jusqu’à » est facultatif : laissez-le vide quand le prix est le même quel que soit le poids. Les kilos en plus sont facturés au tarif par kilo de la catégorie de l’article ci-dessous, sinon au tarif des Marchandises générales. Sans l’un ni l’autre, vous saisissez le prix au comptoir.",
+  "Your prices are now per kg. The amounts did not change. Check them.":
+    "Vos prix sont maintenant au kg. Les montants n’ont pas changé. Vérifiez-les.",
+  "Your prices are now per lb. The amounts did not change. Check them.":
+    "Vos prix sont maintenant à la livre (lb). Les montants n’ont pas changé. Vérifiez-les.",
+  // Refusals on a kilo list or weight.
+  "Enter the weight in kilos (0.1 to 900).": "Saisissez le poids en kilos (0,1 à 900).",
+  "Choose pounds or kilos.": "Choisissez livres ou kilos.",
+  "The weight a price covers must be 0 to 500 kg.": "Le poids couvert par un prix doit être de 0 à 500 kg.",
+  "Enter a price per kilo between $0.01 and $1,000.": "Saisissez un prix par kilo entre 0,01 $ et 1 000 $.",
+  "Enter a weight between 0.1 and 900 kg.": "Saisissez un poids entre 0,1 et 900 kg.",
+  // The weight on a package, and at the counter.
+  "Weight (kg)": "Poids (kg)",
+  "Weight unit": "Unité de poids",
+  "No price per kilo for the extra weight. Type the price.":
+    "Pas de prix par kilo pour le poids en plus. Saisissez le prix.",
+  // The customer's form.
+  "Priced by the kilo": "Au prix par kilo",
+  "Weight in kilos": "Poids en kilos",
+  "Pounds (lb)": "Livres (lb)",
+});
+Object.assign(ATTRIBUTE_TRANSLATIONS, {
+  "$ per kg": "$ par kg",
+  "$ per pound": "$ par livre",
+  "$ per kilo": "$ par kilo",
+  "Weigh in pounds": "Peser en livres",
+  "Weigh in kilos": "Peser en kilos",
+});
+// ==== Kilos END ====
 // ==== Box sizes, the box designer and Pay now (docs/PACKAGE_BOX_SIZES_PAY_NOW.md) START ====
 Object.assign(TEXT_TRANSLATIONS, {
   // The box designer.
@@ -8427,6 +8463,16 @@ export function translateMutations(mutations: ArrayLike<MutationLike>, lang: str
     if (mutation.type === "characterData" && !isInsideOptOut(mutation.target)) {
       translateTextNode(mutation.target, lang);
     }
+    // React rewrote a placeholder / title / aria-label on an element that
+    // stays mounted (a label that follows a choice, e.g. "$ per kg"): the
+    // new value is English again.
+    if (
+      mutation.type === "attributes" &&
+      mutation.target.nodeType === ELEMENT_NODE &&
+      !isInsideOptOut(mutation.target)
+    ) {
+      translateAttributes(mutation.target as DomElement, lang);
+    }
   }
 }
 
@@ -8466,6 +8512,10 @@ export function startDomTranslation(): () => void {
     childList: true,
     characterData: true,
     subtree: true,
+    // Only the attributes we translate; our own writes to them are dropped
+    // by runGuarded (takeRecords), so this cannot feed itself.
+    attributes: true,
+    attributeFilter: TRANSLATED_ATTRIBUTES,
   });
   // The tab title too: consoles set it in an effect and again on the next
   // frame (lib/document-title.ts), often after the last body mutation, which

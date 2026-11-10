@@ -14,6 +14,7 @@ import {
   buildCatalog,
   businessesCountText,
   canReschedule,
+  catalogWeightUnit,
   chooseCountry,
   chooseHandoff,
   chooseMode,
@@ -45,6 +46,7 @@ import {
   sentView,
   setBarrelQuantity,
   setItemQuantity,
+  setWeightUnit,
   submitPayload,
   totalText,
   typeWeight,
@@ -203,7 +205,7 @@ test("quantities, barrels and weights build the basket the server will price", (
 
 const BASKET: BasketLine[] = [
   { key: "a", type: "item", catalogKey: "electronics|phone", label: "Phone", categoryId: "electronics", quantity: 2 },
-  { key: "b", type: "weight", categoryId: "clothing", weightLb: "50", sizePreset: "suitcase" },
+  { key: "b", type: "weight", categoryId: "clothing", weightLb: "50", weightUnit: "lb", sizePreset: "suitcase" },
   { key: "c", type: "barrel", quantity: 1 },
   { key: "d", type: "other", kind: "box", description: " Generator ", photos: [
     { key: "p1", path: "packageRequestPhotos/dala/u/a.jpg", previewUrl: "", status: "ready" },
@@ -215,7 +217,7 @@ const BASKET: BasketLine[] = [
 test("each business is asked for its own item ids; what it does not price waits for a staff estimate", () => {
   assert.deepEqual(piecesFor(BASKET, DALA, "sea"), [
     { priceItemId: "i_phone", quantity: 2, label: "Phone" },
-    { categoryId: "clothing", weightLb: 50, sizePreset: "suitcase" },
+    { categoryId: "clothing", weightLb: 50, weightUnit: "lb", sizePreset: "suitcase" },
     { kind: "barrel" },
     { kind: "box", description: "Generator", photoPaths: ["packageRequestPhotos/dala/u/a.jpg"] },
   ]);
@@ -489,7 +491,7 @@ test("the payload carries the mode, channel, source, window and priced pieces", 
     receiver: { name: "Mariama", phoneE164: "+224620000000" },
     pieces: [
       { priceItemId: "i_phone", quantity: 2, label: "Phone" },
-      { categoryId: "clothing", weightLb: 50, sizePreset: "suitcase" },
+      { categoryId: "clothing", weightLb: 50, weightUnit: "lb", sizePreset: "suitcase" },
       { kind: "barrel" },
       { kind: "box", description: "Generator", photoPaths: ["packageRequestPhotos/dala/u/a.jpg"] },
     ],
@@ -590,4 +592,87 @@ test("every sentence the new flow builds from data has its French", () => {
   // The words built in lib (not in JSX) are bilingual here; check a few shapes differ between languages.
   assert.notEqual(totalText({ allPriced: true, totalCents: 100, pricedCents: 100, piecesToQuote: 0, pickupToQuote: false, weighsAtCounter: true }, "en"), totalText({ allPriced: true, totalCents: 100, pricedCents: 100, piecesToQuote: 0, pickupToQuote: false, weighsAtCounter: true }, "fr"));
   assert.notEqual(departureText({ dateKey: "2026-11-07", source: "planned", approximate: false }, "sea", "en"), departureText({ dateKey: "2026-11-07", source: "planned", approximate: false }, "sea", "fr"));
+});
+
+// Kilos (docs/SHIPPING_SIMPLE_HOME.md K2/K4).
+const KILO_SHOP = option({
+  businessId: "kilo",
+  businessName: "Kilo Express",
+  routes: {
+    sea: { items: [PHONE_A], perLbCents: { clothing: 700, general: 2500 }, unit: "kg" },
+    air: null,
+  },
+});
+
+test("kilos: the unit follows a business's own link, pounds when comparing", () => {
+  assert.equal(catalogWeightUnit([KILO_SHOP], "kilo"), "kg");
+  assert.equal(catalogWeightUnit([KILO_SHOP, DALA], ""), "lb");
+  assert.equal(catalogWeightUnit([DALA], "dala"), "lb");
+  assert.equal(catalogWeightUnit([], "kilo"), "lb");
+});
+
+test("kilos: included weights are shown in the catalog's unit", () => {
+  const kilos = buildCatalog([KILO_SHOP], "sea", "kg");
+  assert.equal(kilos.items[0].maxIncludedLb, 2);
+  assert.equal(includedLbText(kilos.items[0], "en", "kg"), "up to 2 kg each");
+  assert.equal(includedLbText(kilos.items[0], "fr", "kg"), "jusqu’à 2 kg chacun");
+  // Compared in pounds, the kilo shop's 2 kg is 4.4 lb beside Dala's 2 lb.
+  const lbs = buildCatalog([KILO_SHOP, DALA], "sea", "lb");
+  const phone = lbs.items.find((i) => i.key === "electronics|phone");
+  assert.deepEqual([phone?.minIncludedLb, phone?.maxIncludedLb], [2, 4.4]);
+  assert.equal(includedLbText(phone as never, "en"), "up to 2–4.4 lb each");
+  assert.equal(includedLbText(phone as never, "fr"), "jusqu’à 2–4,4 lb chacun");
+});
+
+test("kilos: a weight line carries its unit, presets and the lb/kg switch", () => {
+  const lines = addWeightLine([], "clothing", "kg");
+  const line = lines[0] as Extract<BasketLine, { type: "weight" }>;
+  assert.equal(line.weightUnit, "kg");
+  assert.deepEqual(itemsProblems(lines), ["weight_kg_invalid"]);
+  const suitcase = applySizePreset(line, "suitcase");
+  assert.equal(suitcase.weightLb, "23");
+  assert.equal(typeWeight(suitcase, "23").sizePreset, "suitcase");
+  assert.equal(typeWeight(suitcase, "50").sizePreset, "");
+  // The limits are 900 kg and 2,000 lb.
+  assert.equal(readWeight("900", "kg"), 900);
+  assert.equal(readWeight("901", "kg"), null);
+  assert.equal(readWeight("901", "lb"), 901);
+  assert.equal(readWeight("10,5", "kg"), 10.5);
+  // Switching to pounds keeps the size button's meaning; a typed number is converted.
+  assert.equal(setWeightUnit(suitcase, "lb").weightLb, "50");
+  assert.equal(setWeightUnit(suitcase, "lb").sizePreset, "suitcase");
+  const typed = typeWeight(line, "10");
+  assert.equal(setWeightUnit(typed, "lb").weightLb, "22");
+  assert.equal(setWeightUnit(typeWeight(line, "abc"), "lb").weightLb, "abc");
+  assert.equal(setWeightUnit(typed, "kg"), typed);
+});
+
+test("kilos: each business prices the number in its own unit, and the unit is sent", () => {
+  const inPounds: BasketLine[] = [{ key: "w", type: "weight", categoryId: "clothing", weightLb: "50", weightUnit: "lb", sizePreset: "" }];
+  // 50 lb = 22.7 kg x $7 at the kilo shop; 50 lb x $6 at Dala.
+  assert.equal(basketFor(KILO_SHOP, inPounds, "sea").totalCents, 15890);
+  assert.equal(basketFor(DALA, inPounds, "sea").totalCents, 30000);
+  const inKilos: BasketLine[] = [{ key: "w", type: "weight", categoryId: "clothing", weightLb: "10", weightUnit: "kg", sizePreset: "" }];
+  assert.equal(basketFor(KILO_SHOP, inKilos, "sea").totalCents, 7000);
+  // 10 kg is 22 lb at Dala's $6 a pound.
+  assert.equal(basketFor(DALA, inKilos, "sea").totalCents, 13200);
+  assert.deepEqual(piecesFor(inKilos, KILO_SHOP, "sea"), [{ categoryId: "clothing", weightLb: 10, weightUnit: "kg" }]);
+  assert.deepEqual(piecesFor(inPounds, KILO_SHOP, "sea"), [{ categoryId: "clothing", weightLb: 50, weightUnit: "lb" }]);
+});
+
+test("kilos: how a price is explained", () => {
+  const kilo = { source: "per_lb" as const, label: "Clothes", quantity: 1, unitCents: null, includedLb: 0, perLbCents: 700, weightLb: 10, unit: "kg" as const };
+  assert.equal(priceExplanation(kilo, "en"), "$7.00 per kg × 10 kg, weighed at drop-off");
+  assert.equal(priceExplanation(kilo, "fr"), "7,00 $ le kg × 10 kg, pesé au dépôt");
+  assert.equal(priceExplanation({ ...kilo, weightLb: 4.5 }, "fr"), "7,00 $ le kg × 4,5 kg, pesé au dépôt");
+  const item = { source: "item" as const, label: "Phone", quantity: 2, unitCents: 4000, includedLb: 2, perLbCents: null, weightLb: null, unit: "kg" as const };
+  assert.equal(priceExplanation(item, "en"), "2 × $40.00 · up to 2 kg each, extra weight is charged at the counter");
+  assert.equal(priceExplanation(item, "fr"), "2 × 40,00 $ · jusqu’à 2 kg chacun, le surplus est facturé au comptoir");
+  assert.equal(listPriceCents(kilo), 7000);
+});
+
+test("kilos: the error codes have messages and a step", () => {
+  assert.ok(REQUEST_ERROR_MESSAGES.weight_kg_invalid);
+  assert.ok(REQUEST_ERROR_MESSAGES.unit_invalid);
+  assert.match(REQUEST_ERROR_MESSAGES.weight_kg_invalid, /kilos/);
 });

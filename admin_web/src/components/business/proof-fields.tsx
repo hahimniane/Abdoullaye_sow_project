@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { Camera, Plus, RefreshCw, X } from "lucide-react";
 
+import { useBusinessWeightUnit } from "@/components/business/use-business-weight-unit";
 import { useStoragePhotoUrls } from "@/components/business/proof-ticks";
 import { uploadPackagePhoto } from "@/lib/package-photo";
 import {
@@ -92,7 +93,13 @@ export function ProofFields({
     for (const url of previews.current) URL.revokeObjectURL(url);
   }, []);
 
+  // The weight is typed in the business's unit (its price list's), or the
+  // one picked here while it has no list; a weight already typed - or a
+  // stored one - keeps the unit it was weighed in.
+  const businessUnit = useBusinessWeightUnit(businessId);
+  const unit = draft.weightLb.trim() ? draft.weightUnit : businessUnit.unit;
   const problems = showErrors ? proofDraftProblems(draft, { photosRequired }) : [];
+  const weightProblem = problems.find((p) => p === "weight_invalid" || p === "weight_kg_invalid");
   const rowProblems = showErrors ? contentDraftRowProblems(draft) : [];
   const storedPaths = draft.photos.filter((photo) => photo.status === "ready" && photo.path && !photo.previewUrl).map((photo) => photo.path);
   const urls = useStoragePhotoUrls(storedPaths);
@@ -246,18 +253,43 @@ export function ProofFields({
       </div>
 
       <div className="lst-form-grid prf-measures">
-        <label className="lst-field">
-          <span>Weight (lb)</span>
+        <div className="lst-field prf-weight">
+          <label htmlFor={`${id}-weight`}>
+            <span>{unit === "kg" ? "Weight (kg)" : "Weight (lb)"}</span>
+          </label>
           <input
-            aria-invalid={problems.includes("weight_invalid") ? true : undefined}
-            disabled={disabled}
+            aria-invalid={weightProblem ? true : undefined}
+            // Closed until the business's unit is known: a weight typed
+            // sooner would keep the wrong unit.
+            disabled={disabled || !businessUnit.settled}
+            id={`${id}-weight`}
             inputMode="decimal"
-            onChange={(e) => patch({ weightLb: e.target.value })}
+            onChange={(e) => patch({ weightLb: e.target.value, weightUnit: unit })}
             placeholder={lang === "fr" ? "0,0" : "0.0"}
             value={draft.weightLb}
           />
-          {problems.includes("weight_invalid") && problemText("weight_invalid")}
-        </label>
+          {businessUnit.settled && !businessUnit.fromList && (
+            <div className="prf-unit" role="group" aria-label="Weight unit">
+              {(["lb", "kg"] as const).map((choice) => (
+                <button
+                  aria-pressed={unit === choice}
+                  className={unit === choice ? "active" : ""}
+                  disabled={disabled}
+                  key={choice}
+                  onClick={() => {
+                    businessUnit.choose(choice);
+                    patch({ weightUnit: choice });
+                  }}
+                  title={choice === "kg" ? "Weigh in kilos" : "Weigh in pounds"}
+                  type="button"
+                >
+                  {choice}
+                </button>
+              ))}
+            </div>
+          )}
+          {weightProblem && problemText(weightProblem)}
+        </div>
         <label className="lst-field">
           <span>Declared value ($)</span>
           <input

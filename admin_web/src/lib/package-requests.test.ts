@@ -494,7 +494,7 @@ test("every request screen string has a French translation", () => {
     for (const value of Object.values(table)) strings.add(value);
   }
   // Names, codes and units that read the same in both languages.
-  const same = new Set(["Total", "Containers", "History", "Pickup", "Estimate", "Expected", "Received", "Box", "Other", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "PM", "UTC", "your-business", "R-K7M4P", "Reçu", "Saving...", "Sending...", "Loading…"]);
+  const same = new Set(["Total", "Containers", "History", "Pickup", "Estimate", "Expected", "Received", "Box", "Other", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "PM", "UTC", "your-business", "R-K7M4P", "Reçu", "Saving...", "Sending...", "Loading…", "Kilos (kg)"]);
   const missing = [...strings].filter((value) => !same.has(value) && translateValue(value, "fr") === value);
   assert.deepEqual(missing, []);
 });

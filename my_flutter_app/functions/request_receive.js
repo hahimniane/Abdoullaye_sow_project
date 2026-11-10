@@ -234,7 +234,8 @@ function receivedTotalCents(pieces, pickupFeeCents = 0) {
  *   default: the request's at their prefilled prices), pickupFeeCents
  *   (default: the prefilled one), payOnArrival, staffUid, receivedAt (a
  *   Timestamp or server-timestamp sentinel), photoPaths, contents,
- *   weightLb, declaredValueCents (the proof fields staff typed), shipMode
+ *   weightLb, weightKg, declaredValueCents (the proof fields staff typed;
+ *   kilos win when given), shipMode
  *   ("Ships by": "air" or "sea", sea when missing)}.
  * @return {object} The line, ready to write (the caller adds trackingCode,
  *   paidCents, createdAt, updatedAt and businessId).
@@ -271,6 +272,7 @@ function requestLineRecord(request, args) {
     photoPaths: args.photoPaths,
     contents: args.contents,
     weightLb: args.weightLb,
+    weightKg: args.weightKg,
     declaredValueCents: args.declaredValueCents,
     shipMode: args.shipMode,
   }, {

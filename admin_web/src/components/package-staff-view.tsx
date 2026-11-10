@@ -341,7 +341,7 @@ export function PackageStaffView({
               <b>Not listed</b>
             )}
           </div>
-          <div><span>Weight</span>{weightLb !== null ? <b data-no-translate>{weightText(weightLb, lang)}</b> : <b>Not weighed</b>}</div>
+          <div><span>Weight</span>{weightLb !== null ? <b data-no-translate>{weightText(line, lang)}</b> : <b>Not weighed</b>}</div>
           {/* The declared value is money on the package: never for a deliveries-only person. */}
           {access.canSeeMoney && (
             <div><span>Declared value</span>{declaredValueCents !== null ? <b data-no-translate>{moneyText(declaredValueCents, lang)}</b> : <b>Not declared</b>}</div>

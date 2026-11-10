@@ -1721,7 +1721,9 @@ describe("package proof fields", () => {
     assert.deepEqual(validateContainerLineEdit(current, asked, false), []);
     const next = containerLineEditTarget(current, asked, false);
     const changes = containerLineEditChanges(current, next);
-    assert.deepEqual(changes, [...LINE_PROOF_FIELDS]);
+    // Pounds typed on a line weighed in pounds: no kilos to change.
+    assert.deepEqual(changes,
+        LINE_PROOF_FIELDS.filter((key) => key !== "weightKg"));
     for (const status of ["loading", "shipped", "arrived"]) {
       assert.equal(containerLineEditRefusal({status}, changes), null,
           status);
@@ -1750,6 +1752,139 @@ describe("package proof fields", () => {
 
   it("names the loading warning", () => {
     assert.match(CONTAINER_MESSAGES.sender_problem, /reported a problem/);
+  });
+});
+
+// Kilos on a package (docs/SHIPPING_SIMPLE_HOME.md K3): `weightLb` is always
+// pounds, `weightKg` is what staff typed.
+describe("a package's weight in kilos", () => {
+  const manifest = require("../container_manifest");
+  const dropped = (extra = {}) => ({kind: "barrels", quantity: 3,
+    priceCents: 9000, ownerKind: "customer", customerName: "Fatou Diallo",
+    customerPhone: "+16465550100", receiverName: "Mariama Bah",
+    receiverPhone: "+224620000000", destinationCountryId: "gn",
+    destinationCountryName: "Guinea", ...extra});
+  const stored = (extra = {}) => ({businessId: "biz",
+    ...containerLineRecord(dropped(extra),
+        {containerId: "", containerStatus: LINE_STATUS_WAITING})});
+  const edit = (current, asked) => {
+    assert.deepEqual(validateContainerLineEdit(current, asked, false), []);
+    const next = containerLineEditTarget(current, asked, false);
+    return {next, changes: containerLineEditChanges(current, next)};
+  };
+
+  it("a new line with kilos stores them and the pounds they make", () => {
+    const line = containerLineRecord(dropped({weightKg: 10}));
+    assert.equal(line.weightKg, 10);
+    assert.equal(line.weightLb, 22);
+    assert.deepEqual(validateContainerLine(dropped({weightKg: 10})), []);
+    assert.deepEqual(validateWaitingPackage(dropped({weightKg: 10})), []);
+  });
+
+  it("a new line with pounds has no kilos, and none is written as null",
+      () => {
+        const line = containerLineRecord(dropped({weightLb: 22}));
+        assert.equal(line.weightLb, 22);
+        assert.equal(line.weightKg, null);
+        const bare = containerLineRecord(dropped());
+        assert.equal(bare.weightLb, null);
+        assert.equal(bare.weightKg, null);
+      });
+
+  it("refuses kilos out of range with the kilo code", () => {
+    assert.deepEqual(validateContainerLine(dropped({weightKg: 901})),
+        ["weight_kg_invalid"]);
+    assert.deepEqual(validateContainerLine(dropped({weightKg: 0})),
+        ["weight_kg_invalid"]);
+    assert.deepEqual(validateContainerLine(dropped({weightKg: 900})), []);
+  });
+
+  it("an edit naming kilos defines the whole weight", () => {
+    const current = stored({weightLb: 22});
+    const {next, changes} = edit(current, {weightKg: 12.5});
+    assert.equal(next.weightKg, 12.5);
+    assert.equal(next.weightLb, 27.6);
+    assert.deepEqual(changes, ["weightLb", "weightKg"]);
+    assert.deepEqual(containerLineEditLabels(changes), ["weight"]);
+    // Kilos with no pounds beside them also replace a stored weight that
+    // was typed in pounds; naming null kilos alone clears the weight.
+    const cleared = edit(stored({weightKg: 10}), {weightKg: null});
+    assert.equal(cleared.next.weightLb, null);
+    assert.equal(cleared.next.weightKg, null);
+  });
+
+  it("an older app's pounds alone clear the kilos (the old-app rule)", () => {
+    const current = stored({weightKg: 10});
+    assert.equal(current.weightLb, 22);
+    const {next, changes} = edit(current, {weightLb: 30});
+    assert.equal(next.weightLb, 30);
+    assert.equal(next.weightKg, null, "no stale kilos beside new pounds");
+    assert.deepEqual(changes, ["weightLb", "weightKg"]);
+  });
+
+  it("pounds alone that are the stored pounds leave the kilos (an old app " +
+     "editing something else)", () => {
+    const current = stored({weightKg: 10});
+    const {next, changes} = edit(current, {weightLb: 22, priceCents: 9500});
+    assert.equal(next.weightKg, 10);
+    assert.equal(next.weightLb, 22);
+    assert.deepEqual(changes, ["priceCents"]);
+  });
+
+  it("pounds alone on a line with no weight are just pounds", () => {
+    const {next} = edit(stored(), {weightLb: 5});
+    assert.equal(next.weightLb, 5);
+    assert.equal(next.weightKg, null);
+  });
+
+  it("an edit naming neither leaves both alone", () => {
+    const current = stored({weightKg: 10});
+    const {next, changes} = edit(current, {priceCents: 9500});
+    assert.equal(next.weightKg, 10);
+    assert.equal(next.weightLb, 22);
+    assert.deepEqual(changes, ["priceCents"]);
+    assert.deepEqual(edit(current, {}).changes, []);
+  });
+
+  it("explicit null pounds and kilos clear the weight; null pounds alone " +
+     "too", () => {
+    const current = stored({weightKg: 10});
+    for (const asked of [{weightLb: null, weightKg: null},
+      {weightLb: null}, {weightLb: ""}]) {
+      const {next} = edit(current, asked);
+      assert.equal(next.weightLb, null, JSON.stringify(asked));
+      assert.equal(next.weightKg, null, JSON.stringify(asked));
+    }
+  });
+
+  it("kilos and the same kilos change nothing", () => {
+    const current = stored({weightKg: 10});
+    assert.deepEqual(edit(current, {weightKg: 10}).changes, []);
+    assert.deepEqual(edit(current, {weightKg: 10, weightLb: 22}).changes, []);
+  });
+
+  it("a bad kilo value on an edit is refused with the kilo code", () => {
+    assert.deepEqual(validateContainerLineEdit(stored(),
+        {weightKg: 901}, false), ["weight_kg_invalid"]);
+  });
+
+  it("weightKg is a proof field, editable in every state", () => {
+    assert.ok(LINE_PROOF_FIELDS.includes("weightKg"));
+    assert.ok(LINE_EDIT_FIELDS.includes("weightKg"));
+    for (const status of ["loading", "shipped", "arrived"]) {
+      assert.equal(containerLineEditRefusal({status}, ["weightKg",
+        "weightLb"]), null, status);
+    }
+    assert.equal(LINE_FIELD_LABELS.weightKg, "weight");
+  });
+
+  it("mergeLineEdit is exported for the callable's own checks", () => {
+    assert.equal(typeof manifest.mergeLineEdit, "function");
+    const row = {weightLb: 22, weightKg: 10, kind: "barrels"};
+    assert.deepEqual(manifest.mergeLineEdit(row, {weightLb: 30}),
+        {weightLb: 30, weightKg: null, kind: "barrels"});
+    assert.deepEqual(manifest.mergeLineEdit(row, {weightKg: 5}),
+        {weightLb: null, weightKg: 5, kind: "barrels"});
   });
 });
 

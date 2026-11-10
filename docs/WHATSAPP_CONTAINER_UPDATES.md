@@ -491,7 +491,7 @@ endpoint (`package_proof.photoLink`, signed with the line's
 business, {{6}} contents (FR), {{7}} weight (FR), {{8}} tracking code.
 Contents are `contentsText(line.contents)` in both blocks (serials left
 out), or what the line is when there is no item list; weight is "4.2 lb" /
-"4,2 lb", or "—". Buttons: two **quick replies**, `OK ✓` and `Something's
+"4,2 lb" ("10 kg" / "4,5 kg" when staff weighed it in kilos), or "—". Buttons: two **quick replies**, `OK ✓` and `Something's
 wrong`, sent with the payloads `confirm_ok` / `confirm_problem`
 (`package_proof.CONFIRM_PAYLOAD`). **No URL button.**
 

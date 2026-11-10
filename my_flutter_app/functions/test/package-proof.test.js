@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const {describe, it} = require("node:test");
 
 const proof = require("../package_proof");
+const fixture = require("./fixtures/package-price-list-cases.json");
 
 const BIZ = "nensona";
 const UID = "staffUid123";
@@ -325,5 +326,63 @@ describe("package receipt links", () => {
         Date.now()), false);
     assert.equal(proof.packageReceiptSigningPath("line_abc123"),
         "pkgreceipt:line_abc123");
+  });
+});
+
+// Kilos (docs/SHIPPING_SIMPLE_HOME.md K3): `weightLb` stays pounds always;
+// `weightKg` is what staff typed in kilos. The shared cases are also run by
+// the console and the app.
+describe("weight in kilos", () => {
+  for (const c of fixture.kilos.weights) {
+    it(`weight: ${c.name}`, () => {
+      assert.deepEqual(proof.normalizeWeight(c.input), c.expect);
+    });
+  }
+  for (const c of fixture.kilos.weightText) {
+    it(`weight text: ${c.name}`, () => {
+      assert.equal(proof.weightText(c.weight, c.lang), c.expect);
+    });
+  }
+
+  it("kilos typed are stored and the pounds are derived from them", () => {
+    const out = proof.validateProofFields({weightKg: 10});
+    assert.equal(out.error, "");
+    assert.equal(out.fields.weightKg, 10);
+    assert.equal(out.fields.weightLb, 22);
+  });
+
+  it("a write with pounds and no kilos leaves no kilos", () => {
+    const out = proof.validateProofFields({weightLb: 22});
+    assert.equal(out.fields.weightLb, 22);
+    assert.ok(!("weightKg" in out.fields), "no weightKg key at all");
+  });
+
+  it("kilos win over pounds sent beside them", () => {
+    const out = proof.validateProofFields({weightKg: 10, weightLb: 99});
+    assert.equal(out.fields.weightLb, 22);
+    assert.equal(out.fields.weightKg, 10);
+  });
+
+  it("names the kilo limit in kilos", () => {
+    const out = proof.validateProofFields({weightKg: 901});
+    assert.equal(out.error, "weight_kg_invalid");
+    assert.match(proof.REFUSAL.weight_kg_invalid, /900 kg/);
+    assert.match(proof.REFUSAL.weight_invalid, /2000 lb/);
+  });
+
+  it("the derived pounds are never below 0.1", () => {
+    assert.equal(proof.weightLbFromKg(0.1), 0.2);
+    assert.equal(proof.weightLbFromKg(0.01), 0.1);
+    assert.equal(proof.weightLbFromKg(900), 1984.2);
+  });
+
+  it("weightText keeps its old call shape and takes a line", () => {
+    assert.equal(proof.weightText(4.5, "fr"), "4,5 lb");
+    assert.equal(proof.weightText({weightLb: 22, weightKg: 10}), "10 kg");
+    assert.equal(proof.weightText({weightLb: 9.9, weightKg: 4.5}, "fr"),
+        "4,5 kg");
+    assert.equal(proof.weightText({weightLb: 22, weightKg: null}), "22 lb");
+    assert.equal(proof.weightText({}), "");
+    assert.equal(proof.weightText(undefined), "");
   });
 });

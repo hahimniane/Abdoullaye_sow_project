@@ -319,7 +319,7 @@ describe("whatsapp package flow", () => {
           receiver: {name: "Mariama", phoneE164: "+224620000000"},
           pieces: [{priceItemId: "i_phone", quantity: 2, label: "Phone",
             kind: "other"}, {categoryId: "clothing", weightLb: 50,
-            kind: "other"}],
+            weightUnit: "lb", kind: "other"}],
           language: "en", idempotencyKey: "wa-tok",
         });
         assert.equal(sessions.get("tok").requestCode, "R-B2C3D");
@@ -849,5 +849,144 @@ describe("whatsapp package flow", () => {
     assert.equal(body.interactive.action.parameters.flow_cta,
         "Envoyer un colis");
     assert.match(body.interactive.body.text, /Nensona/);
+  });
+});
+
+// Kilos (docs/SHIPPING_SIMPLE_HOME.md K4): on a business's own link the
+// questions and prices use its unit; comparing several businesses, the
+// customer types pounds and each business converts to its own unit.
+describe("whatsapp package flow, kilos", () => {
+  const KG_ROUTE = {items: [{id: "i_phone", categoryId: "electronics",
+    label: "Phone", priceCents: 4000, includedLb: 2}],
+  perLbCents: {clothing: 700}, unit: "kg"};
+  const kiloShop = (id, name, extra = {}) => option(id, name, {
+    routes: {sea: KG_ROUTE, air: KG_ROUTE}, ...extra});
+  const walk = async (f, lines) => {
+    await f.handle({action: "INIT", flow_token: "tok"});
+    const items = await step(f, "WHERE", {country: "gn", mode: "sea"});
+    const amounts = await step(f, "ITEMS", lines.items);
+    return {items, amounts};
+  };
+
+  it("a single-business link asks and prices in kilos", async () => {
+    const shop = kiloShop("k", "Kilo Shop");
+    const {f, sessions, created} = harness({options: [shop],
+      deps: {loadOptions: async () => ({business: {name: "Kilo Shop"},
+        options: [shop]})}});
+    const {items, amounts} = await walk(f, {items: {
+      item_1: "i:electronics|phone", item_2: "lb:clothing"}});
+    assert.equal(sessions.get("tok").weightUnit, "kg");
+    const rows = items.data.items;
+    assert.match(rows.find((r) => r.id === "i:electronics|phone")
+        .description, /up to 2 kg each/);
+    const clothes = rows.find((r) => r.id === "lb:clothing");
+    assert.equal(clothes.title, "Clothes and fabric (kg)");
+    assert.match(clothes.description, /From \$7\/kg$/);
+    assert.equal(amounts.data.l_qty_2, "Weight (kg)");
+    assert.match(amounts.data.l_intro, /by the kilo.*23 kg/);
+    // 901 kg is too much; the message says kilos.
+    const bad = await step(f, "AMOUNTS", {qty_1: "1", qty_2: "901"});
+    assert.equal(bad.screen, "AMOUNTS");
+    assert.match(bad.data.error_message, /kilos/);
+    // 900 kg is allowed.
+    const ok = await step(f, "AMOUNTS", {qty_1: "1", qty_2: "10"});
+    assert.equal(ok.screen, "HOW");
+    assert.deepEqual(sessions.get("tok").lines.map((l) => l.unit || null),
+        [null, "kg"]);
+    const when = await step(f, "HOW", {how: "bring_in"});
+    assert.equal(when.screen, "WHEN");
+    await step(f, "WHEN", {when: "2026-11-04|09:00|11:00|hq"});
+    const review = await step(f, "PEOPLE", {sender_name: "Fatou D",
+      receiver_name: "Mariama", receiver_phone: "224 620 00 00 00"});
+    assert.match(review.data.summary, /Clothes and fabric · 10 kg/);
+    // 1 phone ($40) + 10 kg x $7 = $110, weighed at the counter.
+    assert.match(review.data.summary, /Total: about \$110/);
+    await step(f, "REVIEW", {});
+    assert.deepEqual(created[0].pieces, [
+      {priceItemId: "i_phone", quantity: 1, label: "Phone", kind: "other"},
+      {categoryId: "clothing", weightLb: 10, weightUnit: "kg",
+        kind: "other"}]);
+  });
+
+  it("the French questions say kilos too", async () => {
+    const shop = kiloShop("k", "Kilo Shop");
+    const {f, sessions} = harness({options: [shop],
+      deps: {loadOptions: async () => ({business: {name: "Kilo Shop"},
+        options: [shop]})}});
+    sessions.set("tok", {...sessions.get("tok"), lang: "fr"});
+    const {items, amounts} = await walk(f, {items: {item_1: "lb:clothing"}});
+    assert.equal(amounts.data.l_qty_1, "Poids (kg)");
+    assert.match(amounts.data.l_intro, /au kilo/);
+    assert.equal(items.data.items.find((r) => r.id === "lb:clothing").title,
+        "Vêtements et tissus (kg)");
+    const bad = await step(f, "AMOUNTS", {qty_1: "0"});
+    assert.match(bad.data.error_message, /kilos/);
+  });
+
+  it("comparing businesses asks pounds and prices each in its own unit",
+      async () => {
+        // Pounds shop: clothes $3/lb (sea). Kilo shop: clothes $7/kg.
+        const lbShop = option("a", "Atlantic");
+        const kgShop = kiloShop("k", "Kilo Shop");
+        const {f, sessions, created} = harness({options: [lbShop, kgShop]});
+        const {items, amounts} = await walk(f, {items: {
+          item_1: "lb:clothing"}});
+        assert.equal(sessions.get("tok").weightUnit, "lb");
+        // The "From" price is per pound for everybody: $7/kg is $3.18/lb,
+        // the pounds shop's $3/lb is the lowest.
+        const clothes = items.data.items.find((r) => r.id === "lb:clothing");
+        assert.equal(clothes.title, "Clothes and fabric (lb)");
+        assert.match(clothes.description, /From \$3\/lb$/);
+        assert.equal(amounts.data.l_qty_1, "Weight (lb)");
+        await step(f, "AMOUNTS", {qty_1: "50"});
+        const pick = await step(f, "HOW", {how: "bring_in"});
+        assert.equal(pick.screen, "PICK");
+        // Atlantic: 50 lb x $3 = $150. Kilo shop: 50 lb = 22.7 kg x $7 =
+        // $158.90.
+        assert.deepEqual(pick.data.businesses.map((b) => b.id), ["a", "k"]);
+        assert.match(pick.data.businesses[0].description, /\$150/);
+        assert.match(pick.data.businesses[1].description, /\$158\.90/);
+        await step(f, "PICK", {business: "k"});
+        await step(f, "WHEN", {when: "2026-11-04|09:00|11:00|hq"});
+        const review = await step(f, "PEOPLE", {sender_name: "Fatou D",
+          receiver_name: "Mariama", receiver_phone: "224 620 00 00 00"});
+        assert.match(review.data.summary, /Clothes and fabric · 50 lb/);
+        assert.match(review.data.summary, /\$158\.90/);
+        await step(f, "REVIEW", {});
+        // The customer's pounds travel as pounds; the server converts.
+        assert.deepEqual(created[0].pieces, [{categoryId: "clothing",
+          weightLb: 50, weightUnit: "lb", kind: "other"}]);
+        const priced = priceList.pricePiece(KG_ROUTE, created[0].pieces[0]);
+        assert.equal(priced.estimateCents, 15890);
+        assert.equal(priced.price.unit, "kg");
+      });
+
+  it("a session started before kilos keeps asking pounds", async () => {
+    const shop = kiloShop("k", "Kilo Shop");
+    const {f, sessions} = harness({options: [shop]});
+    sessions.set("tok", {...sessions.get("tok"), country: "gn",
+      mode: "sea", picked: ["lb:clothing"], catalog: [{id: "lb:clothing",
+        kind: "per_lb", label: "Clothes and fabric",
+        categoryId: "clothing"}]});
+    const done = await step(f, "AMOUNTS", {qty_1: "50"});
+    assert.equal(done.screen, "HOW");
+    assert.equal(sessions.get("tok").lines[0].unit, "lb");
+  });
+
+  it("one flowWeightUnit rule", () => {
+    const lb = option("a", "Atlantic");
+    const kg = kiloShop("k", "Kilo Shop");
+    assert.equal(flow.flowWeightUnit(true, [kg]), "kg");
+    assert.equal(flow.flowWeightUnit(true, [lb]), "lb");
+    assert.equal(flow.flowWeightUnit(false, [kg]), "lb");
+    assert.equal(flow.flowWeightUnit(true, []), "lb");
+  });
+
+  it("the new words fit Meta's label limits", () => {
+    for (const lang of ["en", "fr"]) {
+      const w = flow.words(lang);
+      assert.ok(w.kilos.length <= 20, w.kilos);
+      assert.ok(w.pounds.length <= 20, w.pounds);
+    }
   });
 });

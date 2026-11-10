@@ -23,6 +23,7 @@ import {
   barrelQuantity,
   buildCatalog,
   businessesCountText,
+  catalogWeightUnit,
   categoryLabel,
   chooseCountry,
   chooseHandoff,
@@ -44,6 +45,7 @@ import {
   ratingText,
   setBarrelQuantity,
   setItemQuantity,
+  setWeightUnit,
   sentView,
   submitPayload,
   totalText,
@@ -221,7 +223,10 @@ export function PackageRequestForm({ slug = "", senderName = "", senderPhone = "
   const countries = useMemo(() => requestCountries(options, lang), [options, lang]);
   const airOk = useMemo(() => airOffered(options, draft.countryId), [options, draft.countryId]);
   const modeOpts = useMemo(() => modeOptions(options, draft.countryId, draft.shipMode), [options, draft.countryId, draft.shipMode]);
-  const catalog = useMemo(() => buildCatalog(modeOpts, draft.shipMode), [modeOpts, draft.shipMode]);
+  // The unit the weights are asked in: the business's own on its own link, pounds when comparing
+  // (each business then prices the customer's number in its own unit).
+  const weightUnit = useMemo(() => catalogWeightUnit(modeOpts, viaBusiness ? onlyBusinessId : ""), [modeOpts, viaBusiness, onlyBusinessId]);
+  const catalog = useMemo(() => buildCatalog(modeOpts, draft.shipMode, weightUnit), [modeOpts, draft.shipMode, weightUnit]);
   const canBring = modeOpts.some((o) => o.bringIn.available);
   const canCollect = modeOpts.some((o) => o.collect.available);
   const rows = useMemo(
@@ -610,7 +615,7 @@ export function PackageRequestForm({ slug = "", senderName = "", senderPhone = "
               </div>
             )}
             {catalog.items.map((entry) => {
-              const limit = includedLbText(entry, lang);
+              const limit = includedLbText(entry, lang, weightUnit);
               return (
                 <div className="pkr-item" key={entry.key}>
                   <span className="pkr-item-name">
@@ -654,7 +659,7 @@ export function PackageRequestForm({ slug = "", senderName = "", senderPhone = "
 
         {catalog.categories.length > 0 && (
           <div className="pkr-group">
-            <h3>Priced by the pound</h3>
+            <h3>{weightUnit === "kg" ? "Priced by the kilo" : "Priced by the pound"}</h3>
             <div className="pkr-catalog">
               {catalog.categories.map((categoryId) => (
                 <div className="pkr-item" key={categoryId}>
@@ -662,7 +667,7 @@ export function PackageRequestForm({ slug = "", senderName = "", senderPhone = "
                     <strong data-no-translate>{categoryLabel(categoryId, lang)}</strong>
                     <small>Weighed at drop-off</small>
                   </span>
-                  <button className="secondary-button" onClick={() => setLines((lines) => addWeightLine(lines, categoryId))} type="button">
+                  <button className="secondary-button" onClick={() => setLines((lines) => addWeightLine(lines, categoryId, weightUnit))} type="button">
                     <Plus size={16} aria-hidden="true" /> Add
                   </button>
                 </div>
@@ -673,7 +678,7 @@ export function PackageRequestForm({ slug = "", senderName = "", senderPhone = "
                 <header>
                   <span className="pkr-item-name">
                     <strong data-no-translate>{categoryLabel(line.categoryId, lang)}</strong>
-                    <small>Priced by the pound</small>
+                    <small>{weightUnit === "kg" ? "Priced by the kilo" : "Priced by the pound"}</small>
                   </span>
                   <button aria-label="Remove this piece" className="icon-button" onClick={() => setLines((lines) => lines.filter((row) => row.key !== line.key))} type="button">
                     <Trash2 size={16} aria-hidden="true" />
@@ -684,12 +689,21 @@ export function PackageRequestForm({ slug = "", senderName = "", senderPhone = "
                   {SIZE_PRESETS.map((preset) => (
                     <label className={line.sizePreset === preset.id ? "active" : ""} key={preset.id}>
                       <input checked={line.sizePreset === preset.id} name={`pkr-size-${line.key}`} onChange={() => updateLine(line.key, (row) => (row.type === "weight" ? applySizePreset(row, preset.id) : row))} type="radio" />
-                      <span data-no-translate>{lang === "fr" ? preset.fr : preset.en} · {preset.lb} lb</span>
+                      <span data-no-translate>{lang === "fr" ? preset.fr : preset.en} · {lang === "fr" ? String(preset[line.weightUnit]).replace(".", ",") : preset[line.weightUnit]} {line.weightUnit}</span>
+                    </label>
+                  ))}
+                </fieldset>
+                <fieldset className="pkr-segments">
+                  <legend>Weight unit</legend>
+                  {(["lb", "kg"] as const).map((unit) => (
+                    <label className={line.weightUnit === unit ? "active" : ""} key={unit}>
+                      <input checked={line.weightUnit === unit} name={`pkr-unit-${line.key}`} onChange={() => updateLine(line.key, (row) => (row.type === "weight" ? setWeightUnit(row, unit) : row))} type="radio" />
+                      <span>{unit === "kg" ? "Kilos (kg)" : "Pounds (lb)"}</span>
                     </label>
                   ))}
                 </fieldset>
                 <label className="pkr-field">
-                  <span>Weight in pounds</span>
+                  <span>{line.weightUnit === "kg" ? "Weight in kilos" : "Weight in pounds"}</span>
                   <input inputMode="decimal" maxLength={7} onChange={(event) => updateLine(line.key, (row) => (row.type === "weight" ? typeWeight(row, event.target.value) : row))} value={line.weightLb} />
                 </label>
               </article>
@@ -738,7 +752,7 @@ export function PackageRequestForm({ slug = "", senderName = "", senderPhone = "
           </button>
         </div>
 
-        <FieldError codes={shownItems} show={["pieces_required", "too_many_pieces", "weight_invalid", "quantity_invalid", "piece_description_required", "too_many_photos", "photo_invalid", "text_too_long", "category_invalid", "box_size_invalid", "dims_invalid"]} />
+        <FieldError codes={shownItems} show={["pieces_required", "too_many_pieces", "weight_invalid", "weight_kg_invalid", "unit_invalid", "quantity_invalid", "piece_description_required", "too_many_photos", "photo_invalid", "text_too_long", "category_invalid", "box_size_invalid", "dims_invalid"]} />
         {count > 0 && <p className="pkr-hint" data-no-translate>{piecesCountText(count, lang)}</p>}
         {error && <p className="customer-field-error" role="alert">{error}</p>}
         <div className="pkr-actions">

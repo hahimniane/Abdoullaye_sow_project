@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  businessWeightUnit,
   comingToday,
   emptyRouteDraft,
   laawolLinesOf,
@@ -9,6 +10,7 @@ import {
   listPayload,
   listProblem,
   newItemDraft,
+  perUnitText,
   pieceNeedsWeight,
   piecePriceOf,
   plannedDepartureText,
@@ -17,11 +19,13 @@ import {
   priceListFailure,
   priceListHistory,
   priceListView,
+  readWeight,
   readWeightLb,
   routeDraftFrom,
   routeDraftIsEmpty,
   routePayload,
   routeSummary,
+  unitChangedNotice,
   weighedPriceInput,
   windowText,
 } from "./business-price-list.ts";
@@ -211,4 +215,75 @@ test("box sizes are Sea only: the Air payload never carries them, a bad price is
   air.boxPrices.small = "20";
   assert.equal(routePayload(air, "air"), null, "a typed box price is dropped on Air");
   assert.deepEqual(priceListView({ routes: { gn: { sea: { items: [], perLbCents: {}, boxPricesCents: { small: 2000 } } } } }).routes.gn.sea?.boxPricesCents, { small: 2000 });
+});
+
+// Kilos (docs/SHIPPING_SIMPLE_HOME.md K1/K4).
+const kiloRoute = {
+  items: [{ id: "i_phone", categoryId: "electronics", label: "Phone", priceCents: 4000, includedLb: 2 }],
+  perLbCents: { clothing: 700 },
+  departure: null,
+  unit: "kg",
+};
+
+test("kilos: the stored list says its unit; absent means pounds", () => {
+  assert.equal(priceListView({ weightUnit: "kg", routes: { gn: { sea: kiloRoute } } }).weightUnit, "kg");
+  assert.equal(priceListView({ routes: { gn: { sea: stored } } }).weightUnit, "lb");
+  assert.equal(priceListView(null).weightUnit, "lb");
+  assert.equal(priceListView({ weightUnit: "stone" }).weightUnit, "lb");
+});
+
+test("kilos: the business unit is the list's when it prices a route, else the remembered choice", () => {
+  const list = { weightUnit: "kg", routes: { gn: { sea: kiloRoute } } };
+  assert.deepEqual(businessWeightUnit(list, null), { unit: "kg", fromList: true });
+  // The list wins over what this device last picked.
+  assert.deepEqual(businessWeightUnit(list, "lb"), { unit: "kg", fromList: true });
+  // A list with no route yet does not decide; neither does having none.
+  assert.deepEqual(businessWeightUnit({ weightUnit: "kg", routes: {} }, "lb"), { unit: "lb", fromList: false });
+  assert.deepEqual(businessWeightUnit({ weightUnit: "kg", routes: {} }, null), { unit: "lb", fromList: false });
+  assert.deepEqual(businessWeightUnit(null, "kg"), { unit: "kg", fromList: false });
+  assert.deepEqual(businessWeightUnit(undefined, undefined), { unit: "lb", fromList: false });
+  assert.deepEqual(businessWeightUnit({ routes: { gn: { sea: stored } } }, "kg"), { unit: "lb", fromList: true });
+});
+
+test("kilos: the editor keeps the numbers; the payload carries the list's unit beside the routes", () => {
+  const draft = routeDraftFrom(kiloRoute);
+  assert.equal(draft.rates.clothing, "7");
+  assert.equal(draft.items[0].includedLb, "2");
+  const payload = routePayload(draft);
+  // The payload has no unit on the route; the list's unit is sent beside them.
+  assert.ok(payload && !("unit" in payload));
+  const checked = validatePriceList({ weightUnit: "kg", routes: { gn: { sea: payload } } }, ["gn"]);
+  assert.deepEqual(checked.errors, []);
+  assert.deepEqual(checked.routes?.gn.sea, kiloRoute);
+  assert.equal(checked.weightUnit, "kg");
+});
+
+test("kilos: wording follows the unit", () => {
+  assert.equal(perUnitText("kg"), "per kg");
+  assert.equal(perUnitText("lb", "fr"), "par lb");
+  assert.match(unitChangedNotice("kg"), /^Your prices are now per kg\. The amounts did not change/);
+  assert.match(unitChangedNotice("lb"), /per lb/);
+  assert.match(routeSummary(kiloRoute), /1 per-kg rate/);
+  assert.match(routeSummary(kiloRoute, "fr"), /1 tarif au kg/);
+  assert.match(routeSummary(stored), /2 per-lb rates/);
+  assert.match(priceListFailure({ details: { reason: "per_lb_invalid" } }, "kg").message, /per kilo/);
+  assert.match(priceListFailure({ details: { reason: "per_lb_invalid" } }).message, /per pound/);
+});
+
+test("kilos: the counter weighs in the price's own unit", () => {
+  const phones = piecePriceOf({ price: { source: "item", unit: "kg", unitCents: 4000, quantity: 2, includedLb: 2, excessPerLbCents: 450 } });
+  assert.equal(weighedPriceInput(phones, "3.5"), "80");
+  // 2 phones cover 4 kg; the 5th kilo is charged at the $4.50 excess rate.
+  assert.equal(weighedPriceInput(phones, "5"), "84.50");
+  const clothes = piecePriceOf({ price: { source: "per_lb", unit: "kg", perLbCents: 700, weightLb: 10 } });
+  assert.equal(weighedPriceInput(clothes, "12,5", "fr"), "87,50");
+  // 900 kg is the limit on a kilo price; 901 is not a weight, and 901 is a weight on a pounds one.
+  assert.equal(readWeight("900", "kg"), 900);
+  assert.equal(readWeight("901", "kg"), null);
+  assert.equal(readWeight("901"), 901);
+  assert.equal(readWeightLb("901"), 901);
+  assert.equal(weighedPriceInput(clothes, "901"), null);
+  assert.equal(priceBasisText(phones), "$40 covers up to 2 kg, then $4.50/kg");
+  assert.equal(priceBasisText(phones, "fr"), "$40 couvre jusqu’à 2 kg, puis $4,50/kg");
+  assert.equal(priceBasisText(clothes), "$7/kg");
 });

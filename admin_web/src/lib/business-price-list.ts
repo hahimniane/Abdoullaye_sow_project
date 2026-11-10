@@ -13,10 +13,11 @@ import {
   CATEGORIES,
   LIMIT,
   MODES,
-  PRICE_LIST_MESSAGES,
   WEEK_DAYS,
   counterPriceCents,
   dateKeyValid,
+  priceListMessage as messageIn,
+  unitOf,
   validatePriceList,
   type PiecePrice,
   type PriceMode,
@@ -24,6 +25,7 @@ import {
   type RoutePair,
   type RoutesMap,
   type WeekDayKey,
+  type WeightUnit,
 } from "./package-price-list.ts";
 
 export type Lang = "en" | "fr";
@@ -45,7 +47,7 @@ export type ItemDraft = {
   categoryId: string;
   /** US dollars as typed. */
   price: string;
-  /** Pounds as typed; blank = the price covers any weight. */
+  /** Weight as typed, in the list's unit (the name is legacy: kilos on a kilo list); blank = the price covers any weight. */
   includedLb: string;
 };
 
@@ -58,7 +60,7 @@ export type DepartureDraft = {
 
 export type RouteDraft = {
   items: ItemDraft[];
-  /** Dollars per pound as typed, by category id. */
+  /** Dollars per pound (per kilo on a kilo list) as typed, by category id. */
   rates: Record<string, string>;
   /** Dollars per box size as typed (Sea only): small, medium, large. Extra large is always quoted. */
   boxPrices: Record<string, string>;
@@ -214,16 +216,17 @@ export function listProblem(draft: ListDraft): string {
   return errors[0] ?? "";
 }
 
-/** A priced route's one-line summary: "3 items · 2 rates · Tue, Fri". */
+/** A priced route's one-line summary: "3 items · 2 per-lb rates · Tue, Fri" ("per-kg" on a kilo route). */
 export function routeSummary(route: unknown, lang: Lang = "en"): string {
   const r = asRow(route);
+  const unit = unitOf(r);
   const items = Array.isArray(r.items) ? r.items.length : 0;
   const rates = Object.keys(asRow(r.perLbCents)).length;
   const boxes = Object.keys(asRow(r.boxPricesCents)).length;
   const days = Array.isArray(asRow(r.departure).weekdays) ? (asRow(r.departure).weekdays as string[]) : [];
   const parts: string[] = [];
   if (items) parts.push(lang === "fr" ? `${items} article${items > 1 ? "s" : ""}` : `${items} item${items > 1 ? "s" : ""}`);
-  if (rates) parts.push(lang === "fr" ? `${rates} tarif${rates > 1 ? "s" : ""} au lb` : `${rates} per-lb rate${rates > 1 ? "s" : ""}`);
+  if (rates) parts.push(lang === "fr" ? `${rates} tarif${rates > 1 ? "s" : ""} au ${unit}` : `${rates} per-${unit} rate${rates > 1 ? "s" : ""}`);
   if (boxes) parts.push(lang === "fr" ? `${boxes} taille${boxes > 1 ? "s" : ""} de carton` : `${boxes} box size${boxes > 1 ? "s" : ""}`);
   if (days.length) parts.push(days.map((d) => weekdayShort(d as WeekDayKey, lang)).join(", "));
   return parts.join(" · ");
@@ -253,23 +256,38 @@ export function categoryLabel(categoryId: string, lang: Lang = "en"): string {
   return category ? category[lang === "fr" ? "fr" : "en"] : categoryId;
 }
 
-/** Why a save failed, as a sentence (the server's reasons, EN; french-dom.ts has the French). */
-export function priceListMessage(reason: string): string {
-  return PRICE_LIST_MESSAGES[reason] ?? "";
+/** Why a save failed, as a sentence (the server's reasons, EN; french-dom.ts has the French), in the list's unit's words. */
+export function priceListMessage(reason: string, unit: WeightUnit = "lb"): string {
+  return messageIn(reason, unit);
+}
+
+/** The editor's unit choice as the buttons read it: "per lb" / "per kg" (French "par lb" / "par kg"). */
+export function perUnitText(unit: WeightUnit, lang: Lang = "en"): string {
+  return lang === "fr" ? `par ${unit}` : `per ${unit}`;
+}
+
+/**
+ * The one-time notice after the unit changes: the amounts did not (the
+ * editor keeps the numbers and changes what they mean).
+ */
+export function unitChangedNotice(unit: WeightUnit): string {
+  return unit === "kg"
+    ? "Your prices are now per kg. The amounts did not change. Check them."
+    : "Your prices are now per lb. The amounts did not change. Check them.";
 }
 
 export const PRICE_LIST_GENERIC_ERROR = "Something went wrong. Try again.";
 export const PRICE_LIST_NETWORK_ERROR = "We could not reach Laawol. Check your connection and try again.";
 
 /** A callable's failure as a sentence: its price-list reason, else a generic one. */
-export function priceListFailure(error: unknown): { reason: string; message: string } {
+export function priceListFailure(error: unknown, unit: WeightUnit = "lb"): { reason: string; message: string } {
   const record = asRow(error);
   const details = asRow(record.details);
   const reasons = Array.isArray(details.reasons) ? details.reasons.map((r) => text(r, 60)).filter(Boolean) : [];
   const reason = text(details.reason, 60) || reasons[0] || "";
   const code = text(record.code, 60);
   const message =
-    priceListMessage(reason) ||
+    priceListMessage(reason, unit) ||
     (code === "functions/permission-denied"
       ? "Only the business owner can change the price list."
       : code === "functions/unavailable" || code === "functions/deadline-exceeded"
@@ -284,6 +302,8 @@ export function priceListFailure(error: unknown): { reason: string; message: str
 
 export type PriceListView = {
   routes: RoutesMap;
+  /** The list's one unit: "kg" or "lb" (absent on the document means lb). */
+  weightUnit: WeightUnit;
   needsCheck: boolean;
   updatedAtMs: number;
   updatedByName: string;
@@ -307,12 +327,25 @@ export function priceListView(doc: unknown): PriceListView {
   }
   return {
     routes,
+    weightUnit: d.weightUnit === "kg" ? "kg" : "lb",
     needsCheck: d.needsCheck === true,
     updatedAtMs: Number(d.updatedAtMs) || 0,
     updatedByName: text(d.updatedByName, 80),
     updatedByLaawol: d.updatedByLaawol === true,
     checkedAtMs: Number(d.checkedAtMs) || 0,
   };
+}
+
+/**
+ * The unit a business weighs and quotes in (docs/SHIPPING_SIMPLE_HOME.md K4):
+ * its price list's when the list prices at least one route; otherwise the
+ * last unit this person picked on this device, else pounds. `fromList` says
+ * which: the lb/kg choice on the weight field shows only when it is false.
+ */
+export function businessWeightUnit(doc: unknown, remembered: WeightUnit | null | undefined): { unit: WeightUnit; fromList: boolean } {
+  const view = priceListView(doc);
+  if (Object.keys(view.routes).length > 0) return { unit: view.weightUnit, fromList: true };
+  return { unit: remembered === "kg" ? "kg" : "lb", fromList: false };
 }
 
 export type PriceListHistoryRow = {
@@ -443,12 +476,17 @@ export function pieceNeedsWeight(price: PiecePrice | null): boolean {
   return price.source === "per_lb" || (price.source === "item" && Number(price.includedLb) > 0);
 }
 
-/** A typed weight in pounds, or null when it is not one ("52,5" works). */
-export function readWeightLb(typed: string): number | null {
+/** A typed weight in `unit` (pounds by default), or null when it is not one ("52,5" works); up to 2,000 lb or 900 kg. */
+export function readWeight(typed: string, unit: WeightUnit = "lb"): number | null {
   const raw = text(typed, 12).replace(",", ".");
   if (!/^\d+(\.\d+)?$/.test(raw)) return null;
   const n = Math.round(Number(raw) * 10) / 10;
-  return n > 0 && n <= LIMIT.WEIGHT_LB ? n : null;
+  return n > 0 && n <= (unit === "kg" ? LIMIT.WEIGHT_KG : LIMIT.WEIGHT_LB) ? n : null;
+}
+
+/** A typed weight in pounds, or null when it is not one ("52,5" works). */
+export function readWeightLb(typed: string): number | null {
+  return readWeight(typed, "lb");
 }
 
 /**
@@ -457,26 +495,28 @@ export function readWeightLb(typed: string): number | null {
  * pounds have no rate (staff type the price).
  */
 export function weighedPriceInput(price: PiecePrice | null, typedWeight: string, lang: Lang = "en"): string | null {
-  const weight = readWeightLb(typedWeight);
+  // Typed in the price's own unit (kilos for a kilo snapshot).
+  const weight = readWeight(typedWeight, unitOf(price));
   if (!price || weight === null) return null;
   const cents = counterPriceCents(price, weight);
   return cents === null ? null : dollarsInput(cents, lang) || "0";
 }
 
-/** What the weigh-in line says the price is based on: "Phone · $40 covers up to 2 lb, then $4.50/lb". */
+/** What the weigh-in line says the price is based on: "Phone · $40 covers up to 2 lb, then $4.50/lb" (kg on a kilo price). */
 export function priceBasisText(price: PiecePrice | null, lang: Lang = "en"): string {
   if (!price) return "";
+  const unitWord = unitOf(price);
   const money = (cents: number | null) => (cents && cents > 0 ? `$${dollarsInput(cents, lang)}` : "");
   if (price.source === "per_lb") {
-    return lang === "fr" ? `${money(price.perLbCents)} le lb` : `${money(price.perLbCents)}/lb`;
+    return lang === "fr" ? `${money(price.perLbCents)} le ${unitWord}` : `${money(price.perLbCents)}/${unitWord}`;
   }
   if (price.source !== "item") return "";
   const base = money(price.unitCents);
   if (!(Number(price.includedLb) > 0)) return base;
-  const unit = lang === "fr" ? `${base} couvre jusqu’à ${price.includedLb} lb` : `${base} covers up to ${price.includedLb} lb`;
+  const unit = lang === "fr" ? `${base} couvre jusqu’à ${price.includedLb} ${unitWord}` : `${base} covers up to ${price.includedLb} ${unitWord}`;
   const extra = money(price.excessPerLbCents);
   if (!extra) return unit;
-  return lang === "fr" ? `${unit}, puis ${extra}/lb` : `${unit}, then ${extra}/lb`;
+  return lang === "fr" ? `${unit}, puis ${extra}/${unitWord}` : `${unit}, then ${extra}/${unitWord}`;
 }
 
 // ---------------------------------------------------------------------------

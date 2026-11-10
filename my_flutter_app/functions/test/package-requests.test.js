@@ -1125,6 +1125,76 @@ describe("price lists on requests (docs/PACKAGE_PRICE_LIST.md)", () => {
       quantity: 0}]})).errors, ["quantity_invalid"]);
   });
 
+  describe("on a kilo price list (docs/SHIPPING_SIMPLE_HOME.md K)", () => {
+    const kiloDoc = {weightUnit: "kg", routes: {gn: {
+      sea: {items: [{id: "i_phone", categoryId: "electronics",
+        label: "Phone", priceCents: 4000, includedLb: 2}],
+      perLbCents: {clothing: 700, general: 2500}, unit: "kg",
+      departure: null}}}};
+    const kiloOpt = () => pr.requestOption({businessId: "dala",
+      business: business(), destinationId: "gn", destination: guinea(),
+      locations: LOCATIONS, priceListDoc: kiloDoc, nowMs: NOW});
+    const kiloCheck = (input) => pr.validateSubmission(input, {
+      option: kiloOpt(), business: business(), businessId: "dala",
+      uid: "anon-1", nowMs: NOW, priceListDoc: kiloDoc});
+
+    it("the option says its route is kilos; a pounds route says nothing",
+        () => {
+          assert.equal(kiloOpt().routes.sea.unit, "kg");
+          assert.equal(kiloOpt().routes.air, null);
+          assert.ok(!("unit" in priced().routes.sea));
+          assert.ok(!("unit" in priced().routes.air));
+        });
+
+    it("prices kilos typed in the list's unit", () => {
+      const out = kiloCheck(submission({pieces: [{categoryId: "general",
+        weightLb: 10}]}));
+      assert.deepEqual(out.errors, []);
+      const piece = out.record.pieces[0];
+      assert.equal(piece.estimateCents, 25000);
+      assert.equal(piece.description, "General goods · 10 kg");
+      assert.equal(piece.price.unit, "kg");
+    });
+
+    it("converts pounds a customer typed (and says what it did)", () => {
+      const out = kiloCheck(submission({pieces: [{categoryId: "general",
+        weightLb: 50, weightUnit: "lb"}]}));
+      assert.deepEqual(out.errors, []);
+      const piece = out.record.pieces[0];
+      assert.equal(piece.price.weightLb, 22.7);
+      assert.equal(piece.estimateCents, 56750);
+      assert.equal(piece.description, "General goods · 22.7 kg");
+    });
+
+    it("refuses more than 900 kg with the kilo message", () => {
+      const out = kiloCheck(submission({pieces: [{categoryId: "general",
+        weightLb: 901}]}));
+      assert.deepEqual(out.errors, ["weight_kg_invalid"]);
+      assert.match(pr.REQUEST_MESSAGES.weight_kg_invalid, /kilos/);
+      assert.ok(pr.REQUEST_MESSAGES.unit_invalid);
+      assert.deepEqual(kiloCheck(submission({pieces: [{categoryId:
+        "general", weightLb: 5, weightUnit: "oz"}]})).errors,
+      ["unit_invalid"]);
+    });
+
+    it("the /e/ page carries the kilo unit on a weighed piece only", () => {
+      const record = {...kiloCheck(submission({pieces: [
+        {categoryId: "general", weightLb: 10}, {priceItemId: "i_phone"}]}))
+          .record, status: "received", code: "R-K7M4P", token: "secret"};
+      const view = pr.publicRequestView("req1", record, business(),
+          {hours: WEEK});
+      assert.equal(view.pieces[0].price.unit, "kg");
+      assert.equal(view.pieces[0].price.weightLb, 10);
+      assert.equal(view.pieces[1].price.unit, "kg");
+      const lb = {...check(submission({pieces: [{categoryId: "clothing",
+        weightLb: 50}]})).record, status: "received", code: "R-K7M4P",
+      token: "secret"};
+      const lbView = pr.publicRequestView("req1", lb, business(),
+          {hours: WEEK});
+      assert.ok(!("unit" in lbView.pieces[0].price));
+    });
+  });
+
   it("a Sea option carries the box prices; Air carries none", () => {
     const opt = priced();
     assert.deepEqual(opt.routes.sea.boxPricesCents,

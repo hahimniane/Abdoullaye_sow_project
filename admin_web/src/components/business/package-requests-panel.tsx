@@ -45,10 +45,11 @@ import {
   pieceNeedsWeight,
   plannedWindowOf,
   priceBasisText,
-  readWeightLb,
+  readWeight,
   weighedPriceInput,
   windowText,
 } from "@/lib/business-price-list";
+import { unitOf } from "@/lib/package-price-list";
 import { CopyValue } from "@/components/copy-value";
 import { auth, functions } from "@/lib/firebase";
 import { currentLanguage } from "@/lib/format";
@@ -884,7 +885,8 @@ function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onF
   function weigh(id: string, price: ReturnType<typeof piecePriceOf>, typed: string) {
     setWeights((current) => ({ ...current, [id]: typed }));
     const next = weighedPriceInput(price, typed, l);
-    const missingRate = next === null && typed.trim() !== "" && readWeightLb(typed) !== null;
+    // Typed in the price's own unit (kilos for a kilo snapshot).
+    const missingRate = next === null && typed.trim() !== "" && readWeight(typed, unitOf(price)) !== null;
     setNoRate((current) => ({ ...current, [id]: missingRate }));
     // No rate for this weight: empty the price so an older weight's price is
     // never received by mistake; staff type it.
@@ -970,16 +972,16 @@ function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onF
                     <small data-no-translate>{priceBasisText(entry.price, l)}</small>
                   </span>
                   <label className="lst-field">
-                    <span className="sr-only">Weight (lb)</span>
+                    <span className="sr-only">{unitOf(entry.price) === "kg" ? "Weight (kg)" : "Weight (lb)"}</span>
                     <input
                       disabled={busy}
                       inputMode="decimal"
                       onChange={(event) => weigh(entry.id, entry.price, event.target.value)}
-                      placeholder="Weight (lb)"
+                      placeholder={unitOf(entry.price) === "kg" ? "Weight (kg)" : "Weight (lb)"}
                       value={weights[entry.id] ?? ""}
                     />
                   </label>
-                  {noRate[entry.id] && <small className="pkq-warn">No price per pound for the extra weight. Type the price.</small>}
+                  {noRate[entry.id] && <small className="pkq-warn">{unitOf(entry.price) === "kg" ? "No price per kilo for the extra weight. Type the price." : "No price per pound for the extra weight. Type the price."}</small>}
                 </div>
               ))}
             </section>

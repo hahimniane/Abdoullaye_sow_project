@@ -87,7 +87,9 @@ function containerCustomsModel({container, lines, business}) {
       20)) || text(c.label, 120) || text(c.bookingReference, 60) ||
     containerKindWord(c);
   let totalWeightLb = 0;
+  let totalWeightKg = 0;
   let weighed = 0;
+  let weighedKg = 0;
   let totalValueCents = 0;
   let valued = 0;
   const list = rows.map((row, i) => {
@@ -96,9 +98,15 @@ function containerCustomsModel({container, lines, business}) {
       {name: "Business stock", phone: ""} : lineCustomer(r);
     const weightLb = Number(r.weightLb);
     const hasWeight = Number.isFinite(weightLb) && weightLb > 0;
+    const weightKg = Number(r.weightKg);
+    const hasKg = hasWeight && Number.isFinite(weightKg) && weightKg > 0;
     if (hasWeight) {
       totalWeightLb += weightLb;
       weighed += 1;
+      if (hasKg) {
+        totalWeightKg += weightKg;
+        weighedKg += 1;
+      }
     }
     const valueCents = Number(r.declaredValueCents);
     const hasValue = Number.isInteger(valueCents) && valueCents >= 0;
@@ -116,12 +124,18 @@ function containerCustomsModel({container, lines, business}) {
       // The declared items; a package with none declared says what it is.
       contents: customsContentsText(r.contents) || containerLineWhat(r),
       weightLb: hasWeight ? weightLb : null,
-      weightText: hasWeight ? weightText(weightLb) : "",
+      // Said in kilos when staff weighed it in kilos (K3), else pounds.
+      ...(hasKg ? {weightKg} : {}),
+      weightText: hasWeight ? weightText(r) : "",
       declaredValueCents: hasValue ? valueCents : null,
       declaredValueText: hasValue ? usdText(valueCents) : "",
     };
   });
   const totalWeight = Math.round(totalWeightLb * 10) / 10;
+  // The total is in kilos only when every weighed line was weighed in
+  // kilos; one pounds line makes it pounds (the sum of `weightLb`).
+  const totalInKg = weighed > 0 && weighedKg === weighed;
+  const totalKg = Math.round(totalWeightKg * 10) / 10;
   return {
     title: "Customs list",
     titleFr: "Liste pour la douane",
@@ -146,7 +160,10 @@ function containerCustomsModel({container, lines, business}) {
     totals: {
       lineCount: list.length,
       weightLb: weighed ? totalWeight : null,
-      weightText: weighed ? weightText(totalWeight) : "",
+      ...(totalInKg ? {weightKg: totalKg} : {}),
+      weightText: weighed ?
+        (totalInKg ? weightText({weightKg: totalKg}) :
+          weightText(totalWeight)) : "",
       // How many lines the totals cover, so a gap is seen, not hidden.
       weighed,
       declaredValueCents: valued ? totalValueCents : null,

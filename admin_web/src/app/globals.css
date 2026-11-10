@@ -14738,6 +14738,19 @@ p.prf-air { margin: 4px 0 0; font-size: 13px; }
 .prf-item-error { grid-column: 1 / -1; }
 .prf-add-item { align-self: flex-start; }
 .prf-measures { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+/* The lb / kg choice under a weight field (shown while the business has no price list). */
+.prf-unit, .plist-unit { display: inline-flex; align-self: flex-start; }
+.prf-unit button, .plist-unit button {
+  min-height: 34px; padding: 4px 14px; border: 1.5px solid var(--rule); background: #fff; color: var(--ink-soft, #3c5450);
+  font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+}
+.prf-unit button:first-child, .plist-unit button:first-child { border-radius: 10px 0 0 10px; }
+.prf-unit button:last-child, .plist-unit button:last-child { border-radius: 0 10px 10px 0; margin-left: -1.5px; }
+.prf-unit button.active, .plist-unit button.active { background: var(--brand); border-color: var(--brand); color: #fff; }
+.prf-unit button:focus-visible, .plist-unit button:focus-visible { outline: 3px solid rgba(13,148,136,.35); outline-offset: 1px; position: relative; }
+.prf-unit button:disabled, .plist-unit button:disabled { opacity: .55; cursor: not-allowed; }
+.plist-unit-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 4px 0 8px; }
+.plist-unit-row > span { font-size: 13px; font-weight: 700; color: var(--ink-soft, #3c5450); }
 .prf-staff-ticks { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
 .prf-staff-ticks small { color: var(--muted); }
 .pkg-staff .prf-photos { margin-bottom: 10px; }

@@ -166,6 +166,8 @@ const REQUEST_MESSAGES = Object.freeze({
   window_invalid: "Choose a time window of up to 2 hours in opening hours.",
   quantity_invalid: "Enter how many (1 to 50).",
   weight_invalid: "Enter the weight in pounds (0.1 to 2,000).",
+  weight_kg_invalid: "Enter the weight in kilos (0.1 to 900).",
+  unit_invalid: "Choose pounds or kilos.",
   category_invalid: "Choose what kind of goods it is.",
   pickup_out_of_area: "This business does not pick up at that address.",
   pickup_out_of_range: "That address is too far for this business.",
@@ -587,9 +589,13 @@ function comparisonFields({business, destinationId, destination,
   const todayKey = nowMs ? dateKeyIn(nowMs, zone) : "";
   for (const mode of SHIP_MODES) {
     const route = priceList.routeOf(priceListDoc, destinationId, mode);
+    // A kilo route says so (`unit: "kg"`, docs/SHIPPING_SIMPLE_HOME.md K1):
+    // its rates, included weights and the weights a customer types are
+    // kilos. A pounds route has no `unit` key.
     routes[mode] = route ? {items: route.items || [],
       perLbCents: route.perLbCents || {},
-      boxPricesCents: route.boxPricesCents || {}} : null;
+      boxPricesCents: route.boxPricesCents || {},
+      ...(priceList.unitOf(route) === "kg" ? {unit: "kg"} : {})} : null;
     // The route's own schedule, else the days the business set for freight
     // on that destination before price lists existed.
     const legacy = (Array.isArray(destination?.[mode === "air" ?
@@ -1649,6 +1655,8 @@ function publicRequestView(id, request, business = {}, extra = {}) {
         perLbCents: Number.isInteger(p.price.perLbCents) ?
           p.price.perLbCents : null,
         weightLb: Number(p.price.weightLb) || null,
+        // Kilos only: includedLb and weightLb above are in this unit.
+        ...(p.price.unit === "kg" ? {unit: "kg"} : {}),
       } : null,
     })),
     estimate: estimate ? {

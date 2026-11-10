@@ -19,7 +19,6 @@ describe("the website assistant's prompt", () => {
 
   it("no longer lists Freight as a service or links to it", () => {
     assert.doesNotMatch(prompt, /freight/i);
-    assert.doesNotMatch(prompt, /per kilo/i);
   });
 
   it("describes Send a package: kinds, sea or air, pricing, payment", () => {
@@ -32,7 +31,9 @@ describe("the website assistant's prompt", () => {
     assert.match(prompt, /per item/);
     assert.match(prompt, /Small, Medium, Large/);
     assert.match(prompt, /XL is quoted/);
-    assert.match(prompt, /per pound/);
+    // A business prices by weight in its own unit
+    // (docs/SHIPPING_SIMPLE_HOME.md K1).
+    assert.match(prompt, /per pound or per kilo/);
     assert.match(prompt, /total right away/);
     assert.match(prompt, /drop-off time/);
     assert.match(prompt, /pickup/);

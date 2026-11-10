@@ -10,6 +10,8 @@
  */
 
 import { CONTAINER_MESSAGES } from "./container-manifest.ts";
+// Pounds in a kilo: one constant for the price list and the proof weight.
+import { KG_TO_LB, type WeightUnit } from "./package-price-list.ts";
 
 type Row = Record<string, unknown>;
 type Lang = "en" | "fr";
@@ -61,6 +63,8 @@ export const MAX_CONTENT_QUANTITY = 99;
 export const MAX_SERIAL = 40;
 export const MIN_WEIGHT_LB = 0.1;
 export const MAX_WEIGHT_LB = 2000;
+export const MIN_WEIGHT_KG = 0.1;
+export const MAX_WEIGHT_KG = 900;
 export const MAX_DECLARED_VALUE_CENTS = 100000 * 100;
 
 export const CONFIRMATION_STATUSES = ["none", "asked", "confirmed", "problem"] as const;
@@ -68,15 +72,26 @@ export type SenderConfirmationStatus = (typeof CONFIRMATION_STATUSES)[number];
 
 export type ContentItem = { label: string; quantity: number; serial: string };
 
-/** The four fields the line callables take, as the server stores them. */
+/**
+ * The four fields the line callables take, as the server stores them.
+ * `weightLb` is always pounds; `weightKg` is what staff typed in kilos
+ * (present only then; the pounds are derived from it).
+ */
 export type ProofFields = {
   photoPaths: string[];
   contents: ContentItem[];
   weightLb: number | null;
+  weightKg?: number | null;
   declaredValueCents: number | null;
 };
 
-export type ProofRefusal = "photo_invalid" | "photo_required" | "contents_invalid" | "weight_invalid" | "declared_value_invalid";
+export type ProofRefusal =
+  | "photo_invalid"
+  | "photo_required"
+  | "contents_invalid"
+  | "weight_invalid"
+  | "weight_kg_invalid"
+  | "declared_value_invalid";
 
 /**
  * The server's wording for a proof refusal (package_proof.REFUSAL). Read
@@ -88,6 +103,7 @@ const PROOF_REFUSAL_FALLBACK: Record<ProofRefusal, string> = {
   photo_required: "Add at least one photo of the package.",
   contents_invalid: "Check the item list: a name up to 60 characters, a quantity from 1 to 99, and an optional serial number.",
   weight_invalid: "Enter a weight between 0.1 and 2000 lb.",
+  weight_kg_invalid: "Enter a weight between 0.1 and 900 kg.",
   declared_value_invalid: "Enter a declared value of $0 or more.",
 };
 
@@ -170,17 +186,61 @@ export function normalizeWeightLb(raw: unknown): number | null {
   return rounded;
 }
 
-/** The weight a line stores, or null. */
+/** The weight a line stores in pounds (always pounds), or null. */
 export function lineWeightLb(line: unknown): number | null {
   const value = normalizeWeightLb(asRow(line).weightLb);
   return value === null || Number.isNaN(value) ? null : value;
 }
 
-/** "4.2 lb" (EN) or "4,2 lb" (FR); "" when there is no weight. */
-export function weightText(weightLb: number | null | undefined, lang: Lang = "en"): string {
-  if (typeof weightLb !== "number" || !Number.isFinite(weightLb) || weightLb <= 0) return "";
-  const n = weightLb.toFixed(1).replace(/\.0$/, "");
-  return `${lang === "fr" ? n.replace(".", ",") : n} lb`;
+/** Kilos with one decimal, or NaN; null for "not given". */
+export function normalizeWeightKg(raw: unknown): number | null {
+  if (raw === undefined || raw === null || raw === "") return null;
+  const value = Number(typeof raw === "string" ? raw.replace(",", ".") : raw);
+  if (!Number.isFinite(value)) return NaN;
+  const rounded = Math.round(value * 10) / 10;
+  if (rounded < MIN_WEIGHT_KG || rounded > MAX_WEIGHT_KG) return NaN;
+  return rounded;
+}
+
+/** The kilos staff typed on a line (only a line weighed in kilos has any), or null. */
+export function lineWeightKg(line: unknown): number | null {
+  const value = normalizeWeightKg(asRow(line).weightKg);
+  return value === null || Number.isNaN(value) ? null : value;
+}
+
+/** The pounds a weight typed in kilos is stored as: at least 0.1, one decimal. */
+export function weightLbFromKg(weightKg: number): number {
+  return Math.max(MIN_WEIGHT_LB, Math.round(Number(weightKg) * KG_TO_LB * 10) / 10);
+}
+
+/**
+ * The weight of a line as one pure rule: `weightKg` given (what staff typed
+ * in kilos) wins - it is stored and the pounds are derived from it.
+ * Otherwise `weightLb` is stored and there are no kilos.
+ */
+export function normalizeWeight(raw: unknown): { weightLb: number | null; weightKg: number | null; error: "" | "weight_invalid" | "weight_kg_invalid" } {
+  const row = asRow(raw);
+  const kg = normalizeWeightKg(row.weightKg);
+  if (Number.isNaN(kg)) return { weightLb: null, weightKg: null, error: "weight_kg_invalid" };
+  if (kg !== null) return { weightLb: weightLbFromKg(kg), weightKg: kg, error: "" };
+  const lb = normalizeWeightLb(row.weightLb);
+  if (Number.isNaN(lb)) return { weightLb: null, weightKg: null, error: "weight_invalid" };
+  return { weightLb: lb, weightKg: null, error: "" };
+}
+
+/**
+ * "4.2 lb" (EN) or "4,2 lb" (FR); "10 kg" / "4,5 kg" for a line weighed in
+ * kilos; "" when there is no weight. Takes pounds, or a line `{weightLb,
+ * weightKg}` (kilos are said when the line has them).
+ */
+export function weightText(weight: number | { weightLb?: unknown; weightKg?: unknown } | null | undefined, lang: Lang = "en"): string {
+  const line = weight !== null && typeof weight === "object" ? weight : null;
+  const kg = line ? Number(line.weightKg) : NaN;
+  const useKg = Number.isFinite(kg) && kg > 0;
+  const value = useKg ? kg : line ? Number(line.weightLb) : weight;
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return "";
+  const n = value.toFixed(1).replace(/\.0$/, "");
+  return `${lang === "fr" ? n.replace(".", ",") : n} ${useKg ? "kg" : "lb"}`;
 }
 
 /** Whole cents at or above zero, or NaN; null for "not given". */
@@ -204,12 +264,19 @@ export function validateProofFields(raw: unknown): { fields: ProofFields | null;
   if (photos.error) return { fields: null, error: photos.error };
   const contents = normalizeContents(row.contents);
   if (contents.error) return { fields: null, error: contents.error };
-  const weightLb = normalizeWeightLb(row.weightLb);
-  if (Number.isNaN(weightLb)) return { fields: null, error: "weight_invalid" };
+  const weight = normalizeWeight(row);
+  if (weight.error) return { fields: null, error: weight.error };
   const declaredValueCents = normalizeDeclaredValueCents(row.declaredValueCents);
   if (Number.isNaN(declaredValueCents)) return { fields: null, error: "declared_value_invalid" };
   return {
-    fields: { photoPaths: photos.paths, contents: contents.contents, weightLb, declaredValueCents },
+    fields: {
+      photoPaths: photos.paths,
+      contents: contents.contents,
+      weightLb: weight.weightLb,
+      // Only when staff typed kilos (the pounds above were derived from it).
+      ...(weight.weightKg === null ? {} : { weightKg: weight.weightKg }),
+      declaredValueCents,
+    },
     error: "",
   };
 }
@@ -449,8 +516,10 @@ export type ContentDraft = { key: string; label: string; quantity: string; seria
 export type ProofDraft = {
   photos: ProofPhotoDraft[];
   contents: ContentDraft[];
-  /** Pounds as typed, one decimal. */
+  /** The weight as typed, one decimal, in `weightUnit` (the name is legacy: it is kilos when the unit is "kg"). */
   weightLb: string;
+  /** The unit the weight field is typed in: the business's, or the line's own when it was weighed in kilos. */
+  weightUnit: WeightUnit;
   /** Whole dollars as typed. */
   declaredValue: string;
 };
@@ -465,18 +534,25 @@ export function newContentDraft(): ContentDraft {
   return { key: nextKey("item"), label: "", quantity: "1", serial: "" };
 }
 
-export function emptyProofDraft(): ProofDraft {
-  return { photos: [], contents: [], weightLb: "", declaredValue: "" };
+export function emptyProofDraft(weightUnit: WeightUnit = "lb"): ProofDraft {
+  return { photos: [], contents: [], weightLb: "", weightUnit, declaredValue: "" };
 }
 
-/** A stored line back into the form: its photos (server folders included), items, weight and value. */
+/**
+ * A stored line back into the form: its photos (server folders included),
+ * items, weight and value. A line weighed in kilos shows its kilos; any
+ * other shows its pounds - nothing is converted, so an edit that leaves the
+ * weight alone leaves it exactly as stored.
+ */
 export function proofDraftFromLine(line: unknown): ProofDraft {
-  const weight = lineWeightLb(line);
+  const kilos = lineWeightKg(line);
+  const weight = kilos === null ? lineWeightLb(line) : kilos;
   const value = lineDeclaredValueCents(line);
   return {
     photos: linePhotoPaths(line).map((path) => ({ key: nextKey("photo"), path, previewUrl: "", status: "ready" as const })),
     contents: lineContents(line).map((item) => ({ key: nextKey("item"), label: item.label, quantity: String(item.quantity), serial: item.serial })),
     weightLb: weight === null ? "" : String(weight),
+    weightUnit: kilos === null ? "lb" : "kg",
     declaredValue: value === null ? "" : String(Math.round(value / 100)),
   };
 }
@@ -493,7 +569,18 @@ export function readDeclaredValue(typed: string): number | null {
   return Number(clean) * 100;
 }
 
-export type ProofDraftProblem = "photo_required" | "contents_invalid" | "weight_invalid" | "declared_value_invalid" | "photos_uploading";
+export type ProofDraftProblem =
+  | "photo_required"
+  | "contents_invalid"
+  | "weight_invalid"
+  | "weight_kg_invalid"
+  | "declared_value_invalid"
+  | "photos_uploading";
+
+/** The weight field as the server reads it: kilos win when the field is in kilos. */
+function draftWeight(draft: Pick<ProofDraft, "weightLb" | "weightUnit">): ReturnType<typeof normalizeWeight> {
+  return draft.weightUnit === "kg" ? normalizeWeight({ weightKg: draft.weightLb }) : normalizeWeight({ weightLb: draft.weightLb });
+}
 
 /**
  * The form's own checks before the call: the same rules as the server,
@@ -507,7 +594,8 @@ export function proofDraftProblems(draft: ProofDraft, options: { photosRequired?
   if (options.photosRequired && ready.length === 0) problems.push("photo_required");
   const contents = normalizeContents(draft.contents.map((item) => ({ label: item.label, quantity: item.quantity.trim() === "" ? 1 : Number(item.quantity), serial: item.serial })));
   if (contents.error) problems.push("contents_invalid");
-  if (Number.isNaN(normalizeWeightLb(draft.weightLb))) problems.push("weight_invalid");
+  const weightError = draftWeight(draft).error;
+  if (weightError) problems.push(weightError);
   const value = readDeclaredValue(draft.declaredValue);
   if (Number.isNaN(value) || Number.isNaN(normalizeDeclaredValueCents(value))) problems.push("declared_value_invalid");
   return problems;
@@ -528,17 +616,21 @@ export function proofProblemText(problem: ProofDraftProblem): string {
 
 /**
  * The four fields as the callables take them. Photos that failed to upload
- * are left out; a blank weight or value is sent as null (not given).
+ * are left out; a blank weight or value is sent as null (not given). A weight
+ * typed in kilos goes as `weightKg` with the pounds it makes beside it; one
+ * typed in pounds goes as `weightLb` alone (and a blank kilo field clears
+ * both), so the server never keeps kilos next to pounds that disagree.
  */
 export function proofPayload(draft: ProofDraft): ProofFields {
   const photoPaths = normalizePhotoPaths(draft.photos.filter((photo) => photo.status === "ready" && photo.path).map((photo) => photo.path)).paths;
   const contents = normalizeContents(draft.contents.map((item) => ({ label: item.label, quantity: item.quantity.trim() === "" ? 1 : Number(item.quantity), serial: item.serial }))).contents;
-  const weight = normalizeWeightLb(draft.weightLb);
+  const weight = draftWeight(draft);
   const value = readDeclaredValue(draft.declaredValue);
   return {
     photoPaths,
     contents,
-    weightLb: weight === null || Number.isNaN(weight) ? null : weight,
+    weightLb: weight.error ? null : weight.weightLb,
+    ...(draft.weightUnit === "kg" ? { weightKg: weight.error ? null : weight.weightKg } : {}),
     declaredValueCents: value === null || Number.isNaN(value) ? null : value,
   };
 }

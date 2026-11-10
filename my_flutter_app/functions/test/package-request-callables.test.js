@@ -744,6 +744,22 @@ describe("Received", () => {
     assert.deepEqual(bareLine.photoPaths, []);
     assert.deepEqual(bareLine.contents, []);
     assert.equal(bareLine.weightLb, null);
+    assert.equal(bareLine.weightKg, null);
+    assert.equal(line.weightKg, null, "pounds typed: no kilos");
+    // Staff who weigh in kilos (docs/SHIPPING_SIMPLE_HOME.md K3): the kilos
+    // are stored, the pounds derived; 901 kg is refused with the kilo code.
+    const kiloRequest = (await submit({pieces: [{kind: "barrel"}]}))
+        .requestId;
+    assert.equal(await reasonOf(staff("receivePackageRequest", {requestId:
+      kiloRequest, pieces: [{id: "p1", priceCents: 9000}], weightKg: 901},
+    MARIAMA)), "weight_kg_invalid");
+    const kilos = await staff("receivePackageRequest", {requestId:
+      kiloRequest, pieces: [{id: "p1", priceCents: 9000}], weightKg: 10},
+    MARIAMA);
+    const kiloLine = (await db.collection("containerLines")
+        .doc(kilos.lineId).get()).data();
+    assert.equal(kiloLine.weightKg, 10);
+    assert.equal(kiloLine.weightLb, 22);
     await bizRef.update({packageProofSettings: {}});
   });
 
@@ -1441,6 +1457,72 @@ describe("price lists (docs/PACKAGE_PRICE_LIST.md)", () => {
         "anon-y", ANON);
     assert.deepEqual(view.request.plannedWindow, {from: "14:00",
       to: "16:00"});
+  });
+
+  it("a kilo list: saved with its unit, priced in kilos, re-priced when " +
+     "the unit changes, and refused with an unknown unit", async () => {
+    const kilos = {gn: {air: {items: [{label: "Phone",
+      categoryId: "electronics", priceCents: 4000, includedLb: 2}],
+    perLbCents: {clothing: 700}, departure: {weekdays: ["tue", "fri"]}}}};
+    const saved = await staff("setPackageRequestSettings",
+        {action: "price_list", weightUnit: "kg", routes: kilos});
+    assert.equal(saved.priceList.weightUnit, "kg");
+    const doc = await priceList();
+    assert.equal(doc.weightUnit, "kg");
+    assert.equal(doc.routes.gn.air.unit, "kg");
+    assert.equal(doc.routes.gn.air.items[0].includedLb, 2);
+
+    // The customer's form is told the route is kilos.
+    const listed = await call("listPackageRequestOptions", {}, "anon-kg",
+        ANON);
+    const option = listed.options.find((o) => o.businessId === BIZ &&
+      o.country.id === "gn");
+    assert.equal(option.routes.air.unit, "kg");
+
+    // Kilos typed in the list's unit: $7 x 10 kg. Pounds typed (with their
+    // unit) are converted: 10 lb is 4.5 kg.
+    const inKilos = await submit({shipMode: "air", channel: "web",
+      pieces: [{categoryId: "clothing", weightLb: 10}]});
+    assert.equal(inKilos.status, "confirmed");
+    assert.equal(inKilos.totalCents, 7000);
+    const stored = (await requestDoc(inKilos.requestId)).pieces[0];
+    assert.equal(stored.price.unit, "kg");
+    assert.equal(stored.description, "Clothes and fabric · 10 kg");
+    const inPounds = await submit({shipMode: "air", channel: "web",
+      pieces: [{categoryId: "clothing", weightLb: 10, weightUnit: "lb"}]});
+    assert.equal(inPounds.totalCents, 3150);
+    assert.equal(await reasonOf(submit({shipMode: "air", channel: "web",
+      pieces: [{categoryId: "clothing", weightLb: 901}]})),
+    "weight_kg_invalid");
+
+    // An older app saves without naming the unit: the kilo list stays kilos.
+    await staff("setPackageRequestSettings", {action: "price_list",
+      routes: kilos});
+    assert.equal((await priceList()).weightUnit, "kg");
+    assert.equal((await priceList()).routes.gn.air.unit, "kg");
+
+    // The same numbers as a pounds list: the open request is re-priced from
+    // its stored 10 kg (22 lb) at $7 a pound, and the customer asked again.
+    await staff("setPackageRequestSettings", {action: "price_list",
+      weightUnit: "lb", routes: kilos});
+    const back = await priceList();
+    assert.equal(back.weightUnit, "lb", "a pounds list overwrites kg");
+    assert.ok(!("unit" in back.routes.gn.air));
+    const row = await requestDoc(inKilos.requestId);
+    assert.equal(row.estimate.totalCents, 15400);
+    assert.equal(row.status, "estimate_sent");
+    assert.ok(!("unit" in row.pieces[0].price));
+    assert.equal(row.pieces[0].price.weightLb, 22);
+
+    assert.equal(await reasonOf(staff("setPackageRequestSettings",
+        {action: "price_list", weightUnit: "stone", routes: kilos})),
+    "unit_invalid");
+    // Back to the list the other tests expect.
+    await staff("setPackageRequestSettings", {action: "price_list",
+      routes});
+    assert.equal((await priceList()).weightUnit, "lb");
+    assert.equal((await priceList()).routes.gn.sea.items[0].label,
+        "TV 43 in");
   });
 
   it("new freight work is refused", async () => {

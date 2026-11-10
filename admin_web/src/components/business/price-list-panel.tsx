@@ -12,11 +12,13 @@ import {
   listPayload,
   listProblem,
   newItemDraft,
+  perUnitText,
   priceListFailure,
   priceListHistory,
   priceListMessage,
   priceListView,
   routeSummary,
+  unitChangedNotice,
   weekdayShort,
   weeksText,
   type CountryDraft,
@@ -29,7 +31,7 @@ import { destinationCountryOptionForRow } from "@/lib/destination-countries";
 import { functions } from "@/lib/firebase";
 import { currentLanguage, formatDateTime } from "@/lib/format";
 import { BOX_PRICED_IDS, boxPicture, boxPriceFieldLabel, boxSizeExample, boxSizeLimit, boxSizeName } from "@/lib/package-box";
-import { CATEGORIES, LIMIT, WEEK_DAYS, type PriceMode, type WeekDayKey } from "@/lib/package-price-list";
+import { CATEGORIES, LIMIT, WEEK_DAYS, type PriceMode, type WeekDayKey, type WeightUnit } from "@/lib/package-price-list";
 
 type Props = {
   businessId: string;
@@ -54,8 +56,9 @@ function lang(): Lang {
  * Shipping > Price list: what a business charges to send a package, per
  * destination country, separately by Sea and by Air (docs/PACKAGE_PRICE_LIST.md
  * §6). Items with a fixed price (optionally "covers up to X lb"), a price per
- * pound per category, and the weekly departure days. Save sends the WHOLE
- * map. The same component is mounted in the Laawol admin console for any
+ * pound per category, and the weekly departure days. The whole list is priced
+ * in one unit, per lb or per kg (docs/SHIPPING_SIMPLE_HOME.md K1). Save sends
+ * the WHOLE map. The same component is mounted in the Laawol admin console for any
  * business, where a save asks the business to check it.
  */
 export function PriceListPanel({ businessId, canEdit, byLaawol = false, previewMode = false }: Props) {
@@ -92,14 +95,20 @@ export function PriceListPanel({ businessId, canEdit, byLaawol = false, previewM
     if (savedFrom === null) return undefined;
     if (stored.updatedAtMs !== savedFrom) {
       setEdits(null);
+      setUnitEdit(null);
       setSavedFrom(null);
       return undefined;
     }
-    const timer = setTimeout(() => { setEdits(null); setSavedFrom(null); }, 8000);
+    const timer = setTimeout(() => { setEdits(null); setUnitEdit(null); setSavedFrom(null); }, 8000);
     return () => clearTimeout(timer);
   }, [savedFrom, stored.updatedAtMs]);
   const draft: ListDraft = useMemo(() => ({ ...serverDraft, ...(edits ?? {}) }), [serverDraft, edits]);
-  const dirty = edits !== null;
+  // The list's one unit: what is saved, until the owner picks the other. The
+  // amounts stay as typed; only what they mean changes (so they are told once).
+  const [unitEdit, setUnitEdit] = useState<WeightUnit | null>(null);
+  const unit: WeightUnit = unitEdit ?? stored.weightUnit;
+  const unitChanged = unit !== stored.weightUnit;
+  const dirty = edits !== null || unitChanged;
 
   const [picked, setPicked] = useState("");
   const [mode, setMode] = useState<PriceMode>("sea");
@@ -131,18 +140,18 @@ export function PriceListPanel({ businessId, canEdit, byLaawol = false, previewM
   async function save() {
     const problem = listProblem(draft);
     if (problem) {
-      setError(priceListMessage(problem));
+      setError(priceListMessage(problem, unit));
       return;
     }
     setBusy(true);
     setError("");
     setFlash("");
     try {
-      await call({ action: "price_list", ...listPayload(draft) });
+      await call({ action: "price_list", ...listPayload(draft), weightUnit: unit });
       setSavedFrom(stored.updatedAtMs);
       setFlash(byLaawol ? "Price list saved. The business is asked to check it." : "Price list saved.");
     } catch (err) {
-      setError(priceListFailure(err).message);
+      setError(priceListFailure(err, unit).message);
     } finally {
       setBusy(false);
     }
@@ -242,7 +251,9 @@ export function PriceListPanel({ businessId, canEdit, byLaawol = false, previewM
           <section className="pkq-settings-block">
             <h4>Items and prices</h4>
             <small className="lst-hint">
-              A fixed price for each item. “Covers up to” is optional: leave it empty when the price is the same at any weight. The extra pounds are charged at the item&apos;s category rate per pound below, else the General goods rate. With neither, you type the price at the counter.
+              {unit === "kg"
+                ? "A fixed price for each item. “Covers up to” is optional: leave it empty when the price is the same at any weight. The extra kilos are charged at the item's category rate per kilo below, else the General goods rate. With neither, you type the price at the counter."
+                : "A fixed price for each item. “Covers up to” is optional: leave it empty when the price is the same at any weight. The extra pounds are charged at the item's category rate per pound below, else the General goods rate. With neither, you type the price at the counter."}
             </small>
             {route.items.length > 0 && (
               <div className="plist-items">
@@ -250,7 +261,7 @@ export function PriceListPanel({ businessId, canEdit, byLaawol = false, previewM
                   <span>Item</span>
                   <span>Category</span>
                   <span>Price ($)</span>
-                  <span>Covers up to (lb)</span>
+                  <span>{unit === "kg" ? "Covers up to (kg)" : "Covers up to (lb)"}</span>
                   <span />
                 </div>
                 {route.items.map((item) => (
@@ -284,7 +295,7 @@ export function PriceListPanel({ businessId, canEdit, byLaawol = false, previewM
                       />
                     </label>
                     <label className="lst-field">
-                      <span className="plist-label">Covers up to (lb)</span>
+                      <span className="plist-label">{unit === "kg" ? "Covers up to (kg)" : "Covers up to (lb)"}</span>
                       <input
                         disabled={readOnly}
                         inputMode="decimal"
@@ -362,18 +373,38 @@ export function PriceListPanel({ businessId, canEdit, byLaawol = false, previewM
           )}
 
           <section className="pkq-settings-block">
-            <h4>Price per pound</h4>
+            <h4>{unit === "kg" ? "Price per kilo" : "Price per pound"}</h4>
             <small className="lst-hint">For goods sold by weight, such as clothes or food. Leave a category empty to quote it by hand.</small>
+            <div className="plist-unit-row">
+              <span id="plist-unit-label">Price list unit</span>
+              <div className="plist-unit" role="radiogroup" aria-labelledby="plist-unit-label">
+                {(["lb", "kg"] as WeightUnit[]).map((choice) => (
+                  <button
+                    aria-checked={unit === choice}
+                    className={unit === choice ? "active" : ""}
+                    data-no-translate
+                    disabled={readOnly}
+                    key={choice}
+                    onClick={() => { setFlash(""); setError(""); setUnitEdit(choice === stored.weightUnit ? null : choice); }}
+                    role="radio"
+                    type="button"
+                  >
+                    {perUnitText(choice, l)}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {unitChanged && <p className="pkq-banner warn" role="status">{unitChangedNotice(unit)}</p>}
             <div className="plist-rates">
               {CATEGORIES.map((c) => (
                 <label className="lst-field" key={c.id}>
                   <span>{categoryLabel(c.id, l)}</span>
                   <input
-                    aria-label={`${categoryLabel(c.id, l)}, $ per pound`}
+                    aria-label={unit === "kg" ? `${categoryLabel(c.id, l)}, $ per kilo` : `${categoryLabel(c.id, l)}, $ per pound`}
                     disabled={readOnly}
                     inputMode="decimal"
                     onChange={(event) => editRoute((r) => ({ ...r, rates: { ...r.rates, [c.id]: event.target.value } }))}
-                    placeholder="$ per lb"
+                    placeholder={unit === "kg" ? "$ per kg" : "$ per lb"}
                     value={route.rates[c.id] ?? ""}
                   />
                 </label>
@@ -453,7 +484,7 @@ export function PriceListPanel({ businessId, canEdit, byLaawol = false, previewM
                 {busy ? <RefreshCw className="spin" size={14} aria-hidden="true" /> : <Save size={14} aria-hidden="true" />} {busy ? "Saving..." : "Save price list"}
               </button>
               {dirty && (
-                <button className="lst-btn ghost" disabled={busy} onClick={() => { setEdits(null); setError(""); }} type="button">Discard changes</button>
+                <button className="lst-btn ghost" disabled={busy} onClick={() => { setEdits(null); setUnitEdit(null); setError(""); }} type="button">Discard changes</button>
               )}
               <small className="pkq-muted">Saving sends every country at once. Open requests that use a changed price get a new estimate.</small>
             </div>

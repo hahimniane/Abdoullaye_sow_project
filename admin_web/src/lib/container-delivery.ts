@@ -254,6 +254,7 @@ export const PROOF_REFUSAL_COPY = {
   photo_required: "Add at least one photo of the package.",
   contents_invalid: "Check the item list: a name up to 60 characters, a quantity from 1 to 99, and an optional serial number.",
   weight_invalid: "Enter a weight between 0.1 and 2000 lb.",
+  weight_kg_invalid: "Enter a weight between 0.1 and 900 kg.",
   declared_value_invalid: "Enter a declared value of $0 or more.",
   pickup_code_invalid: "The pickup code does not match. Ask the receiver for the code in their message, or deliver without a code.",
   override_incomplete: "Delivering without a code needs the name of the person collecting and a photo.",

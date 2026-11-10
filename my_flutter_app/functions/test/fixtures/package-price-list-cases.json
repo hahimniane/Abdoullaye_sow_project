@@ -3410,5 +3410,2495 @@
         }
       }
     ]
+  },
+  "kilos": {
+    "_about": "Kilos (docs/SHIPPING_SIMPLE_HOME.md K). lists: validatePriceList(raw, countryIds) -> expect. pieces: pricePiece(route, piece, ctx) -> expect. baskets: priceBasket(route, pieces, ctx) -> expect. counter: counterPriceCents(price, weighed) -> expect, `weighed` in the snapshot's unit. reprice: repricePieces(pieces, route) -> expect with `cents` as a plain object. convert: convertWeight(value, from, to). rates: rateIn(cents, from, to) (a rate shown per the other unit, whole cents). weightIn: weightIn(unit, line). weights: normalizeWeight(input) -> expect. weightText: weightText(weight, lang) where weight is a number (pounds) or a line {weightLb, weightKg}.",
+    "route": {
+      "items": [
+        {
+          "id": "i_phone",
+          "categoryId": "electronics",
+          "label": "Phone",
+          "priceCents": 4000,
+          "includedLb": 2
+        },
+        {
+          "id": "i_laptop",
+          "categoryId": "electronics",
+          "label": "Laptop",
+          "priceCents": 7000,
+          "includedLb": 0
+        }
+      ],
+      "perLbCents": {
+        "clothing": 600,
+        "food": 500,
+        "general": 2500
+      },
+      "departure": {
+        "weekdays": [
+          "tue",
+          "fri"
+        ],
+        "everyWeeks": 1,
+        "anchorDate": ""
+      },
+      "unit": "kg"
+    },
+    "lbRoute": {
+      "items": [
+        {
+          "id": "i_phone",
+          "categoryId": "electronics",
+          "label": "Phone",
+          "priceCents": 4000,
+          "includedLb": 2
+        },
+        {
+          "id": "i_laptop",
+          "categoryId": "electronics",
+          "label": "Laptop",
+          "priceCents": 7000,
+          "includedLb": 0
+        }
+      ],
+      "perLbCents": {
+        "clothing": 600,
+        "food": 500,
+        "general": 450
+      },
+      "departure": {
+        "weekdays": [
+          "tue",
+          "fri"
+        ],
+        "everyWeeks": 1,
+        "anchorDate": ""
+      }
+    },
+    "lists": [
+      {
+        "name": "a kilo list stamps unit kg on every stored route",
+        "raw": {
+          "weightUnit": "kg",
+          "routes": {
+            "gn": {
+              "sea": {
+                "perLbCents": {
+                  "general": 2500
+                }
+              },
+              "air": {
+                "perLbCents": {
+                  "clothing": 700
+                }
+              }
+            },
+            "sn": {
+              "sea": {
+                "items": [
+                  {
+                    "label": "Phone",
+                    "categoryId": "electronics",
+                    "priceCents": 4000,
+                    "includedLb": 2
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "countryIds": [
+          "gn",
+          "sn"
+        ],
+        "expect": {
+          "routes": {
+            "gn": {
+              "sea": {
+                "items": [],
+                "perLbCents": {
+                  "general": 2500
+                },
+                "departure": null,
+                "unit": "kg"
+              },
+              "air": {
+                "items": [],
+                "perLbCents": {
+                  "clothing": 700
+                },
+                "departure": null,
+                "unit": "kg"
+              }
+            },
+            "sn": {
+              "sea": {
+                "items": [
+                  {
+                    "id": "i_phone",
+                    "categoryId": "electronics",
+                    "label": "Phone",
+                    "priceCents": 4000,
+                    "includedLb": 2
+                  }
+                ],
+                "perLbCents": {},
+                "departure": null,
+                "unit": "kg"
+              }
+            }
+          },
+          "weightUnit": "kg",
+          "errors": []
+        }
+      },
+      {
+        "name": "a pounds list written out stores no unit key",
+        "raw": {
+          "weightUnit": "lb",
+          "routes": {
+            "gn": {
+              "sea": {
+                "perLbCents": {
+                  "general": 2500
+                }
+              },
+              "air": {
+                "perLbCents": {
+                  "clothing": 700
+                }
+              }
+            },
+            "sn": {
+              "sea": {
+                "items": [
+                  {
+                    "label": "Phone",
+                    "categoryId": "electronics",
+                    "priceCents": 4000,
+                    "includedLb": 2
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "countryIds": [
+          "gn",
+          "sn"
+        ],
+        "expect": {
+          "routes": {
+            "gn": {
+              "sea": {
+                "items": [],
+                "perLbCents": {
+                  "general": 2500
+                },
+                "departure": null
+              },
+              "air": {
+                "items": [],
+                "perLbCents": {
+                  "clothing": 700
+                },
+                "departure": null
+              }
+            },
+            "sn": {
+              "sea": {
+                "items": [
+                  {
+                    "id": "i_phone",
+                    "categoryId": "electronics",
+                    "label": "Phone",
+                    "priceCents": 4000,
+                    "includedLb": 2
+                  }
+                ],
+                "perLbCents": {},
+                "departure": null
+              }
+            }
+          },
+          "weightUnit": "lb",
+          "errors": []
+        }
+      },
+      {
+        "name": "a list with no unit is a pounds list",
+        "raw": {
+          "routes": {
+            "gn": {
+              "sea": {
+                "perLbCents": {
+                  "general": 2500
+                }
+              },
+              "air": {
+                "perLbCents": {
+                  "clothing": 700
+                }
+              }
+            },
+            "sn": {
+              "sea": {
+                "items": [
+                  {
+                    "label": "Phone",
+                    "categoryId": "electronics",
+                    "priceCents": 4000,
+                    "includedLb": 2
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "countryIds": [
+          "gn",
+          "sn"
+        ],
+        "expect": {
+          "routes": {
+            "gn": {
+              "sea": {
+                "items": [],
+                "perLbCents": {
+                  "general": 2500
+                },
+                "departure": null
+              },
+              "air": {
+                "items": [],
+                "perLbCents": {
+                  "clothing": 700
+                },
+                "departure": null
+              }
+            },
+            "sn": {
+              "sea": {
+                "items": [
+                  {
+                    "id": "i_phone",
+                    "categoryId": "electronics",
+                    "label": "Phone",
+                    "priceCents": 4000,
+                    "includedLb": 2
+                  }
+                ],
+                "perLbCents": {},
+                "departure": null
+              }
+            }
+          },
+          "weightUnit": "lb",
+          "errors": []
+        }
+      },
+      {
+        "name": "a null or blank unit is a pounds list",
+        "raw": {
+          "weightUnit": null,
+          "routes": {
+            "gn": {
+              "sea": {
+                "perLbCents": {
+                  "general": 2500
+                }
+              },
+              "air": {
+                "perLbCents": {
+                  "clothing": 700
+                }
+              }
+            },
+            "sn": {
+              "sea": {
+                "items": [
+                  {
+                    "label": "Phone",
+                    "categoryId": "electronics",
+                    "priceCents": 4000,
+                    "includedLb": 2
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "countryIds": [
+          "gn",
+          "sn"
+        ],
+        "expect": {
+          "routes": {
+            "gn": {
+              "sea": {
+                "items": [],
+                "perLbCents": {
+                  "general": 2500
+                },
+                "departure": null
+              },
+              "air": {
+                "items": [],
+                "perLbCents": {
+                  "clothing": 700
+                },
+                "departure": null
+              }
+            },
+            "sn": {
+              "sea": {
+                "items": [
+                  {
+                    "id": "i_phone",
+                    "categoryId": "electronics",
+                    "label": "Phone",
+                    "priceCents": 4000,
+                    "includedLb": 2
+                  }
+                ],
+                "perLbCents": {},
+                "departure": null
+              }
+            }
+          },
+          "weightUnit": "lb",
+          "errors": []
+        }
+      },
+      {
+        "name": "an unknown unit is refused",
+        "raw": {
+          "weightUnit": "stone",
+          "routes": {
+            "gn": {
+              "sea": {
+                "perLbCents": {
+                  "general": 2500
+                }
+              },
+              "air": {
+                "perLbCents": {
+                  "clothing": 700
+                }
+              }
+            },
+            "sn": {
+              "sea": {
+                "items": [
+                  {
+                    "label": "Phone",
+                    "categoryId": "electronics",
+                    "priceCents": 4000,
+                    "includedLb": 2
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "countryIds": [
+          "gn",
+          "sn"
+        ],
+        "expect": {
+          "routes": null,
+          "weightUnit": "lb",
+          "errors": [
+            "unit_invalid"
+          ]
+        }
+      },
+      {
+        "name": "the unit is lowercase-tolerant",
+        "raw": {
+          "weightUnit": "KG",
+          "routes": {
+            "gn": {
+              "sea": {
+                "perLbCents": {
+                  "general": 2500
+                }
+              },
+              "air": {
+                "perLbCents": {
+                  "clothing": 700
+                }
+              }
+            },
+            "sn": {
+              "sea": {
+                "items": [
+                  {
+                    "label": "Phone",
+                    "categoryId": "electronics",
+                    "priceCents": 4000,
+                    "includedLb": 2
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "countryIds": [
+          "gn",
+          "sn"
+        ],
+        "expect": {
+          "routes": {
+            "gn": {
+              "sea": {
+                "items": [],
+                "perLbCents": {
+                  "general": 2500
+                },
+                "departure": null,
+                "unit": "kg"
+              },
+              "air": {
+                "items": [],
+                "perLbCents": {
+                  "clothing": 700
+                },
+                "departure": null,
+                "unit": "kg"
+              }
+            },
+            "sn": {
+              "sea": {
+                "items": [
+                  {
+                    "id": "i_phone",
+                    "categoryId": "electronics",
+                    "label": "Phone",
+                    "priceCents": 4000,
+                    "includedLb": 2
+                  }
+                ],
+                "perLbCents": {},
+                "departure": null,
+                "unit": "kg"
+              }
+            }
+          },
+          "weightUnit": "kg",
+          "errors": []
+        }
+      },
+      {
+        "name": "a kilo list with nothing priced keeps no route",
+        "raw": {
+          "weightUnit": "kg",
+          "routes": {
+            "gn": {
+              "sea": {
+                "items": []
+              }
+            }
+          }
+        },
+        "countryIds": [
+          "gn"
+        ],
+        "expect": {
+          "routes": {},
+          "weightUnit": "kg",
+          "errors": []
+        }
+      },
+      {
+        "name": "a kilo list still refuses box prices on air",
+        "raw": {
+          "weightUnit": "kg",
+          "routes": {
+            "gn": {
+              "air": {
+                "boxPricesCents": {
+                  "small": 2500
+                }
+              }
+            }
+          }
+        },
+        "countryIds": [
+          "gn"
+        ],
+        "expect": {
+          "routes": null,
+          "weightUnit": "kg",
+          "errors": [
+            "box_sizes_sea_only"
+          ]
+        }
+      },
+      {
+        "name": "a kilo list keeps Sea box prices and stamps the route",
+        "raw": {
+          "weightUnit": "kg",
+          "routes": {
+            "gn": {
+              "sea": {
+                "boxPricesCents": {
+                  "small": 2500
+                }
+              }
+            }
+          }
+        },
+        "countryIds": [
+          "gn"
+        ],
+        "expect": {
+          "routes": {
+            "gn": {
+              "sea": {
+                "items": [],
+                "perLbCents": {},
+                "boxPricesCents": {
+                  "small": 2500
+                },
+                "departure": null,
+                "unit": "kg"
+              }
+            }
+          },
+          "weightUnit": "kg",
+          "errors": []
+        }
+      },
+      {
+        "name": "an unknown unit with no routes names both problems",
+        "raw": {
+          "weightUnit": 5
+        },
+        "countryIds": [
+          "gn"
+        ],
+        "expect": {
+          "routes": null,
+          "weightUnit": "lb",
+          "errors": [
+            "price_list_invalid",
+            "unit_invalid"
+          ]
+        }
+      }
+    ],
+    "pieces": [
+      {
+        "name": "$25/kg x 10 kg is $250.00 exactly",
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 2500
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          },
+          "unit": "kg"
+        },
+        "piece": {
+          "categoryId": "general",
+          "weightLb": 10
+        },
+        "expect": {
+          "price": {
+            "source": "per_lb",
+            "itemId": "",
+            "label": "General goods",
+            "categoryId": "general",
+            "quantity": 1,
+            "unitCents": null,
+            "includedLb": 0,
+            "excessPerLbCents": null,
+            "perLbCents": 2500,
+            "weightLb": 10,
+            "unit": "kg"
+          },
+          "estimateCents": 25000,
+          "description": "General goods · 10 kg",
+          "error": ""
+        }
+      },
+      {
+        "name": "the same with the unit written out",
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 2500
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          },
+          "unit": "kg"
+        },
+        "piece": {
+          "categoryId": "general",
+          "weightLb": 10,
+          "weightUnit": "kg"
+        },
+        "expect": {
+          "price": {
+            "source": "per_lb",
+            "itemId": "",
+            "label": "General goods",
+            "categoryId": "general",
+            "quantity": 1,
+            "unitCents": null,
+            "includedLb": 0,
+            "excessPerLbCents": null,
+            "perLbCents": 2500,
+            "weightLb": 10,
+            "unit": "kg"
+          },
+          "estimateCents": 25000,
+          "description": "General goods · 10 kg",
+          "error": ""
+        }
+      },
+      {
+        "name": "10 lb typed on a kilo route is 4.5 kg",
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 2500
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          },
+          "unit": "kg"
+        },
+        "piece": {
+          "categoryId": "general",
+          "weightLb": 10,
+          "weightUnit": "lb"
+        },
+        "expect": {
+          "price": {
+            "source": "per_lb",
+            "itemId": "",
+            "label": "General goods",
+            "categoryId": "general",
+            "quantity": 1,
+            "unitCents": null,
+            "includedLb": 0,
+            "excessPerLbCents": null,
+            "perLbCents": 2500,
+            "weightLb": 4.5,
+            "unit": "kg"
+          },
+          "estimateCents": 11250,
+          "description": "General goods · 4.5 kg",
+          "error": ""
+        }
+      },
+      {
+        "name": "100 kg typed on a pounds route is 220.5 lb",
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 450
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          }
+        },
+        "piece": {
+          "categoryId": "general",
+          "weightLb": 100,
+          "weightUnit": "kg"
+        },
+        "expect": {
+          "price": {
+            "source": "per_lb",
+            "itemId": "",
+            "label": "General goods",
+            "categoryId": "general",
+            "quantity": 1,
+            "unitCents": null,
+            "includedLb": 0,
+            "excessPerLbCents": null,
+            "perLbCents": 450,
+            "weightLb": 220.5
+          },
+          "estimateCents": 99225,
+          "description": "General goods · 220.5 lb",
+          "error": ""
+        }
+      },
+      {
+        "name": "10 kg typed on a pounds route is 22 lb",
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 450
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          }
+        },
+        "piece": {
+          "categoryId": "general",
+          "weightLb": 10,
+          "weightUnit": "kg"
+        },
+        "expect": {
+          "price": {
+            "source": "per_lb",
+            "itemId": "",
+            "label": "General goods",
+            "categoryId": "general",
+            "quantity": 1,
+            "unitCents": null,
+            "includedLb": 0,
+            "excessPerLbCents": null,
+            "perLbCents": 450,
+            "weightLb": 22
+          },
+          "estimateCents": 9900,
+          "description": "General goods · 22 lb",
+          "error": ""
+        }
+      },
+      {
+        "name": "a pounds route with the unit written out is unchanged",
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 450
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          }
+        },
+        "piece": {
+          "categoryId": "general",
+          "weightLb": 50,
+          "weightUnit": "lb"
+        },
+        "expect": {
+          "price": {
+            "source": "per_lb",
+            "itemId": "",
+            "label": "General goods",
+            "categoryId": "general",
+            "quantity": 1,
+            "unitCents": null,
+            "includedLb": 0,
+            "excessPerLbCents": null,
+            "perLbCents": 450,
+            "weightLb": 50
+          },
+          "estimateCents": 22500,
+          "description": "General goods · 50 lb",
+          "error": ""
+        }
+      },
+      {
+        "name": "0.1 lb on a kilo route never rounds to zero",
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 2500
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          },
+          "unit": "kg"
+        },
+        "piece": {
+          "categoryId": "general",
+          "weightLb": 0.1,
+          "weightUnit": "lb"
+        },
+        "expect": {
+          "price": {
+            "source": "per_lb",
+            "itemId": "",
+            "label": "General goods",
+            "categoryId": "general",
+            "quantity": 1,
+            "unitCents": null,
+            "includedLb": 0,
+            "excessPerLbCents": null,
+            "perLbCents": 2500,
+            "weightLb": 0.1,
+            "unit": "kg"
+          },
+          "estimateCents": 250,
+          "description": "General goods · 0.1 kg",
+          "error": ""
+        }
+      },
+      {
+        "name": "900 kg is the most a kilo weight can be",
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 2500
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          },
+          "unit": "kg"
+        },
+        "piece": {
+          "categoryId": "general",
+          "weightLb": 900
+        },
+        "expect": {
+          "price": {
+            "source": "per_lb",
+            "itemId": "",
+            "label": "General goods",
+            "categoryId": "general",
+            "quantity": 1,
+            "unitCents": null,
+            "includedLb": 0,
+            "excessPerLbCents": null,
+            "perLbCents": 2500,
+            "weightLb": 900,
+            "unit": "kg"
+          },
+          "estimateCents": 2250000,
+          "description": "General goods · 900 kg",
+          "error": ""
+        }
+      },
+      {
+        "name": "900.1 kg is too much",
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 2500
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          },
+          "unit": "kg"
+        },
+        "piece": {
+          "categoryId": "general",
+          "weightLb": 900.1
+        },
+        "expect": {
+          "price": null,
+          "estimateCents": null,
+          "description": "",
+          "error": "weight_kg_invalid"
+        }
+      },
+      {
+        "name": "901 kg typed on a pounds route is too much",
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 450
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          }
+        },
+        "piece": {
+          "categoryId": "general",
+          "weightLb": 901,
+          "weightUnit": "kg"
+        },
+        "expect": {
+          "price": null,
+          "estimateCents": null,
+          "description": "",
+          "error": "weight_kg_invalid"
+        }
+      },
+      {
+        "name": "2000 lb typed on a kilo route is allowed (907.2 kg)",
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 2500
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          },
+          "unit": "kg"
+        },
+        "piece": {
+          "categoryId": "general",
+          "weightLb": 2000,
+          "weightUnit": "lb"
+        },
+        "expect": {
+          "price": {
+            "source": "per_lb",
+            "itemId": "",
+            "label": "General goods",
+            "categoryId": "general",
+            "quantity": 1,
+            "unitCents": null,
+            "includedLb": 0,
+            "excessPerLbCents": null,
+            "perLbCents": 2500,
+            "weightLb": 907.2,
+            "unit": "kg"
+          },
+          "estimateCents": 2268000,
+          "description": "General goods · 907.2 kg",
+          "error": ""
+        }
+      },
+      {
+        "name": "2000.1 lb is too much",
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 2500
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          },
+          "unit": "kg"
+        },
+        "piece": {
+          "categoryId": "general",
+          "weightLb": 2000.1,
+          "weightUnit": "lb"
+        },
+        "expect": {
+          "price": null,
+          "estimateCents": null,
+          "description": "",
+          "error": "weight_invalid"
+        }
+      },
+      {
+        "name": "0.04 kg is too little",
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 2500
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          },
+          "unit": "kg"
+        },
+        "piece": {
+          "categoryId": "general",
+          "weightLb": 0.04
+        },
+        "expect": {
+          "price": null,
+          "estimateCents": null,
+          "description": "",
+          "error": "weight_kg_invalid"
+        }
+      },
+      {
+        "name": "an unknown unit on a piece is refused",
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 2500
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          },
+          "unit": "kg"
+        },
+        "piece": {
+          "categoryId": "general",
+          "weightLb": 10,
+          "weightUnit": "oz"
+        },
+        "expect": {
+          "price": null,
+          "estimateCents": null,
+          "description": "",
+          "error": "unit_invalid"
+        }
+      },
+      {
+        "name": "a kilo item carries the unit and its included weight",
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 2500
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          },
+          "unit": "kg"
+        },
+        "piece": {
+          "priceItemId": "i_phone",
+          "quantity": 2
+        },
+        "expect": {
+          "price": {
+            "source": "item",
+            "itemId": "i_phone",
+            "label": "Phone",
+            "categoryId": "electronics",
+            "quantity": 2,
+            "unitCents": 4000,
+            "includedLb": 2,
+            "excessPerLbCents": 2500,
+            "perLbCents": null,
+            "weightLb": null,
+            "unit": "kg"
+          },
+          "estimateCents": 8000,
+          "description": "2 × Phone",
+          "error": ""
+        }
+      },
+      {
+        "name": "a category with no rate stays as typed for staff",
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 2500
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          },
+          "unit": "kg"
+        },
+        "piece": {
+          "categoryId": "fragile",
+          "weightLb": 12,
+          "weightUnit": "lb"
+        },
+        "expect": {
+          "price": null,
+          "estimateCents": null,
+          "description": "Fragile items · 12 lb",
+          "error": ""
+        }
+      },
+      {
+        "name": "no route at all keeps the kilos as typed",
+        "route": null,
+        "piece": {
+          "categoryId": "general",
+          "weightLb": 12,
+          "weightUnit": "kg"
+        },
+        "expect": {
+          "price": null,
+          "estimateCents": null,
+          "description": "General goods · 12 kg",
+          "error": ""
+        }
+      },
+      {
+        "name": "a kilo description in French",
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 2500
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          },
+          "unit": "kg"
+        },
+        "piece": {
+          "categoryId": "clothing",
+          "weightLb": 4.5
+        },
+        "ctx": {
+          "lang": "fr"
+        },
+        "expect": {
+          "price": {
+            "source": "per_lb",
+            "itemId": "",
+            "label": "Clothes and fabric",
+            "categoryId": "clothing",
+            "quantity": 1,
+            "unitCents": null,
+            "includedLb": 0,
+            "excessPerLbCents": null,
+            "perLbCents": 600,
+            "weightLb": 4.5,
+            "unit": "kg"
+          },
+          "estimateCents": 2700,
+          "description": "Vêtements et tissus · 4.5 kg",
+          "error": ""
+        }
+      }
+    ],
+    "baskets": [
+      {
+        "name": "a kilo basket: item, a suitcase of clothes and a pickup fee",
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 2500
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          },
+          "unit": "kg"
+        },
+        "pieces": [
+          {
+            "priceItemId": "i_phone",
+            "quantity": 2
+          },
+          {
+            "categoryId": "clothing",
+            "weightLb": 23
+          },
+          {
+            "categoryId": "general",
+            "weightLb": 10,
+            "weightUnit": "lb"
+          }
+        ],
+        "ctx": {
+          "pickupFeeCents": 1500
+        },
+        "expect": {
+          "pieces": [
+            {
+              "price": {
+                "source": "item",
+                "itemId": "i_phone",
+                "label": "Phone",
+                "categoryId": "electronics",
+                "quantity": 2,
+                "unitCents": 4000,
+                "includedLb": 2,
+                "excessPerLbCents": 2500,
+                "perLbCents": null,
+                "weightLb": null,
+                "unit": "kg"
+              },
+              "estimateCents": 8000,
+              "description": "2 × Phone",
+              "error": ""
+            },
+            {
+              "price": {
+                "source": "per_lb",
+                "itemId": "",
+                "label": "Clothes and fabric",
+                "categoryId": "clothing",
+                "quantity": 1,
+                "unitCents": null,
+                "includedLb": 0,
+                "excessPerLbCents": null,
+                "perLbCents": 600,
+                "weightLb": 23,
+                "unit": "kg"
+              },
+              "estimateCents": 13800,
+              "description": "Clothes and fabric · 23 kg",
+              "error": ""
+            },
+            {
+              "price": {
+                "source": "per_lb",
+                "itemId": "",
+                "label": "General goods",
+                "categoryId": "general",
+                "quantity": 1,
+                "unitCents": null,
+                "includedLb": 0,
+                "excessPerLbCents": null,
+                "perLbCents": 2500,
+                "weightLb": 4.5,
+                "unit": "kg"
+              },
+              "estimateCents": 11250,
+              "description": "General goods · 4.5 kg",
+              "error": ""
+            }
+          ],
+          "pricedCents": 34550,
+          "unpricedCount": 0,
+          "allPriced": true,
+          "totalCents": 34550,
+          "weighsAtCounter": true,
+          "errors": []
+        }
+      },
+      {
+        "name": "a pounds route priced from kilos typed once",
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 450
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          }
+        },
+        "pieces": [
+          {
+            "categoryId": "clothing",
+            "weightLb": 23,
+            "weightUnit": "kg"
+          }
+        ],
+        "ctx": {},
+        "expect": {
+          "pieces": [
+            {
+              "price": {
+                "source": "per_lb",
+                "itemId": "",
+                "label": "Clothes and fabric",
+                "categoryId": "clothing",
+                "quantity": 1,
+                "unitCents": null,
+                "includedLb": 0,
+                "excessPerLbCents": null,
+                "perLbCents": 600,
+                "weightLb": 50.7
+              },
+              "estimateCents": 30420,
+              "description": "Clothes and fabric · 50.7 lb",
+              "error": ""
+            }
+          ],
+          "pricedCents": 30420,
+          "unpricedCount": 0,
+          "allPriced": true,
+          "totalCents": 30420,
+          "weighsAtCounter": true,
+          "errors": []
+        }
+      }
+    ],
+    "counter": [
+      {
+        "name": "by the kilo: 12.5 kg at $25",
+        "price": {
+          "source": "per_lb",
+          "itemId": "",
+          "label": "General goods",
+          "categoryId": "general",
+          "quantity": 1,
+          "unitCents": null,
+          "includedLb": 0,
+          "excessPerLbCents": null,
+          "perLbCents": 2500,
+          "weightLb": 10,
+          "unit": "kg"
+        },
+        "weighed": 12.5,
+        "expect": 31250
+      },
+      {
+        "name": "by the kilo: nothing on the scale",
+        "price": {
+          "source": "per_lb",
+          "itemId": "",
+          "label": "General goods",
+          "categoryId": "general",
+          "quantity": 1,
+          "unitCents": null,
+          "includedLb": 0,
+          "excessPerLbCents": null,
+          "perLbCents": 2500,
+          "weightLb": 10,
+          "unit": "kg"
+        },
+        "weighed": 0,
+        "expect": null
+      },
+      {
+        "name": "2 phones up to 2 kg each weigh 3.5 kg",
+        "price": {
+          "source": "item",
+          "itemId": "i_phone",
+          "label": "Phone",
+          "categoryId": "electronics",
+          "quantity": 2,
+          "unitCents": 4000,
+          "includedLb": 2,
+          "excessPerLbCents": 2500,
+          "perLbCents": null,
+          "weightLb": null,
+          "unit": "kg"
+        },
+        "weighed": 3.5,
+        "expect": 8000
+      },
+      {
+        "name": "2 phones up to 2 kg each weigh 5 kg",
+        "price": {
+          "source": "item",
+          "itemId": "i_phone",
+          "label": "Phone",
+          "categoryId": "electronics",
+          "quantity": 2,
+          "unitCents": 4000,
+          "includedLb": 2,
+          "excessPerLbCents": 2500,
+          "perLbCents": null,
+          "weightLb": null,
+          "unit": "kg"
+        },
+        "weighed": 5,
+        "expect": 10500
+      }
+    ],
+    "reprice": [
+      {
+        "name": "50 lb priced in pounds, the list moves to kilos at the same numbers",
+        "pieces": [
+          {
+            "id": "p1",
+            "estimateCents": 30000,
+            "price": {
+              "source": "per_lb",
+              "itemId": "",
+              "label": "Clothes and fabric",
+              "categoryId": "clothing",
+              "quantity": 1,
+              "unitCents": null,
+              "includedLb": 0,
+              "excessPerLbCents": null,
+              "perLbCents": 600,
+              "weightLb": 50
+            }
+          }
+        ],
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 2500
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          },
+          "unit": "kg"
+        },
+        "expect": {
+          "pieces": [
+            {
+              "id": "p1",
+              "estimateCents": 13620,
+              "price": {
+                "source": "per_lb",
+                "itemId": "",
+                "label": "Clothes and fabric",
+                "categoryId": "clothing",
+                "quantity": 1,
+                "unitCents": null,
+                "includedLb": 0,
+                "excessPerLbCents": null,
+                "perLbCents": 600,
+                "weightLb": 22.7,
+                "unit": "kg"
+              }
+            }
+          ],
+          "changed": true,
+          "wentUp": false,
+          "cents": {
+            "p1": 13620
+          }
+        }
+      },
+      {
+        "name": "10 kg priced in kilos, the list moves back to pounds",
+        "pieces": [
+          {
+            "id": "p1",
+            "estimateCents": 25000,
+            "price": {
+              "source": "per_lb",
+              "itemId": "",
+              "label": "General goods",
+              "categoryId": "general",
+              "quantity": 1,
+              "unitCents": null,
+              "includedLb": 0,
+              "excessPerLbCents": null,
+              "perLbCents": 2500,
+              "weightLb": 10,
+              "unit": "kg"
+            }
+          }
+        ],
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 450
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          }
+        },
+        "expect": {
+          "pieces": [
+            {
+              "id": "p1",
+              "estimateCents": 9900,
+              "price": {
+                "source": "per_lb",
+                "itemId": "",
+                "label": "General goods",
+                "categoryId": "general",
+                "quantity": 1,
+                "unitCents": null,
+                "includedLb": 0,
+                "excessPerLbCents": null,
+                "perLbCents": 450,
+                "weightLb": 22
+              }
+            }
+          ],
+          "changed": true,
+          "wentUp": false,
+          "cents": {
+            "p1": 9900
+          }
+        }
+      },
+      {
+        "name": "10 kg when the kilo rate goes up",
+        "pieces": [
+          {
+            "id": "p1",
+            "estimateCents": 25000,
+            "price": {
+              "source": "per_lb",
+              "itemId": "",
+              "label": "General goods",
+              "categoryId": "general",
+              "quantity": 1,
+              "unitCents": null,
+              "includedLb": 0,
+              "excessPerLbCents": null,
+              "perLbCents": 2500,
+              "weightLb": 10,
+              "unit": "kg"
+            }
+          }
+        ],
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 3000
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          },
+          "unit": "kg"
+        },
+        "expect": {
+          "pieces": [
+            {
+              "id": "p1",
+              "estimateCents": 30000,
+              "price": {
+                "source": "per_lb",
+                "itemId": "",
+                "label": "General goods",
+                "categoryId": "general",
+                "quantity": 1,
+                "unitCents": null,
+                "includedLb": 0,
+                "excessPerLbCents": null,
+                "perLbCents": 3000,
+                "weightLb": 10,
+                "unit": "kg"
+              }
+            }
+          ],
+          "changed": true,
+          "wentUp": true,
+          "cents": {
+            "p1": 30000
+          }
+        }
+      },
+      {
+        "name": "10 kg on the same kilo list does not change",
+        "pieces": [
+          {
+            "id": "p1",
+            "estimateCents": 25000,
+            "price": {
+              "source": "per_lb",
+              "itemId": "",
+              "label": "General goods",
+              "categoryId": "general",
+              "quantity": 1,
+              "unitCents": null,
+              "includedLb": 0,
+              "excessPerLbCents": null,
+              "perLbCents": 2500,
+              "weightLb": 10,
+              "unit": "kg"
+            }
+          }
+        ],
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 2500
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          },
+          "unit": "kg"
+        },
+        "expect": {
+          "pieces": [
+            {
+              "id": "p1",
+              "estimateCents": 25000,
+              "price": {
+                "source": "per_lb",
+                "itemId": "",
+                "label": "General goods",
+                "categoryId": "general",
+                "quantity": 1,
+                "unitCents": null,
+                "includedLb": 0,
+                "excessPerLbCents": null,
+                "perLbCents": 2500,
+                "weightLb": 10,
+                "unit": "kg"
+              }
+            }
+          ],
+          "changed": false,
+          "wentUp": false,
+          "cents": {}
+        }
+      },
+      {
+        "name": "an item priced in pounds picks up the kilo unit",
+        "pieces": [
+          {
+            "id": "p1",
+            "estimateCents": 4000,
+            "price": {
+              "source": "item",
+              "itemId": "i_phone",
+              "label": "Phone",
+              "categoryId": "electronics",
+              "quantity": 1,
+              "unitCents": 4000,
+              "includedLb": 2,
+              "excessPerLbCents": 450,
+              "perLbCents": null,
+              "weightLb": null
+            }
+          }
+        ],
+        "route": {
+          "items": [
+            {
+              "id": "i_phone",
+              "categoryId": "electronics",
+              "label": "Phone",
+              "priceCents": 4000,
+              "includedLb": 2
+            },
+            {
+              "id": "i_laptop",
+              "categoryId": "electronics",
+              "label": "Laptop",
+              "priceCents": 7000,
+              "includedLb": 0
+            }
+          ],
+          "perLbCents": {
+            "clothing": 600,
+            "food": 500,
+            "general": 2500
+          },
+          "departure": {
+            "weekdays": [
+              "tue",
+              "fri"
+            ],
+            "everyWeeks": 1,
+            "anchorDate": ""
+          },
+          "unit": "kg"
+        },
+        "expect": {
+          "pieces": [
+            {
+              "id": "p1",
+              "estimateCents": 4000,
+              "price": {
+                "source": "item",
+                "itemId": "i_phone",
+                "label": "Phone",
+                "categoryId": "electronics",
+                "quantity": 1,
+                "unitCents": 4000,
+                "includedLb": 2,
+                "excessPerLbCents": 2500,
+                "perLbCents": null,
+                "weightLb": null,
+                "unit": "kg"
+              }
+            }
+          ],
+          "changed": true,
+          "wentUp": false,
+          "cents": {
+            "p1": 4000
+          }
+        }
+      }
+    ],
+    "convert": [
+      {
+        "name": "10 kg is 22 lb",
+        "value": 10,
+        "from": "kg",
+        "to": "lb",
+        "expect": 22
+      },
+      {
+        "name": "10 lb is 4.5 kg",
+        "value": 10,
+        "from": "lb",
+        "to": "kg",
+        "expect": 4.5
+      },
+      {
+        "name": "100 kg is 220.5 lb",
+        "value": 100,
+        "from": "kg",
+        "to": "lb",
+        "expect": 220.5
+      },
+      {
+        "name": "900 kg is 1984.2 lb",
+        "value": 900,
+        "from": "kg",
+        "to": "lb",
+        "expect": 1984.2
+      },
+      {
+        "name": "2000 lb is 907.2 kg",
+        "value": 2000,
+        "from": "lb",
+        "to": "kg",
+        "expect": 907.2
+      },
+      {
+        "name": "the same unit only rounds",
+        "value": 3.14,
+        "from": "kg",
+        "to": "kg",
+        "expect": 3.1
+      },
+      {
+        "name": "0.1 lb never becomes 0 kg",
+        "value": 0.1,
+        "from": "lb",
+        "to": "kg",
+        "expect": 0.1
+      },
+      {
+        "name": "0.1 kg is 0.2 lb",
+        "value": 0.1,
+        "from": "kg",
+        "to": "lb",
+        "expect": 0.2
+      }
+    ],
+    "rates": [
+      {
+        "name": "$25 a kilo is $11.34 a pound",
+        "cents": 2500,
+        "from": "kg",
+        "to": "lb",
+        "expect": 1134
+      },
+      {
+        "name": "$7 a kilo is $3.18 a pound",
+        "cents": 700,
+        "from": "kg",
+        "to": "lb",
+        "expect": 318
+      },
+      {
+        "name": "$3 a pound is $6.61 a kilo",
+        "cents": 300,
+        "from": "lb",
+        "to": "kg",
+        "expect": 661
+      },
+      {
+        "name": "the same unit is the same rate",
+        "cents": 450,
+        "from": "kg",
+        "to": "kg",
+        "expect": 450
+      }
+    ],
+    "weightIn": [
+      {
+        "name": "a kilo line on a kilo price",
+        "unit": "kg",
+        "line": {
+          "weightLb": 22,
+          "weightKg": 10
+        },
+        "expect": 10
+      },
+      {
+        "name": "a kilo line on a pounds price",
+        "unit": "lb",
+        "line": {
+          "weightLb": 22,
+          "weightKg": 10
+        },
+        "expect": 22
+      },
+      {
+        "name": "a pounds line on a kilo price",
+        "unit": "kg",
+        "line": {
+          "weightLb": 10
+        },
+        "expect": 4.5
+      },
+      {
+        "name": "a pounds line on a pounds price",
+        "unit": "lb",
+        "line": {
+          "weightLb": 10
+        },
+        "expect": 10
+      },
+      {
+        "name": "no weight",
+        "unit": "kg",
+        "line": {
+          "weightLb": null
+        },
+        "expect": null
+      },
+      {
+        "name": "only kilos on a pounds price",
+        "unit": "lb",
+        "line": {
+          "weightKg": 10
+        },
+        "expect": 22
+      }
+    ],
+    "weights": [
+      {
+        "name": "kilos derive the pounds",
+        "input": {
+          "weightKg": 10
+        },
+        "expect": {
+          "weightLb": 22,
+          "weightKg": 10,
+          "error": ""
+        }
+      },
+      {
+        "name": "kilos win over pounds sent beside them",
+        "input": {
+          "weightKg": 10,
+          "weightLb": 99
+        },
+        "expect": {
+          "weightLb": 22,
+          "weightKg": 10,
+          "error": ""
+        }
+      },
+      {
+        "name": "pounds alone leave no kilos",
+        "input": {
+          "weightLb": 22
+        },
+        "expect": {
+          "weightLb": 22,
+          "weightKg": null,
+          "error": ""
+        }
+      },
+      {
+        "name": "nothing given",
+        "input": {},
+        "expect": {
+          "weightLb": null,
+          "weightKg": null,
+          "error": ""
+        }
+      },
+      {
+        "name": "blank kilos fall back to pounds",
+        "input": {
+          "weightKg": "",
+          "weightLb": 5
+        },
+        "expect": {
+          "weightLb": 5,
+          "weightKg": null,
+          "error": ""
+        }
+      },
+      {
+        "name": "0.1 kg is stored as 0.2 lb",
+        "input": {
+          "weightKg": 0.1
+        },
+        "expect": {
+          "weightLb": 0.2,
+          "weightKg": 0.1,
+          "error": ""
+        }
+      },
+      {
+        "name": "900 kg is the most",
+        "input": {
+          "weightKg": 900
+        },
+        "expect": {
+          "weightLb": 1984.2,
+          "weightKg": 900,
+          "error": ""
+        }
+      },
+      {
+        "name": "900.1 kg is too much",
+        "input": {
+          "weightKg": 900.1
+        },
+        "expect": {
+          "weightLb": null,
+          "weightKg": null,
+          "error": "weight_kg_invalid"
+        }
+      },
+      {
+        "name": "0.04 kg is too little",
+        "input": {
+          "weightKg": 0.04
+        },
+        "expect": {
+          "weightLb": null,
+          "weightKg": null,
+          "error": "weight_kg_invalid"
+        }
+      },
+      {
+        "name": "kilos are rounded to a tenth",
+        "input": {
+          "weightKg": 4.46
+        },
+        "expect": {
+          "weightLb": 9.9,
+          "weightKg": 4.5,
+          "error": ""
+        }
+      },
+      {
+        "name": "pounds too high",
+        "input": {
+          "weightLb": 2000.1
+        },
+        "expect": {
+          "weightLb": null,
+          "weightKg": null,
+          "error": "weight_invalid"
+        }
+      },
+      {
+        "name": "kilos that are not a number",
+        "input": {
+          "weightKg": "abc"
+        },
+        "expect": {
+          "weightLb": null,
+          "weightKg": null,
+          "error": "weight_kg_invalid"
+        }
+      }
+    ],
+    "weightText": [
+      {
+        "name": "pounds as a number, English",
+        "weight": 4.2,
+        "lang": "en",
+        "expect": "4.2 lb"
+      },
+      {
+        "name": "pounds as a number, French",
+        "weight": 4.2,
+        "lang": "fr",
+        "expect": "4,2 lb"
+      },
+      {
+        "name": "a pounds line",
+        "weight": {
+          "weightLb": 22
+        },
+        "lang": "en",
+        "expect": "22 lb"
+      },
+      {
+        "name": "a kilo line, English",
+        "weight": {
+          "weightLb": 22,
+          "weightKg": 10
+        },
+        "lang": "en",
+        "expect": "10 kg"
+      },
+      {
+        "name": "a kilo line with a fraction, French",
+        "weight": {
+          "weightLb": 9.9,
+          "weightKg": 4.5
+        },
+        "lang": "fr",
+        "expect": "4,5 kg"
+      },
+      {
+        "name": "no weight",
+        "weight": {
+          "weightLb": null,
+          "weightKg": null
+        },
+        "lang": "en",
+        "expect": ""
+      },
+      {
+        "name": "whole kilos drop the zero",
+        "weight": {
+          "weightLb": 22,
+          "weightKg": 10
+        },
+        "lang": "fr",
+        "expect": "10 kg"
+      }
+    ]
   }
 }

@@ -564,8 +564,9 @@ function whatsappUpdateMessage(args) {
       // the first drop-off photo as the header.
       contentsEn: contents || describeLine(line, "en", args.group),
       contentsFr: contents || describeLine(line, "fr", args.group),
-      weightEn: weightText(line.weightLb, "en"),
-      weightFr: weightText(line.weightLb, "fr"),
+      // "10 kg" when staff weighed it in kilos, else "22 lb" (K3).
+      weightEn: weightText(line, "en"),
+      weightFr: weightText(line, "fr"),
       photoLink: photo,
       pickupCode: pickupCodeFor(line, args.role),
     },

@@ -19,12 +19,15 @@ import {
   CATEGORIES,
   LIMIT as PRICE_LIMIT,
   SIZE_PRESETS,
+  convertWeight,
   priceBasket,
   rankOptions,
+  unitOf,
   type BasketResult,
   type NextDepartureResult,
   type PiecePrice,
   type PriceMode,
+  type WeightUnit,
 } from "./package-price-list.ts";
 import {
   DEFAULT_TIME_ZONE,
@@ -82,7 +85,7 @@ export type ItemEntry = {
   key: string;
   label: string;
   categoryId: string;
-  /** The smallest and largest "up to X lb each" among businesses (0 = no weight limit). */
+  /** The smallest and largest "up to X each" among businesses (0 = no weight limit), in the catalog's unit. */
   minIncludedLb: number;
   maxIncludedLb: number;
 };
@@ -106,8 +109,23 @@ export function categoryLabel(categoryId: string, lang: Lang): string {
   return category ? category[lang === "fr" ? "fr" : "en"] : categoryId;
 }
 
-/** Items from `routes[mode].items` by name and category across businesses, plus per-pound categories and the barrel. */
-export function buildCatalog(options: readonly RequestOption[], mode: ShipMode): Catalog {
+/**
+ * The unit the weight questions are asked in (docs/SHIPPING_SIMPLE_HOME.md
+ * K2): the business's own on its own link, pounds when several businesses
+ * are compared (each prices the customer's weight in its own unit).
+ */
+export function catalogWeightUnit(options: readonly RequestOption[], onlyBusinessId = ""): WeightUnit {
+  if (!onlyBusinessId) return "lb";
+  const mine = options.filter((option) => option.businessId === onlyBusinessId);
+  return mine.some((option) => SHIP_MODES.some((mode) => unitOf(option.routes?.[mode]) === "kg")) ? "kg" : "lb";
+}
+
+/**
+ * Items from `routes[mode].items` by name and category across businesses,
+ * plus per-weight categories and the barrel. Included weights are shown in
+ * `unit` (a route in the other unit is converted).
+ */
+export function buildCatalog(options: readonly RequestOption[], mode: ShipMode, unit: WeightUnit = "lb"): Catalog {
   const items = new Map<string, ItemEntry>();
   const categories = new Set<string>();
   for (const option of options) {
@@ -115,7 +133,7 @@ export function buildCatalog(options: readonly RequestOption[], mode: ShipMode):
     for (const item of route?.items ?? []) {
       if (!CATEGORY_ORDER.has(item.categoryId)) continue;
       const key = itemKey(item.categoryId, item.label);
-      const included = Number(item.includedLb) > 0 ? Number(item.includedLb) : 0;
+      const included = Number(item.includedLb) > 0 ? convertWeight(Number(item.includedLb), unitOf(route), unit) : 0;
       const known = items.get(key);
       if (known) {
         known.minIncludedLb = Math.min(known.minIncludedLb, included);
@@ -138,14 +156,15 @@ export function buildCatalog(options: readonly RequestOption[], mode: ShipMode):
   };
 }
 
-/** "up to 2 lb each" for an item some business limits by weight, else "". */
-export function includedLbText(entry: Pick<ItemEntry, "minIncludedLb" | "maxIncludedLb">, lang: Lang): string {
+/** "up to 2 lb each" ("2 kg" on a kilo catalog) for an item some business limits by weight, else "". */
+export function includedLbText(entry: Pick<ItemEntry, "minIncludedLb" | "maxIncludedLb">, lang: Lang, unit: WeightUnit = "lb"): string {
   const lo = entry.minIncludedLb;
   const hi = entry.maxIncludedLb;
   if (!(hi > 0)) return "";
-  const range = lo > 0 && lo !== hi ? `${lo}–${hi}` : String(hi);
+  const num = (n: number) => (lang === "fr" ? String(n).replace(".", ",") : String(n));
+  const range = lo > 0 && lo !== hi ? `${num(lo)}–${num(hi)}` : num(hi);
   // A business with no limit beside one with a limit: say the limit, not a promise.
-  return lang === "fr" ? `jusqu’à ${range} lb chacun` : `up to ${range} lb each`;
+  return lang === "fr" ? `jusqu’à ${range} ${unit} chacun` : `up to ${range} ${unit} each`;
 }
 
 // ---------------------------------------------------------------------------
@@ -155,7 +174,7 @@ export function includedLbText(entry: Pick<ItemEntry, "minIncludedLb" | "maxIncl
 export type BasketLine =
   | { key: string; type: "item"; catalogKey: string; label: string; categoryId: string; quantity: number }
   | { key: string; type: "barrel"; quantity: number }
-  | { key: string; type: "weight"; categoryId: string; weightLb: string; sizePreset: string }
+  | { key: string; type: "weight"; categoryId: string; weightLb: string; weightUnit: WeightUnit; sizePreset: string }
   | { key: string; type: "other"; kind: "box" | "other"; description: string; photos: PhotoDraft[] }
   | BoxLine;
 
@@ -193,8 +212,9 @@ export function setBarrelQuantity(lines: readonly BasketLine[], quantity: number
   return [...lines, { key: newLineKey(), type: "barrel", quantity: n }];
 }
 
-export function addWeightLine(lines: readonly BasketLine[], categoryId: string): BasketLine[] {
-  return [...lines, { key: newLineKey(), type: "weight", categoryId, weightLb: "", sizePreset: "" }];
+/** A by-weight line; `weightLb` is the number as typed, in `weightUnit` (the name is legacy). */
+export function addWeightLine(lines: readonly BasketLine[], categoryId: string, weightUnit: WeightUnit = "lb"): BasketLine[] {
+  return [...lines, { key: newLineKey(), type: "weight", categoryId, weightLb: "", weightUnit, sizePreset: "" }];
 }
 
 /** "Something else": a box by default on Air; on Sea a box is its own line (addBoxLine), so this one starts as "other". */
@@ -207,24 +227,37 @@ export function addBoxLine(lines: readonly BasketLine[]): BasketLine[] {
   return [...lines, newBoxLine(newLineKey())];
 }
 
-/** A size button: fills the pounds with the preset's weight (still editable). */
+/** A size button: fills the weight with the preset's, in the line's unit (still editable). */
 export function applySizePreset(line: Extract<BasketLine, { type: "weight" }>, presetId: string): Extract<BasketLine, { type: "weight" }> {
   const preset = SIZE_PRESETS.find((row) => row.id === presetId);
-  return preset ? { ...line, sizePreset: preset.id, weightLb: String(preset.lb) } : line;
+  return preset ? { ...line, sizePreset: preset.id, weightLb: String(preset[line.weightUnit]) } : line;
 }
 
 /** Typing a weight by hand drops the size preset unless it still says the same number. */
 export function typeWeight(line: Extract<BasketLine, { type: "weight" }>, typed: string): Extract<BasketLine, { type: "weight" }> {
   const preset = SIZE_PRESETS.find((row) => row.id === line.sizePreset);
-  return { ...line, weightLb: typed, sizePreset: preset && String(preset.lb) === typed.trim() ? preset.id : "" };
+  return { ...line, weightLb: typed, sizePreset: preset && String(preset[line.weightUnit]) === typed.trim() ? preset.id : "" };
 }
 
-/** Pounds as typed ("10", "10,5") to a tenth, or null outside the server's 0.1 to 2,000. */
-export function readWeight(typed: string): number | null {
+/**
+ * The lb / kg choice on a weight line. A size button keeps its meaning (its
+ * weight in the new unit); a number typed by hand is converted, to a tenth,
+ * as the server would before pricing; one that does not read stays as typed.
+ */
+export function setWeightUnit(line: Extract<BasketLine, { type: "weight" }>, unit: WeightUnit): Extract<BasketLine, { type: "weight" }> {
+  if (line.weightUnit === unit) return line;
+  const preset = SIZE_PRESETS.find((row) => row.id === line.sizePreset);
+  if (preset) return { ...line, weightUnit: unit, weightLb: String(preset[unit]) };
+  const read = readWeight(line.weightLb, line.weightUnit);
+  return { ...line, weightUnit: unit, weightLb: read === null ? line.weightLb : String(convertWeight(read, line.weightUnit, unit)) };
+}
+
+/** A weight as typed ("10", "10,5") to a tenth, or null outside the server's 0.1 to 2,000 lb (0.1 to 900 kg). */
+export function readWeight(typed: string, unit: WeightUnit = "lb"): number | null {
   const raw = text(typed, 12).replace(",", ".");
   if (!/^\d+(\.\d+)?$/.test(raw)) return null;
-  const lb = Math.round(Number(raw) * 10) / 10;
-  return lb >= 0.1 && lb <= PRICE_LIMIT.WEIGHT_LB ? lb : null;
+  const value = Math.round(Number(raw) * 10) / 10;
+  return value >= 0.1 && value <= (unit === "kg" ? PRICE_LIMIT.WEIGHT_KG : PRICE_LIMIT.WEIGHT_LB) ? value : null;
 }
 
 /** How many physical pieces the basket is: a barrel each, one for any other line (an item's quantity is one piece). */
@@ -246,7 +279,7 @@ export function itemsProblems(lines: readonly BasketLine[]): string[] {
   if (pieceCount(lines) > REQUEST_LIMITS.pieces) add("too_many_pieces");
   for (const line of lines) {
     if (line.type === "item" && !(line.quantity >= 1 && line.quantity <= PRICE_LIMIT.QUANTITY)) add("quantity_invalid");
-    if (line.type === "weight" && readWeight(line.weightLb) === null) add("weight_invalid");
+    if (line.type === "weight" && readWeight(line.weightLb, line.weightUnit) === null) add(line.weightUnit === "kg" ? "weight_kg_invalid" : "weight_invalid");
     if (line.type === "box") boxLineProblems(line).forEach(add);
     if (line.type === "other") {
       if (!line.description.trim()) add("piece_description_required");
@@ -267,7 +300,9 @@ export type SendPiece = {
   quantity?: number;
   label?: string;
   categoryId?: string;
+  /** The number typed, in `weightUnit` (the name is legacy). */
   weightLb?: number;
+  weightUnit?: WeightUnit;
   sizePreset?: string;
   kind?: "barrel" | "box" | "other";
   description?: string;
@@ -295,10 +330,11 @@ export function piecesFor(lines: readonly BasketLine[], option: RequestOption, m
     } else if (line.type === "barrel") {
       for (let i = 0; i < line.quantity; i++) pieces.push({ kind: "barrel" });
     } else if (line.type === "weight") {
-      const weightLb = readWeight(line.weightLb);
+      const weightLb = readWeight(line.weightLb, line.weightUnit);
+      // The unit travels with the number: each business prices it in its own unit.
       pieces.push(weightLb === null
         ? { kind: "other", description: categoryLabel(line.categoryId, "en") }
-        : { categoryId: line.categoryId, weightLb, ...(line.sizePreset ? { sizePreset: line.sizePreset } : {}) });
+        : { categoryId: line.categoryId, weightLb, weightUnit: line.weightUnit, ...(line.sizePreset ? { sizePreset: line.sizePreset } : {}) });
     } else {
       pieces.push({
         kind: line.kind,
@@ -840,21 +876,23 @@ export function sentView(
 // The /e/<token> page: how a piece was priced, and a new time.
 // ---------------------------------------------------------------------------
 
-/** "2 × $40.00 · up to 2 lb each" / "$6.00 per lb × 50 lb, weighed at drop-off" / "". */
+/** "2 × $40.00 · up to 2 lb each" / "$6.00 per lb × 50 lb, weighed at drop-off" / "" (kg on a kilo price). */
 export function priceExplanation(price: PublicPiecePrice | PiecePrice | null | undefined, lang: Lang): string {
   if (!price) return "";
   const fr = lang === "fr";
+  const unit = unitOf(price);
+  const num = (n: number) => (fr ? String(n).replace(".", ",") : String(n));
   const money = (cents: number | null) => moneyText(cents ?? 0, lang);
   if (price.source === "item") {
     const each = price.quantity > 1 ? `${price.quantity} × ${money(price.unitCents)}` : money(price.unitCents);
-    const limit = price.includedLb > 0 ? (fr ? ` · jusqu’à ${price.includedLb} lb chacun, le surplus est facturé au comptoir` : ` · up to ${price.includedLb} lb each, extra weight is charged at the counter`) : "";
+    const limit = price.includedLb > 0 ? (fr ? ` · jusqu’à ${num(price.includedLb)} ${unit} chacun, le surplus est facturé au comptoir` : ` · up to ${price.includedLb} ${unit} each, extra weight is charged at the counter`) : "";
     return `${each}${limit}`;
   }
   if (price.source === "per_lb") {
-    const weight = price.weightLb ? `${price.weightLb} lb` : "";
+    const weight = price.weightLb ? `${fr ? num(price.weightLb) : price.weightLb} ${unit}` : "";
     return fr
-      ? `${money(price.perLbCents)} la lb${weight ? ` × ${weight}` : ""}, pesé au dépôt`
-      : `${money(price.perLbCents)} per lb${weight ? ` × ${weight}` : ""}, weighed at drop-off`;
+      ? `${money(price.perLbCents)} ${unit === "kg" ? "le" : "la"} ${unit}${weight ? ` × ${weight}` : ""}, pesé au dépôt`
+      : `${money(price.perLbCents)} per ${unit}${weight ? ` × ${weight}` : ""}, weighed at drop-off`;
   }
   if (price.source === "barrel") return fr ? "Prix du baril" : "Barrel price";
   if (price.source === "box_size") {

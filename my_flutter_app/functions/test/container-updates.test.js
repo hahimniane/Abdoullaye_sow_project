@@ -1068,6 +1068,24 @@ describe("the sender's confirmation and the pickup code (docs/AIR_PACKAGES.md)",
     assert.equal(body.template.components.length, 4);
   });
 
+  it("says the weight in kilos when staff weighed it in kilos (EN and FR)", () => {
+    const send = (extra) => whatsappUpdateMessage({
+      phone: "+16465550100", name: "Fatou Diallo", businessName: "Dala",
+      line: proofLine(extra), container: null, update: "confirm",
+      trackingCode: "CL-K7M4P2", role: "sender",
+      documentBase: "https://laawoldigital.com/d", nowMs: 1000,
+    }).template.components[1].parameters.map((p) => p.text);
+    const kilos = send({weightLb: 9.9, weightKg: 4.5});
+    assert.deepEqual([kilos[3], kilos[6]], ["4.5 kg", "4,5 kg"]);
+    const whole = send({weightLb: 22, weightKg: 10});
+    assert.deepEqual([whole[3], whole[6]], ["10 kg", "10 kg"]);
+    // Pounds, with or without a stored null, are as before.
+    const pounds = send({weightLb: 4.2, weightKg: null});
+    assert.deepEqual([pounds[3], pounds[6]], ["4.2 lb", "4,2 lb"]);
+    // Both fit the template's 20-character variable.
+    assert.ok(send({weightLb: 1984.2, weightKg: 900})[3].length <= 20);
+  });
+
   it("says what the line is when there is no item list, and — for no weight", () => {
     const body = whatsappUpdateMessage({
       phone: "+16465550100", name: "Fatou Diallo", businessName: "Dala",

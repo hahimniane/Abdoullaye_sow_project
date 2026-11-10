@@ -119,6 +119,36 @@ describe("the customs list", () => {
     assert.equal(usdText(5), "$0.05");
   });
 
+  it("totals in kilos only when every weighed line is in kilos", () => {
+    const kg = (code, weightLb, weightKg) => ({trackingCode: code,
+      kind: "barrels", quantity: 1, ownerKind: "customer",
+      receiverName: "Awa Sow", receiverPhone: "+224620000011", weightLb,
+      ...(weightKg ? {weightKg} : {})});
+    // Every weighed line in kilos: the total is kilos (a line with no weight
+    // at all does not count against it).
+    const allKilos = model({lines: [kg("CL-A", 22, 10), kg("CL-B", 11.1, 5.1),
+      kg("CL-C", null, null)]});
+    assert.equal(allKilos.lines[0].weightText, "10 kg");
+    assert.equal(allKilos.lines[0].weightLb, 22);
+    assert.equal(allKilos.lines[0].weightKg, 10);
+    assert.deepEqual(allKilos.totals, {lineCount: 3, weightLb: 33.1,
+      weightKg: 15.1, weightText: "15.1 kg", weighed: 2,
+      declaredValueCents: null, declaredValueText: "", valued: 0});
+    assert.match(renderContainerCustoms(allKilos), /15\.1 kg/);
+    // One pounds line among the kilos: the total is the sum of the pounds,
+    // and each line still says its own unit.
+    const mixed = model({lines: [kg("CL-A", 22, 10), kg("CL-B", 5)]});
+    assert.equal(mixed.lines[0].weightText, "10 kg");
+    assert.equal(mixed.lines[1].weightText, "5 lb");
+    assert.equal(mixed.totals.weightText, "27 lb");
+    assert.equal(mixed.totals.weightLb, 27);
+    assert.ok(!("weightKg" in mixed.totals));
+    // Pounds only: unchanged (no weightKg key anywhere).
+    const pounds = model();
+    assert.ok(!("weightKg" in pounds.totals));
+    assert.ok(!("weightKg" in pounds.lines[0]));
+  });
+
   it("prints one Letter portrait page with the business's identity", () => {
     const html = renderContainerCustoms(model());
     assert.match(html, /@page\{size:letter portrait;/);

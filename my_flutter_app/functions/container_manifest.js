@@ -833,14 +833,48 @@ function containerLineContactsUpdate(input, current) {
  * The proof fields a line stores, as validateProofFields normalises them;
  * the empties (no photos, nothing listed, no weight, no value) when the
  * input fails the rules - the validator has refused it by then.
+ * `weightLb` is always pounds; `weightKg` is what staff typed in kilos (null
+ * when they typed pounds), from which `weightLb` was derived
+ * (docs/SHIPPING_SIMPLE_HOME.md K3).
  *
  * @param {object} input Raw line fields.
- * @return {object} {photoPaths, contents, weightLb, declaredValueCents}.
+ * @return {object} {photoPaths, contents, weightLb, weightKg,
+ *   declaredValueCents}.
  */
 function proofFieldsOf(input) {
   const {fields, error} = validateProofFields(input);
   return error ? {photoPaths: [], contents: [], weightLb: null,
-    declaredValueCents: null} : fields;
+    weightKg: null, declaredValueCents: null} :
+    {weightKg: null, ...fields};
+}
+
+/**
+ * A requested edit laid over the stored line. Anything the request leaves
+ * out is kept, with one rule for the weight (K3): the weight is
+ * `weightKg` or `weightLb`, never both halves of two writes.
+ * - a request naming `weightKg` defines the whole weight (kilos win; no
+ *   `weightLb` beside them means the pounds are derived from them);
+ * - a request naming `weightLb` alone (an older app) clears the stored
+ *   `weightKg` - unless the pounds are the ones already stored, in which
+ *   case the edit is about something else and the kilos stay.
+ * A request naming neither leaves the weight alone.
+ *
+ * @param {object} row The stored line.
+ * @param {object} asked The requested fields.
+ * @return {object} The line the edit would make, before normalising.
+ */
+function mergeLineEdit(row, asked) {
+  const merged = {...row, ...asked};
+  const has = (key) => Object.prototype.hasOwnProperty.call(asked, key);
+  if (has("weightKg")) {
+    if (!has("weightLb")) merged.weightLb = null;
+  } else if (has("weightLb")) {
+    const same = asked.weightLb !== null && asked.weightLb !== "" &&
+      Math.round(Number(asked.weightLb) * 10) ===
+        Math.round(Number(row.weightLb) * 10);
+    if (!same) merged.weightKg = null;
+  }
+  return merged;
 }
 
 /**
@@ -1138,7 +1172,7 @@ const LINE_PRICE_FIELDS = Object.freeze(
 // state, like the price: a photo is added or the item list fixed after the
 // box has sailed as often as before, and none of it changes what went in.
 const LINE_PROOF_FIELDS = Object.freeze(
-    ["photoPaths", "contents", "weightLb", "declaredValueCents"]);
+    ["photoPaths", "contents", "weightLb", "weightKg", "declaredValueCents"]);
 const LINE_EDIT_FIELDS = Object.freeze(
     [...LINE_SUBSTANCE_FIELDS, ...LINE_PRICE_FIELDS, ...LINE_PROOF_FIELDS,
       ...LINE_CONTACT_FIELDS]);
@@ -1176,6 +1210,7 @@ const LINE_FIELD_LABELS = Object.freeze({
   photoPaths: "photos",
   contents: "contents",
   weightLb: "weight",
+  weightKg: "weight",
   declaredValueCents: "declared value",
   ...CONTACT_FIELD_LABELS,
 });
@@ -1269,7 +1304,7 @@ function containerLineEditTarget(current, input, contactsOnly) {
       ...containerLineContactsUpdate(asked, row),
     };
   }
-  return containerLineEditable({...row, ...asked});
+  return containerLineEditable(mergeLineEdit(row, asked));
 }
 
 /**
@@ -1291,7 +1326,7 @@ function validateContainerLineEdit(current, input, contactsOnly,
   // What was paid is the stored amount, whatever the request claims - or,
   // for a line split into parts, what the server worked out this part must
   // still cover (paidFloorForLine).
-  const merged = {...row, ...asked};
+  const merged = mergeLineEdit(row, asked);
   const errors = validateContainerLine(merged,
       paidFloor === null ? paidCentsOf(row.paidCents) : paidCentsOf(paidFloor));
   // An old line with no receiver's name still takes an edit that leaves its
@@ -1726,6 +1761,7 @@ module.exports = {
   containerCountsDelta,
   LINE_CONTACT_FIELDS,
   LINE_PROOF_FIELDS,
+  mergeLineEdit,
   LINE_SUBSTANCE_FIELDS,
   LINE_PRICE_FIELDS,
   LINE_EDIT_FIELDS,

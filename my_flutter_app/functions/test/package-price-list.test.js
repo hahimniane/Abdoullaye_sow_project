@@ -253,3 +253,149 @@ it("a per-pound piece is described in the customer's language", () => {
   assert.equal(pl.pricePiece(route, piece, {lang: "fr"}).price.label,
       en.price.label);
 });
+
+describe("package price list, kilos (shared cases)", () => {
+  const k = fixture.kilos;
+  it("has its cases", () => {
+    assert.ok(k.lists.length >= 8);
+    assert.ok(k.pieces.length >= 15);
+    assert.ok(k.baskets.length >= 2);
+    assert.ok(k.counter.length >= 4);
+    assert.ok(k.reprice.length >= 4);
+    assert.ok(k.convert.length >= 6);
+    assert.ok(k.rates.length >= 4);
+    assert.ok(k.weightIn.length >= 5);
+    assert.ok(k.weights.length >= 10);
+    assert.ok(k.weightText.length >= 6);
+  });
+  for (const c of k.lists) {
+    it(`kilo list: ${c.name}`, () => {
+      assert.deepEqual(pl.validatePriceList(c.raw, c.countryIds), c.expect);
+    });
+  }
+  for (const c of k.pieces) {
+    it(`kilo piece: ${c.name}`, () => {
+      assert.deepEqual(pl.pricePiece(c.route, c.piece, c.ctx || {}),
+          c.expect);
+    });
+  }
+  for (const c of k.baskets) {
+    it(`kilo basket: ${c.name}`, () => {
+      assert.deepEqual(pl.priceBasket(c.route, c.pieces, c.ctx), c.expect);
+    });
+  }
+  for (const c of k.counter) {
+    it(`kilo counter: ${c.name}`, () => {
+      assert.equal(pl.counterPriceCents(c.price, c.weighed), c.expect);
+    });
+  }
+  for (const c of k.reprice) {
+    it(`kilo reprice: ${c.name}`, () => {
+      const out = pl.repricePieces(c.pieces, c.route);
+      assert.deepEqual({pieces: out.pieces, changed: out.changed,
+        wentUp: out.wentUp, cents: Object.fromEntries(out.cents)}, c.expect);
+    });
+  }
+  for (const c of k.convert) {
+    it(`convert: ${c.name}`, () => {
+      assert.equal(pl.convertWeight(c.value, c.from, c.to), c.expect);
+    });
+  }
+  for (const c of k.rates) {
+    it(`rate in: ${c.name}`, () => {
+      assert.equal(pl.rateIn(c.cents, c.from, c.to), c.expect);
+    });
+  }
+  for (const c of k.weightIn) {
+    it(`weight in: ${c.name}`, () => {
+      assert.equal(pl.weightIn(c.unit, c.line), c.expect);
+    });
+  }
+});
+
+describe("package price list, kilos (the rules, pinned by hand)", () => {
+  const kg = fixture.kilos.route;
+  it("$25/kg x 10 kg is exactly $250.00", () => {
+    const out = pl.pricePiece(kg, {categoryId: "general", weightLb: 10});
+    assert.equal(out.estimateCents, 25000);
+    assert.equal(out.price.unit, "kg");
+    assert.equal(out.price.weightLb, 10);
+    assert.equal(out.description, "General goods · 10 kg");
+  });
+
+  it("a pounds list and its routes carry no unit key anywhere", () => {
+    const {routes} = pl.validatePriceList({weightUnit: "lb", routes: {gn: {
+      sea: {perLbCents: {general: 450}, items: [{label: "Phone",
+        categoryId: "electronics", priceCents: 4000, includedLb: 2}]}}}},
+    ["gn"]);
+    assert.ok(!JSON.stringify(routes).includes("unit"));
+    const piece = pl.pricePiece(routes.gn.sea, {categoryId: "general",
+      weightLb: 50});
+    assert.ok(!("unit" in piece.price));
+    const item = pl.pricePiece(routes.gn.sea, {priceItemId: "i_phone"});
+    assert.ok(!("unit" in item.price));
+  });
+
+  it("a pounds-only basket is byte-identical with and without the unit", () => {
+    const route = fixture.route;
+    const pieces = [{priceItemId: "i_phone", quantity: 2},
+      {categoryId: "clothing", weightLb: 50}];
+    assert.deepEqual(
+        pl.priceBasket(route, pieces.map((p) => p.categoryId ?
+          {...p, weightUnit: "lb"} : p), {}),
+        pl.priceBasket(route, pieces, {}));
+  });
+
+  it("the rounding is to a tenth, before pricing", () => {
+    // 10 lb = 4.5359 kg -> 4.5 kg, not 4.5359 (which would price 11339.8).
+    const out = pl.pricePiece(kg, {categoryId: "general", weightLb: 10,
+      weightUnit: "lb"});
+    assert.equal(out.price.weightLb, 4.5);
+    assert.equal(out.estimateCents, 11250);
+  });
+
+  it("a weight is checked in the unit it was typed in", () => {
+    const lbRoute = fixture.kilos.lbRoute;
+    assert.equal(pl.pricePiece(lbRoute, {categoryId: "general",
+      weightLb: 901, weightUnit: "kg"}).error, "weight_kg_invalid");
+    assert.equal(pl.pricePiece(lbRoute, {categoryId: "general",
+      weightLb: 901}).error, "");
+    assert.equal(pl.pricePiece(kg, {categoryId: "general",
+      weightLb: 901}).error, "weight_kg_invalid");
+  });
+
+  it("each refusal has a message; the kilo list names kilos", () => {
+    for (const code of ["unit_invalid", "weight_kg_invalid"]) {
+      assert.ok(pl.PRICE_LIST_MESSAGES[code], code);
+    }
+    assert.match(pl.priceListMessage("per_lb_invalid", "kg"), /per kilo/);
+    assert.match(pl.priceListMessage("per_lb_invalid", "lb"), /per pound/);
+    assert.match(pl.priceListMessage("included_invalid", "kg"), /kg/);
+    assert.equal(pl.priceListMessage("price_invalid", "kg"),
+        pl.PRICE_LIST_MESSAGES.price_invalid);
+    assert.equal(pl.priceListMessage("nope"), "");
+  });
+
+  it("the size presets have a kilo weight", () => {
+    assert.deepEqual(pl.SIZE_PRESETS.map((p) => p.kg), [5, 23, 32]);
+    assert.deepEqual(pl.SIZE_PRESETS.map((p) => p.lb), [10, 50, 70]);
+    assert.equal(pl.LIMIT.WEIGHT_KG, 900);
+    assert.equal(pl.KG_TO_LB, 2.20462);
+  });
+
+  it("unitOf answers kg only for a kilo route, snapshot or list", () => {
+    assert.equal(pl.unitOf(kg), "kg");
+    assert.equal(pl.unitOf({weightUnit: "kg"}), "kg");
+    assert.equal(pl.unitOf(fixture.route), "lb");
+    assert.equal(pl.unitOf(null), "lb");
+    assert.equal(pl.unitOf({unit: "oz"}), "lb");
+  });
+
+  it("a counter price in kilos for a line weighed in the other unit", () => {
+    const {price} = pl.pricePiece(kg, {categoryId: "general", weightLb: 10});
+    // Staff weighed 27.6 lb: the caller converts to the price's unit first.
+    const weighed = pl.weightIn(pl.unitOf(price), {weightLb: 27.6});
+    assert.equal(weighed, 12.5);
+    assert.equal(pl.counterPriceCents(price, weighed), 31250);
+  });
+});

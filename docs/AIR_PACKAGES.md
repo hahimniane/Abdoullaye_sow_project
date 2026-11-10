@@ -74,7 +74,8 @@ instead of the ocean fields.
 |---|---|
 | `photoPaths` | `string[]`, ≤ 5, drop-off photos under `packagePhotos/{businessId}/{uid}/{fileId}` (the uploader's folder), or `.../req/...` copied from a request |
 | `contents` | `[{label, quantity, serial}]`, ≤ 10 items; `label` ≤ 60, `quantity` 1–99, `serial` ≤ 40 (IMEI/serial, optional) |
-| `weightLb` | number, 0.1–2000, one decimal. Printed on the label. |
+| `weightLb` | number, 0.1–2000, one decimal. ALWAYS pounds, whatever staff typed. Printed on the label. |
+| `weightKg` | number, 0.1–900, one decimal, optional: what staff typed when they weighed in kilos (`null` otherwise); see "Weight in kilos" below |
 | `declaredValueCents` | integer ≥ 0. Never printed. |
 | `senderConfirmation` | `{status: "none"\|"asked"\|"confirmed"\|"problem", askedAtMs, answeredAtMs, wamid, note}` |
 | `pickupCode` | 4 digits, minted with the line when the business switch is on (never `0000`) |
@@ -329,3 +330,36 @@ each package says how it ships.
   settings (incl. `shipsByAir`), passed in by the list that opened it or
   read from the business document, so it offers Ships by like the Waiting
   list.
+
+## 8. Weight in kilos
+
+Full contract: [SHIPPING_SIMPLE_HOME.md](SHIPPING_SIMPLE_HOME.md) K3-K4.
+
+- `containerLines.weightLb` stays pounds, so every reader that was never told
+  about kilos stays correct. `weightKg` is what staff typed in kilos.
+- **Write rule** (one normalizer, `package_proof.normalizeWeight`, used by
+  `addContainerLine`, `addWaitingPackage`, `updateContainerLine` and
+  `receivePackageRequest` through `containerLineRecord`): a write carrying
+  `weightKg` stores it and derives `weightLb = max(0.1, round1(weightKg x
+  2.20462))`; kilos win over a `weightLb` sent beside them. A write carrying
+  `weightLb` and no `weightKg` (an older app) stores no kilos. Out of range is
+  `weight_kg_invalid` (0.1-900 kg) or `weight_invalid` (0.1-2000 lb).
+- **Edits** (`container_manifest.mergeLineEdit`): a request naming `weightKg`
+  defines the whole weight (`weightKg: null` alone clears it; kilos with no
+  `weightLb` beside them derive the pounds); one naming only `weightLb` clears
+  the stored `weightKg` - unless those pounds are exactly the stored pounds
+  (an older app saving something else), which leaves the kilos alone; one
+  naming neither leaves both alone. Both fields are proof fields: editable in
+  every state, named "weight" in History.
+- **Said as** `weightText(line, lang)`: "10 kg" when the line has `weightKg`,
+  else "22 lb"; French uses a decimal comma ("4,5 kg"). The package page, the
+  customer WhatsApp updates (`weightEn`/`weightFr` in `package_confirm_2lang`:
+  a variable, so nothing to re-publish at Meta) and the customs sheet use it.
+- **Customs sheet**: each line says its own unit; the total is in kilos only
+  when every weighed line has `weightKg` (the sum of the kilos), else pounds
+  (the sum of `weightLb`).
+- **Console**: the weight field is in the business's unit - its price list's
+  `weightUnit` when the list prices at least one route, else the lb/kg choice
+  last picked on this device (`localStorage`, default lb; the choice shows
+  only while there is no price list). A line already weighed keeps its unit
+  when edited; nothing is converted.

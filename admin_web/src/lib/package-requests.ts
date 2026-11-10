@@ -97,7 +97,13 @@ export type RequestOption = {
 };
 
 /** What a business prices on one destination by one mode (public part of a route). */
-export type PublicRoute = { items: PriceItem[]; perLbCents: Record<string, number>; boxPricesCents?: Partial<Record<BoxSizeId, number>> };
+/** A route as customers see it: rates and included weights are per kilo / in kilos when `unit` is "kg" (no `unit` key: pounds). */
+export type PublicRoute = {
+  items: PriceItem[];
+  perLbCents: Record<string, number>;
+  boxPricesCents?: Partial<Record<BoxSizeId, number>>;
+  unit?: "kg";
+};
 
 export type PickupPricing = {
   mode: string;
@@ -174,9 +180,12 @@ export type PublicPiecePrice = {
   label: string;
   quantity: number;
   unitCents: number | null;
+  /** In the price's unit (`unit`): kilos when "kg", else pounds. */
   includedLb: number;
   perLbCents: number | null;
   weightLb: number | null;
+  /** Only "kg" is ever sent; a pounds price has no `unit` key. */
+  unit?: "kg";
 };
 
 type Row = Record<string, unknown>;
@@ -482,6 +491,8 @@ export const REQUEST_ERROR_STEP: Record<string, RequestFieldStep> = {
   box_size_invalid: "items",
   dims_invalid: "items",
   weight_invalid: "items",
+  weight_kg_invalid: "items",
+  unit_invalid: "items",
   category_invalid: "items",
   handoff_invalid: "handoff",
   pickup_address_required: "handoff",
@@ -602,6 +613,8 @@ export const REQUEST_ERROR_MESSAGES: Record<string, string> = {
   window_invalid: "Choose a time window of up to 2 hours in opening hours.",
   quantity_invalid: "Enter how many (1 to 50).",
   weight_invalid: "Enter the weight in pounds (0.1 to 2,000).",
+  weight_kg_invalid: "Enter the weight in kilos (0.1 to 900).",
+  unit_invalid: "Choose pounds or kilos.",
   category_invalid: "Choose what kind of goods it is.",
   box_size_invalid: "Choose a box size.",
   dims_invalid: "Box inches must be 1 to 120 in each direction.",

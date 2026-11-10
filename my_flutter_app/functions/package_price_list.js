@@ -15,6 +15,15 @@
  * - departure: the weekly schedule shown as "Next flight / container".
  * Anything not on the list is "ask me": the piece waits for a staff estimate.
  *
+ * Kilos (docs/SHIPPING_SIMPLE_HOME.md K): one unit per list, `weightUnit`
+ * "lb" (absent means lb) or "kg". A kilo list stamps `unit: "kg"` on every
+ * stored route, and a kilo price snapshot carries `unit: "kg"`; pounds are
+ * stored exactly as before (no `unit` key). The field names do not change:
+ * `perLbCents`, `includedLb`, `excessPerLbCents` and a snapshot's `weightLb`
+ * are IN THE ROUTE'S (OR SNAPSHOT'S) UNIT - "Lb" is a legacy name, not a
+ * promise. A weight typed in the other unit is converted (1 kg = 2.20462 lb)
+ * and rounded to a tenth before pricing.
+ *
  * Pure: no Firestore, no clock except what callers pass. Mirrored by
  * admin_web/src/lib/package-price-list.ts and
  * my_flutter_app/lib/services/package_price_list.dart; the shared fixture
@@ -36,12 +45,20 @@ const MODES = Object.freeze(["sea", "air"]);
 const WEEK_DAYS = Object.freeze(
     ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]);
 
-/** One-tap weights for things priced by the pound (owner decision 9). */
+/**
+ * One-tap weights for things priced by the weight (owner decision 9): `lb`
+ * on a pounds list, `kg` on a kilo list.
+ */
 const SIZE_PRESETS = Object.freeze([
-  {id: "small_bag", lb: 10, en: "Small bag", fr: "Petit sac"},
-  {id: "suitcase", lb: 50, en: "Suitcase", fr: "Valise"},
-  {id: "big_box", lb: 70, en: "Big box", fr: "Grand carton"},
+  {id: "small_bag", lb: 10, kg: 5, en: "Small bag", fr: "Petit sac"},
+  {id: "suitcase", lb: 50, kg: 23, en: "Suitcase", fr: "Valise"},
+  {id: "big_box", lb: 70, kg: 32, en: "Big box", fr: "Grand carton"},
 ]);
+
+/** The two units a list can be priced in; absent means "lb". */
+const WEIGHT_UNITS = Object.freeze(["lb", "kg"]);
+/** Pounds in a kilo. A weight typed in the other unit is converted with it. */
+const KG_TO_LB = 2.20462;
 
 /**
  * Box sizes (docs/PACKAGE_BOX_SIZES_PAY_NOW.md §1). Laawol sets them for
@@ -89,6 +106,7 @@ const LIMIT = Object.freeze({
   PER_LB_CENTS: 100000, // $1,000 a pound
   INCLUDED_LB: 500,
   WEIGHT_LB: 2000,
+  WEIGHT_KG: 900,
   QUANTITY: 50,
   EVERY_WEEKS: 8,
 });
@@ -114,10 +132,21 @@ const PRICE_LIST_MESSAGES = Object.freeze({
   item_unknown: "That item is no longer on the price list.",
   quantity_invalid: "Enter how many (1 to 50).",
   weight_invalid: "Enter the weight in pounds (0.1 to 2,000).",
+  weight_kg_invalid: "Enter the weight in kilos (0.1 to 900).",
+  unit_invalid: "Choose pounds or kilos.",
   box_sizes_sea_only: "Box sizes are priced for Sea only.",
   box_price_invalid: "Enter a box price between $0.01 and $10,000.",
   box_size_invalid: "Choose a box size.",
   dims_invalid: "Box inches must be 1 to 120 in each direction.",
+});
+
+/**
+ * What a refusal says on a kilo list: the same codes, the wording that names
+ * kilos (the others read the same in both units).
+ */
+const PRICE_LIST_MESSAGES_KG = Object.freeze({
+  included_invalid: "The weight a price covers must be 0 to 500 kg.",
+  per_lb_invalid: "Enter a price per kilo between $0.01 and $1,000.",
 });
 
 const text = (value, max = 200) => String(value ?? "").trim().slice(0, max);
@@ -146,6 +175,93 @@ function centsIn(value, max) {
 function tenth(value) {
   const n = Number(value);
   return Number.isFinite(n) ? Math.round(n * 10) / 10 : NaN;
+}
+
+/**
+ * A unit as a client sent it.
+ *
+ * @param {*} raw "lb", "kg" or nothing.
+ * @return {{unit: string, ok: boolean}} Nothing is "lb"; anything else
+ *   unknown is not ok.
+ */
+function cleanUnit(raw) {
+  if (raw === undefined || raw === null || raw === "") {
+    return {unit: "lb", ok: true};
+  }
+  const unit = text(raw, 10).toLowerCase();
+  return WEIGHT_UNITS.includes(unit) ? {unit, ok: true} :
+    {unit: "lb", ok: false};
+}
+
+/**
+ * @param {*} holder A route, a price snapshot or a whole list (anything that
+ *   may carry `unit` / `weightUnit`).
+ * @return {string} "kg" or "lb".
+ */
+function unitOf(holder) {
+  return isObject(holder) && (holder.unit === "kg" ||
+    holder.weightUnit === "kg") ? "kg" : "lb";
+}
+
+/**
+ * A weight in another unit, rounded to a tenth, never below 0.1 (no weight,
+ * 0, stays 0).
+ *
+ * @param {*} value The weight.
+ * @param {string} from The unit it is in.
+ * @param {string} to The unit wanted.
+ * @return {number} NaN when not a number.
+ */
+function convertWeight(value, from, to) {
+  const n = tenth(value);
+  if (!(n > 0) || from === to) return n;
+  const converted = to === "lb" ? n * KG_TO_LB : n / KG_TO_LB;
+  return Math.max(0.1, tenth(converted));
+}
+
+/**
+ * A price per unit of weight, said per the other unit (whole cents): $25 a
+ * kilo is about $11.34 a pound. Only for showing rates side by side - a
+ * piece is priced by converting its WEIGHT (pricePiece), never its rate.
+ *
+ * @param {number} cents Cents per `from`.
+ * @param {string} from The unit the rate is per.
+ * @param {string} to The unit wanted.
+ * @return {number} Cents per `to`.
+ */
+function rateIn(cents, from, to) {
+  if (from === to) return cents;
+  return Math.round(to === "lb" ? cents / KG_TO_LB : cents * KG_TO_LB);
+}
+
+/**
+ * A line's weight in the unit a price is in: kilos staff typed are used as
+ * typed, pounds are converted (and the reverse).
+ *
+ * @param {string} unit "lb" | "kg".
+ * @param {*} line {weightLb, weightKg}.
+ * @return {?number} The weight, null when the line has none.
+ */
+function weightIn(unit, line) {
+  const row = isObject(line) ? line : {};
+  const kg = tenth(row.weightKg);
+  const lb = tenth(row.weightLb);
+  if (unit === "kg") {
+    if (kg > 0) return kg;
+    return lb > 0 ? convertWeight(lb, "lb", "kg") : null;
+  }
+  if (lb > 0) return lb;
+  return kg > 0 ? convertWeight(kg, "kg", "lb") : null;
+}
+
+/**
+ * @param {string} code A refusal code.
+ * @param {string} unit The list's unit.
+ * @return {string} What it says, in that unit's words.
+ */
+function priceListMessage(code, unit = "lb") {
+  return (unit === "kg" && PRICE_LIST_MESSAGES_KG[code]) ||
+    PRICE_LIST_MESSAGES[code] || "";
 }
 
 /**
@@ -250,9 +366,11 @@ function cleanDeparture(raw) {
  *
  * @param {*} raw The route a client sent.
  * @param {string} mode "sea" (default) | "air"; box sizes are Sea only.
+ * @param {string} unit "lb" (default) | "kg": the list's unit, stamped on a
+ *   kilo route as `unit: "kg"` (a pounds route carries no `unit` key).
  * @return {{route: ?object, errors: string[]}} The stored shape.
  */
-function validateRoute(raw, mode = "sea") {
+function validateRoute(raw, mode = "sea", unit = "lb") {
   const errors = [];
   const add = (code) => {
     if (!errors.includes(code)) errors.push(code);
@@ -328,25 +446,33 @@ function validateRoute(raw, mode = "sea") {
   const empty = items.length === 0 && Object.keys(perLbCents).length === 0 &&
     !hasBoxes && !departure;
   return {route: empty ? null : {items, perLbCents,
-    ...(hasBoxes ? {boxPricesCents} : {}), departure}, errors};
+    ...(hasBoxes ? {boxPricesCents} : {}), departure,
+    ...(unit === "kg" ? {unit: "kg"} : {})}, errors};
 }
 
 /**
  * Validates a whole price list.
  *
- * @param {*} raw {routes: {[countryId]: {sea?, air?}}}.
+ * @param {*} raw {weightUnit?, routes: {[countryId]: {sea?, air?}}}.
  * @param {string[]} countryIds The countries this business ships to.
- * @return {{routes: ?object, errors: string[]}} The stored routes map.
+ * @return {{routes: ?object, weightUnit: string, errors: string[]}} The
+ *   stored routes map and the list's unit ("lb" when none was sent).
  */
 function validatePriceList(raw, countryIds) {
   const data = isObject(raw) ? raw : {};
   const input = isObject(data.routes) ? data.routes : null;
-  if (!input) return {routes: null, errors: ["price_list_invalid"]};
+  const {unit, ok: unitOk} = cleanUnit(data.weightUnit);
+  if (!input) {
+    return {routes: null, weightUnit: unit,
+      errors: unitOk ? ["price_list_invalid"] :
+        ["price_list_invalid", "unit_invalid"]};
+  }
   const known = new Set(Array.isArray(countryIds) ? countryIds : []);
   const errors = [];
   const add = (code) => {
     if (!errors.includes(code)) errors.push(code);
   };
+  if (!unitOk) add("unit_invalid");
   const entries = Object.entries(input);
   if (entries.length > LIMIT.ROUTES) add("too_many_routes");
   const routes = {};
@@ -364,13 +490,15 @@ function validatePriceList(raw, countryIds) {
     }
     const pair = {};
     for (const mode of MODES) {
-      const {route, errors: routeErrors} = validateRoute(value[mode], mode);
+      const {route, errors: routeErrors} = validateRoute(value[mode], mode,
+          unit);
       routeErrors.forEach(add);
       if (route) pair[mode] = route;
     }
     if (Object.keys(pair).length) routes[countryId] = pair;
   }
-  return errors.length ? {routes: null, errors} : {routes, errors};
+  return errors.length ? {routes: null, weightUnit: unit, errors} :
+    {routes, weightUnit: unit, errors};
 }
 
 /**
@@ -404,11 +532,24 @@ function excessRateCents(route, categoryId) {
 }
 
 /**
+ * The `unit` key a kilo snapshot carries (a pounds one has none).
+ *
+ * @param {?object} route The route the price came from.
+ * @return {object} {unit: "kg"} or {}.
+ */
+function unitStamp(route) {
+  return unitOf(route) === "kg" ? {unit: "kg"} : {};
+}
+
+/**
  * Prices one piece a customer added, at today's prices.
  *
  * A piece is one of:
  * - `{priceItemId, quantity}`: an item from the list;
- * - `{categoryId, weightLb}`: a category priced by the pound;
+ * - `{categoryId, weightLb, weightUnit?}`: a category priced by the weight:
+ *   the number typed (`weightLb` is the legacy name) and the unit it was
+ *   typed in (absent: the route's own); a weight in the other unit is
+ *   converted to the route's, to a tenth, before pricing;
  * - `{kind: "box", boxSize | dimsIn, quantity}`: a Sea box priced by size
  *   (typed inches win); `xl` or a size the business did not price is "ask
  *   me";
@@ -453,6 +594,7 @@ function pricePiece(route, piece, ctx = {}) {
           excessRateCents(route, item.categoryId) : null,
         perLbCents: null,
         weightLb: null,
+        ...unitStamp(route),
       },
       estimateCents: item.priceCents * quantity,
       description: quantity > 1 ? `${quantity} × ${item.label}` : item.label,
@@ -465,18 +607,33 @@ function pricePiece(route, piece, ctx = {}) {
       return {price: null, estimateCents: null, description: "",
         error: "category_invalid"};
     }
-    const weightLb = tenth(p.weightLb);
-    if (!(weightLb >= 0.1 && weightLb <= LIMIT.WEIGHT_LB)) {
-      return {price: null, estimateCents: null, description: "",
-        error: "weight_invalid"};
-    }
     const rate = route?.perLbCents?.[categoryId];
+    const priced = Number.isInteger(rate) && rate > 0;
+    const routeUnit = unitOf(route);
+    const typed = p.weightUnit === undefined || p.weightUnit === null ||
+      p.weightUnit === "" ? {unit: routeUnit, ok: true} :
+      cleanUnit(p.weightUnit);
+    if (!typed.ok) {
+      return {price: null, estimateCents: null, description: "",
+        error: "unit_invalid"};
+    }
+    const asTyped = tenth(p.weightLb);
+    const limit = typed.unit === "kg" ? LIMIT.WEIGHT_KG : LIMIT.WEIGHT_LB;
+    if (!(asTyped >= 0.1 && asTyped <= limit)) {
+      return {price: null, estimateCents: null, description: "",
+        error: typed.unit === "kg" ? "weight_kg_invalid" : "weight_invalid"};
+    }
+    // Priced in the route's unit; with no rate ("ask me") the weight stays
+    // as the customer typed it, for staff to read.
+    const unit = priced ? routeUnit : typed.unit;
+    const weightLb = convertWeight(asTyped, typed.unit, unit);
     const category = CATEGORIES.find((c) => c.id === categoryId);
     const label = category.en;
     // The stored description is in the customer's language; the price's
     // label stays English so re-pricing compares like with like.
-    const said = `${ctx.lang === "fr" ? category.fr : label} · ${weightLb} lb`;
-    if (!Number.isInteger(rate) || rate <= 0) {
+    const said = `${ctx.lang === "fr" ? category.fr : label} · ` +
+      `${weightLb} ${unit}`;
+    if (!priced) {
       return {price: null, estimateCents: null, description: said, error: ""};
     }
     return {
@@ -491,6 +648,7 @@ function pricePiece(route, piece, ctx = {}) {
         excessPerLbCents: null,
         perLbCents: rate,
         weightLb,
+        ...unitStamp(route),
       },
       estimateCents: Math.round(rate * weightLb),
       description: said,
@@ -556,7 +714,9 @@ function pricePiece(route, piece, ctx = {}) {
  * extra weight has no rate (staff type the price).
  *
  * @param {?object} price The snapshot on the piece.
- * @param {*} weighedLb What the scale read for the whole piece.
+ * @param {*} weighedLb What the scale read for the whole piece, IN THE
+ *   SNAPSHOT'S UNIT (`price.unit`, pounds when absent): a caller holding the
+ *   other unit converts first (`weightIn(unitOf(price), line)`).
  * @return {?number} Cents.
  */
 function counterPriceCents(price, weighedLb) {
@@ -643,7 +803,8 @@ function repricePieces(pieces, route) {
       source === "box_size" ?
         {kind: "box", boxSize: piece.price.boxSize,
           quantity: piece.price.quantity} :
-        {categoryId: piece.price.categoryId, weightLb: piece.price.weightLb});
+        {categoryId: piece.price.categoryId, weightLb: piece.price.weightLb,
+          weightUnit: unitOf(piece.price)});
     if (!again.price || !Number.isInteger(again.estimateCents)) return piece;
     const before = Number.isInteger(piece.estimateCents) ?
       piece.estimateCents : null;
@@ -829,6 +990,8 @@ module.exports = {
   MODES,
   WEEK_DAYS,
   SIZE_PRESETS,
+  WEIGHT_UNITS,
+  KG_TO_LB,
   BOX_SIZES,
   BOX_SIZE_IDS,
   BOX_PRICED_IDS,
@@ -838,6 +1001,13 @@ module.exports = {
   LIMIT,
   SORTS,
   PRICE_LIST_MESSAGES,
+  PRICE_LIST_MESSAGES_KG,
+  priceListMessage,
+  cleanUnit,
+  unitOf,
+  convertWeight,
+  rateIn,
+  weightIn,
   itemIdFor,
   cleanDims,
   boxSizeFor,

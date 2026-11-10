@@ -4586,6 +4586,80 @@ describe("proof on the package", () => {
     });
   });
 
+  describe("weight in kilos (docs/SHIPPING_SIMPLE_HOME.md K3)", () => {
+    it("adds a line with kilos: stored as typed, pounds derived", async () => {
+      await switches({});
+      const waiting = await run("addWaitingPackage",
+          barrels(1, {weightKg: 10}), P_STAFF);
+      const line = await lineOf(waiting.lineId);
+      assert.equal(line.weightKg, 10);
+      assert.equal(line.weightLb, 22);
+      const {containerId} = await run("createContainer",
+          {label: "Kilo box", ...GUINEA});
+      const added = await run("addContainerLine", {containerId,
+        line: barrels(1, {weightKg: 4.5})}, P_STAFF);
+      assert.equal((await lineOf(added.lineId)).weightKg, 4.5);
+      assert.equal((await lineOf(added.lineId)).weightLb, 9.9);
+      // Pounds typed leave no kilos (an older app's write).
+      const pounds = await run("addWaitingPackage",
+          barrels(1, {weightLb: 22}), P_STAFF);
+      assert.equal((await lineOf(pounds.lineId)).weightKg, null);
+      assert.equal((await lineOf(pounds.lineId)).weightLb, 22);
+      for (const bad of [901, 0, "heavy"]) {
+        await assert.rejects(run("addWaitingPackage",
+            barrels(1, {weightKg: bad}), P_STAFF),
+        refused("weight_kg_invalid"), String(bad));
+        await assert.rejects(run("addContainerLine", {containerId,
+          line: barrels(1, {weightKg: bad})}, P_STAFF),
+        refused("weight_kg_invalid"), String(bad));
+      }
+    });
+
+    it("edits: kilos define the weight; an older app's pounds clear them",
+        async () => {
+          await switches({});
+          const dropped = await run("addWaitingPackage",
+              barrels(1, {weightKg: 10}), P_STAFF);
+          const id = dropped.lineId;
+          // Kilos, no pounds beside them: the pounds follow.
+          const kilos = await run("updateContainerLine", {lineId: id,
+            line: {...barrels(1), weightKg: 12.5}}, P_STAFF);
+          assert.deepEqual(kilos.changed, ["weightLb", "weightKg"]);
+          assert.equal((await lineOf(id)).weightKg, 12.5);
+          assert.equal((await lineOf(id)).weightLb, 27.6);
+          // An edit about something else, naming neither, leaves both.
+          const untouched = await run("updateContainerLine", {lineId: id,
+            line: barrels(1)}, P_STAFF);
+          assert.deepEqual(untouched.changed, []);
+          assert.equal((await lineOf(id)).weightKg, 12.5);
+          // An older app sends the pounds it knows about, with no kilos:
+          // the same pounds change nothing, different pounds clear them.
+          const same = await run("updateContainerLine", {lineId: id,
+            line: {...barrels(1), weightLb: 27.6}}, P_STAFF);
+          assert.deepEqual(same.changed, []);
+          assert.equal((await lineOf(id)).weightKg, 12.5);
+          const older = await run("updateContainerLine", {lineId: id,
+            line: {...barrels(1), weightLb: 30}}, P_STAFF);
+          assert.deepEqual(older.changed, ["weightLb", "weightKg"]);
+          assert.equal((await lineOf(id)).weightLb, 30);
+          assert.equal((await lineOf(id)).weightKg, null);
+          // Kilos again, then both cleared.
+          await run("updateContainerLine", {lineId: id,
+            line: {...barrels(1), weightKg: 7}}, P_STAFF);
+          assert.equal((await lineOf(id)).weightLb, 15.4);
+          await run("updateContainerLine", {lineId: id,
+            line: {...barrels(1), weightKg: null, weightLb: null}}, P_STAFF);
+          assert.equal((await lineOf(id)).weightLb, null);
+          assert.equal((await lineOf(id)).weightKg, null);
+          await assert.rejects(run("updateContainerLine", {lineId: id,
+            line: {...barrels(1), weightKg: 901}}, P_STAFF),
+          refused("weight_kg_invalid"));
+          const history = await audits(id, "line_edited");
+          assert.ok(history.some((h) => /: weight for Fatou Diallo/.test(h)),
+              history.join(" | "));
+        });
+  });
+
   describe("the pickup code", () => {
     it("is minted on every new line, parts included, when switched on",
         async () => {

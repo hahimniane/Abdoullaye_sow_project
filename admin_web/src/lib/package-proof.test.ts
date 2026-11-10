@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -10,6 +11,7 @@ import {
   normalizeContents,
   normalizeDeclaredValueCents,
   normalizePhotoPaths,
+  normalizeWeight,
   normalizeWeightLb,
   packageShipModeOf,
   photoRequirementRefusal,
@@ -28,6 +30,7 @@ import {
   shipsByAirOf,
   shipsByChoiceShown,
   validateProofFields,
+  weightLbFromKg,
   weightText,
   withProblemAcknowledgement,
 } from "./package-proof.ts";
@@ -265,4 +268,59 @@ test("a sender_problem refusal names its lines, and the second call acknowledges
 
   assert.equal(loadAnywayText(["CL-ABC123"], "en"), "Sender reported a problem with CL-ABC123. Load anyway?");
   assert.equal(loadAnywayText(["CL-ABC123", "CL-DEF456"], "fr"), "L’expéditeur a signalé un problème avec CL-ABC123, CL-DEF456. Charger quand même ?");
+});
+
+// Kilos (docs/SHIPPING_SIMPLE_HOME.md K3): the same shared cases as the server.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const fixture = JSON.parse(readFileSync(new URL("../../../my_flutter_app/functions/test/fixtures/package-price-list-cases.json", import.meta.url), "utf8")) as any;
+
+for (const c of fixture.kilos.weights) {
+  test(`weight: ${c.name}`, () => {
+    assert.deepEqual(normalizeWeight(c.input), c.expect);
+  });
+}
+for (const c of fixture.kilos.weightText) {
+  test(`weight text: ${c.name}`, () => {
+    assert.equal(weightText(c.weight, c.lang), c.expect);
+  });
+}
+
+test("kilos: the fields carry weightKg only when staff typed kilos", () => {
+  const kilos = validateProofFields({ weightKg: 10 });
+  assert.equal(kilos.error, "");
+  assert.deepEqual([kilos.fields?.weightLb, kilos.fields?.weightKg], [22, 10]);
+  const pounds = validateProofFields({ weightLb: 22 });
+  assert.ok(pounds.fields && !("weightKg" in pounds.fields));
+  assert.equal(validateProofFields({ weightKg: 901 }).error, "weight_kg_invalid");
+  assert.equal(proofRefusalText("weight_kg_invalid"), "Enter a weight between 0.1 and 900 kg.");
+  assert.equal(weightLbFromKg(0.01), 0.1);
+});
+
+test("kilos: the form sends kilos with the pounds they make, pounds alone otherwise", () => {
+  const kilos = { ...emptyProofDraft("kg"), weightLb: "10" };
+  assert.equal(kilos.weightUnit, "kg");
+  assert.deepEqual(proofDraftProblems(kilos), []);
+  assert.deepEqual(proofPayload(kilos), { photoPaths: [], contents: [], weightLb: 22, weightKg: 10, declaredValueCents: null });
+  assert.deepEqual(proofPayloadFor("air", kilos).weightKg, 10);
+  // A cleared kilo field clears both (the server reads a named weightKg as the whole weight).
+  assert.deepEqual(proofPayload({ ...kilos, weightLb: "" }), { photoPaths: [], contents: [], weightLb: null, weightKg: null, declaredValueCents: null });
+  // Pounds: no weightKg key at all.
+  assert.ok(!("weightKg" in proofPayload({ ...emptyProofDraft(), weightLb: "22" })));
+  // Each unit has its own limit and its own refusal.
+  assert.deepEqual(proofDraftProblems({ ...kilos, weightLb: "901" }), ["weight_kg_invalid"]);
+  assert.deepEqual(proofDraftProblems({ ...kilos, weightUnit: "lb", weightLb: "901" }), []);
+  assert.deepEqual(proofDraftProblems({ ...kilos, weightLb: "0" }), ["weight_kg_invalid"]);
+});
+
+test("kilos: a stored line comes back in the unit it was weighed in, unconverted", () => {
+  const inKilos = proofDraftFromLine({ weightLb: 22, weightKg: 10 });
+  assert.deepEqual([inKilos.weightLb, inKilos.weightUnit], ["10", "kg"]);
+  const inPounds = proofDraftFromLine({ weightLb: 4.2 });
+  assert.deepEqual([inPounds.weightLb, inPounds.weightUnit], ["4.2", "lb"]);
+  assert.deepEqual([proofDraftFromLine({}).weightLb, proofDraftFromLine({}).weightUnit], ["", "lb"]);
+  // An edit that leaves the weight alone sends back exactly what is stored.
+  assert.deepEqual(
+    [proofPayload(inKilos).weightLb, proofPayload(inKilos).weightKg, proofPayload(inPounds).weightLb],
+    [22, 10, 4.2],
+  );
 });

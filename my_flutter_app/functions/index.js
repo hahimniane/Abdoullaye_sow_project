@@ -46667,7 +46667,7 @@ const ASSISTANT_ALLOWED_ORIGINS = new Set([
 const ASSISTANT_SYSTEM_PROMPT = `You are the website assistant for Laawol Digital (laawoldigital.com), a marketplace where registered, verified businesses serve the African diaspora between the US and West Africa.
 
 THE SERVICES (the only ones that exist):
-- Send a package: barrels, boxes, suitcases and parcels, by sea (cheaper) or air (faster). Each business sets its own prices - per barrel, per item, per box size (Small, Medium, Large; XL is quoted) or per pound - and the customer sees the total right away, with an estimated delivery window and the departure days. Then the customer picks a drop-off time at the business, or asks for a pickup and sees the pickup fee right away. Payment is at the counter, or by card if the business offers it.
+- Send a package: barrels, boxes, suitcases and parcels, by sea (cheaper) or air (faster). Each business sets its own prices - per barrel, per item, per box size (Small, Medium, Large; XL is quoted) or by weight (per pound or per kilo) - and the customer sees the total right away, with an estimated delivery window and the departure days. Then the customer picks a drop-off time at the business, or asks for a pickup and sees the pickup fee right away. Payment is at the counter, or by card if the business offers it.
 - Car sales: businesses publish verified cars (photos, price, title info). Customers can hold a vehicle with a paid deposit.
 - Car transport: customer describes vehicle + destination, covering businesses send quotes.
 - Car parking: reserve a space with an approved business (city + dates).
@@ -49257,11 +49257,19 @@ async function savePackagePriceList(db, {uid, user, businessId, data}) {
   const destinations = await businessRef.collection("destinationCountries")
       .get();
   const countryIds = destinations.docs.map((doc) => doc.id);
-  const checked = packagePriceList.validatePriceList(data, countryIds);
+  // An older app saves a list without saying its unit: that is "no change",
+  // not "pounds" (it only echoes the numbers it was shown), so a kilo list
+  // stays kilos. Every current client sends the unit.
+  const unitSent = data.weightUnit !== undefined && data.weightUnit !== null &&
+    data.weightUnit !== "";
+  const storedUnit = unitSent ? "" : String((await ref.get()).data()
+      ?.weightUnit || "");
+  const checked = packagePriceList.validatePriceList(
+      unitSent ? data : {...data, weightUnit: storedUnit}, countryIds);
   if (checked.errors.length > 0) {
     throw new HttpsError("invalid-argument",
-        packagePriceList.PRICE_LIST_MESSAGES[checked.errors[0]] ||
-          "Check the price list.",
+        packagePriceList.priceListMessage(checked.errors[0],
+            checked.weightUnit) || "Check the price list.",
         {reason: checked.errors[0], reasons: checked.errors});
   }
   const saved = await db.runTransaction(async (tx) => {
@@ -49276,6 +49284,10 @@ async function savePackagePriceList(db, {uid, user, businessId, data}) {
     const next = {
       businessId,
       routes: checked.routes,
+      // "lb" | "kg" (docs/SHIPPING_SIMPLE_HOME.md K1). Always written, so a
+      // list that goes back to pounds overwrites "kg" (an update does not
+      // delete); the routes themselves carry `unit` only for kilos.
+      weightUnit: checked.weightUnit,
       needsCheck: byLaawol ? true : false,
       updatedAtMs: nowMs,
       updatedByUid: uid,
@@ -49409,6 +49421,7 @@ function publicPriceListDoc(doc) {
   return {
     businessId: String(row.businessId || ""),
     routes: row.routes && typeof row.routes === "object" ? row.routes : {},
+    weightUnit: row.weightUnit === "kg" ? "kg" : "lb",
     needsCheck: row.needsCheck === true,
     updatedAtMs: Number(row.updatedAtMs || 0),
     updatedByName: String(row.updatedByName || ""),
@@ -49928,6 +49941,7 @@ exports.receivePackageRequest = onCall(
           photoPaths,
           contents: proof.fields.contents,
           weightLb: proof.fields.weightLb,
+          weightKg: proof.fields.weightKg,
           declaredValueCents: proof.fields.declaredValueCents,
           shipMode: data.shipMode ? shipMode : shipModeOf(row.shipMode),
         });
