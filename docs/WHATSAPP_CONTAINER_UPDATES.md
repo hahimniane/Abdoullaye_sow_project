@@ -343,6 +343,31 @@ known counts as abroad (asking is always right; a wrong address is not). `missin
 (`pickupAddress`, `pickupPhone`) so the consoles can ask for it before the
 message goes out.
 
+**The website console asks the business** (2026-11-10, `admin_web`;
+`missingPickupFields`, `pickupAskFor`, `pickupAskErrors` and
+`destinationsMissingPickup` in `src/lib/destination-pickup.ts`):
+
+- **When a container is marked Ready for pickup** and its destination has no
+  pickup address or no pickup phone, the Containers page opens "Where do
+  customers pick up?" instead of the plain confirm. "Save and mark ready"
+  needs both the address and the phone (the city is optional), saves them with
+  `setDestinationPickup`, then calls `setContainerStatus`, in that order, so
+  the message carries them. "Send without it" marks the container ready as
+  before. A refusal (for example a staff member without the Destinations
+  permission) is said inside the dialog. A container with no destination, or
+  one the business no longer lists, is not asked: there is nothing to save
+  against.
+- **Today → Needs attention** shows the owner "Destinations with no pickup
+  place" with the number of active destinations that lack one; it opens
+  Destinations. Read only while Today is open, only for the owner.
+- **Destinations** marks each active destination with "No pickup place yet"
+  (or which of the two is missing), and the form says what happens without
+  them.
+
+The app asks the same question in the build after 1.0.29. The server does not
+refuse to send: an older app cannot ask, and a late message is worse than one
+that says "ask at the number below".
+
 ## Templates still in review
 
 A template that Meta has not approved yet answers every send with error

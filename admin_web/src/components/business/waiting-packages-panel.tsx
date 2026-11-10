@@ -94,7 +94,7 @@ import {
   type ProofDraft,
   type ProofSettings,
 } from "@/lib/package-proof";
-import { AirPackageBadge, ShipsByChoice } from "@/components/business/ships-by";
+import { AirPackageBadge, ShipsByAirLine, ShipsByChoice } from "@/components/business/ships-by";
 import { MessageCustomerButton } from "@/components/support/message-customer";
 import { unflaggedLineWarnings } from "@/lib/phone-accounts";
 import type { FirestoreRow } from "@/types/admin";
@@ -655,8 +655,11 @@ export function WaitingPackagesPanel({
               <button className="lst-icon-btn" type="button" onClick={closeModal} aria-label="Close"><X size={18} /></button>
             </header>
             <div className="lst-modal-body">
-              {shipsByChoiceShown(shipsByAir, editingRow, airOnly) && (
+              {shipsByChoiceShown(shipsByAir, editingRow, airOnly) ? (
                 <ShipsByChoice id="wpk-ships-by" value={shipMode} onChange={setShipMode} disabled={busy} />
+              ) : (
+                // Not asked of an air-only business, but still said.
+                airOnly && shipMode === "air" && <ShipsByAirLine />
               )}
               {/* A car never flies: an air-only business is not asked, unless it is correcting an old car. */}
               {(!airOnly || draft.kind === "car") && (

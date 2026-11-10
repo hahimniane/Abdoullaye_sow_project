@@ -312,6 +312,9 @@ business. Every string has its French in `french-dom.ts`.
 
 - Starts on **Air**; "Ships by" is not asked. It shows only when correcting an
   old sea package, so that package can be moved to air.
+- Where the question would be, the form says **"Ships by air"** (plane icon,
+  `ShipsByAirLine` in `ships-by.tsx`), so the staff see how the package goes
+  without being asked (2026-11-10).
 - The first piece is a **box** (and so is each piece added after it).
 - "A car" is not asked; it shows only when correcting a package that is a car.
 - The Air / Sea filter above the list shows only while a sea package is still

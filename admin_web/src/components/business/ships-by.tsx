@@ -45,6 +45,15 @@ export function ShipsByChoice({
 }
 
 /** The small "Air" mark on a waiting package that flies. */
+/** For a business that only flies: said on the form, not asked. */
+export function ShipsByAirLine() {
+  return (
+    <p className="prf-air prf-air-line">
+      <Plane size={14} aria-hidden="true" /> <span>Ships by air</span>
+    </p>
+  );
+}
+
 export function AirPackageBadge() {
   return (
     <small className="prf-air" title="Ships by air">

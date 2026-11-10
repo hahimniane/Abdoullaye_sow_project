@@ -150,6 +150,11 @@ test("the register form of an air-only business starts on Air with a box and no 
   assert.match(waiting, /<h2>\{copy\.waitingTitle\}<\/h2>/);
   assert.match(waiting, /placeholder=\{copy\.waitingSearch\}/);
   assert.match(waiting, /: copy\.registerSubtitle\}/);
+  // Not asked Sea or Air, but told: the owner (2026-11-10) "Why dont i see
+  // air shipment".
+  assert.match(waiting, /\) : \(\s*(?:\/\/[^\n]*\s*)?airOnly && shipMode === "air" && <ShipsByAirLine \/>\s*\)\}/);
+  assert.match(read("../components/business/ships-by.tsx"), /export function ShipsByAirLine\(\) \{[\s\S]{0,200}<span>Ships by air<\/span>/);
+  assert.equal(translateValue("Ships by air", "fr"), "Expédié par avion");
   // The Air / Sea filter shows only while there is something to tell apart.
   assert.match(waiting, /const modeFilterShown = shipsByAir && \(!airOnly \|\| airCount < sorted\.length\);/);
 });

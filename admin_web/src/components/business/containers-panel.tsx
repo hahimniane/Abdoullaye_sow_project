@@ -156,6 +156,14 @@ import {
   destinationCountryName,
   destinationCountryOptionForRow,
 } from "@/lib/destination-countries";
+import {
+  destinationPickupDraft,
+  destinationPickupPayload,
+  emptyDestinationPickupDraft,
+  pickupAskErrors,
+  pickupAskFor,
+  type DestinationPickupDraft,
+} from "@/lib/destination-pickup";
 import { db, functions } from "@/lib/firebase";
 import { currentLanguage, formatDate, formatDateTime, text } from "@/lib/format";
 import { plannedDepartureText } from "@/lib/business-price-list";
@@ -240,7 +248,7 @@ type ContainersPanelProps = {
 /** Stands in for a container with no lines, so the loading-list memos below keep a stable input. */
 const NO_ROWS: FirestoreRow[] = [];
 
-type ContainerModal = "" | "container" | "line" | "move" | "history" | "contacts" | "labels" | "assign";
+type ContainerModal = "" | "container" | "line" | "move" | "history" | "contacts" | "labels" | "assign" | "pickup";
 
 /** The two lists the panel offers: the containers, and the packages still waiting for one. */
 export type ListView = "containers" | "waiting" | "requests";
@@ -416,6 +424,12 @@ export function ContainersPanel({
   // container that already has the car instead of leaving the person to
   // hunt for it.
   const [conflictId, setConflictId] = useState("");
+  // Asked when a container is marked ready for pickup and its destination
+  // has no pickup address or phone yet (docs/WHATSAPP_CONTAINER_UPDATES.md,
+  // "Pickup details per destination").
+  const [pickupContainerId, setPickupContainerId] = useState("");
+  const [pickupDraft, setPickupDraft] = useState<DestinationPickupDraft>(emptyDestinationPickupDraft);
+  const [pickupTouched, setPickupTouched] = useState(false);
 
   const [containerDraft, setContainerDraft] = useState<ContainerDraft>(emptyContainerDraft);
   const [editingContainerId, setEditingContainerId] = useState("");
@@ -686,6 +700,8 @@ export function ContainersPanel({
     setMoveLineId("");
     setMoveTargetId("");
     setContactsLineId("");
+    setPickupContainerId("");
+    setPickupTouched(false);
     setLabelsContainerId("");
     setLabelsLineId("");
   }
@@ -780,6 +796,17 @@ export function ContainersPanel({
       setFlash(CONTAINER_MESSAGES[refusal]);
       return;
     }
+    // A destination with no pickup place: ask for it first, so the message
+    // customers are about to get says where to collect and whom to call.
+    const pickupDestination = next === "arrived" ? pickupAskFor(row, destinations.rows) : null;
+    if (pickupDestination) {
+      setPickupDraft(destinationPickupDraft(pickupDestination));
+      setPickupTouched(false);
+      setDraftError("");
+      setPickupContainerId(String(row.id));
+      setModal("pickup");
+      return;
+    }
     const title = containerTitle(row);
     const air = isAirContainer(row);
     const ok = await confirmImportantAction(
@@ -794,6 +821,31 @@ export function ContainersPanel({
     await runPanelAction(setBusy, setFlash, next === "shipped" ? "Marked as shipped." : "Marked ready for pickup.", async () => {
       await httpsCallable(functions, "setContainerStatus")({ businessId, containerId: String(row.id), status: next });
     });
+  }
+
+  // The answer to the pickup question: save the place (unless skipped),
+  // then mark the container ready. The message is queued by the status
+  // change and reads the destination when it is sent, so the place saved
+  // here is the one customers get.
+  async function markReadyForPickup(savePlace: boolean) {
+    const row = pickupContainer;
+    if (!row) return;
+    if (savePlace) {
+      setPickupTouched(true);
+      if (Object.keys(pickupAskErrors(pickupDraft)).length > 0) return;
+    }
+    setDraftError("");
+    await runPanelAction(setBusy, setFlash, "Marked ready for pickup.", async () => {
+      if (savePlace) {
+        await httpsCallable(functions, "setDestinationPickup")({
+          businessId,
+          countryId: text(row.destinationCountryId, ""),
+          ...destinationPickupPayload(pickupDraft),
+        });
+      }
+      await httpsCallable(functions, "setContainerStatus")({ businessId, containerId: String(row.id), status: "arrived" });
+      closeModal();
+    }, failInModal);
   }
 
   async function openLoadingList(row: FirestoreRow) {
@@ -1218,6 +1270,8 @@ export function ContainersPanel({
   const contactsLine = contactsLineId ? lines.rows.find((row) => String(row.id) === contactsLineId) : undefined;
   const contactsLineContainer = contactsLine ? containerById.get(text(contactsLine.containerId, "")) : undefined;
   const labelsContainer = labelsContainerId ? containerById.get(labelsContainerId) : undefined;
+  const pickupContainer = pickupContainerId ? containerById.get(pickupContainerId) : undefined;
+  const pickupErrors = pickupTouched ? pickupAskErrors(pickupDraft) : {};
   const labelsLine = labelsLineId ? lines.rows.find((row) => String(row.id) === labelsLineId) : undefined;
   const conflictContainer = conflictId ? containerById.get(conflictId) : undefined;
 
@@ -2020,6 +2074,64 @@ export function ContainersPanel({
               <button className="lst-add" type="button" disabled={busy || moveTargets.length === 0} aria-busy={busy} onClick={() => void moveLine()}>
                 {busy ? <RefreshCw className="spin" size={16} /> : <ArrowRightLeft size={16} />}
                 {busy ? "Moving..." : "Move line"}
+              </button>
+            </footer>
+          </div>
+        </div>
+      )}
+
+      {modal === "pickup" && pickupContainer && (
+        <div className="lst-modal-overlay" role="dialog" aria-modal="true" {...overlayDismiss(closeModal)}>
+          <div className="lst-modal" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
+            <header className="lst-modal-head">
+              <div>
+                <h3>Where do customers pick up?</h3>
+                <p>The WhatsApp message tells customers where to collect and which number to call. This destination has no pickup place yet:{" "}
+                  <strong data-no-translate>{destinationLabel(pickupContainer)}</strong></p>
+              </div>
+              <button className="lst-icon-btn" type="button" onClick={closeModal} aria-label="Close"><X size={18} /></button>
+            </header>
+            <div className="lst-modal-body">
+              {draftError && <div className="lst-form-error" role="alert">{draftError}</div>}
+              <div className="lst-form-grid">
+                <label className="lst-field wide"><span>Pickup address</span>
+                  <input
+                    maxLength={200}
+                    value={pickupDraft.pickupAddress}
+                    onChange={(e) => setPickupDraft((value) => ({ ...value, pickupAddress: e.target.value }))}
+                    placeholder="e.g. Madina, near the market"
+                    autoFocus
+                  />
+                  {pickupErrors.pickupAddress && <small className="field-error">{pickupErrors.pickupAddress}</small>}
+                </label>
+                <div className="lst-field wide ctn-phone">
+                  <CustomerPhoneField
+                    id="container-pickup-phone"
+                    label="Pickup phone"
+                    value={pickupDraft.pickupPhone}
+                    onChange={(next) => setPickupDraft((value) => ({ ...value, pickupPhone: next }))}
+                    initialCountryCode={phoneCountryForDestination(pickupContainer, customerPhoneCountry, destinations.rows)}
+                    error={pickupErrors.pickupPhone}
+                  />
+                </div>
+                <label className="lst-field wide"><span>Pickup city (optional)</span>
+                  <input
+                    maxLength={80}
+                    value={pickupDraft.pickupCity}
+                    onChange={(e) => setPickupDraft((value) => ({ ...value, pickupCity: e.target.value }))}
+                    placeholder="e.g. Conakry"
+                  />
+                  {pickupErrors.pickupCity && <small className="field-error">{pickupErrors.pickupCity}</small>}
+                </label>
+              </div>
+              <p className="lst-hint">Saved for every package going to this destination. You can change it in Destinations.</p>
+            </div>
+            <footer className="lst-modal-foot">
+              <button className="lst-btn ghost" type="button" disabled={busy} onClick={closeModal}>Cancel</button>
+              <button className="lst-btn ghost" type="button" disabled={busy} title="Customers are told to ask at your business phone number." onClick={() => void markReadyForPickup(false)}>Send without it</button>
+              <button className="lst-add" type="button" disabled={busy} aria-busy={busy} onClick={() => void markReadyForPickup(true)}>
+                {busy ? <RefreshCw className="spin" size={16} /> : <Container size={16} />}
+                {busy ? "Saving..." : "Save and mark ready"}
               </button>
             </footer>
           </div>

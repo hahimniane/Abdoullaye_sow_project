@@ -62,6 +62,7 @@ import {
   destinationPickupPayload,
   destinationPickupSummary,
   emptyDestinationPickupDraft,
+  missingPickupFields,
   type DestinationPickupDraft,
 } from "@/lib/destination-pickup";
 import { FieldInfo } from "@/components/field-info";
@@ -1178,6 +1179,9 @@ export function DestinationsPanel({
                   {Boolean(destinationPickupSummary(row)) && (
                     <small className="destination-pickup-line"><MapPinned size={12} /> <span data-no-translate>{destinationPickupSummary(row)}</span></small>
                   )}
+                  {row.isActive !== false && missingPickupFields(row).length > 0 && (
+                    <small className="destination-pickup-line missing"><MapPinned size={12} /> <span>{missingPickupFields(row).length === 2 ? "No pickup place yet" : missingPickupFields(row)[0] === "pickupPhone" ? "No pickup phone yet" : "No pickup address yet"}</span></small>
+                  )}
                 </div>
               </div>
               <div className="destination-service-cell">
@@ -1448,7 +1452,7 @@ export function DestinationsPanel({
                 )}
                 <div className="lst-field wide destination-pickup">
                   <span>Pickup in this country</span>
-                  <small className="muted">Where customers collect their goods. The ready-for-pickup WhatsApp message gives these. Leave them blank to use your business address and phone.</small>
+                  <small className="muted">Where customers collect their goods. The ready-for-pickup WhatsApp message gives these. Without them, customers are told to ask at your business phone number.</small>
                 </div>
                 <label className="lst-field wide"><span>Pickup city (optional)</span>
                   <input

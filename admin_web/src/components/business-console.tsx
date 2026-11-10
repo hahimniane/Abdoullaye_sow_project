@@ -88,10 +88,12 @@ import {
 import {
   useBusinessCollection,
   useBusinessHasRecords,
+  useBusinessDestinations,
   useBusinessHasSeaContainer,
   useBusinessStaff,
 } from "@/lib/business-data";
 import { airOnlyBusiness, shippingCopy, shippingStepsFor } from "@/lib/air-only";
+import { PICKUP_ATTENTION_LABEL, destinationsMissingPickup } from "@/lib/destination-pickup";
 import { shipsByAirOf } from "@/lib/package-proof";
 import { useServerTotals } from "@/lib/use-server-totals";
 import { Panel } from "@/components/panel";
@@ -620,18 +622,43 @@ export function BusinessConsole({
     () => waitingOnYou(pendingHandovers.rows.map(handoverFrom).filter((h) => h.id), balancesViewer),
     [balancesViewer, pendingHandovers.rows],
   );
+  // Destinations whose ready-for-pickup message has no place or phone to
+  // give: the owner's to fill in (Destinations is the owner's page). A short
+  // list, read only while Today is open.
+  const pickupDestinations = useBusinessDestinations(
+    businessId,
+    onToday && profile.role === "businessOwner" && canOpenContainerLists,
+  );
+  const pickupPlacesMissing = useMemo(
+    () => destinationsMissingPickup(pickupDestinations.rows),
+    [pickupDestinations.rows],
+  );
   const todayExtraAttention = useMemo<TodayAttentionItem[]>(
-    () => waitingHandovers.count > 0
-      ? [{
+    () => {
+      const items: TodayAttentionItem[] = [];
+      if (waitingHandovers.count > 0) {
+        items.push({
           key: "staffHandovers",
           label: "Money handed to you to confirm",
           count: waitingHandovers.count,
           amountCents: waitingHandovers.amountCents,
           tab: "staffBalances",
           view: "",
-        }]
-      : [],
-    [waitingHandovers],
+        });
+      }
+      if (pickupPlacesMissing > 0) {
+        items.push({
+          key: "pickupPlaces",
+          label: PICKUP_ATTENTION_LABEL,
+          count: pickupPlacesMissing,
+          amountCents: null,
+          tab: "destinations",
+          view: "",
+        });
+      }
+      return items;
+    },
+    [pickupPlacesMissing, waitingHandovers],
   );
 
   const businessName = text(business?.name ?? profile.businessName, "Business");

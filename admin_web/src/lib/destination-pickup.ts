@@ -115,3 +115,70 @@ export function destinationPickupSummary(
     .filter(Boolean)
     .join(" · ");
 }
+
+export type MissingPickupField = "pickupAddress" | "pickupPhone";
+
+/**
+ * What a destination still lacks for the ready-for-pickup message to be
+ * right: its address, its phone, or both. Empty when it has both. The city
+ * is never asked for: the country alone names the place.
+ */
+export function missingPickupFields(
+  row: Record<string, unknown> | null | undefined,
+): MissingPickupField[] {
+  const missing: MissingPickupField[] = [];
+  if (!oneLine(row?.pickupAddress)) missing.push("pickupAddress");
+  if (!e164Phone(row?.pickupPhone)) missing.push("pickupPhone");
+  return missing;
+}
+
+/**
+ * The destination to ask about before a container is marked ready for
+ * pickup: the business's own destination the container goes to, when it
+ * lacks an address or a phone. Null when there is nothing to ask - it has
+ * both, the container names no destination, or the destination is not one
+ * of the business's (the callable could not save it).
+ */
+export function pickupAskFor<T extends Record<string, unknown>>(
+  container: Record<string, unknown> | null | undefined,
+  destinations: readonly T[],
+): T | null {
+  const id = oneLine(container?.destinationCountryId);
+  if (!id) return null;
+  const own = destinations.find((row) => oneLine(row.id) === id);
+  if (!own) return null;
+  return missingPickupFields(own).length > 0 ? own : null;
+}
+
+/**
+ * The reasons the ask cannot be saved: the form's own, and the two fields
+ * it exists to collect.
+ */
+export function pickupAskErrors(
+  draft: DestinationPickupDraft,
+): DestinationPickupErrors {
+  const errors = destinationPickupErrors(draft);
+  const value = destinationPickupPayload(draft);
+  if (!value.pickupAddress) errors.pickupAddress = "Add the pickup address.";
+  // A phone typed without its country code keeps the message that says so.
+  if (!value.pickupPhone && !errors.pickupPhone) errors.pickupPhone = "Add the pickup phone.";
+  return errors;
+}
+
+/**
+ * How many of the business's active destinations have no pickup address or
+ * phone: the "Needs attention" row on Today.
+ */
+export function destinationsMissingPickup(
+  rows: ReadonlyArray<Record<string, unknown>>,
+): number {
+  let count = 0;
+  for (const row of rows) {
+    if (row.isActive === false) continue;
+    if (missingPickupFields(row).length > 0) count += 1;
+  }
+  return count;
+}
+
+/** The label of that Today row. */
+export const PICKUP_ATTENTION_LABEL = "Destinations with no pickup place";

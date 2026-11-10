@@ -275,8 +275,25 @@ const CUSTOMER_SHIPPING_TRANSLATIONS: Record<string, string> = {
     "p. ex. Livraison porte-à-porte à Conakry incluse",
   // Pickup details per destination (destination form, destination-pickup.ts).
   "Pickup in this country": "Retrait dans ce pays",
-  "Where customers collect their goods. The ready-for-pickup WhatsApp message gives these. Leave them blank to use your business address and phone.":
-    "Où les clients récupèrent leurs marchandises. Le message WhatsApp « prêt à récupérer » les indique. Laissez vide pour utiliser l’adresse et le téléphone de votre entreprise.",
+  "Where customers collect their goods. The ready-for-pickup WhatsApp message gives these. Without them, customers are told to ask at your business phone number.":
+    "Où les clients récupèrent leurs marchandises. Le message WhatsApp « prêt à récupérer » les indique. Sans eux, les clients sont invités à demander au numéro de téléphone de votre entreprise.",
+  // Asked when a container is marked ready for pickup and its destination
+  // has no pickup place (containers-panel.tsx), and said on Today and in
+  // the destination list.
+  "Where do customers pick up?": "Où les clients récupèrent-ils ?",
+  "The WhatsApp message tells customers where to collect and which number to call. This destination has no pickup place yet:":
+    "Le message WhatsApp indique aux clients où récupérer et quel numéro appeler. Cette destination n’a pas encore de lieu de retrait :",
+  "Pickup phone": "Téléphone de collecte",
+  "Saved for every package going to this destination. You can change it in Destinations.":
+    "Enregistré pour tous les colis vers cette destination. Vous pouvez le modifier dans Destinations.",
+  "Send without it": "Envoyer sans",
+  "Save and mark ready": "Enregistrer et marquer prêt",
+  "Add the pickup address.": "Ajoutez l’adresse de collecte.",
+  "Add the pickup phone.": "Ajoutez le téléphone de collecte.",
+  "Destinations with no pickup place": "Destinations sans lieu de retrait",
+  "No pickup place yet": "Pas encore de lieu de retrait",
+  "No pickup phone yet": "Pas encore de téléphone de collecte",
+  "No pickup address yet": "Pas encore d’adresse de collecte",
   "Pickup city (optional)": "Ville de collecte (facultatif)",
   "Pickup phone (optional)": "Téléphone de collecte (facultatif)",
   "e.g. Conakry": "p. ex. Conakry",
@@ -7677,9 +7694,15 @@ Object.assign(TEXT_TRANSLATIONS, {
     "Ce colis est déjà sur un conteneur : il voyage comme lui. Retirez-le d’abord pour changer « Expédié par ».",
   "Choose how the package ships: sea or air.": "Choisissez comment le colis est expédié : par bateau ou par avion.",
 });
+Object.assign(TEXT_TRANSLATIONS, {
+  // Said, not asked, on the register form of an air-only business.
+  "Ships by air": "Expédié par avion",
+});
 Object.assign(ATTRIBUTE_TRANSLATIONS, {
   "Ships by": "Expédié par",
   "Ships by air": "Expédié par avion",
+  "Customers are told to ask at your business phone number.":
+    "Les clients sont invités à demander au numéro de téléphone de votre entreprise.",
   "Filter by how packages ship": "Filtrer selon le mode d’expédition",
 });
 

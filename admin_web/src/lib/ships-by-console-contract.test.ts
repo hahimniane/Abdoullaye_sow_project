@@ -25,7 +25,7 @@ test("the choice is a Sea / Air radio group, offered only when the business ship
   // The flag comes from the business document the panel already holds.
   assert.match(panel, /const shipsByAir = shipsByAirOf\(business\);/);
   assert.match(panel, /shipsByAir=\{shipsByAir\}\s*onFlash=\{setFlash\}/);
-  assert.match(waiting, /\{shipsByChoiceShown\(shipsByAir, editingRow, airOnly\) && \(\s*<ShipsByChoice id="wpk-ships-by" value=\{shipMode\} onChange=\{setShipMode\}/);
+  assert.match(waiting, /\{shipsByChoiceShown\(shipsByAir, editingRow, airOnly\) \? \(\s*<ShipsByChoice id="wpk-ships-by" value=\{shipMode\} onChange=\{setShipMode\}/);
   // Received also offers it when the customer asked for air, so the choice is never hidden from a request that is.
   assert.match(requests, /\{\(shipsByAir \|\| requestMode === "air"\) && <ShipsByChoice id="pkq-receive-ships-by" value=\{shipMode\} onChange=\{setShipMode\}/);
   // Default sea; an edit opens on the package's own mode.
