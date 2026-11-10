@@ -15,6 +15,7 @@ a French block):
 | `arrived` | `shipment_ready_pickup_2lang` | Staff mark the container **Ready for pickup**. Only staff: the carrier's "discharged / available at the port" is recorded on the timeline and sends nothing, because a box at the port cannot be collected yet. |
 | `confirm` | `package_confirm_2lang` | **Instead of** the sender's `received` when the business has *Ask the sender to confirm* on and the line has a drop-off photo (docs/AIR_PACKAGES.md §4.4): the first photo, the item list and weight, and two quick replies, **OK ✓** / **Something's wrong**. The receiver still gets `received` (with the photo). Row `{lineId}_sender_confirm`, or `{lineId}_receiver_confirm` for a sender who is their own receiver; on the line's `lastCustomerUpdate` it counts as `received`. |
 | `delivered` | `shipment_delivered_2lang` | Destination staff mark the **package** delivered (*Mark delivered*: the `deliver` action of `updateContainerLine`; docs/WAITING_PACKAGES.md "Delivered at destination"). Per line, like `received`. Undoing a delivery sends nothing, and a delivery repeated after an undo finds the rows already there, so nobody hears twice. |
+| `delivered` (with the photo) | `shipment_delivered_photo_2lang` | The same moment, for the **sender and the receiver**, when the agent took a handover photo (`deliveredPhotoPath`: required when delivering without the pickup code, optional on any other delivery): `shipment_delivered_2lang`'s body plus the photo (below). Falls back to the row above when the template is not usable yet. |
 
 ### Delivered (2026-10-21)
 
@@ -686,6 +687,48 @@ Sample values: `Fatou`, `Dala Shipping`, `3 barrels`, `Guinea`,
 The request body (`whatsapp_templates.templateMessage` with
 `photoHeader: true`): a `header` component `{type: "image", image:
 {link}}`, the `body` with eight texts, the URL button.
+
+### `shipment_delivered_photo_2lang`
+
+"Delivered" with the handover photo, for the sender and the receiver (owner
+2026-11-10: the photo taken at delivery must reach both people). Sent
+instead of `shipment_delivered_2lang` when the line has a
+`deliveredPhotoPath` (`container_updates.updatePhotoPath` /
+`photoHeaderWanted`), in either template set. The body of
+`shipment_delivered_2lang` plus one sentence about the photo (same ten
+variables, same order), under a header: **IMAGE**, the photo as a 30-day
+signed link (`package_proof.photoLink`). One URL button like the other
+tracking messages. If Meta answers a "not usable yet" code
+(`RECEIPT_FALLBACK_CODES`) the same row is sent again at once as the plain
+`shipment_delivered_2lang`; the row records `photoHeader`: `attached` or
+`fallback`. Variables: {{1}} name, {{2}} business, {{3}} what (EN), {{4}}
+day (EN), {{5}} collected by, {{6}} business, {{7}} what (FR), {{8}} day
+(FR), {{9}} collected by, {{10}} tracking code.
+
+```
+Hello / Bonjour {{1}} 👋
+
+*ENGLISH*
+{{2}} delivered your shipment of {{3}} on {{4}}. It was collected by {{5}}. The photo above was taken at the handover.
+
+—————
+*FRANÇAIS*
+{{6}} a remis votre envoi de {{7}} le {{8}}. Il a été récupéré par {{9}}. La photo ci-dessus a été prise lors de la remise.
+
+🔎 Tracking code / Code de suivi : {{10}}
+
+Tap the button below to see its details.
+Appuyez sur le bouton ci-dessous pour voir les détails.
+```
+
+Sample values: `Fatou`, `Dala Shipping`, `3 barrels`, `October 21, 2026`,
+`Mamadou Bah`, `Dala Shipping`, `3 barils`, `21 octobre 2026`,
+`Mamadou Bah`, `CL-K7M4P2`. Button: *Visit website*, `Track · Suivre`,
+dynamic `https://customer.laawoldigital.com/t/{{1}}`.
+
+The request body (`whatsapp_templates.templateMessage` with
+`photoHeader: true` on `delivered`): a `header` component `{type: "image",
+image: {link}}`, the `body` with ten texts, the URL button.
 
 ### Pickup number (no template of its own)
 

@@ -477,6 +477,7 @@ const {
   destinationName: containerDestinationName,
   describeLine: describeContainerLine,
   photoHeaderWanted,
+  updatePhotoPath,
   photoFallbackDecision,
   receiptDocumentWanted,
   receiptDocumentFilename,
@@ -22243,9 +22244,15 @@ async function containerLineDelivery(db, args) {
   const business = action === DELIVERY_ACTION.DELIVER ?
     await db.collection("businesses").doc(businessId).get() : null;
   const proofSettings = packageProof.proofSettingsOf(business?.data() || {});
-  const overridePhoto = String(data.override?.photoPath || "").trim();
+  // The handover photo: the override's own, or the one any delivery may
+  // carry (`photoPath`). The sender and the receiver get it with the
+  // "delivered" message.
+  const overridePhoto = String(data.override?.photoPath || "").trim() ||
+    (action === DELIVERY_ACTION.DELIVER ?
+      String(data.photoPath || "").trim() : "");
   const overridePhotoOk = overridePhoto ?
     await photoAttachable(overridePhoto, {businessId, uid}) : false;
+  if (overridePhoto && !overridePhotoOk) throw deliveryError("photo_invalid");
   const payRef = collectedCents > 0 ?
     db.collection("containerLinePayments").doc() : null;
   const outcome = await db.runTransaction(async (tx) => {
@@ -25388,14 +25395,15 @@ exports.deliverContainerCustomerUpdate = onDocumentWritten(
         documentBase: whatsappPhotoBase(),
       };
       // Everyone's "package received" is headed by the drop-off photo when
-      // the line has one (owner 2026-11-10: the sender and the receiver
-      // both get the picture). The link is signed with the line's document
+      // the line has one, and everyone's "delivered" by the handover photo
+      // (owner 2026-11-10: the sender and the receiver both get the
+      // picture, at all times). The link is signed with the line's document
       // token, minted here for a line that has none. A photo message Meta
       // cannot use yet never holds the news back: it goes out without it.
       let sent = null;
       let photoState = "";
       if (photoHeaderWanted({update: row.update}) &&
-          Array.isArray(line.photoPaths) && line.photoPaths.length > 0) {
+          updatePhotoPath(line, row.update)) {
         if (!String(line.documentToken || "").trim()) {
           line.documentToken = await ensureLineDocumentToken(db, lineDoc.ref)
               .catch((error) => {
@@ -25406,8 +25414,9 @@ exports.deliverContainerCustomerUpdate = onDocumentWritten(
               });
         }
         const withPhoto = whatsappUpdateMessage(messageArgs);
-        if (withPhoto?.template?.name ===
-            WHATSAPP_TEMPLATE.SHIPMENT_RECEIVED_PHOTO_2LANG) {
+        if ([WHATSAPP_TEMPLATE.SHIPMENT_RECEIVED_PHOTO_2LANG,
+          WHATSAPP_TEMPLATE.SHIPMENT_DELIVERED_PHOTO_2LANG,
+        ].includes(withPhoto?.template?.name)) {
           const attempt = await sendWhatsAppMessage(withPhoto);
           if (photoFallbackDecision(true, attempt)) {
             logger.info("Photo template not usable; sending without it", {

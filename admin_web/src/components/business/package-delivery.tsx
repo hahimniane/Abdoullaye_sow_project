@@ -103,7 +103,9 @@ function StoragePhoto({ path, alt }: { path: string; alt: string }) {
  * Mark one package delivered: who collected it (the receiver unless someone
  * collected for them), the pickup code when the business asks for one (with
  * "Deliver without a code" - a name and a photo - when the receiver has
- * none), the USD collected now, then - when it still owes money - a warning
+ * none), an optional photo of the handover (the sender and the receiver get
+ * it with the "delivered" message), the USD collected now, then - when it
+ * still owes money - a warning
  * to confirm. The balance is a warning, never a block. `balanceCents` is
  * what the screen already knows the package owes; when the server finds a
  * balance the screen did not (an older copy of the line), the warning shows
@@ -146,6 +148,8 @@ export function MarkDeliveredDialog({
   const [pickupCode, setPickupCode] = useState("");
   const [withoutCode, setWithoutCode] = useState(false);
   const [overrideName, setOverrideName] = useState(() => defaultCollectedBy(line));
+  // The handover photo: required without a code, optional otherwise. One
+  // photo either way; the sender and the receiver get it on WhatsApp.
   const [overridePhotoPath, setOverridePhotoPath] = useState("");
   const [photoBusy, setPhotoBusy] = useState(false);
   const photoInput = useRef<HTMLInputElement>(null);
@@ -210,6 +214,7 @@ export function MarkDeliveredDialog({
           acknowledgeBalance,
           pickupCode: override ? "" : pickupCode,
           override,
+          photoPath: override ? "" : overridePhotoPath,
           collectedCents: collectedNow,
           receivedByStaffId: collectedReceiver,
         }),
@@ -234,6 +239,32 @@ export function MarkDeliveredDialog({
       setBusy(false);
     }
   }
+
+  // One photo control for both cases: the override's (required) and any
+  // other delivery's (optional).
+  const photoRow = (
+    <div className="dlv-photo-row">
+      <input
+        accept="image/*"
+        capture="environment"
+        hidden
+        onChange={(e) => void choosePhoto(e)}
+        ref={photoInput}
+        type="file"
+      />
+      <button
+        aria-busy={photoBusy}
+        className="lst-btn ghost"
+        disabled={busy || photoBusy}
+        onClick={() => photoInput.current?.click()}
+        type="button"
+      >
+        {photoBusy ? <RefreshCw className="spin" size={14} /> : <Camera size={14} />}{" "}
+        {photoBusy ? "Uploading photo…" : overridePhotoPath ? "Retake photo" : "Take photo"}
+      </button>
+      {overridePhotoPath && <StoragePhoto alt="Photo of the handover" path={overridePhotoPath} />}
+    </div>
+  );
 
   const primaryLabel = busy ? DELIVERY_PROGRESS_COPY.deliver : step === "balance" ? "Mark delivered anyway" : "Mark delivered";
   const owedText = canSeeMoney && balanceCents > 0 ? (lang === "fr" ? `Doit ${moneyText(owedAfter, "fr")}` : `Owes ${moneyText(owedAfter, "en")}`) : "";
@@ -303,28 +334,9 @@ export function MarkDeliveredDialog({
                       </label>
                       <div className="lst-field wide">
                         <span>Photo of the person collecting</span>
-                        <div className="dlv-photo-row">
-                          <input
-                            accept="image/*"
-                            capture="environment"
-                            hidden
-                            onChange={(e) => void choosePhoto(e)}
-                            ref={photoInput}
-                            type="file"
-                          />
-                          <button
-                            aria-busy={photoBusy}
-                            className="lst-btn ghost"
-                            disabled={busy || photoBusy}
-                            onClick={() => photoInput.current?.click()}
-                            type="button"
-                          >
-                            {photoBusy ? <RefreshCw className="spin" size={14} /> : <Camera size={14} />}{" "}
-                            {photoBusy ? "Uploading photo…" : overridePhotoPath ? "Retake photo" : "Take photo"}
-                          </button>
-                          {overridePhotoPath && <StoragePhoto alt="Photo of the person collecting" path={overridePhotoPath} />}
-                        </div>
+                        {photoRow}
                       </div>
+                      <p className="lst-hint">The sender and the receiver get this photo on WhatsApp.</p>
                     </div>
                   )}
                 </div>
@@ -343,6 +355,11 @@ export function MarkDeliveredDialog({
                     />
                   </label>
                   <p className="lst-hint">The receiver, unless someone collects for them.</p>
+                  <div className="lst-field wide">
+                    <span>Photo of the handover (optional)</span>
+                    {photoRow}
+                  </div>
+                  <p className="lst-hint">The sender and the receiver get this photo on WhatsApp.</p>
                 </>
               )}
               <label className="lst-field wide">

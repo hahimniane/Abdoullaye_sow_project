@@ -41,6 +41,13 @@
  *                                  line has a photo; it goes before the
  *                                  receipt PDF (one header per message),
  *                                  and falls back the same way.
+ *   shipment_delivered_photo_2lang - `delivered` with the handover photo
+ *                                  as an IMAGE header, for the sender and
+ *                                  the receiver alike, whenever the agent
+ *                                  took one (the body is
+ *                                  shipment_delivered_2lang's variables);
+ *                                  the plain template goes out when this
+ *                                  one is not usable yet.
  *   (A line with a pickupCode sends shipment_ready_pickup_2lang too: Meta's
  *   classifier rejects any template that carries a "code to show" as an
  *   authentication message, so the pickup number rides in the address
@@ -76,6 +83,10 @@ const TEMPLATE = Object.freeze({
   // SHIPMENT_RECEIVED_2LANG. Only ever picked by templateMessage's
   // `photoHeader` flag, never by an update.
   SHIPMENT_RECEIVED_PHOTO_2LANG: "shipment_received_photo_2lang",
+  // `delivered` with the handover photo as an IMAGE header, for the sender
+  // and the receiver alike: the same variables as SHIPMENT_DELIVERED_2LANG.
+  // Only ever picked by templateMessage's `photoHeader` flag.
+  SHIPMENT_DELIVERED_PHOTO_2LANG: "shipment_delivered_photo_2lang",
   // Legacy, one language per message.
   PACKAGE_RECEIVED: "package_received",
   CONTAINER_DEPARTED: "container_departed",
@@ -95,6 +106,7 @@ const BILINGUAL_TEMPLATES = Object.freeze([
   TEMPLATE.PACKAGE_CONFIRM_2LANG,
   TEMPLATE.SHIPMENT_RECEIVED_DOC_2LANG,
   TEMPLATE.SHIPMENT_RECEIVED_PHOTO_2LANG,
+  TEMPLATE.SHIPMENT_DELIVERED_PHOTO_2LANG,
 ]);
 const LEGACY_TEMPLATES = Object.freeze([
   TEMPLATE.PACKAGE_RECEIVED,
@@ -283,6 +295,15 @@ const TEMPLATE_VARIABLES = Object.freeze({
     VARIABLE.COLLECTED_BY_FR,
     VARIABLE.TRACKING_CODE,
   ]),
+  // The same variables as shipment_delivered_2lang; the photo is the header.
+  [TEMPLATE.SHIPMENT_DELIVERED_PHOTO_2LANG]: Object.freeze([
+    VARIABLE.NAME,
+    VARIABLE.BUSINESS, VARIABLE.WHAT_EN, VARIABLE.DELIVERED_ON_EN,
+    VARIABLE.COLLECTED_BY_EN,
+    VARIABLE.BUSINESS, VARIABLE.WHAT_FR, VARIABLE.DELIVERED_ON_FR,
+    VARIABLE.COLLECTED_BY_FR,
+    VARIABLE.TRACKING_CODE,
+  ]),
   [TEMPLATE.PACKAGE_RECEIVED]: Object.freeze([
     VARIABLE.NAME, VARIABLE.BUSINESS, VARIABLE.WHAT, VARIABLE.DESTINATION,
     VARIABLE.TRACKING_CODE,
@@ -340,6 +361,10 @@ const TEMPLATE_SHAPE = Object.freeze({
   }),
   // The first drop-off photo (a 30-day signed link) and the tracking button.
   [TEMPLATE.SHIPMENT_RECEIVED_PHOTO_2LANG]: Object.freeze({
+    header: "image", buttons: "url",
+  }),
+  // The handover photo (a 30-day signed link) and the tracking button.
+  [TEMPLATE.SHIPMENT_DELIVERED_PHOTO_2LANG]: Object.freeze({
     header: "image", buttons: "url",
   }),
 });
@@ -667,7 +692,9 @@ function templateComponents(template, values, language) {
  *   from the values' documentLink / documentFilename). A message has one
  *   header: the photo goes before the receipt. Both apply to the bilingual
  *   set's `received` only - any other update, and the legacy set, ignore
- *   them.
+ *   them - but for `photoHeader: true` on `delivered`, which sends
+ *   shipment_delivered_photo_2lang (the handover photo header) in either
+ *   set: `delivered` has one template for both.
  * @return {object|null} The request body, or null for an update that has no
  *   template.
  */
@@ -682,6 +709,10 @@ function templateMessage(args) {
     } else if (args?.receiptDocument === true) {
       template = TEMPLATE.SHIPMENT_RECEIVED_DOC_2LANG;
     }
+  }
+  if (template === TEMPLATE.SHIPMENT_DELIVERED_2LANG &&
+      args?.photoHeader === true) {
+    template = TEMPLATE.SHIPMENT_DELIVERED_PHOTO_2LANG;
   }
   const language = isBilingualTemplate(template) ?
     BILINGUAL_TEMPLATE_LANGUAGE : templateLanguage(args.language);

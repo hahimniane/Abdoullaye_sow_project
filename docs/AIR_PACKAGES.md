@@ -148,6 +148,14 @@ header.
   `shipment_received_2lang` plus one sentence about the photo, the same eight
   parameters, and the tracking URL button. Wording and status:
   docs/WHATSAPP_CONTAINER_UPDATES.md.
+- **`shipment_delivered_photo_2lang`** (2026-11-10) — header IMAGE (the
+  handover photo, `deliveredPhotoPath`, a 30-day link), the body of
+  `shipment_delivered_2lang` plus one sentence about the photo, the same ten
+  parameters, and the tracking URL button. The handover photo is required
+  when delivering without the pickup code and optional on any other
+  delivery (`photoPath` on the `deliver` action); whenever there is one the
+  sender and the receiver both get it. Wording and status:
+  docs/WHATSAPP_CONTAINER_UPDATES.md.
 - **Pickup number:** Meta's classifier rejects any template that carries a
   "code to show" as an authentication message (two wordings tried on
   2026-10-29, both `INCORRECT_CATEGORY`). So there is no separate template:

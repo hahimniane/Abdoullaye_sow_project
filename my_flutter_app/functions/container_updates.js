@@ -562,8 +562,10 @@ function deliveryDayText(value, language) {
  *   endpoint the photo link is served by: a `received` for a line with a
  *   photo goes as shipment_received_photo_2lang, to the sender and the
  *   receiver alike (`photoHeader: false` leaves the photo out, for the
- *   fallback). `receiptDocument` ({link, filename}) is the package receipt
- *   PDF: given for the sender's `received` without a photo header it picks
+ *   fallback). A `delivered` for a line with a handover photo goes the
+ *   same way, as shipment_delivered_photo_2lang. `receiptDocument`
+ *   ({link, filename}) is the package receipt PDF: given for the sender's
+ *   `received` without a photo header it picks
  *   shipment_received_doc_2lang.
  * @return {object|null} The /messages request body, or null for an update
  *   that has no message (a confirmation without a photo or a document
@@ -582,13 +584,14 @@ function whatsappUpdateMessage(args) {
     abroad: collectedAbroad(args.line, args.container, business)});
   const line = args.line && typeof args.line === "object" ? args.line : {};
   const contents = contentsText(line.contents);
-  const photo = confirmationPhotoLink(line, args.documentBase, args.nowMs);
+  const photo = updatePhotoLink(line, args.update, args.documentBase,
+      args.nowMs);
   if (text(args.update, 20) === CONTAINER_UPDATE.CONFIRM && !photo) {
     return null;
   }
   // The drop-off photo heads everyone's `received` (the sender's and the
-  // receiver's); a message has one header, so the photo goes before the
-  // receipt PDF.
+  // receiver's), the handover photo everyone's `delivered`; a message has
+  // one header, so the photo goes before the receipt PDF.
   const withPhoto = args.photoHeader !== false && Boolean(photo) &&
     photoHeaderWanted({update: args.update, templateSet: args.templateSet});
   const receiptLink = text(args.receiptDocument?.link, 1000);
@@ -651,8 +654,38 @@ function whatsappUpdateMessage(args) {
  * @return {string} The link, or "" without a photo, a token or a base.
  */
 function confirmationPhotoLink(line, documentBase, nowMs = Date.now()) {
+  return updatePhotoLink(line, CONTAINER_UPDATE.CONFIRM, documentBase, nowMs);
+}
+
+/**
+ * The photo an update's message is headed by: the handover photo for
+ * `delivered` (taken by the agent who handed the package over), the first
+ * drop-off photo for every other update.
+ *
+ * @param {object} line A containerLines row.
+ * @param {string} update The row's update.
+ * @return {string} The photo's Storage path, or "" without one.
+ */
+function updatePhotoPath(line, update) {
+  if (text(update, 20) === CONTAINER_UPDATE.DELIVERED) {
+    return text(line?.deliveredPhotoPath, 300);
+  }
   const photos = Array.isArray(line?.photoPaths) ? line.photoPaths : [];
-  const path = text(photos[0], 300);
+  return text(photos[0], 300);
+}
+
+/**
+ * A 30-day link to an update's photo (updatePhotoPath), signed with the
+ * line's document token (package_proof.photoLink).
+ *
+ * @param {object} line A containerLines row.
+ * @param {string} update The row's update.
+ * @param {string} documentBase The /d endpoint's URL.
+ * @param {number} [nowMs] The time; the clock when omitted.
+ * @return {string} The link, or "" without a photo, a token or a base.
+ */
+function updatePhotoLink(line, update, documentBase, nowMs = Date.now()) {
+  const path = updatePhotoPath(line, update);
   const token = text(line?.documentToken, 200);
   const base = text(documentBase, 300).replace(/\/+$/, "");
   if (!path || !token || !base) return "";
@@ -663,8 +696,10 @@ function confirmationPhotoLink(line, documentBase, nowMs = Date.now()) {
  * Whether a `received` message carries the drop-off photo as its header
  * (shipment_received_photo_2lang): everyone's, the sender's and the
  * receiver's alike, in the bilingual set - the legacy set has no such
- * template. The line still needs a photo and a document token for the link
- * (confirmationPhotoLink).
+ * template. A `delivered` message carries the handover photo the same way
+ * (shipment_delivered_photo_2lang), in either set: `delivered` has one
+ * template for both. The line still needs a photo and a document token for
+ * the link (updatePhotoLink).
  *
  * @param {{update: string, templateSet: (string|undefined)}} args The row's
  *   update and the template set (the switch when omitted).
@@ -672,7 +707,9 @@ function confirmationPhotoLink(line, documentBase, nowMs = Date.now()) {
  */
 function photoHeaderWanted(args) {
   const set = args?.templateSet || whatsappTemplateSet();
-  return text(args?.update, 20) === CONTAINER_UPDATE.RECEIVED &&
+  const update = text(args?.update, 20);
+  if (update === CONTAINER_UPDATE.DELIVERED) return true;
+  return update === CONTAINER_UPDATE.RECEIVED &&
     set === TEMPLATE_SET.BILINGUAL;
 }
 
@@ -1181,6 +1218,7 @@ module.exports = {
   pickupCodeFor,
   confirmationPhotoLink,
   photoHeaderWanted,
+  updatePhotoPath,
   photoFallbackDecision,
   receiptDocumentWanted,
   receiptDocumentFilename,

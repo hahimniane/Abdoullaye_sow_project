@@ -187,9 +187,11 @@ function deliveryBalanceView(balanceCents, canSeeMoney) {
  * @param {object} args {staffId, staffName, collectedBy, balanceCents,
  *   withoutCode, photoPath}.
  * @return {object} The delivery's fields on the line (the caller adds
- *   `deliveredAt`, the server's time). `deliveredWithoutCode` and
- *   `deliveredPhotoPath` are the override (docs/AIR_PACKAGES.md §4.7):
- *   false and "" for a handover with the code, or with no code asked.
+ *   `deliveredAt`, the server's time). `deliveredWithoutCode` is the
+ *   override (docs/AIR_PACKAGES.md §4.7): false for a handover with the
+ *   code, or with no code asked. `deliveredPhotoPath` is the agent's
+ *   handover photo: the override must have one, any other delivery may,
+ *   and the sender and the receiver get it with the "delivered" message.
  */
 function deliveryRecord(args) {
   const row = args && typeof args === "object" ? args : {};
@@ -200,8 +202,7 @@ function deliveryRecord(args) {
     deliveredBalanceCents:
       Math.max(0, Math.round(Number(row.balanceCents)) || 0),
     deliveredWithoutCode: row.withoutCode === true,
-    deliveredPhotoPath: row.withoutCode === true ?
-      text(row.photoPath, 300) : "",
+    deliveredPhotoPath: text(row.photoPath, 300),
   };
 }
 

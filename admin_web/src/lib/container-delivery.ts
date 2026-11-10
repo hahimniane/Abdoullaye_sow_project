@@ -116,6 +116,8 @@ export type DeliverRequest = {
   pickupCode?: string;
   /** Delivering without the code: who collected and the agent's photo of them. */
   override?: { collectedBy: string; photoPath: string };
+  /** The agent's photo of a handover with the code (or with no code asked); the sender and the receiver get it. */
+  photoPath?: string;
   /** USD collected at handover, in cents; absent when nothing was. */
   collectedCents?: number;
   /** Who holds that money when it is not the agent: only ever "business_account" (docs/STAFF_BALANCES.md). */
@@ -127,7 +129,8 @@ export type DeliverRequest = {
  * server name the receiver. `acknowledgeBalance` only once the person has
  * seen the unpaid-balance warning and confirmed. `pickupCode` when the
  * agent typed one; `override` instead when the receiver has no code (the
- * server then records "delivered without code"); `collectedCents` for the
+ * server then records "delivered without code"); `photoPath` for the
+ * optional handover photo of any other delivery; `collectedCents` for the
  * money collected now (the one money action the deliveries permission has).
  */
 export function deliverRequest(input: {
@@ -137,6 +140,7 @@ export function deliverRequest(input: {
   acknowledgeBalance?: boolean;
   pickupCode?: unknown;
   override?: { collectedBy?: unknown; photoPath?: unknown } | null;
+  photoPath?: unknown;
   collectedCents?: number | null;
   /** "business_account" when the money went straight to the business; anything else is the agent (the default). */
   receivedByStaffId?: string;
@@ -155,6 +159,10 @@ export function deliverRequest(input: {
       collectedBy: oneLine(input.override.collectedBy).slice(0, MAX_COLLECTED_BY),
       photoPath: text(input.override.photoPath, 300),
     };
+  } else {
+    // The override carries its own photo; any other delivery may carry one.
+    const photo = text(input.photoPath, 300);
+    if (photo) request.photoPath = photo;
   }
   const cents = Math.round(Number(input.collectedCents));
   if (Number.isFinite(cents) && cents > 0) {

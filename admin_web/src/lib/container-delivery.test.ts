@@ -194,6 +194,18 @@ test("the deliver request sends the name on one line and acknowledges only when 
   assert.equal("collectedCents" in withOverride, false, "nothing collected is not sent");
   assert.equal("collectedCents" in deliverRequest({ businessId: "b", lineId: "l", collectedCents: null }), false);
   assert.equal("override" in deliverRequest({ businessId: "b", lineId: "l", override: null }), false);
+  // Owner 2026-11-10: the handover photo goes to the sender and the receiver,
+  // so any delivery may carry one. The override keeps its own.
+  assert.equal(
+    deliverRequest({ businessId: "b", lineId: "l", pickupCode: "4821", photoPath: " packagePhotos/b/u/p.jpg " }).photoPath,
+    "packagePhotos/b/u/p.jpg",
+  );
+  assert.equal("photoPath" in deliverRequest({ businessId: "b", lineId: "l", photoPath: "" }), false);
+  assert.equal(
+    "photoPath" in
+      deliverRequest({ businessId: "b", lineId: "l", photoPath: "x.jpg", override: { collectedBy: "Awa", photoPath: "y.jpg" } }),
+    false,
+  );
   assert.deepEqual(undoDeliveryRequest("b1", "L1"), { businessId: "b1", lineId: "L1", action: "undo_delivery" });
   assert.equal(collectedByError("x".repeat(MAX_COLLECTED_BY)), null);
   assert.equal(collectedByError("x".repeat(MAX_COLLECTED_BY + 1)), "collected_by_too_long");

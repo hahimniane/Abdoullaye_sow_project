@@ -61,7 +61,8 @@ const ALL_TEMPLATES = [...BILINGUAL_TEMPLATES, ...LEGACY_TEMPLATES];
 // The receipt and the photo templates have a header, so they are tested on
 // their own (below).
 const SHAPED_TEMPLATES = ["package_confirm_2lang",
-  "shipment_received_doc_2lang", "shipment_received_photo_2lang"];
+  "shipment_received_doc_2lang", "shipment_received_photo_2lang",
+  "shipment_delivered_photo_2lang"];
 const URL_BUTTON_TEMPLATES = ALL_TEMPLATES.filter((template) =>
   !SHAPED_TEMPLATES.includes(template));
 
@@ -69,7 +70,8 @@ describe("which template each update sends", () => {
   it("names the bilingual and the legacy templates exactly", () => {
     assert.deepEqual([...BILINGUAL_TEMPLATES].sort(), [
       "package_confirm_2lang",
-      "shipment_delivered_2lang", "shipment_departed_2lang",
+      "shipment_delivered_2lang", "shipment_delivered_photo_2lang",
+      "shipment_departed_2lang",
       "shipment_ready_pickup_2lang", "shipment_received_2lang",
       "shipment_received_doc_2lang", "shipment_received_photo_2lang"]);
     assert.deepEqual([...LEGACY_TEMPLATES].sort(), [
@@ -877,14 +879,57 @@ describe("the package received photo template", () => {
         .template.name, "shipment_departed_2lang");
     assert.equal(send({update: "arrived", photoHeader: true})
         .template.name, "shipment_ready_pickup_2lang");
+    // "Delivered" has a photo template of its own (below).
     assert.equal(send({update: "delivered", photoHeader: true})
-        .template.name, "shipment_delivered_2lang");
+        .template.name, "shipment_delivered_photo_2lang");
     // The confirmation already carries the photo in its own header.
     assert.equal(send({update: "confirm", photoHeader: true})
         .template.name, "package_confirm_2lang");
     // The legacy set has no photo template.
     assert.equal(send({photoHeader: true, templateSet: "legacy"})
         .template.name, "package_received");
+  });
+});
+
+// "Delivered" with the handover photo, for the sender and the receiver
+// (owner 2026-11-10: the photo taken at delivery was not sent): the same
+// variables as shipment_delivered_2lang under an IMAGE header, picked by
+// the `photoHeader` flag and never by an update of its own.
+describe("the delivered photo template", () => {
+  const PHOTO = "https://us-central1-demo.cloudfunctions.net/parkingDocument" +
+    "?view=photo&t=tok&p=p&e=1&s=sig";
+  const values = {...VALUES, photoLink: PHOTO};
+  const send = (extra = {}) => templateMessage({update: "delivered",
+    phone: "+1 (646) 555-0100", language: "en", values, ...extra});
+
+  it("has the delivered body, an image header and the tracking button",
+      () => {
+        assert.deepEqual(TEMPLATE_VARIABLES.shipment_delivered_photo_2lang,
+            TEMPLATE_VARIABLES.shipment_delivered_2lang);
+        assert.deepEqual(TEMPLATE_SHAPE.shipment_delivered_photo_2lang,
+            {header: "image", buttons: "url"});
+        const body = send({photoHeader: true});
+        assert.equal(body.template.name, "shipment_delivered_photo_2lang");
+        assert.deepEqual(body.template.language, {code: "en"});
+        const [header, text, button] = body.template.components;
+        assert.deepEqual(header, {type: "header", parameters: [
+          {type: "image", image: {link: PHOTO}}]});
+        assert.deepEqual(text.parameters.map((p) => p.text), bodyOf(
+            "shipment_delivered_2lang", VALUES));
+        assert.equal(button.sub_type, "url");
+        assert.deepEqual(button.parameters,
+            [{type: "text", text: "CL-K7M4P2"}]);
+      });
+
+  it("is only picked on request, in either template set", () => {
+    assert.equal(send().template.name, "shipment_delivered_2lang");
+    assert.equal(send({photoHeader: false}).template.name,
+        "shipment_delivered_2lang");
+    assert.ok(!Object.values(TEMPLATE_BY_UPDATE)
+        .includes("shipment_delivered_photo_2lang"));
+    // `delivered` has one template for both sets, and so has its photo.
+    assert.equal(send({photoHeader: true, templateSet: "legacy"})
+        .template.name, "shipment_delivered_photo_2lang");
   });
 });
 

@@ -7082,6 +7082,10 @@ Object.assign(TEXT_TRANSLATIONS, {
     "Le colis affichera « Livré sans code ». Indiquez qui l’a récupéré et prenez sa photo.",
   "Who collected it": "Qui l’a récupéré",
   "Photo of the person collecting": "Photo de la personne qui récupère",
+  "Photo of the handover (optional)": "Photo de la remise (facultatif)",
+  "Photo of the handover": "Photo de la remise",
+  "The sender and the receiver get this photo on WhatsApp.":
+    "L’expéditeur et le destinataire reçoivent cette photo sur WhatsApp.",
   "Photo of the person who collected it": "Photo de la personne qui l’a récupéré",
   "Uploading photo…": "Envoi de la photo…",
   "Retake photo": "Reprendre la photo",

@@ -4487,6 +4487,63 @@ describe("the sender's confirmation at drop-off", () => {
     assert.equal((await db.collection("containerUpdates").doc(`${third.id}_receiver_received`).get()).get("status"), "failed");
   });
 
+  // Owner 2026-11-10: "when a shipment was delivered the photo taken wasn't
+  // sent as well". The handover photo heads the sender's and the receiver's
+  // "delivered", and never holds the message back.
+  it("heads the delivered message of the sender and the receiver with the handover photo", async () => {
+    const HANDOVER = PHOTO.replace(/[^/]+$/, "00000000000000000000000000000009.jpg");
+    const NOT_READY = {status: 404, body: {error: {code: 132001,
+      message: "Template name does not exist in the translation"}}};
+    const box = await newContainer();
+    const ref = await seededLine(box);
+    await sendReceived(box);
+    await ref.update({deliveredAt: admin.firestore.Timestamp.now(),
+      collectedBy: "Ibrahima Sow", deliveredPhotoPath: HANDOVER});
+    const rowOf = async (role) => {
+      const received = (await db.collection("containerUpdates").doc(`${ref.id}_${role}_received`).get()).data();
+      const row = db.collection("containerUpdates").doc(`${ref.id}_${role}_delivered`);
+      await row.set({...received, update: "delivered", status: "queued", attempts: 0});
+      return row;
+    };
+    for (const [role, to] of [["sender", "16465550100"], ["receiver", "224620000000"]]) {
+      const row = await rowOf(role);
+      fakeWhatsApp(OK);
+      await deliver(row.id);
+      assert.equal(whatsappCalls.length, 1, role);
+      const [body] = whatsappCalls;
+      assert.equal(body.to, to);
+      assert.equal(body.template.name, "shipment_delivered_photo_2lang", role);
+      const line = (await ref.get()).data();
+      const [header, text, button] = body.template.components;
+      // The handover photo, not the drop-off one.
+      assert.match(header.parameters[0].image.link, new RegExp(
+          `parkingDocument\\?view=photo&t=${line.documentToken}` +
+          `&p=${encodeURIComponent(HANDOVER).replace(/\./g, "\\.")}&e=\\d+&s=[0-9a-f]{24}$`));
+      assert.equal(text.parameters.length, 10);
+      assert.equal(text.parameters[4].text, "Ibrahima Sow");
+      assert.equal(button.sub_type, "url");
+      const sent = (await row.get()).data();
+      assert.equal(sent.status, "sent");
+      assert.equal(sent.photoHeader, "attached");
+    }
+    // In review at Meta: the plain "delivered" goes at once.
+    const again = await rowOf("receiver");
+    fakeWhatsApp(NOT_READY, OK);
+    await deliver(again.id);
+    assert.deepEqual(whatsappCalls.map((body) => body.template.name),
+        ["shipment_delivered_photo_2lang", "shipment_delivered_2lang"]);
+    assert.equal(whatsappCalls[1].template.components.length, 2);
+    assert.equal((await again.get()).get("status"), "sent");
+    assert.equal((await again.get()).get("photoHeader"), "fallback");
+    // No handover photo: the plain message, though the line has drop-off photos.
+    await ref.update({deliveredPhotoPath: ""});
+    const plain = await rowOf("receiver");
+    fakeWhatsApp(OK);
+    await deliver(plain.id);
+    assert.deepEqual(whatsappCalls.map((body) => body.template.name), ["shipment_delivered_2lang"]);
+    assert.equal((await plain.get()).get("photoHeader"), undefined);
+  });
+
   it("leaves a package without a photo, and the later messages, as they were", async () => {
     const box = await newContainer();
     const ref = await seededLine(box, {photoPaths: []});
@@ -4942,6 +4999,35 @@ describe("proof on the package", () => {
           await switches({});
           assert.equal((await deliver(other)).delivered, true);
         });
+
+    // Owner 2026-11-10: the photo taken at delivery goes to the sender and
+    // the receiver, so any delivery may carry one - not only the override.
+    it("keeps the agent's handover photo on a delivery with the code, or " +
+        "with no code asked", async () => {
+      await switches({pickupCode: true});
+      const {lineIds: [coded, plain]} =
+        await arrivedBox([barrels(1), barrels(1)]);
+      const code = (await lineOf(coded)).pickupCode;
+      // Someone else's upload is refused, and nothing is delivered.
+      await assert.rejects(deliver(coded, {pickupCode: code,
+        photoPath: await photo(P_OWNER)}), refused("photo_invalid"));
+      assert.equal((await lineOf(coded)).deliveredAt, undefined);
+      const proof = await photo(P_AGENT);
+      const done = await deliver(coded, {pickupCode: code, photoPath: proof});
+      assert.equal(done.deliveredWithoutCode, false);
+      const line = await lineOf(coded);
+      assert.equal(line.deliveredWithoutCode, false);
+      assert.equal(line.deliveredPhotoPath, proof);
+      // No code asked at all.
+      await switches({});
+      const other = await photo(P_AGENT);
+      await deliver(plain, {photoPath: other});
+      assert.equal((await lineOf(plain)).deliveredPhotoPath, other);
+      // Undo clears it, as it clears the override's.
+      await run("updateContainerLine", {lineId: plain,
+        action: "undo_delivery"});
+      assert.equal((await lineOf(plain)).deliveredPhotoPath, undefined);
+    });
 
     it("records the USD collected as a cash payment on the root",
         async () => {

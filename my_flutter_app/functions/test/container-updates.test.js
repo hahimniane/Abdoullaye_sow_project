@@ -1034,6 +1034,7 @@ describe("the sender's confirmation and the pickup code (docs/AIR_PACKAGES.md)",
     askSenderToConfirm, confirmRoleFor, keepsPlainReceived, rowUpdateFor,
     pickupCodeFor, pickupAddressWithCode,
     confirmationPhotoLink, photoHeaderWanted, photoFallbackDecision,
+    updatePhotoPath,
     summaryUpdate, updateRank, withDeliveryTick,
   } = require("../container_updates");
   const {photoLink, PHOTO_LINK_MS} = require("../package_proof");
@@ -1099,7 +1100,7 @@ describe("the sender's confirmation and the pickup code (docs/AIR_PACKAGES.md)",
   // receiver both get the picture on "package received".
   it("puts the photo on the received message of the sender and the receiver", () => {
     assert.equal(photoHeaderWanted({update: "received", templateSet: "bilingual"}), true);
-    for (const update of ["confirm", "shipped", "arrived", "delivered", ""]) {
+    for (const update of ["confirm", "shipped", "arrived", ""]) {
       assert.equal(photoHeaderWanted({update, templateSet: "bilingual"}), false, update);
     }
     assert.equal(photoHeaderWanted({update: "received", templateSet: "legacy"}), false);
@@ -1121,6 +1122,44 @@ describe("the sender's confirmation and the pickup code (docs/AIR_PACKAGES.md)",
       assert.deepEqual(text, plain.template.components[0]);
       assert.deepEqual(button, plain.template.components[1]);
     }
+  });
+
+  // Owner 2026-11-10: "when a shipment was delivered the photo taken wasn't
+  // sent as well". The handover photo heads everyone's "delivered".
+  it("puts the handover photo on the delivered message of the sender and the receiver", () => {
+    const handover = "packagePhotos/b1/u1/00000000000000000000000000000002.jpg";
+    assert.equal(photoHeaderWanted({update: "delivered", templateSet: "bilingual"}), true);
+    assert.equal(photoHeaderWanted({update: "delivered", templateSet: "legacy"}), true);
+    // The handover photo, never the drop-off one; none without a handover photo.
+    assert.equal(updatePhotoPath(proofLine({deliveredPhotoPath: handover}), "delivered"), handover);
+    assert.equal(updatePhotoPath(proofLine(), "delivered"), "");
+    assert.equal(updatePhotoPath(proofLine({deliveredPhotoPath: handover}), "received"), photo);
+    const delivered = proofLine({deliveredPhotoPath: handover, collectedBy: "Ibrahima Sow"});
+    const send = (role, extra = {}) => whatsappUpdateMessage({
+      phone: role === "sender" ? "+16465550100" : "+224620000000",
+      name: "Fatou Diallo", businessName: "Dala", line: delivered,
+      container: null, update: "delivered", trackingCode: "CL-K7M4P2", role,
+      documentBase: "https://laawoldigital.com/d", nowMs: 1000, ...extra,
+    });
+    const link = photoLink({base: "https://laawoldigital.com/d", token: "tok-1",
+      path: handover, expiresMs: 1000 + PHOTO_LINK_MS});
+    for (const role of ["sender", "receiver"]) {
+      const body = send(role);
+      assert.equal(body.template.name, "shipment_delivered_photo_2lang", role);
+      const [header, text, button] = body.template.components;
+      assert.deepEqual(header, {type: "header", parameters: [{type: "image", image: {link}}]});
+      // The words and the button are the plain message's: the fallback.
+      const plain = send(role, {photoHeader: false});
+      assert.equal(plain.template.name, "shipment_delivered_2lang");
+      assert.deepEqual(text, plain.template.components[0]);
+      assert.deepEqual(button, plain.template.components[1]);
+    }
+    // No handover photo: the plain message, even when the line has drop-off photos.
+    const none = whatsappUpdateMessage({phone: "+16465550100", name: "Fatou Diallo",
+      businessName: "Dala", line: proofLine(), container: null, update: "delivered",
+      trackingCode: "CL-K7M4P2", role: "sender",
+      documentBase: "https://laawoldigital.com/d", nowMs: 1000});
+    assert.equal(none.template.name, "shipment_delivered_2lang");
   });
 
   it("sends the photo before the receipt, and the receipt when there is no photo", () => {

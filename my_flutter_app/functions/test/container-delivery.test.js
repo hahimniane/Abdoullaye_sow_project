@@ -416,10 +416,13 @@ describe("the pickup code at handover", () => {
       photoPath: PHOTO});
     assert.equal(record.deliveredWithoutCode, true);
     assert.equal(record.deliveredPhotoPath, PHOTO);
+    // A delivery with the code may carry a handover photo too: it is kept,
+    // and sent to the sender and the receiver (owner 2026-11-10).
     const plain = deliveryRecord({staffId: "u1", withoutCode: false,
       photoPath: PHOTO});
     assert.equal(plain.deliveredWithoutCode, false);
-    assert.equal(plain.deliveredPhotoPath, "");
+    assert.equal(plain.deliveredPhotoPath, PHOTO);
+    assert.equal(deliveryRecord({staffId: "u1"}).deliveredPhotoPath, "");
     assert.ok(DELIVERY_FIELDS.includes("deliveredWithoutCode"));
     assert.ok(DELIVERY_FIELDS.includes("deliveredPhotoPath"));
     assert.ok(!DELIVERY_FIELDS.includes("collectedAtDeliveryCents"));
