@@ -5310,6 +5310,13 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Container updated.": "Conteneur mis à jour.",
   "Container started.": "Conteneur créé.",
   "Container deleted.": "Conteneur supprimé.",
+  "Undo shipped": "Annuler l’expédition",
+  "Back to loading.": "Remis en chargement.",
+  "This container is still loading.": "Ce conteneur est encore en chargement.",
+  "This container arrived with cars on it, so it can't go back to loading.":
+    "Ce conteneur est arrivé avec des voitures, il ne peut pas revenir en chargement.",
+  "Only the owner can put a shipped container back to loading.":
+    "Seul le propriétaire peut remettre en chargement un conteneur expédié.",
   "Container number": "Numéro de conteneur",
   "Booking / BL reference": "Référence de réservation / BL",
   "Working name": "Nom de travail",

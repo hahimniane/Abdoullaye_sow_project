@@ -415,6 +415,7 @@ const {
   containerTransitionRefusal,
   containerIsOpen,
   containerDeleteRefusal,
+  containerUndoShipRefusal,
   validateContainerLine,
   validateWaitingPackage,
   cleanLineIds,
@@ -24007,7 +24008,12 @@ exports.setContainerStatus = onCall(
       await refreshContainerCounts(db, ref);
       // The moment tells customers, so it is written before the audit and
       // on the repair path too; its fixed id makes a repeat write nothing.
-      await recordContainerEvent(ref, `staff_${next}`, {
+      // After an undo the box ships again as a new moment, so the people
+      // on it now are told (a person already told is skipped by the queue).
+      const undone =
+        Math.max(0, Math.floor(Number(current.statusUndoCount)) || 0);
+      const momentId = undone > 0 ? `staff_${next}_${undone}` : `staff_${next}`;
+      await recordContainerEvent(ref, momentId, {
         // "arrived" is stored as before; it now means ready for pickup.
         label: next === CONTAINER_STATUS.SHIPPED ?
           "Container shipped" : "Ready for pickup",
@@ -24027,6 +24033,81 @@ exports.setContainerStatus = onCall(
       }
       return {success: true, containerId: ref.id, status: next,
         repaired: repeat};
+    },
+);
+
+/**
+ * Puts a container marked shipped (or ready for pickup) by mistake back to
+ * loading, so its packages can go back to waiting and the box can be fixed
+ * or deleted. Owner only. Customers already told are not told anything.
+ *
+ * Lines first, container last - as applyContainerStatus does - so a failure
+ * part way leaves the box still shipped and the same request finishes it.
+ */
+exports.undoContainerShipped = onCall(
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true},
+    async (request) => {
+      const uid = requireAuth(request);
+      const data = request.data || {};
+      const businessId = String(data.businessId || "").trim();
+      const db = admin.firestore();
+      await enforceCallableRateLimit(request, {
+        name: "undoContainerShipped",
+        limit: 30,
+        windowSeconds: 60 * 60,
+      });
+      const {ref, data: current} =
+        await loadContainerFor(db, uid, businessId, data.containerId);
+      const user = await requireBusinessManager(uid, businessId);
+      if (!["admin", "businessOwner"].includes(String(user?.role || ""))) {
+        throw new HttpsError("permission-denied",
+            CONTAINER_MESSAGES.container_undo_owner_only,
+            {reason: "container_undo_owner_only"});
+      }
+      const lines = await db.collection("containerLines")
+          .where("containerId", "==", ref.id).get();
+      const refusal = containerUndoShipRefusal(
+          current, lines.docs.map((d) => d.data() || {}));
+      if (refusal) throw containerRefusal(refusal);
+      const was = String(current.status || "");
+      const behind = lines.docs.filter((d) =>
+        String(d.data()?.containerStatus || "") !== CONTAINER_STATUS.LOADING);
+      for (const group of inGroups(behind, 400)) {
+        const batch = db.batch();
+        group.forEach((d) => batch.update(d.ref, {
+          containerStatus: CONTAINER_STATUS.LOADING,
+          updatedAt: FirestoreFieldValue.serverTimestamp(),
+        }));
+        await batch.commit();
+      }
+      const undone =
+        Math.max(0, Math.floor(Number(current.statusUndoCount)) || 0) + 1;
+      await ref.update({
+        status: CONTAINER_STATUS.LOADING,
+        statusSource: "staff",
+        sailedAt: FirestoreFieldValue.delete(),
+        shippedByStaffId: FirestoreFieldValue.delete(),
+        arrivedAt: FirestoreFieldValue.delete(),
+        arrivedByStaffId: FirestoreFieldValue.delete(),
+        statusUndoCount: undone,
+        statusUndoneAt: FirestoreFieldValue.serverTimestamp(),
+        statusUndoneByStaffId: uid,
+        // The carrier's feed must not ship it again behind the owner's back.
+        ...(String(current.trackingProvider || "") === "carrier_api" ?
+          {carrierTrackingDone: true} : {}),
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      });
+      // On the timeline for staff; no customerUpdate, so nobody is messaged.
+      await recordContainerEvent(ref, `staff_undo_${undone}`, {
+        label: "Back to loading",
+        source: "staff",
+        createdBy: uid,
+      });
+      await containerAudit(businessId, ref.id, "undo_shipped", uid,
+          `Put back to loading (was ${was === CONTAINER_STATUS.ARRIVED ?
+            "ready for pickup" : "shipped"})`);
+      return {success: true, containerId: ref.id,
+        status: CONTAINER_STATUS.LOADING};
     },
 );
 

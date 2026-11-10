@@ -279,6 +279,9 @@ export type ContainerRefusal =
   | "container_empty"
   | "container_locked"
   | "container_has_lines"
+  | "container_undo_not_shipped"
+  | "container_undo_has_cars"
+  | "container_undo_owner_only"
   | "container_not_found"
   | "line_not_found"
   | "line_kind_invalid"
@@ -361,6 +364,11 @@ export const CONTAINER_MESSAGES: Record<ContainerRefusal, string> = {
     "note instead of changing it.",
   container_has_lines:
     "This container has lines on it. Remove them first, or leave it.",
+  container_undo_not_shipped: "This container is still loading.",
+  container_undo_has_cars:
+    "This container arrived with cars on it, so it can't go back to loading.",
+  container_undo_owner_only:
+    "Only the owner can put a shipped container back to loading.",
   container_not_found: "Container not found.",
   line_not_found: "That line is no longer on the container.",
   line_kind_invalid:
@@ -640,6 +648,26 @@ export function containerDeleteRefusal(
   if (!containerIsOpen(current)) return "container_locked";
   if (positiveInt(lineCount) > 0) return "container_has_lines";
   return null;
+}
+
+/**
+ * Whether a container marked shipped (or ready for pickup) by mistake may go
+ * back to loading - the same rule as the server (containerUndoShipRefusal in
+ * container_manifest.js). The owner's one way backward.
+ */
+export function containerUndoShipRefusal(
+  current: unknown,
+  lines: readonly unknown[],
+): ContainerRefusal | null {
+  if (containerIsOpen(current)) return "container_undo_not_shipped";
+  const cars = lines.some((line) => (line as { kind?: unknown } | null)?.kind === "car");
+  if (containerStatus(current) === "arrived" && cars) return "container_undo_has_cars";
+  return null;
+}
+
+/** Who may undo a shipped container: the owner (and Laawol), never staff. */
+export function mayUndoShipped(viewer: { role?: unknown } | null | undefined): boolean {
+  return viewer?.role === "businessOwner" || viewer?.role === "admin";
 }
 
 /** The forward step from here, or null once arrived. */

@@ -115,6 +115,7 @@ import {
 } from "@/lib/business-sidebar";
 import {PriceListPanel} from "@/components/business/price-list-panel";
 import {mayRefund} from "@/lib/pay-now";
+import {mayUndoShipped} from "@/lib/container-manifest";
 import {ShippingStepBar} from "@/components/business/shipping-steps";
 import {MenuMovedDialog} from "@/components/business/menu-moved-dialog";
 import {
@@ -974,6 +975,7 @@ export function BusinessConsole({
                   business={business}
                   previewMode={previewMode}
                   canRefundPayNow={mayRefund(profile) && !previewMode}
+                  canUndoShipped={mayUndoShipped(profile) && !previewMode}
                   view={activeShippingStep as ListView}
                   onViewChange={onContainerView}
                   onCounts={onContainerCounts}

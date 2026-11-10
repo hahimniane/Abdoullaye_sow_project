@@ -9,6 +9,7 @@ const {
   containerTransitionRefusal,
   containerIsOpen,
   containerDeleteRefusal,
+  containerUndoShipRefusal,
   validateContainerLine,
   containerLineRecord,
   validateWaitingPackage,
@@ -134,6 +135,30 @@ describe("a container's life", () => {
         "container_has_lines");
     assert.equal(containerDeleteRefusal({status: "shipped"}, 0),
         "container_locked");
+  });
+
+  // A test box marked shipped by mistake held real packages: the owner
+  // must be able to bring it back to loading to free them.
+  it("can go back to loading when it was shipped by mistake", () => {
+    const packages = [{kind: "other"}, {kind: "barrels"}];
+    assert.equal(containerUndoShipRefusal({status: "shipped"}, packages),
+        null);
+    assert.equal(containerUndoShipRefusal({status: "arrived"}, packages),
+        null);
+    assert.equal(containerUndoShipRefusal({status: "shipped"}, [car()]),
+        null);
+    assert.equal(containerUndoShipRefusal({status: "shipped"}, []), null);
+  });
+
+  it("does not undo a box that is loading, or arrived with cars", () => {
+    assert.equal(containerUndoShipRefusal({status: "loading"}, []),
+        "container_undo_not_shipped");
+    assert.equal(containerUndoShipRefusal({}, []),
+        "container_undo_not_shipped");
+    // Arriving released the cars' VINs: they may be on another box now.
+    assert.equal(
+        containerUndoShipRefusal({status: "arrived"}, [{kind: "other"}, car()]),
+        "container_undo_has_cars");
   });
 });
 

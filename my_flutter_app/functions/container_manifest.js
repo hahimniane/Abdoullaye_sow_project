@@ -479,6 +479,27 @@ function containerDeleteRefusal(current, lineCount) {
   return null;
 }
 
+/**
+ * Whether a container marked shipped (or ready for pickup) by mistake may go
+ * back to loading. The one way backward, for the owner only: a test box, a
+ * wrong tap, a carrier feed that spoke for the wrong box. A box that arrived
+ * with cars on it stays: arriving released those cars' VINs, and they may be
+ * on another container by now.
+ *
+ * @param {object} current The stored container.
+ * @param {object[]} lines Its lines.
+ * @return {string|null} A refusal code, or null when allowed.
+ */
+function containerUndoShipRefusal(current, lines) {
+  if (containerIsOpen(current)) return "container_undo_not_shipped";
+  const row = current && typeof current === "object" ? current : {};
+  const arrived = text(row.status, 20) === CONTAINER_STATUS.ARRIVED;
+  const cars = (Array.isArray(lines) ? lines : [])
+      .some((line) => text(line?.kind, 20) === "car");
+  if (arrived && cars) return "container_undo_has_cars";
+  return null;
+}
+
 // -------------------------------------------------------------------------
 // A line on the list.
 // -------------------------------------------------------------------------
@@ -1610,6 +1631,11 @@ const CONTAINER_MESSAGES = Object.freeze({
     "note instead of changing it.",
   container_has_lines:
     "This container has lines on it. Remove them first, or leave it.",
+  container_undo_not_shipped: "This container is still loading.",
+  container_undo_has_cars:
+    "This container arrived with cars on it, so it can't go back to loading.",
+  container_undo_owner_only:
+    "Only the owner can put a shipped container back to loading.",
   container_not_found: "Container not found.",
   line_not_found: "That line is no longer on the container.",
   line_kind_invalid:
@@ -1734,6 +1760,7 @@ module.exports = {
   containerTransitionRefusal,
   containerIsOpen,
   containerDeleteRefusal,
+  containerUndoShipRefusal,
   validateContainerLine,
   linesInPiecesMode,
   validateWaitingPackage,

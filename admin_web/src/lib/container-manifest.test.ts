@@ -24,6 +24,8 @@ import {
   containerLineWhatsApp,
   containerLineWhatsAppText,
   containerDeleteRefusal,
+  containerUndoShipRefusal,
+  mayUndoShipped,
   containerDraftFromRow,
   containerCarrierNeedsChoice,
   containerCarrierScac,
@@ -265,6 +267,33 @@ test("only a loading container is open; only an empty one can be deleted", () =>
   assert.equal(containerDeleteRefusal({ status: "loading" }, 0), null);
   assert.equal(containerDeleteRefusal({ status: "loading" }, 2), "container_has_lines");
   assert.equal(containerDeleteRefusal({ status: "shipped" }, 0), "container_locked");
+});
+
+// A test container marked shipped by mistake held real packages (11/10/2026):
+// the owner brings it back to loading to free them.
+test("the owner can undo a container shipped by mistake", () => {
+  const packages = [{ kind: "other" }, { kind: "barrels" }];
+  assert.equal(containerUndoShipRefusal({ status: "shipped" }, packages), null);
+  assert.equal(containerUndoShipRefusal({ status: "arrived" }, packages), null);
+  assert.equal(containerUndoShipRefusal({ status: "shipped" }, [{ kind: "car" }]), null);
+  assert.equal(containerUndoShipRefusal({ status: "loading" }, packages), "container_undo_not_shipped");
+  assert.equal(containerUndoShipRefusal({ status: "arrived" }, [{ kind: "car" }]), "container_undo_has_cars");
+  assert.equal(mayUndoShipped({ role: "businessOwner" }), true);
+  assert.equal(mayUndoShipped({ role: "admin" }), true);
+  assert.equal(mayUndoShipped({ role: "staff" }), false);
+  assert.equal(mayUndoShipped(null), false);
+  const panel = readFileSync(new URL("../components/business/containers-panel.tsx", import.meta.url), "utf8");
+  assert.match(panel, /canUndoShipped && !selectedOpen/);
+  assert.match(panel, /"undoContainerShipped"/);
+  for (const copy of [
+    "Undo shipped",
+    "Back to loading.",
+    "This container is still loading.",
+    "This container arrived with cars on it, so it can't go back to loading.",
+    "Only the owner can put a shipped container back to loading.",
+  ]) {
+    assert.notEqual(translateValue(copy, "fr"), copy, copy);
+  }
 });
 
 // ---------------------------------------------------------------------------

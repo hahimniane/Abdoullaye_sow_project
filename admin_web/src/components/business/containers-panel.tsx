@@ -26,6 +26,7 @@ import {
   Ship,
   Tag,
   Trash2,
+  Undo2,
   X,
 } from "lucide-react";
 
@@ -55,6 +56,7 @@ import {
   containerCallableFailure,
   containerCarrierNeedsChoice,
   containerDeleteRefusal,
+  containerUndoShipRefusal,
   containerDraftFromRow,
   containerIsOpen,
   containerKindWord,
@@ -221,6 +223,8 @@ type ContainersPanelProps = {
   previewMode?: boolean;
   /** The viewer may refund a Pay now payment: the owner, an admin, or staff who can void. */
   canRefundPayNow?: boolean;
+  /** The owner may put a container shipped by mistake back to loading. */
+  canUndoShipped?: boolean;
   /**
    * Opened from a link (a package's "Open in business console"): the
    * container to open, and the line on it to mark and scroll to.
@@ -299,6 +303,7 @@ export function ContainersPanel({
   business = null,
   previewMode = false,
   canRefundPayNow = false,
+  canUndoShipped = false,
   focusContainerId = "",
   focusLineId = "",
   focusView = "",
@@ -785,6 +790,25 @@ export function ContainersPanel({
     await runPanelAction(setBusy, setFlash, isAirContainer(row) ? "Shipment deleted." : "Container deleted.", async () => {
       await httpsCallable(functions, "deleteContainer")({ businessId, containerId: String(row.id) });
       setSelectedId("");
+    });
+  }
+
+  // Shipped by mistake (a test, a wrong tap): back to loading, so its
+  // packages can go back to waiting. Nobody is messaged.
+  async function undoShipped(row: FirestoreRow) {
+    const refusal = containerUndoShipRefusal(row, linesByContainer.get(String(row.id)) ?? []);
+    if (refusal) {
+      setFlash(CONTAINER_MESSAGES[refusal]);
+      return;
+    }
+    const title = containerTitle(row);
+    const ok = await confirmImportantAction(
+      `Put ${title} back to loading? Use this only when it was marked shipped by mistake. Customers who were already told on WhatsApp are not told again.`,
+      `Remettre ${title} en chargement ? À utiliser seulement s’il a été marqué expédié par erreur. Les clients déjà prévenus sur WhatsApp ne sont pas prévenus à nouveau.`,
+    );
+    if (!ok) return;
+    await runPanelAction(setBusy, setFlash, "Back to loading.", async () => {
+      await httpsCallable(functions, "undoContainerShipped")({ businessId, containerId: String(row.id) });
     });
   }
 
@@ -1356,6 +1380,9 @@ export function ContainersPanel({
                 )}
                 {selectedStatus === "shipped" && (
                   <button className="lst-btn" type="button" disabled={busy} onClick={() => void advance(selected)}><Container size={14} /> Mark ready for pickup</button>
+                )}
+                {canUndoShipped && !selectedOpen && (
+                  <button className="lst-btn ghost" type="button" disabled={busy} onClick={() => void undoShipped(selected)}><Undo2 size={14} /> Undo shipped</button>
                 )}
                 {selectedOpen && selectedLines.length === 0 && (
                   <button className="lst-btn ghost danger" type="button" disabled={busy} onClick={() => void deleteContainer(selected)}><Trash2 size={14} /> Delete</button>
