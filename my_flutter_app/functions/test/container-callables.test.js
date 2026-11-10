@@ -670,6 +670,63 @@ describe("a status change that only half landed", () => {
   });
 });
 
+// Regression (11/10/2026): a test container was marked shipped with three
+// real packages on it. A shipped box is locked, so nothing could free them.
+describe("a container shipped by mistake", () => {
+  it("goes back to loading for the owner, and frees its packages",
+      async () => {
+        const box = await newContainer();
+        const {lineId} = await call("addContainerLine",
+            {containerId: box, line: barrelLine(2)});
+        await call("setContainerStatus", {containerId: box, status: "shipped"});
+        // Staff cannot: this is the owner's call.
+        await assert.rejects(
+            call("undoContainerShipped", {containerId: box}, RECEIVER),
+            (error) => error.code === "permission-denied");
+        const result = await call("undoContainerShipped", {containerId: box});
+        assert.equal(result.status, "loading");
+        const container = await db.collection("containers").doc(box).get();
+        assert.equal(container.get("status"), "loading");
+        assert.equal(container.get("sailedAt"), undefined);
+        assert.equal(container.get("statusUndoCount"), 1);
+        for (const line of await linesOf(box)) {
+          assert.equal(line.get("containerStatus"), "loading");
+        }
+        // On the timeline, and nobody is messaged.
+        const moment = await db.collection("containers").doc(box)
+            .collection("trackingEvents").doc("staff_undo_1").get();
+        assert.equal(moment.exists, true);
+        assert.equal(moment.get("customerUpdate"), null);
+        // Now it is an open box again: empty it and delete it.
+        await call("removeContainerLine", {containerId: box, lineId});
+        await call("deleteContainer", {containerId: box});
+        assert.equal(
+            (await db.collection("containers").doc(box).get()).exists, false);
+      });
+
+  it("is refused on a box that is still loading", async () => {
+    const box = await newContainer();
+    await assert.rejects(
+        call("undoContainerShipped", {containerId: box}),
+        (error) => error.code === "failed-precondition" &&
+          error.message === CONTAINER_MESSAGES.container_undo_not_shipped);
+  });
+
+  it("ships again as a new moment, so customers on it are told", async () => {
+    const box = await newContainer();
+    await call("addContainerLine", {containerId: box, line: barrelLine(1)});
+    await call("setContainerStatus", {containerId: box, status: "shipped"});
+    await call("undoContainerShipped", {containerId: box});
+    await call("setContainerStatus", {containerId: box, status: "shipped"});
+    const moment = await db.collection("containers").doc(box)
+        .collection("trackingEvents").doc("staff_shipped_1").get();
+    assert.equal(moment.get("customerUpdate"), "shipped");
+    assert.equal(
+        (await db.collection("containers").doc(box).get()).get("status"),
+        "shipped");
+  });
+});
+
 describe("codes and tokens are minted once", () => {
   it("gives a line one code when labels print as the box ships", async () => {
     const box = await newContainer();

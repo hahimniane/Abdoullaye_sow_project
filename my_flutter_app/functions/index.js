@@ -24051,11 +24051,6 @@ exports.undoContainerShipped = onCall(
       const data = request.data || {};
       const businessId = String(data.businessId || "").trim();
       const db = admin.firestore();
-      await enforceCallableRateLimit(request, {
-        name: "undoContainerShipped",
-        limit: 30,
-        windowSeconds: 60 * 60,
-      });
       const {ref, data: current} =
         await loadContainerFor(db, uid, businessId, data.containerId);
       const user = await requireBusinessManager(uid, businessId);
