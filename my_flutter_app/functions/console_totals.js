@@ -44,6 +44,7 @@ const businessToday = require("./business_overview");
 const {OPEN_STATUSES: OPEN_PACKAGE_REQUEST_STATUSES} =
   require("./package_requests");
 const {VOLUME_COLLECTION, volumeDocId} = require("./volume_counts");
+const parkingLots = require("./parking_lots");
 
 const CACHE_COLLECTION = "consoleSummaryCache";
 /** Bumped when a cached payload's shape or math changes. */
@@ -566,14 +567,30 @@ function createConsoleTotalsHandlers(deps) {
     const options = {now: at, months, timeZone};
     const parked = db().collection("parkedCars")
         .where("businessId", "==", businessId);
-    const key = `parkingEnded__${businessId}__${year}__${timeZone || "UTC"}`;
+    // The business's lots (docs/PARKING_LOTS.md): none for a business that
+    // never set lots up. The same figures are then told lot by lot, with
+    // the same math over each lot's own cars, so the lots add up to the
+    // business.
+    const lots = (await db().collection("parkingLots")
+        .where("businessId", "==", businessId).get()).docs
+        .map((doc) => ({...(doc.data() || {}), id: doc.id}));
+    const partialsByLot = (rows) => Object.fromEntries(Object.entries(
+        parkingLots.rowsByLot(rows, businessId, lots)).map(([lotId, own]) =>
+      [lotId, parkingSummaryPartial(own, options)]));
+    // The lot ids are part of the key: a lot added since the ended part was
+    // cached must not be told from a cache that never split it out.
+    const lotsKey = lots.map((lot) => lot.id).sort().join(",");
+    const key = `parkingEndedLots__${businessId}__${year}__` +
+      `${timeZone || "UTC"}__${crypto.createHash("sha1").update(lotsKey)
+          .digest("hex").slice(0, 12)}`;
     const ended = await cached(key, PARKING_ENDED_TTL_MS, refresh,
         async () => {
           const boundaryMs = startOfUtcDayMs(at);
           const read = await readAll(
               parked.where("occupancyEndMs", "<", boundaryMs), deadlineMs);
           return {boundaryMs, complete: read.complete,
-            partial: parkingSummaryPartial(read.rows, options)};
+            partial: parkingSummaryPartial(read.rows, options),
+            byLot: partialsByLot(read.rows)};
         });
     const active = await readAll(
         parked.where("occupancyEndMs", ">=", ended.boundaryMs), deadlineMs);
@@ -583,7 +600,45 @@ function createConsoleTotalsHandlers(deps) {
         combineParkingPartials(ended.partial,
             parkingSummaryPartial(active.rows, options)),
         Number(business.data()?.parkingTotalSpaces) || 0);
-    return {...summary, months, year,
+    let lotSummaries = [];
+    if (lots.length > 0) {
+      const activeByLot = partialsByLot(active.rows);
+      const empty = parkingSummaryPartial([], options);
+      // Arrivals and departures of this month: a car that arrived this
+      // month is still in the lot (read above) or left within the last
+      // weeks (read here); so is every car that left this month.
+      const monthKey = zonedDayKey(at, timeZone).slice(0, 7);
+      const recent = await readAll(parked
+          .where("occupancyEndMs", ">=", at.getTime() - 40 * 86400000)
+          .where("occupancyEndMs", "<", ended.boundaryMs), deadlineMs);
+      const movement = parkingLots.lotMonthMovement(
+          [...active.rows, ...recent.rows], {businessId, lots,
+            monthKey, nowMs: at.getTime(),
+            monthKeyOf: (date) => zonedDayKey(date, timeZone).slice(0, 7)});
+      const monthIndex = months.indexOf(monthKey);
+      lotSummaries = parkingLots.openLots(lots).concat(
+          lots.filter((lot) => !parkingLots.lotIsOpen(lot))).map((lot) => {
+        const told = finishParkingSummary(combineParkingPartials(
+            ended.byLot?.[lot.id] || empty, activeByLot[lot.id] || empty),
+        Math.max(0, (Number(lot.totalSpaces) || 0) -
+          (Number(lot.blockedSpaces) || 0)));
+        return {
+          lotId: lot.id,
+          name: String(lot.name || ""),
+          open: parkingLots.lotIsOpen(lot),
+          isMain: lot.isMain === true,
+          ...told,
+          month: {
+            key: monthKey,
+            arrived: movement[lot.id]?.arrived || 0,
+            left: movement[lot.id]?.left || 0,
+            collectedCents: monthIndex >= 0 ?
+              told.collectedByMonth[monthIndex] || 0 : 0,
+          },
+        };
+      });
+    }
+    return {...summary, months, year, lots: lotSummaries,
       complete: ended.complete !== false && active.complete,
       endedComputedAtMs: ended.computedAtMs};
   }

@@ -269,3 +269,33 @@ describe("closing a lot and the booking lot", () => {
         refused("lot_closed"));
       });
 });
+
+describe("the numbers lot by lot", () => {
+  it("tells the parking totals for each lot, adding up to the business",
+      async () => {
+        const answer = await run("getParkingTotals", OWNER,
+            {businessId: BIZ, refresh: true});
+        const {parking} = answer;
+        const told = Object.fromEntries(parking.lots.map((lot) =>
+          [lot.name, lot]));
+        assert.deepEqual(parking.lots.map((lot) => [lot.name, lot.open]),
+            [["Lot 1", true], ["Lot 2", true], ["Lot 3", false]]);
+        // Lot 1: 10 spaces, 1 blocked. Lot 2: 3 spaces.
+        assert.equal(told["Lot 1"].totals.spacesTotal, 9);
+        assert.equal(told["Lot 2"].totals.spacesTotal, 3);
+        assert.equal(told["Lot 3"].totals.inLot, 0);
+        // Every car is in exactly one lot: the lots add up to the business.
+        const sum = (pick) => parking.lots.reduce((n, lot) => n + pick(lot), 0);
+        assert.equal(sum((lot) => lot.totals.inLot), parking.totals.inLot);
+        assert.equal(sum((lot) => lot.totals.reserved),
+            parking.totals.reserved);
+        assert.equal(sum((lot) => lot.records), parking.records);
+        assert.ok(Math.abs(sum((lot) => lot.totals.owed) -
+          parking.totals.owed) < 0.011);
+        // Lot 2 holds the two cars parked into it and the one moved there.
+        assert.equal(told["Lot 2"].totals.inLot, 3);
+        assert.equal(told["Lot 2"].month.arrived, 3);
+        assert.equal(told["Lot 2"].month.left, 0);
+        assert.match(told["Lot 2"].month.key, /^\d{4}-\d{2}$/);
+      });
+});

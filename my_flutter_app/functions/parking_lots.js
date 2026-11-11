@@ -332,6 +332,76 @@ function lotMoveSummary(fromName, toName) {
     `${text(toName, MAX_LOT_NAME) || "another lot"}`;
 }
 
+/**
+ * A business's cars split by the lot each stands in. A car in a lot the
+ * business no longer lists (never expected: lots are closed, not deleted)
+ * is left out.
+ *
+ * @param {object[]} rows parkedCars rows.
+ * @param {string} businessId The business.
+ * @param {object[]} lots Its parkingLots rows.
+ * @return {object} `{[lotId]: rows}`, every lot present.
+ */
+function rowsByLot(rows, businessId, lots) {
+  const out = {};
+  for (const lot of lots || []) out[String(lot.id || "")] = [];
+  for (const row of rows || []) {
+    const bucket = out[lotIdOfCar(row, businessId)];
+    if (bucket) bucket.push(row);
+  }
+  return out;
+}
+
+/**
+ * How many cars arrived in, and left, each lot in one calendar month.
+ * Voided and cancelled records count for nothing; a car arrives on its
+ * `parkingDate` and leaves on its `parkingEndDate`, once that has passed.
+ * A car that has moved counts for the lot it stands in now.
+ *
+ * @param {object[]} rows parkedCars rows (the cars still in the lot and
+ *   those that ended recently: together, every arrival and departure of the
+ *   month).
+ * @param {object} options {businessId, lots, monthKey ("YYYY-MM"), nowMs,
+ *   monthKeyOf (a Date's month key in the business's time zone)}.
+ * @return {object} `{[lotId]: {arrived, left}}`, every lot present.
+ */
+function lotMonthMovement(rows, options) {
+  const {businessId, lots, monthKey, monthKeyOf} = options || {};
+  const nowMs = Number(options?.nowMs) || Date.now();
+  const out = {};
+  for (const lot of lots || []) {
+    out[String(lot.id || "")] = {arrived: 0, left: 0};
+  }
+  const dateOf = (value) => {
+    if (!value) return null;
+    const date = value instanceof Date ? value :
+      typeof value.toDate === "function" ? value.toDate() :
+        new Date(String(value));
+    return Number.isNaN(date.getTime()) ? null : date;
+  };
+  const seen = new Set();
+  for (const row of rows || []) {
+    // The two reads overlap by design; a car counts once.
+    const id = String(row?.id || "");
+    if (id && seen.has(id)) continue;
+    if (id) seen.add(id);
+    if (row?.voided === true || text(row?.status, 40) === "cancelled") {
+      continue;
+    }
+    const tally = out[lotIdOfCar(row, businessId)];
+    if (!tally) continue;
+    const start = dateOf(row.parkingDate);
+    if (start && start.getTime() <= nowMs && monthKeyOf(start) === monthKey) {
+      tally.arrived += 1;
+    }
+    const end = dateOf(row.parkingEndDate);
+    if (end && end.getTime() <= nowMs && monthKeyOf(end) === monthKey) {
+      tally.left += 1;
+    }
+  }
+  return out;
+}
+
 module.exports = {
   DEFAULT_MAIN_LOT_NAME,
   LOT_MESSAGES,
@@ -344,6 +414,7 @@ module.exports = {
   lotCloseRefusal,
   lotIdOfCar,
   lotIsOpen,
+  lotMonthMovement,
   lotMoveSummary,
   lotOccupancy,
   mainLotFromBusiness,
@@ -352,4 +423,5 @@ module.exports = {
   openLots,
   pickBookingLot,
   resolveEntryLot,
+  rowsByLot,
 };

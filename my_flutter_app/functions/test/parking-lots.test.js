@@ -9,8 +9,9 @@ const {describe, it} = require("node:test");
 const {
   DEFAULT_MAIN_LOT_NAME, LOT_MESSAGES, businessSpaceTotals, carLotFields,
   lotAddress, lotAvailability, lotCloseRefusal, lotIdOfCar, lotIsOpen,
-  lotMoveSummary, lotOccupancy, mainLotFromBusiness, mainLotId, normalizeLot,
-  openLots, pickBookingLot, resolveEntryLot,
+  lotMonthMovement, lotMoveSummary, lotOccupancy, mainLotFromBusiness,
+  mainLotId, normalizeLot, openLots, pickBookingLot, resolveEntryLot,
+  rowsByLot,
 } = require("../parking_lots");
 
 const BIZ = "biz-1";
@@ -200,4 +201,43 @@ describe("what a car record carries about its lot", () => {
     assert.equal(lotMoveSummary("Lot 1", "Lot 2"),
         "Moved from Lot 1 to Lot 2");
   });
+});
+
+describe("the numbers lot by lot", () => {
+  it("splits a business's cars by the lot each stands in", () => {
+    const rows = [car("a"), car("b", MAIN), car("c", "lot-2"),
+      car("stray", "deleted-lot")];
+    const split = rowsByLot(rows, BIZ, lots);
+    assert.deepEqual(split[MAIN].map((r) => r.id), ["a", "b"]);
+    assert.deepEqual(split["lot-2"].map((r) => r.id), ["c"]);
+    assert.deepEqual(Object.keys(split).sort(), [MAIN, "lot-2"].sort());
+    assert.deepEqual(rowsByLot([], BIZ, lots), {[MAIN]: [], "lot-2": []});
+  });
+
+  it("counts a month's arrivals and departures for each lot, once per car",
+      () => {
+        const monthKeyOf = (date) => date.toISOString().slice(0, 7);
+        const rows = [
+          // Arrived this month, still there.
+          car("in", MAIN, {parkingDate: day(3)}),
+          // Arrived last month, left this month.
+          car("out", "lot-2", {parkingDate: new Date(Date.UTC(2026, 9, 20)),
+            parkingEndDate: day(4)}),
+          // Arrived and left this month.
+          car("both", "lot-2", {parkingDate: day(2), parkingEndDate: day(5)}),
+          // Leaves later this month: not gone yet.
+          car("later", MAIN, {parkingDate: day(1), parkingEndDate: day(25)}),
+          // Booked for later this month: not arrived yet.
+          car("booked", MAIN, {parkingDate: day(20)}),
+          car("void", MAIN, {parkingDate: day(3), voided: true}),
+          car("cancelled", MAIN, {parkingDate: day(3), status: "cancelled"}),
+        ];
+        // The two reads overlap: a car counts once.
+        const told = lotMonthMovement([...rows, rows[2]], {businessId: BIZ,
+          lots, monthKey: "2026-11", nowMs: day(10).getTime(), monthKeyOf});
+        assert.deepEqual(told, {
+          [MAIN]: {arrived: 2, left: 0},
+          "lot-2": {arrived: 1, left: 2},
+        });
+      });
 });
