@@ -368,6 +368,7 @@ export function BusinessConsole({
       (Array.isArray(raw) ? raw : []).map((item) => text(item, "")),
     );
   }, [business?.enabledServices, profile.businessServices]);
+  const serviceList = useMemo(() => Array.from(services), [services]);
 
   // Check bank (docs/ZELLE_BANK_CHECK.md): the server's rule - the owner, or
   // staff who can sell (inventory permission + service) or take package
@@ -973,6 +974,7 @@ export function BusinessConsole({
                   airOnly={airOnly}
                   businessId={businessId}
                   business={business}
+                  services={serviceList}
                   previewMode={previewMode}
                   canRefundPayNow={mayRefund(profile) && !previewMode}
                   canUndoShipped={mayUndoShipped(profile) && !previewMode}
