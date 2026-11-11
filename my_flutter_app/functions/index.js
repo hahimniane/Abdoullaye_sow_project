@@ -255,6 +255,7 @@ const parkingReceiptPdf = require("./parking_receipt_pdf");
 const parkingInvoices = require("./parking_invoices");
 const parkingBillPayment = require("./parking_bill_payment");
 const parkingTeam = require("./parking_team");
+const parkingLots = require("./parking_lots");
 const parkingInvoicePdf = require("./parking_invoice_pdf");
 const {parkingBalanceNow} = require("./parking_month_statement");
 const {
@@ -604,10 +605,12 @@ const platformActivity = require("./platform_activity_alerts");
 const inventoryTransfers = require("./inventory_transfers");
 const {renderInventoryTags} = require("./inventory_tags");
 const {
+  isActiveParkingRow,
   occupancyEndMs,
   occupancyPatch,
   occupancyWindowStartMs,
   parkingAvailability,
+  parkingRangeOverlaps,
 } = require("./parking_occupancy");
 const {
   backfillCarrierTrackingDone,
@@ -12483,12 +12486,17 @@ exports.updateBusinessProfile = onCall(
         parkingState: String(
             parkingState ?? current.parkingState ?? "",
         ).trim(),
+        // With lots set up the two numbers are the sum over the lots
+        // (docs/PARKING_LOTS.md §2): a settings form that still sends them
+        // (the old phone app) must not overwrite that sum.
         parkingTotalSpaces: Math.max(0, intOrFallback(
-            parkingTotalSpaces,
+            current.parkingLotsEnabled === true ?
+              current.parkingTotalSpaces : parkingTotalSpaces,
             current.parkingTotalSpaces || 0,
         )),
         parkingBlockedSpaces: Math.max(0, intOrFallback(
-            parkingBlockedSpaces,
+            current.parkingLotsEnabled === true ?
+              current.parkingBlockedSpaces : parkingBlockedSpaces,
             current.parkingBlockedSpaces || 0,
         )),
         parkingDailyRate: Math.max(0, numberOrFallback(
@@ -13696,6 +13704,20 @@ exports.createParkingReservation = onCall(
               "No parking spaces are available for those dates",
           );
         }
+        // An online booking goes to the lot the owner chose for bookings,
+        // or the next one with room (docs/PARKING_LOTS.md §6). The combined
+        // check above already found a space somewhere.
+        const bookingLots =
+          await readParkingLots(db, cleanBusinessId, transaction);
+        const bookingLot = bookingLots.length === 0 ? null :
+          parkingLots.pickBookingLot({
+            lots: bookingLots,
+            bookingLotId: business.parkingBookingLotId,
+            businessId: cleanBusinessId,
+            reservations: reservations.docs.map((reservation) =>
+              ({...(reservation.data() || {}), id: reservation.id})),
+            start, end,
+          }) || parkingLots.openLots(bookingLots)[0] || null;
         totalCents = centsFromDollars(option.estimatedTotal);
         paymentCents = Math.min(totalCents, 5000);
         const pricingDoc = await transaction.get(
@@ -13729,6 +13751,8 @@ exports.createParkingReservation = onCall(
           businessName: option.businessName,
           parkingCity: option.city,
           parkingAddress: option.address,
+          ...(bookingLot ?
+            parkingLots.carLotFields(bookingLot, business) : {}),
           parkingDate: FirestoreTimestamp.fromDate(start),
           parkingEndDate: FirestoreTimestamp.fromDate(end),
           // Stamped in the same write, so the next booking's occupancy
@@ -14266,6 +14290,7 @@ exports.createBusinessParkingEntry = onCall(
       let payoutFields;
       let entryBusinessName = "";
       let entryRate = null;
+      let entryLot = {};
       await db.runTransaction(async (transaction) => {
         const businessDoc = await transaction.get(businessRef);
         if (!businessDoc.exists) {
@@ -14293,6 +14318,16 @@ exports.createBusinessParkingEntry = onCall(
         }
         entryRate = selection.rate;
         const reservations = await transaction.get(availabilityQuery);
+        // The lot the car stands in (docs/PARKING_LOTS.md): the one staff
+        // chose, checked for room; nothing for a business with one lot.
+        entryLot = entryLotFields({
+          lots: await readParkingLots(db, input.businessId, transaction),
+          businessId: input.businessId, business,
+          requestedLotId: request.data?.parkingLotId,
+          reservations: reservations.docs.map((reservation) =>
+            ({...(reservation.data() || {}), id: reservation.id})),
+          start: input.startDate, end: input.endDate,
+        });
         // Same option/pricing path the customer gets - parkingEstimateCents
         // runs inside parkingOptionFromBusiness, so a walk-up is never
         // quoted off a second, drifting price model.
@@ -14360,6 +14395,9 @@ exports.createBusinessParkingEntry = onCall(
             parkingRateId: entryRate.id,
             parkingRateLabel: entryRate.label,
           }),
+          // Where it stands: the lot's id and name, and its address in
+          // place of the business's when the lot has its own.
+          ...entryLot,
           parkingDate: FirestoreTimestamp.fromDate(input.startDate),
           // null = open-ended: the car stays until the business closes the
           // stay, and it is billed day by day through "bill through today".
@@ -14384,6 +14422,8 @@ exports.createBusinessParkingEntry = onCall(
         entryId: entryRef.id,
         reservationId: entryRef.id,
         trackingCode,
+        ...(entryLot.parkingLotId ? {parkingLotId: entryLot.parkingLotId,
+          parkingLotName: entryLot.parkingLotName} : {}),
         paymentMethod: plan.paymentMethod,
         amountDue: plan.amountDue,
         amountDueCents: plan.amountDueCents,
@@ -15191,6 +15231,254 @@ async function parkingUpdateContact(request, uid) {
     });
   }
   return {success: true, entryId: carId, changed: Object.keys(plan.changes)};
+}
+
+// ---------------------------------------------------------------------------
+// Several parking lots for one business (docs/PARKING_LOTS.md). A lot is
+// only where a car stands: prices and bills are the business's. The actions
+// ride on updateBusinessParkingEntry (no new export: the CPU budget).
+// ---------------------------------------------------------------------------
+const PARKING_LOT_ACTIONS = Object.freeze(
+    ["lot_save", "lot_booking", "lot_move"]);
+
+/**
+ * @param {string} code A parking_lots.LOT_MESSAGES code.
+ * @param {string} [status] The HttpsError status.
+ * @return {HttpsError} The refusal, with its `reason` for the clients.
+ */
+function parkingLotError(code, status = "failed-precondition") {
+  return new HttpsError(status,
+      parkingLots.LOT_MESSAGES[code] || "That lot cannot be used.",
+      {reason: code});
+}
+
+/**
+ * The business's lots. Empty for a business that never set lots up: its
+ * cars are then read as standing in its first lot (parkingLots.mainLotId).
+ *
+ * @param {object} db Firestore.
+ * @param {string} businessId The business.
+ * @param {object} [transaction] Read inside this transaction when given.
+ * @return {Promise<object[]>} The parkingLots rows, each with its `id`.
+ */
+async function readParkingLots(db, businessId, transaction = null) {
+  const query = db.collection("parkingLots")
+      .where("businessId", "==", businessId);
+  const snapshot = transaction ?
+    await transaction.get(query) : await query.get();
+  return snapshot.docs.map((doc) => ({...(doc.data() || {}), id: doc.id}));
+}
+
+/**
+ * The lot a new car goes into and the fields its record carries, or
+ * nothing for a business with no lots. Refuses an unknown, closed or full
+ * lot. With no lot asked (the old phone app) the car goes into the first
+ * open lot.
+ *
+ * @param {object} args {lots, businessId, business, requestedLotId,
+ *   reservations (rows with ids), start, end}.
+ * @return {object} The record's lot fields ({} with no lots).
+ */
+function entryLotFields(args) {
+  const {lots, businessId, business, reservations, start, end} = args;
+  const requestedLotId = cleanText(args.requestedLotId, 200);
+  if (lots.length === 0) {
+    if (requestedLotId &&
+        requestedLotId !== parkingLots.mainLotId(businessId)) {
+      throw parkingLotError("lot_not_found");
+    }
+    return {};
+  }
+  const chosen = parkingLots.resolveEntryLot({lots, requestedLotId});
+  if (chosen.refusal) throw parkingLotError(chosen.refusal);
+  if (parkingLots.lotAvailability({lot: chosen.lot, businessId,
+    reservations, start, end}) <= 0) {
+    throw parkingLotError("lot_full");
+  }
+  return parkingLots.carLotFields(chosen.lot, business);
+}
+
+/**
+ * The owner's and staff's lot actions: `lot_save` (add or edit a lot; the
+ * first one converts the business, creating its first lot from its own
+ * parking settings), `lot_booking` (which lot online bookings go to) and
+ * `lot_move` (move one car to another lot).
+ *
+ * @param {object} request The callable request.
+ * @param {string} uid The caller.
+ * @param {string} action One of PARKING_LOT_ACTIONS.
+ * @return {Promise<object>} The callable's answer.
+ */
+async function parkingLotAction(request, uid, action) {
+  const data = request.data || {};
+  const db = admin.firestore();
+  if (action === "lot_move") return parkingLotMove(db, uid, data);
+  const businessId = cleanText(data.businessId, 180);
+  if (!businessId) {
+    throw new HttpsError("invalid-argument", "Business is required");
+  }
+  // The lots are business settings: the owner's, as the parking address
+  // and the number of spaces always were (updateBusinessProfile).
+  const user = await requireBusinessManager(uid, businessId);
+  if (user.role !== "admin" && user.role !== "businessOwner") {
+    throw new HttpsError("permission-denied",
+        "Only business owners can update business settings");
+  }
+  const businessRef = db.collection("businesses").doc(businessId);
+  const lotId = cleanText(data.lotId, 200);
+  const now = new Date();
+  const availabilityQuery =
+    await availabilityQueryFor(db, businessId, now, null);
+  return db.runTransaction(async (transaction) => {
+    const businessDoc = await transaction.get(businessRef);
+    if (!businessDoc.exists) {
+      throw new HttpsError("not-found", "Business not found");
+    }
+    const business = businessDoc.data() || {};
+    const stored = await readParkingLots(db, businessId, transaction);
+    const reservations = (await transaction.get(availabilityQuery)).docs
+        .map((doc) => ({...(doc.data() || {}), id: doc.id}));
+    const stamp = FirestoreFieldValue.serverTimestamp();
+    const lots = [...stored];
+    const writes = [];
+    if (lots.length === 0) {
+      // The first lot: the business's own settings. Every car it already
+      // has stands here (a car with no lot is read as being in it).
+      const main = {...parkingLots.mainLotFromBusiness(business),
+        id: parkingLots.mainLotId(businessId), businessId, sortOrder: 0};
+      lots.push(main);
+      const {id, ...fields} = main;
+      writes.push([db.collection("parkingLots").doc(id),
+        {...fields, createdAt: stamp, updatedAt: stamp}]);
+    }
+    if (action === "lot_booking") {
+      const lot = lots.find((row) => row.id === lotId);
+      if (!lot) throw parkingLotError("lot_not_found");
+      if (!parkingLots.lotIsOpen(lot)) throw parkingLotError("lot_closed");
+      for (const [ref, fields] of writes) transaction.set(ref, fields);
+      transaction.update(businessRef, {parkingLotsEnabled: true,
+        parkingBookingLotId: lot.id, updatedAt: stamp});
+      return {success: true, bookingLotId: lot.id};
+    }
+    const current = lotId ? lots.find((row) => row.id === lotId) : null;
+    if (lotId && !current) throw parkingLotError("lot_not_found");
+    if (!current && lots.length >= parkingLots.MAX_LOTS) {
+      throw parkingLotError("lot_limit");
+    }
+    const {value, errors} = parkingLots.normalizeLot(data.lot,
+        {lots, lotId: current?.id || ""});
+    if (errors.length > 0) throw parkingLotError(errors[0], "invalid-argument");
+    if (current && parkingLots.lotIsOpen(current) && !value.active) {
+      const refusal = parkingLots.lotCloseRefusal({lot: current, lots,
+        businessId, reservations, now});
+      if (refusal) throw parkingLotError(refusal);
+    }
+    const ref = current ? db.collection("parkingLots").doc(current.id) :
+      db.collection("parkingLots").doc();
+    const saved = {...(current || {}), ...value, id: ref.id, businessId,
+      sortOrder: current ? Number(current.sortOrder) || 0 :
+        Math.max(-1, ...lots.map((row) => Number(row.sortOrder) || 0)) + 1};
+    const next = current ?
+      lots.map((row) => row.id === current.id ? saved : row) :
+      [...lots, saved];
+    for (const [pendingRef, fields] of writes) {
+      // The first lot is being edited in the call that creates it.
+      if (pendingRef.id === ref.id) continue;
+      transaction.set(pendingRef, fields);
+    }
+    transaction.set(ref, {...value, businessId, sortOrder: saved.sortOrder,
+      ...(current?.isMain === true ? {isMain: true} : {}),
+      ...(current && stored.length > 0 ? {} : {createdAt: stamp}),
+      updatedAt: stamp, updatedByUid: uid}, {merge: true});
+    // The business's own two numbers stay the sum over its open lots, so
+    // the customer search and the totals read one combined figure.
+    const bookingLot = next.find((row) =>
+      row.id === cleanText(business.parkingBookingLotId, 200) &&
+      parkingLots.lotIsOpen(row));
+    transaction.update(businessRef, {
+      ...parkingLots.businessSpaceTotals(next),
+      parkingLotsEnabled: true,
+      parkingBookingLotId: bookingLot?.id ||
+        parkingLots.openLots(next)[0]?.id || "",
+      updatedAt: stamp,
+    });
+    return {success: true, lotId: ref.id, created: !current};
+  });
+}
+
+/**
+ * Moves one car to another lot (docs/PARKING_LOTS.md §5): anyone who can
+ * work the parking, one History line, nobody messaged, the bill untouched.
+ * A lot that is closed or full is refused; the same lot changes nothing.
+ *
+ * @param {object} db Firestore.
+ * @param {string} uid The caller.
+ * @param {object} data {entryId, parkingLotId}.
+ * @return {Promise<object>} {success, moved, parkingLotId, parkingLotName}.
+ */
+async function parkingLotMove(db, uid, data) {
+  const entryId = cleanText(data.entryId || data.carId, 180);
+  const lotId = cleanText(data.parkingLotId, 200);
+  if (!entryId || !lotId) {
+    throw new HttpsError("invalid-argument", "Car and lot are required");
+  }
+  const entryRef = db.collection("parkedCars").doc(entryId);
+  const existing = await entryRef.get();
+  if (!existing.exists) {
+    throw new HttpsError("not-found", "Parking entry not found",
+        {reason: "car_not_found"});
+  }
+  const businessId = String(existing.get("businessId") || "");
+  await requireBusinessPermission(uid, businessId, "parking");
+  refuseVoidedParking(existing.data() || {});
+  const now = new Date();
+  const availabilityQuery =
+    await availabilityQueryFor(db, businessId, now, null);
+  const businessRef = db.collection("businesses").doc(businessId);
+  const outcome = await db.runTransaction(async (transaction) => {
+    const [carDoc, businessDoc] = await Promise.all(
+        [transaction.get(entryRef), transaction.get(businessRef)]);
+    const car = carDoc.data() || {};
+    const business = businessDoc.data() || {};
+    const lots = await readParkingLots(db, businessId, transaction);
+    const target = lots.find((row) => row.id === lotId);
+    if (!target) throw parkingLotError("lot_not_found");
+    const fromId = parkingLots.lotIdOfCar(car, businessId);
+    const from = lots.find((row) => row.id === fromId);
+    if (fromId === target.id) {
+      return {moved: false, target, fromName: target.name};
+    }
+    if (!parkingLots.lotIsOpen(target)) throw parkingLotError("lot_closed");
+    // Only a car that still holds a space needs one in the other lot.
+    const holdsSpace = isActiveParkingRow(car) &&
+      parkingRangeOverlaps(car, now, null);
+    if (holdsSpace) {
+      const reservations = (await transaction.get(availabilityQuery)).docs
+          .map((doc) => ({...(doc.data() || {}), id: doc.id}));
+      if (parkingLots.lotAvailability({lot: target, businessId,
+        reservations, start: now, end: null, exceptCarId: entryId}) <= 0) {
+        throw parkingLotError("lot_full");
+      }
+    }
+    transaction.update(entryRef, {
+      ...parkingLots.carLotFields(target, business),
+      lotMovedAt: FirestoreFieldValue.serverTimestamp(),
+      lotMovedByUid: uid,
+      updatedAt: FirestoreFieldValue.serverTimestamp(),
+    });
+    return {moved: true, target,
+      fromName: from?.name || car.parkingLotName || ""};
+  });
+  if (outcome.moved) {
+    await writeLotLedgerAudit({
+      businessId, entityType: "parking", entityId: entryId,
+      action: "lot_moved", byStaffId: uid, changes: [],
+      summary: parkingLots.lotMoveSummary(
+          outcome.fromName, outcome.target.name),
+    });
+  }
+  return {success: true, entryId, moved: outcome.moved,
+    parkingLotId: outcome.target.id, parkingLotName: outcome.target.name};
 }
 
 const PARKING_WHATSAPP_ACTIONS = Object.freeze(
@@ -17013,6 +17301,9 @@ exports.updateBusinessParkingEntry = onCall(
       }
       if (PARKING_BILL_PAYMENT_ACTIONS.includes(businessAction)) {
         return parkingBillPaymentAction(request, uid, businessAction);
+      }
+      if (PARKING_LOT_ACTIONS.includes(businessAction)) {
+        return parkingLotAction(request, uid, businessAction);
       }
       const entryId = cleanText(
           request.data?.entryId || request.data?.reservationId, 180,

@@ -1649,6 +1649,31 @@ describe("business dashboard Firestore rules", () => {
               "inventoryStores/store_main")));
         });
 
+    // A business's parking lots (docs/PARKING_LOTS.md): its own people
+    // list them, and only the server writes them.
+    it("lets a business list its parking lots, and nobody write them",
+        async () => {
+          await seedStores({multiStore: true});
+          await testEnv.withSecurityRulesDisabled(async (context) => {
+            await setDoc(doc(context.firestore(), "parkingLots/biz_a_main"),
+                {businessId: "biz_a", name: "Lot 1", totalSpaces: 10,
+                  blockedSpaces: 0, active: true, isMain: true});
+          });
+          const list = (db, b) => getDocs(query(collection(db,
+              "parkingLots"), where("businessId", "==", b)));
+          await assertSucceeds(list(firestoreFor("owner-a"), "biz_a"));
+          await assertFails(list(firestoreFor("owner-b"), "biz_a"));
+          await assertFails(list(firestoreFor(null), "biz_a"));
+          await assertFails(getDocs(query(collection(
+              firestoreFor("owner-a"), "parkingLots"))));
+          const owner = firestoreFor("owner-a");
+          await assertFails(setDoc(doc(owner, "parkingLots/forged"),
+              {businessId: "biz_a", name: "X", totalSpaces: 999}));
+          await assertFails(updateDoc(doc(owner, "parkingLots/biz_a_main"),
+              {totalSpaces: 999}));
+          await assertFails(deleteDoc(doc(owner, "parkingLots/biz_a_main")));
+        });
+
     it("keeps the store bookkeeping out of every client's reach",
         async () => {
           await seedStores({multiStore: true});

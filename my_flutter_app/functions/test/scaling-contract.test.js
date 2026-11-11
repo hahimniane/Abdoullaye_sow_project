@@ -49,12 +49,14 @@ describe("parking availability reads only stays that can overlap", () => {
   it("every booking path backfills first and reads in the transaction",
       () => {
         const uses = source.match(/await availabilityQueryFor\(/g) || [];
-        // search, customer reservation, business entry, business edit, and
-        // the parked-car welcome (a plain read of who is on the lot now).
-        assert.equal(uses.length, 5);
+        // search, customer reservation, business entry, business edit, the
+        // parked-car welcome (a plain read of who is on the lot now), and
+        // the two lot actions (docs/PARKING_LOTS.md): saving a lot (may it
+        // close?) and moving a car (has the other lot room?).
+        assert.equal(uses.length, 7);
         const inTransaction =
           source.match(/transaction\.get\(availabilityQuery\)/g) || [];
-        assert.equal(inTransaction.length, 3);
+        assert.equal(inTransaction.length, 5);
         assert.doesNotMatch(source,
             /transaction\.get\(\s*parkedCarsForAvailability/);
       });

@@ -655,6 +655,13 @@ service cloud.firestore {
         (isAdmin(request.auth.uid) ||
          canManageBusiness(request.auth.uid, businessId));
     }
+    // A business's parking lots (docs/PARKING_LOTS.md): read by its own
+    // people, written only by the server (the lot actions of
+    // updateBusinessParkingEntry).
+    match /parkingLots/{lotId} {
+      allow read: if lotLedgerRead(resource.data.businessId);
+      allow write: if false;
+    }
     match /lotActivityTypes/{typeId} {
       allow read: if lotLedgerRead(resource.data.businessId);
       allow write: if false;
