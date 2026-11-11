@@ -8290,6 +8290,11 @@ export function LotLedgerPanel({ businessId, business, previewMode = false, focu
     (selectedType ? selectedType.needsVehicle !== false : true) ||
     Boolean(editRow && (text(editRow.vinNumber, "") || text(editRow.carMake, "")));
   const editingPaid = Boolean(editRow && lotActivityPaid(editRow));
+  // What the car dropdowns hold: the catalog's own spelling when it knows the
+  // make or model, else exactly what the record says.
+  const activityCarMake = canonicalMake(activityDraft.carMake) || activityDraft.carMake;
+  const activityCarModel =
+    canonicalModel(activityDraft.carMake, activityDraft.carModel) || activityDraft.carModel;
 
   // Typing a VIN pulls the car and customer from an existing record for this
   // business (a parked car or a past activity), so staff don't re-key what the
@@ -9391,22 +9396,27 @@ export function LotLedgerPanel({ businessId, business, previewMode = false, focu
                 </label>
                 <label className="lst-field"><span>Phone</span><input value={activityDraft.customerPhone} onChange={(e) => setActivityDraft((d) => ({ ...d, customerPhone: e.target.value }))} /></label>
                 {typeNeedsVehicle && (<>
+                {/* A car the lot already recorded (a VIN match, or the entry
+                    being edited) may carry a make, model or year the catalog
+                    does not list. It is offered as its own option, so the
+                    dropdown shows what the record says instead of falling
+                    back to "Select a make" - whatever the activity is. */}
                 <label className="lst-field"><span>Car make</span>
-                  <select value={canonicalMake(activityDraft.carMake) || activityDraft.carMake} onChange={(e) => setActivityDraft((d) => ({ ...d, carMake: e.target.value, carModel: "", carYear: "" }))}>
+                  <select value={activityCarMake} onChange={(e) => setActivityDraft((d) => ({ ...d, carMake: e.target.value, carModel: "", carYear: "" }))}>
                     <option value="">Select a make</option>
-                    {getMakes().map((m) => (<option key={m} value={m}>{m}</option>))}
+                    {withSelected(getMakes(), activityCarMake).map((m) => (<option key={m} value={m}>{m}</option>))}
                   </select>
                 </label>
                 <label className="lst-field"><span>Car model</span>
-                  <select disabled={!activityDraft.carMake} value={canonicalModel(activityDraft.carMake, activityDraft.carModel) || activityDraft.carModel} onChange={(e) => setActivityDraft((d) => ({ ...d, carModel: e.target.value, carYear: "" }))}>
+                  <select disabled={!activityDraft.carMake} value={activityCarModel} onChange={(e) => setActivityDraft((d) => ({ ...d, carModel: e.target.value, carYear: "" }))}>
                     <option value="">Select a model</option>
-                    {getModels(activityDraft.carMake).map((m) => (<option key={m} value={m}>{m}</option>))}
+                    {withSelected(getModels(activityDraft.carMake), activityCarModel).map((m) => (<option key={m} value={m}>{m}</option>))}
                   </select>
                 </label>
                 <label className="lst-field"><span>Car year</span>
                   <select disabled={!activityDraft.carModel} value={activityDraft.carYear} onChange={(e) => setActivityDraft((d) => ({ ...d, carYear: e.target.value }))}>
                     <option value="">Select a year</option>
-                    {getYears(activityDraft.carMake, activityDraft.carModel).map((y) => (<option key={y} value={y}>{y}</option>))}
+                    {withSelected(getYears(activityDraft.carMake, activityDraft.carModel), activityDraft.carYear).map((y) => (<option key={y} value={y}>{y}</option>))}
                   </select>
                 </label>
                 </>)}

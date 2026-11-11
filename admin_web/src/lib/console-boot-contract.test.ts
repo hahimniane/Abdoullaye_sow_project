@@ -102,6 +102,23 @@ test("every panel that renders the make list loads the catalog itself", () => {
   }
 });
 
+// The activity form is filled from what the lot already recorded (a VIN
+// match, or the entry being edited), whatever the activity is. A make, model
+// or year the catalog does not list must still show in its dropdown: without
+// its own option the select falls back to "Select a make" and the next save
+// drops the car.
+test("the activity form shows a recorded car the catalog does not list", () => {
+  const source = readFileSync("src/components/business/operations-panels.tsx", "utf8");
+  const ledger = source.slice(source.indexOf("export function LotLedgerPanel("));
+  assert.match(ledger, /const activityCarMake = canonicalMake\(activityDraft\.carMake\) \|\| activityDraft\.carMake;/);
+  assert.match(ledger, /withSelected\(getMakes\(\), activityCarMake\)/);
+  assert.match(ledger, /withSelected\(getModels\(activityDraft\.carMake\), activityCarModel\)/);
+  assert.match(ledger, /withSelected\(getYears\(activityDraft\.carMake, activityDraft\.carModel\), activityDraft\.carYear\)/);
+  // One form for every activity: the car fields are hidden only for an
+  // activity that records no vehicle, never left empty for one that does.
+  assert.equal(ledger.split("<span>Car make</span>").length - 1, 1);
+});
+
 // Same trap one level down: the guest entry renders one service panel, chosen
 // before render, but a static import shipped all of them. Shipping is the
 // exception - it is what most links point at, so it stays eager.
