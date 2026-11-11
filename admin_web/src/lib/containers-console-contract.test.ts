@@ -50,7 +50,7 @@ test("the Shipping page routes its list steps to one ContainersPanel", () => {
   assert.match(consoleSource, /import \{ContainersPanel\} from "@\/components\/business\/containers-panel";/);
   // Requests, Waiting and Containers are the panel's three lists, chosen by
   // the page; the panel stays mounted across them.
-  assert.match(consoleSource, /\{containerListSteps\.includes\(activeShippingStep\) && \(\s*<ContainersPanel\s+airOnly=\{airOnly\}\s+businessId=\{businessId\}\s+business=\{business\}\s+previewMode=\{previewMode\}\s+canRefundPayNow=\{mayRefund\(profile\) && !previewMode\}\s+canUndoShipped=\{mayUndoShipped\(profile\) && !previewMode\}\s+view=\{activeShippingStep as ListView\}\s+onViewChange=\{onContainerView\}\s+onCounts=\{onContainerCounts\}\s+(?:\/\/[^\n]*\n\s*)*focusContainerId=\{\s*notificationFocusView === "line"\s*\? ""\s*: todayContainerFocus \|\| \(containerLink\?\.containerId \?\? ""\)\s*\}\s+focusLineId=\{\s*notificationFocusView === "line"\s*\? notificationFocusId\s*: containerLink\?\.lineId \?\? ""\s*\}\s+focusView=\{notificationFocusView === "requests" \? "requests" : todayContainersView\}\s+focusRequestId=\{notificationFocusView === "requests" \? notificationFocusId : ""\}\s+\/>\s*\)\}/);
+  assert.match(consoleSource, /\{containerListSteps\.includes\(activeShippingStep\) && \(\s*<ContainersPanel\s+airOnly=\{airOnly\}\s+businessId=\{businessId\}\s+business=\{business\}\s+services=\{serviceList\}\s+previewMode=\{previewMode\}\s+canRefundPayNow=\{mayRefund\(profile\) && !previewMode\}\s+canUndoShipped=\{mayUndoShipped\(profile\) && !previewMode\}\s+view=\{activeShippingStep as ListView\}\s+onViewChange=\{onContainerView\}\s+onCounts=\{onContainerCounts\}\s+(?:\/\/[^\n]*\n\s*)*focusContainerId=\{\s*notificationFocusView === "line"\s*\? ""\s*: todayContainerFocus \|\| \(containerLink\?\.containerId \?\? ""\)\s*\}\s+focusLineId=\{\s*notificationFocusView === "line"\s*\? notificationFocusId\s*: containerLink\?\.lineId \?\? ""\s*\}\s+focusView=\{notificationFocusView === "requests" \? "requests" : todayContainersView\}\s+focusRequestId=\{notificationFocusView === "requests" \? notificationFocusId : ""\}\s+\/>\s*\)\}/);
   assert.match(consoleSource, /shipping: <Container \{\.\.\.props\} \/>,/, "the sidebar icon map must cover the section");
   // Old tab ids (notifications, Today rows, links) open their step.
   assert.match(consoleSource, /const step = shippingStepForTab\(tab, view\);\s*if \(step\) \{\s*setShippingStep\(step\);\s*setActiveTabState\("shipping"\);/);
@@ -191,7 +191,11 @@ test("a car line asks whether the car is in the lot before it shows a VIN field"
   // The answer lives in the draft and is reset with the kind and on open.
   assert.match(panelSource, /function setLineKind\(kind: ContainerLineDraft\["kind"\]\) \{[\s\S]*?inLot: "",\s*parkedCarId: "",/);
   assert.match(panelSource, /onChange=\{\(\) => setLineKind\("car"\)\} \/><span>A car<\/span>/);
-  assert.match(panelSource, /function openAddLine\(\) \{\s*setLineDraft\(emptyContainerLineDraft\);/);
+  assert.match(panelSource, /function openAddLine\(\) \{\s*setLineDraft\(newContainerLineDraft\(carLineOffered\(services, selected\)\)\);/);
+  // "A car" is offered only where cars ship (carLineOffered): a barrel or
+  // freight shipper, or a flight, sees no car choice and starts on barrels.
+  assert.match(panelSource, /const carOffered = carLineOffered\(services, selected, String\(editingLineRow\?\.kind \?\? ""\)\);/);
+  assert.match(panelSource, /\{carOffered && \(\s*<fieldset className="lst-fieldset">\s*<label className="lst-radio"><input type="radio" name="ctnkind"/);
 });
 
 test("the pick list is the parked cars in the lot, from the subscription the VIN prefill already holds", () => {

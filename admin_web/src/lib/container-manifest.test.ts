@@ -46,6 +46,8 @@ import {
   airWaybillOf,
   AIR_WAYBILL,
   emptyContainerLineDraft,
+  carLineOffered,
+  newContainerLineDraft,
   filterContainers,
   filterParkedCarPicks,
   INTERNATIONAL_PHONE,
@@ -1415,4 +1417,28 @@ test("a customer's package line needs every piece priced and the pieces over $0;
   assert.equal(containerMessage(["piece_price_required"]), "Enter a price for every piece.");
   assert.equal(translateValue(CONTAINER_MESSAGES.piece_price_required, "fr"), "Indiquez un prix pour chaque colis.");
   assert.equal(translateValue(CONTAINER_MESSAGES.package_price_required, "fr"), "Indiquez le prix du colis : plus de 0 $.");
+});
+
+// Regression: a barrel/freight shipper's "Add a line" opened on "A car" and
+// asked whether the car was parked in its lot (KEETAH WAYZ, Nov 2026).
+test("the add-line form offers a car only to a business that ships cars, by sea", () => {
+  const sea = { shipMode: "sea" };
+  const air = { shipMode: "air" };
+  // A freight or barrel shipper: no car choice, the form starts on barrels.
+  assert.equal(carLineOffered(["barrelShipping", "freight"], sea), false);
+  assert.equal(newContainerLineDraft(false).kind, "barrels");
+  // Selling, moving or parking cars each bring the car choice back.
+  for (const service of ["carSales", "carTransport", "carParking"]) {
+    assert.equal(carLineOffered(["freight", service], sea), true, service);
+  }
+  assert.equal(newContainerLineDraft(true).kind, "car");
+  assert.deepEqual(newContainerLineDraft(true), emptyContainerLineDraft);
+  // No car goes on a flight, whatever the business offers.
+  assert.equal(carLineOffered(["carSales"], air), false);
+  // No services recorded yet: the form stays as it always was.
+  assert.equal(carLineOffered([], sea), true);
+  assert.equal(carLineOffered(undefined, undefined), true);
+  // A car line already on the list still edits as a car.
+  assert.equal(carLineOffered(["freight"], air, "car"), true);
+  assert.equal(carLineOffered(["freight"], sea, "barrels"), false);
 });

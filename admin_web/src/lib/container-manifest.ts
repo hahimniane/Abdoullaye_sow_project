@@ -753,6 +753,39 @@ export const emptyContainerLineDraft: ContainerLineDraft = {
   pickupFee: null,
 };
 
+/**
+ * The business services that put cars on a container: selling, moving or
+ * parking them. A business with none of these (a barrel or freight shipper)
+ * never loads a car.
+ */
+export const CAR_LINE_SERVICES = ["carSales", "carTransport", "carParking"] as const;
+
+/**
+ * Whether the add-line form offers "A car". Not on a flight, and not for a
+ * business whose services hold none of `CAR_LINE_SERVICES`. A business with
+ * no services recorded yet keeps the car choice, as the form always had it.
+ * A car line being edited stays a car whatever the business offers now.
+ */
+export function carLineOffered(
+  services: readonly string[] | null | undefined,
+  container: unknown,
+  editingKind = "",
+): boolean {
+  if (editingKind === "car") return true;
+  if (isAirContainer(container)) return false;
+  const list = Array.isArray(services) ? services : [];
+  if (list.length === 0) return true;
+  return CAR_LINE_SERVICES.some((id) => list.includes(id));
+}
+
+/**
+ * A blank add-line form: it starts on a car only where a car is offered,
+ * and on barrels and boxes everywhere else.
+ */
+export function newContainerLineDraft(carOffered: boolean): ContainerLineDraft {
+  return carOffered ? emptyContainerLineDraft : { ...emptyContainerLineDraft, kind: "barrels" };
+}
+
 /** Whether a line draft is described by its pieces (every kind but a car). */
 export function lineDraftHasPieces(draft: { kind: string }): boolean {
   return text(draft.kind, 20) !== "car";

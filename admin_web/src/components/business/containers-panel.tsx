@@ -81,8 +81,10 @@ import {
   containerTitle,
   containerTransitionRefusal,
   emptyContainerDraft,
+  carLineOffered,
   emptyContainerLineDraft,
   filterContainers,
+  newContainerLineDraft,
   lineDraftHasPieces,
   filterParkedCarPicks,
   lineDraftFromParkedCar,
@@ -232,6 +234,12 @@ type ContainersPanelProps = {
   focusContainerId?: string;
   focusLineId?: string;
   /**
+   * The business's enabled services (`businesses/{id}.enabledServices`). The
+   * add-line form offers "A car" only to a business that sells, moves or
+   * parks cars (`carLineOffered`); left out, the car choice stays.
+   */
+  services?: readonly string[];
+  /**
    * A package request notification: open the Requests list on that one.
    * "waiting" (from Today's "Packages waiting for a container") opens the
    * waiting list.
@@ -306,6 +314,7 @@ export function ContainersPanel({
   canUndoShipped = false,
   focusContainerId = "",
   focusLineId = "",
+  services,
   focusView = "",
   focusRequestId = "",
   view: controlledView,
@@ -941,7 +950,7 @@ export function ContainersPanel({
   // -------------------------------------------------------------------------
 
   function openAddLine() {
-    setLineDraft(emptyContainerLineDraft);
+    setLineDraft(newContainerLineDraft(carLineOffered(services, selected)));
     setLineProof(emptyProofDraft());
     setLineTried(false);
     setEditingLineId("");
@@ -1290,6 +1299,9 @@ export function ContainersPanel({
   const moveTargets = loadingContainers.filter((row) => String(row.id) !== selectedId);
   const movingLine = moveLineId ? selectedLines.find((row) => String(row.id) === moveLineId) : undefined;
   const editingLineRow = editingLineId ? lines.rows.find((row) => String(row.id) === editingLineId) : undefined;
+  // "A car" only where cars ship (the business's services, by sea), or on a
+  // car line being edited; otherwise the form is barrels and boxes alone.
+  const carOffered = carLineOffered(services, selected, String(editingLineRow?.kind ?? ""));
   const draftAir = containerDraft.shipMode === "air";
   const contactsLine = contactsLineId ? lines.rows.find((row) => String(row.id) === contactsLineId) : undefined;
   const contactsLineContainer = contactsLine ? containerById.get(text(contactsLine.containerId, "")) : undefined;
@@ -1903,10 +1915,12 @@ export function ContainersPanel({
                   )}
                 </div>
               )}
-              <fieldset className="lst-fieldset">
-                <label className="lst-radio"><input type="radio" name="ctnkind" checked={lineDraft.kind === "car"} onChange={() => setLineKind("car")} /><span>A car</span></label>
-                <label className="lst-radio"><input type="radio" name="ctnkind" checked={lineDraftHasPieces(lineDraft)} onChange={() => setLineKind("barrels")} /><span>Barrels, boxes or other things</span></label>
-              </fieldset>
+              {carOffered && (
+                <fieldset className="lst-fieldset">
+                  <label className="lst-radio"><input type="radio" name="ctnkind" checked={lineDraft.kind === "car"} onChange={() => setLineKind("car")} /><span>A car</span></label>
+                  <label className="lst-radio"><input type="radio" name="ctnkind" checked={lineDraftHasPieces(lineDraft)} onChange={() => setLineKind("barrels")} /><span>Barrels, boxes or other things</span></label>
+                </fieldset>
+              )}
               {lineDraftHasPieces(lineDraft) && (
                 <PiecesEditor
                   id="ctn-pieces"
