@@ -179,6 +179,8 @@ import {
   type LotInstalmentDraft,
 } from "@/lib/lot-ledger";
 import { WhoseCarField, TeamTag, type WhoseCar } from "@/components/business/whose-car-field";
+import { MoveCarLot, ParkingLotBadge, ParkingLotSelect, ParkingLotStrip, useParkingLots } from "@/components/business/parking-lots";
+import { defaultParkingLotId, parkingLotIdOf, parkingLotNameOf, rememberParkingLot, rememberedParkingLot } from "@/lib/parking-lots";
 import { teamMemberOptions, parkingTeamLabel } from "@/lib/parking-team";
 import {
   lotCustomerSources,
@@ -5009,6 +5011,11 @@ export function ParkingPanel({
   // keep. Empty means "do not narrow", so no chips shows everything, and a
   // chip from each facet answers a compound question ("in the lot, not paid").
   const [facets, setFacets] = useState<ParkingFacets>({ kinds: [], payments: [] });
+  // Several lots (docs/PARKING_LOTS.md): which one the list is narrowed to
+  // ("" for every lot), and the lot the next parked car goes into.
+  const parkingLots = useParkingLots(businessId, parkingEnabled);
+  const [lotFilter, setLotFilter] = useState("");
+  const [entryLotId, setEntryLotId] = useState("");
   const toggleKind = (kind: ParkingKind) =>
     setFacets((f) => ({
       ...f,
@@ -5192,12 +5199,14 @@ export function ParkingPanel({
     // Status kind AND payment class, each an OR within itself. "In the lot"
     // plus "Not paid" keeps only unpaid walk-ups; no chips keeps everything.
     // A voided car stays on the list, struck through, below the live ones.
-    return voidedLast(inRange.filter((row) => businessParkingMatchesFacets(row, facets)));
-  }, [searched, facets, rangeFrom, rangeTo]);
+    return voidedLast(inRange.filter((row) => businessParkingMatchesFacets(row, facets) &&
+      (!lotFilter || parkingLotIdOf(row, businessId) === lotFilter)));
+  }, [searched, facets, rangeFrom, rangeTo, lotFilter, businessId]);
   useEffect(() => {
     if (!focusRecordId) return;
     setSearch("");
     setFacets({ kinds: [], payments: [] });
+    setLotFilter("");
     setRangeFrom("");
     setRangeTo("");
   }, [focusRecordId]);
@@ -5218,8 +5227,15 @@ export function ParkingPanel({
   // filter re-totals to the rows in view - every running stay is loaded, so a
   // filter on those is exact; history is paged, so a filter reaching into it
   // says the figures cover the records loaded so far.
-  const parkingFiltered = Boolean(search.trim() || rangeFrom || rangeTo ||
+  const parkingNarrowed = Boolean(search.trim() || rangeFrom || rangeTo ||
     facets.kinds.length > 0 || facets.payments.length > 0);
+  // One lot and nothing else: the server's own figures for that lot, which
+  // cover every stay; any other filter re-totals the rows in view.
+  const serverLots = serverParking.data?.parking?.lots ?? [];
+  const serverLot = lotFilter && !parkingNarrowed
+    ? serverLots.find((lot) => lot.lotId === lotFilter) ?? null
+    : null;
+  const parkingFiltered = parkingNarrowed || Boolean(lotFilter && !serverLot);
   const filteredTotals = useMemo(
     () => businessParkingTotals(
       filteredRows as Parameters<typeof businessParkingTotals>[0],
@@ -5227,7 +5243,9 @@ export function ParkingPanel({
     ),
     [filteredRows, business],
   );
-  const parkingTotals = !parkingFiltered && serverParking.data?.parking?.totals
+  const parkingTotals = serverLot
+    ? serverLot.totals
+    : !parkingFiltered && serverParking.data?.parking?.totals
     ? serverParking.data.parking.totals
     : filteredTotals;
   const parkingTotalsPartial = parkingFiltered && pastStays.hasMore;
@@ -5436,6 +5454,9 @@ export function ParkingPanel({
 
   function openEntry() {
     setEntryWhose("other");
+    // The lot this person used last on this device, when it is still open.
+    setEntryLotId(defaultParkingLotId(parkingLots.lots, businessId, rememberedParkingLot(businessId),
+      serverParking.data?.parking?.lots ?? []));
     setEntryDraft(emptyBusinessParkingEntryDraft);
     setEntryErrors([]);
     setEntryMessage("");
@@ -5644,12 +5665,15 @@ export function ParkingPanel({
       const response = await httpsCallable(
         functions,
         "createBusinessParkingEntry",
-      )(businessParkingEntryPayload(
+      )({...businessParkingEntryPayload(
         // Only a picked team member goes along; typed customer fields of a
         // team car are dropped by the payload.
         {...entryDraft, forStaffId: entryWhose === "team" ? entryDraft.forStaffId : ""},
         businessId,
-      ));
+      ),
+      // Which lot it stands in, when the business has more than one.
+      ...(parkingLots.asks && entryLotId ? {parkingLotId: entryLotId} : {})});
+      if (parkingLots.asks && entryLotId) rememberParkingLot(businessId, entryLotId);
       const created = businessParkingEntryResult(response.data);
       setEntryResult(created);
       // Settling goes through the same callable the "payment received"
@@ -5968,6 +5992,9 @@ export function ParkingPanel({
         </div>
       )}
       {!parkedCars.loading && parkedCars.rows.length > 0 && (
+        <ParkingLotStrip lots={serverLots} selected={lotFilter} onSelect={setLotFilter} />
+      )}
+      {!parkedCars.loading && parkedCars.rows.length > 0 && (
         <div className="pk-scoreboard" role="group" aria-label="Parking totals">
           <div className="pk-stat"><span>In the lot</span><b>{parkingTotals.inLot}</b></div>
           {parkingTotals.reserved > 0 && (
@@ -6042,6 +6069,7 @@ export function ParkingPanel({
                     {vinPlacements.has(text(row.vinNumber, "").toUpperCase()) && (
                       <small className="ctn-placement">{vinPlacementText(vinPlacements.get(text(row.vinNumber, "").toUpperCase()), placementLang)}</small>
                     )}
+                    {parkingLots.lots.length >= 2 && <ParkingLotBadge name={parkingLotNameOf(row, businessId, parkingLots.lots)} />}
                     {voided && <VoidedNote row={row} nameFor={nameForStaff} />}
                   </span>
                   <span><b><span data-no-translate>{text(row.customerName ?? row.ownerName, "—")}</span><TeamTag label={parkingTeamLabel(row.forStaffId, teamIds)} /><CopyValue value={text(row.customerName ?? row.ownerName, "")} label="Copy name" /></b><small data-no-translate>{text(row.customerPhone, "")}</small><RecordPhoneFlags row={row} field="customerPhone" /></span>
@@ -6358,6 +6386,18 @@ export function ParkingPanel({
               {editingPaid && (
                 <p className="lst-hint">This car is paid. You can only correct the customer&apos;s name, phone and email.</p>
               )}
+              {draft.id && parkedCars.rows.some((row) => row.id === draft.id) && (
+                <MoveCarLot
+                  businessId={businessId}
+                  car={parkedCars.rows.find((row) => row.id === draft.id) as Record<string, unknown>}
+                  lots={parkingLots.lots}
+                  disabled={busy}
+                  onMoved={(moved) => {
+                    closeForm();
+                    setMessage(moved);
+                  }}
+                />
+              )}
               <div className="lst-form-grid">
                 <WhoseCarField
                   whose={draft.whose}
@@ -6504,6 +6544,15 @@ export function ParkingPanel({
               <div className="lst-modal-body">
                 {entryMessage && <div className="lst-form-error" role="alert">{entryMessage}</div>}
                 <div className="lst-form-grid">
+                  {parkingLots.asks && (
+                    <ParkingLotSelect
+                      lots={parkingLots.open}
+                      value={entryLotId}
+                      onChange={setEntryLotId}
+                      disabled={entryBusy}
+                      figures={serverLots}
+                    />
+                  )}
                   <WhoseCarField
                     whose={entryWhose}
                     staffId={entryDraft.forStaffId ?? ""}

@@ -273,6 +273,7 @@ const SITES: Site[] = [
   { file: B("operations-panels.tsx"), kind: "useBusinessCollection", what: "parking lotCustomers", shapes: [bc("lotCustomers", { pageSize: 300, orderBy: "lastSeenAt" })] },
   { file: B("operations-panels.tsx"), kind: "useBusinessCollection", what: "purchases", shapes: withStatus("purchaseStatus", (where) => bc("carPurchases", { where })) },
   { file: B("operations-panels.tsx"), kind: "useBusinessCollection", what: "activity types", shapes: [bc("lotActivityTypes", { pageSize: null })] },
+  { file: B("parking-lots.tsx"), kind: "useBusinessCollection", what: "parking lots", shapes: [bc("parkingLots", { pageSize: null })] },
   { file: B("operations-panels.tsx"), kind: "useBusinessCollection", what: "expense lines", shapes: [bc("lotExpenseLines", { pageSize: null })] },
   { file: B("operations-panels.tsx"), kind: "useBusinessCollection", what: "ledger lotCustomers", shapes: [bc("lotCustomers", { pageSize: 300, orderBy: "lastSeenAt" })] },
   {

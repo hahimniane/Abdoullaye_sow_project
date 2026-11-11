@@ -128,7 +128,8 @@ test("the parked car Void action calls updateBusinessParkingEntry with action vo
   // Struck through with the note, and at the end of the list.
   assert.match(panels, /<b>\{voided \? <s>\{vehicle\}<\/s> : vehicle\}/);
   assert.match(panels, /\{voided && <VoidedNote row=\{row\} nameFor=\{nameForStaff\} \/>\}/);
-  assert.match(panels, /return voidedLast\(inRange\.filter\(\(row\) => businessParkingMatchesFacets\(row, facets\)\)\);/);
+  // The lot filter (docs/PARKING_LOTS.md) narrows the same list.
+  assert.match(panels, /return voidedLast\(inRange\.filter\(\(row\) => businessParkingMatchesFacets\(row, facets\) &&\s*\(!lotFilter \|\| parkingLotIdOf\(row, businessId\) === lotFilter\)\)\);/);
   assert.match(panels, /\["voided", "Voided"\],/);
   // The refusal is said inside the modal, not behind it.
   assert.match(panels, /setVoidCarError\(error instanceof Error \? error\.message : "The car could not be voided\."\);/);

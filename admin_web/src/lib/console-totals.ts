@@ -4,6 +4,7 @@
 
 import type { LotLedgerTotals } from "./lot-ledger.ts";
 import type { ParkingOverdue, ParkingTotals } from "./business-parking-entry.ts";
+import type { ServerParkingLot } from "./parking-lots.ts";
 
 /** getParkingTotals().parking, and getLotLedgerTotals().parking. */
 export type ServerParkingSummary = {
@@ -15,6 +16,8 @@ export type ServerParkingSummary = {
   months: string[];
   year: number;
   complete: boolean;
+  /** The same figures lot by lot (docs/PARKING_LOTS.md); empty for a business with no lots. */
+  lots?: ServerParkingLot[];
 };
 
 /** getLotLedgerTotals() */

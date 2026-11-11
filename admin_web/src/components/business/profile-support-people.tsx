@@ -1,5 +1,6 @@
 "use client";
 
+import { ParkingLotsSettings } from "@/components/business/parking-lots";
 import {
   type ChangeEvent,
   type FormEvent,
@@ -714,6 +715,7 @@ export function BusinessServicesPanel({
   );
   const {busy, busyLabel, error, success, run} = useActionFeedback(runAction, toast);
   const sharedBarrelsEnabled = useSharedBarrelsEnabled();
+  const lotsEnabled = (business as Record<string, unknown> | null)?.parkingLotsEnabled === true;
   // Freight is retired (folded into Send a package): never offered as a
   // service. A business that already has it keeps it in `enabledServices`
   // (the draft starts from the stored list and only changes what is toggled).
@@ -1454,6 +1456,10 @@ export function BusinessServicesPanel({
                       />
                     </label>
                   )}
+                  {/* With lots set up, each lot carries its own spaces
+                      (docs/PARKING_LOTS.md): the two numbers here are then
+                      their sum, kept by the server, and are not typed. */}
+                  {lotsEnabled ? null : (<>
                   <label className="lst-field">
                     <span>Total parking spaces</span>
                     <input
@@ -1478,6 +1484,14 @@ export function BusinessServicesPanel({
                       value={draft.parkingBlockedSpaces}
                     />
                   </label>
+                  </>)}
+                  <div className="lst-field wide">
+                    <ParkingLotsSettings
+                      businessId={businessId}
+                      business={business as Record<string, unknown> | null}
+                      canEdit={canManage}
+                    />
+                  </div>
                   <label className="lst-field">
                     <span>Daily rate (USD)</span>
                     <input

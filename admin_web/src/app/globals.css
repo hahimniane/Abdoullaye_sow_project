@@ -17647,3 +17647,117 @@ html.bcard-embed-root .console-lang-toggle { display: none !important; }
   .bcard-sheet-root, .bcard-sheet-root * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
 /* ==== BUSINESS CARDS END ==== */
+
+/* Several parking lots (docs/PARKING_LOTS.md). */
+.pk-lots {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  margin: 12px 0 0;
+}
+
+.pk-lot {
+  background: var(--paper, #fff);
+  border: 1px solid var(--rule, #e5e7eb);
+  border-radius: 10px;
+  color: var(--ink);
+  cursor: pointer;
+  display: grid;
+  font: inherit;
+  gap: 4px;
+  padding: 12px 14px;
+  text-align: left;
+}
+
+.pk-lot:hover { border-color: var(--muted); }
+
+.pk-lot.on {
+  border-color: var(--brand, #0f766e);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand, #0f766e) 25%, transparent);
+}
+
+.pk-lot-name {
+  align-items: baseline;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.pk-lot-name strong { font-size: 15px; }
+
+.pk-lot-name em,
+.pk-lots-list li em {
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.pk-lot-fill { font-size: 13px; }
+.pk-lot-fill b { font-size: 18px; font-variant-numeric: tabular-nums; font-weight: 750; }
+
+.pk-lot-line {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.pk-lot-line b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.pk-lot-line b.owed { color: #b45309; }
+
+.pk-lot-badge {
+  align-items: center;
+  background: color-mix(in srgb, var(--brand, #0f766e) 10%, transparent);
+  border-radius: 999px;
+  color: var(--brand, #0f766e);
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 700;
+  gap: 3px;
+  margin-top: 3px;
+  padding: 1px 8px;
+  width: fit-content;
+}
+
+.pk-lot-move {
+  align-items: end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.pk-lot-move .lst-field { flex: 1 1 200px; }
+.pk-lot-move .lst-form-error { flex: 1 1 100%; margin: 0; }
+
+.pk-lots-settings > header {
+  align-items: start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.pk-lots-settings h4 { margin: 0 0 2px; }
+
+.pk-lots-list {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 10px 0;
+  padding: 0;
+}
+
+.pk-lots-list li {
+  align-items: center;
+  border: 1px solid var(--rule, #e5e7eb);
+  border-radius: 10px;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 10px 12px;
+}
+
+.pk-lots-list li.closed { opacity: .65; }
+.pk-lots-list li > div { display: grid; gap: 2px; }
+.pk-lots-list li strong + em { margin-left: 8px; }
+.pk-lots-list small { color: var(--muted); font-size: 12px; }
