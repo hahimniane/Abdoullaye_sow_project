@@ -86,6 +86,22 @@ test("the car catalog loads on demand", () => {
   assert.match(readFileSync("src/lib/vin-lookup.ts", "utf8"), /await loadCarCatalog\(\);\s*return matchDecodedVehicle/);
 });
 
+// One file holds several panels, and each mounts on its own: a panel that
+// renders the make list without loading the catalog shows empty dropdowns
+// unless another car screen happened to load it first. (Record activity on
+// the lot ledger did exactly that: a VIN found the car, yet the form still
+// read "Select a make" - sometimes.)
+test("every panel that renders the make list loads the catalog itself", () => {
+  const panels = readFileSync("src/components/business/operations-panels.tsx", "utf8")
+    .split(/^(?=(?:export )?function [A-Z])/m);
+  const withPicker = panels.filter((panel) => panel.includes("getMakes()"));
+  assert.ok(withPicker.length >= 3, "expected the listings, parking and lot ledger panels");
+  for (const panel of withPicker) {
+    const name = /function ([A-Za-z0-9]+)/.exec(panel)?.[1] ?? "?";
+    assert.match(panel, /useCarCatalog\(\)/, `${name} renders car pickers without loading the catalog`);
+  }
+});
+
 // Same trap one level down: the guest entry renders one service panel, chosen
 // before render, but a static import shipped all of them. Shipping is the
 // exception - it is what most links point at, so it stays eager.

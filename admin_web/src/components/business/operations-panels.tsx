@@ -7912,6 +7912,10 @@ function lotRangeLabel(start: string, end: string): string {
 const LOT_TAG_TINTS = ["#0d9488", "#f59e0b", "#6366f1", "#db2777", "#0891b2"];
 
 export function LotLedgerPanel({ businessId, business, previewMode = false, focusRecordId = "" }: PanelProps) {
+  // Loads the make/model/year catalog on demand; re-renders when it is in.
+  // Without it the activity form's car dropdowns are empty, so a VIN that
+  // finds the car still shows "Select a make".
+  useCarCatalog();
   const enabled = Boolean(businessId && !previewMode);
   // What the lot charges for and what it spends on: short lists, read whole.
   const activityTypes = useBusinessCollection("lotActivityTypes", businessId, enabled, { pageSize: null });
