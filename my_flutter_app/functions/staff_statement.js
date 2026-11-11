@@ -192,6 +192,46 @@ function staffHeldAsOf(input) {
   return out;
 }
 
+/**
+ * The cash a month's statement still asks a person for: what they held at
+ * the end of the month (staffHeldAsOf), less every handover they have GIVEN
+ * since, confirmed - never below zero.
+ *
+ * A statement is drawn after its month ends, so the cash on it can only be
+ * handed over later. Counting a handover in the month of its date alone left
+ * a paid October statement asking for the same cash for ever (Keren Auto
+ * Sales, 2026-11-11: $3,580 handed over on Nov 8 for the October statement,
+ * which still read "owes $3,508"). Money handed over pays the oldest cash
+ * first; what a handover gives beyond a month's cash is already counted in
+ * the months after it, whose own end-of-month figure has the handover in it.
+ *
+ * Only cash owed TO the business is reduced: a person the business owes at
+ * the month's end (a negative figure) keeps it. Money they RECEIVED after
+ * the month is not that month's.
+ *
+ * @param {object} input As staffHeldAsOf: `{sources, counted, handovers,
+ *   asOfMs, now}`.
+ * @return {object} `{[staffId]: cents}` (signed), for everyone
+ *   staffHeldAsOf names.
+ */
+function staffStatementHeld(input) {
+  const asOfMs = Number(input?.asOfMs) || 0;
+  const held = staffHeldAsOf(input);
+  const givenSince = {};
+  for (const h of objects(input?.handovers)) {
+    if (text(h.status, 20) !== HANDOVER_STATUS.CONFIRMED) continue;
+    const from = text(h.fromStaffId, 128);
+    const amount = Math.round(Number(h.amountCents)) || 0;
+    if (!from || amount <= 0 || !(handoverMs(h) > asOfMs)) continue;
+    givenSince[from] = (givenSince[from] || 0) + amount;
+  }
+  const out = {};
+  for (const [id, cents] of Object.entries(held)) {
+    out[id] = cents > 0 ? Math.max(0, cents - (givenSince[id] || 0)) : cents;
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // The statements
 // ---------------------------------------------------------------------------
@@ -343,5 +383,6 @@ module.exports = {
   monthEndMs,
   receiptTimes,
   staffHeldAsOf,
+  staffStatementHeld,
   staffStatements,
 };

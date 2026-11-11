@@ -32519,7 +32519,7 @@ abstract class AppLocalizations {
   /// Under 'Cash held for the business' on a statement.
   ///
   /// In en, this message translates to:
-  /// **'Money they took in for the business and still hold, as of the end of the month'**
+  /// **'Money they took in for the business by the end of the month and have not handed over since'**
   String get pmeCashHeldNote;
 
   /// Shown while the cash team members hold is being loaded.

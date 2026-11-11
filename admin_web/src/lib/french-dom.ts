@@ -7887,8 +7887,8 @@ Object.assign(TEXT_TRANSLATIONS, {
   "expenses": "dépenses",
   "cash held": "argent détenu",
   "Cash held for the business": "Argent détenu pour l’entreprise",
-  "money they took in for the business and still hold, as of the end of the month":
-    "argent qu’ils ont encaissé pour l’entreprise et qu’ils détiennent encore, à la fin du mois",
+  "money they took in for the business by the end of the month and have not handed over since":
+    "argent qu’ils ont encaissé pour l’entreprise avant la fin du mois et qu’ils n’ont pas remis depuis",
   "Included in the statement of": "Inclus dans le relevé de",
   "Checking the cash team members hold…": "Vérification de l’argent détenu par les membres de l’équipe…",
   "The cash team members hold could not be checked, so their bills show without it.":

@@ -88,7 +88,7 @@ export type StatementContext = {
   repayments?: readonly Row[] | null;
   lines?: readonly Row[] | null;
   staffNames?: Record<string, string> | null;
-  /** `{[staffId]: cash held at the month's end, cents}`. */
+  /** `{[staffId]: the month's cash not handed over yet, cents}` (held at its end, less handovers since). */
   held?: Record<string, number> | null;
 };
 

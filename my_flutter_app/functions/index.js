@@ -20689,10 +20689,11 @@ async function staffBalancesAnswer(uid, data) {
 }
 
 /**
- * The cash each person held for the business at the END of a month (New York
- * time): what they had collected by then, less the handovers confirmed by
- * then (docs/PARKING_INVOICES.md section 6). Reads every ledger that names a
- * receiver, as staffBalancesAnswer does, and works it out with
+ * The cash a month's statement still asks each person for: what they held
+ * for the business at the END of the month (New York time) - collected by
+ * then, less the handovers confirmed by then - less what they have handed
+ * over since (docs/PARKING_INVOICES.md section 6). Reads every ledger that
+ * names a receiver, as staffBalancesAnswer does, and works it out with
  * staff_statement.js.
  *
  * @param {object} db Firestore.
@@ -20716,7 +20717,10 @@ async function staffHeldAtMonthEnd(db, business, businessId, monthKey) {
   parkedCars.splice(0, parkedCars.length,
       ...parkedCars.map(markLegacyUndonePayments));
   const asOfMs = staffStatement.monthEndMs(monthKey);
-  const held = staffStatement.staffHeldAsOf({
+  // What the month's statement still asks for: the cash held at its end,
+  // less what the person has handed over since (a statement is paid after
+  // its month ends).
+  const held = staffStatement.staffStatementHeld({
     asOfMs,
     now: new Date(),
     sources: {parkedCars, lotActivities, lotActivityPayments,

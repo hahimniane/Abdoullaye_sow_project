@@ -643,14 +643,15 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
                     <span aria-hidden="true"></span>
                   </li>
                 );
-                // A team member's statement: the cash they hold for the
-                // business at the end of the month, then what they owe.
+                // A team member's statement: the month's cash they have
+                // not handed over (held at its end, less what they handed
+                // over since), then what they owe.
                 const cashHeld = customer.cashHeldCents ?? 0;
                 const cashRow = customer.statementOwesCents !== undefined && cashHeld !== 0 && (
                   <li key="cash-held" className="pk-month-expense">
                     <span className="pk-month-car">
                       <strong>Cash held for the business</strong>
-                      <small>money they took in for the business and still hold, as of the end of the month</small>
+                      <small>money they took in for the business by the end of the month and have not handed over since</small>
                     </span>
                     <span className="pk-month-period"></span>
                     <span className="pk-month-calc"></span>

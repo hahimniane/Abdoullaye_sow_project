@@ -19578,7 +19578,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get pmeCashHeldNote =>
-      'Argent qu’ils ont encaissé pour l’entreprise et qu’ils détiennent encore, à la fin du mois';
+      'Argent qu’ils ont encaissé pour l’entreprise avant la fin du mois et qu’ils n’ont pas remis depuis';
 
   @override
   String get pmeCashHeldLoading =>

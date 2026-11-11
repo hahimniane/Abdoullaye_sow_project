@@ -11193,7 +11193,7 @@
   "@pmeCashHeldTitle": {
     "description": "A line on a team member's statement: money they took in for the business and still hold."
   },
-  "pmeCashHeldNote": "Money they took in for the business and still hold, as of the end of the month",
+  "pmeCashHeldNote": "Money they took in for the business by the end of the month and have not handed over since",
   "@pmeCashHeldNote": {
     "description": "Under 'Cash held for the business' on a statement."
   },

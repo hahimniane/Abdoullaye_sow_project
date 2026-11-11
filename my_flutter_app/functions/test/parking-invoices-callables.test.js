@@ -1045,8 +1045,11 @@ describe("team members get a statement", () => {
     "Invoice INV-202610-0099-1.pdf");
   });
 
-  it("is not changed by money handed over after the month ended, but is " +
-      "by a handover confirmed before it", async () => {
+  // Keren Auto Sales, 2026-11-11: a statement is drawn after its month
+  // ends, so its cash can only be handed over later. A handover since then
+  // settles the statement's cash, exactly as one before the month's end.
+  it("stops asking for the cash once it is handed over, after the month " +
+      "ended or before it", async () => {
     await turnOn();
     await seedMember();
     const handover = (id, at) => db.collection("staffHandovers").doc(id).set({
@@ -1054,8 +1057,11 @@ describe("team members get a statement", () => {
       toId: "business_account", amountCents: 3600, method: "cash",
       status: "confirmed", createdAt: Timestamp.fromDate(new Date(at)),
       confirmedAt: Timestamp.fromDate(new Date(at))});
-    await handover("late", "2026-11-02T15:00:00Z");
     assert.equal((await preview()).recipients[0].totalDueCents, 122700);
+    await handover("late", "2026-11-02T15:00:00Z");
+    assert.equal((await preview()).recipients[0].totalDueCents, 119100);
+    // Never below what the parking alone comes to: a second handover, this
+    // one before the month ended, takes nothing more off.
     await handover("early", "2026-10-20T15:00:00Z");
     assert.equal((await preview()).recipients[0].totalDueCents, 119100);
   });

@@ -102,6 +102,73 @@ describe("cash held as of the end of a month", () => {
     }
   });
 
+  // Keren Auto Sales, 2026-11-11: a team member handed $3,580 to the owner
+  // on Nov 8 for his October statement, and October still read "owes
+  // $3,508". A statement is drawn after its month ends, so its cash can
+  // only be handed over later: what the statement still asks for is the
+  // cash held at the month's end less what was handed over since.
+  it("a statement stops asking for cash that was handed over since", () => {
+    const sources = {parkedCars: [car("c1", [
+      pay("abd", 350800, "2026-10-15T16:00:00Z"),
+      pay("yao", 10000, "2026-10-16T16:00:00Z"),
+      pay("abd", 16600, "2026-11-03T16:00:00Z")])]};
+    const give = (id, amountCents, at, status = "confirmed", extra = {}) =>
+      ({id, kind: "handover", fromStaffId: "abd", toId: "yao", amountCents,
+        status, confirmedAtMs: Date.parse(at), createdAtMs: Date.parse(at),
+        ...extra});
+    const asked = (handovers) => statement.staffStatementHeld({sources,
+      handovers, asOfMs: END, now: NOW});
+    // Nothing handed over: exactly the cash held at the month's end.
+    assert.deepEqual(asked([]), {abd: 350800, yao: 10000});
+    assert.deepEqual(asked([]), held(sources));
+    // Handed over on Nov 8, more than October's cash: October is settled,
+    // never negative. The receiver's October is not touched by money he
+    // received after it.
+    const nov8 = give("h1", 358000, "2026-11-08T20:45:00Z");
+    assert.deepEqual(asked([nov8]), {abd: 0, yao: 10000});
+    // The month-end figure itself is unchanged: this is a second reading.
+    assert.deepEqual(held(sources, [nov8]), {abd: 350800, yao: 10000});
+    // Part of it handed over: the rest is still asked for.
+    assert.deepEqual(asked([give("h2", 100000, "2026-11-08T20:45:00Z")]),
+        {abd: 250800, yao: 10000});
+    // Two handovers since add up.
+    assert.deepEqual(asked([give("h3", 100000, "2026-11-05T15:00:00Z"),
+      give("h4", 50800, "2026-11-06T15:00:00Z")]),
+    {abd: 200000, yao: 10000});
+    // Only a confirmed handover counts: the voided $3,600 and a pending
+    // or declined one change nothing.
+    for (const status of ["pending", "declined", "voided"]) {
+      assert.deepEqual(asked([give("h5", 360000, "2026-11-08T18:38:00Z",
+          status)]), {abd: 350800, yao: 10000}, status);
+    }
+    // One confirmed before the month ended is already in the month-end
+    // figure (the receiver held it by then), and is not taken off twice.
+    assert.deepEqual(asked([give("h6", 100000, "2026-10-20T15:00:00Z")]),
+        {abd: 250800, yao: 110000});
+    // The month after it: the handover is inside November's own figure, so
+    // the $72 beyond October's cash comes off November's cash, once.
+    const november = statement.staffStatementHeld({sources,
+      handovers: [nov8], asOfMs: statement.monthEndMs("2026-11"),
+      now: new Date("2026-12-02T15:00:00Z")});
+    assert.equal(november.abd, 350800 + 16600 - 358000);
+  });
+
+  it("a person the business owes at the month's end keeps that figure",
+      () => {
+        // An opening amount put the person below zero at the month's end; a
+        // later handover from them must not push it further.
+        const out = statement.staffStatementHeld({
+          sources: {parkedCars: []}, asOfMs: END, now: NOW, handovers: [
+            {id: "o", kind: "handover", fromStaffId: "alh", toId: "yao",
+              amountCents: 5000, status: "confirmed",
+              confirmedAtMs: Date.parse("2026-10-10T15:00:00Z")},
+            {id: "later", kind: "handover", fromStaffId: "alh", toId: "yao",
+              amountCents: 2000, status: "confirmed",
+              confirmedAtMs: Date.parse("2026-11-05T15:00:00Z")}]});
+        assert.equal(out.alh, -5000);
+        assert.equal(out.yao, 5000);
+      });
+
   it("an opening amount, and money handed from person to person, count " +
       "from the moment they were confirmed", () => {
     const sources = {parkedCars: [car("c1", [

@@ -232,7 +232,7 @@ test("every new string reads in French", () => {
     "Statement", "Owes the business", "The business owes them", "Settled", "parking and jobs", "expenses", "cash held",
     "Cash held for the business", "Included in the statement of", "Checking the cash team members hold…",
     "The cash team members hold could not be checked, so their bills show without it.",
-    "money they took in for the business and still hold, as of the end of the month",
+    "money they took in for the business by the end of the month and have not handed over since",
     "Not sent: no number to reach", "no phone number", "number needs a country code", "same number as another recipient",
   ]) {
     assert.notEqual(translateValue(english, "fr"), english, `no French for "${english}"`);

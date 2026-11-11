@@ -217,6 +217,15 @@ team cars even when the business has no links yet. New action on
 refusal `statement_month_invalid`. The month-end push still counts what
 customers owe after expenses (no cash).
 
+**Cash a statement asks for (2026-11-11).** `held` is what the person held
+at the month's end LESS every confirmed handover they have given since,
+never below zero (`staff_statement.staffStatementHeld`). A statement is
+drawn after its month ends, so its cash can only be handed over later;
+counting a handover in the month of its date alone left a paid October
+statement reading "owes" for ever (Keren Auto Sales: $3,580 handed over on
+Nov 8, October still showed $3,508). A person the business owes keeps that
+figure. Staff balances itself is unchanged.
+
 **Console / app.** Month end loads the cash once the month's bills are in;
 until it arrives (or if it fails) team members show as before, with a note.
 The card shows "Owes the business $X" with "parking and jobs - expenses +
