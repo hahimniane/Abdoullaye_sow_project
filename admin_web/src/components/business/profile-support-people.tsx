@@ -1,5 +1,6 @@
 "use client";
 
+import { FULL_ACCESS_EXPLAINED, fullAccessRequest, hasFullAccess } from "@/lib/full-access";
 import { ParkingLotsSettings } from "@/components/business/parking-lots";
 import {
   type ChangeEvent,
@@ -29,6 +30,7 @@ import {
   RefreshCw,
   Save,
   Send,
+  ShieldCheck,
   Ship,
   Trash2,
   Truck,
@@ -185,6 +187,9 @@ export type BusinessPeoplePanelProps = {
   /** Owner or platform admin: may link each person to their parking bill
    * (docs/STAFF_EXPENSE_CREDIT.md §1.2). */
   canLinkParking?: boolean;
+  /** The business's real owner (or a super admin): may switch Full access
+   * on a staff member (docs/STAFF_FULL_ACCESS.md). */
+  canGrantFullAccess?: boolean;
   runAction?: ActionRunner;
   toast?: ToastCallback;
 };
@@ -2680,6 +2685,7 @@ export function BusinessPeoplePanel({
   error: rowsError = "",
   canManageStaff = true,
   canLinkParking = false,
+  canGrantFullAccess = false,
   runAction,
   toast,
 }: BusinessPeoplePanelProps) {
@@ -2830,6 +2836,24 @@ export function BusinessPeoplePanel({
     );
   }
 
+  async function saveFullAccess(row: FirestoreRow, on: boolean) {
+    const name = text(row.fullName ?? row.email, row.id);
+    await run(
+      on ? "Full access given" : "Full access removed",
+      async () => {
+        await httpsCallable(functions, "updateBusinessStaffPermissions")(
+          fullAccessRequest(businessId, row.id, rowPermissions(row), on));
+      },
+      on ? {
+        confirm: `Give ${name} full access? They can then do everything you can here, including settings, prices and staff. Transferring the business and its Stripe and bank stay yours.`,
+        confirmFr: `Donner l’accès complet à ${name} ? Cette personne pourra tout faire comme vous ici, y compris les réglages, les prix et l’équipe. Le transfert de l’entreprise, Stripe et la banque restent à vous.`,
+      } : {
+        confirm: `Remove full access from ${name}? They keep only the permissions ticked below.`,
+        confirmFr: `Retirer l’accès complet à ${name} ? Cette personne garde seulement les autorisations cochées ci-dessous.`,
+      },
+    );
+  }
+
   async function saveInventoryAccess(row: FirestoreRow, access: StaffStoreAccess) {
     await run(
       "Store access saved",
@@ -2928,6 +2952,8 @@ export function BusinessPeoplePanel({
             row={row}
             saving={busy}
             savePermissions={saveStaffPermissions}
+            canGrantFullAccess={canGrantFullAccess}
+            saveFullAccess={saveFullAccess}
             setPermissions={(permissions) => { row.businessPermissions = permissions; }}
             inventoryStores={storeAccessStores}
             saveInventoryAccess={saveInventoryAccess}
@@ -3219,10 +3245,14 @@ function StaffRow({
   canLinkParking = false,
   onLinkParking,
   onUnlinkParking,
+  canGrantFullAccess = false,
+  saveFullAccess,
 }: {
   row: FirestoreRow;
   business?: FirestoreRow | null;
   canManageStaff: boolean;
+  canGrantFullAccess?: boolean;
+  saveFullAccess?: (row: FirestoreRow, on: boolean) => Promise<void>;
   saving: boolean;
   setPermissions: (permissions: string[]) => void;
   savePermissions: (row: FirestoreRow) => Promise<void>;
@@ -3268,8 +3298,23 @@ function StaffRow({
             </span>
           ) : null}
         </div>
-        <span className={`lst-badge ${isOwner ? "navy" : "ok"}`}>{isOwner ? "Owner" : "Staff"}</span>
+        <span className={`lst-badge ${isOwner || hasFullAccess(row) ? "navy" : "ok"}`}>{isOwner ? "Owner" : hasFullAccess(row) ? "Full access" : "Staff"}</span>
       </div>
+      {role === "staff" && (canGrantFullAccess || hasFullAccess(row)) && (
+        <div className="pur-full-access">
+          <p className="lst-hint">{FULL_ACCESS_EXPLAINED}</p>
+          {canGrantFullAccess && saveFullAccess && (
+            <button
+              className={hasFullAccess(row) ? "lst-btn ghost" : "lst-btn"}
+              type="button"
+              disabled={saving}
+              onClick={() => void saveFullAccess(row, !hasFullAccess(row))}
+            >
+              <ShieldCheck size={14} /> {hasFullAccess(row) ? "Remove full access" : "Give full access"}
+            </button>
+          )}
+        </div>
+      )}
       {role === "staff" ? (
         <>
           <div className="lst-form-section" style={{ marginTop: 0 }}>Can manage</div>

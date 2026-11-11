@@ -256,6 +256,7 @@ const parkingInvoices = require("./parking_invoices");
 const parkingBillPayment = require("./parking_bill_payment");
 const parkingTeam = require("./parking_team");
 const parkingLots = require("./parking_lots");
+const staffFullAccess = require("./staff_full_access");
 const parkingInvoicePdf = require("./parking_invoice_pdf");
 const {parkingBalanceNow} = require("./parking_month_statement");
 const {
@@ -1999,14 +2000,17 @@ function accountAccessBlocked(user) {
 }
 
 async function getUserProfile(uid) {
-  const user = await getStoredUserProfile(uid);
-  if (accountAccessBlocked(user)) {
+  const stored = await getStoredUserProfile(uid);
+  if (accountAccessBlocked(stored)) {
     throw userManagementError(
         "permission-denied",
         "account-access-blocked",
         "This account cannot access the platform",
     );
   }
+  // A full-access staff member acts as their business's owner in every
+  // check (docs/STAFF_FULL_ACCESS.md); `storedRole` keeps "staff".
+  const user = staffFullAccess.effectiveUser(stored);
   if (user.role === "admin") {
     const authUser = await admin.auth().getUser(uid);
     if (authUser.emailVerified !== true) {
@@ -30804,6 +30808,8 @@ exports.updateBusinessStaffPermissions = onCall(
       const permissions = normalizeBusinessPermissions(
           request.data?.businessPermissions,
       );
+      // Full access (docs/STAFF_FULL_ACCESS.md): left out, it is unchanged.
+      const fullAccessAsked = typeof request.data?.fullAccess === "boolean";
 
       if (!businessId || !staffUid) {
         throw new HttpsError(
@@ -30833,13 +30839,44 @@ exports.updateBusinessStaffPermissions = onCall(
             "This user is not staff for the selected business",
         );
       }
+      const fullAccess = fullAccessAsked ? request.data.fullAccess : null;
+      const fullAccessChanged = fullAccessAsked &&
+        fullAccess !== (staff.fullAccess === true);
+      if (fullAccessChanged) {
+        const refusal = staffFullAccess.fullAccessGrantRefusal({
+          caller: callerUser,
+          superAdmin: platformAdminRole(callerUser) === "superAdmin",
+          businessId,
+          staff,
+        });
+        if (refusal) {
+          throw new HttpsError("permission-denied",
+              staffFullAccess.FULL_ACCESS_MESSAGES[refusal], {reason: refusal});
+        }
+      }
 
       const batch = db.batch();
       batch.set(staffRef, {
         businessPermissions: permissions,
+        ...(fullAccessChanged ? {
+          fullAccess,
+          fullAccessChangedAt: FirestoreFieldValue.serverTimestamp(),
+          fullAccessChangedBy: callerUid,
+        } : {}),
         updatedAt: FirestoreFieldValue.serverTimestamp(),
         updatedBy: callerUid,
       }, {merge: true});
+      if (fullAccessChanged) {
+        setAdminAuditLog(batch, {
+          action: fullAccess ? "business_staff_full_access_granted" :
+            "business_staff_full_access_removed",
+          actorUid: callerUid,
+          targetCollection: "users",
+          targetId: staffUid,
+          targetLabel: staff.email || staff.fullName || staffUid,
+          nextValue: fullAccess ? "full_access" : "",
+        });
+      }
       setAdminAuditLog(batch, {
         action: "business_staff_permissions_updated",
         actorUid: callerUid,
@@ -30854,6 +30891,7 @@ exports.updateBusinessStaffPermissions = onCall(
         success: true,
         staffUid,
         businessPermissions: permissions,
+        fullAccess: fullAccessChanged ? fullAccess : staff.fullAccess === true,
       };
     },
 );
@@ -31043,6 +31081,9 @@ function userDirectoryDto(userRecord, profileSnapshot = null) {
     businessName: hasProfile ? projection.businessName : "",
     businessPermissions: hasProfile ?
       projection.businessPermissions : [],
+    // Full access (docs/STAFF_FULL_ACCESS.md), for the super admin's switch.
+    fullAccess: hasProfile && profile.role === "staff" &&
+      profile.fullAccess === true,
     accountStatus: hasProfile ? projection.accountStatus : "profile_missing",
     disabled: hasAuth ? userRecord.disabled === true : null,
     emailVerified: hasAuth ? userRecord.emailVerified === true : null,
@@ -32726,6 +32767,8 @@ function nonBusinessAuthorityCleanup() {
     businessPermissions: FirestoreFieldValue.delete(),
     inventoryHomeStoreId: FirestoreFieldValue.delete(),
     inventoryAllStores: FirestoreFieldValue.delete(),
+    // Full access belongs to a staff membership and goes with it.
+    fullAccess: FirestoreFieldValue.delete(),
     ...phoneInviteCleanup(),
   };
 }

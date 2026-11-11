@@ -140,6 +140,9 @@ function bankRoleOf(input) {
   const ofBusiness = Boolean(input.businessId) &&
     user.businessId === input.businessId;
   if (!ofBusiness) return "none";
+  // A full-access staff member acts as the owner everywhere but here:
+  // the bank stays the real owner's (docs/STAFF_FULL_ACCESS.md).
+  if (user.fullAccess === true) return "staff";
   if (user.role === "businessOwner") return "owner";
   if (input.uid && input.business &&
       String(input.business.ownerUid || "") === input.uid) {

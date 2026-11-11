@@ -238,6 +238,15 @@ async function seedFirestore() {
         businessId: "biz_b",
         businessName: "Business B",
       },
+      // Full access (docs/STAFF_FULL_ACCESS.md): a staff member of biz_a
+      // trusted with what the owner reads.
+      "users/full-access-a": {
+        role: "staff",
+        businessId: "biz_a",
+        businessName: "Business A",
+        businessPermissions: [],
+        fullAccess: true,
+      },
       "users/owner-doconly": {
         role: "businessOwner",
         businessId: "legacy_business_id",
@@ -1204,6 +1213,8 @@ describe("business dashboard Firestore rules", () => {
           await assertSucceeds(getDoc(doc(firestoreFor("finance-admin"),
               path)));
           await assertSucceeds(getDoc(doc(firestoreFor("super-admin"), path)));
+          await assertSucceeds(getDoc(doc(firestoreFor("full-access-a"),
+              path)));
           // Another business's owner, staff without the owner's role, a
           // non-finance admin and a stranger see nothing.
           await assertFails(getDoc(doc(firestoreFor("owner-b"), path)));
@@ -4862,5 +4873,21 @@ describe("parking invoice rules", () => {
           Buffer.from("%PDF-1.4 x"), {contentType: "application/pdf"}));
       await assertFails(storage.ref(path).delete());
     }
+  });
+});
+
+// Full access (docs/STAFF_FULL_ACCESS.md) is the server's to give: a staff
+// member can never set it on their own profile.
+describe("full access stays out of a user's own reach", () => {
+  it("no user writes fullAccess on their profile", async () => {
+    const {doc, updateDoc} = require("firebase/firestore");
+    // (Writing the value a profile already holds changes nothing, so the
+    // full-access member is only tested switching it off.)
+    for (const uid of ["staff-listings-a", "owner-a"]) {
+      await assertFails(updateDoc(doc(firestoreFor(uid), `users/${uid}`),
+          {fullAccess: true}));
+    }
+    await assertFails(updateDoc(doc(firestoreFor("full-access-a"),
+        "users/full-access-a"), {fullAccess: false}));
   });
 });

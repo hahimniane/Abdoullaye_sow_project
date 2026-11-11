@@ -1,5 +1,6 @@
 "use client";
 
+import { isRealOwner } from "@/lib/full-access";
 import { useConsoleDocumentTitle } from "@/lib/document-title";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -746,7 +747,7 @@ export function BusinessConsole({
               <UserText value={text(profile.fullName ?? firebaseUser.email, "")} fallback="Business user" />
             </span>
             <span className="admin-role-tag">
-              {profile.role === "businessOwner" ? "Owner" : "Staff"}
+              {profile.storedRole === "staff" ? "Full access" : profile.role === "businessOwner" ? "Owner" : "Staff"}
             </span>
           </div>
           <NotificationBell
@@ -1104,6 +1105,7 @@ export function BusinessConsole({
               error={staff.error}
               canManageStaff={profile.role === "businessOwner"}
               canLinkParking={profile.role === "businessOwner" || profile.role === "admin"}
+              canGrantFullAccess={isRealOwner(profile, businessId)}
             />
           )}
           {activeTab === "cards" && (

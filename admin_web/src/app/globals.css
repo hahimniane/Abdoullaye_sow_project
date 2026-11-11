@@ -17761,3 +17761,14 @@ html.bcard-embed-root .console-lang-toggle { display: none !important; }
 .pk-lots-list li > div { display: grid; gap: 2px; }
 .pk-lots-list li strong + em { margin-left: 8px; }
 .pk-lots-list small { color: var(--muted); font-size: 12px; }
+
+/* Full access staff (docs/STAFF_FULL_ACCESS.md). */
+.pur-full-access {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin: 6px 0 10px;
+}
+
+.pur-full-access .lst-hint { flex: 1 1 260px; margin: 0; }

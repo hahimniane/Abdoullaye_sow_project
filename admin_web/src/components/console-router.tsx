@@ -1,5 +1,6 @@
 "use client";
 
+import { effectiveProfile } from "@/lib/full-access";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import {
@@ -382,7 +383,9 @@ export function ConsoleRouter() {
           return;
         }
         setProfileMissing(false);
-        setProfile({id: snap.id, ...snap.data()} as UserProfile);
+        // A full-access staff member sees the owner's screens
+        // (docs/STAFF_FULL_ACCESS.md); the server checks the same way.
+        setProfile(effectiveProfile({id: snap.id, ...snap.data()}) as UserProfile);
         // The access the session opened with, for noticing its removal.
         let lastLive: UserProfile | null = {id: snap.id, ...snap.data()} as UserProfile;
         let cutting = false;
@@ -417,7 +420,7 @@ export function ConsoleRouter() {
               return;
             }
             const next = {id: live.id, ...live.data()} as UserProfile;
-            setProfile(next);
+            setProfile(effectiveProfile(next) as UserProfile);
             cutIfAccessLost(next);
           },
           // Losing read access (e.g. right after sign-out) just ends the

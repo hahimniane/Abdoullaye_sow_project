@@ -26,6 +26,13 @@ service cloud.firestore {
       return userProfile(userId).role;
     }
 
+    // A full-access staff member (docs/STAFF_FULL_ACCESS.md) reads what
+    // their business's owner reads. Only the server writes `fullAccess`.
+    function hasFullAccess(userId) {
+      return userRole(userId) == 'staff' &&
+        userProfile(userId).get('fullAccess', false) == true;
+    }
+
     function userBusinessId(userId) {
       return userProfile(userId).businessId;
     }
@@ -188,6 +195,7 @@ service cloud.firestore {
                userBusinessId(userId) == businessId &&
                (
                  userRole(userId) == 'businessOwner' ||
+                 hasFullAccess(userId) ||
                  (
                    userRole(userId) == 'staff' &&
                    userProfile(userId).get('businessPermissions', []) is list &&
@@ -865,7 +873,8 @@ service cloud.firestore {
          hasAdminSectionAccess(request.auth.uid, 'finance') ||
          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
           userAccessAllowed(request.auth.uid) &&
-          userRole(request.auth.uid) == 'businessOwner' &&
+          (userRole(request.auth.uid) == 'businessOwner' ||
+           hasFullAccess(request.auth.uid)) &&
           userBusinessId(request.auth.uid) == businessId));
     }
     match /payNowLedger/{rowId} {
@@ -966,6 +975,7 @@ service cloud.firestore {
     function inventoryAllStores(userId) {
       return isAdmin(userId) ||
         userRole(userId) == 'businessOwner' ||
+        hasFullAccess(userId) ||
         userProfile(userId).get('inventoryAllStores', false) == true;
     }
     function inventoryStoreRead(businessId, storeId) {

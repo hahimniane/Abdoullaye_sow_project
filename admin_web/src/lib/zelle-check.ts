@@ -297,6 +297,9 @@ export function bankAccountText(status: Pick<BankStatus, "institutionName" | "ac
 }
 
 /** Who manages the bank in the business console: the owner (a platform admin works from the admin console). */
-export function canManageBank(profile: { role?: unknown; businessId?: unknown } | null | undefined, businessId: string): boolean {
+export function canManageBank(profile: { role?: unknown; businessId?: unknown; storedRole?: unknown; fullAccess?: unknown } | null | undefined, businessId: string): boolean {
+  // A full-access staff member (docs/STAFF_FULL_ACCESS.md) acts as the owner
+  // everywhere but the bank, like the server's bankRoleOf.
+  if (profile?.fullAccess === true || profile?.storedRole === "staff") return false;
   return Boolean(profile && profile.role === "businessOwner" && profile.businessId === businessId && businessId);
 }

@@ -101,6 +101,8 @@ test("the owner's status view and the window choices", () => {
   assert.deepEqual(windowOptions(7), [2, 5, 7, 10, 15, 20, 30, 45, 60]);
   assert.equal(canManageBank({ role: "businessOwner", businessId: "b" }, "b"), true);
   assert.equal(canManageBank({ role: "staff", businessId: "b" }, "b"), false);
+  // Full access is everything but the bank (docs/STAFF_FULL_ACCESS.md).
+  assert.equal(canManageBank({ role: "businessOwner", storedRole: "staff", fullAccess: true, businessId: "b" }, "b"), false);
   assert.equal(canManageBank({ role: "businessOwner", businessId: "other" }, "b"), false);
 });
 

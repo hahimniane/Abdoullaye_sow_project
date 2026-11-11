@@ -299,3 +299,61 @@ describe("the numbers lot by lot", () => {
         assert.match(told["Lot 2"].month.key, /^\d{4}-\d{2}$/);
       });
 });
+
+// Full access (docs/STAFF_FULL_ACCESS.md): the owner trusts a staff member
+// with what the owner does - here, the lots - and only the owner can.
+describe("full access", () => {
+  const grant = (uid, staffUid, fullAccess) =>
+    run("updateBusinessStaffPermissions", uid, {businessId: BIZ, staffUid,
+      businessPermissions: ["parking"], fullAccess});
+  const user = async (uid) => (await db.collection("users").doc(uid).get())
+      .data();
+  const refusedGrant = (error) =>
+    error.details?.reason === "full_access_owner_only";
+
+  it("the owner gives it, and the staff member then manages the lots",
+      async () => {
+        await assert.rejects(lotAction(STAFF, "lot_save",
+            {lot: {name: "Lot 9", totalSpaces: 1}}),
+        (error) => error.code === "permission-denied");
+        const answer = await grant(OWNER, STAFF, true);
+        assert.equal(answer.fullAccess, true);
+        const stored = await user(STAFF);
+        assert.equal(stored.fullAccess, true);
+        assert.equal(stored.role, "staff", "the stored role never changes");
+        assert.equal(stored.fullAccessChangedBy, OWNER);
+        const made = await lotAction(STAFF, "lot_save",
+            {lot: {name: "Lot 9", totalSpaces: 1}});
+        assert.equal(made.created, true);
+        // Closing it again, as the owner would.
+        await lotAction(STAFF, "lot_save", {lotId: made.lotId,
+          lot: {name: "Lot 9", totalSpaces: 1, active: false}});
+      });
+
+  it("nobody but the owner gives it: not the full-access member, not staff",
+      async () => {
+        // The full-access member cannot pass it on...
+        await assert.rejects(grant(STAFF, PACKAGES_ONLY, true), refusedGrant);
+        // ...nor take their own away or touch it at all.
+        await assert.rejects(grant(STAFF, STAFF, false), refusedGrant);
+        // Ordinary staff cannot change staff at all.
+        await assert.rejects(grant(PACKAGES_ONLY, STAFF, false),
+            (error) => error.code === "permission-denied");
+        // Another business's owner cannot reach this business.
+        await assert.rejects(grant(OUTSIDER, STAFF, false),
+            (error) => error.code === "permission-denied");
+        assert.equal((await user(PACKAGES_ONLY)).fullAccess, undefined);
+        // Left out, it is unchanged: permissions alone save as before.
+        await run("updateBusinessStaffPermissions", OWNER, {businessId: BIZ,
+          staffUid: STAFF, businessPermissions: ["parking"]});
+        assert.equal((await user(STAFF)).fullAccess, true);
+      });
+
+  it("the owner takes it back", async () => {
+    await grant(OWNER, STAFF, false);
+    assert.equal((await user(STAFF)).fullAccess, false);
+    await assert.rejects(lotAction(STAFF, "lot_save",
+        {lot: {name: "Lot 10", totalSpaces: 1}}),
+    (error) => error.code === "permission-denied");
+  });
+});

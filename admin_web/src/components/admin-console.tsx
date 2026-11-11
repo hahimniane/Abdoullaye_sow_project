@@ -1,5 +1,6 @@
 "use client";
 
+import { FULL_ACCESS_EXPLAINED, fullAccessRequest } from "@/lib/full-access";
 import { moneyDollars } from "@/lib/money-input";
 import { useConsoleDocumentTitle } from "@/lib/document-title";
 
@@ -4591,6 +4592,45 @@ function PersonDetailWorkspace({
               )}
             </div>
           ))}
+          {isSuperAdmin &&
+            text(user.role, "") === "staff" &&
+            memberships[0]?.businessId && (
+              <div className="people-ownership-action">
+                <div>
+                  <strong>Full access</strong>
+                  <span>{FULL_ACCESS_EXPLAINED}</span>
+                </div>
+                <button
+                  className={user.fullAccess === true ? "secondary-button" : "primary-button"}
+                  onClick={() =>
+                    runAction(
+                      user.fullAccess === true ? "Full access removed" : "Full access given",
+                      () =>
+                        httpsCallable(functions, "updateBusinessStaffPermissions")(
+                          fullAccessRequest(
+                            String(memberships[0]?.businessId ?? ""),
+                            userId,
+                            Array.isArray(user.businessPermissions) ? (user.businessPermissions as string[]) : [],
+                            user.fullAccess !== true,
+                          ),
+                        ),
+                      user.fullAccess === true
+                        ? {
+                            confirm: `Remove full access from ${userDisplayName(user)} at ${memberships[0]?.businessName}?`,
+                            confirmFr: `Retirer l’accès complet à ${userDisplayName(user)} chez ${memberships[0]?.businessName} ?`,
+                          }
+                        : {
+                            confirm: `Give ${userDisplayName(user)} full access at ${memberships[0]?.businessName}? They can then do everything the owner can there, except transferring the business and its Stripe and bank.`,
+                            confirmFr: `Donner l’accès complet à ${userDisplayName(user)} chez ${memberships[0]?.businessName} ? Cette personne pourra tout faire comme le propriétaire, sauf transférer l’entreprise, Stripe et la banque.`,
+                          },
+                    )
+                  }
+                  type="button"
+                >
+                  {user.fullAccess === true ? "Remove full access" : "Give full access"}
+                </button>
+              </div>
+            )}
           {isSuperAdmin &&
             text(user.role, "") === "staff" &&
             memberships[0]?.businessId && (
