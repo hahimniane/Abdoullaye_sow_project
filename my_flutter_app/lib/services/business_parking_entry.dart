@@ -546,9 +546,21 @@ double businessParkingAmountPaid(Map<String, dynamic> row, {DateTime? now}) {
   final cents = num.tryParse('${row['amountPaidCents'] ?? ''}') ?? 0;
   if (cents.isFinite && cents > 0) return cents.round() / 100;
   if (_businessParkingSettled(row)) {
-    return businessParkingAccrued(row, now: now);
+    final net =
+        businessParkingAccrued(row, now: now) - businessParkingDiscount(row);
+    return net > 0 ? (net * 100).round() / 100 : 0;
   }
   return 0;
+}
+
+/// The live agreed discount on a car, in dollars (docs/PARKING_DISCOUNT.md):
+/// taken off what is owed, never counted as money in. Mirrors the console's
+/// `businessParkingDiscount`.
+double businessParkingDiscount(Map<String, dynamic> row) {
+  final cents = num.tryParse('${row['parkingDiscountCents'] ?? ''}');
+  return cents != null && cents.isFinite && cents > 0
+      ? cents.round() / 100
+      : 0;
 }
 
 /// Money is in but the record is not settled - a part payment against a
@@ -1230,7 +1242,8 @@ double businessParkingBalance(Map<String, dynamic> row, {DateTime? now}) {
   if (_parkingRowGone(row)) return 0;
   final owed =
       businessParkingAccrued(row, now: now) -
-      businessParkingAmountPaid(row, now: now);
+      businessParkingAmountPaid(row, now: now) -
+      businessParkingDiscount(row);
   return owed > 0 ? (owed * 100).round() / 100 : 0;
 }
 

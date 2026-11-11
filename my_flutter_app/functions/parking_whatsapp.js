@@ -226,11 +226,16 @@ function livePayments({businessId, carId, car}) {
 function settledCents(car, now) {
   const recorded = Math.max(0, Math.round(Number(car?.amountPaidCents) || 0));
   if (recorded > 0) return recorded;
+  // An agreed discount is not money: a car it settles was paid only the
+  // rest (docs/PARKING_DISCOUNT.md).
+  const discount = Math.max(0,
+      Math.round(Number(car?.parkingDiscountCents) || 0));
   const due = Math.max(0, Math.round(
       Number(car?.amountDueCents ?? car?.totalCostCents) || 0));
-  if (car?.parkingEndDate && due > 0) return due;
-  return parkingBalanceNow({...car, parkingPayments: []}, now)
+  if (car?.parkingEndDate && due > 0) return Math.max(0, due - discount);
+  const accrued = parkingBalanceNow({...car, parkingPayments: []}, now)
       ?.accruedCents || 0;
+  return Math.max(0, accrued - discount);
 }
 
 /**

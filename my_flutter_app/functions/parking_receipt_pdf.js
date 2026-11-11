@@ -206,6 +206,10 @@ function receiptModel(args) {
     totals: [
       {label: "Total paid so far / Total payé à ce jour",
         value: money(balance.paidCents)},
+      // An agreed discount is its own line (docs/PARKING_DISCOUNT.md).
+      ...(Number(balance.discountCents) > 0 ? [{
+        label: "Discount / Remise",
+        value: `-${money(balance.discountCents)}`}] : []),
       paidInFull ?
         {label: "Balance / Solde", value: "Paid in full / Payé en totalité",
           tone: "paid"} :
@@ -250,6 +254,8 @@ function stayStatementModel(args) {
     ["Daily rate / Tarif journalier", money(balance.dailyRateCents)],
     ["Total / Total", money(balance.accruedCents)],
     ["Paid / Payé", money(balance.paidCents)],
+    ["Discount / Remise", Number(balance.discountCents) > 0 ?
+      `-${money(balance.discountCents)}` : ""],
     ["Balance due / Solde à payer", money(owed)],
   ];
   const instructions = text(args?.paymentInstructions, 300);
@@ -275,6 +281,9 @@ function stayStatementModel(args) {
     totals: [
       {label: "Total stay / Total du séjour",
         value: money(balance.accruedCents)},
+      ...(Number(balance.discountCents) > 0 ? [{
+        label: "Discount / Remise",
+        value: `-${money(balance.discountCents)}`}] : []),
       settled ?
         {label: "Balance / Solde", value: "Paid in full / Payé en totalité",
           tone: "paid"} :

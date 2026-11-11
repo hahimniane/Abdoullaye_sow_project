@@ -582,6 +582,111 @@
           }
         ]
       }
+    },
+    {
+      "name": "left earlier, discounted: carries only what is left (PARKING_DISCOUNT.md)",
+      "monthKey": "2026-10",
+      "now": "2026-11-01T12:00:00Z",
+      "cars": [
+        {
+          "id": "highlander",
+          "businessId": "lot",
+          "paymentMethod": "direct",
+          "source": "business",
+          "status": "parked",
+          "paymentStatus": "awaiting_direct_payment",
+          "customerName": "Mariam",
+          "customerPhone": "+12015550101",
+          "carYear": 2021,
+          "carMake": "Toyota",
+          "carModel": "Highlander",
+          "parkingDate": "2026-09-06",
+          "parkingEndDate": "2026-09-07",
+          "dailyRate": 12,
+          "amountDueCents": 2400,
+          "trackingCode": "PK-TEST01",
+          "parkingDiscountCents": 1000,
+          "parkingDiscounts": [
+            {
+              "id": "d1",
+              "amountCents": 1000,
+              "reason": "agreed",
+              "mode": "discount"
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "carried": [
+          {
+            "id": "highlander",
+            "periodFrom": "2026-09-06",
+            "periodTo": "2026-09-07",
+            "days": 2,
+            "accruedCents": 2400,
+            "dueCents": 1400
+          }
+        ],
+        "customers": [
+          {
+            "key": "phone:2015550101",
+            "carIds": [],
+            "olderCarIds": [
+              "highlander"
+            ],
+            "monthCents": 0,
+            "priorUnpaidCents": 1400,
+            "dueCents": 1400,
+            "owes": true,
+            "paid": false
+          }
+        ]
+      }
+    },
+    {
+      "name": "left earlier, settled for less: nothing (PARKING_DISCOUNT.md)",
+      "monthKey": "2026-10",
+      "now": "2026-11-01T12:00:00Z",
+      "cars": [
+        {
+          "id": "highlander",
+          "businessId": "lot",
+          "paymentMethod": "direct",
+          "source": "business",
+          "status": "parked",
+          "paymentStatus": "awaiting_direct_payment",
+          "customerName": "Mariam",
+          "customerPhone": "+12015550101",
+          "carYear": 2021,
+          "carMake": "Toyota",
+          "carModel": "Highlander",
+          "parkingDate": "2026-09-06",
+          "parkingEndDate": "2026-09-07",
+          "dailyRate": 12,
+          "amountDueCents": 2400,
+          "trackingCode": "PK-TEST01",
+          "amountPaidCents": 2000,
+          "parkingPayments": [
+            {
+              "amountCents": 2000,
+              "receivedVia": "cash"
+            }
+          ],
+          "parkingDiscountCents": 400,
+          "parkingDiscounts": [
+            {
+              "id": "d1",
+              "amountCents": 400,
+              "reason": "agreed",
+              "mode": "settle"
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "carried": [],
+        "customers": []
+      }
     }
   ]
 }

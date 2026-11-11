@@ -1,0 +1,375 @@
+{
+  "about": "Parking discounts (docs/PARKING_DISCOUNT.md). The server (parking_discount.js, parking_month_statement.js), the console (parking-discount.ts, parking-month-statement.ts) and the app (parking_discount.dart, parking_month_statement.dart) must all give these answers. Only the keys listed under expect are compared.",
+  "now": "2026-11-15T15:00:00Z",
+  "monthCases": [
+    {
+      "name": "money first, then the discount, oldest first",
+      "monthKey": "2026-10",
+      "car": {
+        "paymentMethod": "direct",
+        "source": "business",
+        "status": "parked",
+        "paymentStatus": "awaiting_direct_payment",
+        "id": "camry",
+        "parkingDate": "2026-10-01",
+        "dailyRate": 10,
+        "amountPaidCents": 20000,
+        "parkingPayments": [
+          {
+            "amountCents": 20000,
+            "receivedVia": "cash"
+          }
+        ],
+        "parkingDiscountCents": 8000,
+        "parkingDiscounts": [
+          {
+            "id": "d1",
+            "amountCents": 8000,
+            "reason": "agreed",
+            "mode": "discount"
+          }
+        ]
+      },
+      "expect": {
+        "monthCents": 31000,
+        "monthPaidCents": 20000,
+        "monthDiscountCents": 8000,
+        "monthUnpaidCents": 3000,
+        "priorUnpaidCents": 0,
+        "dueCents": 3000
+      }
+    },
+    {
+      "name": "the next month starts with what the discount did not cover",
+      "monthKey": "2026-11",
+      "car": {
+        "paymentMethod": "direct",
+        "source": "business",
+        "status": "parked",
+        "paymentStatus": "awaiting_direct_payment",
+        "id": "camry",
+        "parkingDate": "2026-10-01",
+        "dailyRate": 10,
+        "amountPaidCents": 20000,
+        "parkingPayments": [
+          {
+            "amountCents": 20000,
+            "receivedVia": "cash"
+          }
+        ],
+        "parkingDiscountCents": 8000,
+        "parkingDiscounts": [
+          {
+            "id": "d1",
+            "amountCents": 8000,
+            "reason": "agreed",
+            "mode": "discount"
+          }
+        ]
+      },
+      "expect": {
+        "monthCents": 15000,
+        "monthPaidCents": 0,
+        "monthDiscountCents": 0,
+        "monthUnpaidCents": 15000,
+        "priorUnpaidCents": 3000,
+        "dueCents": 18000
+      }
+    },
+    {
+      "name": "a discount bigger than the old months reaches into this one",
+      "monthKey": "2026-11",
+      "car": {
+        "paymentMethod": "direct",
+        "source": "business",
+        "status": "parked",
+        "paymentStatus": "awaiting_direct_payment",
+        "id": "civic",
+        "parkingDate": "2026-10-01",
+        "dailyRate": 10,
+        "amountPaidCents": 25000,
+        "parkingPayments": [
+          {
+            "amountCents": 25000,
+            "receivedVia": "cash"
+          }
+        ],
+        "parkingDiscountCents": 10000,
+        "parkingDiscounts": [
+          {
+            "id": "d1",
+            "amountCents": 10000,
+            "reason": "agreed",
+            "mode": "discount"
+          }
+        ]
+      },
+      "expect": {
+        "monthCents": 15000,
+        "monthPaidCents": 0,
+        "monthDiscountCents": 4000,
+        "monthUnpaidCents": 11000,
+        "priorUnpaidCents": 0,
+        "dueCents": 11000
+      }
+    }
+  ],
+  "planCases": [
+    {
+      "name": "give: part of an open stay, the rest stays owed",
+      "mode": "discount",
+      "car": {
+        "paymentMethod": "direct",
+        "source": "business",
+        "status": "parked",
+        "paymentStatus": "awaiting_direct_payment",
+        "parkingDate": "2026-11-01",
+        "dailyRate": 12
+      },
+      "amountCents": 5000,
+      "reason": "long stay",
+      "expect": {
+        "ok": true,
+        "owedCents": 18000,
+        "discountCents": 5000,
+        "paidCents": 0,
+        "leftCents": 13000,
+        "settles": false
+      }
+    },
+    {
+      "name": "give: never more than owed",
+      "mode": "discount",
+      "car": {
+        "paymentMethod": "direct",
+        "source": "business",
+        "status": "parked",
+        "paymentStatus": "awaiting_direct_payment",
+        "parkingDate": "2026-11-01",
+        "dailyRate": 12
+      },
+      "amountCents": 18001,
+      "reason": "long stay",
+      "expect": {
+        "ok": false,
+        "reason": "discount_more_than_owed"
+      }
+    },
+    {
+      "name": "give: a reason is required",
+      "mode": "discount",
+      "car": {
+        "paymentMethod": "direct",
+        "source": "business",
+        "status": "parked",
+        "paymentStatus": "awaiting_direct_payment",
+        "parkingDate": "2026-11-01",
+        "dailyRate": 12
+      },
+      "amountCents": 500,
+      "reason": "  ",
+      "expect": {
+        "ok": false,
+        "reason": "discount_reason_required"
+      }
+    },
+    {
+      "name": "give: a booking ahead can be discounted on its whole price",
+      "mode": "discount",
+      "car": {
+        "paymentMethod": "direct",
+        "source": "business",
+        "status": "parked",
+        "paymentStatus": "awaiting_direct_payment",
+        "parkingDate": "2026-11-10",
+        "parkingEndDate": "2026-11-30",
+        "dailyRate": 10,
+        "amountDueCents": 21000
+      },
+      "amountCents": 21000,
+      "reason": "friend",
+      "expect": {
+        "ok": true,
+        "owedCents": 21000,
+        "discountCents": 21000,
+        "paidCents": 0,
+        "leftCents": 0,
+        "settles": true
+      }
+    },
+    {
+      "name": "settle: $2,000 owed, $1,500 paid, the rest is the discount",
+      "mode": "settle",
+      "car": {
+        "paymentMethod": "direct",
+        "source": "business",
+        "status": "parked",
+        "paymentStatus": "awaiting_direct_payment",
+        "parkingDate": "2026-10-01",
+        "parkingEndDate": "2026-10-31",
+        "dailyRate": 12,
+        "amountDueCents": 200000
+      },
+      "amountCents": 150000,
+      "reason": "agreed with the owner",
+      "receivedByStaffId": "staff-a",
+      "expect": {
+        "ok": true,
+        "owedCents": 200000,
+        "discountCents": 50000,
+        "paidCents": 150000,
+        "leftCents": 0,
+        "settles": true
+      }
+    },
+    {
+      "name": "settle: an open stay is covered through today, never settled",
+      "mode": "settle",
+      "car": {
+        "paymentMethod": "direct",
+        "source": "business",
+        "status": "parked",
+        "paymentStatus": "awaiting_direct_payment",
+        "parkingDate": "2026-11-01",
+        "dailyRate": 12,
+        "amountPaidCents": 3000,
+        "parkingPayments": [
+          {
+            "amountCents": 3000,
+            "receivedVia": "cash"
+          }
+        ]
+      },
+      "amountCents": 10000,
+      "reason": "agreed",
+      "receivedByStaffId": "staff-a",
+      "expect": {
+        "ok": true,
+        "owedCents": 15000,
+        "discountCents": 5000,
+        "paidCents": 10000,
+        "leftCents": 0,
+        "settles": false
+      }
+    },
+    {
+      "name": "settle: paying it all is a normal payment",
+      "mode": "settle",
+      "car": {
+        "paymentMethod": "direct",
+        "source": "business",
+        "status": "parked",
+        "paymentStatus": "awaiting_direct_payment",
+        "parkingDate": "2026-11-01",
+        "dailyRate": 12
+      },
+      "amountCents": 18000,
+      "reason": "agreed",
+      "receivedByStaffId": "staff-a",
+      "expect": {
+        "ok": false,
+        "reason": "discount_paid_not_less"
+      }
+    },
+    {
+      "name": "settle: money taken needs who took it",
+      "mode": "settle",
+      "car": {
+        "paymentMethod": "direct",
+        "source": "business",
+        "status": "parked",
+        "paymentStatus": "awaiting_direct_payment",
+        "parkingDate": "2026-11-01",
+        "dailyRate": 12
+      },
+      "amountCents": 1000,
+      "reason": "agreed",
+      "receivedByStaffId": "",
+      "expect": {
+        "ok": false,
+        "reason": "discount_receiver_required"
+      }
+    },
+    {
+      "name": "settle: nothing paid is all discount",
+      "mode": "settle",
+      "car": {
+        "paymentMethod": "direct",
+        "source": "business",
+        "status": "parked",
+        "paymentStatus": "awaiting_direct_payment",
+        "parkingDate": "2026-11-01",
+        "dailyRate": 12
+      },
+      "amountCents": 0,
+      "reason": "write off",
+      "receivedByStaffId": "",
+      "expect": {
+        "ok": true,
+        "owedCents": 18000,
+        "discountCents": 18000,
+        "paidCents": 0,
+        "leftCents": 0,
+        "settles": false
+      }
+    },
+    {
+      "name": "a payment-link car is Stripe's",
+      "mode": "discount",
+      "car": {
+        "paymentMethod": "payment_link",
+        "source": "business",
+        "status": "parked",
+        "paymentStatus": "awaiting_direct_payment",
+        "parkingDate": "2026-11-01",
+        "dailyRate": 12
+      },
+      "amountCents": 500,
+      "reason": "x",
+      "expect": {
+        "ok": false,
+        "reason": "discount_not_direct"
+      }
+    },
+    {
+      "name": "a car already discounted owes only the rest",
+      "mode": "discount",
+      "car": {
+        "paymentMethod": "direct",
+        "source": "business",
+        "status": "parked",
+        "paymentStatus": "awaiting_direct_payment",
+        "parkingDate": "2026-11-01",
+        "dailyRate": 12,
+        "parkingDiscountCents": 8000
+      },
+      "amountCents": 10001,
+      "reason": "more",
+      "expect": {
+        "ok": false,
+        "reason": "discount_more_than_owed"
+      }
+    },
+    {
+      "name": "nothing owed, nothing to discount",
+      "mode": "discount",
+      "car": {
+        "paymentMethod": "direct",
+        "source": "business",
+        "status": "parked",
+        "paymentStatus": "paid",
+        "parkingDate": "2026-11-01",
+        "parkingEndDate": "2026-11-02",
+        "dailyRate": 12,
+        "amountDueCents": 2400,
+        "amountPaidCents": 2400
+      },
+      "amountCents": 100,
+      "reason": "x",
+      "expect": {
+        "ok": false,
+        "reason": "discount_nothing_owed"
+      }
+    }
+  ]
+}

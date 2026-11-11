@@ -555,7 +555,7 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
                       </span>
                       <span className="pk-month-period">{formatDayKey(b.periodFrom)} → {formatDayKey(b.periodTo)}</span>
                       <span className="pk-month-calc">{b.days} day{b.days === 1 ? "" : "s"} × {moneyText(b.dayRateCents)}</span>
-                      <span className="pk-month-amount"><strong>{moneyText(b.monthCents)}</strong>{b.monthPaidCents > 0 && <small className="pk-paid">{moneyText(b.monthPaidCents)} paid</small>}{b.dueCents > 0 ? <small>{moneyText(b.dueCents)} due</small> : <small>paid in full</small>}{b.monthPaidCents > 0 && receivedByText(b.paidBy) && <small className="pk-received-by">{receivedByText(b.paidBy).replace(/^ · /, "")}</small>}</span>
+                      <span className="pk-month-amount"><strong>{moneyText(b.monthCents)}</strong>{b.monthPaidCents > 0 && <small className="pk-paid">{moneyText(b.monthPaidCents)} paid</small>}{b.monthDiscountCents > 0 && <small className="pk-paid">-{moneyText(b.monthDiscountCents)} discount</small>}{b.dueCents > 0 ? <small>{moneyText(b.dueCents)} due</small> : <small>paid in full</small>}{b.monthPaidCents > 0 && receivedByText(b.paidBy) && <small className="pk-received-by">{receivedByText(b.paidBy).replace(/^ · /, "")}</small>}</span>
                       {car && <button className="ghost-button" type="button" title="Open the car to record a payment" onClick={() => onOpenCar(car)}><SquarePen size={14} /></button>}
                     </li>
                   );

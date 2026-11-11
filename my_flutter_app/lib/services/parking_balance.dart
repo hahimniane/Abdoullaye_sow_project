@@ -30,6 +30,7 @@ class ParkingBalance {
     required this.days,
     required this.accruedCents,
     required this.paidCents,
+    this.discountCents = 0,
     required this.balanceCents,
     required this.paidInFull,
     required this.stillParked,
@@ -49,6 +50,10 @@ class ParkingBalance {
   final int accruedCents;
   final int paidCents;
 
+  /// An agreed discount: off what is owed, never paid money
+  /// (docs/PARKING_DISCOUNT.md).
+  final int discountCents;
+
   /// What is owed now; never negative.
   final int balanceCents;
   final bool paidInFull;
@@ -61,6 +66,7 @@ class ParkingBalance {
     'days': days,
     'accruedCents': accruedCents,
     'paidCents': paidCents,
+    'discountCents': discountCents,
     'balanceCents': balanceCents,
     'paidInFull': paidInFull,
     'stillParked': stillParked,
@@ -116,6 +122,7 @@ ParkingBalance? parkingBalanceNow(Map<String, dynamic> car, DateTime now) {
   final through = leave == null ? today : (today < leave ? today : leave);
   final accrued = parkingAccruedThroughCents(car, today, today);
   final paid = _paidNowCents(car, today);
+  final discount = parkingDiscountCentsOf(car);
   final dollars = num.tryParse('${car['dailyRate'] ?? ''}');
   final dailyRateCents = dollars != null && dollars.isFinite && dollars > 0
       ? (dollars * 100).round()
@@ -128,8 +135,9 @@ ParkingBalance? parkingBalanceNow(Map<String, dynamic> car, DateTime now) {
     days: days > 0 ? days : 0,
     accruedCents: accrued,
     paidCents: paid,
-    balanceCents: accrued > paid ? accrued - paid : 0,
-    paidInFull: accrued > 0 && paid >= accrued,
+    discountCents: discount,
+    balanceCents: accrued - paid - discount > 0 ? accrued - paid - discount : 0,
+    paidInFull: accrued > 0 && paid + discount >= accrued,
     stillParked: leave == null || leave >= today,
   );
 }

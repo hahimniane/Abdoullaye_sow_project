@@ -35,6 +35,9 @@ describe("parkingBalanceNow: the shared fixture", () => {
       "a stay that ends later is pro-rated so far",
       "voided car has no balance",
       "cancelled car has no balance",
+      "open stay settled for less owes nothing today",
+      "a discount alone leaves the rest owed",
+      "marked paid with no amount after a discount counts only the net as paid",
     ]);
   });
 

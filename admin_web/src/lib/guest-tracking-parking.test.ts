@@ -117,7 +117,8 @@ test("the server's block and the console's own balance helper agree on the same 
   const car = { parkingDate: "2026-10-27", dailyRate: 12, amountPaidCents: 1200 };
   const mine = parkingBalanceNow(car, new Date("2026-10-29T15:00:00Z"));
   // The server's shape: no leave day is null; the page reads it as "".
-  assert.deepEqual(mine, { ...OWING, leftDayKey: null });
+  // The server also says what an agreed discount took off (docs/PARKING_DISCOUNT.md).
+  assert.deepEqual(mine, { ...OWING, leftDayKey: null, discountCents: 0 });
   assert.deepEqual(parseGuestParking("parking", mine), OWING);
 });
 

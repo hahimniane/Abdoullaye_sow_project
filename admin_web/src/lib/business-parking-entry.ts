@@ -471,9 +471,20 @@ export function businessParkingAmountPaid(
   if (Number.isFinite(cents) && cents > 0) return Math.round(cents) / 100;
   const status = trimmed(row?.paymentStatus, 40);
   if (status === "succeeded" || status === "paid") {
-    return businessParkingAccrued(row, now);
+    const net = businessParkingAccrued(row, now) - businessParkingDiscount(row);
+    return net > 0 ? Math.round(net * 100) / 100 : 0;
   }
   return 0;
+}
+
+/**
+ * The live agreed discount on a car, in dollars (docs/PARKING_DISCOUNT.md):
+ * taken off what is owed, never counted as money in. Mirrors the server's
+ * console_summaries.js.
+ */
+export function businessParkingDiscount(row: ParkingRowLike): number {
+  const cents = Number((row as { parkingDiscountCents?: unknown })?.parkingDiscountCents);
+  return Number.isFinite(cents) && cents > 0 ? Math.round(cents) / 100 : 0;
 }
 
 /**
@@ -739,8 +750,8 @@ export function businessParkingBalance(
 ): number {
   if (trimmed((row as { status?: unknown })?.status, 40) === "cancelled") return 0;
   if (isBusinessParkingVoided(row)) return 0;
-  const owed =
-    businessParkingAccrued(row, now) - businessParkingAmountPaid(row, now);
+  const owed = businessParkingAccrued(row, now) -
+    businessParkingAmountPaid(row, now) - businessParkingDiscount(row);
   return owed > 0 ? Math.round(owed * 100) / 100 : 0;
 }
 

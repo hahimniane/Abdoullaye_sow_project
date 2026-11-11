@@ -156,6 +156,15 @@ function billSummary(c, monthEn, monthFr) {
       sub: [],
     });
   }
+  // An agreed discount is its own line (docs/PARKING_DISCOUNT.md).
+  if (cents(c.monthDiscountCents) > 0) {
+    summary.push({
+      label: "Discount / Remise",
+      value: `-${money(c.monthDiscountCents)}`,
+      tone: "paid",
+      sub: [],
+    });
+  }
   return summary;
 }
 

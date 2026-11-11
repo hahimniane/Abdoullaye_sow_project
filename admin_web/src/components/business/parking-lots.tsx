@@ -140,6 +140,9 @@ export function ParkingLotStrip({
             <span className="pk-lot-fill"><b data-no-translate>{words.fill(lot.totals.spacesUsed, lot.totals.spacesTotal)}</b></span>
             <span className="pk-lot-line" data-no-translate>{words.movement(lot.month.arrived, lot.month.left)}</span>
             <span className="pk-lot-line"><span>Collected this month</span> <b data-no-translate>{formatMoney(lot.month.collectedCents / 100)}</b></span>
+            {(lot.month.discountCents ?? 0) > 0 && (
+              <span className="pk-lot-line"><span>Discounts this month</span> <b data-no-translate>-{formatMoney((lot.month.discountCents ?? 0) / 100)}</b></span>
+            )}
             <span className="pk-lot-line"><span>Still owed</span> <b className={lot.totals.owed > 0 ? "owed" : undefined} data-no-translate>{formatMoney(lot.totals.owed)}</b></span>
           </button>
         );

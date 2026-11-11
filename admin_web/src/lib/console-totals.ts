@@ -12,6 +12,10 @@ export type ServerParkingSummary = {
   overdue: ParkingOverdue;
   /** Cents collected per month of `months`, by the month the money arrived. */
   collectedByMonth: number[];
+  /** Cents of agreed discounts per month of `months` (docs/PARKING_DISCOUNT.md); never collected. */
+  discountedByMonth?: number[];
+  /** The same, per person who gave them: uid -> cents. */
+  discountedByMonthByUid?: Record<string, number>[];
   records: number;
   months: string[];
   year: number;
@@ -71,6 +75,7 @@ export function parkingTotalsReloadKey(rows: readonly Record<string, unknown>[])
     "paymentStatus",
     "amountPaidCents",
     "amountPaid",
+    "parkingDiscountCents",
     "parkingEndDate",
     "updatedAt",
   ]);

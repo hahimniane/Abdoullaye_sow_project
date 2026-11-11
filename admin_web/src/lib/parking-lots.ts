@@ -28,7 +28,7 @@ export type ServerParkingLot = {
   open: boolean;
   isMain: boolean;
   totals: { inLot: number; reserved: number; left: number; collected: number; owed: number; spacesTotal: number; spacesUsed: number };
-  month: { key: string; arrived: number; left: number; collectedCents: number };
+  month: { key: string; arrived: number; left: number; collectedCents: number; discountCents?: number };
 };
 
 export type ParkingLotDraft = {

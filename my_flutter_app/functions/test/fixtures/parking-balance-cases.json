@@ -16,6 +16,7 @@
         "days": 10,
         "accruedCents": 10000,
         "paidCents": 0,
+        "discountCents": 0,
         "balanceCents": 10000,
         "paidInFull": false,
         "stillParked": true
@@ -38,6 +39,7 @@
         "days": 10,
         "accruedCents": 10000,
         "paidCents": 0,
+        "discountCents": 0,
         "balanceCents": 10000,
         "paidInFull": false,
         "stillParked": false
@@ -63,6 +65,7 @@
         "days": 10,
         "accruedCents": 10000,
         "paidCents": 3000,
+        "discountCents": 0,
         "balanceCents": 7000,
         "paidInFull": false,
         "stillParked": true
@@ -90,6 +93,7 @@
         "days": 3,
         "accruedCents": 3000,
         "paidCents": 5000,
+        "discountCents": 0,
         "balanceCents": 0,
         "paidInFull": true,
         "stillParked": false
@@ -118,6 +122,7 @@
         "days": 5,
         "accruedCents": 5000,
         "paidCents": 2000,
+        "discountCents": 0,
         "balanceCents": 3000,
         "paidInFull": false,
         "stillParked": true
@@ -137,6 +142,7 @@
         "days": 5,
         "accruedCents": 5000,
         "paidCents": 5000,
+        "discountCents": 0,
         "balanceCents": 0,
         "paidInFull": true,
         "stillParked": true
@@ -164,6 +170,7 @@
         "days": 10,
         "accruedCents": 10000,
         "paidCents": 10000,
+        "discountCents": 0,
         "balanceCents": 0,
         "paidInFull": true,
         "stillParked": false
@@ -182,6 +189,7 @@
         "days": 0,
         "accruedCents": 0,
         "paidCents": 0,
+        "discountCents": 0,
         "balanceCents": 0,
         "paidInFull": false,
         "stillParked": true
@@ -200,6 +208,7 @@
         "days": 10,
         "accruedCents": 0,
         "paidCents": 0,
+        "discountCents": 0,
         "balanceCents": 0,
         "paidInFull": false,
         "stillParked": true
@@ -220,6 +229,7 @@
         "days": 3,
         "accruedCents": 3000,
         "paidCents": 0,
+        "discountCents": 0,
         "balanceCents": 3000,
         "paidInFull": false,
         "stillParked": true
@@ -242,6 +252,84 @@
         "status": "cancelled"
       },
       "expected": null
+    },
+    {
+      "name": "open stay settled for less owes nothing today",
+      "car": {
+        "parkingDate": "2026-10-20T12:00:00Z",
+        "dailyRate": 10,
+        "amountPaidCents": 7000,
+        "parkingPayments": [
+          {
+            "amountCents": 7000,
+            "receivedVia": "cash"
+          }
+        ],
+        "parkingDiscountCents": 3000,
+        "parkingDiscounts": [
+          {
+            "id": "d1",
+            "amountCents": 3000,
+            "reason": "agreed",
+            "mode": "settle"
+          }
+        ]
+      },
+      "expected": {
+        "dailyRateCents": 1000,
+        "sinceDayKey": "2026-10-20",
+        "leftDayKey": null,
+        "days": 10,
+        "accruedCents": 10000,
+        "paidCents": 7000,
+        "discountCents": 3000,
+        "balanceCents": 0,
+        "paidInFull": true,
+        "stillParked": true
+      }
+    },
+    {
+      "name": "a discount alone leaves the rest owed",
+      "car": {
+        "parkingDate": "2026-10-20T12:00:00Z",
+        "dailyRate": 10,
+        "parkingDiscountCents": 2500
+      },
+      "expected": {
+        "dailyRateCents": 1000,
+        "sinceDayKey": "2026-10-20",
+        "leftDayKey": null,
+        "days": 10,
+        "accruedCents": 10000,
+        "paidCents": 0,
+        "discountCents": 2500,
+        "balanceCents": 7500,
+        "paidInFull": false,
+        "stillParked": true
+      }
+    },
+    {
+      "name": "marked paid with no amount after a discount counts only the net as paid",
+      "car": {
+        "parkingDate": "2026-10-01T12:00:00Z",
+        "parkingEndDate": "2026-10-10T12:00:00Z",
+        "dailyRate": 10,
+        "amountDueCents": 10000,
+        "paymentStatus": "paid",
+        "parkingDiscountCents": 4000
+      },
+      "expected": {
+        "dailyRateCents": 1000,
+        "sinceDayKey": "2026-10-01",
+        "leftDayKey": "2026-10-10",
+        "days": 10,
+        "accruedCents": 10000,
+        "paidCents": 6000,
+        "discountCents": 4000,
+        "balanceCents": 0,
+        "paidInFull": true,
+        "stillParked": false
+      }
     }
   ]
 }

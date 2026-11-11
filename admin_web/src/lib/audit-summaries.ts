@@ -211,6 +211,13 @@ const rules: Rule[] = [
   [new RegExp(`^Switched to paid: (${MONEY}) paid at the sale \\((\\w+)\\)$`), (m, lookup) =>
     `Passée en payée : ${m[1]} payés à la vente (${via(m[2], lookup)})`],
 
+  // --- Parking discounts (docs/PARKING_DISCOUNT.md); the reason is typed ---
+  [new RegExp(`^Discount of (${MONEY}) given \\((.*)\\)$`), (m) =>
+    `Remise de ${m[1]} accordée (${m[2]})`],
+  [new RegExp(`^Settled for (${MONEY}): discount of (${MONEY}) \\((.*)\\)$`), (m) =>
+    `Réglé pour ${m[1]} : remise de ${m[2]} (${m[3]})`],
+  [new RegExp(`^Discount of (${MONEY}) undone$`), (m) => `Remise de ${m[1]} annulée`],
+
   // --- Store transfers (entityType inventory_transfer) ---
   [new RegExp(`^Sent (\\d+) items? from (.+?) to (.+) \\((${TRANSFER_CODE})\\)$`), (m) =>
     `Envoi de ${itemsFr(m[1])} de ${m[2]} vers ${m[3]} (${m[4]})`],

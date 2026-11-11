@@ -634,6 +634,8 @@ function createConsoleTotalsHandlers(deps) {
             left: movement[lot.id]?.left || 0,
             collectedCents: monthIndex >= 0 ?
               told.collectedByMonth[monthIndex] || 0 : 0,
+            discountCents: monthIndex >= 0 ?
+              told.discountedByMonth[monthIndex] || 0 : 0,
           },
         };
       });

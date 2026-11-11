@@ -159,11 +159,23 @@ export function accruedThroughCents(row: Row, day: number, today: number): numbe
   return stayDays > 0 ? Math.round(total * days / stayDays) : 0;
 }
 
-function paidCents(row: Row, today: number): number {
+/**
+ * The live discount on a car, in cents (docs/PARKING_DISCOUNT.md): taken off
+ * what is owed, never money in. Mirrors the server's `discountCentsOf`.
+ */
+export function discountCentsOf(row: Row): number {
+  const cents = Math.round(Number(row?.parkingDiscountCents));
+  return Number.isFinite(cents) && cents > 0 ? cents : 0;
+}
+
+/** Recorded payments, or the stay less any discount when marked paid without amounts. */
+export function paidCents(row: Row, today: number): number {
   const recorded = Math.round(Number(row.amountPaidCents) || 0);
   if (recorded > 0) return recorded;
   const status = text(row.paymentStatus, 40);
-  if (status === "succeeded" || status === "paid") return accruedThroughCents(row, today, today);
+  if (status === "succeeded" || status === "paid") {
+    return Math.max(0, accruedThroughCents(row, today, today) - discountCentsOf(row));
+  }
   return 0;
 }
 
@@ -250,6 +262,8 @@ export type ParkingMonthBill = {
   dayRateCents: number;
   monthCents: number;
   monthPaidCents: number;
+  /** Taken off this month by an agreed discount (docs/PARKING_DISCOUNT.md). */
+  monthDiscountCents: number;
   monthUnpaidCents: number;
   priorUnpaidCents: number;
   dueCents: number;
@@ -293,11 +307,14 @@ export function parkingMonthStatement(row: Row, monthKey: string, now: Date = ne
   const monthCents = Math.max(0, throughCents - priorCents);
   if (monthCents <= 0) return null;
 
+  // A discount covers like money, after it (docs/PARKING_DISCOUNT.md).
   const paid = paidCents(row, today);
-  const priorUnpaidCents = Math.max(0, priorCents - paid);
-  const towardMonth = Math.max(0, paid - priorCents);
-  const monthPaidCents = Math.min(monthCents, towardMonth);
-  const monthUnpaidCents = monthCents - monthPaidCents;
+  const covered = paid + discountCentsOf(row);
+  const priorUnpaidCents = Math.max(0, priorCents - covered);
+  const monthPaidCents = Math.min(monthCents, Math.max(0, paid - priorCents));
+  const monthCoveredCents = Math.min(monthCents, Math.max(0, covered - priorCents));
+  const monthDiscountCents = monthCoveredCents - monthPaidCents;
+  const monthUnpaidCents = monthCents - monthCoveredCents;
   const days = to - from + 1;
 
   return {
@@ -309,6 +326,7 @@ export function parkingMonthStatement(row: Row, monthKey: string, now: Date = ne
     dayRateCents: Math.round(monthCents / days),
     monthCents,
     monthPaidCents,
+    monthDiscountCents,
     monthUnpaidCents,
     priorUnpaidCents,
     dueCents: priorUnpaidCents + monthUnpaidCents,
@@ -345,7 +363,7 @@ export function carriedCarItem(row: Row, monthKey: string, now: Date = new Date(
   if (!month || start === null || leave === null || today === null) return null;
   if (leave >= month.first || leave < start) return null;
   const accrued = accruedThroughCents(row, leave, today);
-  const dueCents = Math.max(0, accrued - paidCents(row, today));
+  const dueCents = Math.max(0, accrued - paidCents(row, today) - discountCentsOf(row));
   if (dueCents <= 0) return null;
   return {
     id: text(row.id),
@@ -418,6 +436,8 @@ export type ParkingMonthCustomer = {
   olderCars: ParkingMonthCarriedLine[];
   monthCents: number;
   monthPaidCents: number;
+  /** Taken off this month by an agreed discount (docs/PARKING_DISCOUNT.md). */
+  monthDiscountCents: number;
   monthUnpaidCents: number;
   priorUnpaidCents: number;
   dueCents: number;
@@ -549,10 +569,11 @@ export function parkingMonthCustomers(
       .map((c) => ({ ...c, registeredTo: reg(c.customerName) }));
     const inMonth = acts.filter((a) => !a.prior);
     const older = acts.filter((a) => a.prior);
-    const sumCars = (k: "monthCents" | "monthPaidCents" | "monthUnpaidCents" | "priorUnpaidCents") => cars.reduce((s, b) => s + b[k], 0);
+    const sumCars = (k: "monthCents" | "monthPaidCents" | "monthDiscountCents" | "monthUnpaidCents" | "priorUnpaidCents") => cars.reduce((s, b) => s + b[k], 0);
     const sumActs = (list: ParkingMonthActivityLine[], k: "feeCents" | "paidCents" | "dueCents") => list.reduce((s, a) => s + a[k], 0);
     const monthCents = sumCars("monthCents") + sumActs(inMonth, "feeCents");
     const monthPaidCents = sumCars("monthPaidCents") + sumActs(inMonth, "paidCents");
+    const monthDiscountCents = sumCars("monthDiscountCents");
     const monthUnpaidCents = sumCars("monthUnpaidCents") + sumActs(inMonth, "dueCents");
     const priorUnpaidCents = sumCars("priorUnpaidCents") + sumActs(older, "dueCents") + olderCars.reduce((s, c) => s + c.dueCents, 0);
     const dueCents = monthUnpaidCents + priorUnpaidCents;
@@ -576,6 +597,7 @@ export function parkingMonthCustomers(
       olderCars,
       monthCents,
       monthPaidCents,
+      monthDiscountCents,
       monthUnpaidCents,
       priorUnpaidCents,
       dueCents,
@@ -605,6 +627,8 @@ export type ParkingMonthSummary = {
   customersPaid: ParkingMonthCustomer[];
   billedCents: number;
   collectedCents: number;
+  /** Taken off by agreed discounts, never collected (docs/PARKING_DISCOUNT.md). */
+  discountCents: number;
   owedCents: number;
   olderOwedCents: number;
   dueCents: number;
@@ -701,7 +725,7 @@ export function parkingMonthSummary(
     .filter((b) => b.owes)
     .sort((a, b) => b.dueCents - a.dueCents || a.customerName.localeCompare(b.customerName));
   const inMonth = activities.filter((a) => !a.prior);
-  const sumBills = (k: "monthCents" | "monthPaidCents" | "monthUnpaidCents") => bills.reduce((s, b) => s + b[k], 0);
+  const sumBills = (k: "monthCents" | "monthPaidCents" | "monthDiscountCents" | "monthUnpaidCents") => bills.reduce((s, b) => s + b[k], 0);
   const sumActs = (k: "feeCents" | "paidCents" | "dueCents") => inMonth.reduce((s, a) => s + a[k], 0);
   const net = withStaffExpenseCredit(parkingMonthCustomers(bills, activities, carried), monthKey, staffCredit);
   const customers = net.customers;
@@ -716,6 +740,7 @@ export function parkingMonthSummary(
     customersPaid: customers.filter((c) => c.paid),
     billedCents: sumBills("monthCents") + sumActs("feeCents"),
     collectedCents: sumBills("monthPaidCents") + sumActs("paidCents"),
+    discountCents: sumBills("monthDiscountCents"),
     owedCents: sumBills("monthUnpaidCents") + sumActs("dueCents"),
     // "from before" never reads bigger than what is still owed once a
     // staff member's expenses came off (identical when nothing is netted).
@@ -867,6 +892,7 @@ export function parkingMonthCustomerText(c: ParkingMonthCustomer, businessName: 
     lines.push(`  ${dayLabel(b.periodFrom)} to ${dayLabel(b.periodTo)}: ${b.days} day${b.days === 1 ? "" : "s"} × ${moneyText(b.dayRateCents)} — ${moneyText(b.monthCents)}`);
     if (b.priorUnpaidCents > 0) lines.push(`  Unpaid from before — ${moneyText(b.priorUnpaidCents)}`);
     if (b.monthPaidCents > 0) lines.push(`  Paid — -${moneyText(b.monthPaidCents)}`);
+    if (b.monthDiscountCents > 0) lines.push(`  Discount — -${moneyText(b.monthDiscountCents)}`);
   }
   if (c.activities.length) lines.push("", "Activities");
   for (const a of c.activities) {
@@ -897,6 +923,7 @@ export function parkingMonthCustomerText(c: ParkingMonthCustomer, businessName: 
   lines.push("", `Total for ${month} — ${moneyText(c.monthCents)}`);
   if (c.priorUnpaidCents > 0) lines.push(`Unpaid from before — ${moneyText(c.priorUnpaidCents)}`);
   if (c.monthPaidCents > 0) lines.push(`Paid — -${moneyText(c.monthPaidCents)}`);
+  if (c.monthDiscountCents > 0) lines.push(`Discount — -${moneyText(c.monthDiscountCents)}`);
   if (credited) lines.push(`Less expenses — -${moneyText(c.expenseCreditCents)}`);
   // A team member's statement (staff-statement.ts): the cash they hold for
   // the business, then what they owe it - or what it owes them.
@@ -922,6 +949,7 @@ export function parkingMonthBillText(bill: ParkingMonthBill, businessName: strin
   lines.push("", `${dayLabel(bill.periodFrom)} to ${dayLabel(bill.periodTo)}: ${bill.days} day${bill.days === 1 ? "" : "s"} × ${moneyText(bill.dayRateCents)} — ${moneyText(bill.monthCents)}`);
   if (bill.priorUnpaidCents > 0) lines.push(`Unpaid from before — ${moneyText(bill.priorUnpaidCents)}`);
   if (bill.monthPaidCents > 0) lines.push(`Paid — -${moneyText(bill.monthPaidCents)}`);
+  if (bill.monthDiscountCents > 0) lines.push(`Discount — -${moneyText(bill.monthDiscountCents)}`);
   lines.push(bill.dueCents > 0 ? `BALANCE DUE: ${moneyText(bill.dueCents)}` : "PAID IN FULL");
   return lines.join("\n");
 }

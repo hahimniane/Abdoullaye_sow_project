@@ -26,7 +26,7 @@ const COPY = {
     left: "Left", carsOnLot: "Cars on the lot", carsOwing: "Still owing", billed: "Billed",
     collected: "Collected", owed: "Still owed", whoOwes: "Who still owes", customer: "Customer",
     due: "Due", none: "Nobody owes anything for this month.", soFar: "so far",
-    car: "Car", amount: "Amount", to: "to", activities: "Activities", date: "Date", activity: "Activity", item: "item", items: "items", paidToward: "Paid toward", dueLabel: "due", paidLabel: "paid", olderItems: "Unpaid from before", registeredTo: "registered to", monthTotal: "Total for the month", cars: "cars",
+    car: "Car", amount: "Amount", to: "to", activities: "Activities", date: "Date", activity: "Activity", item: "item", items: "items", paidToward: "Paid toward", discountOn: "Discount on", dueLabel: "due", paidLabel: "paid", olderItems: "Unpaid from before", registeredTo: "registered to", monthTotal: "Total for the month", cars: "cars",
     footer: "Issued through Laawol Digital · laawoldigital.com",
     estimate: "Estimate · whole month",
     expensesPaid: "Expenses you paid for the lot", expense: "Expense", lessExpenses: "Less expenses",
@@ -43,7 +43,7 @@ const COPY = {
     left: "Partie", carsOnLot: "Voitures au parking", carsOwing: "Doivent encore", billed: "Facturé",
     collected: "Encaissé", owed: "Encore dû", whoOwes: "Qui doit encore", customer: "Client",
     due: "Dû", none: "Personne ne doit rien pour ce mois.", soFar: "à ce jour",
-    car: "Voiture", amount: "Montant", to: "au", activities: "Activités", date: "Date", activity: "Activité", item: "élément", items: "éléments", paidToward: "Payé pour", dueLabel: "dû", paidLabel: "payé", olderItems: "Impayé des mois précédents", registeredTo: "enregistrée au nom de", monthTotal: "Total du mois", cars: "voitures",
+    car: "Voiture", amount: "Montant", to: "au", activities: "Activités", date: "Date", activity: "Activité", item: "élément", items: "éléments", paidToward: "Payé pour", discountOn: "Remise sur", dueLabel: "dû", paidLabel: "payé", olderItems: "Impayé des mois précédents", registeredTo: "enregistrée au nom de", monthTotal: "Total du mois", cars: "voitures",
     footer: "Émis via Laawol Digital · laawoldigital.com",
     estimate: "Estimation · mois entier",
     expensesPaid: "Dépenses que vous avez payées pour le parc", expense: "Dépense", lessExpenses: "Moins les dépenses",
@@ -129,6 +129,8 @@ export function billTotalsLayout(c: ParkingMonthCustomer, language: Lang, top: n
   // Which item each payment went toward, not just a lump sum.
   for (const b of c.cars) {
     if (b.monthPaidCents > 0) add(`${t.paidToward} ${b.vehicle || t.car}`, `-${moneyText(b.monthPaidCents)}`, OK, 16);
+    // An agreed discount is its own line (docs/PARKING_DISCOUNT.md).
+    if (b.monthDiscountCents > 0) add(`${t.discountOn} ${b.vehicle || t.car}`, `-${moneyText(b.monthDiscountCents)}`, OK, 16);
   }
   for (const a of c.activities) {
     if (a.paidCents > 0) add(`${t.paidToward} ${a.label}${a.vehicle ? ` · ${a.vehicle}` : ""} (${day(a.date)})`, `-${moneyText(a.paidCents)}`, OK, 16);

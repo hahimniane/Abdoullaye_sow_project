@@ -179,6 +179,7 @@ import {
   type LotInstalmentDraft,
 } from "@/lib/lot-ledger";
 import { WhoseCarField, TeamTag, type WhoseCar } from "@/components/business/whose-car-field";
+import { ParkingDiscountActions } from "@/components/business/parking-discount";
 import { MoveCarLot, ParkingLotBadge, ParkingLotSelect, ParkingLotStrip, useParkingLots } from "@/components/business/parking-lots";
 import { defaultParkingLotId, parkingLotIdOf, parkingLotNameOf, rememberParkingLot, rememberedParkingLot } from "@/lib/parking-lots";
 import { teamMemberOptions, parkingTeamLabel } from "@/lib/parking-team";
@@ -5249,6 +5250,28 @@ export function ParkingPanel({
     ? serverParking.data.parking.totals
     : filteredTotals;
   const parkingTotalsPartial = parkingFiltered && pastStays.hasMore;
+  // Agreed discounts this month (docs/PARKING_DISCOUNT.md): the server's
+  // figure for the business or the one lot in view, with who gave them.
+  const discountsThisMonth = useMemo(() => {
+    const parking = serverParking.data?.parking;
+    if (!parking || parkingNarrowed) return null;
+    if (serverLot) return { cents: serverLot.month.discountCents ?? 0, byUid: {} as Record<string, number> };
+    if (lotFilter) return null;
+    const monthKey = new Intl.DateTimeFormat("en-CA", { timeZone: viewerTimeZone(), year: "numeric", month: "2-digit" })
+      .format(new Date()).slice(0, 7);
+    const index = (parking.months ?? []).indexOf(monthKey);
+    if (index < 0) return null;
+    return { cents: parking.discountedByMonth?.[index] ?? 0, byUid: parking.discountedByMonthByUid?.[index] ?? {} };
+  }, [serverParking.data, serverLot, lotFilter, parkingNarrowed]);
+  const discountGivers = discountsThisMonth
+    ? Object.entries(discountsThisMonth.byUid)
+      .sort((a, b) => b[1] - a[1])
+      .map(([uid, cents]) => {
+        const person = parkingStaff.rows.find((s) => String((s as Record<string, unknown>).id) === uid) as Record<string, unknown> | undefined;
+        const name = text(person?.fullName, "") || text(person?.name, "") || "Staff";
+        return `${name} ${formatMoney(cents / 100)}`;
+      }).join(" · ")
+    : "";
   // Running stays are read whole, so this count is exact.
   const inLotCount = activeStays.rows.filter(
     (row) => !isBusinessParkingVoided(row) &&
@@ -6003,6 +6026,12 @@ export function ParkingPanel({
           <div className="pk-stat"><span>Left</span><b>{parkingTotals.left}</b></div>
           <div className="pk-stat"><span>Collected</span><b>{formatMoney(parkingTotals.collected)}</b></div>
           <div className="pk-stat"><span>Owed</span><b className={parkingTotals.owed > 0 ? "owed" : undefined}>{formatMoney(parkingTotals.owed)}</b></div>
+          {discountsThisMonth && discountsThisMonth.cents > 0 && (
+            <div className="pk-stat" title={discountGivers || undefined}>
+              <span>Discounts this month</span><b>-{formatMoney(discountsThisMonth.cents / 100)}</b>
+              {discountGivers && <small data-no-translate>{discountGivers}</small>}
+            </div>
+          )}
           {parkingTotals.spacesTotal > 0 && (
             <div className="pk-stat"><span>Spaces</span><b>{parkingTotals.spacesUsed} / {parkingTotals.spacesTotal}</b></div>
           )}
@@ -9873,6 +9902,8 @@ function ParkingBillingActions({ row, staff }: { row: FirestoreRow; staff: Fires
   const paidCents = Math.max(0, Math.round(Number(r.amountPaidCents) || 0));
   const dueCents = Math.max(0, Math.round(
     Number(r.amountDueCents ?? r.totalCostCents) || 0));
+  // An agreed discount comes off what is owed (docs/PARKING_DISCOUNT.md).
+  const discountCents = Math.max(0, Math.round(Number(r.parkingDiscountCents) || 0));
   // A fixed stay can take a part payment against its total; an open stay
   // takes money in against a balance that keeps growing. Not offered once
   // settled, cancelled, or on a payment-link record (Stripe owns that).
@@ -9990,9 +10021,14 @@ function ParkingBillingActions({ row, staff }: { row: FirestoreRow; staff: Fires
       {paidCents > 0 && (
         <p className="lst-hint">
           Paid so far: <b>{lotFormatCents(paidCents)}</b>
-          {!openEnded && dueCents > 0 && ` of ${lotFormatCents(dueCents)} — ${lotFormatCents(Math.max(0, dueCents - paidCents))} still owed`}
+          {!openEnded && dueCents > 0 && ` of ${lotFormatCents(dueCents)} — ${lotFormatCents(Math.max(0, dueCents - paidCents - discountCents))} still owed`}
         </p>
       )}
+      <ParkingDiscountActions
+        row={r}
+        staffOptions={staffOptions}
+        nameOf={(uid) => staffOptions.find((s) => s.id === uid)?.name ?? ""}
+      />
       {flash && <div className="lst-hint" role="status">{flash}</div>}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
         {openEnded && (

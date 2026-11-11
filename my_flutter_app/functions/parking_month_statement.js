@@ -163,8 +163,22 @@ function accruedThroughCents(row, day, today) {
 }
 
 /**
+ * The live discount on a car, in cents (docs/PARKING_DISCOUNT.md): what the
+ * lot agreed to take off. Never money in - it comes off what is owed, not
+ * on top of what was paid.
+ *
+ * @param {object} row A parkedCars document.
+ * @return {number} Cents, never negative.
+ */
+function discountCentsOf(row) {
+  const cents = Math.round(Number(row?.parkingDiscountCents));
+  return Number.isFinite(cents) && cents > 0 ? cents : 0;
+}
+
+/**
  * What has been paid on the car, in cents - recorded payments, or the
- * whole of it when the record is marked paid without amounts.
+ * whole of it (less any discount) when the record is marked paid without
+ * amounts.
  *
  * @param {object} row A parkedCars document.
  * @param {number} today Today's day number.
@@ -175,7 +189,8 @@ function paidCents(row, today) {
   if (recorded > 0) return recorded;
   const status = text(row?.paymentStatus, 40);
   if (status === "succeeded" || status === "paid") {
-    return accruedThroughCents(row, today, today);
+    return Math.max(0,
+        accruedThroughCents(row, today, today) - discountCentsOf(row));
   }
   return 0;
 }
@@ -287,7 +302,8 @@ function paidNowCents(row, today) {
  * @param {Date} [now] The moment.
  * @return {?{dailyRateCents: number, sinceDayKey: string,
  *   leftDayKey: ?string, days: number, accruedCents: number,
- *   paidCents: number, balanceCents: number, paidInFull: boolean,
+ *   paidCents: number, discountCents: number, balanceCents: number,
+ *   paidInFull: boolean,
  *   stillParked: boolean}} null for a voided or cancelled car, or one with
  *   no arrival day.
  */
@@ -301,6 +317,7 @@ function parkingBalanceNow(car, now = new Date()) {
   const through = leave === null ? today : Math.min(today, leave);
   const accruedCents = accruedThroughCents(r, today, today);
   const paid = paidNowCents(r, today);
+  const discountCents = discountCentsOf(r);
   const dailyDollars = Number(r.dailyRate);
   const dailyRateCents = Number.isFinite(dailyDollars) && dailyDollars > 0 ?
     Math.round(dailyDollars * 100) :
@@ -312,8 +329,9 @@ function parkingBalanceNow(car, now = new Date()) {
     days: Math.max(0, through - start + 1),
     accruedCents,
     paidCents: paid,
-    balanceCents: Math.max(0, accruedCents - paid),
-    paidInFull: accruedCents > 0 && paid >= accruedCents,
+    discountCents,
+    balanceCents: Math.max(0, accruedCents - paid - discountCents),
+    paidInFull: accruedCents > 0 && paid + discountCents >= accruedCents,
     stillParked: leave === null || leave >= today,
   };
 }
@@ -400,12 +418,16 @@ function parkingMonthStatement(row, monthKey, now = new Date()) {
   if (monthCents <= 0) return null;
 
   // Oldest first: money pays off what came before this month, then this
-  // month. Whatever is left over belongs to later months.
+  // month. Whatever is left over belongs to later months. A discount covers
+  // the same way, after the money (docs/PARKING_DISCOUNT.md).
   const paid = paidCents(r, today);
-  const priorUnpaidCents = Math.max(0, priorCents - paid);
-  const towardMonth = Math.max(0, paid - priorCents);
-  const monthPaidCents = Math.min(monthCents, towardMonth);
-  const monthUnpaidCents = monthCents - monthPaidCents;
+  const covered = paid + discountCentsOf(r);
+  const priorUnpaidCents = Math.max(0, priorCents - covered);
+  const monthPaidCents = Math.min(monthCents, Math.max(0, paid - priorCents));
+  const monthCoveredCents =
+    Math.min(monthCents, Math.max(0, covered - priorCents));
+  const monthDiscountCents = monthCoveredCents - monthPaidCents;
+  const monthUnpaidCents = monthCents - monthCoveredCents;
   const days = to - from + 1;
 
   return {
@@ -418,6 +440,7 @@ function parkingMonthStatement(row, monthKey, now = new Date()) {
     dayRateCents: Math.round(monthCents / days),
     monthCents,
     monthPaidCents,
+    monthDiscountCents,
     monthUnpaidCents,
     priorUnpaidCents,
     dueCents: priorUnpaidCents + monthUnpaidCents,
@@ -467,7 +490,8 @@ function carriedCarItem(row, monthKey, now = new Date()) {
   }
   if (leave >= month.first || leave < start) return null;
   const accrued = accruedThroughCents(r, leave, today);
-  const dueCents = Math.max(0, accrued - paidCents(r, today));
+  const dueCents =
+    Math.max(0, accrued - paidCents(r, today) - discountCentsOf(r));
   if (dueCents <= 0) return null;
   return {
     id: text(r.id),
@@ -582,6 +606,8 @@ function parkingMonthSummary(rows, monthKey, now = new Date(),
     customersPaid: customers.filter((c) => c.paid),
     billedCents: sum(bills, "monthCents") + sum(inMonth, "feeCents"),
     collectedCents: sum(bills, "monthPaidCents") + sum(inMonth, "paidCents"),
+    // Taken off, not collected (docs/PARKING_DISCOUNT.md).
+    discountCents: sum(bills, "monthDiscountCents"),
     owedCents: sum(bills, "monthUnpaidCents") + sum(inMonth, "dueCents"),
     olderOwedCents: sum(customersOwing, "priorUnpaidCents"),
     dueCents: sum(customersOwing, "dueCents"),
@@ -686,6 +712,7 @@ function parkingMonthCustomers(bills, activities = [], carried = []) {
     const monthCents = sum(cars, "monthCents") + sum(inMonth, "feeCents");
     const monthPaidCents = sum(cars, "monthPaidCents") +
       sum(inMonth, "paidCents");
+    const monthDiscountCents = sum(cars, "monthDiscountCents");
     const monthUnpaidCents = sum(cars, "monthUnpaidCents") +
       sum(inMonth, "dueCents");
     const priorUnpaidCents = sum(cars, "priorUnpaidCents") +
@@ -712,6 +739,7 @@ function parkingMonthCustomers(bills, activities = [], carried = []) {
       olderCars,
       monthCents,
       monthPaidCents,
+      monthDiscountCents,
       monthUnpaidCents,
       priorUnpaidCents,
       dueCents,
@@ -759,6 +787,9 @@ function parkingMonthBillText(bill, businessName) {
   if (b.monthPaidCents > 0) {
     lines.push(`Paid — -${moneyText(b.monthPaidCents)}`);
   }
+  if (b.monthDiscountCents > 0) {
+    lines.push(`Discount — -${moneyText(b.monthDiscountCents)}`);
+  }
   lines.push(b.dueCents > 0 ?
     `BALANCE DUE: ${moneyText(b.dueCents)}` : "PAID IN FULL");
   return lines.join("\n");
@@ -798,6 +829,9 @@ function parkingMonthCustomerText(customer, businessName) {
     }
     if (b.monthPaidCents > 0) {
       lines.push(`  Paid — -${moneyText(b.monthPaidCents)}`);
+    }
+    if (b.monthDiscountCents > 0) {
+      lines.push(`  Discount — -${moneyText(b.monthDiscountCents)}`);
     }
   }
   if ((c.activities || []).length) lines.push("", "Activities");
@@ -842,6 +876,9 @@ function parkingMonthCustomerText(customer, businessName) {
   }
   if (c.monthPaidCents > 0) {
     lines.push(`Paid — -${moneyText(c.monthPaidCents)}`);
+  }
+  if (c.monthDiscountCents > 0) {
+    lines.push(`Discount — -${moneyText(c.monthDiscountCents)}`);
   }
   if (credited) {
     lines.push(`Less expenses — -${moneyText(c.expenseCreditCents)}`);
@@ -945,6 +982,7 @@ module.exports = {
   previousMonthKey,
   monthLabel,
   accruedThroughCents,
+  discountCentsOf,
   paidCents,
   paidNowCents,
   paymentCents,

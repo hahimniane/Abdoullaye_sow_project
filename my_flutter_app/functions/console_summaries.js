@@ -736,12 +736,21 @@ function businessParkingAccrued(row, now = new Date()) {
   return daily > 0 ? businessParkingStayDays(row, now) * daily : 0;
 }
 
+// The live discount, in dollars (docs/PARKING_DISCOUNT.md): taken off what
+// is owed, never counted as money in.
+function businessParkingDiscount(row) {
+  const cents = Number(row?.parkingDiscountCents);
+  return Number.isFinite(cents) && cents > 0 ? Math.round(cents) / 100 : 0;
+}
+
 function businessParkingAmountPaid(row, now = new Date()) {
   const cents = Number(row?.amountPaidCents);
   if (Number.isFinite(cents) && cents > 0) return Math.round(cents) / 100;
   const status = trimmed(row?.paymentStatus, 40);
   if (status === "succeeded" || status === "paid") {
-    return businessParkingAccrued(row, now);
+    const net = businessParkingAccrued(row, now) -
+      businessParkingDiscount(row);
+    return net > 0 ? Math.round(net * 100) / 100 : 0;
   }
   return 0;
 }
@@ -750,7 +759,7 @@ function businessParkingBalance(row, now = new Date()) {
   if (trimmed(row?.status, 40) === "cancelled") return 0;
   if (row?.voided === true) return 0;
   const owed = businessParkingAccrued(row, now) -
-    businessParkingAmountPaid(row, now);
+    businessParkingAmountPaid(row, now) - businessParkingDiscount(row);
   return owed > 0 ? Math.round(owed * 100) / 100 : 0;
 }
 
@@ -790,7 +799,11 @@ function parkingSummaryPartial(rows, {now = new Date(), months = [],
   const index = new Map(months.map((m, i) => [m, i]));
   const partial = {inLot: 0, reserved: 0, left: 0, collected: 0, owed: 0,
     overdueCount: 0, overdueAmount: 0, records: 0,
-    collectedByMonth: months.map(() => 0)};
+    collectedByMonth: months.map(() => 0),
+    // Discounts given, by the month they were given and by who gave them
+    // (PARKING_DISCOUNT.md). Taken off, never collected.
+    discountedByMonth: months.map(() => 0),
+    discountedByMonthByUid: months.map(() => ({}))};
   for (const row of Array.isArray(rows) ? rows : []) {
     partial.records += 1;
     // Voided: on the record, in no figure (not in the lot, not collected).
@@ -802,6 +815,19 @@ function parkingSummaryPartial(rows, {now = new Date(), months = [],
       else partial.reserved += 1;
     }
     if (ended) partial.left += 1;
+    if (!cancelled && Array.isArray(row?.parkingDiscounts)) {
+      for (const d of row.parkingDiscounts) {
+        if (!d || d.undone === true) continue;
+        const at = Number(d.atMs) > 0 ? new Date(Number(d.atMs)) : null;
+        const slot = index.get(zonedMonthKey(at, timeZone));
+        const cents = Math.round(Number(d.amountCents) || 0);
+        if (slot === undefined || cents <= 0) continue;
+        partial.discountedByMonth[slot] += cents;
+        const by = trimmed(d.givenByUid, 128) || "unknown";
+        const people = partial.discountedByMonthByUid[slot];
+        people[by] = (people[by] || 0) + cents;
+      }
+    }
     const paid = businessParkingAmountPaid(row, now);
     const balance = businessParkingBalance(row, now);
     partial.collected += paid;
@@ -861,6 +887,17 @@ function combineParkingPartials(a, b) {
     records: a.records + b.records,
     collectedByMonth: Array.from({length: months}, (_, i) =>
       (a.collectedByMonth[i] || 0) + (b.collectedByMonth[i] || 0)),
+    discountedByMonth: Array.from({length: months}, (_, i) =>
+      ((a.discountedByMonth || [])[i] || 0) +
+      ((b.discountedByMonth || [])[i] || 0)),
+    discountedByMonthByUid: Array.from({length: months}, (_, i) => {
+      const out = {...((a.discountedByMonthByUid || [])[i] || {})};
+      for (const [uid, cents] of
+        Object.entries((b.discountedByMonthByUid || [])[i] || {})) {
+        out[uid] = (out[uid] || 0) + cents;
+      }
+      return out;
+    }),
   };
 }
 
@@ -889,6 +926,10 @@ function finishParkingSummary(partial, spacesTotal = 0) {
       amount: Math.round(partial.overdueAmount * 100) / 100,
     },
     collectedByMonth: partial.collectedByMonth,
+    discountedByMonth: partial.discountedByMonth ||
+      partial.collectedByMonth.map(() => 0),
+    discountedByMonthByUid: partial.discountedByMonthByUid ||
+      partial.collectedByMonth.map(() => ({})),
     records: partial.records,
   };
 }

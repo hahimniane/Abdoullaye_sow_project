@@ -13,7 +13,7 @@
  * Pure: no React, no clock of its own (the caller passes `now`).
  */
 
-import { accruedThroughCents, dayNumber } from "./parking-month-statement.ts";
+import { accruedThroughCents, dayNumber, discountCentsOf } from "./parking-month-statement.ts";
 
 export type ParkingBalance = {
   dailyRateCents: number;
@@ -25,6 +25,8 @@ export type ParkingBalance = {
   days: number;
   accruedCents: number;
   paidCents: number;
+  /** An agreed discount: off what is owed, never paid money (docs/PARKING_DISCOUNT.md). */
+  discountCents?: number;
   balanceCents: number;
   paidInFull: boolean;
   /** No leave day yet, or the leave day is today or later. */
@@ -50,7 +52,9 @@ function recordedPaidCents(row: Row, today: number): number {
   const recorded = Math.round(Number(row?.amountPaidCents) || 0);
   if (recorded > 0) return recorded;
   const status = text(row?.paymentStatus);
-  if (status === "succeeded" || status === "paid") return accruedThroughCents(row, today, today);
+  if (status === "succeeded" || status === "paid") {
+    return Math.max(0, accruedThroughCents(row, today, today) - discountCentsOf(row));
+  }
   return 0;
 }
 
@@ -85,6 +89,7 @@ export function parkingBalanceNow(car: Row, now: Date = new Date()): ParkingBala
   const through = leave === null ? today : Math.min(today, leave);
   const accruedCents = accruedThroughCents(r, today, today);
   const paid = paidNowCents(r, today);
+  const discountCents = discountCentsOf(r);
   const dailyDollars = Number(r.dailyRate);
   const dailyRateCents = Number.isFinite(dailyDollars) && dailyDollars > 0
     ? Math.round(dailyDollars * 100)
@@ -96,8 +101,9 @@ export function parkingBalanceNow(car: Row, now: Date = new Date()): ParkingBala
     days: Math.max(0, through - start + 1),
     accruedCents,
     paidCents: paid,
-    balanceCents: Math.max(0, accruedCents - paid),
-    paidInFull: accruedCents > 0 && paid >= accruedCents,
+    discountCents,
+    balanceCents: Math.max(0, accruedCents - paid - discountCents),
+    paidInFull: accruedCents > 0 && paid + discountCents >= accruedCents,
     stillParked: leave === null || leave >= today,
   };
 }

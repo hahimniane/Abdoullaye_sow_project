@@ -428,9 +428,12 @@ function businessParkingPaidUpdate({
   }
 
   const paymentStatus = text(data.paymentStatus, 40);
+  // Paid in full = the total less any agreed discount (PARKING_DISCOUNT.md):
+  // the discount is never recorded as money in.
   const amountPaidCents = Math.max(
       0,
-      Math.round(Number(data.amountDueCents ?? data.totalCostCents ?? 0) || 0),
+      Math.round(Number(data.amountDueCents ?? data.totalCostCents ?? 0) || 0) -
+        discountCents(data),
   );
 
   if (paymentStatus === BUSINESS_PARKING_PAYMENT_STATUS.PAID) {
@@ -564,8 +567,10 @@ function businessParkingPartialPaymentPlan({entry, days, amountCents,
   const alreadyPaid = Math.max(
       0, Math.round(Number(data.amountPaidCents) || 0));
   const openEnded = !data.parkingEndDate;
+  // What money must cover: the total less any agreed discount.
   const dueCents = Math.max(0, Math.round(
-      Number(data.amountDueCents ?? data.totalCostCents ?? 0) || 0));
+      Number(data.amountDueCents ?? data.totalCostCents ?? 0) || 0) -
+      discountCents(data));
 
   // On a fixed stay you cannot pay more than is owed: an overpayment is a
   // typo, not a tip. Clamp it to the balance rather than banking it.
@@ -637,7 +642,8 @@ function businessParkingClosePlan({entry, endDate}) {
   const amountDueCents = days * dailyRateCents;
   const amountPaidCents = Math.max(
       0, Math.round(Number(data.amountPaidCents) || 0));
-  const remainingCents = Math.max(0, amountDueCents - amountPaidCents);
+  const remainingCents =
+    Math.max(0, amountDueCents - amountPaidCents - discountCents(data));
   const fullyCovered = amountDueCents > 0 && remainingCents === 0;
   const update = {
     amountDueCents,
@@ -646,7 +652,8 @@ function businessParkingClosePlan({entry, endDate}) {
     totalCost: dollars(amountDueCents),
   };
 
-  Object.assign(update, directPaymentPayoutFields(amountDueCents), {
+  Object.assign(update, directPaymentPayoutFields(
+      Math.max(0, amountDueCents - discountCents(data))), {
     paymentStatus: fullyCovered ?
       BUSINESS_PARKING_PAYMENT_STATUS.PAID :
       BUSINESS_PARKING_PAYMENT_STATUS.AWAITING_DIRECT,
@@ -662,6 +669,17 @@ function businessParkingClosePlan({entry, endDate}) {
     fullyCovered,
     update,
   };
+}
+
+/**
+ * The live discount on a record, in cents (docs/PARKING_DISCOUNT.md).
+ *
+ * @param {object} data A parkedCars document.
+ * @return {number} Cents, never negative.
+ */
+function discountCents(data) {
+  const cents = Math.round(Number(data?.parkingDiscountCents));
+  return Number.isFinite(cents) && cents > 0 ? cents : 0;
 }
 
 function closeRefusal(reason) {

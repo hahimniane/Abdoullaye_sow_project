@@ -256,6 +256,7 @@ const parkingInvoices = require("./parking_invoices");
 const parkingBillPayment = require("./parking_bill_payment");
 const parkingTeam = require("./parking_team");
 const parkingLots = require("./parking_lots");
+const parkingDiscount = require("./parking_discount");
 const staffFullAccess = require("./staff_full_access");
 const parkingInvoicePdf = require("./parking_invoice_pdf");
 const {parkingBalanceNow} = require("./parking_month_statement");
@@ -15485,6 +15486,170 @@ async function parkingLotMove(db, uid, data) {
     parkingLotId: outcome.target.id, parkingLotName: outcome.target.name};
 }
 
+// ---------------------------------------------------------------------------
+// A negotiated discount on a parked car (docs/PARKING_DISCOUNT.md). Its own
+// line: never money in, never a rewritten price. Rides on
+// updateBusinessParkingEntry (no new export: the CPU budget).
+// ---------------------------------------------------------------------------
+const PARKING_DISCOUNT_ACTIONS = Object.freeze(
+    ["discount_give", "discount_settle", "discount_undo"]);
+
+/**
+ * @param {string} code A parking_discount.DISCOUNT_MESSAGES code.
+ * @param {string} [status] The HttpsError status.
+ * @return {HttpsError} The refusal, with its `reason` for the clients.
+ */
+function parkingDiscountError(code, status = "failed-precondition") {
+  return new HttpsError(status,
+      parkingDiscount.DISCOUNT_MESSAGES[code] ||
+        "That discount cannot be given.",
+      {reason: code});
+}
+
+/**
+ * Dollars for a History line.
+ *
+ * @param {number} cents Cents.
+ * @return {string} "$12.50".
+ */
+function discountMoney(cents) {
+  return "$" + (Math.round(Number(cents) || 0) / 100).toFixed(2);
+}
+
+/**
+ * Give, settle or undo a discount on one car. Anyone with the parking
+ * permission (decision 2); every change is a History line.
+ *
+ * @param {object} request The callable request.
+ * @param {string} uid The caller.
+ * @param {string} action One of PARKING_DISCOUNT_ACTIONS.
+ * @return {Promise<object>} The callable's answer.
+ */
+async function parkingDiscountAction(request, uid, action) {
+  const data = request.data || {};
+  const entryId = cleanText(data.entryId || data.carId, 180);
+  if (!entryId) {
+    throw new HttpsError("invalid-argument", "Parking entry is required");
+  }
+  const db = admin.firestore();
+  const entryRef = db.collection("parkedCars").doc(entryId);
+  const existing = await entryRef.get();
+  if (!existing.exists) {
+    throw new HttpsError("not-found", "Parking entry not found",
+        {reason: "car_not_found"});
+  }
+  const businessId = String(existing.get("businessId") || "");
+  await requireBusinessPermission(uid, businessId, "parking");
+  refuseVoidedParking(existing.data() || {});
+  const reason = cleanText(data.reason, parkingDiscount.MAX_REASON);
+  const outcome = await db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(entryRef);
+    const car = snap.data() || {};
+    refuseVoidedParking(car);
+    const now = new Date();
+    if (action === "discount_undo") {
+      const plan = parkingDiscount.discountUndoPlan({car,
+        discountId: data.discountId, uid, nowMs: now.getTime()});
+      if (!plan.ok) {
+        throw parkingDiscountError(plan.reason,
+            plan.reason === "discount_not_found" ?
+              "not-found" : "failed-precondition");
+      }
+      const update = {
+        parkingDiscounts: plan.discounts,
+        parkingDiscountCents: plan.discountCents,
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      };
+      if (plan.reopens) {
+        Object.assign(update, {
+          paymentStatus: "awaiting_direct_payment",
+          directPaymentReceived: false,
+        });
+      }
+      transaction.update(entryRef, update);
+      return {amountCents: plan.amountCents, reopened: plan.reopens};
+    }
+    const settle = action === "discount_settle";
+    const receivedByStaffId = cleanText(data.receivedByStaffId, 180);
+    const plan = settle ?
+      parkingDiscount.discountSettlePlan({car,
+        paidCents: data.paidCents, reason, receivedByStaffId,
+        expectedOwedCents: data.expectedOwedCents, now}) :
+      parkingDiscount.discountGivePlan({car,
+        amountCents: data.amountCents, reason, now});
+    if (!plan.ok) {
+      throw parkingDiscountError(plan.reason,
+          ["discount_no_amount", "discount_reason_required",
+            "discount_receiver_required"].includes(plan.reason) ?
+            "invalid-argument" : "failed-precondition");
+    }
+    const discountId = db.collection("parkedCars").doc().id;
+    const entry = {
+      id: discountId,
+      amountCents: plan.discountCents,
+      reason,
+      mode: settle ? "settle" : "discount",
+      paymentCents: plan.paidCents,
+      givenByUid: uid,
+      at: FirestoreTimestamp.fromDate(now),
+      atMs: now.getTime(),
+    };
+    const update = {
+      parkingDiscounts: FirestoreFieldValue.arrayUnion(entry),
+      parkingDiscountCents:
+        parkingDiscount.discountListCents(car.parkingDiscounts) +
+        plan.discountCents,
+      updatedAt: FirestoreFieldValue.serverTimestamp(),
+    };
+    if (plan.paidCents > 0) {
+      const alreadyPaid =
+        Math.max(0, Math.round(Number(car.amountPaidCents) || 0));
+      Object.assign(update, parkingPartPaymentUpdate({
+        plan: {appliedCents: plan.paidCents,
+          newPaidCents: alreadyPaid + plan.paidCents,
+          fullyCovered: plan.settles},
+        receivedVia: data.receivedVia, receivedByStaffId, uid,
+        note: reason, extra: {discountId},
+      }));
+    } else if (plan.settles) {
+      // Covered by the discount with no new money: the same settled shape
+      // a payment that reaches the total leaves.
+      const paidCents =
+        Math.max(0, Math.round(Number(car.amountPaidCents) || 0));
+      Object.assign(update, {
+        paymentStatus: "paid",
+        status: "reserved",
+        directPaymentReceived: true,
+        directPaymentMarkedByUid: uid,
+        directPaymentReceivedAt: FirestoreFieldValue.serverTimestamp(),
+        ...directPaymentPayoutFields(paidCents),
+      });
+    }
+    transaction.update(entryRef, update);
+    return {discountId, amountCents: plan.discountCents,
+      paidCents: plan.paidCents, settled: plan.settles,
+      owedCents: plan.owedCents};
+  });
+  let summary;
+  if (action === "discount_undo") {
+    summary = "Discount of " + discountMoney(outcome.amountCents) + " undone";
+  } else if (action === "discount_settle") {
+    summary = "Settled for " + discountMoney(outcome.paidCents) +
+      ": discount of " + discountMoney(outcome.amountCents) +
+      " (" + reason + ")";
+  } else {
+    summary = "Discount of " + discountMoney(outcome.amountCents) +
+      " given (" + reason + ")";
+  }
+  await writeLotLedgerAudit({
+    businessId, entityType: "parking", entityId: entryId,
+    action: action === "discount_undo" ?
+      "parking_discount_undone" : "parking_discount_given",
+    byStaffId: uid, changes: [], summary,
+  });
+  return {success: true, entryId, ...outcome};
+}
+
 const PARKING_WHATSAPP_ACTIONS = Object.freeze(
     ["set_parking_whatsapp", "welcome_preview", "welcome_send"]);
 
@@ -17308,6 +17473,9 @@ exports.updateBusinessParkingEntry = onCall(
       }
       if (PARKING_LOT_ACTIONS.includes(businessAction)) {
         return parkingLotAction(request, uid, businessAction);
+      }
+      if (PARKING_DISCOUNT_ACTIONS.includes(businessAction)) {
+        return parkingDiscountAction(request, uid, businessAction);
       }
       const entryId = cleanText(
           request.data?.entryId || request.data?.reservationId, 180,
@@ -30361,6 +30529,17 @@ exports.billParkingThroughToday = onCall(
             "This stay has a leave date, so its price already covers it. " +
               "Nothing accrues day by day.",
             {reason: "parking_not_open_ended"},
+        );
+      }
+      // The link charges whole days and knows nothing of an agreed
+      // discount: it would bill the customer what the lot took off
+      // (docs/PARKING_DISCOUNT.md). Such a car is paid at the counter.
+      if (Number(car.parkingDiscountCents) > 0) {
+        throw new HttpsError(
+            "failed-precondition",
+            "This car has an agreed discount. Record its payments on the " +
+              "car instead of sending a payment link.",
+            {reason: "parking_has_discount"},
         );
       }
       const dayMs = 24 * 60 * 60 * 1000;

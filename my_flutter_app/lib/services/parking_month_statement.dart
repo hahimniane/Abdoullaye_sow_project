@@ -165,12 +165,23 @@ int parkingAccruedThroughCents(
   return stayDays > 0 ? (total * days / stayDays).round() : 0;
 }
 
+/// The live discount on a car, in cents (docs/PARKING_DISCOUNT.md): taken off
+/// what is owed, never money in. Mirrors the server's `discountCentsOf`.
+int parkingDiscountCentsOf(Map<String, dynamic> row) {
+  final n = num.tryParse('${row['parkingDiscountCents'] ?? ''}');
+  if (n == null || !n.isFinite) return 0;
+  final cents = n.round();
+  return cents > 0 ? cents : 0;
+}
+
 int _paidCents(Map<String, dynamic> row, int today) {
   final recorded = (num.tryParse('${row['amountPaidCents'] ?? ''}') ?? 0).round();
   if (recorded > 0) return recorded;
   final status = _text(row['paymentStatus'], 40);
   if (status == 'succeeded' || status == 'paid') {
-    return parkingAccruedThroughCents(row, today, today);
+    final net = parkingAccruedThroughCents(row, today, today) -
+        parkingDiscountCentsOf(row);
+    return net > 0 ? net : 0;
   }
   return 0;
 }
@@ -232,6 +243,7 @@ class ParkingMonthBill {
     required this.dayRateCents,
     required this.monthCents,
     required this.monthPaidCents,
+    this.monthDiscountCents = 0,
     required this.monthUnpaidCents,
     required this.priorUnpaidCents,
     required this.dueCents,
@@ -258,6 +270,9 @@ class ParkingMonthBill {
   final int dayRateCents;
   final int monthCents;
   final int monthPaidCents;
+
+  /// Taken off this month by an agreed discount (docs/PARKING_DISCOUNT.md).
+  final int monthDiscountCents;
   final int monthUnpaidCents;
   final int priorUnpaidCents;
   final int dueCents;
@@ -304,11 +319,16 @@ ParkingMonthBill? parkingMonthStatement(
   final monthCents = through - prior > 0 ? through - prior : 0;
   if (monthCents <= 0) return null;
 
+  // A discount covers like money, after it (docs/PARKING_DISCOUNT.md).
   final paid = _paidCents(row, today);
-  final priorUnpaid = prior - paid > 0 ? prior - paid : 0;
+  final covered = paid + parkingDiscountCentsOf(row);
+  final priorUnpaid = prior - covered > 0 ? prior - covered : 0;
   final towardMonth = paid - prior > 0 ? paid - prior : 0;
   final monthPaid = towardMonth < monthCents ? towardMonth : monthCents;
-  final monthUnpaid = monthCents - monthPaid;
+  final coveredMonth = covered - prior > 0 ? covered - prior : 0;
+  final monthCovered = coveredMonth < monthCents ? coveredMonth : monthCents;
+  final monthDiscount = monthCovered - monthPaid;
+  final monthUnpaid = monthCents - monthCovered;
   final days = to - from + 1;
   final customer = _text(row['customerName']).isNotEmpty
       ? _text(row['customerName'])
@@ -323,6 +343,7 @@ ParkingMonthBill? parkingMonthStatement(
     dayRateCents: (monthCents / days).round(),
     monthCents: monthCents,
     monthPaidCents: monthPaid,
+    monthDiscountCents: monthDiscount,
     monthUnpaidCents: monthUnpaid,
     priorUnpaidCents: priorUnpaid,
     dueCents: priorUnpaid + monthUnpaid,
@@ -499,7 +520,8 @@ ParkingCarriedCar? carriedCarItem(Map<String, dynamic> row, String monthKey,
   if (leave >= month.first || leave < start) return null;
   final accrued = parkingAccruedThroughCents(row, leave, today);
   final paid = _paidCents(row, today);
-  final due = accrued - paid > 0 ? accrued - paid : 0;
+  final discount = parkingDiscountCentsOf(row);
+  final due = accrued - paid - discount > 0 ? accrued - paid - discount : 0;
   if (due <= 0) return null;
   final customer = _text(row['customerName']).isNotEmpty
       ? _text(row['customerName'])
@@ -546,6 +568,7 @@ class ParkingMonthCustomer {
     required this.olderRegisteredTo,
     required this.monthCents,
     required this.monthPaidCents,
+    this.monthDiscountCents = 0,
     required this.monthUnpaidCents,
     required this.priorUnpaidCents,
     required this.dueCents,
@@ -589,6 +612,9 @@ class ParkingMonthCustomer {
   final List<String> olderCarsRegisteredTo;
   final int monthCents;
   final int monthPaidCents;
+
+  /// Taken off this month by an agreed discount (docs/PARKING_DISCOUNT.md).
+  final int monthDiscountCents;
   final int monthUnpaidCents;
   final int priorUnpaidCents;
   final int dueCents;
@@ -659,6 +685,7 @@ class ParkingMonthCustomer {
     olderRegisteredTo: olderRegisteredTo,
     monthCents: monthCents,
     monthPaidCents: monthPaidCents,
+    monthDiscountCents: monthDiscountCents,
     monthUnpaidCents: monthUnpaidCents,
     priorUnpaidCents: priorUnpaidCents,
     dueCents: dueCents ?? this.dueCents,
@@ -699,6 +726,7 @@ class ParkingMonthCustomer {
         olderRegisteredTo: olderRegisteredTo,
         monthCents: monthCents,
         monthPaidCents: monthPaidCents,
+        monthDiscountCents: monthDiscountCents,
         monthUnpaidCents: monthUnpaidCents,
         priorUnpaidCents: priorUnpaidCents,
         dueCents: net.dueCents,
@@ -897,6 +925,7 @@ List<ParkingMonthCustomer> parkingMonthCustomers(
         l.fold(0, (s, a) => s + f(a));
     final monthCents = sumCars((b) => b.monthCents) + sumActs(inMonth, (a) => a.feeCents);
     final monthPaid = sumCars((b) => b.monthPaidCents) + sumActs(inMonth, (a) => a.paidCents);
+    final monthDiscount = sumCars((b) => b.monthDiscountCents);
     final monthUnpaid = sumCars((b) => b.monthUnpaidCents) + sumActs(inMonth, (a) => a.dueCents);
     final priorUnpaid = sumCars((b) => b.priorUnpaidCents) + sumActs(older, (a) => a.dueCents) +
         olderCars.fold<int>(0, (s, c) => s + c.dueCents);
@@ -930,6 +959,7 @@ List<ParkingMonthCustomer> parkingMonthCustomers(
       olderRegisteredTo: [for (final a in older) reg(a.customerName)],
       monthCents: monthCents,
       monthPaidCents: monthPaid,
+      monthDiscountCents: monthDiscount,
       monthUnpaidCents: monthUnpaid,
       priorUnpaidCents: priorUnpaid,
       dueCents: due,
@@ -972,6 +1002,9 @@ String parkingMonthCustomerText(ParkingMonthCustomer c, String businessName) {
       lines.add('  Unpaid from before — ${parkingMoney(b.priorUnpaidCents)}');
     }
     if (b.monthPaidCents > 0) lines.add('  Paid — -${parkingMoney(b.monthPaidCents)}');
+    if (b.monthDiscountCents > 0) {
+      lines.add('  Discount — -${parkingMoney(b.monthDiscountCents)}');
+    }
   }
   if (c.activities.isNotEmpty) lines..add('')..add('Activities');
   for (var i = 0; i < c.activities.length; i++) {
@@ -1001,6 +1034,9 @@ String parkingMonthCustomerText(ParkingMonthCustomer c, String businessName) {
     lines.add('Unpaid from before — ${parkingMoney(c.priorUnpaidCents)}');
   }
   if (c.monthPaidCents > 0) lines.add('Paid — -${parkingMoney(c.monthPaidCents)}');
+  if (c.monthDiscountCents > 0) {
+    lines.add('Discount — -${parkingMoney(c.monthDiscountCents)}');
+  }
   lines.add(c.dueCents > 0 ? 'BALANCE DUE: ${parkingMoney(c.dueCents)}' : 'PAID IN FULL');
   return lines.join('\n');
 }
@@ -1016,6 +1052,7 @@ class ParkingMonthSummary {
     required this.customersPaid,
     required this.billedCents,
     required this.collectedCents,
+    this.discountCents = 0,
     required this.owedCents,
     required this.olderOwedCents,
     required this.dueCents,
@@ -1038,6 +1075,9 @@ class ParkingMonthSummary {
   final List<ParkingMonthCustomer> customersPaid;
   final int billedCents;
   final int collectedCents;
+
+  /// Taken off by agreed discounts, never collected.
+  final int discountCents;
   final int owedCents;
   final int olderOwedCents;
   /// What customers still owe, after staff expenses came off.
@@ -1115,6 +1155,7 @@ ParkingMonthSummary parkingMonthSummary(
     customersPaid: customers.where((c) => c.paid).toList(),
     billedCents: sumBills((b) => b.monthCents) + sumActs((a) => a.feeCents),
     collectedCents: sumBills((b) => b.monthPaidCents) + sumActs((a) => a.paidCents),
+    discountCents: sumBills((b) => b.monthDiscountCents),
     owedCents: sumBills((b) => b.monthUnpaidCents) + sumActs((a) => a.dueCents),
     olderOwedCents: customersOwing.fold(0, (s, c) => s + c.priorUnpaidCents),
     dueCents: customersOwing.fold(0, (s, c) => s + c.dueCents),
@@ -1243,6 +1284,9 @@ String parkingMonthBillText(ParkingMonthBill b, String businessName) {
   }
   if (b.monthPaidCents > 0) {
     lines.add('Paid — -${parkingMoney(b.monthPaidCents)}');
+  }
+  if (b.monthDiscountCents > 0) {
+    lines.add('Discount — -${parkingMoney(b.monthDiscountCents)}');
   }
   lines.add(b.dueCents > 0
       ? 'BALANCE DUE: ${parkingMoney(b.dueCents)}'
