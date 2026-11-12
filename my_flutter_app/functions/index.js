@@ -49366,6 +49366,11 @@ exports.listPackageRequestOptions = onCall(
       cors: true,
       invoker: "public",
       secrets: [googleMapsApiKey],
+      // "Send a package" waits on this answer before it can show the
+      // countries; a cold start added seconds (owner, 11/11/2026: "customers
+      // aren't patient"). One warm instance, about $7 a month. The only
+      // function kept warm (test/scaling-contract.test.js).
+      minInstances: 1,
     },
     async (request) => {
       await enforceCallableRateLimit(request, {

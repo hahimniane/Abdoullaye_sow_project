@@ -584,11 +584,20 @@ export function CustomerShippingServices({
       }
     }
 
-    void loadDestinationOptions();
-    void loadTransportOptions();
+    // On "Send a package" these two lists are only needed if the customer
+    // turns to card booking or car transport, so they wait a moment and let
+    // the package form's own request go first (it fills the page).
+    const wait = service === "barrel" ? 2500 : 0;
+    const timer = setTimeout(() => {
+      void loadDestinationOptions();
+      void loadTransportOptions();
+    }, wait);
     return () => {
       active = false;
+      clearTimeout(timer);
     };
+    // `service` is read once: switching tabs never needs the delay again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [optionsReloadKey]);
 
   // These catalogs come from callables, which answer once - so a business

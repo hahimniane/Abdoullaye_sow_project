@@ -1,5 +1,7 @@
 "use client";
 
+import { prefetchPackageOptions, type PackageOptionsAnswer } from "@/lib/package-request-options";
+import { requestSlugFromLocation } from "@/lib/package-requests";
 import { effectiveProfile } from "@/lib/full-access";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
@@ -289,9 +291,19 @@ export function ConsoleRouter() {
   );
 
   useEffect(() => {
-    setServiceIntent(
-      customerServiceFromLocation(window.location.pathname, window.location.search),
-    );
+    const intent = customerServiceFromLocation(window.location.pathname, window.location.search);
+    setServiceIntent(intent);
+    // "Send a package": ask for the businesses now, while the form's code is
+    // still downloading, instead of after it has arrived
+    // (lib/package-request-options.ts). The form picks this request up.
+    if (intent === "barrel" || intent === "package-request") {
+      prefetchPackageOptions(
+        requestSlugFromLocation(window.location.pathname, window.location.search),
+        (data) =>
+          httpsCallable<Record<string, unknown>, PackageOptionsAnswer>(functions, "listPackageRequestOptions")(data)
+            .then((result) => result.data),
+      );
+    }
   }, []);
 
   useEffect(() => {

@@ -1,5 +1,6 @@
 "use client";
 
+import { deviceStorage, loadPackageOptions, readCachedPackageOptions } from "@/lib/package-request-options";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { httpsCallable } from "firebase/functions";
 import { ArrowLeft, Box, CheckCircle2, CreditCard, MapPin, Plane, Plus, RefreshCw, Ship, Store, Trash2, Truck } from "lucide-react";
@@ -123,6 +124,11 @@ async function call<T>(name: string, data: Record<string, unknown>): Promise<T> 
   }
 }
 
+/** The businesses behind the form (shared with the router's early request). */
+function fetchPackageOptions(data: Record<string, unknown>) {
+  return call<{ business: unknown; options: unknown[] }>("listPackageRequestOptions", data);
+}
+
 function FieldError({ codes, show }: { codes: string[]; show: string[] }) {
   const code = show.find((c) => codes.includes(c));
   if (!code) return null;
@@ -184,21 +190,33 @@ export function PackageRequestForm({ slug = "", senderName = "", senderPhone = "
 
   useEffect(() => {
     let active = true;
-    setLoading(true);
     setLoadError("");
-    call<{ business: RequestBusinessHeader | null; options: RequestOption[] }>("listPackageRequestOptions", slug ? { slug } : {})
+    type Answer = { business: RequestBusinessHeader | null; options: RequestOption[] };
+    const apply = (result: Answer) => {
+      const list = Array.isArray(result.options) ? result.options : [];
+      setOptions(list);
+      setBusiness(result.business ?? null);
+      if (result.business) {
+        const countries = [...new Set(list.map((o) => o.country.id))];
+        setDraft((d) => ({ ...d, businessId: result.business?.businessId ?? "", countryId: countries.length === 1 ? countries[0] : d.countryId }));
+      }
+    };
+    // The last answer on this device shows at once; the fresh one replaces it
+    // (lib/package-request-options.ts). Without one the spinner shows as before.
+    const kept = readCachedPackageOptions(deviceStorage(), slug ?? "", Date.now()) as Answer | null;
+    if (kept) {
+      apply(kept);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
+    loadPackageOptions(slug ?? "", fetchPackageOptions)
       .then((result) => {
-        if (!active) return;
-        const list = Array.isArray(result.options) ? result.options : [];
-        setOptions(list);
-        setBusiness(result.business ?? null);
-        if (result.business) {
-          const countries = [...new Set(list.map((o) => o.country.id))];
-          setDraft((d) => ({ ...d, businessId: result.business?.businessId ?? "", countryId: countries.length === 1 ? countries[0] : d.countryId }));
-        }
+        if (active) apply(result as Answer);
       })
       .catch((err) => {
-        if (!active) return;
+        // With a kept answer on screen, a failed refresh changes nothing.
+        if (!active || kept) return;
         const failure = requestFailure(err);
         setLoadError(failure.reason === "business_not_found" ? REQUEST_ERROR_MESSAGES.business_not_found : "We could not load the businesses. Check your connection and try again.");
       })

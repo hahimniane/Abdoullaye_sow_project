@@ -194,6 +194,16 @@ describe("scheduled sweeps filter and order in the query", () => {
   });
 });
 
+describe("warm instances cost money every hour", () => {
+  it("only the Send a package list is kept warm", () => {
+    const warm = [...source.matchAll(/^exports\.([A-Za-z0-9_]+) = on[A-Z]/gm)]
+        .map((m) => m[1])
+        .filter((name) => /minInstances:\s*[1-9]/.test(
+            block(`exports.${name} = `).split(/async \(|\(\) =>/)[0]));
+    assert.deepEqual(warm, ["listPackageRequestOptions"]);
+  });
+});
+
 describe("function instance budget", () => {
   // Cloud Run counts cpu x maxInstances of EVERY deployed function against
   // the regional CPU quota; ~1,800 reserved CPUs already failed a deploy

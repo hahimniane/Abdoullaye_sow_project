@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ACTIVE_FIREBASE_CONFIG } from "@/lib/project-config";
 import "./globals.css";
 
 import { ActionConfirmationHost } from "@/components/action-confirmation-dialog";
@@ -38,6 +39,13 @@ export default function RootLayout({
             metadata.title so React does not re-assert it over the runtime
             title each console sets for itself. */}
         <title>Laawol Digital</title>
+        {/* Open the connections the first server call needs while the page's
+            code is still downloading: reCAPTCHA (App Check) and the
+            functions host. Saves a few round trips on "Send a package". */}
+        <link rel="preconnect" href="https://www.google.com" />
+        <link rel="preconnect" href="https://www.gstatic.com" crossOrigin="" />
+        <link rel="preconnect" href={`https://us-central1-${ACTIVE_FIREBASE_CONFIG.projectId}.cloudfunctions.net`} crossOrigin="" />
+        <link rel="dns-prefetch" href="https://firestore.googleapis.com" />
       </head>
       <body>
         {children}
