@@ -8555,7 +8555,6 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Open": "À payer",
   "Waived": "Annulée",
   "Waive": "Annuler la facture",
-  "Undo": "Défaire",
   "Payments": "Paiements",
   "No payments yet.": "Aucun paiement pour le moment.",
   "Method": "Méthode",

@@ -190,7 +190,9 @@ describe("staff expense credit: server wiring (source contract)", () => {
   });
 
   it("caps a repayment inside the transaction that writes it", () => {
-    const fn = between("async function recordStaffRepayment(",
+    // The write lives in writeStaffRepayment, shared with the team month
+    // settle's "Paid them back" (docs/TEAM_SETTLE.md).
+    const fn = between("async function writeStaffRepayment(",
         "\nasync function ");
     const tx = fn.slice(fn.indexOf("db.runTransaction("));
     assert.ok(tx.includes("transaction.get(db.collection(" +
