@@ -283,7 +283,7 @@ test("Inventory is a service, a staff permission, and a sidebar tab gated on bot
   const admin = read("../components/admin-console.tsx");
   assert.match(admin, /\{ id: "inventory", label: "Inventory" \},\n\];/);
   // Later permissions (deliveries) follow inventory in the payload list.
-  assert.match(admin, /"containers",\n  "inventory",\n(?:  "[a-z]+",\n)*\] as const;/);
+  assert.match(admin, /"containers",\n  "inventory",\n(?:  "[a-z_]+",\n)*\] as const;/);
   assert.match(admin, /inventory: "inventory",\n\};/);
   const people = read("../components/business/profile-support-people.tsx");
   assert.match(people, /\{id: "inventory", label: "Inventory"\}/);
@@ -317,7 +317,8 @@ test("the admin console's business view has an Inventory service switch that cal
   // Through runAction, with a success message and an English + French confirmation.
   assert.match(header, /runAction\(\s*inventoryOn \? "Inventory switched off" : "Inventory switched on"/);
   assert.match(header, /switchInventoryService\(!inventoryOn\)/);
-  const switchBlock = header.slice(header.indexOf('className="inventory-service-switch"'));
+  // Up to the Fleet switch, which sits beside it with its own confirmations.
+  const switchBlock = header.slice(header.indexOf('className="inventory-service-switch"'), header.indexOf('aria-label="Fleet service"'));
   assert.equal((switchBlock.match(/confirmFr:/g) ?? []).length, 2);
   assert.equal((switchBlock.match(/confirm:/g) ?? []).length, 2);
   // Not offered for a business that has no profile document to change.

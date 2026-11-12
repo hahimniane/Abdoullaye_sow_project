@@ -34,6 +34,9 @@ import {
   Star,
   Truck,
   UserCog,
+  Users,
+  FileWarning,
+  CarFront,
 } from "lucide-react";
 
 import {AssistantWidget} from "@/components/business/assistant-widget";
@@ -99,6 +102,10 @@ import { shipsByAirOf } from "@/lib/package-proof";
 import { useServerTotals } from "@/lib/use-server-totals";
 import { Panel } from "@/components/panel";
 import { TodayView } from "@/components/business/today-view";
+import {FLEET_TABS, FleetPanel} from "@/components/business/fleet-panel";
+import {useFleetData} from "@/components/business/fleet-data";
+import {FleetTileGroup} from "@/components/business/fleet-payments";
+import {fleetEnabled} from "@/lib/fleet";
 import type { BusinessTodayResponse, TodayAttentionItem, TodayContainersView } from "@/lib/business-today";
 import { previewBusinessToday } from "@/lib/business-today-preview";
 import {
@@ -365,10 +372,21 @@ export function BusinessConsole({
     const raw = Array.isArray(business?.enabledServices)
       ? business?.enabledServices
       : profile.businessServices;
-    return new Set(
+    const set = new Set(
       (Array.isArray(raw) ? raw : []).map((item) => text(item, "")),
     );
-  }, [business?.enabledServices, profile.businessServices]);
+    // Fleet is on when the business doc says so, even before the service
+    // list catches up (docs/FLEET.md section 6).
+    if (fleetEnabled(business)) set.add("fleet");
+    return set;
+  }, [business, profile.businessServices]);
+
+  // Fleet: one live read of its five collections, shared by every Fleet page
+  // and Today's tiles; asked only of someone who may open Fleet.
+  const fleetOn = services.has("fleet");
+  const canOpenFleet = hasBusinessPermission(profile, "fleet");
+  const isFleetAdmin = hasBusinessPermission(profile, "fleet_admin");
+  const fleetState = useFleetData(businessId, enabled && fleetOn && canOpenFleet);
 
   // Check bank (docs/ZELLE_BANK_CHECK.md): the server's rule - the owner, or
   // staff who can sell (inventory permission + service) or take package
@@ -873,6 +891,7 @@ export function BusinessConsole({
               }}
               today={today}
             >
+              {fleetOn && canOpenFleet && !previewMode && <FleetTileGroup state={fleetState} />}
               <PayoutsPanel
                 businessId={businessId}
                 business={business}
@@ -1033,6 +1052,17 @@ export function BusinessConsole({
               businessName={businessName}
               business={business}
               previewMode={previewMode}
+            />
+          )}
+          {FLEET_TABS.includes(activeTab) && fleetOn && canOpenFleet && (
+            <FleetPanel
+              business={business}
+              businessId={businessId}
+              isAdmin={isFleetAdmin}
+              previewMode={previewMode}
+              setTab={setActiveTab}
+              state={fleetState}
+              tab={activeTab}
             />
           )}
           {activeTab === "staffBalances" && (
@@ -1698,6 +1728,11 @@ function tabIcon(tab: BusinessTab) {
     staffBalances: <Scale {...props} />,
     shipping: <Container {...props} />,
     cards: <Contact {...props} />,
+    fleetPayments: <Banknote {...props} />,
+    fleetDrivers: <Users {...props} />,
+    fleetCars: <CarFront {...props} />,
+    fleetPaperwork: <FileWarning {...props} />,
+    fleetSettings: <Settings {...props} />,
   };
   return icons[tab];
 }

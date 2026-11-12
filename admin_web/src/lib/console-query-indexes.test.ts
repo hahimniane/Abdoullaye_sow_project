@@ -183,6 +183,10 @@ const SITES: Site[] = [
   { file: L("business-data.ts"), kind: "useBusinessCollection", what: "useStaffExpenseCreditInputs: expense lines (names on the bill)", shapes: [bc("lotExpenseLines", { pageSize: null })] },
   { file: L("business-data.ts"), kind: "useBusinessCollection", what: "useParkingLinkCars (last twelve months)", shapes: [bc("parkedCars", { pageSize: null, where: [["occupancyEndMs", ">=", 0]] })] },
   { file: L("business-data.ts"), kind: "useBusinessCollection", what: "useBusinessStaff", shapes: [bc("users", { pageSize: null })] },
+  // Fleet (docs/FLEET.md): the five collections, each whole and equality-only on businessId (no composite index).
+  ...["fleetDrivers", "fleetCars", "fleetAssignments", "fleetBills", "fleetPayments"].map((name): Site => ({
+    file: B("fleet-data.ts"), kind: "useBusinessCollection", what: `useFleetData ${name}`, shapes: [bc(name, { pageSize: null })],
+  })),
   { file: L("business-data.ts"), kind: "usePagedQuery", what: "useBusinessCollection itself", shapes: [] },
   { file: L("business-data.ts"), kind: "usePagedQuery", what: "business subcollections (destinations whole, reviews newest first)", shapes: [raw("destinationCountries"), raw("officeLocations"), raw("reviews", [], { field: "createdAt", direction: "desc" })] },
   { file: L("business-data.ts"), kind: "query", what: "useBusinessHasRecords probe (limit 1)", shapes: [raw("cars", [eq("businessId")])] },

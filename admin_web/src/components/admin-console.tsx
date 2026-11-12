@@ -131,6 +131,7 @@ import {
   businessRequestedInventory,
   setBusinessInventoryRequest,
 } from "@/lib/inventory";
+import { fleetEnabled } from "@/lib/fleet";
 import {
   SERVICE_FEE_KEYS,
   SERVICE_FEE_LABELS,
@@ -10173,6 +10174,15 @@ function BusinessWorkspace({
     )(setBusinessInventoryRequest(business.id, enabled));
   }
 
+  // Fleet (TLC plate leasing, docs/FLEET.md): platform admins only, on the server too.
+  const fleetOn = fleetEnabled(business);
+  async function switchFleetService(enabled: boolean) {
+    await httpsCallable(
+      functions,
+      "fleetAction",
+    )({action: "fleet_enable", businessId: business.id, enabled});
+  }
+
   async function reviewBusiness(
     action: "approve" | "request_changes",
     options: { platformDocumentBypass?: boolean } = {},
@@ -10302,6 +10312,41 @@ function BusinessWorkspace({
                 type="button"
               >
                 {inventoryOn ? "Switch Inventory off" : "Switch Inventory on"}
+              </button>
+            </div>
+          )}
+          {!inferred && (
+            <div
+              className="inventory-service-switch"
+              role="group"
+              aria-label="Fleet service"
+            >
+              <span>Fleet service</span>
+              <span
+                className={`status-pill compact ${fleetOn ? "ok" : "muted"}`}
+              >
+                {fleetOn ? "Fleet is on" : "Fleet is off"}
+              </span>
+              <button
+                className="secondary-button"
+                onClick={() =>
+                  runAction(
+                    fleetOn ? "Fleet switched off" : "Fleet switched on",
+                    () => switchFleetService(!fleetOn),
+                    fleetOn ?
+                      {
+                        confirm: `Switch Fleet off for ${text(business.name, business.id)}? Its owner and staff will lose the Fleet pages. Drivers, cars and payments are kept.`,
+                        confirmFr: `Désactiver Fleet pour ${text(business.name, business.id)} ? Son propriétaire et son personnel perdront les pages Fleet. Les chauffeurs, voitures et paiements sont conservés.`,
+                      } :
+                      {
+                        confirm: `Switch Fleet on for ${text(business.name, business.id)}? Its owner and staff with the Fleet permission can then manage drivers, cars and payments.`,
+                        confirmFr: `Activer Fleet pour ${text(business.name, business.id)} ? Son propriétaire et le personnel ayant l’autorisation Fleet pourront alors gérer les chauffeurs, les voitures et les paiements.`,
+                      },
+                  )
+                }
+                type="button"
+              >
+                {fleetOn ? "Switch Fleet off" : "Switch Fleet on"}
               </button>
             </div>
           )}

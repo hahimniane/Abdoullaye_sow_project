@@ -21,7 +21,12 @@ export type BusinessTab =
   | "growth"
   | "staffBalances"
   | "shipping"
-  | "cards";
+  | "cards"
+  | "fleetPayments"
+  | "fleetDrivers"
+  | "fleetCars"
+  | "fleetPaperwork"
+  | "fleetSettings";
 
 /**
  * The steps of the Shipping page, in the order a package moves: asked for,
@@ -43,6 +48,7 @@ export type BusinessSidebarGroupId =
   | "overview"
   | "cars"
   | "money"
+  | "fleet"
   | "business";
 
 export type BusinessSidebarTab = {
@@ -76,6 +82,8 @@ export const businessPermissionImplies: Readonly<Record<string, readonly string[
   // Whoever manages containers may hand packages over too (the server lets
   // "containers" deliver), so the Deliveries tab is theirs as well.
   deliveries: ["containers"],
+  // A Fleet admin works everything Fleet staff do (docs/FLEET.md Q6).
+  fleet: ["fleet_admin"],
 };
 
 /** Whether a team member's permission list grants `permission`, directly or through another. */
@@ -132,6 +140,13 @@ export const businessSidebarTabs: BusinessSidebarTab[] = [
   // Everyone on the team sees every balance (docs/STAFF_BALANCES.md decision 6),
   // so no service gate and no permission.
   {id: "staffBalances", label: "Staff balances", description: "Who holds or owes what", group: "money", keywords: ["Hand over", "Cash", "Handover", "Owes", "Expenses"]},
+  // Fleet (docs/FLEET.md section 6): TLC plate leasing. Shown only when the
+  // business has Fleet on and the person holds "fleet" or "fleet_admin".
+  {id: "fleetPayments", label: "Fleet payments", description: "Who paid each month", group: "fleet", service: "fleet", permission: "fleet", keywords: ["Fleet", "Drivers", "Leasing", "TLC", "Plates"]},
+  {id: "fleetDrivers", label: "Drivers", description: "Drivers, bills and payments", group: "fleet", service: "fleet", permission: "fleet", keywords: ["Fleet", "TLC"]},
+  {id: "fleetCars", label: "Fleet cars", description: "Cars and who had them", group: "fleet", service: "fleet", permission: "fleet", keywords: ["Fleet", "Plates", "TLC"]},
+  {id: "fleetPaperwork", label: "Paperwork", description: "Registration and diamond dates", group: "fleet", service: "fleet", permission: "fleet", keywords: ["Fleet", "Diamond", "Registration", "Insurance"]},
+  {id: "fleetSettings", label: "Fleet settings", description: "Late fee, rules, import", group: "fleet", service: "fleet", permission: "fleet_admin", keywords: ["Fleet", "Late fee", "Import", "Zelle"]},
   {id: "profile", label: "Profile", description: "Identity and verification", group: "business", permission: "profile", keywords: ["Business"]},
   {id: "destinations", label: "Services & coverage", description: "Availability, pickup, rates, and routes", group: "business", permission: "destinations"},
   {id: "people", label: "People", description: "Owners and staff", group: "business", permission: "people"},
@@ -250,6 +265,7 @@ const groupLabels: Record<BusinessSidebarGroupId, string> = {
   overview: "Overview",
   cars: "Cars",
   money: "Money",
+  fleet: "Fleet",
   business: "Business",
 };
 
@@ -257,6 +273,7 @@ const groupOrder: BusinessSidebarGroupId[] = [
   "overview",
   "cars",
   "money",
+  "fleet",
   "business",
 ];
 

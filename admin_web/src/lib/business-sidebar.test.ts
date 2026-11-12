@@ -33,7 +33,7 @@ function visibleStepIds(
 }
 
 describe("business sidebar navigation", () => {
-  it("has four groups: Overview, Cars, Money, Business", () => {
+  it("has five groups: Overview, Cars, Money, Fleet, Business", () => {
     const groups = buildBusinessSidebarGroups(businessSidebarTabs, [], "");
     assert.deepEqual(
       groups.map((group) => [group.label, group.tabs.map((tab) => tab.id)]),
@@ -41,6 +41,7 @@ describe("business sidebar navigation", () => {
         ["Overview", ["today", "shipping"]],
         ["Cars", ["parking", "ledger", "transport", "listings", "purchases", "viewings"]],
         ["Money", ["invoices", "inventory", "staffBalances"]],
+        ["Fleet", ["fleetPayments", "fleetDrivers", "fleetCars", "fleetPaperwork", "fleetSettings"]],
         ["Business", ["profile", "destinations", "people", "cards", "reviews", "cases", "growth"]],
       ],
     );
@@ -263,5 +264,21 @@ describe("business sidebar navigation", () => {
   it("finds Support by searching WhatsApp", () => {
     const groups = buildBusinessSidebarGroups(businessSidebarTabs, [], "whatsapp");
     assert.deepEqual(groups.flatMap((group) => group.tabs.map((tab) => tab.id)), ["cases"]);
+  });
+});
+
+describe("the Fleet sidebar group", () => {
+  const fleetTabs = ["fleetPayments", "fleetDrivers", "fleetCars", "fleetPaperwork", "fleetSettings"];
+  const only = (ids: string[]) => ids.filter((id) => fleetTabs.includes(id));
+
+  it("shows nothing when the business does not offer Fleet", () => {
+    assert.deepEqual(only(visibleTabIds(["carParking"], "owner")), []);
+  });
+
+  it("shows every Fleet page to an owner, and the settings only to Fleet admins", () => {
+    assert.deepEqual(only(visibleTabIds(["fleet"], "owner")), fleetTabs);
+    assert.deepEqual(only(visibleTabIds(["fleet"], ["fleet"])), fleetTabs.slice(0, 4));
+    assert.deepEqual(only(visibleTabIds(["fleet"], ["fleet_admin"])), fleetTabs);
+    assert.deepEqual(only(visibleTabIds(["fleet"], ["parking"])), []);
   });
 });
