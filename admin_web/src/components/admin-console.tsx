@@ -4173,6 +4173,7 @@ function UsersView({
                 roleOptions={roleOptions}
                 runAction={runAction}
                 setAdminRole={setAdminRole}
+                refreshPeople={refreshUsers}
                 updateRole={updateRole}
                 user={displayedPerson}
               />
@@ -4202,6 +4203,7 @@ function PersonDetailWorkspace({
   updateRole,
   createMissingProfile,
   setAdminRole,
+  refreshPeople,
 }: {
   user: FirestoreRow;
   currentUserId: string;
@@ -4214,6 +4216,8 @@ function PersonDetailWorkspace({
   updateRole: (userId: string, newRole: Role) => Promise<void>;
   createMissingProfile: (userId: string) => Promise<void>;
   setAdminRole: (userId: string, adminRole: string) => Promise<void>;
+  /** Reloads the directory so the panel shows what an action just changed. */
+  refreshPeople?: () => void | Promise<void>;
 }) {
   const userId = text(user.uid ?? user.id, "");
   const invitationId = text(user.invitationId ?? user.id, "");
@@ -4605,15 +4609,19 @@ function PersonDetailWorkspace({
                   onClick={() =>
                     runAction(
                       user.fullAccess === true ? "Full access removed" : "Full access given",
-                      () =>
-                        httpsCallable(functions, "updateBusinessStaffPermissions")(
+                      async () => {
+                        await httpsCallable(functions, "updateBusinessStaffPermissions")(
                           fullAccessRequest(
                             String(memberships[0]?.businessId ?? ""),
                             userId,
                             Array.isArray(user.businessPermissions) ? (user.businessPermissions as string[]) : [],
                             user.fullAccess !== true,
                           ),
-                        ),
+                        );
+                        // The directory row carries fullAccess: reload it so the
+                        // button flips without a manual Refresh.
+                        await refreshPeople?.();
+                      },
                       user.fullAccess === true
                         ? {
                             confirm: `Remove full access from ${userDisplayName(user)} at ${memberships[0]?.businessName}?`,
