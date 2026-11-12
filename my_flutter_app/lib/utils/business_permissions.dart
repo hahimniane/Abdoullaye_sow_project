@@ -19,6 +19,10 @@ abstract final class BusinessPermission {
   static const reviews = 'reviews';
   static const support = 'support';
   static const growth = 'growth';
+
+  /// Fleet (docs/FLEET.md Q6): staff, and admins (rents, fees, settings).
+  static const fleet = 'fleet';
+  static const fleetAdmin = 'fleet_admin';
 }
 
 bool canAccessBusinessPermission({

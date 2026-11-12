@@ -621,6 +621,7 @@ const {
   isBenignRace,
 } = require("./scaling_backfills");
 const {createConsoleTotalsHandlers} = require("./console_totals");
+const {createFleetHandlers} = require("./fleet_handlers");
 const {
   drainPages,
   mapWithConcurrency,
@@ -947,6 +948,8 @@ const VALID_BUSINESS_SERVICES = [
   "carParking",
   "carTransport",
   "inventory",
+  // TLC plate leasing (docs/FLEET.md); switched on by a platform admin.
+  "fleet",
 ];
 // Every section a business console or the app can gate on. The web sidebar
 // (admin_web/src/lib/business-sidebar.ts) and the Flutter menu each check one
@@ -976,6 +979,9 @@ const VALID_BUSINESS_PERMISSIONS = [
   // code) and mark it delivered - no prices, payments or other tabs
   // (container_delivery.js).
   "deliveries",
+  // Fleet staff and Fleet admins (docs/FLEET.md Q6).
+  "fleet",
+  "fleet_admin",
 ];
 const VALID_PLATFORM_ADMIN_ROLES = [
   "superAdmin",
@@ -11510,6 +11516,8 @@ exports.createMissingBusinessProfile = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
+      // A rare admin tool: one instance (frees capacity for Fleet).
+      maxInstances: 1,
     },
     async (request) => {
       const adminUid = requireAuth(request);
@@ -27626,7 +27634,9 @@ exports.archiveInventoryCategory = onCall(
 );
 
 exports.syncInventoryCategories = onCall(
-    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, timeoutSeconds: 120},
+    // A one-off sync: one instance (frees capacity for Fleet).
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, timeoutSeconds: 120,
+      maxInstances: 1},
     async (request) => {
       const uid = requireAuth(request);
       const data = request.data || {};
@@ -33864,6 +33874,8 @@ exports.seedDestinationCountries = onCall(
     {
       enforceAppCheck: ENFORCE_APP_CHECK,
       cors: true,
+      // A rare admin tool: one instance (frees capacity for Fleet).
+      maxInstances: 1,
     },
     async (request) => {
       const callerUid = requireAuth(request);
@@ -47528,6 +47540,32 @@ exports.getLotLedgerTotals = onCall(CONSOLE_TOTALS_CALLABLE_OPTIONS,
     consoleTotals.getLotLedgerTotals);
 exports.getParkingTotals = onCall(CONSOLE_TOTALS_CALLABLE_OPTIONS,
     consoleTotals.getParkingTotals);
+
+// ---- Fleet (fleet_handlers.js, docs/FLEET.md) ------------------------------
+const fleet = createFleetHandlers({
+  admin,
+  HttpsError,
+  FieldValue: FirestoreFieldValue,
+  logger,
+  requireAuth,
+  getUserProfile,
+  requireBusinessManager,
+  hasBusinessPermission,
+  requireAdminCapability,
+  normalizeBusinessServices,
+  writeAudit: writeLotLedgerAudit,
+  dayKeyNow: () => require("./console_summaries").zonedDayKey(new Date(),
+      "America/New_York"),
+});
+exports.fleetAction = onCall(
+    // The spreadsheet import writes a few thousand records.
+    {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, timeoutSeconds: 300,
+      memory: "512MiB"},
+    fleet.fleetAction);
+exports.fleetDaily = onSchedule(
+    {schedule: "15 5 * * *", timeZone: "America/New_York",
+      timeoutSeconds: 540, maxInstances: 1},
+    fleet.fleetDaily);
 exports.getAdminOverview = onCall(CONSOLE_TOTALS_CALLABLE_OPTIONS,
     consoleTotals.getAdminOverview);
 exports.getPlatformEarnings = onCall(CONSOLE_TOTALS_CALLABLE_OPTIONS,

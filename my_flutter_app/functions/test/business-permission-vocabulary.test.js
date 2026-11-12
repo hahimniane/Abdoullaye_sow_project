@@ -18,13 +18,13 @@ function backendPermissions() {
       /const VALID_BUSINESS_PERMISSIONS = \[([^\]]*)\];/,
   );
   assert.ok(block, "VALID_BUSINESS_PERMISSIONS not found");
-  return [...block[1].matchAll(/"([a-z]+)"/g)].map((m) => m[1]);
+  return [...block[1].matchAll(/"([a-z_]+)"/g)].map((m) => m[1]);
 }
 
 function sidebarPermissions() {
   const source = read("admin_web", "src", "lib", "business-sidebar.ts");
   return [...new Set(
-      [...source.matchAll(/permission: "([a-z]+)"/g)].map((m) => m[1]),
+      [...source.matchAll(/permission: "([a-z_]+)"/g)].map((m) => m[1]),
   )];
 }
 
@@ -37,13 +37,13 @@ function peoplePanelPermissions() {
       /const businessPermissionOptions = \[([^\]]*)\];/,
   );
   assert.ok(block, "businessPermissionOptions not found");
-  return [...block[1].matchAll(/id: "([a-z]+)"/g)].map((m) => m[1]);
+  return [...block[1].matchAll(/id: "([a-z_]+)"/g)].map((m) => m[1]);
 }
 
 function flutterPermissions() {
   const source = read(
       "my_flutter_app", "lib", "utils", "business_permissions.dart");
-  return [...source.matchAll(/static const [a-z]+ = '([a-z]+)';/g)]
+  return [...source.matchAll(/static const [a-zA-Z]+ = '([a-z_]+)';/g)]
       .map((m) => m[1]);
 }
 
@@ -53,7 +53,7 @@ function adminInvitationPermissions() {
       /const businessStaffPermissionOptions = \[([^\]]*)\] as const;/,
   );
   assert.ok(block, "businessStaffPermissionOptions not found");
-  return [...block[1].matchAll(/"([a-z]+)"/g)].map((m) => m[1]);
+  return [...block[1].matchAll(/"([a-z_]+)"/g)].map((m) => m[1]);
 }
 
 // The admin console's invitation payload is a hand-copied fifth list. It

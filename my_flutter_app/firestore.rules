@@ -666,6 +666,34 @@ service cloud.firestore {
     // A business's parking lots (docs/PARKING_LOTS.md): read by its own
     // people, written only by the server (the lot actions of
     // updateBusinessParkingEntry).
+    // Fleet (docs/FLEET.md): private to the business's Fleet staff and
+    // admins (owners, full access and super admins pass the helper).
+    // Written only by the server (fleet_handlers.js).
+    function fleetRead(businessId) {
+      return request.auth != null && (
+        canManageBusinessSection(request.auth.uid, businessId, 'fleet') ||
+        canManageBusinessSection(request.auth.uid, businessId, 'fleet_admin'));
+    }
+    match /fleetDrivers/{id} {
+      allow read: if fleetRead(resource.data.businessId);
+      allow write: if false;
+    }
+    match /fleetCars/{id} {
+      allow read: if fleetRead(resource.data.businessId);
+      allow write: if false;
+    }
+    match /fleetAssignments/{id} {
+      allow read: if fleetRead(resource.data.businessId);
+      allow write: if false;
+    }
+    match /fleetBills/{id} {
+      allow read: if fleetRead(resource.data.businessId);
+      allow write: if false;
+    }
+    match /fleetPayments/{id} {
+      allow read: if fleetRead(resource.data.businessId);
+      allow write: if false;
+    }
     match /parkingLots/{lotId} {
       allow read: if lotLedgerRead(resource.data.businessId);
       allow write: if false;

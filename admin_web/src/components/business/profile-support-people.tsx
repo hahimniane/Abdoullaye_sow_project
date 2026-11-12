@@ -250,6 +250,10 @@ const businessPermissionOptions = [
   {id: "deliveries", label: "Deliveries", description: "Hand packages over at the destination"},
   {id: "invoices", label: "Invoices", description: "Receipts and what is owed"},
   {id: "inventory", label: "Inventory"},
+  // Fleet (docs/FLEET.md Q6): staff record payments and add drivers/cars;
+  // admins also set rents, fees and settings, waive and undo.
+  {id: "fleet", label: "Fleet", description: "Drivers, cars and their payments"},
+  {id: "fleet_admin", label: "Fleet admin", description: "Rents, late fees, waivers and Fleet settings"},
   {id: "destinations", label: "Services & coverage"},
   {id: "people", label: "People"},
   {id: "reviews", label: "Reviews"},

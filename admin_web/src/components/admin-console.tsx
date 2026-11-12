@@ -260,6 +260,8 @@ const businessStaffPermissionOptions = [
   "containers",
   "inventory",
   "deliveries",
+  "fleet",
+  "fleet_admin",
 ] as const;
 
 function businessPermissionLabel(permission: string) {
@@ -269,6 +271,8 @@ function businessPermissionLabel(permission: string) {
   if (permission === "inventory") return "Inventory";
   if (permission === "invoices") return "Invoices";
   if (permission === "deliveries") return "Deliveries";
+  if (permission === "fleet") return "Fleet";
+  if (permission === "fleet_admin") return "Fleet admin";
   return permission.charAt(0).toUpperCase() + permission.slice(1);
 }
 
