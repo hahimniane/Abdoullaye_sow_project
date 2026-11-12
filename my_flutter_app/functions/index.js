@@ -649,6 +649,7 @@ const staffExpenseLedger = require("./staff_expense_ledger");
 const staffBalances = require("./staff_balances");
 const staffBalanceMonths = require("./staff_balance_months");
 const staffStatement = require("./staff_statement");
+const teamSettle = require("./team_settle");
 const {
   resolveBillingPlan,
   monthEndBillingAmount,
@@ -16423,8 +16424,10 @@ async function recordParkingBillPayment(db, args) {
       cleanText(data.receivedVia, 40));
   const note = cleanText(data.note, 500) || (settle ? reason : "");
   const customerKey = cleanText(data.customerKey, 200);
-  const customer = await parkingBillCustomer(db, businessDoc, monthKey,
-      customerKey, now);
+  // "I paid everything" (docs/TEAM_SETTLE.md) hands in the team member's
+  // statement as one bill, its own tag and no receipt yet.
+  const customer = args.customer ||
+    await parkingBillCustomer(db, businessDoc, monthKey, customerKey, now);
   if (!customer) throw parkingBillPaymentRefusal(R.CUSTOMER_NOT_FOUND);
   const plan = settle ?
     parkingBillPayment.billSettlePlan(customer, paidCents) :
@@ -16570,6 +16573,7 @@ async function recordParkingBillPayment(db, args) {
         Math.max(0, customer.dueCents - plan.payableCents) : plan.leftCents,
       billPaidCents: (Number(customer.monthPaidCents) || 0) +
         Math.round(Number(data.amountCents)),
+      ...(args.tag || {}),
       status: "recorded",
       documentToken: crypto.randomBytes(24).toString("base64url"),
       at,
@@ -16603,8 +16607,8 @@ async function recordParkingBillPayment(db, args) {
       summary: `Discount of ${discountMoney(d.amountCents)} given (${reason})`,
     }).catch(() => null);
   }
-  const receipt = paidCents <= 0 && settle ? "" :
-    await sendParkingBillReceipt(db, {businessDoc,
+  const receipt = (paidCents <= 0 && settle) || args.skipReceipt === true ?
+    "" : await sendParkingBillReceipt(db, {businessDoc,
       billPaymentId, now}).catch((error) => {
       logger.warn("Bill payment receipt failed", {billPaymentId,
         error: String(error?.message || error).slice(0, 300)});
@@ -20796,6 +20800,20 @@ async function linkStaffParking(uid, data) {
 async function recordStaffRepayment(uid, data) {
   const businessId = String(data.businessId || "").trim();
   await requireBusinessPermission(uid, businessId, "ledger");
+  return writeStaffRepayment(uid, data);
+}
+
+/**
+ * The pay-back itself, after whoever calls it has checked who may (the
+ * ledger permission here, or the owner / Full access for "Paid them back"
+ * on a team statement - docs/TEAM_SETTLE.md).
+ *
+ * @param {string} uid The caller.
+ * @param {object} data As recordStaffRepayment.
+ * @return {Promise<object>} `{success, repaymentId, month, creditCents}`.
+ */
+async function writeStaffRepayment(uid, data) {
+  const businessId = String(data.businessId || "").trim();
   const staffId = String(data.staffId || "").trim();
   if (!staffId || staffId.includes("/")) {
     throw staffCreditError("staff_not_member");
@@ -20925,6 +20943,10 @@ async function staffExpenseCreditAction(uid, action, data) {
   if (action === "void_staff_repayment") return voidStaffRepayment(uid, data);
   if (staffBalances.STAFF_BALANCE_ACTIONS.includes(action)) {
     return staffBalanceAction(uid, action, data);
+  }
+  // "I paid everything" (docs/TEAM_SETTLE.md).
+  if (teamSettle.SETTLE_ACTIONS.includes(action)) {
+    return teamSettleAction(uid, action, data);
   }
   throw staffCreditError("staff_action_invalid");
 }
@@ -21393,6 +21415,543 @@ async function staffBalanceAction(uid, action, data) {
   if (action === "set_counted_sources") return setCountedSources(uid, data);
   if (action === "staff_statement_cash") return staffStatementCash(uid, data);
   throw staffBalanceError("staff_balances_action_invalid");
+}
+
+// ---- "I paid everything": a team member settles their month ---------------
+// docs/TEAM_SETTLE.md. The arithmetic is team_settle.js (pure, shared
+// fixture); this gathers the statement and writes. The amount and the split
+// are frozen when the member files it; it counts only once the receiver
+// confirms, which writes a confirmed hand-over (the cash part) and a month
+// bill payment (the parking part), both tagged with the settlement. One undo
+// takes both off. These ride on updateLotExpenseEntry (no new export: the
+// CPU budget).
+
+/**
+ * @param {string} code A team_settle refusal code.
+ * @return {HttpsError} The refusal, `details.reason` = code.
+ */
+function teamSettleError(code) {
+  const {kind, message} = teamSettle.teamSettleRefusal(code);
+  return new HttpsError(kind, message, {reason: code, reasons: [code]});
+}
+
+/**
+ * The caller's place in the settle flow: a member of the business, and
+ * whether they are a receiver (the owner, someone with Full access - who
+ * reads as the owner on the server - or a platform admin).
+ *
+ * @param {string} uid The caller.
+ * @param {object} data The request (`businessId`).
+ * @return {Promise<object>} staffBalanceContext's answer plus `businessDoc`
+ *   and `receiverRole`.
+ */
+async function teamSettleContext(uid, data) {
+  const ctx = await staffBalanceContext(uid, data);
+  const businessDoc = await ctx.db.collection("businesses")
+      .doc(ctx.businessId).get();
+  const {user, business, businessId} = ctx;
+  const receiverRole = user.role === "admin" ||
+    String(business.ownerUid || "") === uid ||
+    (user.role === "businessOwner" &&
+      String(user.businessId || "") === businessId);
+  return {...ctx, uid, businessDoc, receiverRole};
+}
+
+/**
+ * Whether a person may be named as the receiver of a settlement: the
+ * Business account, the business's owner, or someone with Full access.
+ *
+ * @param {object} ctx teamSettleContext's answer.
+ * @param {string} receiverId A uid or "business_account".
+ * @return {Promise<boolean>} True when they may.
+ */
+async function teamSettleReceiverOk(ctx, receiverId) {
+  if (staffBalances.isBusinessAccount(receiverId)) return true;
+  if (receiverId.includes("/")) return false;
+  if (String(ctx.business.ownerUid || "") === receiverId) return true;
+  const doc = await ctx.db.collection("users").doc(receiverId).get();
+  const person = doc.exists ? doc.data() || {} : null;
+  return Boolean(person) &&
+    String(person.businessId || "") === ctx.businessId &&
+    (person.role === "businessOwner" || person.fullAccess === true);
+}
+
+/**
+ * A team member's statement for a month, worked out the way Month end and
+ * the invoices work it out (one statement), with what each kind of money
+ * can take and the member's bills as the one bill a payment is recorded on.
+ *
+ * @param {object} db Firestore.
+ * @param {object} businessDoc The business's snapshot.
+ * @param {string} monthKey "YYYY-MM".
+ * @param {string} staffId The team member.
+ * @param {Date} now The moment.
+ * @return {Promise<?object>} `{statement, limits, billCustomer}`, or null
+ *   when the member has no statement that month.
+ */
+async function teamStatementFor(db, businessDoc, monthKey, staffId, now) {
+  const data = await parkingMonthEndData(db, businessDoc, monthKey, now, true);
+  if (!data || !data.netting) return null;
+  const credit = await parkingInvoiceCredit(db, businessDoc, data.netting,
+      [staffId]);
+  const customers = parkingInvoices.nettedCustomers(data.summary.customers,
+      monthKey, credit);
+  const {held} = await staffHeldAtMonthEnd(db, businessDoc.data() || {},
+      businessDoc.id, monthKey);
+  const team = parkingInvoices.teamStatementsOf(customers, monthKey, credit,
+      held);
+  const statement = team.statements.find((s) => s.staffId === staffId);
+  if (!statement) return null;
+  const limits = teamSettle.settleLimits(statement);
+  return {
+    statement,
+    limits,
+    // The bill the parking part is recorded on: the member's bills as one,
+    // owing what is left after their expenses.
+    billCustomer: {
+      ...statement.customer,
+      dueCents: limits.parkingDueCents,
+      customerPhone: String(statement.customer.customerPhone || "").trim() ||
+        credit.staffPhones?.[staffId] || "",
+    },
+  };
+}
+
+/**
+ * A settlement's History row, written with the change it describes.
+ *
+ * @param {object} args `{db, transaction, businessId, settlementId, action,
+ *   uid, summary, changes}`.
+ */
+function setSettlementAudit({db, transaction, businessId, settlementId, action,
+  uid, summary, changes = []}) {
+  transaction.set(db.collection("lotLedgerAudit").doc(),
+      lotLedgerAuditRecord({businessId, entityType: "team_settlement",
+        entityId: settlementId, action, byStaffId: uid, summary, changes}));
+}
+
+/**
+ * A push that never blocks the action it follows.
+ *
+ * @param {string} uid Who to tell.
+ * @param {string} kind teamSettle.settlePushText's kind.
+ * @param {object} values `{name, amountCents, monthKey, note}`.
+ * @param {object} data The push's data (strings).
+ * @return {Promise<void>}
+ */
+async function teamSettlePush(uid, kind, values, data) {
+  const push = teamSettle.settlePushText(kind, {...values,
+    monthText: parkingInvoices.monthTextEn(values.monthKey)});
+  await safeSendPreferenceNotification({uid, preferenceKey: "businessActivity",
+    title: push.title, body: push.body, pushOnly: true,
+    data: {type: "team_settle", kind, ...data}});
+}
+
+/**
+ * Whether the month is one that has started (a settlement is for a month
+ * whose bill exists).
+ *
+ * @param {string} monthKey "YYYY-MM".
+ * @param {Date} now The moment.
+ * @return {boolean} True when it has started.
+ */
+function teamSettleMonthStarted(monthKey, now) {
+  const bounds = parkingMonthBoundsMs(monthKey);
+  return Boolean(bounds) && bounds.startMs <= now.getTime();
+}
+
+/**
+ * The member says they paid: the amount and the split are checked against
+ * the statement and frozen; the receiver is told. A receiver who files it
+ * for a member (naming themselves or the Business account) confirms it at
+ * once.
+ *
+ * @param {string} uid The caller.
+ * @param {object} data businessId, monthKey, staffId (the member; the caller
+ *   when absent), amountCents, scope, receiverId, method, note.
+ * @return {Promise<object>} `{success, settlementId, status, cashCents,
+ *   parkingCents}`.
+ */
+async function teamSettleRequest(uid, data) {
+  const ctx = await teamSettleContext(uid, data);
+  const {db, businessId, receiverRole, businessDoc} = ctx;
+  const early = teamSettle.requestRefusal(data);
+  if (early) throw teamSettleError(early);
+  const monthKey = String(data.monthKey).trim();
+  const now = new Date();
+  if (!teamSettleMonthStarted(monthKey, now)) {
+    throw teamSettleError(teamSettle.REFUSAL.MONTH_INVALID);
+  }
+  const staffId = String(data.staffId || uid).trim();
+  if (staffId !== uid && !receiverRole) {
+    throw teamSettleError(teamSettle.REFUSAL.NOT_OWN);
+  }
+  if (staffBalances.isBusinessAccount(staffId) ||
+      !await businessPersonProfile(db, businessId, staffId)) {
+    throw staffBalanceError("staff_not_member");
+  }
+  const receiverId = String(data.receiverId).trim();
+  if (receiverId === staffId || !await teamSettleReceiverOk(ctx, receiverId)) {
+    throw teamSettleError(teamSettle.REFUSAL.RECEIVER_INVALID);
+  }
+  const found = await teamStatementFor(db, businessDoc, monthKey, staffId,
+      now);
+  if (!found) throw teamSettleError(teamSettle.REFUSAL.NO_STATEMENT);
+  const plan = teamSettle.teamSettlePlan({statement: found.statement,
+    amountCents: data.amountCents, scope: data.scope});
+  if (!plan.ok) throw teamSettleError(plan.reason);
+  const record = teamSettle.settlementRecord(
+      {...data, businessId, staffId, receiverId, monthKey}, plan,
+      {uid, statementOwedCents: found.statement.owesCents,
+        nowMs: now.getTime()});
+  const ref = db.collection("staffMonthSettlements").doc();
+  const name = found.statement.name;
+  const receiverName = await businessStaffName(db, businessId, receiverId);
+  await db.runTransaction(async (transaction) => {
+    transaction.set(ref, {...record,
+      createdAt: FirestoreFieldValue.serverTimestamp()});
+    setSettlementAudit({db, transaction, businessId, settlementId: ref.id,
+      action: "requested", uid,
+      summary: `${name} says they paid ${lotMoney(record.amountCents)} for ` +
+        `${parkingInvoices.monthTextEn(monthKey)} to ` +
+        `${receiverName || "the business"} - waiting for them to confirm`,
+      changes: [{field: "receiverId", from: "", to: receiverId}]});
+  });
+  // A receiver filing it for someone else is the receiver: no confirm step.
+  const confirmNow = receiverRole && (receiverId === uid ?
+    staffId !== uid : staffBalances.isBusinessAccount(receiverId));
+  if (confirmNow) {
+    const done = await applyTeamSettlement(ctx, {ref, row: record, found,
+      now}).catch(async (error) => {
+      // Never left waiting on a receiver who is the one filing it.
+      await ref.update({status: teamSettle.SETTLE_STATUS.DECLINED,
+        declinedAtMs: Date.now(), declinedByUid: uid,
+        declineNote: "Could not be recorded"});
+      throw error;
+    });
+    return {success: true, settlementId: ref.id, status: "confirmed",
+      cashCents: plan.cashCents, parkingCents: plan.parkingCents, ...done};
+  }
+  // Tell whoever has to confirm: the person, or the owner for the Business
+  // account. Never blocks the request.
+  const tell = staffBalances.isBusinessAccount(receiverId) ?
+    String(ctx.business.ownerUid || "") : receiverId;
+  await teamSettlePush(tell, "request", {name,
+    amountCents: record.amountCents, monthKey}, {businessId,
+    settlementId: ref.id, monthKey});
+  return {success: true, settlementId: ref.id, status: record.status,
+    cashCents: plan.cashCents, parkingCents: plan.parkingCents};
+}
+
+/**
+ * Makes a pending settlement count, exactly as it was frozen: the cash part
+ * as a confirmed hand-over from the member to the receiver, the parking part
+ * as a payment on their month bill (the receiver took it), one receipt.
+ * Refused when the statement can no longer take what was frozen; nothing is
+ * left half-done.
+ *
+ * @param {object} ctx teamSettleContext's answer (the confirmer).
+ * @param {object} args `{ref, row, found, now}` - the settlement's
+ *   reference, its row, teamStatementFor's answer and the moment.
+ * @return {Promise<object>} `{handoverId, billPaymentId, receipt}`.
+ */
+async function applyTeamSettlement(ctx, args) {
+  const {db, businessId, businessDoc, receiverRole, user} = ctx;
+  const {ref, row, found, now} = args;
+  const R = teamSettle.REFUSAL;
+  const {uid} = ctx;
+  // What was frozen must still fit the statement (a later edit may have
+  // lowered it): refused, never silently changed.
+  if (row.cashCents > found.limits.cashDueCents ||
+      row.parkingCents > found.limits.parkingDueCents) {
+    throw teamSettleError(R.BILL_CHANGED);
+  }
+  const billData = {monthKey: row.monthKey, customerKey: found.statement.key,
+    amountCents: row.parkingCents, receivedVia: row.method,
+    receivedByStaffId: row.receiverId,
+    note: row.note || `Month settlement - ${row.monthKey}`};
+  if (row.parkingCents > 0 &&
+      !parkingBillPayment.billPaymentPlan(found.billCustomer,
+          row.parkingCents).ok) {
+    throw teamSettleError(R.BILL_CHANGED);
+  }
+  const handoverRef = row.cashCents > 0 ?
+    db.collection("staffHandovers").doc() : null;
+  const nowTs = FirestoreFieldValue.serverTimestamp();
+  await db.runTransaction(async (transaction) => {
+    const doc = await transaction.get(ref);
+    const current = doc.exists ? doc.data() || {} : null;
+    const refusal = teamSettle.settlementAnswerRefusal(current,
+        {uid, businessId, isReceiverRole: receiverRole});
+    if (refusal) throw teamSettleError(refusal);
+    transaction.update(ref, {
+      status: teamSettle.SETTLE_STATUS.CONFIRMED,
+      confirmedAtMs: now.getTime(),
+      confirmedByUid: uid,
+      handoverId: handoverRef ? handoverRef.id : "",
+    });
+    if (handoverRef) {
+      transaction.set(handoverRef, {
+        businessId,
+        kind: staffBalances.HANDOVER_KIND.HANDOVER,
+        fromStaffId: row.staffId,
+        toId: row.receiverId,
+        amountCents: row.cashCents,
+        method: row.method,
+        note: row.note,
+        proofPath: "",
+        status: staffBalances.HANDOVER_STATUS.CONFIRMED,
+        createdByUid: row.requestedByUid,
+        confirmedByUid: uid,
+        declinedByUid: "",
+        declineNote: "",
+        voidedByUid: "",
+        voidReason: "",
+        settlementId: ref.id,
+        createdAt: nowTs,
+        confirmedAt: nowTs,
+        declinedAt: null,
+        voidedAt: null,
+      });
+      setHandoverAudit({db, transaction, businessId, handoverId:
+        handoverRef.id, action: "confirmed", uid,
+      summary: `Cash ${lotMoney(row.cashCents)} handed over as part of a ` +
+          "month settlement",
+      changes: [{field: "status", from: "", to: "confirmed"}]});
+    }
+    setSettlementAudit({db, transaction, businessId, settlementId: ref.id,
+      action: "confirmed", uid,
+      summary: `Confirmed ${lotMoney(row.cashCents + row.parkingCents)} ` +
+        `for ${parkingInvoices.monthTextEn(row.monthKey)}`,
+      changes: [{field: "status", from: "pending", to: "confirmed"}]});
+  });
+  let billPaymentId = "";
+  if (row.parkingCents > 0) {
+    try {
+      const paid = await recordParkingBillPayment(db, {businessDoc, user, uid,
+        data: billData, now, customer: found.billCustomer,
+        tag: {settlementId: ref.id, settleCashCents: row.cashCents},
+        skipReceipt: true});
+      billPaymentId = paid.billPaymentId;
+    } catch (error) {
+      // Put it back as it was: the settlement waits again, and the cash
+      // hand-over written a moment ago is voided (never deleted).
+      await db.runTransaction(async (transaction) => {
+        transaction.update(ref, {
+          status: teamSettle.SETTLE_STATUS.PENDING, confirmedAtMs: 0,
+          confirmedByUid: "", handoverId: ""});
+        if (handoverRef) {
+          transaction.update(handoverRef, {
+            status: staffBalances.HANDOVER_STATUS.VOIDED, voidedByUid: uid,
+            voidedAt: FirestoreFieldValue.serverTimestamp(),
+            voidReason: "The month settlement could not be completed"});
+        }
+      });
+      throw error;
+    }
+    await ref.update({billPaymentId});
+  }
+  // The usual receipt for the whole settle, on the bill payment.
+  const receipt = billPaymentId ?
+    await sendParkingBillReceipt(db, {businessDoc, billPaymentId, now})
+        .catch((error) => {
+          logger.warn("Settlement receipt failed", {settlementId: ref.id,
+            error: String(error?.message || error).slice(0, 300)});
+          return parkingWhatsApp.STATUS.FAILED;
+        }) : "";
+  await teamSettlePush(row.staffId, "confirmed",
+      {amountCents: row.cashCents + row.parkingCents,
+        monthKey: row.monthKey}, {businessId, settlementId: ref.id,
+        monthKey: row.monthKey});
+  return {handoverId: handoverRef ? handoverRef.id : "", billPaymentId,
+    receipt: receipt || ""};
+}
+
+/**
+ * The receiver confirms (it counts, as frozen) or declines (nothing
+ * changes; the member is told).
+ *
+ * @param {string} uid The caller.
+ * @param {object} data businessId, settlementId, note (decline).
+ * @param {boolean} confirm True to confirm, false to decline.
+ * @return {Promise<object>} `{success, settlementId, status, ...}`.
+ */
+async function teamSettleAnswer(uid, data, confirm) {
+  const ctx = await teamSettleContext(uid, data);
+  const {db, businessId, receiverRole, businessDoc} = ctx;
+  const id = String(data.settlementId || "").trim();
+  if (!id || id.includes("/")) {
+    throw teamSettleError(teamSettle.REFUSAL.NOT_FOUND);
+  }
+  const ref = db.collection("staffMonthSettlements").doc(id);
+  const snap = await ref.get();
+  const row = snap.exists ? snap.data() || {} : null;
+  const refusal = teamSettle.settlementAnswerRefusal(row,
+      {uid, businessId, isReceiverRole: receiverRole});
+  if (refusal) throw teamSettleError(refusal);
+  const now = new Date();
+  if (confirm) {
+    const found = await teamStatementFor(db, businessDoc, row.monthKey,
+        row.staffId, now);
+    if (!found) throw teamSettleError(teamSettle.REFUSAL.BILL_CHANGED);
+    const done = await applyTeamSettlement(ctx, {ref, row, found, now});
+    return {success: true, settlementId: id, status: "confirmed", ...done};
+  }
+  const note = String(data.note || "").trim().slice(0, 300);
+  await db.runTransaction(async (transaction) => {
+    const doc = await transaction.get(ref);
+    const current = doc.exists ? doc.data() || {} : null;
+    const again = teamSettle.settlementAnswerRefusal(current,
+        {uid, businessId, isReceiverRole: receiverRole});
+    if (again) throw teamSettleError(again);
+    transaction.update(ref, {
+      status: teamSettle.SETTLE_STATUS.DECLINED,
+      declinedAtMs: now.getTime(), declinedByUid: uid, declineNote: note});
+    setSettlementAudit({db, transaction, businessId, settlementId: id,
+      action: "declined", uid,
+      summary: `Declined ${lotMoney(row.amountCents)} for ` +
+        `${parkingInvoices.monthTextEn(row.monthKey)}` +
+        `${note ? ` — ${note}` : ""}`,
+      changes: [{field: "status", from: "pending", to: "declined"}]});
+  });
+  await teamSettlePush(row.staffId, "declined", {amountCents: row.amountCents,
+    monthKey: row.monthKey, note}, {businessId, settlementId: id,
+    monthKey: row.monthKey});
+  return {success: true, settlementId: id, status: "declined"};
+}
+
+/**
+ * One undo takes off everything the settlement recorded: the month bill
+ * payment and the cash hand-over (voided, never deleted). Any staff member
+ * of the business may; History records who and when; nobody is messaged.
+ *
+ * @param {string} uid The caller.
+ * @param {object} data businessId, settlementId.
+ * @return {Promise<object>} `{success, settlementId, status}`.
+ */
+async function teamSettleUndo(uid, data) {
+  const ctx = await teamSettleContext(uid, data);
+  const {db, businessId, businessDoc, user} = ctx;
+  const id = String(data.settlementId || "").trim();
+  if (!id || id.includes("/")) {
+    throw teamSettleError(teamSettle.REFUSAL.NOT_FOUND);
+  }
+  const ref = db.collection("staffMonthSettlements").doc(id);
+  const snap = await ref.get();
+  const row = snap.exists ? snap.data() || {} : null;
+  const refusal = teamSettle.settlementUndoRefusal(row, businessId);
+  if (refusal) throw teamSettleError(refusal);
+  if (row.billPaymentId) {
+    // Any staff member may undo the whole settlement, so the parking part
+    // is undone with the authority of the business, not the caller's
+    // sections (as the settlement itself needed none of theirs).
+    try {
+      await undoParkingBillPayment(db, {businessDoc,
+        user: {...user, role: "businessOwner"}, uid,
+        data: {billPaymentId: row.billPaymentId}});
+    } catch (error) {
+      if (error?.details?.reason !==
+          parkingBillPayment.BILL_PAYMENT_REFUSAL.ALREADY_UNDONE) throw error;
+    }
+  }
+  const nowMs = Date.now();
+  await db.runTransaction(async (transaction) => {
+    const doc = await transaction.get(ref);
+    const current = doc.exists ? doc.data() || {} : null;
+    const again = teamSettle.settlementUndoRefusal(current, businessId);
+    if (again) throw teamSettleError(again);
+    const handoverRef = current.handoverId ?
+      db.collection("staffHandovers").doc(String(current.handoverId)) : null;
+    const handover = handoverRef ? await transaction.get(handoverRef) : null;
+    transaction.update(ref, {
+      status: teamSettle.SETTLE_STATUS.UNDONE,
+      undoneAtMs: nowMs, undoneByUid: uid});
+    if (handover?.exists &&
+        handover.data()?.status !== staffBalances.HANDOVER_STATUS.VOIDED) {
+      transaction.update(handoverRef, {
+        status: staffBalances.HANDOVER_STATUS.VOIDED, voidedByUid: uid,
+        voidedAt: FirestoreFieldValue.serverTimestamp(),
+        voidReason: "The month settlement was undone"});
+      setHandoverAudit({db, transaction, businessId, handoverId:
+        handoverRef.id, action: "voided", uid,
+      summary: `Voided a ${lotMoney(current.cashCents)} handover ` +
+          "(month settlement undone)",
+      changes: [{field: "status", from: "confirmed", to: "voided"}]});
+    }
+    setSettlementAudit({db, transaction, businessId, settlementId: id,
+      action: "undone", uid,
+      summary: `Undid ${lotMoney(current.amountCents)} for ` +
+        `${parkingInvoices.monthTextEn(current.monthKey)}`,
+      changes: [{field: "status", from: String(current.status || ""),
+        to: "undone"}]});
+  });
+  return {success: true, settlementId: id,
+    status: teamSettle.SETTLE_STATUS.UNDONE};
+}
+
+/**
+ * "Paid them back": the statement is negative (the business owes the member),
+ * and the owner or someone with Full access records the money given back, as
+ * an expense pay-back (staffExpenseRepayments) dated in the month it settles.
+ * No confirm step; the member is told.
+ *
+ * @param {string} uid The caller.
+ * @param {object} data businessId, monthKey, staffId, amountCents, method,
+ *   note.
+ * @return {Promise<object>} `{success, repaymentId, month}`.
+ */
+async function teamPayback(uid, data) {
+  const ctx = await teamSettleContext(uid, data);
+  const {db, businessId, receiverRole, businessDoc} = ctx;
+  if (!receiverRole) throw teamSettleError(teamSettle.REFUSAL.OWNER_ONLY);
+  const monthKey = String(data.monthKey || "").trim();
+  const now = new Date();
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(monthKey) ||
+      !teamSettleMonthStarted(monthKey, now)) {
+    throw teamSettleError(teamSettle.REFUSAL.MONTH_INVALID);
+  }
+  const staffId = String(data.staffId || "").trim();
+  if (!staffId || staffBalances.isBusinessAccount(staffId) ||
+      !await businessPersonProfile(db, businessId, staffId)) {
+    throw staffBalanceError("staff_not_member");
+  }
+  const found = await teamStatementFor(db, businessDoc, monthKey, staffId,
+      now);
+  if (!found) throw teamSettleError(teamSettle.REFUSAL.NO_STATEMENT);
+  const refusal = teamSettle.paybackRefusal({
+    owesCents: found.statement.owesCents, amountCents: data.amountCents,
+    method: data.method});
+  if (refusal) throw teamSettleError(refusal);
+  const todayKey = zelleCheck.dateKeyIn(now.getTime(), "America/New_York");
+  const paid = await writeStaffRepayment(uid, {businessId, staffId,
+    amountCents: data.amountCents, method: data.method,
+    note: String(data.note || "").trim() ||
+      `Month settlement - ${monthKey}`,
+    givenByStaffId: uid, paidAt: teamSettle.paybackDay(monthKey, todayKey)});
+  await teamSettlePush(staffId, "payback", {amountCents: data.amountCents,
+    monthKey}, {businessId, monthKey});
+  return {success: true, repaymentId: paid.repaymentId, month: paid.month};
+}
+
+/**
+ * updateLotExpenseEntry's settle branches.
+ *
+ * @param {string} uid The caller.
+ * @param {string} action A teamSettle.SETTLE_ACTIONS value.
+ * @param {object} data The request.
+ * @return {Promise<object>} The action's answer.
+ */
+async function teamSettleAction(uid, action, data) {
+  if (action === "team_settle_request") return teamSettleRequest(uid, data);
+  if (action === "team_settle_confirm") {
+    return teamSettleAnswer(uid, data, true);
+  }
+  if (action === "team_settle_decline") {
+    return teamSettleAnswer(uid, data, false);
+  }
+  if (action === "team_settle_undo") return teamSettleUndo(uid, data);
+  if (action === "team_payback") return teamPayback(uid, data);
+  throw teamSettleError(teamSettle.REFUSAL.ACTION_INVALID);
 }
 
 // Edit a logged purchase — amount, date, who paid, note, receipt. The line it

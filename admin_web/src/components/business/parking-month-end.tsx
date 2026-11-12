@@ -17,7 +17,9 @@ import {
 import { ReceivedByOptions } from "@/components/business/received-by-options";
 import { TeamTag } from "@/components/business/whose-car-field";
 import { auth, functions } from "@/lib/firebase";
-import { useParkingBillPayments, useParkingMonthInputs, useStaffExpenseCreditInputs } from "@/lib/business-data";
+import { useParkingBillPayments, useParkingMonthInputs, useStaffExpenseCreditInputs, useStaffMonthSettlements } from "@/lib/business-data";
+import { TeamSettlePanel } from "@/components/business/team-settle-panel";
+import { settlementRecords, settlementsOf } from "@/lib/team-settle";
 import { BUSINESS_PARKING_RECEIVED_VIA_OPTIONS } from "@/lib/business-parking-entry";
 import { overlayDismiss } from "@/lib/overlay-dismiss";
 
@@ -188,6 +190,22 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
   );
   const thisMonth = new Date().toISOString().slice(0, 7);
 
+  // "I paid everything" (docs/TEAM_SETTLE.md): the month's settlements, and
+  // who may receive them - the owner and people with Full access.
+  const settleRead = useStaffMonthSettlements(businessId, monthKey, Boolean(businessId));
+  const settlements = useMemo(() => settlementRecords(settleRead.rows), [settleRead.rows]);
+  const myUid = auth.currentUser?.uid ?? "";
+  const ownerUid = text(business?.ownerUid, "");
+  const settleReceivers = useMemo(() => {
+    const out = staff
+      .filter((s) => String(s.id) === ownerUid || s.fullAccess === true || s.role === "businessOwner")
+      .map((s) => ({ id: String(s.id), name: text(s.fullName, "") || text(s.name, "") || text(s.email, "") }))
+      .filter((s) => s.name);
+    if (ownerUid && !out.some((s) => s.id === ownerUid)) out.unshift({ id: ownerUid, name: "Owner" });
+    return out;
+  }, [staff, ownerUid]);
+  const isSettleReceiver = canSendInvoices || (myUid !== "" && myUid === ownerUid);
+
   // A team member's STATEMENT (docs/PARKING_INVOICES.md §6): their card shows
   // exactly what the WhatsApp statement says - parking and jobs, less the
   // expenses not yet credited, plus the cash they hold for the business at
@@ -220,7 +238,7 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
       live = false;
       window.clearTimeout(timer);
     };
-  }, [needsCash, businessId, monthKey, billPays.rows.length]);
+  }, [needsCash, businessId, monthKey, billPays.rows.length, settlements]);
   const statements = useMemo(() => {
     if (!staffCredit || !needsCash || cash.state !== "ready") return null;
     return staffStatements(summary.customers, {
@@ -727,6 +745,25 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
                     {showPaid && paidLines}
                   </ul>
                   {paymentsList}
+                  {customer.statementStaffId && customer.statementOwesCents !== undefined && (
+                    <TeamSettlePanel
+                      businessId={businessId}
+                      monthKey={monthKey}
+                      staffId={customer.statementStaffId}
+                      staffName={customer.customerName}
+                      owesCents={customer.statementOwesCents}
+                      parkingJobsCents={customer.dueCents}
+                      expenseCents={customer.expenseCreditCents}
+                      cashHeldCents={customer.cashHeldCents ?? 0}
+                      settlements={settlementsOf(settlements, customer.statementStaffId)}
+                      receivers={settleReceivers}
+                      names={staffNames}
+                      myUid={myUid}
+                      isReceiver={isSettleReceiver}
+                      estimating={estimating}
+                      onFlash={setFlash}
+                    />
+                  )}
                   </>
                 );
               })()}

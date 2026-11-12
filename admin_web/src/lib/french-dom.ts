@@ -7337,6 +7337,13 @@ export const ATTRIBUTE_TRANSLATIONS: Record<string, string> = {
 // than one English source must name its English here; french-dom.test.ts fails
 // on any new ambiguous pair that is not resolved in this table.
 export const REVERSE_PREFERENCES: Record<string, string> = {
+  // "I paid everything" (docs/TEAM_SETTLE.md) shares these with older copy.
+  "Annuler": "Cancel",
+  "Remboursé": "Refunded",
+  "En attente de": "Waiting on",
+  "Annuler le paiement": "Revert payment",
+  "Ce paiement est introuvable.": "That payment could not be found.",
+  "Annuler ce paiement ?": "Undo this payment?",
   // "Packages" (the Volume pages) and "Package" share "Colis".
   "Colis": "Package",
   // "Remove" and the loading lists' "Take off" share "Retirer".
@@ -8037,6 +8044,77 @@ Object.assign(TEXT_TRANSLATIONS, {
     "Une voiture ou une tâche de ce paiement a été marquée payée en totalité ensuite. Annulez d’abord cela.",
   "This payment covers lot activities: it needs the ledger permission.":
     "Ce paiement couvre des activités du parc : il faut la permission du registre.",
+});
+
+// "I paid everything" (docs/TEAM_SETTLE.md): the team member's Month end
+// card, its confirm / decline / undo, "Paid them back", and the server's
+// refusals (team-settle.ts SETTLE_MESSAGES). Money and names sit in their
+// own elements.
+Object.assign(TEXT_TRANSLATIONS, {
+  "Month settlement": "Règlement du mois",
+  "I paid everything": "J’ai tout payé",
+  "Record that they paid everything": "Enregistrer qu’il a tout payé",
+  "Paid them back": "Remboursé",
+  "Paid back — recorded.": "Remboursement enregistré.",
+  "Waiting for": "En attente de",
+  "to confirm": "pour confirmer",
+  "Confirmed": "Confirmé",
+  "Not confirmed": "Non confirmé",
+  "Confirm": "Confirmer",
+  "Decline": "Refuser",
+  "Undo": "Annuler",
+  "Cancel payment": "Annuler le paiement",
+  "Cash held": "Espèces détenues",
+  "Parking and jobs": "Stationnement et travaux",
+  "The statement was": "Le relevé était de",
+  "Everything": "Tout",
+  "Only the cash I hold": "Seulement les espèces que je détiens",
+  "Only my parking": "Seulement mon stationnement",
+  "Amount paid ($)": "Montant payé ($)",
+  "Amount paid": "Montant payé",
+  "Amount paid back ($)": "Montant remboursé ($)",
+  "Amount paid back": "Montant remboursé",
+  "Who received it": "Qui l’a reçu",
+  "Left to pay": "Reste à payer",
+  "Payment recorded.": "Paiement enregistré.",
+  "Payment confirmed.": "Paiement confirmé.",
+  "Payment declined.": "Paiement refusé.",
+  "Sent. It counts once the person who received it confirms.": "Envoyé. Il compte dès que la personne qui l’a reçu confirme.",
+  "It counts once the person who received the money confirms. The amount and what it is for are kept as you send them.":
+    "Il compte dès que la personne qui a reçu l’argent confirme. Le montant et son objet sont conservés tels que vous les envoyez.",
+  "Decline this payment?": "Refuser ce paiement ?",
+  "Why (optional)": "Pourquoi (facultatif)",
+  "Cancel this payment?": "Annuler ce paiement ?",
+  "It will not count. Nobody is told.": "Il ne comptera pas. Personne n’est prévenu.",
+  "It takes off the parking payment and the cash hand-over together. Nobody is told.":
+    "Il retire ensemble le paiement du stationnement et la remise d’espèces. Personne n’est prévenu.",
+  "The business owes them": "L’entreprise lui doit",
+  "It is recorded as paid back for their expenses.": "Il est enregistré comme remboursement de ses dépenses.",
+  "Owner": "Propriétaire",
+  "Enter how much was paid.": "Saisissez le montant payé.",
+  "That is more than this statement asks for. Pay what is owed, or pick what it is for.":
+    "C’est plus que ce que ce relevé demande. Payez ce qui est dû, ou choisissez l’objet du paiement.",
+  "Nothing is owed for that. Pick something else.": "Rien n’est dû pour cela. Choisissez autre chose.",
+  "Choose what the payment is for: everything, only the cash, or only the parking.":
+    "Choisissez l’objet du paiement : tout, seulement les espèces ou seulement le stationnement.",
+  "Choose how the money was paid.": "Choisissez comment l’argent a été payé.",
+  "Pick a month that has started (yyyy-mm).": "Choisissez un mois commencé (aaaa-mm).",
+  "This person has no statement for this month.": "Cette personne n’a pas de relevé pour ce mois.",
+  "Choose the owner, someone with Full access, or the Business account.":
+    "Choisissez le propriétaire, une personne avec accès complet ou le compte de l’entreprise.",
+  "You can only say you paid for yourself. Ask the owner to record it for someone else.":
+    "Vous ne pouvez déclarer un paiement que pour vous-même. Demandez au propriétaire de l’enregistrer pour quelqu’un d’autre.",
+  "This payment was not found.": "Ce paiement est introuvable.",
+  "Only the person who received this money can answer it.": "Seule la personne qui a reçu cet argent peut répondre.",
+  "This payment was already answered.": "Ce paiement a déjà reçu une réponse.",
+  "This payment is already undone or declined.": "Ce paiement est déjà annulé ou refusé.",
+  "The parking bill changed since it was filed, so it cannot be confirmed as it was. Decline it and ask for a new one.":
+    "La facture de stationnement a changé depuis l’envoi : elle ne peut pas être confirmée telle quelle. Refusez-la et demandez-en une nouvelle.",
+  "Only the owner or someone with Full access can do this.": "Seul le propriétaire ou une personne avec accès complet peut faire cela.",
+  "The business does not owe this person anything for this month.": "L’entreprise ne doit rien à cette personne pour ce mois.",
+  "That is more than the business owes this person.": "C’est plus que ce que l’entreprise doit à cette personne.",
+  "Your account is not allowed to do this.": "Votre compte n’est pas autorisé à faire cela.",
+  "That did not save. Try again.": "L’enregistrement a échoué. Réessayez.",
 });
 // "Whose car?" on parking: a team member's own car (docs/PARKING_TEAM_CARS.md).
 Object.assign(TEXT_TRANSLATIONS, {

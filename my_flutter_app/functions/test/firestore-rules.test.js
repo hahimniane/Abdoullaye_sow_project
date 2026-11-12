@@ -4078,6 +4078,45 @@ describe("staff handovers are callable-only", () => {
       });
 });
 
+describe("team month settlements are callable-only", () => {
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await context.firestore().doc("staffMonthSettlements/settle_a").set({
+        businessId: "biz_a", staffId: "staff-parking-a", monthKey: "2026-10",
+        amountCents: 500, status: "pending", receiverId: "owner-a",
+      });
+    });
+  });
+
+  it("lets the business's team read, nobody else", async () => {
+    for (const uid of ["owner-a", "staff-parking-a", "super-admin"]) {
+      await assertSucceeds(firestoreFor(uid)
+          .doc("staffMonthSettlements/settle_a").get());
+    }
+    await assertSucceeds(firestoreFor("owner-a")
+        .collection("staffMonthSettlements")
+        .where("businessId", "==", "biz_a")
+        .where("monthKey", "==", "2026-10").get());
+    await assertFails(firestoreFor("owner-b")
+        .doc("staffMonthSettlements/settle_a").get());
+    await assertFails(firestoreFor(null)
+        .doc("staffMonthSettlements/settle_a").get());
+  });
+
+  it("denies every client write, even the owner's and an admin's",
+      async () => {
+        for (const uid of ["owner-a", "staff-parking-a", "super-admin"]) {
+          const db = firestoreFor(uid);
+          await assertFails(db.doc(`staffMonthSettlements/forged_${uid}`)
+              .set({businessId: "biz_a", amountCents: 1,
+                status: "confirmed"}));
+          await assertFails(db.doc("staffMonthSettlements/settle_a")
+              .update({status: "confirmed"}));
+          await assertFails(db.doc("staffMonthSettlements/settle_a").delete());
+        }
+      });
+});
+
 describe("staff expense credit is callable-only", () => {
   beforeEach(async () => {
     await testEnv.withSecurityRulesDisabled(async (context) => {

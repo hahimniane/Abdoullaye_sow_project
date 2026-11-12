@@ -402,6 +402,29 @@ function namedCars(c) {
 }
 
 /**
+ * The month's team statements, the numbers Month end shows: the netted
+ * customers put through staff_statement.js with the cash held at the end of
+ * the month. Shared by the invoices and by "I paid everything" so both read
+ * ONE statement.
+ *
+ * @param {object[]} customers nettedCustomers' answer.
+ * @param {string} monthKey "YYYY-MM".
+ * @param {object} staffCredit `{entries, repayments, lines, staffNames}`.
+ * @param {object} held `{[staffId]: cash held at the month's end, cents}`.
+ * @return {{statements: object[], customerKeys: object}} staffStatements'.
+ */
+function teamStatementsOf(customers, monthKey, staffCredit, held) {
+  return staffStatements(customers, {
+    monthKey,
+    entries: creditEntries(staffCredit),
+    repayments: staffCredit?.repayments || [],
+    lines: staffCredit?.lines || [],
+    staffNames: staffCredit?.staffNames || {},
+    held: held || {},
+  });
+}
+
+/**
  * Who gets an invoice (or a statement) for the month, from the month-end
  * summary.
  *
@@ -440,14 +463,9 @@ function invoiceRecipients(summary, staffCredit, now = new Date(),
   const customers = nettedCustomers(summary?.customers, monthKey, staffCredit);
   const numbers = invoiceNumbers(customers, monthKey);
   const sent = options.sent instanceof Set ? options.sent : new Set();
-  const team = staffCredit ? staffStatements(customers, {
-    monthKey,
-    entries: creditEntries(staffCredit),
-    repayments: staffCredit.repayments || [],
-    lines: staffCredit.lines || [],
-    staffNames: staffCredit.staffNames || {},
-    held: options.held || {},
-  }) : {statements: [], customerKeys: {}};
+  const team = staffCredit ?
+    teamStatementsOf(customers, monthKey, staffCredit, options.held) :
+    {statements: [], customerKeys: {}};
   const recipients = [];
   const skipped = [];
   const taken = new Set();
@@ -715,4 +733,5 @@ module.exports = {
   statementNumbers,
   storagePath,
   tallyRows,
+  teamStatementsOf,
 };
