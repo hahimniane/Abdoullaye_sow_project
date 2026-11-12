@@ -42,6 +42,7 @@ const {
   isBusinessAccount,
 } = require("./staff_balances");
 const {msOf} = require("./parking_whatsapp");
+const staffBalanceMonths = require("./staff_balance_months");
 
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 const TIME_ZONE = "America/New_York";
@@ -193,6 +194,46 @@ function staffHeldAsOf(input) {
 }
 
 /**
+ * The money each person held for the business through a month, counted the
+ * way Staff balances counts it (STAFF_BALANCES_MONTHLY.md): every payment
+ * in the month its bill was for (a September stay paid in November is
+ * September's), whenever it was collected, plus the handovers confirmed by
+ * the end of the month. A payment for a later month never counts.
+ *
+ * @param {object} input `{sources, counted, handovers, monthKey, now}`.
+ * @return {object} `{[staffId]: heldCents}` (signed).
+ */
+function staffHeldThroughMonth(input) {
+  const monthKey = text(input?.monthKey, 7);
+  const now = input?.now instanceof Date ? input.now :
+    new Date(Number(input?.now) || Date.now());
+  const people = {};
+  const add = (id, cents) => {
+    people[id] = (people[id] || 0) + cents;
+  };
+  for (const r of staffBalanceMonths.monthReceipts(input?.sources, now,
+      input?.counted)) {
+    const id = text(r.staffId, 128);
+    if (!id || isBusinessAccount(id) || !(r.month <= monthKey)) continue;
+    add(id, Math.round(Number(r.amountCents)) || 0);
+  }
+  for (const h of objects(input?.handovers)) {
+    if (text(h.status, 20) !== HANDOVER_STATUS.CONFIRMED) continue;
+    const amount = Math.round(Number(h.amountCents)) || 0;
+    const from = text(h.fromStaffId, 128);
+    const to = text(h.toId, 128);
+    if (amount <= 0 || !from) continue;
+    const month = staffBalanceMonths.monthOf(handoverMs(h));
+    if (month && month > monthKey) continue;
+    if (!isBusinessAccount(from)) add(from, -amount);
+    if (to && !isBusinessAccount(to)) add(to, amount);
+  }
+  const out = {};
+  for (const [id, cents] of Object.entries(people)) out[id] = signed(cents);
+  return out;
+}
+
+/**
  * The cash a month's statement still asks a person for: what they held at
  * the end of the month (staffHeldAsOf), less every handover they have GIVEN
  * since, confirmed - never below zero.
@@ -216,7 +257,13 @@ function staffHeldAsOf(input) {
  */
 function staffStatementHeld(input) {
   const asOfMs = Number(input?.asOfMs) || 0;
-  const held = staffHeldAsOf(input);
+  // With a month, the money is counted by the month its bill was for, as
+  // Staff balances does (owner, 2026-11-12: Yao's October statement must
+  // read what Staff balances says at the end of October). Without one, the
+  // cash in hand at the moment.
+  const monthKey = text(input?.monthKey, 7);
+  const held = /^\d{4}-\d{2}$/.test(monthKey) ?
+    staffHeldThroughMonth({...input, monthKey}) : staffHeldAsOf(input);
   const givenSince = {};
   for (const h of objects(input?.handovers)) {
     if (text(h.status, 20) !== HANDOVER_STATUS.CONFIRMED) continue;
@@ -383,6 +430,7 @@ module.exports = {
   monthEndMs,
   receiptTimes,
   staffHeldAsOf,
+  staffHeldThroughMonth,
   staffStatementHeld,
   staffStatements,
 };

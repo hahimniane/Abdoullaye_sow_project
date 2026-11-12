@@ -153,6 +153,48 @@ describe("cash held as of the end of a month", () => {
     assert.equal(november.abd, 350800 + 16600 - 358000);
   });
 
+  // Keren Auto Sales, 2026-11-12: Yao's October statement read "the
+  // business owes them $5,889.34" while Staff balances said he owed
+  // $7,007.35 at the end of October - he had collected $13,272.69 in
+  // November for September and October bills. The owner: the statement
+  // must read what Staff balances reads, money in the month its bill was
+  // for.
+  it("with a month: money counts in the month its bill was for, like " +
+      "Staff balances", () => {
+    const sources = {parkedCars: [
+      car("sep", [pay("yao", 36000, "2026-11-03T16:00:00Z")],
+          {parkingDate: "2026-09-01", parkingEndDate: "2026-09-30"}),
+      car("oct", [pay("yao", 20400, "2026-10-17T16:00:00Z"),
+        pay("yao", 14400, "2026-11-05T16:00:00Z")]),
+      car("nov", [pay("yao", 12000, "2026-11-10T16:00:00Z")],
+          {parkingDate: "2026-11-01", parkingEndDate: "2026-11-10"}),
+    ]};
+    const now = new Date("2026-11-12T15:00:00Z");
+    const october = (handovers = []) => statement.staffStatementHeld({
+      sources, handovers, asOfMs: END, monthKey: "2026-10", now});
+    // September's and October's bills, whenever they were paid; not
+    // November's.
+    assert.deepEqual(october(), {yao: 36000 + 20400 + 14400});
+    // The cash-in-hand reading (no month) still sees only October's cash.
+    assert.deepEqual(statement.staffStatementHeld({sources, handovers: [],
+      asOfMs: END, now}), {yao: 20400});
+    assert.deepEqual(statement.staffHeldThroughMonth({sources,
+      monthKey: "2026-10", now}), {yao: 70800});
+    // Cash handed TO him in November is not October's...
+    const toYao = {id: "h1", kind: "handover", fromStaffId: "abd",
+      toId: "yao", amountCents: 358000, status: "confirmed",
+      confirmedAtMs: Date.parse("2026-11-08T20:45:00Z")};
+    assert.equal(october([toYao]).yao, 70800);
+    // ...cash he handed over in November pays October's statement...
+    const fromYao = {...toYao, id: "h2", fromStaffId: "yao",
+      toId: "business_account", amountCents: 50000};
+    assert.equal(october([fromYao]).yao, 20800);
+    // ...and one confirmed in October is inside October already.
+    const inOctober = {...fromYao, id: "h3",
+      confirmedAtMs: Date.parse("2026-10-20T15:00:00Z")};
+    assert.equal(october([inOctober]).yao, 20800);
+  });
+
   it("a person the business owes at the month's end keeps that figure",
       () => {
         // An opening amount put the person below zero at the month's end; a

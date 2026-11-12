@@ -448,6 +448,7 @@ function staffBalanceMonths(input) {
 module.exports = {
   allocate,
   carMonthBounds,
+  monthOf,
   monthReceipts,
   staffBalanceMonths,
 };

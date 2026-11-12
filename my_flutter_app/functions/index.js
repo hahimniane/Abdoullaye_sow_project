@@ -21362,6 +21362,7 @@ async function staffHeldAtMonthEnd(db, business, businessId, monthKey) {
   // its month ends).
   const held = staffStatement.staffStatementHeld({
     asOfMs,
+    monthKey,
     now: new Date(),
     sources: {parkedCars, lotActivities, lotActivityPayments,
       containerLinePayments, inventorySales, inventoryCreditPayments,
