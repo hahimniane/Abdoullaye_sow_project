@@ -8833,6 +8833,37 @@ Object.assign(TEXT_TRANSLATIONS, {
 Object.assign(ATTRIBUTE_TRANSLATIONS, {
   "Which drivers": "Quels chauffeurs",
 });
+Object.assign(TEXT_TRANSLATIONS, {
+  "billed this month": "facturés ce mois-ci",
+  "Nothing billed yet this month": "Rien de facturé ce mois-ci",
+  "driver owes": "chauffeur doit",
+  "drivers owe": "chauffeurs doivent",
+  "Late drivers": "Chauffeurs en retard",
+  "past due": "dû en retard",
+  "Nobody is late": "Personne n’est en retard",
+  "Connect Stripe to receive card payments": "Connectez Stripe pour recevoir les paiements par carte",
+  "Finish Stripe to receive card payments": "Terminez Stripe pour recevoir les paiements par carte",
+  "Your business is approved. Card payments from customers are kept by Laawol until Stripe is set up, then paid out to you. Zelle and cash work now.": "Votre entreprise est approuvée. Les paiements par carte des clients sont gardés par Laawol jusqu’à la configuration de Stripe, puis vous sont versés. Zelle et les espèces fonctionnent dès maintenant.",
+  "Next step": "Étape suivante",
+});
+Object.assign(ATTRIBUTE_TRANSLATIONS, {
+  "Fleet this month": "Fleet ce mois-ci",
+});
+// ==== Fleet list filters (2026-11-12) ====
+Object.assign(TEXT_TRANSLATIONS, {
+  "Most paid first": "Le plus payé d’abord",
+  "This month:": "Ce mois-ci :",
+  "All companies": "Toutes les sociétés",
+  "Paperwork due first": "Papiers à échéance d’abord",
+  "Paperwork:": "Papiers :",
+  "No bill in this list.": "Aucune facture dans cette liste.",
+  "No payment in this list.": "Aucun paiement dans cette liste.",
+  "No car matches. Change the search or the filters.": "Aucune voiture ne correspond. Changez la recherche ou les filtres.",
+});
+Object.assign(ATTRIBUTE_TRANSLATIONS, {
+  "Which bills": "Quelles factures",
+  "Which payments": "Quels paiements",
+});
 const englishDictionary = { ...TEXT_TRANSLATIONS, ...ATTRIBUTE_TRANSLATIONS };
 const frenchDictionary = buildReverseDictionary([
   TEXT_TRANSLATIONS,

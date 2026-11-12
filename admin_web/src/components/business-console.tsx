@@ -857,6 +857,7 @@ export function BusinessConsole({
           {businessId && payoutStatus.state !== "ready" && (
             <StripeSetupBanner
               businessId={businessId}
+              approved={isApproved}
               payoutStatus={payoutStatus}
               previewMode={previewMode}
               onOpenSupport={() => setActiveTab("cases")}
@@ -1264,12 +1265,15 @@ function BusinessNavItem({
 
 function StripeSetupBanner({
   businessId,
+  approved = false,
   payoutStatus,
   previewMode,
   onOpenSupport,
   canOpenSupport,
 }: {
   businessId: string;
+  /** Approved without Stripe (super admin): Stripe is for card payouts now. */
+  approved?: boolean;
   payoutStatus: BusinessPayoutStatus;
   previewMode: boolean;
   onOpenSupport: () => void;
@@ -1278,12 +1282,16 @@ function StripeSetupBanner({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const hasStripeAccount = Boolean(payoutStatus.stripeAccountId);
-  const headline = hasStripeAccount
-    ? "Finish Stripe setup to continue"
-    : "Set up Stripe to continue";
-  const body = hasStripeAccount
-    ? "Your Stripe account exists, but Stripe still needs verification details before Laawol can approve payouts or send customer payments to your business."
-    : "Before your business can be approved for paid services, create your secure Stripe account for identity, tax, legal, and bank verification.";
+  const headline = approved
+    ? hasStripeAccount ? "Finish Stripe to receive card payments" : "Connect Stripe to receive card payments"
+    : hasStripeAccount
+      ? "Finish Stripe setup to continue"
+      : "Set up Stripe to continue";
+  const body = approved
+    ? "Your business is approved. Card payments from customers are kept by Laawol until Stripe is set up, then paid out to you. Zelle and cash work now."
+    : hasStripeAccount
+      ? "Your Stripe account exists, but Stripe still needs verification details before Laawol can approve payouts or send customer payments to your business."
+      : "Before your business can be approved for paid services, create your secure Stripe account for identity, tax, legal, and bank verification.";
   const actionLabel = busy
     ? "Opening Stripe..."
     : hasStripeAccount
@@ -1323,7 +1331,7 @@ function StripeSetupBanner({
       aria-labelledby="stripe-setup-title"
     >
       <div className="stripe-setup-main">
-        <span className="stripe-setup-step">Required first step</span>
+        <span className="stripe-setup-step">{approved ? "Next step" : "Required first step"}</span>
         <h2 id="stripe-setup-title">{headline}</h2>
         <p>{body}</p>
         <div className="stripe-setup-meta">

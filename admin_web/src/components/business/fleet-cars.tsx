@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowLeft, CarFront, FileWarning, Plus, Search } from "lucide-react";
+import { ArrowLeft, CarFront, FileWarning, Plus, Search, X } from "lucide-react";
 
 import { Panel } from "@/components/panel";
 import { formatDayKey } from "@/lib/format";
@@ -15,6 +15,11 @@ import {
   paperworkRows,
   type CarRow,
   type Expiry,
+  carCompanies,
+  carFilterCounts,
+  emptyCarFilter,
+  filterCarRows,
+  type CarFilter,
 } from "@/lib/fleet";
 import { moneyText } from "@/lib/invoice-ledger";
 
@@ -51,10 +56,24 @@ export function FleetCars({
   onOpenCar: (id: string) => void;
   onOpenDriver: (id: string) => void;
 }) {
-  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<CarFilter>(emptyCarFilter);
   const [adding, setAdding] = useState(false);
   const rows = useMemo(() => carRows(state.data, state.index, state.todayKey), [state]);
-  const shown = useMemo(() => (search.trim() ? rows.filter((r) => matchesSearch(r.search, search)) : rows), [rows, search]);
+  const shown = useMemo(() => filterCarRows(rows, filter), [rows, filter]);
+  const counts = useMemo(() => carFilterCounts(rows), [rows]);
+  const companies = useMemo(() => carCompanies(rows), [rows]);
+  const narrowed = filter.view !== "all" || filter.paper !== "any" || filter.company !== "" || filter.query.trim() !== "";
+  const paperChip = (value: CarFilter["paper"], label: string, count: number) =>
+    (count > 0 || filter.paper === value) && (
+      <button
+        type="button"
+        className={`pk-me-chip${filter.paper === value ? " on" : ""}`}
+        aria-pressed={filter.paper === value}
+        onClick={() => setFilter((f) => ({ ...f, paper: f.paper === value ? "any" : value }))}
+      >
+        {label} <b data-no-translate>{count}</b>
+      </button>
+    );
   const selected = carId ? state.index.carById.get(carId) : undefined;
 
   if (selected) {
@@ -87,15 +106,56 @@ export function FleetCars({
             <input
               aria-label="Search cars"
               placeholder="Search plate, company or driver"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              value={filter.query}
+              onChange={(event) => {
+                const query = event.target.value;
+                setFilter((f) => ({ ...f, query }));
+              }}
             />
           </label>
+          {companies.length > 1 && (
+            <label className="pk-me-select">
+              <span>Company</span>
+              <select value={filter.company} onChange={(e) => {
+                const company = e.target.value;
+                setFilter((f) => ({ ...f, company }));
+              }}>
+                <option value="">All companies</option>
+                {companies.map((c) => <option key={c} value={c} data-no-translate>{c}</option>)}
+              </select>
+            </label>
+          )}
+          <label className="pk-me-select">
+            <span>Sort by</span>
+            <select value={filter.sort} onChange={(e) => {
+              const sort = e.target.value as CarFilter["sort"];
+              setFilter((f) => ({ ...f, sort }));
+            }}>
+              <option value="plate">Plate</option>
+              <option value="expiry">Paperwork due first</option>
+            </select>
+          </label>
+        </div>
+        <div className="pk-me-chips fleet-driver-chips">
+          <div className="pk-view" role="group" aria-label="Which cars">
+            <button type="button" className={filter.view === "all" ? "on" : ""} aria-pressed={filter.view === "all"} onClick={() => setFilter((f) => ({ ...f, view: "all" }))}>All (<span data-no-translate>{counts.all}</span>)</button>
+            <button type="button" className={filter.view === "driver" ? "on" : ""} aria-pressed={filter.view === "driver"} onClick={() => setFilter((f) => ({ ...f, view: "driver" }))}>With a driver (<span data-no-translate>{counts.driver}</span>)</button>
+            <button type="button" className={filter.view === "free" ? "on" : ""} aria-pressed={filter.view === "free"} onClick={() => setFilter((f) => ({ ...f, view: "free" }))}>Free (<span data-no-translate>{counts.free}</span>)</button>
+          </div>
+          <span className="fleet-chip-label">Paperwork:</span>
+          {paperChip("expired", "Expired", counts.expired)}
+          {paperChip("soon", "Due in 60 days", counts.soon)}
+          {paperChip("missing", "Missing", counts.missing)}
+          {narrowed && (
+            <button className="ghost-button" type="button" onClick={() => setFilter((f) => ({ ...emptyCarFilter, sort: f.sort }))}>
+              <X size={14} /> Clear filters
+            </button>
+          )}
         </div>
         {state.loading && rows.length === 0 ? (
           <div className="empty-state">Loading cars…</div>
         ) : shown.length === 0 ? (
-          <div className="empty-state">{search.trim() ? "No car matches that search." : "No cars yet."}</div>
+          <div className="empty-state">{narrowed ? "No car matches. Change the search or the filters." : "No cars yet."}</div>
         ) : (
           <div className="fleet-grid-scroll">
             <div className="fleet-grid" role="table">
@@ -386,9 +446,16 @@ type Filter = Expiry | "all";
 
 export function FleetPaperwork({ state, onOpenCar }: { state: FleetState; onOpenCar: (id: string) => void }) {
   const [filter, setFilter] = useState<Filter>("all");
-  const rows = useMemo(() => paperworkRows(carRows(state.data, state.index, state.todayKey)), [state]);
+  const [query, setQuery] = useState("");
+  const [company, setCompany] = useState("");
+  const cars = useMemo(() => carRows(state.data, state.index, state.todayKey), [state]);
+  const rows = useMemo(() => paperworkRows(cars), [cars]);
   const counts = useMemo(() => paperworkCounts(rows), [rows]);
-  const shown = useMemo(() => (filter === "all" ? rows : rows.filter((r) => r.worst === filter)), [rows, filter]);
+  const companies = useMemo(() => carCompanies(cars), [cars]);
+  const shown = useMemo(
+    () => filterCarRows(cars, { ...emptyCarFilter, query, company, sort: "expiry" }).filter((r) => filter === "all" || r.worst === filter),
+    [cars, query, company, filter],
+  );
   const chips: [Filter, string, number][] = [
     ["all", "All", rows.length],
     ["expired", "Expired", counts.expired],
@@ -399,6 +466,21 @@ export function FleetPaperwork({ state, onOpenCar }: { state: FleetState; onOpen
   return (
     <div className="stack fleet-page">
       <Panel title="Paperwork" icon={<FileWarning size={18} />}>
+        <div className="fleet-toolbar">
+          <label className="fleet-search">
+            <Search aria-hidden="true" size={15} />
+            <input aria-label="Search cars" placeholder="Search plate, company or driver" value={query} onChange={(event) => setQuery(event.target.value)} />
+          </label>
+          {companies.length > 1 && (
+            <label className="pk-me-select">
+              <span>Company</span>
+              <select value={company} onChange={(e) => setCompany(e.target.value)}>
+                <option value="">All companies</option>
+                {companies.map((c) => <option key={c} value={c} data-no-translate>{c}</option>)}
+              </select>
+            </label>
+          )}
+        </div>
         <div className="fleet-toolbar">
           <div className="pk-view" role="group" aria-label="Filter by state">
             {chips.map(([id, label, count]) => (

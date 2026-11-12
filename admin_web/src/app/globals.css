@@ -18056,3 +18056,23 @@ button.fleet-grid-row:focus-visible { outline: 2px solid var(--brand-strong); ou
 .bp-doc-skipped { color: #047857; font-weight: 700; margin: 4px 0 0; }
 .fleet-driver-chips { margin: 10px 0; }
 .fleet-no-fee { color: #7a4b00; display: block; font-size: 11.5px; font-weight: 700; }
+
+/* ==== Fleet polish (owner, 2026-11-12): nothing touches a panel's edge ==== */
+.fleet-page .panel { padding-bottom: 16px; }
+.fleet-page .panel > :not(.panel-header) { margin-left: 16px; margin-right: 16px; }
+.fleet-page .panel > .panel-header + * { margin-top: 14px; }
+.fleet-page .panel-header { padding: 0 16px; }
+.fleet-grid-row { padding: 8px 14px; }
+.fleet-grid-row > span { overflow: visible; }
+.fleet-grid-row > span.fleet-name, .fleet-grid-row > span:first-child { overflow: hidden; }
+.fleet-kpis { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.fleet-kpi { background: var(--paper, #fff); border: 1px solid var(--rule); border-radius: 10px; box-shadow: var(--shadow); box-sizing: border-box; display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 16px 18px; }
+.fleet-kpi-label { color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.fleet-kpi-value { color: var(--ink); font-size: 24px; font-variant-numeric: tabular-nums; font-weight: 800; line-height: 1.2; overflow-wrap: anywhere; }
+.fleet-kpi-value.ok { color: #047857; }
+.fleet-kpi-value.owed { color: #b42318; }
+.fleet-kpi small { color: var(--muted); font-size: 12.5px; }
+.fleet-kpi-bar { background: #e2e8f0; border-radius: 999px; display: block; height: 6px; margin-top: 4px; overflow: hidden; }
+.fleet-kpi-bar i { background: #059669; border-radius: 999px; display: block; height: 100%; }
+.fleet-chip-label { color: var(--muted); font-size: 12.5px; font-weight: 700; margin-left: 4px; }
+.fleet-list-view { margin-bottom: 10px; }

@@ -715,7 +715,17 @@ export function freeCars(data: FleetData, index: FleetIndex): Row[] {
 // Tiles (Payments page and Today).
 // ---------------------------------------------------------------------------
 
-export type FleetTiles = { collectedCents: number; owedCents: number; lateDrivers: number };
+export type FleetTiles = {
+  collectedCents: number;
+  owedCents: number;
+  lateDrivers: number;
+  /** Past due, summed over the late drivers. */
+  lateCents: number;
+  /** Drivers with anything owed. */
+  owingDrivers: number;
+  /** What this month's bills ask for (waived and void left out). */
+  dueThisMonthCents: number;
+};
 
 /** Collected this month, owed now, and how many drivers have a late bill. */
 export function fleetTiles(data: FleetData, index: FleetIndex, todayKey: string): FleetTiles {
@@ -726,12 +736,25 @@ export function fleetTiles(data: FleetData, index: FleetIndex, todayKey: string)
   }
   let owed = 0;
   let late = 0;
+  let lateCents = 0;
+  let owingDrivers = 0;
   for (const d of data.drivers) {
     const b = driverBalance(index.billsByDriver.get(d.id) ?? [], num(d.creditCents), todayKey);
     owed += b.owedCents;
-    if (b.lateCents > 0) late += 1;
+    if (b.owedCents > 0) owingDrivers += 1;
+    if (b.lateCents > 0) {
+      late += 1;
+      lateCents += b.lateCents;
+    }
   }
-  return { collectedCents: collected, owedCents: owed, lateDrivers: late };
+  // Billed for this month: bills due this month that stand (not waived or void).
+  let dueThisMonth = 0;
+  for (const b of data.bills) {
+    const status = str(b.status);
+    if (status === "waived" || status === "void") continue;
+    if (monthOf(str(b.dueDayKey)) === month) dueThisMonth += num(b.amountCents);
+  }
+  return { collectedCents: collected, owedCents: owed, lateDrivers: late, lateCents, owingDrivers, dueThisMonthCents: dueThisMonth };
 }
 
 /** The assignment the end-of-rent rule applies to, in a sentence. */
@@ -877,3 +900,133 @@ export function readImportPreview(result: unknown): ImportPreview {
 }
 
 export type { FleetAssignment, FleetBill };
+
+// ---------------------------------------------------------------------------
+// Filters on the other Fleet lists (owner, 2026-11-12: "on each page, filter
+// and search where needed"). Pure, so each page only renders.
+
+export type PaymentsFilter = {
+  view: DriverView;
+  /** The current month's cell: owes, part paid, paid in full. */
+  month: "any" | "owed" | "part" | "paid";
+  late: boolean;
+  query: string;
+  sort: "name" | "owed" | "total";
+};
+
+export const emptyPaymentsFilter: PaymentsFilter = { view: "active", month: "any", late: false, query: "", sort: "name" };
+
+function gridDriver(rows: ReadonlyMap<string, DriverRow>, id: string): DriverRow | undefined {
+  return rows.get(id);
+}
+
+function monthMatches(row: GridRow, month: PaymentsFilter["month"]): boolean {
+  if (month === "any") return true;
+  const last = row.cells[row.cells.length - 1];
+  if (!last) return false;
+  if (month === "owed") return last.state === "owed";
+  if (month === "part") return last.state === "part";
+  return last.state === "full";
+}
+
+function gridInView(row: GridRow, drivers: ReadonlyMap<string, DriverRow>, view: DriverView): boolean {
+  const status = gridDriver(drivers, row.driverId)?.status ?? "active";
+  if (view === "active") return status === "active";
+  if (view === "left") return status !== "active";
+  return true;
+}
+
+/** The Payments grid's rows after the view, the chips, the search and the order. */
+export function filterGridRows(rows: readonly GridRow[], drivers: ReadonlyMap<string, DriverRow>, f: PaymentsFilter): GridRow[] {
+  const query = f.query.trim();
+  const out = rows.filter(
+    (r) =>
+      gridInView(r, drivers, f.view) &&
+      monthMatches(r, f.month) &&
+      (!f.late || (gridDriver(drivers, r.driverId)?.lateCents ?? 0) > 0) &&
+      (!query || matchesSearch(r.search, query)),
+  );
+  const byName = (a: GridRow, b: GridRow) => a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true });
+  const owed = (r: GridRow) => gridDriver(drivers, r.driverId)?.owedCents ?? 0;
+  if (f.sort === "owed") return out.sort((a, b) => owed(b) - owed(a) || byName(a, b));
+  if (f.sort === "total") return out.sort((a, b) => b.totalCents - a.totalCents || byName(a, b));
+  return out.sort(byName);
+}
+
+export type PaymentsCounts = { active: number; left: number; all: number; owed: number; part: number; paid: number; late: number };
+
+export function gridFilterCounts(rows: readonly GridRow[], drivers: ReadonlyMap<string, DriverRow>, view: DriverView): PaymentsCounts {
+  const inView = rows.filter((r) => gridInView(r, drivers, view));
+  return {
+    active: rows.filter((r) => gridInView(r, drivers, "active")).length,
+    left: rows.filter((r) => gridInView(r, drivers, "left")).length,
+    all: rows.length,
+    owed: inView.filter((r) => monthMatches(r, "owed")).length,
+    part: inView.filter((r) => monthMatches(r, "part")).length,
+    paid: inView.filter((r) => monthMatches(r, "paid")).length,
+    late: inView.filter((r) => (gridDriver(drivers, r.driverId)?.lateCents ?? 0) > 0).length,
+  };
+}
+
+export type CarFilter = {
+  view: "all" | "driver" | "free";
+  paper: "any" | "expired" | "soon" | "missing";
+  company: string;
+  query: string;
+  sort: "plate" | "expiry";
+};
+
+export const emptyCarFilter: CarFilter = { view: "all", paper: "any", company: "", query: "", sort: "plate" };
+
+const carHasDriver = (r: CarRow) => Boolean(r.driverId);
+
+/** Cars (and Paperwork) after the view, paperwork state, company, search and order. */
+export function filterCarRows(rows: readonly CarRow[], f: CarFilter): PaperworkRow[] {
+  const query = f.query.trim();
+  const out = paperworkRows([...rows]).filter(
+    (r) =>
+      (f.view === "all" || (f.view === "driver" ? carHasDriver(r) : !carHasDriver(r))) &&
+      (f.paper === "any" || r.worst === f.paper) &&
+      (!f.company || r.company === f.company) &&
+      (!query || matchesSearch(r.search, query)),
+  );
+  if (f.sort === "expiry") return out;
+  return out.sort((a, b) => a.plate.localeCompare(b.plate, undefined, { numeric: true }));
+}
+
+export type CarCounts = { all: number; driver: number; free: number; expired: number; soon: number; missing: number };
+
+export function carFilterCounts(rows: readonly CarRow[]): CarCounts {
+  const paper = paperworkRows([...rows]);
+  return {
+    all: rows.length,
+    driver: rows.filter(carHasDriver).length,
+    free: rows.filter((r) => !carHasDriver(r)).length,
+    expired: paper.filter((r) => r.worst === "expired").length,
+    soon: paper.filter((r) => r.worst === "soon").length,
+    missing: paper.filter((r) => r.worst === "missing").length,
+  };
+}
+
+/** The companies on the cars, for the company picker. */
+export function carCompanies(rows: readonly CarRow[]): string[] {
+  return [...new Set(rows.map((r) => r.company).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+}
+
+/** A driver's bills and payments on their page. */
+export type BillView = "open" | "paid" | "waived" | "all";
+export type PaymentView = "all" | "zelle" | "cash" | "import" | "other";
+
+export function billInView(bill: Record<string, unknown>, view: BillView): boolean {
+  const status = String(bill.status ?? "open");
+  if (view === "all") return true;
+  if (view === "waived") return status === "waived" || status === "void";
+  return status === view;
+}
+
+export function paymentInView(payment: Record<string, unknown>, view: PaymentView): boolean {
+  if (view === "all") return true;
+  const method = payment.imported === true ? "import" : String(payment.method ?? "other");
+  if (view === "other") return !["zelle", "cash", "import"].includes(method);
+  return method === view;
+}

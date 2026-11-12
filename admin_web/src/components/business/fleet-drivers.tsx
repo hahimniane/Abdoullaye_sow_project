@@ -10,8 +10,12 @@ import {
   dollarsToCents,
   driverFilterCounts,
   driverFilterNarrowed,
+  billInView,
   driverRows,
   emptyDriverFilter,
+  paymentInView,
+  type BillView,
+  type PaymentView,
   filterDriverRows,
   freeCars,
   type DriverFilter,
@@ -33,6 +37,8 @@ const s = (v: unknown) => String(v ?? "").trim();
 
 const methodLabels: Record<string, string> = { zelle: "Zelle", cash: "Cash", other: "Other", import: "Imported" };
 const billStatusLabels: Record<string, string> = { open: "Open", paid: "Paid", waived: "Waived", void: "Void" };
+const billViewLabels: Record<BillView, string> = { open: "Open", paid: "Paid", waived: "Waived", all: "All" };
+const paymentViewLabels: Record<PaymentView, string> = { all: "All", zelle: "Zelle", cash: "Cash", import: "Imported", other: "Other" };
 
 // ---------------------------------------------------------------------------
 // List.
@@ -330,6 +336,9 @@ function DriverPage({
   onOpenCar: (id: string) => void;
 }) {
   const [dialog, setDialog] = useState<Dialog>(null);
+  // Open bills first by default; every payment by default.
+  const [billView, setBillView] = useState<BillView>("open");
+  const [paymentView, setPaymentView] = useState<PaymentView>("all");
   // Bumped after a details edit so the track record re-reads its History lines.
   const [profileRefresh, setProfileRefresh] = useState(0);
   const lang = fleetLang();
@@ -348,6 +357,8 @@ function DriverPage({
       ),
     [state, driver.id],
   );
+  const shownBills = useMemo(() => bills.filter((b) => billInView(b, billView)), [bills, billView]);
+  const shownPayments = useMemo(() => payments.filter((p) => paymentInView(p, paymentView)), [payments, paymentView]);
   const balance = useMemo(() => driverBalance(bills, Number(driver.creditCents) || 0, state.todayKey), [bills, driver, state.todayKey]);
   const code = zelleAmountText(balance.owedCents, driver.personalCents);
   const address = (driver.address ?? {}) as Record<string, unknown>;
@@ -448,8 +459,19 @@ function DriverPage({
       <FriendsPanel businessId={businessId} driver={driver} isAdmin={isAdmin} state={state} />
 
       <Panel title="Bills" icon={<CarFront size={18} />}>
+        {bills.length > 0 && (
+          <div className="pk-view fleet-list-view" role="group" aria-label="Which bills">
+            {(["open", "paid", "waived", "all"] as BillView[]).map((v) => (
+              <button key={v} type="button" className={billView === v ? "on" : ""} aria-pressed={billView === v} onClick={() => setBillView(v)}>
+                {billViewLabels[v]} (<span data-no-translate>{bills.filter((b) => billInView(b, v)).length}</span>)
+              </button>
+            ))}
+          </div>
+        )}
         {bills.length === 0 ? (
           <div className="empty-state">No bills yet.</div>
+        ) : shownBills.length === 0 ? (
+          <div className="empty-state">No bill in this list.</div>
         ) : (
           <div className="fleet-grid-scroll">
             <table className="fleet-table">
@@ -464,7 +486,7 @@ function DriverPage({
                 </tr>
               </thead>
               <tbody>
-                {bills.map((b) => {
+                {shownBills.map((b) => {
                   const late = b.status === "open" && s(b.dueDayKey) < state.todayKey;
                   return (
                     <tr key={b.id}>
@@ -495,8 +517,22 @@ function DriverPage({
       </Panel>
 
       <Panel title="Payments" icon={<CarFront size={18} />}>
+        {payments.length > 0 && (
+          <div className="pk-view fleet-list-view" role="group" aria-label="Which payments">
+            {(["all", "zelle", "cash", "import", "other"] as PaymentView[]).map((v) => {
+              const count = payments.filter((p) => paymentInView(p, v)).length;
+              return v !== "all" && count === 0 && paymentView !== v ? null : (
+                <button key={v} type="button" className={paymentView === v ? "on" : ""} aria-pressed={paymentView === v} onClick={() => setPaymentView(v)}>
+                  {paymentViewLabels[v]} (<span data-no-translate>{count}</span>)
+                </button>
+              );
+            })}
+          </div>
+        )}
         {payments.length === 0 ? (
           <div className="empty-state">No payments yet.</div>
+        ) : shownPayments.length === 0 ? (
+          <div className="empty-state">No payment in this list.</div>
         ) : (
           <div className="fleet-grid-scroll">
             <table className="fleet-table">
@@ -511,7 +547,7 @@ function DriverPage({
                 </tr>
               </thead>
               <tbody>
-                {payments.map((p) => (
+                {shownPayments.map((p) => (
                   <tr className={p.status === "undone" ? "fleet-undone" : ""} key={p.id}>
                     <td data-no-translate>{formatDayKey(p.paidDayKey, lang)}</td>
                     <td className="num"><Money cents={Number(p.amountCents) || 0} /></td>

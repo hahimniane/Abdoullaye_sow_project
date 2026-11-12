@@ -104,7 +104,7 @@ describe("tiles, drivers and cars", () => {
   const index = indexFleet(data);
 
   it("counts collected this month, owed now and late drivers", () => {
-    assert.deepEqual(fleetTiles(data, index, TODAY), { collectedCents: 30000, owedCents: 120000 + 60000 + 90000, lateDrivers: 2 });
+    assert.deepEqual(fleetTiles(data, index, TODAY), { collectedCents: 30000, owedCents: 120000 + 60000 + 90000, lateDrivers: 2, lateCents: 270000, owingDrivers: 2, dueThisMonthCents: 210000 });
   });
 
   it("lists drivers with their car and owed", () => {

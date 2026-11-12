@@ -76,6 +76,7 @@ Return:
 - Website and featured-business location fields must be selectable controls, not free-text country/city inputs. Preserve current/legacy values in select options so existing records remain editable without introducing spelling drift.
 - Business-owner listing views must clearly show all cars for the current business, with no artificial row cap. Empty states should point to missing listings only after the data query has run for the owner's `businessId`.
 - Operational money pages (e.g. parking Month end, 2026-11-12): the owner picked a dense table (one row per customer, search + filter chips + lot + sort) with the record opening in a slide-in panel from the right, over a card list. Team members' rows show Expenses and Cash held as their own columns. Show WhatsApp delivery ticks in the list, not only inside the record.
+- Nothing touches a panel's edge (owner, 2026-11-12): every panel's content keeps 16px+ inner padding, including the last table column, totals and legends. The shared web `Panel` has no body padding; pad the page's panels. KPI tiles are compact (12px uppercase label, ~24px number, one muted detail line), no colored top bars, color only on the number. Every list page has search plus filter chips with counts and a sort.
 - Every async user action must show a loading/progress state and prevent double
   taps until it resolves; this applies across mobile, web, tablet, and desktop
   layouts.
