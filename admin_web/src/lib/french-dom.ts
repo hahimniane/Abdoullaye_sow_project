@@ -8730,6 +8730,44 @@ Object.assign(ATTRIBUTE_TRANSLATIONS, {
   "Fleet service": "Service Fleet",
 });
 // ==== Air-only business END ====
+// ==== Month end table (design A, 2026-11-12) ====
+Object.assign(TEXT_TRANSLATIONS, {
+  "Invoices on WhatsApp": "Factures sur WhatsApp",
+  "Invoices ready to send on WhatsApp": "Factures prêtes à envoyer sur WhatsApp",
+  "Invoices sent:": "Factures envoyées :",
+  "Delivered or read:": "Remises ou lues :",
+  "Waiting for WhatsApp:": "En attente de WhatsApp :",
+  "Not delivered:": "Non remises :",
+  "If nobody sends them, they go out on their own on the 3rd.": "Si personne ne les envoie, elles partent toutes seules le 3.",
+  "Show the ones not delivered": "Voir celles non remises",
+  "Review and send": "Vérifier et envoyer",
+  "Hide the list": "Masquer la liste",
+  "Search customers": "Rechercher des clients",
+  "Which lot": "Quel parking",
+  "All lots": "Tous les parkings",
+  "Sort by": "Trier par",
+  "Most owed first": "Le plus dû d’abord",
+  "Name A–Z": "Nom de A à Z",
+  "Most cars": "Le plus de voitures",
+  "Owes from before": "Doit des mois précédents",
+  "Invoice not delivered": "Facture non remise",
+  "No customer matches. Change the search or the filters.": "Aucun client ne correspond. Changez la recherche ou les filtres.",
+  "From before": "Mois précédents",
+  "Invoice on WhatsApp": "Facture sur WhatsApp",
+  "Lot activities:": "Activités du parking :",
+  "Customers shown:": "Clients affichés :",
+  "Total due on this list:": "Total dû sur cette liste :",
+  "Due now": "À payer maintenant",
+  "Owed to them": "On leur doit",
+});
+Object.assign(ATTRIBUTE_TRANSLATIONS, {
+  "Search name, phone, car or VIN": "Rechercher un nom, un téléphone, une voiture ou un VIN",
+  "Search customers": "Rechercher des clients",
+  "Invoices on WhatsApp": "Factures sur WhatsApp",
+  "Customer list": "Liste des clients",
+  "Bill for the selected customer": "Facture du client choisi",
+  "Close the bill": "Fermer la facture",
+});
 const englishDictionary = { ...TEXT_TRANSLATIONS, ...ATTRIBUTE_TRANSLATIONS };
 const frenchDictionary = buildReverseDictionary([
   TEXT_TRANSLATIONS,

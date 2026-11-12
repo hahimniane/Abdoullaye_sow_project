@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { httpsCallable } from "firebase/functions";
-import { ArrowLeft, Banknote, ChevronDown, ChevronLeft, ChevronRight, Copy, FileDown, RefreshCw, SquarePen, Undo2, X } from "lucide-react";
+import { ArrowLeft, Banknote, ChevronDown, ChevronLeft, ChevronRight, Copy, FileDown, MessageCircle, RefreshCw, Search, SquarePen, Undo2, X } from "lucide-react";
 
 import { BUSINESS_ACCOUNT_RECEIVER, STAFF_BALANCES_TIMEOUT_MS, businessAccountName } from "@/lib/staff-balances";
 import {
@@ -28,6 +28,23 @@ import { PdfPreview, type PdfPreviewFile } from "@/components/pdf-preview";
 import { BusinessOwesSection } from "@/components/business/business-owes-section";
 import { InvoiceMessageStatus, ParkingInvoicesPanel, useParkingInvoiceMessages } from "@/components/business/parking-invoices";
 import { invoicesOfferedFor } from "@/lib/parking-invoices";
+import { Tick } from "@/components/business/parking-whatsapp";
+import { parkingLotIdOf, type ParkingLot } from "@/lib/parking-lots";
+import {
+  emptyMonthTableFilter,
+  invoiceTally,
+  isTeamCard,
+  monthRowCarCount,
+  monthRowDueCents,
+  monthRowStatus,
+  monthTableCounts,
+  monthTableNarrowed,
+  monthTableRows,
+  type MonthRowStatus,
+  type MonthTableContext,
+  type MonthTableFilter,
+  type MonthTableSort,
+} from "@/lib/parking-month-table";
 import {
   BILL_PAYMENT_MESSAGES,
   BILL_PAYMENT_REFUSAL,
@@ -89,6 +106,9 @@ type ParkingMonthEndProps = {
   /** Owner or platform admin: may send the month's invoices on WhatsApp
    * (docs/PARKING_INVOICES.md). Everyone else does not see the panel. */
   canSendInvoices?: boolean;
+  /** The business's parking lots: with two or more, rows show the lot and the
+   * list can be narrowed to one (docs/PARKING_LOTS.md). */
+  lots?: readonly ParkingLot[];
 };
 
 /**
@@ -97,13 +117,18 @@ type ParkingMonthEndProps = {
  * to send. Worked out live from the cars; payments are recorded on the car
  * as always, oldest month first, so a bill flips to paid by itself.
  */
-export function ParkingMonthEnd({ businessId, staff = [], business, businessName, initialMonth, onClose, onOpenCar, canSettleStaff = false, canSendInvoices = false }: ParkingMonthEndProps) {
+export function ParkingMonthEnd({ businessId, staff = [], business, businessName, initialMonth, onClose, onOpenCar, canSettleStaff = false, canSendInvoices = false, lots = [] }: ParkingMonthEndProps) {
   const [monthKey, setMonthKey] = useState(initialMonth || previousMonthKey());
   const inputs = useParkingMonthInputs(businessId, monthKey, Boolean(businessId));
   const rows = inputs.cars;
   const activities = inputs.activities;
-  // Which customers: who still owes, who has paid for the month, everyone.
-  const [view, setView] = useState<"owing" | "paid" | "all">("owing");
+  // Which customers (who owes, paid, everyone), the chips, the lot, the
+  // search and the order (lib/parking-month-table.ts); the customer whose
+  // bill is open on the side; whether the invoice send list is unfolded.
+  const [filter, setFilter] = useState<MonthTableFilter>(emptyMonthTableFilter);
+  const [selectedKey, setSelectedKey] = useState("");
+  const [showInvoices, setShowInvoices] = useState(false);
+  const billRef = useRef<HTMLElement | null>(null);
   // "Whole month": the current month counted to its last day, so cars still
   // parked run up to the end of the month. A preview: nothing is saved and
   // nothing can be collected for days that have not happened.
@@ -259,13 +284,65 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
   // What each card is owed on: the statement's number for a team member.
   const stillOwedCents = cardsOwing.reduce((sum, c) => sum + (c.statementOwesCents ?? c.dueCents), 0);
   const origByKey = useMemo(() => new Map(summary.customers.map((c) => [c.key, c])), [summary.customers]);
-  // One row per customer (grouped by phone), their cars underneath.
-  const listed = view === "all" ? cards : view === "paid" ? cardsPaid : cardsOwing;
   const rowById = useMemo(() => {
     const map = new Map<string, FirestoreRow>();
     rows.forEach((r) => map.set(String(r.id), r));
     return map;
   }, [rows]);
+  // A customer's invoice message, found by the member for a team statement.
+  const invoiceLineOf = (c: ParkingMonthCustomer) =>
+    invoiceMessages.byCustomer.get(c.key) ?? (c.statementStaffId ? invoiceMessages.byCustomer.get(`staff:${c.statementStaffId}`) : undefined);
+  // Each customer's lots, worked out once per data change, not per row.
+  const lotIdsByKey = useMemo(() => {
+    const out = new Map<string, string[]>();
+    for (const c of cards) {
+      const ids = new Set<string>();
+      for (const b of [...c.cars, ...c.olderCars]) ids.add(parkingLotIdOf(rowById.get(b.id) ?? null, businessId));
+      out.set(c.key, [...ids]);
+    }
+    return out;
+  }, [cards, rowById, businessId]);
+  const lotNamesOf = (c: ParkingMonthCustomer) =>
+    (lotIdsByKey.get(c.key) ?? []).map((id) => lots.find((lot) => lot.id === id)?.name ?? "").filter(Boolean).join(", ");
+  const failedKeys = useMemo(() => {
+    const out = new Set<string>();
+    for (const c of cards) {
+      const line = invoiceMessages.byCustomer.get(c.key) ?? (c.statementStaffId ? invoiceMessages.byCustomer.get(`staff:${c.statementStaffId}`) : undefined);
+      if (line && (line.state === "failed" || line.state === "stopped")) out.add(c.key);
+    }
+    return out;
+  }, [cards, invoiceMessages.byCustomer]);
+  const tableContext = useMemo<MonthTableContext>(() => ({
+    lotIdsOf: (c) => lotIdsByKey.get(c.key) ?? [],
+    invoiceFailed: (c) => failedKeys.has(c.key),
+  }), [lotIdsByKey, failedKeys]);
+  const listed = useMemo(() => monthTableRows(cards, filter, tableContext), [cards, filter, tableContext]);
+  const counts = useMemo(() => monthTableCounts(cards, filter.view, tableContext), [cards, filter.view, tableContext]);
+  const narrowed = monthTableNarrowed(filter);
+  const listedDueCents = useMemo(() => listed.reduce((sum, c) => sum + Math.max(0, monthRowDueCents(c)), 0), [listed]);
+  // The open bill stays open while a filter or a payment moves its row.
+  const selected = selectedKey ? cards.find((c) => c.key === selectedKey) ?? null : null;
+  const showTeamCols = cards.some((c) => c.expenseCreditCents > 0 || c.statementOwesCents !== undefined);
+  const tally = useMemo(() => invoiceTally(invoiceMessages.byCustomer.values()), [invoiceMessages.byCustomer]);
+  const showInvoiceCol = tally.total > 0;
+  const showInvoiceBar = tally.total > 0 || invoicesOffered;
+  function pick(key: string) {
+    setSelectedKey(key);
+  }
+  // The bill slides in from the right: focus goes to it, Escape closes it
+  // (unless a payment, Mark all paid or Undo is open over it).
+  const dialogOpen = Boolean(payKey || settleKey || undoTarget || preview);
+  useEffect(() => {
+    if (selectedKey) billRef.current?.focus({ preventScroll: true });
+  }, [selectedKey]);
+  useEffect(() => {
+    if (!selectedKey || dialogOpen) return undefined;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSelectedKey("");
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedKey, dialogOpen]);
 
   async function saveSummary() {
     setBusyId("summary");
@@ -516,66 +593,244 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
         </div>
       </div>
 
-      {invoicesOffered && <ParkingInvoicesPanel key={monthKey} businessId={businessId} monthKey={monthKey} staffNames={staffNames} />}
+      {showInvoiceBar && (
+        <section className={`pk-me-wa-bar${tally.failed > 0 ? " has-failed" : ""}`} aria-label="Invoices on WhatsApp">
+          <MessageCircle size={20} aria-hidden="true" />
+          <div className="pk-me-wa-text">
+            <strong>
+              <span>{tally.total > 0 ? "Invoices on WhatsApp" : "Invoices ready to send on WhatsApp"}</span> · <span data-no-translate>{monthLabel(monthKey, lang)}</span>
+            </strong>
+            {tally.total > 0 ? (
+              <small>
+                <span>Invoices sent:</span> <b data-no-translate>{tally.total}</b> · <span>Delivered or read:</span> <b data-no-translate>{tally.seen}</b>
+                {tally.waiting > 0 && <> · <span>Waiting for WhatsApp:</span> <b data-no-translate>{tally.waiting}</b></>}
+                {tally.failed > 0 && <> · <span>Not delivered:</span> <b className="pk-owed" data-no-translate>{tally.failed}</b></>}
+              </small>
+            ) : (
+              <small>If nobody sends them, they go out on their own on the 3rd.</small>
+            )}
+          </div>
+          {tally.failed > 0 && (
+            <button className="lst-btn ghost" type="button" onClick={() => { setFilter((f) => ({ ...f, view: "all", notDelivered: true })); }}>
+              Show the ones not delivered
+            </button>
+          )}
+          {invoicesOffered && (
+            <button className={showInvoices ? "lst-btn ghost" : "lst-btn"} type="button" aria-expanded={showInvoices} onClick={() => setShowInvoices((v) => !v)}>
+              {showInvoices ? "Hide the list" : "Review and send"}
+            </button>
+          )}
+        </section>
+      )}
+      {invoicesOffered && showInvoices && <ParkingInvoicesPanel key={monthKey} businessId={businessId} monthKey={monthKey} staffNames={staffNames} />}
 
-      <div className="pk-month-tools">
+      <div className="pk-me-toolbar">
+        <label className="pk-me-search">
+          <Search size={16} aria-hidden="true" />
+          <span className="sr-only">Search customers</span>
+          <input
+            type="search"
+            value={filter.query}
+            placeholder="Search name, phone, car or VIN"
+            aria-label="Search customers"
+            autoComplete="off"
+            onChange={(e) => { const query = e.target.value; setFilter((f) => ({ ...f, query })); }}
+          />
+        </label>
+        {lots.length >= 2 && (
+          <label className="pk-me-select">
+            <span>Which lot</span>
+            <select value={filter.lotId} onChange={(e) => { const lotId = e.target.value; setFilter((f) => ({ ...f, lotId })); }}>
+              <option value="">All lots</option>
+              {lots.map((lot) => <option key={lot.id} value={lot.id} data-no-translate>{lot.name}</option>)}
+            </select>
+          </label>
+        )}
+        <label className="pk-me-select">
+          <span>Sort by</span>
+          <select value={filter.sort} onChange={(e) => { const sort = e.target.value as MonthTableSort; setFilter((f) => ({ ...f, sort })); }}>
+            <option value="owed">Most owed first</option>
+            <option value="name">Name A–Z</option>
+            <option value="cars">Most cars</option>
+          </select>
+        </label>
+      </div>
+
+      <div className="pk-me-chips">
         <div className="pk-view" role="group" aria-label="Which customers">
-          <button type="button" className={view === "owing" ? "on" : ""} aria-pressed={view === "owing"} onClick={() => setView("owing")}>Who owes ({cardsOwing.length})</button>
-          <button type="button" className={view === "paid" ? "on" : ""} aria-pressed={view === "paid"} onClick={() => setView("paid")}>Paid ({cardsPaid.length})</button>
-          <button type="button" className={view === "all" ? "on" : ""} aria-pressed={view === "all"} onClick={() => setView("all")}>Everyone ({cards.length})</button>
+          <button type="button" className={filter.view === "owing" ? "on" : ""} aria-pressed={filter.view === "owing"} onClick={() => setFilter((f) => ({ ...f, view: "owing" }))}>Who owes (<span data-no-translate>{counts.owing}</span>)</button>
+          <button type="button" className={filter.view === "paid" ? "on" : ""} aria-pressed={filter.view === "paid"} onClick={() => setFilter((f) => ({ ...f, view: "paid" }))}>Paid (<span data-no-translate>{counts.paid}</span>)</button>
+          <button type="button" className={filter.view === "all" ? "on" : ""} aria-pressed={filter.view === "all"} onClick={() => setFilter((f) => ({ ...f, view: "all" }))}>Everyone (<span data-no-translate>{counts.all}</span>)</button>
         </div>
+        {(counts.part > 0 || filter.part) && (
+          <button type="button" className={`pk-me-chip${filter.part ? " on" : ""}`} aria-pressed={filter.part} onClick={() => setFilter((f) => ({ ...f, part: !f.part }))}>Part paid <b data-no-translate>{counts.part}</b></button>
+        )}
+        {(counts.team > 0 || filter.team) && (
+          <button type="button" className={`pk-me-chip${filter.team ? " on" : ""}`} aria-pressed={filter.team} onClick={() => setFilter((f) => ({ ...f, team: !f.team }))}>Team members <b data-no-translate>{counts.team}</b></button>
+        )}
+        {(counts.older > 0 || filter.older) && (
+          <button type="button" className={`pk-me-chip${filter.older ? " on" : ""}`} aria-pressed={filter.older} onClick={() => setFilter((f) => ({ ...f, older: !f.older }))}>Owes from before <b data-no-translate>{counts.older}</b></button>
+        )}
+        {(counts.notDelivered > 0 || filter.notDelivered) && (
+          <button type="button" className={`pk-me-chip${filter.notDelivered ? " on" : ""}`} aria-pressed={filter.notDelivered} onClick={() => setFilter((f) => ({ ...f, notDelivered: !f.notDelivered }))}>Invoice not delivered <b data-no-translate>{counts.notDelivered}</b></button>
+        )}
+        {narrowed && (
+          <button className="ghost-button" type="button" onClick={() => setFilter((f) => ({ ...emptyMonthTableFilter, view: f.view, sort: f.sort }))}><X size={14} /> Clear filters</button>
+        )}
       </div>
 
       {listed.length === 0 ? (
-        <div className="empty-state">{summary.customers.length === 0 ? "No car was on the lot that month." : view === "paid" ? "Nobody has paid for this month yet." : "Nobody owes anything for this month."}</div>
+        <div className="empty-state">{summary.customers.length === 0 ? "No car was on the lot that month." : narrowed ? "No customer matches. Change the search or the filters." : filter.view === "paid" ? "Nobody has paid for this month yet." : "Nobody owes anything for this month."}</div>
       ) : (
-        <div className="pk-month-list">
-          {listed.map((customer) => (
-            <article className="pk-month-customer" key={customer.key}>
-              <header>
-                <div>
-                  <strong data-no-translate>{customer.customerName || "—"}</strong>
-                  {(customer.forStaffId || customer.statementStaffId) && <TeamTag label="Team member" />}
-                  {(() => {
-                    // A team member's statement is found by the member, too.
-                    const line = invoiceMessages.byCustomer.get(customer.key) ?? (customer.statementStaffId ? invoiceMessages.byCustomer.get(`staff:${customer.statementStaffId}`) : undefined);
-                    return line ? <InvoiceMessageStatus line={line} /> : null;
-                  })()}
-                  <small>{[customer.customerPhone, customer.cars.length + customer.olderCars.length ? `${customer.cars.length + customer.olderCars.length} car${customer.cars.length + customer.olderCars.length === 1 ? "" : "s"}` : "", customer.activities.length + customer.olderActivities.length ? `${customer.activities.length + customer.olderActivities.length} activit${customer.activities.length + customer.olderActivities.length === 1 ? "y" : "ies"}` : ""].filter(Boolean).join(" · ")}</small>
-                </div>
-                <div className="pk-month-due">
-                  {customer.includedInStatementOf
-                    ? <small><span>Included in the statement of</span> <b data-no-translate>{customer.includedInStatementOf}</b></small>
-                    : customer.statementOwesCents !== undefined
-                    ? <>
-                        {customer.statementOwesCents > 0
-                          ? <><small>Owes the business</small><strong className="pk-owed">{moneyText(customer.statementOwesCents)}</strong></>
-                          : customer.statementOwesCents < 0
-                          ? <><small>The business owes them</small><strong className="pk-paid">{moneyText(-customer.statementOwesCents)}</strong></>
-                          : <span className="lst-badge ok">Settled</span>}
-                        <small>
-                          <span data-no-translate>{moneyText(customer.dueCents)}</span> <span>parking and jobs</span>
-                          {customer.expenseCreditCents > 0 && <> <span data-no-translate>− {moneyText(customer.expenseCreditCents)}</span> <span>expenses</span></>}
-                          {(customer.cashHeldCents ?? 0) !== 0 && <> <span data-no-translate>{(customer.cashHeldCents ?? 0) > 0 ? "+" : "−"} {moneyText(Math.abs(customer.cashHeldCents ?? 0))}</span> <span>cash held</span></>}
-                        </small>
-                      </>
-                    : customer.dueCents > 0
-                    ? <><strong className="pk-owed">{moneyText(customer.dueCents)}</strong><small>{customer.monthPaidCents > 0 ? `${moneyText(customer.monthPaidCents)} paid · ` : ""}{moneyText(customer.monthCents)} this month{customer.priorUnpaidCents > 0 ? ` + ${moneyText(customer.priorUnpaidCents)} from before` : ""}</small>{customer.expenseCreditCents > 0 && <small className="pk-month-paid-via">Less expenses -{moneyText(customer.expenseCreditCents)}</small>}</>
-                    : <><span className="lst-badge ok">Paid</span>{customer.monthPaidCents > 0 && <small className="pk-month-paid-via">{moneyText(customer.monthPaidCents)} paid{customer.paidVia.length > 0 ? ` · ${customer.paidVia.map(parkingPaidViaLabel).join(", ")}` : ""}{receivedByText(customer.paidBy)}</small>}{customer.expenseCreditCents > 0 && <small className="pk-month-paid-via">Less expenses -{moneyText(customer.expenseCreditCents)}</small>}</>}
-                </div>
-                <div className="pk-month-actions">
-                  <button className="lst-btn ghost" type="button" disabled={busyId !== ""} onClick={() => void saveBill(customer)}>
-                    {busyId === customer.key ? <RefreshCw className="spin" size={14} /> : <FileDown size={14} />} View bill
-                  </button>
-                  <button className="lst-btn ghost" type="button" onClick={() => void copyBill(customer)}><Copy size={14} /> Copy text</button>
-                  {!estimating && (origByKey.get(customer.key) ?? customer).dueCents > 0 && monthBillPaymentPlan(origByKey.get(customer.key) ?? customer).items.length > 0 && (
-                    <button className="lst-btn" type="button" disabled={busyId !== ""} onClick={() => openSettle(customer)}><Banknote size={14} /> Mark all paid</button>
+        <div className="pk-me-layout">
+          <section className="pk-me-list" aria-label="Customer list">
+            <div className="pk-me-scroll">
+              <table className="pk-me-table">
+                <thead>
+                  <tr>
+                    <th>Customer</th>
+                    <th className="r">Cars</th>
+                    <th className="r">This month</th>
+                    <th className="r">From before</th>
+                    <th className="r">Paid</th>
+                    {showTeamCols && <><th className="r">Expenses</th><th className="r">Cash held</th></>}
+                    <th className="r">Due</th>
+                    <th>Status</th>
+                    {showInvoiceCol && <th>WhatsApp</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {listed.map((row) => {
+                    const isSel = selected?.key === row.key;
+                    const due = monthRowDueCents(row);
+                    const line = invoiceLineOf(row);
+                    const acts = row.activities.length + row.olderActivities.length;
+                    const cashHeld = row.cashHeldCents ?? 0;
+                    const lotNames = lots.length >= 2 ? lotNamesOf(row) : "";
+                    return (
+                      <tr key={row.key} className={isSel ? "sel" : undefined} onClick={() => pick(row.key)}>
+                        <td>
+                          <button className="pk-me-name" type="button" aria-current={isSel ? "true" : undefined} onClick={(e) => { e.stopPropagation(); pick(row.key); }}>
+                            <span data-no-translate>{row.customerName || row.customerPhone || "—"}</span>
+                          </button>
+                          <small>
+                            {(row.customerPhone || lotNames) && <span data-no-translate>{[row.customerName ? row.customerPhone : "", lotNames].filter(Boolean).join(" · ")}</span>}
+                            {isTeamCard(row) && <TeamTag label="Team member" />}
+                          </small>
+                        </td>
+                        <td className="r" data-no-translate>
+                          {monthRowCarCount(row)}
+                          {acts > 0 && <small><span>Lot activities:</span> {acts}</small>}
+                        </td>
+                        <td className="r" data-no-translate>{moneyText(row.monthCents)}</td>
+                        <td className="r" data-no-translate>{row.priorUnpaidCents > 0 ? moneyText(row.priorUnpaidCents) : <span className="pk-me-dim">—</span>}</td>
+                        <td className="r" data-no-translate>{row.monthPaidCents > 0 ? <span className="pk-paid">{moneyText(row.monthPaidCents)}</span> : moneyText(0)}</td>
+                        {showTeamCols && (
+                          <>
+                            <td className="r" data-no-translate>{row.expenseCreditCents > 0 ? `−${moneyText(row.expenseCreditCents)}` : <span className="pk-me-dim">—</span>}</td>
+                            <td className="r" data-no-translate>{row.statementOwesCents !== undefined && cashHeld !== 0 ? `${cashHeld > 0 ? "+" : "−"}${moneyText(Math.abs(cashHeld))}` : <span className="pk-me-dim">—</span>}</td>
+                          </>
+                        )}
+                        <td className="r">
+                          {row.includedInStatementOf
+                            ? <small><span>Included in the statement of</span> <b data-no-translate>{row.includedInStatementOf}</b></small>
+                            : due > 0
+                            ? <b className="pk-owed" data-no-translate>{moneyText(due)}</b>
+                            : due < 0
+                            ? <><b className="pk-paid" data-no-translate>{moneyText(-due)}</b><small>The business owes them</small></>
+                            : <span data-no-translate>{moneyText(0)}</span>}
+                        </td>
+                        <td><MonthStatusPill status={monthRowStatus(row)} /></td>
+                        {showInvoiceCol && (
+                          <td>
+                            {line
+                              ? <span className={`pk-me-wa state-${line.state}`}><Tick tick={line.tick} /> <span>{line.stateLabel}</span></span>
+                              : <span className="pk-me-dim">—</span>}
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <p className="pk-me-foot">
+              <span>Customers shown:</span> <b data-no-translate>{listed.length}</b>
+              {listedDueCents > 0 && <> · <span>Total due on this list:</span> <b className="pk-owed" data-no-translate>{moneyText(listedDueCents)}</b></>}
+            </p>
+          </section>
+        </div>
+      )}
+      {selected && (
+          <aside className="pk-month-customer pk-me-bill pk-me-drawer" ref={billRef} tabIndex={-1} aria-label="Bill for the selected customer">
+            {(() => {
+              const customer = selected;
+              const orig = origByKey.get(customer.key) ?? customer;
+              const line = invoiceLineOf(customer);
+              const statement = customer.statementOwesCents !== undefined;
+              const cashHeldTotal = customer.cashHeldCents ?? 0;
+              const canMarkAll = !estimating && orig.dueCents > 0 && monthBillPaymentPlan(orig).items.length > 0;
+              const canPay = !estimating && orig.dueCents > 0 && (payableByCustomer.get(customer.key) ?? 0) > 0;
+              return (
+                <>
+                  <header className="pk-me-bill-head">
+                    <div>
+                      <h3 data-no-translate>{customer.customerName || customer.customerPhone || "—"}</h3>
+                      <small data-no-translate>{[customer.customerName ? customer.customerPhone : "", lots.length >= 2 ? lotNamesOf(customer) : ""].filter(Boolean).join(" · ")}</small>
+                      <span className="pk-me-tags">
+                        <MonthStatusPill status={monthRowStatus(customer)} />
+                        {isTeamCard(customer) && <TeamTag label="Team member" />}
+                      </span>
+                    </div>
+                    <button className="lst-icon-btn" type="button" aria-label="Close the bill" onClick={() => setSelectedKey("")}><X size={18} /></button>
+                  </header>
+
+                  {customer.includedInStatementOf ? (
+                    <p className="lst-hint"><span>Included in the statement of</span> <b data-no-translate>{customer.includedInStatementOf}</b></p>
+                  ) : statement ? (
+                    <div className="pk-me-totals">
+                      <div><span>Parking and jobs</span><b data-no-translate>{moneyText(customer.dueCents)}</b></div>
+                      <div><span>Expenses</span><b data-no-translate>{customer.expenseCreditCents > 0 ? `−${moneyText(customer.expenseCreditCents)}` : moneyText(0)}</b></div>
+                      <div><span>Cash held</span><b data-no-translate>{`${cashHeldTotal < 0 ? "−" : cashHeldTotal > 0 ? "+" : ""}${moneyText(Math.abs(cashHeldTotal))}`}</b></div>
+                      <div className={(customer.statementOwesCents ?? 0) > 0 ? "owed" : "ok"}>
+                        <span>{(customer.statementOwesCents ?? 0) < 0 ? "The business owes them" : (customer.statementOwesCents ?? 0) > 0 ? "Owes the business" : "Settled"}</span>
+                        <b data-no-translate>{moneyText(Math.abs(customer.statementOwesCents ?? 0))}</b>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="pk-me-totals">
+                      <div><span>This month</span><b data-no-translate>{moneyText(customer.monthCents)}</b></div>
+                      <div><span>From before</span><b data-no-translate>{moneyText(customer.priorUnpaidCents)}</b></div>
+                      <div className="ok">
+                        <span>Paid</span><b data-no-translate>{moneyText(customer.monthPaidCents)}</b>
+                        {customer.monthPaidCents > 0 && (customer.paidVia.length > 0 || (customer.paidBy ?? []).length > 0) && (
+                          <small>
+                            {customer.paidVia.length > 0 && <span>{customer.paidVia.map(parkingPaidViaLabel).join(", ")}</span>}
+                            {receivedByText(customer.paidBy) && <span data-no-translate>{customer.paidVia.length > 0 ? receivedByText(customer.paidBy) : receivedByText(customer.paidBy).replace(/^ · /, "")}</span>}
+                          </small>
+                        )}
+                      </div>
+                      <div className={customer.dueCents > 0 ? "owed" : "ok"}><span>Due now</span><b data-no-translate>{moneyText(customer.dueCents)}</b></div>
+                      {customer.expenseCreditCents > 0 && <small className="pk-me-totals-note"><span>Less expenses</span> <span data-no-translate>−{moneyText(customer.expenseCreditCents)}</span></small>}
+                    </div>
                   )}
-                  {!estimating && (origByKey.get(customer.key) ?? customer).dueCents > 0 && (payableByCustomer.get(customer.key) ?? 0) > 0 && (
-                    <button className="lst-btn" type="button" disabled={busyId !== "" || payBusy} onClick={() => openPay(customer)}><Banknote size={14} /> Record a payment</button>
-                  )}
-                </div>
-              </header>
+
+                  {line && <div className="pk-me-bill-wa"><InvoiceMessageStatus line={line} /></div>}
+
+                  <div className="pk-me-bill-actions">
+                    {canPay && (
+                      <button className="lst-btn pk-me-primary" type="button" disabled={busyId !== "" || payBusy} onClick={() => openPay(customer)}><Banknote size={16} /> Record a payment</button>
+                    )}
+                    <div className="pk-me-bill-actions-row">
+                      {canMarkAll && (
+                        <button className="lst-btn ghost" type="button" disabled={busyId !== ""} onClick={() => openSettle(customer)}><Banknote size={14} /> Mark all paid</button>
+                      )}
+                      <button className="lst-btn ghost" type="button" disabled={busyId !== ""} onClick={() => void saveBill(customer)}>
+                        {busyId === customer.key ? <RefreshCw className="spin" size={14} /> : <FileDown size={14} />} View bill
+                      </button>
+                      <button className="lst-btn ghost" type="button" onClick={() => void copyBill(customer)}><Copy size={14} /> Copy text</button>
+                    </div>
+                  </div>
               {(() => {
                 // What is left to collect leads; lines already paid fold away
                 // under one toggle so a paid car never looks like it is owed.
@@ -767,9 +1022,10 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
                   </>
                 );
               })()}
-            </article>
-          ))}
-        </div>
+                </>
+              );
+            })()}
+          </aside>
       )}
       {credit.available && (
         <BusinessOwesSection
@@ -969,4 +1225,21 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
       {preview && <PdfPreview {...preview} onClose={() => setPreview(null)} />}
     </div>
   );
+}
+
+const STATUS_PILL: Record<MonthRowStatus, { label: string; tone: string }> = {
+  not_paid: { label: "Not paid", tone: "owed" },
+  part_paid: { label: "Part paid", tone: "part" },
+  paid: { label: "Paid", tone: "ok" },
+  team_owes: { label: "Not paid", tone: "owed" },
+  team_owed: { label: "Owed to them", tone: "ok" },
+  team_settled: { label: "Settled", tone: "ok" },
+  included: { label: "Included in the statement of", tone: "quiet" },
+};
+
+/** A customer's status in the Month end table and on their bill. */
+function MonthStatusPill({ status }: { status: MonthRowStatus }) {
+  const pill = STATUS_PILL[status];
+  if (status === "included") return null;
+  return <span className={`pk-me-pill ${pill.tone}`}>{pill.label}</span>;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import { MessageCircle, RefreshCw } from "lucide-react";
@@ -164,7 +164,9 @@ export function useParkingInvoiceMessages(businessId: string, monthKey: string, 
     };
   }, [enabled, businessId, monthKey]);
 
-  return { byCustomer: invoiceMessagesByCustomer(rows, monthKey), loading };
+  // Built once per snapshot, so the page can memo on it.
+  const byCustomer = useMemo(() => invoiceMessagesByCustomer(rows, monthKey), [rows, monthKey]);
+  return { byCustomer, loading };
 }
 
 /** One customer card's invoice line: "Monthly invoice" and its tick. */

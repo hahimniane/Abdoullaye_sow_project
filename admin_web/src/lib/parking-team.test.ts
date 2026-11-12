@@ -109,7 +109,9 @@ test("team members are no longer mixed into the parking customer suggestions", (
 
 test("the list rows, card and Month end carry the Team labels", () => {
   assert.equal((panelSource.match(/<TeamTag label=\{parkingTeamLabel\(row\.forStaffId, teamIds\)\}/g) ?? []).length, 2);
-  assert.match(monthEndSource, /\(customer\.forStaffId \|\| customer\.statementStaffId\) && <TeamTag label="Team member" \/>/);
+  assert.match(monthEndSource, /isTeamCard\(row\) && <TeamTag label="Team member" \/>/, "the table row");
+  assert.match(monthEndSource, /isTeamCard\(customer\) && <TeamTag label="Team member" \/>/, "the bill");
+  assert.match(readFileSync(new URL("./parking-month-table.ts", import.meta.url), "utf8"), /return Boolean\(card\.forStaffId \|\| card\.statementStaffId\);/);
 });
 
 test("Month end groups a team car under staff:{uid}, apart from a same-number untied car", () => {

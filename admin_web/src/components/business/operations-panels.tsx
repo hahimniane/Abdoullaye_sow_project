@@ -5935,6 +5935,7 @@ export function ParkingPanel({
           onOpenCar={(row) => editParking(row)}
           canSettleStaff={canManageLedger}
           canSendInvoices={canSendParkingInvoices}
+          lots={parkingLots.lots}
         />
       )}
 

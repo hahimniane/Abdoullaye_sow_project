@@ -75,6 +75,7 @@ Return:
 - For admin dashboards, use a tidy conventional operations layout: restrained top bar, collapsible sidebar, dense tables/lists, and minimal decorative copy. The user rejected decorative AI-looking admin designs.
 - Website and featured-business location fields must be selectable controls, not free-text country/city inputs. Preserve current/legacy values in select options so existing records remain editable without introducing spelling drift.
 - Business-owner listing views must clearly show all cars for the current business, with no artificial row cap. Empty states should point to missing listings only after the data query has run for the owner's `businessId`.
+- Operational money pages (e.g. parking Month end, 2026-11-12): the owner picked a dense table (one row per customer, search + filter chips + lot + sort) with the record opening in a slide-in panel from the right, over a card list. Team members' rows show Expenses and Cash held as their own columns. Show WhatsApp delivery ticks in the list, not only inside the record.
 - Every async user action must show a loading/progress state and prevent double
   taps until it resolves; this applies across mobile, web, tablet, and desktop
   layouts.

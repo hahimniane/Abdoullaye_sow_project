@@ -190,7 +190,9 @@ test("the run's status line: ready, sending, sent by a person, sent automaticall
 
 test("the panel sits on Month end for parking staff, with the switch on, in the month just ended", () => {
   assert.match(monthEnd, /const invoicesOffered = canSendInvoices && parkingWhatsAppEnabled\(business\) && invoicesOfferedFor\(monthKey\)/);
-  assert.match(monthEnd, /\{invoicesOffered && <ParkingInvoicesPanel key=\{monthKey\} businessId=\{businessId\} monthKey=\{monthKey\} staffNames=\{staffNames\} \/>\}/);
+  // Behind the WhatsApp bar's "Review and send" (Month end table, 2026-11-12).
+  assert.match(monthEnd, /\{invoicesOffered && showInvoices && <ParkingInvoicesPanel key=\{monthKey\} businessId=\{businessId\} monthKey=\{monthKey\} staffNames=\{staffNames\} \/>\}/);
+  assert.match(monthEnd, /\{invoicesOffered && \(\s*<button className=\{showInvoices \? "lst-btn ghost" : "lst-btn"\}/);
   assert.match(panels, /<ParkingMonthEnd[\s\S]*?canSendInvoices=\{canSendParkingInvoices\}/);
   // Any staff with Parking (owner, 2026-11-04), never in a preview.
   assert.match(read("../components/business-console.tsx"), /canSendParkingInvoices=\{!previewMode\}/);
@@ -264,7 +266,7 @@ test("the messages query is three equalities and nothing else, opened per month,
   // Month end subscribes once the business has used the switch, and each card shows its line.
   assert.match(monthEnd, /useParkingInvoiceMessages\(businessId, monthKey, parkingWhatsAppEverEnabled\(business\)\)/);
   // (a team member's statement is found by the member too)
-  assert.match(monthEnd, /invoiceMessages\.byCustomer\.get\(customer\.key\) \?\? \(customer\.statementStaffId/);
+  assert.match(monthEnd, /invoiceMessages\.byCustomer\.get\(c\.key\) \?\? \(c\.statementStaffId/);
   assert.match(monthEnd, /<InvoiceMessageStatus line=/);
   // The month-end view still never writes the database itself.
   assert.doesNotMatch(component, /setDoc\(|updateDoc\(|addDoc\(|deleteDoc\(/);
