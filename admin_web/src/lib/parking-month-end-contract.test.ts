@@ -139,7 +139,7 @@ test("three views, in order: Who owes · Paid · Everyone, each from the shared 
   // The same customer card for every view, with what came in and how.
   // One table and one bill for every view, not a fork.
   assert.equal(view.match(/<table className="pk-me-table">/g)?.length, 1, "one table");
-  assert.equal(view.match(/<aside className="pk-month-customer pk-me-bill"/g)?.length, 1, "one bill, not a fork");
+  assert.equal(view.match(/<aside className="pk-month-customer pk-me-bill pk-me-drawer"/g)?.length, 1, "one bill, not a fork");
   assert.match(view, /customer\.paidVia\.map\(parkingPaidViaLabel\)/);
   assert.match(view, /<span>Paid in full<\/span><b>\{cardsPaid\.length\}<\/b>/);
   assert.match(view, /<h3 data-no-translate>\{customer\.customerName/, "a name is not copy");
