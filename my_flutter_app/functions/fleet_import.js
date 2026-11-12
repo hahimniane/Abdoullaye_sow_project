@@ -94,6 +94,15 @@ function parseLooseDate(value) {
 }
 
 /**
+ * @param {string} text Free text such as "Drop\n01/07/2026".
+ * @return {?string} The first M/D/YYYY or M/D/YY date in it, or null.
+ */
+function findDateInText(text) {
+  const m = String(text ?? "").match(/\d{1,2}\/\d{1,2}\/(?:\d{4}|\d{2})\b/);
+  return m ? parseLooseDate(m[0]) : null;
+}
+
+/**
  * @param {string} month "YYYY-MM".
  * @return {string} Its last day, "YYYY-MM-DD".
  */
@@ -268,19 +277,30 @@ function parseFleetSheet(rows, options = {}) {
           warn(rowNumber, "start", "No start date and no payments.");
         }
       }
+      // END DATE is a contract/insurance term, not a return.
+      const contractRaw = cell(row, 2);
+      const contractEndDayKey = parseLooseDate(contractRaw);
+      if (contractRaw && !contractEndDayKey) {
+        warn(rowNumber, "end", "Date not understood.");
+      }
+      // DROP (anywhere in the text) ends the assignment.
       let endDayKey = null;
-      for (const [field, col] of [["end", 2], ["drop", 5]]) {
-        const text = cell(row, col);
-        const parsed = parseLooseDate(text);
-        if (parsed && !endDayKey) endDayKey = parsed;
-        else if (text && !parsed) {
-          warn(rowNumber, field, "Date not understood.");
+      const dropRaw = cell(row, 5);
+      if (dropRaw) {
+        endDayKey = findDateInText(dropRaw);
+        if (!endDayKey) {
+          const base = paid.length ?
+            `${paid[paid.length - 1].month}-01` : startDayKey;
+          endDayKey = base ? lastDayOfMonth(base.slice(0, 7)) : null;
+          warn(rowNumber, "drop", "dropped without a date");
         }
       }
       if (!endDayKey && cells.length &&
           cells[cells.length - 1].dollars === 1) {
-        endDayKey = lastDayOfMonth(
-            previousMonth(cells[cells.length - 1].month));
+        // A run of 1s up to the end: the car went back before the first.
+        let first = cells.length - 1;
+        while (first > 0 && cells[first - 1].dollars === 1) first--;
+        endDayKey = lastDayOfMonth(previousMonth(cells[first].month));
         warn(rowNumber, "end", "assumed returned (1 marker)");
       }
 
@@ -288,6 +308,7 @@ function parseFleetSheet(rows, options = {}) {
       if (rentDollars === null) warn(rowNumber, "rent", "No plate fee.");
       assignments.push({
         importKey: assignmentKey, driverKey, carKey, startDayKey, endDayKey,
+        contractEndDayKey,
         rentCents: rentDollars === null ? 0 : Math.round(rentDollars * 100),
         period: "monthly", dueDay: 1,
       });

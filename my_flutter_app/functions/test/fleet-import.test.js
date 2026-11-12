@@ -92,8 +92,26 @@ const sheet = () => [
   }),
   // row 7: no phone (keyed by name), no start date, bad drop date, ended.
   row({
-    name: "Test Driver E", plate: "T000005C", fee: "650", drop: "garbage",
+    name: "Test Driver E", plate: "T000005C", fee: "650", drop: "Drop",
     end: "6/30/2026", months: {"2026-05": "650", "2026-06": "650"},
+  }),
+  // row 8: DROP with a date inside the text.
+  row({
+    start: "1/1/2025", name: "Test Driver F", phone: "2125550104",
+    plate: "T000006C", fee: "500", drop: "Drop\n01/07/2026",
+    months: {"2025-12": "500"},
+  }),
+  // row 9: DROP without a date: ends the month of the last payment.
+  row({
+    start: "1/1/2026", name: "Test Driver G", phone: "2125550105",
+    plate: "T000007C", fee: "500", drop: "Drop own us",
+    months: {"2026-02": "500", "2026-03": "500"},
+  }),
+  // row 10: DROP date after Oct 1 2026: still active for October.
+  row({
+    name: "Test Driver H", phone: "2125550106", plate: "T000008C",
+    fee: "400", drop: "10/15/2026",
+    months: {"2026-09": "400", "2026-10": "400"},
   }),
 ];
 
@@ -138,16 +156,17 @@ describe("fleet import: payments", () => {
   it("ignores values under 50, 0, 1 and the tail columns", () => {
     assert.equal(out.payments.some((p) => p.paidDayKey === "2021-11-01"),
         false);
-    assert.equal(out.totals.paymentCount, 11);
+    assert.equal(out.totals.paymentCount, 16);
     assert.equal(out.totals.paymentsCents,
         100000 + 100000 + 120000 + 30000 + 70000 + 70000 + 90000 + 50000 +
-        65000 + 65000);
+        65000 + 65000 + 50000 + 100000 + 80000);
   });
 
   it("totals by year", () => {
     assert.equal(out.totals.byYear["2021"], 100000);
+    assert.equal(out.totals.byYear["2025"], 50000);
     assert.equal(out.totals.byYear["2026"], 100000 + 120000 + 30000 + 70000 +
-      70000 + 90000 + 50000 + 65000 + 65000);
+      70000 + 90000 + 50000 + 65000 + 65000 + 100000 + 80000);
   });
 
   it("links payments to driver, car and assignment by import key", () => {
@@ -180,7 +199,7 @@ describe("fleet import: drivers, cars, assignments", () => {
     const mine = out.assignments.filter(
         (x) => x.driverKey === "drv:2125550100");
     assert.deepEqual(mine.map((x) => x.importKey), ["asg:2", "asg:5"]);
-    assert.equal(out.totals.driverCount, 5);
+    assert.equal(out.totals.driverCount, 8);
   });
 
   it("keys a driver without a phone by lower-cased name", () => {
@@ -191,7 +210,7 @@ describe("fleet import: drivers, cars, assignments", () => {
   });
 
   it("builds cars from unique upper-cased plates", () => {
-    assert.equal(out.totals.carCount, 5);
+    assert.equal(out.totals.carCount, 8);
     const car = find(out.cars, "car:T000001C");
     assert.equal(car.plate, "T000001C");
     assert.equal(car.company, "L&A");
@@ -224,7 +243,51 @@ describe("fleet import: drivers, cars, assignments", () => {
     const a7 = find(out.assignments, "asg:7");
     assert.equal(a7.startDayKey, "2026-05-01");
     assert.equal(a7.endDayKey, "2026-06-30");
-    assert.ok(out.warnings.some((w) => w.row === 7 && w.field === "drop"));
+  });
+
+  it("ends a run of 1 markers before the first of the run", () => {
+    const run = parseFleetSheet([header(), row({
+      start: "1/1/2026", name: "Test Driver Y", phone: "2125550198",
+      plate: "T000098C", fee: "500",
+      months: {"2026-08": "500", "2026-09": "1", "2026-10": "1"},
+    })]);
+    assert.equal(run.assignments[0].endDayKey, "2026-08-31");
+    const mid = parseFleetSheet([header(), row({
+      start: "1/1/2026", name: "Test Driver Y", phone: "2125550198",
+      plate: "T000098C", fee: "500",
+      months: {"2026-09": "1", "2026-10": "500"},
+    })]);
+    assert.equal(mid.assignments[0].endDayKey, null);
+  });
+
+  it("keeps an END DATE as the contract term, never as a return", () => {
+    const a2 = find(out.assignments, "asg:2");
+    assert.equal(a2.contractEndDayKey, null);
+    const early = parseFleetSheet([header(), row({
+      start: "1/1/2022", end: "1/1/2023", name: "Test Driver Z",
+      phone: "2125550199", plate: "T000099C", fee: "500",
+      months: {"2026-11": "500"},
+    })]);
+    assert.equal(early.assignments[0].contractEndDayKey, "2023-01-01");
+    assert.equal(early.assignments[0].endDayKey, null);
+    assert.deepEqual(early.bills.map((b) => b.status), ["open", "paid"]);
+    assert.equal(early.drivers[0].status, "active");
+    assert.equal(find(out.assignments, "asg:7").contractEndDayKey,
+        "2026-06-30");
+  });
+
+  it("ends on a DROP date found anywhere in the text", () => {
+    assert.equal(find(out.assignments, "asg:8").endDayKey, "2026-01-07");
+    assert.equal(find(out.assignments, "asg:10").endDayKey, "2026-10-15");
+  });
+
+  it("ends a DROP without a date at its last payment month", () => {
+    assert.equal(find(out.assignments, "asg:9").endDayKey, "2026-03-31");
+    assert.equal(find(out.assignments, "asg:7").endDayKey, "2026-06-30");
+    for (const r of [7, 9]) {
+      assert.ok(out.warnings.some((w) =>
+        w.row === r && w.message === "dropped without a date"));
+    }
   });
 
   it("assumes a driver returned when the latest cell is 1", () => {
@@ -269,18 +332,26 @@ describe("fleet import: go-live bills", () => {
     assert.equal(bill("asg:7", "2026-10"), undefined);
     assert.equal(bill("asg:5", "2026-10"), undefined);
     assert.equal(bill("asg:5", "2026-11").status, "paid");
+    assert.equal(bill("asg:8", "2026-10"), undefined);
+    assert.equal(bill("asg:9", "2026-10"), undefined);
+  });
+
+  it("bills October when the DROP date is later in October", () => {
+    assert.equal(bill("asg:10", "2026-10").status, "paid");
+    assert.equal(bill("asg:10", "2026-11"), undefined);
   });
 
   it("totals what is still owed", () => {
     // asg:3 Oct 800 + Nov 500 remaining.
     assert.equal(out.totals.ownedBillsCents, 80000 + 50000);
-    assert.equal(out.bills.length, 5);
+    assert.equal(out.bills.length, 6);
   });
 
   it("honours custom go-live months", () => {
     const only = parseFleetSheet(sheet(), {goLiveMonths: ["2026-09"]});
     assert.deepEqual(only.bills.map((b) => b.importKey), [
       "bill:asg:2:2026-09", "bill:asg:3:2026-09", "bill:asg:4:2026-09",
+      "bill:asg:10:2026-09",
     ]);
   });
 });
