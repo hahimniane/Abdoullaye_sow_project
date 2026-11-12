@@ -141,7 +141,8 @@ describe("a voided parked car drops out of every total", () => {
     assert.ok(live.owed > 0);
     assert.deepEqual(voided, {inLot: 0, reserved: 0, left: 0, collected: 0,
       owed: 0, overdueCount: 0, overdueAmount: 0, records: 1,
-      collectedByMonth: [0]});
+      collectedByMonth: [0], discountedByMonth: [0],
+      discountedByMonthByUid: [{}]});
   });
 
   it("is in no overview count or earning", () => {

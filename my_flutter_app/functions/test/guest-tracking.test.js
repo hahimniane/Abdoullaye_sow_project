@@ -408,8 +408,8 @@ test("a parked car's public record carries its money and no people", () => {
     data: car, now});
   assert.deepEqual(record.parking, {
     dailyRateCents: 1000, sinceDayKey: "2026-10-20", leftDayKey: null,
-    days: 10, accruedCents: 10000, paidCents: 3000, balanceCents: 7000,
-    paidInFull: false, stillParked: true,
+    days: 10, accruedCents: 10000, paidCents: 3000, discountCents: 0,
+    balanceCents: 7000, paidInFull: false, stillParked: true,
   });
   const serialized = JSON.stringify(record);
   for (const secret of ["Alimou", "a@example.test", "2015551234",
