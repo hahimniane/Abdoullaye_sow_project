@@ -14,6 +14,7 @@ import {
   lateFeesToCreate,
   rentBillsToCreate,
   rentPeriods,
+  whoDroveAt,
   type FleetAssignment,
   type FleetBill,
   type FleetSettings,
@@ -37,6 +38,7 @@ const fixture = JSON.parse(readFileSync(fixtureUrl, "utf8")) as {
   allocationCases: { name: string; bills: FleetBill[]; amountCents: number; expect: Row }[];
   creditCases: { name: string; bills: FleetBill[]; creditCents: number; expect: Row }[];
   balanceCases: { name: string; today: string; creditCents: number; bills: FleetBill[]; expect: Row }[];
+  whoDroveCases: { name: string; assignments: never[]; substitutes: never[]; carId: string; dayKey: string; expect: Row }[];
   personalCases: { name: string; drivers: { id: string; personalCents: number | null; createdAt: number }[]; expect: Row }[];
 };
 const pick = (value: unknown, keys: string[]) =>
@@ -96,6 +98,14 @@ describe("fleet billing (console): balance and personal cents", () => {
   for (const c of fixture.personalCases) {
     it(c.name, () => {
       assert.deepEqual(assignPersonalCents(c.drivers), c.expect);
+    });
+  }
+});
+
+describe("fleet billing (console): who drove", () => {
+  for (const c of fixture.whoDroveCases) {
+    it(c.name, () => {
+      assert.deepEqual(whoDroveAt(c.assignments, c.substitutes, c.carId, c.dayKey), c.expect);
     });
   }
 });

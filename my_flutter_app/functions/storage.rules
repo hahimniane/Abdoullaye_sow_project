@@ -269,6 +269,39 @@ service firebase.storage {
         canManageBusinessLedger(businessId);
     }
 
+    // Fleet driver files (docs/FLEET.md): license photo, ID, signed
+    // agreement. Office only: the business owner or staff with the Fleet
+    // permission (token claims, like every rule here), image or PDF under
+    // 10 MB. Notes name the paths; the fleetAction note_add re-checks them.
+    function canManageFleet(businessId) {
+      return isLinkedToBusiness(businessId) &&
+        (
+          userRole() == 'businessOwner' ||
+          (
+            userRole() == 'staff' &&
+            (hasBusinessSection('fleet') || hasBusinessSection('fleet_admin'))
+          )
+        );
+    }
+
+    function validFleetDocUpload() {
+      return request.resource.size < 10 * 1024 * 1024 &&
+        (
+          request.resource.contentType.matches('image/.*') ||
+          request.resource.contentType == 'application/pdf'
+        );
+    }
+
+    match /fleetDocs/{businessId}/{driverId}/{fileName} {
+      allow read: if request.auth != null &&
+        (hasAdminCapability('businesses') || canManageFleet(businessId));
+      allow create: if request.auth != null &&
+        resource == null &&
+        validFleetDocUpload() &&
+        canManageFleet(businessId);
+      allow update, delete: if false;
+    }
+
     match /businesses/{businessId}/{allPaths=**} {
       allow read: if true;
       allow write: if request.auth != null &&

@@ -4,8 +4,11 @@ import { describe, it } from "node:test";
 import {
   carRows,
   carTimeline,
+  daysBetween,
   dollarsToCents,
   driverRows,
+  driverTenure,
+  driverTimeline,
   expiryState,
   fleetEnabled,
   fleetErrorMessage,
@@ -21,6 +24,7 @@ import {
   readFleetSettings,
   readImportPreview,
   shiftMonth,
+  tenureText,
   zelleAmountText,
   type FleetData,
 } from "./fleet.ts";
@@ -223,5 +227,118 @@ describe("import preview", () => {
     assert.equal(p.paymentsCents, 86326500);
     assert.deepEqual(p.warnings, [{ row: 5, field: "phone", message: "Not a phone number" }]);
     assert.equal(readImportPreview(null).drivers, 0);
+  });
+});
+
+describe("driver profile: tenure", () => {
+  const A = (startDayKey: string, endDayKey: string | null) => ({ id: startDayKey, startDayKey, endDayKey }) as never;
+
+  it("joined is the first start; days add up, gaps do not count", () => {
+    const t = driverTenure([A("2023-01-01", "2023-12-31"), A("2024-06-01", null)], "2026-11-11");
+    assert.equal(t.joinedDayKey, "2023-01-01");
+    assert.equal(t.days, 364 + daysBetween("2024-06-01", "2026-11-11"));
+  });
+
+  it("overlapping assignments are counted once", () => {
+    assert.equal(driverTenure([A("2026-01-01", "2026-03-01"), A("2026-02-01", "2026-04-01")], TODAY).days, 90);
+  });
+
+  it("no assignment: no join date and 0 days", () => {
+    assert.deepEqual(driverTenure([], TODAY), { joinedDayKey: "", days: 0 });
+  });
+
+  it("reads as years and months, in both languages", () => {
+    assert.equal(tenureText(365 * 3 + 62), "3 years 2 months");
+    assert.equal(tenureText(365 * 3 + 62, "fr"), "3 ans 2 mois");
+    assert.equal(tenureText(365), "1 year");
+    assert.equal(tenureText(31), "1 month");
+    assert.equal(tenureText(12), "12 days");
+    assert.equal(tenureText(12, "fr"), "12 jours");
+    assert.equal(tenureText(1), "1 day");
+  });
+});
+
+describe("driver profile: track record", () => {
+  function build() {
+    const data: FleetData = {
+      drivers: [{ id: "d1", name: "Amadou", licenseHistory: [{ license: "5000001", fromDayKey: "2023-01-05", toDayKey: "2025-02-10" }] }],
+      cars: [
+        { id: "c1", plate: "T111111C" },
+        { id: "c2", plate: "T222222C" },
+      ],
+      assignments: [
+        { id: "a1", carId: "c1", driverId: "d1", startDayKey: "2023-01-01", endDayKey: "2024-01-31", rentCents: 100000, period: "monthly" },
+        { id: "a2", carId: "c2", driverId: "d1", startDayKey: "2024-02-10", endDayKey: "2024-12-31", rentCents: 110000, period: "monthly" },
+        { id: "a3", carId: "c2", driverId: "d1", startDayKey: "2025-06-01", endDayKey: null, rentCents: 110000, period: "monthly" },
+      ],
+      bills: [
+        { id: "b1", driverId: "d1", kind: "late_fee", status: "paid", label: "Late fee", amountCents: 2500, dueDayKey: "2025-07-10" },
+        { id: "b2", driverId: "d1", kind: "charge", status: "open", label: "Tow", amountCents: 6500, dueDayKey: "2025-08-01" },
+        { id: "b3", driverId: "d1", kind: "rent", status: "waived", label: "Rent", amountCents: 110000, dueDayKey: "2025-09-01", waived: { atMs: Date.UTC(2025, 8, 5, 16), reason: "Office mistake" } },
+      ],
+      payments: [],
+      notes: [
+        { id: "n1", driverId: "d1", text: "Signed agreement", files: [{ path: "p", name: "a.pdf", contentType: "application/pdf", size: 5 }], atMs: Date.UTC(2025, 9, 1, 16), byName: "Fleet Staff" },
+        { id: "n2", driverId: "d1", text: "Wrong note", atMs: Date.UTC(2025, 9, 2, 16), voided: { byUid: "x" } },
+      ],
+      substitutes: [
+        { id: "s1", driverId: "d1", carId: "c2", name: "Friend One", fromDayKey: "2025-07-01", toDayKey: "2025-07-05" },
+        { id: "s2", driverId: "d1", carId: "c2", name: "Gone Friend", fromDayKey: "2025-07-20", toDayKey: "2025-07-21", voided: true },
+      ],
+    };
+    return { data, index: indexFleet(data) };
+  }
+
+  it("joined, cars given and returned, rent change, left and back", () => {
+    const { data, index } = build();
+    const t = driverTimeline(data.drivers[0], index);
+    const kinds = (k: string) => t.filter((e) => e.kind === k);
+    assert.equal(kinds("joined").length, 1);
+    assert.equal(kinds("joined")[0].plate, "T111111C");
+    assert.equal(kinds("car_given").length, 3);
+    assert.deepEqual(kinds("car_returned").map((e) => e.dayKey), ["2024-12-31", "2024-01-31"]);
+    assert.deepEqual(kinds("rent_change").map((e) => [e.fromRentCents, e.rentCents]), [[100000, 110000]]);
+    // 2024-12-31 -> 2025-06-01 is more than 30 days; 2024-01-31 -> 2024-02-10 is not.
+    assert.deepEqual(kinds("left_back").map((e) => [e.leftDayKey, e.dayKey]), [["2024-12-31", "2025-06-01"]]);
+  });
+
+  it("license history, friends (not voided), money events", () => {
+    const { data, index } = build();
+    const t = driverTimeline(data.drivers[0], index);
+    assert.deepEqual(t.filter((e) => e.kind === "license").map((e) => [e.license, e.fromDayKey, e.toDayKey]), [["5000001", "2023-01-05", "2025-02-10"]]);
+    assert.deepEqual(t.filter((e) => e.kind === "friend").map((e) => [e.name, e.plate, e.fromDayKey, e.toDayKey]), [["Friend One", "T222222C", "2025-07-01", "2025-07-05"]]);
+    assert.equal(t.filter((e) => e.kind === "late_fee")[0].amountCents, 2500);
+    assert.equal(t.filter((e) => e.kind === "charge")[0].label, "Tow");
+    const waived = t.filter((e) => e.kind === "waived")[0];
+    assert.equal(waived.dayKey, "2025-09-05");
+    assert.equal(waived.text, "Office mistake");
+  });
+
+  it("notes keep voided ones (greyed) and everything is newest first", () => {
+    const { data, index } = build();
+    const t = driverTimeline(data.drivers[0], index, [
+      { id: "x1", action: "fleet_driver_saved", atMs: Date.UTC(2025, 10, 1, 16) },
+      { id: "x2", action: "fleet_note_added", atMs: Date.UTC(2025, 10, 2, 16) },
+    ]);
+    const notes = t.filter((e) => e.kind === "note");
+    assert.deepEqual(notes.map((n) => [n.noteId, n.voided]), [["n2", true], ["n1", false]]);
+    assert.equal(notes[1].files?.length, 1);
+    assert.equal(t.filter((e) => e.kind === "edit").length, 1, "only the actions worth showing");
+    const days = t.map((e) => e.dayKey);
+    assert.deepEqual(days, [...days].sort().reverse());
+    assert.equal(t[0].kind, "edit");
+  });
+
+  it("a driver with no records has an empty record", () => {
+    const data: FleetData = { drivers: [{ id: "d9", name: "New" }], cars: [], assignments: [], bills: [], payments: [] };
+    assert.deepEqual(driverTimeline(data.drivers[0], indexFleet(data)), []);
+  });
+
+  it("friends show under the driver on the car's timeline", () => {
+    const { index } = build();
+    const t = carTimeline("c2", index);
+    const withFriend = t.find((e) => e.id === "a3")!;
+    assert.deepEqual(withFriend.friends.map((f) => f.name), ["Friend One"]);
+    assert.deepEqual(t.find((e) => e.id === "a2")!.friends, []);
   });
 });

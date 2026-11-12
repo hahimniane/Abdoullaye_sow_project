@@ -239,5 +239,14 @@
        {"id": "y", "personalCents": null, "createdAt": 10},
        {"id": "x", "personalCents": null, "createdAt": 10}],
      "expect": {"x": 1, "y": 2}}
+  ],
+  "whoDroveCases": [
+    {"name": "the assigned driver when no friend covers the day", "assignments": [{"id": "a1", "carId": "c1", "driverId": "d1", "startDayKey": "2026-01-01", "endDayKey": null}], "substitutes": [], "carId": "c1", "dayKey": "2026-03-05", "expect": {"driverId": "d1", "substituteId": null}},
+    {"name": "a friend covers the day (both ends included)", "assignments": [{"id": "a1", "carId": "c1", "driverId": "d1", "startDayKey": "2026-01-01", "endDayKey": null}], "substitutes": [{"id": "s1", "carId": "c1", "driverId": "d1", "fromDayKey": "2026-03-05", "toDayKey": "2026-03-10"}], "carId": "c1", "dayKey": "2026-03-10", "expect": {"driverId": "d1", "substituteId": "s1"}},
+    {"name": "the day after the friend period is the driver again", "assignments": [{"id": "a1", "carId": "c1", "driverId": "d1", "startDayKey": "2026-01-01", "endDayKey": null}], "substitutes": [{"id": "s1", "carId": "c1", "driverId": "d1", "fromDayKey": "2026-03-05", "toDayKey": "2026-03-10"}], "carId": "c1", "dayKey": "2026-03-11", "expect": {"driverId": "d1", "substituteId": null}},
+    {"name": "a voided friend period is ignored", "assignments": [{"id": "a1", "carId": "c1", "driverId": "d1", "startDayKey": "2026-01-01", "endDayKey": null}], "substitutes": [{"id": "s1", "carId": "c1", "driverId": "d1", "fromDayKey": "2026-03-05", "toDayKey": "2026-03-10", "voided": true}], "carId": "c1", "dayKey": "2026-03-06", "expect": {"driverId": "d1", "substituteId": null}},
+    {"name": "the driver on that day after a car changes hands", "assignments": [{"id": "a1", "carId": "c1", "driverId": "d1", "startDayKey": "2026-01-01", "endDayKey": "2026-02-28"}, {"id": "a2", "carId": "c1", "driverId": "d2", "startDayKey": "2026-03-01", "endDayKey": null}], "substitutes": [], "carId": "c1", "dayKey": "2026-02-10", "expect": {"driverId": "d1", "substituteId": null}},
+    {"name": "nobody has the car in a gap", "assignments": [{"id": "a1", "carId": "c1", "driverId": "d1", "startDayKey": "2026-01-01", "endDayKey": "2026-01-31"}], "substitutes": [], "carId": "c1", "dayKey": "2026-02-10", "expect": {"driverId": null, "substituteId": null}},
+    {"name": "a friend of another car does not count", "assignments": [{"id": "a1", "carId": "c1", "driverId": "d1", "startDayKey": "2026-01-01", "endDayKey": null}], "substitutes": [{"id": "s9", "carId": "c2", "driverId": "d1", "fromDayKey": "2026-03-01", "toDayKey": "2026-03-31"}], "carId": "c1", "dayKey": "2026-03-05", "expect": {"driverId": "d1", "substituteId": null}}
   ]
 }

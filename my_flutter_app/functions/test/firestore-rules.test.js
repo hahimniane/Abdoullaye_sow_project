@@ -79,6 +79,9 @@ const TEST_USER_CLAIMS = {
   "staff-parking-a": {
     role: "staff", businessId: "biz_a", businessPermissions: ["parking"],
   },
+  "staff-fleet-a": {
+    role: "staff", businessId: "biz_a", businessPermissions: ["fleet"],
+  },
   "staff-missing-permissions-a": {role: "staff", businessId: "biz_a"},
   "staff-empty-permissions-a": {
     role: "staff", businessId: "biz_a", businessPermissions: [],
@@ -4274,6 +4277,44 @@ describe("lot expense receipt Storage rules", () => {
             }),
         );
         await assertFails(putReceipt(storageFor("owner-b"), "biz_a", "x.jpg"));
+      });
+});
+
+describe("fleet driver file Storage rules", () => {
+  const put = (storage, businessId, fileName, options = {}) =>
+    storage.ref(`fleetDocs/${businessId}/driver_1/${fileName}`).put(
+        imageBytes(options.size),
+        {contentType: options.contentType || "image/jpeg"},
+    );
+
+  it("lets Fleet staff and the owner add an image or PDF, and read it",
+      async () => {
+        await assertSucceeds(
+            put(storageFor("staff-fleet-a"), "biz_a", "a.jpg"));
+        await assertSucceeds(put(storageFor("owner-a"), "biz_a", "b.pdf", {
+          contentType: "application/pdf",
+        }));
+        await assertSucceeds(
+            storageFor("staff-fleet-a").ref("fleetDocs/biz_a/driver_1/a.jpg")
+                .getDownloadURL());
+      });
+
+  it("refuses other staff, other businesses, bad types, big files, rewrites",
+      async () => {
+        await assertFails(put(storageFor("staff-parking-a"), "biz_a", "c.jpg"));
+        await assertFails(put(storageFor("staff-fleet-a"), "biz_b", "c.jpg"));
+        await assertFails(put(storageFor("owner-b"), "biz_a", "c.jpg"));
+        await assertFails(put(storageFor(null), "biz_a", "c.jpg"));
+        await assertFails(put(storageFor("staff-fleet-a"), "biz_a", "d.html", {
+          contentType: "text/html",
+        }));
+        await assertFails(put(storageFor("staff-fleet-a"), "biz_a", "e.pdf", {
+          contentType: "application/pdf", size: 10 * 1024 * 1024,
+        }));
+        await assertFails(put(storageFor("staff-fleet-a"), "biz_a", "a.jpg"));
+        await assertFails(
+            storageFor("staff-parking-a").ref("fleetDocs/biz_a/driver_1/a.jpg")
+                .getDownloadURL());
       });
 });
 

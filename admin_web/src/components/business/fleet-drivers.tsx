@@ -20,6 +20,7 @@ import { moneyText } from "@/lib/invoice-ledger";
 import { staffNameFrom, staffNameIndex } from "@/lib/staff-names";
 
 import type { FleetState } from "./fleet-data";
+import { FriendsPanel, NotesPanel, ProfileTenureFacts, TrackRecordPanel } from "./fleet-profile";
 import { fleetLang, FleetModal, Money, SaveButton, useFleetRun } from "./fleet-ui";
 
 type Row = Record<string, unknown> & { id: string };
@@ -272,8 +273,10 @@ function DriverPage({
   onOpenCar: (id: string) => void;
 }) {
   const [dialog, setDialog] = useState<Dialog>(null);
+  // Bumped after a details edit so the track record re-reads its History lines.
+  const [profileRefresh, setProfileRefresh] = useState(0);
   const lang = fleetLang();
-  const staff = useBusinessStaff(businessId, true);
+  const staff =useBusinessStaff(businessId, true);
   const staffNames = useMemo(() => staffNameIndex(staff.rows), [staff.rows]);
   const current = state.index.currentByDriver.get(driver.id);
   const car = current ? state.index.carById.get(s(current.carId)) : undefined;
@@ -315,6 +318,11 @@ function DriverPage({
             <span className={`fleet-chip ${s(driver.status) === "left" ? "muted" : "ok"}`}>{s(driver.status) === "left" ? "Left" : "Active"}</span>
           </div>
           <div className="fleet-facts">
+            <ProfileTenureFacts driver={driver} state={state} />
+            <div>
+              <small>Current car</small>
+              <b data-no-translate>{car ? s(car.plate) : "—"}</b>
+            </div>
             <div><small>Owed now</small><Money cents={balance.owedCents} /></div>
             <div><small>Late</small><Money cents={balance.lateCents} /></div>
             <div><small>Credit</small><Money cents={balance.creditCents} /></div>
@@ -377,6 +385,10 @@ function DriverPage({
           </div>
         )}
       </Panel>
+
+      <TrackRecordPanel businessId={businessId} driver={driver} refresh={profileRefresh} state={state} />
+      <NotesPanel businessId={businessId} driver={driver} isAdmin={isAdmin} state={state} />
+      <FriendsPanel businessId={businessId} driver={driver} isAdmin={isAdmin} state={state} />
 
       <Panel title="Bills" icon={<CarFront size={18} />}>
         {bills.length === 0 ? (
@@ -472,7 +484,15 @@ function DriverPage({
       </Panel>
 
       {dialog === "edit" && (
-        <DriverFormDialog businessId={businessId} driver={driver} onClose={() => setDialog(null)} onSaved={() => setDialog(null)} />
+        <DriverFormDialog
+          businessId={businessId}
+          driver={driver}
+          onClose={() => setDialog(null)}
+          onSaved={() => {
+            setDialog(null);
+            setProfileRefresh((n) => n + 1);
+          }}
+        />
       )}
       {dialog === "payment" && <PaymentDialog businessId={businessId} driver={driver} todayKey={state.todayKey} onClose={() => setDialog(null)} />}
       {dialog === "charge" && <ChargeDialog businessId={businessId} driver={driver} todayKey={state.todayKey} onClose={() => setDialog(null)} />}

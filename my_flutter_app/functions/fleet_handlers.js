@@ -12,6 +12,8 @@ const {parseFleetSheet} = require("./fleet_import");
 const STAFF = "fleet";
 const ADMIN = "fleet_admin";
 const MAX_IMPORT_ROWS = 2000;
+const MAX_NOTE_FILES = 10;
+const MAX_FILE_BYTES = 10 * 1024 * 1024;
 
 const FLEET_REFUSALS = Object.freeze({
   fleet_off: "Fleet is not switched on for this business.",
@@ -23,6 +25,10 @@ const FLEET_REFUSALS = Object.freeze({
   fleet_already_undone: "That payment was already undone.",
   fleet_not_open: "Only an open bill can be waived.",
   fleet_reason_required: "Say why.",
+  fleet_friend_overlap: "Another friend already has this car on those days.",
+  fleet_note_empty: "Write a note or attach a file.",
+  fleet_note_voided: "That note was already removed.",
+  fleet_bad_file: "A file is not allowed (images or PDF, up to 10 MB).",
 });
 
 const text = (v, max = 200) => String(v ?? "").trim().slice(0, max);
@@ -196,6 +202,19 @@ function createFleetHandlers(deps) {
       if (!doc.exists || doc.get("businessId") !== businessId) {
         throw refuse("fleet_not_found", "not-found");
       }
+      // A changed TLC license keeps the old one with its dates.
+      const before = text(doc.get("tlcLicense"), 20);
+      if (before !== fields.tlcLicense) {
+        const history = Array.isArray(doc.get("licenseHistory")) ?
+          [...doc.get("licenseHistory")] : [];
+        if (before) {
+          history.push({license: before,
+            fromDayKey: doc.get("tlcLicenseSince") || null,
+            toDayKey: deps.dayKeyNow()});
+        }
+        fields.licenseHistory = history;
+        fields.tlcLicenseSince = fields.tlcLicense ? deps.dayKeyNow() : null;
+      }
       await doc.ref.set(fields, {merge: true});
       await audit(businessId, uid, "fleet_driver", driverId,
           "fleet_driver_saved", `Driver ${name} edited`);
@@ -209,6 +228,8 @@ function createFleetHandlers(deps) {
       drivers.push({id: ref.id, createdAt: Date.now()});
       const cents = fleetBilling.assignPersonalCents(drivers);
       tx.set(ref, {...fields, status: "active", creditCents: 0,
+        licenseHistory: [],
+        tlcLicenseSince: fields.tlcLicense ? deps.dayKeyNow() : null,
         personalCents: cents[ref.id] ?? null, rememberedSenders: [],
         createdAt: FieldValue.serverTimestamp()});
     });
@@ -382,6 +403,168 @@ function createFleetHandlers(deps) {
         (creditBack > 0 ? `, $${(creditBack / 100).toFixed(2)} to credit` :
           ""));
     return {success: true, creditBackCents: creditBack};
+  }
+
+  // ---- the driver's profile: office notes and files, friends -----------
+
+  const FILE_TYPES = /^(image\/[a-z0-9.+-]+|application\/pdf)$/i;
+
+  function cleanFiles(raw, businessId, driverId) {
+    const list = Array.isArray(raw) ? raw : [];
+    if (list.length > MAX_NOTE_FILES) {
+      throw refuse("fleet_bad_file", "invalid-argument");
+    }
+    const prefix = `fleetDocs/${businessId}/${driverId}/`;
+    return list.map((f) => {
+      const path = text(f?.path, 400);
+      const size = Math.trunc(Number(f?.size));
+      const contentType = text(f?.contentType, 100);
+      if (!path.startsWith(prefix) || path.includes("..") ||
+          !FILE_TYPES.test(contentType) ||
+          !(size >= 0 && size <= MAX_FILE_BYTES)) {
+        throw refuse("fleet_bad_file", "invalid-argument");
+      }
+      return {path, name: text(f?.name, 160) || "file", contentType, size};
+    });
+  }
+
+  async function noteAdd(uid, businessId, data) {
+    const user = await requireStaff(uid, businessId);
+    const {data: business} = await businessOf(businessId);
+    if (!fleetOn(business)) throw refuse("fleet_off");
+    const driverId = text(data.driverId, 180);
+    const note = text(data.text, 2000);
+    if (!driverId) throw refuse("fleet_bad_input", "invalid-argument");
+    const files = cleanFiles(data.files, businessId, driverId);
+    if (!note && files.length === 0) {
+      throw refuse("fleet_note_empty", "invalid-argument");
+    }
+    const driver = await db().collection("fleetDrivers").doc(driverId).get();
+    if (!driver.exists || driver.get("businessId") !== businessId) {
+      throw refuse("fleet_not_found", "not-found");
+    }
+    const ref = db().collection("fleetNotes").doc();
+    await ref.set({businessId, driverId, text: note, files, byUid: uid,
+      byName: text(user?.fullName || user?.email, 120), atMs: Date.now(),
+      createdAt: FieldValue.serverTimestamp()});
+    await audit(businessId, uid, "fleet_driver", driverId, "fleet_note_added",
+        `Note added for ${driver.get("name") || "driver"}` +
+        (files.length ? ` with ${files.length} file(s)` : ""));
+    return {success: true, noteId: ref.id};
+  }
+
+  // Notes are never deleted: an admin marks one removed and it stays
+  // visible, greyed out.
+  async function noteVoid(uid, businessId, data) {
+    const user = await requireAdmin(uid, businessId);
+    const noteId = text(data.noteId, 180);
+    const ref = db().collection("fleetNotes").doc(noteId || "-");
+    let driverId = "";
+    await db().runTransaction(async (tx) => {
+      const doc = await tx.get(ref);
+      if (!doc.exists || doc.get("businessId") !== businessId) {
+        throw refuse("fleet_not_found", "not-found");
+      }
+      if (doc.get("voided")) throw refuse("fleet_note_voided");
+      driverId = doc.get("driverId") || "";
+      tx.update(ref, {voided: {byUid: uid,
+        byName: text(user?.fullName || user?.email, 120), atMs: Date.now()}});
+    });
+    await audit(businessId, uid, "fleet_driver", driverId, "fleet_note_voided",
+        "Note removed");
+    return {success: true};
+  }
+
+  async function substituteSave(uid, businessId, data) {
+    await requireStaff(uid, businessId);
+    const {data: business} = await businessOf(businessId);
+    if (!fleetOn(business)) throw refuse("fleet_off");
+    const driverId = text(data.driverId, 180);
+    const friend = data.friend || {};
+    const name = text(friend.name, 120);
+    const fromDayKey = text(data.fromDayKey, 10);
+    const toDayKey = text(data.toDayKey, 10);
+    if (!driverId || !name || !DAY.test(fromDayKey) || !DAY.test(toDayKey) ||
+        toDayKey < fromDayKey) {
+      throw refuse("fleet_bad_input", "invalid-argument");
+    }
+    const substituteId = text(data.substituteId, 180);
+    const col = db().collection("fleetSubstitutes");
+    const ref = substituteId ? col.doc(substituteId) : col.doc();
+    let carId = text(data.carId, 180);
+    let driverName = "";
+    await db().runTransaction(async (tx) => {
+      const driver = await tx.get(db().collection("fleetDrivers")
+          .doc(driverId));
+      if (!driver.exists || driver.get("businessId") !== businessId) {
+        throw refuse("fleet_not_found", "not-found");
+      }
+      driverName = driver.get("name") || "";
+      if (!carId) {
+        // The car the driver has in those days.
+        const mine = await tx.get(db().collection("fleetAssignments")
+            .where("driverId", "==", driverId));
+        const a = mine.docs.map((d) => d.data()).find((x) =>
+          x.businessId === businessId && x.startDayKey <= toDayKey &&
+          (!x.endDayKey || x.endDayKey >= fromDayKey));
+        if (!a) throw refuse("fleet_bad_input", "invalid-argument");
+        carId = a.carId;
+      }
+      const car = await tx.get(db().collection("fleetCars").doc(carId));
+      if (!car.exists || car.get("businessId") !== businessId) {
+        throw refuse("fleet_not_found", "not-found");
+      }
+      const others = await tx.get(col.where("carId", "==", carId));
+      const clash = others.docs.find((d) => d.id !== ref.id &&
+        d.get("businessId") === businessId && !d.get("voided") &&
+        d.get("fromDayKey") <= toDayKey && fromDayKey <= d.get("toDayKey"));
+      if (clash) throw refuse("fleet_friend_overlap");
+      let existing = null;
+      if (substituteId) {
+        existing = await tx.get(ref);
+        if (!existing.exists || existing.get("businessId") !== businessId) {
+          throw refuse("fleet_not_found", "not-found");
+        }
+      }
+      const fields = {businessId, driverId, carId, name,
+        phone: cleanPhone(friend.phone),
+        tlcLicense: text(friend.tlcLicense, 20),
+        address: {line1: text(friend.address?.line1, 160),
+          city: text(friend.address?.city, 80),
+          state: text(friend.address?.state, 40),
+          zip: text(friend.address?.zip, 12)},
+        fromDayKey, toDayKey};
+      if (existing) {
+        tx.set(ref, {...fields, updatedBy: uid,
+          updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+      } else {
+        tx.set(ref, {...fields, byUid: uid,
+          createdAt: FieldValue.serverTimestamp()});
+      }
+    });
+    await audit(businessId, uid, "fleet_driver", driverId,
+        "fleet_substitute_saved",
+        `${name} drove ${driverName}'s car ${fromDayKey} to ${toDayKey}`);
+    return {success: true, substituteId: ref.id, carId};
+  }
+
+  async function substituteVoid(uid, businessId, data) {
+    await requireAdmin(uid, businessId);
+    const id = text(data.substituteId, 180);
+    const ref = db().collection("fleetSubstitutes").doc(id || "-");
+    let driverId = "";
+    await db().runTransaction(async (tx) => {
+      const doc = await tx.get(ref);
+      if (!doc.exists || doc.get("businessId") !== businessId) {
+        throw refuse("fleet_not_found", "not-found");
+      }
+      driverId = doc.get("driverId") || "";
+      if (doc.get("voided")) return;
+      tx.update(ref, {voided: true, voidedBy: uid, voidedAtMs: Date.now()});
+    });
+    await audit(businessId, uid, "fleet_driver", driverId,
+        "fleet_substitute_voided", "Friend period removed");
+    return {success: true};
   }
 
   // ---- charges, waivers, payments --------------------------------------
@@ -624,6 +807,10 @@ function createFleetHandlers(deps) {
     payment_record: paymentRecord,
     payment_undo: paymentUndo,
     import_sheet: importSheet,
+    note_add: noteAdd,
+    note_void: noteVoid,
+    substitute_save: substituteSave,
+    substitute_void: substituteVoid,
   };
 
   async function fleetAction(request) {

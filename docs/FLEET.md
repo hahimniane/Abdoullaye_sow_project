@@ -99,6 +99,35 @@ payments, car, credit, History), Cars (list → car page: who had it when),
 Paperwork (diamond/registration soonest first), Settings. Today gains fleet
 tiles. English + French (`french-dom.ts`).
 
+### Driver profile (office-only, decided 2026-11-11)
+
+The driver page also shows **Joined** (start of the first assignment), **With
+the company** (assigned days added up, overlaps and gaps not counted), the
+current car, then three panels: **Track record** (newest first: joined, cars
+given/returned, rent changes, left/back after a gap over 30 days, old TLC
+licenses, friends who drove, late fees, charges, waived bills, notes, office
+edits), **Office notes and files**, **Friends who drove**. Drivers never see
+any of it.
+
+- `fleetNotes/{id}`: `businessId, driverId, text, files[{path,name,contentType,size}], byUid, byName, atMs, createdAt, voided?{byUid,byName,atMs}`.
+  Actions `note_add` (staff), `note_void` (admin; never deleted, shown greyed).
+  Files are uploaded by the browser first to Storage
+  `fleetDocs/{businessId}/{driverId}/{random}-{name}` (storage.rules:
+  owner or `fleet`/`fleet_admin` staff by token claims, image or PDF under
+  10 MB, create only); `note_add` re-checks the path prefix, type and size.
+- `fleetSubstitutes/{id}`: `businessId, driverId, carId, name, phone, tlcLicense, address, fromDayKey, toDayKey, byUid, createdAt, voided?`.
+  Actions `substitute_save` (staff; refuses `fleet_friend_overlap` on the same
+  car and toDayKey < fromDayKey), `substitute_void` (admin). The main driver
+  stays responsible for rent and charged tickets.
+  `whoDroveAt(assignments, substitutes, carId, dayKey)` (server
+  `fleet_billing.js`, mirrored in `fleet-billing.ts`, shared fixture
+  `whoDroveCases`) is what phase 3 uses to put the friend's name on a ticket.
+- `driver_save` keeps the previous TLC license: `licenseHistory[{license,
+  fromDayKey|null, toDayKey}]`, with `tlcLicenseSince` for the current one.
+- Firestore rules: both collections read by `fleetRead`, write false.
+  Edit lines on the track record read History (`lotLedgerAudit`,
+  entityId = the driver).
+
 ## 7. Phases
 
 1a office (this spec) → 1b Zelle automatic (bank feed, personal cents, "I

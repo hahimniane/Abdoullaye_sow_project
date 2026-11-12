@@ -23,7 +23,11 @@ export const FLEET_REFUSALS: Record<string, string> = {
   fleet_already_undone: "That payment was already undone.",
   fleet_not_open: "Only an open bill can be waived.",
   fleet_reason_required: "Say why.",
-  fleet_staff_only: "This staff account is not allowed to manage Fleet.",
+  fleet_friend_overlap: "Another friend already has this car on those days.",
+  fleet_note_empty: "Write a note or attach a file.",
+  fleet_note_voided: "That note was already removed.",
+  fleet_bad_file: "A file is not allowed (images or PDF, up to 10 MB).",
+  fleet_staff_only:"This staff account is not allowed to manage Fleet.",
 };
 
 /** The sentence to show for a failed Fleet call: the server's reason, else its message, else a fallback. */
@@ -128,9 +132,19 @@ export type FleetData = {
   assignments: Row[];
   bills: Row[];
   payments: Row[];
+  /** Office notes and files (fleetNotes), oldest to newest does not matter. */
+  notes?: Row[];
+  /** Friends who drove a car (fleetSubstitutes). */
+  substitutes?: Row[];
 };
 
 export type FleetIndex = {
+  /** driverId -> office notes (voided ones included, shown greyed). */
+  notesByDriver: Map<string, Row[]>;
+  /** driverId -> friend periods (voided ones included). */
+  substitutesByDriver: Map<string, Row[]>;
+  /** carId -> friend periods (voided ones included). */
+  substitutesByCar: Map<string, Row[]>;
   driverById: Map<string, Row>;
   carById: Map<string, Row>;
   billsByDriver: Map<string, FleetBill[]>;
@@ -152,6 +166,9 @@ function pushTo<T>(map: Map<string, T[]>, key: string, value: T) {
 /** Groups every collection by driver/car in one pass. */
 export function indexFleet(data: FleetData): FleetIndex {
   const index: FleetIndex = {
+    notesByDriver: new Map(),
+    substitutesByDriver: new Map(),
+    substitutesByCar: new Map(),
     driverById: new Map(),
     carById: new Map(),
     billsByDriver: new Map(),
@@ -165,6 +182,11 @@ export function indexFleet(data: FleetData): FleetIndex {
   for (const c of data.cars) index.carById.set(c.id, c);
   for (const b of data.bills) pushTo(index.billsByDriver, String(b.driverId), b as unknown as FleetBill);
   for (const p of data.payments) pushTo(index.paymentsByDriver, String(p.driverId), p);
+  for (const n of data.notes ?? []) pushTo(index.notesByDriver, String(n.driverId), n);
+  for (const f of data.substitutes ?? []) {
+    pushTo(index.substitutesByDriver, String(f.driverId), f);
+    pushTo(index.substitutesByCar, String(f.carId), f);
+  }
   for (const a of data.assignments) {
     pushTo(index.assignmentsByDriver, String(a.driverId), a);
     pushTo(index.assignmentsByCar, String(a.carId), a);
@@ -386,12 +408,24 @@ export type TimelineEntry = {
   endDayKey: string;
   rentCents: number;
   period: string;
+  /** Friends who drove the car during this assignment (not voided). */
+  friends: { id: string; name: string; fromDayKey: string; toDayKey: string }[];
 };
 
-/** Who had a car and when, newest first. */
+/** Who had a car and when, newest first; friends who drove it show under the driver. */
 export function carTimeline(carId: string, index: FleetIndex): TimelineEntry[] {
+  const friends = (index.substitutesByCar.get(carId) ?? []).filter((f) => f.voided !== true);
   return (index.assignmentsByCar.get(carId) ?? [])
     .map((a) => ({
+      friends: friends
+        .filter(
+          (f) =>
+            str(f.driverId) === str(a.driverId) &&
+            str(f.fromDayKey) <= (str(a.endDayKey) || "9999-12-31") &&
+            str(f.toDayKey) >= str(a.startDayKey),
+        )
+        .map((f) => ({ id: f.id, name: str(f.name), fromDayKey: str(f.fromDayKey), toDayKey: str(f.toDayKey) }))
+        .sort((x, y) => y.fromDayKey.localeCompare(x.fromDayKey)),
       id: a.id,
       driverId: str(a.driverId),
       driverName: str(index.driverById.get(str(a.driverId))?.name),
@@ -401,6 +435,192 @@ export function carTimeline(carId: string, index: FleetIndex): TimelineEntry[] {
       period: str(a.period),
     }))
     .sort((a, b) => b.startDayKey.localeCompare(a.startDayKey));
+}
+
+// ---------------------------------------------------------------------------
+// The driver profile: tenure and the track record.
+// ---------------------------------------------------------------------------
+
+/** A gap longer than this between two assignments reads as "left ... back". */
+export const LEFT_GAP_DAYS = 30;
+
+export type DriverTenure = {
+  /** Start of the first assignment, "" when the driver never had a car. */
+  joinedDayKey: string;
+  /** Days a car was assigned (overlaps and gaps do not count). */
+  days: number;
+};
+
+/** Joined = the first assignment's start; With the company = the assigned days added up. */
+export function driverTenure(assignments: Row[], todayKey: string): DriverTenure {
+  const spans = assignments
+    .map((a) => ({ from: str(a.startDayKey), to: str(a.endDayKey) || todayKey }))
+    .filter((x) => x.from && x.to >= x.from)
+    .sort((a, b) => a.from.localeCompare(b.from));
+  let days = 0;
+  let curFrom = "";
+  let curTo = "";
+  for (const span of spans) {
+    if (curFrom && span.from <= curTo) {
+      if (span.to > curTo) curTo = span.to;
+      continue;
+    }
+    if (curFrom) days += daysBetween(curFrom, curTo);
+    curFrom = span.from;
+    curTo = span.to;
+  }
+  if (curFrom) days += daysBetween(curFrom, curTo);
+  return { joinedDayKey: spans[0]?.from ?? "", days };
+}
+
+/** "3 years 2 months" (French "3 ans 2 mois"); under a month: days. */
+export function tenureText(days: number, language: "en" | "fr" = "en"): string {
+  const total = Math.max(0, Math.round(days));
+  let years = Math.floor(total / 365);
+  let months = Math.floor((total - years * 365) / 30.4375);
+  if (months >= 12) {
+    years += 1;
+    months = 0;
+  }
+  const fr = language === "fr";
+  const parts: string[] = [];
+  if (years > 0) parts.push(fr ? `${years} ${years === 1 ? "an" : "ans"}` : `${years} ${years === 1 ? "year" : "years"}`);
+  if (months > 0) parts.push(fr ? `${months} mois` : `${months} ${months === 1 ? "month" : "months"}`);
+  if (parts.length === 0) parts.push(fr ? `${total} ${total === 1 ? "jour" : "jours"}` : `${total} ${total === 1 ? "day" : "days"}`);
+  return parts.join(" ");
+}
+
+export type ProfileKind =
+  | "joined"
+  | "car_given"
+  | "car_returned"
+  | "rent_change"
+  | "left_back"
+  | "license"
+  | "friend"
+  | "late_fee"
+  | "charge"
+  | "waived"
+  | "note"
+  | "edit";
+
+export type ProfileFile = { path: string; name: string; contentType: string; size: number };
+
+export type ProfileEntry = {
+  key: string;
+  kind: ProfileKind;
+  /** The day it belongs to, newest first. */
+  dayKey: string;
+  plate?: string;
+  rentCents?: number;
+  /** rent_change: the rent before. */
+  fromRentCents?: number;
+  period?: string;
+  /** left_back: the day the car came back, `leftDayKey` the day it was returned. */
+  leftDayKey?: string;
+  /** friend: the days; license: the old license's dates. */
+  fromDayKey?: string;
+  toDayKey?: string;
+  license?: string;
+  name?: string;
+  label?: string;
+  amountCents?: number;
+  text?: string;
+  files?: ProfileFile[];
+  noteId?: string;
+  voided?: boolean;
+  by?: string;
+  /** edit: which office edit. */
+  action?: string;
+};
+
+/** One office edit from History (lotLedgerAudit), already read from Firestore. */
+export type ProfileAudit = { id: string; action: string; atMs: number };
+
+/** The audit actions worth a line on the profile (the rest are shown elsewhere or are noise). */
+export const PROFILE_AUDIT_ACTIONS = ["fleet_driver_saved", "fleet_driver_added"] as const;
+
+/**
+ * A driver's track record, newest first, built from the driver's own records
+ * once per snapshot: joined, cars given and returned, rent changes, left and
+ * came back (a gap over LEFT_GAP_DAYS), license changes, friends who drove,
+ * money events, office notes and office edits.
+ */
+export function driverTimeline(driver: Row, index: FleetIndex, audit: ProfileAudit[] = []): ProfileEntry[] {
+  const entries: ProfileEntry[] = [];
+  const add = (entry: Omit<ProfileEntry, "key">) => entries.push({ ...entry, key: `${entry.kind}:${entries.length}` });
+  const plateOf = (carId: unknown) => str(index.carById.get(str(carId))?.plate);
+  const assignments = [...(index.assignmentsByDriver.get(driver.id) ?? [])]
+    .filter((a) => str(a.startDayKey))
+    .sort((a, b) => str(a.startDayKey).localeCompare(str(b.startDayKey)));
+
+  assignments.forEach((a, i) => {
+    const plate = plateOf(a.carId);
+    const start = str(a.startDayKey);
+    if (i === 0) add({ kind: "joined", dayKey: start, plate });
+    add({ kind: "car_given", dayKey: start, plate, rentCents: num(a.rentCents), period: str(a.period) });
+    if (str(a.endDayKey)) add({ kind: "car_returned", dayKey: str(a.endDayKey), plate });
+    const prev = assignments[i - 1];
+    if (!prev) return;
+    if (num(prev.rentCents) !== num(a.rentCents)) {
+      add({ kind: "rent_change", dayKey: start, plate, fromRentCents: num(prev.rentCents), rentCents: num(a.rentCents), period: str(a.period) });
+    }
+    const prevEnd = str(prev.endDayKey);
+    if (prevEnd && daysBetween(prevEnd, start) > LEFT_GAP_DAYS) {
+      add({ kind: "left_back", dayKey: start, leftDayKey: prevEnd });
+    }
+  });
+
+  const history = Array.isArray(driver.licenseHistory) ? (driver.licenseHistory as Record<string, unknown>[]) : [];
+  for (const h of history) {
+    if (!str(h.license)) continue;
+    add({ kind: "license", dayKey: str(h.toDayKey), license: str(h.license), fromDayKey: str(h.fromDayKey), toDayKey: str(h.toDayKey) });
+  }
+
+  for (const f of index.substitutesByDriver.get(driver.id) ?? []) {
+    if (f.voided === true) continue;
+    add({ kind: "friend", dayKey: str(f.fromDayKey), name: str(f.name), plate: plateOf(f.carId), fromDayKey: str(f.fromDayKey), toDayKey: str(f.toDayKey) });
+  }
+
+  for (const b of index.billsByDriver.get(driver.id) ?? []) {
+    const bill = b as unknown as Row;
+    const label = str(bill.label);
+    if (bill.status === "waived") {
+      const atMs = Number((bill.waived as { atMs?: unknown } | undefined)?.atMs) || 0;
+      add({
+        kind: "waived",
+        dayKey: atMs ? newYorkDayKey(new Date(atMs)) : str(bill.dueDayKey),
+        label: label || str(bill.kind),
+        amountCents: num(bill.amountCents),
+        text: str((bill.waived as { reason?: unknown } | undefined)?.reason),
+      });
+    }
+    if (bill.status === "void") continue;
+    if (bill.kind === "late_fee") add({ kind: "late_fee", dayKey: str(bill.dueDayKey), label, amountCents: num(bill.amountCents) });
+    else if (bill.kind === "charge") add({ kind: "charge", dayKey: str(bill.dueDayKey), label, amountCents: num(bill.amountCents) });
+  }
+
+  for (const n of index.notesByDriver.get(driver.id) ?? []) {
+    const atMs = Number(n.atMs) || 0;
+    add({
+      kind: "note",
+      dayKey: atMs ? newYorkDayKey(new Date(atMs)) : "",
+      noteId: n.id,
+      text: str(n.text),
+      files: Array.isArray(n.files) ? (n.files as ProfileFile[]) : [],
+      voided: Boolean(n.voided),
+      by: str(n.byName),
+    });
+  }
+
+  for (const a of audit) {
+    if (!(PROFILE_AUDIT_ACTIONS as readonly string[]).includes(a.action) || !a.atMs) continue;
+    add({ kind: "edit", dayKey: newYorkDayKey(new Date(a.atMs)), action: a.action, noteId: a.id });
+  }
+
+  // Newest first; on one day, what was added last (later in the build order) shows on top.
+  const order = new Map(entries.map((e, i) => [e.key, i]));
+  return entries.sort((a, b) => b.dayKey.localeCompare(a.dayKey) || (order.get(b.key) ?? 0) - (order.get(a.key) ?? 0));
 }
 
 /** Cars with no driver now (the ones "Give a car" may pick). */

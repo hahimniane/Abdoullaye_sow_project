@@ -183,8 +183,9 @@ const SITES: Site[] = [
   { file: L("business-data.ts"), kind: "useBusinessCollection", what: "useStaffExpenseCreditInputs: expense lines (names on the bill)", shapes: [bc("lotExpenseLines", { pageSize: null })] },
   { file: L("business-data.ts"), kind: "useBusinessCollection", what: "useParkingLinkCars (last twelve months)", shapes: [bc("parkedCars", { pageSize: null, where: [["occupancyEndMs", ">=", 0]] })] },
   { file: L("business-data.ts"), kind: "useBusinessCollection", what: "useBusinessStaff", shapes: [bc("users", { pageSize: null })] },
-  // Fleet (docs/FLEET.md): the five collections, each whole and equality-only on businessId (no composite index).
-  ...["fleetDrivers", "fleetCars", "fleetAssignments", "fleetBills", "fleetPayments"].map((name): Site => ({
+  // Fleet (docs/FLEET.md): the seven collections, each whole and equality-only on businessId (no composite index).
+  { file: B("fleet-profile.tsx"), kind: "query", what: "a driver's office edits (History)", shapes: [raw("lotLedgerAudit", [eq("businessId"), eq("entityId")], { field: "at", direction: "desc" })] },
+  ...["fleetDrivers", "fleetCars", "fleetAssignments", "fleetBills", "fleetPayments", "fleetNotes", "fleetSubstitutes"].map((name): Site => ({
     file: B("fleet-data.ts"), kind: "useBusinessCollection", what: `useFleetData ${name}`, shapes: [bc(name, { pageSize: null })],
   })),
   { file: L("business-data.ts"), kind: "usePagedQuery", what: "useBusinessCollection itself", shapes: [] },

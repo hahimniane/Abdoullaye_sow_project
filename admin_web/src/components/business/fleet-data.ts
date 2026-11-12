@@ -28,8 +28,12 @@ export function useFleetData(businessId: string, enabled: boolean): FleetState {
   const assignments = useBusinessCollection("fleetAssignments", businessId, enabled, COMPLETE);
   const bills = useBusinessCollection("fleetBills", businessId, enabled, COMPLETE);
   const payments = useBusinessCollection("fleetPayments", businessId, enabled, COMPLETE);
-  const loading = enabled && (drivers.loading || cars.loading || assignments.loading || bills.loading || payments.loading);
-  const error = drivers.error || cars.error || assignments.error || bills.error || payments.error;
+  const notes = useBusinessCollection("fleetNotes", businessId, enabled, COMPLETE);
+  const substitutes = useBusinessCollection("fleetSubstitutes", businessId, enabled, COMPLETE);
+  const loading =
+    enabled &&
+    (drivers.loading || cars.loading || assignments.loading || bills.loading || payments.loading || notes.loading || substitutes.loading);
+  const error = drivers.error || cars.error || assignments.error || bills.error || payments.error || notes.error || substitutes.error;
   return useMemo(() => {
     const data: FleetData = {
       drivers: drivers.rows as FleetData["drivers"],
@@ -37,9 +41,11 @@ export function useFleetData(businessId: string, enabled: boolean): FleetState {
       assignments: assignments.rows as FleetData["assignments"],
       bills: bills.rows as FleetData["bills"],
       payments: payments.rows as FleetData["payments"],
+      notes: notes.rows as FleetData["notes"],
+      substitutes: substitutes.rows as FleetData["substitutes"],
     };
     return { data, index: indexFleet(data), todayKey: newYorkDayKey(), loading, error };
-  }, [drivers.rows, cars.rows, assignments.rows, bills.rows, payments.rows, loading, error]);
+  }, [drivers.rows, cars.rows, assignments.rows, bills.rows, payments.rows, notes.rows, substitutes.rows, loading, error]);
 }
 
 /** Calls the one Fleet callable. Throws the callable's error (read it with fleetErrorMessage). */

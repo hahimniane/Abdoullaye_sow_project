@@ -17924,6 +17924,22 @@ button.fleet-grid-row:focus-visible { outline: 2px solid var(--brand-strong); ou
 .fleet-undone td:last-child { text-decoration: none; }
 .fleet-note { color: var(--muted); display: block; font-size: 10.5px; font-weight: 600; margin-top: 2px; }
 
+/* The driver profile: track record, office notes, friends. */
+.fleet-track { display: grid; gap: 0; list-style: none; margin: 0; padding: 0; }
+.fleet-track li { border-left: 2px solid rgba(148, 163, 184, 0.4); display: grid; gap: 2px; margin-left: 6px; padding: 0 0 14px 16px; position: relative; }
+.fleet-track li::before { background: var(--panel, #fff); border: 2px solid #6366f1; border-radius: 50%; content: ""; height: 10px; left: -6px; position: absolute; top: 4px; width: 10px; }
+.fleet-track li:last-child { border-left-color: transparent; padding-bottom: 0; }
+.fleet-track .when { color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.fleet-track .what { font-size: 14px; }
+.fleet-track .what b { margin-right: 6px; }
+.fleet-track .voided { color: var(--muted); }
+.fleet-track .voided .text { text-decoration: line-through; }
+.fleet-files { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.fleet-files button { font-size: 12px; }
+.fleet-friend-list { display: grid; gap: 10px; list-style: none; margin: 0; padding: 0; }
+.fleet-friend-list li { align-items: center; display: flex; flex-wrap: wrap; gap: 6px 14px; justify-content: space-between; }
+.fleet-friend-list li.voided { color: var(--muted); text-decoration: line-through; }
+
 .fleet-import h3 { font-size: 15px; margin: 14px 0 8px; }
 .fleet-warnings { background: rgba(245, 158, 11, 0.1); border-radius: 8px; font-size: 12px; margin-top: 10px; padding: 8px 12px; }
 .fleet-warnings ul { margin: 4px 0 0; padding-left: 18px; }

@@ -352,6 +352,14 @@ function CarPage({
                       <button className="fleet-link" type="button" onClick={() => onOpenDriver(t.driverId)}>
                         <b data-no-translate>{t.driverName || "—"}</b>
                       </button>
+                      {t.friends.map((f) => (
+                        <small className="fleet-note" key={f.id}>
+                          <span>Friend drove</span>{" "}
+                          <span data-no-translate>
+                            {f.name} · {formatDayKey(f.fromDayKey, lang)} → {formatDayKey(f.toDayKey, lang)}
+                          </span>
+                        </small>
+                      ))}
                     </td>
                     <td data-no-translate>{formatDayKey(t.startDayKey, lang)}</td>
                     <td>{t.endDayKey ? <span data-no-translate>{formatDayKey(t.endDayKey, lang)}</span> : <span className="fleet-chip ok">Now</span>}</td>

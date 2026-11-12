@@ -312,3 +312,23 @@ export function assignPersonalCents(
   }
   return result;
 }
+
+export type DroveAssignment = { carId: string; driverId: string; startDayKey: string; endDayKey?: string | null };
+export type DroveSubstitute = { id: string; carId: string; fromDayKey: string; toDayKey: string; voided?: boolean };
+
+/** Who had the car on a day: the assigned driver and the friend who drove it (if any). Mirrors the server. */
+export function whoDroveAt(
+  assignments: DroveAssignment[],
+  substitutes: DroveSubstitute[],
+  carId: string,
+  dayKey: string,
+): { driverId: string | null; substituteId: string | null } {
+  const a = (assignments || []).find(
+    (x) => x.carId === carId && x.startDayKey <= dayKey && (!x.endDayKey || x.endDayKey >= dayKey),
+  );
+  if (!a) return { driverId: null, substituteId: null };
+  const s = (substitutes || []).find(
+    (x) => x.carId === carId && x.voided !== true && x.fromDayKey <= dayKey && x.toDayKey >= dayKey,
+  );
+  return { driverId: a.driverId, substituteId: s ? s.id : null };
+}

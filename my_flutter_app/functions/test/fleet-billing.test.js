@@ -10,6 +10,7 @@ const {
   allocatePayment,
   applyCredit,
   assignPersonalCents,
+  whoDroveAt,
   driverBalance,
   lateFeesToCreate,
   rentBillsToCreate,
@@ -120,4 +121,13 @@ describe("fleet billing: personal cents", () => {
     assert.equal(out.d100, null);
     assert.equal(out.d000, 1);
   });
+});
+
+describe("fleet billing: who drove", () => {
+  for (const c of fixture.whoDroveCases) {
+    it(c.name, () => {
+      assert.deepEqual(whoDroveAt(c.assignments, c.substitutes,
+          c.carId, c.dayKey), c.expect);
+    });
+  }
 });

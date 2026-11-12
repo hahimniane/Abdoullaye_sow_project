@@ -342,6 +342,27 @@ function assignPersonalCents(activeDrivers) {
   return result;
 }
 
+/**
+ * Who had the car on a day: the assigned driver, and the friend (if the
+ * office recorded one for that day) who actually drove it. The main driver
+ * stays responsible for rent and charged tickets; phase 3 (city tickets)
+ * puts the friend's name on a ticket in those dates.
+ *
+ * @param {object[]} assignments {carId, driverId, startDayKey, endDayKey}.
+ * @param {object[]} substitutes {id, carId, fromDayKey, toDayKey, voided?}.
+ * @param {string} carId The car.
+ * @param {string} dayKey YYYY-MM-DD.
+ * @return {{driverId: (string|null), substituteId: (string|null)}} Who.
+ */
+function whoDroveAt(assignments, substitutes, carId, dayKey) {
+  const a = (assignments || []).find((x) => x.carId === carId &&
+    x.startDayKey <= dayKey && (!x.endDayKey || x.endDayKey >= dayKey));
+  if (!a) return {driverId: null, substituteId: null};
+  const s = (substitutes || []).find((x) => x.carId === carId &&
+    x.voided !== true && x.fromDayKey <= dayKey && x.toDayKey >= dayKey);
+  return {driverId: a.driverId, substituteId: s ? s.id : null};
+}
+
 module.exports = {
   FLEET_MESSAGES,
   rentPeriods,
@@ -351,4 +372,5 @@ module.exports = {
   applyCredit,
   driverBalance,
   assignPersonalCents,
+  whoDroveAt,
 };

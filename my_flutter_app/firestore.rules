@@ -694,6 +694,16 @@ service cloud.firestore {
       allow read: if fleetRead(resource.data.businessId);
       allow write: if false;
     }
+    // A driver's office notes and files, and friends who drove the car:
+    // office only (drivers never read them), server-written.
+    match /fleetNotes/{id} {
+      allow read: if fleetRead(resource.data.businessId);
+      allow write: if false;
+    }
+    match /fleetSubstitutes/{id} {
+      allow read: if fleetRead(resource.data.businessId);
+      allow write: if false;
+    }
     match /parkingLots/{lotId} {
       allow read: if lotLedgerRead(resource.data.businessId);
       allow write: if false;

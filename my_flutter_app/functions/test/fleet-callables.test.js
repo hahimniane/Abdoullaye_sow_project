@@ -159,6 +159,107 @@ describe("payments", () => {
   });
 });
 
+describe("the driver profile: license history, notes, friends", () => {
+  const file = (driverId, name = "license.jpg") => ({
+    path: `fleetDocs/${BIZ}/${driverId}/abc123-${name}`, name,
+    contentType: "image/jpeg", size: 1234});
+
+  it("a changed TLC license keeps the old one with its dates", async () => {
+    await act(STAFF, "driver_save", {driverId: driverA, driver: {
+      name: "Test Driver A", phone: "2125550100", tlcLicense: "5000001"}});
+    let a = await doc("fleetDrivers", driverA);
+    assert.deepEqual(a.licenseHistory, []);
+    assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(a.tlcLicenseSince));
+    // Saving the same license again adds nothing.
+    await act(STAFF, "driver_save", {driverId: driverA, driver: {
+      name: "Test Driver A", phone: "2125550100", tlcLicense: "5000001"}});
+    assert.equal((await doc("fleetDrivers", driverA)).licenseHistory.length, 0);
+    await act(STAFF, "driver_save", {driverId: driverA, driver: {
+      name: "Test Driver A", phone: "2125550100", tlcLicense: "5000002"}});
+    a = await doc("fleetDrivers", driverA);
+    assert.equal(a.tlcLicense, "5000002");
+    assert.equal(a.licenseHistory.length, 1);
+    assert.equal(a.licenseHistory[0].license, "5000001");
+    assert.ok(a.licenseHistory[0].fromDayKey);
+    assert.ok(a.licenseHistory[0].toDayKey);
+  });
+
+  it("staff add a note with a file; an admin removes it (kept, greyed)",
+      async () => {
+        await assert.rejects(act(PARKING_ONLY, "note_add",
+            {driverId: driverA, text: "x"}), denied);
+        await assert.rejects(act(STAFF, "note_add", {driverId: driverA}),
+            refused("fleet_note_empty"));
+        await assert.rejects(act(STAFF, "note_add", {driverId: driverA,
+          text: "x", files: [{...file(driverA), contentType: "text/html"}]}),
+        refused("fleet_bad_file"));
+        await assert.rejects(act(STAFF, "note_add", {driverId: driverA,
+          text: "x", files: [{...file("other-driver")}]}),
+        refused("fleet_bad_file"));
+        await assert.rejects(act(STAFF, "note_add", {driverId: driverA,
+          text: "x", files: [{...file(driverA), size: 11 * 1024 * 1024}]}),
+        refused("fleet_bad_file"));
+        await assert.rejects(act(STAFF, "note_add", {driverId: "nobody",
+          text: "x"}), refused("fleet_not_found"));
+        const {noteId} = await act(STAFF, "note_add", {driverId: driverA,
+          text: "Brought the signed agreement", files: [file(driverA)]});
+        const n = await doc("fleetNotes", noteId);
+        assert.equal(n.businessId, BIZ);
+        assert.equal(n.driverId, driverA);
+        assert.equal(n.byUid, STAFF);
+        assert.equal(n.files.length, 1);
+        assert.ok(n.atMs > 0);
+        await assert.rejects(act(STAFF, "note_void", {noteId}),
+            refused("fleet_admin_only"));
+        await act(OWNER, "note_void", {noteId});
+        const after = await doc("fleetNotes", noteId);
+        assert.equal(after.voided.byUid, OWNER);
+        assert.equal(after.text, "Brought the signed agreement");
+        await assert.rejects(act(OWNER, "note_void", {noteId}),
+            refused("fleet_note_voided"));
+      });
+
+  it("friends who drove: overlap and bad dates are refused", async () => {
+    const friend = {name: "Test Friend", phone: "(212) 555-0111",
+      tlcLicense: "6000001", address: {line1: "1 Test St", city: "Queens",
+        state: "NY", zip: "11101"}};
+    await assert.rejects(act(PARKING_ONLY, "substitute_save", {driverId:
+      driverA, friend, fromDayKey: "2026-09-10", toDayKey: "2026-09-12"}),
+    denied);
+    await assert.rejects(act(STAFF, "substitute_save", {driverId: driverA,
+      friend, fromDayKey: "2026-09-12", toDayKey: "2026-09-10"}),
+    refused("fleet_bad_input"));
+    await assert.rejects(act(STAFF, "substitute_save", {driverId: driverA,
+      friend: {...friend, name: " "}, fromDayKey: "2026-09-10",
+      toDayKey: "2026-09-12"}), refused("fleet_bad_input"));
+    const first = await act(STAFF, "substitute_save", {driverId: driverA,
+      friend, fromDayKey: "2026-09-10", toDayKey: "2026-09-12"});
+    assert.equal(first.carId, car1, "the driver's current car");
+    const s = await doc("fleetSubstitutes", first.substituteId);
+    assert.equal(s.phone, "+12125550111");
+    assert.equal(s.driverId, driverA);
+    await assert.rejects(act(STAFF, "substitute_save", {driverId: driverA,
+      friend: {...friend, name: "Other Friend"}, fromDayKey: "2026-09-12",
+      toDayKey: "2026-09-14"}), refused("fleet_friend_overlap"));
+    // Editing the same period does not clash with itself.
+    await act(STAFF, "substitute_save", {substituteId: first.substituteId,
+      driverId: driverA, friend, fromDayKey: "2026-09-10",
+      toDayKey: "2026-09-11"});
+    // The next days are free.
+    const second = await act(STAFF, "substitute_save", {driverId: driverA,
+      friend: {...friend, name: "Other Friend"}, fromDayKey: "2026-09-12",
+      toDayKey: "2026-09-14"});
+    await assert.rejects(act(STAFF, "substitute_void",
+        {substituteId: second.substituteId}), refused("fleet_admin_only"));
+    await act(OWNER, "substitute_void", {substituteId: second.substituteId});
+    assert.equal((await doc("fleetSubstitutes", second.substituteId)).voided,
+        true);
+    // A voided period no longer blocks the days.
+    await act(STAFF, "substitute_save", {driverId: driverA, friend,
+      fromDayKey: "2026-09-12", toDayKey: "2026-09-14"});
+  });
+});
+
 describe("the car comes back mid-month", () => {
   it("days rule: the cut month is charged for its days only", async () => {
     await act(OWNER, "assignment_end", {assignmentId: assignment,
