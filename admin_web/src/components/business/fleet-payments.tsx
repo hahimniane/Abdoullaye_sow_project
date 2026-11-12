@@ -103,7 +103,11 @@ export function FleetPayments({ state, onOpenDriver }: { state: FleetState; onOp
                       key={cell.month}
                       title={cellStateLabel(cell.state)}
                     >
-                      <b data-no-translate>{cell.paidCents > 0 ? moneyText(cell.paidCents, lang) : cell.state === "owed" ? moneyText(cell.dueCents, lang) : "—"}</b>
+                      {cell.paidCents > 0
+                        ? <b data-no-translate>{moneyText(cell.paidCents, lang)}</b>
+                        : cell.state === "owed"
+                          ? <b><span>Owes</span> <span data-no-translate>{moneyText(cell.dueCents, lang)}</span></b>
+                          : <b>—</b>}
                     </span>
                   ))}
                   <span className="num"><Money cents={row.totalCents} /></span>
