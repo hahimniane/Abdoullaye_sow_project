@@ -4492,10 +4492,10 @@ function PersonDetailWorkspace({
                   aria-label="Admin access role"
                   disabled={isCurrentUser}
                   value={adminRole}
-                  onChange={(event) =>
+                  onChange={({ target: { value: picked } }) =>
                     runAction(
                       "Admin role updated",
-                      () => setAdminRole(userId, event.target.value),
+                      () => setAdminRole(userId, picked),
                       {
                         confirm: `Change admin access for ${userDisplayName(user)}?`,
                         confirmFr: `Modifier l’accès admin de ${userDisplayName(user)} ?`,
@@ -4533,10 +4533,10 @@ function PersonDetailWorkspace({
               {isSuperAdmin ? (
                 <select
                   value={text(user.role, "customer")}
-                  onChange={(event) =>
+                  onChange={({ target: { value: picked } }) =>
                     runAction(
                       "User role updated",
-                      () => updateRole(userId, event.target.value as Role),
+                      () => updateRole(userId, picked as Role),
                       {
                         confirm: `Change account role for ${userDisplayName(user)}?`,
                         confirmFr: `Modifier le rôle du compte de ${userDisplayName(user)} ?`,
@@ -4571,13 +4571,13 @@ function PersonDetailWorkspace({
                 <select
                   aria-label="Business membership role"
                   value={membership.role}
-                  onChange={(event) =>
+                  onChange={({ target: { value: picked } }) =>
                     runAction(
                       "Business membership updated",
                       () =>
                         updateMembership(
                           membership.businessId,
-                          event.target.value,
+                          picked,
                         ),
                       {
                         confirm: `Change this membership for ${userDisplayName(user)}?`,
@@ -10243,18 +10243,18 @@ function BusinessWorkspace({
               <span>Status</span>
               <select
                 value={text(business.status, "pending")}
-                onChange={(event) =>
+                onChange={({ target: { value: picked } }) =>
                   runAction(
                     "Business status updated",
                     () =>
                       commitStatusChange({
                         collectionName: "businesses",
                         targetId: business.id,
-                        nextStatus: event.target.value,
+                        nextStatus: picked,
                       }),
                     {
-                      confirm: `Change ${text(business.name, business.id)} status to ${statusLabel(event.target.value)}?`,
-                      confirmFr: `Changer le statut de ${text(business.name, business.id)} en ${statusLabel(event.target.value)} ?`,
+                      confirm: `Change ${text(business.name, business.id)} status to ${statusLabel(picked)}?`,
+                      confirmFr: `Changer le statut de ${text(business.name, business.id)} en ${statusLabel(picked)} ?`,
                     },
                   )
                 }
@@ -10561,19 +10561,19 @@ function BusinessWorkspace({
                         </div>
                         <select
                           value={text(user.role, "staff")}
-                          onChange={(event) =>
+                          onChange={({ target: { value: picked } }) =>
                             runAction(
                               "Business membership updated",
                               () =>
                                 updateMembership({
                                   userId: user.id,
-                                  role: event.target.value as
+                                  role: picked as
                                     "businessOwner" | "staff" | "customer",
                                   businessId: business.id,
                                 }),
                               {
-                                confirm: `Change ${userDisplayName(user)} to ${event.target.value === "customer" ? "customer" : event.target.value === "businessOwner" ? "business head" : "staff"}?`,
-                                confirmFr: `Changer ${userDisplayName(user)} en ${event.target.value === "customer" ? "client" : event.target.value === "businessOwner" ? "responsable entreprise" : "employé"} ?`,
+                                confirm: `Change ${userDisplayName(user)} to ${picked === "customer" ? "customer" : picked === "businessOwner" ? "business head" : "staff"}?`,
+                                confirmFr: `Changer ${userDisplayName(user)} en ${picked === "customer" ? "client" : picked === "businessOwner" ? "responsable entreprise" : "employé"} ?`,
                               },
                             )
                           }
@@ -10643,18 +10643,18 @@ function BusinessWorkspace({
                         </div>
                         <select
                           value={text(listing.status, "active")}
-                          onChange={(event) =>
+                          onChange={({ target: { value: picked } }) =>
                             runAction(
                               "Listing status updated",
                               () =>
                                 commitStatusChange({
                                   collectionName: "cars",
                                   targetId: listing.id,
-                                  nextStatus: event.target.value,
+                                  nextStatus: picked,
                                 }),
                               {
-                                confirm: `Change ${listingTitle(listing)} status to ${statusLabel(event.target.value)}?`,
-                                confirmFr: `Changer le statut de ${listingTitle(listing)} en ${statusLabel(event.target.value)} ?`,
+                                confirm: `Change ${listingTitle(listing)} status to ${statusLabel(picked)}?`,
+                                confirmFr: `Changer le statut de ${listingTitle(listing)} en ${statusLabel(picked)} ?`,
                               },
                             )
                           }
@@ -12046,18 +12046,18 @@ function MarketplaceListingRow({
       </div>
       <select
         value={text(listing.status, "active")}
-        onChange={(event) =>
+        onChange={({ target: { value: picked } }) =>
           runAction(
             "Listing status updated",
             () =>
               commitStatusChange({
                 collectionName: "cars",
                 targetId: listing.id,
-                nextStatus: event.target.value,
+                nextStatus: picked,
               }),
             {
-              confirm: `Change ${listingTitle(listing)} status to ${statusLabel(event.target.value)}?`,
-              confirmFr: `Changer le statut de ${listingTitle(listing)} en ${statusLabel(event.target.value)} ?`,
+              confirm: `Change ${listingTitle(listing)} status to ${statusLabel(picked)}?`,
+              confirmFr: `Changer le statut de ${listingTitle(listing)} en ${statusLabel(picked)} ?`,
             },
           )
         }
@@ -13866,18 +13866,18 @@ function CollectionRow({
         <>
           <select
             value={text(item[statusField], "pending")}
-            onChange={(event) =>
+            onChange={({ target: { value: picked } }) =>
               runAction(
                 `${title} updated`,
                 () =>
                   commitStatusChange({
                     collectionName,
                     targetId: item.id,
-                    nextStatus: event.target.value,
+                    nextStatus: picked,
                   }),
                 {
-                  confirm: `Change ${label(item)} status to ${statusLabel(event.target.value)}?`,
-                  confirmFr: `Changer le statut de ${label(item)} en ${statusLabel(event.target.value)} ?`,
+                  confirm: `Change ${label(item)} status to ${statusLabel(picked)}?`,
+                  confirmFr: `Changer le statut de ${label(item)} en ${statusLabel(picked)} ?`,
                 },
               )
             }
