@@ -97,6 +97,23 @@ new cases in `parking-balance-cases.json` and `parking-carryover-cases.json`,
 and the emulator test `test/parking-discount-callables.test.js`
 (`npm run test:parking-discount`).
 
+## Month end: settle a customer's bill for less (owner, 11/11/2026)
+
+On a customer's Month end card, the "Record a payment" sheet has a second
+kind, **Settle for a lower amount**: what the customer pays now + method +
+received by + why. `billSettlePlan` (parking_bill_payment.js, mirrored in
+parking-bill-payment.ts; shared fixture
+`test/fixtures/parking-settle-cases.json`): the money pays the lot jobs first
+(a discount only comes off parking; less than the jobs is refused,
+`bill_settle_jobs_first`), then the cars oldest first; what the cars still
+owe becomes a discount on each car. Server action `bill_settle` (same
+callable as `bill_payment_record`, same checks): one `parkingBillPayments`
+document with `mode: "settle"`, `reason`, `discountCents`, `discountParts`;
+each car gets a `parkingDiscounts` entry carrying `billPaymentId`; a stay the
+money and discount cover takes the paid shape. `bill_payment_undo` removes
+the money AND those discounts (also on cars the money did not reach). An
+all-discount settle (nothing paid) needs no receiver and sends no receipt.
+
 ## Not in this release
 
 - The phone app screens (the Dart rules are in; buttons next build).

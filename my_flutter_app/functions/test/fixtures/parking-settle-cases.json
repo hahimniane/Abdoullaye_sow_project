@@ -1,0 +1,248 @@
+{
+  "about": "Month end 'Settle for a lower amount' (docs/PARKING_DISCOUNT.md). Server billSettlePlan (parking_bill_payment.js) and console billSettlePlan (parking-bill-payment.ts) must agree.",
+  "cases": [
+    {
+      "name": "two cars: money oldest first, the rest a discount on the newer car",
+      "paidCents": 30000,
+      "customer": {
+        "dueCents": 46800,
+        "cars": [
+          {
+            "id": "a",
+            "vehicle": "Car a",
+            "trackingCode": "PK-a",
+            "recordable": true,
+            "dueCents": 24000,
+            "priorUnpaidCents": 0,
+            "periodFrom": "2026-10-01"
+          },
+          {
+            "id": "b",
+            "vehicle": "Car b",
+            "trackingCode": "PK-b",
+            "recordable": true,
+            "dueCents": 22800,
+            "priorUnpaidCents": 0,
+            "periodFrom": "2026-10-10"
+          }
+        ],
+        "activities": [],
+        "olderCars": [],
+        "olderActivities": []
+      },
+      "expect": {
+        "ok": true,
+        "payableCents": 46800,
+        "discountCents": 16800,
+        "parts": [
+          [
+            "car",
+            "a",
+            24000,
+            true
+          ],
+          [
+            "car",
+            "b",
+            6000,
+            false
+          ]
+        ],
+        "discountParts": [
+          [
+            "b",
+            16800
+          ]
+        ]
+      }
+    },
+    {
+      "name": "jobs are paid first; the discount is only on parking",
+      "paidCents": 5000,
+      "customer": {
+        "dueCents": 29000,
+        "cars": [
+          {
+            "id": "a",
+            "vehicle": "Car a",
+            "trackingCode": "PK-a",
+            "recordable": true,
+            "dueCents": 24000,
+            "priorUnpaidCents": 0,
+            "periodFrom": "2026-10-01"
+          }
+        ],
+        "activities": [
+          {
+            "id": "j",
+            "label": "Wash",
+            "vehicle": "",
+            "dueCents": 5000,
+            "date": "2026-10-05"
+          }
+        ],
+        "olderCars": [],
+        "olderActivities": []
+      },
+      "expect": {
+        "ok": true,
+        "payableCents": 29000,
+        "discountCents": 24000,
+        "parts": [
+          [
+            "activity",
+            "j",
+            5000,
+            true
+          ]
+        ],
+        "discountParts": [
+          [
+            "a",
+            24000
+          ]
+        ]
+      }
+    },
+    {
+      "name": "less than the jobs is refused",
+      "paidCents": 4000,
+      "customer": {
+        "dueCents": 29000,
+        "cars": [
+          {
+            "id": "a",
+            "vehicle": "Car a",
+            "trackingCode": "PK-a",
+            "recordable": true,
+            "dueCents": 24000,
+            "priorUnpaidCents": 0,
+            "periodFrom": "2026-10-01"
+          }
+        ],
+        "activities": [
+          {
+            "id": "j",
+            "label": "Wash",
+            "vehicle": "",
+            "dueCents": 5000,
+            "date": "2026-10-05"
+          }
+        ],
+        "olderCars": [],
+        "olderActivities": []
+      },
+      "expect": {
+        "ok": false,
+        "reason": "bill_settle_jobs_first"
+      }
+    },
+    {
+      "name": "the whole bill is a normal payment",
+      "paidCents": 24000,
+      "customer": {
+        "dueCents": 24000,
+        "cars": [
+          {
+            "id": "a",
+            "vehicle": "Car a",
+            "trackingCode": "PK-a",
+            "recordable": true,
+            "dueCents": 24000,
+            "priorUnpaidCents": 0,
+            "periodFrom": "2026-10-01"
+          }
+        ],
+        "activities": [],
+        "olderCars": [],
+        "olderActivities": []
+      },
+      "expect": {
+        "ok": false,
+        "reason": "bill_settle_not_less"
+      }
+    },
+    {
+      "name": "nothing paid: all discount",
+      "paidCents": 0,
+      "customer": {
+        "dueCents": 24000,
+        "cars": [
+          {
+            "id": "a",
+            "vehicle": "Car a",
+            "trackingCode": "PK-a",
+            "recordable": true,
+            "dueCents": 24000,
+            "priorUnpaidCents": 0,
+            "periodFrom": "2026-10-01"
+          }
+        ],
+        "activities": [],
+        "olderCars": [],
+        "olderActivities": []
+      },
+      "expect": {
+        "ok": true,
+        "payableCents": 24000,
+        "discountCents": 24000,
+        "parts": [],
+        "discountParts": [
+          [
+            "a",
+            24000
+          ]
+        ]
+      }
+    },
+    {
+      "name": "an older car carried in is paid before the month",
+      "paidCents": 10000,
+      "customer": {
+        "dueCents": 34000,
+        "cars": [
+          {
+            "id": "m",
+            "vehicle": "Car m",
+            "trackingCode": "PK-m",
+            "recordable": true,
+            "dueCents": 24000,
+            "priorUnpaidCents": 0,
+            "periodFrom": "2026-10-01"
+          }
+        ],
+        "activities": [],
+        "olderCars": [
+          {
+            "id": "o",
+            "vehicle": "Old",
+            "trackingCode": "PK-o",
+            "recordable": true,
+            "dueCents": 10000,
+            "periodFrom": "2026-08-01"
+          }
+        ],
+        "olderActivities": []
+      },
+      "expect": {
+        "ok": true,
+        "payableCents": 34000,
+        "discountCents": 24000,
+        "parts": [
+          [
+            "car",
+            "o",
+            10000,
+            true
+          ]
+        ],
+        "discountParts": [
+          [
+            "m",
+            24000
+          ]
+        ]
+      }
+    }
+  ]
+}
