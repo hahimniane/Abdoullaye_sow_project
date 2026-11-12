@@ -195,7 +195,9 @@ describe("the spreadsheet import", () => {
     const r = Array.from({length: 98}, () => "");
     r[1] = "1/1/2026"; r[3] = name; r[4] = phone; r[8] = plate; r[20] = "400";
     for (const [month, value] of Object.entries(months)) {
-      const col = FLEET_SHEET_MONTHS.indexOf(month);
+      // The last column of that month (column index -> "YYYY-MM").
+      const col = Math.max(...Object.entries(FLEET_SHEET_MONTHS)
+          .filter(([, m]) => m === month).map(([c]) => Number(c)));
       if (col >= 0) r[col] = value;
     }
     return r;
