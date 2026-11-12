@@ -740,6 +740,14 @@ service cloud.firestore {
         canManageBusiness(request.auth.uid, resource.data.businessId);
       allow write: if false;
     }
+    // "I paid everything" (docs/TEAM_SETTLE.md): a team member's month
+    // settlement. Everyone on the business's team reads it; written only by
+    // updateLotExpenseEntry (team_settle_*), never deleted - an undo marks it.
+    match /staffMonthSettlements/{settlementId} {
+      allow read: if request.auth != null &&
+        canManageBusiness(request.auth.uid, resource.data.businessId);
+      allow write: if false;
+    }
     // The lot's customer memory (name, contact, cars seen), written only by
     // the callables when an activity or walk-up is recorded. Managers of the
     // business read it to pick a customer instead of re-keying them.

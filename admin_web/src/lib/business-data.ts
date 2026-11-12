@@ -487,6 +487,25 @@ export function useParkingBillPayments(businessId: string, monthKey: string, ena
 }
 
 /**
+ * The month's team settlements ("I paid everything", docs/TEAM_SETTLE.md),
+ * shown on each team member's Month end card. Two equalities (business,
+ * month), so no composite index; `available` is false when the read failed.
+ */
+export function useStaffMonthSettlements(businessId: string, monthKey: string, enabled: boolean): {
+  rows: FirestoreRow[];
+  loading: boolean;
+  available: boolean;
+} {
+  const active = enabled && parkingMonthQueryPlan(monthKey) !== null;
+  const read = useBusinessCollection("staffMonthSettlements", businessId, active, {
+    pageSize: null,
+    sort: "query",
+    where: [["monthKey", "==", monthKey]],
+  });
+  return { rows: read.rows, loading: read.loading, available: active && !read.error };
+}
+
+/**
  * What staff expenses are netted from on the month's bills
  * (docs/STAFF_EXPENSE_CREDIT.md): every lot expense and every paid-back
  * record of the business. Both sides are cumulative ("every expense already

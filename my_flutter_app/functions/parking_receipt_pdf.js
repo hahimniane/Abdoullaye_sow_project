@@ -481,6 +481,13 @@ function billReceiptModel(args) {
     rows.push([`And ${rest.length} more / Et ${rest.length} autres`,
       money(rest.reduce((sum, p) => sum + (Number(p.amountCents) || 0), 0))]);
   }
+  // "I paid everything" (docs/TEAM_SETTLE.md): the cash handed over in the
+  // same settlement is on the receipt, and in the amount paid.
+  const cashCents = Math.max(0, Math.round(Number(payment.settleCashCents) ||
+    0));
+  if (cashCents > 0) {
+    rows.push(["Cash handed over / Espèces remises", money(cashCents)]);
+  }
   const leftCents = Math.max(0, Math.round(Number(payment.leftCents) || 0));
   const paidInFull = leftCents === 0;
   const number = Math.max(1, Math.round(Number(payment.number) || 1));
@@ -503,7 +510,7 @@ function billReceiptModel(args) {
     rows: rows.filter(([, value]) => value)
         .map(([label, value]) => ({label, value})),
     amount: {label: "AMOUNT PAID / MONTANT PAYÉ",
-      value: money(payment.amountCents)},
+      value: money((Number(payment.amountCents) || 0) + cashCents)},
     totals: [
       {label: "Bill before this payment / Facture avant ce paiement",
         value: money(leftCents + (Number(payment.amountCents) || 0))},

@@ -702,15 +702,21 @@ function billReceiptValues(payment, business) {
   const balance = {paidInFull: left === 0, balanceCents: left};
   const code = parts.map((p) => text(p?.trackingCode, 40)).find(Boolean) ||
     "";
+  // "I paid everything" (docs/TEAM_SETTLE.md): the amount is the whole
+  // settlement - the parking paid plus the cash handed over with it.
+  const cash = Math.max(0, Math.round(Number(payment?.settleCashCents) || 0));
+  const total = (Number(payment?.amountCents) || 0) + cash;
   return {
     name: text(payment?.customerName, 60),
     business: text(business?.name, 80),
     businessPhone: text(business?.phone, 40),
     trackingCode: code,
-    amountEn: moneyEn(payment?.amountCents),
-    amountFr: moneyFr(payment?.amountCents),
-    carEn: billPaymentFor(parts, "en"),
-    carFr: billPaymentFor(parts, "fr"),
+    amountEn: moneyEn(total),
+    amountFr: moneyFr(total),
+    carEn: billPaymentFor(parts, "en") +
+      (cash > 0 ? " and cash held for the business" : ""),
+    carFr: billPaymentFor(parts, "fr") +
+      (cash > 0 ? " et espèces détenues pour l'entreprise" : ""),
     paidTotalEn: moneyEn(payment?.billPaidCents),
     paidTotalFr: moneyFr(payment?.billPaidCents),
     balanceEn: balanceLine(balance, "en"),
