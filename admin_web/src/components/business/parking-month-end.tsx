@@ -713,7 +713,7 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
                               <small><span>Covered:</span> <span data-no-translate>{billPaymentFor(p.parts, lang)}</span></small>
                               {p.discountCents > 0 && <small><span>Settled for less · discount</span> <b data-no-translate>-{moneyText(p.discountCents)}</b></small>}
                             </span>
-                            {p.status === "recorded" && (
+                            {p.status === "recorded" && !p.settlementId && (
                               <button className="ghost-button" type="button" disabled={undoBusy} onClick={() => { setUndoTarget(p); setUndoError(""); }}><Undo2 size={14} /> Undo payment</button>
                             )}
                           </li>

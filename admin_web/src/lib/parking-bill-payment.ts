@@ -34,6 +34,7 @@ export const BILL_PAYMENT_REFUSAL = Object.freeze({
   SETTLE_NOT_LESS: "bill_settle_not_less",
   SETTLE_JOBS_FIRST: "bill_settle_jobs_first",
   SETTLE_REASON_REQUIRED: "bill_settle_reason_required",
+  FROM_SETTLEMENT: "bill_payment_from_settlement",
 } as const);
 
 export type BillPaymentRefusal = (typeof BILL_PAYMENT_REFUSAL)[keyof typeof BILL_PAYMENT_REFUSAL];
@@ -54,6 +55,7 @@ export const BILL_PAYMENT_MESSAGES: Record<BillPaymentRefusal, string> = Object.
   [BILL_PAYMENT_REFUSAL.SETTLE_NOT_LESS]: "The amount paid must be less than the bill. For the full amount, record a normal payment.",
   [BILL_PAYMENT_REFUSAL.SETTLE_JOBS_FIRST]: "The amount must at least pay the lot jobs on this bill: a discount only comes off parking.",
   [BILL_PAYMENT_REFUSAL.SETTLE_REASON_REQUIRED]: "Say why the bill was settled for less.",
+  [BILL_PAYMENT_REFUSAL.FROM_SETTLEMENT]: "This payment is part of a month settlement. Undo the settlement instead.",
 });
 
 /** What a callable's rejection says when it carries no reason of ours. */
@@ -345,6 +347,8 @@ export type BillPaymentRecord = {
   parts: { label: string; amountCents: number; full: boolean }[];
   /** Settled for less: what was taken off as a discount (0 for a plain payment). */
   discountCents: number;
+  /** Part of a team member's month settlement: undone with it, never alone. */
+  settlementId: string;
   status: "recorded" | "undone";
   /** When it was recorded (ms), 0 when unknown. */
   atMs: number;
@@ -364,6 +368,7 @@ export function billPaymentRecord(row: Row): BillPaymentRecord {
     note: text(row.note, 300),
     parts: parts.map((p) => ({ label: text(p?.label, 80), amountCents: cents(p?.amountCents), full: p?.full === true })),
     discountCents: cents(row.discountCents),
+    settlementId: text(row.settlementId, 128),
     status: text(row.status, 20) === "undone" ? "undone" : "recorded",
     atMs: cents(row.atMs),
     undoneAtMs: cents(row.undoneAtMs),

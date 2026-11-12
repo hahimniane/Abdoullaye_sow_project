@@ -23,6 +23,7 @@ export const FLEET_REFUSALS: Record<string, string> = {
   fleet_already_undone: "That payment was already undone.",
   fleet_not_open: "Only an open bill can be waived.",
   fleet_reason_required: "Say why.",
+  fleet_import_locked: "A payment brought in from the spreadsheet cannot be undone here.",
   fleet_friend_overlap: "Another friend already has this car on those days.",
   fleet_note_empty: "Write a note or attach a file.",
   fleet_note_voided: "That note was already removed.",

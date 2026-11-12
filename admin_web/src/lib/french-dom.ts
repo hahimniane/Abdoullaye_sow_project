@@ -7108,6 +7108,8 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Discount given.": "Remise accordée.",
   "Discount undone.": "Remise annulée.",
   "Undo discount": "Annuler la remise",
+  "This payment is part of a month settlement. Undo the settlement instead.": "Ce paiement fait partie d’un règlement du mois. Annulez plutôt le règlement.",
+  "A payment brought in from the spreadsheet cannot be undone here.": "Un paiement importé du tableur ne peut pas être annulé ici.",
   "Full or part payment": "Paiement total ou partiel",
   "Payment kind": "Type de paiement",
   "The bill is": "La facture est de",

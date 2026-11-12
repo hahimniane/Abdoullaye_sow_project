@@ -16663,6 +16663,11 @@ async function undoParkingBillPayment(db, args) {
     if (bill.status === "undone") {
       throw parkingBillPaymentRefusal(R.ALREADY_UNDONE);
     }
+    // Part of a team member's month settlement: undone with the settlement,
+    // never alone (docs/TEAM_SETTLE.md).
+    if (bill.settlementId && args.fromSettlement !== true) {
+      throw parkingBillPaymentRefusal(R.FROM_SETTLEMENT);
+    }
     const parts = Array.isArray(bill.parts) ? bill.parts : [];
     if (parts.some((p) => p.kind === "activity") &&
         !hasBusinessPermission(user, "ledger")) {
@@ -16957,7 +16962,8 @@ async function parkingBillPaymentAction(request, uid, action) {
     return recordParkingBillPayment(db, {businessDoc, user, uid, data,
       now: new Date(), settle: action === "bill_settle"});
   }
-  return undoParkingBillPayment(db, {businessDoc, user, uid, data});
+  return undoParkingBillPayment(db, {businessDoc, user, uid, data,
+    fromSettlement: false});
 }
 
 const PARKING_INVOICE_ACTIONS = Object.freeze(
@@ -21856,7 +21862,7 @@ async function teamSettleUndo(uid, data) {
     try {
       await undoParkingBillPayment(db, {businessDoc,
         user: {...user, role: "businessOwner"}, uid,
-        data: {billPaymentId: row.billPaymentId}});
+        data: {billPaymentId: row.billPaymentId}, fromSettlement: true});
     } catch (error) {
       if (error?.details?.reason !==
           parkingBillPayment.BILL_PAYMENT_REFUSAL.ALREADY_UNDONE) throw error;

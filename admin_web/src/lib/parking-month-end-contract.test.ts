@@ -167,7 +167,8 @@ test("Record a payment: one amount, the shared plan, one request, undone as a wh
   assert.match(view, /billPaymentRefusalText\(failure\)/, "a refusal is the console's words, never the raw error");
   assert.match(view, /<h3>Undo this payment\?<\/h3>/, "undo is confirmed");
   assert.match(view, /billPaymentFor\(p\.parts, lang\)/, "what it paid");
-  assert.match(view, /p\.status === "recorded" && \(/, "only a payment that stands can be undone");
+  assert.match(view, /p\.status === "recorded" && !p\.settlementId && \(/,
+    "only a payment that stands can be undone, and a month settlement's payment only with it");
   assert.match(view, /pk-bill-payment-undone/, "an undone one stays on the card, greyed");
   // A failed read of the payments only says so; the rest of the page is unaffected.
   assert.match(view, /!billPays\.available && !billPays\.loading && \(/);

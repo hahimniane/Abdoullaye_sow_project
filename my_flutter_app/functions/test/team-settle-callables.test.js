@@ -272,6 +272,13 @@ describe("the receiver answers", () => {
     const car = (await db.collection("parkedCars").doc("own").get()).data();
     assert.equal(car.amountPaidCents, 6500);
 
+    // Its bill payment is undone only with the settlement, never alone.
+    await assert.rejects(functions.updateBusinessParkingEntry.run({
+      auth: {uid: OWNER, token: {}}, rawRequest: {},
+      data: {action: "bill_payment_undo", businessId: BIZ,
+        billPaymentId: bill.id}}),
+    refusal("failed-precondition", "bill_payment_from_settlement"));
+
     // The statement is settled: nothing more can be paid on it.
     await assert.rejects(request(MEMBER, {amountCents: 100}),
         refusal("failed-precondition", "team_settle_nothing_owed"));

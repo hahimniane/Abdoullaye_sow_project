@@ -468,7 +468,9 @@ function DriverPage({
                       {p.status === "undone" ? (
                         <span className="fleet-chip muted">Undone</span>
                       ) : (
-                        isAdmin && (
+                        // A payment brought in from the spreadsheet is history:
+                        // it has no bill split to take back (docs/FLEET.md §5).
+                        isAdmin && p.imported !== true && (
                           <button className="ghost-button compact" type="button" onClick={() => setDialog({ undo: p })}>
                             <Undo2 size={13} /> Undo
                           </button>

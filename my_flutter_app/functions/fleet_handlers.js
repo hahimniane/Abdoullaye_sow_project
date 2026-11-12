@@ -25,6 +25,8 @@ const FLEET_REFUSALS = Object.freeze({
   fleet_already_undone: "That payment was already undone.",
   fleet_not_open: "Only an open bill can be waived.",
   fleet_reason_required: "Say why.",
+  fleet_import_locked: "A payment brought in from the spreadsheet " +
+    "cannot be undone here.",
   fleet_friend_overlap: "Another friend already has this car on those days.",
   fleet_note_empty: "Write a note or attach a file.",
   fleet_note_voided: "That note was already removed.",
@@ -684,6 +686,8 @@ function createFleetHandlers(deps) {
       }
       const p = doc.data();
       if (p.status === "undone") throw refuse("fleet_already_undone");
+      // Spreadsheet history carries no bill split to take back.
+      if (p.imported === true) throw refuse("fleet_import_locked");
       const billDocs = await Promise.all((p.allocations || []).map((a) =>
         tx.get(db().collection("fleetBills").doc(a.billId))));
       for (const [i, a] of (p.allocations || []).entries()) {

@@ -36,6 +36,7 @@ const BILL_PAYMENT_REFUSAL = Object.freeze({
   SETTLE_NOT_LESS: "bill_settle_not_less",
   SETTLE_JOBS_FIRST: "bill_settle_jobs_first",
   SETTLE_REASON_REQUIRED: "bill_settle_reason_required",
+  FROM_SETTLEMENT: "bill_payment_from_settlement",
 });
 
 const BILL_PAYMENT_MESSAGES = Object.freeze({
@@ -63,6 +64,8 @@ const BILL_PAYMENT_MESSAGES = Object.freeze({
     "the lot jobs on this bill: a discount only comes off parking.",
   [BILL_PAYMENT_REFUSAL.SETTLE_REASON_REQUIRED]: "Say why the bill was " +
     "settled for less.",
+  [BILL_PAYMENT_REFUSAL.FROM_SETTLEMENT]: "This payment is part of a month " +
+    "settlement. Undo the settlement instead.",
 });
 
 /**

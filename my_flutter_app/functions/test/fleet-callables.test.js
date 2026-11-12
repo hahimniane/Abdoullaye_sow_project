@@ -331,6 +331,9 @@ describe("the spreadsheet import", () => {
             .where("businessId", "==", BIZ).where("imported", "==", true)
             .get();
         assert.equal(payments.size, 2);
+        // Spreadsheet history cannot be undone (no bill split to take back).
+        await assert.rejects(act(OWNER, "payment_undo",
+            {paymentId: payments.docs[0].id}), refused("fleet_import_locked"));
         const open = await db.collection("fleetBills")
             .where("businessId", "==", BIZ).where("kind", "==", "rent")
             .where("status", "==", "open").get();
