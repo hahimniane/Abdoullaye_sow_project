@@ -61,8 +61,20 @@ test("the form picks up the router's early request once, then asks again", async
   prefetchPackageOptions("early", fetcher);
   prefetchPackageOptions("early", fetcher);
   assert.equal(calls, 1, "a second prefetch joins the first");
-  assert.deepEqual(await loadPackageOptions("early", fetcher), ANSWER);
-  assert.equal(calls, 1, "the form reused the early request");
+  const first = loadPackageOptions("early", fetcher);
+  const again = loadPackageOptions("early", fetcher);
+  assert.deepEqual(await first, ANSWER);
+  assert.deepEqual(await again, ANSWER);
+  assert.equal(calls, 1, "the form (even mounted twice) reused the early request");
   await loadPackageOptions("early", fetcher);
-  assert.equal(calls, 2, "Try again really asks again");
+  assert.equal(calls, 1, "a form that mounts just after the answer reuses it");
+});
+
+test("a failed request is forgotten at once, so Try again asks again", async () => {
+  let calls = 0;
+  const failing = async () => { calls += 1; throw new Error("offline"); };
+  await assert.rejects(loadPackageOptions("down", failing));
+  await new Promise((r) => setTimeout(r, 0));
+  await assert.rejects(loadPackageOptions("down", failing));
+  assert.equal(calls, 2);
 });

@@ -77,46 +77,40 @@ export function deviceStorage(): Storage | null {
   }
 }
 
-// One request in flight per link, shared by the router's prefetch and the form.
+// One request in flight per link, shared by the router's prefetch and the
+// form (and by a form that mounts twice).
 const inFlight = new Map<string, Promise<PackageOptionsAnswer>>();
+/** How long a just-arrived answer is reused instead of asking again. */
+const FRESH_FOR_MS = 30_000;
 
-/**
- * The fresh answer for a link. A request already started (by the prefetch)
- * is reused once; after it settles the next call asks again, so "Try again"
- * really retries. A fresh answer is kept on the device.
- */
+/** The fresh answer for a link: the request in flight, else a new one. Kept on the device. */
 export function loadPackageOptions(
   slug: string,
   fetcher: (data: Record<string, unknown>) => Promise<PackageOptionsAnswer>,
 ): Promise<PackageOptionsAnswer> {
-  const key = keyFor(slug);
-  const pending = inFlight.get(key);
-  if (pending) {
-    inFlight.delete(key);
-    return pending;
-  }
-  return startPackageOptions(slug, fetcher, false);
+  return inFlight.get(keyFor(slug)) ?? startPackageOptions(slug, fetcher);
 }
 
 function startPackageOptions(
   slug: string,
   fetcher: (data: Record<string, unknown>) => Promise<PackageOptionsAnswer>,
-  keep: boolean,
 ): Promise<PackageOptionsAnswer> {
   const key = keyFor(slug);
   const request = fetcher(slug ? { slug } : {}).then((data) => {
     writeCachedPackageOptions(deviceStorage(), slug, data, Date.now());
     return data;
   });
-  if (keep) {
-    inFlight.set(key, request);
-    // A prefetch nobody picks up must not keep an old answer forever.
-    request.catch(() => undefined).finally(() => {
-      setTimeout(() => {
-        if (inFlight.get(key) === request) inFlight.delete(key);
-      }, 60_000);
-    });
-  }
+  inFlight.set(key, request);
+  const forget = () => {
+    if (inFlight.get(key) === request) inFlight.delete(key);
+  };
+  // A fresh answer is still good for a moment: the form often mounts just
+  // after the router's early request came back. A failure is forgotten at
+  // once so "Try again" really asks again.
+  request.then(() => {
+    const timer = setTimeout(forget, FRESH_FOR_MS) as unknown as { unref?: () => void };
+    timer.unref?.(); // never keeps a test process (Node) alive
+  }, forget);
   return request;
 }
 
@@ -126,5 +120,5 @@ export function prefetchPackageOptions(
   fetcher: (data: Record<string, unknown>) => Promise<PackageOptionsAnswer>,
 ) {
   if (inFlight.has(keyFor(slug))) return;
-  startPackageOptions(slug, fetcher, true).catch(() => undefined);
+  startPackageOptions(slug, fetcher).catch(() => undefined);
 }
