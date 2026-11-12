@@ -323,7 +323,12 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
   // The open bill stays open while a filter or a payment moves its row.
   const selected = selectedKey ? cards.find((c) => c.key === selectedKey) ?? null : null;
   const showTeamCols = cards.some((c) => c.expenseCreditCents > 0 || c.statementOwesCents !== undefined);
-  const tally = useMemo(() => invoiceTally(invoiceMessages.byCustomer.values()), [invoiceMessages.byCustomer]);
+  // Counted over the customers on this page, so the bar and the
+  // "Invoice not delivered" filter always agree.
+  const tally = useMemo(() => invoiceTally(cards.flatMap((c) => {
+    const line = invoiceMessages.byCustomer.get(c.key) ?? (c.statementStaffId ? invoiceMessages.byCustomer.get(`staff:${c.statementStaffId}`) : undefined);
+    return line ? [line] : [];
+  })), [cards, invoiceMessages.byCustomer]);
   const showInvoiceCol = tally.total > 0;
   const showInvoiceBar = tally.total > 0 || invoicesOffered;
   function pick(key: string) {
