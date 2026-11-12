@@ -1,6 +1,7 @@
 "use client";
 
 import { FULL_ACCESS_EXPLAINED, fullAccessRequest } from "@/lib/full-access";
+import { ImportSheet as FleetImportSheet } from "@/components/business/fleet-settings";
 import { moneyDollars } from "@/lib/money-input";
 import { useConsoleDocumentTitle } from "@/lib/document-title";
 
@@ -10405,6 +10406,12 @@ function BusinessWorkspace({
           )}
         </div>
       </header>
+
+      {!inferred && fleetOn && (
+        <div className="workspace-section">
+          <FleetImportSheet businessId={business.id} />
+        </div>
+      )}
 
       <div className="workspace-kpis">
         <span>

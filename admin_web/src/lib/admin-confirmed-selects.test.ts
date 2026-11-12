@@ -25,3 +25,8 @@ test("approve without Stripe: super admin only, sent through the review with the
     assert.notEqual(translateValue(english, "fr"), english, `no French for "${english}"`);
   }
 });
+
+test("a platform admin can import a fleet sheet from the business page, once Fleet is on", () => {
+  assert.match(adminConsole, /import \{ ImportSheet as FleetImportSheet \} from "@\/components\/business\/fleet-settings";/);
+  assert.match(adminConsole, /\{!inferred && fleetOn && \(\s*<div className="workspace-section">\s*<FleetImportSheet businessId=\{business\.id\} \/>/);
+});

@@ -111,7 +111,9 @@ function SettingsForm({ businessId, settings }: { businessId: string; settings: 
   );
 }
 
-function ImportSheet({ businessId }: { businessId: string }) {
+/** The sheet import; also on the admin console's business page, so a platform
+ * admin can bring a fleet in for the business (Landa, 2026-11-12). */
+export function ImportSheet({ businessId }: { businessId: string }) {
   const lang = fleetLang();
   const [rows, setRows] = useState<string[][] | null>(null);
   const [fileName, setFileName] = useState("");
