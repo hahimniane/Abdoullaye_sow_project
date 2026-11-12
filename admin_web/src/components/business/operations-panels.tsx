@@ -233,6 +233,7 @@ import {
   businessParkingAmountPaid,
   businessParkingIsPartlyPaid,
   businessParkingBalance,
+  businessParkingDiscount,
   businessParkingWithinRange,
   businessParkingPaymentBadge,
   businessParkingPaymentLabel,
@@ -6203,6 +6204,9 @@ export function ParkingPanel({
                 {/* The platform records what a direct entry owes; it never
                     bills it, so the amount is labelled as recorded, not paid. */}
                 <div><span>{businessEntered ? "Amount recorded" : "Total cost"}</span><b>{formatMoney(businessEntered ? businessParkingAmountDue(row) : row.totalCost)}</b></div>
+                {/* An agreed discount, beside the price it comes off
+                    (docs/PARKING_DISCOUNT.md); the price itself stays. */}
+                {businessParkingDiscount(row) > 0 && <div><span>Discount</span><b>-{formatMoney(businessParkingDiscount(row))}</b></div>}
                 {businessEntered && <div><span>Payment status</span><b>{businessParkingPaymentLabel(row)}</b></div>}
                 {Boolean(row.parkingEndDate) && <div><span>{businessParkingEndLabel(row)}</span><b>{formatDate(row.parkingEndDate)}</b></div>}
               </div>

@@ -117,13 +117,13 @@ export function ParkingDiscountActions({
               <span>
                 <b>Discount −{formatCents(d.amountCents)}</b>
                 {" · "}<span data-no-translate>{d.reason}</span>
-                {" · "}{nameOf(d.givenByUid) || "Staff"}
+                {" · "}{nameOf(d.givenByUid) ? <span data-no-translate>{nameOf(d.givenByUid)}</span> : "Staff"}
                 {d.atMs > 0 && <>{" · "}{formatDateTime(new Date(d.atMs))}</>}
                 {d.undone && <>{" · "}Undone{d.undoneAtMs > 0 && <> {formatDateTime(new Date(d.undoneAtMs))}</>}</>}
               </span>
               {!d.undone && (
                 <button className="ghost-button" type="button" disabled={busy} onClick={() => void undo(d.id, d.amountCents)}>
-                  <RotateCcw size={13} /> Undo
+                  <RotateCcw size={13} /><span>Undo discount</span>
                 </button>
               )}
             </li>

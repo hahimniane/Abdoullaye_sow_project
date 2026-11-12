@@ -7107,6 +7107,7 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Settled. The discount is on the bill.": "Réglé. La remise figure sur la facture.",
   "Discount given.": "Remise accordée.",
   "Discount undone.": "Remise annulée.",
+  "Undo discount": "Annuler la remise",
   "Discounts this month": "Remises ce mois-ci",
   "Discount on": "Remise sur",
   "discount": "remise",
