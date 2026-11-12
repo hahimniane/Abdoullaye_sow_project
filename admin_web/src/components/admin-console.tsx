@@ -2716,6 +2716,10 @@ export function AdminConsole() {
               supportRequests={supportRequestRows}
               runAction={runAction}
               focusBusinessId={notificationBusinessId}
+              isSuperAdmin={
+                resolveAdminRoleKey(profile?.adminRole, previewMode) ===
+                "superAdmin"
+              }
             />
           )}
           {activeTab === "operations" && (
@@ -8753,6 +8757,7 @@ function BusinessesView({
   supportRequests,
   runAction,
   focusBusinessId = "",
+  isSuperAdmin = false,
 }: {
   businesses: FirestoreRow[];
   users: FirestoreRow[];
@@ -8769,6 +8774,8 @@ function BusinessesView({
   runAction: ActionRunner;
   /** A bell click (platform activity alert): open this business. */
   focusBusinessId?: string;
+  /** Only a super admin may approve a business without Stripe. */
+  isSuperAdmin?: boolean;
 }) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -9205,6 +9212,7 @@ function BusinessesView({
               createMissingBusinessProfile={createMissingBusinessProfile}
               updateMembership={updateMembership}
               runAction={runAction}
+              isSuperAdmin={isSuperAdmin}
             />
           ) : (
             <div className="detail-empty">
@@ -9626,6 +9634,8 @@ function BusinessVerificationPanel({
   onSave,
   onApprove,
   onApproveWithBypass,
+  canApproveWithoutStripe: superAdminMayApproveWithoutStripe = false,
+  onApproveWithoutStripe,
   onRequestChanges,
   runAction,
 }: {
@@ -9641,6 +9651,9 @@ function BusinessVerificationPanel({
   onSave: () => Promise<void>;
   onApprove: () => Promise<void>;
   onApproveWithBypass: () => Promise<void>;
+  /** A super admin may approve before Stripe is set up (owner, 2026-11-12). */
+  canApproveWithoutStripe?: boolean;
+  onApproveWithoutStripe?: () => Promise<void>;
   onRequestChanges: () => Promise<void>;
   runAction: ActionRunner;
 }) {
@@ -9651,6 +9664,8 @@ function BusinessVerificationPanel({
   const approved = rowStatus(business) === "approved";
   const canApproveWithBypass =
     !approved && stripe.ready && !summary.approvalReady;
+  const canApproveWithoutStripe =
+    !approved && !stripe.ready && superAdminMayApproveWithoutStripe && Boolean(onApproveWithoutStripe);
   const canVerifySubmitted = items.some((item) => item.status === "submitted");
   const stripeDueCount = stripe.currentlyDue.length + stripe.pastDue.length;
 
@@ -9675,6 +9690,15 @@ function BusinessVerificationPanel({
           {stripe.ready ? "Stripe complete" : "Stripe blocked"}
         </span>
       </div>
+
+      {canApproveWithoutStripe && (
+        <div className="info-band">
+          Stripe is not set up yet. As a super admin you can approve this
+          business now: card payments are kept by Laawol and paid out once
+          the business connects Stripe. Missing Laawol documents are bypassed
+          too, and the override is saved on the verification review.
+        </div>
+      )}
 
       {canApproveWithBypass && (
         <div className="info-band">
@@ -9910,6 +9934,26 @@ function BusinessVerificationPanel({
             Bypass platform docs and approve
           </button>
         )}
+        {canApproveWithoutStripe && onApproveWithoutStripe && (
+          <button
+            className="primary-button warning"
+            type="button"
+            onClick={() =>
+              runAction(
+                "Business approved without Stripe",
+                onApproveWithoutStripe,
+                {
+                  confirm:
+                    "Approve this business without Stripe? Customers can see and use it now. Card payments are kept by Laawol and paid out once the business connects Stripe. Missing Laawol documents are bypassed too.",
+                  confirmFr:
+                    "Approuver cette entreprise sans Stripe ? Les clients peuvent la voir et l’utiliser dès maintenant. Les paiements par carte sont gardés par Laawol et versés quand l’entreprise connecte Stripe. Les documents Laawol manquants sont aussi contournés.",
+                },
+              )
+            }
+          >
+            Approve without Stripe
+          </button>
+        )}
       </div>
     </div>
   );
@@ -9932,6 +9976,7 @@ function BusinessWorkspace({
   createMissingBusinessProfile,
   updateMembership,
   runAction,
+  isSuperAdmin = false,
 }: {
   business: FirestoreRow;
   members: FirestoreRow[];
@@ -9953,6 +9998,7 @@ function BusinessWorkspace({
     businessId?: string;
   }) => Promise<void>;
   runAction: ActionRunner;
+  isSuperAdmin?: boolean;
 }) {
   const [section, setSection] = useState<WorkspaceSection>("overview");
   const [selectedUserId, setSelectedUserId] = useState("");
@@ -10185,12 +10231,18 @@ function BusinessWorkspace({
 
   async function reviewBusiness(
     action: "approve" | "request_changes",
-    options: { platformDocumentBypass?: boolean } = {},
+    options: { platformDocumentBypass?: boolean; platformStripeBypass?: boolean } = {},
   ) {
+    // Without Stripe: a super admin's call, and it bypasses the documents too.
+    const approveWithoutStripe =
+      action === "approve" &&
+      options.platformStripeBypass === true &&
+      isSuperAdmin &&
+      !stripeVerification.ready;
     const approveWithBypass =
       action === "approve" &&
       options.platformDocumentBypass === true &&
-      stripeVerification.ready;
+      (stripeVerification.ready || approveWithoutStripe);
     if (action === "approve" && !businessApprovalReady && !approveWithBypass) {
       throw new Error(
         "Complete Stripe verification and required platform documents before approval.",
@@ -10215,6 +10267,7 @@ function BusinessWorkspace({
       reviewNote: reviewNote.trim(),
       platformDocumentBypass: approveWithBypass,
       platformDocumentBypassNote: reviewNote.trim(),
+      platformStripeBypass: approveWithoutStripe,
     });
   }
 
@@ -10495,6 +10548,10 @@ function BusinessWorkspace({
                 onApprove={() => reviewBusiness("approve")}
                 onApproveWithBypass={() =>
                   reviewBusiness("approve", { platformDocumentBypass: true })
+                }
+                canApproveWithoutStripe={isSuperAdmin}
+                onApproveWithoutStripe={() =>
+                  reviewBusiness("approve", { platformDocumentBypass: true, platformStripeBypass: true })
                 }
                 onRequestChanges={() => reviewBusiness("request_changes")}
                 runAction={runAction}

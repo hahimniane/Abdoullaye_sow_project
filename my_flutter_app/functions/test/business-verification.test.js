@@ -468,6 +468,59 @@ describe("business verification review helpers", () => {
         /Stripe verification must be complete/,
     );
   });
+
+  it("a super admin may approve without Stripe, with the document bypass",
+      () => {
+        const business = {
+          enabledServices: ["carSales"],
+          verificationDocuments: {
+            dealerLicense: {status: "submitted", path: "docs/dealer.pdf"},
+          },
+        };
+        const stripeOnly = businessVerificationApprovalReadiness(business,
+            {allowStripeBypass: true});
+        assert.equal(stripeOnly.ready, false, "documents still count");
+        assert.deepEqual(stripeOnly.blockers,
+            ["Dealer license or sales authorization"]);
+        const both = businessVerificationApprovalReadiness(business,
+            {allowStripeBypass: true, allowPlatformDocumentBypass: true});
+        assert.equal(both.ready, true);
+        assert.equal(both.stripeReady, false);
+        assert.equal(both.stripeBypassed, true);
+        assert.equal(both.platformDocumentsBypassed, true);
+        // Stripe already done: nothing to bypass.
+        const done = businessVerificationApprovalReadiness({
+          ...business, stripeAccountId: "acct_ready", chargesEnabled: true,
+          payoutsEnabled: true,
+        }, {allowStripeBypass: true});
+        assert.equal(done.stripeBypassed, false);
+
+        const timestamp = Symbol("timestamp");
+        const update = buildBusinessVerificationBypassUpdate({
+          business, note: "Fleet first, Stripe later.", adminUid: "admin-a",
+          timestamp, allowStripeBypass: true,
+        });
+        assert.equal(update["verificationReview.stripeBypassed"], true);
+        assert.equal(update["verificationReview.stripeBypassedBy"], "admin-a");
+        const review = (key) => update[`verificationReview.${key}`];
+        assert.equal(review("platformDocumentsBypassed"), true);
+        assert.equal(review("documents.dealerLicense").status,
+            "not_applicable");
+      });
+
+  it("approving without Stripe is a super admin's call", () => {
+    const index = fs.readFileSync(
+        path.join(__dirname, "..", "index.js"), "utf8");
+    assert.match(index, new RegExp(
+        "const approveWithoutStripe =\\s*approveWithPlatformBypass && " +
+        "platformStripeBypass === true;\\s*if \\(approveWithoutStripe\\) " +
+        "\\{\\s*requireSuperAdmin\\("));
+    assert.match(index, /allowStripeBypass: approveWithoutStripe,/);
+    // The plain status dropdown never skips Stripe.
+    const at = index.indexOf("exports.updateAdminRecordStatus");
+    const statusFn = index.slice(at, at + 3000);
+    assert.doesNotMatch(statusFn, /allowStripeBypass/);
+  });
 });
 
 describe("keeping the Stripe display name in step", () => {

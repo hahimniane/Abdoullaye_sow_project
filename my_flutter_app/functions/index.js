@@ -2377,6 +2377,7 @@ function assertBusinessApprovalReady(
   }, {
     allowPlatformDocumentBypass:
       options.allowPlatformDocumentBypass === true,
+    allowStripeBypass: options.allowStripeBypass === true,
   });
   if (readiness.ready) return readiness;
   const suffix = readiness.blockers.length ?
@@ -12151,6 +12152,7 @@ exports.reviewBusinessApplication = onCall(
         reviewNote,
         platformDocumentBypass,
         platformDocumentBypassNote,
+        platformStripeBypass,
       } = request.data || {};
       if (!businessId || !action) {
         throw new HttpsError(
@@ -12217,12 +12219,25 @@ exports.reviewBusinessApplication = onCall(
       );
       const approveWithPlatformBypass =
         nextStatus === "approved" && platformDocumentBypass === true;
+      // Approving without Stripe is a super admin's call (owner,
+      // 2026-11-12), and it carries the document bypass with it.
+      const approveWithoutStripe =
+        approveWithPlatformBypass && platformStripeBypass === true;
+      if (approveWithoutStripe) {
+        requireSuperAdmin(
+            adminUser,
+            "Only super admins can approve a business without Stripe",
+        );
+      }
       let approvalReadiness = null;
       if (nextStatus === "approved") {
         approvalReadiness = assertBusinessApprovalReady(
             current,
             normalizedServices,
-            {allowPlatformDocumentBypass: approveWithPlatformBypass},
+            {
+              allowPlatformDocumentBypass: approveWithPlatformBypass,
+              allowStripeBypass: approveWithoutStripe,
+            },
         );
       }
 
@@ -12240,15 +12255,20 @@ exports.reviewBusinessApplication = onCall(
       };
       const bypassUpdate =
         approveWithPlatformBypass &&
-        approvalReadiness?.platformDocumentsBypassed === true ?
+        (approvalReadiness?.platformDocumentsBypassed === true ||
+          approvalReadiness?.stripeBypassed === true) ?
           buildBusinessVerificationBypassUpdate({
             business: {
               ...current,
               enabledServices: normalizedServices,
             },
-            note: platformDocumentBypassNote || reviewNote,
+            note: platformDocumentBypassNote || reviewNote ||
+              (approvalReadiness?.stripeBypassed ?
+                "Approved without Stripe by a super admin: card payouts " +
+                  "wait until the business connects Stripe." : ""),
             adminUid,
             timestamp: now,
+            allowStripeBypass: approveWithoutStripe,
           }) :
           {};
 

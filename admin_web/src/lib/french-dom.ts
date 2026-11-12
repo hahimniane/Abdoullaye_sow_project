@@ -8768,6 +8768,13 @@ Object.assign(ATTRIBUTE_TRANSLATIONS, {
   "Bill for the selected customer": "Facture du client choisi",
   "Close the bill": "Fermer la facture",
 });
+// ==== Approve without Stripe (super admin, 2026-11-12) ====
+Object.assign(TEXT_TRANSLATIONS, {
+  "Approve without Stripe": "Approuver sans Stripe",
+  "Business approved without Stripe": "Entreprise approuvée sans Stripe",
+  "Stripe is not set up yet. As a super admin you can approve this business now: card payments are kept by Laawol and paid out once the business connects Stripe. Missing Laawol documents are bypassed too, and the override is saved on the verification review.":
+    "Stripe n’est pas encore configuré. En tant que super admin, vous pouvez approuver cette entreprise maintenant : les paiements par carte sont gardés par Laawol et versés quand l’entreprise connecte Stripe. Les documents Laawol manquants sont aussi contournés, et l’exception est enregistrée dans l’examen de vérification.",
+});
 const englishDictionary = { ...TEXT_TRANSLATIONS, ...ATTRIBUTE_TRANSLATIONS };
 const frenchDictionary = buildReverseDictionary([
   TEXT_TRANSLATIONS,

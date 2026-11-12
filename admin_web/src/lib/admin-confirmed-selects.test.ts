@@ -15,3 +15,13 @@ test("a confirmed select reads the picked value before the confirmation, never a
   const handlers = adminConsole.match(/onChange=\{\(\{ target: \{ value: picked \} \}\) =>\s*runAction\(/g) ?? [];
   assert.ok(handlers.length >= 8, `business, listing and item statuses, admin role, account role, memberships (found ${handlers.length})`);
 });
+
+test("approve without Stripe: super admin only, sent through the review with the document bypass", async () => {
+  assert.match(adminConsole, /options\.platformStripeBypass === true &&\s*isSuperAdmin &&\s*!stripeVerification\.ready;/);
+  assert.match(adminConsole, /platformStripeBypass: approveWithoutStripe,/);
+  assert.match(adminConsole, /canApproveWithoutStripe=\{isSuperAdmin\}/);
+  const { translateValue } = await import("./french-dom.ts");
+  for (const english of ["Approve without Stripe", "Business approved without Stripe"]) {
+    assert.notEqual(translateValue(english, "fr"), english, `no French for "${english}"`);
+  }
+});

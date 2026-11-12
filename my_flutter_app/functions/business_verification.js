@@ -215,20 +215,27 @@ function businessVerificationApprovalReadiness(business, options = {}) {
     cleanString(business?.stripeAccountId) !== "" &&
     business?.chargesEnabled === true &&
     business?.payoutsEnabled === true;
+  // A super admin may approve without Stripe (owner, 2026-11-12): card
+  // payments are then held by Laawol and paid out once Stripe is connected
+  // (payouts wait as "pending_account").
+  const stripeBypassed =
+    Boolean(options.allowStripeBypass) && !stripeReady;
+  const stripeOk = stripeReady || stripeBypassed;
   const blockers = [
-    ...(stripeReady ? [] : ["Stripe verification"]),
-    ...(options.allowPlatformDocumentBypass && stripeReady ?
+    ...(stripeOk ? [] : ["Stripe verification"]),
+    ...(options.allowPlatformDocumentBypass && stripeOk ?
       [] :
       documentBlockers.map((document) => document.label)),
   ];
   const platformDocumentsBypassed =
     Boolean(options.allowPlatformDocumentBypass) &&
-    stripeReady &&
+    stripeOk &&
     documentBlockers.length > 0;
   return {
-    ready: stripeReady && (documentBlockers.length === 0 ||
+    ready: stripeOk && (documentBlockers.length === 0 ||
       platformDocumentsBypassed),
     stripeReady,
+    stripeBypassed,
     requiredDocumentIds: requiredDocuments.map((document) => document.id),
     documentBlockers,
     blockers,
@@ -241,11 +248,13 @@ function buildBusinessVerificationBypassUpdate({
   note,
   adminUid,
   timestamp,
+  allowStripeBypass = false,
 }) {
   const readiness = businessVerificationApprovalReadiness(business, {
     allowPlatformDocumentBypass: true,
+    allowStripeBypass,
   });
-  if (!readiness.stripeReady) {
+  if (!readiness.stripeReady && !readiness.stripeBypassed) {
     throw new Error(
         "Stripe verification must be complete before bypassing " +
         "platform documents",
@@ -256,9 +265,15 @@ function buildBusinessVerificationBypassUpdate({
       "Stripe verification completed.";
   const update = {
     "verificationReview.note": bypassNote,
-    "verificationReview.platformDocumentsBypassed": true,
+    "verificationReview.platformDocumentsBypassed":
+      readiness.documentBlockers.length > 0,
     "verificationReview.platformDocumentsBypassedAt": timestamp,
     "verificationReview.platformDocumentsBypassedBy": adminUid,
+    ...(readiness.stripeBypassed ? {
+      "verificationReview.stripeBypassed": true,
+      "verificationReview.stripeBypassedAt": timestamp,
+      "verificationReview.stripeBypassedBy": adminUid,
+    } : {}),
     "verificationReview.updatedAt": timestamp,
     "verificationReview.updatedBy": adminUid,
     updatedAt: timestamp,
