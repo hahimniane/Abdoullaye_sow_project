@@ -112,3 +112,8 @@ test("invoice tally: delivered and read are seen; failed and stopped not deliver
     { state: "queued", tick: "clock" }, { state: "failed", tick: "cross" }, { state: "stopped", tick: "pause" }, { state: "skipped", tick: "dash" },
   ]), { total: 6, seen: 2, waiting: 2, failed: 2 });
 });
+
+test("invoice tally: a statement listed under its number and its member counts once", () => {
+  const statement = { id: "invoice_b_2026-10_9175550117", state: "failed", tick: "cross" };
+  assert.deepEqual(invoiceTally([statement, statement, { id: "x", state: "read", tick: "double-read" }]), { total: 2, seen: 1, waiting: 0, failed: 1 });
+});

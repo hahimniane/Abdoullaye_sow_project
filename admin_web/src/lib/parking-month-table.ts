@@ -167,10 +167,16 @@ export function monthTableNarrowed(filter: MonthTableFilter): boolean {
 
 export type InvoiceTally = { total: number; seen: number; waiting: number; failed: number };
 
-/** The month's WhatsApp invoices, counted from each one's tick. */
-export function invoiceTally(lines: Iterable<{ state: string; tick: string }>): InvoiceTally {
+/** The month's WhatsApp invoices, counted from each one's tick. A team
+ * statement is listed under its number and under the member: counted once. */
+export function invoiceTally(lines: Iterable<{ id?: string; state: string; tick: string }>): InvoiceTally {
   const out: InvoiceTally = { total: 0, seen: 0, waiting: 0, failed: 0 };
+  const counted = new Set<string>();
   for (const line of lines) {
+    if (line.id) {
+      if (counted.has(line.id)) continue;
+      counted.add(line.id);
+    }
     if (line.state === "skipped") continue;
     out.total += 1;
     if (line.state === "failed" || line.state === "stopped") out.failed += 1;
