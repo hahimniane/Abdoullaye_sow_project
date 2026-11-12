@@ -8775,6 +8775,64 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Stripe is not set up yet. As a super admin you can approve this business now: card payments are kept by Laawol and paid out once the business connects Stripe. Missing Laawol documents are bypassed too, and the override is saved on the verification review.":
     "Stripe n’est pas encore configuré. En tant que super admin, vous pouvez approuver cette entreprise maintenant : les paiements par carte sont gardés par Laawol et versés quand l’entreprise connecte Stripe. Les documents Laawol manquants sont aussi contournés, et l’exception est enregistrée dans l’examen de vérification.",
 });
+// ==== Fleet: pay-day bank checks and Zelle deposits (2026-11-12) ====
+Object.assign(TEXT_TRANSLATIONS, {
+  "Pay-day bank checks": "Vérifications de banque les jours de paiement",
+  "Zelle deposits pay drivers' bills by themselves when Laawol recognizes the driver. The bank tells Laawol about new deposits a few times a day for free. On pay days you can have Laawol ask the bank more often, so payments show up within minutes. Each ask is a paid bank check.":
+    "Les dépôts Zelle paient les factures des chauffeurs automatiquement quand Laawol reconnaît le chauffeur. La banque informe Laawol des nouveaux dépôts quelques fois par jour, gratuitement. Les jours de paiement, Laawol peut interroger la banque plus souvent pour que les paiements apparaissent en quelques minutes. Chaque demande est une vérification de banque payante.",
+  "Connect the business's bank first (Profile, Bank for Zelle checks).": "Connectez d’abord la banque de l’entreprise (Profil, Banque pour les vérifications Zelle).",
+  "How often on pay days": "Fréquence les jours de paiement",
+  "Off: only when the bank updates": "Désactivé : seulement quand la banque se met à jour",
+  "Every hour": "Toutes les heures",
+  "Every 15 minutes": "Toutes les 15 minutes",
+  "Every 30 minutes": "Toutes les 30 minutes",
+  "Every 60 minutes": "Toutes les 60 minutes",
+  "Until": "Heure de fin",
+  "Pay days (day of the month)": "Jours de paiement (jour du mois)",
+  "Also every Monday (weekly drivers)": "Aussi chaque lundi (chauffeurs à la semaine)",
+  "checks a month": "vérifications par mois",
+  "checks a pay day ×": "vérifications par jour de paiement ×",
+  "pay days ×": "jours de paiement ×",
+  "a check. Added to your Laawol bill.": "la vérification. Ajouté à votre facture Laawol.",
+  "No extra cost: deposits pay drivers when the bank updates, a few times a day.": "Aucun coût supplémentaire : les dépôts paient les chauffeurs quand la banque se met à jour, quelques fois par jour.",
+  "Save the schedule": "Enregistrer le calendrier",
+  "Zelle from the bank": "Zelle depuis la banque",
+  "Check bank now": "Vérifier la banque maintenant",
+  "Connect the business's bank (Profile, Bank for Zelle checks) and Zelle deposits pay drivers' bills by themselves.": "Connectez la banque de l’entreprise (Profil, Banque pour les vérifications Zelle) et les dépôts Zelle paieront les factures des chauffeurs automatiquement.",
+  "Deposits from known drivers pay their bills by themselves.": "Les dépôts des chauffeurs connus paient leurs factures automatiquement.",
+  "Last pay-day check": "Dernière vérification du jour de paiement",
+  "No deposit is waiting for a driver.": "Aucun dépôt n’attend un chauffeur.",
+  "pending at the bank": "en attente à la banque",
+  "Pick the driver…": "Choisir le chauffeur…",
+  "Pay this driver": "Payer ce chauffeur",
+  "Pick the driver who sent it.": "Choisissez le chauffeur qui l’a envoyé.",
+  "Bank checked. New deposits from known drivers are now paid.": "Banque vérifiée. Les nouveaux dépôts des chauffeurs connus sont payés.",
+  "This month's bank-check limit is reached: Laawol reads what the bank already sent.": "La limite mensuelle de vérifications de banque est atteinte : Laawol lit ce que la banque a déjà envoyé.",
+  "Laawol does not know this sender yet: pick the driver once and it is remembered.": "Laawol ne connaît pas encore cet expéditeur : choisissez le chauffeur une fois et il sera retenu.",
+  "It could be from two drivers: pick the right one.": "Il peut venir de deux chauffeurs : choisissez le bon.",
+  "Its payment was undone: pick the right driver.": "Son paiement a été annulé : choisissez le bon chauffeur.",
+  "That deposit was already used for another payment.": "Ce dépôt a déjà servi pour un autre paiement.",
+  "The bank details took too long to load. Try again.": "Les détails de la banque ont mis trop de temps à charger. Réessayez.",
+});
+Object.assign(ATTRIBUTE_TRANSLATIONS, {
+  "Driver who sent it": "Chauffeur qui l’a envoyé",
+});
+Object.assign(TEXT_TRANSLATIONS, {
+  "Not needed: approved by Laawol.": "Pas nécessaire : approuvé par Laawol.",
+});
+Object.assign(TEXT_TRANSLATIONS, {
+  "Owes money": "Doit de l’argent",
+  "No plate fee": "Pas de frais de plaque",
+  "No car": "Pas de voiture",
+  "Has credit": "A du crédit",
+  "No driver matches. Change the search or the filters.": "Aucun chauffeur ne correspond. Changez la recherche ou les filtres.",
+  "No driver in this list.": "Aucun chauffeur dans cette liste.",
+  "Drivers shown:": "Chauffeurs affichés :",
+  "Owed by these drivers:": "Dû par ces chauffeurs :",
+});
+Object.assign(ATTRIBUTE_TRANSLATIONS, {
+  "Which drivers": "Quels chauffeurs",
+});
 const englishDictionary = { ...TEXT_TRANSLATIONS, ...ATTRIBUTE_TRANSLATIONS };
 const frenchDictionary = buildReverseDictionary([
   TEXT_TRANSLATIONS,

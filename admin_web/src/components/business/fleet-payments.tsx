@@ -7,6 +7,7 @@ import { Panel } from "@/components/panel";
 import { fleetTiles, matchesSearch, monthLabel, monthOf, monthWindow, paymentsGrid } from "@/lib/fleet";
 import { moneyText } from "@/lib/invoice-ledger";
 
+import { FleetBankDeposits } from "./fleet-bank";
 import type { FleetState } from "./fleet-data";
 import { cellStateLabel, fleetLang, Money } from "./fleet-ui";
 
@@ -34,7 +35,7 @@ export function FleetTileGroup({ state }: { state: FleetState }) {
   );
 }
 
-export function FleetPayments({ state, onOpenDriver }: { state: FleetState; onOpenDriver: (driverId: string) => void }) {
+export function FleetPayments({ businessId, state, onOpenDriver }: { businessId: string; state: FleetState; onOpenDriver: (driverId: string) => void }) {
   const lang = fleetLang();
   const [monthCount, setMonthCount] = useState(FIRST_MONTHS);
   const [search, setSearch] = useState("");
@@ -49,6 +50,7 @@ export function FleetPayments({ state, onOpenDriver }: { state: FleetState; onOp
   return (
     <div className="stack fleet-page">
       <FleetTileGroup state={state} />
+      <FleetBankDeposits businessId={businessId} state={state} />
       <Panel
         title="Payments by month"
         icon={<Search size={18} />}

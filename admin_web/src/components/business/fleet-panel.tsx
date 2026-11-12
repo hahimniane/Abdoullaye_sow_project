@@ -77,5 +77,5 @@ export function FleetPanel({
       <div className="empty-state">Only a Fleet admin can change the Fleet settings.</div>
     );
   }
-  return <FleetPayments onOpenDriver={openDriver} state={state} />;
+  return <FleetPayments businessId={businessId} onOpenDriver={openDriver} state={state} />;
 }

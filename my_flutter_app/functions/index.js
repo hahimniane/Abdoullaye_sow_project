@@ -48262,6 +48262,13 @@ const fleet = createFleetHandlers({
   writeAudit: writeLotLedgerAudit,
   dayKeyNow: () => require("./console_summaries").zonedDayKey(new Date(),
       "America/New_York"),
+  // Fleet phase 1b (docs/FLEET.md section 8): bank deposits pay drivers.
+  bankCheckPriceCents: fleetBankCheckPriceCents,
+  bankLinkSummary: fleetBankLinkSummary,
+  fleetBankCheckNow: (businessId, uid) =>
+    fleetBankRefresh(businessId, {uid, scheduled: false}),
+  fleetScheduledRefresh: (businessId) =>
+    fleetBankRefresh(businessId, {uid: "schedule", scheduled: true}),
 });
 exports.fleetAction = onCall(
     // The spreadsheet import writes a few thousand records.
@@ -48272,6 +48279,89 @@ exports.fleetDaily = onSchedule(
     {schedule: "15 5 * * *", timeZone: "America/New_York",
       timeoutSeconds: 540, maxInstances: 1},
     fleet.fleetDaily);
+// Pay-day bank checks: each Fleet business's own schedule and cost.
+exports.fleetBankRefresh = onSchedule(
+    {schedule: "every 15 minutes", timeZone: "America/New_York",
+      timeoutSeconds: 300, maxInstances: 1},
+    () => fleet.fleetBankTick(Date.now()));
+
+/**
+ * One bank check's price for a business: its Bills deal, else Plaid's.
+ *
+ * @param {string} businessId The business.
+ * @return {Promise<number>} Cents.
+ */
+async function fleetBankCheckPriceCents(businessId) {
+  const doc = await admin.firestore().collection("billingDeals")
+      .doc(businessId).get();
+  const versions = doc.exists && Array.isArray(doc.get("versions")) ?
+    doc.get("versions") : [];
+  const month = bankCheck.usageMonthKey(Date.now());
+  // dealInEffect returns the version; its terms are under `deal`.
+  const version = versions.length ?
+    require("./platform_billing").dealInEffect(versions, month) : null;
+  const cents = Number(version?.deal?.bankCheck?.centsEach);
+  return Number.isFinite(cents) && cents >= 0 ? cents :
+    require("./fleet_bank").PLAID_REFRESH_CENTS;
+}
+
+/**
+ * The connected bank as Fleet shows it (never the token).
+ *
+ * @param {string} businessId The business.
+ * @return {Promise<object>} {connected, institutionName, accountMask}.
+ */
+async function fleetBankLinkSummary(businessId) {
+  const [doc] = await admin.firestore().getAll(
+      bankLinkRef(admin.firestore(), businessId),
+      {fieldMask: ["status", "institutionName", "accountMask"]});
+  const link = doc.exists ? doc.data() || {} : {};
+  return {connected: link.status === "active",
+    institutionName: String(link.institutionName || ""),
+    accountMask: String(link.accountMask || "")};
+}
+
+/**
+ * Fleet asks the bank for news: a paid refresh, then a sync (whose new
+ * deposits pay drivers in syncBankLink). A scheduled ask is counted as
+ * `scheduledRefreshes` (billed with the month's checks, outside the
+ * counter's monthly limit); "Check now" goes through the counter's own
+ * rule (refreshAndSyncBank: once a minute, the owner's limit).
+ *
+ * @param {string} businessId The business.
+ * @param {object} opts {uid, scheduled}.
+ * @return {Promise<object>} {noBank} or {checked}.
+ */
+async function fleetBankRefresh(businessId, opts) {
+  const db = admin.firestore();
+  const doc = await bankLinkRef(db, businessId).get();
+  const link = doc.exists ? doc.data() || {} : null;
+  if (!link || link.status !== "active" || !link.accessTokenEnc) {
+    return {noBank: true};
+  }
+  const accessToken = openBankToken(link, businessId);
+  if (!opts.scheduled) {
+    const result = await refreshAndSyncBank({db, businessId, link,
+      accessToken, recordKey: "fleet", uid: opts.uid, counted: true});
+    return {checked: true, limitReached: result.limitReached === true};
+  }
+  const ok = await bankPlaidClient().refreshTransactions(accessToken)
+      .then(() => true)
+      .catch((error) => {
+        logger.info("fleet bank refresh unavailable", {businessId,
+          plaidCode: error?.code || null});
+        return false;
+      });
+  if (ok) {
+    const {month, ref} = bankUsageRef(db, businessId);
+    await ref.set({businessId, month, linkActive: true,
+      scheduledRefreshes: FirestoreFieldValue.increment(1),
+      updatedAt: FirestoreFieldValue.serverTimestamp()}, {merge: true})
+        .catch(() => undefined);
+  }
+  await syncBankLink(db, businessId, link, accessToken);
+  return {checked: ok};
+}
 exports.getAdminOverview = onCall(CONSOLE_TOTALS_CALLABLE_OPTIONS,
     consoleTotals.getAdminOverview);
 exports.getPlatformEarnings = onCall(CONSOLE_TOTALS_CALLABLE_OPTIONS,
@@ -48637,9 +48727,14 @@ async function refreshAndSyncBank(input) {
  */
 async function syncBankLink(db, businessId, link, accessToken) {
   try {
-    return await bankSync.syncBusinessBank({db,
+    const outcome = await bankSync.syncBusinessBank({db,
       FieldValue: FirestoreFieldValue, businessId, plaid: bankPlaidClient(),
       accessToken, link, logger});
+    // New deposits pay Fleet drivers (never throws).
+    if (outcome.ok && outcome.creditIds?.length) {
+      await fleet.matchBankDeposits(businessId, outcome.creditIds);
+    }
+    return outcome;
   } catch (error) {
     logger.error("bank sync crashed", {businessId,
       error: String(error?.message || error)});

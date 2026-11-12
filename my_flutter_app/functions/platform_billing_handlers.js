@@ -296,7 +296,9 @@ function createPlatformBillingHandlers(deps) {
     const link = linkSnap.exists ? linkSnap.data() || {} : null;
     return {
       bankConnected: bankCheck.linkActiveInMonth({link, usage, window}),
-      bankRefreshes: bankCheck.countOf(usage?.refreshes),
+      // Fleet's pay-day checks (fleet_bank) are billed like the counter's.
+      bankRefreshes: bankCheck.countOf(usage?.refreshes) +
+        bankCheck.countOf(usage?.scheduledRefreshes),
       usage,
       link,
     };

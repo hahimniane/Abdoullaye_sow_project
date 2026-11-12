@@ -133,3 +133,45 @@ any of it.
 1a office (this spec) → 1b Zelle automatic (bank feed, personal cents, "I
 paid", WhatsApp question) → 2 drivers (accounts, WhatsApp reminders/receipts,
 app pages, insurance proof, lock to the business) → 3 city tickets.
+
+## 8. Phase 1b: Zelle deposits pay drivers (built 2026-11-12)
+
+Owner, 2026-11-12: deposits in the business's connected bank (Plaid, the
+same link as the counter's Check bank) pay drivers' bills by themselves; the
+business chooses how often Laawol asks the bank on pay days and sees what it
+costs before saving.
+
+- **Matching** (`fleet_bank.matchDeposit`, run after every bank sync in
+  `index.js syncBankLink` -> `fleet_handlers.matchBankDeposits`): only
+  deposits with a sender, after go-live (`BANK_MATCH_START_MS`, or when
+  Fleet was switched on), not removed, not already used (a shop sale, a
+  driver). 1) a sender remembered for exactly one active driver; 2) else the
+  amount's cents equal exactly one active driver's personal cents. Paid like
+  a hand-recorded payment (late fees, oldest first, rest to credit) with
+  `method: "zelle"`, `bankTxnId`, `matchedBy`; the deposit gets
+  `consumedBy {kind: "fleet_payment", id}` in the same transaction, and the
+  sender is remembered on the driver. Otherwise the deposit gets
+  `fleetWaiting: true` + `fleetWaitingReason` (`unknown` / `two_drivers` /
+  `undone`).
+- **Office**: Fleet payments shows "Zelle from the bank" (`bank_status`):
+  the bank, the waiting deposits, "Check bank now" (`bank_check_now`, the
+  counter's paid refresh under its once-a-minute rule and monthly limit) and
+  "Pay this driver" (`bank_assign`, staff; the sender is remembered). Undoing
+  a bank payment gives the deposit back to the waiting list.
+- **Pay-day schedule** (Fleet settings, Fleet admin, `bank_schedule_save`):
+  `fleet.settings.bankSchedule {every: 0|15|30|60, fromHour, toHour (New
+  York), monthDays [1..28], mondays}`; off by default. The panel shows
+  checks/month and $/month live (`bankScheduleQuote`, console mirror
+  `lib/fleet-bank.ts`, shared fixture `test/fixtures/fleet-bank-cases.json`)
+  at the business's Bills price for a bank check, else Plaid's $0.12.
+  Estimate: 15 min, 7 AM-11 PM, 1st-3rd = 192 checks = $23.04.
+- **Job** `fleetBankRefresh` (every 15 minutes, maxInstances 1): a business
+  whose schedule is due gets one paid `/transactions/refresh` + a sync;
+  counted as `scheduledRefreshes` on `businessBankUsage` (outside the
+  counter's monthly limit) and billed with the month's bank checks
+  (`platform_billing_handlers.bankUsage`).
+- Tests: `test/fleet-bank.test.js` (pure), `test/fleet-bank-callables.test.js`
+  (emulator, in `npm run test:fleet`), `admin_web/src/lib/fleet-bank.test.ts`.
+- Next (phase 2): drivers see their personal cents and Zelle details,
+  WhatsApp receipt per payment, "I paid", WhatsApp question for unknown
+  deposits.

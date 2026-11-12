@@ -18034,3 +18034,25 @@ button.fleet-grid-row:focus-visible { outline: 2px solid var(--brand-strong); ou
   .pk-me-select { flex: 1 1 140px; }
   .pk-me-select select { flex: 1; min-width: 0; }
 }
+
+/* ==== Fleet: pay-day bank checks and Zelle deposits (2026-11-12) ==== */
+.fleet-bank-days { border: 1px solid var(--rule); border-radius: 8px; margin: 12px 0 0; padding: 10px 12px; }
+.fleet-bank-days legend { color: var(--muted); font-size: 13px; font-weight: 700; padding: 0 4px; }
+.fleet-bank-days[disabled] { opacity: 0.55; }
+.fleet-bank-day-grid { display: grid; gap: 6px; grid-template-columns: repeat(7, minmax(0, 1fr)); margin-bottom: 8px; max-width: 420px; }
+.fleet-bank-day { background: var(--paper, #fff); border: 1px solid var(--rule-strong, #b8d7d3); border-radius: 7px; color: var(--ink); cursor: pointer; font: inherit; font-size: 13px; font-weight: 700; height: 36px; }
+.fleet-bank-day.on { background: var(--brand-strong); border-color: var(--brand-strong); color: #fff; }
+.fleet-bank-quote { background: rgba(204, 251, 241, 0.5); border: 1px solid rgba(13, 148, 136, 0.3); border-radius: 8px; display: flex; flex-direction: column; gap: 2px; margin-top: 12px; padding: 10px 12px; }
+.fleet-bank-quote.off { background: var(--paper-soft, #f8fafc); border-color: var(--rule); }
+.fleet-bank-quote strong { color: var(--brand-strong); font-size: 14.5px; }
+.fleet-bank-quote small { color: var(--muted); font-size: 12.5px; }
+.fleet-bank-waiting { display: flex; flex-direction: column; gap: 8px; list-style: none; margin: 8px 0 0; padding: 0; }
+.fleet-bank-waiting li { align-items: center; border: 1px solid var(--rule); border-radius: 8px; display: flex; flex-wrap: wrap; gap: 10px 16px; justify-content: space-between; padding: 10px 12px; }
+.fleet-bank-deposit { display: flex; flex: 1 1 260px; flex-direction: column; gap: 2px; min-width: 0; }
+.fleet-bank-deposit strong { color: var(--ink); font-size: 15px; font-variant-numeric: tabular-nums; }
+.fleet-bank-deposit small { color: var(--muted); font-size: 12.5px; }
+.fleet-bank-assign { align-items: center; display: flex; flex: 1 1 280px; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.fleet-bank-assign .lst-field { flex: 1 1 180px; margin: 0; }
+.bp-doc-skipped { color: #047857; font-weight: 700; margin: 4px 0 0; }
+.fleet-driver-chips { margin: 10px 0; }
+.fleet-no-fee { color: #7a4b00; display: block; font-size: 11.5px; font-weight: 700; }

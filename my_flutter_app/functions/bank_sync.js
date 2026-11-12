@@ -410,8 +410,13 @@ async function applySyncPlan(ctx, plan) {
       }
     });
   }
+  // Fleet matches the deposits this sync wrote (fleet_handlers).
+  const creditIds = [
+    ...plan.upserts.map((c) => creditDocId(businessId, c.transactionId)),
+    ...plan.replacements.map((c) => creditDocId(businessId, c.transactionId)),
+  ];
   return {upserted: plan.upserts.length, replaced: plan.replacements.length,
-    removed};
+    removed, creditIds};
 }
 
 /**

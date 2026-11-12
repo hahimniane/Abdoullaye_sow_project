@@ -1,0 +1,18 @@
+{
+  "quotes": [
+    {"name": "every 15 min, 7 AM-11 PM, 1st-3rd", "schedule": {"every": 15, "fromHour": 7, "toHour": 23, "monthDays": [1, 2, 3]}, "centsEach": 12,
+      "expect": {"perDay": 64, "days": 3, "perMonth": 192, "centsEach": 12, "monthCents": 2304}},
+    {"name": "around the clock", "schedule": {"every": 15, "fromHour": 0, "toHour": 24, "monthDays": [1, 2, 3]}, "centsEach": 12,
+      "expect": {"perDay": 96, "days": 3, "perMonth": 288, "centsEach": 12, "monthCents": 3456}},
+    {"name": "every 30 min", "schedule": {"every": 30, "fromHour": 7, "toHour": 23, "monthDays": [1, 2, 3]}, "centsEach": 12,
+      "expect": {"perDay": 32, "days": 3, "perMonth": 96, "centsEach": 12, "monthCents": 1152}},
+    {"name": "plus Mondays", "schedule": {"every": 15, "fromHour": 7, "toHour": 23, "monthDays": [1, 2, 3], "mondays": true}, "centsEach": 12,
+      "expect": {"perDay": 64, "days": 7, "perMonth": 448, "centsEach": 12, "monthCents": 5376}},
+    {"name": "the business's own price", "schedule": {"every": 60, "fromHour": 8, "toHour": 20, "monthDays": [1]}, "centsEach": 20,
+      "expect": {"perDay": 12, "days": 1, "perMonth": 12, "centsEach": 20, "monthCents": 240}},
+    {"name": "off", "schedule": {"every": 0, "monthDays": [1, 2, 3]}, "centsEach": 12,
+      "expect": {"perDay": 0, "days": 3, "perMonth": 0, "centsEach": 12, "monthCents": 0}},
+    {"name": "bad input falls back", "schedule": {"every": 10, "fromHour": 20, "toHour": 8, "monthDays": [0, 40, 2, 2]}, "centsEach": -5,
+      "expect": {"perDay": 0, "days": 1, "perMonth": 0, "centsEach": 12, "monthCents": 0}}
+  ]
+}

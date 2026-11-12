@@ -2458,12 +2458,16 @@ function BusinessVerificationUploadSection({
                 <span className={`lst-badge ${statusClass}`}>{statusLabel(item.status)}</span>
               </div>
               <p>{item.description}</p>
-              {item.reviewNote && (
+              {/* A document Laawol waived (approval bypass) asks for nothing. */}
+              {item.status === "not_applicable" && (
+                <p className="bp-doc-skipped">Not needed: approved by Laawol.</p>
+              )}
+              {item.reviewNote && item.status !== "not_applicable" && (
                 <div className="bp-doc-note">
                   <strong>Admin request:</strong> {item.reviewNote}
                 </div>
               )}
-              <div className="bp-doc-evidence">
+              <div className="bp-doc-evidence" hidden={item.status === "not_applicable"}>
                 {item.evidence.present ? (
                   item.evidence.url ? (
                     <a className="lst-btn ghost" href={item.evidence.url} target="_blank" rel="noreferrer">

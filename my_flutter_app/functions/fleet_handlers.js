@@ -7,6 +7,7 @@
 // and `fleetDaily` (scheduled), like console_totals.js.
 
 const fleetBilling = require("./fleet_billing");
+const fleetBank = require("./fleet_bank");
 const {parseFleetSheet} = require("./fleet_import");
 
 const STAFF = "fleet";
@@ -31,6 +32,9 @@ const FLEET_REFUSALS = Object.freeze({
   fleet_note_empty: "Write a note or attach a file.",
   fleet_note_voided: "That note was already removed.",
   fleet_bad_file: "A file is not allowed (images or PDF, up to 10 MB).",
+  fleet_deposit_used: "That deposit was already used for another payment.",
+  fleet_no_bank: "Connect the business's bank first (Profile, Bank for " +
+    "Zelle checks).",
 });
 
 const text = (v, max = 200) => String(v ?? "").trim().slice(0, max);
@@ -618,6 +622,64 @@ function createFleetHandlers(deps) {
     return {success: true};
   }
 
+  /**
+   * One payment inside a transaction: the driver's open bills, oldest and
+   * late fees first, the rest to credit. Reads before writes.
+   *
+   * @param {object} tx The transaction.
+   * @param {object} ref The new fleetPayments document.
+   * @param {object} p {businessId, driverId, amount, method, paidDayKey,
+   *   byUid, note, bank?: {creditId, senderName, how}}.
+   * @return {Promise<object>} The allocation plan.
+   */
+  async function applyPayment(tx, ref, p) {
+    const driverRef = db().collection("fleetDrivers").doc(p.driverId);
+    const [driver, open] = await Promise.all([
+      tx.get(driverRef),
+      tx.get(db().collection("fleetBills")
+          .where("driverId", "==", p.driverId).where("status", "==", "open")),
+    ]);
+    if (!driver.exists || driver.get("businessId") !== p.businessId) {
+      throw refuse("fleet_not_found", "not-found");
+    }
+    const bills = open.docs.map((d) => ({id: d.id, ...d.data()}));
+    const plan = fleetBilling.allocatePayment(bills, p.amount);
+    if (!plan.ok) throw refuse(plan.reason, "invalid-argument");
+    for (const a of plan.allocations) {
+      const bill = bills.find((b) => b.id === a.billId);
+      const paid = (Number(bill.paidCents) || 0) + a.cents;
+      tx.update(db().collection("fleetBills").doc(a.billId), {
+        paidCents: paid,
+        status: paid >= Number(bill.amountCents) ? "paid" : "open",
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    }
+    const driverPatch = {};
+    if (plan.creditAddedCents > 0) {
+      driverPatch.creditCents = FieldValue.increment(plan.creditAddedCents);
+    }
+    // The sender is remembered, so their next deposit pays this driver.
+    if (p.bank?.senderName) {
+      driverPatch.rememberedSenders =
+        FieldValue.arrayUnion(fleetBank.senderKey(p.bank.senderName));
+    }
+    if (Object.keys(driverPatch).length) {
+      tx.update(driverRef, {...driverPatch,
+        updatedAt: FieldValue.serverTimestamp()});
+    }
+    tx.set(ref, {businessId: p.businessId, driverId: p.driverId,
+      amountCents: p.amount, method: p.method, paidDayKey: p.paidDayKey,
+      receivedAtMs: Date.now(), receivedByUid: p.byUid,
+      allocations: plan.allocations,
+      creditAddedCents: plan.creditAddedCents, creditUsedCents: 0,
+      status: "recorded", imported: false, note: p.note || "",
+      ...(p.bank ? {bankTxnId: p.bank.creditId,
+        bankSenderName: p.bank.senderName || "",
+        matchedBy: p.bank.how} : {}),
+      createdAt: FieldValue.serverTimestamp()});
+    return plan;
+  }
+
   async function paymentRecord(uid, businessId, data) {
     await requireStaff(uid, businessId);
     const {data: business} = await businessOf(businessId);
@@ -633,39 +695,8 @@ function createFleetHandlers(deps) {
     const ref = db().collection("fleetPayments").doc();
     let result;
     await db().runTransaction(async (tx) => {
-      const driverRef = db().collection("fleetDrivers").doc(driverId);
-      const [driver, open] = await Promise.all([
-        tx.get(driverRef),
-        tx.get(db().collection("fleetBills")
-            .where("driverId", "==", driverId).where("status", "==", "open")),
-      ]);
-      if (!driver.exists || driver.get("businessId") !== businessId) {
-        throw refuse("fleet_not_found", "not-found");
-      }
-      const bills = open.docs.map((d) => ({id: d.id, ...d.data()}));
-      const plan = fleetBilling.allocatePayment(bills, amount);
-      if (!plan.ok) throw refuse(plan.reason, "invalid-argument");
-      for (const a of plan.allocations) {
-        const bill = bills.find((b) => b.id === a.billId);
-        const paid = (Number(bill.paidCents) || 0) + a.cents;
-        tx.update(db().collection("fleetBills").doc(a.billId), {
-          paidCents: paid,
-          status: paid >= Number(bill.amountCents) ? "paid" : "open",
-          updatedAt: FieldValue.serverTimestamp(),
-        });
-      }
-      if (plan.creditAddedCents > 0) {
-        tx.update(driverRef, {
-          creditCents: FieldValue.increment(plan.creditAddedCents),
-          updatedAt: FieldValue.serverTimestamp()});
-      }
-      tx.set(ref, {businessId, driverId, amountCents: amount, method,
-        paidDayKey, receivedAtMs: Date.now(), receivedByUid: uid,
-        allocations: plan.allocations,
-        creditAddedCents: plan.creditAddedCents, creditUsedCents: 0,
-        status: "recorded", imported: false, note: text(data.note, 300),
-        createdAt: FieldValue.serverTimestamp()});
-      result = plan;
+      result = await applyPayment(tx, ref, {businessId, driverId,
+        amount, method, paidDayKey, byUid: uid, note: text(data.note, 300)});
     });
     await audit(businessId, uid, "fleet_payment", ref.id,
         "fleet_payment_recorded",
@@ -705,11 +736,247 @@ function createFleetHandlers(deps) {
       }
       tx.update(ref, {status: "undone", undoneByUid: uid,
         undoneAtMs: Date.now()});
+      // A bank deposit it used goes back to "waiting" for the right driver.
+      if (p.bankTxnId) {
+        tx.set(db().collection("businessBankCredits").doc(p.bankTxnId), {
+          consumedBy: FieldValue.delete(), consumedAt: FieldValue.delete(),
+          consumedByUid: FieldValue.delete(), fleetWaiting: true,
+          fleetWaitingReason: "undone"}, {merge: true});
+      }
       amount = Number(p.amountCents) || 0;
     });
     await audit(businessId, uid, "fleet_payment", paymentId,
         "fleet_payment_undone", `Payment $${(amount / 100).toFixed(2)} undone`);
     return {success: true};
+  }
+
+  // ---- bank deposits (phase 1b, docs/FLEET.md §8) ----------------------
+
+  /**
+   * Where matching starts for a business: go-live, or Fleet's own start.
+   *
+   * @param {object} business The business.
+   * @return {number} The earliest deposit time.
+   */
+  function matchSince(business) {
+    return Math.max(fleetBank.BANK_MATCH_START_MS,
+        Number(business?.fleet?.enabledAtMs) || 0);
+  }
+
+  async function activeDrivers(businessId) {
+    const snap = await db().collection("fleetDrivers")
+        .where("businessId", "==", businessId)
+        .where("status", "==", "active").get();
+    return snap.docs.map((d) => ({id: d.id, ...d.data()}));
+  }
+
+  /**
+   * One deposit paying one driver: claims the deposit (consumedBy) and
+   * records the payment in one transaction, so a deposit is never used
+   * twice (a shop sale, another driver, a second sync).
+   *
+   * @param {object} p {businessId, creditId, driverId, how, byUid}.
+   * @return {Promise<object>} {paymentId, amountCents}.
+   */
+  async function payFromDeposit(p) {
+    const creditRef = db().collection("businessBankCredits").doc(p.creditId);
+    const ref = db().collection("fleetPayments").doc();
+    let amount = 0;
+    await db().runTransaction(async (tx) => {
+      const doc = await tx.get(creditRef);
+      const credit = doc.exists ? doc.data() || {} : null;
+      if (!credit || credit.businessId !== p.businessId ||
+          credit.removed === true) {
+        throw refuse("fleet_not_found", "not-found");
+      }
+      if (credit.consumedBy && credit.consumedBy.kind) {
+        throw refuse("fleet_deposit_used");
+      }
+      amount = Number(credit.amountCents) || 0;
+      const day = String(credit.dateKey || "") || deps.dayKeyNow();
+      await applyPayment(tx, ref, {businessId: p.businessId,
+        driverId: p.driverId, amount, method: "zelle", paidDayKey: day,
+        byUid: p.byUid, note: "",
+        bank: {creditId: p.creditId, senderName: credit.senderName || "",
+          how: p.how}});
+      tx.set(creditRef, {consumedBy: {kind: "fleet_payment", id: ref.id},
+        consumedAt: FieldValue.serverTimestamp(), consumedByUid: p.byUid,
+        fleetWaiting: false, fleetWaitingReason: FieldValue.delete()},
+      {merge: true});
+    });
+    await audit(p.businessId, p.byUid, "fleet_payment", ref.id,
+        "fleet_payment_recorded",
+        `Zelle $${(amount / 100).toFixed(2)} from the bank ` +
+        `(${p.how === "office" ? "picked by the office" : p.how === "sender" ?
+          "known sender" : "driver's cents"})`);
+    return {paymentId: ref.id, amountCents: amount};
+  }
+
+  /**
+   * After a bank sync: each new deposit from a person pays its driver, or
+   * waits for the office. Never throws (a sync must not fail over Fleet).
+   *
+   * @param {string} businessId The business.
+   * @param {Array<string>} creditIds The deposits the sync wrote.
+   * @return {Promise<object>} {paid, waiting}.
+   */
+  async function matchBankDeposits(businessId, creditIds) {
+    const out = {paid: 0, waiting: 0};
+    try {
+      const ids = [...new Set((creditIds || []).filter(Boolean))];
+      if (ids.length === 0) return out;
+      const {data: business} = await businessOf(businessId);
+      if (!fleetOn(business)) return out;
+      const since = matchSince(business);
+      const refs = ids.map((id) =>
+        db().collection("businessBankCredits").doc(id));
+      const docs = [];
+      for (let i = 0; i < refs.length; i += 100) {
+        docs.push(...await db().getAll(...refs.slice(i, i + 100)));
+      }
+      const drivers = await activeDrivers(businessId);
+      for (const doc of docs) {
+        const credit = doc.exists ? doc.data() || {} : null;
+        if (!credit || credit.businessId !== businessId) continue;
+        if (!fleetBank.depositMatchable(credit, since)) continue;
+        const match = fleetBank.matchDeposit(credit, drivers);
+        if (match.driverId) {
+          try {
+            await payFromDeposit({businessId, creditId: doc.id,
+              driverId: match.driverId, how: match.how, byUid: "bank"});
+            out.paid += 1;
+            continue;
+          } catch (error) {
+            deps.logger.warn("Fleet deposit not applied", {businessId,
+              creditId: doc.id, error: String(error?.message || error)});
+          }
+        }
+        if (credit.fleetWaiting !== true) {
+          await doc.ref.set({fleetWaiting: true,
+            fleetWaitingReason: match.reason || "unknown"}, {merge: true});
+        }
+        out.waiting += 1;
+      }
+    } catch (error) {
+      deps.logger.error("Fleet deposit matching failed", {businessId,
+        error: String(error?.message || error)});
+    }
+    return out;
+  }
+
+  /**
+   * What one bank check costs this business (its Bills price, else
+   * Plaid's).
+   *
+   * @param {string} businessId The business.
+   * @return {Promise<number>} Cents.
+   */
+  async function checkPriceCents(businessId) {
+    try {
+      const cents = await deps.bankCheckPriceCents(businessId);
+      return Number.isFinite(cents) && cents >= 0 ? cents :
+        fleetBank.PLAID_REFRESH_CENTS;
+    } catch (error) {
+      return fleetBank.PLAID_REFRESH_CENTS;
+    }
+  }
+
+  async function bankStatus(uid, businessId) {
+    await requireStaff(uid, businessId);
+    const {data: business} = await businessOf(businessId);
+    const schedule = fleetBank.cleanBankSchedule(
+        business?.fleet?.settings?.bankSchedule);
+    const centsEach = await checkPriceCents(businessId);
+    const link = await deps.bankLinkSummary(businessId);
+    const waitingSnap = await db().collection("businessBankCredits")
+        .where("businessId", "==", businessId)
+        .where("fleetWaiting", "==", true).get();
+    const waiting = waitingSnap.docs.map((d) => ({id: d.id, ...d.data()}))
+        .filter((c) => c.removed !== true &&
+          !(c.consumedBy && c.consumedBy.kind))
+        .sort((a, b) => (Number(b.atMs) || 0) - (Number(a.atMs) || 0))
+        .slice(0, 100)
+        .map((c) => ({id: c.id, amountCents: Number(c.amountCents) || 0,
+          senderName: String(c.senderName || ""), atMs: Number(c.atMs) || 0,
+          dateKey: String(c.dateKey || ""), pending: c.pending === true,
+          reason: String(c.fleetWaitingReason || "unknown")}));
+    return {success: true, schedule,
+      quote: fleetBank.bankScheduleQuote(schedule, centsEach),
+      bank: link, waiting,
+      lastScheduledMs: Number(business?.fleet?.bankLastScheduledMs) || 0};
+  }
+
+  async function bankScheduleSave(uid, businessId, data) {
+    await requireAdmin(uid, businessId);
+    const {ref, data: business} = await businessOf(businessId);
+    if (!fleetOn(business)) throw refuse("fleet_off");
+    const schedule = fleetBank.cleanBankSchedule(data.schedule);
+    const quote = fleetBank.bankScheduleQuote(schedule,
+        await checkPriceCents(businessId));
+    await ref.update({"fleet.settings.bankSchedule": schedule,
+      updatedAt: FieldValue.serverTimestamp()});
+    await audit(businessId, uid, "fleet_settings", businessId,
+        "fleet_bank_schedule", schedule.every > 0 ?
+          `Pay-day bank checks every ${schedule.every} min, ` +
+          `${schedule.fromHour}:00-${schedule.toHour}:00, about ` +
+          `${quote.perMonth} a month ` +
+          `($${(quote.monthCents / 100).toFixed(2)})` :
+          "Pay-day bank checks off");
+    return {success: true, schedule, quote};
+  }
+
+  async function bankAssign(uid, businessId, data) {
+    await requireStaff(uid, businessId);
+    const {data: business} = await businessOf(businessId);
+    if (!fleetOn(business)) throw refuse("fleet_off");
+    const creditId = text(data.creditId, 300);
+    const driverId = text(data.driverId, 180);
+    if (!creditId || !driverId) {
+      throw refuse("fleet_bad_input", "invalid-argument");
+    }
+    const result = await payFromDeposit({businessId, creditId, driverId,
+      how: "office", byUid: uid});
+    return {success: true, ...result};
+  }
+
+  async function bankCheckNow(uid, businessId) {
+    await requireStaff(uid, businessId);
+    const {data: business} = await businessOf(businessId);
+    if (!fleetOn(business)) throw refuse("fleet_off");
+    const outcome = await deps.fleetBankCheckNow(businessId, uid);
+    if (outcome?.noBank) throw refuse("fleet_no_bank");
+    return {success: true, ...(outcome || {})};
+  }
+
+  /**
+   * The 15-minute job: each Fleet business whose pay-day schedule says so
+   * gets one paid refresh; Plaid's webhook then syncs and matching runs.
+   *
+   * @param {number} nowMs Now.
+   * @return {Promise<object>} {asked}.
+   */
+  async function fleetBankTick(nowMs = Date.now()) {
+    const businesses = await db().collection("businesses")
+        .where("fleet.enabled", "==", true).get();
+    let asked = 0;
+    for (const b of businesses.docs) {
+      const fleet = b.get("fleet") || {};
+      const schedule =
+        fleetBank.cleanBankSchedule(fleet.settings?.bankSchedule);
+      if (!fleetBank.bankRefreshDue(schedule, nowMs,
+          Number(fleet.bankLastScheduledMs) || 0)) {
+        continue;
+      }
+      try {
+        await b.ref.update({"fleet.bankLastScheduledMs": nowMs});
+        const done = await deps.fleetScheduledRefresh(b.id);
+        if (done) asked += 1;
+      } catch (error) {
+        deps.logger.warn("Fleet bank check failed", {businessId: b.id,
+          error: String(error?.message || error)});
+      }
+    }
+    return {asked};
   }
 
   // ---- import ----------------------------------------------------------
@@ -815,6 +1082,10 @@ function createFleetHandlers(deps) {
     note_void: noteVoid,
     substitute_save: substituteSave,
     substitute_void: substituteVoid,
+    bank_status: bankStatus,
+    bank_schedule_save: bankScheduleSave,
+    bank_assign: bankAssign,
+    bank_check_now: bankCheckNow,
   };
 
   async function fleetAction(request) {
@@ -908,7 +1179,8 @@ function createFleetHandlers(deps) {
     }
   }
 
-  return {fleetAction, fleetDaily, runFleetDay};
+  return {fleetAction, fleetDaily, runFleetDay, matchBankDeposits,
+    fleetBankTick};
 }
 
 module.exports = {FLEET_REFUSALS, createFleetHandlers};

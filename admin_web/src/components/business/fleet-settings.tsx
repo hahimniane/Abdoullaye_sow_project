@@ -15,6 +15,7 @@ import {
 } from "@/lib/fleet";
 import { moneyText } from "@/lib/invoice-ledger";
 
+import { FleetBankSchedule } from "./fleet-bank";
 import { callFleet } from "./fleet-data";
 import { fleetLang, SaveButton, useFleetRun } from "./fleet-ui";
 
@@ -22,6 +23,7 @@ export function FleetSettings({ businessId, settings }: { businessId: string; se
   return (
     <div className="stack fleet-page">
       <SettingsForm businessId={businessId} settings={settings} />
+      <FleetBankSchedule businessId={businessId} />
       <ImportSheet businessId={businessId} />
     </div>
   );

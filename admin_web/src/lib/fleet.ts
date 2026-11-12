@@ -301,6 +301,8 @@ export type DriverRow = {
   lateCents: number;
   creditCents: number;
   personalCents: number | null;
+  /** The current car's plate fee (rent), 0 when none is set or no car. */
+  rentCents: number;
   search: string;
 };
 
@@ -322,11 +324,89 @@ export function driverRows(data: FleetData, index: FleetIndex, todayKey: string)
       lateCents: balance.lateCents,
       creditCents: balance.creditCents,
       personalCents: Number.isInteger(personal) && personal >= 1 ? personal : null,
+      rentCents: current ? Math.max(0, num(current.rentCents)) : 0,
       search: driverSearchText(d, plate),
     };
   });
   rows.sort((a, b) => (a.status === b.status ? a.name.localeCompare(b.name) : a.status === "active" ? -1 : 1));
   return rows;
+}
+
+// ---------------------------------------------------------------------------
+// The Drivers list's filters (owner, 2026-11-12): who is active, who owes,
+// who is late, who has credit, no car, no plate fee, and the order.
+
+export type DriverView = "active" | "left" | "all";
+export type DriverSort = "name" | "owed" | "cents";
+export type DriverFilter = {
+  view: DriverView;
+  owes: boolean;
+  late: boolean;
+  credit: boolean;
+  noCar: boolean;
+  noFee: boolean;
+  query: string;
+  sort: DriverSort;
+};
+
+export const emptyDriverFilter: DriverFilter = {
+  view: "active", owes: false, late: false, credit: false, noCar: false, noFee: false, query: "", sort: "name",
+};
+
+const isActive = (r: DriverRow) => r.status === "active";
+const driverChecks = {
+  owes: (r: DriverRow) => r.owedCents > 0,
+  late: (r: DriverRow) => r.lateCents > 0,
+  credit: (r: DriverRow) => r.creditCents > 0,
+  noCar: (r: DriverRow) => isActive(r) && !r.carId,
+  noFee: (r: DriverRow) => isActive(r) && Boolean(r.carId) && r.rentCents <= 0,
+};
+
+function inDriverView(r: DriverRow, view: DriverView): boolean {
+  if (view === "active") return isActive(r);
+  if (view === "left") return !isActive(r);
+  return true;
+}
+
+/** The rows on screen: the view, every chip, the search, in the chosen order. */
+export function filterDriverRows(rows: readonly DriverRow[], f: DriverFilter): DriverRow[] {
+  const query = f.query.trim();
+  const out = rows.filter(
+    (r) =>
+      inDriverView(r, f.view) &&
+      (!f.owes || driverChecks.owes(r)) &&
+      (!f.late || driverChecks.late(r)) &&
+      (!f.credit || driverChecks.credit(r)) &&
+      (!f.noCar || driverChecks.noCar(r)) &&
+      (!f.noFee || driverChecks.noFee(r)) &&
+      (!query || matchesSearch(r.search, query)),
+  );
+  const byName = (a: DriverRow, b: DriverRow) => a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true });
+  if (f.sort === "owed") return out.sort((a, b) => b.owedCents - a.owedCents || byName(a, b));
+  if (f.sort === "cents") return out.sort((a, b) => (a.personalCents ?? 100) - (b.personalCents ?? 100) || byName(a, b));
+  return out.sort(byName);
+}
+
+export type DriverCounts = { active: number; left: number; all: number; owes: number; late: number; credit: number; noCar: number; noFee: number };
+
+/** The numbers on the view buttons (everyone) and the chips (within the view). */
+export function driverFilterCounts(rows: readonly DriverRow[], view: DriverView): DriverCounts {
+  const inView = rows.filter((r) => inDriverView(r, view));
+  return {
+    active: rows.filter(isActive).length,
+    left: rows.filter((r) => !isActive(r)).length,
+    all: rows.length,
+    owes: inView.filter(driverChecks.owes).length,
+    late: inView.filter(driverChecks.late).length,
+    credit: inView.filter(driverChecks.credit).length,
+    noCar: inView.filter(driverChecks.noCar).length,
+    noFee: inView.filter(driverChecks.noFee).length,
+  };
+}
+
+/** Whether a chip or the search narrows the list. */
+export function driverFilterNarrowed(f: DriverFilter): boolean {
+  return f.owes || f.late || f.credit || f.noCar || f.noFee || f.query.trim() !== "";
 }
 
 export type Expiry = "missing" | "expired" | "soon" | "ok";

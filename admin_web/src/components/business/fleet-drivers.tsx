@@ -1,16 +1,21 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowLeft, CarFront, Plus, Search, Undo2 } from "lucide-react";
+import { ArrowLeft, CarFront, Plus, Search, Undo2, X } from "lucide-react";
 
 import { Panel } from "@/components/panel";
 import { useBusinessStaff } from "@/lib/business-data";
 import { formatDayKey } from "@/lib/format";
 import {
   dollarsToCents,
+  driverFilterCounts,
+  driverFilterNarrowed,
   driverRows,
+  emptyDriverFilter,
+  filterDriverRows,
   freeCars,
-  matchesSearch,
+  type DriverFilter,
+  type DriverSort,
   returnRuleText,
   zelleAmountText,
   type FleetSettingsView,
@@ -50,11 +55,25 @@ export function FleetDrivers({
   onOpenDriver: (id: string) => void;
   onOpenCar: (id: string) => void;
 }) {
-  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<DriverFilter>(emptyDriverFilter);
   const [adding, setAdding] = useState(false);
   const lang = fleetLang();
   const rows = useMemo(() => driverRows(state.data, state.index, state.todayKey), [state]);
-  const shown = useMemo(() => (search.trim() ? rows.filter((r) => matchesSearch(r.search, search)) : rows), [rows, search]);
+  const shown = useMemo(() => filterDriverRows(rows, filter), [rows, filter]);
+  const counts = useMemo(() => driverFilterCounts(rows, filter.view), [rows, filter.view]);
+  const narrowed = driverFilterNarrowed(filter);
+  const shownOwedCents = useMemo(() => shown.reduce((sum, r) => sum + r.owedCents, 0), [shown]);
+  const chip = (key: "owes" | "late" | "credit" | "noCar" | "noFee", label: string) =>
+    (counts[key] > 0 || filter[key]) && (
+      <button
+        type="button"
+        className={`pk-me-chip${filter[key] ? " on" : ""}`}
+        aria-pressed={filter[key]}
+        onClick={() => setFilter((f) => ({ ...f, [key]: !f[key] }))}
+      >
+        {label} <b data-no-translate>{counts[key]}</b>
+      </button>
+    );
   const selected = driverId ? state.index.driverById.get(driverId) : undefined;
 
   if (selected) {
@@ -88,15 +107,46 @@ export function FleetDrivers({
             <input
               aria-label="Search drivers"
               placeholder="Search name, phone or plate"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              value={filter.query}
+              onChange={(event) => {
+                const query = event.target.value;
+                setFilter((f) => ({ ...f, query }));
+              }}
             />
           </label>
+          <label className="pk-me-select">
+            <span>Sort by</span>
+            <select value={filter.sort} onChange={(e) => {
+              const sort = e.target.value as DriverSort;
+              setFilter((f) => ({ ...f, sort }));
+            }}>
+              <option value="name">Name A–Z</option>
+              <option value="owed">Most owed first</option>
+              <option value="cents">Zelle cents</option>
+            </select>
+          </label>
+        </div>
+        <div className="pk-me-chips fleet-driver-chips">
+          <div className="pk-view" role="group" aria-label="Which drivers">
+            <button type="button" className={filter.view === "active" ? "on" : ""} aria-pressed={filter.view === "active"} onClick={() => setFilter((f) => ({ ...f, view: "active" }))}>Active (<span data-no-translate>{counts.active}</span>)</button>
+            <button type="button" className={filter.view === "left" ? "on" : ""} aria-pressed={filter.view === "left"} onClick={() => setFilter((f) => ({ ...f, view: "left" }))}>Left (<span data-no-translate>{counts.left}</span>)</button>
+            <button type="button" className={filter.view === "all" ? "on" : ""} aria-pressed={filter.view === "all"} onClick={() => setFilter((f) => ({ ...f, view: "all" }))}>Everyone (<span data-no-translate>{counts.all}</span>)</button>
+          </div>
+          {chip("owes", "Owes money")}
+          {chip("late", "Late")}
+          {chip("noFee", "No plate fee")}
+          {chip("noCar", "No car")}
+          {chip("credit", "Has credit")}
+          {narrowed && (
+            <button className="ghost-button" type="button" onClick={() => setFilter((f) => ({ ...emptyDriverFilter, view: f.view, sort: f.sort }))}>
+              <X size={14} /> Clear filters
+            </button>
+          )}
         </div>
         {state.loading && rows.length === 0 ? (
           <div className="empty-state">Loading drivers…</div>
         ) : shown.length === 0 ? (
-          <div className="empty-state">{search.trim() ? "No driver matches that search." : "No drivers yet."}</div>
+          <div className="empty-state">{narrowed ? "No driver matches. Change the search or the filters." : rows.length === 0 ? "No drivers yet." : "No driver in this list."}</div>
         ) : (
           <div className="fleet-grid-scroll">
             <div className="fleet-grid" role="table">
@@ -114,13 +164,20 @@ export function FleetDrivers({
                   <span className="fleet-name" data-no-translate>{r.name}</span>
                   <span data-no-translate>{r.phone || "—"}</span>
                   <span><span className={`fleet-chip ${r.status === "active" ? "ok" : "muted"}`}>{r.status === "active" ? "Active" : "Left"}</span></span>
-                  <span data-no-translate>{r.plate || "—"}</span>
+                  <span>
+                    <span data-no-translate>{r.plate || "—"}</span>
+                    {r.status === "active" && r.carId && r.rentCents <= 0 && <small className="fleet-no-fee">No plate fee</small>}
+                  </span>
                   <span className={`num${r.lateCents > 0 ? " fleet-late" : ""}`} data-no-translate>{r.owedCents > 0 ? moneyText(r.owedCents, lang) : "—"}</span>
                   <span className="num" data-no-translate>{r.creditCents > 0 ? moneyText(r.creditCents, lang) : "—"}</span>
                   <span className="num" data-no-translate>{r.personalCents === null ? "—" : String(r.personalCents).padStart(2, "0")}</span>
                 </button>
               ))}
             </div>
+            <p className="pk-me-foot">
+              <span>Drivers shown:</span> <b data-no-translate>{shown.length}</b>
+              {shownOwedCents > 0 && <> · <span>Owed by these drivers:</span> <b className="pk-owed" data-no-translate>{moneyText(shownOwedCents, lang)}</b></>}
+            </p>
           </div>
         )}
       </Panel>
