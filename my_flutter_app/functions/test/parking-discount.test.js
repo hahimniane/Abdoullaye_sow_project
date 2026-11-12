@@ -233,3 +233,24 @@ describe("parking discount: no WhatsApp payment for a discount", () => {
       after, eventMs: NOW.getTime(), now: NOW}), []);
   });
 });
+
+describe("parking discount: Month end settle for less (shared fixture)", () => {
+  const {billSettlePlan} = require("../parking_bill_payment");
+  const {cases} = require("./fixtures/parking-settle-cases.json");
+  for (const c of cases) {
+    it(c.name, () => {
+      const plan = billSettlePlan(c.customer, c.paidCents);
+      assert.equal(plan.ok, c.expect.ok);
+      if (!c.expect.ok) {
+        assert.equal(plan.reason, c.expect.reason);
+        return;
+      }
+      assert.equal(plan.payableCents, c.expect.payableCents);
+      assert.equal(plan.discountCents, c.expect.discountCents);
+      assert.deepEqual(plan.parts.map((p) => [p.kind, p.id, p.amountCents,
+        p.full]), c.expect.parts);
+      assert.deepEqual(plan.discountParts.map((d) => [d.id, d.amountCents]),
+          c.expect.discountParts);
+    });
+  }
+});

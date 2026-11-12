@@ -30,6 +30,10 @@ export const BILL_PAYMENT_REFUSAL = Object.freeze({
   ALREADY_UNDONE: "bill_payment_already_undone",
   SETTLED_SINCE: "bill_payment_settled_since",
   LEDGER_REQUIRED: "bill_payment_ledger_required",
+  // Settle for a lower amount (docs/PARKING_DISCOUNT.md, Month end).
+  SETTLE_NOT_LESS: "bill_settle_not_less",
+  SETTLE_JOBS_FIRST: "bill_settle_jobs_first",
+  SETTLE_REASON_REQUIRED: "bill_settle_reason_required",
 } as const);
 
 export type BillPaymentRefusal = (typeof BILL_PAYMENT_REFUSAL)[keyof typeof BILL_PAYMENT_REFUSAL];
@@ -47,6 +51,9 @@ export const BILL_PAYMENT_MESSAGES: Record<BillPaymentRefusal, string> = Object.
   [BILL_PAYMENT_REFUSAL.ALREADY_UNDONE]: "This payment was already undone.",
   [BILL_PAYMENT_REFUSAL.SETTLED_SINCE]: "A car or job in this payment was marked paid in full afterwards. Undo that first.",
   [BILL_PAYMENT_REFUSAL.LEDGER_REQUIRED]: "This payment covers lot activities: it needs the ledger permission.",
+  [BILL_PAYMENT_REFUSAL.SETTLE_NOT_LESS]: "The amount paid must be less than the bill. For the full amount, record a normal payment.",
+  [BILL_PAYMENT_REFUSAL.SETTLE_JOBS_FIRST]: "The amount must at least pay the lot jobs on this bill: a discount only comes off parking.",
+  [BILL_PAYMENT_REFUSAL.SETTLE_REASON_REQUIRED]: "Say why the bill was settled for less.",
 });
 
 /** What a callable's rejection says when it carries no reason of ours. */
@@ -195,6 +202,72 @@ export function billPaymentPlan(customer: BillPaymentCustomer | null | undefined
   };
 }
 
+export type BillSettlePlan = {
+  ok: boolean;
+  reason: BillPaymentRefusal | "";
+  payableCents: number;
+  parts: BillPaymentPart[];
+  discountParts: { id: string; label: string; trackingCode: string; amountCents: number }[];
+  discountCents: number;
+};
+
+/**
+ * Settle a customer's bill for a lower amount: the money pays the lot jobs
+ * first (a discount only comes off parking), then the cars oldest first; what
+ * the cars still owe becomes the discount. Mirrors the server's
+ * `billSettlePlan` (parking_bill_payment.js).
+ */
+export function billSettlePlan(customer: BillPaymentCustomer | null | undefined, paidCents: number): BillSettlePlan {
+  const items = billPaymentItems(customer);
+  const payableCents = items.reduce((s, x) => s + x.amountCents, 0);
+  const paid = Math.round(Number(paidCents));
+  const refuse = (reason: BillPaymentRefusal): BillSettlePlan =>
+    ({ ok: false, reason, payableCents, parts: [], discountParts: [], discountCents: 0 });
+  if (payableCents <= 0) return refuse(BILL_PAYMENT_REFUSAL.NOTHING_TO_PAY);
+  if (!Number.isFinite(paid) || paid < 0) return refuse(BILL_PAYMENT_REFUSAL.NO_AMOUNT);
+  if (paid >= payableCents) return refuse(BILL_PAYMENT_REFUSAL.SETTLE_NOT_LESS);
+  const jobs = items.filter((x) => x.kind === "activity");
+  const cars = items.filter((x) => x.kind === "car");
+  if (paid < jobs.reduce((s, x) => s + x.amountCents, 0)) return refuse(BILL_PAYMENT_REFUSAL.SETTLE_JOBS_FIRST);
+  const owed = new Map<string, number>();
+  for (const item of items) owed.set(`${item.kind}:${item.id}`, (owed.get(`${item.kind}:${item.id}`) || 0) + item.amountCents);
+  const parts: Omit<BillPaymentPart, "full">[] = [];
+  const index = new Map<string, number>();
+  const discount = new Map<string, { id: string; label: string; trackingCode: string; amountCents: number }>();
+  let left = paid;
+  for (const item of [...jobs, ...cars]) {
+    const take = Math.min(left, item.amountCents);
+    left -= take;
+    const key = `${item.kind}:${item.id}`;
+    if (take > 0) {
+      const at = index.get(key);
+      if (at !== undefined) parts[at].amountCents += take;
+      else {
+        index.set(key, parts.length);
+        parts.push({ kind: item.kind, id: item.id, label: item.label, trackingCode: item.trackingCode, amountCents: take });
+      }
+    }
+    const rest = item.amountCents - take;
+    if (rest > 0 && item.kind === "car") {
+      const d = discount.get(item.id) ?? { id: item.id, label: item.label, trackingCode: item.trackingCode, amountCents: 0 };
+      d.amountCents += rest;
+      discount.set(item.id, d);
+    }
+  }
+  const discountParts = [...discount.values()];
+  return {
+    ok: true, reason: "", payableCents,
+    parts: parts.map((p) => ({ ...p, full: p.amountCents >= (owed.get(`${p.kind}:${p.id}`) ?? 0) })),
+    discountParts,
+    discountCents: discountParts.reduce((s, d) => s + d.amountCents, 0),
+  };
+}
+
+/** The `bill_settle` request (a bill payment that leaves the rest as a discount). */
+export function billSettleRequest(input: BillPaymentRecordInput & { reason: string }) {
+  return { ...billPaymentRecordRequest(input), action: "bill_settle" as const, reason: text(input.reason, 300) };
+}
+
 /** "A", "A and B", "A, B and 2 more" (French "A et B", "A, B et 1 autre",
  * "A, B et 2 autres") - what a payment was for. No part: "parking". */
 export function billPaymentFor(parts: readonly { label?: unknown }[] | null | undefined, language: "en" | "fr" = "en"): string {
@@ -270,6 +343,8 @@ export type BillPaymentRecord = {
   receivedByStaffId: string;
   note: string;
   parts: { label: string; amountCents: number; full: boolean }[];
+  /** Settled for less: what was taken off as a discount (0 for a plain payment). */
+  discountCents: number;
   status: "recorded" | "undone";
   /** When it was recorded (ms), 0 when unknown. */
   atMs: number;
@@ -288,6 +363,7 @@ export function billPaymentRecord(row: Row): BillPaymentRecord {
     receivedByStaffId: text(row.receivedByStaffId, 128),
     note: text(row.note, 300),
     parts: parts.map((p) => ({ label: text(p?.label, 80), amountCents: cents(p?.amountCents), full: p?.full === true })),
+    discountCents: cents(row.discountCents),
     status: text(row.status, 20) === "undone" ? "undone" : "recorded",
     atMs: cents(row.atMs),
     undoneAtMs: cents(row.undoneAtMs),

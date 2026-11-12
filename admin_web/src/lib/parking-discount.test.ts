@@ -67,3 +67,23 @@ describe("parking discount (console): French History lines", async () => {
     assert.equal(translateAuditSummary("Discount of $32.00 undone"), "Remise de $32.00 annulée");
   });
 });
+
+describe("parking discount (console): Month end settle for less", async () => {
+  const { billSettlePlan } = await import("./parking-bill-payment.ts");
+  const settleUrl = new URL("../../../my_flutter_app/functions/test/fixtures/parking-settle-cases.json", import.meta.url);
+  const { cases } = JSON.parse(readFileSync(settleUrl, "utf8")) as { cases: { name: string; paidCents: number; customer: Row; expect: Row }[] };
+  for (const c of cases) {
+    it(c.name, () => {
+      const plan = billSettlePlan(c.customer as never, c.paidCents);
+      assert.equal(plan.ok, c.expect.ok);
+      if (!c.expect.ok) {
+        assert.equal(plan.reason, c.expect.reason);
+        return;
+      }
+      assert.equal(plan.payableCents, c.expect.payableCents);
+      assert.equal(plan.discountCents, c.expect.discountCents);
+      assert.deepEqual(plan.parts.map((p) => [p.kind, p.id, p.amountCents, p.full]), c.expect.parts);
+      assert.deepEqual(plan.discountParts.map((d) => [d.id, d.amountCents]), c.expect.discountParts);
+    });
+  }
+});

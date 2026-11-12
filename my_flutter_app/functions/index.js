@@ -16344,7 +16344,7 @@ async function parkingInvoicesAction(request, uid, action) {
 // ---------------------------------------------------------------------------
 
 const PARKING_BILL_PAYMENT_ACTIONS = Object.freeze(
-    ["bill_payment_record", "bill_payment_undo"]);
+    ["bill_payment_record", "bill_payment_undo", "bill_settle"]);
 
 /**
  * A refusal a client can name: the code in `details.reason`.
@@ -16406,6 +16406,10 @@ async function parkingBillCustomer(db, businessDoc, monthKey, customerKey,
  */
 async function recordParkingBillPayment(db, args) {
   const {businessDoc, user, uid, data, now} = args;
+  // Settle for a lower amount (docs/PARKING_DISCOUNT.md, Month end): the
+  // money as a normal bill payment, the rest of the cars' charges as a
+  // discount on each car, one document, one Undo.
+  const settle = args.settle === true;
   const businessId = businessDoc.id;
   const R = parkingBillPayment.BILL_PAYMENT_REFUSAL;
   const monthKey = cleanText(data.monthKey, 7);
@@ -16414,19 +16418,27 @@ async function recordParkingBillPayment(db, args) {
     throw parkingBillPaymentRefusal(R.MONTH_INVALID, "invalid-argument");
   }
   const receivedByStaffId = cleanText(data.receivedByStaffId, 180);
-  if (!receivedByStaffId) {
+  const paidCents = Math.round(Number(data.amountCents));
+  const reason = cleanText(data.reason, parkingDiscount.MAX_REASON);
+  if (settle && !reason) {
+    throw parkingBillPaymentRefusal(R.SETTLE_REASON_REQUIRED,
+        "invalid-argument");
+  }
+  if (!receivedByStaffId && !(settle && paidCents === 0)) {
     throw parkingBillPaymentRefusal(R.RECEIVER_REQUIRED, "invalid-argument");
   }
   const receivedVia = normalizeDirectPaymentMethod(
       cleanText(data.receivedVia, 40));
-  const note = cleanText(data.note, 500);
+  const note = cleanText(data.note, 500) || (settle ? reason : "");
   const customerKey = cleanText(data.customerKey, 200);
   const customer = await parkingBillCustomer(db, businessDoc, monthKey,
       customerKey, now);
   if (!customer) throw parkingBillPaymentRefusal(R.CUSTOMER_NOT_FOUND);
-  const plan = parkingBillPayment.billPaymentPlan(customer,
-      Number(data.amountCents));
+  const plan = settle ?
+    parkingBillPayment.billSettlePlan(customer, paidCents) :
+    parkingBillPayment.billPaymentPlan(customer, Number(data.amountCents));
   if (!plan.ok) throw parkingBillPaymentRefusal(plan.reason);
+  const discountParts = settle ? plan.discountParts : [];
   // The preview the person confirmed must be the bill paid: if a payment
   // landed since, the oldest-first split may differ.
   const expected = Math.round(Number(data.expectedPayableCents));
@@ -16443,10 +16455,21 @@ async function recordParkingBillPayment(db, args) {
   const at = FirestoreTimestamp.now();
   const sessions = [];
   const parts = plan.parts.map((p) => ({...p}));
+  const discountOf = new Map(discountParts.map((d) => [d.id, d.amountCents]));
+  // A car the money did not reach still gets its discount.
+  const discountOnly = discountParts.filter((d) =>
+    !parts.some((p) => p.kind === "car" && p.id === d.id));
+  const discountEntry = (carId, cents, paymentCents) => ({
+    id: `${billPaymentId}_${carId}`.slice(0, 80),
+    amountCents: cents, reason, mode: "settle", paymentCents,
+    givenByUid: uid, at, atMs: at.toMillis(), billPaymentId});
   await db.runTransaction(async (tx) => {
     const refs = parts.map((p) => db.collection(
         p.kind === "car" ? "parkedCars" : "lotActivities").doc(p.id));
+    const onlyRefs = discountOnly.map((d) =>
+      db.collection("parkedCars").doc(d.id));
     const snaps = await Promise.all(refs.map((ref) => tx.get(ref)));
+    const onlySnaps = await Promise.all(onlyRefs.map((ref) => tx.get(ref)));
     const writes = [];
     snaps.forEach((snap, i) => {
       const part = parts[i];
@@ -16459,14 +16482,29 @@ async function recordParkingBillPayment(db, args) {
         const dailyRateCents = Math.max(0, Math.round(
             centsFromDollars(row.dailyRate) ||
             Number(row.dailyRateCents) || 0));
-        const carPlan = businessParkingPartialPaymentPlan({entry: row,
+        const extraDiscount = discountOf.get(part.id) || 0;
+        const discountNow =
+          parkingDiscount.discountListCents(row.parkingDiscounts) +
+          extraDiscount;
+        // Planned with the discount it gets, so a stay the payment and the
+        // discount cover together takes the paid shape.
+        const carPlan = businessParkingPartialPaymentPlan({
+          entry: {...row, parkingDiscountCents: discountNow},
           amountCents: part.amountCents, dailyRateCents});
         if (!carPlan.ok || carPlan.appliedCents !== part.amountCents) {
           throw parkingBillPaymentRefusal(R.BILL_CHANGED);
         }
-        writes.push(() => tx.update(refs[i], parkingPartPaymentUpdate({
+        const update = parkingPartPaymentUpdate({
           plan: carPlan, receivedVia, receivedByStaffId, uid, note,
-          extra: {billPaymentId}})));
+          extra: {billPaymentId}});
+        if (extraDiscount > 0) {
+          Object.assign(update, {
+            parkingDiscounts: FirestoreFieldValue.arrayUnion(
+                discountEntry(part.id, extraDiscount, part.amountCents)),
+            parkingDiscountCents: discountNow,
+          });
+        }
+        writes.push(() => tx.update(refs[i], update));
       } else {
         const actPlan = lotActivityPaymentPlan({activity: row,
           amountCents: part.amountCents, source: "cash"});
@@ -16485,8 +16523,40 @@ async function recordParkingBillPayment(db, args) {
           receivedByStaffId, uid, note, now, extra: {billPaymentId}}));
       }
     });
+    onlySnaps.forEach((snap, i) => {
+      const row = snap.exists ? snap.data() || {} : null;
+      if (!row || String(row.businessId || "") !== businessId ||
+          row.voided === true) {
+        throw parkingBillPaymentRefusal(R.BILL_CHANGED);
+      }
+      const cents = discountOnly[i].amountCents;
+      const give = parkingDiscount.discountGivePlan({car: row,
+        amountCents: cents, reason, now});
+      if (!give.ok) throw parkingBillPaymentRefusal(R.BILL_CHANGED);
+      const update = {
+        parkingDiscounts: FirestoreFieldValue.arrayUnion(
+            discountEntry(discountOnly[i].id, cents, 0)),
+        parkingDiscountCents:
+          parkingDiscount.discountListCents(row.parkingDiscounts) + cents,
+        updatedAt: FirestoreFieldValue.serverTimestamp(),
+      };
+      if (give.settles) {
+        Object.assign(update, {
+          paymentStatus: "paid", status: "reserved",
+          directPaymentReceived: true, directPaymentMarkedByUid: uid,
+          directPaymentReceivedAt: FirestoreFieldValue.serverTimestamp(),
+          ...directPaymentPayoutFields(
+              Math.max(0, Math.round(Number(row.amountPaidCents) || 0))),
+        });
+      }
+      writes.push(() => tx.update(onlyRefs[i], update));
+    });
     for (const write of writes) write();
     tx.set(billRef, {
+      ...(settle ? {mode: "settle", reason,
+        discountCents: plan.discountCents,
+        discountParts: discountParts.map((d) => ({id: d.id, label: d.label,
+          trackingCode: d.trackingCode, amountCents: d.amountCents}))} : {}),
       businessId,
       monthKey,
       customerKey,
@@ -16504,7 +16574,8 @@ async function recordParkingBillPayment(db, args) {
       })),
       // What the whole bill owed before, and still owes after.
       dueBeforeCents: customer.dueCents,
-      leftCents: plan.leftCents,
+      leftCents: settle ?
+        Math.max(0, customer.dueCents - plan.payableCents) : plan.leftCents,
       billPaidCents: (Number(customer.monthPaidCents) || 0) +
         Math.round(Number(data.amountCents)),
       status: "recorded",
@@ -16533,17 +16604,27 @@ async function recordParkingBillPayment(db, args) {
       changes: [],
     }).catch(() => null);
   }
-  const receipt = await sendParkingBillReceipt(db, {businessDoc,
-    billPaymentId, now}).catch((error) => {
-    logger.warn("Bill payment receipt failed", {billPaymentId,
-      error: String(error?.message || error).slice(0, 300)});
-    return parkingWhatsApp.STATUS.FAILED;
-  });
+  for (const d of discountParts) {
+    await writeLotLedgerAudit({
+      businessId, entityType: "parking", entityId: d.id,
+      action: "parking_discount_given", byStaffId: uid, changes: [],
+      summary: `Discount of ${discountMoney(d.amountCents)} given (${reason})`,
+    }).catch(() => null);
+  }
+  const receipt = paidCents <= 0 && settle ? "" :
+    await sendParkingBillReceipt(db, {businessDoc,
+      billPaymentId, now}).catch((error) => {
+      logger.warn("Bill payment receipt failed", {billPaymentId,
+        error: String(error?.message || error).slice(0, 300)});
+      return parkingWhatsApp.STATUS.FAILED;
+    });
   return {
     success: true,
     billPaymentId,
     amountCents: Math.round(Number(data.amountCents)),
-    leftCents: plan.leftCents,
+    discountCents: settle ? plan.discountCents : 0,
+    leftCents: settle ?
+      Math.max(0, customer.dueCents - plan.payableCents) : plan.leftCents,
     parts: parts.map((p) => ({kind: p.kind, id: p.id, label: p.label,
       amountCents: p.amountCents, full: p.full === true})),
     receipt: receipt || "",
@@ -16586,6 +16667,23 @@ async function undoParkingBillPayment(db, args) {
     const refs = parts.map((p) => db.collection(
         p.kind === "car" ? "parkedCars" : "lotActivities").doc(String(p.id)));
     const snaps = await Promise.all(refs.map((ref) => tx.get(ref)));
+    // A settle's discounts on cars the money did not reach.
+    const onlyIds = (Array.isArray(bill.discountParts) ? bill.discountParts :
+      []).map((d) => String(d.id)).filter((id) =>
+      !parts.some((p) => p.kind === "car" && String(p.id) === id));
+    const onlyRefs = onlyIds.map((id) => db.collection("parkedCars").doc(id));
+    const onlySnaps = await Promise.all(onlyRefs.map((ref) => tx.get(ref)));
+    const discountUndo = (row) => {
+      const list = Array.isArray(row.parkingDiscounts) ?
+        row.parkingDiscounts : [];
+      if (!list.some((d) => d?.billPaymentId === billRef.id &&
+          d.undone !== true)) return null;
+      const discounts = list.map((d) => d?.billPaymentId === billRef.id ?
+        {...d, undone: true, undoneByUid: uid, undoneAtMs: nowTs.toMillis()} :
+        d);
+      return {parkingDiscounts: discounts,
+        parkingDiscountCents: parkingDiscount.discountListCents(discounts)};
+    };
     const instalments = await Promise.all(parts.map((p) =>
       p.kind === "activity" ?
         tx.get(db.collection("lotActivityPayments")
@@ -16600,8 +16698,19 @@ async function undoParkingBillPayment(db, args) {
         const list = Array.isArray(row.parkingPayments) ?
           row.parkingPayments : [];
         const mine = list.filter((p) => p?.billPaymentId === billRef.id);
-        // Already taken off by the car's own undo: nothing left to do here.
-        if (mine.length === 0) return;
+        const lessDiscount = discountUndo(row);
+        // Already taken off by the car's own undo: only a settle's discount
+        // may be left to take off.
+        if (mine.length === 0) {
+          if (lessDiscount) {
+            writes.push(() => tx.update(refs[i], {...lessDiscount,
+              ...(String(row.paymentStatus || "") === "paid" ?
+                {paymentStatus: "awaiting_direct_payment",
+                  directPaymentReceived: false} : {}),
+              updatedAt: FirestoreFieldValue.serverTimestamp()}));
+          }
+          return;
+        }
         const listed = list.reduce((sum, p) => sum + parkingPaymentCents(p), 0);
         const stored = Math.round(Number(row.amountPaidCents) || 0);
         if (stored !== listed) throw parkingBillPaymentRefusal(R.SETTLED_SINCE);
@@ -16617,6 +16726,7 @@ async function undoParkingBillPayment(db, args) {
             ...p, reverted: true, revertedByUid: uid, revertedAt: nowTs}))],
           amountPaidCents: newPaid,
           amountPaid: dollarsFromCents(newPaid),
+          ...(lessDiscount || {}),
           updatedAt: FirestoreFieldValue.serverTimestamp(),
         };
         if (String(row.paymentStatus || "") === "paid") {
@@ -16665,6 +16775,17 @@ async function undoParkingBillPayment(db, args) {
         writes.push(() => tx.set(refs[i], update, {merge: true}));
         undone.push({kind: "activity", id: part.id, amountCents: removed});
       }
+    });
+    onlySnaps.forEach((snap, i) => {
+      if (!snap.exists) return;
+      const row = snap.data() || {};
+      const lessDiscount = discountUndo(row);
+      if (!lessDiscount) return;
+      writes.push(() => tx.update(onlyRefs[i], {...lessDiscount,
+        ...(String(row.paymentStatus || "") === "paid" ?
+          {paymentStatus: "awaiting_direct_payment",
+            directPaymentReceived: false} : {}),
+        updatedAt: FirestoreFieldValue.serverTimestamp()}));
     });
     for (const write of writes) write();
     tx.update(billRef, {
@@ -16828,9 +16949,9 @@ async function parkingBillPaymentAction(request, uid, action) {
     throw new HttpsError("not-found", "Business not found",
         {reason: "business_not_found"});
   }
-  if (action === "bill_payment_record") {
+  if (action === "bill_payment_record" || action === "bill_settle") {
     return recordParkingBillPayment(db, {businessDoc, user, uid, data,
-      now: new Date()});
+      now: new Date(), settle: action === "bill_settle"});
   }
   return undoParkingBillPayment(db, {businessDoc, user, uid, data});
 }

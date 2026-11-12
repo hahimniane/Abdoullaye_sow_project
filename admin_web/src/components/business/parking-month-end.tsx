@@ -32,6 +32,8 @@ import {
   billPaymentFor,
   billPaymentPlan,
   billPaymentRecordRequest,
+  billSettlePlan,
+  billSettleRequest,
   billPaymentRefusalText,
   billPaymentsByCustomer,
   billPaymentUndoRequest,
@@ -126,6 +128,10 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
   const [payNote, setPayNote] = useState("");
   const [payBusy, setPayBusy] = useState(false);
   const [payError, setPayError] = useState("");
+  // Settle for a lower amount (docs/PARKING_DISCOUNT.md): the same sheet, the
+  // rest of the cars' charges taken off as a discount, with a reason.
+  const [payMode, setPayMode] = useState<"pay" | "settle">("pay");
+  const [settleReason, setSettleReason] = useState("");
   // "Undo": a whole payment at once, after a confirm.
   const [undoTarget, setUndoTarget] = useState<BillPaymentRecord | null>(null);
   const [undoBusy, setUndoBusy] = useState(false);
@@ -347,6 +353,8 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
     setPayBy(staffOptions.some((s) => s.id === me) ? me : "");
     setPayNote(`Month end — ${monthLabel(monthKey)}`);
     setPayError("");
+    setPayMode("pay");
+    setSettleReason("");
   }
 
   // One request: the server splits the amount oldest first, records each part
@@ -354,12 +362,19 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
   // payable total rides along, so a bill that moved is refused, not guessed.
   async function runPay(customer: ParkingMonthCustomer) {
     if (payBusy) return;
-    if (!payBy) {
+    if (!payBy && !(payMode === "settle" && dollarsToCents(payAmount) === 0)) {
       setPayError("Say who received the money.");
       return;
     }
     const amountCents = dollarsToCents(payAmount);
-    const plan = billPaymentPlan(customer, Number.isFinite(amountCents) ? amountCents : 0);
+    const settling = payMode === "settle";
+    if (settling && !settleReason.trim()) {
+      setPayError(BILL_PAYMENT_MESSAGES[BILL_PAYMENT_REFUSAL.SETTLE_REASON_REQUIRED]);
+      return;
+    }
+    const plan = settling
+      ? billSettlePlan(customer, Number.isFinite(amountCents) ? amountCents : -1)
+      : billPaymentPlan(customer, Number.isFinite(amountCents) ? amountCents : 0);
     if (!plan.ok) {
       setPayError(BILL_PAYMENT_MESSAGES[plan.reason as BillPaymentRefusal]);
       return;
@@ -367,12 +382,14 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
     setPayBusy(true);
     setPayError("");
     try {
-      const result = await httpsCallable(functions, "updateBusinessParkingEntry")(billPaymentRecordRequest({
+      const input = {
         businessId, monthKey, customerKey: customer.key, amountCents, receivedVia: payVia,
         receivedByStaffId: payBy, note: payNote, expectedPayableCents: plan.payableCents,
-      }));
+      };
+      const result = await httpsCallable(functions, "updateBusinessParkingEntry")(
+        settling ? billSettleRequest({ ...input, reason: settleReason }) : billPaymentRecordRequest(input));
       const data = (result.data && typeof result.data === "object" ? result.data : {}) as { leftCents?: number; receipt?: string };
-      const left = Number.isFinite(Number(data.leftCents)) ? Number(data.leftCents) : plan.leftCents;
+      const left = Number.isFinite(Number(data.leftCents)) ? Number(data.leftCents) : ("leftCents" in plan ? plan.leftCents : 0);
       setPayKey("");
       setFlash(
         <>
@@ -676,6 +693,7 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
                                 {by && <> · <span>received by</span> <span data-no-translate>{by}</span></>}
                               </small>
                               <small><span>Covered:</span> <span data-no-translate>{billPaymentFor(p.parts, lang)}</span></small>
+                              {p.discountCents > 0 && <small><span>Settled for less · discount</span> <b data-no-translate>-{moneyText(p.discountCents)}</b></small>}
                             </span>
                             {p.status === "recorded" && (
                               <button className="ghost-button" type="button" disabled={undoBusy} onClick={() => { setUndoTarget(p); setUndoError(""); }}><Undo2 size={14} /> Undo payment</button>
@@ -793,19 +811,29 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
         if (!customer) return null;
         const typed = payAmount.trim() !== "";
         const amountCents = dollarsToCents(payAmount);
+        const settling = payMode === "settle";
         const plan = billPaymentPlan(customer, Number.isFinite(amountCents) ? amountCents : 0);
+        const settlePlan = billSettlePlan(customer, Number.isFinite(amountCents) ? amountCents : -1);
         return (
           <div className="lst-modal-overlay" role="dialog" aria-modal="true" {...overlayDismiss(() => { if (!payBusy) setPayKey(""); })}>
             <div className="lst-modal" style={{ maxWidth: 600 }} onClick={(e) => e.stopPropagation()}>
               <header className="lst-modal-head">
-                <div><h3>Record a payment</h3><p><span data-no-translate>{customer.customerName || "—"}</span> · {monthLabel(monthKey, lang)}</p></div>
+                <div><h3>{settling ? "Settle for a lower amount" : "Record a payment"}</h3><p><span data-no-translate>{customer.customerName || "—"}</span> · {monthLabel(monthKey, lang)}</p></div>
                 <button className="lst-icon-btn" type="button" disabled={payBusy} onClick={() => setPayKey("")} aria-label="Close"><X size={18} /></button>
               </header>
               <div className="lst-modal-body">
                 {payError && <div className="lst-form-error" role="alert">{payError}</div>}
-                <p className="lst-hint" style={{ marginTop: 0 }}>
+                <div className="pk-mode-switch" role="group" aria-label="Payment kind">
+                  <button type="button" className={settling ? "lst-btn ghost" : "lst-btn"} aria-pressed={!settling} disabled={payBusy} onClick={() => { setPayMode("pay"); setPayError(""); }}>Full or part payment</button>
+                  <button type="button" className={settling ? "lst-btn" : "lst-btn ghost"} aria-pressed={settling} disabled={payBusy} onClick={() => { setPayMode("settle"); setPayError(""); }}>Settle for a lower amount</button>
+                </div>
+                {settling ? (
+                  <p className="lst-hint" style={{ marginTop: 0 }}>
+                    <span>The bill is</span> <b data-no-translate>{moneyText(settlePlan.payableCents)}</b>. <span>Type what the customer pays now: the rest is recorded as a discount and the bill closes at $0.</span>
+                  </p>
+                ) : <p className="lst-hint" style={{ marginTop: 0 }}>
                   <span>It pays the oldest charges first, and is kept as one payment you can undo.</span> <span>Most you can record:</span> <b data-no-translate>{moneyText(plan.payableCents)}</b>
-                </p>
+                </p>}
                 <div className="lst-form-grid">
                   <label className="lst-field"><span>Amount received ($)</span>
                     <input value={payAmount} inputMode="decimal" autoComplete="off" placeholder="0.00" aria-label="Amount received" disabled={payBusy} onChange={(e) => { setPayAmount(e.target.value); setPayError(""); }} />
@@ -820,11 +848,34 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
                       <ReceivedByOptions staffOptions={staffOptions} placeholder="Who took the money?" />
                     </select>
                   </label>
+                  {settling && (
+                    <label className="lst-field wide"><span>Why (required)</span>
+                      <input value={settleReason} maxLength={300} disabled={payBusy} placeholder="e.g. Agreed with the owner, long stay" aria-label="Why the discount was agreed" onChange={(e) => { setSettleReason(e.target.value); setPayError(""); }} />
+                    </label>
+                  )}
                   <label className="lst-field wide"><span>Note</span><input value={payNote} disabled={payBusy} onChange={(e) => setPayNote(e.target.value)} /></label>
                 </div>
                 <div aria-live="polite">
                   {!typed ? (
                     <p className="lst-hint">Type the amount received to see what it pays off.</p>
+                  ) : settling ? (
+                    settlePlan.ok ? (
+                      <ul className="pk-settle-list">
+                        {settlePlan.parts.map((x) => (
+                          <li key={`${x.kind}:${x.id}`}>
+                            <span><span>Paid</span> · <span data-no-translate>{x.label}</span></span><strong>{moneyText(x.amountCents)}</strong>
+                          </li>
+                        ))}
+                        {settlePlan.discountParts.map((d) => (
+                          <li key={`discount:${d.id}`}>
+                            <span><span>Discount</span> · <span data-no-translate>{d.label}</span></span><strong>-{moneyText(d.amountCents)}</strong>
+                          </li>
+                        ))}
+                        <li className="pk-settle-total"><span>Left on the bill:</span><strong>{moneyText(0)}</strong></li>
+                      </ul>
+                    ) : (
+                      <div className="lst-form-error" role="alert">{BILL_PAYMENT_MESSAGES[settlePlan.reason as BillPaymentRefusal]}</div>
+                    )
                   ) : plan.ok ? (
                     <>
                       <p className="lst-hint" style={{ marginBottom: 0 }}>Pays off:</p>
@@ -849,8 +900,10 @@ export function ParkingMonthEnd({ businessId, staff = [], business, businessName
               <footer className="lst-modal-foot">
                 {payBusy && <span className="lst-hint" role="status" style={{ marginRight: "auto" }}><RefreshCw className="spin" size={13} /> Saving…</span>}
                 <button className="lst-btn ghost" type="button" disabled={payBusy} onClick={() => setPayKey("")}>Cancel</button>
-                <button className="lst-add" type="button" disabled={payBusy || !payBy || !plan.ok} onClick={() => void runPay(customer)}>
-                  <Banknote size={16} /> Record payment
+                <button className="lst-add" type="button"
+                  disabled={payBusy || (settling ? (!settlePlan.ok || (amountCents > 0 && !payBy) || !settleReason.trim()) : (!payBy || !plan.ok))}
+                  onClick={() => void runPay(customer)}>
+                  <Banknote size={16} /> {settling ? "Settle" : "Record payment"}
                 </button>
               </footer>
             </div>

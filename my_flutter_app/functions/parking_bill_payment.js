@@ -32,6 +32,10 @@ const BILL_PAYMENT_REFUSAL = Object.freeze({
   ALREADY_UNDONE: "bill_payment_already_undone",
   SETTLED_SINCE: "bill_payment_settled_since",
   LEDGER_REQUIRED: "bill_payment_ledger_required",
+  // Settle for a lower amount (docs/PARKING_DISCOUNT.md, Month end).
+  SETTLE_NOT_LESS: "bill_settle_not_less",
+  SETTLE_JOBS_FIRST: "bill_settle_jobs_first",
+  SETTLE_REASON_REQUIRED: "bill_settle_reason_required",
 });
 
 const BILL_PAYMENT_MESSAGES = Object.freeze({
@@ -53,6 +57,12 @@ const BILL_PAYMENT_MESSAGES = Object.freeze({
     "marked paid in full afterwards. Undo that first.",
   [BILL_PAYMENT_REFUSAL.LEDGER_REQUIRED]: "This payment covers lot " +
     "activities: it needs the ledger permission.",
+  [BILL_PAYMENT_REFUSAL.SETTLE_NOT_LESS]: "The amount paid must be less " +
+    "than the bill. For the full amount, record a normal payment.",
+  [BILL_PAYMENT_REFUSAL.SETTLE_JOBS_FIRST]: "The amount must at least pay " +
+    "the lot jobs on this bill: a discount only comes off parking.",
+  [BILL_PAYMENT_REFUSAL.SETTLE_REASON_REQUIRED]: "Say why the bill was " +
+    "settled for less.",
 });
 
 /**
@@ -158,6 +168,72 @@ function billPaymentPlan(customer, amountCents) {
 }
 
 /**
+ * Settle a customer's bill for a lower amount (Month end): the money pays
+ * the lot jobs first (a discount only comes off parking), then the cars
+ * oldest first; what the cars still owe becomes the discount, per car. One
+ * bill payment records both, and one Undo removes both.
+ *
+ * @param {object} customer A Month end customer.
+ * @param {number} paidCents The money received (0 allowed: all discount).
+ * @return {{ok: boolean, reason: string, payableCents: number,
+ *   parts: Array<object>, discountParts: Array<{id: string, label: string,
+ *   trackingCode: string, amountCents: number}>, discountCents: number}}
+ *   `parts` as billPaymentPlan's (what the money paid).
+ */
+function billSettlePlan(customer, paidCents) {
+  const items = billPaymentItems(customer);
+  const payableCents = items.reduce((s, x) => s + x.amountCents, 0);
+  const paid = Math.round(Number(paidCents));
+  const refuse = (reason) => ({ok: false, reason, payableCents, parts: [],
+    discountParts: [], discountCents: 0});
+  if (payableCents <= 0) return refuse(BILL_PAYMENT_REFUSAL.NOTHING_TO_PAY);
+  if (!Number.isFinite(paid) || paid < 0) {
+    return refuse(BILL_PAYMENT_REFUSAL.NO_AMOUNT);
+  }
+  if (paid >= payableCents) return refuse(BILL_PAYMENT_REFUSAL.SETTLE_NOT_LESS);
+  const jobs = items.filter((x) => x.kind === "activity");
+  const cars = items.filter((x) => x.kind === "car");
+  const jobCents = jobs.reduce((s, x) => s + x.amountCents, 0);
+  if (paid < jobCents) return refuse(BILL_PAYMENT_REFUSAL.SETTLE_JOBS_FIRST);
+  const owed = new Map();
+  for (const item of items) {
+    const key = `${item.kind}:${item.id}`;
+    owed.set(key, (owed.get(key) || 0) + item.amountCents);
+  }
+  const parts = [];
+  const index = new Map();
+  const discount = new Map();
+  let left = paid;
+  for (const item of [...jobs, ...cars]) {
+    const take = Math.min(left, item.amountCents);
+    left -= take;
+    const key = `${item.kind}:${item.id}`;
+    if (take > 0) {
+      if (index.has(key)) {
+        parts[index.get(key)].amountCents += take;
+      } else {
+        index.set(key, parts.length);
+        parts.push({kind: item.kind, id: item.id, label: item.label,
+          trackingCode: item.trackingCode, amountCents: take});
+      }
+    }
+    const rest = item.amountCents - take;
+    if (rest > 0 && item.kind === "car") {
+      const d = discount.get(item.id) || {id: item.id, label: item.label,
+        trackingCode: item.trackingCode, amountCents: 0};
+      d.amountCents += rest;
+      discount.set(item.id, d);
+    }
+  }
+  for (const part of parts) {
+    part.full = part.amountCents >= owed.get(`${part.kind}:${part.id}`);
+  }
+  const discountParts = [...discount.values()];
+  return {ok: true, reason: "", payableCents, parts, discountParts,
+    discountCents: discountParts.reduce((s, d) => s + d.amountCents, 0)};
+}
+
+/**
  * "2014 Toyota Corolla, 2016 RAV4 and 2 more" - what a payment was for.
  *
  * @param {Array<object>} parts billPaymentPlan's parts.
@@ -185,4 +261,5 @@ module.exports = {
   billPaymentFor,
   billPaymentItems,
   billPaymentPlan,
+  billSettlePlan,
 };

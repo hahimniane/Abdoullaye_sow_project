@@ -177,3 +177,73 @@ describe("settle for a lower amount", () => {
         {entryId: id, amountCents: 100, reason: "x"}));
   });
 });
+
+describe("Month end: settle a customer's bill for less", () => {
+  const {occupancyEndMs} = require("../parking_occupancy");
+  const now = new Date();
+  const prev = new Date(Date.UTC(now.getUTCFullYear(),
+      now.getUTCMonth() - 1, 1));
+  const MONTH = prev.toISOString().slice(0, 7);
+  const day = (d) => `${MONTH}-${String(d).padStart(2, "0")}`;
+  const PHONE = "+12015559900";
+  const KEY = "phone:2015559900";
+  const settle = (uid, extra) => act(uid, "bill_settle", {businessId: BIZ,
+    monthKey: MONTH, customerKey: KEY, ...extra});
+  let carA;
+  let carB;
+
+  before(async () => {
+    const stay = (id, from, to, cents) => db.collection("parkedCars").doc(id)
+        .set({businessId: BIZ, source: "business", enteredByBusiness: true,
+          paymentMethod: "direct", paymentStatus: "awaiting_direct_payment",
+          status: "reserved", customerName: "Settle Customer",
+          customerPhone: PHONE, carMake: "Honda", carModel: "Accord",
+          carYear: "2014", dailyRate: 12,
+          parkingDate: Timestamp.fromDate(new Date(`${day(from)}T12:00:00Z`)),
+          parkingEndDate: Timestamp.fromDate(new Date(`${day(to)}T12:00:00Z`)),
+          amountDueCents: cents, totalCostCents: cents,
+          occupancyEndMs: occupancyEndMs({
+            parkingEndDate: new Date(`${day(to)}T12:00:00Z`)}) ||
+            Date.parse(`${day(to)}T23:59:59Z`)});
+    carA = "pkdisc-settle-a";
+    carB = "pkdisc-settle-b";
+    await stay(carA, 1, 20, 24000);
+    await stay(carB, 10, 28, 22800);
+  });
+
+  it("$468 owed, $300 paid: oldest first, the rest a discount", async () => {
+    await assert.rejects(settle(STAFF, {amountCents: 30000,
+      receivedVia: "cash", receivedByStaffId: STAFF, reason: " "}),
+    (e) => e.details?.reason === "bill_settle_reason_required");
+    await assert.rejects(settle(STAFF, {amountCents: 46800,
+      receivedVia: "cash", receivedByStaffId: STAFF, reason: "x"}),
+    (e) => e.details?.reason === "bill_settle_not_less");
+    const answer = await settle(STAFF, {amountCents: 30000,
+      receivedVia: "cash", receivedByStaffId: STAFF,
+      reason: "Agreed at month end"});
+    assert.equal(answer.discountCents, 16800);
+    const a = await car(carA);
+    const b = await car(carB);
+    assert.equal(a.amountPaidCents, 24000);
+    assert.equal(a.paymentStatus, "paid");
+    assert.equal(b.amountPaidCents, 6000);
+    assert.equal(b.parkingDiscountCents, 16800);
+    assert.equal(b.paymentStatus, "paid");
+    assert.equal(b.parkingDiscounts[0].billPaymentId, answer.billPaymentId);
+    const bill = (await db.collection("parkingBillPayments")
+        .doc(answer.billPaymentId).get()).data();
+    assert.equal(bill.mode, "settle");
+    assert.equal(bill.discountCents, 16800);
+
+    // One Undo takes off the money and the discount.
+    await act(STAFF, "bill_payment_undo", {businessId: BIZ,
+      billPaymentId: answer.billPaymentId});
+    const a2 = await car(carA);
+    const b2 = await car(carB);
+    assert.equal(a2.amountPaidCents, 0);
+    assert.equal(b2.amountPaidCents, 0);
+    assert.equal(b2.parkingDiscountCents, 0);
+    assert.equal(b2.parkingDiscounts[0].undone, true);
+    assert.equal(b2.paymentStatus, "awaiting_direct_payment");
+  });
+});

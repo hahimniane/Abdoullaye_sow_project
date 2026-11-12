@@ -157,10 +157,12 @@ test("Record a payment: one amount, the shared plan, one request, undone as a wh
   assert.match(view, /!estimating && \(origByKey\.get\(customer\.key\) \?\? customer\)\.dueCents > 0 && \(payableByCustomer\.get\(customer\.key\) \?\? 0\) > 0 && \(/);
   assert.match(view, /new Map\(summary\.customers\.map\(\(c\) => \[c\.key, billPaymentPlan\(c, 1\)\.payableCents\]\)\)/, "precomputed once per statement, not per render");
   assert.match(view, /const paymentsByCustomer = useMemo\(\(\) => billPaymentsByCustomer\(billPays\.rows\), \[billPays\.rows\]\)/);
-  assert.match(view, /httpsCallable\(functions, "updateBusinessParkingEntry"\)\(billPaymentRecordRequest\(\{/);
+  // One request: a payment, or a settle for less (docs/PARKING_DISCOUNT.md).
+  assert.match(view, /httpsCallable\(functions, "updateBusinessParkingEntry"\)\(\s*settling \? billSettleRequest\(\{ \.\.\.input, reason: settleReason \}\) : billPaymentRecordRequest\(input\)\)/);
   assert.match(view, /expectedPayableCents: plan\.payableCents/, "the preview's payable total rides along");
   assert.match(view, /receivedByStaffId: payBy/, "who received the money is always sent");
-  assert.match(view, /if \(!payBy\) \{/, "and required before anything is recorded");
+  assert.match(view, /if \(!payBy && !\(payMode === "settle" && dollarsToCents\(payAmount\) === 0\)\) \{/,
+      "and required before anything is recorded (an all-discount settle takes no money)");
   assert.match(view, /billPaymentUndoRequest\(businessId, undoTarget\.id\)/);
   assert.match(view, /billPaymentRefusalText\(failure\)/, "a refusal is the console's words, never the raw error");
   assert.match(view, /<h3>Undo this payment\?<\/h3>/, "undo is confirmed");
