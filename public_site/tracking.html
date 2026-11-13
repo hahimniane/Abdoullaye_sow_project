@@ -9,8 +9,8 @@
   <meta name="theme-color" content="#0b3b38" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="assets/styles.css?v=33" />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/styles.css?v=34" /><link rel="stylesheet" href="assets/theme.css?v=1" />
   <link rel="icon" type="image/png" href="assets/logo.png" />
 
   <style>
@@ -20,24 +20,23 @@
     .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
   </style>
 </head>
-<body>
+<body class="lw">
   <header class="site-header">
     <div class="container nav">
       <a class="brand" href="index.html" aria-label="Accueil Laawol Digital">
-        <span class="brand-mark" aria-hidden="true"><img src="assets/logo.png" alt="Laawol" width="32" height="32" style="border-radius:8px;display:block" /></span>
+        <span class="brand-mark" aria-hidden="true"><img src="assets/logo.png" alt="Laawol" width="36" height="36" style="border-radius:9px;display:block" /></span>
         <span class="brand-text">Laawol<span>Digital</span></span>
       </a>
       <nav class="nav-links" aria-label="Navigation principale">
-        <a href="index.html">Accueil</a>
         <a href="services.html">Services</a>
         <a href="tracking.html" class="active">Suivi de commande</a>
         <a href="app.html">Application</a>
         <a href="about.html">À propos</a>
+        <a href="partner.html">Pour les entreprises</a>
         <a href="contact.html">Contact</a>
       </nav>
       <div class="nav-cta">
-        <a class="btn btn-ghost" href="app.html">Télécharger l’application</a>
-        <a class="btn btn-primary" href="partner.html">Inscrire votre entreprise</a>
+        <a class="h-btn-amber" href="https://customer.laawoldigital.com/?service=barrel">Envoyer un colis</a>
       </div>
       <button class="nav-toggle" id="navToggle" aria-label="Ouvrir le menu" aria-expanded="false"><span></span><span></span><span></span></button>
     </div>
@@ -49,11 +48,11 @@
       <a href="about.html">À propos</a>
       <a href="contact.html">Contact</a>
       <a href="partner.html">Pour les entreprises</a>
-      <a class="btn btn-primary" href="app.html">Télécharger l’application</a>
+      <a href="app.html">Télécharger l’application</a>
+      <a class="btn h-btn-amber" href="https://customer.laawoldigital.com/?service=barrel">Envoyer un colis</a>
     </div>
   </header>
   <section class="page-head"><div class="hero-bg" aria-hidden="true"></div><div class="container">
-    <span class="kicker">Un suivi clair, à chaque étape</span>
     <h1>Suivez votre commande du départ à l’arrivée</h1>
     <p>Dès que votre colis, votre baril ou votre voiture est en route, Laawol vous donne un numéro de suivi et les mises à jour de statut, au même endroit que votre commande.</p>
     <!-- The page told people to track an order and then gave them nowhere to
@@ -69,8 +68,7 @@
 
   <section class="section"><div class="container source-split">
     <div>
-      <div class="section-head" style="text-align:left;margin:0 0 28px">
-        <span class="kicker">Comment ça marche</span><h2>De l’expédition à la livraison suivie</h2>
+      <div class="section-head" style="text-align:left;margin:0 0 28px"><h2>De l’expédition à la livraison suivie</h2>
       </div>
       <div class="steps steps-vert">
         <div class="step"><span class="step-num">1</span><h3>Recevez votre numéro de suivi</h3><p>Dès que votre commande est confirmée, Laawol vous donne un numéro de suivi unique — pour les colis, les barils ou le transport de voiture.</p></div>
@@ -86,10 +84,10 @@
   </div></section>
 
   <section class="section section-alt"><div class="container">
-    <div class="section-head"><span class="kicker">Pourquoi ça compte</span><h2>Un suivi clair pour chaque service</h2></div>
+    <div class="section-head"><h2>Un suivi clair pour chaque service</h2></div>
     <div class="chip-grid">
-      <span class="ex-chip">📦 Colis</span><span class="ex-chip">✈️ Par avion</span><span class="ex-chip">🚢 Par mer</span>
-      <span class="ex-chip">🚗 Transport de voiture</span><span class="ex-chip">🅿️ Stationnement</span><span class="ex-chip">💳 Paiements et remboursements</span>
+      <span class="ex-chip">Colis</span><span class="ex-chip">Par avion</span><span class="ex-chip">Par mer</span>
+      <span class="ex-chip">Transport de véhicules</span><span class="ex-chip">Stationnement</span><span class="ex-chip">Paiements et remboursements</span>
     </div>
   </div></section>
 
@@ -123,10 +121,9 @@
   </footer>
   <script src="assets/script.js?v=13"></script>
   <script src="assets/mailto.js?v=2" defer></script>
-  <script src="assets/motion.js?v=10" defer></script>
   <script src="assets/site-config.js?v=3"></script>
   <script src="assets/chat.js?v=7" defer></script>
-  <script src="assets/i18n.js?v=15"></script>
-  <script src="assets/content.js?v=12"></script>
+  <script src="assets/i18n.js?v=19"></script>
+  <script src="assets/content.js?v=12"></script><script src="assets/site.js?v=1" defer></script>
 </body>
 </html>

@@ -151,7 +151,7 @@ assertIncludes(index, 'data-cms="featured.heading"', "index.html");
   ]) {
     assertIncludes(i18n, `: "${fr}"`, "i18n.js homepage translation");
   }
-  assertIncludes(index, "assets/home.css?v=", "index.html");
+  assertIncludes(index, "assets/theme.css?v=", "index.html");
 }
 
 for (const file of ["index.html"]) {

@@ -94,12 +94,14 @@ test("every public HTML page loads the shared customer CTA mechanism", () => {
 });
 
 test("public service cards expose a visible action and keyboard focus state", () => {
-  const styles = readFileSync("../public_site/assets/styles.css", "utf8");
+  const styles = readFileSync("../public_site/assets/theme.css", "utf8");
   const services = readFileSync("../public_site/services.html", "utf8");
-  assert.match(styles, /a\.service-card\{[\s\S]*display:flex/);
-  assert.match(styles, /a\.service-card \.link-arrow\{[\s\S]*min-height:44px/);
-  assert.match(styles, /\.service-card:focus-visible/);
+  // Photo cards since the 2026-11-13 redesign: the whole card is the link,
+  // with a visible action line and a keyboard focus ring.
+  assert.match(styles, /\.a-card\{[^}]*display:flex/);
+  assert.match(styles, /\.a-card-link\{[^}]*min-height:44px/);
+  assert.match(styles, /\.a-card:focus-visible/);
   // Five cards: Freight folded into Send a package.
-  assert.equal((services.match(/class="service-card"/g) ?? []).length, 5);
-  assert.equal((services.match(/class="link-arrow"/g) ?? []).length, 5);
+  assert.equal((services.match(/class="a-card"/g) ?? []).length, 5);
+  assert.equal((services.match(/class="a-card-link"/g) ?? []).length, 5);
 });

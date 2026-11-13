@@ -9,28 +9,28 @@
   <meta name="theme-color" content="#0b3b38" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="assets/styles.css?v=33" />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/styles.css?v=34" /><link rel="stylesheet" href="assets/theme.css?v=1" />
   <link rel="icon" type="image/png" href="assets/logo.png" />
 </head>
-<body>
+<body class="lw">
   <header class="site-header">
     <div class="container nav">
       <a class="brand" href="index.html" aria-label="Accueil Laawol Digital">
-        <span class="brand-mark" aria-hidden="true"><img src="assets/logo.png" alt="Laawol" width="32" height="32" style="border-radius:8px;display:block" /></span>
+        <span class="brand-mark" aria-hidden="true"><img src="assets/logo.png" alt="Laawol" width="36" height="36" style="border-radius:9px;display:block" /></span>
         <span class="brand-text">Laawol<span>Digital</span></span>
       </a>
       <nav class="nav-links" aria-label="Navigation principale">
-        <a href="index.html">Accueil</a>
         <a href="services.html" class="active">Services</a>
         <a href="tracking.html">Suivi de commande</a>
         <a href="app.html">Application</a>
         <a href="about.html">À propos</a>
+        <a href="partner.html">Pour les entreprises</a>
         <a href="contact.html">Contact</a>
       </nav>
       <div class="nav-cta">
-        <a class="btn btn-ghost" href="app.html">Télécharger l’application</a>
-        <a class="btn btn-primary" href="partner.html">Inscrire votre entreprise</a>
+        <a class="h-signin" href="https://customer.laawoldigital.com">Se connecter</a>
+        <a class="h-btn-amber" href="https://customer.laawoldigital.com/?service=barrel">Envoyer un colis</a>
       </div>
       <button class="nav-toggle" id="navToggle" aria-label="Ouvrir le menu" aria-expanded="false"><span></span><span></span><span></span></button>
     </div>
@@ -42,70 +42,64 @@
       <a href="about.html">À propos</a>
       <a href="contact.html">Contact</a>
       <a href="partner.html">Pour les entreprises</a>
-      <a class="btn btn-primary" href="app.html">Télécharger l’application</a>
+      <a href="app.html">Télécharger l’application</a>
+      <a class="btn h-btn-amber" href="https://customer.laawoldigital.com/?service=barrel">Envoyer un colis</a>
+      <a class="btn btn-primary" href="https://customer.laawoldigital.com">Utiliser Laawol en ligne</a>
     </div>
   </header>
   <section class="page-head"><div class="hero-bg" aria-hidden="true"></div><div class="container">
-    <span class="kicker">Des entreprises inscrites, organisées au même endroit</span>
     <h1>Des services de partenaires que vous pouvez comparer</h1>
     <p>Laawol est la couche de plateforme. Les entreprises fournissent les services; nous organisons leurs prix, destinations, annonces, suivis, paiements et assistance afin que les clients choisissent en confiance.</p>
   </div></section>
 
   <section class="section"><div class="container">
-    <div class="service-grid">
-      
-        <a class="service-card" href="https://customer.laawoldigital.com/?service=barrel">
-          <div class="service-icon" data-tone="teal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/><path d="M11 8v6M8 11h6"/></svg></div>
-          <h3>Envoyer un colis</h3>
-          <p>Barils, cartons, valises et colis, par mer ou par avion. Comparez les prix des entreprises et voyez votre total tout de suite.</p>
-          <span class="link-arrow">Envoyer un colis <span>→</span></span>
+    <div class="reveal a-cards">
+        <a class="a-card" href="https://customer.laawoldigital.com/?service=barrel">
+          <span class="a-card-photo"><img src="assets/home/barrels.jpg?v=1" width="760" height="760" loading="lazy" decoding="async" alt="Des barils et des cartons étiquetés, prêts à partir." /></span>
+          <span class="a-card-title">Envoyer un colis</span>
+          <span class="a-card-text">Barils, cartons, valises et colis, par mer ou par avion. Comparez les prix des entreprises et voyez votre total tout de suite.</span>
+          <span class="a-card-link">Envoyer un colis <span aria-hidden="true">→</span></span>
         </a>
-      
         <!-- Shared barrels: paused platform-wide (Settings -> Feature
              availability -> Shared barrel pools). Not deleted, just hidden
              until re-enabled.
-        <a class="service-card" href="https://customer.laawoldigital.com/?service=shared-barrels">
-          <div class="service-icon" data-tone="gold"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 4h10l1 4H6l1-4z"/><path d="M6 8h12v10a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V8z"/><path d="M10 12h4"/></svg></div>
-          <h3>Barils partagés</h3>
-          <p>Ouvrez des parts dans un baril ou rejoignez un chargement partagé vers la même destination.</p>
-          <span class="link-arrow">Partager un baril <span>→</span></span>
+        <a class="a-card" href="https://customer.laawoldigital.com/?service=shared-barrels">
+          <span class="a-card-photo"><img src="assets/home/barrels.jpg?v=1" width="760" height="760" loading="lazy" decoding="async" alt="" /></span>
+          <span class="a-card-title">Barils partagés</span>
+          <span class="a-card-text">Ouvrez des parts dans un baril ou rejoignez un chargement partagé vers la même destination.</span>
+          <span class="a-card-link">Partager un baril <span aria-hidden="true">→</span></span>
         </a>
         -->
-
-        <a class="service-card" href="https://customer.laawoldigital.com/?service=cars">
-          <div class="service-icon" data-tone="navy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 13l2-5a3 3 0 0 1 2.8-2h8.4A3 3 0 0 1 19 8l2 5"/><path d="M3 13h18v4a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1v-1H6v1a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-4z"/><circle cx="7" cy="15.5" r="1"/><circle cx="17" cy="15.5" r="1"/></svg></div>
-          <h3>Voitures</h3>
-          <p>Consultez les annonces, photos, prix et informations de titre, puis préparez une visite, une réservation ou un achat.</p>
-          <span class="link-arrow">Voir les voitures <span>→</span></span>
+        <a class="a-card" href="https://customer.laawoldigital.com/?service=cars">
+          <span class="a-card-photo"><img src="assets/home/car-lot.jpg?v=1" width="760" height="760" loading="lazy" decoding="async" alt="Des voitures d’occasion à vendre sur un parc à New York." /></span>
+          <span class="a-card-title">Voitures</span>
+          <span class="a-card-text">Consultez les annonces, photos, prix et informations de titre, puis préparez une visite, une réservation ou un achat.</span>
+          <span class="a-card-link">Voir les voitures <span aria-hidden="true">→</span></span>
         </a>
-      
-        <a class="service-card" href="https://customer.laawoldigital.com/?service=car-transport">
-          <div class="service-icon" data-tone="green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 3v8a2 2 0 0 0 2 2v8M7 3v6M9 3v6"/><path d="M17 3c-1.5 0-2.5 2-2.5 5s1 4 2.5 4v8"/></svg></div>
-          <h3>Transport de véhicules</h3>
-          <p>Choisissez une destination et préparez les informations de votre véhicule pour demander un devis.</p>
-          <span class="link-arrow">Demander un transport <span>→</span></span>
+        <a class="a-card" href="https://customer.laawoldigital.com/?service=car-transport">
+          <span class="a-card-photo"><img src="assets/home/car-transport.jpg?v=1" width="760" height="760" loading="lazy" decoding="async" alt="Un SUV monte dans un conteneur au port." /></span>
+          <span class="a-card-title">Transport de véhicules</span>
+          <span class="a-card-text">Choisissez une destination et préparez les informations de votre véhicule pour demander un devis.</span>
+          <span class="a-card-link">Demander un transport <span aria-hidden="true">→</span></span>
         </a>
-      
-        <a class="service-card" href="https://customer.laawoldigital.com/?service=parking">
-          <div class="service-icon" data-tone="plum"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v18"/><path d="M5 7h14"/><path d="M7 7l-3 6a3 3 0 0 0 6 0L7 7z"/><path d="M17 7l-3 6a3 3 0 0 0 6 0l-3-6z"/><path d="M8 21h8"/></svg></div>
-          <h3>Stationnement</h3>
-          <p>Recherchez une place auprès d’une entreprise approuvée, comparez les dates et préparez votre réservation.</p>
-          <span class="link-arrow">Trouver un stationnement <span>→</span></span>
+        <a class="a-card" href="https://customer.laawoldigital.com/?service=parking">
+          <span class="a-card-photo"><img src="assets/home/parking.jpg?v=1" width="760" height="760" loading="lazy" decoding="async" alt="Un agent vérifie les voitures d’un parking le soir." /></span>
+          <span class="a-card-title">Stationnement</span>
+          <span class="a-card-text">Recherchez une place auprès d’une entreprise approuvée, comparez les dates et préparez votre réservation.</span>
+          <span class="a-card-link">Trouver un stationnement <span aria-hidden="true">→</span></span>
         </a>
     </div>
   </div></section>
 
   
-  <section class="section section-alt" id="destinations">
+  <section class="section" id="destinations">
     <div class="container">
-      <div class="section-head"><span class="kicker">Trajets des partenaires</span><h2>Les entreprises choisissent leurs zones de service</h2><p>Chaque entreprise d’expédition gère ses pays, prix, délais estimés et détails de destination. Les clients voient ces conditions avant de réserver.</p></div>
-      <div class="dest-grid">
-        <div class="dest-card"><div class="flag">🇬🇳</div><h3>Guinée</h3><p>Conakry et au-delà</p><span class="est">~21–28 jours</span></div>
-        <div class="dest-card"><div class="flag">🇸🇳</div><h3>Sénégal</h3><p>Dakar et régions</p><span class="est">~24–31 jours</span></div>
-        <div class="dest-card"><div class="flag">🇬🇲</div><h3>Gambie</h3><p>Banjul et régions</p><span class="est">~24–31 jours</span></div>
-        <div class="dest-card"><div class="flag">🇱🇷</div><h3>Libéria</h3><p>Monrovia et régions</p><span class="est">Demander une estimation</span></div>
+      <div class="section-head"><h2>Les entreprises choisissent leurs zones de service</h2><p>Chaque entreprise d’expédition gère ses pays, prix, délais estimés et détails de destination. Les clients voient ces conditions avant de réserver.</p></div>
+      <div class="reveal a-dests">
+        <a class="a-dest" href="https://customer.laawoldigital.com/?service=barrel&amp;to=GN"><span class="a-dest-flag" aria-hidden="true">🇬🇳</span><span class="a-dest-name">Guinée</span><span class="a-dest-city">Conakry et au-delà</span><span class="a-dest-time">Par mer · ~21–28 jours</span></a>
+        <a class="a-dest" href="https://customer.laawoldigital.com/?service=barrel&amp;to=SL"><span class="a-dest-flag" aria-hidden="true">🇸🇱</span><span class="a-dest-name">Sierra Leone</span><span class="a-dest-city">Freetown et régions</span><span class="a-dest-time">Voir les prix</span></a>
+        <a class="a-dest a-dest-more" href="contact.html"><span class="a-dest-flag" aria-hidden="true">🌍</span><span class="a-dest-name">Votre pays n’est pas là ?</span><span class="a-dest-city">D’autres pays sont ajoutés lorsque les entreprises approuvées publient leurs trajets.</span><span class="a-dest-time">Demander pour votre pays</span></a>
       </div>
-      <p class="dest-note">D’autres pays sont ajoutés lorsque les entreprises approuvées publient leurs trajets. <a href="contact.html">Demander pour votre pays →</a></p>
     </div>
   </section>
   
@@ -138,10 +132,9 @@
   </footer>
   <script src="assets/script.js?v=13"></script>
   <script src="assets/mailto.js?v=2" defer></script>
-  <script src="assets/motion.js?v=10" defer></script>
   <script src="assets/site-config.js?v=3"></script>
   <script src="assets/chat.js?v=7" defer></script>
-  <script src="assets/i18n.js?v=15"></script>
-  <script src="assets/content.js?v=12"></script>
+  <script src="assets/i18n.js?v=19"></script>
+  <script src="assets/content.js?v=12"></script><script src="assets/site.js?v=1" defer></script>
 </body>
 </html>
