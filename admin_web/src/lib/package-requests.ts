@@ -462,6 +462,21 @@ export function countryName(country: { id: string; name: string }, lang: Lang): 
   }
 }
 
+/**
+ * The destination a homepage link asks for (`?to=GN`, an ISO country code):
+ * the id of the option country with that code, else "". The homepage's
+ * "Compare available providers" uses it to open Send a package on that
+ * country.
+ */
+export function linkedCountryId(search: string, options: readonly RequestOption[]): string {
+  const want = String(new URLSearchParams(search).get("to") ?? "").trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(want)) return "";
+  const hit = options.find((option) =>
+    String(destinationCountryOptionForRow({ id: option.country.id, name: option.country.name }).code ?? "")
+      .toUpperCase() === want);
+  return hit ? hit.country.id : "";
+}
+
 export function optionsForCountry(options: readonly RequestOption[], countryId: string): RequestOption[] {
   return options
     .filter((option) => option.country.id === countryId)

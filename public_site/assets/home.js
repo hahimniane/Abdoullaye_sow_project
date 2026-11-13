@@ -1,34 +1,33 @@
-/* Homepage hero video: plays muted in the rounded photo slot, only while it
-   is on screen. Under reduced motion or data saver it never loads, and the
-   poster frame stays. Purely decorative: if this file fails, the poster shows. */
+/* Homepage booking panel: one tab per service. Without this file the first
+   tab (Send a package) still works on its own. */
 (function () {
   "use strict";
-  var video = document.querySelector(".h-photo video");
-  if (!video) return;
-  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  var saveData = navigator.connection && navigator.connection.saveData;
-  if (reduce || saveData) return;
+  var tabs = Array.prototype.slice.call(document.querySelectorAll(".a-tab"));
+  if (!tabs.length) return;
 
-  function play() {
-    var attempt = video.play();
-    if (attempt && attempt.catch) attempt.catch(function () {});
+  function select(tab, focus) {
+    tabs.forEach(function (other) {
+      var on = other === tab;
+      other.setAttribute("aria-selected", on ? "true" : "false");
+      other.tabIndex = on ? 0 : -1;
+      var pane = document.getElementById(other.getAttribute("aria-controls"));
+      if (pane) pane.hidden = !on;
+    });
+    if (focus) tab.focus();
   }
 
-  video.muted = true;
-  video.preload = "auto";
-  // Watch the hero area, not the video: the video's frame starts fully
-  // clipped by the opening wipe, which would read as "not on screen".
-  var area = video.closest(".h-hero-visual") || video;
-  if ("IntersectionObserver" in window) {
-    new IntersectionObserver(function (entries) {
-      if (entries[0].isIntersecting && !document.hidden) play();
-      else video.pause();
-    }).observe(area);
-  } else {
-    play();
-  }
-  document.addEventListener("visibilitychange", function () {
-    if (document.hidden) video.pause();
-    else if (area.getBoundingClientRect().bottom > 0) play();
+  tabs.forEach(function (tab, index) {
+    tab.addEventListener("click", function () { select(tab, false); });
+    tab.addEventListener("keydown", function (event) {
+      var next = null;
+      if (event.key === "ArrowRight") next = tabs[(index + 1) % tabs.length];
+      if (event.key === "ArrowLeft") next = tabs[(index - 1 + tabs.length) % tabs.length];
+      if (event.key === "Home") next = tabs[0];
+      if (event.key === "End") next = tabs[tabs.length - 1];
+      if (next) {
+        event.preventDefault();
+        select(next, true);
+      }
+    });
   });
 })();

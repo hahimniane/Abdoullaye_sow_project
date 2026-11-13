@@ -367,6 +367,9 @@
     "Ship packages, barrels and cars between the US and West Africa.": "Expédiez des colis, des barils et des voitures entre les États-Unis et l’Afrique de l’Ouest.",
     // Homepage (2026-11 redesign)
     // Homepage photos (2026-11-13)
+    "From": "Départ",
+    "Compare businesses": "Comparer les entreprises",
+    "No obligation. See the available businesses before you book.": "Sans engagement. Voyez les entreprises disponibles avant de réserver.",
     "See the routes": "Voir les trajets",
     "By sea · ~21–28 days": "Par mer · ~21–28 jours",
     "By sea · ~24–31 days": "Par mer · ~24–31 jours",

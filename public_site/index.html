@@ -50,26 +50,59 @@
   </header>
 
   <main>
-  <!-- HERO: the title, the search pill, then two real photos. -->
+  <!-- HERO: the promise on the left, the booking panel on the right. -->
   <section class="a-hero" id="top">
     <div class="a-wrap">
-      <div class="a-hero-head">
-        <h1 data-cms="hero.headline">Expédiez vers l’Afrique de l’Ouest avec des entreprises vérifiées</h1>
-        <p data-cms="hero.subheadline">Colis, barils, voitures et stationnement. Comparez les prix, réservez en ligne et suivez chaque étape sur WhatsApp.</p>
+      <div class="a-hero-grid">
+        <div class="a-hero-head">
+          <h1 data-cms="hero.headline">Expédiez vers l’Afrique de l’Ouest avec des entreprises vérifiées</h1>
+          <p data-cms="hero.subheadline">Colis, barils, voitures et stationnement. Comparez les prix, réservez en ligne et suivez chaque étape sur WhatsApp.</p>
+          <p class="a-hero-links"><a href="tracking.html">Suivre une commande</a><a href="partner.html">Inscrire votre entreprise</a></p>
+        </div>
+        <div class="a-book">
+          <div class="a-book-head">Que voulez-vous faire ?</div>
+          <div class="a-tabs" role="tablist" aria-label="Services">
+            <button class="a-tab" id="tab-package" role="tab" type="button" aria-selected="true" aria-controls="pane-package">Envoyer un colis</button>
+            <button class="a-tab" id="tab-cars" role="tab" type="button" aria-selected="false" aria-controls="pane-cars" tabindex="-1">Acheter une voiture</button>
+            <button class="a-tab" id="tab-transport" role="tab" type="button" aria-selected="false" aria-controls="pane-transport" tabindex="-1">Expédier une voiture</button>
+            <button class="a-tab" id="tab-parking" role="tab" type="button" aria-selected="false" aria-controls="pane-parking" tabindex="-1">Stationnement</button>
+          </div>
+          <form class="a-book-pane" id="pane-package" role="tabpanel" aria-labelledby="tab-package" action="https://customer.laawoldigital.com/" method="get">
+            <input type="hidden" name="service" value="barrel" />
+            <div class="a-fields">
+              <div class="a-field">
+                <span class="a-field-label">Départ</span>
+                <span class="a-input a-input-static">États-Unis</span>
+              </div>
+              <label class="a-field" for="homeDestination">
+                <span class="a-field-label">Destination</span>
+                <span class="a-input">
+                  <select id="homeDestination" name="to">
+                    <option value="GN">Guinée</option>
+                    <option value="SN">Sénégal</option>
+                    <option value="GM">Gambie</option>
+                    <option value="LR">Libéria</option>
+                  </select><svg class="a-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+                </span>
+              </label>
+            </div>
+            <button class="a-book-btn" type="submit">Comparer les entreprises <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+            <p class="a-book-note">Sans engagement. Voyez les entreprises disponibles avant de réserver.</p>
+          </form>
+        <div class="a-book-pane" id="pane-cars" role="tabpanel" aria-labelledby="tab-cars" hidden>
+          <p class="a-book-text">Des véhicules d’entreprises vérifiées, photos et prix à l’appui.</p>
+          <a class="a-book-btn" href="https://customer.laawoldigital.com/?service=cars">Voir les voitures <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+        </div>
+        <div class="a-book-pane" id="pane-transport" role="tabpanel" aria-labelledby="tab-transport" hidden>
+          <p class="a-book-text">Votre voiture expédiée en conteneur, du devis à l’arrivée.</p>
+          <a class="a-book-btn" href="https://customer.laawoldigital.com/?service=car-transport">Demander un transport <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+        </div>
+        <div class="a-book-pane" id="pane-parking" role="tabpanel" aria-labelledby="tab-parking" hidden>
+          <p class="a-book-text">Une place sûre pour votre voiture, à la journée ou au mois.</p>
+          <a class="a-book-btn" href="https://customer.laawoldigital.com/?service=parking">Trouver un stationnement <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+        </div>
+        </div>
       </div>
-      <form class="a-search" action="https://customer.laawoldigital.com/" method="get">
-        <label class="a-seg" for="homeService">
-          <span class="a-seg-label">Service</span>
-          <select id="homeService" name="service">
-            <option value="barrel">Envoyer un colis ou un baril</option>
-            <option value="cars">Acheter une voiture</option>
-            <option value="car-transport">Expédier une voiture</option>
-            <option value="parking">Réserver un stationnement</option>
-          </select>
-        </label>
-        <a class="a-seg a-seg-link" href="tracking.html"><span class="a-seg-label">Déjà réservé ?</span><span class="a-seg-value">Suivre une commande</span></a>
-        <button type="submit" class="a-search-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><span>Commencer</span></button>
-      </form>
       <div class="a-gallery">
         <figure class="a-photo a-photo-main"><img src="assets/home/loading.jpg?v=1" width="1000" height="1250" fetchpriority="high" decoding="async" alt="Un employé charge un baril bleu dans un conteneur à New York." /></figure>
         <figure class="a-photo"><img src="assets/home/delivery-conakry.jpg?v=2" width="1536" height="1024" fetchpriority="high" decoding="async" alt="Un livreur remet un baril bleu à une cliente devant sa maison à Conakry." /><figcaption><span>Chargé à New York</span><span>Livré à Conakry</span></figcaption></figure>
@@ -264,7 +297,8 @@
   <script src="assets/motion.js?v=10" defer></script>
   <script src="assets/site-config.js?v=3"></script>
   <script src="assets/chat.js?v=7" defer></script>
-  <script src="assets/i18n.js?v=17"></script>
+  <script src="assets/i18n.js?v=18"></script>
   <script src="assets/content.js?v=12"></script>
+  <script src="assets/home.js?v=2" defer></script>
 </body>
 </html>

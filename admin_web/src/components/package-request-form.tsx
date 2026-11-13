@@ -72,6 +72,7 @@ import {
   REQUEST_LIMITS,
   countryName,
   hoursLines,
+  linkedCountryId,
   newIdempotencyKey,
   pieceKindLabel,
   requestCountries,
@@ -200,6 +201,10 @@ export function PackageRequestForm({ slug = "", senderName = "", senderPhone = "
         const countries = [...new Set(list.map((o) => o.country.id))];
         setDraft((d) => ({ ...d, businessId: result.business?.businessId ?? "", countryId: countries.length === 1 ? countries[0] : d.countryId }));
       }
+      // The homepage's "Compare available providers" (?to=GN) opens on that
+      // destination; the customer can still change it.
+      const linked = typeof window === "undefined" ? "" : linkedCountryId(window.location.search, list);
+      if (linked) setDraft((d) => (d.countryId ? d : { ...d, countryId: linked }));
     };
     // The last answer on this device shows at once; the fresh one replaces it
     // (lib/package-request-options.ts). Without one the spinner shows as before.

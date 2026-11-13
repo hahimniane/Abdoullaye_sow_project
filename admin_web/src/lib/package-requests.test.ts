@@ -63,6 +63,7 @@ import {
   slugEditable,
   todayKeyIn,
   compressedSize,
+  linkedCountryId,
   type RequestOption,
   type WeekHours,
 } from "./package-requests.ts";
@@ -497,4 +498,14 @@ test("every request screen string has a French translation", () => {
   const same = new Set(["Total", "Containers", "History", "Pickup", "Estimate", "Expected", "Received", "Box", "Other", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "PM", "UTC", "your-business", "R-K7M4P", "Reçu", "Saving...", "Sending...", "Loading…", "Kilos (kg)"]);
   const missing = [...strings].filter((value) => !same.has(value) && translateValue(value, "fr") === value);
   assert.deepEqual(missing, []);
+});
+
+test("the homepage link opens Send a package on its destination (?to=GN)", () => {
+  const option = (id: string, name: string) => ({ country: { id, name } }) as unknown as RequestOption;
+  const options = [option("senegal", "Senegal"), option("guinea", "Guinea")];
+  assert.equal(linkedCountryId("?service=barrel&to=GN", options), "guinea");
+  assert.equal(linkedCountryId("?to=sn", options), "senegal");
+  assert.equal(linkedCountryId("?to=LR", options), "", "no business ships there yet");
+  assert.equal(linkedCountryId("?to=guinea", options), "", "codes only");
+  assert.equal(linkedCountryId("?service=barrel", options), "");
 });
