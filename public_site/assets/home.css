@@ -3,8 +3,8 @@
    keep their shared markup and ids (script.js, i18n.js and content.js rely on
    them); this file only restyles them.
 
-   Look: an established company, not a startup template. The logo's navy,
-   ivory and sand, one terracotta accent used sparingly, a serif for
+   Look: an established shipping company. The logo's navy on a cool white,
+   one brass accent (a ship's instruments) used sparingly, a serif for
    headlines, real photos in one frame. No eyebrow labels, no floating cards,
    no icon rows. */
 
@@ -13,17 +13,18 @@ body.home{
   --font-body:Inter,ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;
   --navy:#032346;          /* the logo */
   --navy-2:#0B2F5B;
-  --ink:#121A26;
-  --body:#3B4048;
-  --muted:#6B6A66;
-  --ivory:#F8F5EF;
-  --sand:#EFE9DF;
-  --line:#E3DCD0;
-  --line-2:#D3CABB;
-  --accent:#B5532F;        /* terracotta: links, one italic word, numbers */
+  --ink:#101826;
+  --body:#3A4350;
+  --muted:#667080;
+  --ivory:#FAFBFC;         /* page */
+  --sand:#EEF2F6;          /* quiet sections */
+  --line:#E2E7EE;
+  --line-2:#CFD7E2;
+  --accent:#8E6524;        /* brass: one italic phrase, step numbers, hovers */
+  --brass-light:#E3C48A;   /* brass on navy */
   --radius:18px;
   /* Shared site variables, so the chat button and footer follow. */
-  --teal:#032346; --teal-deep:#032346; --teal-mid:#E9C79A; --mist:#E7EDF5;
+  --teal:#032346; --teal-deep:#032346; --teal-mid:#E3C48A; --mist:#E7EDF5;
   background:var(--ivory); color:var(--ink); font-family:var(--font-body);
   -webkit-font-smoothing:antialiased;
 }
@@ -34,8 +35,8 @@ body.home main h2{margin:0; font-size:clamp(34px,3.6vw,52px); line-height:1.05}
 body.home main em{font-style:italic; color:var(--accent)}
 
 /* ---------- Header ---------- */
-body.home .site-header{background:rgba(248,245,239,.9); border-bottom:1px solid transparent; transition:border-color .2s ease, background .2s ease}
-body.home .site-header.scrolled{background:rgba(248,245,239,.96); border-bottom-color:var(--line)}
+body.home .site-header{background:rgba(250,251,252,.9); border-bottom:1px solid transparent; transition:border-color .2s ease, background .2s ease}
+body.home .site-header.scrolled{background:rgba(250,251,252,.96); border-bottom-color:var(--line)}
 body.home .site-header .container{max-width:1320px; padding:0 40px}
 body.home .brand,body.home .brand-mark{flex:0 0 auto}
 body.home .site-header .brand{margin-right:16px}
@@ -123,7 +124,7 @@ body.home .mobile-menu a.h-btn-amber{border:0; margin-top:10px; color:#fff}
 .h-story-photo::before{content:""; position:absolute; inset:0; background:linear-gradient(0deg,rgba(3,22,44,.88) 0%,rgba(3,22,44,.55) 34%,rgba(3,22,44,0) 64%); pointer-events:none; z-index:1}
 .h-story-copy{position:absolute; left:0; right:0; bottom:0; z-index:2; padding:0 56px 52px; color:#fff}
 .h-story-quote{margin:0; max-width:1040px; font-family:var(--font-display); font-size:clamp(34px,4vw,60px); line-height:1.05; color:#fff}
-body.home main .h-story-quote em{font-style:italic; color:#F3D9BD}
+body.home main .h-story-quote em{font-style:italic; color:var(--brass-light)}
 .h-story-text{margin:14px 0 0; max-width:520px; font-size:17px; line-height:1.6; color:rgba(255,255,255,.86)}
 
 /* ---------- How it works ---------- */
@@ -144,7 +145,7 @@ body.home main .h-steps h3{margin:0; font-size:34px; line-height:1.1}
 .h-points strong{font-size:16px; font-weight:600; color:var(--ink)}
 .h-points span{font-size:15px; line-height:1.5; color:var(--muted)}
 .h-informed-copy .h-link{margin-top:8px; align-self:flex-start}
-.h-chat{display:flex; flex-direction:column; gap:10px; padding:22px; border-radius:24px; background:#E9E4DA; border:1px solid var(--line-2); box-shadow:0 30px 60px -36px rgba(3,35,70,.35)}
+.h-chat{display:flex; flex-direction:column; gap:10px; padding:22px; border-radius:24px; background:#E7ECF2; border:1px solid var(--line-2); box-shadow:0 30px 60px -36px rgba(3,35,70,.35)}
 .h-chat-head{display:flex; align-items:center; gap:10px; padding-bottom:12px; margin-bottom:4px; border-bottom:1px solid var(--line-2)}
 .h-chat-head img{border-radius:50%}
 .h-chat-head span{display:flex; flex-direction:column; line-height:1.2}
@@ -182,8 +183,8 @@ body.home .site-footer .container{max-width:1240px; padding-left:40px; padding-r
 body.home .footer-brand p{color:rgba(255,255,255,.62)}
 body.home .footer-col a{color:rgba(255,255,255,.72)}
 body.home .footer-col a:hover{color:#fff}
-body.home .brand-text.light span{color:#E9C79A}
-body.home .footer-tag{color:#E9C79A}
+body.home .brand-text.light span{color:var(--brass-light)}
+body.home .footer-tag{color:var(--brass-light)}
 
 /* ---------- Motion (off under reduced motion) ---------- */
 @media (prefers-reduced-motion:no-preference){
