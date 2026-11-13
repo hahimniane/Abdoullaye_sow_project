@@ -134,19 +134,61 @@ body.home main .a-steps h3{font-size:20px; font-weight:700; letter-spacing:-.01e
 
 /* ---------- App + businesses ---------- */
 .a-duo{display:grid; grid-template-columns:minmax(0,1.5fr) minmax(0,1fr); gap:24px}
-.a-app{display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:end; gap:24px; padding:0 0 0 48px; overflow:hidden}
+.a-app{display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:end; gap:24px; padding:0 0 0 56px; overflow:hidden}
 .a-app-copy{display:flex; flex-direction:column; gap:14px; padding:48px 0}
 .a-app-copy p{margin:0; max-width:380px; font-size:16px; line-height:1.55; color:var(--text-2)}
 body.home .a-app .store-badges{margin-top:6px; gap:10px}
 body.home .a-app .store-badge{background:var(--text); border-color:var(--text); color:#fff}
-.a-phone{width:220px; height:300px; margin-right:40px; padding:9px 9px 0; overflow:hidden; border-radius:36px 36px 0 0; background:#1a1a1a}
+.a-phone{width:240px; height:320px; margin-right:72px; padding:9px 9px 0; overflow:hidden; border-radius:36px 36px 0 0; background:#1a1a1a}
 .a-phone img{display:block; width:100%; height:auto; border-radius:28px 28px 0 0}
 .a-biz{display:flex; flex-direction:column; justify-content:center; align-items:flex-start; gap:14px; padding:48px; background:var(--brand); color:#fff}
 body.home main .a-biz h2{color:#fff}
 .a-biz p{margin:0; max-width:360px; font-size:16px; line-height:1.55; color:rgba(255,255,255,.8)}
 
+/* ---------- Destinations ---------- */
+.a-dests{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:24px}
+.a-dest{display:flex; flex-direction:column; gap:4px; padding:24px; border:1px solid var(--line); border-radius:var(--radius); color:var(--text); transition:box-shadow .2s ease, border-color .2s ease}
+.a-dest:hover{border-color:transparent; box-shadow:var(--shadow-hover)}
+.a-dest-flag{font-size:34px; line-height:1; margin-bottom:12px}
+.a-dest-name{font-size:18px; font-weight:700; letter-spacing:-.01em}
+.a-dest-city{font-size:15px; color:var(--text-2)}
+.a-dest-time{margin-top:14px; padding-top:14px; border-top:1px solid var(--line-soft); font-size:14px; font-weight:600; color:var(--text)}
+.a-note{margin:16px 0 0; font-size:14px; color:var(--text-2)}
+
+/* ---------- For businesses ---------- */
+.a-biz-grid{display:grid; grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr); gap:64px; align-items:start; padding:56px; border-radius:var(--radius); background:var(--brand); color:#fff}
+.a-biz-intro{display:flex; flex-direction:column; align-items:flex-start; gap:16px; position:sticky; top:96px}
+body.home main .a-biz-intro h2{font-size:32px; font-weight:800; line-height:1.15; letter-spacing:-.025em; color:#fff}
+.a-biz-intro p{margin:0; max-width:380px; font-size:16px; line-height:1.6; color:rgba(255,255,255,.78)}
+.a-biz-intro .a-btn{margin-top:8px; background:#fff; color:var(--text)}
+.a-biz-intro .a-btn:hover{background:var(--surface); color:var(--text)}
+.a-features{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 32px; margin:0; padding:0; list-style:none}
+.a-features li{display:flex; flex-direction:column; gap:6px; padding:22px 0; border-top:1px solid rgba(255,255,255,.16)}
+.a-features strong{font-size:16px; font-weight:700; color:#fff}
+.a-features span{font-size:15px; line-height:1.55; color:rgba(255,255,255,.72)}
+
+/* ---------- Questions ---------- */
+.a-faq-grid{display:grid; grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr); gap:64px; align-items:start}
+body.home main .a-faq-grid>h2{font-size:32px; font-weight:800; line-height:1.15; letter-spacing:-.025em}
+.a-faq{border-top:1px solid var(--line)}
+.a-faq details{border-bottom:1px solid var(--line)}
+.a-faq summary{display:flex; align-items:center; justify-content:space-between; gap:16px; padding:22px 0; font-size:17px; font-weight:600; color:var(--text); cursor:pointer; list-style:none}
+.a-faq summary::-webkit-details-marker{display:none}
+.a-faq summary::after{content:""; flex:0 0 auto; width:12px; height:12px; border-right:2px solid var(--text); border-bottom:2px solid var(--text); transform:rotate(45deg) translateY(-3px); transition:transform .2s ease}
+.a-faq details[open] summary::after{transform:rotate(-135deg) translateY(-3px)}
+.a-faq summary:focus-visible{outline:2px solid var(--text); outline-offset:4px; border-radius:4px}
+.a-faq p{margin:0; padding:0 0 22px; max-width:620px; font-size:16px; line-height:1.6; color:var(--text-2)}
+
+/* ---------- Closing ---------- */
+.a-closing-sec{padding-top:24px}
+.a-closing{display:flex; flex-direction:column; align-items:center; gap:12px; padding:64px 24px; border-radius:var(--radius); background:var(--surface); text-align:center}
+body.home main .a-closing h2{font-size:clamp(28px,3vw,40px); font-weight:800; letter-spacing:-.03em}
+.a-closing p{margin:0 0 8px; font-size:17px; color:var(--text-2)}
+.a-closing .a-btn-light{background:var(--brand); color:#fff}
+.a-closing .a-btn-light:hover{background:var(--brand-hover); color:#fff}
+
 /* ---------- Footer: light, as on airbnb.com ---------- */
-body.home .site-footer{margin-top:56px; background:var(--surface); background-image:none; color:var(--text); border-top:1px solid var(--line-soft)}
+body.home .site-footer{margin-top:40px; background:var(--surface); background-image:none; color:var(--text); border-top:1px solid var(--line-soft)}
 body.home .site-footer::before{display:none}
 body.home .site-footer .container{max-width:1280px; padding-left:40px; padding-right:40px}
 body.home .footer-brand p{color:var(--text-2)}
@@ -168,6 +210,9 @@ body.home .footer-tag{color:var(--text-2); font-family:var(--font); font-weight:
 @media (max-width:1100px){
   .a-cards{grid-template-columns:repeat(2,minmax(0,1fr)); gap:32px 20px}
   .a-duo{grid-template-columns:1fr}
+  .a-dests{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .a-biz-grid,.a-faq-grid{grid-template-columns:1fr; gap:32px}
+  .a-biz-intro{position:static}
 }
 @media (max-width:860px){
   .a-wrap,body.home .site-header .container,body.home .site-footer .container{padding-left:24px; padding-right:24px}
@@ -179,7 +224,7 @@ body.home .footer-tag{color:var(--text-2); font-family:var(--font); font-weight:
   .a-app{grid-template-columns:1fr; padding:0 32px}
   .a-app-copy{padding:36px 0 0}
   .a-phone{margin:0 auto}
-  .a-biz{padding:36px 32px}
+  .a-biz-grid{padding:36px 32px}
 }
 @media (max-width:600px){
   .a-wrap,body.home .site-header .container,body.home .site-footer .container{padding-left:16px; padding-right:16px}
@@ -198,5 +243,10 @@ body.home .footer-tag{color:var(--text-2); font-family:var(--font); font-weight:
   body.home main .a-row-head h2,body.home main .a-panel h2{font-size:22px}
   .a-updates{padding:24px 20px}
   .a-app{padding:0 20px}
-  .a-biz{padding:28px 20px}
+  .a-biz-grid{padding:28px 20px}
+  .a-features{grid-template-columns:1fr}
+  .a-dests{gap:12px}
+  .a-dest{padding:18px}
+  body.home main .a-biz-intro h2,body.home main .a-faq-grid>h2{font-size:26px}
+  .a-closing{padding:44px 20px}
 }
