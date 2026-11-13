@@ -28,6 +28,9 @@ export const FLEET_REFUSALS: Record<string, string> = {
   fleet_note_empty: "Write a note or attach a file.",
   fleet_note_voided: "That note was already removed.",
   fleet_bad_file: "A file is not allowed (images or PDF, up to 10 MB).",
+  fleet_deposit_used: "That deposit was already used for another payment.",
+  fleet_no_bank: "Connect the business's bank first (Profile, Bank for Zelle checks).",
+  fleet_bad_phone: "Enter a phone number with its area code.",
   fleet_staff_only:"This staff account is not allowed to manage Fleet.",
 };
 
@@ -783,6 +786,8 @@ export type FleetSettingsView = {
   driversSeeOnly: boolean;
   zelleName: string;
   zelleHandle: string;
+  /** Drivers get receipts and reminders on WhatsApp (docs/FLEET.md §9). */
+  whatsappEnabled: boolean;
 };
 
 /** The business's Fleet settings with their defaults (drivers-see-only is on unless turned off). */
@@ -801,6 +806,7 @@ export function readFleetSettings(business: Record<string, unknown> | null | und
     driversSeeOnly: s.driversSeeOnlyThisBusiness !== false,
     zelleName: str(zelle.name),
     zelleHandle: str(zelle.handle),
+    whatsappEnabled: ((s.whatsapp ?? {}) as Record<string, unknown>).enabled === true,
   };
 }
 

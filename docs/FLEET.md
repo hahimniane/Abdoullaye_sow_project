@@ -175,3 +175,32 @@ costs before saving.
 - Next (phase 2): drivers see their personal cents and Zelle details,
   WhatsApp receipt per payment, "I paid", WhatsApp question for unknown
   deposits.
+
+## 9. Phase 2a: drivers on WhatsApp (built 2026-11-12)
+
+Owner, 2026-11-12: WhatsApp only for drivers for now (no app pages yet);
+off until the business sends itself a test and switches it on; the
+unknown-deposit question waits (the office's "Zelle from the bank" list).
+
+- **Switch**: `fleet.settings.whatsapp.enabled` (Fleet admin,
+  `whatsapp_save`), off by default. `whatsapp_test {phone}` sends a sample
+  receipt and reminder to that phone (no driver named).
+- **Receipt** (`fleet_receipt_2lang`, Utility, bilingual): after every
+  recorded payment (`payment_record`, a bank deposit matched or picked by
+  the office), never for imported history. Says the amount, the day, and
+  what is still owed or the credit.
+- **Reminder** (`fleet_rent_reminder_2lang`): for each active driver's
+  oldest open bill, 2 days before its due day, on the day, 3 days after,
+  then every 7 days while open; says the amount owed, Landa's Zelle
+  (settings zelle name + handle) and the exact amount to send (whole
+  dollars owed + the driver's personal cents). Sent once a day from 10 AM
+  New York by `fleetBankRefresh` (`fleet.remindersSentDayKey`).
+- **Rows**: `fleetMessages/{receipt_<paymentId> | reminder_<driver>_<bill>_<day>
+  | test_...}` created once (never sent twice), status queued / sent /
+  failed / stopped / skipped (no phone). Server-only collection.
+- Pure: `fleet_whatsapp.js` + `test/fleet-whatsapp.test.js`; emulator:
+  `test/fleet-whatsapp-callables.test.js` (in `npm run test:fleet`).
+- Templates submitted with `~/laawol-deploy-logs/create_fleet_templates.py`
+  on 2026-11-12. Meta first rejected the reminder as INCORRECT_CATEGORY;
+  reworded as "Payment reminder from {{2}}: your rent bill {{3}}..." and
+  resubmitted. Turn WhatsApp to drivers on only once both are APPROVED.

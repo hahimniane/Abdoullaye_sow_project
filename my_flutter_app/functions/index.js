@@ -48270,7 +48270,40 @@ const fleet = createFleetHandlers({
     fleetBankRefresh(businessId, {uid, scheduled: false}),
   fleetScheduledRefresh: (businessId) =>
     fleetBankRefresh(businessId, {uid: "schedule", scheduled: true}),
+  // Drivers on WhatsApp (docs/FLEET.md section 9).
+  sendFleetMessage: sendFleetMessage,
 });
+
+/**
+ * One Fleet WhatsApp: its fleetMessages row (created once: a second call
+ * for the same id is skipped), then the send, then the outcome on the row.
+ *
+ * @param {object} args {id, row, body, reachable}.
+ * @return {Promise<string>} "sent" | "failed" | "stopped" | "skipped" |
+ *   "" (already handled).
+ */
+async function sendFleetMessage(args) {
+  const db = admin.firestore();
+  const ref = db.collection("fleetMessages").doc(args.id);
+  const created = await ref.create({...args.row,
+    status: args.reachable ? "queued" : "skipped",
+    error: args.reachable ? "" : "No WhatsApp number on file.",
+    createdAt: FirestoreFieldValue.serverTimestamp()})
+      .then(() => true, () => false);
+  if (!created) return "";
+  if (!args.reachable) return "skipped";
+  const result = containerWhatsAppConfigured() ?
+    await sendWhatsAppMessage(args.body) :
+    {ok: false, messageId: "", error: "WhatsApp is not connected yet."};
+  const status = result.ok ? "sent" :
+    (result.errorCode === WHATSAPP_STOPPED_ERROR_CODE ? "stopped" : "failed");
+  await ref.update({status, wamid: result.messageId || "",
+    error: result.ok ? "" : String(result.error || "").slice(0, 300),
+    ...(result.errorCode ? {errorCode: Number(result.errorCode)} : {}),
+    ...(result.ok ? {sentAt: FirestoreFieldValue.serverTimestamp()} : {}),
+    updatedAt: FirestoreFieldValue.serverTimestamp()});
+  return status;
+}
 exports.fleetAction = onCall(
     // The spreadsheet import writes a few thousand records.
     {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, timeoutSeconds: 300,

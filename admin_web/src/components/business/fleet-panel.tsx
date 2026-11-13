@@ -72,7 +72,11 @@ export function FleetPanel({
   if (tab === "fleetPaperwork") return <FleetPaperwork onOpenCar={openCar} state={state} />;
   if (tab === "fleetSettings") {
     return isAdmin ? (
-      <FleetSettings businessId={businessId} settings={settings} />
+      <FleetSettings
+        businessId={businessId}
+        settings={settings}
+        driversWithPhone={state.data.drivers.filter((d) => d.status === "active" && String(d.phone ?? "").replace(/\D/g, "").length >= 10).length}
+      />
     ) : (
       <div className="empty-state">Only a Fleet admin can change the Fleet settings.</div>
     );

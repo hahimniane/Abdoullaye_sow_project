@@ -16,13 +16,23 @@ import {
 import { moneyText } from "@/lib/invoice-ledger";
 
 import { FleetBankSchedule } from "./fleet-bank";
+import { FleetWhatsAppPanel } from "./fleet-whatsapp";
 import { callFleet } from "./fleet-data";
 import { fleetLang, SaveButton, useFleetRun } from "./fleet-ui";
 
-export function FleetSettings({ businessId, settings }: { businessId: string; settings: FleetSettingsView }) {
+export function FleetSettings({
+  businessId,
+  settings,
+  driversWithPhone = 0,
+}: {
+  businessId: string;
+  settings: FleetSettingsView;
+  driversWithPhone?: number;
+}) {
   return (
     <div className="stack fleet-page">
       <SettingsForm businessId={businessId} settings={settings} />
+      <FleetWhatsAppPanel businessId={businessId} settings={settings} driversWithPhone={driversWithPhone} />
       <FleetBankSchedule businessId={businessId} />
       <ImportSheet businessId={businessId} />
     </div>

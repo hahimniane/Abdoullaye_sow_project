@@ -8864,6 +8864,20 @@ Object.assign(ATTRIBUTE_TRANSLATIONS, {
   "Which bills": "Quelles factures",
   "Which payments": "Quels paiements",
 });
+Object.assign(TEXT_TRANSLATIONS, {
+  "WhatsApp to drivers": "WhatsApp pour les chauffeurs",
+  "Drivers get, on WhatsApp, in English and French: a receipt each time a payment is recorded, and a reminder 2 days before rent is due, on the due day, 3 days after if still unpaid, then every week. Each reminder says how to pay by Zelle and the exact amount to send, with the driver's cents.": "Les chauffeurs reçoivent sur WhatsApp, en anglais et en français : un reçu à chaque paiement enregistré, et un rappel 2 jours avant l’échéance du loyer, le jour même, 3 jours après s’il n’est pas payé, puis chaque semaine. Chaque rappel indique comment payer par Zelle et le montant exact à envoyer, avec les centimes du chauffeur.",
+  "On: drivers get receipts and reminders.": "Activé : les chauffeurs reçoivent reçus et rappels.",
+  "Off: no message is sent to drivers.": "Désactivé : aucun message n’est envoyé aux chauffeurs.",
+  "Send yourself a test first, then turn it on.": "Envoyez-vous d’abord un test, puis activez.",
+  "Your phone for a test": "Votre téléphone pour un test",
+  "Send a test": "Envoyer un test",
+  "Turn on WhatsApp to drivers": "Activer WhatsApp pour les chauffeurs",
+  "Turn off WhatsApp to drivers": "Désactiver WhatsApp pour les chauffeurs",
+  "Two test messages were sent: a receipt and a reminder. Check WhatsApp on that phone.": "Deux messages de test ont été envoyés : un reçu et un rappel. Vérifiez WhatsApp sur ce téléphone.",
+  "The test could not be sent. If these messages are new, Meta may still be reviewing them: try again later.": "Le test n’a pas pu être envoyé. Si ces messages sont nouveaux, Meta les examine peut-être encore : réessayez plus tard.",
+  "Enter a phone number with its area code.": "Saisissez un numéro de téléphone avec son indicatif.",
+});
 const englishDictionary = { ...TEXT_TRANSLATIONS, ...ATTRIBUTE_TRANSLATIONS };
 const frenchDictionary = buildReverseDictionary([
   TEXT_TRANSLATIONS,

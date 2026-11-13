@@ -8,6 +8,7 @@
 
 const fleetBilling = require("./fleet_billing");
 const fleetBank = require("./fleet_bank");
+const fleetWhatsApp = require("./fleet_whatsapp");
 const {parseFleetSheet} = require("./fleet_import");
 
 const STAFF = "fleet";
@@ -35,6 +36,7 @@ const FLEET_REFUSALS = Object.freeze({
   fleet_deposit_used: "That deposit was already used for another payment.",
   fleet_no_bank: "Connect the business's bank first (Profile, Bank for " +
     "Zelle checks).",
+  fleet_bad_phone: "Enter a phone number with its area code.",
 });
 
 const text = (v, max = 200) => String(v ?? "").trim().slice(0, max);
@@ -701,6 +703,7 @@ function createFleetHandlers(deps) {
     await audit(businessId, uid, "fleet_payment", ref.id,
         "fleet_payment_recorded",
         `Payment $${(amount / 100).toFixed(2)} (${method})`);
+    await sendReceipt(businessId, ref.id);
     return {success: true, paymentId: ref.id,
       creditAddedCents: result.creditAddedCents};
   }
@@ -809,6 +812,7 @@ function createFleetHandlers(deps) {
         `Zelle $${(amount / 100).toFixed(2)} from the bank ` +
         `(${p.how === "office" ? "picked by the office" : p.how === "sender" ?
           "known sender" : "driver's cents"})`);
+    await sendReceipt(p.businessId, ref.id);
     return {paymentId: ref.id, amountCents: amount};
   }
 
@@ -959,6 +963,24 @@ function createFleetHandlers(deps) {
     const businesses = await db().collection("businesses")
         .where("fleet.enabled", "==", true).get();
     let asked = 0;
+    // Rent reminders: once a day, from the reminder hour (New York).
+    const now = fleetBank.nyParts(nowMs);
+    if (now.hour >= fleetWhatsApp.REMINDER_HOUR) {
+      const today = deps.dayKeyNow();
+      for (const b of businesses.docs) {
+        const business = b.data() || {};
+        if (!whatsappOn(business)) continue;
+        if (business.fleet?.remindersSentDayKey === today) continue;
+        try {
+          await b.ref.update({"fleet.remindersSentDayKey": today});
+          const tried = await remindBusiness(b.id, business, today);
+          deps.logger.info("Fleet reminders", {businessId: b.id, tried});
+        } catch (error) {
+          deps.logger.warn("Fleet reminders failed", {businessId: b.id,
+            error: String(error?.message || error)});
+        }
+      }
+    }
     for (const b of businesses.docs) {
       const fleet = b.get("fleet") || {};
       const schedule =
@@ -977,6 +999,183 @@ function createFleetHandlers(deps) {
       }
     }
     return {asked};
+  }
+
+  // ---- drivers on WhatsApp (docs/FLEET.md section 9) --------------------
+
+  function whatsappOn(business) {
+    return business?.fleet?.settings?.whatsapp?.enabled === true;
+  }
+
+  /**
+   * One driver's open bills and credit, read now.
+   *
+   * @param {string} driverId The driver.
+   * @param {object} driver Their record.
+   * @return {Promise<object>} {bills, owedCents, creditCents}.
+   */
+  async function driverMoney(driverId, driver) {
+    const snap = await db().collection("fleetBills")
+        .where("driverId", "==", driverId).where("status", "==", "open").get();
+    const bills = snap.docs.map((d) => ({id: d.id, ...d.data()}));
+    const balance = fleetBilling.driverBalance(bills,
+        Number(driver?.creditCents) || 0, deps.dayKeyNow());
+    return {bills, owedCents: balance.owedCents,
+      creditCents: Math.max(0, Number(driver?.creditCents) || 0)};
+  }
+
+  /**
+   * A payment's receipt to its driver, when the business has WhatsApp on.
+   * Never throws: a payment never fails over a message.
+   *
+   * @param {string} businessId The business.
+   * @param {string} paymentId The fleetPayments id.
+   * @return {Promise<string>} The message status, or "" when none was sent.
+   */
+  async function sendReceipt(businessId, paymentId) {
+    try {
+      const {data: business} = await businessOf(businessId);
+      if (!fleetOn(business) || !whatsappOn(business)) return "";
+      const pay = await db().collection("fleetPayments").doc(paymentId).get();
+      if (!pay.exists || pay.get("imported") === true) return "";
+      const driverId = String(pay.get("driverId") || "");
+      const driverDoc = await db().collection("fleetDrivers").doc(driverId)
+          .get();
+      const driver = driverDoc.exists ? driverDoc.data() || {} : {};
+      const money = await driverMoney(driverId, driver);
+      const values = fleetWhatsApp.receiptValues({
+        driverName: driver.name, businessName: business.name,
+        businessPhone: business.phone,
+        amountCents: Number(pay.get("amountCents")) || 0,
+        paidDayKey: String(pay.get("paidDayKey") || deps.dayKeyNow()),
+        owedCents: money.owedCents, creditCents: money.creditCents});
+      return await deps.sendFleetMessage({
+        id: fleetWhatsApp.messageId("receipt", {paymentId}),
+        row: {businessId, driverId, kind: "receipt", paymentId,
+          template: fleetWhatsApp.RECEIPT_TEMPLATE,
+          phone: String(driver.phone || ""), name: String(driver.name || "")},
+        body: fleetWhatsApp.templateBody(fleetWhatsApp.RECEIPT_TEMPLATE,
+            driver.phone, values),
+        reachable: fleetWhatsApp.reachable(driver.phone),
+      });
+    } catch (error) {
+      deps.logger.warn("Fleet receipt not sent", {businessId, paymentId,
+        error: String(error?.message || error)});
+      return "";
+    }
+  }
+
+  /**
+   * One business's reminders for today: each active driver whose oldest
+   * open bill is due in 2 days, due today, 3 days late or a further week
+   * late. Idempotent per driver, bill and day.
+   *
+   * @param {string} businessId The business.
+   * @param {object} business Its record.
+   * @param {string} todayKey Today (New York).
+   * @return {Promise<number>} Messages sent or tried.
+   */
+  async function remindBusiness(businessId, business, todayKey) {
+    const [drivers, open] = await Promise.all([
+      activeDrivers(businessId),
+      db().collection("fleetBills").where("businessId", "==", businessId)
+          .where("status", "==", "open").get(),
+    ]);
+    const billsByDriver = new Map();
+    for (const d of open.docs) {
+      const bill = {id: d.id, ...d.data()};
+      const list = billsByDriver.get(bill.driverId) || [];
+      list.push(bill);
+      billsByDriver.set(bill.driverId, list);
+    }
+    let tried = 0;
+    for (const driver of drivers) {
+      const bills = billsByDriver.get(driver.id) || [];
+      const oldest = fleetWhatsApp.oldestOpenBill(bills);
+      if (!oldest) continue;
+      const kind = fleetWhatsApp.reminderKind(oldest.dueDayKey, todayKey);
+      if (!kind) continue;
+      const balance = fleetBilling.driverBalance(bills,
+          Number(driver.creditCents) || 0, todayKey);
+      if (!(balance.owedCents > 0)) continue;
+      const values = fleetWhatsApp.reminderValues({
+        driverName: driver.name, businessName: business.name,
+        businessPhone: business.phone, settings: business.fleet?.settings,
+        kind, dueDayKey: oldest.dueDayKey, owedCents: balance.owedCents,
+        personalCents: driver.personalCents});
+      await deps.sendFleetMessage({
+        id: fleetWhatsApp.messageId("reminder",
+            {driverId: driver.id, billId: oldest.id, todayKey}),
+        row: {businessId, driverId: driver.id, kind: "reminder",
+          reminder: kind, billId: oldest.id,
+          template: fleetWhatsApp.REMINDER_TEMPLATE,
+          phone: String(driver.phone || ""), name: String(driver.name || "")},
+        body: fleetWhatsApp.templateBody(fleetWhatsApp.REMINDER_TEMPLATE,
+            driver.phone, values),
+        reachable: fleetWhatsApp.reachable(driver.phone),
+      }).catch((error) => deps.logger.warn("Fleet reminder not sent",
+          {businessId, driverId: driver.id,
+            error: String(error?.message || error)}));
+      tried += 1;
+    }
+    return tried;
+  }
+
+  async function whatsappSave(uid, businessId, data) {
+    await requireAdmin(uid, businessId);
+    const {ref, data: business} = await businessOf(businessId);
+    if (!fleetOn(business)) throw refuse("fleet_off");
+    if (typeof data.enabled !== "boolean") {
+      throw refuse("fleet_bad_input", "invalid-argument");
+    }
+    await ref.update({"fleet.settings.whatsapp.enabled": data.enabled,
+      "fleet.settings.whatsapp.updatedAtMs": Date.now(),
+      "fleet.settings.whatsapp.updatedBy": uid,
+      updatedAt: FieldValue.serverTimestamp()});
+    await audit(businessId, uid, "fleet_settings", businessId,
+        "fleet_whatsapp", data.enabled ?
+          "WhatsApp to drivers switched on" :
+          "WhatsApp to drivers switched off");
+    return {success: true, enabled: data.enabled};
+  }
+
+  /**
+   * A sample receipt and a sample reminder to one phone, so the office sees
+   * what drivers get before switching it on. Names no driver.
+   *
+   * @param {string} uid The caller (Fleet admin).
+   * @param {string} businessId The business.
+   * @param {object} data {phone}.
+   * @return {Promise<object>} {receipt, reminder} statuses.
+   */
+  async function whatsappTest(uid, businessId, data) {
+    await requireAdmin(uid, businessId);
+    const {data: business} = await businessOf(businessId);
+    if (!fleetOn(business)) throw refuse("fleet_off");
+    const phone = text(data.phone, 40);
+    if (!fleetWhatsApp.reachable(phone)) {
+      throw refuse("fleet_bad_phone", "invalid-argument");
+    }
+    const today = deps.dayKeyNow();
+    const sample = {driverName: "Test", businessName: business.name,
+      businessPhone: business.phone};
+    const send = (kind, template, values) => deps.sendFleetMessage({
+      id: fleetWhatsApp.messageId("test", {businessId}) + `_${kind}`,
+      row: {businessId, driverId: "", kind: "test", test: kind, template,
+        phone, name: "Test", byUid: uid},
+      body: fleetWhatsApp.templateBody(template, phone, values),
+      reachable: true,
+    });
+    const receipt = await send("receipt", fleetWhatsApp.RECEIPT_TEMPLATE,
+        fleetWhatsApp.receiptValues({...sample, amountCents: 35017,
+          paidDayKey: today, owedCents: 0, creditCents: 17}));
+    const reminder = await send("reminder", fleetWhatsApp.REMINDER_TEMPLATE,
+        fleetWhatsApp.reminderValues({...sample,
+          settings: business.fleet?.settings, kind: "soon",
+          dueDayKey: today, owedCents: 35000, personalCents: 17}));
+    await audit(businessId, uid, "fleet_settings", businessId,
+        "fleet_whatsapp_test", `Test WhatsApp sent to ${phone}`);
+    return {success: true, receipt, reminder};
   }
 
   // ---- import ----------------------------------------------------------
@@ -1086,6 +1285,8 @@ function createFleetHandlers(deps) {
     bank_schedule_save: bankScheduleSave,
     bank_assign: bankAssign,
     bank_check_now: bankCheckNow,
+    whatsapp_save: whatsappSave,
+    whatsapp_test: whatsappTest,
   };
 
   async function fleetAction(request) {
@@ -1180,7 +1381,7 @@ function createFleetHandlers(deps) {
   }
 
   return {fleetAction, fleetDaily, runFleetDay, matchBankDeposits,
-    fleetBankTick};
+    fleetBankTick, sendReceipt, remindBusiness};
 }
 
 module.exports = {FLEET_REFUSALS, createFleetHandlers};
