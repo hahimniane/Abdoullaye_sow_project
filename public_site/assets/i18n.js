@@ -367,6 +367,7 @@
     "Ship packages, barrels and cars between the US and West Africa.": "Expédiez des colis, des barils et des voitures entre les États-Unis et l’Afrique de l’Ouest.",
     // Homepage (2026-11 redesign)
     // Homepage photos (2026-11-13)
+    "At sea": "En mer",
     "From": "Départ",
     "Compare businesses": "Comparer les entreprises",
     "No obligation. See the available businesses before you book.": "Sans engagement. Voyez les entreprises disponibles avant de réserver.",

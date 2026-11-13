@@ -114,31 +114,40 @@ assertIncludes(index, 'id="featuredBusinessesGrid"', "index.html");
 assertIncludes(index, 'data-cms="hero.headline"', "index.html");
 assertIncludes(index, 'data-cms="featured.heading"', "index.html");
 
-// Homepage redesign (2026-11): the hero "What do you need?" box is a plain GET
-// form to the customer site, so it works without JavaScript. Every service it
-// (or any homepage link) opens must be one the customer site understands
+// Homepage (2026-11-13): the hero booking panel. Its package tab is a plain
+// GET form to the customer site (service=barrel + destination ?to=<ISO code>,
+// read by linkedCountryId in admin_web/src/lib/package-requests.ts), so it
+// works without JavaScript; the other tabs are plain links. Every service the
+// page opens must be one the customer site understands
 // (admin_web/src/lib/customer-service-intent.ts).
 {
   const KNOWN_SERVICES = ["barrel", "car-transport", "parking", "shared-barrels", "cars", "tracking"];
   assertIncludes(
     index,
-    '<form class="h-search" action="https://customer.laawoldigital.com/" method="get">',
-    "homepage hero service picker",
+    '<form class="a-book-pane" id="pane-package" role="tabpanel" aria-labelledby="tab-package" action="https://customer.laawoldigital.com/" method="get">',
+    "homepage booking panel",
   );
-  assertIncludes(index, '<select id="homeService" name="service">', "homepage hero service picker");
-  const picker = index.slice(index.indexOf('id="homeService"'), index.indexOf("</select>"));
-  const options = Array.from(picker.matchAll(/<option value="([^"]+)"/g), (m) => m[1]);
-  assert(options.length >= 4, "homepage service picker must offer the four public services");
-  for (const value of options) {
-    assert(KNOWN_SERVICES.includes(value), `homepage service picker offers unknown service ${value}`);
+  assertIncludes(index, '<input type="hidden" name="service" value="barrel" />', "homepage booking panel");
+  assertIncludes(index, '<select id="homeDestination" name="to">', "homepage booking panel");
+  const picker = index.slice(index.indexOf('id="homeDestination"'), index.indexOf("</select>", index.indexOf('id="homeDestination"')));
+  const codes = Array.from(picker.matchAll(/<option value="([^"]+)"/g), (m) => m[1]);
+  assert(codes.length >= 1, "homepage destination picker must offer at least one country");
+  for (const code of codes) {
+    assert(/^[A-Z]{2}$/.test(code), `homepage destination ${code} must be an ISO country code`);
+  }
+  for (const service of ["cars", "car-transport", "parking"]) {
+    assertIncludes(index, `https://customer.laawoldigital.com/?service=${service}`, "homepage booking panel tab");
   }
   for (const m of index.matchAll(/customer\.laawoldigital\.com\/\?service=([a-z-]+)/g)) {
     assert(KNOWN_SERVICES.includes(m[1]), `homepage links to unknown customer service ${m[1]}`);
   }
-  // Every French line the redesign added has its English entry.
+  // Every French line the panel and the new sections show has its English entry.
   for (const fr of [
-    "Comparez.", "Envoyez.", "Suivez.", "Que voulez-vous faire ?", "Commencer",
-    "Nos services", "Après votre réservation", "Prêt à commencer ?", "Espace client",
+    "Que voulez-vous faire ?", "Envoyer un colis", "Acheter une voiture", "Expédier une voiture",
+    "Stationnement", "Départ", "États-Unis", "Comparer les entreprises",
+    "Sans engagement. Voyez les entreprises disponibles avant de réserver.",
+    "Chargé à New York", "En mer", "Livré à Conakry", "Simple, du début à la fin",
+    "Laawol pour les entreprises", "Questions fréquentes", "Prêt à envoyer ?", "Espace client",
   ]) {
     assertIncludes(i18n, `: "${fr}"`, "i18n.js homepage translation");
   }
