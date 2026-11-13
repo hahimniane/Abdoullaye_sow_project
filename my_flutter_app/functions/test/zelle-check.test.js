@@ -381,7 +381,7 @@ describe("zelle check: callable contract", () => {
       const body = block(name);
       if (!REACHES_PLAID.test(body)) return;
       const options = body.slice(0, body.indexOf("async"));
-      assert.match(options, /secrets: BANK_SECRETS/);
+      assert.match(options, /secrets: (BANK_SECRETS|\[\.\.\.BANK_SECRETS\b)/);
     });
   }
 

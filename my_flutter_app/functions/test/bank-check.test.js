@@ -407,7 +407,8 @@ describe("check bank: callable contract", () => {
       for (const name of users) {
         const part = exportBlocks.find((block) => block.name === name).body;
         assert.match(part.slice(0, part.indexOf("async")),
-            /secrets: BANK_SECRETS/, `${name} (${fn})`);
+            /secrets: (BANK_SECRETS|\[\.\.\.BANK_SECRETS\b)/,
+            `${name} (${fn})`);
       }
       // ...and through the callables that call those helpers.
       for (const name of fn === "standaloneBankCheck" ? users : []) {

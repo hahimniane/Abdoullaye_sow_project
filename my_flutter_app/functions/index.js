@@ -48304,10 +48304,21 @@ async function sendFleetMessage(args) {
     updatedAt: FirestoreFieldValue.serverTimestamp()});
   return status;
 }
+const plaidClientIdSecret = defineSecret("PLAID_CLIENT_ID");
+const plaidSecretSecret = defineSecret("PLAID_SECRET");
+// 32 random bytes, base64: seals the bank access token at rest.
+const bankTokenKeySecret = defineSecret("BANK_TOKEN_KEY");
+const BANK_SECRETS = [plaidClientIdSecret, plaidSecretSecret,
+  bankTokenKeySecret];
+// Fleet sends WhatsApp (receipts, reminders) when a payment lands: every
+// function that records a Fleet payment or reminds drivers needs these.
+const FLEET_WHATSAPP_SECRETS = [whatsappAccessToken, whatsappPhoneNumberId];
 exports.fleetAction = onCall(
-    // The spreadsheet import writes a few thousand records.
+    // The spreadsheet import writes a few thousand records. Check bank now
+    // opens the bank link; payments and tests send WhatsApp.
     {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, timeoutSeconds: 300,
-      memory: "512MiB"},
+      memory: "512MiB",
+      secrets: [...BANK_SECRETS, ...FLEET_WHATSAPP_SECRETS]},
     fleet.fleetAction);
 exports.fleetDaily = onSchedule(
     {schedule: "15 5 * * *", timeZone: "America/New_York",
@@ -48316,7 +48327,8 @@ exports.fleetDaily = onSchedule(
 // Pay-day bank checks: each Fleet business's own schedule and cost.
 exports.fleetBankRefresh = onSchedule(
     {schedule: "every 15 minutes", timeZone: "America/New_York",
-      timeoutSeconds: 300, maxInstances: 1},
+      timeoutSeconds: 300, maxInstances: 1,
+      secrets: [...BANK_SECRETS, ...FLEET_WHATSAPP_SECRETS]},
     () => fleet.fleetBankTick(Date.now()));
 
 /**
@@ -48414,12 +48426,7 @@ const zelleCheck = require("./zelle_check");
 const bankCheck = require("./bank_check");
 const bankTokenCrypto = require("./bank_token_crypto");
 
-const plaidClientIdSecret = defineSecret("PLAID_CLIENT_ID");
-const plaidSecretSecret = defineSecret("PLAID_SECRET");
-// 32 random bytes, base64: seals the bank access token at rest.
-const bankTokenKeySecret = defineSecret("BANK_TOKEN_KEY");
-const BANK_SECRETS = [plaidClientIdSecret, plaidSecretSecret,
-  bankTokenKeySecret];
+// The bank secrets (BANK_SECRETS) are defined above the Fleet functions.
 
 /**
  * @param {string} code A zelle_check BANK_REFUSALS code.
@@ -48838,7 +48845,7 @@ exports.createBankLinkToken = onCall(
 
 exports.connectBusinessBank = onCall(
     {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public",
-      secrets: BANK_SECRETS},
+      secrets: [...BANK_SECRETS, ...FLEET_WHATSAPP_SECRETS]},
     async (request) => {
       const uid = requireAuth(request);
       const data = request.data || {};
@@ -49307,7 +49314,7 @@ async function bankUseRecords(uid, businessId, data) {
 
 exports.checkZellePayment = onCall(
     {enforceAppCheck: ENFORCE_APP_CHECK, cors: true, invoker: "public",
-      secrets: BANK_SECRETS},
+      secrets: [...BANK_SECRETS, ...FLEET_WHATSAPP_SECRETS]},
     async (request) => {
       const uid = requireAuth(request);
       const data = request.data || {};
@@ -49444,7 +49451,8 @@ async function applyBankItemChange(db, ref, itemId, change) {
 // over the exact body); then thin: it syncs or records the login's state
 // and answers 200, so a new Plaid message type never becomes an outage.
 exports.plaidWebhook = onRequest(
-    {cors: false, invoker: "public", secrets: BANK_SECRETS},
+    {cors: false, invoker: "public",
+      secrets: [...BANK_SECRETS, ...FLEET_WHATSAPP_SECRETS]},
     async (req, res) => {
       if (req.method !== "POST") {
         res.status(405).send("Method not allowed");
