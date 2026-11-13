@@ -171,7 +171,8 @@ body.home main .a-biz h2{color:#fff}
 .a-biz p{margin:0; max-width:360px; font-size:16px; line-height:1.55; color:rgba(255,255,255,.8)}
 
 /* ---------- Destinations ---------- */
-.a-dests{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:24px}
+.a-dests{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:24px}
+.a-dest-more{background:var(--surface); border-color:var(--line-soft)}
 .a-dest{display:flex; flex-direction:column; gap:4px; padding:24px; border:1px solid var(--line); border-radius:var(--radius); color:var(--text); transition:box-shadow .2s ease, border-color .2s ease}
 .a-dest:hover{border-color:transparent; box-shadow:var(--shadow-hover)}
 .a-dest-flag{font-size:34px; line-height:1; margin-bottom:12px}

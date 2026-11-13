@@ -367,6 +367,10 @@
     "Ship packages, barrels and cars between the US and West Africa.": "Expédiez des colis, des barils et des voitures entre les États-Unis et l’Afrique de l’Ouest.",
     // Homepage (2026-11 redesign)
     // Homepage photos (2026-11-13)
+    "Freetown and regions": "Freetown et régions",
+    "See prices": "Voir les prix",
+    "Is your country missing?": "Votre pays n’est pas là ?",
+    "Ask for your country": "Demander pour votre pays",
     "At sea": "En mer",
     "From": "Départ",
     "Compare businesses": "Comparer les entreprises",
