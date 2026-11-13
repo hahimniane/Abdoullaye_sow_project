@@ -159,6 +159,8 @@ describe("money and codes", () => {
   it("makes the Zelle amount the code", () => {
     assert.equal(zelleAmountText(120000, 7), "$1,200.07");
     assert.equal(zelleAmountText(0, 42), "$0.42");
+    // Rounded up: $349.83 owed reads "$350.17", never 66 cents short.
+    assert.equal(zelleAmountText(34983, 17), "$350.17");
     assert.equal(zelleAmountText(1000, null), null);
     assert.equal(zelleAmountText(1000, 100), null);
   });

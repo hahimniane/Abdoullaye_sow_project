@@ -38,7 +38,11 @@ describe("Fleet WhatsApp: what it says", () => {
   it("the exact Zelle amount is the whole dollars owed and the driver's " +
       "cents", () => {
     assert.equal(fw.zelleAmountCents(35000, 17), 35017);
-    assert.equal(fw.zelleAmountCents(35050, 17), 35017);
+    // Owed $349.83 after last month's 17 cents of credit: send $350.17,
+    // never $349.17 (66 cents short, and a reminder over pennies).
+    assert.equal(fw.zelleAmountCents(34983, 17), 35017);
+    assert.equal(fw.zelleAmountCents(35050, 17), 35117);
+    assert.equal(fw.zelleAmountCents(0, 17), 17);
     assert.equal(fw.zelleAmountCents(35000, null), null);
     assert.equal(fw.zelleAmountCents(35000, 100), null);
   });

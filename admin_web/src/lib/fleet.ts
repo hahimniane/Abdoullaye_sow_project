@@ -122,7 +122,8 @@ export function centsToInput(cents: unknown): string {
 export function zelleAmountText(owedCents: number, personalCents: unknown): string | null {
   const p = Number(personalCents);
   if (!Number.isInteger(p) || p < 1 || p > 99) return null;
-  const dollars = Math.floor(Math.max(0, Number(owedCents) || 0) / 100);
+  // Rounded UP, so the driver is never a few cents short (fleet_whatsapp.js).
+  const dollars = Math.ceil(Math.max(0, Number(owedCents) || 0) / 100);
   return `$${dollars.toLocaleString("en-US")}.${String(p).padStart(2, "0")}`;
 }
 

@@ -59,9 +59,11 @@ function dayText(key, lang) {
 }
 
 /**
- * The amount a driver sends by Zelle: whole dollars of what they owe, and
- * their personal cents (the amount is the code). Same rule as the
- * console's zelleAmountText.
+ * The amount a driver sends by Zelle: what they owe ROUNDED UP to whole
+ * dollars, plus their personal cents (the amount is the code). Rounding up
+ * means a driver is never a few cents short: the cents over become credit,
+ * taken off the next bill, and stay under about a dollar (owner,
+ * 2026-11-12). Same rule as the console's zelleAmountText.
  *
  * @param {number} owedCents What they owe.
  * @param {*} personalCents 1-99.
@@ -70,7 +72,7 @@ function dayText(key, lang) {
 function zelleAmountCents(owedCents, personalCents) {
   const p = Number(personalCents);
   if (!Number.isInteger(p) || p < 1 || p > 99) return null;
-  return Math.floor(Math.max(0, Number(owedCents) || 0) / 100) * 100 + p;
+  return Math.ceil(Math.max(0, Number(owedCents) || 0) / 100) * 100 + p;
 }
 
 /**
