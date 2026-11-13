@@ -11,6 +11,8 @@ const BANK_REFRESH_EVERY = Object.freeze([0, 15, 30, 60]);
 /** What Plaid bills Laawol per successful /transactions/refresh. */
 const PLAID_REFRESH_CENTS = 12;
 /** Deposits before this are never matched (the feature's go-live day). */
+// How many days apart a pending deposit and its posted copy may be dated.
+const DUPLICATE_DAYS = 5;
 const BANK_MATCH_START_MS = Date.UTC(2026, 10, 12, 5, 0, 0);
 /** A month has about this many Mondays (for the monthly estimate). */
 const MONDAYS_PER_MONTH = 4;
@@ -167,7 +169,35 @@ function depositMatchable(credit, sinceMs) {
   return day !== "" && Date.parse(`${day}T23:59:59-05:00`) >= sinceMs;
 }
 
+/**
+ * Whether a new deposit may be one already used, sent again by the bank:
+ * same account, amount and sender as a used deposit that was pending or was
+ * removed by the bank, within DUPLICATE_DAYS. Some banks post a pending
+ * deposit under a new id without linking the two; paying it by itself
+ * would pay the driver twice, so it waits for the office instead.
+ *
+ * @param {object} credit The new deposit ({id, accountId, amountCents,
+ *   senderName, dateKey}).
+ * @param {Array<object>} others Stored deposits with the same amount.
+ * @return {?object} The used deposit it may repeat, or null.
+ */
+function possibleDuplicateOf(credit, others) {
+  const sender = senderKey(credit?.senderName);
+  const day = Date.parse(`${credit?.dateKey || ""}T12:00:00Z`);
+  if (!sender || !Number.isFinite(day)) return null;
+  return (others || []).find((o) => o && o.id !== credit.id &&
+    o.consumedBy && o.consumedBy.kind &&
+    (o.removed === true || o.pending === true) &&
+    String(o.accountId || "") === String(credit.accountId || "") &&
+    Number(o.amountCents) === Number(credit.amountCents) &&
+    senderKey(o.senderName) === sender &&
+    Math.abs(Date.parse(`${o.dateKey || ""}T12:00:00Z`) - day) <=
+      DUPLICATE_DAYS * 24 * 3600 * 1000) || null;
+}
+
 module.exports = {
+  DUPLICATE_DAYS,
+  possibleDuplicateOf,
   BANK_MATCH_START_MS,
   BANK_REFRESH_EVERY,
   DEFAULT_BANK_SCHEDULE,

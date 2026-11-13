@@ -52,7 +52,8 @@ async function deposit(amountCents, senderName, extra = {}) {
   const id = `${BIZ}_txn-${++n}`;
   await db.collection("businessBankCredits").doc(id).set({businessId: BIZ,
     transactionId: `txn-${n}`, accountId: "acct", amountCents, pending: false,
-    atMs: AFTER + n * 1000, dateKey: "2026-12-02", senderName, ...extra});
+    atMs: AFTER + n * 1000, dateKey: "2026-12-02", senderName,
+    createdAt: FieldValue.serverTimestamp(), ...extra});
   return id;
 }
 
@@ -159,6 +160,38 @@ describe("deposits pay drivers by themselves", () => {
         {consumedBy: {kind: "sale", id: "s1"}});
     assert.deepEqual(await handlers.matchBankDeposits(BIZ, [sale]),
         {paid: 0, waiting: 0});
+  });
+
+  it("the bank sends a used Zelle again under a new id: it waits for the " +
+      "office, never pays twice", async () => {
+    // Pending, paid by itself (cents .17 = drv-a).
+    const pending = await deposit(45017, "ALPHA SENDER", {pending: true});
+    assert.deepEqual(await handlers.matchBankDeposits(BIZ, [pending]),
+        {paid: 1, waiting: 0});
+    // The bank posts it under a new id with no link, and removes the
+    // pending one.
+    await db.collection("businessBankCredits").doc(pending).set(
+        {removed: true}, {merge: true});
+    const posted = await deposit(45017, "Alpha Sender",
+        {dateKey: "2026-12-03"});
+    assert.deepEqual(await handlers.matchBankDeposits(BIZ, [posted]),
+        {paid: 0, waiting: 1});
+    const credit = await doc("businessBankCredits", posted);
+    assert.equal(credit.consumedBy, undefined);
+    assert.equal(credit.fleetWaitingReason, "possible_duplicate");
+    // A second, real Zelle of the same amount after the first posted (not
+    // pending, not removed) still pays by itself.
+    const used = await deposit(45017, "ALPHA SENDER", {
+      consumedBy: {kind: "fleet_payment", id: "p-old"}});
+    const again = await deposit(45017, "ALPHA SENDER");
+    await db.collection("businessBankCredits").doc(posted).set(
+        {consumedBy: {kind: "fleet_payment", id: "office"}}, {merge: true});
+    assert.ok(used);
+    // Only the removed pending one is a possible repeat of `again` (same
+    // amount and sender, within 5 days): it waits too. That is the safe
+    // side: the office pays it with one tap if the driver sent it twice.
+    assert.deepEqual(await handlers.matchBankDeposits(BIZ, [again]),
+        {paid: 0, waiting: 1});
   });
 
   it("undo gives the deposit back to the waiting list", async () => {

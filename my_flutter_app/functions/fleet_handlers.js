@@ -900,7 +900,14 @@ function createFleetHandlers(deps) {
         const credit = doc.exists ? doc.data() || {} : null;
         if (!credit || credit.businessId !== businessId) continue;
         if (!fleetBank.depositMatchable(credit, since)) continue;
-        const match = fleetBank.matchDeposit(credit, drivers);
+        const sameAmount = await db().collection("businessBankCredits")
+            .where("businessId", "==", businessId)
+            .where("amountCents", "==", Number(credit.amountCents) || 0)
+            .orderBy("createdAt", "desc").limit(50).get();
+        const repeat = fleetBank.possibleDuplicateOf({id: doc.id, ...credit},
+            sameAmount.docs.map((d) => ({id: d.id, ...d.data()})));
+        const match = repeat ? {reason: "possible_duplicate"} :
+          fleetBank.matchDeposit(credit, drivers);
         if (match.driverId) {
           try {
             await payFromDeposit({businessId, creditId: doc.id,

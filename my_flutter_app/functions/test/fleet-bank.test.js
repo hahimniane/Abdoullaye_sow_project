@@ -12,6 +12,7 @@ const {
   matchDeposit,
   senderKey,
 } = require("../fleet_bank");
+const fb = require("../fleet_bank");
 
 // New York times in November 2026 (UTC-5).
 const ny = (day, hour, minute = 0) =>
@@ -119,4 +120,34 @@ describe("a deposit pays the right driver", () => {
     assert.equal(depositMatchable({amountCents: 100, senderName: "A",
       atMs: null, dateKey: "2026-11-12"}, BANK_MATCH_START_MS), true);
   });
+});
+
+describe("a deposit the bank may have sent twice", () => {
+  const used = {id: "a", accountId: "acct", amountCents: 35017,
+    senderName: "MOUSSA DIALLO", dateKey: "2026-12-01", pending: true,
+    consumedBy: {kind: "fleet_payment", id: "p1"}};
+  const fresh = {id: "b", accountId: "acct", amountCents: 35017,
+    senderName: "Moussa Diallo", dateKey: "2026-12-02", pending: false};
+  it("same account, amount and sender as a used pending or removed one",
+      () => {
+        assert.equal(fb.possibleDuplicateOf(fresh, [used]).id, "a");
+        assert.equal(fb.possibleDuplicateOf(fresh,
+            [{...used, pending: false, removed: true}]).id, "a");
+      });
+  it("not when the used one posted normally, or differs, or is far apart",
+      () => {
+        assert.equal(fb.possibleDuplicateOf(fresh,
+            [{...used, pending: false}]), null);
+        assert.equal(fb.possibleDuplicateOf(fresh,
+            [{...used, consumedBy: null}]), null);
+        assert.equal(fb.possibleDuplicateOf(fresh,
+            [{...used, amountCents: 35018}]), null);
+        assert.equal(fb.possibleDuplicateOf(fresh,
+            [{...used, senderName: "OTHER"}]), null);
+        assert.equal(fb.possibleDuplicateOf(fresh,
+            [{...used, accountId: "other"}]), null);
+        assert.equal(fb.possibleDuplicateOf(fresh,
+            [{...used, dateKey: "2026-11-20"}]), null);
+        assert.equal(fb.possibleDuplicateOf(fresh, [fresh]), null);
+      });
 });

@@ -8899,6 +8899,9 @@ Object.assign(TEXT_TRANSLATIONS, {
   "This driver has no WhatsApp number. Add one in Edit details.": "Ce chauffeur n’a pas de numéro WhatsApp. Ajoutez-en un dans Modifier les détails.",
   "This driver has left.": "Ce chauffeur est parti.",
 });
+Object.assign(TEXT_TRANSLATIONS, {
+  "This may be a Zelle already used, sent again by the bank. Pay it only if the driver really sent it twice.": "Ce Zelle a peut-être déjà été utilisé et renvoyé par la banque. Ne le payez que si le chauffeur l’a vraiment envoyé deux fois.",
+});
 const englishDictionary = { ...TEXT_TRANSLATIONS, ...ATTRIBUTE_TRANSLATIONS };
 const frenchDictionary = buildReverseDictionary([
   TEXT_TRANSLATIONS,
