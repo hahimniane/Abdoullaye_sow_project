@@ -8878,6 +8878,16 @@ Object.assign(TEXT_TRANSLATIONS, {
   "The test could not be sent. If these messages are new, Meta may still be reviewing them: try again later.": "Le test n’a pas pu être envoyé. Si ces messages sont nouveaux, Meta les examine peut-être encore : réessayez plus tard.",
   "Enter a phone number with its area code.": "Saisissez un numéro de téléphone avec son indicatif.",
 });
+Object.assign(TEXT_TRANSLATIONS, {
+  "Who gets messages": "Qui reçoit les messages",
+  "All active drivers with a phone": "Tous les chauffeurs actifs avec un téléphone",
+  "Only chosen drivers (a test or a pilot)": "Seulement les chauffeurs choisis (un test ou un essai)",
+  "Pick at least one driver.": "Choisissez au moins un chauffeur.",
+  "Remove this driver": "Retirer ce chauffeur",
+  "Add to the list": "Ajouter à la liste",
+  "Choose a driver...": "Choisir un chauffeur...",
+  "Save who gets messages": "Enregistrer qui reçoit les messages",
+});
 const englishDictionary = { ...TEXT_TRANSLATIONS, ...ATTRIBUTE_TRANSLATIONS };
 const frenchDictionary = buildReverseDictionary([
   TEXT_TRANSLATIONS,

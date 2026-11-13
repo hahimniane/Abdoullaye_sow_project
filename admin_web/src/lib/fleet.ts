@@ -789,6 +789,8 @@ export type FleetSettingsView = {
   zelleHandle: string;
   /** Drivers get receipts and reminders on WhatsApp (docs/FLEET.md §9). */
   whatsappEnabled: boolean;
+  /** When set, only these drivers get WhatsApp (a test or a pilot); empty: every active driver. */
+  whatsappOnlyDriverIds: string[];
 };
 
 /** The business's Fleet settings with their defaults (drivers-see-only is on unless turned off). */
@@ -799,6 +801,7 @@ export function readFleetSettings(business: Record<string, unknown> | null | und
   >;
   const lateFee = (s.lateFee ?? {}) as Record<string, unknown>;
   const zelle = (s.zelle ?? {}) as Record<string, unknown>;
+  const whatsapp = (s.whatsapp ?? {}) as Record<string, unknown>;
   return {
     lateFeeCents: num(lateFee.cents),
     lateFeeDay: num(lateFee.dayOfMonth) || 5,
@@ -807,7 +810,10 @@ export function readFleetSettings(business: Record<string, unknown> | null | und
     driversSeeOnly: s.driversSeeOnlyThisBusiness !== false,
     zelleName: str(zelle.name),
     zelleHandle: str(zelle.handle),
-    whatsappEnabled: ((s.whatsapp ?? {}) as Record<string, unknown>).enabled === true,
+    whatsappEnabled: whatsapp.enabled === true,
+    whatsappOnlyDriverIds: Array.isArray(whatsapp.onlyDriverIds)
+      ? whatsapp.onlyDriverIds.filter((id): id is string => typeof id === "string" && id !== "")
+      : [],
   };
 }
 

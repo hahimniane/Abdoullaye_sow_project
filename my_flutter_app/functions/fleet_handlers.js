@@ -1008,6 +1008,21 @@ function createFleetHandlers(deps) {
   }
 
   /**
+   * Whether this driver may get WhatsApp messages: everyone when the
+   * business has no "only these drivers" list (a test or a pilot), else
+   * only the drivers on it.
+   *
+   * @param {object} business The business record.
+   * @param {string} driverId The driver.
+   * @return {boolean} True when the driver may get messages.
+   */
+  function whatsappAllows(business, driverId) {
+    const only = business?.fleet?.settings?.whatsapp?.onlyDriverIds;
+    if (!Array.isArray(only) || only.length === 0) return true;
+    return only.includes(driverId);
+  }
+
+  /**
    * One driver's open bills and credit, read now.
    *
    * @param {string} driverId The driver.
@@ -1039,6 +1054,7 @@ function createFleetHandlers(deps) {
       const pay = await db().collection("fleetPayments").doc(paymentId).get();
       if (!pay.exists || pay.get("imported") === true) return "";
       const driverId = String(pay.get("driverId") || "");
+      if (!whatsappAllows(business, driverId)) return "";
       const driverDoc = await db().collection("fleetDrivers").doc(driverId)
           .get();
       const driver = driverDoc.exists ? driverDoc.data() || {} : {};
@@ -1090,6 +1106,7 @@ function createFleetHandlers(deps) {
     }
     let tried = 0;
     for (const driver of drivers) {
+      if (!whatsappAllows(business, driver.id)) continue;
       const bills = billsByDriver.get(driver.id) || [];
       const oldest = fleetWhatsApp.oldestOpenBill(bills);
       if (!oldest) continue;
@@ -1128,15 +1145,38 @@ function createFleetHandlers(deps) {
     if (typeof data.enabled !== "boolean") {
       throw refuse("fleet_bad_input", "invalid-argument");
     }
-    await ref.update({"fleet.settings.whatsapp.enabled": data.enabled,
+    const update = {"fleet.settings.whatsapp.enabled": data.enabled,
       "fleet.settings.whatsapp.updatedAtMs": Date.now(),
       "fleet.settings.whatsapp.updatedBy": uid,
-      updatedAt: FieldValue.serverTimestamp()});
+      updatedAt: FieldValue.serverTimestamp()};
+    // Optional "only these drivers" (a test or a pilot). Absent: unchanged;
+    // empty: every active driver.
+    let only = null;
+    if (data.onlyDriverIds !== undefined) {
+      if (!Array.isArray(data.onlyDriverIds) ||
+          data.onlyDriverIds.length > 50) {
+        throw refuse("fleet_bad_input", "invalid-argument");
+      }
+      only = [...new Set(data.onlyDriverIds.map((id) => text(id, 180))
+          .filter(Boolean))];
+      const docs = await Promise.all(only.map((id) =>
+        db().collection("fleetDrivers").doc(id).get()));
+      if (docs.some((d) => !d.exists || d.get("businessId") !== businessId)) {
+        throw refuse("fleet_not_found", "not-found");
+      }
+      update["fleet.settings.whatsapp.onlyDriverIds"] = only;
+    }
+    await ref.update(update);
+    const who = only && only.length ?
+      ` (only ${only.length} chosen driver${only.length === 1 ? "" : "s"})` :
+      "";
     await audit(businessId, uid, "fleet_settings", businessId,
         "fleet_whatsapp", data.enabled ?
-          "WhatsApp to drivers switched on" :
-          "WhatsApp to drivers switched off");
-    return {success: true, enabled: data.enabled};
+          `WhatsApp to drivers switched on${who}` :
+          `WhatsApp to drivers switched off${who}`);
+    const saved = business.fleet?.settings?.whatsapp?.onlyDriverIds;
+    return {success: true, enabled: data.enabled,
+      onlyDriverIds: only ?? (Array.isArray(saved) ? saved : [])};
   }
 
   /**

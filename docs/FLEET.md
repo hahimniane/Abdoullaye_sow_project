@@ -185,6 +185,11 @@ unknown-deposit question waits (the office's "Zelle from the bank" list).
 - **Switch**: `fleet.settings.whatsapp.enabled` (Fleet admin,
   `whatsapp_save`), off by default. `whatsapp_test {phone}` sends a sample
   receipt and reminder to that phone (no driver named).
+- **Only these drivers** (a test or a pilot):
+  `fleet.settings.whatsapp.onlyDriverIds`, saved with `whatsapp_save
+  {enabled, onlyDriverIds}` (up to 50, each a driver of the business).
+  When the list is set, receipts and reminders go to those drivers only;
+  an empty list means every active driver; leaving it out keeps the list.
 - **Receipt** (`fleet_receipt_2lang`, Utility, bilingual): after every
   recorded payment (`payment_record`, a bank deposit matched or picked by
   the office), never for imported history. Says the amount, the day, and

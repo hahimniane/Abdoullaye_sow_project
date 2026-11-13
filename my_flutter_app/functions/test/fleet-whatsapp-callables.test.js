@@ -142,4 +142,42 @@ describe("drivers on WhatsApp", () => {
     assert.equal(byDriver["wa-d1"].id,
         "reminder_wa-d1_wa-b1_2026-12-01");
   });
+
+  it("only these drivers: a test or a pilot reaches nobody else",
+      async () => {
+        await assert.rejects(act(OWNER, "whatsapp_save",
+            {enabled: true, onlyDriverIds: ["not-a-driver"]}),
+        refused("fleet_not_found"));
+        await assert.rejects(act(OWNER, "whatsapp_save",
+            {enabled: true, onlyDriverIds: "wa-d1"}),
+        refused("fleet_bad_input"));
+        const saved = await act(OWNER, "whatsapp_save",
+            {enabled: true, onlyDriverIds: ["wa-d1", "wa-d1"]});
+        assert.deepEqual(saved.onlyDriverIds, ["wa-d1"]);
+
+        let business = (await db.collection("businesses").doc(BIZ).get())
+            .data();
+        sent.length = 0;
+        await handlers.remindBusiness(BIZ, business, "2026-12-01");
+        assert.deepEqual(sent.map((s) => s.row.driverId), ["wa-d1"]);
+
+        // A payment by a driver who is not on the list: no receipt.
+        const before = (await rows((r) => r.kind === "receipt")).length;
+        await act(STAFF, "payment_record", {driverId: "wa-d3",
+          amountCents: 1000, method: "cash"});
+        assert.equal((await rows((r) => r.kind === "receipt")).length,
+            before);
+
+        // Saving without the list keeps it; an empty list means everyone.
+        await act(OWNER, "whatsapp_save", {enabled: true});
+        business = (await db.collection("businesses").doc(BIZ).get()).data();
+        assert.deepEqual(business.fleet.settings.whatsapp.onlyDriverIds,
+            ["wa-d1"]);
+        await act(OWNER, "whatsapp_save", {enabled: true, onlyDriverIds: []});
+        business = (await db.collection("businesses").doc(BIZ).get()).data();
+        sent.length = 0;
+        await handlers.remindBusiness(BIZ, business, "2026-12-01");
+        assert.deepEqual(sent.map((s) => s.row.driverId).sort(),
+            ["wa-d1", "wa-d2", "wa-d4"]);
+      });
 });

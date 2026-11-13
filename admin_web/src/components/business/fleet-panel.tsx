@@ -75,7 +75,13 @@ export function FleetPanel({
       <FleetSettings
         businessId={businessId}
         settings={settings}
-        driversWithPhone={state.data.drivers.filter((d) => d.status === "active" && String(d.phone ?? "").replace(/\D/g, "").length >= 10).length}
+        drivers={state.data.drivers
+          .filter((d) => d.status === "active")
+          .map((d) => ({
+            id: String(d.id),
+            name: String(d.name ?? ""),
+            hasPhone: String(d.phone ?? "").replace(/\D/g, "").length >= 10,
+          }))}
       />
     ) : (
       <div className="empty-state">Only a Fleet admin can change the Fleet settings.</div>
