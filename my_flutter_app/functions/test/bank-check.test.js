@@ -118,6 +118,18 @@ describe("check bank: which deposits answer it", () => {
       dateKey: "2026-10-19"}, ctxFor("today")), "outside_window");
   });
 
+  it("a date-only deposit may carry the bank's next-day posting date",
+      () => {
+        // Capital One gave a Zelle sent at 11:30 PM on Nov 12 the date
+        // Nov 13 and no time (2026-11-12).
+        const posted = credit({atMs: null, timeKnown: false,
+          dateKey: "2026-10-21"});
+        assert.equal(b.standaloneIneligibility(posted, ctxFor("today")), null);
+        assert.equal(b.standaloneIneligibility(posted, ctxFor("15m")), null);
+        assert.equal(b.standaloneIneligibility({...posted,
+          dateKey: "2026-10-22"}, ctxFor("today")), "outside_window");
+      });
+
   it("one -> received, several -> listed newest first, none -> not found",
       () => {
         assert.deepEqual(b.standaloneOutcome(ctxFor("15m"), []),

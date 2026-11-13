@@ -117,6 +117,25 @@ function standaloneWindow(input) {
 }
 
 /**
+ * The window's dates plus the day after the last one: a bank that gives
+ * only a date may give its posting date, which is often the next day
+ * (Capital One posted a Zelle sent at 11:30 PM on Nov 12 as Nov 13).
+ *
+ * @param {Iterable<string>} keys Window dates (YYYY-MM-DD).
+ * @return {Set<string>} The dates a date-only deposit may carry.
+ */
+function withPostingDay(keys) {
+  const all = new Set(keys);
+  const last = [...all].sort().pop();
+  if (last) {
+    const next = new Date(`${last}T12:00:00Z`);
+    next.setUTCDate(next.getUTCDate() + 1);
+    all.add(next.toISOString().slice(0, 10));
+  }
+  return all;
+}
+
+/**
  * Whether a stored deposit answers a standalone check.
  *
  * @param {object} credit A stored credit.
@@ -136,8 +155,8 @@ function standaloneIneligibility(credit, ctx) {
     return credit.atMs >= w.fromMs && credit.atMs <= w.toMs ? null :
       "outside_window";
   }
-  return credit.dateKey && w.dateKeys.has(credit.dateKey) ? null :
-    "outside_window";
+  return credit.dateKey && withPostingDay(w.dateKeys).has(credit.dateKey) ?
+    null : "outside_window";
 }
 
 /**
@@ -209,7 +228,8 @@ function useIneligibility(credit, ctx) {
     return credit.atMs >= earliest && credit.atMs <= nowMs + FUTURE_GRACE_MS ?
       null : "outside_window";
   }
-  const keys = new Set([dateKeyIn(earliest, zone), dateKeyIn(nowMs, zone)]);
+  const keys = withPostingDay([dateKeyIn(earliest, zone),
+    dateKeyIn(nowMs, zone)]);
   return credit.dateKey && keys.has(credit.dateKey) ? null : "outside_window";
 }
 

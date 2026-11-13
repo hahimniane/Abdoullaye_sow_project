@@ -230,6 +230,8 @@ function createFleetHandlers(deps) {
         fields.tlcLicenseSince = fields.tlcLicense ? deps.dayKeyNow() : null;
       }
       await doc.ref.set(fields, {merge: true});
+      // A driver who comes back may hold cents someone took meanwhile.
+      if (fields.status === "active") await ensurePersonalCents(businessId);
       await audit(businessId, uid, "fleet_driver", driverId,
           "fleet_driver_saved", `Driver ${name} edited`);
       return {success: true, driverId};
@@ -238,7 +240,8 @@ function createFleetHandlers(deps) {
     await db().runTransaction(async (tx) => {
       const active = await tx.get(col.where("businessId", "==", businessId)
           .where("status", "==", "active"));
-      const drivers = active.docs.map((x) => ({id: x.id, ...x.data()}));
+      const drivers = active.docs.map((x) => ({id: x.id,
+        personalCents: x.get("personalCents"), createdAt: joinedMs(x.data())}));
       drivers.push({id: ref.id, createdAt: Date.now()});
       const cents = fleetBilling.assignPersonalCents(drivers);
       tx.set(ref, {...fields, status: "active", creditCents: 0,
@@ -355,6 +358,8 @@ function createFleetHandlers(deps) {
         "fleet_assignment_started",
         `Car given to driver from ${startDayKey}, ` +
         `$${(rentCents / 100).toFixed(2)} ${period}`);
+    // Giving a car makes the driver active again: keep their cents unique.
+    await ensurePersonalCents(businessId);
     return {success: true, assignmentId: ref.id};
   }
 
@@ -777,6 +782,52 @@ function createFleetHandlers(deps) {
         .where("businessId", "==", businessId)
         .where("status", "==", "active").get();
     return snap.docs.map((d) => ({id: d.id, ...d.data()}));
+  }
+
+  /**
+   * When a driver joined, in ms, for the personal-cents order: createdAt,
+   * else importedAt (imported drivers), else 0.
+   *
+   * @param {object} driver A fleetDrivers record.
+   * @return {number} Milliseconds.
+   */
+  function joinedMs(driver) {
+    const v = driver?.createdAt ?? driver?.importedAt;
+    if (v && typeof v.toMillis === "function") return v.toMillis();
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  /**
+   * Keeps personal cents unique across a business's active drivers: the
+   * driver who joined first keeps a shared value, the other gets the lowest
+   * free one. Runs after an import, when a driver comes back, and daily.
+   *
+   * @param {string} businessId The business.
+   * @return {Promise<number>} How many drivers got new cents.
+   */
+  async function ensurePersonalCents(businessId) {
+    const snap = await db().collection("fleetDrivers")
+        .where("businessId", "==", businessId)
+        .where("status", "==", "active").get();
+    const cents = fleetBilling.assignPersonalCents(snap.docs.map((d) => ({
+      id: d.id, personalCents: d.get("personalCents"),
+      createdAt: joinedMs(d.data())})));
+    const changed = snap.docs.filter((d) =>
+      (d.get("personalCents") ?? null) !== (cents[d.id] ?? null));
+    for (let i = 0; i < changed.length; i += 400) {
+      const batch = db().batch();
+      for (const d of changed.slice(i, i + 400)) {
+        batch.update(d.ref, {personalCents: cents[d.id] ?? null,
+          updatedAt: FieldValue.serverTimestamp()});
+      }
+      await batch.commit();
+    }
+    if (changed.length) {
+      deps.logger.info("Fleet personal cents made unique",
+          {businessId, changed: changed.length});
+    }
+    return changed.length;
   }
 
   /**
@@ -1369,8 +1420,11 @@ function createFleetHandlers(deps) {
         "fleet_imported", `Spreadsheet imported: ${parsed.drivers.length} ` +
         `drivers, ${parsed.cars.length} cars, ${parsed.payments.length} ` +
         "payments");
+    // The sheet's cents ignore drivers already in Fleet: make them unique.
+    const centsChanged = await ensurePersonalCents(businessId);
     return {success: true, totals: parsed.totals,
-      warnings: parsed.warnings.slice(0, 200), written: writes.length};
+      warnings: parsed.warnings.slice(0, 200), written: writes.length,
+      centsChanged};
   }
 
   // ---- the callable ----------------------------------------------------
@@ -1480,6 +1534,7 @@ function createFleetHandlers(deps) {
         .where("fleet.enabled", "==", true).get();
     for (const b of businesses.docs) {
       try {
+        await ensurePersonalCents(b.id);
         const counts = await runFleetDay(b.id, b.get("fleet")?.settings || {},
             today);
         deps.logger.info("Fleet day", {businessId: b.id, ...counts});
@@ -1491,7 +1546,7 @@ function createFleetHandlers(deps) {
   }
 
   return {fleetAction, fleetDaily, runFleetDay, matchBankDeposits,
-    fleetBankTick, sendReceipt, remindBusiness};
+    fleetBankTick, sendReceipt, remindBusiness, ensurePersonalCents};
 }
 
 module.exports = {FLEET_REFUSALS, createFleetHandlers};

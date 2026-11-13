@@ -215,3 +215,33 @@ describe("drivers on WhatsApp", () => {
             {driverId: "wa-d1"}), refused("fleet_whatsapp_off"));
       });
 });
+
+describe("personal cents stay unique", () => {
+  it("a driver added before an import and a sheet driver with the same " +
+      "cents: the later one gets the lowest free value", async () => {
+    const BIZ2 = "fleetcents-biz";
+    const at = (iso) => admin.firestore.Timestamp.fromDate(new Date(iso));
+    await Promise.all([
+      db.collection("fleetDrivers").doc("c-test").set({businessId: BIZ2,
+        name: "Test Driver", status: "active", personalCents: 1,
+        createdAt: at("2026-11-12T15:00:00Z")}),
+      db.collection("fleetDrivers").doc("c-sheet").set({businessId: BIZ2,
+        name: "Sheet Driver", status: "active", personalCents: 1,
+        importedAt: at("2026-11-12T20:00:00Z")}),
+      db.collection("fleetDrivers").doc("c-two").set({businessId: BIZ2,
+        name: "Two", status: "active", personalCents: 2,
+        importedAt: at("2026-11-12T20:00:00Z")}),
+      db.collection("fleetDrivers").doc("c-left").set({businessId: BIZ2,
+        name: "Left", status: "left", personalCents: 3}),
+    ]);
+    assert.equal(await handlers.ensurePersonalCents(BIZ2), 1);
+    const read = async (id) => (await db.collection("fleetDrivers").doc(id)
+        .get()).get("personalCents");
+    assert.equal(await read("c-test"), 1, "joined first, keeps .01");
+    assert.equal(await read("c-two"), 2);
+    assert.equal(await read("c-sheet"), 3,
+        "lowest value no active driver holds");
+    assert.equal(await read("c-left"), 3, "a driver who left is untouched");
+    assert.equal(await handlers.ensurePersonalCents(BIZ2), 0, "settled");
+  });
+});
