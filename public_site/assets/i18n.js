@@ -367,6 +367,13 @@
     "Ship packages, barrels and cars between the US and West Africa.": "Expédiez des colis, des barils et des voitures entre les États-Unis et l’Afrique de l’Ouest.",
     // Homepage (2026-11 redesign)
     // Homepage photos (2026-11-13)
+    "Ship to West Africa with verified businesses": "Expédiez vers l’Afrique de l’Ouest avec des entreprises vérifiées",
+    "Packages, barrels, cars and parking. Compare prices, book online and follow every step on WhatsApp.": "Colis, barils, voitures et stationnement. Comparez les prix, réservez en ligne et suivez chaque étape sur WhatsApp.",
+    "Already booked?": "Déjà réservé ?",
+    "Loaded in New York": "Chargé à New York",
+    "Delivered in Conakry": "Livré à Conakry",
+    "Do you run a shipping business?": "Vous êtes une entreprise d’expédition ?",
+    "List your business so customers comparing prices on your routes can find you.": "Inscrivez votre entreprise pour être vue par les clients qui comparent les prix sur vos trajets.",
     "From the US to West Africa, your shipments": "Des États-Unis à l’Afrique de l’Ouest, vos envois",
     "in good hands.": "entre de bonnes mains.",
     "Compare verified shipping, car and parking businesses. Book online, then follow every step on WhatsApp.": "Comparez des entreprises vérifiées d’expédition, de voitures et de stationnement. Réservez en ligne, puis suivez chaque étape sur WhatsApp.",

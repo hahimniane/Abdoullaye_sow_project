@@ -9,9 +9,9 @@
   <meta name="theme-color" content="#032346" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="assets/styles.css?v=33" />
-  <link rel="stylesheet" href="assets/home.css?v=3" />
+  <link rel="stylesheet" href="assets/home.css?v=4" />
   <link rel="icon" type="image/png" href="assets/logo.png" />
 </head>
 <body class="home">
@@ -50,129 +50,117 @@
   </header>
 
   <main>
-  <!-- HERO: words on ivory, the real work on the right, edge to edge. -->
-  <section class="h-hero" id="top">
-    <div class="h-hero-grid">
-      <div class="h-hero-copy">
-        <h1 class="h-title" data-cms="hero.headline">Des États-Unis à l’Afrique de l’Ouest, vos envois <em>entre de bonnes mains.</em></h1>
-        <p class="h-lead" data-cms="hero.subheadline">Comparez des entreprises vérifiées d’expédition, de voitures et de stationnement. Réservez en ligne, puis suivez chaque étape sur WhatsApp.</p>
-        <form class="h-search" action="https://customer.laawoldigital.com/" method="get">
-          <label class="h-seg" for="homeService">
-            <span class="h-seg-label">Que voulez-vous faire ?</span>
-            <select id="homeService" name="service">
-              <option value="barrel">Envoyer un colis ou un baril</option>
-              <option value="cars">Acheter une voiture</option>
-              <option value="car-transport">Expédier une voiture</option>
-              <option value="parking">Réserver un stationnement</option>
-            </select>
-            <svg class="h-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
-          </label>
-          <button type="submit" class="h-search-btn">Commencer <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
-        </form>
-        <p class="h-note"><a href="tracking.html">Suivre une commande</a><span aria-hidden="true">·</span><a href="partner.html">Inscrire votre entreprise</a></p>
+  <!-- HERO: the title, the search pill, then two real photos. -->
+  <section class="a-hero" id="top">
+    <div class="a-wrap">
+      <div class="a-hero-head">
+        <h1 data-cms="hero.headline">Expédiez vers l’Afrique de l’Ouest avec des entreprises vérifiées</h1>
+        <p data-cms="hero.subheadline">Colis, barils, voitures et stationnement. Comparez les prix, réservez en ligne et suivez chaque étape sur WhatsApp.</p>
       </div>
-      <figure class="h-hero-photo">
-        <img src="assets/home/loading.jpg?v=1" width="1000" height="1250" fetchpriority="high" decoding="async" alt="Un employé charge un baril bleu dans un conteneur à New York." />
-      </figure>
+      <form class="a-search" action="https://customer.laawoldigital.com/" method="get">
+        <label class="a-seg" for="homeService">
+          <span class="a-seg-label">Service</span>
+          <select id="homeService" name="service">
+            <option value="barrel">Envoyer un colis ou un baril</option>
+            <option value="cars">Acheter une voiture</option>
+            <option value="car-transport">Expédier une voiture</option>
+            <option value="parking">Réserver un stationnement</option>
+          </select>
+        </label>
+        <a class="a-seg a-seg-link" href="tracking.html"><span class="a-seg-label">Déjà réservé ?</span><span class="a-seg-value">Suivre une commande</span></a>
+        <button type="submit" class="a-search-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><span>Commencer</span></button>
+      </form>
+      <div class="a-gallery">
+        <figure class="a-photo a-photo-main"><img src="assets/home/loading.jpg?v=1" width="1000" height="1250" fetchpriority="high" decoding="async" alt="Un employé charge un baril bleu dans un conteneur à New York." /></figure>
+        <figure class="a-photo"><img src="assets/home/delivery-conakry.jpg?v=2" width="1536" height="1024" fetchpriority="high" decoding="async" alt="Un livreur remet un baril bleu à une cliente devant sa maison à Conakry." /><figcaption><span>Chargé à New York</span><span>Livré à Conakry</span></figcaption></figure>
+      </div>
     </div>
   </section>
 
   <!-- SERVICES -->
-  <section class="h-section h-services" id="services">
-    <div class="h-wrap">
-      <div class="h-head">
+  <section class="a-section" id="services">
+    <div class="a-wrap">
+      <div class="a-row-head">
         <h2>Tout ce que vous envoyez, au même endroit</h2>
-        <p data-cms="sections.servicesIntro">De la simple boîte à la voiture entière, chaque service est proposé par des entreprises que vous pouvez comparer.</p>
+        <a class="a-more" href="services.html">Découvrir tous les services <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
       </div>
-      <div class="h-cards">
-        <a class="h-card" href="https://customer.laawoldigital.com/?service=barrel">
-          <span class="h-card-photo"><img src="assets/home/barrels.jpg?v=1" width="760" height="760" loading="lazy" decoding="async" alt="Des barils et des cartons étiquetés, prêts à partir." /></span>
-          <span class="h-card-title">Colis et barils <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
-          <span class="h-card-text">Par mer ou par avion, au prix de l’entreprise.</span>
+      <div class="a-cards">
+        <a class="a-card" href="https://customer.laawoldigital.com/?service=barrel">
+          <span class="a-card-photo"><img src="assets/home/barrels.jpg?v=1" width="760" height="760" loading="lazy" decoding="async" alt="Des barils et des cartons étiquetés, prêts à partir." /></span>
+          <span class="a-card-title">Colis et barils</span>
+          <span class="a-card-text">Par mer ou par avion, au prix de l’entreprise.</span>
         </a>
-        <a class="h-card" href="https://customer.laawoldigital.com/?service=cars">
-          <span class="h-card-photo"><img src="assets/home/car-lot.jpg?v=1" width="760" height="760" loading="lazy" decoding="async" alt="Des voitures d’occasion à vendre sur un parc à New York." /></span>
-          <span class="h-card-title">Voitures à vendre <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
-          <span class="h-card-text">Des véhicules d’entreprises vérifiées, photos et prix à l’appui.</span>
+        <a class="a-card" href="https://customer.laawoldigital.com/?service=cars">
+          <span class="a-card-photo"><img src="assets/home/car-lot.jpg?v=1" width="760" height="760" loading="lazy" decoding="async" alt="Des voitures d’occasion à vendre sur un parc à New York." /></span>
+          <span class="a-card-title">Voitures à vendre</span>
+          <span class="a-card-text">Des véhicules d’entreprises vérifiées, photos et prix à l’appui.</span>
         </a>
-        <a class="h-card" href="https://customer.laawoldigital.com/?service=car-transport">
-          <span class="h-card-photo"><img src="assets/home/car-transport.jpg?v=1" width="760" height="760" loading="lazy" decoding="async" alt="Un SUV monte dans un conteneur au port." /></span>
-          <span class="h-card-title">Transport de véhicules <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
-          <span class="h-card-text">Votre voiture expédiée en conteneur, du devis à l’arrivée.</span>
+        <a class="a-card" href="https://customer.laawoldigital.com/?service=car-transport">
+          <span class="a-card-photo"><img src="assets/home/car-transport.jpg?v=1" width="760" height="760" loading="lazy" decoding="async" alt="Un SUV monte dans un conteneur au port." /></span>
+          <span class="a-card-title">Transport de véhicules</span>
+          <span class="a-card-text">Votre voiture expédiée en conteneur, du devis à l’arrivée.</span>
         </a>
-        <a class="h-card" href="https://customer.laawoldigital.com/?service=parking">
-          <span class="h-card-photo"><img src="assets/home/parking.jpg?v=1" width="760" height="760" loading="lazy" decoding="async" alt="Un agent vérifie les voitures d’un parking le soir." /></span>
-          <span class="h-card-title">Stationnement <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
-          <span class="h-card-text">Une place sûre pour votre voiture, à la journée ou au mois.</span>
+        <a class="a-card" href="https://customer.laawoldigital.com/?service=parking">
+          <span class="a-card-photo"><img src="assets/home/parking.jpg?v=1" width="760" height="760" loading="lazy" decoding="async" alt="Un agent vérifie les voitures d’un parking le soir." /></span>
+          <span class="a-card-title">Stationnement</span>
+          <span class="a-card-text">Une place sûre pour votre voiture, à la journée ou au mois.</span>
         </a>
       </div>
-      <a class="h-link" href="services.html">Découvrir tous les services <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
     </div>
   </section>
 
-  <!-- STORY BAND: the moment it arrives. -->
-  <section class="h-story" aria-label="Livraison à Conakry">
-    <figure class="h-story-photo">
-      <img src="assets/home/delivery-conakry.jpg?v=2" width="1536" height="1024" loading="lazy" decoding="async" alt="Un livreur remet un baril bleu à une cliente devant sa maison à Conakry." />
-      <figcaption class="h-story-copy">
-        <p class="h-story-quote">Ce que vous envoyez arrive. <em>Et vous le savez.</em></p>
-        <p class="h-story-text">Chaque baril, chaque carton, chaque voiture est suivi jusqu’à la porte.</p>
-      </figcaption>
-    </figure>
-  </section>
-
   <!-- HOW IT WORKS -->
-  <section class="h-section h-steps-sec" id="how">
-    <div class="h-wrap">
-      <div class="h-head">
-        <h2>Simple, du début à la fin</h2>
-      </div>
-      <ol class="h-steps">
-        <li><span class="h-step-num">01</span><h3>Comparez</h3><p>Voyez les prix, les délais et les avis des entreprises inscrites, côte à côte.</p></li>
-        <li><span class="h-step-num">02</span><h3>Réservez</h3><p>Choisissez une entreprise et réservez en ligne. Vous recevez un reçu pour chaque paiement.</p></li>
-        <li><span class="h-step-num">03</span><h3>Suivez</h3><p>Laawol vous envoie chaque étape sur WhatsApp, de la prise en charge à la livraison.</p></li>
+  <section class="a-section" id="how">
+    <div class="a-wrap">
+      <div class="a-row-head"><h2>Simple, du début à la fin</h2></div>
+      <ol class="a-steps">
+        <li><span class="a-step-num">1</span><h3>Comparez</h3><p>Voyez les prix, les délais et les avis des entreprises inscrites, côte à côte.</p></li>
+        <li><span class="a-step-num">2</span><h3>Réservez</h3><p>Choisissez une entreprise et réservez en ligne. Vous recevez un reçu pour chaque paiement.</p></li>
+        <li><span class="a-step-num">3</span><h3>Suivez</h3><p>Laawol vous envoie chaque étape sur WhatsApp, de la prise en charge à la livraison.</p></li>
       </ol>
     </div>
   </section>
 
   <!-- FEATURED BUSINESSES (filled by content.js; stays hidden until the CMS has some) -->
-  <section class="h-section h-featured" id="featuredBusinessesSection" hidden>
-    <div class="h-wrap">
-      <div class="h-head">
+  <section class="a-section h-featured" id="featuredBusinessesSection" hidden>
+    <div class="a-wrap">
+      <div class="a-row-head">
         <h2 data-cms="featured.heading">Entreprises mises en avant</h2>
-        <p data-cms="featured.subheading">Une sélection de partenaires approuvés avec des profils publics validés.</p>
       </div>
+      <p class="a-lead" data-cms="featured.subheading">Une sélection de partenaires approuvés avec des profils publics validés.</p>
       <div class="partner-grid" id="featuredBusinessesGrid"></div>
     </div>
   </section>
 
   <!-- WHATSAPP UPDATES -->
-  <section class="h-section h-informed" id="informed">
-    <div class="h-wrap h-informed-grid">
-      <div class="h-informed-copy">
-        <h2>L’entreprise expédie. Laawol vous tient informé.</h2>
-        <p>Plus besoin de relancer l’expéditeur pour avoir des nouvelles. Laawol suit la commande et vous envoie une mise à jour à chaque étape, dans l’application et sur WhatsApp, de la prise en charge à l’arrivée.</p>
-        <ul class="h-points">
-          <li><strong>Chaque changement de statut vous parvient</strong><span>Pris en charge, chargé, en transit, arrivé, livré.</span></li>
-          <li><strong>Sur WhatsApp et dans l’application</strong><span>Les mises à jour arrivent là où vous êtes déjà.</span></li>
-          <li><strong>Un seul dossier pour tous</strong><span>Vous et l’entreprise voyez le même statut.</span></li>
-        </ul>
-        <a class="h-link" href="tracking.html">Suivre ma commande <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
-      </div>
-      <div class="h-chat" aria-hidden="true">
-        <div class="h-chat-head"><img src="assets/logo.png" alt="" width="32" height="32" /><span><strong>Laawol</strong><small>via WhatsApp</small></span></div>
-        <p class="h-msg">Votre baril a été pris en charge à New York.</p>
-        <p class="h-msg">Chargé sur le navire. Arrivée prévue à Conakry dans environ 4 semaines.</p>
-        <p class="h-msg h-msg-last">Arrivé à Conakry et prêt pour le retrait.</p>
+  <section class="a-section" id="informed">
+    <div class="a-wrap">
+      <div class="a-panel a-updates">
+        <div class="a-updates-copy">
+          <h2>L’entreprise expédie. Laawol vous tient informé.</h2>
+          <p>Plus besoin de relancer l’expéditeur pour avoir des nouvelles. Laawol suit la commande et vous envoie une mise à jour à chaque étape, dans l’application et sur WhatsApp, de la prise en charge à l’arrivée.</p>
+          <ul class="a-checks">
+            <li>Pris en charge, chargé, en transit, arrivé, livré.</li>
+            <li>Les mises à jour arrivent là où vous êtes déjà.</li>
+            <li>Vous et l’entreprise voyez le même statut.</li>
+          </ul>
+          <a class="a-btn" href="tracking.html">Suivre ma commande</a>
+        </div>
+        <div class="a-chat" aria-hidden="true">
+          <div class="a-chat-head"><img src="assets/logo.png" alt="" width="36" height="36" /><span><strong>Laawol</strong><small>via WhatsApp</small></span></div>
+          <p class="a-msg">Votre baril a été pris en charge à New York.</p>
+          <p class="a-msg">Chargé sur le navire. Arrivée prévue à Conakry dans environ 4 semaines.</p>
+          <p class="a-msg">Arrivé à Conakry et prêt pour le retrait.</p>
+        </div>
       </div>
     </div>
   </section>
 
-  <!-- APP -->
-  <section class="h-section h-app-sec" id="app">
-    <div class="h-wrap">
-      <div class="h-app">
-        <div class="h-app-copy">
+  <!-- APP + BUSINESSES -->
+  <section class="a-section" id="app">
+    <div class="a-wrap a-duo">
+      <div class="a-panel a-app">
+        <div class="a-app-copy">
           <h2>Gérez vos envois où que vous soyez</h2>
           <p>Comparez, réservez et suivez depuis votre téléphone, en français ou en anglais.</p>
           <div class="store-badges">
@@ -180,27 +168,12 @@
             <a class="store-badge" href="https://play.google.com/store/apps/details?id=com.laawoldigital.app" target="_blank" rel="noopener" aria-label="Disponible sur Google Play"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="#34d399" d="M3.6 2.3 13 11.7l2.6-2.6L5.2 3a2 2 0 0 0-1.6-.7z"/><path fill="#60a5fa" d="M3 2.8C2.8 3.1 2.7 3.5 2.7 4v16c0 .5.1.9.3 1.2L12.4 12 3 2.8z"/><path fill="#fbbf24" d="M16.7 9.5 13.7 12l3 2.5 3.2-1.8c.9-.5.9-1.9 0-2.4l-3.2-1.8z"/><path fill="#f87171" d="M3.6 21.7c.4.1.9 0 1.6-.4l10.4-6L13 12.3l-9.4 9.4z"/></svg><span><small>Disponible sur</small><b>Google Play</b></span></a>
           </div>
         </div>
-        <div class="h-app-phone">
-          <div class="h-phone-frame">
-            <img src="assets/app-shipping-fr.png?v=2" data-src-fr="assets/app-shipping-fr.png?v=2" data-src-en="assets/app-shipping-en.png?v=2" width="804" height="1748" loading="lazy" decoding="async" alt="Écran Expédition de l’application Laawol présentant les colis, les barils et le transport de voitures." />
-          </div>
-        </div>
+        <div class="a-phone"><img src="assets/app-shipping-fr.png?v=2" data-src-fr="assets/app-shipping-fr.png?v=2" data-src-en="assets/app-shipping-en.png?v=2" width="804" height="1748" loading="lazy" decoding="async" alt="Écran Expédition de l’application Laawol présentant les colis, les barils et le transport de voitures." /></div>
       </div>
-    </div>
-  </section>
-
-  <!-- CTA -->
-  <section class="h-section h-cta-sec" id="business">
-    <div class="h-wrap">
-      <div class="h-cta">
-        <div class="h-cta-copy">
-          <h2>Prêt à commencer ?</h2>
-          <p>Envoyez un colis aujourd’hui, ou inscrivez votre entreprise pour être vue par les clients qui comparent les prix sur vos trajets.</p>
-        </div>
-        <div class="h-cta-actions">
-          <a class="h-btn-light" href="https://customer.laawoldigital.com/?service=barrel">Envoyer un colis</a>
-          <a class="h-btn-ghost" href="partner.html">Inscrire votre entreprise <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
-        </div>
+      <div class="a-panel a-biz" id="business">
+        <h2>Vous êtes une entreprise d’expédition ?</h2>
+        <p>Inscrivez votre entreprise pour être vue par les clients qui comparent les prix sur vos trajets.</p>
+        <a class="a-btn a-btn-light" href="partner.html">Inscrire votre entreprise</a>
       </div>
     </div>
   </section>
