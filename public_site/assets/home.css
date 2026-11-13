@@ -94,6 +94,9 @@ body.home main .a-hero-head h1{font-size:clamp(36px,4.4vw,60px); font-weight:800
 .a-tab:hover{color:var(--text)}
 .a-tab[aria-selected="true"]{color:var(--text)}
 .a-tab[aria-selected="true"]::after{content:""; position:absolute; left:12px; right:12px; bottom:-1px; height:2px; border-radius:2px; background:var(--text)}
+.a-tabs{position:relative}
+.a-tab-ink{position:absolute; bottom:-1px; left:0; height:2px; border-radius:2px; background:var(--text); transition:transform .35s cubic-bezier(.2,.8,.2,1), width .35s cubic-bezier(.2,.8,.2,1); pointer-events:none}
+.a-tabs.has-ink .a-tab::after{display:none}
 .a-tab:focus-visible{outline:2px solid var(--text); outline-offset:-4px; border-radius:8px}
 .a-book-pane{display:flex; flex-direction:column; gap:18px; padding:24px 28px 26px}
 .a-fields{display:grid; grid-template-columns:1fr 1fr; gap:14px}
@@ -110,11 +113,16 @@ body.home main .a-hero-head h1{font-size:clamp(36px,4.4vw,60px); font-weight:800
 .a-book-btn:hover svg{transform:translateX(3px)}
 .a-book-note{margin:-4px 0 0; font-size:13px; text-align:center; color:var(--text-2)}
 .a-book-text{margin:0; font-size:16px; line-height:1.55; color:var(--text-2)}
-.a-gallery{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.6fr); gap:12px; height:clamp(320px,38vw,520px)}
-.a-photo-main img{object-position:50% 35%}
-.a-gallery .a-photo:last-child img{object-position:50% 40%}
-.a-photo figcaption{position:absolute; left:16px; bottom:16px; display:flex; gap:8px; flex-wrap:wrap}
-.a-photo figcaption span{padding:6px 12px; border-radius:16px; background:#fff; color:var(--text); font-size:13px; font-weight:600; box-shadow:0 2px 6px rgba(0,0,0,.12)}
+/* The journey: loaded in New York, at sea, delivered in Conakry. */
+.a-journey{display:grid; grid-template-columns:minmax(0,.9fr) minmax(0,1.5fr) minmax(0,1.1fr); gap:12px; height:clamp(300px,34vw,480px)}
+.a-j1 img{object-position:50% 35%}
+.a-j3 img{object-position:32% 40%}
+.a-j video{display:block; width:100%; height:100%; object-fit:cover}
+.a-photo figcaption{position:absolute; left:14px; bottom:14px; display:inline-flex; align-items:center; gap:8px; padding:6px 12px 6px 6px; border-radius:20px; background:#fff; color:var(--text); font-size:13px; font-weight:600; box-shadow:0 2px 8px rgba(0,0,0,.14)}
+.a-photo figcaption b{display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:50%; background:var(--brand); color:#fff; font-size:12px}
+.a-route{position:relative; height:28px; margin:6px 0 0}
+.a-route-line{position:absolute; left:4%; right:4%; top:13px; height:2px; border-radius:2px; background:var(--line-soft); overflow:visible}
+.a-route-line i{position:absolute; top:-4px; left:0; width:10px; height:10px; border-radius:50%; background:var(--brand); box-shadow:0 0 0 5px rgba(3,35,70,.12)}
 
 /* ---------- Services ---------- */
 .a-cards{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:24px}
@@ -218,9 +226,66 @@ body.home .footer-bottom{color:var(--text-2); border-top-color:var(--line)}
 body.home .footer-bottom a{color:var(--text)}
 body.home .footer-tag{color:var(--text-2); font-family:var(--font); font-weight:500}
 
-/* ---------- Motion (off under reduced motion) ---------- */
+/* ---------- Motion ----------
+   One opening sequence (title, text, panel, then the journey), a dot that
+   travels New York -> sea -> Conakry, photos that drift slowly, buttons that
+   answer the hand, sections that ease in once. Everything is visible without
+   it, and none of it runs under reduced motion. */
+@media (prefers-reduced-motion:no-preference){
+  @keyframes aUp{from{opacity:0; transform:translateY(18px)}to{opacity:1; transform:none}}
+  @keyframes aRise{from{opacity:0; transform:translateY(28px) scale(.985)}to{opacity:1; transform:none}}
+  @keyframes aDrift{from{transform:scale(1)}to{transform:scale(1.07)}}
+  @keyframes aTravel{0%{left:0} 12%{left:0} 44%{left:calc(50% - 5px)} 56%{left:calc(50% - 5px)} 88%{left:calc(100% - 10px)} 100%{left:calc(100% - 10px)}}
+  @keyframes aChip{0%,100%{transform:none; box-shadow:0 2px 8px rgba(0,0,0,.14)} 50%{transform:translateY(-3px); box-shadow:0 8px 18px rgba(0,0,0,.18)}}
+  @keyframes aPane{from{opacity:0; transform:translateY(6px)}to{opacity:1; transform:none}}
+  @keyframes aDot{0%,80%,100%{opacity:.25; transform:translateY(0)} 40%{opacity:1; transform:translateY(-3px)}}
+
+  .a-hero-head h1{animation:aUp .9s cubic-bezier(.2,.75,.2,1) .05s both}
+  .a-hero-head>p{animation:aUp .9s cubic-bezier(.2,.75,.2,1) .18s both}
+  .a-hero-links{animation:aUp .9s cubic-bezier(.2,.75,.2,1) .28s both}
+  .a-book{animation:aRise 1s cubic-bezier(.2,.75,.2,1) .2s both}
+  .a-j{animation:aRise 1s cubic-bezier(.2,.75,.2,1) both}
+  .a-j1{animation-delay:.45s}.a-j2{animation-delay:.55s}.a-j3{animation-delay:.65s}
+  .a-j1 img,.a-j3 img{animation:aDrift 16s ease-in-out 1s infinite alternate}
+  .a-route-line i{animation:aTravel 9s cubic-bezier(.6,0,.3,1) 1.2s infinite}
+  .a-j figcaption{animation:aChip 9s ease-in-out infinite}
+  .a-j1 figcaption{animation-delay:1.2s}.a-j2 figcaption{animation-delay:4.2s}.a-j3 figcaption{animation-delay:7.2s}
+
+  .a-book-pane:not([hidden]){animation:aPane .35s cubic-bezier(.2,.8,.2,1) both}
+
+  .a-book-btn,.a-btn,.h-btn-amber,.a-search-btn{transition:background .15s ease, transform .15s ease, box-shadow .2s ease}
+  .a-book-btn:hover,.a-btn:hover,.h-btn-amber:hover{transform:translateY(-1px); box-shadow:0 10px 22px -10px rgba(3,35,70,.55)}
+  .a-book-btn:active,.a-btn:active,.h-btn-amber:active{transform:translateY(0) scale(.98); box-shadow:none}
+  .a-dest{transition:box-shadow .2s ease, border-color .2s ease, transform .2s ease}
+  .a-dest:hover{transform:translateY(-3px)}
+  .a-dest:hover .a-dest-flag{transform:scale(1.12) rotate(-4deg)}
+  .a-dest-flag{display:inline-block; transition:transform .25s cubic-bezier(.2,.8,.2,1)}
+  .a-card{transition:transform .25s ease}
+  .a-card:hover{transform:translateY(-3px)}
+  .a-steps li{transition:transform .2s ease, box-shadow .2s ease, border-color .2s ease}
+  .a-steps li:hover{transform:translateY(-3px); border-color:transparent; box-shadow:var(--shadow-hover)}
+
+  /* Sections ease in once as they come into view (home.js adds .is-in).
+     Only hidden when the script is running, and never for long. */
+  html.a-motion .reveal{opacity:0; transform:translateY(24px); transition:opacity .8s cubic-bezier(.2,.75,.2,1), transform .8s cubic-bezier(.2,.75,.2,1)}
+  html.a-motion .reveal.is-in{opacity:1; transform:none}
+  html.a-motion .a-cards.reveal .a-card,html.a-motion .a-dests.reveal .a-dest,html.a-motion .a-steps.reveal li{opacity:0; transform:translateY(16px); transition:opacity .6s ease, transform .6s cubic-bezier(.2,.75,.2,1)}
+  html.a-motion .reveal.is-in .a-card,html.a-motion .reveal.is-in .a-dest,html.a-motion .reveal.is-in li{opacity:1; transform:none}
+  html.a-motion .reveal.is-in > :nth-child(2){transition-delay:.08s}
+  html.a-motion .reveal.is-in > :nth-child(3){transition-delay:.16s}
+  html.a-motion .reveal.is-in > :nth-child(4){transition-delay:.24s}
+
+  /* WhatsApp: messages arrive one by one, with a typing bubble between. */
+  html.a-motion .a-chat .a-msg{opacity:0; transform:translateY(8px) scale(.98); transition:opacity .4s ease, transform .4s cubic-bezier(.2,.8,.2,1)}
+  html.a-motion .a-chat .a-msg.is-in{opacity:1; transform:none}
+  .a-typing{display:none; align-self:flex-start; gap:4px; padding:12px 14px; border-radius:4px 18px 18px 18px; background:var(--surface)}
+  .a-typing.is-on{display:inline-flex}
+  .a-typing i{width:7px; height:7px; border-radius:50%; background:var(--text-2); animation:aDot 1s ease-in-out infinite}
+  .a-typing i:nth-child(2){animation-delay:.15s}.a-typing i:nth-child(3){animation-delay:.3s}
+}
 @media (prefers-reduced-motion:reduce){
   .a-card-photo img{transition:none}
+  .a-route-line i{left:calc(50% - 5px)}
 }
 
 /* ---------- Smaller screens ---------- */
@@ -235,9 +300,10 @@ body.home .footer-tag{color:var(--text-2); font-family:var(--font); font-weight:
 }
 @media (max-width:860px){
   .a-wrap,body.home .site-header .container,body.home .site-footer .container{padding-left:24px; padding-right:24px}
-  .a-gallery{grid-template-columns:1fr 1fr; height:auto}
-  .a-gallery .a-photo{aspect-ratio:4/5}
-  .a-gallery .a-photo:last-child{aspect-ratio:auto}
+  .a-journey{grid-template-columns:1fr 1fr; height:auto}
+  .a-j{aspect-ratio:4/5}
+  .a-j2{grid-column:1 / -1; grid-row:1; aspect-ratio:16/9}
+  .a-route{display:none}
   .a-steps{grid-template-columns:1fr}
   .a-updates{grid-template-columns:1fr; padding:32px; gap:32px}
   .a-app{grid-template-columns:1fr; padding:0 32px}
@@ -253,8 +319,7 @@ body.home .footer-tag{color:var(--text-2); font-family:var(--font); font-weight:
   .a-tabs{grid-template-columns:repeat(2,minmax(0,1fr))}
   .a-tab{border-bottom:1px solid var(--line-soft)}
   .a-fields{grid-template-columns:1fr}
-  .a-gallery{grid-template-columns:1fr; gap:10px}
-  .a-gallery .a-photo,.a-gallery .a-photo:last-child{aspect-ratio:4/3}
+  .a-journey{gap:10px}
   .a-cards{grid-template-columns:1fr 1fr; gap:24px 12px}
   .a-card-text{font-size:14px}
   .a-section{padding:40px 0}
