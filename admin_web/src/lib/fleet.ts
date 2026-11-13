@@ -31,6 +31,10 @@ export const FLEET_REFUSALS: Record<string, string> = {
   fleet_deposit_used: "That deposit was already used for another payment.",
   fleet_no_bank: "Connect the business's bank first (Profile, Bank for Zelle checks).",
   fleet_bad_phone: "Enter a phone number with its area code.",
+  fleet_whatsapp_off: "WhatsApp to drivers is off for this driver (Fleet settings).",
+  fleet_nothing_owed: "This driver owes nothing right now.",
+  fleet_no_phone: "This driver has no WhatsApp number. Add one in Edit details.",
+  fleet_driver_left: "This driver has left.",
   fleet_staff_only:"This staff account is not allowed to manage Fleet.",
 };
 

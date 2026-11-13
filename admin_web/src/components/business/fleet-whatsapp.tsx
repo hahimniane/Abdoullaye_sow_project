@@ -203,3 +203,61 @@ export function FleetWhatsAppPanel({
     </Panel>
   );
 }
+
+type RemindAnswer = { status?: string };
+
+/**
+ * "Send a WhatsApp reminder" on a driver's page: shown when WhatsApp is on
+ * for this driver and they owe money. The server sends it once a day per bill.
+ */
+export function FleetRemindButton({
+  businessId,
+  settings,
+  driverId,
+  active,
+  owedCents,
+}: {
+  businessId: string;
+  settings: FleetSettingsView;
+  driverId: string;
+  active: boolean;
+  owedCents: number;
+}) {
+  const [result, setResult] = useState<{ text: string; ok: boolean } | null>(null);
+  const { busy, error, run } = useFleetRun(businessId);
+  const only = settings.whatsappOnlyDriverIds;
+  const allowed = settings.whatsappEnabled && (only.length === 0 || only.includes(driverId));
+  if (!allowed || !active || !(owedCents > 0)) return null;
+
+  async function send() {
+    setResult(null);
+    const answer = await run<RemindAnswer>("whatsapp_remind_driver", { driverId }, {
+      en: "Send this driver a WhatsApp reminder now, with the amount owed and how to pay by Zelle?",
+      fr: "Envoyer maintenant à ce chauffeur un rappel WhatsApp, avec le montant dû et comment payer par Zelle ?",
+    });
+    if (!answer) return;
+    const status = answer.status ?? "";
+    setResult(
+      status === "sent"
+        ? { text: "Reminder sent on WhatsApp.", ok: true }
+        : status === ""
+          ? { text: "A reminder was already sent today for this bill.", ok: true }
+          : status === "skipped"
+            ? { text: "No WhatsApp number on file for this driver.", ok: false }
+            : { text: "The reminder could not be sent. Check the driver's phone number.", ok: false },
+    );
+  }
+
+  return (
+    <>
+      <SaveButton busy={busy} label="Send a WhatsApp reminder" busyLabel="Sending..." onClick={() => void send()} />
+      {error && <div className="lst-form-error" role="alert">{error}</div>}
+      {result &&
+        (result.ok ? (
+          <p className="fleet-saved" role="status">{result.text}</p>
+        ) : (
+          <div className="lst-form-error" role="alert">{result.text}</div>
+        ))}
+    </>
+  );
+}

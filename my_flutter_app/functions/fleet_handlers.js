@@ -37,6 +37,12 @@ const FLEET_REFUSALS = Object.freeze({
   fleet_no_bank: "Connect the business's bank first (Profile, Bank for " +
     "Zelle checks).",
   fleet_bad_phone: "Enter a phone number with its area code.",
+  fleet_whatsapp_off:
+      "WhatsApp to drivers is off for this driver (Fleet settings).",
+  fleet_nothing_owed: "This driver owes nothing right now.",
+  fleet_no_phone:
+      "This driver has no WhatsApp number. Add one in Edit details.",
+  fleet_driver_left: "This driver has left.",
 });
 
 const text = (v, max = 200) => String(v ?? "").trim().slice(0, max);
@@ -1112,30 +1118,93 @@ function createFleetHandlers(deps) {
       if (!oldest) continue;
       const kind = fleetWhatsApp.reminderKind(oldest.dueDayKey, todayKey);
       if (!kind) continue;
-      const balance = fleetBilling.driverBalance(bills,
-          Number(driver.creditCents) || 0, todayKey);
-      if (!(balance.owedCents > 0)) continue;
-      const values = fleetWhatsApp.reminderValues({
-        driverName: driver.name, businessName: business.name,
-        businessPhone: business.phone, settings: business.fleet?.settings,
-        kind, dueDayKey: oldest.dueDayKey, owedCents: balance.owedCents,
-        personalCents: driver.personalCents});
-      await deps.sendFleetMessage({
-        id: fleetWhatsApp.messageId("reminder",
-            {driverId: driver.id, billId: oldest.id, todayKey}),
-        row: {businessId, driverId: driver.id, kind: "reminder",
-          reminder: kind, billId: oldest.id,
-          template: fleetWhatsApp.REMINDER_TEMPLATE,
-          phone: String(driver.phone || ""), name: String(driver.name || "")},
-        body: fleetWhatsApp.templateBody(fleetWhatsApp.REMINDER_TEMPLATE,
-            driver.phone, values),
-        reachable: fleetWhatsApp.reachable(driver.phone),
-      }).catch((error) => deps.logger.warn("Fleet reminder not sent",
-          {businessId, driverId: driver.id,
-            error: String(error?.message || error)}));
+      const message = reminderMessage({businessId, business, driver, bills,
+        oldest, kind, todayKey});
+      if (!message) continue;
+      await deps.sendFleetMessage(message)
+          .catch((error) => deps.logger.warn("Fleet reminder not sent",
+              {businessId, driverId: driver.id,
+                error: String(error?.message || error)}));
       tried += 1;
     }
     return tried;
+  }
+
+  /**
+   * One driver's rent reminder, ready for sendFleetMessage; null when the
+   * driver owes nothing.
+   *
+   * @param {object} p {businessId, business, driver, bills, oldest, kind,
+   *   todayKey, manual, byUid}.
+   * @return {object|null} The sendFleetMessage args.
+   */
+  function reminderMessage(p) {
+    const {businessId, business, driver, bills, oldest, kind, todayKey} = p;
+    const balance = fleetBilling.driverBalance(bills,
+        Number(driver.creditCents) || 0, todayKey);
+    if (!(balance.owedCents > 0)) return null;
+    const values = fleetWhatsApp.reminderValues({
+      driverName: driver.name, businessName: business.name,
+      businessPhone: business.phone, settings: business.fleet?.settings,
+      kind, dueDayKey: oldest.dueDayKey, owedCents: balance.owedCents,
+      personalCents: driver.personalCents});
+    const base = fleetWhatsApp.messageId("reminder",
+        {driverId: driver.id, billId: oldest.id, todayKey});
+    return {
+      // A reminder sent from the driver's page is its own message (once a
+      // day per bill), apart from the daily one.
+      id: p.manual ? base.replace(/^reminder_/, "reminder_manual_") : base,
+      row: {businessId, driverId: driver.id, kind: "reminder",
+        reminder: kind, billId: oldest.id,
+        template: fleetWhatsApp.REMINDER_TEMPLATE,
+        phone: String(driver.phone || ""), name: String(driver.name || ""),
+        ...(p.manual ? {manual: true, byUid: p.byUid} : {})},
+      body: fleetWhatsApp.templateBody(fleetWhatsApp.REMINDER_TEMPLATE,
+          driver.phone, values),
+      reachable: fleetWhatsApp.reachable(driver.phone),
+    };
+  }
+
+  /**
+   * "Send a WhatsApp reminder" on a driver's page: the reminder for the
+   * driver's oldest open bill, now. Once a day per bill; only when the
+   * business has WhatsApp on for this driver.
+   *
+   * @param {string} uid The caller (Fleet staff).
+   * @param {string} businessId The business.
+   * @param {object} data {driverId}.
+   * @return {Promise<object>} {status}: sent, failed, skipped, or "" when
+   *   one was already sent today.
+   */
+  async function whatsappRemindDriver(uid, businessId, data) {
+    await requireStaff(uid, businessId);
+    const {data: business} = await businessOf(businessId);
+    if (!fleetOn(business)) throw refuse("fleet_off");
+    const driverId = text(data.driverId, 180);
+    if (!whatsappOn(business) || !whatsappAllows(business, driverId)) {
+      throw refuse("fleet_whatsapp_off");
+    }
+    const doc = await db().collection("fleetDrivers").doc(driverId).get();
+    if (!doc.exists || doc.get("businessId") !== businessId) {
+      throw refuse("fleet_not_found", "not-found");
+    }
+    const driver = {id: doc.id, ...doc.data()};
+    if (driver.status !== "active") throw refuse("fleet_driver_left");
+    if (!fleetWhatsApp.reachable(driver.phone)) throw refuse("fleet_no_phone");
+    const todayKey = deps.dayKeyNow();
+    const {bills} = await driverMoney(driverId, driver);
+    const oldest = fleetWhatsApp.oldestOpenBill(bills);
+    const kind = !oldest ? null : oldest.dueDayKey > todayKey ? "soon" :
+      oldest.dueDayKey === todayKey ? "today" : "late";
+    const message = oldest && reminderMessage({businessId, business, driver,
+      bills, oldest, kind, todayKey, manual: true, byUid: uid});
+    if (!message) throw refuse("fleet_nothing_owed");
+    const status = await deps.sendFleetMessage(message);
+    if (status) {
+      await audit(businessId, uid, "fleet_driver", driverId,
+          "fleet_whatsapp_reminder", `WhatsApp reminder sent (${status})`);
+    }
+    return {success: true, status};
   }
 
   async function whatsappSave(uid, businessId, data) {
@@ -1327,6 +1396,7 @@ function createFleetHandlers(deps) {
     bank_check_now: bankCheckNow,
     whatsapp_save: whatsappSave,
     whatsapp_test: whatsappTest,
+    whatsapp_remind_driver: whatsappRemindDriver,
   };
 
   async function fleetAction(request) {

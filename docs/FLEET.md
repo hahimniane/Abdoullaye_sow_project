@@ -190,6 +190,12 @@ unknown-deposit question waits (the office's "Zelle from the bank" list).
   {enabled, onlyDriverIds}` (up to 50, each a driver of the business).
   When the list is set, receipts and reminders go to those drivers only;
   an empty list means every active driver; leaving it out keeps the list.
+- **Send a WhatsApp reminder** (driver page, Fleet staff,
+  `whatsapp_remind_driver {driverId}`): the reminder for the driver's
+  oldest open bill, now (soon / today / late from its due day). Its own
+  message id `reminder_manual_{driver}_{bill}_{day}`: once a day per bill.
+  Refused when WhatsApp is off for the driver, they owe nothing, have no
+  phone, or have left.
 - **Receipt** (`fleet_receipt_2lang`, Utility, bilingual): after every
   recorded payment (`payment_record`, a bank deposit matched or picked by
   the office), never for imported history. Says the amount, the day, and

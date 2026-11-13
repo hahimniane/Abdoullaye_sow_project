@@ -180,4 +180,38 @@ describe("drivers on WhatsApp", () => {
         assert.deepEqual(sent.map((s) => s.row.driverId).sort(),
             ["wa-d1", "wa-d2", "wa-d4"]);
       });
+
+  it("a reminder from the driver's page: once a day, only when owed",
+      async () => {
+        // Through the real callable: WhatsApp is not connected here, so the
+        // row is written and marked failed, which proves it was tried.
+        const first = await act(STAFF, "whatsapp_remind_driver",
+            {driverId: "wa-d2"});
+        assert.ok(["sent", "failed"].includes(first.status));
+        const again = await act(STAFF, "whatsapp_remind_driver",
+            {driverId: "wa-d2"});
+        assert.equal(again.status, "", "not twice on the same day");
+        const manual = await rows((r) => r.manual === true);
+        assert.equal(manual.length, 1);
+        assert.equal(manual[0].driverId, "wa-d2");
+        // The callable uses the real clock: wa-b2 is due 2026-11-28.
+        const today = new Intl.DateTimeFormat("en-CA",
+            {timeZone: "America/New_York"}).format(new Date());
+        assert.equal(manual[0].reminder, today < "2026-11-28" ? "soon" :
+          today === "2026-11-28" ? "today" : "late");
+        assert.equal(manual[0].byUid, STAFF);
+        assert.match(manual[0].id, /^reminder_manual_wa-d2_wa-b2_/);
+
+        await assert.rejects(act(STAFF, "whatsapp_remind_driver",
+            {driverId: "wa-d3"}), refused("fleet_nothing_owed"));
+        await assert.rejects(act(STAFF, "whatsapp_remind_driver",
+            {driverId: "wa-d4"}), refused("fleet_no_phone"));
+        await act(OWNER, "whatsapp_save",
+            {enabled: true, onlyDriverIds: ["wa-d1"]});
+        await assert.rejects(act(STAFF, "whatsapp_remind_driver",
+            {driverId: "wa-d2"}), refused("fleet_whatsapp_off"));
+        await act(OWNER, "whatsapp_save", {enabled: false, onlyDriverIds: []});
+        await assert.rejects(act(STAFF, "whatsapp_remind_driver",
+            {driverId: "wa-d1"}), refused("fleet_whatsapp_off"));
+      });
 });

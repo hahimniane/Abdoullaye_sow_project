@@ -31,6 +31,7 @@ import { staffNameFrom, staffNameIndex } from "@/lib/staff-names";
 import type { FleetState } from "./fleet-data";
 import { FriendsPanel, NotesPanel, ProfileTenureFacts, TrackRecordPanel } from "./fleet-profile";
 import { fleetLang, FleetModal, Money, SaveButton, useFleetRun } from "./fleet-ui";
+import { FleetRemindButton } from "./fleet-whatsapp";
 
 type Row = Record<string, unknown> & { id: string };
 const s = (v: unknown) => String(v ?? "").trim();
@@ -418,6 +419,13 @@ function DriverPage({
         <div className="fleet-actions">
           <button className="lst-btn" type="button" onClick={() => setDialog("payment")}>Record a payment</button>
           <button className="lst-btn ghost" type="button" onClick={() => setDialog("charge")}>Add a charge</button>
+          <FleetRemindButton
+            businessId={businessId}
+            settings={settings}
+            driverId={driver.id}
+            active={s(driver.status) === "active"}
+            owedCents={balance.owedCents}
+          />
         </div>
       </Panel>
 

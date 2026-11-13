@@ -8888,6 +8888,17 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Choose a driver...": "Choisir un chauffeur...",
   "Save who gets messages": "Enregistrer qui reçoit les messages",
 });
+Object.assign(TEXT_TRANSLATIONS, {
+  "Send a WhatsApp reminder": "Envoyer un rappel WhatsApp",
+  "Reminder sent on WhatsApp.": "Rappel envoyé sur WhatsApp.",
+  "A reminder was already sent today for this bill.": "Un rappel a déjà été envoyé aujourd’hui pour cette facture.",
+  "No WhatsApp number on file for this driver.": "Aucun numéro WhatsApp enregistré pour ce chauffeur.",
+  "The reminder could not be sent. Check the driver's phone number.": "Le rappel n’a pas pu être envoyé. Vérifiez le numéro du chauffeur.",
+  "WhatsApp to drivers is off for this driver (Fleet settings).": "WhatsApp pour les chauffeurs est désactivé pour ce chauffeur (Paramètres de la flotte).",
+  "This driver owes nothing right now.": "Ce chauffeur ne doit rien pour l’instant.",
+  "This driver has no WhatsApp number. Add one in Edit details.": "Ce chauffeur n’a pas de numéro WhatsApp. Ajoutez-en un dans Modifier les détails.",
+  "This driver has left.": "Ce chauffeur est parti.",
+});
 const englishDictionary = { ...TEXT_TRANSLATIONS, ...ATTRIBUTE_TRANSLATIONS };
 const frenchDictionary = buildReverseDictionary([
   TEXT_TRANSLATIONS,
