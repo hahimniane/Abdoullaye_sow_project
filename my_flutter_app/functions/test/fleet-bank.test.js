@@ -93,8 +93,59 @@ describe("a deposit pays the right driver", () => {
     assert.deepEqual(matchDeposit({amountCents: 35000,
       senderName: "NEW PERSON"}, drivers), {reason: "unknown"});
     assert.deepEqual(matchDeposit({amountCents: 35055,
-      senderName: "OLD DRIVER"}, drivers), {reason: "unknown"},
+      senderName: "OLD DRIVER"}, drivers), {reason: "driver_left"},
     "a driver who left is never paid");
+  });
+
+  it("a driver who left still pays with their old cents: the driver who " +
+      "has those cents now is not paid", () => {
+    const now = [...drivers, {id: "d5", status: "active", personalCents: 55,
+      rememberedSenders: []}];
+    assert.deepEqual(matchDeposit({amountCents: 20055,
+      senderName: "Old Driver"}, now), {reason: "driver_left"});
+    // A stranger with those cents is still the new driver's first payment.
+    assert.deepEqual(matchDeposit({amountCents: 20055,
+      senderName: "SOMEONE NEW"}, now), {driverId: "d5", how: "cents"});
+  });
+
+  it("a known sender with another driver's cents waits: two people can " +
+      "share a name, a friend can pay for a friend", () => {
+    // MOUSSA KEITA is d1's sender (cents 17); .42 is d2's code.
+    assert.deepEqual(matchDeposit({amountCents: 35042,
+      senderName: "MOUSSA KEITA"}, drivers), {reason: "two_drivers"});
+    // His own cents, no cents, or cents nobody has: still his.
+    for (const amountCents of [35017, 35000, 35099]) {
+      assert.deepEqual(matchDeposit({amountCents, senderName: "MOUSSA KEITA"},
+          drivers), {driverId: "d1", how: "sender"});
+    }
+  });
+
+  it("only a person's Zelle pays by itself or is remembered", () => {
+    const {senderRememberable} = require("../fleet_bank");
+    // A card payout, a cash deposit, interest: cents .42 are d2's code.
+    for (const senderName of ["STRIPE", "ATM", "INTEREST PAID", "Uber"]) {
+      assert.deepEqual(matchDeposit({amountCents: 123442, senderName,
+        zelle: false}, drivers), {reason: "not_zelle"}, senderName);
+      assert.equal(senderRememberable({senderName, zelle: false}), false);
+    }
+    // Even a remembered sender: a check or cash from them waits.
+    assert.deepEqual(matchDeposit({amountCents: 35017,
+      senderName: "MOUSSA KEITA", zelle: false}, drivers),
+    {reason: "not_zelle"});
+    // The app's own name is nobody, and so is no name.
+    for (const senderName of ["Zelle", "ZELLE", "Venmo", "Cash App", ""]) {
+      assert.deepEqual(matchDeposit({amountCents: 35042, senderName,
+        zelle: true}, drivers), {reason: "unknown"}, senderName);
+      assert.equal(senderRememberable({senderName, zelle: true}), false);
+    }
+    assert.equal(senderRememberable({senderName: "360 Checking XXXXXXX2820",
+      zelle: true}), false);
+    assert.equal(senderRememberable({senderName: "Awa Sow", zelle: true}),
+        true);
+    // Deposits stored before the flag existed keep working.
+    assert.equal(senderRememberable({senderName: "Awa Sow"}), true);
+    assert.deepEqual(matchDeposit({amountCents: 35042, senderName: "NEW"},
+        drivers), {driverId: "d2", how: "cents"});
   });
 
   it("a transfer from an account is nobody's, whatever its cents or " +
@@ -126,14 +177,15 @@ describe("a deposit pays the right driver", () => {
       senderName: "MOUSSA KEITA"}, twins), {reason: "two_drivers"});
   });
 
-  it("only new, unused money from a person is tried", () => {
+  it("only new, unused money is looked at", () => {
     const after = BANK_MATCH_START_MS + 1000;
     assert.equal(depositMatchable({amountCents: 100, senderName: "A",
       atMs: after}, BANK_MATCH_START_MS), true);
     assert.equal(depositMatchable({amountCents: 100, senderName: "A",
       atMs: BANK_MATCH_START_MS - 1}, BANK_MATCH_START_MS), false);
     assert.equal(depositMatchable({amountCents: 100, senderName: "",
-      atMs: after}, BANK_MATCH_START_MS), false, "no sender: not a driver");
+      atMs: after}, BANK_MATCH_START_MS), true,
+    "no sender: it waits for the office (cash paid in at the bank)");
     assert.equal(depositMatchable({amountCents: 100, senderName: "A",
       atMs: after, consumedBy: {kind: "sale", id: "s"}},
     BANK_MATCH_START_MS), false, "already used for a sale");

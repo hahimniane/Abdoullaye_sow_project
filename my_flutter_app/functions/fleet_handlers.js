@@ -672,9 +672,8 @@ function createFleetHandlers(deps) {
       driverPatch.creditCents = FieldValue.increment(plan.creditAddedCents);
     }
     // The sender is remembered, so their next deposit pays this driver
-    // (a person only: an account transfer is never remembered).
-    if (p.bank?.senderName &&
-        !fleetBank.senderIsAccount(p.bank.senderName)) {
+    // (a person's Zelle only: never an account, an app, cash or a check).
+    if (p.bank && fleetBank.senderRememberable(p.bank)) {
       driverPatch.rememberedSenders =
         FieldValue.arrayUnion(fleetBank.senderKey(p.bank.senderName));
     }
@@ -737,6 +736,20 @@ function createFleetHandlers(deps) {
       if (p.imported === true) throw refuse("fleet_import_locked");
       const billDocs = await Promise.all((p.allocations || []).map((a) =>
         tx.get(db().collection("fleetBills").doc(a.billId))));
+      const driverRef = db().collection("fleetDrivers").doc(p.driverId);
+      const driver = await tx.get(driverRef);
+      // The deposit it used, and the posted copy the bank replaced it with
+      // since (the payment still points at the first one).
+      const credits = [];
+      let creditId = String(p.bankTxnId || "");
+      for (let i = 0; creditId && i < 4; i += 1) {
+        const c = await tx.get(
+            db().collection("businessBankCredits").doc(creditId));
+        if (!c.exists) break;
+        credits.push(c);
+        const next = String(c.get("replacedByTransactionId") || "");
+        creditId = next ? `${businessId}_${next}` : "";
+      }
       for (const [i, a] of (p.allocations || []).entries()) {
         const b = billDocs[i];
         if (!b.exists) continue;
@@ -745,19 +758,33 @@ function createFleetHandlers(deps) {
         tx.update(b.ref, {paidCents: paid, status,
           updatedAt: FieldValue.serverTimestamp()});
       }
+      const driverPatch = {};
       if (Number(p.creditAddedCents) > 0) {
-        tx.update(db().collection("fleetDrivers").doc(p.driverId), {
-          creditCents: FieldValue.increment(-Number(p.creditAddedCents)),
+        driverPatch.creditCents =
+          FieldValue.increment(-Number(p.creditAddedCents));
+      }
+      // The match was wrong: this sender is no longer this driver's, or the
+      // next deposit would go to the same wrong driver by itself.
+      if (p.bankSenderName) {
+        driverPatch.rememberedSenders = FieldValue.arrayRemove(
+            fleetBank.senderKey(p.bankSenderName));
+      }
+      if (driver.exists && Object.keys(driverPatch).length) {
+        tx.update(driverRef, {...driverPatch,
           updatedAt: FieldValue.serverTimestamp()});
       }
       tx.update(ref, {status: "undone", undoneByUid: uid,
         undoneAtMs: Date.now()});
-      // A bank deposit it used goes back to "waiting" for the right driver.
-      if (p.bankTxnId) {
-        tx.set(db().collection("businessBankCredits").doc(p.bankTxnId), {
+      // The bank deposit goes back to "waiting" for the right driver.
+      for (const c of credits) {
+        const used = c.get("consumedBy");
+        if (used && used.id && used.id !== paymentId) continue;
+        tx.set(c.ref, {
           consumedBy: FieldValue.delete(), consumedAt: FieldValue.delete(),
-          consumedByUid: FieldValue.delete(), fleetWaiting: true,
-          fleetWaitingReason: "undone"}, {merge: true});
+          consumedByUid: FieldValue.delete(),
+          ...(c.get("removed") === true ? {} :
+            {fleetWaiting: true, fleetWaitingReason: "undone"}),
+        }, {merge: true});
       }
       amount = Number(p.amountCents) || 0;
     });
@@ -860,7 +887,7 @@ function createFleetHandlers(deps) {
         driverId: p.driverId, amount, method: "zelle", paidDayKey: day,
         byUid: p.byUid, note: "",
         bank: {creditId: p.creditId, senderName: credit.senderName || "",
-          how: p.how}});
+          zelle: credit.zelle, how: p.how}});
       tx.set(creditRef, {consumedBy: {kind: "fleet_payment", id: ref.id},
         consumedAt: FieldValue.serverTimestamp(), consumedByUid: p.byUid,
         fleetWaiting: false, fleetWaitingReason: FieldValue.delete()},
@@ -897,7 +924,11 @@ function createFleetHandlers(deps) {
       for (let i = 0; i < refs.length; i += 100) {
         docs.push(...await db().getAll(...refs.slice(i, i + 100)));
       }
-      const drivers = await activeDrivers(businessId);
+      // Every driver, not only the active ones: a sender who paid for a
+      // driver who left must not be given to whoever has their cents now.
+      const drivers = (await db().collection("fleetDrivers")
+          .where("businessId", "==", businessId).get())
+          .docs.map((d) => ({id: d.id, ...d.data()}));
       for (const doc of docs) {
         const credit = doc.exists ? doc.data() || {} : null;
         if (!credit || credit.businessId !== businessId) continue;
