@@ -29,12 +29,29 @@ const m221HeadBytes = m221HeadDots ~/ 8;
 
 /// The Phomemo M421 (4 in label maker) takes the same commands on a wider
 /// head. Measured on one on 2026-11-14 (firmware 0.2.6, 4 x 6 in fan-fold):
-/// 832-dot rows (104 mm) print whole, with the 101.6 mm label centred under
-/// them; one raster command is one label (the printer feeds to the next gap
-/// after every raster, so a label is never sent in bands); a 1218-row raster
-/// prints in one piece. It paces the sender itself: `01 n` grants n packets
-/// and `02 lo hi` gives the packet size, exactly like the PM-241.
-const m421HeadDots = 832;
+/// - The head is about 896 dots (112 mm) and a row starts at its first dot,
+///   whatever the row's width. The 101.6 mm label is centred under it, so
+///   the label's left edge is about 43 dots (5.4 mm) in: an 832-dot row with
+///   the picture centred printed 4 mm too far left (its left edge cut off).
+/// - Rows of 864 dots (108 bytes) x 1180 print whole and the printer answers
+///   "done"; that is the width sent. The 800-dot picture starts at dot 48,
+///   0.6 mm inside the label, like the PM-241's.
+/// - One raster command is one label: the printer feeds to the next gap
+///   after every raster, so a label is never sent in bands.
+/// - It paces the sender itself: `01 n` grants n packets and `02 lo hi`
+///   gives the packet size, exactly like the PM-241.
+const m421HeadDots = 864;
+
+/// Where the 4 x 6 in picture's left edge goes on the M421's rows, in dots.
+const m421PictureX = 48;
+
+/// [image] (the 800-dot 4 x 6 in picture) packed for an M421.
+PackedRaster m421Raster(LabelBitmap image) => packRaster(
+  image,
+  m421PictureX - (m421HeadDots - image.width) ~/ 2,
+  0,
+  headDots: m421HeadDots,
+);
 
 /// How long an M421 may take to answer "label done" after the footer.
 const m421DoneTimeout = Duration(seconds: 25);

@@ -92,7 +92,7 @@ bool printerNameRecognized(String name) {
 String printerModelLogName(PrinterModel model) => switch (model) {
   PrinterModel.m221 => 'Phomemo M221',
   PrinterModel.pm241 => 'Phomemo PM-241 (TSPL)',
-  PrinterModel.m421 => 'Phomemo M421 (raster, 832-dot head)',
+  PrinterModel.m421 => 'Phomemo M421 (raster, 864-dot rows)',
   PrinterModel.generic4x6 => 'Other 4x6 Bluetooth printer (TSPL, beta)',
 };
 
@@ -993,7 +993,7 @@ class LabelPrinterController extends ChangeNotifier {
   }
 
   /// Sends one 4 x 6 in label to an M421: the M221's commands with the
-  /// picture centred on the 832-dot head, as ONE raster (the printer feeds
+  /// picture placed over the label ([m421Raster]), as ONE raster (the printer feeds
   /// to the next label after every raster), one packet per credit, then
   /// waits for the M-series "label done" frame.
   Future<void> _printOneM421(PrinterLink link, LabelBitmap image) async {
@@ -1012,7 +1012,7 @@ class LabelPrinterController extends ChangeNotifier {
           ? pm241CreditWait
           : const Duration(seconds: 1),
     );
-    final raster = packRaster(image, 0, 0, headDots: m421HeadDots);
+    final raster = m421Raster(image);
     final steps = m221LabelSteps(raster);
     var packets = 0;
     for (final step in steps) {
@@ -1365,7 +1365,7 @@ class LabelPrinterController extends ChangeNotifier {
     if (isM421) {
       log.add(
         'print: $copies x $what ${image.width}x${image.height} dots, '
-        'centred on $m421HeadDots dots, one raster per label',
+        'at dot $m421PictureX of $m421HeadDots, one raster per label',
       );
     } else if (isPm241 || isGeneric) {
       log.add(
