@@ -8900,6 +8900,7 @@ Object.assign(TEXT_TRANSLATIONS, {
   "This driver has left.": "Ce chauffeur est parti.",
 });
 Object.assign(TEXT_TRANSLATIONS, {
+  "This is a transfer from a bank account, not a Zelle from a person. Use it for a driver only if they really paid this way.": "C’est un virement depuis un compte bancaire, pas un Zelle d’une personne. Ne l’utilisez pour un chauffeur que s’il a vraiment payé ainsi.",
   "This may be a Zelle already used, sent again by the bank. Pay it only if the driver really sent it twice.": "Ce Zelle a peut-être déjà été utilisé et renvoyé par la banque. Ne le payez que si le chauffeur l’a vraiment envoyé deux fois.",
 });
 const englishDictionary = { ...TEXT_TRANSLATIONS, ...ATTRIBUTE_TRANSLATIONS };

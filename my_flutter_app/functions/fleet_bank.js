@@ -120,7 +120,24 @@ function senderKey(name) {
 }
 
 /**
+ * Whether the bank's "sender" is an account and not a person: a transfer
+ * from another account ("360 Checking XXXXXXX2820"). It is never a driver's
+ * Zelle, whatever its cents are, and it is never remembered as a sender
+ * (2026-11-14: a $1.01 transfer between the business's own accounts paid the
+ * driver whose cents are .01).
+ *
+ * @param {string} name The sender as the bank shows it.
+ * @return {boolean} Whether it names an account.
+ */
+function senderIsAccount(name) {
+  const text = String(name || "");
+  return /(?:x|\*|\u2022|\u00b7){2,}\s*\d{2,}/i.test(text) ||
+    /\b(?:checking|savings|money market)\b/i.test(text);
+}
+
+/**
  * Which driver a deposit is from, or why it is not known.
+ * 0. A transfer from an account is nobody's: the office decides.
  * 1. A sender remembered for exactly one active driver.
  * 2. Else the amount's cents equal exactly one active driver's personal
  *    cents (the amount is the code, decided 2026-11-05).
@@ -129,9 +146,10 @@ function senderKey(name) {
  * @param {Array<object>} drivers {id, status, personalCents,
  *   rememberedSenders}.
  * @return {object} {driverId, how: "sender"|"cents"} or {reason:
- *   "two_drivers"|"unknown"}.
+ *   "two_drivers"|"unknown"|"own_transfer"}.
  */
 function matchDeposit(credit, drivers) {
+  if (senderIsAccount(credit?.senderName)) return {reason: "own_transfer"};
   const active = (drivers || []).filter((d) => d && d.status === "active");
   const sender = senderKey(credit?.senderName);
   if (sender) {
@@ -198,6 +216,7 @@ function possibleDuplicateOf(credit, others) {
 module.exports = {
   DUPLICATE_DAYS,
   possibleDuplicateOf,
+  senderIsAccount,
   BANK_MATCH_START_MS,
   BANK_REFRESH_EVERY,
   DEFAULT_BANK_SCHEDULE,

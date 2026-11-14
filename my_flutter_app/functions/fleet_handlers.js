@@ -671,8 +671,10 @@ function createFleetHandlers(deps) {
     if (plan.creditAddedCents > 0) {
       driverPatch.creditCents = FieldValue.increment(plan.creditAddedCents);
     }
-    // The sender is remembered, so their next deposit pays this driver.
-    if (p.bank?.senderName) {
+    // The sender is remembered, so their next deposit pays this driver
+    // (a person only: an account transfer is never remembered).
+    if (p.bank?.senderName &&
+        !fleetBank.senderIsAccount(p.bank.senderName)) {
       driverPatch.rememberedSenders =
         FieldValue.arrayUnion(fleetBank.senderKey(p.bank.senderName));
     }
@@ -915,6 +917,12 @@ function createFleetHandlers(deps) {
             out.paid += 1;
             continue;
           } catch (error) {
+            // The bank often sends two notices in the same second and both
+            // runs try the same deposit: the one that lost has nothing to
+            // do. It must not put a paid deposit on the waiting list.
+            const now = await doc.ref.get();
+            const used = now.exists ? now.data()?.consumedBy : null;
+            if (used && used.kind) continue;
             deps.logger.warn("Fleet deposit not applied", {businessId,
               creditId: doc.id, error: String(error?.message || error)});
           }

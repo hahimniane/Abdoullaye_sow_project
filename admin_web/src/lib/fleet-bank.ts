@@ -110,5 +110,7 @@ export function waitingReasonText(reason: string): string {
   if (reason === "undone") return "Its payment was undone: pick the right driver.";
   if (reason === "possible_duplicate")
     return "This may be a Zelle already used, sent again by the bank. Pay it only if the driver really sent it twice.";
+  if (reason === "own_transfer")
+    return "This is a transfer from a bank account, not a Zelle from a person. Use it for a driver only if they really paid this way.";
   return "Laawol does not know this sender yet: pick the driver once and it is remembered.";
 }
