@@ -278,9 +278,9 @@ test("every static string of the beta printer UI has French and round-trips", ()
 });
 
 test("the dialog offers the choice only where Web Bluetooth exists, and keeps the PM-241 sentence for the PM-241", () => {
-  assert.match(dialogSource, /printer\.supported \? \(\s*<>\s*<LabelPrinterKindPicker printer=\{printer\} \/>\s*\{printer\.kind === "pm241" \? \(\s*<p[^>]*>Prints straight to the PM-241/);
+  assert.match(dialogSource, /printer\.supported \? \(\s*<>\s*<LabelPrinterKindPicker printer=\{printer\} \/>\s*\{printer\.kind === "pm241" \? \(\s*<p[^>]*>Prints straight to the label printer \(Phomemo PM-241 or M421\)/);
   assert.match(dialogSource, /<GenericPrinterBeta printer=\{printer\} \/>/);
-  assert.match(pickerSource, /checked=\{printer\.kind === "pm241"\}[\s\S]*Phomemo PM-241/);
+  assert.match(pickerSource, /checked=\{printer\.kind === "pm241"\}[\s\S]*Phomemo PM-241 or M421/);
   // The visible fallback box exists and is selectable; details are data, not dictionary text.
   assert.match(pickerSource, /<textarea[\s\S]*readOnly[\s\S]*data-no-translate/);
 });
@@ -289,7 +289,7 @@ test("the choice is remembered and the PM-241 recipe is untouched by the generic
   assert.match(printerSource, /writePrinterKind\(localStore\(\), kind\)/);
   assert.match(printerSource, /if \(kind === "generic"\) \{/);
   // The PM-241 identifiers are still the ones the recipe printed with.
-  assert.match(printerSource, /filters: PM241_NAME_PREFIXES\.map\(\(namePrefix\) => \(\{ namePrefix \}\)\)/);
+  assert.match(printerSource, /filters: \[\.\.\.PM241_NAME_PREFIXES, \.\.\.M421_NAME_PREFIXES\]\.map\(\(namePrefix\) => \(\{ namePrefix \}\)\)/);
   assert.match(printerSource, /optionalServices: \[PM241_SERVICE_SHORT\]/);
   // A failed beta print offers the details at once, and the clipboard is wrapped.
   assert.match(hookSource, /noteGenericPrintFailure\(error\);\s+setCopy\("idle"\);\s+setDetails\(genericPrinterDetailsText\(\)\)/);

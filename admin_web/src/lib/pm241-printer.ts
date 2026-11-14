@@ -13,6 +13,7 @@
  */
 
 import { connectGenericPrinter } from "./generic-printer.ts";
+import { M421_NAME_PREFIXES, M421Link, isM421Name } from "./m421.ts";
 import { readPrinterKind, writePrinterKind, type PrinterKind } from "./generic-label-printer.ts";
 import {
   PM241_NAME_PREFIXES,
@@ -110,6 +111,11 @@ function isPm241(name: string | undefined): boolean {
   return PM241_NAME_PREFIXES.some((prefix) => upper.startsWith(prefix));
 }
 
+/** A Phomemo this page knows by name: the PM-241 or the M421 (same service, its own language). */
+function isKnownPrinter(name: string | undefined): boolean {
+  return isPm241(name) || isM421Name(name);
+}
+
 /** The printer's name for the screen ("PM-241-BT"), once one is chosen. */
 export function labelPrinterName(): string {
   return rememberedDevice?.name ?? "";
@@ -137,7 +143,7 @@ async function pickDevice(api: BtApi): Promise<BtDevice> {
   // A printer chosen before (an earlier visit): found again without the chooser.
   if (typeof api.getDevices === "function") {
     try {
-      const known = (await api.getDevices()).find((d) => isPm241(d.name));
+      const known = (await api.getDevices()).find((d) => isKnownPrinter(d.name));
       if (known) return (rememberedDevice = known);
     } catch {
       // Not allowed here; the chooser below still works.
@@ -145,7 +151,7 @@ async function pickDevice(api: BtApi): Promise<BtDevice> {
   }
   try {
     const device = await api.requestDevice({
-      filters: PM241_NAME_PREFIXES.map((namePrefix) => ({ namePrefix })),
+      filters: [...PM241_NAME_PREFIXES, ...M421_NAME_PREFIXES].map((namePrefix) => ({ namePrefix })),
       optionalServices: [PM241_SERVICE_SHORT],
     });
     return (rememberedDevice = device);
@@ -165,7 +171,9 @@ async function openSession(device: BtDevice): Promise<{ device: BtDevice; link: 
   const write = await service.getCharacteristic(PM241_WRITE_UUID);
   const notify = await service.getCharacteristic(PM241_NOTIFY_UUID);
 
-  const link = new Pm241Link(
+  // The M421 has the PM-241's service and credits but takes raster commands, not TSPL.
+  const Link = isM421Name(device.name) ? M421Link : Pm241Link;
+  const link = new Link(
     {
       async write(packet) {
         // Copy: the packet is a view into the whole job.

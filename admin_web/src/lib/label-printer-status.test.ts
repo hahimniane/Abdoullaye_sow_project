@@ -97,12 +97,16 @@ const dialogSource = read("../components/business/container-labels-dialog.tsx");
 const hookSource = read("../components/business/use-label-printer.ts");
 const printerSource = read("./pm241-printer.ts");
 
+test("the printer choice names both Phomemo printers, in French too", () => {
+  assert.equal(translateValue("Phomemo PM-241 or M421", "fr"), "Phomemo PM-241 ou M421");
+});
+
 test("every static string of the label printer section has French and round-trips", () => {
   const strings = [
     "Label printer",
     "Print on label printer",
     "Printing...",
-    "Prints straight to the PM-241 label printer over Bluetooth: one label per piece, with no print window.",
+    "Prints straight to the label printer (Phomemo PM-241 or M421) over Bluetooth: one label per piece, with no print window.",
     "Use Chrome to print straight to the label printer, or the Laawol app on iPhone.",
   ];
   for (const english of strings) {
@@ -121,7 +125,7 @@ test("the labels dialog offers the label printer beside Open labels, and keeps t
   assert.ok(printerAt > 0 && openAt > printerAt, "the label printer comes before Open labels");
   assert.match(dialogSource, /\{busy \? "Opening\.\.\." : "Open labels"\}/);
   // Without Web Bluetooth the dialog says what to use instead and offers no dead button.
-  assert.match(dialogSource, /printer\.supported \? \([\s\S]*Prints straight to the PM-241[\s\S]*\) : \([\s\S]*Use Chrome to print straight to the label printer/);
+  assert.match(dialogSource, /printer\.supported \? \([\s\S]*Prints straight to the label printer \(Phomemo PM-241 or M421\)[\s\S]*\) : \([\s\S]*Use Chrome to print straight to the label printer/);
   // The progress sentence carries counts: built per language, never run through the dictionary.
   assert.match(dialogSource, /role=\{labelPrinterStatusRole\(printer\.state\)\}\s+data-no-translate/);
 });
@@ -148,7 +152,7 @@ test("the click's gesture reaches the Bluetooth chooser, and every path ends not
 test("Web Bluetooth is feature-detected and the recipe's identifiers are used", () => {
   assert.match(printerSource, /\(nav as \(Navigator & \{ bluetooth\?: BtApi \}\) \| undefined\)\?\.bluetooth/);
   assert.match(printerSource, /typeof api\.requestDevice === "function"/);
-  assert.match(printerSource, /filters: PM241_NAME_PREFIXES\.map\(\(namePrefix\) => \(\{ namePrefix \}\)\)/);
+  assert.match(printerSource, /filters: \[\.\.\.PM241_NAME_PREFIXES, \.\.\.M421_NAME_PREFIXES\]\.map\(\(namePrefix\) => \(\{ namePrefix \}\)\)/);
   assert.match(printerSource, /optionalServices: \[PM241_SERVICE_SHORT\]/);
   assert.match(printerSource, /api\.getDevices/);
   assert.match(printerSource, /writeValueWithoutResponse/);

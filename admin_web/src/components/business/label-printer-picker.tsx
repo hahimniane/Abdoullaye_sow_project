@@ -8,14 +8,14 @@ import type { useLabelPrinter } from "@/components/business/use-label-printer";
 type Printer = ReturnType<typeof useLabelPrinter>;
 
 /**
- * Which label printer the person has: the Phomemo PM-241 (the tested path) or
+ * Which label printer the person has: a Phomemo PM-241 or M421 (the tested paths, told apart by name) or
  * "Other 4x6 Bluetooth printer (beta)". The choice is remembered in this
  * browser by the hook.
  */
 export function LabelPrinterKindPicker({ printer }: { printer: Printer }) {
   return (
     <div role="radiogroup" aria-label="Printer type" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <label className="lst-radio"><input type="radio" name="ctnprinterkind" checked={printer.kind === "pm241"} disabled={printer.busy} onChange={() => printer.setKind("pm241")} /><span>Phomemo PM-241</span></label>
+      <label className="lst-radio"><input type="radio" name="ctnprinterkind" checked={printer.kind === "pm241"} disabled={printer.busy} onChange={() => printer.setKind("pm241")} /><span>Phomemo PM-241 or M421</span></label>
       <label className="lst-radio"><input type="radio" name="ctnprinterkind" checked={printer.kind === "generic"} disabled={printer.busy} onChange={() => printer.setKind("generic")} /><span>Other 4×6 Bluetooth printer (beta)</span></label>
     </div>
   );
