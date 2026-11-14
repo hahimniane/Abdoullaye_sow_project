@@ -7,8 +7,9 @@ import 'package:my_flutter_app/services/pm241_protocol.dart';
 import 'fixtures/fake_printer.dart';
 
 // The Phomemo M421, as measured on a real one on 2026-11-14: it advertises
-// as "M421", takes the M221's commands on an 832-dot head, grants packet
-// credits like a PM-241, and feeds to the next label after EVERY raster.
+// as "M421", takes the M221's commands on a head about 896 dots wide (the
+// label's left edge is about 43 dots in), grants packet credits like a
+// PM-241, and feeds to the next label after EVERY raster.
 
 const _m421Settings = LabelPrinterSettings(
   deviceId: 'AA:BB:CC:DD:EE:03',
@@ -89,20 +90,23 @@ void main() {
     });
   });
 
-  group('the picture on the 832-dot head', () {
-    test('an 800-dot label is centred: 16 dots each side, 104-byte rows', () {
-      final raster = packRaster(_label(), 0, 0, headDots: m421HeadDots);
-      expect(raster.widthBytes, 104);
+  group('the picture over the label', () {
+    test('an 800-dot label starts at dot 48 of 864-dot rows', () {
+      // Centred on 832 dots it printed 4 mm too far left on the real
+      // printer, its left edge off the label (2026-11-14).
+      final raster = m421Raster(_label());
+      expect(raster.widthBytes, 108);
       expect(raster.rows, 1180);
-      expect(raster.x, 16);
-      expect(raster.data.length, 104 * 1180);
-      // Row 0 is black from dot 16 to dot 815, white outside.
-      expect(raster.data[0], 0x00);
-      expect(raster.data[1], 0x00);
-      expect(raster.data[2], 0xFF);
-      expect(raster.data[101], 0xFF);
-      expect(raster.data[102], 0x00);
-      expect(raster.data[103], 0x00);
+      expect(raster.x, 48);
+      expect(raster.data.length, 108 * 1180);
+      // Row 0 is black from dot 48 to dot 847, white outside.
+      for (final byte in [0, 5]) {
+        expect(raster.data[byte], 0x00, reason: 'byte $byte');
+      }
+      expect(raster.data[6], 0xFF);
+      expect(raster.data[105], 0xFF);
+      expect(raster.data[106], 0x00);
+      expect(raster.data[107], 0x00);
     });
 
     test('the M221 packing is unchanged', () {
@@ -120,14 +124,14 @@ void main() {
       final image = _label();
       final outcome = await c.printLabels(image: image, what: 'test');
       expect(outcome.ok, isTrue);
-      final raster = packRaster(image, 0, 0, headDots: m421HeadDots);
+      final raster = m421Raster(image);
       final expected = [
         for (final step in m221LabelSteps(raster)) ...step.bytes,
       ];
       expect(t.allBytes, expected);
       // The printer feeds to the next label after every raster: a label
       // sent in bands would waste one label per band.
-      expect(_count(t.allBytes, [0x1D, 0x76, 0x30, 0x00, 104, 0x00]), 1);
+      expect(_count(t.allBytes, [0x1D, 0x76, 0x30, 0x00, 108, 0x00]), 1);
       expect(t.creditViolations, 0);
       // Packet size = min(182 from the printer, 197 from the link).
       expect(t.writes.every((w) => w.length <= 182), isTrue);
@@ -146,7 +150,7 @@ void main() {
       expect(outcome.ok, isTrue);
       expect(outcome.printed, 2);
       expect(_count(t.allBytes, m221Footer), 2);
-      expect(_count(t.allBytes, [0x1D, 0x76, 0x30, 0x00, 104, 0x00]), 2);
+      expect(_count(t.allBytes, [0x1D, 0x76, 0x30, 0x00, 108, 0x00]), 2);
       expect(t.connects, 1);
       expect(t.creditViolations, 0);
     });
@@ -185,8 +189,8 @@ void main() {
       await c.printLabels(image: _label(), what: 'package label');
       final text = c.log.entries.map((e) => e.message).join('\n');
       expect(text, contains('Phomemo M421'));
-      expect(text, contains('centred on 832 dots, one raster per label'));
-      expect(text, contains('sent: raster 832x1180 dots'));
+      expect(text, contains('at dot 48 of 864, one raster per label'));
+      expect(text, contains('sent: raster 864x1180 dots'));
       expect(text, contains('done: printer finished the label'));
     });
   });

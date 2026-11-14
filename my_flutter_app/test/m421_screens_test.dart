@@ -93,11 +93,8 @@ void main() {
     await _tap(tester, 'label-printer-test-label');
     await _tap(tester, 'label-printer-test-label-go');
     expect(find.text('Printed.'), findsOneWidget);
-    final raster = packRaster(
+    final raster = m421Raster(
       pm241TestLabel(tagQrMatrix(inventoryTagLink(labelPrinterTestCode))),
-      0,
-      0,
-      headDots: m421HeadDots,
     );
     expect(t.allBytes, [
       for (final step in m221LabelSteps(raster)) ...step.bytes,
