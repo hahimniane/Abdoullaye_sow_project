@@ -152,7 +152,7 @@ export function ContainerLabelsDialog({
               <>
                 <LabelPrinterKindPicker printer={printer} />
                 {printer.kind === "pm241" ? (
-                  <p className="lst-hint" style={{ margin: 0 }}>Prints straight to the PM-241 label printer over Bluetooth: one label per piece, with no print window.</p>
+                  <p className="lst-hint" style={{ margin: 0 }}>Prints straight to the label printer (Phomemo PM-241 or M421) over Bluetooth: one label per piece, with no print window.</p>
                 ) : (
                   <GenericPrinterBeta printer={printer} />
                 )}

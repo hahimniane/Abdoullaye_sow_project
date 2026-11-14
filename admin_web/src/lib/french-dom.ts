@@ -8379,8 +8379,9 @@ Object.assign(TEXT_TRANSLATIONS, {
   "Label printer": "Imprimante d’étiquettes",
   "Print on label printer": "Imprimer sur l’imprimante d’étiquettes",
   "Printing...": "Impression...",
-  "Prints straight to the PM-241 label printer over Bluetooth: one label per piece, with no print window.":
-    "Imprime directement sur l’imprimante d’étiquettes PM-241 par Bluetooth : une étiquette par colis, sans fenêtre d’impression.",
+  "Prints straight to the label printer (Phomemo PM-241 or M421) over Bluetooth: one label per piece, with no print window.":
+    "Imprime directement sur l’imprimante d’étiquettes (Phomemo PM-241 ou M421) par Bluetooth : une étiquette par colis, sans fenêtre d’impression.",
+  "Phomemo PM-241 or M421": "Phomemo PM-241 ou M421",
   "Use Chrome to print straight to the label printer, or the Laawol app on iPhone.":
     "Utilisez Chrome pour imprimer directement sur l’imprimante d’étiquettes, ou l’application Laawol sur iPhone.",
   // The beta "other 4x6 Bluetooth printer" choice (label-printer-picker.tsx).

@@ -270,6 +270,8 @@ export interface LabelLink {
   /** False when the printer never says a label came out (so "sent", not "printed"). */
   readonly confirmsLabels?: boolean;
   beginJob(): void;
+  /** The bytes of one label for this printer; the PM-241's TSPL job when a link has none of its own. */
+  buildJob?(bitmap: LabelBitmap): Uint8Array;
   send(data: Uint8Array, onProgress?: (sent: number, total: number) => void): Promise<void>;
   waitDone(): Promise<void>;
   close(error?: PrinterError): void;
@@ -324,6 +326,12 @@ export class Pm241Link implements LabelLink {
 
   private wake(): void {
     for (const waiter of [...this.waiters]) waiter();
+  }
+
+  /** The label is out: for a link whose printer says so in its own way (the M421's `1A 0F`). */
+  protected confirmDone(): void {
+    this.done = true;
+    this.wake();
   }
 
   /**
@@ -442,7 +450,8 @@ export async function printLabels(
   let printed = 0;
   try {
     for (let i = 0; i < count; i++) {
-      const job = buildLabelJob(render(i));
+      const bitmap = render(i);
+      const job = link.buildJob ? link.buildJob(bitmap) : buildLabelJob(bitmap);
       const index = i + 1;
       link.beginJob();
       onProgress?.({ phase: "sending", index, total: count, sent: 0, bytes: job.length });
