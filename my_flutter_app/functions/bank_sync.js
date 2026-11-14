@@ -90,6 +90,27 @@ const SENDER_NOISE = new RegExp([
   "\\bID\\s*#?\\s*[A-Z0-9]*\\d[A-Z0-9]*",
 ].join("|"), "gi");
 
+/** Apps a payment goes through: never the person who sent it. */
+const APP_NAMES = /^(?:zelle|venmo|cash\s*app|paypal|apple\s*cash)$/i;
+/** Plaid counterparty types that are the rail, not the sender. */
+const RAIL_PARTY_TYPES = new Set(["payment_app", "financial_institution",
+  "payment_terminal"]);
+
+/**
+ * Whether the bank's own line says the money came by Zelle. Fleet pays a
+ * driver by itself only for these: a card payout, a cash or check deposit,
+ * interest or a refund is never a driver's Zelle.
+ *
+ * @param {object} tx A Plaid transaction.
+ * @return {boolean} Whether any of its names mentions Zelle.
+ */
+function isZelle(tx) {
+  const parties = Array.isArray(tx?.counterparties) ? tx.counterparties : [];
+  return [tx?.name, tx?.original_description, tx?.merchant_name,
+    ...parties.map((p) => p?.name)]
+      .some((part) => /\bzelle\b/i.test(String(part || "")));
+}
+
 /**
  * @param {*} value A name-ish string.
  * @return {string} Trimmed to one line and the stored length.
@@ -101,7 +122,8 @@ function tidy(value) {
 
 /**
  * Who sent the money, as the bank shows it - and only that: the rest of the
- * line (memo, reference numbers) is never stored. Counterparty first, then
+ * line (memo, reference numbers) is never stored. Never the app or the bank
+ * the money came through ("Zelle" is not a sender). Counterparty first, then
  * the words after "from" on the line, then the merchant, then the line with
  * the Zelle noise taken out.
  *
@@ -112,7 +134,9 @@ function senderNameOf(tx) {
   const parties = Array.isArray(tx?.counterparties) ? tx.counterparties : [];
   for (const party of parties) {
     const name = tidy(party?.name);
-    if (name) return name;
+    if (!name || APP_NAMES.test(name) ||
+        RAIL_PARTY_TYPES.has(String(party?.type || ""))) continue;
+    return name;
   }
   const line = String(tx?.name || "");
   const from = line.match(
@@ -123,7 +147,7 @@ function senderNameOf(tx) {
     if (name) return name;
   }
   const merchant = tidy(tx?.merchant_name);
-  if (merchant) return merchant;
+  if (merchant && !APP_NAMES.test(merchant)) return merchant;
   return tidy(line.replace(SENDER_NOISE, " ").replace(/[;:#*]+/g, " "));
 }
 
@@ -163,6 +187,7 @@ function creditFromTransaction(tx, scope) {
     timeKnown: atMs !== null,
     dateKey: dateKeyOf(tx.authorized_date) || dateKeyOf(tx.date),
     senderName: senderNameOf(tx),
+    zelle: isZelle(tx),
     pendingTransactionId: tx.pending_transaction_id ?
       String(tx.pending_transaction_id) : "",
   };

@@ -8900,6 +8900,8 @@ Object.assign(TEXT_TRANSLATIONS, {
   "This driver has left.": "Ce chauffeur est parti.",
 });
 Object.assign(TEXT_TRANSLATIONS, {
+  "This deposit is not a Zelle (cash, a check, a card payout or a transfer). Pick the driver only if it is a driver's payment.": "Ce dépôt n’est pas un Zelle (espèces, chèque, versement de carte ou virement). Choisissez le chauffeur seulement si c’est bien son paiement.",
+  "This sender paid for a driver who left. Pick who this payment is for.": "Cet expéditeur payait pour un chauffeur parti. Choisissez pour qui est ce paiement.",
   "This is a transfer from a bank account, not a Zelle from a person. Use it for a driver only if they really paid this way.": "C’est un virement depuis un compte bancaire, pas un Zelle d’une personne. Ne l’utilisez pour un chauffeur que s’il a vraiment payé ainsi.",
   "This may be a Zelle already used, sent again by the bank. Pay it only if the driver really sent it twice.": "Ce Zelle a peut-être déjà été utilisé et renvoyé par la banque. Ne le payez que si le chauffeur l’a vraiment envoyé deux fois.",
 });

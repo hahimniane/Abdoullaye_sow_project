@@ -135,42 +135,77 @@ function senderIsAccount(name) {
     /\b(?:checking|savings|money market)\b/i.test(text);
 }
 
+/** Apps a payment goes through: a name like this is not a person. */
+const APP_SENDER = /^(?:ZELLE|VENMO|CASH ?APP|PAYPAL|APPLE CASH)$/;
+
 /**
- * Which driver a deposit is from, or why it is not known.
- * 0. A transfer from an account is nobody's: the office decides.
- * 1. A sender remembered for exactly one active driver.
- * 2. Else the amount's cents equal exactly one active driver's personal
+ * Whether a deposit's sender may be remembered for a driver, so the next
+ * one pays by itself: a person's Zelle only. Never an account, an app's own
+ * name, a deposit the bank does not call a Zelle (cash, check, card payout),
+ * or no name at all.
+ *
+ * @param {object} credit {senderName, zelle}.
+ * @return {boolean} Whether to remember it.
+ */
+function senderRememberable(credit) {
+  const key = senderKey(credit?.senderName);
+  return key !== "" && !APP_SENDER.test(key) && credit?.zelle !== false &&
+    !senderIsAccount(credit?.senderName);
+}
+
+/**
+ * Which driver a deposit is from, or why it is not known. Wrong is worse
+ * than slow: whenever two readings are possible, it waits for the office.
+ * 0. A transfer from an account is nobody's. A deposit the bank does not
+ *    call a Zelle (stored `zelle: false`) never pays by itself. Neither
+ *    does one without a person's name.
+ * 1. A sender remembered for exactly one active driver - unless the cents
+ *    are another active driver's code (two people can share a name, and a
+ *    friend can pay for a friend).
+ * 2. A sender remembered only for a driver who left: never by cents (their
+ *    old cents may be someone else's now).
+ * 3. Else the amount's cents equal exactly one active driver's personal
  *    cents (the amount is the code, decided 2026-11-05).
  *
- * @param {object} credit {amountCents, senderName}.
- * @param {Array<object>} drivers {id, status, personalCents,
- *   rememberedSenders}.
+ * @param {object} credit {amountCents, senderName, zelle}.
+ * @param {Array<object>} drivers Every driver of the business {id, status,
+ *   personalCents, rememberedSenders}; only active ones are ever paid.
  * @return {object} {driverId, how: "sender"|"cents"} or {reason:
- *   "two_drivers"|"unknown"|"own_transfer"}.
+ *   "two_drivers"|"unknown"|"own_transfer"|"not_zelle"|"driver_left"}.
  */
 function matchDeposit(credit, drivers) {
   if (senderIsAccount(credit?.senderName)) return {reason: "own_transfer"};
-  const active = (drivers || []).filter((d) => d && d.status === "active");
+  if (credit?.zelle === false) return {reason: "not_zelle"};
   const sender = senderKey(credit?.senderName);
-  if (sender) {
-    const owners = active.filter((d) => (d.rememberedSenders || [])
-        .some((s) => senderKey(s) === sender));
-    if (owners.length === 1) return {driverId: owners[0].id, how: "sender"};
-    if (owners.length > 1) return {reason: "two_drivers"};
-  }
+  if (!sender || APP_SENDER.test(sender)) return {reason: "unknown"};
+  const all = (drivers || []).filter(Boolean);
+  const active = all.filter((d) => d.status === "active");
+  const knows = (d) => (d.rememberedSenders || [])
+      .some((s) => senderKey(s) === sender);
   const amount = Math.round(Number(credit?.amountCents));
   const tail = Number.isFinite(amount) ? amount % 100 : 0;
-  if (tail > 0) {
-    const byCents = active.filter((d) => Number(d.personalCents) === tail);
-    if (byCents.length === 1) return {driverId: byCents[0].id, how: "cents"};
-    if (byCents.length > 1) return {reason: "two_drivers"};
+  const byCents = tail > 0 ?
+    active.filter((d) => Number(d.personalCents) === tail) : [];
+  const owners = active.filter(knows);
+  if (owners.length > 1) return {reason: "two_drivers"};
+  if (owners.length === 1) {
+    if (byCents.some((d) => d.id !== owners[0].id)) {
+      return {reason: "two_drivers"};
+    }
+    return {driverId: owners[0].id, how: "sender"};
   }
+  if (all.some((d) => d.status !== "active" && knows(d))) {
+    return {reason: "driver_left"};
+  }
+  if (byCents.length === 1) return {driverId: byCents[0].id, how: "cents"};
+  if (byCents.length > 1) return {reason: "two_drivers"};
   return {reason: "unknown"};
 }
 
 /**
- * Whether a stored deposit can pay a driver: money in from a person (the
- * bank shows a sender), on or after `sinceMs`, not removed, not used.
+ * Whether Fleet looks at a stored deposit at all: money in, on or after
+ * `sinceMs`, not removed, not used. One without a sender's name still
+ * counts: it waits for the office (a driver can pay cash at the bank).
  *
  * @param {object} credit A businessBankCredits row.
  * @param {number} sinceMs The earliest deposit time.
@@ -180,7 +215,6 @@ function depositMatchable(credit, sinceMs) {
   if (!credit || credit.removed === true) return false;
   if (credit.consumedBy && credit.consumedBy.kind) return false;
   if (!(Number(credit.amountCents) > 0)) return false;
-  if (!senderKey(credit.senderName)) return false;
   const at = Number(credit.atMs);
   if (Number.isFinite(at) && at > 0) return at >= sinceMs;
   const day = String(credit.dateKey || "");
@@ -217,6 +251,7 @@ module.exports = {
   DUPLICATE_DAYS,
   possibleDuplicateOf,
   senderIsAccount,
+  senderRememberable,
   BANK_MATCH_START_MS,
   BANK_REFRESH_EVERY,
   DEFAULT_BANK_SCHEDULE,

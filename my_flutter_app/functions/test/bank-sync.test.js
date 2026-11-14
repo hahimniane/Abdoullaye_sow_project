@@ -81,9 +81,38 @@ describe("bank sync: a Plaid row as a credit", () => {
       type: "individual"}]})), "Fatou Bah");
     assert.equal(senderNameOf(tx({name: "ZELLE FROM MAMADOU DIALLO ON 10/16"})),
         "MAMADOU DIALLO");
-    assert.equal(senderNameOf(tx({name: "DEPOSIT", merchant_name: "Cash App"})),
-        "Cash App");
+    assert.equal(senderNameOf(tx({name: "DEPOSIT", merchant_name: "Acme LLC"})),
+        "Acme LLC");
     assert.equal(senderNameOf(tx({name: "Zelle Transfer Conf# 12345"})), "");
+  });
+
+  it("the app or bank the money came through is never the sender", () => {
+    // Some banks list Zelle itself as the counterparty: remembered as a
+    // sender, every Zelle would then belong to one driver.
+    assert.equal(senderNameOf(tx({name: "Zelle payment from AWA SOW 123",
+      counterparties: [{name: "Zelle", type: "payment_app"}]})), "AWA SOW 123");
+    assert.equal(senderNameOf(tx({name: "Zelle payment from AWA SOW",
+      counterparties: [{name: "Zelle", type: "payment_app"},
+        {name: "Awa Sow", type: "individual"}]})), "Awa Sow");
+    assert.equal(senderNameOf(tx({name: "DEPOSIT",
+      counterparties: [{name: "Some Bank", type: "financial_institution"}],
+      merchant_name: "Cash App"})), "");
+    assert.equal(senderNameOf(tx({name: "DEPOSIT", merchant_name: "Venmo"})),
+        "");
+  });
+
+  it("says whether the bank calls it a Zelle", () => {
+    assert.equal(creditFromTransaction(tx(), SCOPE).zelle, true);
+    assert.equal(creditFromTransaction(tx({name: "Deposit from 360 Checking " +
+      "XXXXXXX2820", counterparties: []}), SCOPE).zelle, false);
+    assert.equal(creditFromTransaction(tx({name: "STRIPE TRANSFER",
+      merchant_name: "Stripe", counterparties: []}), SCOPE).zelle, false);
+    assert.equal(creditFromTransaction(tx({name: "Money received",
+      original_description: "ZELLE FROM AWA SOW", counterparties: []}),
+    SCOPE).zelle, true);
+    assert.equal(creditFromTransaction(tx({name: "Payment",
+      counterparties: [{name: "Zelle", type: "payment_app"}]}), SCOPE).zelle,
+    true);
   });
 
   it("names its document by business and transaction", () => {

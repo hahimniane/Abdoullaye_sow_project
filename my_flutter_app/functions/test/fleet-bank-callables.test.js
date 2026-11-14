@@ -127,15 +127,18 @@ describe("deposits pay drivers by themselves", () => {
         const old = await deposit(30000, "WHO IS THIS",
             {atMs: BANK_MATCH_START_MS - 1000});
         const noSender = await deposit(30000, "");
+        // No sender's name: it waits too (cash paid in at the bank).
         assert.deepEqual(await handlers.matchBankDeposits(BIZ,
-            [unknown, gone, old, noSender]), {paid: 0, waiting: 2});
+            [unknown, gone, old, noSender]), {paid: 0, waiting: 3});
         assert.equal((await doc("businessBankCredits", unknown)).fleetWaiting,
             true);
+        assert.equal((await doc("businessBankCredits", gone))
+            .fleetWaitingReason, "driver_left");
         assert.equal((await doc("businessBankCredits", old)).fleetWaiting,
             undefined, "before go-live: never touched");
         const status = await act(STAFF, "bank_status");
         assert.deepEqual(status.waiting.map((w) => w.id).sort(),
-            [gone, unknown].sort());
+            [gone, unknown, noSender].sort());
         assert.equal(status.bank.connected, true);
       });
 
@@ -231,6 +234,103 @@ describe("deposits pay drivers by themselves", () => {
     const next = await deposit(217, "360 Checking XXXXXXX2820");
     assert.deepEqual(await handlers.matchBankDeposits(BIZ, [next]),
         {paid: 0, waiting: 1});
+  });
+
+  it("a card payout, cash or a check never pays by itself and is never " +
+      "remembered", async () => {
+    // Cents .42 are drv-b's code; the bank does not call it a Zelle.
+    const payout = await deposit(123442, "STRIPE", {zelle: false});
+    assert.deepEqual(await handlers.matchBankDeposits(BIZ, [payout]),
+        {paid: 0, waiting: 1});
+    assert.equal((await doc("businessBankCredits", payout))
+        .fleetWaitingReason, "not_zelle");
+    // A driver did pay cash at the bank: the office says so, once.
+    await act(STAFF, "bank_assign", {creditId: payout, driverId: "drv-b"});
+    const driver = await doc("fleetDrivers", "drv-b");
+    assert.ok(!(driver.rememberedSenders || []).includes("STRIPE"));
+    const next = await deposit(88800, "STRIPE", {zelle: false});
+    assert.deepEqual(await handlers.matchBankDeposits(BIZ, [next]),
+        {paid: 0, waiting: 1});
+    // The app's own name is nobody's, even on a Zelle with a driver's cents.
+    const app = await deposit(20042, "Zelle", {zelle: true});
+    assert.deepEqual(await handlers.matchBankDeposits(BIZ, [app]),
+        {paid: 0, waiting: 1});
+  });
+
+  it("a driver who left pays with their old cents: the driver who has " +
+      "those cents now is not paid", async () => {
+    await Promise.all([
+      db.collection("fleetDrivers").doc("drv-left2").set({businessId: BIZ,
+        name: "Left Two", status: "left", personalCents: 77,
+        rememberedSenders: ["LEFT PAYER"], creditCents: 0}),
+      db.collection("fleetDrivers").doc("drv-c").set({businessId: BIZ,
+        name: "Driver C", status: "active", personalCents: 77,
+        rememberedSenders: [], creditCents: 0}),
+    ]);
+    const id = await deposit(20077, "Left Payer");
+    assert.deepEqual(await handlers.matchBankDeposits(BIZ, [id]),
+        {paid: 0, waiting: 1});
+    const credit = await doc("businessBankCredits", id);
+    assert.equal(credit.consumedBy, undefined);
+    assert.equal(credit.fleetWaitingReason, "driver_left");
+  });
+
+  it("a known sender with another driver's cents waits for the office",
+      async () => {
+        // ALPHA SENDER is drv-a's; .42 is drv-b's code.
+        const id = await deposit(30042, "ALPHA SENDER");
+        assert.deepEqual(await handlers.matchBankDeposits(BIZ, [id]),
+            {paid: 0, waiting: 1});
+        assert.equal((await doc("businessBankCredits", id))
+            .fleetWaitingReason, "two_drivers");
+      });
+
+  it("undo forgets the sender, so the same wrong match does not repeat",
+      async () => {
+        // A stranger whose amount happens to end in drv-b's cents.
+        const id = await deposit(21042, "WRONG PERSON");
+        assert.deepEqual(await handlers.matchBankDeposits(BIZ, [id]),
+            {paid: 1, waiting: 0});
+        assert.ok((await doc("fleetDrivers", "drv-b")).rememberedSenders
+            .includes("WRONG PERSON"));
+        const paymentId = (await doc("businessBankCredits", id)).consumedBy.id;
+        await act(OWNER, "payment_undo", {paymentId});
+        assert.ok(!(await doc("fleetDrivers", "drv-b")).rememberedSenders
+            .includes("WRONG PERSON"));
+        const next = await deposit(30000, "WRONG PERSON");
+        assert.deepEqual(await handlers.matchBankDeposits(BIZ, [next]),
+            {paid: 0, waiting: 1});
+      });
+
+  it("undo after the bank replaced the pending deposit frees the posted " +
+      "one", async () => {
+    const pending = await deposit(22017, "REPLACED SENDER", {pending: true});
+    assert.deepEqual(await handlers.matchBankDeposits(BIZ, [pending]),
+        {paid: 1, waiting: 0});
+    const used = (await doc("businessBankCredits", pending)).consumedBy;
+    // What a sync writes when the posted copy arrives (bank_sync.js).
+    const posted = `${BIZ}_txn-posted-1`;
+    await db.collection("businessBankCredits").doc(posted).set({
+      businessId: BIZ, transactionId: "txn-posted-1", accountId: "acct",
+      amountCents: 22017, pending: false, atMs: AFTER + 5000,
+      dateKey: "2026-12-02", senderName: "REPLACED SENDER",
+      replacesTransactionId: pending.replace(`${BIZ}_`, ""),
+      consumedBy: used, consumedByUid: "bank",
+      createdAt: FieldValue.serverTimestamp()});
+    await db.collection("businessBankCredits").doc(pending).set({
+      removed: true, replacedByTransactionId: "txn-posted-1"}, {merge: true});
+    await act(OWNER, "payment_undo", {paymentId: used.id});
+    const live = await doc("businessBankCredits", posted);
+    assert.equal(live.consumedBy, undefined, "the posted copy is free again");
+    assert.equal(live.fleetWaiting, true);
+    assert.equal(live.fleetWaitingReason, "undone");
+    const old = await doc("businessBankCredits", pending);
+    assert.equal(old.consumedBy, undefined);
+    assert.notEqual(old.fleetWaiting, true, "the removed copy never waits");
+    const status = await act(STAFF, "bank_status");
+    assert.ok(status.waiting.some((w) => w.id === posted));
+    // The office can now give it to the right driver.
+    await act(STAFF, "bank_assign", {creditId: posted, driverId: "drv-b"});
   });
 
   it("undo gives the deposit back to the waiting list", async () => {
