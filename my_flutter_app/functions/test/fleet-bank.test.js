@@ -97,6 +97,28 @@ describe("a deposit pays the right driver", () => {
     "a driver who left is never paid");
   });
 
+  it("a transfer from an account is nobody's, whatever its cents or " +
+      "whoever was remembered", () => {
+    const {senderIsAccount} = require("../fleet_bank");
+    for (const name of ["360 Checking XXXXXXX2820", "Savings ****1234",
+      "CHECKING 0042", "Money Market xx9911"]) {
+      assert.equal(senderIsAccount(name), true, name);
+    }
+    for (const name of ["HASSIMIOU NIANE", "Moussa Keïta", "ALPHA 2 SENDER",
+      "Maxine Checkley", ""]) {
+      assert.equal(senderIsAccount(name), false, name);
+    }
+    // Cents .42 are d2's code, yet an account transfer waits for the office.
+    assert.deepEqual(matchDeposit({amountCents: 142,
+      senderName: "360 Checking XXXXXXX2820"}, drivers),
+    {reason: "own_transfer"});
+    const remembered = [{id: "d9", status: "active", personalCents: 1,
+      rememberedSenders: ["360 CHECKING XXXXXXX2820"]}];
+    assert.deepEqual(matchDeposit({amountCents: 45001,
+      senderName: "360 Checking XXXXXXX2820"}, remembered),
+    {reason: "own_transfer"});
+  });
+
   it("two drivers who could be the sender: nobody is guessed", () => {
     const twins = [...drivers, {id: "d4", status: "active", personalCents: 17,
       rememberedSenders: ["MOUSSA KEITA"]}];

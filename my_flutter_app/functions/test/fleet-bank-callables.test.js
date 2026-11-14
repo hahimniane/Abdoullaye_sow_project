@@ -194,6 +194,45 @@ describe("deposits pay drivers by themselves", () => {
         {paid: 0, waiting: 1});
   });
 
+  it("two bank notices in the same second: one payment, and the deposit " +
+      "is not left on the waiting list", async () => {
+    // Cents .17 = drv-a. Both runs see the deposit unused and try it.
+    const id = await deposit(46017, "RACE SENDER");
+    const before = (await db.collection("fleetPayments")
+        .where("businessId", "==", BIZ).get()).size;
+    const runs = await Promise.all([
+      handlers.matchBankDeposits(BIZ, [id]),
+      handlers.matchBankDeposits(BIZ, [id]),
+    ]);
+    assert.equal(runs[0].paid + runs[1].paid, 1, "paid once");
+    assert.equal(runs[0].waiting + runs[1].waiting, 0, "never waiting");
+    const after = (await db.collection("fleetPayments")
+        .where("businessId", "==", BIZ).get()).size;
+    assert.equal(after - before, 1, "one payment");
+    const credit = await doc("businessBankCredits", id);
+    assert.equal(credit.consumedBy.kind, "fleet_payment");
+    assert.notEqual(credit.fleetWaiting, true);
+  });
+
+  it("a transfer from an account waits for the office whatever its cents, " +
+      "and is never remembered as a sender", async () => {
+    // Cents .17 are drv-a's code: a person's Zelle would pay drv-a.
+    const id = await deposit(117, "360 Checking XXXXXXX2820");
+    assert.deepEqual(await handlers.matchBankDeposits(BIZ, [id]),
+        {paid: 0, waiting: 1});
+    const waiting = await doc("businessBankCredits", id);
+    assert.equal(waiting.consumedBy, undefined);
+    assert.equal(waiting.fleetWaitingReason, "own_transfer");
+    // The office may still use it for a driver; the account is not learned.
+    await act(STAFF, "bank_assign", {creditId: id, driverId: "drv-a"});
+    const driver = await doc("fleetDrivers", "drv-a");
+    assert.ok(!(driver.rememberedSenders || [])
+        .includes("360 CHECKING XXXXXXX2820"));
+    const next = await deposit(217, "360 Checking XXXXXXX2820");
+    assert.deepEqual(await handlers.matchBankDeposits(BIZ, [next]),
+        {paid: 0, waiting: 1});
+  });
+
   it("undo gives the deposit back to the waiting list", async () => {
     const id = await deposit(12317, "ALPHA SENDER");
     await handlers.matchBankDeposits(BIZ, [id]);

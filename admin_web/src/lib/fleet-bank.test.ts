@@ -48,6 +48,7 @@ test("the new words read in French", () => {
     waitingReasonText("two_drivers"),
     waitingReasonText("undone"),
     waitingReasonText("possible_duplicate"),
+    waitingReasonText("own_transfer"),
   ]) {
     assert.notEqual(translateValue(english, "fr"), english, `no French for "${english}"`);
   }
