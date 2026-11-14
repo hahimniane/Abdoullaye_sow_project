@@ -27,6 +27,18 @@ const m221NotifyUuid = '0000ff03-0000-1000-8000-00805f9b34fb';
 const m221HeadDots = 576;
 const m221HeadBytes = m221HeadDots ~/ 8;
 
+/// The Phomemo M421 (4 in label maker) takes the same commands on a wider
+/// head. Measured on one on 2026-11-14 (firmware 0.2.6, 4 x 6 in fan-fold):
+/// 832-dot rows (104 mm) print whole, with the 101.6 mm label centred under
+/// them; one raster command is one label (the printer feeds to the next gap
+/// after every raster, so a label is never sent in bands); a 1218-row raster
+/// prints in one piece. It paces the sender itself: `01 n` grants n packets
+/// and `02 lo hi` gives the packet size, exactly like the PM-241.
+const m421HeadDots = 832;
+
+/// How long an M421 may take to answer "label done" after the footer.
+const m421DoneTimeout = Duration(seconds: 25);
+
 /// Writes go in chunks of at most 128 bytes, 20 ms apart.
 const m221ChunkBytes = 128;
 const m221ChunkGap = Duration(milliseconds: 20);
@@ -162,35 +174,42 @@ class PackedRaster {
   final int x;
 }
 
-/// Places [image] on the 576-dot head - centred, moved [xOffset] dots to
-/// the right (clamped so it stays on the head) - after [yOffset] blank rows,
-/// and packs it 1 bit per dot, most significant bit first, 1 = black.
+/// Places [image] on the head ([headDots] wide: the M221's 576 unless an
+/// M421's 832 is given) - centred, moved [xOffset] dots to the right
+/// (clamped so it stays on the head) - after [yOffset] blank rows, and packs
+/// it 1 bit per dot, most significant bit first, 1 = black.
 ///
 /// Same as the reference `pack()` for every [yOffset] >= 0. The reference
 /// ignores a negative [yOffset]; here it trims that many rows off the top
 /// instead, so a tag that prints too low can be moved up.
-PackedRaster packRaster(LabelBitmap image, int xOffset, int yOffset) {
+PackedRaster packRaster(
+  LabelBitmap image,
+  int xOffset,
+  int yOffset, {
+  int headDots = m221HeadDots,
+}) {
+  final headBytes = headDots ~/ 8;
   final w = image.width;
-  final centred = ((m221HeadDots - w) / 2).floor();
+  final centred = ((headDots - w) / 2).floor();
   var x = centred + xOffset;
-  if (x > m221HeadDots - w) x = m221HeadDots - w;
+  if (x > headDots - w) x = headDots - w;
   if (x < 0) x = 0;
   final top = yOffset > 0 ? yOffset : 0;
   final skip = yOffset < 0
       ? (-yOffset > image.height ? image.height : -yOffset)
       : 0;
   final rows = top + image.height - skip;
-  final data = Uint8List(rows * m221HeadBytes);
+  final data = Uint8List(rows * headBytes);
   for (var y = skip; y < image.height; y++) {
     final row = top + y - skip;
     for (var ix = 0; ix < w; ix++) {
       if (!image.black(ix, y)) continue;
       final hx = x + ix;
-      if (hx < 0 || hx >= m221HeadDots) continue;
-      data[row * m221HeadBytes + (hx >> 3)] |= 0x80 >> (hx & 7);
+      if (hx < 0 || hx >= headDots) continue;
+      data[row * headBytes + (hx >> 3)] |= 0x80 >> (hx & 7);
     }
   }
-  return PackedRaster(data, m221HeadBytes, rows, x);
+  return PackedRaster(data, headBytes, rows, x);
 }
 
 // ---------------------------------------------------------------------------

@@ -21947,6 +21947,12 @@ abstract class AppLocalizations {
   /// **'Phomemo PM-241 · 4×6 labels'**
   String get labelPrinterModelPm241;
 
+  /// No description provided for @labelPrinterModelM421.
+  ///
+  /// In en, this message translates to:
+  /// **'Phomemo M421 · 4×6 labels'**
+  String get labelPrinterModelM421;
+
   /// No description provided for @labelPrinterSize4x6.
   ///
   /// In en, this message translates to:

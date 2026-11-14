@@ -12593,6 +12593,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get labelPrinterModelPm241 => 'Phomemo PM-241 · 4×6 labels';
 
   @override
+  String get labelPrinterModelM421 => 'Phomemo M421 · 4×6 labels';
+
+  @override
   String get labelPrinterSize4x6 => '4 × 6 in';
 
   @override

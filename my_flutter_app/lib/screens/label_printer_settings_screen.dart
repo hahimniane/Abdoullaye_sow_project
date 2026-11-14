@@ -405,6 +405,7 @@ class _LabelPrinterSettingsScreenState
                     Text(
                       switch (_printer.model) {
                         PrinterModel.pm241 => l10n.labelPrinterModelPm241,
+                        PrinterModel.m421 => l10n.labelPrinterModelM421,
                         PrinterModel.generic4x6 =>
                           l10n.labelPrinterModelGeneric,
                         PrinterModel.m221 => l10n.labelPrinterModelM221,

@@ -5910,6 +5910,7 @@
   "labelPrinterSent": "Printed.",
   "labelPrinterModelM221": "Phomemo M221 · tags and small labels",
   "labelPrinterModelPm241": "Phomemo PM-241 · 4×6 labels",
+  "labelPrinterModelM421": "Phomemo M421 · 4×6 labels",
   "labelPrinterSize4x6": "4 × 6 in",
   "pkgLabelsTipPm241": "Each 4 × 6 in label carries the QR code, the tracking code, and both names and phone numbers.",
   "labelPrinterPm241Hint": "This printer prints package labels at 4 × 6 in. The app sets the size and darkness itself. Product tags print on the Phomemo M221.",
