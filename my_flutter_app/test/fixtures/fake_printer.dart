@@ -22,6 +22,7 @@ class FakePrinterTransport implements PrinterTransport {
     this.scanError,
     this.connectError,
     this.pm241 = false,
+    this.m421 = false,
     this.initialCredits = 7,
     this.grantCredits = true,
     this.maxPacketReply = 244,
@@ -44,6 +45,10 @@ class FakePrinterTransport implements PrinterTransport {
 
   /// Act as a PM-241 (TSPL, flow control) instead of an M221.
   bool pm241;
+
+  /// Act as a Phomemo M421: the M221's commands and "done" frame, with the
+  /// PM-241's flow-control credits.
+  bool m421;
 
   /// The credits it grants when notifications are turned on.
   int initialCredits;
@@ -160,7 +165,7 @@ class FakePrinterLink implements PrinterLink {
     for (final frame in _printer.subscribeReplies) {
       reply(frame);
     }
-    if (_printer.pm241) {
+    if (_printer.pm241 || _printer.m421) {
       _printer.creditsLeft = _printer.initialCredits;
       if (_printer.initialCredits > 0) {
         reply([0x01, _printer.initialCredits]);
@@ -197,6 +202,16 @@ class FakePrinterLink implements PrinterLink {
     if (_printer.pm241) {
       _writePm241(bytes);
       return;
+    }
+    if (_printer.m421) {
+      _printer.creditsLeft--;
+      if (_printer.creditsLeft < 0) _printer.creditViolations++;
+      if (_printer.grantCredits) {
+        _printer.creditsLeft++;
+        // Like the real one: the credit and its own replies are separate
+        // notifications.
+        reply([0x01, 0x01]);
+      }
     }
     // An M221 only acts when notifications are on; a job sent before that
     // is dropped silently (no reply).
@@ -269,6 +284,7 @@ LabelPrinterController fakeController(
     doneTimeout: doneTimeout,
     pm241DoneWait: doneTimeout,
     pm241CreditWait: pm241CreditWait,
+    m421DoneWait: doneTimeout,
     idleDisconnect: Duration.zero,
   );
   c.updateSettings(settings);

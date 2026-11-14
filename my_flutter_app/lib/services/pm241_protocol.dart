@@ -259,6 +259,33 @@ class Pm241Flow {
     return true;
   }
 
+  /// Reads the flow-control frames at the start of one notification from a
+  /// printer whose other replies are binary, not text (the M421: `1A ..`):
+  /// `01 n` and `02 lo hi`, in any number. Answers how many bytes it read;
+  /// what follows is the printer's own reply and is left alone (fed to
+  /// [feed] it would be taken for an unfinished text line and swallow the
+  /// credits after it).
+  int feedFlowOnly(List<int> frame, List<Pm241Event> events) {
+    var i = 0;
+    while (i < frame.length) {
+      final b = frame[i];
+      if (b == 0x01 && i + 1 < frame.length) {
+        final n = frame[i + 1];
+        _credits += n;
+        events.add(Pm241Event(Pm241EventType.credit, value: n));
+        i += 2;
+      } else if (b == 0x02 && i + 2 < frame.length) {
+        final size = frame[i + 1] | (frame[i + 2] << 8);
+        if (size > 0) _maxPacket = size;
+        events.add(Pm241Event(Pm241EventType.maxPacket, value: size));
+        i += 3;
+      } else {
+        break;
+      }
+    }
+    return i;
+  }
+
   /// Reads one notification: binary flow-control frames (`01 n`,
   /// `02 lo hi`) and CRLF-ended text lines, in any mix; a line cut across
   /// two notifications is completed by the next.

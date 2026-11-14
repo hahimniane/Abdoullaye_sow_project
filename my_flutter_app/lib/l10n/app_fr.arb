@@ -5910,6 +5910,7 @@
   "labelPrinterSent": "Imprimé.",
   "labelPrinterModelM221": "Phomemo M221 · étiquettes produit et petits formats",
   "labelPrinterModelPm241": "Phomemo PM-241 · étiquettes 4×6",
+  "labelPrinterModelM421": "Phomemo M421 · étiquettes 4×6",
   "labelPrinterSize4x6": "4 × 6 po",
   "pkgLabelsTipPm241": "Chaque étiquette 4 × 6 po porte le code QR, le code de suivi, ainsi que les deux noms et numéros de téléphone.",
   "labelPrinterPm241Hint": "Cette imprimante imprime les étiquettes de colis en 4 × 6 po. L’app règle elle-même la taille et l’intensité. Les étiquettes produit s’impriment sur la Phomemo M221.",

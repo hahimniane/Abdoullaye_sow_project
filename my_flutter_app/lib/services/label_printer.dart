@@ -43,6 +43,10 @@ enum PrinterModel {
   /// 4 x 6 in package labels (TSPL).
   pm241,
 
+  /// 4 x 6 in package labels on the Phomemo M421: the M221's commands on a
+  /// 104 mm head, paced by the printer like a PM-241.
+  m421,
+
   /// BETA: any other 4 x 6 in Bluetooth LE label printer (the same TSPL job
   /// as the PM-241, sent to whatever writable characteristic the printer
   /// has). Never guessed from a name: the shop picks it for a device.
@@ -53,14 +57,24 @@ extension PrinterModelTraits on PrinterModel {
   /// Prints the one fixed 4 x 6 in package label (no product tags, no
   /// size or alignment to tune).
   bool get isFourBySix =>
-      this == PrinterModel.pm241 || this == PrinterModel.generic4x6;
+      this == PrinterModel.pm241 ||
+      this == PrinterModel.m421 ||
+      this == PrinterModel.generic4x6;
+
+  /// Told by the name the printer advertises, whatever the shop said for
+  /// the device before the app knew this printer.
+  bool get knownByName =>
+      this == PrinterModel.pm241 || this == PrinterModel.m421;
 }
 
 /// The model of a printer called [name]: "PM-241Z-BT-0470" is a PM-241,
-/// anything else (the M221 advertises a serial such as "Q2...") an M221.
+/// "M421" an M421, anything else (the M221 advertises a serial such as
+/// "Q2...") an M221.
 PrinterModel printerModelForName(String name) =>
     RegExp(r'PM-?241', caseSensitive: false).hasMatch(name)
     ? PrinterModel.pm241
+    : RegExp(r'M-?421', caseSensitive: false).hasMatch(name)
+    ? PrinterModel.m421
     : PrinterModel.m221;
 
 /// Whether the app knows [name] as a Phomemo PM-241 or M221 (so there is
@@ -68,7 +82,7 @@ PrinterModel printerModelForName(String name) =>
 /// the kind of.
 bool printerNameRecognized(String name) {
   final upper = name.trim().toUpperCase();
-  return printerModelForName(name) == PrinterModel.pm241 ||
+  return printerModelForName(name).knownByName ||
       upper.startsWith('Q2') ||
       upper.contains('M221') ||
       upper.contains('PHOMEMO');
@@ -78,6 +92,7 @@ bool printerNameRecognized(String name) {
 String printerModelLogName(PrinterModel model) => switch (model) {
   PrinterModel.m221 => 'Phomemo M221',
   PrinterModel.pm241 => 'Phomemo PM-241 (TSPL)',
+  PrinterModel.m421 => 'Phomemo M421 (raster, 832-dot head)',
   PrinterModel.generic4x6 => 'Other 4x6 Bluetooth printer (TSPL, beta)',
 };
 
@@ -139,7 +154,7 @@ class LabelPrinterSettings {
   /// advertises as a PM-241 is always one.
   PrinterModel get model {
     final byName = printerModelForName(deviceName);
-    if (byName == PrinterModel.pm241) return byName;
+    if (byName.knownByName) return byName;
     return deviceModels[deviceId] ?? byName;
   }
 
@@ -429,7 +444,7 @@ class PrinterDevice {
       name.toUpperCase().startsWith('Q2') ||
       name.toUpperCase().contains('M221') ||
       name.toUpperCase().contains('PHOMEMO') ||
-      printerModelForName(name) == PrinterModel.pm241;
+      printerModelForName(name).knownByName;
 }
 
 abstract class PrinterTransport {
@@ -519,6 +534,7 @@ class LabelPrinterController extends ChangeNotifier {
     this.doneTimeout = m221DoneTimeout,
     this.pm241DoneWait = pm241DoneTimeout,
     this.pm241CreditWait = pm241CreditTimeout,
+    this.m421DoneWait = m421DoneTimeout,
     this.scanTimeout = const Duration(seconds: 8),
     this.connectTimeout = const Duration(seconds: 15),
     this.writeTimeout = const Duration(seconds: 10),
@@ -539,6 +555,7 @@ class LabelPrinterController extends ChangeNotifier {
   /// and for a flow-control credit between packets.
   final Duration pm241DoneWait;
   final Duration pm241CreditWait;
+  final Duration m421DoneWait;
   final Duration scanTimeout;
   final Duration connectTimeout;
   final Duration writeTimeout;
@@ -805,8 +822,19 @@ class LabelPrinterController extends ChangeNotifier {
     final connectedAt = _connectedAt = _clock();
     _lastGatt = link.gatt ?? _lastGatt;
     final isPm241 = _settings.model == PrinterModel.pm241;
+    final isM421 = _settings.model == PrinterModel.m421;
     final flow = _flow = Pm241Flow();
     _notifySub = link.notifications.listen((frame) {
+      if (isM421) {
+        // Packet credits first; what is left is the printer's own reply
+        // (`1A ..`), read like an M221's.
+        final rest = _onM421Frame(flow, frame);
+        if (rest.isEmpty) return;
+        _frames.add(rest);
+        _frameEvents.add(rest);
+        log.add('reply: ${m221Hex(rest)}');
+        return;
+      }
       _frames.add(frame);
       _frameEvents.add(frame);
       if (isPm241) {
@@ -848,7 +876,7 @@ class LabelPrinterController extends ChangeNotifier {
     log.add(
       'connected: ${printerModelLogName(_settings.model)}, '
       'write ${link.writeWithoutResponse ? 'without' : 'with'} '
-      'response, ${isPm241 || isGeneric ? link.maxWriteLength : _chunkSize(link)} '
+      'response, ${isPm241 || isM421 || isGeneric ? link.maxWriteLength : _chunkSize(link)} '
       'bytes per write',
     );
     unawaited(
@@ -915,6 +943,110 @@ class LabelPrinterController extends ChangeNotifier {
         throw PrinterException(PrintFailure.writeFailed, '$e');
       }
       await pause(m221ChunkGap);
+    }
+  }
+
+  // -- M421 ------------------------------------------------------------------
+
+  /// A notification from an M421: its packet credits go to [flow]; the rest
+  /// (an M-series reply such as `1A 0F 0C`, or nothing) is handed back.
+  List<int> _onM421Frame(Pm241Flow flow, List<int> frame) {
+    final events = <Pm241Event>[];
+    final read = flow.feedFlowOnly(frame, events);
+    for (final event in events) {
+      if (event.type != Pm241EventType.credit || event.value != 1) {
+        log.add(event.logLine);
+      }
+      if (!_flowEvents.isClosed) _flowEvents.add(event);
+    }
+    return read >= frame.length ? const [] : frame.sublist(read);
+  }
+
+  /// Sends [bytes] to a printer that paces the sender: one packet per credit.
+  Future<int> _sendPaced(
+    PrinterLink link,
+    Pm241Flow flow,
+    List<int> bytes,
+  ) async {
+    final sender = Pm241Sender(bytes, flow);
+    while (!sender.finished) {
+      if (!link.isConnected) {
+        throw const PrinterException(PrintFailure.connectionLost);
+      }
+      final packet = sender.next(link.maxWriteLength);
+      if (packet == null) {
+        await _waitForCredit(flow);
+        continue;
+      }
+      try {
+        await link.write(packet).timeout(writeTimeout);
+      } on PrinterException {
+        rethrow;
+      } catch (e) {
+        if (!link.isConnected) {
+          throw PrinterException(PrintFailure.connectionLost, '$e');
+        }
+        throw PrinterException(PrintFailure.writeFailed, '$e');
+      }
+    }
+    return sender.packets;
+  }
+
+  /// Sends one 4 x 6 in label to an M421: the M221's commands with the
+  /// picture centred on the 832-dot head, as ONE raster (the printer feeds
+  /// to the next label after every raster), one packet per credit, then
+  /// waits for the M-series "label done" frame.
+  Future<void> _printOneM421(PrinterLink link, LabelBitmap image) async {
+    if (!pm241Fits(image)) {
+      throw PrinterException(
+        PrintFailure.writeFailed,
+        'a ${image.width}x${image.height} picture does not fit '
+        '${pm241LabelWidthDots}x$pm241LabelHeightDots',
+      );
+    }
+    final flow = _flow;
+    // The printer says its packet size right after notifications are on.
+    await _waitForFlow(
+      () => flow.maxPacket != null,
+      pm241CreditWait < const Duration(seconds: 1)
+          ? pm241CreditWait
+          : const Duration(seconds: 1),
+    );
+    final raster = packRaster(image, 0, 0, headDots: m421HeadDots);
+    final steps = m221LabelSteps(raster);
+    var packets = 0;
+    for (final step in steps) {
+      if (step.name == 'footer') {
+        _frames.clear();
+        // Listen before the footer goes out: the reply can be quick.
+        final done = _frameEvents.stream
+            .firstWhere(m221IsDoneFrame)
+            .then((_) => true, onError: (Object _) => false);
+        final lost = link.disconnected.then(
+          (_) => false,
+          onError: (Object _) => false,
+        );
+        packets += await _sendPaced(link, flow, step.bytes);
+        log.add(
+          'sent: raster ${raster.widthBytes * 8}x${raster.rows} dots in '
+          '$packets packets (up to ${flow.packetSize(link.maxWriteLength)} '
+          'bytes each), waiting for the printer',
+        );
+        final bool finished;
+        try {
+          finished = await Future.any([done, lost]).timeout(m421DoneWait);
+        } on TimeoutException {
+          log.add('done: no reply in ${m421DoneWait.inSeconds} s');
+          throw const PrinterException(PrintFailure.noCompletion);
+        }
+        if (!finished) {
+          throw const PrinterException(PrintFailure.connectionLost);
+        }
+        log.add('done: printer finished the label');
+        return;
+      }
+      packets += await _sendPaced(link, flow, step.bytes);
+      await pause(step.pauseAfter);
     }
   }
 
@@ -1224,12 +1356,18 @@ class LabelPrinterController extends ChangeNotifier {
     _progressDone = 0;
     _progressTotal = copies;
     final isPm241 = model == PrinterModel.pm241;
+    final isM421 = model == PrinterModel.m421;
     final isGeneric = model == PrinterModel.generic4x6;
-    final raster = isPm241 || isGeneric
+    final raster = isPm241 || isM421 || isGeneric
         ? null
         : packRaster(image, _settings.xOffset, _settings.yOffset);
     log.add('model: ${printerModelLogName(model)}');
-    if (isPm241 || isGeneric) {
+    if (isM421) {
+      log.add(
+        'print: $copies x $what ${image.width}x${image.height} dots, '
+        'centred on $m421HeadDots dots, one raster per label',
+      );
+    } else if (isPm241 || isGeneric) {
       log.add(
         'print: $copies x $what ${image.width}x${image.height} dots, '
         'TSPL 100x150 mm, density 10, speed 4',
@@ -1262,6 +1400,8 @@ class LabelPrinterController extends ChangeNotifier {
           log.add('print: label ${printed + 1} of $copies');
           if (isGeneric) {
             await _printOneGeneric(link, image);
+          } else if (isM421) {
+            await _printOneM421(link, image);
           } else if (raster == null) {
             await _printOnePm241(link, image);
           } else {
