@@ -107,7 +107,7 @@ export function ReviewComposerDrawer({
           </button>
         </div>
         {businessName && (
-          <p style={{ fontWeight: 800, margin: "4px 0 0" }}>{businessName}</p>
+          <p style={{ fontWeight: 700, margin: "4px 0 0" }}>{businessName}</p>
         )}
         {orderTitle && (
           <p style={{ color: "var(--muted)", fontSize: 13, margin: "2px 0 0" }}>

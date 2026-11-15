@@ -1093,11 +1093,11 @@ test("pickup address entry automatically exposes an accessible searchable sugges
   assert.match(styles, /\.customer-barrel-stage > label\s*\{[\s\S]*display: grid/);
   assert.match(
     styles,
-    /\.customer-barrel-stage\s*>\s*label\s*>\s*input:not\(\[type="checkbox"\]\):not\(\[type="radio"\]\)\s*\{[\s\S]*background: var\(--paper-soft\)[\s\S]*border: 1px solid var\(--rule-strong, #b8d7d3\)[\s\S]*min-height: 50px/,
+    /\.customer-barrel-stage\s*>\s*label\s*>\s*input:not\(\[type="checkbox"\]\):not\(\[type="radio"\]\)\s*\{[\s\S]*background: var\(--paper-soft\)[\s\S]*border: 1px solid var\(--rule-strong, #c8c8c8\)[\s\S]*min-height: 50px/,
   );
   assert.match(
     styles,
-    /\.customer-searchable-control\s*\{[\s\S]*background: var\(--paper-soft\)[\s\S]*border: 1px solid var\(--rule-strong, #b8d7d3\)/,
+    /\.customer-searchable-control\s*\{[\s\S]*background: var\(--paper-soft\)[\s\S]*border: 1px solid var\(--rule-strong, #c8c8c8\)/,
   );
   for (const token of ["--brand-deep", "--brand-mist", "--rule-strong"]) {
     assert.match(
