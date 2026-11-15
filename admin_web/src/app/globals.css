@@ -18482,3 +18482,17 @@ button.fleet-grid-row:focus-visible { outline: 2px solid var(--brand-strong); ou
   margin-left: 16px;
   margin-right: 16px;
 }
+
+/* Between phone and desktop the menu lies across the top: its search box
+   keeps its own height instead of stretching to the tallest group. */
+@media (min-width: 821px) and (max-width: 1050px) {
+  .sidebar {
+    border-bottom: 1px solid #ebebeb;
+  }
+  .business-sidebar {
+    align-items: flex-start;
+  }
+  .business-sidebar .sidebar-search {
+    align-self: flex-start;
+  }
+}
