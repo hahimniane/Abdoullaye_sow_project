@@ -35,6 +35,12 @@ test("bank_status is read defensively", () => {
   assert.equal(status.bank.connected, true);
   assert.equal(status.waiting.length, 1);
   assert.deepEqual(readFleetBankStatus(null).waiting, []);
+  // Payments whose deposit the bank took back: read defensively, junk dropped.
+  assert.deepEqual(readFleetBankStatus(null).removed, []);
+  assert.deepEqual(
+    readFleetBankStatus({ removed: [{ paymentId: "p1", driverId: "d1", amountCents: 40017, paidDayKey: "2026-12-02", senderName: "ALPHA" }, { paymentId: "", amountCents: 5 }, { paymentId: "p2", amountCents: 0 }] }).removed,
+    [{ paymentId: "p1", driverId: "d1", amountCents: 40017, paidDayKey: "2026-12-02", senderName: "ALPHA" }],
+  );
 });
 
 test("the new words read in French", () => {
@@ -51,6 +57,12 @@ test("the new words read in French", () => {
     waitingReasonText("own_transfer"),
     waitingReasonText("not_zelle"),
     waitingReasonText("driver_left"),
+    "The bank took back a deposit that had paid a driver",
+    "The payment is still recorded. Look at the bank account: if the money is not there, undo the payment. If it is there, keep it.",
+    "The money is there: keep it",
+    "Undo the payment",
+    "Payment undone.",
+    "Payment kept.",
   ]) {
     assert.notEqual(translateValue(english, "fr"), english, `no French for "${english}"`);
   }

@@ -120,6 +120,25 @@ describe("bank sync: a Plaid row as a credit", () => {
   });
 });
 
+describe("bank sync: a deposit the bank takes back", () => {
+  it("is reported to Fleet before the new deposits are matched", () => {
+    const fs = require("fs");
+    const path = require("path");
+    const sync = fs.readFileSync(path.join(__dirname, "..", "bank_sync.js"),
+        "utf8");
+    assert.match(sync, /removedIds\.push\(ref\.id\)/);
+    assert.match(sync, /removed, creditIds, removedIds\}/);
+    const index = fs.readFileSync(path.join(__dirname, "..", "index.js"),
+        "utf8");
+    const noted = index.indexOf("fleet.noteRemovedDeposits(businessId, " +
+      "outcome.removedIds)");
+    const matched = index.indexOf("fleet.matchBankDeposits(businessId, " +
+      "outcome.creditIds)");
+    assert.ok(noted > 0 && matched > noted,
+        "removed deposits are noted first, so a renumbered copy waits");
+  });
+});
+
 describe("bank sync: what one sync writes", () => {
   it("upserts added and modified credits, account-filtered", () => {
     const plan = planSyncWrites({...SCOPE,

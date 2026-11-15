@@ -29,11 +29,21 @@ export type WaitingDeposit = {
   reason: string;
 };
 
+/** A payment still recorded although the bank took its deposit back: the office decides. */
+export type RemovedDeposit = {
+  paymentId: string;
+  driverId: string;
+  amountCents: number;
+  paidDayKey: string;
+  senderName: string;
+};
+
 export type FleetBankStatus = {
   schedule: BankSchedule;
   quote: BankQuote;
   bank: { connected: boolean; institutionName: string; accountMask: string };
   waiting: WaitingDeposit[];
+  removed: RemovedDeposit[];
   lastScheduledMs: number;
 };
 
@@ -87,6 +97,7 @@ export function readFleetBankStatus(answer: unknown): FleetBankStatus {
   const q = (a.quote && typeof a.quote === "object" ? a.quote : {}) as Row;
   const bank = (a.bank && typeof a.bank === "object" ? a.bank : {}) as Row;
   const waiting = Array.isArray(a.waiting) ? (a.waiting as Row[]) : [];
+  const removed = Array.isArray(a.removed) ? (a.removed as Row[]) : [];
   return {
     schedule,
     quote: bankScheduleQuote(schedule, num(q.centsEach) || PLAID_REFRESH_CENTS),
@@ -100,6 +111,13 @@ export function readFleetBankStatus(answer: unknown): FleetBankStatus {
       pending: w.pending === true,
       reason: String(w.reason ?? "unknown"),
     })).filter((w) => w.id && w.amountCents > 0),
+    removed: removed.map((r) => ({
+      paymentId: String(r.paymentId ?? ""),
+      driverId: String(r.driverId ?? ""),
+      amountCents: num(r.amountCents),
+      paidDayKey: String(r.paidDayKey ?? ""),
+      senderName: String(r.senderName ?? ""),
+    })).filter((r) => r.paymentId && r.amountCents > 0),
     lastScheduledMs: num(a.lastScheduledMs),
   };
 }

@@ -18048,6 +18048,10 @@ button.fleet-grid-row:focus-visible { outline: 2px solid var(--brand-strong); ou
 .fleet-bank-quote small { color: var(--muted); font-size: 12.5px; }
 .fleet-bank-waiting { display: flex; flex-direction: column; gap: 8px; list-style: none; margin: 8px 0 0; padding: 0; }
 .fleet-bank-waiting li { align-items: center; border: 1px solid var(--rule); border-radius: 8px; display: flex; flex-wrap: wrap; gap: 10px 16px; justify-content: space-between; padding: 10px 12px; }
+.fleet-bank-removed { background: #fff7ed; border: 1px solid #fdba74; border-radius: 10px; margin: 10px 0 14px; padding: 12px 14px; }
+.fleet-bank-removed > strong { color: #9a3412; display: block; font-size: 14.5px; }
+.fleet-bank-removed .lst-hint { margin: 4px 0 0; }
+.fleet-bank-removed .fleet-bank-waiting li { background: #fff; }
 .fleet-bank-deposit { display: flex; flex: 1 1 260px; flex-direction: column; gap: 2px; min-width: 0; }
 .fleet-bank-deposit strong { color: var(--ink); font-size: 15px; font-variant-numeric: tabular-nums; }
 .fleet-bank-deposit small { color: var(--muted); font-size: 12.5px; }
