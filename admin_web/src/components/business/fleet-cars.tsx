@@ -13,6 +13,7 @@ import {
   matchesSearch,
   paperworkCounts,
   paperworkRows,
+  plateCarHistory,
   type CarRow,
   type Expiry,
   carCompanies,
@@ -92,11 +93,11 @@ export function FleetCars({
   return (
     <div className="stack fleet-page">
       <Panel
-        title="Cars"
+        title="Plates"
         icon={<CarFront size={18} />}
         action={
           <button className="lst-btn" type="button" onClick={() => setAdding(true)}>
-            <Plus size={14} /> Add car
+            <Plus size={14} /> Add plate
           </button>
         }
       >
@@ -104,7 +105,7 @@ export function FleetCars({
           <label className="fleet-search">
             <Search aria-hidden="true" size={15} />
             <input
-              aria-label="Search cars"
+              aria-label="Search plates"
               placeholder="Search plate, company or driver"
               value={filter.query}
               onChange={(event) => {
@@ -137,7 +138,7 @@ export function FleetCars({
           </label>
         </div>
         <div className="pk-me-chips fleet-driver-chips">
-          <div className="pk-view" role="group" aria-label="Which cars">
+          <div className="pk-view" role="group" aria-label="Which plates">
             <button type="button" className={filter.view === "all" ? "on" : ""} aria-pressed={filter.view === "all"} onClick={() => setFilter((f) => ({ ...f, view: "all" }))}>All (<span data-no-translate>{counts.all}</span>)</button>
             <button type="button" className={filter.view === "driver" ? "on" : ""} aria-pressed={filter.view === "driver"} onClick={() => setFilter((f) => ({ ...f, view: "driver" }))}>With a driver (<span data-no-translate>{counts.driver}</span>)</button>
             <button type="button" className={filter.view === "free" ? "on" : ""} aria-pressed={filter.view === "free"} onClick={() => setFilter((f) => ({ ...f, view: "free" }))}>Free (<span data-no-translate>{counts.free}</span>)</button>
@@ -153,9 +154,9 @@ export function FleetCars({
           )}
         </div>
         {state.loading && rows.length === 0 ? (
-          <div className="empty-state">Loading cars…</div>
+          <div className="empty-state">Loading plates…</div>
         ) : shown.length === 0 ? (
-          <div className="empty-state">{narrowed ? "No car matches. Change the search or the filters." : "No cars yet."}</div>
+          <div className="empty-state">{narrowed ? "No plate matches. Change the search or the filters." : "No plates yet."}</div>
         ) : (
           <div className="fleet-grid-scroll">
             <div className="fleet-grid" role="table">
@@ -220,8 +221,14 @@ function CarFormDialog({
     insuranceDueDay: car?.insuranceDueDay ? String(car.insuranceDueDay) : "",
     insuranceAutopay: car?.insuranceAutopay === true,
     insurancePaidBy: s(car?.insurancePaidBy),
-    ownership: s(car?.ownership) === "driver" ? "driver" : "company",
+    // A new plate: the car on it is usually the driver's own.
+    ownership: car ? (s(car.ownership) === "driver" ? "driver" : "company") : "driver",
   });
+  // Editing the car's details: a different car on the same plate, or a typo being fixed?
+  const [carChange, setCarChange] = useState<"" | "moved" | "typo">("");
+  const [movedSince, setMovedSince] = useState("");
+  const hadCar = Boolean(car && (s(car.vin) || s(car.vehicleType)));
+  const carEdited = hadCar && (d.vin.trim().toUpperCase() !== s(car?.vin).toUpperCase() || d.vehicleType.trim() !== s(car?.vehicleType));
   const { busy, error, setError, run } = useFleetRun(businessId);
   const set = (key: keyof typeof d) => (event: { target: { value: string } }) => setD((x) => ({ ...x, [key]: event.target.value }));
 
@@ -229,6 +236,10 @@ function CarFormDialog({
     const premium = d.premium.trim() ? dollarsToCents(d.premium) : 0;
     if (!d.plate.trim() || premium === null) {
       setError("Some details are missing or not valid.");
+      return;
+    }
+    if (carEdited && !carChange) {
+      setError("Say whether the plate moved to another car or you are fixing a mistake.");
       return;
     }
     const result = await run<{ carId?: string }>("car_save", {
@@ -247,6 +258,7 @@ function CarFormDialog({
         insuranceAutopay: d.insuranceAutopay,
         insurancePaidBy: d.insurancePaidBy,
         ownership: d.ownership,
+        ...(carEdited && carChange === "moved" ? { vehicleChange: { moved: true, sinceDayKey: movedSince } } : {}),
       },
     });
     if (result) onSaved(result.carId || car?.id || "");
@@ -254,14 +266,14 @@ function CarFormDialog({
 
   return (
     <FleetModal
-      title={car ? "Edit car" : "Add car"}
+      title={car ? "Edit plate" : "Add plate"}
       onClose={onClose}
       busy={busy}
       width={640}
       footer={
         <>
           <button className="lst-btn ghost" type="button" disabled={busy} onClick={onClose}>Cancel</button>
-          <SaveButton busy={busy} label="Save car" busyLabel="Saving..." onClick={() => void save()} />
+          <SaveButton busy={busy} label="Save plate" busyLabel="Saving..." onClick={() => void save()} />
         </>
       }
     >
@@ -276,7 +288,7 @@ function CarFormDialog({
           <input data-no-translate disabled={busy} maxLength={80} value={d.company} onChange={set("company")} />
         </label>
         <label className="lst-field">
-          <span>Vehicle type</span>
+          <span>Car on this plate</span>
           <input data-no-translate disabled={busy} maxLength={80} value={d.vehicleType} onChange={set("vehicleType")} />
         </label>
         <label className="lst-field">
@@ -323,6 +335,26 @@ function CarFormDialog({
           <span>Insurance is on autopay</span>
         </label>
       </div>
+      {carEdited && (
+        <fieldset className="fleet-car-change">
+          <legend>You changed the car on this plate</legend>
+          <label className="lst-radio">
+            <input type="radio" name="fleetcarchange" disabled={busy} checked={carChange === "moved"} onChange={() => setCarChange("moved")} />
+            <span>The plate moved to another car</span>
+          </label>
+          {carChange === "moved" && (
+            <label className="lst-field">
+              <span>Since (leave empty for today)</span>
+              <input disabled={busy} type="date" value={movedSince} onChange={(e) => setMovedSince(e.target.value)} />
+            </label>
+          )}
+          <label className="lst-radio">
+            <input type="radio" name="fleetcarchange" disabled={busy} checked={carChange === "typo"} onChange={() => setCarChange("typo")} />
+            <span>Same car: I am fixing a mistake</span>
+          </label>
+          <p className="lst-hint">When the plate moves, the car it was on stays in the plate&apos;s history.</p>
+        </fieldset>
+      )}
     </FleetModal>
   );
 }
@@ -345,9 +377,10 @@ function CarPage({
   const [editing, setEditing] = useState(false);
   const lang = fleetLang();
   const timeline = useMemo(() => carTimeline(car.id, state.index), [state, car.id]);
+  const plateCars = useMemo(() => plateCarHistory(car), [car]);
   const facts: [string, string][] = [
     ["Company", s(car.company)],
-    ["Vehicle type", s(car.vehicleType)],
+    ["Car on this plate", s(car.vehicleType)],
     ["VIN", s(car.vin)],
     ["Insurer", s(car.insurer)],
     ["Policy number", s(car.policyNumber)],
@@ -358,10 +391,10 @@ function CarPage({
   return (
     <div className="stack fleet-page">
       <button className="ghost-button compact fleet-back" type="button" onClick={onBack}>
-        <ArrowLeft size={14} /> All cars
+        <ArrowLeft size={14} /> All plates
       </button>
       <Panel
-        title="Car"
+        title="Plate"
         icon={<CarFront size={18} />}
         action={<button className="ghost-button compact" type="button" onClick={() => setEditing(true)}>Edit details</button>}
       >
@@ -391,9 +424,39 @@ function CarPage({
           ))}
         </div>
       </Panel>
-      <Panel title="Who had this car" icon={<CarFront size={18} />}>
+      <Panel title="Cars this plate has been on" icon={<CarFront size={18} />}>
+        {plateCars.length === 0 ? (
+          <div className="empty-state">No car is recorded on this plate yet.</div>
+        ) : (
+          <div className="fleet-grid-scroll">
+            <table className="fleet-table">
+              <thead>
+                <tr>
+                  <th>Car</th>
+                  <th>VIN</th>
+                  <th>Whose car</th>
+                  <th>From</th>
+                  <th>To</th>
+                </tr>
+              </thead>
+              <tbody>
+                {plateCars.map((c, i) => (
+                  <tr key={`${c.vin}-${c.fromDayKey}-${i}`}>
+                    <td data-no-translate>{c.vehicleType || "—"}</td>
+                    <td data-no-translate>{c.vin || "—"}</td>
+                    <td>{c.ownership === "driver" ? "The driver" : "The company"}</td>
+                    <td>{c.fromDayKey ? <span data-no-translate>{formatDayKey(c.fromDayKey, lang)}</span> : <span className="muted">—</span>}</td>
+                    <td>{c.toDayKey ? <span data-no-translate>{formatDayKey(c.toDayKey, lang)}</span> : <span className="fleet-chip ok">Now</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
+      <Panel title="Who had this plate" icon={<CarFront size={18} />}>
         {timeline.length === 0 ? (
-          <div className="empty-state">No driver has had this car yet.</div>
+          <div className="empty-state">No driver has had this plate yet.</div>
         ) : (
           <div className="fleet-grid-scroll">
             <table className="fleet-table">
@@ -469,7 +532,7 @@ export function FleetPaperwork({ state, onOpenCar }: { state: FleetState; onOpen
         <div className="fleet-toolbar">
           <label className="fleet-search">
             <Search aria-hidden="true" size={15} />
-            <input aria-label="Search cars" placeholder="Search plate, company or driver" value={query} onChange={(event) => setQuery(event.target.value)} />
+            <input aria-label="Search plates" placeholder="Search plate, company or driver" value={query} onChange={(event) => setQuery(event.target.value)} />
           </label>
           {companies.length > 1 && (
             <label className="pk-me-select">
@@ -491,9 +554,9 @@ export function FleetPaperwork({ state, onOpenCar }: { state: FleetState; onOpen
           </div>
         </div>
         {state.loading && rows.length === 0 ? (
-          <div className="empty-state">Loading cars…</div>
+          <div className="empty-state">Loading plates…</div>
         ) : shown.length === 0 ? (
-          <div className="empty-state">No cars in this list.</div>
+          <div className="empty-state">No plates in this list.</div>
         ) : (
           <div className="fleet-grid-scroll">
             <div className="fleet-grid" role="table">

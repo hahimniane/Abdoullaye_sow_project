@@ -185,7 +185,7 @@ describe("settings and refusals", () => {
   });
 
   it("maps a refusal reason to its sentence", () => {
-    assert.equal(fleetErrorMessage({ details: { reason: "fleet_car_taken" }, message: "x" }), "This car already has a driver. Return it first.");
+    assert.equal(fleetErrorMessage({ details: { reason: "fleet_car_taken" }, message: "x" }), "This plate already has a driver. Get it back first.");
     assert.equal(fleetErrorMessage({ message: "boom" }), "boom");
     assert.equal(fleetErrorMessage(null), "Something went wrong. Try again.");
   });
@@ -343,4 +343,38 @@ describe("driver profile: track record", () => {
     assert.deepEqual(withFriend.friends.map((f) => f.name), ["Friend One"]);
     assert.deepEqual(t.find((e) => e.id === "a2")!.friends, []);
   });
+});
+
+describe("plates and the cars on them", () => {
+  it("the car now first, then the earlier ones, newest first", async () => {
+  const { plateCarHistory } = await import("./fleet.ts");
+  assert.deepEqual(plateCarHistory(null), []);
+  assert.deepEqual(plateCarHistory({ plate: "T1" }), [], "a plate with no car recorded");
+  const rows = plateCarHistory({
+    vehicleType: "Honda Accord 2022", vin: "2B", ownership: "driver", vehicleSince: "2026-12-10",
+    vehicleHistory: [
+      { vehicleType: "Toyota Camry 2019", vin: "1A", ownership: "driver", fromDayKey: "2026-01-05", toDayKey: "2026-06-01" },
+      { vehicleType: "Nissan Altima 2020", vin: "9Z", ownership: "company", fromDayKey: "2026-06-01", toDayKey: "2026-12-10" },
+      null, { vehicleType: "", vin: "" },
+    ],
+  });
+  assert.deepEqual(rows.map((r) => [r.vehicleType, r.vin, r.ownership, r.fromDayKey, r.toDayKey]), [
+    ["Honda Accord 2022", "2B", "driver", "2026-12-10", ""],
+    ["Nissan Altima 2020", "9Z", "company", "2026-06-01", "2026-12-10"],
+    ["Toyota Camry 2019", "1A", "driver", "2026-01-05", "2026-06-01"],
+  ]);
+});
+
+  it("Fleet speaks of plates, in French too", async () => {
+  const { translateValue } = await import("./french-dom.ts");
+  for (const english of [
+    "Plates", "Plates and who has them", "Add plate", "Edit plate", "Save plate", "All plates", "Who had this plate",
+    "Give a plate", "Give the plate", "Plate returned", "Current plate", "No plate right now.", "Choose a plate…",
+    "This plate already has a driver. Get it back first.", "Car on this plate", "Cars this plate has been on",
+    "The plate moved to another car", "Same car: I am fixing a mistake", "Whose car",
+    "Say whether the plate moved to another car or you are fixing a mistake.",
+  ]) {
+    assert.notEqual(translateValue(english, "fr"), english, `no French for "${english}"`);
+  }
+});
 });

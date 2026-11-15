@@ -142,7 +142,7 @@ export function FleetDrivers({
           {chip("owes", "Owes money")}
           {chip("late", "Late")}
           {chip("noFee", "No plate fee")}
-          {chip("noCar", "No car")}
+          {chip("noCar", "No plate")}
           {chip("credit", "Has credit")}
           {narrowed && (
             <button className="ghost-button" type="button" onClick={() => setFilter((f) => ({ ...emptyDriverFilter, view: f.view, sort: f.sort }))}>
@@ -161,7 +161,7 @@ export function FleetDrivers({
                 <span>Driver</span>
                 <span>Phone</span>
                 <span>Status</span>
-                <span>Car</span>
+                <span>Plate</span>
                 <span className="num">Owed</span>
                 <span className="num">Credit</span>
                 <span className="num">Zelle cents</span>
@@ -389,7 +389,7 @@ function DriverPage({
           <div className="fleet-facts">
             <ProfileTenureFacts driver={driver} state={state} />
             <div>
-              <small>Current car</small>
+              <small>Current plate</small>
               <b data-no-translate>{car ? s(car.plate) : "—"}</b>
             </div>
             <div><small>Owed now</small><Money cents={balance.owedCents} /></div>
@@ -429,7 +429,7 @@ function DriverPage({
         </div>
       </Panel>
 
-      <Panel title="Car" icon={<CarFront size={18} />}>
+      <Panel title="Plate" icon={<CarFront size={18} />}>
         {current && car ? (
           <div className="fleet-detail">
             <div>
@@ -449,14 +449,14 @@ function DriverPage({
               </p>
             </div>
             {isAdmin && (
-              <button className="lst-btn ghost" type="button" onClick={() => setDialog("return")}>Car returned</button>
+              <button className="lst-btn ghost" type="button" onClick={() => setDialog("return")}>Plate returned</button>
             )}
           </div>
         ) : (
           <div className="fleet-detail">
-            <p className="lst-hint">No car right now.</p>
+            <p className="lst-hint">No plate right now.</p>
             {isAdmin && (
-              <button className="lst-btn" type="button" onClick={() => setDialog("give")}>Give a car</button>
+              <button className="lst-btn" type="button" onClick={() => setDialog("give")}>Give a plate</button>
             )}
           </div>
         )}
@@ -807,7 +807,7 @@ function GiveCarDialog({ businessId, driver, state, onClose }: { businessId: str
 
   return (
     <FleetModal
-      title="Give a car"
+      title="Give a plate"
       subtitle={<span data-no-translate>{s(driver.name)}</span>}
       onClose={onClose}
       busy={busy}
@@ -815,17 +815,17 @@ function GiveCarDialog({ businessId, driver, state, onClose }: { businessId: str
       footer={
         <>
           <CancelClose busy={busy} onClose={onClose} />
-          <SaveButton busy={busy} disabled={free.length === 0} label="Give the car" busyLabel="Saving..." onClick={() => void save()} />
+          <SaveButton busy={busy} disabled={free.length === 0} label="Give the plate" busyLabel="Saving..." onClick={() => void save()} />
         </>
       }
     >
       {error && <div className="lst-form-error" role="alert">{error}</div>}
-      {free.length === 0 && <p className="lst-hint">Every car has a driver. Add a car first, or return one.</p>}
+      {free.length === 0 && <p className="lst-hint">Every plate has a driver. Add a plate first, or get one back.</p>}
       <div className="lst-form-grid">
         <label className="lst-field wide">
-          <span>Car</span>
+          <span>Plate</span>
           <select disabled={busy} value={carId} onChange={(e) => setCarId(e.target.value)}>
-            <option value="">Choose a car…</option>
+            <option value="">Choose a plate…</option>
             {free.map((c) => (
               <option data-no-translate key={c.id} value={c.id}>
                 {s(c.plate)}{s(c.company) ? ` · ${s(c.company)}` : ""}
@@ -902,7 +902,7 @@ function ReturnCarDialog({
 
   return (
     <FleetModal
-      title="Car returned"
+      title="Plate returned"
       subtitle={<span data-no-translate>{s(driver.name)}</span>}
       onClose={onClose}
       busy={busy}

@@ -8372,6 +8372,51 @@ Object.assign(ATTRIBUTE_TRANSLATIONS, {
   "e.g. Zelle confirmation number": "p. ex. numéro de confirmation Zelle",
 });
 // ==== Box sizes, the box designer and Pay now END ====
+// ==== Fleet: the plate is the fleet's, the car is usually the driver's (2026-11-15) START ====
+Object.assign(TEXT_TRANSLATIONS, {
+  "Plates": "Plaques",
+  "Plates and who has them": "Les plaques et qui les a",
+  "Search plates": "Rechercher des plaques",
+  "Which plates": "Quelles plaques",
+  "Loading plates…": "Chargement des plaques…",
+  "No plate matches. Change the search or the filters.": "Aucune plaque ne correspond. Modifiez la recherche ou les filtres.",
+  "No plates yet.": "Pas encore de plaque.",
+  "Edit plate": "Modifier la plaque",
+  "Add plate": "Ajouter une plaque",
+  "Save plate": "Enregistrer la plaque",
+  "All plates": "Retour aux plaques",
+  "Who had this plate": "Qui a eu cette plaque",
+  "No driver has had this plate yet.": "Aucun chauffeur n’a encore eu cette plaque.",
+  "No plates in this list.": "Aucune plaque dans cette liste.",
+  "No plate": "Pas de plaque",
+  "Current plate": "Plaque actuelle",
+  "Plate returned": "Plaque rendue",
+  "No plate right now.": "Pas de plaque en ce moment.",
+  "Give a plate": "Donner une plaque",
+  "Give the plate": "Donner la plaque",
+  "Every plate has a driver. Add a plate first, or get one back.": "Toutes les plaques ont un chauffeur. Ajoutez d’abord une plaque, ou récupérez-en une.",
+  "Choose a plate…": "Choisir une plaque…",
+  "When a plate is returned mid-period": "Quand une plaque est rendue en cours de période",
+  "First plate": "Première plaque",
+  "Plate given": "Plaque donnée",
+  "This driver has not had a plate yet.": "Ce chauffeur n’a pas encore eu de plaque.",
+  "This plate already has a driver. Get it back first.": "Cette plaque a déjà un chauffeur. Récupérez-la d’abord.",
+  "A plate returned mid-period is billed for the days used.": "Une plaque rendue en cours de période est facturée pour les jours utilisés.",
+  "A plate returned mid-period is billed the full period.": "Une plaque rendue en cours de période est facturée pour la période entière.",
+  "Car on this plate": "Voiture sur cette plaque",
+});
+Object.assign(TEXT_TRANSLATIONS, {
+  "Cars this plate has been on": "Voitures qui ont porté cette plaque",
+  "No car is recorded on this plate yet.": "Aucune voiture n’est encore enregistrée sur cette plaque.",
+  "Whose car": "À qui est la voiture",
+  "You changed the car on this plate": "Vous avez changé la voiture sur cette plaque",
+  "The plate moved to another car": "La plaque est passée sur une autre voiture",
+  "Since (leave empty for today)": "Depuis (laissez vide pour aujourd’hui)",
+  "Same car: I am fixing a mistake": "Même voiture : je corrige une erreur",
+  "When the plate moves, the car it was on stays in the plate's history.": "Quand la plaque change de voiture, l’ancienne voiture reste dans l’historique de la plaque.",
+  "Say whether the plate moved to another car or you are fixing a mistake.": "Dites si la plaque est passée sur une autre voiture ou si vous corrigez une erreur.",
+});
+// ==== Fleet: plates END ====
 // ==== Label printer (Web Bluetooth, PM-241) START ====
 Object.assign(TEXT_TRANSLATIONS, {
   // The labels dialog (container-labels-dialog.tsx). The progress and

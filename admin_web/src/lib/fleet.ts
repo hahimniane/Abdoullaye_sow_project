@@ -17,7 +17,7 @@ export const FLEET_REFUSALS: Record<string, string> = {
   fleet_off: "Fleet is not switched on for this business.",
   fleet_admin_only: "Only a Fleet admin can do this.",
   fleet_not_found: "That record was not found.",
-  fleet_car_taken: "This car already has a driver. Return it first.",
+  fleet_car_taken: "This plate already has a driver. Get it back first.",
   fleet_bad_input: "Some details are missing or not valid.",
   fleet_no_amount: "Enter an amount.",
   fleet_already_undone: "That payment was already undone.",
@@ -712,7 +712,7 @@ export function driverTimeline(driver: Row, index: FleetIndex, audit: ProfileAud
   return entries.sort((a, b) => b.dayKey.localeCompare(a.dayKey) || (order.get(b.key) ?? 0) - (order.get(a.key) ?? 0));
 }
 
-/** Cars with no driver now (the ones "Give a car" may pick). */
+/** Cars with no driver now (the ones "Give a plate" may pick). */
 export function freeCars(data: FleetData, index: FleetIndex): Row[] {
   return data.cars
     .filter((c) => !index.currentByCar.has(c.id))
@@ -768,8 +768,8 @@ export function fleetTiles(data: FleetData, index: FleetIndex, todayKey: string)
 /** The assignment the end-of-rent rule applies to, in a sentence. */
 export function returnRuleText(rule: unknown): string {
   return rule === "days"
-    ? "A car returned mid-period is billed for the days used."
-    : "A car returned mid-period is billed the full period.";
+    ? "A plate returned mid-period is billed for the days used."
+    : "A plate returned mid-period is billed the full period.";
 }
 
 // ---------------------------------------------------------------------------
@@ -1046,4 +1046,28 @@ export function paymentInView(payment: Record<string, unknown>, view: PaymentVie
   const method = payment.imported === true ? "import" : String(payment.method ?? "other");
   if (view === "other") return !["zelle", "cash", "import"].includes(method);
   return method === view;
+}
+
+// ---------------------------------------------------------------------------
+// The cars a plate has been on (the plate is the fleet's; the car is usually the driver's).
+// ---------------------------------------------------------------------------
+
+export type PlateCar = { vehicleType: string; vin: string; ownership: "driver" | "company"; fromDayKey: string; toDayKey: string };
+
+/**
+ * The car on a plate now (toDayKey "") followed by the cars it was on before,
+ * newest first. Read defensively from a `fleetCars` record (`vehicleHistory`,
+ * `vehicleSince`); a plate with no car recorded gives an empty list.
+ */
+export function plateCarHistory(car: Record<string, unknown> | null | undefined): PlateCar[] {
+  if (!car) return [];
+  const text = (v: unknown) => String(v ?? "").trim();
+  const owner = (v: unknown): "driver" | "company" => (text(v) === "driver" ? "driver" : "company");
+  const past = (Array.isArray(car.vehicleHistory) ? (car.vehicleHistory as Record<string, unknown>[]) : [])
+    .filter((h) => h && typeof h === "object")
+    .map((h) => ({ vehicleType: text(h.vehicleType), vin: text(h.vin), ownership: owner(h.ownership), fromDayKey: text(h.fromDayKey), toDayKey: text(h.toDayKey) }))
+    .filter((h) => h.vehicleType || h.vin)
+    .sort((a, b) => b.toDayKey.localeCompare(a.toDayKey));
+  const now = { vehicleType: text(car.vehicleType), vin: text(car.vin), ownership: owner(car.ownership), fromDayKey: text(car.vehicleSince), toDayKey: "" };
+  return now.vehicleType || now.vin ? [now, ...past] : past;
 }

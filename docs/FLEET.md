@@ -21,6 +21,7 @@ decided 2026-11-01 → 2026-11-11 (memory: project_fleet_module).
 | Q13 | Drivers pay by **Zelle only**. No card or bank payments in the app. |
 | Q14 | Import the sheet as past payments. A 0 in the current month or the one before (Oct and Nov 2026) becomes an owed bill; older 0s carry no debt. |
 | Q15 | A city ticket shows to a driver only after the office presses "Charge driver". Phase 3. |
+| Plates (11/15) | **The plate is the fleet's; the car on it is usually the driver's.** Screens speak of plates ("Plates", "Give a plate", "Plate returned"). A plate is permanent; the car on it can change. When the office edits the car and says the plate moved (not a typo), the car it was on is kept with its dates (`vehicleHistory`, `vehicleSince`). A new plate defaults to "the driver" owns the car. |
 | Today | No separate Fleet home: Today shows fleet tiles (money this month, late drivers, Zelle waiting, tickets). |
 | Rules | No prices in code (what Laawol charges Landa is a Bills deal). Fleet data is private to the business. AI reads, suggests and drafts; a person confirms anything with money. |
 
@@ -33,7 +34,11 @@ decided 2026-11-01 → 2026-11-11 (memory: project_fleet_module).
 - `fleetCars/{id}`: `businessId, plate (upper case), company, vehicleType, vin,
   registrationExpiry (dayKey), diamondExpiry (dayKey), insurer, policyNumber,
   premiumCents, insuranceDueDay, insuranceAutopay, insurancePaidBy, ownership
-  "driver"|"company", status "active"|"inactive", importKey`.
+  "driver"|"company", status "active"|"inactive", importKey, vehicleSince
+  (dayKey|null), vehicleHistory [{vin, vehicleType, ownership, fromDayKey,
+  toDayKey}]`. The record is the **plate**; `vin`/`vehicleType`/`ownership`
+  describe the car on it now. `car_save` with `car.vehicleChange {moved: true,
+  sinceDayKey}` moves the old car into `vehicleHistory`.
 - `fleetAssignments/{id}`: `businessId, carId, driverId, startDayKey,
   endDayKey|null, rentCents, period "weekly"|"monthly", dueDay (monthly 1–28,
   weekly 1=Mon…7=Sun), createdBy`.

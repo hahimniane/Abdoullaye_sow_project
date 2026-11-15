@@ -69,8 +69,8 @@ function SettingsForm({ businessId, settings }: { businessId: string; settings: 
         },
       },
       {
-        en: "Save the Fleet settings? The late fee and the car-returned rule apply to bills from now on.",
-        fr: "Enregistrer les paramètres Fleet ? Les frais de retard et la règle de retour de voiture s’appliquent aux factures à partir de maintenant.",
+        en: "Save the Fleet settings? The late fee and the plate-returned rule apply to bills from now on.",
+        fr: "Enregistrer les paramètres Fleet ? Les frais de retard et la règle de retour de plaque s’appliquent aux factures à partir de maintenant.",
       },
     );
     if (result) setSaved(true);
@@ -93,7 +93,7 @@ function SettingsForm({ businessId, settings }: { businessId: string; settings: 
           <input disabled={busy} type="month" value={first} onChange={(e) => setFirst(e.target.value)} />
         </label>
         <label className="lst-field">
-          <span>When a car is returned mid-period</span>
+          <span>When a plate is returned mid-period</span>
           <select disabled={busy} value={rule} onChange={(e) => setRule(e.target.value as "full" | "days")}>
             <option value="full">Bill the full period</option>
             <option value="days">Bill the days used</option>
@@ -203,7 +203,7 @@ export function ImportSheet({ businessId }: { businessId: string }) {
           <h3>What would be imported</h3>
           <div className="fleet-facts">
             <div><small>Drivers</small><b data-no-translate>{preview.drivers}</b></div>
-            <div><small>Cars</small><b data-no-translate>{preview.cars}</b></div>
+            <div><small>Plates</small><b data-no-translate>{preview.cars}</b></div>
             <div><small>Assignments</small><b data-no-translate>{preview.assignments}</b></div>
             <div><small>Payments</small><b data-no-translate>{preview.payments}</b></div>
             <div><small>Payments total</small><b data-no-translate>{moneyText(preview.paymentsCents, lang)}</b></div>
