@@ -184,6 +184,40 @@ describe("the driver profile: license history, notes, friends", () => {
     assert.ok(a.licenseHistory[0].toDayKey);
   });
 
+  it("a plate that moves to another car keeps the car it was on; fixing " +
+      "a typo does not", async () => {
+    const plate = {plate: "T000009C", company: "Test Base",
+      ownership: "driver"};
+    const id = (await act(STAFF, "car_save", {car: {...plate,
+      vehicleType: "Toyota Camry 2019", vin: "1AAAAAAAAAAAAAAA1"}})).carId;
+    const added = await doc("fleetCars", id);
+    assert.deepEqual(added.vehicleHistory, []);
+    assert.match(added.vehicleSince, /^\d{4}-\d{2}-\d{2}$/);
+    // A typo in the VIN: the same car, no history.
+    await act(STAFF, "car_save", {carId: id, car: {...plate,
+      vehicleType: "Toyota Camry 2019", vin: "1AAAAAAAAAAAAAAA2"}});
+    let now = await doc("fleetCars", id);
+    assert.deepEqual(now.vehicleHistory, []);
+    assert.equal(now.vin, "1AAAAAAAAAAAAAAA2");
+    assert.equal(now.vehicleSince, added.vehicleSince);
+    // The driver changed cars and kept the plate.
+    await act(STAFF, "car_save", {carId: id, car: {...plate,
+      vehicleType: "Honda Accord 2022", vin: "2BBBBBBBBBBBBBBB3",
+      vehicleChange: {moved: true, sinceDayKey: "2026-12-10"}}});
+    now = await doc("fleetCars", id);
+    assert.equal(now.plate, "T000009C", "the plate is the same");
+    assert.equal(now.vin, "2BBBBBBBBBBBBBBB3");
+    assert.equal(now.vehicleSince, "2026-12-10");
+    assert.deepEqual(now.vehicleHistory, [{vin: "1AAAAAAAAAAAAAAA2",
+      vehicleType: "Toyota Camry 2019", ownership: "driver",
+      fromDayKey: added.vehicleSince, toDayKey: "2026-12-10"}]);
+    // "Moved" with nothing changed records nothing.
+    await act(STAFF, "car_save", {carId: id, car: {...plate,
+      vehicleType: "Honda Accord 2022", vin: "2BBBBBBBBBBBBBBB3",
+      vehicleChange: {moved: true, sinceDayKey: "2026-12-20"}}});
+    assert.equal((await doc("fleetCars", id)).vehicleHistory.length, 1);
+  });
+
   it("staff add a note with a file; an admin removes it (kept, greyed)",
       async () => {
         await assert.rejects(act(PARKING_ONLY, "note_add",

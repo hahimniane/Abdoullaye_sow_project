@@ -21,7 +21,7 @@ const FLEET_REFUSALS = Object.freeze({
   fleet_off: "Fleet is not switched on for this business.",
   fleet_admin_only: "Only a Fleet admin can do this.",
   fleet_not_found: "That record was not found.",
-  fleet_car_taken: "This car already has a driver. Return it first.",
+  fleet_car_taken: "This plate already has a driver. Get it back first.",
   fleet_bad_input: "Some details are missing or not valid.",
   fleet_no_amount: "Enter an amount.",
   fleet_already_undone: "That payment was already undone.",
@@ -284,16 +284,37 @@ function createFleetHandlers(deps) {
       if (!doc.exists || doc.get("businessId") !== businessId) {
         throw refuse("fleet_not_found", "not-found");
       }
+      // The plate is the fleet's and stays; the car on it is usually the
+      // driver's and can change. When the office says the plate moved to
+      // another car (not a typo being fixed), the car it was on is kept
+      // with its dates.
+      const beforeVin = text(doc.get("vin"), 17).toUpperCase();
+      const beforeType = text(doc.get("vehicleType"), 80);
+      const moved = c.vehicleChange && c.vehicleChange.moved === true &&
+        (beforeVin || beforeType) &&
+        (beforeVin !== fields.vin || beforeType !== fields.vehicleType);
+      if (moved) {
+        const since = day(c.vehicleChange.sinceDayKey) || deps.dayKeyNow();
+        const history = Array.isArray(doc.get("vehicleHistory")) ?
+          [...doc.get("vehicleHistory")] : [];
+        history.push({vin: beforeVin, vehicleType: beforeType,
+          ownership: doc.get("ownership") === "driver" ? "driver" : "company",
+          fromDayKey: doc.get("vehicleSince") || null, toDayKey: since});
+        fields.vehicleHistory = history.slice(-50);
+        fields.vehicleSince = since;
+      }
       await doc.ref.set(fields, {merge: true});
       await audit(businessId, uid, "fleet_car", carId, "fleet_car_saved",
-          `Car ${plate} edited`);
+          moved ? `Plate ${plate} moved to another car` :
+            `Plate ${plate} edited`);
       return {success: true, carId};
     }
     const ref = col.doc();
-    await ref.set({...fields, status: "inactive",
+    await ref.set({...fields, status: "inactive", vehicleHistory: [],
+      vehicleSince: fields.vin || fields.vehicleType ? deps.dayKeyNow() : null,
       createdAt: FieldValue.serverTimestamp()});
     await audit(businessId, uid, "fleet_car", ref.id, "fleet_car_added",
-        `Car ${plate} added`);
+        `Plate ${plate} added`);
     return {success: true, carId: ref.id};
   }
 
@@ -356,7 +377,7 @@ function createFleetHandlers(deps) {
     });
     await audit(businessId, uid, "fleet_assignment", ref.id,
         "fleet_assignment_started",
-        `Car given to driver from ${startDayKey}, ` +
+        `Plate given to driver from ${startDayKey}, ` +
         `$${(rentCents / 100).toFixed(2)} ${period}`);
     // Giving a car makes the driver active again: keep their cents unique.
     await ensurePersonalCents(businessId);
@@ -418,7 +439,7 @@ function createFleetHandlers(deps) {
       }
     });
     await audit(businessId, uid, "fleet_assignment", assignmentId,
-        "fleet_assignment_ended", `Car returned on ${endDayKey}` +
+        "fleet_assignment_ended", `Plate returned on ${endDayKey}` +
         (creditBack > 0 ? `, $${(creditBack / 100).toFixed(2)} to credit` :
           ""));
     return {success: true, creditBackCents: creditBack};

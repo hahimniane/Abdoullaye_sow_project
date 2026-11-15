@@ -108,13 +108,13 @@ function EntryLine({ entry, lang }: { entry: ProfileEntry; lang: "en" | "fr" }) 
       return (
         <>
           <b>Joined</b>
-          <span>First car</span> {plate}
+          <span>First plate</span> {plate}
         </>
       );
     case "car_given":
       return (
         <>
-          <b>Car given</b>
+          <b>Plate given</b>
           {plate}{" "}
           <span data-no-translate>
             {money(entry.rentCents)}
@@ -125,7 +125,7 @@ function EntryLine({ entry, lang }: { entry: ProfileEntry; lang: "en" | "fr" }) 
     case "car_returned":
       return (
         <>
-          <b>Car returned</b>
+          <b>Plate returned</b>
           {plate}
         </>
       );
@@ -573,10 +573,10 @@ function FriendDialog({ businessId, driver, state, onClose }: { businessId: stri
       }
     >
       {error && <div className="lst-form-error" role="alert">{error}</div>}
-      {cars.length === 0 && <p className="lst-hint">This driver has not had a car yet.</p>}
+      {cars.length === 0 && <p className="lst-hint">This driver has not had a plate yet.</p>}
       <div className="lst-form-grid">
         <label className="lst-field wide">
-          <span>Car</span>
+          <span>Plate</span>
           <select disabled={busy} value={draft.carId} onChange={set("carId")}>
             {cars.map((c) => (
               <option data-no-translate key={c.id} value={c.id}>

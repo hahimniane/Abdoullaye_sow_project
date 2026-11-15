@@ -144,7 +144,7 @@ export const businessSidebarTabs: BusinessSidebarTab[] = [
   // business has Fleet on and the person holds "fleet" or "fleet_admin".
   {id: "fleetPayments", label: "Fleet payments", description: "Who paid each month", group: "fleet", service: "fleet", permission: "fleet", keywords: ["Fleet", "Drivers", "Leasing", "TLC", "Plates"]},
   {id: "fleetDrivers", label: "Drivers", description: "Drivers, bills and payments", group: "fleet", service: "fleet", permission: "fleet", keywords: ["Fleet", "TLC"]},
-  {id: "fleetCars", label: "Fleet cars", description: "Cars and who had them", group: "fleet", service: "fleet", permission: "fleet", keywords: ["Fleet", "Plates", "TLC"]},
+  {id: "fleetCars", label: "Plates", description: "Plates and who has them", group: "fleet", service: "fleet", permission: "fleet", keywords: ["Fleet", "Plates", "TLC"]},
   {id: "fleetPaperwork", label: "Paperwork", description: "Registration and diamond dates", group: "fleet", service: "fleet", permission: "fleet", keywords: ["Fleet", "Diamond", "Registration", "Insurance"]},
   {id: "fleetSettings", label: "Fleet settings", description: "Late fee, rules, import", group: "fleet", service: "fleet", permission: "fleet_admin", keywords: ["Fleet", "Late fee", "Import", "Zelle"]},
   {id: "profile", label: "Profile", description: "Identity and verification", group: "business", permission: "profile", keywords: ["Business"]},
