@@ -48771,6 +48771,11 @@ async function syncBankLink(db, businessId, link, accessToken) {
     const outcome = await bankSync.syncBusinessBank({db,
       FieldValue: FirestoreFieldValue, businessId, plaid: bankPlaidClient(),
       accessToken, link, logger});
+    // A deposit the bank took back after it paid a driver: the office is
+    // told (never throws). Before matching, so a renumbered copy waits.
+    if (outcome.ok && outcome.removedIds?.length) {
+      await fleet.noteRemovedDeposits(businessId, outcome.removedIds);
+    }
     // New deposits pay Fleet drivers (never throws).
     if (outcome.ok && outcome.creditIds?.length) {
       await fleet.matchBankDeposits(businessId, outcome.creditIds);

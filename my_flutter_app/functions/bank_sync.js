@@ -398,12 +398,16 @@ async function applySyncPlan(ctx, plan) {
       ...(existing.has(ref.id) ? {} : {createdAt: now})}]);
   }
   let removed = 0;
+  // Deposits the bank took back for good (not a pending one replaced by its
+  // posted copy): Fleet tells the office when one had paid a driver.
+  const removedIds = [];
   for (const id of plan.removals) {
     const ref = credits.doc(creditDocId(businessId, id));
     // Only what was stored: an outgoing payment Plaid removed was never ours.
     if (!existing.has(ref.id)) continue;
     writes.push([ref, {removed: true, removedAt: now, syncedAt: now}]);
     removed += 1;
+    removedIds.push(ref.id);
   }
   for (const part of chunk(writes, MAX_BATCH_WRITES)) {
     const batch = db.batch();
@@ -441,7 +445,7 @@ async function applySyncPlan(ctx, plan) {
     ...plan.replacements.map((c) => creditDocId(businessId, c.transactionId)),
   ];
   return {upserted: plan.upserts.length, replaced: plan.replacements.length,
-    removed, creditIds};
+    removed, creditIds, removedIds};
 }
 
 /**

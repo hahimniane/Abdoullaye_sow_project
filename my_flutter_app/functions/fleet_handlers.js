@@ -738,6 +738,17 @@ function createFleetHandlers(deps) {
         tx.get(db().collection("fleetBills").doc(a.billId))));
       const driverRef = db().collection("fleetDrivers").doc(p.driverId);
       const driver = await tx.get(driverRef);
+      // The extra this payment left as credit may have paid later bills
+      // since: what is no longer held is taken back from the driver's
+      // bills, newest first, so what they owe is right again (the credit
+      // never goes below zero, where it would simply vanish).
+      const creditAdded = Math.max(0, Number(p.creditAddedCents) || 0);
+      const held = driver.exists ?
+        Math.max(0, Number(driver.get("creditCents")) || 0) : 0;
+      const shortfall = Math.max(0, creditAdded - held);
+      const laterBills = shortfall > 0 ? (await tx.get(
+          db().collection("fleetBills").where("driverId", "==", p.driverId)))
+          .docs.filter((d) => d.get("businessId") === businessId) : [];
       // The deposit it used, and the posted copy the bank replaced it with
       // since (the payment still points at the first one).
       const credits = [];
@@ -750,18 +761,44 @@ function createFleetHandlers(deps) {
         const next = String(c.get("replacedByTransactionId") || "");
         creditId = next ? `${businessId}_${next}` : "";
       }
+      // What each bill has left as paid once this payment's own shares
+      // (and then the spent credit) are taken back; one write per bill.
+      const after = new Map();
+      const billOf = new Map();
       for (const [i, a] of (p.allocations || []).entries()) {
         const b = billDocs[i];
         if (!b.exists) continue;
-        const paid = Math.max(0, (Number(b.get("paidCents")) || 0) - a.cents);
+        billOf.set(b.id, b);
+        const now = after.has(b.id) ? after.get(b.id) :
+          Number(b.get("paidCents")) || 0;
+        after.set(b.id, Math.max(0, now - a.cents));
+      }
+      const creditTakenBack = [];
+      let left = shortfall;
+      const newestFirst = [...laterBills].sort((x, y) =>
+        String(y.get("dueDayKey") || "").localeCompare(
+            String(x.get("dueDayKey") || "")) || y.id.localeCompare(x.id));
+      for (const b of newestFirst) {
+        if (left <= 0) break;
+        if (!["open", "paid"].includes(b.get("status"))) continue;
+        const paid = after.has(b.id) ? after.get(b.id) :
+          Number(b.get("paidCents")) || 0;
+        const take = Math.min(left, paid);
+        if (take <= 0) continue;
+        billOf.set(b.id, billOf.get(b.id) || b);
+        after.set(b.id, paid - take);
+        creditTakenBack.push({billId: b.id, cents: take});
+        left -= take;
+      }
+      for (const [billId, paid] of after) {
+        const b = billOf.get(billId);
         const status = b.get("status") === "paid" ? "open" : b.get("status");
         tx.update(b.ref, {paidCents: paid, status,
           updatedAt: FieldValue.serverTimestamp()});
       }
       const driverPatch = {};
-      if (Number(p.creditAddedCents) > 0) {
-        driverPatch.creditCents =
-          FieldValue.increment(-Number(p.creditAddedCents));
+      if (creditAdded > 0) {
+        driverPatch.creditCents = Math.max(0, held - creditAdded);
       }
       // The match was wrong: this sender is no longer this driver's, or the
       // next deposit would go to the same wrong driver by itself.
@@ -774,7 +811,8 @@ function createFleetHandlers(deps) {
           updatedAt: FieldValue.serverTimestamp()});
       }
       tx.update(ref, {status: "undone", undoneByUid: uid,
-        undoneAtMs: Date.now()});
+        undoneAtMs: Date.now(),
+        ...(creditTakenBack.length ? {creditTakenBack} : {})});
       // The bank deposit goes back to "waiting" for the right driver.
       for (const c of credits) {
         const used = c.get("consumedBy");
@@ -1007,9 +1045,23 @@ function createFleetHandlers(deps) {
           senderName: String(c.senderName || ""), atMs: Number(c.atMs) || 0,
           dateKey: String(c.dateKey || ""), pending: c.pending === true,
           reason: String(c.fleetWaitingReason || "unknown")}));
+    // Payments whose deposit the bank took back since: the office decides.
+    const removedSnap = await db().collection("fleetPayments")
+        .where("businessId", "==", businessId)
+        .where("bankRemoved", "==", true).get();
+    const removed = removedSnap.docs
+        .filter((d) => d.get("status") === "recorded" &&
+          !d.get("bankRemovedKeptAtMs"))
+        .map((d) => ({paymentId: d.id,
+          driverId: String(d.get("driverId") || ""),
+          amountCents: Number(d.get("amountCents")) || 0,
+          paidDayKey: String(d.get("paidDayKey") || ""),
+          senderName: String(d.get("bankSenderName") || ""),
+          removedAtMs: Number(d.get("bankRemovedAtMs")) || 0}))
+        .sort((a, b) => b.removedAtMs - a.removedAtMs).slice(0, 50);
     return {success: true, schedule,
       quote: fleetBank.bankScheduleQuote(schedule, centsEach),
-      bank: link, waiting,
+      bank: link, waiting, removed,
       lastScheduledMs: Number(business?.fleet?.bankLastScheduledMs) || 0};
   }
 
@@ -1030,6 +1082,77 @@ function createFleetHandlers(deps) {
           `($${(quote.monthCents / 100).toFixed(2)})` :
           "Pay-day bank checks off");
     return {success: true, schedule, quote};
+  }
+
+  /**
+   * After a bank sync: deposits the bank took back for good. One that had
+   * paid a driver leaves its payment standing (the money may still be
+   * there under a new number) and marks it, so the office sees it and
+   * decides: keep it, or undo it. Never throws.
+   *
+   * @param {string} businessId The business.
+   * @param {Array<string>} creditIds The removed deposits.
+   * @return {Promise<number>} How many payments were marked.
+   */
+  async function noteRemovedDeposits(businessId, creditIds) {
+    let marked = 0;
+    try {
+      const ids = [...new Set((creditIds || []).filter(Boolean))];
+      for (let i = 0; i < ids.length; i += 100) {
+        const docs = await db().getAll(...ids.slice(i, i + 100).map((id) =>
+          db().collection("businessBankCredits").doc(id)));
+        for (const doc of docs) {
+          const credit = doc.exists ? doc.data() || {} : null;
+          if (!credit || credit.businessId !== businessId) continue;
+          const used = credit.consumedBy;
+          if (!used || used.kind !== "fleet_payment" || !used.id) continue;
+          const ref = db().collection("fleetPayments").doc(String(used.id));
+          const done = await db().runTransaction(async (tx) => {
+            const pay = await tx.get(ref);
+            if (!pay.exists || pay.get("businessId") !== businessId ||
+                pay.get("status") !== "recorded" ||
+                pay.get("bankRemoved") === true) return false;
+            tx.update(ref, {bankRemoved: true, bankRemovedAtMs: Date.now()});
+            return true;
+          });
+          if (done) {
+            marked += 1;
+            deps.logger.warn("Fleet: the bank removed a deposit that paid " +
+              "a driver", {businessId, paymentId: ref.id});
+          }
+        }
+      }
+    } catch (error) {
+      deps.logger.error("Fleet removed-deposit check failed", {businessId,
+        error: String(error?.message || error)});
+    }
+    return marked;
+  }
+
+  /**
+   * The office looked at a payment whose deposit the bank removed and the
+   * money is there: the payment stays and the notice goes.
+   *
+   * @param {string} uid The caller.
+   * @param {string} businessId The business.
+   * @param {object} data {paymentId}.
+   * @return {Promise<object>} {success}.
+   */
+  async function bankRemovedKeep(uid, businessId, data) {
+    await requireAdmin(uid, businessId);
+    const paymentId = text(data.paymentId, 180);
+    const ref = db().collection("fleetPayments").doc(paymentId);
+    const doc = await ref.get();
+    if (!doc.exists || doc.get("businessId") !== businessId ||
+        doc.get("bankRemoved") !== true) {
+      throw refuse("fleet_not_found", "not-found");
+    }
+    await ref.update({bankRemovedKeptByUid: uid,
+      bankRemovedKeptAtMs: Date.now()});
+    await audit(businessId, uid, "fleet_payment", paymentId,
+        "fleet_payment_kept", "Kept: the bank removed its deposit, the " +
+        "money was checked");
+    return {success: true};
   }
 
   async function bankAssign(uid, businessId, data) {
@@ -1493,6 +1616,7 @@ function createFleetHandlers(deps) {
     bank_status: bankStatus,
     bank_schedule_save: bankScheduleSave,
     bank_assign: bankAssign,
+    bank_removed_keep: bankRemovedKeep,
     bank_check_now: bankCheckNow,
     whatsapp_save: whatsappSave,
     whatsapp_test: whatsappTest,
@@ -1592,6 +1716,7 @@ function createFleetHandlers(deps) {
   }
 
   return {fleetAction, fleetDaily, runFleetDay, matchBankDeposits,
+    noteRemovedDeposits,
     fleetBankTick, sendReceipt, remindBusiness, ensurePersonalCents};
 }
 

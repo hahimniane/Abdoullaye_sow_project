@@ -333,6 +333,88 @@ describe("deposits pay drivers by themselves", () => {
     await act(STAFF, "bank_assign", {creditId: posted, driverId: "drv-b"});
   });
 
+  it("undo after the extra already paid a later bill takes it back from " +
+      "that bill; the credit never goes below zero", async () => {
+    await db.collection("fleetDrivers").doc("drv-over").set({businessId: BIZ,
+      name: "Over Payer", status: "active", personalCents: 88,
+      rememberedSenders: [], creditCents: 0});
+    const first = await openRent("drv-over", 30000);
+    // $350 on a $300 bill: $50 becomes credit.
+    const paid = await act(OWNER, "payment_record", {driverId: "drv-over",
+      amountCents: 35000, method: "cash"});
+    assert.equal(paid.creditAddedCents, 5000);
+    // The daily job since: next month's bill took $30 of the credit.
+    const next = db.collection("fleetBills").doc();
+    await next.set({businessId: BIZ, driverId: "drv-over", carId: "car",
+      assignmentId: "a", kind: "rent", label: "Rent", periodFrom: "2027-01-01",
+      periodTo: "2027-01-31", dueDayKey: "2027-01-01", amountCents: 30000,
+      paidCents: 3000, status: "open"});
+    await db.collection("fleetDrivers").doc("drv-over")
+        .update({creditCents: 2000});
+    await act(OWNER, "payment_undo", {paymentId: paid.paymentId});
+    const driver = await doc("fleetDrivers", "drv-over");
+    assert.equal(driver.creditCents, 0, "not minus $30");
+    assert.equal((await doc("fleetBills", first)).paidCents, 0);
+    assert.equal((await doc("fleetBills", first)).status, "open");
+    assert.equal((await doc("fleetBills", next.id)).paidCents, 0,
+        "the $30 the credit paid is owed again");
+    const payment = await doc("fleetPayments", paid.paymentId);
+    assert.deepEqual(payment.creditTakenBack,
+        [{billId: next.id, cents: 3000}]);
+    // The driver owes both bills in full again: $600.
+    const owed = (await db.collection("fleetBills")
+        .where("driverId", "==", "drv-over").get()).docs
+        .reduce((sum, d) => sum + d.get("amountCents") - d.get("paidCents"), 0);
+    assert.equal(owed, 60000);
+  });
+
+  it("the bank takes back a deposit that paid a driver: the office is told " +
+      "and decides", async () => {
+    await openRent("drv-a", 40000);
+    const id = await deposit(40017, "ALPHA SENDER");
+    assert.deepEqual(await handlers.matchBankDeposits(BIZ, [id]),
+        {paid: 1, waiting: 0});
+    const paymentId = (await doc("businessBankCredits", id)).consumedBy.id;
+    // What a sync does when the bank removes it for good (bank_sync.js).
+    await db.collection("businessBankCredits").doc(id)
+        .set({removed: true}, {merge: true});
+    assert.equal(await handlers.noteRemovedDeposits(BIZ, [id]), 1);
+    assert.equal(await handlers.noteRemovedDeposits(BIZ, [id]), 0, "once");
+    const payment = await doc("fleetPayments", paymentId);
+    assert.equal(payment.status, "recorded", "the payment still stands");
+    assert.equal(payment.bankRemoved, true);
+    let status = await act(STAFF, "bank_status");
+    assert.deepEqual(status.removed.map((r) => [r.paymentId, r.driverId,
+      r.amountCents, r.senderName]),
+    [[paymentId, "drv-a", 40017, "ALPHA SENDER"]]);
+    // Only a Fleet admin decides; "keep" clears the notice, nothing else.
+    await assert.rejects(act(STAFF, "bank_removed_keep", {paymentId}),
+        refused("fleet_admin_only"));
+    await act(OWNER, "bank_removed_keep", {paymentId});
+    status = await act(STAFF, "bank_status");
+    assert.deepEqual(status.removed, []);
+    assert.equal((await doc("fleetPayments", paymentId)).status, "recorded");
+    // A deposit that paid nobody, or another business's, marks nothing.
+    const free = await deposit(5000, "NOBODY KNOWN");
+    assert.equal(await handlers.noteRemovedDeposits(BIZ, [free, "x_y"]), 0);
+  });
+
+  it("an undone payment whose deposit the bank removed is no longer listed",
+      async () => {
+        const id = await deposit(21117, "ALPHA SENDER");
+        await handlers.matchBankDeposits(BIZ, [id]);
+        const paymentId = (await doc("businessBankCredits", id)).consumedBy.id;
+        await db.collection("businessBankCredits").doc(id)
+            .set({removed: true}, {merge: true});
+        await handlers.noteRemovedDeposits(BIZ, [id]);
+        await act(OWNER, "payment_undo", {paymentId});
+        const status = await act(STAFF, "bank_status");
+        assert.equal(status.removed.some((r) => r.paymentId === paymentId),
+            false);
+        // The removed deposit does not come back as waiting.
+        assert.equal(status.waiting.some((w) => w.id === id), false);
+      });
+
   it("undo gives the deposit back to the waiting list", async () => {
     const id = await deposit(12317, "ALPHA SENDER");
     await handlers.matchBankDeposits(BIZ, [id]);

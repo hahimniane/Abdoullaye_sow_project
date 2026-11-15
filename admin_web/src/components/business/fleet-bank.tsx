@@ -18,6 +18,7 @@ import {
   hourLabel,
   readFleetBankStatus,
   waitingReasonText,
+  type RemovedDeposit,
   type BankSchedule,
   type FleetBankStatus,
 } from "@/lib/fleet-bank";
@@ -186,6 +187,52 @@ export function FleetBankSchedule({ businessId }: { businessId: string }) {
   );
 }
 
+/**
+ * Payments still recorded although the bank took their deposit back: the
+ * office looks at the bank account and keeps or undoes each one.
+ */
+export function FleetBankRemoved({
+  removed,
+  driverNames,
+  busy,
+  lang,
+  onKeep,
+  onUndo,
+}: {
+  removed: RemovedDeposit[];
+  driverNames: ReadonlyMap<string, string>;
+  busy: boolean;
+  lang: "en" | "fr";
+  onKeep: (paymentId: string) => void;
+  onUndo: (paymentId: string, cents: number) => void;
+}) {
+  if (removed.length === 0) return null;
+  return (
+    <div className="fleet-bank-removed" role="alert">
+      <strong>The bank took back a deposit that had paid a driver</strong>
+      <p className="lst-hint">The payment is still recorded. Look at the bank account: if the money is not there, undo the payment. If it is there, keep it.</p>
+      <ul className="fleet-bank-waiting">
+        {removed.map((r) => (
+          <li key={r.paymentId}>
+            <div className="fleet-bank-deposit">
+              <strong data-no-translate>{moneyText(r.amountCents, lang)}</strong>
+              <span data-no-translate>{driverNames.get(r.driverId) || "—"}</span>
+              <small>
+                <span data-no-translate>{r.senderName || "—"}</span>
+                {r.paidDayKey && <> · <span data-no-translate>{formatDayKey(r.paidDayKey)}</span></>}
+              </small>
+            </div>
+            <div className="fleet-bank-assign">
+              <button className="ghost-button compact" type="button" disabled={busy} onClick={() => onKeep(r.paymentId)}>The money is there: keep it</button>
+              <button className="danger-button" type="button" disabled={busy} onClick={() => onUndo(r.paymentId, r.amountCents)}>Undo the payment</button>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /** Fleet payments: the deposits waiting for a driver, and "Check bank now". */
 export function FleetBankDeposits({ businessId, state }: { businessId: string; state: FleetState }) {
   const lang = fleetLang();
@@ -228,6 +275,36 @@ export function FleetBankDeposits({ businessId, state }: { businessId: string; s
     }
   }
 
+  // Every driver by id (one who left too): the name on a payment the bank took back.
+  const driverNames = useMemo(
+    () => new Map(state.data.drivers.map((d) => [String(d.id), String(d.name ?? "") || String(d.phone ?? "")])),
+    [state.data.drivers],
+  );
+
+  async function undoRemoved(paymentId: string, cents: number) {
+    setFlash("");
+    const result = await run("payment_undo", { paymentId }, {
+      en: `Undo this ${moneyText(cents, "en")} payment? The bills it paid open again and any credit it created is taken back.`,
+      fr: `Annuler ce paiement de ${moneyText(cents, "fr")} ? Les factures qu’il a payées sont rouvertes et le crédit qu’il a créé est repris.`,
+    });
+    if (result) {
+      setFlash("Payment undone.");
+      reload();
+    }
+  }
+
+  async function keepRemoved(paymentId: string) {
+    setFlash("");
+    const result = await run("bank_removed_keep", { paymentId }, {
+      en: "Keep this payment? Do this only when the money is in the bank account.",
+      fr: "Garder ce paiement ? Faites-le seulement si l’argent est bien sur le compte bancaire.",
+    });
+    if (result) {
+      setFlash("Payment kept.");
+      reload();
+    }
+  }
+
   const bankLine = status?.bank.connected
     ? `${status.bank.institutionName || "Bank"}${status.bank.accountMask ? ` ••${status.bank.accountMask}` : ""}`
     : "";
@@ -256,6 +333,7 @@ export function FleetBankDeposits({ businessId, state }: { businessId: string; s
             <span data-no-translate>{bankLine}</span> · <span>Deposits from known drivers pay their bills by themselves.</span>
             {status.lastScheduledMs > 0 && <> · <span>Last pay-day check</span> <span data-no-translate>{formatDateTime(status.lastScheduledMs)}</span></>}
           </p>
+          <FleetBankRemoved removed={status.removed} driverNames={driverNames} busy={busy} lang={lang} onKeep={(id) => void keepRemoved(id)} onUndo={(id, cents) => void undoRemoved(id, cents)} />
           {status.waiting.length === 0 ? (
             <p className="empty-state">No deposit is waiting for a driver.</p>
           ) : (

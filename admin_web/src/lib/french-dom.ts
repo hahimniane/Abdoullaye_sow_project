@@ -8901,6 +8901,11 @@ Object.assign(TEXT_TRANSLATIONS, {
   "This driver has left.": "Ce chauffeur est parti.",
 });
 Object.assign(TEXT_TRANSLATIONS, {
+  "The bank took back a deposit that had paid a driver": "La banque a repris un dépôt qui avait payé un chauffeur",
+  "The payment is still recorded. Look at the bank account: if the money is not there, undo the payment. If it is there, keep it.":
+    "Le paiement est toujours enregistré. Regardez le compte bancaire : si l’argent n’y est pas, annulez le paiement. S’il y est, gardez-le.",
+  "The money is there: keep it": "L’argent est là : le garder",
+  "Payment kept.": "Paiement gardé.",
   "This deposit is not a Zelle (cash, a check, a card payout or a transfer). Pick the driver only if it is a driver's payment.": "Ce dépôt n’est pas un Zelle (espèces, chèque, versement de carte ou virement). Choisissez le chauffeur seulement si c’est bien son paiement.",
   "This sender paid for a driver who left. Pick who this payment is for.": "Cet expéditeur payait pour un chauffeur parti. Choisissez pour qui est ce paiement.",
   "This is a transfer from a bank account, not a Zelle from a person. Use it for a driver only if they really paid this way.": "C’est un virement depuis un compte bancaire, pas un Zelle d’une personne. Ne l’utilisez pour un chauffeur que s’il a vraiment payé ainsi.",
