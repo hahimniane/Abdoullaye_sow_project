@@ -9775,8 +9775,8 @@ function LotMonthlyChart({ revenue, parking, expenses, year }: { revenue: number
           return (
             <g key={i}>
               <title>{`${months[i]}: activities $${(r / 100).toFixed(0)}, parked cars $${(p / 100).toFixed(0)}, exp $${(expenses[i] / 100).toFixed(0)}`}</title>
-              <rect x={pad + i * bw + 4} y={y(r)} width={bw / 2 - 4} height={h - pad - y(r)} fill="#0d9488" />
-              {p > 0 && <rect x={pad + i * bw + 4} y={y(income[i])} width={bw / 2 - 4} height={y(r) - y(income[i])} fill="#5eead4" />}
+              <rect x={pad + i * bw + 4} y={y(r)} width={bw / 2 - 4} height={h - pad - y(r)} fill="#032346" />
+              {p > 0 && <rect x={pad + i * bw + 4} y={y(income[i])} width={bw / 2 - 4} height={y(r) - y(income[i])} fill="#9db3cf" />}
               <rect x={pad + i * bw + bw / 2} y={y(expenses[i])} width={bw / 2 - 4} height={h - pad - y(expenses[i])} fill="#f59e0b" />
               <text x={pad + i * bw + bw / 2} y={h - pad + 12} fontSize="9" fill="#64748b" textAnchor="middle">{months[i]}</text>
             </g>
@@ -9873,7 +9873,7 @@ function LotYearSummary({ revenue, parking, expense, net }: { revenue: number; p
       <strong style={{ textAlign: "right" }}>{lotFormatCents(v)}</strong>
     </div>
   );
-  return (<div>{bar("Activity revenue", revenue, "#0d9488")}{bar("Parked-car income", parking, "#5eead4")}{bar("Expenses", expense, "#f59e0b")}{bar("Net", net, net < 0 ? "#dc2626" : "#059669")}</div>);
+  return (<div>{bar("Activity revenue", revenue, "#032346")}{bar("Parked-car income", parking, "#9db3cf")}{bar("Expenses", expense, "#f59e0b")}{bar("Net", net, net < 0 ? "#dc2626" : "#059669")}</div>);
 }
 
 // The open-ended parking actions: bill through today, record an off-platform

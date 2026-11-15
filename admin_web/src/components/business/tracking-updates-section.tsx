@@ -86,7 +86,7 @@ export function TrackingUpdatesSection({
   return (
     <div style={{ borderTop: "1px solid var(--rule)", marginTop: 4, paddingTop: 10 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".03em" }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--muted)" }}>
           Tracking updates
         </span>
         {canEdit && (
@@ -139,7 +139,7 @@ export function TrackingUpdatesSection({
             <div key={event.id} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
               {isCarrier ?
                 <Ship size={14} color="var(--brand)" style={{ marginTop: 2, flexShrink: 0 }} /> :
-                <Flag size={14} color="#0d9488" style={{ marginTop: 2, flexShrink: 0 }} />}
+                <Flag size={14} color="#032346" style={{ marginTop: 2, flexShrink: 0 }} />}
               <div>
                 <strong style={{ fontSize: 13 }}>{text(event.label)}</strong>
                 {detail && <div style={{ fontSize: 12, color: "var(--muted)" }}>{detail}</div>}

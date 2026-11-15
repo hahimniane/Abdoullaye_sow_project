@@ -3174,8 +3174,8 @@ function Today(props: {
       color: statusColor(key),
     }));
   const accountBars = [
-    { label: "Admins", value: roles.admin, color: "#0d9488" },
-    { label: "Owners", value: roles.businessOwner, color: "#14b8a6" },
+    { label: "Admins", value: roles.admin, color: "#032346" },
+    { label: "Owners", value: roles.businessOwner, color: "#3c6aa3" },
     { label: "Staff", value: roles.staff, color: "#f59e0b" },
     { label: "Customers", value: roles.customer, color: "#2563eb" },
   ];
@@ -3452,7 +3452,7 @@ function Distribution({
 function statusColor(status: string) {
   const map: Record<string, string> = {
     approved: "#059669",
-    active: "#0d9488",
+    active: "#032346",
     completed: "#059669",
     pending: "#f59e0b",
     scheduled: "#0ea5e9",
@@ -3470,7 +3470,7 @@ function statusColor(status: string) {
     forfeited: "#b45309",
     missing_profile: "#94a3b8",
   };
-  return map[status.toLowerCase()] ?? "#14b8a6";
+  return map[status.toLowerCase()] ?? "#3c6aa3";
 }
 
 type ChartSegment = { label: string; value: number; color: string };
