@@ -75,6 +75,13 @@ const TIMER = Object.freeze({
   NEW_ALERT_MS: 3 * DAY_MS,
   NEW_EXPIRY_MS: 30 * DAY_MS,
   DROPOFF_REMINDER_DAYS: 3,
+  // The reminder of a drop-off with a time window: at 8 AM that day when the
+  // window starts at 11 AM or later, else at 6 PM the evening before. The
+  // sweep is hourly, so an 8 AM reminder for an 8-10 AM window used to
+  // arrive after the window had started (R-GY4D8, 2026-11-16).
+  DROPOFF_SAME_DAY_FROM_MIN: 11 * 60,
+  DROPOFF_MORNING_HOUR: 8,
+  DROPOFF_EVENING_BEFORE_HOUR: 18,
   CONFIRMED_EXPIRY_DAYS: 30,
   PHOTO_RETENTION_MS: 90 * DAY_MS,
   // A received request whose line is not ready for pickup yet is looked at
@@ -208,13 +215,28 @@ const REQUEST_RECEIVED_UPDATE = "request_received";
  * "the business will send the price soon" is stale once an estimate exists
  * (the row may have waited for its template for days).
  *
+ * A "your drop-off is coming" reminder that would arrive once its window
+ * has started (a late sweep, or a timer stored under an older rule) is not
+ * sent either: by then it reads as a mistake.
+ *
  * @param {object} request The stored request.
  * @param {string} update The row's update.
+ * @param {number} [nowMs] The moment it would go out; without it the
+ *   window is not looked at.
  * @return {string} The reason, or "".
  */
-function requestMessageSkipReason(request, update) {
+function requestMessageSkipReason(request, update, nowMs) {
   const status = text(request?.status, 40);
   if (!isOpenStatus(status)) return `The request is ${status}.`;
+  if (text(update, 40) === ACTION.DROPOFF_TODAY && Number(nowMs) > 0 &&
+      dateKeyValid(text(request?.plannedDate, 10))) {
+    const from = minutesOf(request.plannedWindow?.from);
+    if (Number.isFinite(from) && Number(nowMs) >=
+        startOfDayMs(request.plannedDate, request.timeZone) +
+        from * 60 * 1000) {
+      return "The drop-off window has already started.";
+    }
+  }
   if (text(update, 40) === REQUEST_RECEIVED_UPDATE &&
       status !== STATUS.NEW) {
     return `The request is already ${status}.`;
@@ -831,7 +853,10 @@ function rescheduleDecision(request, input, ctx) {
   delete reminders.dropoffTodayAt;
   delete reminders.stillComingAt;
   delete reminders.dropoff3dAt;
-  return {code: "", patch: {plannedDate, plannedWindow, reminders}};
+  // When this day and window were chosen: a reminder whose moment has
+  // already passed by then is never sent (nextTimer).
+  return {code: "", patch: {plannedDate, plannedWindow, reminders,
+    plannedSetAtMs: Number(ctx.nowMs) || 0}};
 }
 
 /**
@@ -1370,6 +1395,26 @@ function expiryMs(request) {
 }
 
 /**
+ * When the reminder of a windowed drop-off goes out: 8 AM on the day when
+ * the window starts at 11 AM or later, else 6 PM the evening before, so it
+ * always arrives well before the window (the sweep runs hourly).
+ *
+ * @param {object} request A stored request with plannedDate and
+ *   plannedWindow.
+ * @return {number} Epoch ms.
+ */
+function dropoffReminderMs(request) {
+  const hour = 60 * 60 * 1000;
+  const from = minutesOf(request.plannedWindow?.from);
+  if (Number.isFinite(from) && from < TIMER.DROPOFF_SAME_DAY_FROM_MIN) {
+    return startOfDayMs(addDays(request.plannedDate, -1), request.timeZone) +
+      TIMER.DROPOFF_EVENING_BEFORE_HOUR * hour;
+  }
+  return startOfDayMs(request.plannedDate, request.timeZone) +
+    TIMER.DROPOFF_MORNING_HOUR * hour;
+}
+
+/**
  * The next thing the sweep must do for a request, and when.
  *
  * @param {object} request A stored request (as it will be written).
@@ -1399,14 +1444,16 @@ function nextTimer(request, extra = {}) {
   if (status === STATUS.CONFIRMED && request.handoff === HANDOFF.BRING_IN &&
       windowed && !isCardPaid(request) &&
       dateKeyValid(text(request.plannedDate, 10))) {
-    // 8 AM on the day (only when it was confirmed before then), and 10 AM
-    // the day after if they did not come.
-    const morning = startOfDayMs(request.plannedDate, request.timeZone) +
-      8 * 60 * 60 * 1000;
-    const confirmedAt = toMillis(request.confirmedAtMs ||
-      request.confirmedAt);
-    if (!reminders.dropoffTodayAt && (!confirmedAt || confirmedAt < morning)) {
-      candidates.push({action: ACTION.DROPOFF_TODAY, atMs: morning});
+    // Ahead of the window (dropoffReminderMs), only when the day and window
+    // were chosen before that moment: someone who confirmed or picked a new
+    // time after it has just seen the plan. And 10 AM the day after if they
+    // did not come.
+    const remindAt = dropoffReminderMs(request);
+    const chosenAt = Math.max(
+        toMillis(request.confirmedAtMs || request.confirmedAt) || 0,
+        toMillis(request.plannedSetAtMs) || 0);
+    if (!reminders.dropoffTodayAt && (!chosenAt || chosenAt < remindAt)) {
+      candidates.push({action: ACTION.DROPOFF_TODAY, atMs: remindAt});
     }
     if (!reminders.stillComingAt) {
       candidates.push({action: ACTION.STILL_COMING,
@@ -1555,12 +1602,28 @@ function hoursText(week, language) {
 function requestMessageValues(request, args = {}) {
   const total = Number(request.estimate?.totalCents);
   const hours = args.hours || request.location?.hours || null;
-  // The morning-of reminder names the window the customer chose.
+  // The reminder ahead of a drop-off names the window the customer chose,
+  // and the day as it is when the message goes out: it is sent the evening
+  // before for a morning window.
   const slot = args.update === ACTION.DROPOFF_TODAY &&
     request.plannedWindow?.from ? request.plannedWindow : null;
-  const slotText = (lang) => slot ? `${lang === "fr" ? "aujourd'hui" :
-    "today"}, ${clockText(slot.from, lang)}–${clockText(slot.to, lang)}` :
-    "";
+  const sentOn = dateKeyIn(Number(args.nowMs) || Date.now(),
+      request.timeZone);
+  const planned = text(request.plannedDate, 10);
+  const dayText = (lang) => {
+    if (!dateKeyValid(planned) || planned === sentOn) {
+      return lang === "fr" ? "aujourd'hui" : "today";
+    }
+    if (planned === addDays(sentOn, 1)) {
+      return lang === "fr" ? "demain" : "tomorrow";
+    }
+    const [y, m, d] = planned.split("-").map(Number);
+    return new Intl.DateTimeFormat(lang === "fr" ? "fr-FR" : "en-US",
+        {weekday: "short", month: "short", day: "numeric", timeZone: "UTC"})
+        .format(new Date(Date.UTC(y, m - 1, d)));
+  };
+  const slotText = (lang) => slot ? `${dayText(lang)}, ` +
+    `${clockText(slot.from, lang)}–${clockText(slot.to, lang)}` : "";
   return {
     name: text(request.sender?.name, 60),
     business: text(request.businessName, 80),
@@ -1857,6 +1920,7 @@ module.exports = {
   isOpenStatus,
   REQUEST_RECEIVED_UPDATE,
   requestMessageSkipReason,
+  dropoffReminderMs,
   isCardPaid,
   businessTimeZone,
   dateKeyIn,

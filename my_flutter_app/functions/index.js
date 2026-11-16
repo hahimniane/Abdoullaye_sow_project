@@ -50013,7 +50013,8 @@ async function deliverPackageRequestMessage(db, rowRef, row, claim) {
   // A reminder about a request that closed since it was queued says nothing
   // useful; an estimate too, and "we got your request" once an estimate
   // exists.
-  const skip = packageRequests.requestMessageSkipReason(request, row.update);
+  const skip = packageRequests.requestMessageSkipReason(request, row.update,
+      Date.now());
   if (skip) {
     await rowRef.update({status: "skipped", leaseUntilMs: 0,
       error: skip,
@@ -50028,6 +50029,7 @@ async function deliverPackageRequestMessage(db, rowRef, row, claim) {
     update: row.update,
     values: packageRequests.requestMessageValues(request, {
       update: row.update,
+      nowMs: Date.now(),
       destinationFr: containerDestinationName(request, null, "fr"),
       hours: settings.openingHours[String(request.locationId || "")] || null,
     }),

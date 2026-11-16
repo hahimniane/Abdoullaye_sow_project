@@ -1299,11 +1299,73 @@ describe("price lists on requests (docs/PACKAGE_PRICE_LIST.md)", () => {
     assert.equal(new Date(second.atMs).toISOString(),
         "2026-10-25T14:00:00.000Z", "10 AM the day after");
     const values = pr.requestMessageValues({...request, sender: {name: "F"},
-      pieces: []}, {update: "dropoff_today"});
+      pieces: []}, {update: "dropoff_today", nowMs: first.atMs});
     assert.equal(values.hoursEn, "today, 11:00 AM–1:00 PM");
     assert.equal(values.hoursFr, "aujourd'hui, 11 h 00–13 h 00");
     assert.equal(requestTemplateForUpdate("still_coming"),
         REQUEST_TEMPLATE.PACKAGE_DROPOFF_REMINDER_2LANG);
+  });
+
+  // R-GY4D8, 2026-11-16: the 8 AM reminder of an 8-10 AM drop-off went out
+  // at 8:26 AM (the sweep is hourly), after the window had started.
+  it("a morning drop-off is reminded the evening before, as tomorrow", () => {
+    const request = {status: "confirmed", handoff: "bring_in",
+      plannedDate: "2026-10-24", plannedWindow: {from: "08:00", to: "10:00"},
+      timeZone: NY, confirmedAtMs: NOW, createdAtMs: NOW, reminders: {}};
+    const first = pr.nextTimer(request);
+    assert.equal(first.action, "dropoff_today");
+    assert.equal(new Date(first.atMs).toISOString(),
+        "2026-10-23T22:00:00.000Z", "6 PM New York the evening before");
+    assert.equal(pr.dropoffReminderMs(request), first.atMs);
+    // Even an hour late (the sweep is hourly) it is still ahead of 8 AM.
+    const values = pr.requestMessageValues({...request, sender: {name: "F"},
+      pieces: []}, {update: "dropoff_today",
+      nowMs: first.atMs + 59 * 60 * 1000});
+    assert.equal(values.hoursEn, "tomorrow, 8:00 AM–10:00 AM");
+    assert.equal(values.hoursFr, "demain, 8 h 00–10 h 00");
+    // 10:59 is still the evening before; 11:00 is 8 AM that day.
+    assert.equal(new Date(pr.dropoffReminderMs({...request,
+      plannedWindow: {from: "10:30", to: "12:30"}})).toISOString(),
+    "2026-10-23T22:00:00.000Z");
+    assert.equal(new Date(pr.dropoffReminderMs({...request,
+      plannedWindow: {from: "11:00", to: "13:00"}})).toISOString(),
+    "2026-10-24T12:00:00.000Z");
+  });
+
+  it("a reminder is not sent once the drop-off window has started", () => {
+    const request = {status: "confirmed", handoff: "bring_in",
+      plannedDate: "2026-10-24", plannedWindow: {from: "08:00", to: "10:00"},
+      timeZone: NY};
+    const eight = Date.parse("2026-10-24T12:00:00.000Z");
+    assert.equal(pr.requestMessageSkipReason(request, "dropoff_today",
+        eight - 60 * 1000), "");
+    assert.match(pr.requestMessageSkipReason(request, "dropoff_today",
+        eight + 26 * 60 * 1000), /already started/);
+    // Other messages, and callers that give no moment, are untouched.
+    assert.equal(pr.requestMessageSkipReason(request, "still_coming",
+        eight + 26 * 60 * 1000), "");
+    assert.equal(pr.requestMessageSkipReason(request, "dropoff_today"), "");
+  });
+
+  it("no reminder when the time was chosen after its moment", () => {
+    const base = {status: "confirmed", handoff: "bring_in",
+      plannedDate: "2026-10-24", plannedWindow: {from: "08:00", to: "10:00"},
+      timeZone: NY, createdAtMs: NOW, reminders: {}};
+    const evening = Date.parse("2026-10-23T22:00:00.000Z");
+    // Confirmed at 9 PM for 8 AM the next morning: they have just seen it.
+    const late = pr.nextTimer({...base,
+      confirmedAtMs: evening + 3 * 60 * 60 * 1000});
+    assert.equal(late.action, "still_coming");
+    // Confirmed days ago, then a new time picked after the reminder's
+    // moment: the same.
+    const moved = pr.nextTimer({...base, confirmedAtMs: NOW,
+      plannedSetAtMs: evening + 60 * 1000});
+    assert.equal(moved.action, "still_coming");
+    // A new time picked before that moment is reminded as usual.
+    const early = pr.nextTimer({...base, confirmedAtMs: NOW,
+      plannedSetAtMs: evening - 60 * 1000});
+    assert.equal(early.action, "dropoff_today");
+    assert.equal(early.atMs, evening);
   });
 
   it("the customer picks a new time and the reminders start over", () => {
@@ -1316,7 +1378,7 @@ describe("price lists on requests (docs/PACKAGE_PRICE_LIST.md)", () => {
     assert.equal(ok.code, "");
     assert.deepEqual(ok.patch, {plannedDate: "2026-10-24",
       plannedWindow: {from: "10:00", to: "12:00"},
-      reminders: {estimate24hAt: 3}});
+      reminders: {estimate24hAt: 3}, plannedSetAtMs: NOW});
     assert.equal(pr.rescheduleDecision(request, {plannedDate: "2026-10-25",
       plannedWindow: "10:00-12:00"}, {hours: WEEK, nowMs: NOW}).code,
     "planned_day_closed");

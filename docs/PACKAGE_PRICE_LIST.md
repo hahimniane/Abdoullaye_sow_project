@@ -260,13 +260,21 @@ request's `shipMode` unless staff choose another.
 
 ### Reminders
 
-- `dropoff_today` (8 AM on `plannedDate`, only if confirmed before then)
-  and `still_coming` (10 AM the day after) for a confirmed bring_in with a
-  `plannedWindow`; both use the approved `package_dropoff_reminder_2lang`
-  (`{{4}}` = "today, 2:00 PM–4:00 PM" for the morning one, the opening
-  hours for Still coming; the button opens `/e/<token>` where the customer
-  picks a new time). Requests without a window keep the old +3 days
-  reminder.
+- `dropoff_today` and `still_coming` (10 AM the day after) for a confirmed
+  bring_in with a `plannedWindow`; both use the approved
+  `package_dropoff_reminder_2lang` (`{{4}}` = "today, 2:00 PM–4:00 PM" or
+  "tomorrow, 8:00 AM–10:00 AM" for the reminder, the opening hours for
+  Still coming; the button opens `/e/<token>` where the customer picks a
+  new time). Requests without a window keep the old +3 days reminder.
+- When `dropoff_today` goes out (`dropoffReminderMs`; the sweep is hourly,
+  so it must leave well ahead): a window starting at 11 AM or later is
+  reminded at 8 AM that day; an earlier window at 6 PM the evening before,
+  worded "tomorrow". Only when the day and window were chosen before that
+  moment (`confirmedAt`, or `plannedSetAtMs` written by a reschedule):
+  someone who confirmed or picked a new time after it has just seen the
+  plan. A reminder that would still arrive once its window has started is
+  skipped (`requestMessageSkipReason`). 2026-11-16, R-GY4D8: the old 8 AM
+  rule sent the reminder of an 8-10 AM drop-off at 8:26 AM.
 
 ### Freight
 
