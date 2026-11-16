@@ -18,13 +18,16 @@ import { pickupFeeOf, pieceSizeOf, piecesLineFields } from "./line-pieces.ts";
 import { payNowOn } from "./pay-now.ts";
 import type { BoxSizeId, NextDepartureResult, PriceItem } from "./package-price-list.ts";
 import {
+  eachPricing,
   newPieceDraft as newPieceDraftOf,
   pieceDraftProblems,
+  piecesDraftCount,
   piecesDraftTotalCents,
   piecesPayload,
   readPickupFeeInput,
   type PieceDraft as LinePieceDraft,
   type PiecePayload,
+  type PiecesPricing,
 } from "./piece-drafts.ts";
 
 export type Lang = "en" | "fr";
@@ -964,15 +967,16 @@ export function receiveDraftsFrom(row: unknown): LinePieceDraft[] {
 export function receivePayload(
   drafts: readonly LinePieceDraft[],
   pickupFee: string | null = null,
+  pricing: PiecesPricing = eachPricing(),
 ): { pieces: PiecePayload[]; pickupFeeCents?: number; error: string } {
-  const problems = pieceDraftProblems(drafts, { priceRequired: true });
+  const problems = pieceDraftProblems(drafts, { priceRequired: true, pricing });
   if (problems.codes.length > 0) {
     // The server names a piece with no price `price_required` on a receive.
     const first = problems.codes[0];
     return { pieces: [], error: first === "piece_price_required" ? "price_required" : first };
   }
-  if (drafts.length > REQUEST_LIMITS.pieces) return { pieces: [], error: "too_many_pieces" };
-  const pieces = piecesPayload(drafts);
+  if (piecesDraftCount(drafts) > REQUEST_LIMITS.pieces) return { pieces: [], error: "too_many_pieces" };
+  const pieces = piecesPayload(drafts, pricing);
   if (pickupFee === null) return { pieces, error: "" };
   const fee = readPickupFeeInput(pickupFee);
   if (fee.error) return { pieces: [], error: fee.error };
@@ -1000,8 +1004,8 @@ export function receivedLineStub(
 }
 
 /** The Received total: the pieces plus the pickup fee (cents, 0 for none), as the line will hold it. */
-export function receiveTotalCents(drafts: readonly LinePieceDraft[], pickupFeeCents = 0): number | null {
-  return piecesDraftTotalCents(drafts, pickupFeeCents);
+export function receiveTotalCents(drafts: readonly LinePieceDraft[], pickupFeeCents = 0, pricing: PiecesPricing = eachPricing()): number | null {
+  return piecesDraftTotalCents(drafts, pickupFeeCents, pricing);
 }
 
 // ---------------------------------------------------------------------------

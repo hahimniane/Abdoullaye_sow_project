@@ -942,6 +942,8 @@ test("a stored line opens the add-line form pre-filled for editing", () => {
     notifyCustomer: false,
     notifyReceiver: true,
     senderIsReceiver: false,
+    // A car is never priced as one total for its pieces.
+    pricing: { mode: "each", total: "" },
     pickupFee: null,
   });
   assert.deepEqual(validateContainerLineDraft({ ...draft, pieces: carPieces }), []);
@@ -979,9 +981,9 @@ test("a stored line opens the add-line form pre-filled for editing", () => {
   const other = containerLineDraftFromRow({ kind: "other", quantity: 2, description: "Tires", ownerKind: "customer", customerName: "Awa" });
   assert.equal(other.description, "Tires");
   assert.equal(other.quantity, "2");
-  // A legacy line opens as its pieces: 2 "Tires", ids p1 and p2.
-  assert.deepEqual(other.pieces.map((p) => [p.id, p.kind, p.description]), [["p1", "other", "Tires"], ["p2", "other", "Tires"]]);
-  assert.equal(barrels.pieces.length, 3);
+  // A legacy line opens as its pieces: 2 "Tires", ids p1 and p2, on one row ("How many" 2).
+  assert.deepEqual(other.pieces.map((p) => [p.id, p.moreIds, p.count, p.kind, p.description]), [["p1", ["p2"], "2", "other", "Tires"]]);
+  assert.deepEqual(barrels.pieces.map((p) => p.count), ["3"]);
   assert.deepEqual(containerLinePayload(other), containerLinePayload({ ...emptyContainerLineDraft, ...other }));
   // Saved without touching its pieces, a legacy line keeps its old form;
   // changed pieces are written as pieces, ids kept.

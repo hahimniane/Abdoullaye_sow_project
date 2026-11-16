@@ -36,7 +36,8 @@ describe("the shared line-pieces cases", () => {
       "pieceSummaryText", "linePiecesWhat", "lineGroupSummary",
       "paidFloorForLine", "splitPieces", "nextPartIndex",
       "partTrackingCode", "lineTotalCents", "pickupFeeOf", "pickupFeeErrors",
-      "linePickupFeeCents", "lineHasPickupFee", "piecesLineFields"]) {
+      "linePickupFeeCents", "lineHasPickupFee", "piecesLineFields",
+      "priceModeOf", "linePriceMode"]) {
       assert.ok(covered.has(fn), `${fn} has no shared case`);
     }
   });
@@ -308,4 +309,90 @@ describe("a line with a pickup fee (owner decision 2026-10-18)", () => {
     assert.equal(pieces.paidFloorForLine(group, "part"), 0);
     assert.equal(pieces.paidFloorForLine(group, "root"), 1000);
   });
+});
+
+// docs/WAITING_PACKAGES.md "One price for all" (owner, 2026-11-16).
+describe("one price for all the pieces", () => {
+  const boxes = (...cents) => cents.map((c) =>
+    ({kind: "box", description: "Clothes", priceCents: c}));
+  const total = (cents, count) => ({...customer, priceMode: "total",
+    pieces: boxes(...pieces.distributeCents(cents, count))});
+
+  it("is remembered on the line, the prices still in the pieces", () => {
+    const record = containerLineRecord(total(20000, 3));
+    assert.equal(record.priceMode, "total");
+    assert.equal(record.priceCents, 20000);
+    assert.deepEqual(record.pieces.map((p) => p.priceCents),
+        [6667, 6667, 6666]);
+    assert.deepEqual(validateWaitingPackage(total(20000, 3)), []);
+  });
+
+  it("is a price on each piece unless asked, and for cars and old lines",
+      () => {
+        assert.equal(containerLineRecord({...customer,
+          pieces: boxes(5000, 5000)}).priceMode, "each");
+        assert.equal(containerLineRecord({...customer, kind: "barrels",
+          quantity: 2, priceCents: 9000, priceMode: "total"}).priceMode,
+        "each");
+        assert.equal(containerLineRecord({...customer, kind: "car",
+          vinNumber: "1HGCM82633A004352", priceMode: "total"}).priceMode,
+        "each");
+        // Asked for, but the prices are not an even split: not claimed.
+        assert.equal(containerLineRecord({...customer, priceMode: "total",
+          pieces: boxes(9000, 4000)}).priceMode, "each");
+      });
+
+  it("survives an edit that leaves the prices alone", () => {
+    const stored = containerLineRecord(total(20000, 3));
+    // An older app sends the pieces back without the mode.
+    const next = containerLineEditTarget(stored,
+        {receiverName: "Aissatou Bah", pieces: stored.pieces}, false);
+    assert.equal(next.priceMode, "total");
+    assert.deepEqual(containerLineEditChanges(stored, next),
+        ["receiverName"]);
+  });
+
+  it("becomes a price on each piece when one price is changed", () => {
+    const stored = containerLineRecord(total(20000, 3));
+    const asked = {pieces: stored.pieces.map((p, i) =>
+      ({...p, priceCents: i === 0 ? 9000 : p.priceCents}))};
+    const next = containerLineEditTarget(stored, asked, false);
+    assert.equal(next.priceMode, "each");
+    assert.deepEqual(containerLineEditChanges(stored, next),
+        ["priceCents", "piecePrices", "priceMode"]);
+  });
+
+  it("can be switched on and off by an edit", () => {
+    const each = containerLineRecord({...customer,
+      pieces: boxes(5000, 5000)});
+    const on = containerLineEditTarget(each, {priceMode: "total"}, false);
+    assert.deepEqual(containerLineEditChanges(each, on), ["priceMode"]);
+    const off = containerLineEditTarget({...each, priceMode: "total"},
+        {priceMode: "each"}, false);
+    assert.deepEqual(containerLineEditChanges(
+        {...each, priceMode: "total"}, off), ["priceMode"]);
+  });
+
+  it("leaves a line saved before the mode existed untouched", () => {
+    const stored = containerLineRecord({...customer,
+      pieces: boxes(5000, 5000)});
+    delete stored.priceMode;
+    const next = containerLineEditTarget(stored, {pieces: stored.pieces},
+        false);
+    assert.deepEqual(containerLineEditChanges(stored, next), []);
+  });
+
+  it("holds for both halves of a split: first pieces go, the rest wait",
+      () => {
+        for (const [cents, count] of [[20000, 3], [10000, 7], [1, 4],
+          [99999, 60], [5000, 2]]) {
+          const all = boxes(...pieces.distributeCents(cents, count));
+          for (let going = 1; going < count; going += 1) {
+            assert.equal(pieces.priceModeOf("total", all.slice(0, going)),
+                "total", `${cents} over ${count}, first ${going}`);
+            assert.equal(pieces.priceModeOf("total", all.slice(going)),
+                "total", `${cents} over ${count}, after ${going}`);
+          }
+        }
+      });
 });

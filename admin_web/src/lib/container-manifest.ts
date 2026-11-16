@@ -32,16 +32,20 @@ import {
   piecesSummaryFields,
   type LineSource,
   type Piece,
+  type PriceMode,
 } from "./line-pieces.ts";
 import {
+  eachPricing,
   newPieceDraft,
   pieceDraftProblems,
   pieceDraftsFromLine,
   piecesDifferFromLine,
   piecesPayload,
+  piecesPricingFromLine,
   readPickupFeeInput,
   type PieceDraft,
   type PiecePayload,
+  type PiecesPricing,
 } from "./piece-drafts.ts";
 
 export const CONTAINER_STATUSES = ["loading", "shipped", "arrived"] as const;
@@ -722,6 +726,8 @@ export type ContainerLineDraft = {
    * `description` are what the server writes from them for older apps.
    */
   pieces: PieceDraft[];
+  /** How the pieces are priced: a price on each, or one price for all (absent: each). */
+  pricing?: PiecesPricing;
   /**
    * A collected request's pickup fee in US dollars as typed, for a line that
    * has one (`lineHasPickupFee`); null for every other line, which shows no
@@ -833,7 +839,7 @@ export function validateContainerLineDraft(
     // (`linesInPiecesMode`): 1-60 of them, each saying what it is.
     // A customer's package also needs its price: every piece priced, the
     // pieces over $0 (docs/PACKAGE_PRICE_REQUIRED.md); stock is exempt.
-    errors.push(...pieceDraftProblems(draft.pieces ?? [], { priceRequired: text(draft.ownerKind, 20) === "customer" }).codes);
+    errors.push(...pieceDraftProblems(draft.pieces ?? [], { priceRequired: text(draft.ownerKind, 20) === "customer", pricing: draft.pricing }).codes);
     if (draft.pickupFee !== null && draft.pickupFee !== undefined && readPickupFeeInput(draft.pickupFee).error) {
       errors.push("pickup_fee_invalid");
     }
@@ -959,6 +965,8 @@ export type ContainerLinePayload = ReturnType<typeof lineContacts> & {
   quantity: number;
   description: string;
   pieces?: PiecePayload[];
+  /** How the pieces were priced: "total" for one price for all, spread over them (line-pieces.ts PRICE_MODE). */
+  priceMode?: PriceMode;
   /** Only for a line that has a pickup fee (a collected request's). */
   pickupFeeCents?: number;
 };
@@ -976,7 +984,8 @@ export function containerLinePayload(draft: ContainerLineDraft): ContainerLinePa
     ...lineContacts(draft, owner),
   };
   if (isCar) return { kind, ...base, quantity: 1, description: "" };
-  const pieces = piecesPayload(draft.pieces ?? []);
+  const pricing = draft.pricing ?? eachPricing();
+  const pieces = piecesPayload(draft.pieces ?? [], pricing);
   const summary = piecesSummaryFields(pieces);
   const hasFee = draft.pickupFee !== null && draft.pickupFee !== undefined;
   return {
@@ -985,6 +994,7 @@ export function containerLinePayload(draft: ContainerLineDraft): ContainerLinePa
     quantity: Math.min(MAX_QUANTITY, summary.quantity),
     description: summary.kind === "other" ? text(summary.description, MAX_LABEL) : "",
     pieces,
+    priceMode: pricing.mode,
     ...(hasFee ? { pickupFeeCents: readPickupFeeInput(draft.pickupFee).cents } : {}),
   };
 }
@@ -1012,10 +1022,10 @@ function legacyLinePayload(line: unknown, draft: ContainerLineDraft): ContainerL
 }
 
 /** Whether an edit keeps a legacy line in its old form (its pieces were left as they read). */
-export function editKeepsLegacyForm(line: unknown, draft: Pick<ContainerLineDraft, "kind" | "pieces">): boolean {
+export function editKeepsLegacyForm(line: unknown, draft: Pick<ContainerLineDraft, "kind" | "pieces" | "pricing">): boolean {
   const r = asRow(line);
   const legacy = text(r.kind, 20) !== "car" && !lineHasPieces(r);
-  return lineDraftHasPieces(draft) && legacy && !piecesDifferFromLine(r, draft.pieces ?? []);
+  return lineDraftHasPieces(draft) && legacy && !piecesDifferFromLine(r, draft.pieces ?? [], draft.pricing ?? eachPricing());
 }
 
 /**
@@ -1073,6 +1083,7 @@ export function containerLineDraftFromRow(line: unknown): ContainerLineDraft {
     senderIsReceiver: same,
     // The line's pieces, ids kept (a legacy line's count expanded).
     pieces: pieceDraftsFromLine(r),
+    pricing: piecesPricingFromLine(r),
     // Its own pickup fee, kept apart from the pieces, when it has one.
     pickupFee: lineHasPickupFee(r) ? centsToInput(linePickupFeeCents(r)) : null,
   };

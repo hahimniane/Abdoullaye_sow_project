@@ -252,6 +252,7 @@ in `functions/test/fixtures/line-pieces-cases.json`.
 | `pieceCount`, `barrelPieces`, `packagePieces`, `carPieces` | int | denormalized on every write; packages = box + other; a car line is 1 car piece |
 | `kind`, `quantity`, `description` | | summaries for older app versions: `barrels` when every piece is a barrel else `other`; quantity = piece count; description names the pieces ("Barrel, Clothes, TV") |
 | `priceCents` | int \| null | = sum of the priced pieces + `pickupFeeCents` (`lineTotalCents`; null while no piece is priced) |
+| `priceMode` | `each` \| `total` | how the price was typed: a price on each piece, or one price for all of them (see "How many and one price for all"). `total` only while the piece prices are still their sum spread evenly; absent on lines saved before 2026-11-16 (reads as `each`); always `each` on a car or a legacy line |
 | `pickupFeeCents` | int >= 0, absent | a collected request's pickup fee, the line's own amount beside the pieces (owner decision 2026-10-18: never spread into piece prices). Present (0 allowed) only on the line Received makes from a "Collect from me" request; absent on counter lines, bring-in requests, cars, legacy lines and split parts (absent reads as 0). `lineHasPickupFee` says whether the edit forms show the field |
 | `lengthIn`/`widthIn`/`heightIn` | | the piece's size for a one-piece line, else null |
 | `source` | `counter` \| `request` \| `card_order` | `counter` for `addWaitingPackage` / `addContainerLine`; `request` / `card_order` for `receivePackageRequest` (docs/PACKAGE_REQUESTS.md §8.6) |
@@ -287,6 +288,45 @@ receipt fields (`lineReceiptFields` in `container_manifest.js`: `source`,
 `requestId`, `receivedAt`, `rootLineId`, `partIndex`), so waiting, labels,
 split, payments and monthly volume treat it like a counter line; it holds at
 most 20 pieces (the request's cap).
+
+**How many and one price for all** (owner, 2026-11-16). Two shortcuts at the
+counter, both in the pieces editor; a saved line is unchanged by them - one
+piece per physical thing, each with its own price, label and scan.
+
+- **How many.** A row of the editor stands for 1-60 identical pieces (kind,
+  description, size, price). On save a row of 3 is sent as 3 pieces; the
+  first keeps the row's id, the others the ids stored beside it (`moreIds`),
+  new ones none. A saved line opens with pieces that follow each other and
+  read the same as one row ("Pieces 1-3", the numbers their labels carry);
+  the same piece further down the list stays its own row, so order never
+  changes. A typed number is taken when the field is left (never digit by
+  digit), and above 10 only after a yes ("Make this 30 pieces? It prints 30
+  labels."). On a saved package a changed count says to print the labels
+  again.
+- **One price for all.** The request carries `priceMode: "total"` and the
+  pieces already priced: the form spreads the typed total over every piece
+  with `distributeCents` (even, the odd cents on the first pieces), so the
+  prices add up to exactly what was typed. The pickup fee is never part of
+  it. The server does not split anything: `priceModeOf(asked, pieces)` keeps
+  `total` only when every piece is priced and the prices are that even
+  split, else stores `each`. So an edit that sends the pieces back without
+  `priceMode` (an older app) keeps the mode, and one that changes a single
+  price makes the line `each` again (edit key `priceMode`, History "how it
+  is priced", open in every state like the prices). A split keeps it on both
+  halves: the first n pieces of an even split, and the rest, are each an
+  even split of their own sum. A line priced this way opens on its total
+  (the pieces' sum) with no price on the rows; rows whose shares differ by a
+  cent are still one row. Flipping the switch back gives every row its
+  share, cutting a row in two where the odd cent falls. On a saved package
+  whose count changes, the form says the total stays.
+- A piece priced by its weight at Received keeps its own price: the switch
+  is not offered while the request has one.
+- Rules: `priceModeOf` / `linePriceMode` in `line_pieces.js` and its two
+  mirrors (shared cases); the typing half in `admin_web/src/lib/
+  piece-drafts.ts` (`piecesPayload`, `switchPricingMode`,
+  `pieceDraftsFromLine`, `piecesPricingFromLine`). The app's editor gets
+  both in its next build; until then it shows such a line as its pieces and
+  their shares.
 
 **Editing** (`updateContainerLine`): what the pieces are (count, kind,
 description, size) changes while waiting or loading (`container_locked`

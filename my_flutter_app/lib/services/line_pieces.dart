@@ -54,6 +54,12 @@ final RegExp _pieceId = RegExp(r'^[A-Za-z0-9_-]{1,40}$');
 
 const lineSources = <String>['counter', 'request', 'card_order'];
 
+/// How a package's price was typed at the counter: a price on each piece, or
+/// one price for all of them, spread evenly over the pieces
+/// (docs/WAITING_PACKAGES.md "One price for all"). The pieces carry their
+/// prices either way; the mode only says how the form opens the next time.
+const priceMode = (each: 'each', total: 'total');
+
 // ---------------------------------------------------------------------------
 // JavaScript's coercions, so the rules read values the way the server does.
 // ---------------------------------------------------------------------------
@@ -536,6 +542,35 @@ List<LinePiece> linePieces(Object? line) {
         priceCents: prices[i],
       ),
   ];
+}
+
+/// How a package is priced, from what was asked and the prices its pieces
+/// hold: "total" (one price for all) only while every piece is priced and
+/// the prices are still their sum spread evenly ([distributeCents]). A price
+/// typed on one piece afterwards makes it "each" again.
+String priceModeOf(Object? value, Object? pieces) {
+  if (_text(value, 10).toLowerCase() != priceMode.total) return priceMode.each;
+  final list = pieces is List ? pieces : const <Object?>[];
+  if (list.isEmpty) return priceMode.each;
+  final prices = [
+    for (final piece in list) piecePriceOf(_asRow(piece)['priceCents']),
+  ];
+  if (prices.contains(null)) return priceMode.each;
+  final cents = prices.cast<int>();
+  final even = distributeCents(cents.fold<int>(0, (a, b) => a + b), cents.length);
+  for (var i = 0; i < cents.length; i++) {
+    if (cents[i] != even[i]) return priceMode.each;
+  }
+  return priceMode.total;
+}
+
+/// How a stored line is priced ([priceModeOf]); a car or a legacy line is
+/// always "each".
+String linePriceMode(Object? line) {
+  final row = _asRow(line);
+  return lineHasPieces(row)
+      ? priceModeOf(row['priceMode'], row['pieces'])
+      : priceMode.each;
 }
 
 /// The counts every line carries, so volume can be counted without reading

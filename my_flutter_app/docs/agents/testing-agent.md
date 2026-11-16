@@ -834,3 +834,14 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
 - A source-contract test (`container_manifest_parity_test`) that pins two
   lines must allow whitespace between them (`RegExp(r'a;\s+b\(\);')`): wrapping
   a block in an `if` re-indents it and breaks an exact string for no reason.
+- A number field that acts on every keystroke passes through the digits on
+  the way: "30" typed over a count is 3 first (pieces dropped, then asked
+  about 30). Take a typed number when the field is left or on Enter, and test
+  it in a browser with real key presses, one digit at a time: a tool that
+  inserts the whole text in one event hides the bug (pieces editor "How
+  many", 2026-11-16).
+- In the built-in browser pane, a viewport emulated wider than the pane is
+  scaled down and clicks by reference can land beside small row buttons
+  (`elementFromPoint` at the button's centre returned the row). Clear the
+  emulation (`preset: "desktop"`) before clicking list actions; emulate a
+  size only to measure or screenshot.

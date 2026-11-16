@@ -26,7 +26,7 @@ test("the shared fixture covers every rule the mirror keeps", () => {
     "pieceErrors", "piecePriceRequiredErrors", "normalizePieces", "distributeCents", "linePieces", "lineCounts", "piecesTotalCents",
     "piecesSummaryFields", "pieceSummaryText", "linePiecesWhat", "lineGroupSummary", "paidFloorForLine",
     "splitPieces", "nextPartIndex", "partTrackingCode", "lineTotalCents", "pickupFeeOf", "pickupFeeErrors",
-    "linePickupFeeCents", "lineHasPickupFee", "piecesLineFields",
+    "linePickupFeeCents", "lineHasPickupFee", "piecesLineFields", "priceModeOf", "linePriceMode",
   ]) {
     assert.ok(covered.has(fn), `${fn} has no shared case`);
   }

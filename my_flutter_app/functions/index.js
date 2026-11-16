@@ -552,6 +552,7 @@ const {
   partIndexOf,
   partTrackingCode,
   piecesLineFields,
+  priceModeOf,
   splitPieces,
 } = require("./line_pieces");
 const {
@@ -24012,6 +24013,9 @@ function txSplitLine(tx, db, args) {
     shipMode: lineShipModeOf(line),
     payOnArrival: line.payOnArrival === true,
     ...staying,
+    // Priced the way the package was: a slice of an even split is still
+    // one (priceModeOf checks it).
+    priceMode: priceModeOf(line.priceMode, staying.pieces),
     // The drop-off photos show the whole drop-off: the part keeps them.
     // A pickup code of its own, when the business asks for one.
     photoPaths: Array.isArray(line.photoPaths) ? line.photoPaths : [],
@@ -51485,6 +51489,7 @@ exports.receivePackageRequest = onCall(
           pieces: final.pieces,
           pickupFeeCents: requestReceive.cleanReceivePickupFee(
               data.pickupFeeCents, row).pickupFeeCents,
+          priceMode: data.priceMode,
           payOnArrival: data.payOnArrival === true,
           staffUid: uid,
           receivedAt: FirestoreTimestamp.fromMillis(nowMs),

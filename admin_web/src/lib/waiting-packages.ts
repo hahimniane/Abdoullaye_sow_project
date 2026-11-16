@@ -63,12 +63,15 @@ import {
 import { readMoneyInput } from "./money-input.ts";
 import { BUSINESS_ACCOUNT_RECEIVER } from "./staff-balances.ts";
 import {
+  eachPricing,
   newPieceDraft,
   parseInches,
   piecesCountText,
+  piecesDraftCount,
   piecesDraftTotalCents,
   readPickupFeeInput,
   type PieceDraft,
+  type PiecesPricing,
 } from "./piece-drafts.ts";
 import { bankCheckFrom, type BankCheck } from "./zelle-check.ts";
 
@@ -599,6 +602,8 @@ export type WaitingPackageDraft = {
   carYear: string;
   /** What a package that is not a car holds: one entry per barrel, box or thing handed over. */
   pieces: PieceDraft[];
+  /** How the pieces are priced: a price on each, or one price for all (absent: each). */
+  pricing?: PiecesPricing;
   /** A collected request's pickup fee as typed, for a package that has one; null for any other (no field). */
   pickupFee: string | null;
   customerName: string;
@@ -691,6 +696,7 @@ export function waitingPackageDraftFromRow(row: unknown): WaitingPackageDraft {
     carModel: base.carModel,
     carYear: base.carYear,
     pieces: base.pieces,
+    pricing: base.pricing,
     pickupFee: base.pickupFee,
     customerName: base.customerName,
     customerPhone: base.customerPhone,
@@ -725,6 +731,7 @@ function lineDraftOf(draft: WaitingPackageDraft): ContainerLineDraft {
     quantity: "",
     description: "",
     pieces: draft.pieces,
+    pricing: draft.pricing,
     pickupFee: draft.pickupFee ?? null,
     // A waiting package is always a customer's: stock has no counter drop-off.
     ownerKind: "customer",
@@ -798,15 +805,15 @@ export function validateWaitingPackage(
  * (the server's rule, `lineTotalCents`). Null while nothing is priced or a
  * typed price cannot be read.
  */
-export function waitingDraftTotalCents(draft: Pick<WaitingPackageDraft, "kind" | "price" | "pieces"> & { pickupFee?: string | null }): number | null {
+export function waitingDraftTotalCents(draft: Pick<WaitingPackageDraft, "kind" | "price" | "pieces" | "pricing"> & { pickupFee?: string | null }): number | null {
   if (!lineDraftHasPieces(draft)) return readPackagePrice(draft.price).cents;
   const fee = draft.pickupFee === null || draft.pickupFee === undefined ? 0 : readPickupFeeInput(draft.pickupFee).cents;
-  return piecesDraftTotalCents(draft.pieces ?? [], fee);
+  return piecesDraftTotalCents(draft.pieces ?? [], fee, draft.pricing ?? eachPricing());
 }
 
 /** How many labels the package prints: one per piece, one for a car. */
 export function waitingDraftLabelCount(draft: Pick<WaitingPackageDraft, "kind" | "pieces">): number {
-  return lineDraftHasPieces(draft) ? Math.max(1, (draft.pieces ?? []).length) : 1;
+  return lineDraftHasPieces(draft) ? Math.max(1, piecesDraftCount(draft.pieces ?? [])) : 1;
 }
 
 // ---------------------------------------------------------------------------
