@@ -942,8 +942,6 @@ test("a stored line opens the add-line form pre-filled for editing", () => {
     notifyCustomer: false,
     notifyReceiver: true,
     senderIsReceiver: false,
-    // A car is never priced as one total for its pieces.
-    pricing: { mode: "each", total: "" },
     pickupFee: null,
   });
   assert.deepEqual(validateContainerLineDraft({ ...draft, pieces: carPieces }), []);

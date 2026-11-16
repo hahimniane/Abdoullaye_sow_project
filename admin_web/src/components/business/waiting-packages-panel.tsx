@@ -25,7 +25,7 @@ import {
   withSenderIsReceiver,
 } from "@/lib/container-manifest";
 import { lineCounts, linePickupFeeCents, type LineGroupSummary } from "@/lib/line-pieces";
-import { eachPricing, newPieceDraft, savePrintLabelsText } from "@/lib/piece-drafts";
+import { newPieceDraft, savePrintLabelsText } from "@/lib/piece-drafts";
 import { shippingCopy } from "@/lib/air-only";
 import { destinationCountryName } from "@/lib/destination-countries";
 import { functions } from "@/lib/firebase";
@@ -673,8 +673,6 @@ export function WaitingPackagesPanel({
                   id="wpk-pieces"
                   pieces={draft.pieces}
                   onChange={(pieces) => setDraft((d) => ({ ...d, pieces }))}
-                  pricing={draft.pricing ?? eachPricing()}
-                  onPricingChange={(next) => setDraft((d) => ({ ...d, pieces: next.pieces, pricing: next.pricing }))}
                   // Editing a saved package: a changed count means new labels.
                   storedCount={editingRow ? lineCounts(editingRow).pieceCount : undefined}
                   showErrors={triedSave}

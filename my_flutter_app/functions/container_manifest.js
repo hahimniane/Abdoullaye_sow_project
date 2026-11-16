@@ -50,8 +50,6 @@ const {
   lineTotalCents,
   pickupFeeErrors,
   pickupFeeOf,
-  priceModeOf,
-  PRICE_MODE,
 } = require("./line_pieces");
 
 const CONTAINER_STATUS = Object.freeze({
@@ -950,9 +948,6 @@ function containerLineRecord(input, opts = {}) {
     // A car, or a line in the old kind/quantity form, has no pieces of its
     // own: readers expand it (linePieces).
     pieces: null,
-    // How the price was typed (line_pieces.js PRICE_MODE): a price on each
-    // piece unless staff gave one price for all of them.
-    priceMode: PRICE_MODE.EACH,
   };
   if (pieced) {
     // The pieces decide what the line is, its total and (for one piece) its
@@ -962,9 +957,6 @@ function containerLineRecord(input, opts = {}) {
     const fee = input.pickupFeeCents;
     Object.assign(record, piecesLineFields(input.pieces,
         fee === undefined || fee === null ? null : pickupFeeOf(fee)));
-    // "One price for all" holds only while the pieces still show the even
-    // split (priceModeOf); the prices themselves are in the pieces.
-    record.priceMode = priceModeOf(input.priceMode, record.pieces);
   }
   // The counts every line carries, so volume is counted without pieces.
   return {...record, ...lineCounts(record)};
@@ -1195,12 +1187,8 @@ const LINE_SUBSTANCE_FIELDS = Object.freeze([
 // prices are written inside `pieces`).
 // `pickupFeeCents` is a collected request's pickup fee, kept beside the
 // pieces (an edit that leaves it out keeps the stored one).
-// `priceMode` is how the price was typed ("each" piece or one "total" for
-// all, line_pieces.js): an edit that leaves it out keeps the stored one for
-// as long as the piece prices still show its even split.
 const LINE_PRICE_FIELDS = Object.freeze(
-    ["priceCents", "payOnArrival", "piecePrices", "pickupFeeCents",
-      "priceMode"]);
+    ["priceCents", "payOnArrival", "piecePrices", "pickupFeeCents"]);
 // Proof on the package (docs/AIR_PACKAGES.md §2). Correctable in every
 // state, like the price: a photo is added or the item list fixed after the
 // box has sailed as often as before, and none of it changes what went in.
@@ -1239,7 +1227,6 @@ const LINE_FIELD_LABELS = Object.freeze({
   priceCents: "price",
   payOnArrival: "pay on arrival",
   piecePrices: "piece prices",
-  priceMode: "how it is priced",
   pickupFeeCents: "pickup fee",
   photoPaths: "photos",
   contents: "contents",

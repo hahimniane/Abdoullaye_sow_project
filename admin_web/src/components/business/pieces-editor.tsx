@@ -4,13 +4,13 @@ import { useState } from "react";
 import { Minus, Plus, X } from "lucide-react";
 
 import { CONTAINER_MESSAGES, containerMessage } from "@/lib/container-manifest";
-import { MAX_PIECES, PIECE_KINDS, PRICE_MODE, type PriceMode } from "@/lib/line-pieces";
+import { MAX_PIECES, PIECE_KINDS } from "@/lib/line-pieces";
 import {
   COUNT_CONFIRM_ABOVE,
   addPieceDraft,
   countConfirmText,
-  eachPricing,
   pieceDraftCount,
+  pieceDraftPricedTogether,
   pieceDraftProblems,
   pieceHeading,
   pieceKindLabel,
@@ -19,24 +19,24 @@ import {
   piecesDraftTotalCents,
   piecesEditorText,
   piecesTotalText,
+  priceForAllLabel,
+  priceTogetherText,
   readPickupFeeInput,
   removePieceDraft,
   reprintLabelsText,
   setPieceDraftCount,
-  switchPricingMode,
-  totalSplitText,
-  totalStaysText,
+  setPieceDraftPriceFor,
   updatePieceDraft,
   type PieceDraft,
-  type PiecesPricing,
+  type PriceFor,
 } from "@/lib/piece-drafts";
 
 /**
  * The pieces of one package: each barrel, box or other thing handed over,
  * with what it is, an optional size and its price. Identical pieces are one
- * row with "How many". The price is typed on each piece, or once for all of
- * them ("One price for all": spread evenly when saved). The total is the sum
- * of the piece prices (docs/WAITING_PACKAGES.md "Pieces"). One editor for the
+ * row with "How many", priced each or all of that row together (shared
+ * among the row's own pieces when saved, never with another row's). The
+ * total is the sum of the piece prices (docs/WAITING_PACKAGES.md "Pieces"). One editor for the
  * register form, the waiting-package edit, the containers panel's line form
  * and Received; the rules live in `lib/piece-drafts.ts`.
  */
@@ -50,8 +50,6 @@ export function PiecesEditor({
   pickupFee,
   onPickupFeeChange,
   priceRequired = false,
-  pricing,
-  onPricingChange,
   storedCount,
 }: {
   /** The wrapper's element id: a refused save scrolls here. */
@@ -75,28 +73,19 @@ export function PiecesEditor({
    * False for the business's own stock.
    */
   priceRequired?: boolean;
-  /**
-   * How the package is priced, and its setter: with both, the form offers
-   * "One price for all" once there are two pieces. Flipping the switch may
-   * rewrite the rows (their shares of the total), so the setter takes both.
-   */
-  pricing?: PiecesPricing;
-  onPricingChange?: (next: { pieces: PieceDraft[]; pricing: PiecesPricing }) => void;
   /** Editing a saved package: how many pieces it holds now, so a change says to print the labels again. */
   storedCount?: number;
 }) {
-  const mode: PiecesPricing = pricing ?? eachPricing();
-  const totalMode = mode.mode === PRICE_MODE.TOTAL;
   // A "How many" being typed: blank while the number is being replaced, or a
   // large number waiting for its yes. The row keeps its last count meanwhile.
   const [typedCounts, setTypedCounts] = useState<Record<string, string>>({});
-  const problems = showErrors ? pieceDraftProblems(pieces, { priceRequired, pricing: mode }) : { codes: [], byPiece: [] };
+  const problems = showErrors ? pieceDraftProblems(pieces, { priceRequired }) : { codes: [], byPiece: [] };
   const listProblems = problems.codes.filter((code) => code === "pieces_required" || code === "pieces_too_many" || code === "package_price_required");
-  // Pieces that all come to $0 (or a total not typed): the package's problem, shown by every price field.
+  // Pieces that all come to $0: the package's problem, shown by every price field.
   const packagePriceMissing = problems.codes.includes("package_price_required");
   const listErrorId = `${id}-list-error`;
   const fee = pickupFee === undefined ? null : readPickupFeeInput(pickupFee);
-  const total = piecesDraftTotalCents(pieces, fee?.cents ?? 0, mode);
+  const total = piecesDraftTotalCents(pieces, fee?.cents ?? 0);
   const count = piecesDraftCount(pieces);
   const full = count >= MAX_PIECES;
   // A decimal comma in French; readMoneyInput reads "45,50" and "45.50" alike.
@@ -126,12 +115,8 @@ export function PiecesEditor({
     if (value >= 1 && value <= COUNT_CONFIRM_ABOVE) setCount(piece.key, value);
     else if (value === 0 || value === pieceDraftCount(piece)) forget(piece.key);
   };
-  const setMode = (next: PriceMode) => {
-    if (!pricing || !onPricingChange || next === mode.mode) return;
-    onPricingChange(switchPricingMode(pieces, mode, next));
-  };
-  const showSwitch = Boolean(pricing && onPricingChange) && (count >= 2 || totalMode);
-  const splitText = totalMode ? totalSplitText(mode, count, lang) : "";
+  // Flipping a row's price switch keeps the money: it may cut the row in two.
+  const setPriceFor = (key: string, priceFor: PriceFor) => onChange(setPieceDraftPriceFor(pieces, key, priceFor));
   const countChanged = storedCount !== undefined && storedCount > 0 && storedCount !== count;
 
   let firstNumber = 0;
@@ -153,7 +138,8 @@ export function PiecesEditor({
           firstNumber += many;
           const typed = typedCounts[piece.key];
           const waiting = typed !== undefined && typed !== "" && Number(typed) !== many ? Number(typed) : 0;
-          const rowSum = totalMode ? "" : pieceRowSumText(piece, lang);
+          const together = pieceDraftPricedTogether(piece);
+          const rowSum = pieceRowSumText(piece, lang);
           return (
             <li className="pcs-piece" key={piece.key}>
               <div className="pcs-piece-head">
@@ -187,7 +173,7 @@ export function PiecesEditor({
                   <X size={14} />
                 </button>
               </div>
-              <div className={`lst-form-grid pcs-fields${totalMode ? " pcs-fields-total" : ""}`}>
+              <div className="lst-form-grid pcs-fields">
                 <label className="lst-field wide">
                   <span>{piece.kind === "barrel" ? "What is in it (optional)" : piece.kind === "box" ? "What is in it" : "What it is"}</span>
                   <input
@@ -229,12 +215,13 @@ export function PiecesEditor({
                     </button>
                   </div>
                 </div>
-                {!totalMode && (
-                  <label className="lst-field pcs-price">
-                    <span>Price ($){priceRequired && <i className="lst-required" aria-hidden="true"> *</i>}</span>
-                    <input inputMode="decimal" value={piece.price} disabled={disabled} onChange={(e) => set(piece.key, { price: e.target.value })} placeholder={moneyPlaceholder} aria-required={priceRequired || undefined} {...priceProps} />
-                  </label>
-                )}
+                <label className="lst-field pcs-price">
+                  <span>
+                    {many > 1 ? <span data-no-translate>{together ? priceForAllLabel(many, lang) : t("priceEach")}</span> : "Price ($)"}
+                    {priceRequired && <i className="lst-required" aria-hidden="true"> *</i>}
+                  </span>
+                  <input inputMode="decimal" value={piece.price} disabled={disabled} onChange={(e) => set(piece.key, { price: e.target.value })} placeholder={moneyPlaceholder} aria-required={priceRequired || undefined} {...priceProps} />
+                </label>
               </div>
               {waiting > COUNT_CONFIRM_ABOVE && (
                 <div className="pcs-confirm" role="alert">
@@ -245,7 +232,26 @@ export function PiecesEditor({
                   </span>
                 </div>
               )}
-              {rowSum && <small className="pcs-row-sum" data-no-translate>{rowSum}</small>}
+              {many > 1 && (
+                <div className="pcs-price-for">
+                  <div className="service-segments pcs-kinds" role="radiogroup" aria-label={t("priceForAria")}>
+                    {(["each", "all"] as const).map((value) => (
+                      <button
+                        key={value}
+                        type="button"
+                        role="radio"
+                        aria-checked={together === (value === "all")}
+                        className={`segment${together === (value === "all") ? " active" : ""}`}
+                        disabled={disabled}
+                        onClick={() => setPriceFor(piece.key, value)}
+                      >
+                        <span data-no-translate>{value === "all" ? priceTogetherText(many, lang) : t("each")}</span>
+                      </button>
+                    ))}
+                  </div>
+                  {rowSum && <small className="pcs-row-sum" data-no-translate>{rowSum}</small>}
+                </div>
+              )}
               {own.length > 0 && <small className="lst-field-error" id={errorId}>{containerMessage(own)}</small>}
             </li>
           );
@@ -255,49 +261,8 @@ export function PiecesEditor({
         <button className="lst-btn ghost" type="button" disabled={disabled || full} onClick={() => onChange(addPieceDraft(pieces))}>
           <Plus size={14} /> Add another piece
         </button>
-        {pickupFee === undefined && !showSwitch && <strong className="pcs-total" data-no-translate>{piecesTotalText(total, lang)}</strong>}
+        {pickupFee === undefined && <strong className="pcs-total" data-no-translate>{piecesTotalText(total, lang)}</strong>}
       </div>
-      {showSwitch && (
-        <div className="pcs-pricing">
-          <div className="pcs-pricing-switch">
-            <strong data-no-translate>{t("priceSwitch")}</strong>
-            <div className="service-segments pcs-kinds" role="radiogroup" aria-label={t("priceSwitchAria")}>
-              {([PRICE_MODE.EACH, PRICE_MODE.TOTAL] as const).map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  role="radio"
-                  aria-checked={mode.mode === value}
-                  className={`segment${mode.mode === value ? " active" : ""}`}
-                  disabled={disabled}
-                  onClick={() => setMode(value)}
-                >
-                  <span data-no-translate>{t(value === PRICE_MODE.TOTAL ? "total" : "each")}</span>
-                </button>
-              ))}
-            </div>
-            {/* The total beside the switch; with a pickup fee it comes after the fee instead. */}
-            {pickupFee === undefined && <strong className="pcs-total pcs-total-end" data-no-translate>{piecesTotalText(total, lang)}</strong>}
-          </div>
-          {totalMode && (
-            <label className="lst-field pcs-price pcs-total-field">
-              <span><span data-no-translate>{t("totalField")}</span>{priceRequired && <i className="lst-required" aria-hidden="true"> *</i>}</span>
-              <input
-                id={`${id}-total`}
-                inputMode="decimal"
-                value={mode.total}
-                disabled={disabled}
-                onChange={(e) => onPricingChange?.({ pieces: [...pieces], pricing: { mode: PRICE_MODE.TOTAL, total: e.target.value } })}
-                placeholder={moneyPlaceholder}
-                aria-required={priceRequired || undefined}
-                {...(packagePriceMissing ? { "aria-invalid": true, "aria-describedby": listErrorId } : {})}
-              />
-              {splitText && <small className="pcs-row-sum" data-no-translate>{splitText}</small>}
-            </label>
-          )}
-          {totalMode && countChanged && totalStaysText(mode, lang) && <small className="pcs-note" data-no-translate>{totalStaysText(mode, lang)}</small>}
-        </div>
-      )}
       {countChanged && <small className="pcs-note" data-no-translate>{reprintLabelsText(storedCount, count, lang)}</small>}
       {pickupFee !== undefined && (
         <div className="pcs-fee">

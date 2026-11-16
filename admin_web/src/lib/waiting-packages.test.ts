@@ -512,8 +512,6 @@ test("the add request sends the pieces (ids, kinds, sizes, cents) and the summar
       { id: "", kind: "barrel", description: "", sizeIn: null, priceCents: 10000 },
       { id: "", kind: "box", description: "Clothes", sizeIn: { l: 20, w: 20, h: 18.5 }, priceCents: 4550 },
     ],
-    // A price on each piece, said so an edit can switch one price for all off.
-    priceMode: "each",
     destinationCountryId: "guinea",
     destinationCountryName: "Guinea",
     payOnArrival: true,
@@ -655,8 +653,8 @@ test("a waiting package opens back into the form with its pieces, ids kept", () 
   assert.deepEqual(validateWaitingPackage({ ...reopened, customerPhone: "+16465550100" }, undefined, storedLine), ["receiver_name_required"]);
   // A line from before pieces reads as its pieces: 3 barrels, the price spread.
   const old = waitingPackageDraftFromRow({ id: "l", kind: "barrels", quantity: 3, customerName: "A", priceCents: 10000 });
-  // The two that read the same are one row with its "How many"; the ids of both are kept.
-  assert.deepEqual(old.pieces.map((p) => [p.id, p.kind, p.price, p.count, p.moreIds]), [["p1", "barrel", "33.34", "1", []], ["p2", "barrel", "33.33", "2", ["p3"]]]);
+  // One row: three barrels priced together for the $100 (it does not divide); every id is kept.
+  assert.deepEqual(old.pieces.map((p) => [p.id, p.kind, p.price, p.count, p.priceFor, p.moreIds]), [["p1", "barrel", "100", "3", "all", ["p2", "p3"]]]);
   // A car keeps its size and price on the line.
   const car = waitingPackageDraftFromRow({ id: "c", kind: "car", vinNumber: "1HGCM82633A004352", lengthIn: 180, widthIn: 70, heightIn: 60, priceCents: 80000 });
   assert.equal(car.lengthIn, "180");

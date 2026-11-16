@@ -44,18 +44,6 @@ const PIECE_ID = /^[A-Za-z0-9_-]{1,40}$/;
 export const LINE_SOURCES = Object.freeze(["counter", "request", "card_order"] as const);
 export type LineSource = (typeof LINE_SOURCES)[number];
 
-/**
- * How a package's price was typed at the counter: a price on each piece, or
- * one price for all of them, which the form spreads evenly over the pieces
- * (docs/WAITING_PACKAGES.md "One price for all"). The pieces carry their
- * prices either way; the mode only says how the form opens the next time.
- */
-export const PRICE_MODE = Object.freeze({
-  EACH: "each",
-  TOTAL: "total",
-} as const);
-export type PriceMode = (typeof PRICE_MODE)[keyof typeof PRICE_MODE];
-
 export type PieceSize = { l: number; w: number; h: number };
 
 export type Piece = {
@@ -269,30 +257,6 @@ export function linePieces(line: unknown): Piece[] {
     sizeIn: size ? { ...size } : null,
     priceCents,
   }));
-}
-
-/**
- * How a package is priced, from what was asked and the prices its pieces
- * hold: "total" (one price for all) only while every piece is priced and the
- * prices are still their sum spread evenly (distributeCents). A price typed
- * on one piece afterwards makes it "each" again, so the mode never claims a
- * split the pieces no longer show.
- */
-export function priceModeOf(value: unknown, pieces: unknown): PriceMode {
-  if (text(value, 10).toLowerCase() !== PRICE_MODE.TOTAL) return PRICE_MODE.EACH;
-  const list = Array.isArray(pieces) ? pieces : [];
-  if (list.length === 0) return PRICE_MODE.EACH;
-  const prices = list.map((piece) => piecePriceOf(asRow(piece).priceCents));
-  if (prices.some((cents) => cents === null)) return PRICE_MODE.EACH;
-  const cents = prices as number[];
-  const even = distributeCents(cents.reduce((sum, value) => sum + value, 0), cents.length);
-  return cents.every((value, i) => value === even[i]) ? PRICE_MODE.TOTAL : PRICE_MODE.EACH;
-}
-
-/** How a stored line is priced (priceModeOf); a car or a legacy line is always "each". */
-export function linePriceMode(line: unknown): PriceMode {
-  const row = asRow(line);
-  return lineHasPieces(row) ? priceModeOf(row.priceMode, row.pieces) : PRICE_MODE.EACH;
 }
 
 /** The denormalized counts every line carries: all pieces, barrels, packages (box + other), cars. */

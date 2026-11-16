@@ -232,8 +232,7 @@ function receivedTotalCents(pieces, pickupFeeCents = 0) {
  * @param {object} request The stored request.
  * @param {object} args {lineId, requestId, pieces (from cleanReceivePieces;
  *   default: the request's at their prefilled prices), pickupFeeCents
- *   (default: the prefilled one), priceMode ("total" for one price for
- *   all the pieces; "each" otherwise), payOnArrival, staffUid, receivedAt (a
+ *   (default: the prefilled one), payOnArrival, staffUid, receivedAt (a
  *   Timestamp or server-timestamp sentinel), photoPaths, contents,
  *   weightLb, weightKg, declaredValueCents (the proof fields staff typed;
  *   kilos win when given), shipMode
@@ -258,9 +257,6 @@ function requestLineRecord(request, args) {
     kind: "other",
     pieces,
     pickupFeeCents,
-    // "One price for all" when staff priced the drop-off that way; kept
-    // only while the pieces show its even split (priceModeOf).
-    priceMode: args.priceMode,
     ownerKind: "customer",
     customerName: request?.sender?.name,
     customerPhone: request?.sender?.phoneE164,

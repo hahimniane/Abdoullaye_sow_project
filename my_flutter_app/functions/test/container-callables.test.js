@@ -2472,51 +2472,6 @@ describe("pieces on lines", () => {
     assert.deepEqual(after.pieces, line.pieces);
   });
 
-  // docs/WAITING_PACKAGES.md "One price for all" (owner, 2026-11-16): the
-  // form spreads one total over the pieces; the line remembers it was priced
-  // that way for as long as the pieces still show the even split.
-  it("remembers one price for all through edits and a split", async () => {
-    const boxesAt = (...cents) => cents.map((priceCents) =>
-      ({kind: "box", description: "Clothes", priceCents}));
-    const {lineId} = await call("addWaitingPackage", {...people,
-      priceMode: "total", pieces: boxesAt(6667, 6667, 6666)});
-    let line = await lineOf(lineId);
-    assert.equal(line.priceMode, "total");
-    assert.equal(line.priceCents, 20000);
-    // An older app sends the pieces back without the mode: it is kept.
-    await call("updateContainerLine", {lineId, line: {...people,
-      receiverName: "Aissatou Bah", pieces: line.pieces}});
-    line = await lineOf(lineId);
-    assert.equal(line.priceMode, "total");
-    assert.equal(line.receiverName, "Aissatou Bah");
-    // A fourth box, the same total split in four.
-    await call("updateContainerLine", {lineId, line: {...people,
-      priceMode: "total", pieces: [
-        ...line.pieces.map((p) => ({...p, priceCents: 5000})),
-        {kind: "box", description: "Clothes", priceCents: 5000}]}});
-    line = await lineOf(lineId);
-    assert.equal(line.priceMode, "total");
-    assert.equal(line.pieceCount, 4);
-    assert.equal(line.priceCents, 20000);
-    // Three go, one waits: each part carries its share and its mode.
-    const box = await newContainer();
-    const result = await call("assignContainerLines", {containerId: box,
-      lineIds: [lineId], pieceCounts: {[lineId]: 3}});
-    const going = await lineOf(lineId);
-    const staying = await lineOf(result.parts[0].partLineId);
-    assert.deepEqual([going.priceMode, going.priceCents], ["total", 15000]);
-    assert.deepEqual([staying.priceMode, staying.priceCents],
-        ["total", 5000]);
-    // One price changed by hand: a price on each piece again.
-    await call("updateContainerLine", {containerId: box, lineId,
-      line: {...people, pieces: going.pieces.map((p, i) =>
-        ({...p, priceCents: i === 0 ? 9000 : p.priceCents}))}});
-    assert.equal((await lineOf(lineId)).priceMode, "each");
-    // A package priced piece by piece says so.
-    const plain = await call("addWaitingPackage", counter());
-    assert.equal((await lineOf(plain.lineId)).priceMode, "each");
-  });
-
   describe("split across containers", () => {
     // Drop off 4 pieces, $200 paid; 2 go in, 2 stay waiting.
     async function splitOne(extra = {}) {

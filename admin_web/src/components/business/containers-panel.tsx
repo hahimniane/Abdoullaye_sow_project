@@ -149,7 +149,7 @@ import {
   groupForLine,
   runPackageCall,
 } from "@/lib/waiting-packages";
-import { eachPricing, newPieceDraft } from "@/lib/piece-drafts";
+import { newPieceDraft } from "@/lib/piece-drafts";
 import { lineCounts } from "@/lib/line-pieces";
 import { shippingCopy } from "@/lib/air-only";
 import { PiecesEditor } from "@/components/business/pieces-editor";
@@ -1913,8 +1913,6 @@ export function ContainersPanel({
                   id="ctn-pieces"
                   pieces={lineDraft.pieces}
                   onChange={(pieces) => setLineDraft((d) => ({ ...d, pieces }))}
-                  pricing={lineDraft.pricing ?? eachPricing()}
-                  onPricingChange={(next) => setLineDraft((d) => ({ ...d, pieces: next.pieces, pricing: next.pricing }))}
                   // Editing a saved line: a changed count means new labels.
                   storedCount={editingLineRow ? lineCounts(editingLineRow).pieceCount : undefined}
                   showErrors={lineTried}

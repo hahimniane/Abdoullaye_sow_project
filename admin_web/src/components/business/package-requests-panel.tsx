@@ -38,7 +38,7 @@ import {
 } from "@/lib/package-proof";
 import { ShipsByChoice } from "@/components/business/ships-by";
 import { CONTAINER_MESSAGES } from "@/lib/container-manifest";
-import { eachPricing, type PieceDraft, type PiecesPricing } from "@/lib/piece-drafts";
+import type { PieceDraft } from "@/lib/piece-drafts";
 import {
   comingToday,
   piecePriceOf,
@@ -855,9 +855,6 @@ function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onF
   // The load as it arrived: the request's pieces in phase 1's pieces editor
   // (the counter's), plus or minus what the customer actually brought.
   const [pieces, setPieces] = useState<PieceDraft[]>(() => receiveDraftsFrom(row));
-  // A price on each piece, as the estimate gave them, unless staff give one
-  // price for all the pieces (docs/WAITING_PACKAGES.md "One price for all").
-  const [pricing, setPricing] = useState<PiecesPricing>(() => eachPricing());
   const [showErrors, setShowErrors] = useState(false);
   const [payOnArrival, setPayOnArrival] = useState(false);
   const [takeMoney, setTakeMoney] = useState(false);
@@ -904,7 +901,7 @@ function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onF
   const [pickupFee, setPickupFee] = useState(() => (receiveTakesPickupFee(row) ? ledgerCentsToInput(receivePrefillPickupFeeCents(row)) : ""));
 
   async function receive() {
-    const { pieces: payloadPieces, pickupFeeCents, error: problem } = receivePayload(pieces, receiveTakesPickupFee(row) ? pickupFee : null, pricing);
+    const { pieces: payloadPieces, pickupFeeCents, error: problem } = receivePayload(pieces, receiveTakesPickupFee(row) ? pickupFee : null);
     if (problem) {
       setShowErrors(true);
       setError(REQUEST_ERROR_MESSAGES[problem] ?? CONTAINER_MESSAGES[problem as keyof typeof CONTAINER_MESSAGES] ?? REQUEST_ERROR_MESSAGES.price_invalid);
@@ -936,7 +933,6 @@ function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onF
         businessId,
         requestId: str(row.id),
         pieces: payloadPieces,
-        priceMode: pricing.mode,
         ...(pickupFeeCents !== undefined ? { pickupFeeCents } : {}),
         payOnArrival,
         ...(payment ? { payment } : {}),
@@ -997,17 +993,6 @@ function ReceiveDialog({ businessId, row, staffOptions, onClose, onReceived, onF
             onChange={setPieces}
             pieces={pieces}
             priceRequired
-            // A piece priced by its weight keeps its own price (the scale
-            // fills it in): one price for all is offered when none is.
-            {...(weighable.length === 0
-              ? {
-                  pricing,
-                  onPricingChange: (next: { pieces: PieceDraft[]; pricing: PiecesPricing }) => {
-                    setPieces(next.pieces);
-                    setPricing(next.pricing);
-                  },
-                }
-              : {})}
             showErrors={showErrors}
             {...(collect ? { pickupFee, onPickupFeeChange: setPickupFee } : {})}
           />

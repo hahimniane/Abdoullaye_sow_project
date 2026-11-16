@@ -48,15 +48,6 @@ const PIECE_ID = /^[A-Za-z0-9_-]{1,40}$/;
 
 const LINE_SOURCES = Object.freeze(["counter", "request", "card_order"]);
 
-// How a package's price was typed at the counter: a price on each piece, or
-// one price for all of them, which the form spreads evenly over the pieces
-// (docs/WAITING_PACKAGES.md "One price for all"). The pieces carry their
-// prices either way; the mode only says how the form opens the next time.
-const PRICE_MODE = Object.freeze({
-  EACH: "each",
-  TOTAL: "total",
-});
-
 const text = (value, max = 200) => String(value ?? "").trim().slice(0, max);
 const positiveInt = (value) => {
   const n = Number(value);
@@ -298,42 +289,6 @@ function linePieces(line) {
     sizeIn: size ? {...size} : null,
     priceCents,
   }));
-}
-
-/**
- * How a package is priced, from what was asked and the prices its pieces
- * hold: "total" (one price for all) only while every piece is priced and the
- * prices are still their sum spread evenly (distributeCents). A price typed
- * on one piece afterwards - an older app, a correction - makes it "each"
- * again, so the mode never claims a split the pieces no longer show.
- *
- * @param {*} value The asked or stored mode.
- * @param {*} pieces The pieces as they will be stored.
- * @return {string} "total" or "each".
- */
-function priceModeOf(value, pieces) {
-  if (text(value, 10).toLowerCase() !== PRICE_MODE.TOTAL) {
-    return PRICE_MODE.EACH;
-  }
-  const list = Array.isArray(pieces) ? pieces : [];
-  if (list.length === 0) return PRICE_MODE.EACH;
-  const prices = list.map((piece) => piecePriceOf(asRow(piece).priceCents));
-  if (prices.some((cents) => cents === null)) return PRICE_MODE.EACH;
-  const even = distributeCents(
-      prices.reduce((sum, cents) => sum + cents, 0), prices.length);
-  return prices.every((cents, i) => cents === even[i]) ?
-    PRICE_MODE.TOTAL : PRICE_MODE.EACH;
-}
-
-/**
- * @param {object} line A stored line.
- * @return {string} How it is priced (priceModeOf); a car or a legacy line
- *   is always "each".
- */
-function linePriceMode(line) {
-  const row = asRow(line);
-  return lineHasPieces(row) ? priceModeOf(row.priceMode, row.pieces) :
-    PRICE_MODE.EACH;
 }
 
 /**
@@ -793,7 +748,6 @@ module.exports = {
   MAX_PIECE_DESCRIPTION,
   MAX_PIECE_INCHES,
   LINE_SOURCES,
-  PRICE_MODE,
   pieceSizeOf,
   pieceSizeGiven,
   piecePriceOf,
@@ -805,8 +759,6 @@ module.exports = {
   linePriceOf,
   lineHasPieces,
   linePieces,
-  priceModeOf,
-  linePriceMode,
   pieceCounts,
   lineCounts,
   piecesTotalCents,
