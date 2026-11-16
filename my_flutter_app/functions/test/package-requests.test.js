@@ -1304,6 +1304,21 @@ describe("price lists on requests (docs/PACKAGE_PRICE_LIST.md)", () => {
     assert.equal(values.hoursFr, "aujourd'hui, 11 h 00–13 h 00");
     assert.equal(requestTemplateForUpdate("still_coming"),
         REQUEST_TEMPLATE.PACKAGE_DROPOFF_REMINDER_2LANG);
+    // The reminder ahead of the drop-off has its own wording ("See you
+    // ..."), filled with the same eight values in the same order.
+    assert.equal(requestTemplateForUpdate("dropoff_today"),
+        REQUEST_TEMPLATE.PACKAGE_DROPOFF_AHEAD_2LANG);
+    assert.equal(REQUEST_TEMPLATE.PACKAGE_DROPOFF_AHEAD_2LANG,
+        "package_dropoff_ahead_2lang");
+    const T = REQUEST_TEMPLATE;
+    assert.deepEqual(REQUEST_TEMPLATE_VARIABLES[T.PACKAGE_DROPOFF_AHEAD_2LANG],
+        REQUEST_TEMPLATE_VARIABLES[T.PACKAGE_DROPOFF_REMINDER_2LANG]);
+    const message = requestTemplateMessage({phone: "+19175550100",
+      update: "dropoff_today", values: {...values, token: "tok"}});
+    assert.equal(message.template.name, "package_dropoff_ahead_2lang");
+    assert.equal(message.template.components[0].parameters[3].text,
+        "today, 11:00 AM–1:00 PM");
+    assert.equal(message.template.components[1].parameters[0].text, "tok");
   });
 
   // R-GY4D8, 2026-11-16: the 8 AM reminder of an 8-10 AM drop-off went out

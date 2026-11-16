@@ -261,11 +261,15 @@ request's `shipMode` unless staff choose another.
 ### Reminders
 
 - `dropoff_today` and `still_coming` (10 AM the day after) for a confirmed
-  bring_in with a `plannedWindow`; both use the approved
-  `package_dropoff_reminder_2lang` (`{{4}}` = "today, 2:00 PM–4:00 PM" or
-  "tomorrow, 8:00 AM–10:00 AM" for the reminder, the opening hours for
-  Still coming; the button opens `/e/<token>` where the customer picks a
-  new time). Requests without a window keep the old +3 days reminder.
+  bring_in with a `plannedWindow`. `dropoff_today` uses
+  `package_dropoff_ahead_2lang` ("See you {{4}} at {{2}} with your {{3}}.
+  Can't make it? Tap the button to pick a new time."; `{{4}}` = "today,
+  2:00 PM–4:00 PM" or "tomorrow, 8:00 AM–10:00 AM"; approved 2026-11-16,
+  `~/laawol-deploy-logs/create_dropoff_ahead_template.py`). `still_coming`
+  keeps `package_dropoff_reminder_2lang` with the opening hours. Both take
+  the same eight values and the button opens `/e/<token>`, where the
+  customer picks a new time. Requests without a window keep the old +3 days
+  reminder.
 - When `dropoff_today` goes out (`dropoffReminderMs`; the sweep is hourly,
   so it must leave well ahead): a window starting at 11 AM or later is
   reminded at 8 AM that day; an earlier window at 6 PM the evening before,

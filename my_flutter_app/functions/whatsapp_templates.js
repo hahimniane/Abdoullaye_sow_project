@@ -739,6 +739,11 @@ function templateMessage(args) {
 const REQUEST_TEMPLATE = Object.freeze({
   PACKAGE_ESTIMATE_2LANG: "package_estimate_2lang",
   PACKAGE_DROPOFF_REMINDER_2LANG: "package_dropoff_reminder_2lang",
+  // "See you tomorrow, 8:00 AM–10:00 AM at ...": the reminder ahead of a
+  // drop-off with a time window. The older reminder text was written for
+  // someone who had not come yet and read like a chase to a customer who
+  // had just confirmed (approved 2026-11-16).
+  PACKAGE_DROPOFF_AHEAD_2LANG: "package_dropoff_ahead_2lang",
   // "We got your request": the customer's request is in and the business
   // will send the price / next step soon (a request created without an
   // automatic estimate).
@@ -764,6 +769,14 @@ const REQUEST_TEMPLATE_VARIABLES = Object.freeze({
     VARIABLE.BUSINESS, VARIABLE.PIECES_FR, VARIABLE.HOURS_FR,
     VARIABLE.REQUEST_CODE,
   ]),
+  // The same eight, in the same order, as the drop-off reminder: 4 and 7
+  // are when ("tomorrow, 8:00 AM–10:00 AM" / "demain, 8 h 00–10 h 00").
+  [REQUEST_TEMPLATE.PACKAGE_DROPOFF_AHEAD_2LANG]: Object.freeze([
+    VARIABLE.NAME,
+    VARIABLE.BUSINESS, VARIABLE.PIECES_EN, VARIABLE.HOURS_EN,
+    VARIABLE.BUSINESS, VARIABLE.PIECES_FR, VARIABLE.HOURS_FR,
+    VARIABLE.REQUEST_CODE,
+  ]),
   // 1 name, 2 business, 3 pieces EN, 4 destination EN, 5 business,
   // 6 pieces FR, 7 destination FR, 8 request code.
   [REQUEST_TEMPLATE.PACKAGE_REQUEST_RECEIVED_2LANG]: Object.freeze([
@@ -776,7 +789,8 @@ const REQUEST_TEMPLATE_VARIABLES = Object.freeze({
 
 /**
  * @param {string} update A request row's update: `estimate_v{n}`,
- *   `estimate_reminder`, `dropoff_reminder` or `request_received`.
+ *   `estimate_reminder`, `dropoff_reminder`, `dropoff_today`,
+ *   `still_coming` or `request_received`.
  * @return {string|null} Its template, or null.
  */
 function requestTemplateForUpdate(update) {
@@ -784,8 +798,10 @@ function requestTemplateForUpdate(update) {
   if (/^estimate_v\d+$/.test(value) || value === "estimate_reminder") {
     return REQUEST_TEMPLATE.PACKAGE_ESTIMATE_2LANG;
   }
-  if (value === "dropoff_reminder" || value === "dropoff_today" ||
-      value === "still_coming") {
+  if (value === "dropoff_today") {
+    return REQUEST_TEMPLATE.PACKAGE_DROPOFF_AHEAD_2LANG;
+  }
+  if (value === "dropoff_reminder" || value === "still_coming") {
     return REQUEST_TEMPLATE.PACKAGE_DROPOFF_REMINDER_2LANG;
   }
   if (value === "request_received") {
