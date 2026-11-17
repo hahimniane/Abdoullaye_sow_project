@@ -64,7 +64,12 @@ function createBusinessCardsHandlers(deps) {
   const clock = deps.nowMs || (() => Date.now());
   const randomInt = deps.randomInt || ((max) => crypto.randomInt(max));
   const db = () => admin.firestore();
-  const now = () => admin.firestore.FieldValue.serverTimestamp();
+  // Under the Functions emulator `admin.firestore` is a stand-in without the
+  // namespace's statics, so FieldValue is taken from the firestore module
+  // when it is not there (the first list of a business's cards died on it).
+  const fieldValue = () => admin.firestore.FieldValue ||
+    require("firebase-admin/firestore").FieldValue;
+  const now = () => fieldValue().serverTimestamp();
 
   const refuse = (status, message, reason) =>
     new HttpsError(status, message, {reason});
