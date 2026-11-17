@@ -16,12 +16,15 @@ import '../services/package_request_service.dart';
 import '../services/package_requests.dart';
 import '../services/phone_accounts.dart' show RecordPhoneField;
 import '../services/waiting_package_service.dart';
+import '../services/line_resend.dart';
+import '../services/waiting_filters.dart';
 import '../services/waiting_packages.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_motion.dart';
 import '../theme/app_spacing.dart';
 import '../utils/action_confirmation.dart';
 import '../utils/date_display.dart';
+import '../widgets/line_resend_widgets.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/lot_sheets.dart';
@@ -130,7 +133,12 @@ class WaitingPackagesScreen extends StatefulWidget {
     this.clock,
     this.registerOnOpen = false,
     this.airOnly = false,
+    @visibleForTesting this.initialSavedIds = const {},
   });
+
+  /// The packages already saved in this sitting, when the screen opens (a
+  /// test starts the counter warning here without driving the form).
+  final Set<String> initialSavedIds;
 
   /// Opens the register form once, after the first frame (the simple
   /// shipping home's Register a package).
@@ -182,6 +190,16 @@ class _WaitingPackagesScreenState extends State<WaitingPackagesScreen> {
   /// The Sea / Air filter (docs/AIR_PACKAGES.md §7): "" shows both. Offered
   /// only to a business that ships by air.
   String _shipModeFilter = '';
+
+  /// The packages saved in this sitting: when WhatsApp reports that one of
+  /// their messages did not arrive, the counter warning names who
+  /// (docs/WHATSAPP_RESEND.md).
+  late final Set<String> _savedIds = {...widget.initialSavedIds};
+
+  void _saved(String lineId) {
+    if (lineId.isEmpty || !mounted) return;
+    setState(() => _savedIds.add(lineId));
+  }
 
   @override
   void initState() {
@@ -354,6 +372,9 @@ class _WaitingPackagesScreenState extends State<WaitingPackagesScreen> {
       staff: widget.staff,
       proofSettings: widget.proofSettings,
       airOnly: widget.airOnly,
+      liveUpdates: widget.feed,
+      liveLines: () => widget.feed.lines,
+      onSaved: _saved,
     );
     if (saved == null || !mounted) return;
     final line = saved.line;
@@ -392,6 +413,9 @@ class _WaitingPackagesScreenState extends State<WaitingPackagesScreen> {
       staff: widget.staff,
       proofSettings: widget.proofSettings,
       airOnly: widget.airOnly,
+      liveUpdates: widget.feed,
+      liveLines: () => widget.feed.lines,
+      onSaved: _saved,
     );
   }
 
@@ -562,24 +586,34 @@ class _WaitingPackagesScreenState extends State<WaitingPackagesScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final all = _waiting;
-    // An air-only business has no sea packages to tell apart.
-    final shipsByAir = widget.proofSettings.shipsByAir && !widget.airOnly;
     final sendable = widget.proofSettings.shipsByAir
         ? sendablePackages(widget.feed.lines)
         : const <ContainerLine>[];
-    final matched = filterWaitingByShipMode(
-      filterWaitingPackages(all, _filter.text),
-      shipsByAir ? _shipModeFilter : '',
+    // The search, "Missing proof" and Air / Sea, with the chips' counts and
+    // what an empty list says: one pure computation (waiting_filters.dart).
+    final view = waitingFilterView(
+      all,
+      query: _filter.text,
+      missingOnly: _missingOnly,
+      mode: _shipModeFilter,
+      shipsByAir: widget.proofSettings.shipsByAir,
+      airOnly: widget.airOnly,
     );
-    final shown = _missingOnly
-        ? [for (final l in matched) if (l.proofTicks.missing) l]
-        : matched;
+    final alerts = counterAlerts(all, _savedIds);
+    final shipsByAir = view.modeFilterShown;
+    final shown = view.shown;
     final searching = _filter.text.trim().length >= 2 ||
         (shipsByAir && _shipModeFilter.isNotEmpty);
+    final emptyTitle = switch (view.empty) {
+      WaitingEmpty.allHaveProof => l10n.shpEveryPackageHasProof,
+      WaitingEmpty.noShipMode => l10n.shpNoPackageShipsThatWay,
+      _ => null,
+    };
 
-    Widget modeChip(String mode, String label, IconData icon) => FilterChip(
+    Widget modeChip(String mode, String label, IconData icon, int count) =>
+        FilterChip(
           key: Key('waiting-ship-mode-$mode'),
-          label: Text(label),
+          label: Text(l10n.shpChipCount(label, count)),
           selected: _shipModeFilter == mode,
           avatar: _shipModeFilter == mode ? null : Icon(icon, size: 16),
           visualDensity: VisualDensity.compact,
@@ -644,6 +678,24 @@ class _WaitingPackagesScreenState extends State<WaitingPackagesScreen> {
                         ),
                       ],
                     ),
+                    // WhatsApp could not reach someone on a package saved
+                    // in this sitting (docs/WHATSAPP_RESEND.md).
+                    if (alerts.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(
+                            left: AppSpacing.md, top: AppSpacing.md),
+                        child: CounterAlertsBox(
+                          alerts: alerts,
+                          businessId: widget.businessId,
+                          send: widget.caller,
+                          onFix: (lineId) {
+                            final line = all
+                                .where((l) => l.id == lineId)
+                                .firstOrNull;
+                            if (line != null && _busy.isEmpty) _edit(line);
+                          },
+                        ),
+                      ),
                     const SizedBox(height: AppSpacing.md),
                     Padding(
                       padding: const EdgeInsets.only(left: AppSpacing.md),
@@ -674,7 +726,8 @@ class _WaitingPackagesScreenState extends State<WaitingPackagesScreen> {
                           children: [
                             FilterChip(
                               key: const Key('waiting-missing-proof'),
-                              label: Text(l10n.proofMissingFilter),
+                              label: Text(l10n.shpChipCount(
+                                  l10n.proofMissingFilter, view.missingCount)),
                               selected: _missingOnly,
                               avatar: _missingOnly
                                   ? null
@@ -688,9 +741,10 @@ class _WaitingPackagesScreenState extends State<WaitingPackagesScreen> {
                             // Sea / Air (docs/AIR_PACKAGES.md §7).
                             if (shipsByAir) ...[
                               modeChip(containerShipModeSea, l10n.airModeSea,
-                                  Icons.directions_boat_outlined),
+                                  Icons.directions_boat_outlined,
+                                  view.seaCount),
                               modeChip(containerShipModeAir, l10n.airModeAir,
-                                  Icons.flight),
+                                  Icons.flight, view.airCount),
                             ],
                           ],
                         ),
@@ -728,6 +782,7 @@ class _WaitingPackagesScreenState extends State<WaitingPackagesScreen> {
                     staff: widget.staff,
                     anyAtAll: all.isNotEmpty,
                     searching: searching || _missingOnly,
+                    emptyTitle: emptyTitle,
                     onTap: _busy.isNotEmpty ? null : _actions,
                     onPrint: _busy.isNotEmpty ? null : _printLabel,
                     expected: expectedExcept(
@@ -783,7 +838,12 @@ class WaitingPackagesList extends StatelessWidget {
     this.busyRequestId = '',
     this.onLookupCode,
     this.showLookupCode = false,
+    this.emptyTitle,
   });
+
+  /// What an empty list says when it is not the plain "none waiting" or
+  /// "no match": "Every waiting package has its proof."
+  final String? emptyTitle;
 
   /// What to show, already filtered, newest first.
   final List<ContainerLine> lines;
@@ -836,7 +896,10 @@ class WaitingPackagesList extends StatelessWidget {
           LotEmptyState(
             key: const Key('waiting-empty'),
             icon: Icons.inventory_2_outlined,
-            title: anyAtAll && searching ? l10n.wpkNoMatch : l10n.wpkEmptyTitle,
+            title: emptyTitle ??
+                (anyAtAll && searching
+                    ? l10n.wpkNoMatch
+                    : l10n.wpkEmptyTitle),
             hint: anyAtAll ? null : l10n.wpkEmptyHint,
           ),
         ],

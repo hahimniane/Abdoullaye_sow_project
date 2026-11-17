@@ -858,3 +858,13 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
 - ARB keys must be unique: `json.loads` and `flutter gen-l10n` accept a duplicate key and the LATER one silently wins, which re-types an existing getter (a `String` became a `String Function(String)` and broke an unrelated screen). Before inserting a block of keys, count each new key's occurrences in `app_en.arb`/`app_fr.arb` (`pmeSettleHint` already existed).
 - A widget that shows a busy spinner while a confirm/decline dialog is open never lets `pumpAndSettle` finish (the indicator animates forever): set the busy flag only around the server call, after the question is answered.
 - `ParkedCar.paymentFields` carries only the Firestore payment fields; a test of a money screen must add `parkingDate`/`dailyRate` there, or the balance reads $0 and the buttons that need a balance stay hidden.
+
+- A widget test of `ContainerDetailScreen` / `ContainersScreen` uses
+  `ContainerFeed.fixed` (it never reads Firestore on `focus`/`unfocus`) and
+  injects the server through the screen's `callable` / `caller` parameter. A
+  `Provider<AuthProvider>` fake `implements AuthProvider` with a
+  `noSuchMethod` that returns null for getters, plus the getters the screen
+  reads (`packageAccess` for the container detail). Reusing one `TeamPanel`
+  across two `pumpWidget` calls keeps the first call's streams: give it a
+  `UniqueKey`. A 320 px French test that overflows in `LotPrimaryBar` or a
+  header row is a real bug: fix the widget, not the test.

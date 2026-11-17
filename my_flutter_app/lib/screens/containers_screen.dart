@@ -1,10 +1,11 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' hide TextDirection;
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../data/calling_code_catalog.dart';
@@ -12,6 +13,7 @@ import '../data/country_catalog.dart';
 import '../data/ocean_carrier_catalog.dart';
 import '../l10n/app_localizations.dart';
 import '../models/destination_country.dart';
+import '../providers/auth_provider.dart';
 import '../services/business_activity_queries.dart';
 import '../services/container_delivery.dart';
 import '../services/container_delivery_service.dart';
@@ -25,6 +27,7 @@ import '../services/container_manifest.dart';
 import '../services/container_packages.dart';
 import '../services/shipping_home.dart' show airOnlyBusiness;
 import '../services/known_car_lookup.dart';
+import '../services/line_resend.dart';
 import '../services/line_pieces.dart';
 import '../services/label_printer.dart' show LabelPrinterController;
 import '../services/lot_customers.dart';
@@ -51,6 +54,7 @@ import '../widgets/app_snackbars.dart';
 import '../widgets/container_volume_card.dart';
 import '../widgets/country_phone_field.dart';
 import '../widgets/label_print_sheet.dart';
+import '../widgets/line_resend_widgets.dart';
 import '../utils/date_display.dart' show displayDay, displayMonthDay, parseDayKey;
 import '../widgets/lot_sheets.dart';
 import '../widgets/received_by_options.dart';
@@ -115,7 +119,8 @@ class ContainerFeed extends ChangeNotifier {
     this.businessId, {
     this.containers = const [],
     this.lines = const [],
-  }) : _dbOverride = null {
+  }) : _dbOverride = null,
+       _fixedRows = true {
     _open = [
       for (final c in containers)
         if (!c.isArrived) c,
@@ -132,6 +137,10 @@ class ContainerFeed extends ChangeNotifier {
 
   final String businessId;
   final FirebaseFirestore? _dbOverride;
+
+  /// Built by [ContainerFeed.fixed] (a test or a seeded screen): every row it
+  /// will ever have is already here, so nothing is read for a focused box.
+  bool _fixedRows = false;
 
   /// Read when a query is first opened, never at construction.
   FirebaseFirestore get _db => _dbOverride ?? FirebaseFirestore.instance;
@@ -320,6 +329,10 @@ class ContainerFeed extends ChangeNotifier {
   void focus(String containerId) {
     final cid = containerId.trim();
     if (_disposed || cid.isEmpty) return;
+    if (_fixedRows) {
+      _focusAnswered.add(cid);
+      return;
+    }
     final n = (_focusCount[cid] ?? 0) + 1;
     _focusCount[cid] = n;
     if (n > 1) return;
@@ -346,6 +359,10 @@ class ContainerFeed extends ChangeNotifier {
 
   void unfocus(String containerId) {
     final cid = containerId.trim();
+    if (_fixedRows) {
+      _focusAnswered.remove(cid);
+      return;
+    }
     final n = (_focusCount[cid] ?? 0) - 1;
     if (n > 0) {
       _focusCount[cid] = n;
@@ -688,6 +705,9 @@ class _ContainersScreenState extends State<ContainersScreen> {
   PackageProofSettings _proofSettings = const PackageProofSettings();
 
   String _filter = containerStatusLoading;
+
+  /// The destination filter: '' is every destination.
+  String _destinationFilter = '';
   String _search = '';
 
   /// The waiting entry opens once what its register form needs has answered
@@ -1037,6 +1057,16 @@ class _ContainersScreenState extends State<ContainersScreen> {
           )
         : null;
 
+    final destinationOptions = containerDestinationOptions(
+      _containers,
+      {for (final d in _destinations) d.id: d.name},
+    );
+    // A destination no container has any more is not a filter any more.
+    final activeDestination =
+        destinationOptions.any((o) => o.id == _destinationFilter)
+            ? _destinationFilter
+            : '';
+
     return Scaffold(
       backgroundColor: AppColors.cream,
       body: Column(
@@ -1048,6 +1078,14 @@ class _ContainersScreenState extends State<ContainersScreen> {
             onSearch: (v) => setState(() => _search = v),
             filter: _filter,
             counts: counts,
+            destinationOptions: destinationOptions,
+            destination: destinationOptions.any((o) => o.id == _destinationFilter)
+                ? _destinationFilter
+                : '',
+            onDestination: (v) {
+              AppHaptics.selection();
+              setState(() => _destinationFilter = v);
+            },
             onFilter: (v) {
               AppHaptics.selection();
               setState(() => _filter = v);
@@ -1114,8 +1152,13 @@ class _ContainersScreenState extends State<ContainersScreen> {
                   )
                 else
                   _ContainerList(
-                    containers: filterContainers(_containers, _filter),
+                    containers: filterContainers(
+                      _containers,
+                      _filter,
+                      destinationCountryId: activeDestination,
+                    ),
                     filter: _filter,
+                    destinationFiltered: activeDestination.isNotEmpty,
                     anyAtAll: _containers.isNotEmpty,
                     onOpen: _openDetail,
                     footer: _filter == containerStatusArrived
@@ -1184,6 +1227,9 @@ class _ContainersHeader extends StatelessWidget {
     required this.filter,
     required this.counts,
     required this.onFilter,
+    this.destinationOptions = const [],
+    this.destination = '',
+    required this.onDestination,
     required this.showFilter,
     required this.waitingCount,
     required this.onOpenWaiting,
@@ -1208,6 +1254,12 @@ class _ContainersHeader extends StatelessWidget {
   final String filter;
   final Map<String, int> counts;
   final ValueChanged<String> onFilter;
+
+  /// The destination filter: the destinations containers go to, the one
+  /// chosen ('' for every destination) and what choosing does.
+  final List<ContainerDestinationOption> destinationOptions;
+  final String destination;
+  final ValueChanged<String> onDestination;
   final bool showFilter;
   final int waitingCount;
   final VoidCallback onOpenWaiting;
@@ -1265,7 +1317,9 @@ class _ContainersHeader extends StatelessWidget {
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   // The yard's most frequent question - whose is this? - is
-                  // one tap from the top of the list.
+                  // one tap from the top of the list. On a narrow phone the
+                  // label steps aside for the icon (a long French label does
+                  // not fit beside the title at 320 px).
                   PressableScale(
                     key: const Key('containers-scan-package'),
                     scale: 0.96,
@@ -1273,32 +1327,39 @@ class _ContainersHeader extends StatelessWidget {
                       AppHaptics.selection();
                       onScan();
                     },
-                    child: Container(
-                      height: 36,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.md),
-                      decoration: BoxDecoration(
-                        color: AppColors.mist,
-                        borderRadius:
-                            BorderRadius.circular(AppSpacing.radiusSm),
-                        border: Border.all(
-                            color: AppColors.cobalt.withValues(alpha: 0.35)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.qr_code_scanner,
-                              size: 18, color: AppColors.cobaltDeep),
-                          const SizedBox(width: 6),
-                          Text(
-                            l10n.pkgScanAction,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.cobaltDeep,
-                            ),
-                          ),
-                        ],
+                    child: Semantics(
+                      button: true,
+                      label: l10n.pkgScanAction,
+                      excludeSemantics: true,
+                      child: Container(
+                        height: 36,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.md),
+                        decoration: BoxDecoration(
+                          color: AppColors.mist,
+                          borderRadius:
+                              BorderRadius.circular(AppSpacing.radiusSm),
+                          border: Border.all(
+                              color: AppColors.cobalt.withValues(alpha: 0.35)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.qr_code_scanner,
+                                size: 18, color: AppColors.cobaltDeep),
+                            if (MediaQuery.sizeOf(context).width >= 360) ...[
+                              const SizedBox(width: 6),
+                              Text(
+                                l10n.pkgScanAction,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.cobaltDeep,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -1338,6 +1399,14 @@ class _ContainersHeader extends StatelessWidget {
                                   ]
                                 : containerStatuses,
                           ),
+                          if (destinationOptions.isNotEmpty) ...[
+                            const SizedBox(height: AppSpacing.sm),
+                            _DestinationFilter(
+                              options: destinationOptions,
+                              selected: destination,
+                              onChanged: onDestination,
+                            ),
+                          ],
                           if (!shipments) ...[
                             const SizedBox(height: AppSpacing.sm),
                             WaitingEntryRow(
@@ -1353,6 +1422,53 @@ class _ContainersHeader extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// "Every destination" and the destinations containers go to.
+class _DestinationFilter extends StatelessWidget {
+  const _DestinationFilter({
+    required this.options,
+    required this.selected,
+    required this.onChanged,
+  });
+
+  final List<ContainerDestinationOption> options;
+  final String selected;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Semantics(
+      key: const Key('containers-destination-filter'),
+      label: l10n.shpFilterDestination,
+      child: DropdownButtonFormField<String>(
+      // Rebuilt when the choice changes from outside (a destination that
+      // no container has any more), as the field only reads it once.
+      key: ValueKey('destination:$selected'),
+      initialValue: selected,
+      isExpanded: true,
+      isDense: true,
+      decoration: InputDecoration(
+        isDense: true,
+        prefixIcon:
+            const Icon(Icons.place_outlined, size: 20, color: AppColors.muted),
+      ),
+      items: [
+        DropdownMenuItem(
+          value: '',
+          child: Text(l10n.shpEveryDestination, overflow: TextOverflow.ellipsis),
+        ),
+        for (final o in options)
+          DropdownMenuItem(
+            value: o.id,
+            child: Text(o.label, overflow: TextOverflow.ellipsis),
+          ),
+      ],
+      onChanged: (v) => onChanged(v ?? ''),
       ),
     );
   }
@@ -1505,7 +1621,11 @@ class _ContainerList extends StatelessWidget {
     required this.onOpen,
     this.footer,
     this.shipments = false,
+    this.destinationFiltered = false,
   });
+
+  /// A destination is chosen: an empty list says none go there.
+  final bool destinationFiltered;
 
   /// "On the way": an empty list says nothing is on the way.
   final bool shipments;
@@ -1529,7 +1649,9 @@ class _ContainerList extends StatelessWidget {
         children: [
           LotEmptyState(
             icon: Icons.view_in_ar_outlined,
-            title: shipments && filter != containerStatusArrived
+            title: destinationFiltered && anyAtAll
+                ? l10n.shpNoDestinationMatch
+                : shipments && filter != containerStatusArrived
                 ? l10n.shhNothingOnTheWay
                 : !anyAtAll
                 ? l10n.ctrNoContainers
@@ -1855,10 +1977,15 @@ class ContainerDetailScreen extends StatefulWidget {
     this.feed,
     this.deliveryService = const ContainerDeliveryService(),
     this.proofSettings = const PackageProofSettings(),
+    this.callable,
   });
 
   final String businessId;
   final String containerId;
+
+  /// How a container action reaches the server. Absent, the Cloud Function
+  /// itself; a test passes its own.
+  final ContainerCallableCaller? callable;
 
   /// The business's proof switches: the add-line form requires a photo when
   /// `photosRequired` is on.
@@ -2128,6 +2255,30 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
         'status': containerStatusArrived,
       });
     }, done: l10n.ctrArrivedDone);
+  }
+
+  /// Shipped by mistake: back to loading, so its packages can go back to
+  /// waiting. Nobody is messaged. The owner's one way backward.
+  Future<void> _undoShipped() async {
+    final l10n = AppLocalizations.of(context)!;
+    final container = _container;
+    if (container == null) return;
+    final refusal = containerUndoShipRefusal(container, _lines);
+    if (refusal != null) return _refuse(refusal);
+    final ok = await confirmMajorAction(
+      context,
+      title: l10n.shpUndoTitle,
+      message: l10n.shpUndoMessage(container.displayName),
+      confirmLabel: l10n.shpUndoConfirm,
+      icon: Icons.undo,
+    );
+    if (!ok || !mounted) return;
+    await _run('undo', () async {
+      await (widget.callable ?? callContainerCallable)('undoContainerShipped', {
+        'businessId': widget.businessId,
+        'containerId': widget.containerId,
+      });
+    }, done: l10n.shpUndoDone);
   }
 
   Future<void> _delete() async {
@@ -2498,6 +2649,12 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
     final busy = _busy.isNotEmpty;
     final waitingCount = _allLines.where((l) => l.isWaiting).length;
     final access = packageAccessOf(context);
+    final viewer = Provider.of<AuthProvider?>(context, listen: false);
+    final canUndoShipped = !container.isLoading &&
+        mayUndoShipped(
+          isOwner: viewer?.isBusinessOwner ?? false,
+          isAdmin: viewer?.isAdmin ?? false,
+        );
 
     return Scaffold(
       backgroundColor: AppColors.cream,
@@ -2669,6 +2826,18 @@ class _ContainerDetailScreenState extends State<ContainerDetailScreen> {
                         onBusyChanged: (on) {
                           if (mounted) setState(() => _busy = on ? 'status' : '');
                         },
+                      ),
+                    ],
+                    // Shipped by mistake: the owner (or Laawol) puts it back.
+                    if (canUndoShipped) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      ContainerActionButton(
+                        key: const Key('container-undo-shipped'),
+                        icon: Icons.undo,
+                        label: l10n.shpUndoShipped,
+                        busy: _busy == 'undo',
+                        enabled: !busy,
+                        onTap: _undoShipped,
                       ),
                     ],
                     // Packages dropped off before any container: tick the ones
@@ -4083,7 +4252,20 @@ class _LineFormSheet extends StatefulWidget {
     this.proofController,
     this.weightUnit,
     this.airOnly = false,
+    this.liveUpdates,
+    this.liveLines,
+    this.onSaved,
   }) : assert(waiting || container != null);
+
+  /// The list's live feed and its lines, so the counter warning (WhatsApp
+  /// could not reach a number just saved) shows here too, while the
+  /// customer is still at the counter. Absent, only the snapshot [lines].
+  final Listenable? liveUpdates;
+  final List<ContainerLine> Function()? liveLines;
+
+  /// Told the id of every package saved here, including the ones that keep
+  /// the sheet open, so the list behind can keep the same warning.
+  final ValueChanged<String>? onSaved;
 
   /// The business's weight unit and price list; the sheet makes (and owns)
   /// its own from `packagePriceLists/{businessId}` unless a test gave one.
@@ -4207,6 +4389,16 @@ class _LineFormSheetState extends State<_LineFormSheet> {
   /// customers are three lines, entered back to back without closing it.
   final List<String> _addedThisSitting = [];
 
+  /// The packages saved (or being corrected) in this sitting: the counter
+  /// warning is about these only.
+  late final Set<String> _savedIds = {
+    if (widget.existing != null) widget.existing!.id,
+  };
+
+  void _onLiveUpdate() {
+    if (mounted) setState(() {});
+  }
+
   String _kind = containerLineKindCar;
   String _owner = containerOwnerCustomer;
 
@@ -4279,6 +4471,7 @@ class _LineFormSheetState extends State<_LineFormSheet> {
   @override
   void initState() {
     super.initState();
+    widget.liveUpdates?.addListener(_onLiveUpdate);
     final line = widget.existing;
     // An edit opens on the line's pieces (an old-form line on the pieces it
     // reads as, its price spread over them); a new one on one barrel (one
@@ -4366,6 +4559,7 @@ class _LineFormSheetState extends State<_LineFormSheet> {
 
   @override
   void dispose() {
+    widget.liveUpdates?.removeListener(_onLiveUpdate);
     _pieceEditor
       ..removeListener(_onPiecesEdited)
       ..dispose();
@@ -5019,6 +5213,7 @@ class _LineFormSheetState extends State<_LineFormSheet> {
       if (!mounted) return;
       AppHaptics.commit();
       widget.onLineAdded?.call();
+      widget.onSaved?.call(existing.id);
       Navigator.of(context).pop(WaitingPackageSaved(
         lineId: existing.id,
         trackingCode: existing.trackingCode,
@@ -5062,6 +5257,10 @@ class _LineFormSheetState extends State<_LineFormSheet> {
     if (!mounted) return;
     AppHaptics.commit();
     widget.onLineAdded?.call();
+    if (lineId.isNotEmpty) {
+      _savedIds.add(lineId);
+      widget.onSaved?.call(lineId);
+    }
     if (andAnother) {
       // The same sender's next package, for another receiver or country:
       // only the sender (name, phone, WhatsApp switch) stays; the receiver,
@@ -5711,6 +5910,25 @@ class _LineFormSheetState extends State<_LineFormSheet> {
                 ),
               ),
             ],
+            // WhatsApp could not reach someone on a package saved just now:
+            // say so while the customer is still here (a corrected number
+            // is sent the message by itself; or send it again as it is).
+            if (_waiting)
+              Builder(builder: (context) {
+                final alerts = counterAlerts(
+                  (widget.liveLines ?? () => widget.lines)(),
+                  _savedIds,
+                );
+                if (alerts.isEmpty) return const SizedBox.shrink();
+                return Padding(
+                  padding: const EdgeInsets.only(top: AppSpacing.sm),
+                  child: CounterAlertsBox(
+                    alerts: alerts,
+                    businessId: widget.businessId,
+                    send: widget.caller,
+                  ),
+                );
+              }),
           ],
         ],
       ),
@@ -6990,6 +7208,9 @@ Future<WaitingPackageSaved?> showWaitingPackageSheet(
   PackageProofSettings proofSettings = const PackageProofSettings(),
   ProofFieldsController? proofController,
   bool airOnly = false,
+  Listenable? liveUpdates,
+  List<ContainerLine> Function()? liveLines,
+  ValueChanged<String>? onSaved,
 }) {
   final start = existing == null
       ? defaultWaitingDestination(destinations)
@@ -7016,6 +7237,9 @@ Future<WaitingPackageSaved?> showWaitingPackageSheet(
       proofSettings: proofSettings,
       proofController: proofController,
       airOnly: airOnly,
+      liveUpdates: liveUpdates,
+      liveLines: liveLines,
+      onSaved: onSaved,
     ),
   );
 }

@@ -37,7 +37,8 @@ void main() {
     expect(menu, contains('ContainersScreen(businessId: ledgerBusinessId)'));
     expect(menu, contains("Key('open-containers')"));
     for (final path in [
-      'lib/screens/add_staff_screen.dart',
+      // The invite form and the team list share one set of chips.
+      'lib/widgets/staff_permission_chips.dart',
       'lib/screens/user_management_screen.dart',
     ]) {
       expect(read(path), contains('BusinessPermission.containers'),

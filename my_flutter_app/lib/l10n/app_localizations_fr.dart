@@ -13736,6 +13736,260 @@ class AppLocalizationsFr extends AppLocalizations {
   String get pcsKindBarrel => 'Baril';
 
   @override
+  String get shpUndoShipped => 'Annuler l\'expédition';
+
+  @override
+  String get shpUndoTitle => 'Remettre en chargement ?';
+
+  @override
+  String shpUndoMessage(String title) {
+    return 'Remettre $title en chargement ? À utiliser seulement s\'il a été marqué expédié par erreur. Les clients déjà prévenus sur WhatsApp ne sont pas prévenus à nouveau.';
+  }
+
+  @override
+  String get shpUndoConfirm => 'Remettre en chargement';
+
+  @override
+  String get shpUndoDone => 'Remis en chargement.';
+
+  @override
+  String get shpSendAgain => 'Renvoyer';
+
+  @override
+  String get shpResending => 'Envoi…';
+
+  @override
+  String get shpResendDone => 'Renvoyé';
+
+  @override
+  String get shpResendNothing =>
+      'Rien à renvoyer : tous ceux qui pouvaient le recevoir l\'ont déjà, ou il est déjà en route.';
+
+  @override
+  String get shpResendNotConnected => 'WhatsApp n\'est pas encore connecté.';
+
+  @override
+  String get shpResendNoMessage =>
+      'Il n\'y a pas encore de message à renvoyer.';
+
+  @override
+  String get shpResendFailed => 'Impossible de renvoyer. Réessayez.';
+
+  @override
+  String get shpCounterTitle => 'WhatsApp n\'a pas pu joindre ce numéro';
+
+  @override
+  String get shpCounterHint =>
+      'Vérifiez le numéro avec le client pendant qu\'il est là. Un numéro corrigé reçoit le message tout seul.';
+
+  @override
+  String get shpFixNumber => 'Corriger le numéro';
+
+  @override
+  String shpChipCount(String label, int count) {
+    return '$label · $count';
+  }
+
+  @override
+  String get shpEveryPackageHasProof => 'Chaque colis en attente a sa preuve.';
+
+  @override
+  String get shpNoPackageShipsThatWay =>
+      'Aucun colis en attente ne part ainsi.';
+
+  @override
+  String get shpEveryDestination => 'Toutes les destinations';
+
+  @override
+  String get shpFilterDestination => 'Filtrer par destination';
+
+  @override
+  String get shpNoDestinationMatch =>
+      'Aucun conteneur ne va vers cette destination ici.';
+
+  @override
+  String get pplOwnerTag => 'Propriétaire';
+
+  @override
+  String get pplStaffTag => 'Employé';
+
+  @override
+  String get pplFullAccessTag => 'Accès complet';
+
+  @override
+  String get pplOwnerAccessNote =>
+      'Accès complet à l\'espace de cette entreprise.';
+
+  @override
+  String get pplFullAccessExplained =>
+      'Accès complet : tout ce que le propriétaire peut faire ici, y compris les réglages, les prix et l\'équipe. Le transfert de l\'entreprise, Stripe et la banque restent au propriétaire.';
+
+  @override
+  String get pplGiveFullAccess => 'Donner l\'accès complet';
+
+  @override
+  String get pplRemoveFullAccess => 'Retirer l\'accès complet';
+
+  @override
+  String get pplGiveFullAccessTitle => 'Donner l\'accès complet ?';
+
+  @override
+  String get pplRemoveFullAccessTitle => 'Retirer l\'accès complet ?';
+
+  @override
+  String pplGiveFullAccessMessage(String name) {
+    return 'Donner l\'accès complet à $name ? Cette personne pourra tout faire comme vous ici, y compris les réglages, les prix et l\'équipe. Le transfert de l\'entreprise, Stripe et la banque restent à vous.';
+  }
+
+  @override
+  String pplRemoveFullAccessMessage(String name) {
+    return 'Retirer l\'accès complet à $name ? Cette personne garde seulement les autorisations cochées ci-dessous.';
+  }
+
+  @override
+  String pplAdminGiveFullAccessMessage(String name, String business) {
+    return 'Donner l\'accès complet à $name chez $business ? Cette personne pourra tout faire comme le propriétaire, sauf transférer l\'entreprise, Stripe et la banque.';
+  }
+
+  @override
+  String pplAdminRemoveFullAccessMessage(String name, String business) {
+    return 'Retirer l\'accès complet à $name chez $business ?';
+  }
+
+  @override
+  String get pplFullAccessGiven => 'Accès complet donné.';
+
+  @override
+  String get pplFullAccessRemoved => 'Accès complet retiré.';
+
+  @override
+  String get pplCanManage => 'Peut gérer';
+
+  @override
+  String get pplSavePermissions => 'Enregistrer les autorisations';
+
+  @override
+  String get pplSavePermissionsTitle => 'Enregistrer les autorisations ?';
+
+  @override
+  String pplSavePermissionsMessage(String name) {
+    return 'Enregistrer les changements d\'autorisations pour $name ?';
+  }
+
+  @override
+  String get pplPermissionsSaved => 'Autorisations enregistrées.';
+
+  @override
+  String get pplParkingBill => 'Facture de parking';
+
+  @override
+  String get pplNotLinked => 'Non lié';
+
+  @override
+  String get pplParkingBillHint =>
+      'Les dépenses du parc payées par cette personne sont déduites de cette facture en fin de mois.';
+
+  @override
+  String get pplLink => 'Lier';
+
+  @override
+  String get pplChange => 'Changer';
+
+  @override
+  String get pplUnlink => 'Délier';
+
+  @override
+  String get pplUnlinkTitle => 'Délier la facture de parking ?';
+
+  @override
+  String pplUnlinkMessage(String name) {
+    return 'Délier la facture de parking de $name ? Ses dépenses du parc n\'y seront plus déduites.';
+  }
+
+  @override
+  String get pplParkingLinked => 'Facture de parking liée.';
+
+  @override
+  String get pplParkingUnlinked => 'Facture de parking déliée.';
+
+  @override
+  String get pplLinkSheetTitle => 'Lier une facture de parking';
+
+  @override
+  String get pplLinkSheetHint =>
+      'Choisissez le client de parking dont cette personne paie la facture mensuelle. Ses dépenses du parc sont déduites de cette facture ; le reste, l\'entreprise le lui doit.';
+
+  @override
+  String get pplFindCustomer => 'Chercher un client : nom ou téléphone';
+
+  @override
+  String get pplSuggested => 'Suggestions';
+
+  @override
+  String get pplEveryoneElse => 'Tous les autres';
+
+  @override
+  String get pplNoMatch => 'Aucun client de parking ne correspond.';
+
+  @override
+  String get pplNoCars =>
+      'Aucune voiture n\'a été garée ces douze derniers mois.';
+
+  @override
+  String get pplCarsLoadFailed => 'Impossible de charger les voitures garées.';
+
+  @override
+  String get pplTryAgain => 'Réessayer';
+
+  @override
+  String pplCarsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count voitures garées',
+      one: '1 voiture garée',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pplLikelyMatch => 'Correspondance probable';
+
+  @override
+  String get pplLinkedBadge => 'Lié';
+
+  @override
+  String get pplErrFullAccessOwnerOnly =>
+      'Seul le propriétaire de l\'entreprise ou un super admin Laawol peut modifier l\'accès complet.';
+
+  @override
+  String get pplErrFullAccessStaffOnly =>
+      'L\'accès complet est réservé aux employés de cette entreprise.';
+
+  @override
+  String get pplErrNotMember =>
+      'Cette personne ne fait plus partie de l\'équipe de cette entreprise.';
+
+  @override
+  String get pplErrLinkOwnerOnly =>
+      'Seul le propriétaire de l\'entreprise peut lier une facture de parking.';
+
+  @override
+  String get pplErrLinkCustomer => 'Choisissez le client de parking à lier.';
+
+  @override
+  String get pplErrActionInvalid =>
+      'Cette application n\'est plus à jour. Mettez-la à jour et réessayez.';
+
+  @override
+  String get pplErrNotAllowed =>
+      'Votre compte n\'a pas le droit de faire cela. Demandez au propriétaire de l\'entreprise.';
+
+  @override
+  String get pplErrOther =>
+      'L\'enregistrement a échoué. Vérifiez votre connexion et réessayez.';
+
+  @override
   String get pcsKindBox => 'Carton';
 
   @override

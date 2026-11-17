@@ -98,7 +98,7 @@ void main() {
   test('the permission editors offer Invoices, in both languages', () {
     String read(String path) => File(path).readAsStringSync();
     expect(
-      read('lib/screens/add_staff_screen.dart'),
+      read('lib/widgets/staff_permission_chips.dart'),
       contains('BusinessPermission.invoices'),
     );
     final people = read('lib/screens/user_management_screen.dart');

@@ -584,3 +584,16 @@ Add future project conventions and repeated architectural decisions here.
   (`lib/services/price_list_fill.dart`): it types into the piece's own fields and
   stores nothing; the weights it asked for ride on the piece row
   (`fillWeight`) so an air package's empty weight can be filled from their sum.
+
+## Team (People) section
+
+- The permission chips live once, in `lib/widgets/staff_permission_chips.dart`
+  (`StaffPermissionChips`): the invite form and the team list's permission
+  editor both use it, so a permission added there is offered in both. Source
+  contract tests read that file, not `add_staff_screen.dart`.
+- Who may do what is pure in `lib/services/team_staff.dart`: edit permissions
+  = owner (full access included) or admin; give/remove Full access = the REAL
+  owner (`isRealBusinessOwner`) or a super admin (`adminRole == 'superAdmin'`);
+  link a Parking bill = the real owner or a platform admin (the server refuses
+  a full-access person: `bankRoleOf` treats them as staff). Hide a control the
+  server would refuse.

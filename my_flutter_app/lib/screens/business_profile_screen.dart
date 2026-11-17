@@ -33,7 +33,9 @@ import 'parking_lots_settings_screen.dart' show ParkingLotsEntryRow;
 import '../widgets/parking_whatsapp_switch.dart';
 import '../widgets/pickup_plan_editor.dart';
 import '../widgets/staff_invite_widgets.dart' show BusinessInvitationsSection;
+import '../widgets/team_member_card.dart';
 import '../services/parking_rates.dart';
+import '../services/team_staff.dart';
 import '../utils/service_catalog_localization.dart';
 
 class BusinessProfileScreen extends StatefulWidget {
@@ -1219,12 +1221,16 @@ class _FeatureStatusBadge extends StatelessWidget {
   }
 }
 
-class TeamPanel extends StatelessWidget {
+class TeamPanel extends StatefulWidget {
   const TeamPanel({
     super.key,
     required this.businessId,
     this.canAddStaff = true,
     this.canManageInventoryAccess = false,
+    this.membersStream,
+    this.parkingLinksStream,
+    this.service = const TeamStaffService(),
+    this.loadParkingCars = loadParkingLinkCars,
   });
 
   final String businessId;
@@ -1234,90 +1240,127 @@ class TeamPanel extends StatelessWidget {
   /// get a home store and "works in all stores" control under the list.
   final bool canManageInventoryAccess;
 
+  /// The team (`users` of this business) and the business's
+  /// `staffParkingLinks`; the live Firestore reads unless a test gives its
+  /// own.
+  final Stream<List<TeamMember>>? membersStream;
+  final Stream<Map<String, dynamic>>? parkingLinksStream;
+
+  /// The team's writes (permissions, full access, the Parking bill link),
+  /// and the parked cars the link picker reads.
+  final TeamStaffService service;
+  final ParkingLinkCarsLoader loadParkingCars;
+
+  @override
+  State<TeamPanel> createState() => _TeamPanelState();
+}
+
+class _TeamPanelState extends State<TeamPanel> {
+  late final Stream<List<TeamMember>> _members =
+      widget.membersStream ??
+      FirebaseFirestore.instance
+          .collection('users')
+          .where('businessId', isEqualTo: widget.businessId)
+          .where('role', whereIn: ['staff', 'businessOwner'])
+          .snapshots()
+          .map(
+            (snapshot) => [
+              for (final doc in snapshot.docs)
+                TeamMember.fromMap(doc.id, doc.data()),
+            ],
+          );
+
+  late final Stream<Map<String, dynamic>> _links =
+      widget.parkingLinksStream ??
+      FirebaseFirestore.instance
+          .collection('businesses')
+          .doc(widget.businessId)
+          .snapshots()
+          .map((doc) {
+            final links = doc.data()?['staffParkingLinks'];
+            return links is Map
+                ? {for (final e in links.entries) '${e.key}': e.value}
+                : <String, dynamic>{};
+          });
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    // Who may do what in the team (null auth: a test without a provider
+    // sees nothing editable).
+    final auth = Provider.of<AuthProvider?>(context);
+    final isOwner = auth?.isBusinessOwner ?? false;
+    final isAdmin = auth?.isAdmin ?? false;
+    final canEditPermissions = mayEditStaffPermissions(
+      isOwner: isOwner,
+      isAdmin: isAdmin,
+    );
+    final canGrantFullAccess = mayGrantFullAccess(
+      isRealOwner: auth?.isRealBusinessOwner ?? false,
+      isSuperAdmin: auth?.adminRole == superAdminRole,
+    );
+    final canLinkParking = mayLinkStaffParking(
+      isRealOwner: auth?.isRealBusinessOwner ?? false,
+      isAdmin: isAdmin,
+    );
     return _Panel(
       title: l10n.team,
-      child: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('users')
-            .where('businessId', isEqualTo: businessId)
-            .where('role', whereIn: ['staff', 'businessOwner'])
-            .snapshots(),
+      child: StreamBuilder<List<TeamMember>>(
+        stream: _members,
         builder: (context, snapshot) {
-          final users = snapshot.data?.docs ?? [];
-          return Column(
-            children: [
-              if (canAddStaff) _TeamInvites(businessId: businessId),
-              if (users.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 24),
-                  child: Text(l10n.noTeamMembersYet),
-                )
-              else
-                ...users.map((doc) {
-                  final data = doc.data() as Map<String, dynamic>;
-                  final name = (data['fullName'] as String?)?.trim();
-                  final email = (data['email'] as String?) ?? '';
-                  final phone = (data['phone'] as String?) ?? '';
-                  final imageUrl = data['profileImageUrl'] as String?;
-                  return ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: CircleAvatar(
-                      backgroundImage: imageUrl == null || imageUrl.isEmpty
-                          ? null
-                          : NetworkImage(imageUrl),
-                      child: imageUrl == null || imageUrl.isEmpty
-                          ? const Icon(Icons.person_outline)
-                          : null,
-                    ),
-                    title: Text(
-                      name == null || name.isEmpty ? email : name,
-                      style: const TextStyle(fontWeight: FontWeight.w800),
-                    ),
-                    subtitle: Text(
-                      [
-                        email,
-                        phone,
-                        data['role'],
-                      ].where((item) => '$item'.trim().isNotEmpty).join(' • '),
-                    ),
-                  );
-                }),
-              if (canManageInventoryAccess)
-                InventoryTeamAccess(
-                  businessId: businessId,
-                  members: [
-                    for (final doc in users)
-                      if ((doc.data() as Map<String, dynamic>)['role'] ==
-                              'staff' &&
-                          ((doc.data() as Map<String, dynamic>)['businessPermissions']
-                                      as Iterable? ??
-                                  const [])
-                              .contains(BusinessPermission.inventory))
-                        InventoryTeamMember(
-                          userId: doc.id,
-                          name: _teamMemberName(
-                              doc.data() as Map<String, dynamic>),
-                          homeStoreId:
-                              '${(doc.data() as Map<String, dynamic>)['inventoryHomeStoreId'] ?? ''}',
-                          allStores: (doc.data()
-                                  as Map<String, dynamic>)['inventoryAllStores'] ==
-                              true,
+          final members = snapshot.data ?? const <TeamMember>[];
+          return StreamBuilder<Map<String, dynamic>>(
+            stream: _links,
+            builder: (context, linksSnapshot) {
+              final links = linksSnapshot.data ?? const <String, dynamic>{};
+              return Column(
+                children: [
+                  if (widget.canAddStaff)
+                    _TeamInvites(businessId: widget.businessId),
+                  if (members.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      child: Text(l10n.noTeamMembersYet),
+                    )
+                  else
+                    for (final member in members)
+                      TeamMemberCard(
+                        businessId: widget.businessId,
+                        member: member,
+                        canEditPermissions: canEditPermissions,
+                        canGrantFullAccess: canGrantFullAccess,
+                        canLinkParking: canLinkParking,
+                        parkingLink: StaffParkingLink.fromLinks(
+                          links,
+                          member.id,
                         ),
-                  ],
-                ),
-            ],
+                        service: widget.service,
+                        loadCars: widget.loadParkingCars,
+                      ),
+                  if (widget.canManageInventoryAccess)
+                    InventoryTeamAccess(
+                      businessId: widget.businessId,
+                      members: [
+                        for (final member in members)
+                          if (member.isStaff &&
+                              member.permissions.contains(
+                                BusinessPermission.inventory,
+                              ))
+                            InventoryTeamMember(
+                              userId: member.id,
+                              name: member.displayName,
+                              homeStoreId: member.inventoryHomeStoreId,
+                              allStores: member.inventoryAllStores,
+                            ),
+                      ],
+                    ),
+                ],
+              );
+            },
           );
         },
       ),
     );
-  }
-
-  static String _teamMemberName(Map<String, dynamic> data) {
-    final name = (data['fullName'] as String?)?.trim() ?? '';
-    return name.isEmpty ? '${data['email'] ?? ''}' : name;
   }
 }
 

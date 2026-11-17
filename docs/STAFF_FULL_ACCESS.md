@@ -36,7 +36,12 @@ Owner, 11/11/2026: "give hassimiou niane the same privileges as the owner"
   applied once in `console-router`; `isRealOwner` decides who sees the
   grant button). The header reads "Full access" for them, and
   `canManageBank` keeps the bank card owner-only.
-- **Phone app:** next build. It reads `users/{uid}.role` directly
+- **Phone app (Team section):** the owner's People list can give / remove
+  Full access (`TeamMemberCard`, real owner only; a super admin from the user
+  sheet in `user_management_screen.dart`), edit a staff member's permissions
+  and link their Parking bill (the real owner or a platform admin: the server
+  keeps `link_staff_parking` away from full-access staff). **Phone app (acting
+  as the owner):** next build. It reads `users/{uid}.role` directly
   (`auth_provider.dart`), so until then a full-access person sees their staff
   screens in the app; the website gives them everything.
 

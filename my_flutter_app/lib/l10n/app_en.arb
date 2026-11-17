@@ -6523,6 +6523,149 @@
     }
   },
   "pcsKindBarrel": "Barrel",
+  "shpUndoShipped": "Undo shipped",
+  "shpUndoTitle": "Put back to loading?",
+  "shpUndoMessage": "Put {title} back to loading? Use this only when it was marked shipped by mistake. Customers who were already told on WhatsApp are not told again.",
+  "@shpUndoMessage": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "shpUndoConfirm": "Put back to loading",
+  "shpUndoDone": "Back to loading.",
+  "shpSendAgain": "Send again",
+  "shpResending": "Sending…",
+  "shpResendDone": "Sent again",
+  "shpResendNothing": "Nothing to send again: everyone who could get it has it, or it is already on its way.",
+  "shpResendNotConnected": "WhatsApp is not connected yet.",
+  "shpResendNoMessage": "There is no message to send again yet.",
+  "shpResendFailed": "Could not send again. Try again.",
+  "shpCounterTitle": "WhatsApp could not reach this number",
+  "shpCounterHint": "Check the number with the customer while they are here. A corrected number gets the message by itself.",
+  "shpFixNumber": "Fix the number",
+  "shpChipCount": "{label} · {count}",
+  "@shpChipCount": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "shpEveryPackageHasProof": "Every waiting package has its proof.",
+  "shpNoPackageShipsThatWay": "No waiting package ships that way.",
+  "shpEveryDestination": "Every destination",
+  "shpFilterDestination": "Filter by destination",
+  "shpNoDestinationMatch": "No container goes to that destination here.",
+  "pplOwnerTag": "Owner",
+  "pplStaffTag": "Staff",
+  "pplFullAccessTag": "Full access",
+  "pplOwnerAccessNote": "Full access to this business workspace.",
+  "pplFullAccessExplained": "Full access: everything the owner can do here, including settings, prices and staff. Transferring the business and its Stripe and bank stay the owner's.",
+  "pplGiveFullAccess": "Give full access",
+  "pplRemoveFullAccess": "Remove full access",
+  "pplGiveFullAccessTitle": "Give full access?",
+  "pplRemoveFullAccessTitle": "Remove full access?",
+  "pplGiveFullAccessMessage": "Give {name} full access? They can then do everything you can here, including settings, prices and staff. Transferring the business and its Stripe and bank stay yours.",
+  "@pplGiveFullAccessMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "pplRemoveFullAccessMessage": "Remove full access from {name}? They keep only the permissions ticked below.",
+  "@pplRemoveFullAccessMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "pplAdminGiveFullAccessMessage": "Give {name} full access at {business}? They can then do everything the owner can there, except transferring the business and its Stripe and bank.",
+  "@pplAdminGiveFullAccessMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "pplAdminRemoveFullAccessMessage": "Remove full access from {name} at {business}?",
+  "@pplAdminRemoveFullAccessMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "pplFullAccessGiven": "Full access given.",
+  "pplFullAccessRemoved": "Full access removed.",
+  "pplCanManage": "Can manage",
+  "pplSavePermissions": "Save permissions",
+  "pplSavePermissionsTitle": "Save permissions?",
+  "pplSavePermissionsMessage": "Save permission changes for {name}?",
+  "@pplSavePermissionsMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "pplPermissionsSaved": "Staff permissions saved.",
+  "pplParkingBill": "Parking bill",
+  "pplNotLinked": "Not linked",
+  "pplParkingBillHint": "Lot expenses this person pays come off this bill at month end.",
+  "pplLink": "Link",
+  "pplChange": "Change",
+  "pplUnlink": "Unlink",
+  "pplUnlinkTitle": "Unlink the parking bill?",
+  "pplUnlinkMessage": "Unlink {name}'s parking bill? Their lot expenses will stop coming off it.",
+  "@pplUnlinkMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "pplParkingLinked": "Parking bill linked.",
+  "pplParkingUnlinked": "Parking bill unlinked.",
+  "pplLinkSheetTitle": "Link a parking bill",
+  "pplLinkSheetHint": "Choose the parking customer whose monthly bill this person pays. Their lot expenses come off that bill; whatever is left, the business owes them.",
+  "pplFindCustomer": "Find a customer: name or phone",
+  "pplSuggested": "Suggested",
+  "pplEveryoneElse": "Everyone else",
+  "pplNoMatch": "No parking customer matches.",
+  "pplNoCars": "No car was parked in the last twelve months.",
+  "pplCarsLoadFailed": "The parked cars could not be loaded.",
+  "pplTryAgain": "Try again",
+  "pplCarsCount": "{count, plural, =1{1 parked car} other{{count} parked cars}}",
+  "@pplCarsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pplLikelyMatch": "Likely match",
+  "pplLinkedBadge": "Linked",
+  "pplErrFullAccessOwnerOnly": "Only the business owner or a Laawol super admin can change full access.",
+  "pplErrFullAccessStaffOnly": "Full access is for staff of this business.",
+  "pplErrNotMember": "That person is no longer on this business's team.",
+  "pplErrLinkOwnerOnly": "Only the business owner can link a parking bill.",
+  "pplErrLinkCustomer": "Choose the parking customer to link.",
+  "pplErrActionInvalid": "This app is out of date. Update it and try again.",
+  "pplErrNotAllowed": "Your account is not allowed to do this. Ask the business owner.",
+  "pplErrOther": "It did not save. Check your connection and try again.",
   "pcsKindBox": "Box",
   "pcsKindOther": "Other",
   "pcsKindLabel": "What piece {number} is",

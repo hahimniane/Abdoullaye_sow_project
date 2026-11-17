@@ -417,7 +417,7 @@ void main() {
 
     test('the permission is offered wherever permissions are edited', () {
       for (final path in [
-        'lib/screens/add_staff_screen.dart',
+        'lib/widgets/staff_permission_chips.dart',
         'lib/screens/user_management_screen.dart',
       ]) {
         expect(

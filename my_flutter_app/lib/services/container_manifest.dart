@@ -611,6 +611,27 @@ String? containerDeleteRefusal(ShippingContainer? current, int lineCount) {
   return null;
 }
 
+/// Why a shipped container cannot go back to loading, or null. Mirrors
+/// `containerUndoShipRefusal`: a loading one has nothing to undo, and an
+/// arrived one with cars on it is closed (its cars are already out).
+String? containerUndoShipRefusal(
+  ShippingContainer? current,
+  Iterable<ContainerLine> lines,
+) {
+  if (containerIsOpen(current)) return 'container_undo_not_shipped';
+  final hasCars = lines.any((l) => l.kind == containerLineKindCar);
+  if ((current?.status ?? '') == containerStatusArrived && hasCars) {
+    return 'container_undo_has_cars';
+  }
+  return null;
+}
+
+/// Who may put a shipped container back to loading: the owner (a full-access
+/// staff member counts as one) and Laawol's admins, never ordinary staff.
+/// Mirrors `mayUndoShipped`.
+bool mayUndoShipped({required bool isOwner, required bool isAdmin}) =>
+    isOwner || isAdmin;
+
 // ---------------------------------------------------------------------------
 // A line on the list.
 // ---------------------------------------------------------------------------
@@ -1831,13 +1852,57 @@ List<ShippingContainer> sortContainers(Iterable<ShippingContainer> list) {
   return out;
 }
 
-/// The containers in one state. An unknown filter shows everything.
+/// The containers in one state and, when [destinationCountryId] is given,
+/// going to one destination. An unknown state shows every state; an empty
+/// destination shows every destination. Mirrors the console's
+/// `filterContainers({status, destinationCountryId})`.
 List<ShippingContainer> filterContainers(
   Iterable<ShippingContainer> list,
-  String status,
+  String status, {
+  String destinationCountryId = '',
+}) {
+  final destination = destinationCountryId.trim();
+  Iterable<ShippingContainer> kept = list;
+  if (containerStatuses.contains(status)) {
+    kept = kept.where((c) => c.status == status);
+  }
+  if (destination.isNotEmpty) {
+    kept = kept.where((c) => c.destinationCountryId == destination);
+  }
+  return sortContainers(kept);
+}
+
+/// One choice of the destination filter.
+class ContainerDestinationOption {
+  const ContainerDestinationOption({required this.id, required this.label});
+
+  final String id;
+  final String label;
+}
+
+/// The destinations the filter offers: only ones a container actually has,
+/// so it stays a handful of choices rather than every country, by name.
+/// [labels] maps a destination id to its name (the business's destination
+/// list); a destination missing there falls back to the name stored on its
+/// container, then to the id. Mirrors `destinationFilterOptions`.
+List<ContainerDestinationOption> containerDestinationOptions(
+  Iterable<ShippingContainer> containers,
+  Map<String, String> labels,
 ) {
-  if (!containerStatuses.contains(status)) return sortContainers(list);
-  return sortContainers(list.where((c) => c.status == status));
+  final byId = <String, String>{};
+  for (final c in containers) {
+    final id = c.destinationCountryId.trim();
+    if (id.isEmpty || byId.containsKey(id)) continue;
+    final known = (labels[id] ?? '').trim();
+    final stored = c.destinationCountryName.trim();
+    byId[id] = known.isNotEmpty ? known : (stored.isNotEmpty ? stored : id);
+  }
+  final out = [
+    for (final e in byId.entries)
+      ContainerDestinationOption(id: e.key, label: e.value),
+  ];
+  out.sort((a, b) => a.label.toLowerCase().compareTo(b.label.toLowerCase()));
+  return out;
 }
 
 /// In the order they were loaded, oldest first: the list reads top to bottom
