@@ -18,6 +18,7 @@ import '../models/office_location.dart';
 import '../providers/auth_provider.dart';
 import '../services/office_location_service.dart';
 import '../theme/app_colors.dart';
+import 'getting_paid_screen.dart' show GettingPaidEntryRow;
 import 'office_locations_screen.dart';
 import '../utils/auth_error_text.dart';
 import '../utils/business_permissions.dart';
@@ -739,6 +740,8 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
                   onPickImage: _pickImage,
                 ),
                 const SizedBox(height: 18),
+                // The real owner's Stripe payouts, fees and documents.
+                const GettingPaidEntryRow(),
                 _BusinessForm(
                   formKey: _formKey,
                   canEdit: canEdit,

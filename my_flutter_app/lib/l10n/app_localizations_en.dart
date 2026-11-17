@@ -13792,6 +13792,634 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pcsDescriptionWhat => 'What is it?';
 
   @override
+  String get ownCountedTitle => 'What counts as the business\'s money';
+
+  @override
+  String get ownCountedHint =>
+      'Untick money that belongs to the person who took it, like their own car sales.';
+
+  @override
+  String get ownCountedHintStaff => 'The business owner chooses what counts.';
+
+  @override
+  String get ownCountedParking => 'Parking';
+
+  @override
+  String get ownCountedActivity => 'Lot jobs';
+
+  @override
+  String get ownCountedPackage => 'Packages and containers';
+
+  @override
+  String get ownCountedShop => 'Shop sales';
+
+  @override
+  String get ownCountedInvoice => 'Invoices';
+
+  @override
+  String get ownCountedSaved =>
+      'Saved. The balances now count only what is ticked.';
+
+  @override
+  String get ownCountedOwnerOnly =>
+      'Only the business owner can choose what counts as the business\'s money.';
+
+  @override
+  String get ownCountedInvalid =>
+      'Choose what counts as the business\'s money.';
+
+  @override
+  String get ownCountedNone => 'Nothing is counted as the business\'s money.';
+
+  @override
+  String ownCountedSummary(String list) {
+    return 'Counted: $list';
+  }
+
+  @override
+  String get ownPayoutsTitle => 'Laawol owes you';
+
+  @override
+  String get ownPayoutsAdminTitle => 'Pay now payouts';
+
+  @override
+  String get ownPayoutsLede =>
+      'Card payments Laawol collected for you, paid out by Zelle or bank every Monday for the week before (Monday to Sunday, New York time). Card fees, refunds and chargebacks are taken off.';
+
+  @override
+  String get ownPayoutsAdminLede =>
+      'Card payments Laawol collected for businesses without their own Stripe. Send each business what is due by Zelle or bank, then tap Mark paid out.';
+
+  @override
+  String ownPayoutsOwedNow(String amount) {
+    return 'Owed to you now: $amount';
+  }
+
+  @override
+  String ownPayoutsDueTotal(String amount) {
+    return 'Due to businesses: $amount';
+  }
+
+  @override
+  String ownPayoutsBillNote(String amount) {
+    return 'Your unpaid Laawol bill of $amount is taken out of the next payout.';
+  }
+
+  @override
+  String ownPayoutsWeekOf(String date) {
+    return 'Week of $date';
+  }
+
+  @override
+  String get ownPayoutsPaidOut => 'Paid out';
+
+  @override
+  String get ownPayoutsNothing => 'Nothing to pay this week';
+
+  @override
+  String get ownPayoutsToBill => 'Goes onto the Laawol bill';
+
+  @override
+  String ownPayoutsPaidOutOn(String date) {
+    return 'Paid out on $date';
+  }
+
+  @override
+  String ownPayoutsCollecting(String date) {
+    return 'Still collecting. Paid out on $date';
+  }
+
+  @override
+  String get ownPayoutsNoneDue => 'No payout is due.';
+
+  @override
+  String get ownPayoutsLoadFailed => 'Payouts could not be loaded. Try again.';
+
+  @override
+  String get ownPayoutsSlow =>
+      'Payouts are taking longer than usual. Try again in a moment.';
+
+  @override
+  String get ownPayoutsRefresh => 'Refresh';
+
+  @override
+  String get ownPayoutsRecent => 'Recently paid out';
+
+  @override
+  String get ownPayoutsMarkPaid => 'Mark paid out';
+
+  @override
+  String get ownPayoutsPutOnBill => 'Put on the bill';
+
+  @override
+  String get ownPayoutsSheetTitleBill => 'Put on the Laawol bill';
+
+  @override
+  String get ownPayoutsSheetBillHint =>
+      'This week nets to less than nothing, so it is charged on the business\'s Laawol bill. No money is sent.';
+
+  @override
+  String get ownPayoutsSheetHint =>
+      'Send the money first, then record how you paid. Any unpaid Laawol bill is taken out and recorded as a bill payment.';
+
+  @override
+  String get ownPayoutsHowPaid => 'How you paid';
+
+  @override
+  String get ownPayoutsMethodZelle => 'Zelle';
+
+  @override
+  String get ownPayoutsMethodBank => 'Bank';
+
+  @override
+  String get ownPayoutsMethodOther => 'Other';
+
+  @override
+  String get ownPayoutsReference => 'Reference (optional)';
+
+  @override
+  String get ownPayoutsReferenceHint => 'e.g. Zelle confirmation number';
+
+  @override
+  String get ownPayoutsDonePaid =>
+      'Paid out. The business gets a receipt on WhatsApp.';
+
+  @override
+  String get ownPayoutsDoneBill => 'Put on the business\'s Laawol bill.';
+
+  @override
+  String get ownPayoutsRefNotAllowed => 'You are not allowed to do that.';
+
+  @override
+  String get ownPayoutsRefWeekNotOver => 'That week is not over yet.';
+
+  @override
+  String get ownPayoutsRefWeekEmpty =>
+      'Nothing was collected or refunded that week.';
+
+  @override
+  String get ownPayoutsRefAlreadyPaid => 'That week is already paid out.';
+
+  @override
+  String get ownPayoutsRefMethod =>
+      'Say how it was sent: Zelle, bank or other.';
+
+  @override
+  String get ownPayoutsRefReferenceLong => 'The reference is too long.';
+
+  @override
+  String get ownPayoutsRefWeekInvalid => 'Pick a week that starts on a Monday.';
+
+  @override
+  String get ownLedgerPayment => 'Card payment';
+
+  @override
+  String get ownLedgerStripeFee => 'Card fee';
+
+  @override
+  String get ownLedgerRefund => 'Refund';
+
+  @override
+  String get ownLedgerChargeback => 'Chargeback';
+
+  @override
+  String get ownLedgerDisputeFee => 'Dispute fee';
+
+  @override
+  String get ownLedgerBillOffset => 'Taken off for your Laawol bill';
+
+  @override
+  String get ownLedgerPayout => 'Paid out';
+
+  @override
+  String get ownLedgerToBill => 'Put on your Laawol bill';
+
+  @override
+  String get ownCardsTitle => 'Team cards';
+
+  @override
+  String get ownCardsSubtitle => 'A card for the business and each person';
+
+  @override
+  String get ownCardsIntro =>
+      'Share a card\'s link or open it. To print cards ten to a sheet, use the website.';
+
+  @override
+  String get ownCardsLoadFailed => 'The cards did not load. Try again.';
+
+  @override
+  String get ownCardsNotAllowed => 'You cannot see the team\'s cards.';
+
+  @override
+  String get ownCardsYourCard => 'Your card';
+
+  @override
+  String get ownCardsTeamCard => 'Team card';
+
+  @override
+  String get ownCardsBusinessCard => 'The business\'s card';
+
+  @override
+  String get ownCardsNoNumber =>
+      'No phone number on this account yet, so the card shows the office number only.';
+
+  @override
+  String get ownCardsCopyLink => 'Copy link';
+
+  @override
+  String get ownCardsLinkCopied => 'Link copied';
+
+  @override
+  String get ownCardsOpen => 'Open card';
+
+  @override
+  String get ownCardsOpenFailed => 'We could not open the card. Try again.';
+
+  @override
+  String get ownCardsAddNumbers => 'Add numbers';
+
+  @override
+  String get ownCardsEditNumbers => 'Edit numbers';
+
+  @override
+  String get ownCardsNumbersTitle => 'Numbers on this card';
+
+  @override
+  String get ownCardsNumbersIntro =>
+      'Add up to 3 more numbers to show on this card, like WhatsApp or a number abroad.';
+
+  @override
+  String get ownCardsNumbersOwnNote =>
+      'Their sign-in number is always on the card';
+
+  @override
+  String get ownCardsNumbersSaved => 'The numbers are saved.';
+
+  @override
+  String get ownCardsNumbersSaveFailed =>
+      'We could not save the numbers. Try again.';
+
+  @override
+  String get ownCardsNumbersNotAllowed =>
+      'You cannot change this person\'s numbers.';
+
+  @override
+  String get ownCardsLookTitle => 'How your cards look';
+
+  @override
+  String get ownCardsStyle => 'Style';
+
+  @override
+  String get ownCardsStylePlain => 'Plain white';
+
+  @override
+  String get ownCardsStyleFull => 'Full color';
+
+  @override
+  String get ownCardsColor => 'Main color';
+
+  @override
+  String get ownCardsAccent => 'Second color';
+
+  @override
+  String get ownCardsPhoto => 'Picture';
+
+  @override
+  String get ownCardsPhotoNone => 'No picture';
+
+  @override
+  String get ownCardsPhotoCar => 'A car';
+
+  @override
+  String get ownCardsTagline => 'Line under the name';
+
+  @override
+  String get ownCardsTaglineHint => 'Car sales · Parking · Shipping';
+
+  @override
+  String get ownCardsTaglineNote => 'Leave empty to use your services.';
+
+  @override
+  String get ownCardsServices => 'Services on the back';
+
+  @override
+  String get ownCardsServicesNote => 'One per line, six at most.';
+
+  @override
+  String get ownCardsSave => 'Save card';
+
+  @override
+  String get ownCardsSaved => 'Card saved.';
+
+  @override
+  String get ownCardsSaveFailed => 'The card was not saved.';
+
+  @override
+  String get ownCardsOwnerOnly =>
+      'Only the business owner can change how the cards look.';
+
+  @override
+  String get ownCardsTaglineTooLong => 'The line under the name is too long.';
+
+  @override
+  String get ownCardsServicesTooMany => 'List six services at most.';
+
+  @override
+  String get ownCardsServiceTooLong => 'One of the services is too long.';
+
+  @override
+  String get ownCardsEntryTitle => 'Team cards';
+
+  @override
+  String get ownCardsEntrySubtitle =>
+      'See, share and edit your team\'s business cards';
+
+  @override
+  String get ownCardColorLaawol => 'Laawol green';
+
+  @override
+  String get ownCardColorTeal => 'Teal';
+
+  @override
+  String get ownCardColorIndigo => 'Indigo';
+
+  @override
+  String get ownCardColorForest => 'Forest green';
+
+  @override
+  String get ownCardColorBurgundy => 'Burgundy';
+
+  @override
+  String get ownCardColorSaffron => 'Saffron';
+
+  @override
+  String get ownCardColorCharcoal => 'Charcoal';
+
+  @override
+  String get ownCardColorOcean => 'Ocean blue';
+
+  @override
+  String get ownCardColorPlum => 'Plum';
+
+  @override
+  String get ownCardColorNavy => 'Navy';
+
+  @override
+  String get ownCardAccentRed => 'Red';
+
+  @override
+  String get ownCardAccentAmber => 'Amber';
+
+  @override
+  String get ownCardAccentBlue => 'Blue';
+
+  @override
+  String get ownPayTitle => 'Getting paid';
+
+  @override
+  String get ownPayEntrySubtitle =>
+      'Stripe payouts, fees and verification documents';
+
+  @override
+  String get ownPayPayoutsTitle => 'Payouts';
+
+  @override
+  String get ownPayStatusReady => 'Payouts enabled';
+
+  @override
+  String get ownPayStatusPending => 'Connected, pending verification';
+
+  @override
+  String get ownPayStatusNone => 'Payout setup required';
+
+  @override
+  String get ownPayChargesOn => 'Charges verified';
+
+  @override
+  String get ownPayChargesOff => 'Charges not verified';
+
+  @override
+  String ownPayAccount(String id) {
+    return 'Account: $id';
+  }
+
+  @override
+  String get ownPayHelpNone =>
+      'Register with Stripe so Laawol can verify the business and send payouts securely.';
+
+  @override
+  String get ownPayHelpPending =>
+      'A Stripe payout account is connected. Stripe may still be checking the bank account or requesting more details before payouts can start.';
+
+  @override
+  String get ownPayStart => 'Start Stripe registration';
+
+  @override
+  String get ownPayContinue => 'Continue in Stripe';
+
+  @override
+  String get ownPayRefresh => 'Refresh status';
+
+  @override
+  String get ownPayOpening => 'Opening Stripe...';
+
+  @override
+  String get ownPayChecking => 'Checking status...';
+
+  @override
+  String get ownPayRefreshed => 'Status updated.';
+
+  @override
+  String get ownPayOpenFailed => 'We could not open the page. Try again.';
+
+  @override
+  String get ownPayLinkFailed => 'Could not start Stripe setup. Try again.';
+
+  @override
+  String get ownPayRefreshFailed =>
+      'Could not refresh payout status. Try again.';
+
+  @override
+  String get ownPayAutoFailed =>
+      'We could not check your Stripe status automatically, so the status above may be out of date. If you have finished with Stripe, press Refresh status.';
+
+  @override
+  String ownPayDue(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count Stripe requirements due',
+      one: '1 Stripe requirement due',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String ownPayPendingStripe(int count) {
+    return '$count pending with Stripe';
+  }
+
+  @override
+  String get ownPayNoUpload =>
+      'Do not upload identity, tax, legal, or bank files to Laawol. Stripe must collect those details in its secure onboarding flow.';
+
+  @override
+  String get ownPayOwnerOnly => 'Only the business owner sets up payouts.';
+
+  @override
+  String get ownPayLoadFailed => 'We could not load your business. Try again.';
+
+  @override
+  String get ownPayFeesTitle => 'Fees';
+
+  @override
+  String get ownPayPlatformFee => 'Platform fee';
+
+  @override
+  String get ownPayCustomRate => 'Custom rate for your business';
+
+  @override
+  String get ownPayDefaultRate => 'May vary by service on our default rate.';
+
+  @override
+  String get ownPayProcessingWho => 'Who pays Stripe\'s processing fee';
+
+  @override
+  String get ownPayYou => 'You';
+
+  @override
+  String get ownPayLaawol => 'Laawol';
+
+  @override
+  String get ownPayProcessingPending =>
+      'Your account is set to pay Stripe\'s processing fee directly, but this only takes effect once your Stripe payout setup is complete. Until then, payments still use the default (Laawol pays Stripe\'s fee).';
+
+  @override
+  String get ownPayFeesFailed => 'Your fee settings could not be loaded.';
+
+  @override
+  String get ownDocTitle => 'Verification documents';
+
+  @override
+  String get ownDocReady => 'Required Laawol service documents are complete.';
+
+  @override
+  String get ownDocIntro =>
+      'Upload only the service documents Laawol admins need. Stripe collects identity, tax, legal, and bank details.';
+
+  @override
+  String ownDocComplete(int done, int total) {
+    return '$done/$total complete';
+  }
+
+  @override
+  String get ownDocNone =>
+      'No Laawol service documents required. The services selected for this business do not require extra licenses or authority documents.';
+
+  @override
+  String ownDocAdminNote(String note) {
+    return 'Admin note: $note';
+  }
+
+  @override
+  String ownDocAdminRequest(String note) {
+    return 'Admin request: $note';
+  }
+
+  @override
+  String get ownDocWaived => 'Not needed: approved by Laawol.';
+
+  @override
+  String get ownDocStatusMissing => 'Missing';
+
+  @override
+  String get ownDocStatusSubmitted => 'Submitted';
+
+  @override
+  String get ownDocStatusVerified => 'Verified';
+
+  @override
+  String get ownDocStatusNeedsChanges => 'Needs changes';
+
+  @override
+  String get ownDocStatusNotNeeded => 'Not needed';
+
+  @override
+  String get ownDocShippingAuthority => 'Freight or shipping authority';
+
+  @override
+  String get ownDocShippingAuthorityNote =>
+      'Freight-forwarder license, warehouse agreement, customs broker agreement, or receiving-partner proof.';
+
+  @override
+  String get ownDocDealerLicense => 'Dealer license or sales authorization';
+
+  @override
+  String get ownDocDealerLicenseNote =>
+      'Dealer license, reseller authorization, auction access proof, or local vehicle sales permit.';
+
+  @override
+  String get ownDocParkingProof => 'Parking facility proof';
+
+  @override
+  String get ownDocParkingProofNote =>
+      'Lot lease, property ownership, facility insurance, or written parking authorization.';
+
+  @override
+  String get ownDocTransportInsurance => 'Transport insurance and authority';
+
+  @override
+  String get ownDocTransportInsuranceNote =>
+      'Commercial auto policy, transporter authority, USDOT/MC registration, or carrier agreement.';
+
+  @override
+  String get ownDocOpen => 'Open document';
+
+  @override
+  String ownDocUploaded(String name) {
+    return 'Uploaded: $name';
+  }
+
+  @override
+  String get ownDocNoFile => 'No file uploaded yet';
+
+  @override
+  String get ownDocChoose => 'Choose document';
+
+  @override
+  String ownDocSelected(String name, int kb) {
+    return '$name ($kb KB)';
+  }
+
+  @override
+  String get ownDocUpload => 'Upload document';
+
+  @override
+  String get ownDocUploading => 'Uploading...';
+
+  @override
+  String get ownDocDone => 'Document uploaded.';
+
+  @override
+  String get ownDocFailed => 'The document was not uploaded. Try again.';
+
+  @override
+  String get ownDocBadType => 'Documents must be PDF, Word, or image files.';
+
+  @override
+  String get ownDocTooBig => 'Documents must be under 20 MB.';
+
+  @override
+  String get ownDocEmpty => 'That file is empty.';
+
+  @override
+  String get ownDocPickFailed => 'We could not read that file. Try again.';
+
+  @override
+  String get ownDocNotAllowed =>
+      'You cannot upload documents for this business.';
+
+  @override
   String get pcsPrice => 'Price';
 
   @override

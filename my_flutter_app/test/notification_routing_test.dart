@@ -325,6 +325,29 @@ void businessRoutingTests() {
       );
     });
 
+    test('a transport quote won or lost opens the transport screen', () {
+      for (final type in ['transport_quote_won', 'transport_quote_lost']) {
+        expect(
+          routeForNotificationData({'type': type}, audience: business)?.name,
+          '/business-transport',
+          reason: type,
+        );
+      }
+    });
+
+    test('a transport quote notice belongs to the transport requests', () {
+      expect(collectionForNotificationType('transport_quote_won'),
+          'transportRequests');
+      expect(collectionForNotificationType('transport_quote_lost'),
+          'transportRequests');
+    });
+
+    test('a transport quote notice is not a customer route', () {
+      for (final type in ['transport_quote_won', 'transport_quote_lost']) {
+        expect(routeForNotificationData({'type': type}), isNull, reason: type);
+      }
+    });
+
     test('quote and pool notices land on the business home list', () {
       final freight = routeForNotificationData({'type': 'freight_quote_request'},
           audience: business);

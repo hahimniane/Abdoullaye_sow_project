@@ -9,6 +9,8 @@ import '../providers/auth_provider.dart';
 import '../screens/support_inbox_screen.dart';
 import 'bank_zelle_settings_screen.dart';
 import 'my_card_screen.dart';
+import 'team_cards_screen.dart';
+import '../utils/business_permissions.dart';
 import '../services/support_service.dart';
 import '../services/biometric_lock_service.dart';
 import '../services/business_card.dart';
@@ -367,6 +369,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ).push(
                               MaterialPageRoute<void>(
                                 builder: (_) => const MyCardScreen(),
+                              ),
+                            ),
+                          ),
+                        ],
+                        // The business's cards for the team: the owner and
+                        // anyone who may see People (docs/BUSINESS_CARDS.md).
+                        if ((authProvider.businessId ?? '').isNotEmpty &&
+                            (authProvider.isBusinessOwner ||
+                                authProvider.hasBusinessPermission(
+                                  BusinessPermission.people,
+                                ))) ...[
+                          const Divider(height: 1),
+                          _SettingRow(
+                            key: const Key('settings-team-cards'),
+                            icon: Icons.groups_2_outlined,
+                            title: l10n.ownCardsEntryTitle,
+                            subtitle: l10n.ownCardsEntrySubtitle,
+                            onTap: () => Navigator.of(
+                              context,
+                              rootNavigator: true,
+                            ).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => TeamCardsScreen(
+                                  businessId: authProvider.businessId!,
+                                ),
                               ),
                             ),
                           ),

@@ -868,3 +868,6 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   across two `pumpWidget` calls keeps the first call's streams: give it a
   `UniqueKey`. A 320 px French test that overflows in `LotPrimaryBar` or a
   header row is a real bug: fix the widget, not the test.
+- A `ListTile`/`SwitchListTile`/`InkWell` inside a `Container` that has a `BoxDecoration` colour throws "ListTile background color or ink splashes may be invisible" in a widget test (and hides the ink on a phone). Give the tiles their own `Material(type: MaterialType.transparency)`, or build the card as a `Material` with a shape instead of a decorated `Container`.
+- `XFile.fromData(bytes, name: ...)` ignores `name` on dart:io, so a picker test that builds files that way gets an empty file name. A picker boundary should hand the screen a small value (`ChosenFile`: name, mime type, a `read` function), not an `XFile`, so a test controls the name.
+- A loading screen with a spinner never lets `pumpAndSettle` finish before its safety timeout fires (fake time runs on); to assert the spinner, pump once instead of settling, then advance past the timeout and assert the retry.

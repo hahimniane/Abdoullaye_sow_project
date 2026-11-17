@@ -16,6 +16,7 @@ import '../theme/app_colors.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/country_phone_field.dart';
 import '../widgets/language_toggle.dart';
+import '../widgets/pay_now_payouts_panel.dart';
 import 'staff_car_management_screen.dart';
 import '../utils/service_catalog_localization.dart';
 
@@ -143,6 +144,12 @@ class _PlatformAdminDashboardScreenState
                                 const SizedBox(height: 16),
                               if (canViewFinance) const _FinancePanel(),
                             ],
+                            if (canViewFinance)
+                              PayNowPayoutsPanel(
+                                canPayOut: access.canManage(
+                                  PlatformSection.finance,
+                                ),
+                              ),
                             const SizedBox(height: 16),
                             if (wide && canViewBusinesses && canViewOperations)
                               const Row(

@@ -30,7 +30,33 @@ const staffBalancesRefusals = {
   'handover_not_receiver',
   'handover_not_pending',
   'opening_owner_only',
+  'counted_sources_owner_only',
+  'counted_sources_invalid',
 };
+
+/// Which kinds of money count as the business's (docs/STAFF_BALANCES.md §7).
+const countedSourceKeys = ['parking', 'activity', 'package', 'shop', 'invoice'];
+
+/// Every key on unless the owner chose otherwise; invoices are off (staff's own
+/// car sales).
+const countedSourceDefaults = <String, bool>{
+  'parking': true,
+  'activity': true,
+  'package': true,
+  'shop': true,
+  'invoice': false,
+};
+
+/// The business's choice with every key filled from the defaults.
+Map<String, bool> countedSourcesFrom(Object? value) {
+  final given = callableMap(value);
+  return {
+    for (final key in countedSourceKeys)
+      key: given[key] is bool
+          ? given[key] as bool
+          : countedSourceDefaults[key]!,
+  };
+}
 
 /// Where the pending list is allowed to wait before the screen gives up and
 /// shows "could not load" - loading always resolves.
@@ -449,6 +475,7 @@ class StaffBalancesSnapshot {
     required this.staff,
     required this.businessAccount,
     required this.pending,
+    this.counted = countedSourceDefaults,
   });
 
   factory StaffBalancesSnapshot.fromCallable(Object? data) {
@@ -456,6 +483,7 @@ class StaffBalancesSnapshot {
     final staff = d['staff'];
     final pending = d['pending'];
     return StaffBalancesSnapshot(
+      counted: countedSourcesFrom(d['counted']),
       asOf: _moment(d['asOfMs']),
       staff: [
         if (staff is List)
@@ -477,6 +505,9 @@ class StaffBalancesSnapshot {
   final List<StaffBalanceRow> staff;
   final BusinessAccountRow businessAccount;
   final List<StaffHandover> pending;
+
+  /// What counts as the business's money, every key filled.
+  final Map<String, bool> counted;
 
   /// A name for a staff id or the business account's id; '' when unknown.
   String nameOf(String id) {
@@ -795,6 +826,21 @@ class StaffBalancesService {
       'businessId': businessId,
       'handoverId': handoverId,
       if (reason.trim().isNotEmpty) 'reason': reason.trim(),
+    });
+  }
+
+  /// `set_counted_sources`: owner or platform admin only. Sends the full choice.
+  Future<void> setCountedSources(
+    String businessId,
+    Map<String, bool> sources,
+  ) async {
+    await _call({
+      'action': 'set_counted_sources',
+      'businessId': businessId,
+      'sources': {
+        for (final key in countedSourceKeys)
+          key: sources[key] ?? countedSourceDefaults[key]!,
+      },
     });
   }
 

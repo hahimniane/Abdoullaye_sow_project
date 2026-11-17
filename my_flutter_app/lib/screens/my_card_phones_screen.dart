@@ -27,9 +27,18 @@ class MyCardPhonesScreen extends StatefulWidget {
     required this.service,
     required this.ownPhone,
     this.initial = const [],
+    this.uid,
+    this.businessId,
   });
 
   final BusinessCardService service;
+
+  /// Set when someone who manages the team edits a colleague's numbers: whose
+  /// card it is, and the business. Null for the person's own card.
+  final String? uid;
+  final String? businessId;
+
+  bool get forColleague => (uid ?? '').isNotEmpty;
 
   /// The person's sign-in number, as the card has it.
   final String ownPhone;
@@ -122,7 +131,11 @@ class _MyCardPhonesScreenState extends State<MyCardPhonesScreen> {
     });
     if (incomplete) return;
     try {
-      final saved = await widget.service.savePhones(sent);
+      final saved = await widget.service.savePhones(
+        sent,
+        uid: widget.uid,
+        businessId: widget.businessId,
+      );
       if (!mounted) return;
       Navigator.of(context).pop(saved);
     } on BusinessCardFailure catch (failure) {
@@ -160,10 +173,14 @@ class _MyCardPhonesScreenState extends State<MyCardPhonesScreen> {
     }
     showErrorSnackBar(
       context,
-      failure.notTeamMember
+      widget.forColleague && failure.code == 'permission-denied'
+          ? l10n.ownCardsNumbersNotAllowed
+          : failure.notTeamMember
           ? l10n.myCardNotTeamMember
           : failure.offline
           ? l10n.myCardOffline
+          : widget.forColleague
+          ? l10n.ownCardsNumbersSaveFailed
           : l10n.myCardPhonesSaveFailed,
     );
   }
@@ -183,7 +200,11 @@ class _MyCardPhonesScreenState extends State<MyCardPhonesScreen> {
       backgroundColor: AppColors.cream,
       body: Column(
         children: [
-          InventoryHeader(title: l10n.myCardPhonesTitle),
+          InventoryHeader(
+            title: widget.forColleague
+                ? l10n.ownCardsNumbersTitle
+                : l10n.myCardPhonesTitle,
+          ),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.fromLTRB(
@@ -195,11 +216,17 @@ class _MyCardPhonesScreenState extends State<MyCardPhonesScreen> {
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               children: [
                 if (own.isNotEmpty) ...[
-                  _OwnNumber(key: const Key('my-card-phones-own'), number: own),
+                  _OwnNumber(
+                    key: const Key('my-card-phones-own'),
+                    number: own,
+                    colleague: widget.forColleague,
+                  ),
                   const SizedBox(height: AppSpacing.md),
                 ],
                 Text(
-                  l10n.myCardPhonesIntro,
+                  widget.forColleague
+                      ? l10n.ownCardsNumbersIntro
+                      : l10n.myCardPhonesIntro,
                   style: const TextStyle(
                     fontSize: 13,
                     height: 1.35,
@@ -245,9 +272,14 @@ class _MyCardPhonesScreenState extends State<MyCardPhonesScreen> {
 
 /// The sign-in number, read-only, with the reason it cannot be changed here.
 class _OwnNumber extends StatelessWidget {
-  const _OwnNumber({super.key, required this.number});
+  const _OwnNumber({
+    super.key,
+    required this.number,
+    this.colleague = false,
+  });
 
   final String number;
+  final bool colleague;
 
   @override
   Widget build(BuildContext context) {
@@ -281,7 +313,9 @@ class _OwnNumber extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  l10n.myCardPhonesOwnNote,
+                  colleague
+                      ? l10n.ownCardsNumbersOwnNote
+                      : l10n.myCardPhonesOwnNote,
                   style: const TextStyle(
                     fontSize: 12.5,
                     height: 1.3,
