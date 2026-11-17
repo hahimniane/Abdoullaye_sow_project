@@ -22,6 +22,7 @@ import '../services/whatsapp_conversations.dart' show showBusinessSupportTab;
 import '../services/business_activity_queries.dart';
 import '../services/business_parking_entry.dart';
 import '../services/business_service_overview.dart';
+import '../services/business_today.dart' show todayShowsLedgerAlerts;
 import '../services/container_manifest.dart';
 import '../services/inventory.dart';
 import '../services/shipping_home.dart';
@@ -34,6 +35,7 @@ import '../widgets/container_link_chip.dart';
 import '../widgets/home_destinations.dart';
 import '../widgets/customer_notification_bell.dart';
 import 'business_assistant_screen.dart';
+import 'business_today_screen.dart';
 import 'business_reviews_screen.dart';
 import 'business_transport_screen.dart';
 import 'containers_screen.dart';
@@ -1065,6 +1067,15 @@ class _HomeMenuState extends State<HomeMenu> {
                         ),
                         const SizedBox(height: AppSpacing.xl),
                       ],
+                      // One quiet row to the Today page; everything else it
+                      // shows lives on its own screen, not on this home.
+                      if (_businessId.isNotEmpty &&
+                          auth.hasBusinessDashboardAccess) ...[
+                        HomeDestinationGroup(
+                          rows: [_todayDestination(context, auth, l10n)],
+                        ),
+                        const SizedBox(height: AppSpacing.lg),
+                      ],
                       if (shopOnly)
                         _ShopMoreSection(l10n: l10n)
                       else if (simpleShipping) ...[
@@ -1420,6 +1431,32 @@ class _ServicesSection extends StatelessWidget {
     );
   }
 }
+
+/// The Today row: this month, what is waiting and the money, on its own
+/// screen (the server cuts it to this person's services and permissions).
+HomeDestination _todayDestination(
+  BuildContext context,
+  AuthProvider auth,
+  AppLocalizations l10n,
+) => HomeDestination(
+  rowKey: const Key('open-today'),
+  icon: Icons.today_outlined,
+  title: l10n.tdyTitle,
+  subtitle: l10n.tdyHomeSubtitle,
+  onTap: () {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => BusinessTodayScreen(
+          businessId: auth.businessId ?? '',
+          showLedgerAlerts: todayShowsLedgerAlerts(
+            services: auth.effectiveBusinessServices,
+            hasPermission: auth.hasBusinessPermission,
+          ),
+        ),
+      ),
+    );
+  },
+);
 
 /// The Deliveries row: scan a package and hand it over. One definition for
 /// the standard home (destination staff without Containers) and the simple

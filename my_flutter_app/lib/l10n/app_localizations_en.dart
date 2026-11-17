@@ -13548,6 +13548,248 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pcsAddSize => 'Add size (inches)';
 
   @override
+  String get tdyTitle => 'Today';
+
+  @override
+  String get tdyHomeSubtitle => 'This month, what is waiting, and the money';
+
+  @override
+  String get tdyThisMonth => 'This month';
+
+  @override
+  String tdyComparedWith(String month) {
+    return 'Compared with $month · New York time';
+  }
+
+  @override
+  String get tdyRefresh => 'Refresh';
+
+  @override
+  String get tdyRetry => 'Try again';
+
+  @override
+  String get tdyLoadFailed =>
+      'Today could not be loaded. Check your connection and try again.';
+
+  @override
+  String get tdyRefreshFailed => 'Could not refresh. Showing the last figures.';
+
+  @override
+  String tdyUpdatedAt(String time) {
+    return 'Updated $time';
+  }
+
+  @override
+  String get tdyPartial =>
+      'Some payments could not be counted, so these totals may be low. Refresh in a moment.';
+
+  @override
+  String get tdyFiguresPartial =>
+      'Some figures could not be loaded. Refresh in a moment.';
+
+  @override
+  String get tdyTilePackages => 'Packages received';
+
+  @override
+  String get tdyTileBarrels => 'Barrels received';
+
+  @override
+  String get tdyTileCarsShipped => 'Cars shipped';
+
+  @override
+  String get tdyTileContainers => 'Containers sailed';
+
+  @override
+  String get tdyTileCollected => 'Money collected';
+
+  @override
+  String get tdyTileOwed => 'Still owed';
+
+  @override
+  String get tdyTileShopSales => 'Shop sales';
+
+  @override
+  String get tdyTileInLot => 'Cars in the lot';
+
+  @override
+  String get tdyTileListings => 'Active listings';
+
+  @override
+  String get tdyNoteOpenNow => 'Open now';
+
+  @override
+  String get tdyNotePayments => 'Payments';
+
+  @override
+  String get tdyNoteSpaces => 'Spaces';
+
+  @override
+  String get tdyVsLastMonth => 'vs last month';
+
+  @override
+  String get tdyNoLastMonth => 'No figure last month';
+
+  @override
+  String get tdyNeedsAttention => 'Needs attention';
+
+  @override
+  String get tdyNothingWaiting => 'Nothing is waiting on you right now.';
+
+  @override
+  String get tdyAttPackageRequests => 'Package requests to answer';
+
+  @override
+  String get tdyAttWaitingPackages => 'Packages waiting for a container';
+
+  @override
+  String get tdyAttContainersLoading => 'Containers loading';
+
+  @override
+  String get tdyAttBarrelOrders => 'Open barrel orders';
+
+  @override
+  String get tdyAttFreightOrders => 'Open freight orders';
+
+  @override
+  String get tdyAttCarPurchases => 'Car purchases in progress';
+
+  @override
+  String get tdyAttTransport => 'Open transport requests';
+
+  @override
+  String get tdyAttSupport => 'Support requests';
+
+  @override
+  String get tdyAttPackagesOwed => 'Unpaid package balances';
+
+  @override
+  String get tdyAttOpenInvoices => 'Open invoices';
+
+  @override
+  String get tdyAttParkingOwed => 'Parking balances due';
+
+  @override
+  String get tdyAttShopCredit => 'Shop credit to collect';
+
+  @override
+  String get tdyLedgerPaid => 'Ledger payment received';
+
+  @override
+  String get tdyLedgerVoided => 'Ledger entry voided';
+
+  @override
+  String get tdyLedgerEdited => 'Ledger entry edited';
+
+  @override
+  String get tdyLedgerLinked => 'Parking bill linked';
+
+  @override
+  String get tdyLedgerUnlinked => 'Parking bill unlinked';
+
+  @override
+  String get tdyLedgerRepaid => 'Staff paid back for expenses';
+
+  @override
+  String get tdyLedgerRepaymentVoided => 'Staff payback voided';
+
+  @override
+  String get tdyLedgerByStaff => 'by staff';
+
+  @override
+  String get tdyDismiss => 'Dismiss';
+
+  @override
+  String get tdyDismissFailed => 'Could not dismiss that. Try again.';
+
+  @override
+  String get tdyContainersTitle => 'Containers in progress';
+
+  @override
+  String get tdyContainersOpen => 'Open containers';
+
+  @override
+  String get tdyContainersEmpty => 'No container is loading or at sea.';
+
+  @override
+  String get tdyContainersMore => 'See every open container';
+
+  @override
+  String get tdyContainerPieces => 'Pieces';
+
+  @override
+  String get tdyContainerSailed => 'Sailed';
+
+  @override
+  String get tdyMoneyTitle => 'Money collected this month';
+
+  @override
+  String get tdyTotal => 'Total';
+
+  @override
+  String get tdyByService => 'By service';
+
+  @override
+  String get tdyByMethod => 'By method';
+
+  @override
+  String get tdyNoPayments => 'No payments recorded this month yet.';
+
+  @override
+  String get tdyLastMonth => 'Last month';
+
+  @override
+  String get tdyStillOwed => 'Still owed by customers';
+
+  @override
+  String get tdyMoneyHint =>
+      'Counter payments (cash, Zelle, card in person and the rest) and online card payments, by the day they were received.';
+
+  @override
+  String get tdySvcPackages => 'Barrels & packages';
+
+  @override
+  String get tdySvcInvoices => 'Invoices';
+
+  @override
+  String get tdySvcLot => 'Lot jobs';
+
+  @override
+  String get tdySvcParking => 'Parking';
+
+  @override
+  String get tdySvcShop => 'Shop sales';
+
+  @override
+  String get tdySvcOnline => 'Online orders';
+
+  @override
+  String get tdyOwedShopCredit => 'Shop credit';
+
+  @override
+  String get tdyMethodCash => 'Cash';
+
+  @override
+  String get tdyMethodZelle => 'Zelle';
+
+  @override
+  String get tdyMethodCashApp => 'Cash App';
+
+  @override
+  String get tdyMethodVenmo => 'Venmo';
+
+  @override
+  String get tdyMethodCheck => 'Check';
+
+  @override
+  String get tdyMethodCardInPerson => 'Card in person';
+
+  @override
+  String get tdyMethodOnline => 'Online (card)';
+
+  @override
+  String get tdyMethodOther => 'Other';
+
+  @override
   String pcsRemovePiece(int number) {
     return 'Remove piece $number';
   }

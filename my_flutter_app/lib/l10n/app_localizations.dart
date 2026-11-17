@@ -23387,6 +23387,474 @@ abstract class AppLocalizations {
   /// **'Add size (inches)'**
   String get pcsAddSize;
 
+  /// No description provided for @tdyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Today'**
+  String get tdyTitle;
+
+  /// No description provided for @tdyHomeSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'This month, what is waiting, and the money'**
+  String get tdyHomeSubtitle;
+
+  /// No description provided for @tdyThisMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'This month'**
+  String get tdyThisMonth;
+
+  /// No description provided for @tdyComparedWith.
+  ///
+  /// In en, this message translates to:
+  /// **'Compared with {month} · New York time'**
+  String tdyComparedWith(String month);
+
+  /// No description provided for @tdyRefresh.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh'**
+  String get tdyRefresh;
+
+  /// No description provided for @tdyRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get tdyRetry;
+
+  /// No description provided for @tdyLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Today could not be loaded. Check your connection and try again.'**
+  String get tdyLoadFailed;
+
+  /// No description provided for @tdyRefreshFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not refresh. Showing the last figures.'**
+  String get tdyRefreshFailed;
+
+  /// No description provided for @tdyUpdatedAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Updated {time}'**
+  String tdyUpdatedAt(String time);
+
+  /// No description provided for @tdyPartial.
+  ///
+  /// In en, this message translates to:
+  /// **'Some payments could not be counted, so these totals may be low. Refresh in a moment.'**
+  String get tdyPartial;
+
+  /// No description provided for @tdyFiguresPartial.
+  ///
+  /// In en, this message translates to:
+  /// **'Some figures could not be loaded. Refresh in a moment.'**
+  String get tdyFiguresPartial;
+
+  /// No description provided for @tdyTilePackages.
+  ///
+  /// In en, this message translates to:
+  /// **'Packages received'**
+  String get tdyTilePackages;
+
+  /// No description provided for @tdyTileBarrels.
+  ///
+  /// In en, this message translates to:
+  /// **'Barrels received'**
+  String get tdyTileBarrels;
+
+  /// No description provided for @tdyTileCarsShipped.
+  ///
+  /// In en, this message translates to:
+  /// **'Cars shipped'**
+  String get tdyTileCarsShipped;
+
+  /// No description provided for @tdyTileContainers.
+  ///
+  /// In en, this message translates to:
+  /// **'Containers sailed'**
+  String get tdyTileContainers;
+
+  /// No description provided for @tdyTileCollected.
+  ///
+  /// In en, this message translates to:
+  /// **'Money collected'**
+  String get tdyTileCollected;
+
+  /// No description provided for @tdyTileOwed.
+  ///
+  /// In en, this message translates to:
+  /// **'Still owed'**
+  String get tdyTileOwed;
+
+  /// No description provided for @tdyTileShopSales.
+  ///
+  /// In en, this message translates to:
+  /// **'Shop sales'**
+  String get tdyTileShopSales;
+
+  /// No description provided for @tdyTileInLot.
+  ///
+  /// In en, this message translates to:
+  /// **'Cars in the lot'**
+  String get tdyTileInLot;
+
+  /// No description provided for @tdyTileListings.
+  ///
+  /// In en, this message translates to:
+  /// **'Active listings'**
+  String get tdyTileListings;
+
+  /// No description provided for @tdyNoteOpenNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Open now'**
+  String get tdyNoteOpenNow;
+
+  /// No description provided for @tdyNotePayments.
+  ///
+  /// In en, this message translates to:
+  /// **'Payments'**
+  String get tdyNotePayments;
+
+  /// No description provided for @tdyNoteSpaces.
+  ///
+  /// In en, this message translates to:
+  /// **'Spaces'**
+  String get tdyNoteSpaces;
+
+  /// No description provided for @tdyVsLastMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'vs last month'**
+  String get tdyVsLastMonth;
+
+  /// No description provided for @tdyNoLastMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'No figure last month'**
+  String get tdyNoLastMonth;
+
+  /// No description provided for @tdyNeedsAttention.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs attention'**
+  String get tdyNeedsAttention;
+
+  /// No description provided for @tdyNothingWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing is waiting on you right now.'**
+  String get tdyNothingWaiting;
+
+  /// No description provided for @tdyAttPackageRequests.
+  ///
+  /// In en, this message translates to:
+  /// **'Package requests to answer'**
+  String get tdyAttPackageRequests;
+
+  /// No description provided for @tdyAttWaitingPackages.
+  ///
+  /// In en, this message translates to:
+  /// **'Packages waiting for a container'**
+  String get tdyAttWaitingPackages;
+
+  /// No description provided for @tdyAttContainersLoading.
+  ///
+  /// In en, this message translates to:
+  /// **'Containers loading'**
+  String get tdyAttContainersLoading;
+
+  /// No description provided for @tdyAttBarrelOrders.
+  ///
+  /// In en, this message translates to:
+  /// **'Open barrel orders'**
+  String get tdyAttBarrelOrders;
+
+  /// No description provided for @tdyAttFreightOrders.
+  ///
+  /// In en, this message translates to:
+  /// **'Open freight orders'**
+  String get tdyAttFreightOrders;
+
+  /// No description provided for @tdyAttCarPurchases.
+  ///
+  /// In en, this message translates to:
+  /// **'Car purchases in progress'**
+  String get tdyAttCarPurchases;
+
+  /// No description provided for @tdyAttTransport.
+  ///
+  /// In en, this message translates to:
+  /// **'Open transport requests'**
+  String get tdyAttTransport;
+
+  /// No description provided for @tdyAttSupport.
+  ///
+  /// In en, this message translates to:
+  /// **'Support requests'**
+  String get tdyAttSupport;
+
+  /// No description provided for @tdyAttPackagesOwed.
+  ///
+  /// In en, this message translates to:
+  /// **'Unpaid package balances'**
+  String get tdyAttPackagesOwed;
+
+  /// No description provided for @tdyAttOpenInvoices.
+  ///
+  /// In en, this message translates to:
+  /// **'Open invoices'**
+  String get tdyAttOpenInvoices;
+
+  /// No description provided for @tdyAttParkingOwed.
+  ///
+  /// In en, this message translates to:
+  /// **'Parking balances due'**
+  String get tdyAttParkingOwed;
+
+  /// No description provided for @tdyAttShopCredit.
+  ///
+  /// In en, this message translates to:
+  /// **'Shop credit to collect'**
+  String get tdyAttShopCredit;
+
+  /// No description provided for @tdyLedgerPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Ledger payment received'**
+  String get tdyLedgerPaid;
+
+  /// No description provided for @tdyLedgerVoided.
+  ///
+  /// In en, this message translates to:
+  /// **'Ledger entry voided'**
+  String get tdyLedgerVoided;
+
+  /// No description provided for @tdyLedgerEdited.
+  ///
+  /// In en, this message translates to:
+  /// **'Ledger entry edited'**
+  String get tdyLedgerEdited;
+
+  /// No description provided for @tdyLedgerLinked.
+  ///
+  /// In en, this message translates to:
+  /// **'Parking bill linked'**
+  String get tdyLedgerLinked;
+
+  /// No description provided for @tdyLedgerUnlinked.
+  ///
+  /// In en, this message translates to:
+  /// **'Parking bill unlinked'**
+  String get tdyLedgerUnlinked;
+
+  /// No description provided for @tdyLedgerRepaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Staff paid back for expenses'**
+  String get tdyLedgerRepaid;
+
+  /// No description provided for @tdyLedgerRepaymentVoided.
+  ///
+  /// In en, this message translates to:
+  /// **'Staff payback voided'**
+  String get tdyLedgerRepaymentVoided;
+
+  /// No description provided for @tdyLedgerByStaff.
+  ///
+  /// In en, this message translates to:
+  /// **'by staff'**
+  String get tdyLedgerByStaff;
+
+  /// No description provided for @tdyDismiss.
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss'**
+  String get tdyDismiss;
+
+  /// No description provided for @tdyDismissFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not dismiss that. Try again.'**
+  String get tdyDismissFailed;
+
+  /// No description provided for @tdyContainersTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Containers in progress'**
+  String get tdyContainersTitle;
+
+  /// No description provided for @tdyContainersOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open containers'**
+  String get tdyContainersOpen;
+
+  /// No description provided for @tdyContainersEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No container is loading or at sea.'**
+  String get tdyContainersEmpty;
+
+  /// No description provided for @tdyContainersMore.
+  ///
+  /// In en, this message translates to:
+  /// **'See every open container'**
+  String get tdyContainersMore;
+
+  /// No description provided for @tdyContainerPieces.
+  ///
+  /// In en, this message translates to:
+  /// **'Pieces'**
+  String get tdyContainerPieces;
+
+  /// No description provided for @tdyContainerSailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Sailed'**
+  String get tdyContainerSailed;
+
+  /// No description provided for @tdyMoneyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Money collected this month'**
+  String get tdyMoneyTitle;
+
+  /// No description provided for @tdyTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Total'**
+  String get tdyTotal;
+
+  /// No description provided for @tdyByService.
+  ///
+  /// In en, this message translates to:
+  /// **'By service'**
+  String get tdyByService;
+
+  /// No description provided for @tdyByMethod.
+  ///
+  /// In en, this message translates to:
+  /// **'By method'**
+  String get tdyByMethod;
+
+  /// No description provided for @tdyNoPayments.
+  ///
+  /// In en, this message translates to:
+  /// **'No payments recorded this month yet.'**
+  String get tdyNoPayments;
+
+  /// No description provided for @tdyLastMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'Last month'**
+  String get tdyLastMonth;
+
+  /// No description provided for @tdyStillOwed.
+  ///
+  /// In en, this message translates to:
+  /// **'Still owed by customers'**
+  String get tdyStillOwed;
+
+  /// No description provided for @tdyMoneyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Counter payments (cash, Zelle, card in person and the rest) and online card payments, by the day they were received.'**
+  String get tdyMoneyHint;
+
+  /// No description provided for @tdySvcPackages.
+  ///
+  /// In en, this message translates to:
+  /// **'Barrels & packages'**
+  String get tdySvcPackages;
+
+  /// No description provided for @tdySvcInvoices.
+  ///
+  /// In en, this message translates to:
+  /// **'Invoices'**
+  String get tdySvcInvoices;
+
+  /// No description provided for @tdySvcLot.
+  ///
+  /// In en, this message translates to:
+  /// **'Lot jobs'**
+  String get tdySvcLot;
+
+  /// No description provided for @tdySvcParking.
+  ///
+  /// In en, this message translates to:
+  /// **'Parking'**
+  String get tdySvcParking;
+
+  /// No description provided for @tdySvcShop.
+  ///
+  /// In en, this message translates to:
+  /// **'Shop sales'**
+  String get tdySvcShop;
+
+  /// No description provided for @tdySvcOnline.
+  ///
+  /// In en, this message translates to:
+  /// **'Online orders'**
+  String get tdySvcOnline;
+
+  /// No description provided for @tdyOwedShopCredit.
+  ///
+  /// In en, this message translates to:
+  /// **'Shop credit'**
+  String get tdyOwedShopCredit;
+
+  /// No description provided for @tdyMethodCash.
+  ///
+  /// In en, this message translates to:
+  /// **'Cash'**
+  String get tdyMethodCash;
+
+  /// No description provided for @tdyMethodZelle.
+  ///
+  /// In en, this message translates to:
+  /// **'Zelle'**
+  String get tdyMethodZelle;
+
+  /// No description provided for @tdyMethodCashApp.
+  ///
+  /// In en, this message translates to:
+  /// **'Cash App'**
+  String get tdyMethodCashApp;
+
+  /// No description provided for @tdyMethodVenmo.
+  ///
+  /// In en, this message translates to:
+  /// **'Venmo'**
+  String get tdyMethodVenmo;
+
+  /// No description provided for @tdyMethodCheck.
+  ///
+  /// In en, this message translates to:
+  /// **'Check'**
+  String get tdyMethodCheck;
+
+  /// No description provided for @tdyMethodCardInPerson.
+  ///
+  /// In en, this message translates to:
+  /// **'Card in person'**
+  String get tdyMethodCardInPerson;
+
+  /// No description provided for @tdyMethodOnline.
+  ///
+  /// In en, this message translates to:
+  /// **'Online (card)'**
+  String get tdyMethodOnline;
+
+  /// No description provided for @tdyMethodOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get tdyMethodOther;
+
   /// No description provided for @pcsRemovePiece.
   ///
   /// In en, this message translates to:
