@@ -7159,6 +7159,681 @@
     }
   },
   "pcsErrPiecesRequired": "Ajoutez au moins un colis.",
+  "fltTitle": "Flotte",
+  "fltHomeSubtitle": "Paiements, chauffeurs, plaques et banque",
+  "fltTabPayments": "Paiements",
+  "fltTabDrivers": "Chauffeurs",
+  "fltTabPlates": "Plaques",
+  "fltTabBank": "Banque",
+  "fltTabSettings": "Réglages",
+  "fltCancel": "Annuler",
+  "fltClose": "Fermer",
+  "fltClear": "Effacer",
+  "fltRetry": "Réessayer",
+  "fltSaved": "Enregistré.",
+  "fltShowMore": "Afficher plus",
+  "fltYes": "Oui",
+  "fltNo": "Non",
+  "fltRemove": "Retirer",
+  "fltEditDetails": "Modifier",
+  "fltLoadFailed": "La flotte n’a pas pu être chargée. Vérifiez votre connexion et réessayez.",
+  "fltErrOffline": "Pas de connexion. Vérifiez votre internet et réessayez.",
+  "fltErrUnknown": "Une erreur est survenue. Réessayez.",
+  "fltRefusalOff": "La flotte n’est pas activée pour cette entreprise.",
+  "fltRefusalAdminOnly": "Seul un administrateur de la flotte peut faire cela.",
+  "fltRefusalNotFound": "Cet élément est introuvable.",
+  "fltRefusalCarTaken": "Cette plaque a déjà un chauffeur. Reprenez-la d’abord.",
+  "fltRefusalBadInput": "Des informations sont manquantes ou invalides.",
+  "fltRefusalNoAmount": "Saisissez un montant supérieur à zéro.",
+  "fltRefusalAlreadyUndone": "Ce paiement a déjà été annulé.",
+  "fltRefusalNotOpen": "Seule une facture ouverte peut être exonérée.",
+  "fltRefusalReasonRequired": "Indiquez la raison.",
+  "fltRefusalImportLocked": "Un paiement importé depuis le tableur ne peut pas être annulé ici.",
+  "fltRefusalFriendOverlap": "Un autre ami a déjà cette voiture ces jours-là.",
+  "fltRefusalNoteEmpty": "Écrivez une note.",
+  "fltRefusalNoteVoided": "Cette note a déjà été retirée.",
+  "fltRefusalBadFile": "Un fichier n’est pas accepté (images ou PDF, jusqu’à 10 Mo).",
+  "fltRefusalDepositUsed": "Ce dépôt a déjà servi pour un autre paiement.",
+  "fltRefusalNoBank": "Connectez d’abord la banque de l’entreprise (Profil, Banque pour les vérifications Zelle).",
+  "fltRefusalBadPhone": "Saisissez un numéro de téléphone avec son indicatif.",
+  "fltRefusalWhatsappOff": "WhatsApp est désactivé pour ce chauffeur (réglages de la flotte).",
+  "fltRefusalNothingOwed": "Ce chauffeur ne doit rien pour le moment.",
+  "fltRefusalNoPhone": "Ce chauffeur n’a pas de numéro WhatsApp. Ajoutez-en un dans Modifier.",
+  "fltRefusalDriverLeft": "Ce chauffeur est parti.",
+  "fltRefusalStaffOnly": "Ce compte n’est pas autorisé à gérer la flotte.",
+  "fltPeriodWeek": "Semaine",
+  "fltPeriodMonth": "Mois",
+  "fltPeriodPrevious": "Période précédente",
+  "fltPeriodNext": "Période suivante",
+  "fltPeriodTotals": "Payé {paid} sur {billed} facturés",
+  "@fltPeriodTotals": {
+    "placeholders": {
+      "paid": {
+        "type": "String"
+      },
+      "billed": {
+        "type": "String"
+      }
+    }
+  },
+  "fltSearchDrivers": "Nom, téléphone ou plaque",
+  "fltViewActive": "Actifs",
+  "fltViewLeft": "Partis",
+  "fltViewEveryone": "Tous",
+  "fltStateOwes": "Doit",
+  "fltStatePart": "Payé en partie",
+  "fltStatePaid": "Payé en entier",
+  "fltChipLate": "En retard",
+  "fltChipOwes": "Doit",
+  "fltChipCredit": "Crédit",
+  "fltChipNoPlate": "Sans plaque",
+  "fltChipNoFee": "Sans loyer",
+  "fltSortBy": "Trier par",
+  "fltSortName": "Nom A-Z",
+  "fltSortOwed": "Plus dû d’abord",
+  "fltSortPaid": "Plus payé d’abord",
+  "fltSortZelleCents": "Centimes Zelle",
+  "fltNoDriverMatches": "Aucun chauffeur ne correspond. Changez la recherche ou les filtres.",
+  "fltNoDriversYet": "Aucun chauffeur pour le moment.",
+  "fltNoDriverInList": "Aucun chauffeur dans cette liste.",
+  "fltBilledAmount": "Facturé {amount}",
+  "@fltBilledAmount": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "fltLateAmount": "En retard {amount}",
+  "@fltLateAmount": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "fltCreditAmount": "Crédit {amount}",
+  "@fltCreditAmount": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "fltTileCollected": "Encaissé ce mois-ci",
+  "fltTileOfBilled": "sur {amount} facturés",
+  "@fltTileOfBilled": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "fltTileNothingBilled": "Rien de facturé pour l’instant",
+  "fltTileOwed": "Dû maintenant",
+  "fltTileDriversOwe": "{count, plural, one{{count} chauffeur doit} other{{count} chauffeurs doivent}}",
+  "@fltTileDriversOwe": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fltTileLate": "Chauffeurs en retard",
+  "fltTilePastDue": "{amount} en retard",
+  "@fltTilePastDue": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "fltTileNobodyLate": "Personne n’est en retard",
+  "fltDriver": "Chauffeur",
+  "fltAddDriver": "Ajouter un chauffeur",
+  "fltEditDriver": "Modifier le chauffeur",
+  "fltSaveDriver": "Enregistrer",
+  "fltStatusActive": "Actif",
+  "fltStatusLeft": "Parti",
+  "fltFieldFullName": "Nom complet",
+  "fltFieldPhone": "Téléphone",
+  "fltFieldTlc": "Licence TLC",
+  "fltFieldStreet": "Adresse",
+  "fltFieldCity": "Ville",
+  "fltFieldState": "État",
+  "fltFieldZip": "Code postal",
+  "fltFieldNotes": "Notes",
+  "fltFieldNote": "Note",
+  "fltFactJoined": "Arrivé le",
+  "fltFactWithCompany": "Avec l’entreprise",
+  "fltFactPlate": "Plaque actuelle",
+  "fltFactOwed": "Dû maintenant",
+  "fltFactLate": "En retard",
+  "fltFactCredit": "Crédit",
+  "fltFactNextDue": "Prochaine échéance",
+  "fltTenureYears": "{count, plural, one{{count} an} other{{count} ans}}",
+  "@fltTenureYears": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fltTenureMonths": "{count} mois",
+  "@fltTenureMonths": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fltTenureDays": "{count, plural, one{{count} jour} other{{count} jours}}",
+  "@fltTenureDays": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fltNoZelleCents": "Ce chauffeur n’a pas encore de centimes Zelle (seuls les chauffeurs actifs en ont).",
+  "fltZelleAmountFor": "Montant Zelle de ce chauffeur : {amount}. Les deux derniers chiffres sont ceux du chauffeur : le montant dit qui a payé.",
+  "@fltZelleAmountFor": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "fltRecordPayment": "Enregistrer un paiement",
+  "fltRecordPaymentAction": "Enregistrer",
+  "fltAddCharge": "Ajouter des frais",
+  "fltAddChargeAction": "Ajouter",
+  "fltSendReminder": "Envoyer un rappel WhatsApp",
+  "fltReminderSent": "Le rappel WhatsApp a été envoyé.",
+  "fltPlateCardTitle": "Plaque",
+  "fltPlateSince": "Depuis le {day} · {rent} · échéance {due}",
+  "@fltPlateSince": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      },
+      "rent": {
+        "type": "String"
+      },
+      "due": {
+        "type": "String"
+      }
+    }
+  },
+  "fltNoPlateNow": "Aucune plaque pour le moment.",
+  "fltGivePlate": "Donner une plaque",
+  "fltGivePlateAction": "Donner la plaque",
+  "fltPlateReturned": "Plaque rendue",
+  "fltPlateReturnedAction": "Plaque rendue",
+  "fltNoFreePlates": "Chaque plaque a un chauffeur. Ajoutez d’abord une plaque, ou reprenez-en une.",
+  "fltFieldPlate": "Plaque",
+  "fltFieldStartDay": "Début le",
+  "fltFieldRent": "Loyer ($)",
+  "fltFieldReturnedOn": "Rendue le",
+  "fltPeriodMonthly": "Mensuel",
+  "fltPeriodWeekly": "Hebdomadaire",
+  "fltFieldDueDay": "Jour d’échéance du mois",
+  "fltFieldDueWeekday": "Jour d’échéance",
+  "fltWeekdayMon": "Lundi",
+  "fltWeekdayTue": "Mardi",
+  "fltWeekdayWed": "Mercredi",
+  "fltWeekdayThu": "Jeudi",
+  "fltWeekdayFri": "Vendredi",
+  "fltWeekdaySat": "Samedi",
+  "fltWeekdaySun": "Dimanche",
+  "fltRentPerMonth": "{amount} par mois",
+  "@fltRentPerMonth": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "fltRentPerWeek": "{amount} par semaine",
+  "@fltRentPerWeek": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "fltReturnRuleFull": "Une plaque rendue en cours de période est facturée pour toute la période.",
+  "fltReturnRuleDays": "Une plaque rendue en cours de période est facturée pour les jours utilisés.",
+  "fltFieldAmount": "Montant ($)",
+  "fltFieldPaidOn": "Payé le",
+  "fltFieldWhatFor": "Pour quoi",
+  "fltFieldDueOn": "Échéance le",
+  "fltMethodZelle": "Zelle",
+  "fltMethodCash": "Espèces",
+  "fltMethodOther": "Autre",
+  "fltMethodImport": "Tableur",
+  "fltPaymentHint": "Il est réparti d’abord sur les plus anciennes factures ; l’excédent devient du crédit.",
+  "fltPaymentRecorded": "Paiement enregistré",
+  "fltPaymentSpread": "Il a été réparti sur leurs factures ouvertes, les plus anciennes d’abord.",
+  "fltPaymentWentToCredit": "{amount} dépassait ce qu’ils devaient et est allé en crédit, qui paiera leur prochaine facture.",
+  "@fltPaymentWentToCredit": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "fltTrackRecord": "Historique",
+  "fltTrackRecordEmpty": "Rien pour l’instant.",
+  "fltEntryJoined": "Arrivé avec la plaque {plate}",
+  "@fltEntryJoined": {
+    "placeholders": {
+      "plate": {
+        "type": "String"
+      }
+    }
+  },
+  "fltEntryCarGiven": "Plaque {plate} donnée, {rent}",
+  "@fltEntryCarGiven": {
+    "placeholders": {
+      "plate": {
+        "type": "String"
+      },
+      "rent": {
+        "type": "String"
+      }
+    }
+  },
+  "fltEntryCarReturned": "Plaque {plate} rendue",
+  "@fltEntryCarReturned": {
+    "placeholders": {
+      "plate": {
+        "type": "String"
+      }
+    }
+  },
+  "fltEntryRentChange": "Loyer passé de {from} à {to}",
+  "@fltEntryRentChange": {
+    "placeholders": {
+      "from": {
+        "type": "String"
+      },
+      "to": {
+        "type": "String"
+      }
+    }
+  },
+  "fltEntryLeftBack": "De retour après être parti le {day}",
+  "@fltEntryLeftBack": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "fltEntryLicense": "Ancienne licence TLC {license}",
+  "@fltEntryLicense": {
+    "placeholders": {
+      "license": {
+        "type": "String"
+      }
+    }
+  },
+  "fltEntryFriend": "{name} a conduit la plaque {plate}, du {from} au {to}",
+  "@fltEntryFriend": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "plate": {
+        "type": "String"
+      },
+      "from": {
+        "type": "String"
+      },
+      "to": {
+        "type": "String"
+      }
+    }
+  },
+  "fltEntryLateFee": "Frais de retard : {label}, {amount}",
+  "@fltEntryLateFee": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "fltEntryCharge": "Frais : {label}, {amount}",
+  "@fltEntryCharge": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "fltEntryWaived": "Exonéré : {label}, {amount} ({reason})",
+  "@fltEntryWaived": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      },
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "fltEntryNote": "Note : {text}",
+  "@fltEntryNote": {
+    "placeholders": {
+      "text": {
+        "type": "String"
+      }
+    }
+  },
+  "fltNotesTitle": "Notes du bureau",
+  "fltAddNote": "Ajouter une note",
+  "fltSaveNote": "Enregistrer la note",
+  "fltNotesEmpty": "Aucune note pour l’instant.",
+  "fltNoteNoFilesHint": "Les fichiers s’ajoutent depuis le site web. Ici, les notes sont du texte seulement.",
+  "fltNoteFilesOnly": "{count, plural, one{{count} fichier} other{{count} fichiers}}",
+  "@fltNoteFilesOnly": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fltNoteRemoved": "retirée",
+  "fltRemoveNoteTitle": "Retirer cette note ?",
+  "fltRemoveNoteMessage": "Elle reste visible, en grisé. Les notes ne sont jamais supprimées.",
+  "fltFriendsTitle": "Amis qui ont conduit",
+  "fltFriendsEmpty": "Aucun ami n’a conduit la voiture de ce chauffeur.",
+  "fltAddFriend": "Ajouter un ami qui a conduit",
+  "fltSaveFriend": "Enregistrer l’ami",
+  "fltFieldFromDay": "Du",
+  "fltFieldToDay": "Au",
+  "fltRemoveFriendTitle": "Retirer cet ami ?",
+  "fltRemoveFriendMessage": "Les jours restent enregistrés, marqués comme retirés.",
+  "fltBillsTitle": "Factures",
+  "fltBillsOpen": "Ouvertes",
+  "fltBillsPaid": "Payées",
+  "fltBillsWaived": "Exonérées",
+  "fltBillsAll": "Toutes",
+  "fltNoBillsYet": "Aucune facture pour l’instant.",
+  "fltNoBillInList": "Aucune facture dans cette liste.",
+  "fltBillDue": "Échéance {day}",
+  "@fltBillDue": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "fltBillPaidAmount": "Payé {amount}",
+  "@fltBillPaidAmount": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "fltBillPaid": "Payée",
+  "fltBillLate": "En retard",
+  "fltBillOpen": "Ouverte",
+  "fltBillWaived": "Exonérée",
+  "fltBillVoid": "Annulée",
+  "fltWaiveTitle": "Exonérer cette facture",
+  "fltWaiveAction": "Exonérer",
+  "fltFieldReason": "Raison",
+  "fltWaiveHint": "Le chauffeur ne la doit plus. La raison reste dans l’historique.",
+  "fltPaymentsTitle": "Paiements",
+  "fltNoPaymentsYet": "Aucun paiement pour l’instant.",
+  "fltNoPaymentInList": "Aucun paiement dans cette liste.",
+  "fltPaymentToCredit": "{amount} en crédit",
+  "@fltPaymentToCredit": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "fltPaymentUndoneChip": "Annulé",
+  "fltUndoAction": "Annuler",
+  "fltUndoPaymentTitle": "Annuler ce paiement ?",
+  "fltUndoPaymentMessage": "Annuler ce paiement de {amount} ? Les factures qu’il a payées sont rouvertes et le crédit qu’il a créé est repris.",
+  "@fltUndoPaymentMessage": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "fltPaymentUndone": "Le paiement a été annulé.",
+  "fltAddPlate": "Ajouter une plaque",
+  "fltEditPlate": "Modifier la plaque",
+  "fltSavePlate": "Enregistrer",
+  "fltPlate": "Plaque",
+  "fltPlatesMode": "Plaques",
+  "fltPaperworkMode": "Papiers",
+  "fltSearchPlates": "Plaque, société ou chauffeur",
+  "fltCarsAll": "Toutes",
+  "fltCarsWithDriver": "Avec chauffeur",
+  "fltCarsFree": "Libres",
+  "fltNoPlatesYet": "Aucune plaque pour l’instant.",
+  "fltNoPlateMatches": "Aucune plaque ne correspond.",
+  "fltNoDriverNow": "Sans chauffeur",
+  "fltRegistrationShort": "Immatriculation",
+  "fltDiamondShort": "Diamant",
+  "fltRegistrationExpires": "Immatriculation expire",
+  "fltDiamondExpires": "Diamant expire",
+  "fltExpiryExpired": "Expiré",
+  "fltExpirySoon": "Dans 60 jours",
+  "fltExpiryMissing": "Manquant",
+  "fltExpiryOk": "OK",
+  "fltFieldCompany": "Société",
+  "fltFieldCarOnPlate": "Voiture sur cette plaque",
+  "fltFieldVin": "VIN",
+  "fltFieldInsurer": "Assureur",
+  "fltFieldPolicy": "Numéro de police",
+  "fltFieldPremium": "Prime mensuelle ($)",
+  "fltFieldInsuranceDueDay": "Jour d’échéance de l’assurance",
+  "fltFieldInsurancePaidBy": "Assurance payée par",
+  "fltFieldAutopay": "Assurance en prélèvement",
+  "fltAutopayOn": "L’assurance est en prélèvement automatique",
+  "fltFieldOwnership": "Propriétaire de la voiture",
+  "fltOwnerCompany": "L’entreprise",
+  "fltOwnerDriver": "Le chauffeur",
+  "fltCarChangedTitle": "Vous avez changé la voiture de cette plaque",
+  "fltCarMoved": "La plaque est passée sur une autre voiture",
+  "fltCarMovedSince": "Depuis (vide = aujourd’hui)",
+  "fltCarTypo": "Même voiture : je corrige une erreur",
+  "fltCarMovedHint": "Quand la plaque change de voiture, l’ancienne reste dans l’historique de la plaque.",
+  "fltCarChangeAsk": "Dites si la plaque est passée sur une autre voiture ou si vous corrigez une erreur.",
+  "fltCarsOnPlate": "Voitures sur cette plaque",
+  "fltCarNow": "actuellement",
+  "fltCarUntil": "jusqu’au {day}",
+  "@fltCarUntil": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "fltWhoHadIt": "Qui l’avait et quand",
+  "fltNobodyHadIt": "Personne n’a encore eu cette plaque.",
+  "fltFriendDrove": "{name} l’a conduite, du {from} au {to}",
+  "@fltFriendDrove": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "from": {
+        "type": "String"
+      },
+      "to": {
+        "type": "String"
+      }
+    }
+  },
+  "fltBankTitle": "Zelle depuis la banque",
+  "fltCheckBankNow": "Vérifier la banque",
+  "fltBankNotConnected": "Connectez la banque de l’entreprise (Profil, Banque pour les vérifications Zelle) et les dépôts Zelle paieront seuls les factures des chauffeurs.",
+  "fltBankGeneric": "Banque",
+  "fltBankAutoNote": "Les dépôts de chauffeurs connus paient seuls leurs factures.",
+  "fltBankLastCheck": "Dernière vérification un jour de paie : {day}",
+  "@fltBankLastCheck": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "fltBankTooSlow": "Les informations bancaires sont trop longues à charger. Réessayez.",
+  "fltBankChecked": "Banque vérifiée. Les nouveaux dépôts de chauffeurs connus sont payés.",
+  "fltBankLimitReached": "La limite mensuelle de vérifications est atteinte : Laawol lit ce que la banque a déjà envoyé.",
+  "fltBankRemovedTitle": "La banque a repris un dépôt",
+  "fltBankRemovedHint": "Le paiement est toujours enregistré. Regardez le compte : si l’argent n’y est pas, annulez le paiement. S’il y est, gardez-le.",
+  "fltAdminDecides": "Un administrateur de la flotte décide.",
+  "fltKeepPayment": "Le garder",
+  "fltKeepPaymentTitle": "Garder ce paiement ?",
+  "fltKeepPaymentMessage": "Faites-le seulement si l’argent est bien sur le compte.",
+  "fltPaymentKept": "Paiement conservé.",
+  "fltBankWaitingTitle": "Dépôts en attente d’un chauffeur",
+  "fltBankNoneWaiting": "Aucun dépôt n’attend de chauffeur.",
+  "fltBankPending": "en attente à la banque",
+  "fltDriverWhoSent": "Chauffeur qui l’a envoyé",
+  "fltPayThisDriver": "Payer ce chauffeur",
+  "fltPickDriverFirst": "Choisissez le chauffeur qui l’a envoyé.",
+  "fltPayWithDepositTitle": "Payer avec ce dépôt ?",
+  "fltPayWithDepositMessage": "Payer les factures de {name} avec ce dépôt ? Ses prochains dépôts du même expéditeur seront payés automatiquement.",
+  "@fltPayWithDepositMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "fltWaitingTwoDrivers": "Il pourrait venir de deux chauffeurs : choisissez le bon.",
+  "fltWaitingUndone": "Son paiement a été annulé : choisissez le bon chauffeur.",
+  "fltWaitingDuplicate": "C’est peut-être un Zelle déjà utilisé, renvoyé par la banque. Ne le payez que si le chauffeur l’a vraiment envoyé deux fois.",
+  "fltWaitingNotZelle": "Ce dépôt n’est pas un Zelle (espèces, chèque, versement de carte ou virement). Choisissez le chauffeur seulement si c’est le paiement d’un chauffeur.",
+  "fltWaitingDriverLeft": "Cet expéditeur payait pour un chauffeur parti. Choisissez pour qui est ce paiement.",
+  "fltWaitingOwnTransfer": "C’est un virement d’un compte bancaire, pas un Zelle d’une personne. Utilisez-le pour un chauffeur seulement s’il a vraiment payé ainsi.",
+  "fltWaitingUnknown": "Laawol ne connaît pas encore cet expéditeur : choisissez le chauffeur une fois et il sera retenu.",
+  "fltSettingsTitle": "Réglages de la flotte",
+  "fltSettingLateFee": "Frais de retard ($, 0 pour aucun)",
+  "fltSettingLateFeeDay": "Les frais s’appliquent le jour du mois (1-28)",
+  "fltSettingFirstMonth": "Premier mois d’application (AAAA-MM)",
+  "fltSettingReturnRule": "Quand une plaque est rendue en cours de période",
+  "fltRuleFull": "Facturer toute la période",
+  "fltRuleDays": "Facturer les jours utilisés",
+  "fltSettingZelleName": "Nom Zelle montré aux chauffeurs",
+  "fltSettingZelleHandle": "E-mail ou téléphone Zelle montré aux chauffeurs",
+  "fltSettingDriversSeeOnly": "Les chauffeurs ne voient que cette entreprise",
+  "fltSettingDriversSeeOnlyHint": "Activé : un chauffeur de la flotte voit les pages et services de cette entreprise sur Laawol, et aucune autre.",
+  "fltSaveSettings": "Enregistrer les réglages",
+  "fltSettingsSaveTitle": "Enregistrer les réglages ?",
+  "fltSettingsSaveMessage": "Les frais de retard et la règle de plaque rendue s’appliquent aux factures à partir de maintenant.",
+  "fltImportOnWebsite": "L’import d’un tableur se fait sur le site web, pas sur le téléphone.",
+  "fltWaTitle": "WhatsApp pour les chauffeurs",
+  "fltWaIntro": "Les chauffeurs reçoivent un reçu à chaque paiement enregistré, et un rappel 2 jours avant l’échéance, le jour même, 3 jours après si c’est toujours impayé, puis chaque semaine.",
+  "fltWaStateOff": "Désactivé : aucun message n’est envoyé aux chauffeurs.",
+  "fltWaStateOn": "Activé : les chauffeurs reçoivent reçus et rappels.",
+  "fltWaStateSome": "{count, plural, one{Activé pour 1 chauffeur choisi seulement.} other{Activé pour {count} chauffeurs choisis seulement.}}",
+  "@fltWaStateSome": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fltWaTestFirst": "Envoyez-vous d’abord un test, puis activez.",
+  "fltWaAllDrivers": "Tous avec téléphone",
+  "fltWaChosenDrivers": "Chauffeurs choisis",
+  "fltWaAddDriver": "Ajouter un chauffeur",
+  "fltWaNoMoreDrivers": "Aucun autre chauffeur actif n’a de numéro de téléphone.",
+  "fltWaSaveWho": "Enregistrer les destinataires",
+  "fltWaTestPhone": "Téléphone pour un message de test",
+  "fltWaSendTest": "Envoyer un test",
+  "fltWaTestSent": "Deux messages de test ont été envoyés : un reçu et un rappel. Vérifiez WhatsApp sur ce téléphone.",
+  "fltWaTestFailed": "Le test n’a pas pu être envoyé. Si ces messages sont nouveaux, Meta les examine peut-être encore : réessayez plus tard.",
+  "fltWaTurnOn": "Activer",
+  "fltWaTurnOff": "Désactiver",
+  "fltWaTurnOnTitle": "Activer WhatsApp pour les chauffeurs ?",
+  "fltWaTurnOffTitle": "Désactiver WhatsApp pour les chauffeurs ?",
+  "fltWaTurnOnAll": "{count, plural, one{Dès maintenant, le chauffeur actif avec un téléphone reçoit un reçu pour chaque paiement et des rappels avant et après l’échéance.} other{Dès maintenant, les {count} chauffeurs actifs avec un téléphone reçoivent un reçu pour chaque paiement et des rappels avant et après l’échéance.}}",
+  "@fltWaTurnOnAll": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fltWaTurnOnSome": "{count, plural, one{Seul 1 chauffeur choisi reçoit des messages. Aucun autre n’en reçoit.} other{Seuls {count} chauffeurs choisis reçoivent des messages. Aucun autre n’en reçoit.}}",
+  "@fltWaTurnOnSome": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fltWaTurnOffMessage": "Plus aucun reçu ni rappel ne sera envoyé.",
+  "fltScheduleTitle": "Vérifications de la banque les jours de paie",
+  "fltScheduleIntro": "La banque informe Laawol des nouveaux dépôts quelques fois par jour, gratuitement. Les jours de paie, Laawol peut demander plus souvent, pour que les paiements apparaissent en quelques minutes. Chaque demande est une vérification payante.",
+  "fltScheduleEvery": "Fréquence les jours de paie",
+  "fltScheduleOff": "Désactivé : seulement quand la banque se met à jour",
+  "fltScheduleEveryHour": "Toutes les heures",
+  "fltScheduleEveryMinutes": "Toutes les {minutes} minutes",
+  "@fltScheduleEveryMinutes": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "fltScheduleFrom": "De",
+  "fltScheduleUntil": "Jusqu’à",
+  "fltSchedulePayDays": "Jours de paie (jour du mois)",
+  "fltScheduleMondays": "Aussi chaque lundi (chauffeurs hebdomadaires)",
+  "fltScheduleQuote": "{count, plural, one{Environ 1 vérification par mois, environ {amount} par mois. Ajouté à votre facture Laawol.} other{Environ {count} vérifications par mois, environ {amount} par mois. Ajouté à votre facture Laawol.}}",
+  "@fltScheduleQuote": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "fltScheduleNoCost": "Aucun coût supplémentaire : les dépôts paient les chauffeurs quand la banque se met à jour, quelques fois par jour.",
+  "fltScheduleSave": "Enregistrer le calendrier",
+  "fltScheduleSaveTitle": "Enregistrer le calendrier ?",
+  "fltScheduleSaveOn": "Vérifier la banque toutes les {minutes} minutes les jours de paie ? Environ {count} vérifications par mois, environ {amount} par mois sur votre facture Laawol.",
+  "@fltScheduleSaveOn": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "fltScheduleSaveOff": "Désactiver les vérifications les jours de paie ? Les dépôts paient toujours les chauffeurs quand la banque se met à jour d’elle-même, sans frais.",
   "pcsErrPiecesTooMany": "Un envoi peut compter au plus 60 colis.",
   "pcsErrKindInvalid": "Indiquez ce qu'est chaque colis : un baril, un carton ou autre chose.",
   "pcsErrDescriptionRequired": "Indiquez ce qu'est chaque carton ou article.",

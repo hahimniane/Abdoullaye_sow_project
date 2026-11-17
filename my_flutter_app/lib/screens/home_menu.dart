@@ -20,6 +20,7 @@ import '../theme/app_motion.dart';
 import '../theme/app_spacing.dart';
 import '../services/whatsapp_conversations.dart' show showBusinessSupportTab;
 import '../services/business_activity_queries.dart';
+import '../services/fleet.dart' show FleetAccess, showsFleetRow;
 import '../services/business_parking_entry.dart';
 import '../services/business_service_overview.dart';
 import '../services/business_today.dart' show todayShowsLedgerAlerts;
@@ -51,6 +52,7 @@ import '../services/parking_lots.dart';
 import '../services/parking_team.dart';
 import '../widgets/parking_lot_widgets.dart';
 import 'office_locations_screen.dart';
+import 'fleet_screen.dart';
 import 'park_car_screen.dart';
 import 'lot_ledger_screen.dart';
 import 'shipping_home_section.dart';
@@ -1070,9 +1072,15 @@ class _HomeMenuState extends State<HomeMenu> {
                       // One quiet row to the Today page; everything else it
                       // shows lives on its own screen, not on this home.
                       if (_businessId.isNotEmpty &&
-                          auth.hasBusinessDashboardAccess) ...[
+                          (auth.hasBusinessDashboardAccess ||
+                              _showsFleetRow(auth))) ...[
                         HomeDestinationGroup(
-                          rows: [_todayDestination(context, auth, l10n)],
+                          rows: [
+                            if (auth.hasBusinessDashboardAccess)
+                              _todayDestination(context, auth, l10n),
+                            if (_showsFleetRow(auth))
+                              _fleetDestination(context, auth, l10n),
+                          ],
                         ),
                         const SizedBox(height: AppSpacing.lg),
                       ],
@@ -1431,6 +1439,46 @@ class _ServicesSection extends StatelessWidget {
     );
   }
 }
+
+/// Fleet access for this person: a business with the Fleet service, and the
+/// `fleet` (or `fleet_admin`) permission; the owner and full-access staff
+/// always hold it.
+FleetAccess _fleetAccessOf(AuthProvider auth) {
+  final admin = auth.hasBusinessPermission(BusinessPermission.fleetAdmin);
+  return FleetAccess(
+    staff: admin || auth.hasBusinessPermission(BusinessPermission.fleet),
+    admin: admin,
+  );
+}
+
+bool _showsFleetRow(AuthProvider auth) => showsFleetRow(
+  services: auth.effectiveBusinessServices,
+  businessId: auth.businessId ?? '',
+  access: _fleetAccessOf(auth),
+);
+
+/// The one Fleet row: payments, drivers, plates and bank for a business that
+/// leases cars to drivers.
+HomeDestination _fleetDestination(
+  BuildContext context,
+  AuthProvider auth,
+  AppLocalizations l10n,
+) => HomeDestination(
+  rowKey: const Key('open-fleet'),
+  icon: Icons.local_taxi_outlined,
+  title: l10n.fltTitle,
+  subtitle: l10n.fltHomeSubtitle,
+  onTap: () {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => FleetScreen(
+          businessId: auth.businessId ?? '',
+          access: _fleetAccessOf(auth),
+        ),
+      ),
+    );
+  },
+);
 
 /// The Today row: this month, what is waiting and the money, on its own
 /// screen (the server cuts it to this person's services and permissions).
