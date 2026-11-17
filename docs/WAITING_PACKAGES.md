@@ -325,9 +325,15 @@ server rule knows them.
   what it comes to.
 - A split takes the first n pieces with the prices they hold, as always.
 - The typing half is `admin_web/src/lib/piece-drafts.ts` (`piecesPayload`,
-  `pieceDraftsFromLine`, `setPieceDraftPriceFor`, `setPieceDraftCount`). The
-  app's editor gets both in its next build; until then it shows such a line
-  as its pieces, each with its price.
+  `pieceDraftsFromLine`, `setPieceDraftPriceFor`, `setPieceDraftCount`).
+- **App** (built 2026-11-17, in the build after 1.0.30): the same two
+  controls in `lib/widgets/pieces_editor.dart`; the rules are
+  `lib/services/piece_rows.dart` (`groupPieceRows`, `rowPieceCents`), which
+  must read a line exactly as the console does. "How many" is a stepper;
+  tapping the number opens a box to type one, which says how many labels a
+  count above 10 prints before it is taken. A piece weighed at Received
+  keeps its own row (no "How many"). Older app versions show such a line as
+  its pieces, each with its price.
 
 **Editing** (`updateContainerLine`): what the pieces are (count, kind,
 description, size) changes while waiting or loading (`container_locked`

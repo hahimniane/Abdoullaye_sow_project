@@ -845,3 +845,14 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   (`elementFromPoint` at the button's centre returned the row). Clear the
   emulation (`preset: "desktop"`) before clicking list actions; emulate a
   size only to measure or screenshot.
+- A `Column` (or any list of children) with a child that comes and goes
+  (`if (...) Padding(...)`) must give that child and every one after it a
+  key. Unkeyed, Flutter matches by position and type: the next `Padding`
+  takes the leaving one's place and its whole subtree is rebuilt, so a
+  `TextField` in it loses focus and the keyboard closes the moment it opens
+  (loading screen, 2026-11-17: the camera pane hides while typing). The test
+  that catches it: open the keyboard with `tester.view.viewInsets` and check
+  the field's `EditableTextState` is `identical` to the one tapped. A screen
+  with a camera needs a stand-in for the camera in tests, or the test never
+  sees the layout a phone has.
+

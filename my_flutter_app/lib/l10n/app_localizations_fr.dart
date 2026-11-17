@@ -13884,6 +13884,59 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get pcsHowMany => 'Combien';
+
+  @override
+  String get pcsHowManyTitle => 'Combien de colis comme celui-ci ?';
+
+  @override
+  String pcsHowManyUpTo(int max) {
+    return 'De 1 à $max';
+  }
+
+  @override
+  String pcsHowManyPrints(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Imprime $count étiquettes',
+      one: 'Imprime 1 étiquette',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String pcsPieceNumbers(int first, int last) {
+    return '$first–$last';
+  }
+
+  @override
+  String get pcsPriceFor => 'Ce que couvre ce prix';
+
+  @override
+  String get pcsEachPiece => 'Par colis';
+
+  @override
+  String pcsAllTogether(int count) {
+    return 'Les $count ensemble';
+  }
+
+  @override
+  String pcsRowSumEach(int count, String each, String total) {
+    return '$count × $each = $total';
+  }
+
+  @override
+  String pcsShareEach(String price) {
+    return '$price chacun';
+  }
+
+  @override
+  String pcsShareSplit(int high, String highPrice, int low, String lowPrice) {
+    return '$high à $highPrice, $low à $lowPrice';
+  }
+
+  @override
   String get pcsFewer => 'Moins de colis';
 
   @override

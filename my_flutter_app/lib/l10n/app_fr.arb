@@ -6618,6 +6618,84 @@
       }
     }
   },
+  "pcsHowMany": "Combien",
+  "pcsHowManyTitle": "Combien de colis comme celui-ci ?",
+  "pcsHowManyUpTo": "De 1 à {max}",
+  "@pcsHowManyUpTo": {
+    "placeholders": {
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "pcsHowManyPrints": "{count, plural, =1{Imprime 1 étiquette} other{Imprime {count} étiquettes}}",
+  "@pcsHowManyPrints": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pcsPieceNumbers": "{first}–{last}",
+  "@pcsPieceNumbers": {
+    "placeholders": {
+      "first": {
+        "type": "int"
+      },
+      "last": {
+        "type": "int"
+      }
+    }
+  },
+  "pcsPriceFor": "Ce que couvre ce prix",
+  "pcsEachPiece": "Par colis",
+  "pcsAllTogether": "Les {count} ensemble",
+  "@pcsAllTogether": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pcsRowSumEach": "{count} × {each} = {total}",
+  "@pcsRowSumEach": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "each": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "pcsShareEach": "{price} chacun",
+  "@pcsShareEach": {
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "pcsShareSplit": "{high} à {highPrice}, {low} à {lowPrice}",
+  "@pcsShareSplit": {
+    "placeholders": {
+      "high": {
+        "type": "int"
+      },
+      "highPrice": {
+        "type": "String"
+      },
+      "low": {
+        "type": "int"
+      },
+      "lowPrice": {
+        "type": "String"
+      }
+    }
+  },
   "pcsFewer": "Moins de colis",
   "pcsMore": "Plus de colis",
   "pcsPreviewGoing": "{count, plural, =1{1 colis → ce conteneur} other{{count} colis → ce conteneur}}",

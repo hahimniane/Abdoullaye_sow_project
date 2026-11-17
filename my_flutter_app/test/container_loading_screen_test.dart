@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_flutter_app/l10n/app_localizations.dart';
 import 'package:my_flutter_app/screens/container_loading_screen.dart';
-import 'package:my_flutter_app/services/container_loading.dart' show isLoadScanId;
+import 'package:my_flutter_app/services/container_loading.dart'
+    show isLoadScanId;
 import 'package:my_flutter_app/services/container_manifest.dart';
 import 'package:my_flutter_app/services/lot_ledger.dart' show LotStaff;
 import 'package:my_flutter_app/theme/app_theme.dart';
@@ -96,6 +97,7 @@ Future<List<bool>> _open(
   List<ContainerLine> Function()? liveLines,
   List<LotStaff> staff = const [],
   List<bool>? feedbackInto,
+  Widget? cameraStandIn,
 }) async {
   tester.view.physicalSize = size * 2;
   tester.view.devicePixelRatio = 2;
@@ -120,6 +122,7 @@ Future<List<bool>> _open(
             container: _box,
             caller: caller.call,
             cameraEnabled: false,
+            cameraStandIn: cameraStandIn,
             feedback: feedback.add,
             liveUpdates: liveUpdates,
             liveLines: liveLines,
@@ -761,12 +764,14 @@ void main() {
     Locale locale = const Locale('en'),
     List<ContainerLine>? lines,
     List<bool>? feedback,
+    Widget? cameraStandIn,
   }) async {
     final live = ValueNotifier<List<ContainerLine>>(lines ?? feedLines());
     await _open(
       tester,
       caller,
       locale: locale,
+      cameraStandIn: cameraStandIn,
       liveUpdates: live,
       liveLines: () => live.value,
       staff: staff,
@@ -908,6 +913,67 @@ void main() {
         caller.of('scan')[1]['scanId'],
         isNot(caller.of('scan')[0]['scanId']),
       );
+    },
+  );
+
+  // Owner, 2026-11-17: with the camera open, tapping a box to type opened
+  // the keyboard and it closed at once. The camera pane leaves while the
+  // keyboard is open; the boxes under it must stay the very same boxes, or
+  // the one being typed in loses its focus.
+  testWidgets(
+    'the keyboard pushing the camera out leaves the box being typed in alone',
+    (tester) async {
+      await openLists(
+        tester,
+        _FakeCaller({}),
+        cameraStandIn: const ColoredBox(
+          key: Key('test-camera'),
+          color: Colors.black,
+        ),
+      );
+      addTearDown(tester.view.resetViewInsets);
+      Future<void> keyboard(double height) async {
+        // Physical pixels: the test phone is at 2x.
+        tester.view.viewInsets = FakeViewPadding(bottom: height * 2);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+      }
+
+      Future<void> typesThrough(String key) async {
+        expect(find.byKey(const Key('test-camera')), findsOneWidget);
+        final field = find.descendant(
+          of: find.byKey(Key(key)),
+          matching: find.byType(EditableText),
+        );
+        await tester.tap(field);
+        await tester.pump();
+        final before = tester.state<EditableTextState>(field);
+        expect(before.widget.focusNode.hasFocus, isTrue);
+        await keyboard(320);
+        // The camera is out of the way...
+        expect(find.byKey(const Key('test-camera')), findsNothing);
+        expect(find.byKey(const Key('load-done')), findsNothing);
+        // ...and the box is the one that was tapped, still being typed in.
+        expect(
+          identical(tester.state<EditableTextState>(field), before),
+          isTrue,
+          reason: '$key was rebuilt when the camera left',
+        );
+        expect(before.widget.focusNode.hasFocus, isTrue);
+        expect(tester.testTextInput.isVisible, isTrue);
+        await tester.enterText(field, 'CL');
+        expect(before.widget.controller.text, 'CL');
+        before.widget.focusNode.unfocus();
+        await keyboard(0);
+        await tester.enterText(field, '');
+        await tester.pumpAndSettle();
+      }
+
+      await typesThrough('load-type-code');
+      await tab(tester, 'stillToLoad');
+      await typesThrough('load-list-search');
+      await tab(tester, 'onContainer');
+      await typesThrough('load-list-search');
     },
   );
 

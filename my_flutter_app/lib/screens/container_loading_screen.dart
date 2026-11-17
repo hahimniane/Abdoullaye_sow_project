@@ -70,6 +70,7 @@ class ContainerLoadingScreen extends StatefulWidget {
     this.feedback = _defaultLoadFeedback,
     this.callTimeout = const Duration(seconds: 20),
     this.cameraEnabled = true,
+    this.cameraStandIn,
   });
 
   final String businessId;
@@ -95,6 +96,12 @@ class ContainerLoadingScreen extends StatefulWidget {
   /// Off in widget tests, where there is no camera plugin.
   @visibleForTesting
   final bool cameraEnabled;
+
+  /// Shown where the camera goes, in widget tests (there is no camera
+  /// plugin there): the screen then lays itself out as it does on a phone,
+  /// the camera pane leaving while the keyboard is open.
+  @visibleForTesting
+  final Widget? cameraStandIn;
 
   @override
   State<ContainerLoadingScreen> createState() => _ContainerLoadingScreenState();
@@ -322,13 +329,15 @@ class _ContainerLoadingScreenState extends State<ContainerLoadingScreen> {
         icon: Icons.error_outline,
       );
       if (load && mounted) {
-        unawaited(_scan(
-          code,
-          move: move,
-          key: key,
-          scanId: scanId,
-          acknowledgeProblems: true,
-        ));
+        unawaited(
+          _scan(
+            code,
+            move: move,
+            key: key,
+            scanId: scanId,
+            acknowledgeProblems: true,
+          ),
+        );
       }
     });
   }
@@ -918,9 +927,15 @@ class _ContainerLoadingScreenState extends State<ContainerLoadingScreen> {
             ),
           ),
           // Out of the way while typing: on a small phone the keyboard
-          // leaves no room for it.
-          if (_camera != null && !keyboardOpen)
+          // leaves no room for it. Every child of this column that comes and
+          // goes, and every one after it, has a key: without them the camera
+          // leaving made Flutter rebuild the boxes below it in its place, so
+          // the field being typed in lost its focus and the keyboard closed
+          // the moment it opened (owner, 2026-11-17).
+          if ((_camera != null || widget.cameraStandIn != null) &&
+              !keyboardOpen)
             Padding(
+              key: const Key('load-camera-pane'),
               padding: const EdgeInsets.fromLTRB(
                 AppSpacing.lg,
                 AppSpacing.md,
@@ -938,15 +953,18 @@ class _ContainerLoadingScreenState extends State<ContainerLoadingScreen> {
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      ScannerCameraView(
-                        controller: _camera!,
-                        onDetect: _onDetect,
-                        unavailableText: l10n.ldgCameraUnavailable,
-                        frameMargin: const EdgeInsets.symmetric(
-                          horizontal: 70,
-                          vertical: 28,
+                      if (_camera == null)
+                        widget.cameraStandIn!
+                      else
+                        ScannerCameraView(
+                          controller: _camera!,
+                          onDetect: _onDetect,
+                          unavailableText: l10n.ldgCameraUnavailable,
+                          frameMargin: const EdgeInsets.symmetric(
+                            horizontal: 70,
+                            vertical: 28,
+                          ),
                         ),
-                      ),
                       Positioned(
                         left: AppSpacing.sm,
                         right: AppSpacing.sm,
@@ -986,6 +1004,7 @@ class _ContainerLoadingScreenState extends State<ContainerLoadingScreen> {
               ),
             ),
           Padding(
+            key: const Key('load-type-row'),
             padding: const EdgeInsets.fromLTRB(
               AppSpacing.lg,
               AppSpacing.md,
@@ -1032,6 +1051,7 @@ class _ContainerLoadingScreenState extends State<ContainerLoadingScreen> {
             ),
           ),
           Padding(
+            key: const Key('load-tabs'),
             padding: const EdgeInsets.fromLTRB(
               AppSpacing.lg,
               AppSpacing.md,
@@ -1053,6 +1073,7 @@ class _ContainerLoadingScreenState extends State<ContainerLoadingScreen> {
             ),
           ),
           Expanded(
+            key: const Key('load-lists'),
             child: switch (_tab) {
               _LoadTab.recent => _recentList(l10n),
               _LoadTab.onContainer => _onContainerTab(l10n),
@@ -1061,6 +1082,7 @@ class _ContainerLoadingScreenState extends State<ContainerLoadingScreen> {
           ),
           if (!keyboardOpen)
             Container(
+              key: const Key('load-done-bar'),
               decoration: BoxDecoration(
                 color: AppColors.paper,
                 border: Border(

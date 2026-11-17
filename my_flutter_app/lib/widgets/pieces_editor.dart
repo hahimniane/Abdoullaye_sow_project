@@ -8,6 +8,7 @@ import '../services/line_pieces.dart';
 import '../services/lot_ledger.dart' show formatLotCents;
 import '../services/invoice_ledger.dart' show invoiceCentsToInput;
 import '../services/package_price_list.dart' show counterPriceCents, unitOf;
+import '../services/piece_rows.dart';
 import '../services/price_list_fill.dart';
 import '../services/waiting_packages.dart' show trimNumber;
 import '../theme/app_colors.dart';
@@ -19,7 +20,10 @@ import 'price_fill_sheet.dart';
 /// What a package that is not a car holds, piece by piece, as the counter
 /// types it (docs/WAITING_PACKAGES.md "Pieces"): each piece a barrel, a box
 /// or something else, what it is, an optional size in inches and its own
-/// price. One editor, used wherever a line's pieces are entered: registering
+/// price. Identical pieces are one row with "How many", priced each or all
+/// of that row together ("How many, and a row priced all together": the
+/// amount is shared among the row's own pieces, never another row's). One
+/// editor, used wherever a line's pieces are entered: registering
 /// a package at the counter, editing a waiting package, and adding or
 /// editing a line on a container.
 ///
@@ -29,12 +33,15 @@ import 'price_fill_sheet.dart';
 /// [maxPieces]); the editor shows each piece's own problems once the sheet
 /// asks it to ([PiecesEditor.showErrors]).
 
-/// One piece as typed.
+/// One row as typed: a piece, or several identical ones ([count]).
 class PieceDraftRow {
   PieceDraftRow._({
     required this.uid,
     required this.id,
     required this.kind,
+    this.count = 1,
+    List<String> moreIds = const [],
+    this.priceFor = priceForEach,
     String description = '',
     String length = '',
     String width = '',
@@ -50,6 +57,7 @@ class PieceDraftRow {
        weight = priceSnapshotWeighs(snapshot)
            ? TextEditingController(text: weight)
            : null,
+       moreIds = List.unmodifiable(moreIds),
        showSize = length.isNotEmpty || width.isNotEmpty || height.isNotEmpty;
 
   /// Local identity, so a row keeps its fields when one above it goes.
@@ -59,6 +67,23 @@ class PieceDraftRow {
   /// gives it the first free `p<n>`).
   final String id;
   String kind;
+
+  /// "How many": the identical pieces this row stands for. Each is still a
+  /// piece of its own once saved: its own label, its own scan.
+  int count;
+
+  /// The stored ids of the second, third... of them, so an edit keeps its
+  /// pieces. They stay when [count] is lowered: fewer pieces simply send
+  /// fewer of them.
+  final List<String> moreIds;
+
+  /// How a row of several is priced: [priceForEach] piece at [price], or
+  /// [priceForAll] of them together for [price], shared among this row's
+  /// pieces only. One piece is always priced each.
+  String priceFor;
+
+  /// The row's price is one amount for all its pieces.
+  bool get pricedTogether => rowPricedTogether(priceFor, count);
   final TextEditingController description;
   final TextEditingController length;
   final TextEditingController width;
@@ -98,22 +123,53 @@ class PieceDraftRow {
 
   static String _side(String typed) => typed.trim().replaceAll(',', '.');
 
-  /// The piece as `pieceErrors` and the request read it. A price that could
-  /// not be read is kept as unreadable, so it is refused, never guessed.
-  Map<String, Object?> toDraft() {
+  /// The row's price as typed: whole cents, null for blank, or
+  /// "unreadable" - kept, so it is refused, never guessed.
+  Object? get _typedPrice {
     final reading = readMoneyInput(price.text);
-    return {
-      'id': id,
-      'kind': kind,
-      'description': description.text,
-      'sizeIn': {
-        'l': _side(length.text),
-        'w': _side(width.text),
-        'h': _side(height.text),
-      },
-      'priceCents': reading.isEmpty ? null : (reading.cents ?? 'unreadable'),
-    };
+    return reading.isEmpty ? null : (reading.cents ?? 'unreadable');
   }
+
+  /// The price typed in whole cents; null while blank or unreadable.
+  int? get priceCents {
+    final typed = _typedPrice;
+    return typed is int ? typed : null;
+  }
+
+  /// The row as `pieceErrors` reads it - what it is and the price typed on
+  /// it - for the row's own problems.
+  Map<String, Object?> toDraft() => _piece(id, _typedPrice);
+
+  /// The row's pieces as the request carries them: [count] of them, the
+  /// first with the row's id and the others with the ids stored beside it
+  /// (none for a new one). Priced together, the amount is spread over them
+  /// (`rowPieceCents`); a price that could not be read stays unreadable on
+  /// every one.
+  List<Map<String, Object?>> toDrafts() {
+    final typed = _typedPrice;
+    final shares = typed is int
+        ? rowPieceCents(typed, count, priceFor)
+        : List<Object?>.filled(count, typed);
+    return [
+      for (var i = 0; i < count; i++)
+        _piece(
+          i == 0 ? id : (i - 1 < moreIds.length ? moreIds[i - 1] : ''),
+          shares[i],
+        ),
+    ];
+  }
+
+  Map<String, Object?> _piece(String pieceId, Object? priceCents) => {
+    'id': pieceId,
+    'kind': kind,
+    'description': description.text,
+    'sizeIn': {
+      'l': _side(length.text),
+      'w': _side(width.text),
+      'h': _side(height.text),
+    },
+    'priceCents': priceCents,
+  };
 
   void _dispose() {
     for (final c in _fields) {
@@ -157,19 +213,29 @@ class PiecesEditorController extends ChangeNotifier {
     if (start.isEmpty) {
       _rows.add(_row(kind: kind));
     } else {
-      for (final piece in start) {
+      // Identical pieces that follow each other open as one row (`How
+      // many`); a piece weighed at Received keeps its own row and field.
+      final groups = groupPieceRows(
+        start,
+        keepAlone: (piece) => priceSnapshotWeighs(priceSnapshots[piece.id]),
+      );
+      for (final group in groups) {
+        final piece = group.pieces.first;
         final size = piece.sizeIn;
         _rows.add(
           _row(
             id: piece.id,
             kind: piece.kind,
+            count: group.count,
+            moreIds: [for (final p in group.pieces.skip(1)) p.id],
+            priceFor: group.priceFor,
             description: piece.description,
             length: size == null ? '' : trimNumber(size.l),
             width: size == null ? '' : trimNumber(size.w),
             height: size == null ? '' : trimNumber(size.h),
-            price: piece.priceCents == null
+            price: group.priceCents == null
                 ? ''
-                : invoiceCentsToInput(piece.priceCents!),
+                : invoiceCentsToInput(group.priceCents!),
             snapshot: priceSnapshots[piece.id],
             weight: _startWeight(priceSnapshots[piece.id]),
           ),
@@ -236,6 +302,9 @@ class PiecesEditorController extends ChangeNotifier {
   PieceDraftRow _row({
     String id = '',
     required String kind,
+    int count = 1,
+    List<String> moreIds = const [],
+    String priceFor = priceForEach,
     String description = '',
     String length = '',
     String width = '',
@@ -248,6 +317,9 @@ class PiecesEditorController extends ChangeNotifier {
       uid: _nextUid++,
       id: id,
       kind: pieceKinds.contains(kind) ? kind : pieceKind.other,
+      count: count < 1 ? 1 : count,
+      moreIds: moreIds,
+      priceFor: priceFor == priceForAll ? priceForAll : priceForEach,
       description: description,
       length: length,
       width: width,
@@ -264,16 +336,57 @@ class PiecesEditorController extends ChangeNotifier {
   }
 
   List<PieceDraftRow> get rows => List.unmodifiable(_rows);
-  int get count => _rows.length;
+
+  /// The pieces in all: what is saved, labelled and scanned (every row's
+  /// "How many" added up).
+  int get count => _rows.fold(0, (sum, row) => sum + row.count);
 
   /// The most pieces this editor takes.
   final int limit;
 
-  bool get canAdd => _rows.length < limit;
+  bool get canAdd => count < limit;
 
-  /// The pieces as the request carries them before they are cleaned.
+  /// The number of row [index]'s first piece, as its label will carry it.
+  int firstNumber(int index) {
+    var number = 1;
+    for (var i = 0; i < index && i < _rows.length; i++) {
+      number += _rows[i].count;
+    }
+    return number;
+  }
+
+  /// The most row [index] can stand for: what the package still has room
+  /// for beside the other rows, never below one.
+  int maxCount(int index) {
+    if (index < 0 || index >= _rows.length) return 1;
+    final room = limit - (count - _rows[index].count);
+    return room < 1 ? 1 : room;
+  }
+
+  /// "How many" set on a row: 1 up to [maxCount].
+  void setCount(int index, int value) {
+    if (index < 0 || index >= _rows.length) return;
+    final next = value.clamp(1, maxCount(index));
+    if (_rows[index].count == next) return;
+    _rows[index].count = next;
+    notifyListeners();
+  }
+
+  /// A row's price switch: the number typed stays as it is and only what it
+  /// stands for changes (the price of each piece, or of all the row's
+  /// pieces together).
+  void setPriceFor(int index, String priceFor) {
+    if (index < 0 || index >= _rows.length) return;
+    if (priceFor != priceForEach && priceFor != priceForAll) return;
+    if (_rows[index].priceFor == priceFor) return;
+    _rows[index].priceFor = priceFor;
+    notifyListeners();
+  }
+
+  /// The pieces as the request carries them before they are cleaned: every
+  /// row's pieces, in order.
   List<Map<String, Object?>> get draftPieces => [
-    for (final row in _rows) row.toDraft(),
+    for (final row in _rows) ...row.toDrafts(),
   ];
 
   /// The line total: the priced pieces plus the pickup fee when the line
@@ -416,7 +529,7 @@ class PiecesEditor extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              l10n.pcsPiecesTitle(rows.length),
+              l10n.pcsPiecesTitle(controller.count),
               key: const Key('pieces-title'),
               style: const TextStyle(
                 fontSize: 13,
@@ -432,6 +545,16 @@ class PiecesEditor extends StatelessWidget {
                 child: _PieceCard(
                   index: i,
                   row: rows[i],
+                  number: controller.firstNumber(i),
+                  maxCount: controller.maxCount(i),
+                  onCount: (value) {
+                    AppHaptics.selection();
+                    controller.setCount(i, value);
+                  },
+                  onPriceFor: (priceFor) {
+                    AppHaptics.selection();
+                    controller.setPriceFor(i, priceFor);
+                  },
                   removable: rows.length > 1 && enabled,
                   enabled: enabled,
                   requirePrice: requirePrices,
@@ -522,6 +645,10 @@ class _PieceCard extends StatelessWidget {
   const _PieceCard({
     required this.index,
     required this.row,
+    required this.number,
+    required this.maxCount,
+    required this.onCount,
+    required this.onPriceFor,
     required this.removable,
     required this.enabled,
     required this.errors,
@@ -537,6 +664,14 @@ class _PieceCard extends StatelessWidget {
 
   final int index;
   final PieceDraftRow row;
+
+  /// The number of the row's first piece, as its label will carry it.
+  final int number;
+
+  /// The most "How many" can be: what the package still has room for.
+  final int maxCount;
+  final ValueChanged<int> onCount;
+  final ValueChanged<String> onPriceFor;
   final bool removable;
   final bool enabled;
   final List<String> errors;
@@ -552,8 +687,19 @@ class _PieceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final number = index + 1;
     final invalid = errors.isNotEmpty;
+    final count = row.count;
+    Widget step(String key, IconData icon, String label, VoidCallback? onTap) =>
+        SizedBox(
+          width: 44,
+          height: 44,
+          child: IconButton.outlined(
+            key: Key('$key-$index'),
+            onPressed: onTap,
+            icon: Icon(icon, size: 20),
+            tooltip: label,
+          ),
+        );
     Widget side(String key, TextEditingController c, String label) => Expanded(
       child: TextField(
         key: Key('$key-$index'),
@@ -586,15 +732,20 @@ class _PieceCard extends StatelessWidget {
           Row(
             children: [
               Container(
-                width: 28,
+                constraints: const BoxConstraints(minWidth: 28),
                 height: 28,
+                padding: const EdgeInsets.symmetric(horizontal: 6),
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: AppColors.mist,
                   borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
                 ),
                 child: Text(
-                  '$number',
+                  // A row of several carries the numbers of its labels.
+                  count > 1
+                      ? l10n.pcsPieceNumbers(number, number + count - 1)
+                      : '$number',
+                  key: Key('piece-number-$index'),
                   style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w800,
@@ -675,7 +826,9 @@ class _PieceCard extends StatelessWidget {
                     decimal: true,
                   ),
                   decoration: InputDecoration(
-                    labelText: requirePrice ? '${l10n.pcsPrice} *' : l10n.pcsPrice,
+                    labelText: requirePrice
+                        ? '${l10n.pcsPrice} *'
+                        : l10n.pcsPrice,
                     prefixText: r'$ ',
                     isDense: true,
                   ),
@@ -728,6 +881,106 @@ class _PieceCard extends StatelessWidget {
               ),
             ),
           ],
+          // A piece weighed at Received is one piece: its weight is its own.
+          if (row.weight == null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    l10n.pcsHowMany,
+                    style: const TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.ink,
+                    ),
+                  ),
+                ),
+                step(
+                  'piece-fewer',
+                  Icons.remove,
+                  l10n.pcsFewer,
+                  enabled && count > 1 ? () => onCount(count - 1) : null,
+                ),
+                // The number itself opens a box to type a larger one.
+                InkWell(
+                  key: Key('piece-count-$index'),
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                  onTap: !enabled
+                      ? null
+                      : () async {
+                          final typed = await _askPieceCount(
+                            context,
+                            current: count,
+                            max: maxCount,
+                          );
+                          if (typed != null) onCount(typed);
+                        },
+                  child: SizedBox(
+                    width: 52,
+                    height: 44,
+                    child: Center(
+                      child: Text(
+                        '$count',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.ink,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                step(
+                  'piece-more',
+                  Icons.add,
+                  l10n.pcsMore,
+                  enabled && count < maxCount ? () => onCount(count + 1) : null,
+                ),
+              ],
+            ),
+          ],
+          if (count > 1) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Semantics(
+              label: l10n.pcsPriceFor,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _KindButton(
+                      key: Key('piece-price-each-$index'),
+                      label: l10n.pcsEachPiece,
+                      selected: !row.pricedTogether,
+                      onTap: enabled ? () => onPriceFor(priceForEach) : null,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: _KindButton(
+                      key: Key('piece-price-all-$index'),
+                      label: l10n.pcsAllTogether(count),
+                      selected: row.pricedTogether,
+                      onTap: enabled ? () => onPriceFor(priceForAll) : null,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (_rowSumText(l10n, row) case final sum?)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  sum,
+                  key: Key('piece-row-sum-$index'),
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.muted,
+                  ),
+                ),
+              ),
+          ],
           if (row.showSize) ...[
             const SizedBox(height: AppSpacing.sm),
             Row(
@@ -770,6 +1023,121 @@ class _PieceCard extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+}
+
+/// Under a row of several, what its price comes to. Priced each: "3 × $45.00
+/// = $135.00". Priced together: "$50.00 each", or "2 at $66.67, 1 at $66.66"
+/// when the amount does not divide. Null while no price can be read.
+String? _rowSumText(AppLocalizations l10n, PieceDraftRow row) {
+  final cents = row.priceCents;
+  if (cents == null || row.count < 2) return null;
+  if (!row.pricedTogether) {
+    return l10n.pcsRowSumEach(
+      row.count,
+      formatLotCents(cents),
+      formatLotCents(cents * row.count),
+    );
+  }
+  final runs = rowShareRuns(cents, row.count);
+  if (runs.length == 1) return l10n.pcsShareEach(formatLotCents(runs[0].cents));
+  return l10n.pcsShareSplit(
+    runs[0].count,
+    formatLotCents(runs[0].cents),
+    runs[1].count,
+    formatLotCents(runs[1].cents),
+  );
+}
+
+/// "How many pieces like this one?": a number typed instead of tapped up.
+/// Above [pieceCountConfirmAbove] the box says how many labels that prints
+/// before it is taken. Null when cancelled or nothing usable was typed.
+Future<int?> _askPieceCount(
+  BuildContext context, {
+  required int current,
+  required int max,
+}) {
+  return showDialog<int>(
+    context: context,
+    builder: (context) => _PieceCountDialog(current: current, max: max),
+  );
+}
+
+class _PieceCountDialog extends StatefulWidget {
+  const _PieceCountDialog({required this.current, required this.max});
+
+  final int current;
+  final int max;
+
+  @override
+  State<_PieceCountDialog> createState() => _PieceCountDialogState();
+}
+
+class _PieceCountDialogState extends State<_PieceCountDialog> {
+  late final TextEditingController _field =
+      TextEditingController(text: '${widget.current}')
+        ..selection = TextSelection(
+          baseOffset: 0,
+          extentOffset: '${widget.current}'.length,
+        );
+
+  @override
+  void dispose() {
+    _field.dispose();
+    super.dispose();
+  }
+
+  /// What was typed, when it is a count the package has room for.
+  int? get _typed {
+    final value = int.tryParse(_field.text.trim());
+    return value != null && value >= 1 && value <= widget.max ? value : null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final typed = _typed;
+    return AlertDialog(
+      title: Text(l10n.pcsHowManyTitle),
+      content: TextField(
+        key: const Key('piece-count-field'),
+        controller: _field,
+        autofocus: true,
+        keyboardType: TextInputType.number,
+        inputFormatters: [
+          FilteringTextInputFormatter.digitsOnly,
+          LengthLimitingTextInputFormatter(2),
+        ],
+        onChanged: (_) => setState(() {}),
+        onSubmitted: (_) {
+          if (_typed != null) Navigator.of(context).pop(_typed);
+        },
+        decoration: InputDecoration(
+          // Said back before a large count is taken: 30 typed for 3 prints
+          // 30 labels.
+          helperText: typed != null && typed > pieceCountConfirmAbove
+              ? l10n.pcsHowManyPrints(typed)
+              : l10n.pcsHowManyUpTo(widget.max),
+          errorText: typed == null && _field.text.trim().isNotEmpty
+              ? l10n.pcsHowManyUpTo(widget.max)
+              : null,
+        ),
+      ),
+      actions: [
+        TextButton(
+          key: const Key('piece-count-cancel'),
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(l10n.cancel),
+        ),
+        TextButton(
+          key: const Key('piece-count-done'),
+          onPressed: typed == null
+              ? null
+              : () => Navigator.of(context).pop(typed),
+          child: Text(l10n.done),
+        ),
+      ],
     );
   }
 }

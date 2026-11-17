@@ -538,14 +538,15 @@ void main() {
           await _openSheet<WaitingPackageSaved>(tester, sheet(calls, existing: line));
       expect(find.text('Edit package'), findsOneWidget);
       expect(_field(tester, 'line-customer'), 'Fatou Diallo');
-      expect(find.byKey(const Key('piece-description-1')), findsOneWidget);
+      // The two identical barrels are one row: "How many" 2, $22.75 each.
+      expect(find.byKey(const Key('piece-description-1')), findsNothing);
+      expect(find.text('Pieces (2)'), findsOneWidget);
       expect(_field(tester, 'piece-price-0'), '22.75');
-      expect(_field(tester, 'piece-price-1'), '22.75');
       // Edited, not added: no "add another".
       expect(find.byKey(const Key('line-save-and-another')), findsNothing);
       expect(find.byKey(const Key('wpk-no-notice')), findsNothing);
 
-      await _type(tester, 'piece-price-1', '30');
+      await _type(tester, 'piece-price-0', '30');
       await _tap(tester, 'line-save-edit');
 
       final update = calls.of('updateContainerLine').single;
@@ -553,8 +554,9 @@ void main() {
       expect(update['containerId'], '');
       final sent = update['line'] as Map<String, Object?>;
       final pieces = (sent['pieces'] as List).cast<Map>();
+      // Both pieces go, each with its id and the row's price.
       expect(pieces.map((p) => p['id']), ['p1', 'p2']);
-      expect(pieces.map((p) => p['priceCents']), [2275, 3000]);
+      expect(pieces.map((p) => p['priceCents']), [3000, 3000]);
       expect(sent.containsKey('priceCents'), isFalse);
       // The prices went with the pieces: nothing else to call.
       expect(calls.of('setContainerLinePrice'), isEmpty);
@@ -639,7 +641,7 @@ void main() {
       final calls = _Calls();
       await _openSheet<WaitingPackageSaved>(tester, sheet(calls, existing: line));
       expect(find.byKey(const Key('pieces-pickup-fee')), findsNothing);
-      await _type(tester, 'piece-price-1', '30');
+      await _type(tester, 'piece-price-0', '30');
       await _tap(tester, 'line-save-edit');
       final sent = calls.of('updateContainerLine').single['line']
           as Map<String, Object?>;

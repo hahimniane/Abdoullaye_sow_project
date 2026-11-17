@@ -23531,6 +23531,72 @@ abstract class AppLocalizations {
   /// **'{going} of {total}'**
   String pcsGoingOf(int going, int total);
 
+  /// No description provided for @pcsHowMany.
+  ///
+  /// In en, this message translates to:
+  /// **'How many'**
+  String get pcsHowMany;
+
+  /// No description provided for @pcsHowManyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'How many pieces like this one?'**
+  String get pcsHowManyTitle;
+
+  /// No description provided for @pcsHowManyUpTo.
+  ///
+  /// In en, this message translates to:
+  /// **'From 1 to {max}'**
+  String pcsHowManyUpTo(int max);
+
+  /// No description provided for @pcsHowManyPrints.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Prints 1 label} other{Prints {count} labels}}'**
+  String pcsHowManyPrints(int count);
+
+  /// No description provided for @pcsPieceNumbers.
+  ///
+  /// In en, this message translates to:
+  /// **'{first}–{last}'**
+  String pcsPieceNumbers(int first, int last);
+
+  /// No description provided for @pcsPriceFor.
+  ///
+  /// In en, this message translates to:
+  /// **'What this price is for'**
+  String get pcsPriceFor;
+
+  /// No description provided for @pcsEachPiece.
+  ///
+  /// In en, this message translates to:
+  /// **'Each piece'**
+  String get pcsEachPiece;
+
+  /// No description provided for @pcsAllTogether.
+  ///
+  /// In en, this message translates to:
+  /// **'All {count} together'**
+  String pcsAllTogether(int count);
+
+  /// No description provided for @pcsRowSumEach.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} × {each} = {total}'**
+  String pcsRowSumEach(int count, String each, String total);
+
+  /// No description provided for @pcsShareEach.
+  ///
+  /// In en, this message translates to:
+  /// **'{price} each'**
+  String pcsShareEach(String price);
+
+  /// No description provided for @pcsShareSplit.
+  ///
+  /// In en, this message translates to:
+  /// **'{high} at {highPrice}, {low} at {lowPrice}'**
+  String pcsShareSplit(int high, String highPrice, int low, String lowPrice);
+
   /// No description provided for @pcsFewer.
   ///
   /// In en, this message translates to:

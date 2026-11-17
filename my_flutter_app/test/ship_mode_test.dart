@@ -336,9 +336,9 @@ void main() {
       );
       expect(find.byKey(const Key('proof-weight')), findsOneWidget);
       await tap(tester, 'ship-mode-sea');
-      // An old line saved without a price is priced when it is next edited.
+      // An old line saved without a price is priced when it is next edited
+      // (its identical pieces are one row: one price for each).
       await type(tester, 'piece-price-0', '45');
-      await type(tester, 'piece-price-1', '45');
       await tap(tester, 'line-save-edit');
       final sent = log.where((c) => c.$1 == 'updateContainerLine').single.$2;
       final line = sent['line'] as Map;

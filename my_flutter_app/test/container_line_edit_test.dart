@@ -89,12 +89,15 @@ void main() {
     );
     expect(find.text('Edit line'), findsOneWidget);
     expect(find.byKey(const Key('line-edit-note')), findsOneWidget);
-    // An old-form line of three barrels opens as its three barrel pieces.
+    // An old-form line of three barrels opens as its three barrel pieces,
+    // on one row: they are identical ("How many" 3, labels 1 to 3).
     expect(find.text('Pieces (3)'), findsOneWidget);
-    for (var i = 0; i < 3; i++) {
-      expect(find.byKey(Key('piece-kind-$i-barrel')), findsOneWidget);
-    }
-    expect(find.byKey(const Key('piece-kind-3-barrel')), findsNothing);
+    expect(find.byKey(const Key('piece-kind-0-barrel')), findsOneWidget);
+    expect(find.byKey(const Key('piece-kind-1-barrel')), findsNothing);
+    expect(
+      tester.widget<Text>(find.byKey(const Key('piece-number-0'))).data,
+      '1–3',
+    );
     expect(_field(tester, 'line-customer'), 'Fatou Diallo');
     expect(_field(tester, 'line-receiver'), 'Mariama Bah');
     // One line is saved and closed: no "add another", no split hint.
@@ -104,19 +107,19 @@ void main() {
 
     // The form's own checks still run before anything is sent: a box has
     // to say what it is.
-    await tester.tap(find.byKey(const Key('piece-kind-1-box')));
+    await tester.tap(find.byKey(const Key('piece-kind-0-box')));
     await tester.pumpAndSettle();
     // An old line saved without a price is priced the next time it is edited
-    // (docs/PACKAGE_PRICE_REQUIRED.md): every piece of a customer's line is
-    // marked required and says so when it is empty.
-    expect(find.text('Price *'), findsNWidgets(3));
+    // (docs/PACKAGE_PRICE_REQUIRED.md): a customer's line is marked required
+    // and says so when it is empty.
+    expect(find.text('Price *'), findsOneWidget);
     await tester.ensureVisible(find.byKey(const Key('line-save-edit')));
     await tester.tap(find.byKey(const Key('line-save-edit')));
     await tester.pumpAndSettle();
     expect(find.text('Say what each box or item is.'), findsOneWidget);
-    expect(find.text('Enter a price for every piece.'), findsNWidgets(3));
-    // The box says both: what it is, and its price.
-    expect(find.byKey(const Key('piece-error-1')), findsNWidgets(2));
+    expect(find.text('Enter a price for every piece.'), findsOneWidget);
+    // The row says both: what it is, and its price.
+    expect(find.byKey(const Key('piece-error-0')), findsNWidgets(2));
     expect(tester.takeException(), isNull);
   });
 

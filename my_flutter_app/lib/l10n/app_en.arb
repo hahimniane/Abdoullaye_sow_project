@@ -6619,6 +6619,84 @@
       }
     }
   },
+  "pcsHowMany": "How many",
+  "pcsHowManyTitle": "How many pieces like this one?",
+  "pcsHowManyUpTo": "From 1 to {max}",
+  "@pcsHowManyUpTo": {
+    "placeholders": {
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "pcsHowManyPrints": "{count, plural, =1{Prints 1 label} other{Prints {count} labels}}",
+  "@pcsHowManyPrints": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pcsPieceNumbers": "{first}–{last}",
+  "@pcsPieceNumbers": {
+    "placeholders": {
+      "first": {
+        "type": "int"
+      },
+      "last": {
+        "type": "int"
+      }
+    }
+  },
+  "pcsPriceFor": "What this price is for",
+  "pcsEachPiece": "Each piece",
+  "pcsAllTogether": "All {count} together",
+  "@pcsAllTogether": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pcsRowSumEach": "{count} × {each} = {total}",
+  "@pcsRowSumEach": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "each": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "pcsShareEach": "{price} each",
+  "@pcsShareEach": {
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "pcsShareSplit": "{high} at {highPrice}, {low} at {lowPrice}",
+  "@pcsShareSplit": {
+    "placeholders": {
+      "high": {
+        "type": "int"
+      },
+      "highPrice": {
+        "type": "String"
+      },
+      "low": {
+        "type": "int"
+      },
+      "lowPrice": {
+        "type": "String"
+      }
+    }
+  },
   "pcsFewer": "Fewer pieces",
   "pcsMore": "More pieces",
   "pcsPreviewGoing": "{count, plural, =1{1 piece → this container} other{{count} pieces → this container}}",
