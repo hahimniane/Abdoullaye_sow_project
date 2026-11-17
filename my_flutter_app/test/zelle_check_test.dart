@@ -576,7 +576,11 @@ void main() {
       final settings = read('lib/screens/settings_screen.dart');
       final row = settings.indexOf("Key('settings-bank-zelle')");
       expect(row, greaterThan(0));
-      final gate = settings.lastIndexOf('authProvider.isBusinessOwner', row);
+      // The real owner only: never a full-access staff member.
+      final gate = settings.lastIndexOf(
+        'authProvider.isRealBusinessOwner',
+        row,
+      );
       expect(gate, greaterThan(0));
       expect(row - gate, lessThan(300), reason: 'the row sits under the gate');
       expect(settings, contains('BankZelleSettingsScreen('));

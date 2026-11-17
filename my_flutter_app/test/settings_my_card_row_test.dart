@@ -27,6 +27,10 @@ class _Auth extends ChangeNotifier implements AuthProvider {
   @override
   bool get isBusinessOwner => owner;
   @override
+  bool get isRealBusinessOwner => owner;
+  @override
+  bool get hasFullAccess => false;
+  @override
   bool get isStaff => staff;
   @override
   bool get isAdmin => admin;

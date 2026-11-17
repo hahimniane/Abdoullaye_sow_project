@@ -32,8 +32,8 @@ String teamSettleRefusalText(AppLocalizations l10n, String reason) =>
       SettleRefusal.notUndoable => l10n.pmeTsNotUndoable,
       SettleRefusal.billChanged => l10n.pmeTsBillChanged,
       SettleRefusal.ownerOnly => l10n.pmeTsOwnerOnly,
-      SettleRefusal.paybackNotOwed => l10n.pmeTsPaybackNotOwed,
-      SettleRefusal.paybackMoreThanOwed => l10n.pmeTsPaybackMore,
+      SettleRefusal.paybackNotOwed => l10n.pmeTsRepayNotOwed,
+      SettleRefusal.paybackMoreThanOwed => l10n.pmeTsRepayMore,
       _ => l10n.pmeTsUnknown,
     };
 
@@ -1028,7 +1028,7 @@ class _TeamPaybackSheetState extends State<TeamPaybackSheet> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            l10n.pmeTsPaybackHint(parkingMoney(-widget.owesCents)),
+            l10n.pmeTsRepayHint(parkingMoney(-widget.owesCents)),
             style: const TextStyle(fontSize: 12.5, color: AppColors.muted),
           ),
           const SizedBox(height: AppSpacing.md),
@@ -1039,7 +1039,7 @@ class _TeamPaybackSheetState extends State<TeamPaybackSheet> {
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             onChanged: (_) => setState(() => _error = ''),
             decoration: InputDecoration(
-              labelText: l10n.pmeTsPaybackAmount,
+              labelText: l10n.pmeTsRepayAmount,
               prefixText: r'$ ',
             ),
           ),

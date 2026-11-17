@@ -418,7 +418,9 @@ void main() {
       expect(start, greaterThan(0));
       final body = main.substring(start, main.indexOf('},', start));
       expect(body, contains('args is BusinessBankArguments'));
-      expect(body, contains('!auth.isBusinessOwner'));
+      // The real owner only: never a full-access staff member
+      // (docs/STAFF_FULL_ACCESS.md).
+      expect(body, contains('!auth.isRealBusinessOwner'));
       expect(body, contains('BankZelleSettingsScreen(businessId: businessId)'));
     });
   });

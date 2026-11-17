@@ -24911,17 +24911,17 @@ abstract class AppLocalizations {
   /// **'The WhatsApp receipt could not be sent.'**
   String get pmeTsReceiptFailed;
 
-  /// No description provided for @pmeTsPaybackHint.
+  /// No description provided for @pmeTsRepayHint.
   ///
   /// In en, this message translates to:
   /// **'The business owes them {amount}. It is recorded as paid back for their expenses.'**
-  String pmeTsPaybackHint(String amount);
+  String pmeTsRepayHint(String amount);
 
-  /// No description provided for @pmeTsPaybackAmount.
+  /// No description provided for @pmeTsRepayAmount.
   ///
   /// In en, this message translates to:
   /// **'Amount paid back'**
-  String get pmeTsPaybackAmount;
+  String get pmeTsRepayAmount;
 
   /// No description provided for @pmeTsWaitingTitle.
   ///
@@ -25031,17 +25031,17 @@ abstract class AppLocalizations {
   /// **'Only the owner or someone with Full access can do this.'**
   String get pmeTsOwnerOnly;
 
-  /// No description provided for @pmeTsPaybackNotOwed.
+  /// No description provided for @pmeTsRepayNotOwed.
   ///
   /// In en, this message translates to:
   /// **'The business does not owe this person anything for this month.'**
-  String get pmeTsPaybackNotOwed;
+  String get pmeTsRepayNotOwed;
 
-  /// No description provided for @pmeTsPaybackMore.
+  /// No description provided for @pmeTsRepayMore.
   ///
   /// In en, this message translates to:
   /// **'That is more than the business owes this person.'**
-  String get pmeTsPaybackMore;
+  String get pmeTsRepayMore;
 
   /// No description provided for @pmeTsUnknown.
   ///

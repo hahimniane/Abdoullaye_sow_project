@@ -6803,28 +6803,103 @@
   "pmeDiscGive": "Accorder une remise",
   "pmeDiscSettle": "Régler pour un montant inférieur",
   "pmeDiscOwedToday": "Dû aujourd'hui : {amount}",
+  "@pmeDiscOwedToday": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "pmeDiscKeepsAdding": "Les jours continuent de s'ajouter dès demain.",
   "pmeDiscAmountPaid": "Montant payé maintenant",
   "pmeDiscAmount": "Montant de la remise",
   "pmeDiscReason": "Pourquoi (obligatoire)",
   "pmeDiscReasonHint": "ex. : convenu avec le propriétaire, long séjour",
   "pmeDiscPreviewSettle": "Payé {paid} · Remise −{discount} · Reste {left}",
+  "@pmeDiscPreviewSettle": {
+    "placeholders": {
+      "paid": {
+        "type": "String"
+      },
+      "discount": {
+        "type": "String"
+      },
+      "left": {
+        "type": "String"
+      }
+    }
+  },
   "pmeDiscPreviewGive": "Remise −{discount} · Reste à payer {left}",
+  "@pmeDiscPreviewGive": {
+    "placeholders": {
+      "discount": {
+        "type": "String"
+      },
+      "left": {
+        "type": "String"
+      }
+    }
+  },
   "pmeDiscSubmitSettle": "Régler",
   "pmeDiscSubmitGive": "Accorder la remise",
   "pmeDiscConfirmSettleTitle": "Régler pour moins ?",
   "pmeDiscConfirmSettle": "Régler cette voiture pour {paid} ? {discount} est enregistré comme remise.",
+  "@pmeDiscConfirmSettle": {
+    "placeholders": {
+      "paid": {
+        "type": "String"
+      },
+      "discount": {
+        "type": "String"
+      }
+    }
+  },
   "pmeDiscConfirmGiveTitle": "Accorder une remise ?",
   "pmeDiscConfirmGive": "Accorder une remise de {amount} sur cette voiture ?",
+  "@pmeDiscConfirmGive": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "pmeDiscDoneSettle": "Réglé. La remise figure sur la facture.",
   "pmeDiscDoneGive": "Remise accordée.",
   "pmeDiscDoneUndo": "Remise annulée.",
   "pmeDiscLine": "Remise −{amount}",
+  "@pmeDiscLine": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "pmeDiscLineBy": "par {name}",
+  "@pmeDiscLineBy": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "pmeDiscUndo": "Annuler la remise",
   "pmeDiscUndoTitle": "Annuler cette remise ?",
   "pmeDiscUndoBody": "Annuler cette remise de {amount} ? La voiture la doit à nouveau. Elle reste dans l'historique comme annulée.",
+  "@pmeDiscUndoBody": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "pmeDiscUndone": "Annulée · {date}",
+  "@pmeDiscUndone": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "pmeNotAllowed": "Votre compte n'est pas autorisé à faire cela. Demandez au propriétaire de l'entreprise.",
   "pmeDiscNotDirect": "Une remise ne peut être accordée que sur une voiture dont l'entreprise enregistre les paiements (espèces, Zelle...). Les voitures payées en ligne ou par lien de paiement passent par Stripe.",
   "pmeDiscReasonRequired": "Dites pourquoi la remise a été convenue.",
@@ -6840,20 +6915,75 @@
   "pmeSettleKindPay": "Paiement total ou partiel",
   "pmeSettleKindLess": "Régler pour un montant inférieur",
   "pmeSettleLessHint": "La facture est de {bill}. Saisissez ce que le client paie maintenant : le reste est enregistré comme remise et la facture est soldée à 0 $.",
+  "@pmeSettleLessHint": {
+    "placeholders": {
+      "bill": {
+        "type": "String"
+      }
+    }
+  },
   "pmeSettlePaidLine": "Payé · {label}",
+  "@pmeSettlePaidLine": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
   "pmeSettleDiscountLine": "Remise · {label}",
+  "@pmeSettleDiscountLine": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
   "pmeSettleSave": "Régler pour {amount}",
+  "@pmeSettleSave": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "pmeSettleDone": "Réglé pour {paid}. {discount} enregistré comme remise.",
+  "@pmeSettleDone": {
+    "placeholders": {
+      "paid": {
+        "type": "String"
+      },
+      "discount": {
+        "type": "String"
+      }
+    }
+  },
   "pmeSettleNotLess": "Le montant payé doit être inférieur à la facture. Pour le montant complet, enregistrez un paiement normal.",
   "pmeSettleJobsFirst": "Le montant doit au moins couvrir les travaux de cette facture : une remise ne s'applique qu'au stationnement.",
   "pmeSettleReasonRequired": "Dites pourquoi la facture a été réglée pour moins.",
   "pmeBillPaymentFromSettlement": "Ce paiement fait partie d'un règlement du mois. Annulez plutôt le règlement.",
   "pmeBillPaymentDiscount": "Remise −{amount}",
+  "@pmeBillPaymentDiscount": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "pmeBillPaymentInSettlement": "Fait partie d'un règlement du mois",
   "pmeTsTitle": "Règlement du mois",
   "pmeTsPaidEverything": "J'ai tout payé",
   "pmeTsTheyPaid": "Enregistrer qu'il a tout payé",
   "pmeTsButton": "{label} · {amount}",
+  "@pmeTsButton": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "pmeTsPaidThemBack": "Remboursé",
   "pmeTsSheetHint": "Cela compte une fois que la personne qui a reçu l'argent a confirmé. Le montant et son objet sont conservés tels que vous les envoyez.",
   "pmeTsScope": "À quoi cela sert",
@@ -6868,15 +6998,57 @@
   "pmeTsPreviewParking": "Stationnement et travaux",
   "pmeTsPreviewLeft": "Reste à payer",
   "pmeTsStatementWas": "Le relevé était de {amount}",
+  "@pmeTsStatementWas": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "pmeTsWaitingFor": "En attente de la confirmation de {name}",
+  "@pmeTsWaitingFor": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "pmeTsWaitingForYou": "En attente de votre confirmation",
   "pmeTsConfirmed": "Confirmé · {date}",
+  "@pmeTsConfirmed": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "pmeTsConfirmedPlain": "Confirmé",
   "pmeTsDeclined": "Non confirmé",
   "pmeTsUndone": "Annulé · {date}",
+  "@pmeTsUndone": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "pmeTsUndonePlain": "Annulé",
   "pmeTsReceivedBy": "reçu par {name}",
+  "@pmeTsReceivedBy": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "pmeTsUndoneBy": "par {name}",
+  "@pmeTsUndoneBy": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "pmeTsConfirm": "Confirmer",
   "pmeTsDecline": "Refuser",
   "pmeTsUndo": "Annuler",
@@ -6897,10 +7069,27 @@
   "pmeTsDoneUndone": "Paiement annulé.",
   "pmeTsDonePayback": "Remboursement enregistré.",
   "pmeTsReceiptFailed": "Le reçu WhatsApp n'a pas pu être envoyé.",
-  "pmeTsPaybackHint": "L'entreprise lui doit {amount}. C'est enregistré comme remboursement de ses dépenses.",
-  "pmeTsPaybackAmount": "Montant remboursé",
+  "pmeTsRepayHint": "L'entreprise lui doit {amount}. C'est enregistré comme remboursement de ses dépenses.",
+  "@pmeTsRepayHint": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeTsRepayAmount": "Montant remboursé",
   "pmeTsWaitingTitle": "En attente de votre accord",
   "pmeTsWaitingLine": "{name} dit avoir payé {amount}",
+  "@pmeTsWaitingLine": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "pmeTsNoReceivers": "Personne ne peut encore recevoir l'argent. Demandez au propriétaire.",
   "pmeTsNoAmount": "Saisissez le montant payé.",
   "pmeTsMoreThanOwed": "C'est plus que ce que demande ce relevé. Payez ce qui est dû, ou choisissez à quoi cela sert.",
@@ -6917,8 +7106,8 @@
   "pmeTsNotUndoable": "Ce paiement est déjà annulé ou refusé.",
   "pmeTsBillChanged": "La facture de stationnement a changé depuis le dépôt : elle ne peut pas être confirmée telle quelle. Refusez-la et demandez-en une nouvelle.",
   "pmeTsOwnerOnly": "Seul le propriétaire ou une personne avec accès complet peut faire cela.",
-  "pmeTsPaybackNotOwed": "L'entreprise ne doit rien à cette personne pour ce mois.",
-  "pmeTsPaybackMore": "C'est plus que ce que l'entreprise doit à cette personne.",
+  "pmeTsRepayNotOwed": "L'entreprise ne doit rien à cette personne pour ce mois.",
+  "pmeTsRepayMore": "C'est plus que ce que l'entreprise doit à cette personne.",
   "pmeTsUnknown": "Cela n'a pas été enregistré. Réessayez.",
   "pmeTsOwnerName": "Propriétaire",
   "pmeFltSearchHint": "Rechercher nom, téléphone, voiture ou VIN",
@@ -6932,6 +7121,16 @@
   "pmeFltOlder": "Doit d'avant",
   "pmeFltNotDelivered": "Facture non livrée",
   "pmeFltChip": "{label} {count}",
+  "@pmeFltChip": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "count": {
+        "type": "String"
+      }
+    }
+  },
   "pmeFltClear": "Effacer les filtres",
   "pmeFltNoMatch": "Aucun client ne correspond. Changez la recherche ou les filtres.",
   "pcsAnotherHint": "« En enregistrer un autre » ne garde que l'expéditeur, pour un autre destinataire ou pays.",

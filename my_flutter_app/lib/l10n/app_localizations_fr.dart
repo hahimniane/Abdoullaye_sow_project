@@ -14649,12 +14649,12 @@ class AppLocalizationsFr extends AppLocalizations {
   String get pmeTsReceiptFailed => 'Le reçu WhatsApp n\'a pas pu être envoyé.';
 
   @override
-  String pmeTsPaybackHint(String amount) {
+  String pmeTsRepayHint(String amount) {
     return 'L\'entreprise lui doit $amount. C\'est enregistré comme remboursement de ses dépenses.';
   }
 
   @override
-  String get pmeTsPaybackAmount => 'Montant remboursé';
+  String get pmeTsRepayAmount => 'Montant remboursé';
 
   @override
   String get pmeTsWaitingTitle => 'En attente de votre accord';
@@ -14723,11 +14723,11 @@ class AppLocalizationsFr extends AppLocalizations {
       'Seul le propriétaire ou une personne avec accès complet peut faire cela.';
 
   @override
-  String get pmeTsPaybackNotOwed =>
+  String get pmeTsRepayNotOwed =>
       'L\'entreprise ne doit rien à cette personne pour ce mois.';
 
   @override
-  String get pmeTsPaybackMore =>
+  String get pmeTsRepayMore =>
       'C\'est plus que ce que l\'entreprise doit à cette personne.';
 
   @override

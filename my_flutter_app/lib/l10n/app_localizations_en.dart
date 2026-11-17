@@ -14429,12 +14429,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pmeTsReceiptFailed => 'The WhatsApp receipt could not be sent.';
 
   @override
-  String pmeTsPaybackHint(String amount) {
+  String pmeTsRepayHint(String amount) {
     return 'The business owes them $amount. It is recorded as paid back for their expenses.';
   }
 
   @override
-  String get pmeTsPaybackAmount => 'Amount paid back';
+  String get pmeTsRepayAmount => 'Amount paid back';
 
   @override
   String get pmeTsWaitingTitle => 'Waiting for your OK';
@@ -14502,11 +14502,11 @@ class AppLocalizationsEn extends AppLocalizations {
       'Only the owner or someone with Full access can do this.';
 
   @override
-  String get pmeTsPaybackNotOwed =>
+  String get pmeTsRepayNotOwed =>
       'The business does not owe this person anything for this month.';
 
   @override
-  String get pmeTsPaybackMore =>
+  String get pmeTsRepayMore =>
       'That is more than the business owes this person.';
 
   @override

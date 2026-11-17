@@ -7070,15 +7070,15 @@
   "pmeTsDoneUndone": "Payment undone.",
   "pmeTsDonePayback": "Paid back — recorded.",
   "pmeTsReceiptFailed": "The WhatsApp receipt could not be sent.",
-  "pmeTsPaybackHint": "The business owes them {amount}. It is recorded as paid back for their expenses.",
-  "@pmeTsPaybackHint": {
+  "pmeTsRepayHint": "The business owes them {amount}. It is recorded as paid back for their expenses.",
+  "@pmeTsRepayHint": {
     "placeholders": {
       "amount": {
         "type": "String"
       }
     }
   },
-  "pmeTsPaybackAmount": "Amount paid back",
+  "pmeTsRepayAmount": "Amount paid back",
   "pmeTsWaitingTitle": "Waiting for your OK",
   "pmeTsWaitingLine": "{name} says they paid {amount}",
   "@pmeTsWaitingLine": {
@@ -7107,8 +7107,8 @@
   "pmeTsNotUndoable": "This payment is already undone or declined.",
   "pmeTsBillChanged": "The parking bill changed since it was filed, so it cannot be confirmed as it was. Decline it and ask for a new one.",
   "pmeTsOwnerOnly": "Only the owner or someone with Full access can do this.",
-  "pmeTsPaybackNotOwed": "The business does not owe this person anything for this month.",
-  "pmeTsPaybackMore": "That is more than the business owes this person.",
+  "pmeTsRepayNotOwed": "The business does not owe this person anything for this month.",
+  "pmeTsRepayMore": "That is more than the business owes this person.",
   "pmeTsUnknown": "That did not save. Try again.",
   "pmeTsOwnerName": "Owner",
   "pmeFltSearchHint": "Search name, phone, car or VIN",
