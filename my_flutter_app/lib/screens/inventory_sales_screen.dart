@@ -521,16 +521,19 @@ class _InventorySalesScreenState extends State<InventorySalesScreen> {
               keyPrefix: 'inv-sales-credit',
               options: [
                 (id: '', label: l10n.invCreditFilterAll),
+                (id: 'credit', label: l10n.extCreditFilterOnCredit),
                 (id: 'open', label: l10n.invCreditOwedTitle),
                 (id: 'paid', label: l10n.invCreditChipPaid),
               ],
               selected: switch (_creditFilter) {
                 InventoryCreditFilter.all => '',
+                InventoryCreditFilter.credit => 'credit',
                 InventoryCreditFilter.open => 'open',
                 InventoryCreditFilter.paid => 'paid',
               },
               onSelected: (id) => setState(
                 () => _creditFilter = switch (id) {
+                  'credit' => InventoryCreditFilter.credit,
                   'open' => InventoryCreditFilter.open,
                   'paid' => InventoryCreditFilter.paid,
                   _ => InventoryCreditFilter.all,

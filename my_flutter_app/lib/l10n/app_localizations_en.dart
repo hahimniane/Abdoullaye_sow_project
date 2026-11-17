@@ -15266,6 +15266,274 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pcsGoingIn => 'Pieces going in';
 
   @override
+  String get extCarSearchHint => 'Search make, model, VIN, stock number…';
+
+  @override
+  String get extStatusAll => 'All statuses';
+
+  @override
+  String get extStatusDraft => 'Draft';
+
+  @override
+  String get extCarsNoMatch => 'No listings match your search.';
+
+  @override
+  String extBulkSelected(int n) {
+    return '$n selected';
+  }
+
+  @override
+  String get extBulkApply => 'Apply';
+
+  @override
+  String get extBulkClear => 'Clear selection';
+
+  @override
+  String get extBulkSetStatus => 'Change status to';
+
+  @override
+  String extBulkDone(int n) {
+    return '$n listings updated.';
+  }
+
+  @override
+  String get extBulkFailed =>
+      'We could not change those listings. Check your connection, or ask the owner for access, then try again.';
+
+  @override
+  String extCarSelect(Object title) {
+    return 'Select $title';
+  }
+
+  @override
+  String get extFinancingNote => 'Financing note';
+
+  @override
+  String get extFinancingNoteHint => 'e.g. Financing available';
+
+  @override
+  String get extImageLinkTitle => 'Add a photo by link';
+
+  @override
+  String get extImageLinkHint => 'https://…';
+
+  @override
+  String get extImageLinkAdd => 'Add link';
+
+  @override
+  String get extImageLinkInvalid =>
+      'Paste a web address that starts with https://';
+
+  @override
+  String extImageLinkFull(int max) {
+    return 'This listing already has the most photos it can hold ($max).';
+  }
+
+  @override
+  String get extPurchaseSearchHint => 'Search car, buyer, phone, status…';
+
+  @override
+  String get extQuickNeedsAction => 'Needs action';
+
+  @override
+  String get extQuickPaidHolds => 'Paid holds';
+
+  @override
+  String get extPurchaseNoMatch => 'No records match your search.';
+
+  @override
+  String get extTransportSearchHint =>
+      'Search customer, vehicle, phone or reference';
+
+  @override
+  String get extTransportNoMatch => 'No accepted jobs match your search.';
+
+  @override
+  String get extContactPhone => 'Contact phone';
+
+  @override
+  String get extTransportDate => 'Transport date';
+
+  @override
+  String get extCreditFilterOnCredit => 'On credit';
+
+  @override
+  String get extCreditGroupNone => 'Oldest due first';
+
+  @override
+  String get extCreditGroupCustomer => 'By customer';
+
+  @override
+  String get extCreditGroupCollector => 'By collector';
+
+  @override
+  String get extCreditGroupStore => 'By store';
+
+  @override
+  String get extCreditOverdueOnly => 'Overdue only';
+
+  @override
+  String get extCreditSearchHint => 'Customer name or phone';
+
+  @override
+  String get extCreditNoMatch => 'No credit matches this filter.';
+
+  @override
+  String get extHistoryRangeCustom => 'Custom';
+
+  @override
+  String get extHistoryRangeFrom => 'From';
+
+  @override
+  String get extHistoryRangeTo => 'To';
+
+  @override
+  String get extHistoryRangePickFrom => 'Choose the first day';
+
+  @override
+  String get extHistoryRangePickTo => 'Choose the last day';
+
+  @override
+  String get extHistoryRangeBackwards =>
+      'The last day is before the first day. Change one of them.';
+
+  @override
+  String extHistoryRangeTooLong(int max) {
+    return 'That is more than $max days. Choose a shorter period.';
+  }
+
+  @override
+  String extHistoryRangeLabel(Object from, Object to) {
+    return '$from to $to';
+  }
+
+  @override
+  String get extHistoryNoComparisonRange => 'No sales in the period before';
+
+  @override
+  String extHistoryVsPreviousRange(Object change) {
+    return '$change vs the period before';
+  }
+
+  @override
+  String get extGrowthTitle => 'Growth';
+
+  @override
+  String get extGrowthSubtitle =>
+      'Your plan and the AI advisor\'s recommendations.';
+
+  @override
+  String get extGrowthFreeTitle => 'Free';
+
+  @override
+  String get extGrowthFreeBody =>
+      'Listings, destinations, barrels, purchases, parking, transport, people and support.';
+
+  @override
+  String get extGrowthProTitle => 'Pro';
+
+  @override
+  String get extGrowthProBody =>
+      'The AI advisor, deeper analytics and lower platform fees as you grow.';
+
+  @override
+  String get extGrowthCurrentPlan => 'Current plan';
+
+  @override
+  String get extGrowthActive => 'Active';
+
+  @override
+  String get extGrowthUpgrade => 'Upgrade to Pro';
+
+  @override
+  String get extGrowthUpgradeOwnerOnly =>
+      'Only the business owner can change the plan.';
+
+  @override
+  String get extGrowthCheckoutOpened =>
+      'The payment page is open in your browser.';
+
+  @override
+  String get extGrowthOpenFailed => 'We could not open the payment page.';
+
+  @override
+  String get extGrowthAdvisorTitle => 'Business AI advisor';
+
+  @override
+  String get extGrowthAdvisorOn =>
+      'Generate new recommendations from your latest business data.';
+
+  @override
+  String get extGrowthAdvisorOff =>
+      'Available on the Pro plan. It spots pricing, listing and response problems and how to fix them.';
+
+  @override
+  String get extGrowthGenerate => 'Generate insights';
+
+  @override
+  String get extGrowthGenerating => 'Generating… this can take a minute.';
+
+  @override
+  String get extGrowthGenerated => 'New recommendations are ready.';
+
+  @override
+  String get extGrowthNoInsights => 'No recommendations yet.';
+
+  @override
+  String get extGrowthNoInsightsPro =>
+      'Generate your first set of recommendations.';
+
+  @override
+  String get extGrowthNoInsightsFree => 'Upgrade to Pro to unlock the advisor.';
+
+  @override
+  String get extGrowthFinding => 'Finding';
+
+  @override
+  String get extGrowthAction => 'Recommended action';
+
+  @override
+  String get extGrowthCardFallbackTitle => 'Recommendation';
+
+  @override
+  String get extGrowthSevCritical => 'Critical';
+
+  @override
+  String get extGrowthSevHigh => 'High';
+
+  @override
+  String get extGrowthSevMedium => 'Medium';
+
+  @override
+  String get extGrowthSevLow => 'Low';
+
+  @override
+  String get extGrowthSevUnknown => 'Unknown';
+
+  @override
+  String get extGrowthLoadFailed =>
+      'We could not load your plan and recommendations.';
+
+  @override
+  String get extGrowthErrCheckoutOwner =>
+      'Only the business owner can start a subscription.';
+
+  @override
+  String get extGrowthErrCheckoutSetup =>
+      'Pro cannot be bought yet. Please try again later.';
+
+  @override
+  String get extGrowthErrAdvisorPro => 'The AI advisor needs the Pro plan.';
+
+  @override
+  String get extGrowthErrNoAccess =>
+      'You do not have access to the growth tools.';
+
+  @override
+  String get extGrowthErrGeneric =>
+      'That did not work. Check your connection and try again.';
+
+  @override
   String pcsGoingOf(int going, int total) {
     return '$going of $total';
   }

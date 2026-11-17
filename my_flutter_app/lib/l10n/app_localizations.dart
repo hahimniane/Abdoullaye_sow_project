@@ -26345,6 +26345,480 @@ abstract class AppLocalizations {
   /// **'Pieces going in'**
   String get pcsGoingIn;
 
+  /// No description provided for @extCarSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search make, model, VIN, stock number…'**
+  String get extCarSearchHint;
+
+  /// No description provided for @extStatusAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All statuses'**
+  String get extStatusAll;
+
+  /// No description provided for @extStatusDraft.
+  ///
+  /// In en, this message translates to:
+  /// **'Draft'**
+  String get extStatusDraft;
+
+  /// No description provided for @extCarsNoMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'No listings match your search.'**
+  String get extCarsNoMatch;
+
+  /// No description provided for @extBulkSelected.
+  ///
+  /// In en, this message translates to:
+  /// **'{n} selected'**
+  String extBulkSelected(int n);
+
+  /// No description provided for @extBulkApply.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply'**
+  String get extBulkApply;
+
+  /// No description provided for @extBulkClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear selection'**
+  String get extBulkClear;
+
+  /// No description provided for @extBulkSetStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Change status to'**
+  String get extBulkSetStatus;
+
+  /// No description provided for @extBulkDone.
+  ///
+  /// In en, this message translates to:
+  /// **'{n} listings updated.'**
+  String extBulkDone(int n);
+
+  /// No description provided for @extBulkFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'We could not change those listings. Check your connection, or ask the owner for access, then try again.'**
+  String get extBulkFailed;
+
+  /// No description provided for @extCarSelect.
+  ///
+  /// In en, this message translates to:
+  /// **'Select {title}'**
+  String extCarSelect(Object title);
+
+  /// No description provided for @extFinancingNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Financing note'**
+  String get extFinancingNote;
+
+  /// No description provided for @extFinancingNoteHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. Financing available'**
+  String get extFinancingNoteHint;
+
+  /// No description provided for @extImageLinkTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a photo by link'**
+  String get extImageLinkTitle;
+
+  /// No description provided for @extImageLinkHint.
+  ///
+  /// In en, this message translates to:
+  /// **'https://…'**
+  String get extImageLinkHint;
+
+  /// No description provided for @extImageLinkAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Add link'**
+  String get extImageLinkAdd;
+
+  /// No description provided for @extImageLinkInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste a web address that starts with https://'**
+  String get extImageLinkInvalid;
+
+  /// No description provided for @extImageLinkFull.
+  ///
+  /// In en, this message translates to:
+  /// **'This listing already has the most photos it can hold ({max}).'**
+  String extImageLinkFull(int max);
+
+  /// No description provided for @extPurchaseSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search car, buyer, phone, status…'**
+  String get extPurchaseSearchHint;
+
+  /// No description provided for @extQuickNeedsAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs action'**
+  String get extQuickNeedsAction;
+
+  /// No description provided for @extQuickPaidHolds.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid holds'**
+  String get extQuickPaidHolds;
+
+  /// No description provided for @extPurchaseNoMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'No records match your search.'**
+  String get extPurchaseNoMatch;
+
+  /// No description provided for @extTransportSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search customer, vehicle, phone or reference'**
+  String get extTransportSearchHint;
+
+  /// No description provided for @extTransportNoMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'No accepted jobs match your search.'**
+  String get extTransportNoMatch;
+
+  /// No description provided for @extContactPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact phone'**
+  String get extContactPhone;
+
+  /// No description provided for @extTransportDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Transport date'**
+  String get extTransportDate;
+
+  /// No description provided for @extCreditFilterOnCredit.
+  ///
+  /// In en, this message translates to:
+  /// **'On credit'**
+  String get extCreditFilterOnCredit;
+
+  /// No description provided for @extCreditGroupNone.
+  ///
+  /// In en, this message translates to:
+  /// **'Oldest due first'**
+  String get extCreditGroupNone;
+
+  /// No description provided for @extCreditGroupCustomer.
+  ///
+  /// In en, this message translates to:
+  /// **'By customer'**
+  String get extCreditGroupCustomer;
+
+  /// No description provided for @extCreditGroupCollector.
+  ///
+  /// In en, this message translates to:
+  /// **'By collector'**
+  String get extCreditGroupCollector;
+
+  /// No description provided for @extCreditGroupStore.
+  ///
+  /// In en, this message translates to:
+  /// **'By store'**
+  String get extCreditGroupStore;
+
+  /// No description provided for @extCreditOverdueOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Overdue only'**
+  String get extCreditOverdueOnly;
+
+  /// No description provided for @extCreditSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer name or phone'**
+  String get extCreditSearchHint;
+
+  /// No description provided for @extCreditNoMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'No credit matches this filter.'**
+  String get extCreditNoMatch;
+
+  /// No description provided for @extHistoryRangeCustom.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom'**
+  String get extHistoryRangeCustom;
+
+  /// No description provided for @extHistoryRangeFrom.
+  ///
+  /// In en, this message translates to:
+  /// **'From'**
+  String get extHistoryRangeFrom;
+
+  /// No description provided for @extHistoryRangeTo.
+  ///
+  /// In en, this message translates to:
+  /// **'To'**
+  String get extHistoryRangeTo;
+
+  /// No description provided for @extHistoryRangePickFrom.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the first day'**
+  String get extHistoryRangePickFrom;
+
+  /// No description provided for @extHistoryRangePickTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the last day'**
+  String get extHistoryRangePickTo;
+
+  /// No description provided for @extHistoryRangeBackwards.
+  ///
+  /// In en, this message translates to:
+  /// **'The last day is before the first day. Change one of them.'**
+  String get extHistoryRangeBackwards;
+
+  /// No description provided for @extHistoryRangeTooLong.
+  ///
+  /// In en, this message translates to:
+  /// **'That is more than {max} days. Choose a shorter period.'**
+  String extHistoryRangeTooLong(int max);
+
+  /// No description provided for @extHistoryRangeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'{from} to {to}'**
+  String extHistoryRangeLabel(Object from, Object to);
+
+  /// No description provided for @extHistoryNoComparisonRange.
+  ///
+  /// In en, this message translates to:
+  /// **'No sales in the period before'**
+  String get extHistoryNoComparisonRange;
+
+  /// No description provided for @extHistoryVsPreviousRange.
+  ///
+  /// In en, this message translates to:
+  /// **'{change} vs the period before'**
+  String extHistoryVsPreviousRange(Object change);
+
+  /// No description provided for @extGrowthTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Growth'**
+  String get extGrowthTitle;
+
+  /// No description provided for @extGrowthSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your plan and the AI advisor\'s recommendations.'**
+  String get extGrowthSubtitle;
+
+  /// No description provided for @extGrowthFreeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Free'**
+  String get extGrowthFreeTitle;
+
+  /// No description provided for @extGrowthFreeBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Listings, destinations, barrels, purchases, parking, transport, people and support.'**
+  String get extGrowthFreeBody;
+
+  /// No description provided for @extGrowthProTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pro'**
+  String get extGrowthProTitle;
+
+  /// No description provided for @extGrowthProBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The AI advisor, deeper analytics and lower platform fees as you grow.'**
+  String get extGrowthProBody;
+
+  /// No description provided for @extGrowthCurrentPlan.
+  ///
+  /// In en, this message translates to:
+  /// **'Current plan'**
+  String get extGrowthCurrentPlan;
+
+  /// No description provided for @extGrowthActive.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get extGrowthActive;
+
+  /// No description provided for @extGrowthUpgrade.
+  ///
+  /// In en, this message translates to:
+  /// **'Upgrade to Pro'**
+  String get extGrowthUpgrade;
+
+  /// No description provided for @extGrowthUpgradeOwnerOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the business owner can change the plan.'**
+  String get extGrowthUpgradeOwnerOnly;
+
+  /// No description provided for @extGrowthCheckoutOpened.
+  ///
+  /// In en, this message translates to:
+  /// **'The payment page is open in your browser.'**
+  String get extGrowthCheckoutOpened;
+
+  /// No description provided for @extGrowthOpenFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'We could not open the payment page.'**
+  String get extGrowthOpenFailed;
+
+  /// No description provided for @extGrowthAdvisorTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Business AI advisor'**
+  String get extGrowthAdvisorTitle;
+
+  /// No description provided for @extGrowthAdvisorOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Generate new recommendations from your latest business data.'**
+  String get extGrowthAdvisorOn;
+
+  /// No description provided for @extGrowthAdvisorOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Available on the Pro plan. It spots pricing, listing and response problems and how to fix them.'**
+  String get extGrowthAdvisorOff;
+
+  /// No description provided for @extGrowthGenerate.
+  ///
+  /// In en, this message translates to:
+  /// **'Generate insights'**
+  String get extGrowthGenerate;
+
+  /// No description provided for @extGrowthGenerating.
+  ///
+  /// In en, this message translates to:
+  /// **'Generating… this can take a minute.'**
+  String get extGrowthGenerating;
+
+  /// No description provided for @extGrowthGenerated.
+  ///
+  /// In en, this message translates to:
+  /// **'New recommendations are ready.'**
+  String get extGrowthGenerated;
+
+  /// No description provided for @extGrowthNoInsights.
+  ///
+  /// In en, this message translates to:
+  /// **'No recommendations yet.'**
+  String get extGrowthNoInsights;
+
+  /// No description provided for @extGrowthNoInsightsPro.
+  ///
+  /// In en, this message translates to:
+  /// **'Generate your first set of recommendations.'**
+  String get extGrowthNoInsightsPro;
+
+  /// No description provided for @extGrowthNoInsightsFree.
+  ///
+  /// In en, this message translates to:
+  /// **'Upgrade to Pro to unlock the advisor.'**
+  String get extGrowthNoInsightsFree;
+
+  /// No description provided for @extGrowthFinding.
+  ///
+  /// In en, this message translates to:
+  /// **'Finding'**
+  String get extGrowthFinding;
+
+  /// No description provided for @extGrowthAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Recommended action'**
+  String get extGrowthAction;
+
+  /// No description provided for @extGrowthCardFallbackTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Recommendation'**
+  String get extGrowthCardFallbackTitle;
+
+  /// No description provided for @extGrowthSevCritical.
+  ///
+  /// In en, this message translates to:
+  /// **'Critical'**
+  String get extGrowthSevCritical;
+
+  /// No description provided for @extGrowthSevHigh.
+  ///
+  /// In en, this message translates to:
+  /// **'High'**
+  String get extGrowthSevHigh;
+
+  /// No description provided for @extGrowthSevMedium.
+  ///
+  /// In en, this message translates to:
+  /// **'Medium'**
+  String get extGrowthSevMedium;
+
+  /// No description provided for @extGrowthSevLow.
+  ///
+  /// In en, this message translates to:
+  /// **'Low'**
+  String get extGrowthSevLow;
+
+  /// No description provided for @extGrowthSevUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown'**
+  String get extGrowthSevUnknown;
+
+  /// No description provided for @extGrowthLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'We could not load your plan and recommendations.'**
+  String get extGrowthLoadFailed;
+
+  /// No description provided for @extGrowthErrCheckoutOwner.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the business owner can start a subscription.'**
+  String get extGrowthErrCheckoutOwner;
+
+  /// No description provided for @extGrowthErrCheckoutSetup.
+  ///
+  /// In en, this message translates to:
+  /// **'Pro cannot be bought yet. Please try again later.'**
+  String get extGrowthErrCheckoutSetup;
+
+  /// No description provided for @extGrowthErrAdvisorPro.
+  ///
+  /// In en, this message translates to:
+  /// **'The AI advisor needs the Pro plan.'**
+  String get extGrowthErrAdvisorPro;
+
+  /// No description provided for @extGrowthErrNoAccess.
+  ///
+  /// In en, this message translates to:
+  /// **'You do not have access to the growth tools.'**
+  String get extGrowthErrNoAccess;
+
+  /// No description provided for @extGrowthErrGeneric.
+  ///
+  /// In en, this message translates to:
+  /// **'That did not work. Check your connection and try again.'**
+  String get extGrowthErrGeneric;
+
   /// No description provided for @pcsGoingOf.
   ///
   /// In en, this message translates to:

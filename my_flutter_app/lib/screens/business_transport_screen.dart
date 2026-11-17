@@ -10,12 +10,18 @@ import '../models/transport_opportunity.dart';
 import '../models/transport_quote.dart';
 import '../models/transport_request.dart';
 import '../services/business_transport_jobs.dart';
+import '../services/shipment_tracking_service.dart';
+import '../services/transport_job_filters.dart';
 import '../theme/app_colors.dart';
 import '../utils/action_confirmation.dart';
 import '../utils/business_transport_localization.dart';
+import '../utils/date_display.dart';
 import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/async_action_button.dart';
+import '../widgets/container_tracking_card.dart';
+import '../widgets/shipment_tracking_section.dart';
+import '../widgets/transport_job_filter_bar.dart';
 import '../widgets/language_toggle.dart';
 import 'business_transport_bid_screen.dart';
 
@@ -33,12 +39,22 @@ class BusinessTransportScreen extends StatefulWidget {
     required this.businessId,
     BusinessTransportService? service,
     FirebaseFirestore? firestore,
+    this.trackingService,
+    @visibleForTesting this.jobsStream,
   }) : _service = service,
        _firestore = firestore;
 
   final String businessId;
   final BusinessTransportService? _service;
   final FirebaseFirestore? _firestore;
+
+  /// The tracking feed and carrier subscription behind each accepted job.
+  /// Null builds the real one; a test passes a fake.
+  final ShipmentTrackingService? trackingService;
+
+  /// The accepted jobs as a stream, in place of the Firestore query. For
+  /// widget tests, which cannot build a Firestore.
+  final Stream<List<TransportRequest>>? jobsStream;
 
   @override
   State<BusinessTransportScreen> createState() =>
@@ -57,13 +73,39 @@ class _BusinessTransportScreenState extends State<BusinessTransportScreen> {
 
   StreamSubscription<List<TransportOpportunity>>? _opportunitySubscription;
   StreamSubscription<List<TransportQuote>>? _quoteSubscription;
-  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _jobSubscription;
+  StreamSubscription<List<TransportRequest>>? _jobSubscription;
 
   bool _opportunitiesLoaded = false;
   bool _quotesLoaded = false;
   bool _jobsLoaded = false;
 
   BusinessTransportSection _section = BusinessTransportSection.openToBid;
+
+  // Search and status filter on the accepted jobs, applied once per change
+  // of the jobs or of the filter, never per build.
+  String _jobQuery = '';
+  String _jobStatus = 'all';
+  List<TransportRequest> _shownJobs = const [];
+  List<String> _jobStatuses = const [];
+  bool _jobsDirty = true;
+  String _shownQuery = '';
+  String _shownStatus = 'all';
+
+  void _refreshJobViews() {
+    if (_jobsDirty ||
+        _shownQuery != _jobQuery ||
+        _shownStatus != _jobStatus) {
+      if (_jobsDirty) _jobStatuses = transportJobStatusesIn(_jobs);
+      _shownJobs = filterTransportJobs(
+        _jobs,
+        query: _jobQuery,
+        status: _jobStatus,
+      );
+      _shownQuery = _jobQuery;
+      _shownStatus = _jobStatus;
+      _jobsDirty = false;
+    }
+  }
 
   @override
   void initState() {
@@ -90,16 +132,24 @@ class _BusinessTransportScreenState extends State<BusinessTransportScreen> {
           }),
           onError: (_) => setState(() => _quotesLoaded = true),
         );
-    _jobSubscription = _firestore
-        .collection('transportRequests')
-        .where('businessId', isEqualTo: widget.businessId)
-        .snapshots()
-        .listen(
-          (snapshot) => setState(() {
+    _jobSubscription =
+        (widget.jobsStream ??
+                _firestore
+                    .collection('transportRequests')
+                    .where('businessId', isEqualTo: widget.businessId)
+                    .snapshots()
+                    .map(
+                      (snapshot) => snapshot.docs
+                          .map(TransportRequest.fromFirestore)
+                          .toList(),
+                    ))
+            .listen(
+          (rows) => setState(() {
             _jobs
               ..clear()
-              ..addAll(snapshot.docs.map(TransportRequest.fromFirestore));
+              ..addAll(rows);
             _jobs.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+            _jobsDirty = true;
             _jobsLoaded = true;
           }),
           onError: (_) => setState(() => _jobsLoaded = true),
@@ -252,15 +302,40 @@ class _BusinessTransportScreenState extends State<BusinessTransportScreen> {
       : _opportunitiesIn(section).length;
 
   Widget _buildSection(AppLocalizations l10n) {
-    final rows = _section == BusinessTransportSection.wonJobs
-        ? _jobs
-        : _opportunitiesIn(_section);
+    final isJobs = _section == BusinessTransportSection.wonJobs;
+    if (isJobs) _refreshJobViews();
+    final rows = isJobs ? _shownJobs : _opportunitiesIn(_section);
+    if (isJobs && _jobs.isNotEmpty) {
+      return Column(
+        children: [
+          TransportJobFilterBar(
+            query: _jobQuery,
+            status: _jobStatus,
+            statuses: _jobStatuses,
+            onQueryChanged: (value) => setState(() => _jobQuery = value),
+            onStatusChanged: (value) => setState(() => _jobStatus = value),
+          ),
+          Expanded(child: _buildRows(l10n, rows, noMatch: rows.isEmpty)),
+        ],
+      );
+    }
+    return _buildRows(l10n, rows);
+  }
+
+  Widget _buildRows(
+    AppLocalizations l10n,
+    List<Object> rows, {
+    bool noMatch = false,
+  }) {
     if (rows.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(32),
           child: Text(
-            businessTransportSectionEmpty(l10n, _section),
+            noMatch
+                ? l10n.extTransportNoMatch
+                : businessTransportSectionEmpty(l10n, _section),
+            key: noMatch ? const Key('transport-job-no-match') : null,
             textAlign: TextAlign.center,
             style: const TextStyle(
               color: AppColors.muted,
@@ -281,6 +356,7 @@ class _BusinessTransportScreenState extends State<BusinessTransportScreen> {
               job: row,
               businessId: widget.businessId,
               service: _service,
+              trackingService: widget.trackingService,
             )
           else if (row is TransportOpportunity)
             _TransportOpportunityCard(
@@ -489,11 +565,13 @@ class _TransportJobCard extends StatefulWidget {
     required this.job,
     required this.businessId,
     required this.service,
+    this.trackingService,
   });
 
   final TransportRequest job;
   final String businessId;
   final BusinessTransportService service;
+  final ShipmentTrackingService? trackingService;
 
   @override
   State<_TransportJobCard> createState() => _TransportJobCardState();
@@ -638,6 +716,12 @@ class _TransportJobCardState extends State<_TransportJobCard> {
           const SizedBox(height: 8),
           _Fact(label: l10n.ownerName, value: job.ownerName),
           _Fact(
+            label: l10n.extContactPhone,
+            value: job.customerPhone.trim().isEmpty
+                ? l10n.notProvided
+                : job.customerPhone.trim(),
+          ),
+          _Fact(
             label: l10n.pickupAddress,
             value: job.pickupAddress.isEmpty ? l10n.notProvided : job.pickupAddress,
           ),
@@ -654,6 +738,10 @@ class _TransportJobCardState extends State<_TransportJobCard> {
                   ? job.selectedAmountCents / 100
                   : job.price,
             ),
+          ),
+          _Fact(
+            label: l10n.extTransportDate,
+            value: displayDate(job.transportDate, dateLocaleOf(context)),
           ),
           if (container.isNotEmpty)
             _Fact(
@@ -736,6 +824,25 @@ class _TransportJobCardState extends State<_TransportJobCard> {
               ),
             ),
           ],
+          // A transported car gets the same milestone feed and carrier
+          // subscription as a barrel; the customer's journey card reads
+          // from exactly this (the console does the same).
+          const SizedBox(height: 16),
+          ContainerTrackingCard(
+            key: Key('transport-job-tracking-card-${job.id}'),
+            relatedCollection: 'transportRequests',
+            relatedId: job.id,
+            containerNumber: container,
+            trackingProvider: job.trackingProvider,
+            trackingService: widget.trackingService,
+          ),
+          const SizedBox(height: 12),
+          ShipmentTrackingSection(
+            key: Key('transport-job-tracking-${job.id}'),
+            relatedCollection: 'transportRequests',
+            relatedId: job.id,
+            trackingService: widget.trackingService,
+          ),
         ],
       ),
     );

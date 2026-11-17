@@ -19,6 +19,7 @@ import '../utils/date_display.dart';
 import '../widgets/day_picker.dart';
 import '../widgets/inventory_widgets.dart';
 import '../widgets/lot_sheets.dart';
+import '../widgets/sales_range_bar.dart';
 import 'inventory_item_screen.dart';
 import 'inventory_sales_screen.dart';
 
@@ -96,6 +97,12 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
     widget.clock(),
   );
   String _storeFilter = '';
+
+  // The two ends being set for a custom range, kept only while one of them
+  // is refused (otherwise the range is the period itself).
+  DateTime? _rangeFrom;
+  DateTime? _rangeTo;
+  SalesRangeProblem? _rangeProblem;
 
   SalesHistoryData? _data;
   List<_TimelineRow> _rows = const [];
@@ -186,7 +193,8 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
       }
       return;
     }
-    final key = '${_period.kind.name}|${_period.startDay}|$_storeId';
+    final key =
+        '${_period.kind.name}|${_period.startDay}|${_period.endDay}|$_storeId';
     if (!force && key == _loadedKey) return;
     _loadedKey = key;
     unawaited(_load(_period, _storeId));
@@ -234,6 +242,9 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
       _data = null;
       _rows = const [];
       _selectedBar = null;
+      _rangeFrom = null;
+      _rangeTo = null;
+      _rangeProblem = null;
     });
     _maybeLoad();
   }
@@ -246,6 +257,54 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
           ? SalesPeriod.current(kind, now)
           : SalesPeriod.containing(kind, _period.startDay),
     );
+  }
+
+  DateTime _wall(DateTime d) => DateTime.utc(d.year, d.month, d.day);
+
+  /// The custom range starts from the period on screen, ended no later than
+  /// today.
+  void _startCustom() {
+    if (_period.kind == SalesPeriodKind.custom) return;
+    final today = _wall(shopToday(widget.clock()));
+    var to = _period.lastDay.isAfter(today) ? today : _period.lastDay;
+    final from = _period.startDay.isAfter(to) ? to : _period.startDay;
+    if (to.isBefore(from)) to = from;
+    _applyRange(from, to);
+  }
+
+  /// Shows the range, or says in words why not and leaves the period as it
+  /// was. A last day after today is today (nothing is sold in the future).
+  void _applyRange(DateTime from, DateTime to) {
+    final today = _wall(shopToday(widget.clock()));
+    final problem = checkSalesRange(from, to);
+    if (problem != null) {
+      setState(() {
+        _rangeFrom = from;
+        _rangeTo = to;
+        _rangeProblem = problem;
+      });
+      return;
+    }
+    _show(SalesPeriod.range(from, to.isAfter(today) ? today : to));
+  }
+
+  Future<void> _pickRangeEnd({required bool first}) async {
+    final today = shopToday(widget.clock());
+    final from = _rangeFrom ?? _period.startDay;
+    final to = _rangeTo ?? _period.lastDay;
+    final picked = await pickCalendarDay(
+      context,
+      initial: wallDayAsLocal(first ? from : to),
+      first: DateTime(2020, 1, 1),
+      last: today,
+    );
+    if (picked == null || !mounted) return;
+    final day = DateTime.utc(picked.year, picked.month, picked.day);
+    if (first) {
+      _applyRange(day, to);
+    } else {
+      _applyRange(from, day);
+    }
   }
 
   void _setStore(String id) {
@@ -265,7 +324,10 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
     if (picked == null || !mounted) return;
     _show(
       SalesPeriod.containing(
-        _period.kind,
+        // A day picked from inside a custom range is that day.
+        _period.kind == SalesPeriodKind.custom
+            ? SalesPeriodKind.day
+            : _period.kind,
         DateTime.utc(picked.year, picked.month, picked.day),
       ),
     );
@@ -333,20 +395,23 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
         locale,
       ),
       SalesPeriodKind.year => '${p.startDay.year}',
+      SalesPeriodKind.custom => l10n.extHistoryRangeLabel(
+        displayDate(wallDayAsLocal(p.startDay), locale),
+        displayDate(wallDayAsLocal(p.lastDay), locale),
+      ),
     };
   }
 
   /// A bar's name: its hour, its day or its month.
   String _barLabel(int index, String locale) {
     final day = wallDayAsLocal(_period.bucketDay(index));
-    return switch (_period.kind) {
-      SalesPeriodKind.day => displayHour(
+    return switch (_period.granularity) {
+      SalesGranularity.hour => displayHour(
         DateTime(day.year, day.month, day.day, index),
         locale,
       ),
-      SalesPeriodKind.week ||
-      SalesPeriodKind.month => displayWeekdayMonthDay(day, locale),
-      SalesPeriodKind.year => displayMonthYear(day, locale),
+      SalesGranularity.day => displayWeekdayMonthDay(day, locale),
+      SalesGranularity.month => displayMonthYear(day, locale),
     };
   }
 
@@ -361,6 +426,23 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
       SalesPeriodKind.week => displayWeekdayShort(day, locale),
       SalesPeriodKind.month => index % 7 == 0 ? '${day.day}' : null,
       SalesPeriodKind.year => displayMonthNarrow(day, locale),
+      SalesPeriodKind.custom => switch (_period.granularity) {
+        SalesGranularity.hour =>
+          index % 6 == 0
+              ? displayHour(
+                  DateTime(day.year, day.month, day.day, index),
+                  locale,
+                )
+              : null,
+        SalesGranularity.day =>
+          _period.bucketCount <= 7
+              ? displayWeekdayShort(day, locale)
+              : (index % 7 == 0 ? '${day.day}' : null),
+        SalesGranularity.month =>
+          _period.bucketCount <= 12
+              ? displayMonthNarrow(day, locale)
+              : (index % 3 == 0 ? displayMonthNarrow(day, locale) : null),
+      },
     };
   }
 
@@ -377,7 +459,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
       _PeriodControls(
         kind: _period.kind,
         label: _periodLabel(locale, l10n),
-        current: _period.contains(now)
+        current: _period.contains(now) && _period.kind != SalesPeriodKind.custom
             ? l10n.salesHistCurrent(_period.kind.name)
             : null,
         canGoNext: _period.next.startedBy(now),
@@ -385,6 +467,16 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
         onPrevious: () => _show(_period.previous),
         onNext: () => _show(_period.next),
         onPick: _pickDay,
+        onCustom: _startCustom,
+        range: _period.kind == SalesPeriodKind.custom
+            ? SalesRangeBar(
+                from: _rangeFrom ?? _period.startDay,
+                to: _rangeTo ?? _period.lastDay,
+                problem: _rangeProblem,
+                onPickFrom: () => _pickRangeEnd(first: true),
+                onPickTo: () => _pickRangeEnd(first: false),
+              )
+            : null,
       ),
       if (stores.viewerSeesAll) ...[
         const SizedBox(height: AppSpacing.sm),
@@ -464,22 +556,27 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
           ),
           const SizedBox(height: AppSpacing.md),
           _ChartCard(
-            title: l10n.salesHistChartTitle(_period.kind.name),
+            title: _period.kind == SalesPeriodKind.custom
+                ? (_period.granularity == SalesGranularity.hour
+                      ? l10n.salesHistChartTitle('day')
+                      : _period.granularity == SalesGranularity.day
+                      ? l10n.salesHistChartTitle('week')
+                      : l10n.salesHistChartTitle('year'))
+                : l10n.salesHistChartTitle(_period.kind.name),
             values: s.buckets,
             selected: _selectedBar,
             barLabel: (i) => _barLabel(i, locale),
             axisLabel: (i) => _axisLabel(i, locale),
             onSelect: (i) =>
                 setState(() => _selectedBar = _selectedBar == i ? null : i),
-            drillLabel: switch (_period.kind) {
-              SalesPeriodKind.day => null,
-              SalesPeriodKind.week ||
-              SalesPeriodKind.month => l10n.salesHistOpenDay,
-              SalesPeriodKind.year => l10n.salesHistOpenMonth,
+            drillLabel: switch (_period.granularity) {
+              SalesGranularity.hour => null,
+              SalesGranularity.day => l10n.salesHistOpenDay,
+              SalesGranularity.month => l10n.salesHistOpenMonth,
             },
             onDrill: (i) => _show(
               SalesPeriod.containing(
-                _period.kind == SalesPeriodKind.year
+                _period.granularity == SalesGranularity.month
                     ? SalesPeriodKind.month
                     : SalesPeriodKind.day,
                 _period.bucketDay(i),
@@ -782,9 +879,15 @@ class _PeriodControls extends StatelessWidget {
     required this.onPrevious,
     required this.onNext,
     required this.onPick,
+    required this.onCustom,
+    required this.range,
   });
 
   final SalesPeriodKind kind;
+  final VoidCallback onCustom;
+
+  /// The two ends of a custom range, while one is on screen.
+  final Widget? range;
   final String label;
   final String? current;
   final bool canGoNext;
@@ -817,11 +920,28 @@ class _PeriodControls extends StatelessWidget {
             segment(SalesPeriodKind.month, l10n.salesHistMonth),
             segment(SalesPeriodKind.year, l10n.salesHistYear),
           ],
-          selected: {kind},
+          selected: kind == SalesPeriodKind.custom ? {} : {kind},
+          emptySelectionAllowed: true,
           showSelectedIcon: false,
-          onSelectionChanged: (set) => onKind(set.first),
+          onSelectionChanged: (set) {
+            if (set.isNotEmpty) onKind(set.first);
+          },
           style: const ButtonStyle(visualDensity: VisualDensity.compact),
         ),
+        const SizedBox(height: AppSpacing.sm),
+        Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: FilterChip(
+            key: const Key('hist-kind-custom'),
+            label: Text(l10n.extHistoryRangeCustom),
+            selected: kind == SalesPeriodKind.custom,
+            onSelected: (_) => onCustom(),
+          ),
+        ),
+        if (range != null) ...[
+          const SizedBox(height: AppSpacing.sm),
+          range!,
+        ],
         const SizedBox(height: AppSpacing.sm),
         Row(
           children: [
@@ -955,7 +1075,11 @@ class _Figures extends StatelessWidget {
     if (before != null) {
       final change = percentChange(s.totalCents, before.totalCents);
       comparison = Text(
-        change == null
+        kind == SalesPeriodKind.custom
+            ? (change == null
+                  ? l10n.extHistoryNoComparisonRange
+                  : l10n.extHistoryVsPreviousRange(percentChangeText(change)))
+            : change == null
             ? l10n.salesHistNoComparison(kind.name)
             : l10n.salesHistVsPrevious(percentChangeText(change), kind.name),
         key: const Key('hist-kpi-change'),

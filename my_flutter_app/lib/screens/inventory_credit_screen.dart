@@ -7,6 +7,7 @@ import '../services/eastern_clock.dart';
 import '../services/inventory.dart';
 import '../services/inventory_context.dart';
 import '../services/inventory_credit.dart';
+import '../services/inventory_credit_list.dart';
 import '../services/inventory_service.dart';
 import '../services/inventory_stores.dart';
 import '../services/inventory_team.dart';
@@ -86,6 +87,53 @@ class _InventoryCreditScreenState extends State<InventoryCreditScreen> {
     currentUserId: _me,
   );
   String _storeFilter = '';
+
+  // Grouping, "Overdue only" and the customer search, on top of the
+  // collector and store chips.
+  InventoryCreditGroupBy _groupBy = InventoryCreditGroupBy.none;
+  bool _overdueOnly = false;
+  String _query = '';
+
+  // What the list shows, made once per change of the credits, the filters or
+  // the day, never per build.
+  Object? _viewKey;
+  List<InventorySale> _shown = const [];
+  List<InventoryCreditGroup> _groups = const [];
+
+  void _refreshView(DateTime today, bool seesAll) {
+    final key = (
+      _credits,
+      _collector,
+      seesAll ? _storeFilter : '',
+      _overdueOnly,
+      _query,
+      _groupBy,
+      today,
+      _team.people,
+    );
+    if (_viewKey == key) return;
+    _viewKey = key;
+    _shown = filterInventoryCredits(
+      inventoryOpenCredits(
+        _credits,
+        collectorId: _collector,
+        storeId: seesAll ? _storeFilter : '',
+        today: today,
+      ),
+      overdueOnly: _overdueOnly,
+      query: _query,
+      today: today,
+    );
+    _groups = groupInventoryCredits(
+      _shown,
+      _groupBy,
+      today: today,
+      collectorName: _name,
+      storeName: (sale) => sale.storeName.isNotEmpty
+          ? sale.storeName
+          : _watcher.context.storeName(sale.storeId),
+    );
+  }
 
   @override
   void didChangeDependencies() {
@@ -196,12 +244,8 @@ class _InventoryCreditScreenState extends State<InventoryCreditScreen> {
     final locale = dateLocaleOf(context);
     final today = shopToday(widget.clock());
     final stores = _watcher.context;
-    final shown = inventoryOpenCredits(
-      _credits,
-      collectorId: _collector,
-      storeId: stores.viewerSeesAll ? _storeFilter : '',
-      today: today,
-    );
+    _refreshView(today, stores.viewerSeesAll);
+    final shown = _shown;
     final totals = inventoryCreditTotals(shown, today: today);
     // Mine, everyone, then each other collector with something open.
     final collectors = [
@@ -246,6 +290,60 @@ class _InventoryCreditScreenState extends State<InventoryCreditScreen> {
                 onSelected: (id) => setState(() => _storeFilter = id),
               ),
             ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.sm,
+              AppSpacing.lg,
+              0,
+            ),
+            child: InventoryChoiceChips(
+              keyPrefix: 'credit-group',
+              options: [
+                (id: 'none', label: l10n.extCreditGroupNone),
+                (id: 'customer', label: l10n.extCreditGroupCustomer),
+                (id: 'collector', label: l10n.extCreditGroupCollector),
+                if (stores.viewerSeesAll)
+                  (id: 'store', label: l10n.extCreditGroupStore),
+              ],
+              selected: _groupBy.name,
+              onSelected: (id) => setState(
+                () => _groupBy = InventoryCreditGroupBy.values.firstWhere(
+                  (g) => g.name == id,
+                  orElse: () => InventoryCreditGroupBy.none,
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.sm,
+              AppSpacing.lg,
+              0,
+            ),
+            child: TextField(
+              key: const Key('credit-search'),
+              onChanged: (value) => setState(() => _query = value),
+              textInputAction: TextInputAction.search,
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.search),
+                hintText: l10n.extCreditSearchHint,
+                isDense: true,
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+            child: SwitchListTile.adaptive(
+              key: const Key('credit-overdue-only'),
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              value: _overdueOnly,
+              onChanged: (value) => setState(() => _overdueOnly = value),
+              title: Text(l10n.extCreditOverdueOnly),
+            ),
+          ),
           Expanded(
             child: !_loaded
                 ? const Center(child: CircularProgressIndicator())
@@ -281,7 +379,17 @@ class _InventoryCreditScreenState extends State<InventoryCreditScreen> {
                     children: [
                       _TotalsCard(totals: totals),
                       const SizedBox(height: AppSpacing.md),
-                      if (shown.isEmpty)
+                      if (shown.isEmpty && _credits.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.all(AppSpacing.lg),
+                          child: Text(
+                            l10n.extCreditNoMatch,
+                            key: const Key('credit-no-match'),
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: AppColors.muted),
+                          ),
+                        )
+                      else if (shown.isEmpty)
                         LotEmptyState(
                           key: const Key('credit-empty'),
                           icon: Icons.handshake_outlined,
@@ -289,8 +397,14 @@ class _InventoryCreditScreenState extends State<InventoryCreditScreen> {
                           hint: l10n.invCreditNoneOpenHint,
                         )
                       else
-                        for (final sale in shown)
-                          _CreditRow(
+                        for (final group in _groups) ...[
+                          if (_groupBy != InventoryCreditGroupBy.none)
+                            _GroupHeader(
+                              key: ValueKey('credit-group-${group.key}'),
+                              group: group,
+                            ),
+                          for (final sale in group.rows)
+                            _CreditRow(
                             key: ValueKey('credit-${sale.id}'),
                             sale: sale,
                             today: today,
@@ -306,8 +420,49 @@ class _InventoryCreditScreenState extends State<InventoryCreditScreen> {
                                 : '',
                             onTap: () => _open(sale),
                           ),
+                        ],
                     ],
                   ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The head of one group: who it is, and what the group is owed.
+class _GroupHeader extends StatelessWidget {
+  const _GroupHeader({super.key, required this.group});
+
+  final InventoryCreditGroup group;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.sm, bottom: AppSpacing.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            group.label.isEmpty ? '—' : group.label,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: AppColors.ink,
+            ),
+          ),
+          if (group.detail.isNotEmpty)
+            Text(
+              group.detail,
+              style: const TextStyle(fontSize: 12.5, color: AppColors.muted),
+            ),
+          Text(
+            l10n.invCreditTotals(
+              group.totals.count,
+              formatLotCents(group.totals.owedCents),
+            ),
+            style: const TextStyle(fontSize: 12.5, color: AppColors.muted),
           ),
         ],
       ),

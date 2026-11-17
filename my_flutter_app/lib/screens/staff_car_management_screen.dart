@@ -16,6 +16,7 @@ import '../models/business_service.dart';
 import '../models/car.dart';
 import '../providers/auth_provider.dart';
 import '../services/business_activity_queries.dart';
+import '../services/listing_filters.dart';
 import '../services/vin_catalog_matcher.dart';
 import '../services/vin_decoder_service.dart';
 import '../theme/app_colors.dart';
@@ -29,6 +30,7 @@ import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/country_phone_field.dart';
 import '../widgets/language_toggle.dart';
+import '../widgets/listing_toolbar.dart';
 import 'vin_scanner_screen.dart';
 
 class StaffCarManagementScreen extends StatefulWidget {
@@ -46,6 +48,76 @@ class _StaffCarManagementScreenState extends State<StaffCarManagementScreen> {
   final Set<String> _processingCars = <String>{};
   final NumberFormat _currency = NumberFormat.simpleCurrency();
   bool _isSavingCar = false;
+
+  // Search, status filter and the ticked listings for a bulk status change.
+  String _query = '';
+  String _statusFilter = 'all';
+  Set<String> _selected = <String>{};
+  String _bulkStatus = 'active';
+  bool _bulkBusy = false;
+
+  // The parsed listings and the filtered view, made once per change of the
+  // data or of the search, never per build.
+  QuerySnapshot? _parsedFrom;
+  List<Car> _parsed = const <Car>[];
+  List<Car> _visible = const <Car>[];
+  String _visibleQuery = '';
+  String _visibleStatus = 'all';
+  bool _visibleStale = true;
+
+  List<Car> _carsFrom(QuerySnapshot snap) {
+    if (!identical(_parsedFrom, snap)) {
+      _parsedFrom = snap;
+      _parsed = snap.docs.map((doc) => Car.fromFirestore(doc)).toList()
+        ..sort((a, b) {
+          final aDate = a.createdAt ?? DateTime(1970);
+          final bDate = b.createdAt ?? DateTime(1970);
+          return bDate.compareTo(aDate);
+        });
+      _visibleStale = true;
+      _selected = pruneListingSelection(_selected, _parsed.map((c) => c.id));
+    }
+    return _parsed;
+  }
+
+  List<Car> _visibleCars(List<Car> cars) {
+    if (_visibleStale ||
+        _visibleQuery != _query ||
+        _visibleStatus != _statusFilter) {
+      _visible = filterListings(cars, query: _query, status: _statusFilter);
+      _visibleQuery = _query;
+      _visibleStatus = _statusFilter;
+      _visibleStale = false;
+    }
+    return _visible;
+  }
+
+  Future<void> _applyBulkStatus() async {
+    final l10n = AppLocalizations.of(context)!;
+    final ids = _selected.toList();
+    if (ids.isEmpty || _bulkBusy) return;
+    setState(() => _bulkBusy = true);
+    try {
+      for (final chunk in chunkListingIds(ids)) {
+        final batch = _firestore.batch();
+        for (final id in chunk) {
+          batch.update(_firestore.collection('cars').doc(id), {
+            'status': _bulkStatus,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }
+        await batch.commit();
+      }
+      if (!mounted) return;
+      setState(() => _selected = <String>{});
+      showSuccessSnackBar(context, l10n.extBulkDone(ids.length));
+    } catch (_) {
+      if (!mounted) return;
+      showErrorSnackBar(context, l10n.extBulkFailed);
+    } finally {
+      if (mounted) setState(() => _bulkBusy = false);
+    }
+  }
 
   void _setProcessing(String id, bool value) {
     setState(() {
@@ -309,7 +381,7 @@ class _StaffCarManagementScreenState extends State<StaffCarManagementScreen> {
       case 'reserved':
         return l10n.reserved;
       default:
-        return status;
+        return listingStatusLabel(l10n, status);
     }
   }
 
@@ -493,16 +565,9 @@ class _StaffCarManagementScreenState extends State<StaffCarManagementScreen> {
                               child: CircularProgressIndicator(),
                             );
                           }
-                          final cars =
-                              snapshot.data!.docs
-                                  .map((doc) => Car.fromFirestore(doc))
-                                  .toList()
-                                ..sort((a, b) {
-                                  final aDate = a.createdAt ?? DateTime(1970);
-                                  final bDate = b.createdAt ?? DateTime(1970);
-                                  return bDate.compareTo(aDate);
-                                });
-                          if (cars.isEmpty) {
+                          final allCars = _carsFrom(snapshot.data!);
+                          final cars = _visibleCars(allCars);
+                          if (allCars.isEmpty) {
                             return _EmptyCarsState(onAdd: () => _showCarForm());
                           }
 
@@ -524,6 +589,34 @@ class _StaffCarManagementScreenState extends State<StaffCarManagementScreen> {
                                 reserved: counts?['reserved'],
                                 l10n: l10n,
                               ),
+                              ListingFilterBar(
+                                query: _query,
+                                status: _statusFilter,
+                                onQueryChanged: (value) =>
+                                    setState(() => _query = value),
+                                onStatusChanged: (value) =>
+                                    setState(() => _statusFilter = value),
+                              ),
+                              if (_selected.isNotEmpty)
+                                ListingBulkBar(
+                                  count: _selected.length,
+                                  status: _bulkStatus,
+                                  busy: _bulkBusy,
+                                  onStatusChanged: (value) =>
+                                      setState(() => _bulkStatus = value),
+                                  onApply: _applyBulkStatus,
+                                  onClear: () =>
+                                      setState(() => _selected = <String>{}),
+                                ),
+                              if (cars.isEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.all(24),
+                                  child: Text(
+                                    l10n.extCarsNoMatch,
+                                    key: const Key('listing-no-match'),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
                               Expanded(
                                 child: ListView.builder(
                                   padding: const EdgeInsets.symmetric(
@@ -575,6 +668,15 @@ class _StaffCarManagementScreenState extends State<StaffCarManagementScreen> {
                                         car.status,
                                       ),
                                       isProcessing: isProcessing,
+                                      selected: _selected.contains(car.id),
+                                      onSelected: (on) => setState(
+                                        () => _selected =
+                                            toggleListingSelection(
+                                              _selected,
+                                              car.id,
+                                              on,
+                                            ),
+                                      ),
                                       onEdit: () => _showCarForm(car: car),
                                       onToggleStatus:
                                           car.isSold || car.isReserved
@@ -760,6 +862,8 @@ class _CarCard extends StatelessWidget {
     required this.statusColor,
     required this.statusLabel,
     required this.isProcessing,
+    required this.selected,
+    required this.onSelected,
     required this.onEdit,
     required this.onToggleStatus,
     required this.onMarkSold,
@@ -771,6 +875,8 @@ class _CarCard extends StatelessWidget {
   final Color statusColor;
   final String statusLabel;
   final bool isProcessing;
+  final bool selected;
+  final ValueChanged<bool> onSelected;
   final VoidCallback onEdit;
   final VoidCallback? onToggleStatus;
   final VoidCallback? onMarkSold;
@@ -1003,6 +1109,24 @@ class _CarCard extends StatelessWidget {
             ],
           ),
         ),
+        Positioned(
+          left: 6,
+          top: 6,
+          child: Semantics(
+            label: l10n.extCarSelect(car.title),
+            child: Material(
+              color: Colors.white.withValues(alpha: 0.9),
+              shape: const CircleBorder(),
+              child: Checkbox(
+                key: Key('listing-select-${car.id}'),
+                value: selected,
+                onChanged: isProcessing
+                    ? null
+                    : (value) => onSelected(value ?? false),
+              ),
+            ),
+          ),
+        ),
         if (isProcessing)
           Positioned.fill(
             child: Container(
@@ -1134,6 +1258,7 @@ class _CarFormSheetState extends State<_CarFormSheet> {
   late final TextEditingController _contactEmailController;
   late final TextEditingController _vinController;
   late final TextEditingController _stockNumberController;
+  late final TextEditingController _financingNoteController;
   late final TextEditingController _holdFlatFeeController;
   late final TextEditingController _holdDailyRateController;
   late final TextEditingController _holdMaxDaysController;
@@ -1205,6 +1330,9 @@ class _CarFormSheetState extends State<_CarFormSheet> {
     _vinController = TextEditingController(text: car?.vin ?? '');
     _stockNumberController = TextEditingController(
       text: car?.stockNumber ?? '',
+    );
+    _financingNoteController = TextEditingController(
+      text: car?.financingNote ?? '',
     );
     _holdFlatFeeController = TextEditingController(
       text: car?.carHoldFlatFee?.toStringAsFixed(0) ?? '',
@@ -1350,6 +1478,13 @@ class _CarFormSheetState extends State<_CarFormSheet> {
     } finally {
       if (mounted) setState(() => _isPickingImages = false);
     }
+  }
+
+  /// A photo that already lives at a web address: kept as a link, never
+  /// uploaded, and counted against the same cap as picked photos.
+  void _addImageLink(String url) {
+    if (_images.length >= _maxImages) return;
+    setState(() => _images.add(_EditableCarImage.remote(url)));
   }
 
   void _removeImage(int index) {
@@ -1689,6 +1824,7 @@ class _CarFormSheetState extends State<_CarFormSheet> {
       interiorColor: _interiorColor ?? '',
       vin: _vinController.text.trim().replaceAll(' ', '').toUpperCase(),
       stockNumber: _stockNumberController.text.trim(),
+      financingNote: _financingNoteController.text.trim(),
       isRebuiltTitle: _isRebuiltTitle!,
       isNegotiable: _isNegotiable,
       locationAddressLine1: _locationAddressLine1,
@@ -1719,6 +1855,7 @@ class _CarFormSheetState extends State<_CarFormSheet> {
     _contactEmailController.dispose();
     _vinController.dispose();
     _stockNumberController.dispose();
+    _financingNoteController.dispose();
     _holdFlatFeeController.dispose();
     _holdDailyRateController.dispose();
     _holdMaxDaysController.dispose();
@@ -1773,6 +1910,7 @@ class _CarFormSheetState extends State<_CarFormSheet> {
     String? errorText,
     ValueChanged<String>? onChanged,
     Widget? suffixIcon,
+    String? hint,
   }) {
     return TextFormField(
       controller: controller,
@@ -1782,6 +1920,7 @@ class _CarFormSheetState extends State<_CarFormSheet> {
       onChanged: onChanged,
       decoration: InputDecoration(
         labelText: label,
+        hintText: hint,
         prefixIcon: icon == null ? null : Icon(icon),
         suffixIcon: suffixIcon,
         errorText: errorText,
@@ -1958,6 +2097,12 @@ class _CarFormSheetState extends State<_CarFormSheet> {
               label: Text(l10n.addImages),
             ),
           ],
+        ),
+        const SizedBox(height: 12),
+        ImageLinkField(
+          count: _images.length,
+          max: _maxImages,
+          onAdd: _addImageLink,
         ),
         const SizedBox(height: 12),
         if (_images.isEmpty)
@@ -2157,6 +2302,13 @@ class _CarFormSheetState extends State<_CarFormSheet> {
               onChanged: (value) => setState(() => _isNegotiable = value),
               title: Text(l10n.negotiable),
               secondary: const Icon(Icons.handshake_outlined),
+            ),
+            const SizedBox(height: 8),
+            _textField(
+              controller: _financingNoteController,
+              label: l10n.extFinancingNote,
+              icon: Icons.account_balance_outlined,
+              hint: l10n.extFinancingNoteHint,
             ),
             const SizedBox(height: 8),
             SwitchListTile.adaptive(
@@ -3352,6 +3504,7 @@ class _CarFormResult {
     required this.interiorColor,
     required this.vin,
     required this.stockNumber,
+    this.financingNote = '',
     required this.isRebuiltTitle,
     required this.isNegotiable,
     required this.locationAddressLine1,
@@ -3388,6 +3541,7 @@ class _CarFormResult {
   final String interiorColor;
   final String vin;
   final String stockNumber;
+  final String financingNote;
   final bool isRebuiltTitle;
   final bool isNegotiable;
   final String locationAddressLine1;
@@ -3422,6 +3576,7 @@ class _CarFormResult {
       'interiorColor': interiorColor,
       'vin': vin,
       'stockNumber': stockNumber,
+      'financingNote': financingNote,
       'isRebuiltTitle': isRebuiltTitle,
       'isNegotiable': isNegotiable,
       'locationAddressLine1': locationAddressLine1,

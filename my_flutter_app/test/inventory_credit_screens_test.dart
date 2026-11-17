@@ -45,6 +45,7 @@ InventorySale _creditSale(
   String due = '',
   String name = 'Fatou Diallo',
   String storeId = '',
+  String phone = '+12125550100',
 }) => InventorySale.fromMap(id, {
   'businessId': 'b1',
   'totalCents': 6000,
@@ -68,7 +69,7 @@ InventorySale _creditSale(
   'creditStatus': status,
   'credit': {
     'customerName': name,
-    'customerPhone': '+12125550100',
+    'customerPhone': phone,
     'collectorStaffId': collector,
     'dueDate': due,
   },
@@ -743,6 +744,159 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.text('Crédit dû'), findsWidgets);
       expect(find.textContaining('3 crédits ouverts'), findsOneWidget);
+    });
+  });
+
+  group('Credit owed: group, overdue only, search', () {
+    final credits = [
+      _creditSale('a', collector: 'u-me', due: '2026-10-30', name: 'Awa',
+          phone: '+233201110000'),
+      _creditSale('b', collector: 'u-kofi', due: '2026-10-01', name: 'Binta',
+          phone: '+233202220000'),
+      _creditSale('c', collector: 'u-me', due: '2026-10-12', name: 'Awa',
+          phone: '+233201110000', paid: 1000),
+    ];
+
+    Widget screen({String user = 'u-owner'}) => InventoryCreditScreen(
+      businessId: 'b1',
+      source: _Source(),
+      creditSource: _Credits(open: credits),
+      currentUserId: user,
+      clock: () => _today,
+    );
+
+    testWidgets('Overdue only hides what is not yet due', (tester) async {
+      await _pump(tester, screen());
+      expect(find.text('Awa'), findsNWidgets(2));
+      await _tapKey(tester, 'credit-overdue-only');
+      // b and c are overdue; a is due Oct 30.
+      expect(find.text('Binta'), findsOneWidget);
+      expect(find.text('Awa'), findsOneWidget);
+      expect(find.byKey(const Key('credit-a')), findsNothing);
+      await _tapKey(tester, 'credit-overdue-only');
+      expect(find.byKey(const Key('credit-a')), findsOneWidget);
+    });
+
+    testWidgets('search finds a customer by name or by phone digits', (
+      tester,
+    ) async {
+      await _pump(tester, screen());
+      await tester.enterText(find.byKey(const Key('credit-search')), 'bin');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('credit-b')), findsOneWidget);
+      expect(find.byKey(const Key('credit-a')), findsNothing);
+      await tester.enterText(find.byKey(const Key('credit-search')), '2011');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('credit-a')), findsOneWidget);
+      expect(find.byKey(const Key('credit-c')), findsOneWidget);
+      expect(find.byKey(const Key('credit-b')), findsNothing);
+      await tester.enterText(find.byKey(const Key('credit-search')), 'nobody');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('credit-no-match')), findsOneWidget);
+      expect(find.text('No credit matches this filter.'), findsOneWidget);
+    });
+
+    testWidgets('grouping by customer puts one phone under one heading', (
+      tester,
+    ) async {
+      await _pump(tester, screen());
+      expect(find.byKey(const ValueKey('credit-group-tel:233201110000')),
+          findsNothing);
+      await _tapKey(tester, 'credit-group-customer');
+      final awa = find.byKey(const ValueKey('credit-group-tel:233201110000'));
+      expect(awa, findsOneWidget);
+      expect(
+        find.descendant(of: awa, matching: find.text('+233201110000')),
+        findsOneWidget,
+      );
+      // a (4000) + c (3000 left): two open credits.
+      expect(
+        find.descendant(
+          of: awa,
+          matching: find.text(r'2 open credits · $70.00 owed'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('credit-group-tel:233202220000')),
+          findsOneWidget);
+      // Back to the plain order: no headings.
+      await _tapKey(tester, 'credit-group-none');
+      expect(awa, findsNothing);
+    });
+
+    testWidgets('grouping by collector names the people; no store group '
+        'without stores', (tester) async {
+      await _pump(tester, screen());
+      expect(find.byKey(const Key('credit-group-store')), findsNothing);
+      await _tapKey(tester, 'credit-group-collector');
+      expect(find.byKey(const ValueKey('credit-group-u-me')), findsOneWidget);
+      expect(find.byKey(const ValueKey('credit-group-u-kofi')), findsOneWidget);
+      expect(find.text('Kofi'), findsWidgets);
+    });
+
+    testWidgets('French, 320 wide: the new controls fit', (tester) async {
+      await _pump(
+        tester,
+        screen(),
+        locale: const Locale('fr'),
+        size: const Size(320, 1800),
+      );
+      expect(find.text('En retard seulement'), findsOneWidget);
+      expect(find.text('Par client'), findsOneWidget);
+      expect(find.text('Par encaisseur'), findsOneWidget);
+      await _tapKey(tester, 'credit-group-customer');
+      await tester.enterText(find.byKey(const Key('credit-search')), 'zzz');
+      await tester.pumpAndSettle();
+      expect(find.text('Aucun crédit ne correspond à ce filtre.'),
+          findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('sales list: On credit', () {
+    testWidgets('shows every credit sale, paid off ones too', (tester) async {
+      final plain = InventorySale.fromMap('plain', {
+        'businessId': 'b1',
+        'totalCents': 1000,
+        'paymentMethod': 'cash',
+        'soldByStaffId': 'u-kofi',
+      });
+      final open = _creditSale('open', due: '2026-10-10');
+      final paid = _creditSale('paid', paid: 4000, status: 'paid');
+      await _pump(
+        tester,
+        InventorySalesScreen(
+          businessId: 'b1',
+          source: _Source(sales: [plain, open, paid]),
+          creditSource: _Credits(),
+          currentUserId: 'u-me',
+          clock: () => _today,
+        ),
+      );
+      await _tapKey(tester, 'inv-sales-credit-credit');
+      expect(find.byKey(const Key('inv-sale-open')), findsOneWidget);
+      expect(find.byKey(const Key('inv-sale-paid')), findsOneWidget);
+      expect(find.byKey(const Key('inv-sale-plain')), findsNothing);
+      await _tapKey(tester, 'inv-sales-credit-paid');
+      expect(find.byKey(const Key('inv-sale-open')), findsNothing);
+      expect(find.byKey(const Key('inv-sale-paid')), findsOneWidget);
+    });
+
+    testWidgets('French: the chip reads À crédit', (tester) async {
+      await _pump(
+        tester,
+        InventorySalesScreen(
+          businessId: 'b1',
+          source: _Source(),
+          creditSource: _Credits(),
+          currentUserId: 'u-me',
+          clock: () => _today,
+        ),
+        locale: const Locale('fr'),
+        size: const Size(320, 1400),
+      );
+      expect(find.text('À crédit'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
   });
 }

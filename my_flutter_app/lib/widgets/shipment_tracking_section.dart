@@ -83,11 +83,15 @@ class ShipmentTrackingSection extends StatelessWidget {
                   ),
                 ),
               ),
+              // Flexible, so a long French label wraps inside a narrow card
+              // instead of overflowing the header.
               if (canEdit)
-                TextButton.icon(
-                  onPressed: () => _addUpdate(context, service),
-                  icon: const Icon(Icons.add, size: 18),
-                  label: Text(l10n.addTrackingUpdate),
+                Flexible(
+                  child: TextButton.icon(
+                    onPressed: () => _addUpdate(context, service),
+                    icon: const Icon(Icons.add, size: 18),
+                    label: Text(l10n.addTrackingUpdate),
+                  ),
                 ),
             ],
           ),
