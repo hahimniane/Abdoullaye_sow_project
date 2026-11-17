@@ -6699,6 +6699,125 @@
   },
   "pcsFewer": "Fewer pieces",
   "pcsMore": "More pieces",
+  "pltWhichLot": "Which lot?",
+  "pltLotRequired": "Choose which lot the car is parked in.",
+  "pltOptionFree": "{name} · {free} free",
+  "@pltOptionFree": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "free": {
+        "type": "int"
+      }
+    }
+  },
+  "pltOptionFull": "{name} · full",
+  "@pltOptionFull": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "pltLotLabel": "Lot",
+  "pltLotOfCar": "Lot: {name}",
+  "@pltLotOfCar": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "pltStripAll": "All lots",
+  "pltStripLabel": "Parking lots",
+  "pltStripClosed": "Closed",
+  "pltStripFull": "Full",
+  "pltStripCars": "{count, plural, =1{1 car} other{{count} cars}}",
+  "@pltStripCars": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pltStripFree": "{count, plural, =1{1 space free} other{{count} spaces free}}",
+  "@pltStripFree": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pltStripOwed": "Owed {amount}",
+  "@pltStripOwed": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "pltMoveTitle": "Move to another lot",
+  "pltMoveHint": "Nobody is messaged and the bill does not change.",
+  "pltMoveButton": "Move car",
+  "pltMoved": "Moved to {name}.",
+  "@pltMoved": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "pltMoveSame": "The car is already in that lot.",
+  "pltMoveFailed": "The car could not be moved. Try again.",
+  "pltRefusalNameRequired": "Give the lot a name.",
+  "pltRefusalNameTaken": "Another lot already has that name.",
+  "pltRefusalSpacesInvalid": "Enter how many spaces the lot has, zero or more.",
+  "pltRefusalBlockedInvalid": "Blocked spaces must be zero or more, and no more than the lot has.",
+  "pltRefusalNotFound": "That lot was not found. Refresh and try again.",
+  "pltRefusalClosed": "That lot is closed. Choose another lot.",
+  "pltRefusalFull": "That lot is full. Choose another lot.",
+  "pltRefusalHasCars": "There are still cars in that lot. Move them to another lot first.",
+  "pltRefusalLastOpen": "A business that parks cars needs at least one open lot.",
+  "pltRefusalLimit": "That is the most lots a business can have.",
+  "pltSettingsTitle": "Parking lots",
+  "pltSettingsRowSubtitle": "Name, spaces and address of each lot",
+  "pltSettingsHint": "Where your cars stand. Prices are the same in every lot; each lot has its own spaces.",
+  "pltAddLot": "Add a lot",
+  "pltEditLot": "Edit lot",
+  "pltLotName": "Lot name",
+  "pltSpaces": "Spaces",
+  "pltBlockedSpaces": "Blocked spaces",
+  "pltAddressOptional": "Street address (optional)",
+  "pltCity": "City",
+  "pltState": "State",
+  "pltAddressHint": "Leave the address empty when the lot is at your business’s parking address. Customers see the lot’s name and address on their receipt.",
+  "pltOpenToggle": "Open: cars can be parked here",
+  "pltSaveLot": "Save lot",
+  "pltSaved": "Saved.",
+  "pltSaveFailed": "The lot could not be saved. Try again.",
+  "pltBookingSaveFailed": "That could not be saved. Try again.",
+  "pltLoadFailed": "The lots could not be loaded.",
+  "pltOwnerOnly": "Only the business owner can change the parking lots.",
+  "pltSpacesCount": "{count, plural, =1{1 space} other{{count} spaces}}",
+  "@pltSpacesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pltSpacesBlocked": "{count, plural, =1{1 blocked} other{{count} blocked}}",
+  "@pltSpacesBlocked": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pltAtBusinessAddress": "At the business’s parking address",
+  "pltBookingsGoTo": "Online bookings go to",
+  "pltBookingsHint": "When that lot is full, a booking goes to the next lot with room.",
   "pcsPreviewGoing": "{count, plural, =1{1 piece → this container} other{{count} pieces → this container}}",
   "@pcsPreviewGoing": {
     "placeholders": {

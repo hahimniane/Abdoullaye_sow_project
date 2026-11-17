@@ -77,6 +77,7 @@ class BusinessParkingEntryDraft {
     this.paymentMethod = BusinessParkingPaymentMethod.direct,
     this.parkingRateId = '',
     this.forStaffId = '',
+    this.parkingLotId = '',
   });
 
   final String businessId;
@@ -85,6 +86,10 @@ class BusinessParkingEntryDraft {
   /// '' for someone else's car. With a member, the name and phone are not
   /// typed: the server fills them from the member.
   final String forStaffId;
+
+  /// The lot the car stands in (docs/PARKING_LOTS.md): only sent by a
+  /// business with two or more open lots; '' lets the server use the first.
+  final String parkingLotId;
   final String customerName;
   final String customerPhone;
   final String customerEmail;
@@ -221,6 +226,10 @@ Map<String, dynamic> businessParkingEntryPayload(
     // how the server hears "the lot's standard rate".
     if (_trimmed(draft.parkingRateId, 60).isNotEmpty)
       'parkingRateId': _trimmed(draft.parkingRateId, 60),
+    // Only when the business asked: an absent field is how the server hears
+    // "no lot chosen" and puts the car in the first open lot.
+    if (_trimmed(draft.parkingLotId, 200).isNotEmpty)
+      'parkingLotId': _trimmed(draft.parkingLotId, 200),
   };
 }
 

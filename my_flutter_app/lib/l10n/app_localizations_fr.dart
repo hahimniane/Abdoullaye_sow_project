@@ -13943,6 +13943,220 @@ class AppLocalizationsFr extends AppLocalizations {
   String get pcsMore => 'Plus de colis';
 
   @override
+  String get pltWhichLot => 'Quel parc ?';
+
+  @override
+  String get pltLotRequired => 'Choisissez le parc où la voiture est garée.';
+
+  @override
+  String pltOptionFree(String name, int free) {
+    return '$name · $free libres';
+  }
+
+  @override
+  String pltOptionFull(String name) {
+    return '$name · complet';
+  }
+
+  @override
+  String get pltLotLabel => 'Parc';
+
+  @override
+  String pltLotOfCar(String name) {
+    return 'Parc : $name';
+  }
+
+  @override
+  String get pltStripAll => 'Tous les parcs';
+
+  @override
+  String get pltStripLabel => 'Parcs de stationnement';
+
+  @override
+  String get pltStripClosed => 'Fermé';
+
+  @override
+  String get pltStripFull => 'Complet';
+
+  @override
+  String pltStripCars(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count voitures',
+      one: '1 voiture',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String pltStripFree(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count places libres',
+      one: '1 place libre',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String pltStripOwed(String amount) {
+    return 'Dû $amount';
+  }
+
+  @override
+  String get pltMoveTitle => 'Déplacer vers un autre parc';
+
+  @override
+  String get pltMoveHint =>
+      'Personne n’est prévenu et la facture ne change pas.';
+
+  @override
+  String get pltMoveButton => 'Déplacer la voiture';
+
+  @override
+  String pltMoved(String name) {
+    return 'Déplacée vers $name.';
+  }
+
+  @override
+  String get pltMoveSame => 'La voiture est déjà dans ce parc.';
+
+  @override
+  String get pltMoveFailed => 'La voiture n’a pas pu être déplacée. Réessayez.';
+
+  @override
+  String get pltRefusalNameRequired => 'Donnez un nom au parc.';
+
+  @override
+  String get pltRefusalNameTaken => 'Un autre parc porte déjà ce nom.';
+
+  @override
+  String get pltRefusalSpacesInvalid =>
+      'Indiquez le nombre de places du parc, zéro ou plus.';
+
+  @override
+  String get pltRefusalBlockedInvalid =>
+      'Les places bloquées doivent être zéro ou plus, sans dépasser celles du parc.';
+
+  @override
+  String get pltRefusalNotFound =>
+      'Ce parc est introuvable. Actualisez et réessayez.';
+
+  @override
+  String get pltRefusalClosed => 'Ce parc est fermé. Choisissez un autre parc.';
+
+  @override
+  String get pltRefusalFull => 'Ce parc est complet. Choisissez un autre parc.';
+
+  @override
+  String get pltRefusalHasCars =>
+      'Il reste des voitures dans ce parc. Déplacez-les d’abord vers un autre parc.';
+
+  @override
+  String get pltRefusalLastOpen =>
+      'Une entreprise qui gare des voitures a besoin d’au moins un parc ouvert.';
+
+  @override
+  String get pltRefusalLimit =>
+      'C’est le nombre maximal de parcs pour une entreprise.';
+
+  @override
+  String get pltSettingsTitle => 'Parcs de stationnement';
+
+  @override
+  String get pltSettingsRowSubtitle => 'Nom, places et adresse de chaque parc';
+
+  @override
+  String get pltSettingsHint =>
+      'Là où se trouvent vos voitures. Les prix sont les mêmes dans tous les parcs ; chaque parc a ses propres places.';
+
+  @override
+  String get pltAddLot => 'Ajouter un parc';
+
+  @override
+  String get pltEditLot => 'Modifier le parc';
+
+  @override
+  String get pltLotName => 'Nom du parc';
+
+  @override
+  String get pltSpaces => 'Places';
+
+  @override
+  String get pltBlockedSpaces => 'Places bloquées';
+
+  @override
+  String get pltAddressOptional => 'Adresse (facultatif)';
+
+  @override
+  String get pltCity => 'Ville';
+
+  @override
+  String get pltState => 'État';
+
+  @override
+  String get pltAddressHint =>
+      'Laissez l’adresse vide si le parc est à l’adresse de stationnement de votre entreprise. Les clients voient le nom et l’adresse du parc sur leur reçu.';
+
+  @override
+  String get pltOpenToggle => 'Ouvert : on peut y garer des voitures';
+
+  @override
+  String get pltSaveLot => 'Enregistrer le parc';
+
+  @override
+  String get pltSaved => 'Enregistré.';
+
+  @override
+  String get pltSaveFailed => 'Le parc n’a pas pu être enregistré. Réessayez.';
+
+  @override
+  String get pltBookingSaveFailed =>
+      'Cela n’a pas pu être enregistré. Réessayez.';
+
+  @override
+  String get pltLoadFailed => 'Les parcs n’ont pas pu être chargés.';
+
+  @override
+  String get pltOwnerOnly =>
+      'Seul le propriétaire de l’entreprise peut modifier les parcs.';
+
+  @override
+  String pltSpacesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count places',
+      one: '1 place',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String pltSpacesBlocked(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count bloquées',
+      one: '1 bloquée',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pltAtBusinessAddress =>
+      'À l’adresse de stationnement de l’entreprise';
+
+  @override
+  String get pltBookingsGoTo => 'Les réservations en ligne vont à';
+
+  @override
+  String get pltBookingsHint =>
+      'Quand ce parc est complet, la réservation va au parc suivant qui a de la place.';
+
+  @override
   String pcsPreviewGoing(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,

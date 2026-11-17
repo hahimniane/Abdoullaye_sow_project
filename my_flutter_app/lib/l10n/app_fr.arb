@@ -6698,6 +6698,125 @@
   },
   "pcsFewer": "Moins de colis",
   "pcsMore": "Plus de colis",
+  "pltWhichLot": "Quel parc ?",
+  "pltLotRequired": "Choisissez le parc où la voiture est garée.",
+  "pltOptionFree": "{name} · {free} libres",
+  "@pltOptionFree": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "free": {
+        "type": "int"
+      }
+    }
+  },
+  "pltOptionFull": "{name} · complet",
+  "@pltOptionFull": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "pltLotLabel": "Parc",
+  "pltLotOfCar": "Parc : {name}",
+  "@pltLotOfCar": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "pltStripAll": "Tous les parcs",
+  "pltStripLabel": "Parcs de stationnement",
+  "pltStripClosed": "Fermé",
+  "pltStripFull": "Complet",
+  "pltStripCars": "{count, plural, =1{1 voiture} other{{count} voitures}}",
+  "@pltStripCars": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pltStripFree": "{count, plural, =1{1 place libre} other{{count} places libres}}",
+  "@pltStripFree": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pltStripOwed": "Dû {amount}",
+  "@pltStripOwed": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "pltMoveTitle": "Déplacer vers un autre parc",
+  "pltMoveHint": "Personne n’est prévenu et la facture ne change pas.",
+  "pltMoveButton": "Déplacer la voiture",
+  "pltMoved": "Déplacée vers {name}.",
+  "@pltMoved": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "pltMoveSame": "La voiture est déjà dans ce parc.",
+  "pltMoveFailed": "La voiture n’a pas pu être déplacée. Réessayez.",
+  "pltRefusalNameRequired": "Donnez un nom au parc.",
+  "pltRefusalNameTaken": "Un autre parc porte déjà ce nom.",
+  "pltRefusalSpacesInvalid": "Indiquez le nombre de places du parc, zéro ou plus.",
+  "pltRefusalBlockedInvalid": "Les places bloquées doivent être zéro ou plus, sans dépasser celles du parc.",
+  "pltRefusalNotFound": "Ce parc est introuvable. Actualisez et réessayez.",
+  "pltRefusalClosed": "Ce parc est fermé. Choisissez un autre parc.",
+  "pltRefusalFull": "Ce parc est complet. Choisissez un autre parc.",
+  "pltRefusalHasCars": "Il reste des voitures dans ce parc. Déplacez-les d’abord vers un autre parc.",
+  "pltRefusalLastOpen": "Une entreprise qui gare des voitures a besoin d’au moins un parc ouvert.",
+  "pltRefusalLimit": "C’est le nombre maximal de parcs pour une entreprise.",
+  "pltSettingsTitle": "Parcs de stationnement",
+  "pltSettingsRowSubtitle": "Nom, places et adresse de chaque parc",
+  "pltSettingsHint": "Là où se trouvent vos voitures. Les prix sont les mêmes dans tous les parcs ; chaque parc a ses propres places.",
+  "pltAddLot": "Ajouter un parc",
+  "pltEditLot": "Modifier le parc",
+  "pltLotName": "Nom du parc",
+  "pltSpaces": "Places",
+  "pltBlockedSpaces": "Places bloquées",
+  "pltAddressOptional": "Adresse (facultatif)",
+  "pltCity": "Ville",
+  "pltState": "État",
+  "pltAddressHint": "Laissez l’adresse vide si le parc est à l’adresse de stationnement de votre entreprise. Les clients voient le nom et l’adresse du parc sur leur reçu.",
+  "pltOpenToggle": "Ouvert : on peut y garer des voitures",
+  "pltSaveLot": "Enregistrer le parc",
+  "pltSaved": "Enregistré.",
+  "pltSaveFailed": "Le parc n’a pas pu être enregistré. Réessayez.",
+  "pltBookingSaveFailed": "Cela n’a pas pu être enregistré. Réessayez.",
+  "pltLoadFailed": "Les parcs n’ont pas pu être chargés.",
+  "pltOwnerOnly": "Seul le propriétaire de l’entreprise peut modifier les parcs.",
+  "pltSpacesCount": "{count, plural, =1{1 place} other{{count} places}}",
+  "@pltSpacesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pltSpacesBlocked": "{count, plural, =1{1 bloquée} other{{count} bloquées}}",
+  "@pltSpacesBlocked": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pltAtBusinessAddress": "À l’adresse de stationnement de l’entreprise",
+  "pltBookingsGoTo": "Les réservations en ligne vont à",
+  "pltBookingsHint": "Quand ce parc est complet, la réservation va au parc suivant qui a de la place.",
   "pcsPreviewGoing": "{count, plural, =1{1 colis → ce conteneur} other{{count} colis → ce conteneur}}",
   "@pcsPreviewGoing": {
     "placeholders": {

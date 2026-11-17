@@ -45,7 +45,9 @@ import 'staff_balances_screen.dart';
 import '../widgets/received_by_options.dart';
 import '../widgets/parking_welcome_sheet.dart';
 import '../widgets/parking_whose_car.dart';
+import '../services/parking_lots.dart';
 import '../services/parking_team.dart';
+import '../widgets/parking_lot_widgets.dart';
 import 'office_locations_screen.dart';
 import 'park_car_screen.dart';
 import 'lot_ledger_screen.dart';
@@ -216,6 +218,16 @@ class _HomeMenuState extends State<HomeMenu> {
   /// about a column, not about one card at a time.
   bool _parkingDenseList = true;
 
+  /// The business's parking lots (docs/PARKING_LOTS.md), live, and the one
+  /// the list is narrowed to ('' for every lot). A business with one lot never
+  /// sees either.
+  List<ParkingLot> _lots = const [];
+  int _lotsVersion = 0;
+  String _lotFilter = '';
+  StreamSubscription<List<ParkingLot>>? _lotsSub;
+  Object? _lotFiguresKey;
+  List<ParkingLotFigures> _lotFiguresCache = const [];
+
   /// uid -> person, for the "Registered by" and "Received by" columns.
   Map<String, String> _staffNames = const {};
 
@@ -289,6 +301,47 @@ class _HomeMenuState extends State<HomeMenu> {
     );
   }
 
+  /// The lots, live. A failed read leaves the list as it was: the home then
+  /// behaves as a one-lot business's does.
+  void _listenToLots(String businessId) {
+    unawaited(_lotsSub?.cancel());
+    try {
+      _lotsSub = ParkingLotsService()
+          .watchLots(businessId)
+          .listen((lots) {
+            if (!mounted) return;
+            setState(() {
+              _lots = lots;
+              _lotsVersion += 1;
+              // A filter on a lot that is gone would hide every car.
+              if (_lotFilter.isNotEmpty &&
+                  !lots.any((lot) => lot.id == _lotFilter)) {
+                _lotFilter = '';
+              }
+            });
+          }, onError: (Object error) {
+            debugPrint('Parking lots read failed: $error');
+          });
+    } catch (error) {
+      debugPrint('Parking lots read failed: $error');
+    }
+  }
+
+  /// Every lot's figures over the open cars in view, computed once per
+  /// change of the cars or the lots.
+  List<ParkingLotFigures> get _lotFigures {
+    final key = (_recordsVersion, _lotsVersion);
+    if (key == _lotFiguresKey) return _lotFiguresCache;
+    _lotFiguresKey = key;
+    return _lotFiguresCache = _lots.length < 2
+        ? const []
+        : parkingLotFigures(
+            lots: _lots,
+            rows: _parkedCars.map((car) => car.paymentFields),
+            businessId: _businessId,
+          );
+  }
+
   static List<ParkedCar> _parseParkedCars(
     Iterable<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
   ) {
@@ -335,6 +388,7 @@ class _HomeMenuState extends State<HomeMenu> {
     if (hasBusiness && auth.hasBusinessPermission(BusinessPermission.parking)) {
       _loadParkingSpaces(businessId);
       _loadStaffNames(businessId);
+      _listenToLots(businessId);
       // Two narrow reads make "the lot's open work": the stays holding a
       // space today or later, and the stays still owed for however old.
       _listenOpen(parkedCarsOnLotSpec(businessId, DateTime.now()), (docs) {
@@ -696,7 +750,8 @@ class _HomeMenuState extends State<HomeMenu> {
       _parkingSearch.trim().isNotEmpty ||
       !_parkingFacets.isEmpty ||
       _parkedFrom != null ||
-      _parkedTo != null;
+      _parkedTo != null ||
+      _lotFilter.isNotEmpty;
 
   /// The feed as filtered right now. Computed once per change of the records
   /// or of a filter - not once per build, and not once per caller: the
@@ -712,6 +767,8 @@ class _HomeMenuState extends State<HomeMenu> {
       _parkedFrom,
       _parkedTo,
       _parkingTotalSpaces,
+      _lotFilter,
+      _lotsVersion,
       (enabled.map((c) => c.index).toList()..sort()).join(','),
     );
     if (key == _filteredKey) return _filteredCache;
@@ -751,6 +808,13 @@ class _HomeMenuState extends State<HomeMenu> {
             // Overlap, not containment: a car that arrived before the window
             // and leaves after it was parked during that week and must still
             // appear.
+            if (!parkingLotMatchesFilter(
+              car.paymentFields,
+              _businessId,
+              _lotFilter,
+            )) {
+              return false;
+            }
             return businessParkingWithinRange(
               car.paymentFields,
               _parkedFrom,
@@ -766,7 +830,17 @@ class _HomeMenuState extends State<HomeMenu> {
     ];
     _parkingTotalsCache = rows.isEmpty
         ? null
-        : businessParkingTotals(rows, spacesTotal: _parkingTotalSpaces);
+        : businessParkingTotals(
+            rows,
+            // Narrowed to one lot, the spaces are that lot's own.
+            spacesTotal: _lotFilter.isEmpty
+                ? _parkingTotalSpaces
+                : _lots
+                          .where((lot) => lot.id == _lotFilter)
+                          .firstOrNull
+                          ?.usableSpaces ??
+                      _parkingTotalSpaces,
+          );
     return _filteredCache;
   }
 
@@ -816,11 +890,13 @@ class _HomeMenuState extends State<HomeMenu> {
       _parkingSearchController.clear();
       _parkedFrom = null;
       _parkedTo = null;
+      _lotFilter = '';
     });
   }
 
   @override
   void dispose() {
+    unawaited(_lotsSub?.cancel());
     _parkingSearchController.dispose();
     _loadingSafety?.cancel();
     _freightShipmentsSubscription?.cancel();
@@ -930,6 +1006,9 @@ class _HomeMenuState extends State<HomeMenu> {
       // the SAME filtered records the feed shows, so a
       // filter re-totals the numbers - as the console does.
       parkingTotals: _parkingTotalsCache,
+      lotFigures: _lotFigures,
+      lotFilter: _lotFilter,
+      onLotSelected: (lotId) => setState(() => _lotFilter = lotId),
     );
 
     return Scaffold(
@@ -1074,6 +1153,8 @@ class _HomeMenuState extends State<HomeMenu> {
                       denseList: _parkingDenseList,
                       staffNames: _staffNames,
                       containerLinks: _containerLinks,
+                      lots: _lots,
+                      businessId: _businessId,
                     ),
                   ),
                 ),
@@ -1920,9 +2001,18 @@ class _ActivitySection extends StatelessWidget {
     required this.parkedTo,
     required this.onParkedRangeChanged,
     required this.parkingTotals,
+    required this.lotFigures,
+    required this.lotFilter,
+    required this.onLotSelected,
   });
 
   final AppLocalizations l10n;
+
+  /// Each lot's cars and free spaces (empty for a business with one lot), the
+  /// lot the list is narrowed to, and the tap that narrows it.
+  final List<ParkingLotFigures> lotFigures;
+  final String lotFilter;
+  final ValueChanged<String> onLotSelected;
 
   /// Whether the filtered feed has anything to show.
   final bool hasRecords;
@@ -2088,6 +2178,16 @@ class _ActivitySection extends StatelessWidget {
           if (parkingTotals != null) ...[
             const SizedBox(height: 12),
             _ParkingScoreboard(l10n: l10n, totals: parkingTotals!),
+          ],
+          // Several lots: each with its cars and free spaces; tapping one
+          // narrows the list (and the scoreboard) to it.
+          if (lotFigures.length >= 2) ...[
+            const SizedBox(height: 12),
+            ParkingLotStrip(
+              figures: lotFigures,
+              selected: lotFilter,
+              onSelect: onLotSelected,
+            ),
           ],
           // Same two layouts as the console, same default. The dense one
           // carries the columns a card cannot: days, rate, total, who
@@ -2313,7 +2413,14 @@ class _ActivityRecordTile extends StatelessWidget {
     required this.denseList,
     required this.staffNames,
     required this.containerLinks,
+    this.lots = const [],
+    this.businessId = '',
   });
+
+  /// The business's lots: a car's lot is named on its row only when there is
+  /// more than one to tell apart (docs/PARKING_LOTS.md).
+  final List<ParkingLot> lots;
+  final String businessId;
 
   final AppLocalizations l10n;
   final ActivityRecord record;
@@ -2323,6 +2430,11 @@ class _ActivityRecordTile extends StatelessWidget {
   /// VIN → container link, for the parked-car rows. Empty when the business
   /// holds no containers permission.
   final Map<String, ContainerVinLink> containerLinks;
+
+  /// The lot's name for a parked car's row, '' for a one-lot business.
+  String _lotNameOn(ParkedCar car) => lots.length > 1
+      ? parkingLotNameOf(car.paymentFields, businessId, lots)
+      : '';
 
   @override
   Widget build(BuildContext context) {
@@ -2342,6 +2454,7 @@ class _ActivityRecordTile extends StatelessWidget {
       return _ParkingListRow(
         l10n: l10n,
         car: car,
+        lotName: _lotNameOn(car),
         staffNames: staffNames,
         containerLink: containerLinks[car.vinNumber.trim().toUpperCase()],
         onTap: () =>
@@ -2357,9 +2470,14 @@ class _ActivityRecordTile extends StatelessWidget {
                 .trim()
                 .toUpperCase()]
           : null,
-      subtitle: paymentNote.isEmpty
-          ? record.subtitle
-          : '${record.subtitle} • $paymentNote',
+      subtitle: [
+        record.subtitle,
+        if (paymentNote.isNotEmpty) paymentNote,
+        if (record.payload is ParkedCar &&
+            record.category == ServiceCategory.parking &&
+            _lotNameOn(record.payload as ParkedCar).isNotEmpty)
+          _lotNameOn(record.payload as ParkedCar),
+      ].join(' • '),
       date: record.date,
       categoryLabel: _categoryLabel(record.category, l10n),
       categoryIcon: _categoryIcon(record.category),
@@ -2602,7 +2720,11 @@ class _ParkingListRow extends StatelessWidget {
     required this.staffNames,
     required this.onTap,
     this.containerLink,
+    this.lotName = '',
   });
+
+  /// The lot the car stands in; '' for a business with one lot.
+  final String lotName;
 
   final AppLocalizations l10n;
   final ParkedCar car;
@@ -2770,6 +2892,7 @@ class _ParkingListRow extends StatelessWidget {
                             _rowMeta(
                               businessParkingPaymentStatusLabel(l10n, fields),
                             ),
+                          if (lotName.isNotEmpty) ParkingLotBadge(name: lotName),
                           if (containerLink != null)
                             ContainerLinkChip(link: containerLink!),
                           _rowMeta(

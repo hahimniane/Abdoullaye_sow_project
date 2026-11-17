@@ -20,6 +20,7 @@ import '../services/business_parking_entry.dart';
 import '../services/container_manifest.dart';
 import '../services/lot_ledger.dart'
     show LotStaff, lotStaffFromProfile, withBusinessOwner;
+import '../services/parking_lots.dart' show ParkingLotsService;
 import '../services/parking_team.dart';
 import '../services/parking_whatsapp.dart'
     show
@@ -45,6 +46,7 @@ import '../widgets/business_parking_payment_badge.dart';
 import '../widgets/container_link_chip.dart';
 import '../widgets/phone_account_widgets.dart' show RecordPhoneFlagNotes;
 import '../widgets/lot_sheets.dart' show showLotSheet;
+import '../widgets/parking_lot_widgets.dart' show ParkingLotMove;
 import '../widgets/parking_messages_section.dart';
 import '../widgets/parking_whatsapp_send_card.dart';
 import '../widgets/parking_whose_car.dart';
@@ -69,6 +71,9 @@ class ParkedCarDetailsScreen extends StatefulWidget {
   /// Overrides the read of the business's `parkingWhatsApp.enabled`.
   final Stream<bool>? parkingWhatsAppEnabled;
 
+  /// Injectable so a widget test lists and moves lots without Firebase.
+  final ParkingLotsService? parkingLotsService;
+
   const ParkedCarDetailsScreen({
     super.key,
     required this.parkedCar,
@@ -76,6 +81,7 @@ class ParkedCarDetailsScreen extends StatefulWidget {
     this.parkingMessages,
     this.parkingWhatsAppService,
     this.parkingWhatsAppEnabled,
+    this.parkingLotsService,
   });
 
   @override
@@ -1342,6 +1348,17 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
                             const SizedBox(height: 16),
                           ],
                           _buildInfoCard(canEdit, isBusinessEntry, contactEditable),
+                          // The lot it stands in, and a move to another
+                          // (docs/PARKING_LOTS.md); nothing for a one-lot
+                          // business.
+                          if (canRecordPayment && !isVoided)
+                            ParkingLotMove(
+                              businessId:
+                                  '${_paymentFields['businessId'] ?? ''}'.trim(),
+                              carId: widget.parkedCar.id,
+                              car: _paymentFields,
+                              service: widget.parkingLotsService,
+                            ),
                           const SizedBox(height: 24),
                           _buildBillingCard(
                             l10n,

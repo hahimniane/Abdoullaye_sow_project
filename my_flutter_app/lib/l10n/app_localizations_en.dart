@@ -13731,6 +13731,216 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pcsMore => 'More pieces';
 
   @override
+  String get pltWhichLot => 'Which lot?';
+
+  @override
+  String get pltLotRequired => 'Choose which lot the car is parked in.';
+
+  @override
+  String pltOptionFree(String name, int free) {
+    return '$name · $free free';
+  }
+
+  @override
+  String pltOptionFull(String name) {
+    return '$name · full';
+  }
+
+  @override
+  String get pltLotLabel => 'Lot';
+
+  @override
+  String pltLotOfCar(String name) {
+    return 'Lot: $name';
+  }
+
+  @override
+  String get pltStripAll => 'All lots';
+
+  @override
+  String get pltStripLabel => 'Parking lots';
+
+  @override
+  String get pltStripClosed => 'Closed';
+
+  @override
+  String get pltStripFull => 'Full';
+
+  @override
+  String pltStripCars(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count cars',
+      one: '1 car',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String pltStripFree(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count spaces free',
+      one: '1 space free',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String pltStripOwed(String amount) {
+    return 'Owed $amount';
+  }
+
+  @override
+  String get pltMoveTitle => 'Move to another lot';
+
+  @override
+  String get pltMoveHint => 'Nobody is messaged and the bill does not change.';
+
+  @override
+  String get pltMoveButton => 'Move car';
+
+  @override
+  String pltMoved(String name) {
+    return 'Moved to $name.';
+  }
+
+  @override
+  String get pltMoveSame => 'The car is already in that lot.';
+
+  @override
+  String get pltMoveFailed => 'The car could not be moved. Try again.';
+
+  @override
+  String get pltRefusalNameRequired => 'Give the lot a name.';
+
+  @override
+  String get pltRefusalNameTaken => 'Another lot already has that name.';
+
+  @override
+  String get pltRefusalSpacesInvalid =>
+      'Enter how many spaces the lot has, zero or more.';
+
+  @override
+  String get pltRefusalBlockedInvalid =>
+      'Blocked spaces must be zero or more, and no more than the lot has.';
+
+  @override
+  String get pltRefusalNotFound =>
+      'That lot was not found. Refresh and try again.';
+
+  @override
+  String get pltRefusalClosed => 'That lot is closed. Choose another lot.';
+
+  @override
+  String get pltRefusalFull => 'That lot is full. Choose another lot.';
+
+  @override
+  String get pltRefusalHasCars =>
+      'There are still cars in that lot. Move them to another lot first.';
+
+  @override
+  String get pltRefusalLastOpen =>
+      'A business that parks cars needs at least one open lot.';
+
+  @override
+  String get pltRefusalLimit => 'That is the most lots a business can have.';
+
+  @override
+  String get pltSettingsTitle => 'Parking lots';
+
+  @override
+  String get pltSettingsRowSubtitle => 'Name, spaces and address of each lot';
+
+  @override
+  String get pltSettingsHint =>
+      'Where your cars stand. Prices are the same in every lot; each lot has its own spaces.';
+
+  @override
+  String get pltAddLot => 'Add a lot';
+
+  @override
+  String get pltEditLot => 'Edit lot';
+
+  @override
+  String get pltLotName => 'Lot name';
+
+  @override
+  String get pltSpaces => 'Spaces';
+
+  @override
+  String get pltBlockedSpaces => 'Blocked spaces';
+
+  @override
+  String get pltAddressOptional => 'Street address (optional)';
+
+  @override
+  String get pltCity => 'City';
+
+  @override
+  String get pltState => 'State';
+
+  @override
+  String get pltAddressHint =>
+      'Leave the address empty when the lot is at your business’s parking address. Customers see the lot’s name and address on their receipt.';
+
+  @override
+  String get pltOpenToggle => 'Open: cars can be parked here';
+
+  @override
+  String get pltSaveLot => 'Save lot';
+
+  @override
+  String get pltSaved => 'Saved.';
+
+  @override
+  String get pltSaveFailed => 'The lot could not be saved. Try again.';
+
+  @override
+  String get pltBookingSaveFailed => 'That could not be saved. Try again.';
+
+  @override
+  String get pltLoadFailed => 'The lots could not be loaded.';
+
+  @override
+  String get pltOwnerOnly =>
+      'Only the business owner can change the parking lots.';
+
+  @override
+  String pltSpacesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count spaces',
+      one: '1 space',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String pltSpacesBlocked(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count blocked',
+      one: '1 blocked',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pltAtBusinessAddress => 'At the business’s parking address';
+
+  @override
+  String get pltBookingsGoTo => 'Online bookings go to';
+
+  @override
+  String get pltBookingsHint =>
+      'When that lot is full, a booking goes to the next lot with room.';
+
+  @override
   String pcsPreviewGoing(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,

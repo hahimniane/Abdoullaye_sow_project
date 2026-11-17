@@ -29,6 +29,7 @@ import '../widgets/app_snackbars.dart';
 import '../widgets/country_phone_field.dart';
 import '../widgets/language_toggle.dart';
 import '../widgets/parking_payment_instructions_field.dart';
+import 'parking_lots_settings_screen.dart' show ParkingLotsEntryRow;
 import '../widgets/parking_whatsapp_switch.dart';
 import '../widgets/pickup_plan_editor.dart';
 import '../widgets/staff_invite_widgets.dart' show BusinessInvitationsSection;
@@ -1888,6 +1889,8 @@ class _BusinessForm extends StatelessWidget {
               errorText:
                   sectionErrors[_BusinessProfileSectionKey.parkingCapacity],
               children: [
+                // Several lots: the owner's list (docs/PARKING_LOTS.md).
+                if (canEdit) const ParkingLotsEntryRow(),
                 _BusinessProfileField(
                   controller: parkingAddressLine1Controller,
                   enabled: canEdit,

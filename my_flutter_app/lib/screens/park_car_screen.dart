@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
+import 'dart:async';
 import 'dart:io';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -39,16 +40,24 @@ import '../widgets/async_action_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/country_phone_field.dart';
 import '../widgets/marketplace_transaction_disclosure.dart';
+import '../widgets/parking_lot_widgets.dart';
 import '../widgets/parking_whose_car.dart';
+import '../services/parking_lots.dart'
+    show ParkingLotsService, parkingLotRefusalReason;
+import '../utils/parking_lots_localization.dart';
 
 class ParkCarScreen extends StatefulWidget {
   const ParkCarScreen({
     super.key,
     this.parkingRepository,
     this.businessParkingService,
+    this.parkingLotsService,
   });
 
   final ParkingRepository? parkingRepository;
+
+  /// Injectable so a widget test drives the lot picker without Firebase.
+  final ParkingLotsService? parkingLotsService;
 
   /// Injectable so a widget test can drive the walk-up flow without Firebase,
   /// the same seam `parkingRepository` already provides.
@@ -128,6 +137,9 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
   // nothing to choose, and the picker stays out of the way entirely.
   List<ParkingRateChoice> _rateChoices = const [];
   String _rateId = '';
+  // The lot picked (docs/PARKING_LOTS.md); '' unless the business has two or
+  // more open lots.
+  ParkingLotChoice _lotChoice = const ParkingLotChoice();
   String _receivedVia = businessParkingReceivedViaValues.first;
   bool _isRecordingEntry = false;
   BusinessParkingEntryResult? _entryResult;
@@ -1116,6 +1128,7 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
       endDate: _walkUpEndDate,
       paymentMethod: _paymentMethod,
       parkingRateId: _rateId,
+      parkingLotId: _lotChoice.asks ? _lotChoice.lotId : '',
     );
   }
 
@@ -1165,6 +1178,15 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
     setState(() => _isRecordingEntry = true);
     try {
       final result = await _businessParkingService.createEntry(draft);
+      if (draft.parkingLotId.isNotEmpty) {
+        // The next car opens on this lot (on this device).
+        unawaited(
+          (widget.parkingLotsService ?? ParkingLotsService()).rememberLot(
+            draft.businessId,
+            draft.parkingLotId,
+          ),
+        );
+      }
       if (!mounted) return;
       setState(() => _entryResult = result);
       // Settling goes through the same callable the "payment received" button
@@ -1220,9 +1242,18 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
       );
     } catch (error) {
       if (!mounted) return;
+      // A lot refusal ("that lot is full") is said in the reader's language,
+      // never in the server's English.
+      final lotRefusal = parkingLotRefusalText(
+        l10n,
+        parkingLotRefusalReason(error),
+      );
       showErrorSnackBar(
         context,
-        error is FirebaseFunctionsException && (error.message ?? '').isNotEmpty
+        lotRefusal.isNotEmpty
+            ? lotRefusal
+            : error is FirebaseFunctionsException &&
+                  (error.message ?? '').isNotEmpty
             ? error.message!
             : l10n.carCouldNotBeRecorded,
       );
@@ -1684,6 +1715,23 @@ class _ParkCarScreenState extends State<ParkCarScreen> {
                                 _buildEntryResultPanel(
                                   AppLocalizations.of(context)!,
                                 ),
+                              ParkingLotChooser(
+                                key: const ValueKey<String>(
+                                  'parking-lot-chooser',
+                                ),
+                                businessId:
+                                    context.read<AuthProvider>().isAdmin
+                                    ? BusinessProfile.defaultBusinessId
+                                    : context.read<AuthProvider>().businessId ??
+                                          BusinessProfile.defaultBusinessId,
+                                service: widget.parkingLotsService,
+                                enabled: !_isRecordingEntry,
+                                onChanged: (choice) {
+                                  // Reported after the chooser's own frame.
+                                  if (choice == _lotChoice) return;
+                                  _lotChoice = choice;
+                                },
+                              ),
                               ParkingWhoseCarChoice(
                                 teamCar: _teamCar,
                                 staffId: _teamStaffId,

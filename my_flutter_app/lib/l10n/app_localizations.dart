@@ -23609,6 +23609,324 @@ abstract class AppLocalizations {
   /// **'More pieces'**
   String get pcsMore;
 
+  /// No description provided for @pltWhichLot.
+  ///
+  /// In en, this message translates to:
+  /// **'Which lot?'**
+  String get pltWhichLot;
+
+  /// No description provided for @pltLotRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose which lot the car is parked in.'**
+  String get pltLotRequired;
+
+  /// No description provided for @pltOptionFree.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} · {free} free'**
+  String pltOptionFree(String name, int free);
+
+  /// No description provided for @pltOptionFull.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} · full'**
+  String pltOptionFull(String name);
+
+  /// No description provided for @pltLotLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Lot'**
+  String get pltLotLabel;
+
+  /// No description provided for @pltLotOfCar.
+  ///
+  /// In en, this message translates to:
+  /// **'Lot: {name}'**
+  String pltLotOfCar(String name);
+
+  /// No description provided for @pltStripAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All lots'**
+  String get pltStripAll;
+
+  /// No description provided for @pltStripLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Parking lots'**
+  String get pltStripLabel;
+
+  /// No description provided for @pltStripClosed.
+  ///
+  /// In en, this message translates to:
+  /// **'Closed'**
+  String get pltStripClosed;
+
+  /// No description provided for @pltStripFull.
+  ///
+  /// In en, this message translates to:
+  /// **'Full'**
+  String get pltStripFull;
+
+  /// No description provided for @pltStripCars.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 car} other{{count} cars}}'**
+  String pltStripCars(int count);
+
+  /// No description provided for @pltStripFree.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 space free} other{{count} spaces free}}'**
+  String pltStripFree(int count);
+
+  /// No description provided for @pltStripOwed.
+  ///
+  /// In en, this message translates to:
+  /// **'Owed {amount}'**
+  String pltStripOwed(String amount);
+
+  /// No description provided for @pltMoveTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Move to another lot'**
+  String get pltMoveTitle;
+
+  /// No description provided for @pltMoveHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Nobody is messaged and the bill does not change.'**
+  String get pltMoveHint;
+
+  /// No description provided for @pltMoveButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Move car'**
+  String get pltMoveButton;
+
+  /// No description provided for @pltMoved.
+  ///
+  /// In en, this message translates to:
+  /// **'Moved to {name}.'**
+  String pltMoved(String name);
+
+  /// No description provided for @pltMoveSame.
+  ///
+  /// In en, this message translates to:
+  /// **'The car is already in that lot.'**
+  String get pltMoveSame;
+
+  /// No description provided for @pltMoveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The car could not be moved. Try again.'**
+  String get pltMoveFailed;
+
+  /// No description provided for @pltRefusalNameRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Give the lot a name.'**
+  String get pltRefusalNameRequired;
+
+  /// No description provided for @pltRefusalNameTaken.
+  ///
+  /// In en, this message translates to:
+  /// **'Another lot already has that name.'**
+  String get pltRefusalNameTaken;
+
+  /// No description provided for @pltRefusalSpacesInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter how many spaces the lot has, zero or more.'**
+  String get pltRefusalSpacesInvalid;
+
+  /// No description provided for @pltRefusalBlockedInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Blocked spaces must be zero or more, and no more than the lot has.'**
+  String get pltRefusalBlockedInvalid;
+
+  /// No description provided for @pltRefusalNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'That lot was not found. Refresh and try again.'**
+  String get pltRefusalNotFound;
+
+  /// No description provided for @pltRefusalClosed.
+  ///
+  /// In en, this message translates to:
+  /// **'That lot is closed. Choose another lot.'**
+  String get pltRefusalClosed;
+
+  /// No description provided for @pltRefusalFull.
+  ///
+  /// In en, this message translates to:
+  /// **'That lot is full. Choose another lot.'**
+  String get pltRefusalFull;
+
+  /// No description provided for @pltRefusalHasCars.
+  ///
+  /// In en, this message translates to:
+  /// **'There are still cars in that lot. Move them to another lot first.'**
+  String get pltRefusalHasCars;
+
+  /// No description provided for @pltRefusalLastOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'A business that parks cars needs at least one open lot.'**
+  String get pltRefusalLastOpen;
+
+  /// No description provided for @pltRefusalLimit.
+  ///
+  /// In en, this message translates to:
+  /// **'That is the most lots a business can have.'**
+  String get pltRefusalLimit;
+
+  /// No description provided for @pltSettingsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Parking lots'**
+  String get pltSettingsTitle;
+
+  /// No description provided for @pltSettingsRowSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Name, spaces and address of each lot'**
+  String get pltSettingsRowSubtitle;
+
+  /// No description provided for @pltSettingsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Where your cars stand. Prices are the same in every lot; each lot has its own spaces.'**
+  String get pltSettingsHint;
+
+  /// No description provided for @pltAddLot.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a lot'**
+  String get pltAddLot;
+
+  /// No description provided for @pltEditLot.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit lot'**
+  String get pltEditLot;
+
+  /// No description provided for @pltLotName.
+  ///
+  /// In en, this message translates to:
+  /// **'Lot name'**
+  String get pltLotName;
+
+  /// No description provided for @pltSpaces.
+  ///
+  /// In en, this message translates to:
+  /// **'Spaces'**
+  String get pltSpaces;
+
+  /// No description provided for @pltBlockedSpaces.
+  ///
+  /// In en, this message translates to:
+  /// **'Blocked spaces'**
+  String get pltBlockedSpaces;
+
+  /// No description provided for @pltAddressOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'Street address (optional)'**
+  String get pltAddressOptional;
+
+  /// No description provided for @pltCity.
+  ///
+  /// In en, this message translates to:
+  /// **'City'**
+  String get pltCity;
+
+  /// No description provided for @pltState.
+  ///
+  /// In en, this message translates to:
+  /// **'State'**
+  String get pltState;
+
+  /// No description provided for @pltAddressHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave the address empty when the lot is at your business’s parking address. Customers see the lot’s name and address on their receipt.'**
+  String get pltAddressHint;
+
+  /// No description provided for @pltOpenToggle.
+  ///
+  /// In en, this message translates to:
+  /// **'Open: cars can be parked here'**
+  String get pltOpenToggle;
+
+  /// No description provided for @pltSaveLot.
+  ///
+  /// In en, this message translates to:
+  /// **'Save lot'**
+  String get pltSaveLot;
+
+  /// No description provided for @pltSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved.'**
+  String get pltSaved;
+
+  /// No description provided for @pltSaveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The lot could not be saved. Try again.'**
+  String get pltSaveFailed;
+
+  /// No description provided for @pltBookingSaveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'That could not be saved. Try again.'**
+  String get pltBookingSaveFailed;
+
+  /// No description provided for @pltLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The lots could not be loaded.'**
+  String get pltLoadFailed;
+
+  /// No description provided for @pltOwnerOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the business owner can change the parking lots.'**
+  String get pltOwnerOnly;
+
+  /// No description provided for @pltSpacesCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 space} other{{count} spaces}}'**
+  String pltSpacesCount(int count);
+
+  /// No description provided for @pltSpacesBlocked.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 blocked} other{{count} blocked}}'**
+  String pltSpacesBlocked(int count);
+
+  /// No description provided for @pltAtBusinessAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'At the business’s parking address'**
+  String get pltAtBusinessAddress;
+
+  /// No description provided for @pltBookingsGoTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Online bookings go to'**
+  String get pltBookingsGoTo;
+
+  /// No description provided for @pltBookingsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'When that lot is full, a booking goes to the next lot with room.'**
+  String get pltBookingsHint;
+
   /// No description provided for @pcsPreviewGoing.
   ///
   /// In en, this message translates to:
