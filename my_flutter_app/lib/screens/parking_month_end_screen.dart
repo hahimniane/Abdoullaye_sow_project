@@ -18,6 +18,7 @@ import '../services/lot_ledger.dart' show lotDollarsToCents;
 import '../services/parking_bill_payment.dart';
 import '../services/parking_bill_payment_service.dart';
 import '../services/parking_month_statement.dart';
+import '../services/parking_lots.dart';
 import '../services/parking_month_table.dart';
 import '../services/parking_whatsapp.dart';
 import '../services/staff_balances.dart';
@@ -59,9 +60,13 @@ class ParkingMonthEndScreen extends StatefulWidget {
     this.balancesService = const StaffBalancesService(),
     this.billPaymentService = const ParkingBillPaymentService(),
     this.teamSettleService = const TeamSettleService(),
+    this.parkingLots,
   });
 
   final String businessId;
+
+  /// Overrides the live read of the business's parking lots (a widget test).
+  final Stream<List<ParkingLot>>? parkingLots;
 
   /// Files, confirms, declines and undoes a team member's month settlement
   /// (docs/TEAM_SETTLE.md).
@@ -135,6 +140,13 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
   /// not on every rebuild (a busy flag flipping used to re-run it).
   Object? _summaryKey;
   ParkingMonthSummary? _summaryCache;
+
+  /// The business's parking lots, live (docs/PARKING_LOTS.md): with two or
+  /// more, the list can be narrowed to one. Each customer's lots are worked
+  /// out once per change of the bills or the lots, never per row.
+  List<ParkingLot> _lots = const [];
+  Object? _lotIdsKey;
+  Map<String, Set<String>> _lotIdsByCustomer = const {};
 
   /// The team, for "Received by" when a whole bill is marked paid.
   List<({String id, String name})> _staff = const [];
@@ -325,6 +337,34 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
         if (mounted) setState(() => _business = doc.data() ?? const {});
       }, onError: (_) {}),
     );
+    // A refused or failed read leaves no lots: the screen is then a one-lot
+    // business's, with nothing to pick.
+    try {
+      _subs.add(
+        (widget.parkingLots ?? ParkingLotsService().watchLots(widget.businessId))
+            .listen((lots) {
+              if (mounted) setState(() => _lots = lots);
+            }, onError: (_) {}),
+      );
+    } catch (_) {}
+  }
+
+  /// The lots each customer's cars stand in, by customer key.
+  Map<String, Set<String>> _customerLots(ParkingMonthSummary summary) {
+    final key = (summary, _lots, _docs);
+    if (key == _lotIdsKey) return _lotIdsByCustomer;
+    _lotIdsKey = key;
+    if (_lots.length < 2) return _lotIdsByCustomer = const {};
+    final carById = {for (final d in _docs) d.id: d.data()};
+    return _lotIdsByCustomer = {
+      for (final customer in summary.customers)
+        customer.key: {
+          for (final car in customer.cars)
+            parkingLotIdOf(carById[car.id], widget.businessId),
+          for (final car in customer.olderCars)
+            parkingLotIdOf(carById[car.id], widget.businessId),
+        },
+    };
   }
 
   /// One query each, equality only. The spinner waits for them so a bill
@@ -1024,11 +1064,13 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
       isReceiver: isSettleReceiver,
     );
     // The search, the chips and the sort act on the view on screen.
+    final customerLots = _customerLots(summary);
     final tableContext = MonthTableContext(
       invoiceFailed: (c) {
         final invoice = _invoices[c.key];
         return invoice != null && parkingMessageIsProblem(invoice);
       },
+      lotIdsOf: (c) => customerLots[c.key] ?? const <String>{},
     );
     final counts = monthTableCounts(
       parkingMonthListed(summary, _view),
@@ -1038,6 +1080,7 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
       filter: _filter,
       counts: counts,
       controller: _search,
+      lots: _lots,
       onChanged: (next) => setState(() => _filter = next),
     );
 

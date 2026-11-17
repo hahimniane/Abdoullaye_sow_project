@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_flutter_app/l10n/app_localizations.dart';
 import 'package:my_flutter_app/screens/parking_month_end_screen.dart';
+import 'package:my_flutter_app/services/parking_lots.dart';
 import 'package:my_flutter_app/services/parking_month_statement.dart';
 import 'package:my_flutter_app/services/parking_month_table.dart';
 import 'package:my_flutter_app/services/staff_statement.dart'
@@ -135,6 +136,29 @@ void main() {
     expect(f.narrowed, isFalse);
     expect(f.copyWith(part: true).narrowed, isTrue);
     expect(f.copyWith(query: '  ').narrowed, isFalse);
+  });
+
+  // docs/PARKING_LOTS.md: Month end narrowed to one lot, as on the website
+  // (parking-month-table.test.ts "chips: ... lot").
+  test('the lot: only customers with a car standing in it', () {
+    const f = MonthTableFilter.empty;
+    final byLot = MonthTableContext(
+      lotIdsOf: (c) =>
+          c.key == 'b' ? const ['lot2', 'biz_main'] : const ['biz_main'],
+    );
+    expect(keys(monthTableRows(owing, f.copyWith(lotId: 'lot2'), byLot)), [
+      'b',
+    ]);
+    expect(
+      keys(monthTableRows(owing, f.copyWith(lotId: 'biz_main'), byLot)),
+      keys(monthTableRows(owing, f, byLot)),
+    );
+    // No lots known (a one-lot business): a stale lot shows nobody, and
+    // every lot shows everyone.
+    expect(monthTableRows(owing, f.copyWith(lotId: 'lot2')), isEmpty);
+    expect(f.copyWith(lotId: 'lot2').narrowed, isTrue);
+    expect(f.copyWith(lotId: 'lot2').cleared().lotId, '');
+    expect(f.copyWith(lotId: 'lot2') == f, isFalse);
   });
 
   test('a chip never matches a team statement as part paid', () {
@@ -304,6 +328,40 @@ void main() {
         );
       },
     );
+
+    testWidgets('the lot picker shows only for two lots or more', (
+      tester,
+    ) async {
+      var filter = MonthTableFilter.empty;
+      Widget bar(List<ParkingLot> lots) => harness(
+        const Locale('en'),
+        StatefulBuilder(
+          builder: (context, setState) => Padding(
+            padding: const EdgeInsets.all(16),
+            child: ParkingMonthFilterBar(
+              filter: filter,
+              controller: TextEditingController(),
+              counts: monthTableCounts(const []),
+              lots: lots,
+              onChanged: (next) => setState(() => filter = next),
+            ),
+          ),
+        ),
+      );
+      const lot1 = ParkingLot(id: 'biz_main', name: 'Lot 1');
+      const lot2 = ParkingLot(id: 'lot2', name: 'Lot 2');
+      await tester.pumpWidget(bar(const [lot1]));
+      expect(find.byKey(const Key('month-end-lot')), findsNothing);
+      await tester.pumpWidget(bar(const [lot1, lot2]));
+      expect(find.byKey(const Key('month-end-lot')), findsOneWidget);
+      expect(find.text('All lots'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('month-end-lot')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Lot 2').last);
+      await tester.pumpAndSettle();
+      expect(filter.lotId, 'lot2');
+      expect(tester.takeException(), isNull);
+    });
 
     testWidgets('sorting by name reorders the cards', (tester) async {
       tester.view.physicalSize = const Size(800, 2400);

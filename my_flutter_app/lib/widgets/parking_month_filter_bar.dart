@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../l10n/app_localizations.dart';
+import '../services/parking_lots.dart' show ParkingLot;
 import '../services/parking_month_table.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
@@ -17,7 +18,12 @@ class ParkingMonthFilterBar extends StatelessWidget {
     required this.counts,
     required this.onChanged,
     required this.controller,
+    this.lots = const [],
   });
+
+  /// The business's parking lots: with two or more, "Which lot" narrows the
+  /// list to customers with a car there (docs/PARKING_LOTS.md).
+  final List<ParkingLot> lots;
 
   final MonthTableFilter filter;
   final MonthTableCounts counts;
@@ -93,6 +99,55 @@ class ParkingMonthFilterBar extends StatelessWidget {
               isDense: true,
             ),
           ),
+          if (lots.length >= 2) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Row(
+              children: [
+                Text(
+                  l10n.pltLotLabel,
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    color: AppColors.muted,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: DropdownButton<String>(
+                    key: const Key('month-end-lot'),
+                    // A lot that is gone reads as every lot.
+                    value: lots.any((lot) => lot.id == filter.lotId)
+                        ? filter.lotId
+                        : '',
+                    isExpanded: true,
+                    isDense: true,
+                    underline: const SizedBox.shrink(),
+                    items: [
+                      DropdownMenuItem(
+                        value: '',
+                        child: Text(
+                          l10n.pltStripAll,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      for (final lot in lots)
+                        DropdownMenuItem(
+                          value: lot.id,
+                          child: Text(
+                            lot.name,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                    ],
+                    onChanged: (lotId) {
+                      if (lotId != null) {
+                        onChanged(filter.copyWith(lotId: lotId));
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: AppSpacing.sm),
           Row(
             children: [

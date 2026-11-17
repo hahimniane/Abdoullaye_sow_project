@@ -23,6 +23,7 @@ class MonthTableFilter {
     this.team = false,
     this.older = false,
     this.notDelivered = false,
+    this.lotId = '',
     this.query = '',
     this.sort = MonthTableSort.owed,
   });
@@ -38,6 +39,10 @@ class MonthTableFilter {
 
   /// Only customers whose WhatsApp invoice failed.
   final bool notDelivered;
+
+  /// Only customers with a car in this parking lot; '' for every lot
+  /// (docs/PARKING_LOTS.md).
+  final String lotId;
   final String query;
   final MonthTableSort sort;
 
@@ -48,6 +53,7 @@ class MonthTableFilter {
     bool? team,
     bool? older,
     bool? notDelivered,
+    String? lotId,
     String? query,
     MonthTableSort? sort,
   }) => MonthTableFilter(
@@ -55,6 +61,7 @@ class MonthTableFilter {
     team: team ?? this.team,
     older: older ?? this.older,
     notDelivered: notDelivered ?? this.notDelivered,
+    lotId: lotId ?? this.lotId,
     query: query ?? this.query,
     sort: sort ?? this.sort,
   );
@@ -62,9 +69,14 @@ class MonthTableFilter {
   /// "Clear filters": every chip and the search off, the sort kept.
   MonthTableFilter cleared() => MonthTableFilter(sort: sort);
 
-  /// Whether any chip or the search narrows the list.
+  /// Whether any chip, the lot or the search narrows the list.
   bool get narrowed =>
-      part || team || older || notDelivered || query.trim().isNotEmpty;
+      part ||
+      team ||
+      older ||
+      notDelivered ||
+      lotId.isNotEmpty ||
+      query.trim().isNotEmpty;
 
   @override
   bool operator ==(Object other) =>
@@ -73,11 +85,13 @@ class MonthTableFilter {
       other.team == team &&
       other.older == older &&
       other.notDelivered == notDelivered &&
+      other.lotId == lotId &&
       other.query == query &&
       other.sort == sort;
 
   @override
-  int get hashCode => Object.hash(part, team, older, notDelivered, query, sort);
+  int get hashCode =>
+      Object.hash(part, team, older, notDelivered, lotId, query, sort);
 }
 
 /// A team member's bill or statement.
@@ -141,12 +155,20 @@ bool monthSearchMatches(ParkingMonthCustomer card, String query) {
 /// What the screen knows about a card beyond the statement itself.
 @immutable
 class MonthTableContext {
-  const MonthTableContext({this.invoiceFailed = _never});
+  const MonthTableContext({
+    this.invoiceFailed = _never,
+    this.lotIdsOf = _noLots,
+  });
 
   /// Their invoice for the month failed on WhatsApp.
   final bool Function(ParkingMonthCustomer card) invoiceFailed;
 
+  /// The lots the customer's cars stand in (the first lot when a car names
+  /// none).
+  final Iterable<String> Function(ParkingMonthCustomer card) lotIdsOf;
+
   static bool _never(ParkingMonthCustomer _) => false;
+  static Iterable<String> _noLots(ParkingMonthCustomer _) => const [];
 }
 
 bool _passesChips(
@@ -158,6 +180,10 @@ bool _passesChips(
   if (filter.team && !isTeamCard(card)) return false;
   if (filter.older && !hasOlderDebt(card)) return false;
   if (filter.notDelivered && !context.invoiceFailed(card)) return false;
+  if (filter.lotId.isNotEmpty &&
+      !context.lotIdsOf(card).contains(filter.lotId)) {
+    return false;
+  }
   return true;
 }
 
