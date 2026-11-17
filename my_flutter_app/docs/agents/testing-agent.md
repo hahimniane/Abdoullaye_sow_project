@@ -855,4 +855,6 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   the field's `EditableTextState` is `identical` to the one tapped. A screen
   with a camera needs a stand-in for the camera in tests, or the test never
   sees the layout a phone has.
-
+- ARB keys must be unique: `json.loads` and `flutter gen-l10n` accept a duplicate key and the LATER one silently wins, which re-types an existing getter (a `String` became a `String Function(String)` and broke an unrelated screen). Before inserting a block of keys, count each new key's occurrences in `app_en.arb`/`app_fr.arb` (`pmeSettleHint` already existed).
+- A widget that shows a busy spinner while a confirm/decline dialog is open never lets `pumpAndSettle` finish (the indicator animates forever): set the busy flag only around the server call, after the question is answered.
+- `ParkedCar.paymentFields` carries only the Firestore payment fields; a test of a money screen must add `parkingDate`/`dailyRate` there, or the balance reads $0 and the buttons that need a balance stay hidden.

@@ -1,7 +1,8 @@
 # "I paid everything" - a team member settles their month
 
-Owner, 2026-11-11 (decisions Q1-Q8). Server + website; the phone app is the
-next build.
+Owner, 2026-11-11 (decisions Q1-Q8). Server + website; the phone app panel
+(`team_settle_panel.dart`, rules in `team_settle.dart`, a "Waiting for your OK"
+card at the top of Month end) is built on branch `app/monthend`, next build.
 
 A team member's Month end card is a STATEMENT (PARKING_INVOICES.md section 6):
 parking and jobs - expenses + cash held = "Owes the business $X". One action

@@ -55,6 +55,10 @@ String parkingBillPaymentRefusalText(
   BillPaymentRefusal.alreadyUndone => l10n.pmeBillPaymentAlreadyUndone,
   BillPaymentRefusal.settledSince => l10n.pmeBillPaymentSettledSince,
   BillPaymentRefusal.ledgerRequired => l10n.pmeBillPaymentLedgerRequired,
+  BillPaymentRefusal.settleNotLess => l10n.pmeSettleNotLess,
+  BillPaymentRefusal.settleJobsFirst => l10n.pmeSettleJobsFirst,
+  BillPaymentRefusal.settleReasonRequired => l10n.pmeSettleReasonRequired,
+  BillPaymentRefusal.fromSettlement => l10n.pmeBillPaymentFromSettlement,
   _ => l10n.lotCouldNotSave,
 };
 
@@ -132,6 +136,11 @@ class BillPaymentSheet extends StatefulWidget {
 class _BillPaymentSheetState extends State<BillPaymentSheet> {
   final _amount = TextEditingController();
   final _note = TextEditingController();
+  final _reason = TextEditingController();
+
+  /// "Settle for a lower amount" (docs/PARKING_DISCOUNT.md): the same sheet,
+  /// the rest of the cars' charges taken off as a discount, with a reason.
+  bool _settling = false;
   String _via = 'cash';
   late String _by =
       widget.staff
@@ -157,7 +166,11 @@ class _BillPaymentSheetState extends State<BillPaymentSheet> {
   /// What the typed amount pays; null while nothing usable is typed. Worked
   /// out when the amount changes, never per build.
   BillPaymentPlan? _plan;
+  BillSettlePlan? _settlePlan;
   int _cents = 0;
+
+  /// Something usable is typed (a settle accepts $0, a payment does not).
+  bool _typed = false;
 
   @override
   void initState() {
@@ -170,6 +183,7 @@ class _BillPaymentSheetState extends State<BillPaymentSheet> {
     _amount.removeListener(_replan);
     _amount.dispose();
     _note.dispose();
+    _reason.dispose();
     super.dispose();
   }
 
@@ -178,9 +192,14 @@ class _BillPaymentSheetState extends State<BillPaymentSheet> {
     final plan = typed == null || typed <= 0
         ? null
         : billPaymentPlan(widget.customer, typed);
+    final settle = typed == null || typed < 0
+        ? null
+        : billSettlePlan(widget.customer, typed);
     setState(() {
       _cents = typed ?? 0;
+      _typed = typed != null;
       _plan = plan;
+      _settlePlan = settle;
       _error = '';
     });
   }
@@ -219,11 +238,20 @@ class _BillPaymentSheetState extends State<BillPaymentSheet> {
 
   Future<void> _save() async {
     final l10n = AppLocalizations.of(context)!;
-    final plan = _plan;
-    if (plan == null || !plan.ok || _busy) return;
-    if (_by.isEmpty) {
+    if (_busy) return;
+    final settling = _settling;
+    final payable = settling ? _settlePlan?.payableCents : _plan?.payableCents;
+    final planOk = settling ? (_settlePlan?.ok ?? false) : (_plan?.ok ?? false);
+    if (!planOk || payable == null) return;
+    // A settle for nothing taken needs no receiver (nothing to reconcile).
+    if (_by.isEmpty && !(settling && _cents == 0)) {
       AppHaptics.refuse();
       setState(() => _error = l10n.pmeSayWhoReceived);
+      return;
+    }
+    if (settling && _reason.text.trim().isEmpty) {
+      AppHaptics.refuse();
+      setState(() => _error = l10n.pmeSettleReasonRequired);
       return;
     }
     setState(() {
@@ -231,20 +259,37 @@ class _BillPaymentSheetState extends State<BillPaymentSheet> {
       _error = '';
     });
     try {
-      final result = await widget.service.record(
-        businessId: widget.businessId,
-        monthKey: widget.monthKey,
-        customerKey: widget.customer.key,
-        amountCents: _cents,
-        receivedVia: _via,
-        receivedByStaffId: _by,
-        note: _note.text,
-        expectedPayableCents: plan.payableCents,
-      );
+      final result = settling
+          ? await widget.service.settle(
+              businessId: widget.businessId,
+              monthKey: widget.monthKey,
+              customerKey: widget.customer.key,
+              amountCents: _cents,
+              receivedVia: _via,
+              receivedByStaffId: _by,
+              note: _note.text,
+              expectedPayableCents: payable,
+              reason: _reason.text,
+            )
+          : await widget.service.record(
+              businessId: widget.businessId,
+              monthKey: widget.monthKey,
+              customerKey: widget.customer.key,
+              amountCents: _cents,
+              receivedVia: _via,
+              receivedByStaffId: _by,
+              note: _note.text,
+              expectedPayableCents: payable,
+            );
       if (!mounted) return;
       AppHaptics.commit();
       final recorded = parkingMoney(result.amountCents);
-      final message = result.leftCents > 0
+      final message = settling
+          ? l10n.pmeSettleDone(
+              recorded,
+              parkingMoney(_settlePlan?.discountCents ?? 0),
+            )
+          : result.leftCents > 0
           ? l10n.pmeBillPaymentRecorded(
               recorded,
               parkingMoney(result.leftCents),
@@ -284,7 +329,10 @@ class _BillPaymentSheetState extends State<BillPaymentSheet> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final plan = _plan;
-    final ok = plan != null && plan.ok;
+    final settlePlan = _settlePlan;
+    final ok = _settling
+        ? _typed && settlePlan != null && settlePlan.ok
+        : plan != null && plan.ok;
     final byName = _by.isEmpty
         ? null
         : receivedByName(
@@ -293,7 +341,7 @@ class _BillPaymentSheetState extends State<BillPaymentSheet> {
             widget.staff.where((s) => s.id == _by).firstOrNull?.name ?? '',
           );
     return LotSheetShell(
-      title: l10n.pmeRecordPayment,
+      title: _settling ? l10n.pmeSettleKindLess : l10n.pmeRecordPayment,
       subtitle: '${widget.customer.customerName} · ${widget.monthLabel}',
       footer: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -310,7 +358,11 @@ class _BillPaymentSheetState extends State<BillPaymentSheet> {
           LotSheetButton(
             key: const Key('bill-payment-save'),
             label: ok
-                ? l10n.pmeRecordTotal(parkingMoney(_cents))
+                ? (_settling
+                      ? l10n.pmeSettleSave(parkingMoney(_cents))
+                      : l10n.pmeRecordTotal(parkingMoney(_cents)))
+                : _settling
+                ? l10n.pmeSettleKindLess
                 : l10n.pmeRecordPayment,
             busy: _busy,
             tone: LotTone.good,
@@ -321,8 +373,43 @@ class _BillPaymentSheetState extends State<BillPaymentSheet> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          SegmentedButton<bool>(
+            key: const Key('bill-payment-kind'),
+            showSelectedIcon: false,
+            segments: [
+              ButtonSegment<bool>(
+                value: false,
+                label: Text(
+                  l10n.pmeSettleKindPay,
+                  maxLines: 2,
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              ButtonSegment<bool>(
+                value: true,
+                label: Text(
+                  l10n.pmeSettleKindLess,
+                  maxLines: 2,
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ],
+            selected: {_settling},
+            onSelectionChanged: _busy
+                ? null
+                : (set) => setState(() {
+                    _settling = set.first;
+                    _error = '';
+                  }),
+          ),
+          const SizedBox(height: AppSpacing.md),
           Text(
-            l10n.pmeBillPaymentHint,
+            _settling
+                ? l10n.pmeSettleLessHint(
+                    parkingMoney(settlePlan?.payableCents ?? _payableCents),
+                  )
+                : l10n.pmeBillPaymentHint,
+            key: const Key('bill-payment-hint'),
             style: const TextStyle(fontSize: 12.5, color: AppColors.muted),
           ),
           const SizedBox(height: AppSpacing.md),
@@ -338,7 +425,13 @@ class _BillPaymentSheetState extends State<BillPaymentSheet> {
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
-          _Preview(plan: plan, payableCents: _payableCents),
+          if (_settling)
+            _SettlePreview(
+              plan: _typed ? settlePlan : null,
+              payableCents: _payableCents,
+            )
+          else
+            _Preview(plan: plan, payableCents: _payableCents),
           const SizedBox(height: AppSpacing.md),
           LotPickerField(
             label: l10n.invPayMethod,
@@ -358,6 +451,23 @@ class _BillPaymentSheetState extends State<BillPaymentSheet> {
                 : null,
           ),
           const SizedBox(height: AppSpacing.md),
+          if (_settling) ...[
+            TextField(
+              key: const Key('bill-payment-reason'),
+              controller: _reason,
+              enabled: !_busy,
+              maxLength: 300,
+              onChanged: (_) {
+                if (_error.isNotEmpty) setState(() => _error = '');
+              },
+              decoration: InputDecoration(
+                labelText: l10n.pmeDiscReason,
+                hintText: l10n.pmeDiscReasonHint,
+                counterText: '',
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
           TextField(
             controller: _note,
             enabled: !_busy,
@@ -461,6 +571,90 @@ class _Preview extends StatelessWidget {
   }
 }
 
+/// What a settle for less does: what is paid, what is taken off each car as
+/// a discount, and that the bill closes at $0; or why it cannot be taken.
+class _SettlePreview extends StatelessWidget {
+  const _SettlePreview({required this.plan, required this.payableCents});
+
+  final BillSettlePlan? plan;
+  final int payableCents;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final plan = this.plan;
+    if (plan == null) {
+      return Text(
+        l10n.pmeBillPaymentUpTo(parkingMoney(payableCents)),
+        key: const Key('bill-settle-up-to'),
+        style: const TextStyle(fontSize: 12.5, color: AppColors.muted),
+      );
+    }
+    if (!plan.ok) {
+      return Text(
+        parkingBillPaymentRefusalText(
+          l10n,
+          plan.reason,
+          payableCents: plan.payableCents,
+        ),
+        key: const Key('bill-settle-refusal'),
+        style: const TextStyle(fontSize: 12.5, color: AppColors.errorRed),
+      );
+    }
+    Widget line(String label, String amount, {Color? color}) => Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(fontSize: 13, color: color ?? AppColors.ink),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            amount,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: color ?? AppColors.ink,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+        ],
+      ),
+    );
+    return Column(
+      key: const Key('bill-settle-preview'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final part in plan.parts)
+          line(
+            l10n.pmeSettlePaidLine(part.label),
+            parkingMoney(part.amountCents),
+          ),
+        for (final d in plan.discountParts)
+          line(
+            l10n.pmeSettleDiscountLine(d.label),
+            '−${parkingMoney(d.amountCents)}',
+            color: AppColors.warn,
+          ),
+        const Divider(height: 14),
+        Text(
+          l10n.pmeBillPaymentLeft(parkingMoney(0)),
+          key: const Key('bill-settle-left'),
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w800,
+            color: AppColors.ink,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 /// "Payments on this bill" on a customer's card: each payment's amount,
 /// method, date, who received it and what it paid; a recorded one can be
 /// undone, an undone one shows greyed as "Undone · date".
@@ -526,7 +720,7 @@ class ParkingBillPaymentsSection extends StatelessWidget {
                 for (final x in p.parts) x.label,
               ], language),
               busy: busyKey == 'undo:${p.id}',
-              canUndo: onUndo != null,
+              canUndo: onUndo != null && p.settlementId.isEmpty,
               onUndo: busyKey.isNotEmpty || onUndo == null
                   ? null
                   : () => onUndo!(p),
@@ -604,6 +798,27 @@ class _PaymentRow extends StatelessWidget {
                     color: AppColors.muted,
                   ),
                 ),
+                if (payment.discountCents > 0)
+                  Text(
+                    l10n.pmeBillPaymentDiscount(
+                      parkingMoney(payment.discountCents),
+                    ),
+                    key: Key('bill-payment-discount-${payment.id}'),
+                    style: const TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.muted,
+                    ),
+                  ),
+                if (payment.settlementId.isNotEmpty && !undone)
+                  Text(
+                    l10n.pmeBillPaymentInSettlement,
+                    key: Key('bill-payment-settlement-${payment.id}'),
+                    style: const TextStyle(
+                      fontSize: 11.5,
+                      color: AppColors.muted,
+                    ),
+                  ),
                 if (undone)
                   Text(
                     l10n.pmeBillPaymentUndone(undoneDate),

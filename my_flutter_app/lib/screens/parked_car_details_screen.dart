@@ -43,6 +43,7 @@ import '../widgets/app_back_button.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/async_action_button.dart';
 import '../widgets/business_parking_payment_badge.dart';
+import '../widgets/parking_discount_actions.dart';
 import '../widgets/container_link_chip.dart';
 import '../widgets/phone_account_widgets.dart' show RecordPhoneFlagNotes;
 import '../widgets/lot_sheets.dart' show showLotSheet;
@@ -2781,6 +2782,18 @@ class _ParkedCarDetailsScreenState extends State<ParkedCarDetailsScreen> {
               ),
             ),
           ],
+          // Discounts (docs/PARKING_DISCOUNT.md): "Settle for a lower amount",
+          // "Give a discount" and Undo, for anyone with the parking permission.
+          if (canRecordPayment)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: ParkingDiscountActions(
+                car: _paymentFields,
+                entryId: widget.parkedCar.id,
+                staffNames: _staffNames,
+                onChanged: _refreshFromRecord,
+              ),
+            ),
           // Undo a hand-marked direct payment - full or part. A Stripe
           // payment-link settlement is Stripe's record and cannot be undone
           // here, so this shows only on a direct, business-entered car.

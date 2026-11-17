@@ -137,6 +137,38 @@ class ParkingBillPaymentService {
     return ParkingBillPaymentRecorded.fromCallable(data);
   }
 
+  /// `bill_settle`: the same payment, with the rest of what the cars owe
+  /// taken off as a discount, for a [reason]. A payment of $0 needs no
+  /// receiver. Refusals: `bill_settle_not_less`, `bill_settle_jobs_first`,
+  /// `bill_settle_reason_required` and the plain payment's.
+  Future<ParkingBillPaymentRecorded> settle({
+    required String businessId,
+    required String monthKey,
+    required String customerKey,
+    required int amountCents,
+    required String receivedVia,
+    required String receivedByStaffId,
+    required int expectedPayableCents,
+    required String reason,
+    String note = '',
+  }) async {
+    final data = await _call({
+      'action': 'bill_settle',
+      'businessId': businessId,
+      'monthKey': monthKey,
+      'customerKey': customerKey,
+      'amountCents': amountCents,
+      'receivedVia': receivedVia,
+      'receivedByStaffId': receivedByStaffId,
+      'note': note.trim(),
+      'expectedPayableCents': expectedPayableCents,
+      'reason': reason.trim().length > 300
+          ? reason.trim().substring(0, 300)
+          : reason.trim(),
+    });
+    return ParkingBillPaymentRecorded.fromCallable(data);
+  }
+
   /// `bill_payment_undo`: the whole payment comes off every car and job it
   /// paid; it stays on file as "Undone".
   Future<void> undo({

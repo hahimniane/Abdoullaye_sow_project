@@ -23429,6 +23429,816 @@ abstract class AppLocalizations {
   /// **'Save without printing'**
   String get pcsSaveOnly;
 
+  /// No description provided for @pmeDiscTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Discounts'**
+  String get pmeDiscTitle;
+
+  /// No description provided for @pmeDiscGive.
+  ///
+  /// In en, this message translates to:
+  /// **'Give a discount'**
+  String get pmeDiscGive;
+
+  /// No description provided for @pmeDiscSettle.
+  ///
+  /// In en, this message translates to:
+  /// **'Settle for a lower amount'**
+  String get pmeDiscSettle;
+
+  /// No description provided for @pmeDiscOwedToday.
+  ///
+  /// In en, this message translates to:
+  /// **'Owed today: {amount}'**
+  String pmeDiscOwedToday(String amount);
+
+  /// No description provided for @pmeDiscKeepsAdding.
+  ///
+  /// In en, this message translates to:
+  /// **'The days keep adding up from tomorrow.'**
+  String get pmeDiscKeepsAdding;
+
+  /// No description provided for @pmeDiscAmountPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount paid now'**
+  String get pmeDiscAmountPaid;
+
+  /// No description provided for @pmeDiscAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Discount amount'**
+  String get pmeDiscAmount;
+
+  /// No description provided for @pmeDiscReason.
+  ///
+  /// In en, this message translates to:
+  /// **'Why (required)'**
+  String get pmeDiscReason;
+
+  /// No description provided for @pmeDiscReasonHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. Agreed with the owner, long stay'**
+  String get pmeDiscReasonHint;
+
+  /// No description provided for @pmeDiscPreviewSettle.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid {paid} · Discount −{discount} · Left {left}'**
+  String pmeDiscPreviewSettle(String paid, String discount, String left);
+
+  /// No description provided for @pmeDiscPreviewGive.
+  ///
+  /// In en, this message translates to:
+  /// **'Discount −{discount} · Left to pay {left}'**
+  String pmeDiscPreviewGive(String discount, String left);
+
+  /// No description provided for @pmeDiscSubmitSettle.
+  ///
+  /// In en, this message translates to:
+  /// **'Settle'**
+  String get pmeDiscSubmitSettle;
+
+  /// No description provided for @pmeDiscSubmitGive.
+  ///
+  /// In en, this message translates to:
+  /// **'Give discount'**
+  String get pmeDiscSubmitGive;
+
+  /// No description provided for @pmeDiscConfirmSettleTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Settle for less?'**
+  String get pmeDiscConfirmSettleTitle;
+
+  /// No description provided for @pmeDiscConfirmSettle.
+  ///
+  /// In en, this message translates to:
+  /// **'Settle this car for {paid}? {discount} is recorded as a discount.'**
+  String pmeDiscConfirmSettle(String paid, String discount);
+
+  /// No description provided for @pmeDiscConfirmGiveTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Give a discount?'**
+  String get pmeDiscConfirmGiveTitle;
+
+  /// No description provided for @pmeDiscConfirmGive.
+  ///
+  /// In en, this message translates to:
+  /// **'Give a {amount} discount on this car?'**
+  String pmeDiscConfirmGive(String amount);
+
+  /// No description provided for @pmeDiscDoneSettle.
+  ///
+  /// In en, this message translates to:
+  /// **'Settled. The discount is on the bill.'**
+  String get pmeDiscDoneSettle;
+
+  /// No description provided for @pmeDiscDoneGive.
+  ///
+  /// In en, this message translates to:
+  /// **'Discount given.'**
+  String get pmeDiscDoneGive;
+
+  /// No description provided for @pmeDiscDoneUndo.
+  ///
+  /// In en, this message translates to:
+  /// **'Discount undone.'**
+  String get pmeDiscDoneUndo;
+
+  /// No description provided for @pmeDiscLine.
+  ///
+  /// In en, this message translates to:
+  /// **'Discount −{amount}'**
+  String pmeDiscLine(String amount);
+
+  /// No description provided for @pmeDiscLineBy.
+  ///
+  /// In en, this message translates to:
+  /// **'by {name}'**
+  String pmeDiscLineBy(String name);
+
+  /// No description provided for @pmeDiscUndo.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo discount'**
+  String get pmeDiscUndo;
+
+  /// No description provided for @pmeDiscUndoTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo this discount?'**
+  String get pmeDiscUndoTitle;
+
+  /// No description provided for @pmeDiscUndoBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo this {amount} discount? The car owes it again. It stays in the history as undone.'**
+  String pmeDiscUndoBody(String amount);
+
+  /// No description provided for @pmeDiscUndone.
+  ///
+  /// In en, this message translates to:
+  /// **'Undone · {date}'**
+  String pmeDiscUndone(String date);
+
+  /// No description provided for @pmeNotAllowed.
+  ///
+  /// In en, this message translates to:
+  /// **'Your account is not allowed to do this. Ask the business owner.'**
+  String get pmeNotAllowed;
+
+  /// No description provided for @pmeDiscNotDirect.
+  ///
+  /// In en, this message translates to:
+  /// **'A discount can only be given on a car the business records payments for (cash, Zelle...). Online and payment-link cars are paid in Stripe.'**
+  String get pmeDiscNotDirect;
+
+  /// No description provided for @pmeDiscReasonRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Say why the discount was agreed.'**
+  String get pmeDiscReasonRequired;
+
+  /// No description provided for @pmeDiscNoAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the discount amount.'**
+  String get pmeDiscNoAmount;
+
+  /// No description provided for @pmeDiscNothingOwed.
+  ///
+  /// In en, this message translates to:
+  /// **'This car owes nothing right now.'**
+  String get pmeDiscNothingOwed;
+
+  /// No description provided for @pmeDiscMoreThanOwed.
+  ///
+  /// In en, this message translates to:
+  /// **'That is more than this car owes. Enter at most what is owed.'**
+  String get pmeDiscMoreThanOwed;
+
+  /// No description provided for @pmeDiscPaidNotLess.
+  ///
+  /// In en, this message translates to:
+  /// **'The amount paid must be less than what is owed. For the full amount, record a normal payment.'**
+  String get pmeDiscPaidNotLess;
+
+  /// No description provided for @pmeDiscReceiverRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Say who took the money.'**
+  String get pmeDiscReceiverRequired;
+
+  /// No description provided for @pmeDiscOwedChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'What this car owes has changed. Check the amount and try again.'**
+  String get pmeDiscOwedChanged;
+
+  /// No description provided for @pmeDiscNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'That discount was not found.'**
+  String get pmeDiscNotFound;
+
+  /// No description provided for @pmeDiscAlreadyUndone.
+  ///
+  /// In en, this message translates to:
+  /// **'That discount was already undone.'**
+  String get pmeDiscAlreadyUndone;
+
+  /// No description provided for @pmeDiscVoided.
+  ///
+  /// In en, this message translates to:
+  /// **'This car record was voided.'**
+  String get pmeDiscVoided;
+
+  /// No description provided for @pmeSettleKindPay.
+  ///
+  /// In en, this message translates to:
+  /// **'Full or part payment'**
+  String get pmeSettleKindPay;
+
+  /// No description provided for @pmeSettleKindLess.
+  ///
+  /// In en, this message translates to:
+  /// **'Settle for a lower amount'**
+  String get pmeSettleKindLess;
+
+  /// No description provided for @pmeSettleLessHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The bill is {bill}. Type what the customer pays now: the rest is recorded as a discount and the bill closes at \$0.'**
+  String pmeSettleLessHint(String bill);
+
+  /// No description provided for @pmeSettlePaidLine.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid · {label}'**
+  String pmeSettlePaidLine(String label);
+
+  /// No description provided for @pmeSettleDiscountLine.
+  ///
+  /// In en, this message translates to:
+  /// **'Discount · {label}'**
+  String pmeSettleDiscountLine(String label);
+
+  /// No description provided for @pmeSettleSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Settle for {amount}'**
+  String pmeSettleSave(String amount);
+
+  /// No description provided for @pmeSettleDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Settled for {paid}. {discount} recorded as a discount.'**
+  String pmeSettleDone(String paid, String discount);
+
+  /// No description provided for @pmeSettleNotLess.
+  ///
+  /// In en, this message translates to:
+  /// **'The amount paid must be less than the bill. For the full amount, record a normal payment.'**
+  String get pmeSettleNotLess;
+
+  /// No description provided for @pmeSettleJobsFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'The amount must at least pay the lot jobs on this bill: a discount only comes off parking.'**
+  String get pmeSettleJobsFirst;
+
+  /// No description provided for @pmeSettleReasonRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Say why the bill was settled for less.'**
+  String get pmeSettleReasonRequired;
+
+  /// No description provided for @pmeBillPaymentFromSettlement.
+  ///
+  /// In en, this message translates to:
+  /// **'This payment is part of a month settlement. Undo the settlement instead.'**
+  String get pmeBillPaymentFromSettlement;
+
+  /// No description provided for @pmeBillPaymentDiscount.
+  ///
+  /// In en, this message translates to:
+  /// **'Discount −{amount}'**
+  String pmeBillPaymentDiscount(String amount);
+
+  /// No description provided for @pmeBillPaymentInSettlement.
+  ///
+  /// In en, this message translates to:
+  /// **'Part of a month settlement'**
+  String get pmeBillPaymentInSettlement;
+
+  /// No description provided for @pmeTsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Month settlement'**
+  String get pmeTsTitle;
+
+  /// No description provided for @pmeTsPaidEverything.
+  ///
+  /// In en, this message translates to:
+  /// **'I paid everything'**
+  String get pmeTsPaidEverything;
+
+  /// No description provided for @pmeTsTheyPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Record that they paid everything'**
+  String get pmeTsTheyPaid;
+
+  /// No description provided for @pmeTsButton.
+  ///
+  /// In en, this message translates to:
+  /// **'{label} · {amount}'**
+  String pmeTsButton(String label, String amount);
+
+  /// No description provided for @pmeTsPaidThemBack.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid them back'**
+  String get pmeTsPaidThemBack;
+
+  /// No description provided for @pmeTsSheetHint.
+  ///
+  /// In en, this message translates to:
+  /// **'It counts once the person who received the money confirms. The amount and what it is for are kept as you send them.'**
+  String get pmeTsSheetHint;
+
+  /// No description provided for @pmeTsScope.
+  ///
+  /// In en, this message translates to:
+  /// **'What it is for'**
+  String get pmeTsScope;
+
+  /// No description provided for @pmeTsScopeEverything.
+  ///
+  /// In en, this message translates to:
+  /// **'Everything'**
+  String get pmeTsScopeEverything;
+
+  /// No description provided for @pmeTsScopeCash.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the cash I hold'**
+  String get pmeTsScopeCash;
+
+  /// No description provided for @pmeTsScopeParking.
+  ///
+  /// In en, this message translates to:
+  /// **'Only my parking'**
+  String get pmeTsScopeParking;
+
+  /// No description provided for @pmeTsAmountPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount paid'**
+  String get pmeTsAmountPaid;
+
+  /// No description provided for @pmeTsReceiver.
+  ///
+  /// In en, this message translates to:
+  /// **'Who received it'**
+  String get pmeTsReceiver;
+
+  /// No description provided for @pmeTsPickReceiver.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose who received it'**
+  String get pmeTsPickReceiver;
+
+  /// No description provided for @pmeTsMethodDeposit.
+  ///
+  /// In en, this message translates to:
+  /// **'Bank deposit'**
+  String get pmeTsMethodDeposit;
+
+  /// No description provided for @pmeTsPreviewCash.
+  ///
+  /// In en, this message translates to:
+  /// **'Cash held'**
+  String get pmeTsPreviewCash;
+
+  /// No description provided for @pmeTsPreviewParking.
+  ///
+  /// In en, this message translates to:
+  /// **'Parking and jobs'**
+  String get pmeTsPreviewParking;
+
+  /// No description provided for @pmeTsPreviewLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'Left to pay'**
+  String get pmeTsPreviewLeft;
+
+  /// No description provided for @pmeTsStatementWas.
+  ///
+  /// In en, this message translates to:
+  /// **'The statement was {amount}'**
+  String pmeTsStatementWas(String amount);
+
+  /// No description provided for @pmeTsWaitingFor.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for {name} to confirm'**
+  String pmeTsWaitingFor(String name);
+
+  /// No description provided for @pmeTsWaitingForYou.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for you to confirm'**
+  String get pmeTsWaitingForYou;
+
+  /// No description provided for @pmeTsConfirmed.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirmed · {date}'**
+  String pmeTsConfirmed(String date);
+
+  /// No description provided for @pmeTsConfirmedPlain.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirmed'**
+  String get pmeTsConfirmedPlain;
+
+  /// No description provided for @pmeTsDeclined.
+  ///
+  /// In en, this message translates to:
+  /// **'Not confirmed'**
+  String get pmeTsDeclined;
+
+  /// No description provided for @pmeTsUndone.
+  ///
+  /// In en, this message translates to:
+  /// **'Undone · {date}'**
+  String pmeTsUndone(String date);
+
+  /// No description provided for @pmeTsReceivedBy.
+  ///
+  /// In en, this message translates to:
+  /// **'received by {name}'**
+  String pmeTsReceivedBy(String name);
+
+  /// No description provided for @pmeTsUndonePlain.
+  ///
+  /// In en, this message translates to:
+  /// **'Undone'**
+  String get pmeTsUndonePlain;
+
+  /// No description provided for @pmeTsUndoneBy.
+  ///
+  /// In en, this message translates to:
+  /// **'by {name}'**
+  String pmeTsUndoneBy(String name);
+
+  /// No description provided for @pmeTsConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm'**
+  String get pmeTsConfirm;
+
+  /// No description provided for @pmeTsDecline.
+  ///
+  /// In en, this message translates to:
+  /// **'Decline'**
+  String get pmeTsDecline;
+
+  /// No description provided for @pmeTsUndo.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo'**
+  String get pmeTsUndo;
+
+  /// No description provided for @pmeTsCancelPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get pmeTsCancelPending;
+
+  /// No description provided for @pmeTsKeepIt.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep it'**
+  String get pmeTsKeepIt;
+
+  /// No description provided for @pmeTsDeclineTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Decline this payment?'**
+  String get pmeTsDeclineTitle;
+
+  /// No description provided for @pmeTsDeclineWhy.
+  ///
+  /// In en, this message translates to:
+  /// **'Why (optional)'**
+  String get pmeTsDeclineWhy;
+
+  /// No description provided for @pmeTsUndoTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo this payment?'**
+  String get pmeTsUndoTitle;
+
+  /// No description provided for @pmeTsUndoBody.
+  ///
+  /// In en, this message translates to:
+  /// **'It takes off the parking payment and the cash hand-over together. Nobody is told.'**
+  String get pmeTsUndoBody;
+
+  /// No description provided for @pmeTsCancelTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel this payment?'**
+  String get pmeTsCancelTitle;
+
+  /// No description provided for @pmeTsCancelBody.
+  ///
+  /// In en, this message translates to:
+  /// **'It will not count. Nobody is told.'**
+  String get pmeTsCancelBody;
+
+  /// No description provided for @pmeTsCancelDo.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel payment'**
+  String get pmeTsCancelDo;
+
+  /// No description provided for @pmeTsUndoDo.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo payment'**
+  String get pmeTsUndoDo;
+
+  /// No description provided for @pmeTsDoneRecorded.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment recorded.'**
+  String get pmeTsDoneRecorded;
+
+  /// No description provided for @pmeTsDoneSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent. It counts once the person who received it confirms.'**
+  String get pmeTsDoneSent;
+
+  /// No description provided for @pmeTsDoneConfirmed.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment confirmed.'**
+  String get pmeTsDoneConfirmed;
+
+  /// No description provided for @pmeTsDoneDeclined.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment declined.'**
+  String get pmeTsDoneDeclined;
+
+  /// No description provided for @pmeTsDoneUndone.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment undone.'**
+  String get pmeTsDoneUndone;
+
+  /// No description provided for @pmeTsDonePayback.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid back — recorded.'**
+  String get pmeTsDonePayback;
+
+  /// No description provided for @pmeTsReceiptFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The WhatsApp receipt could not be sent.'**
+  String get pmeTsReceiptFailed;
+
+  /// No description provided for @pmeTsPaybackHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The business owes them {amount}. It is recorded as paid back for their expenses.'**
+  String pmeTsPaybackHint(String amount);
+
+  /// No description provided for @pmeTsPaybackAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount paid back'**
+  String get pmeTsPaybackAmount;
+
+  /// No description provided for @pmeTsWaitingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for your OK'**
+  String get pmeTsWaitingTitle;
+
+  /// No description provided for @pmeTsWaitingLine.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} says they paid {amount}'**
+  String pmeTsWaitingLine(String name, String amount);
+
+  /// No description provided for @pmeTsNoReceivers.
+  ///
+  /// In en, this message translates to:
+  /// **'Nobody can receive the money yet. Ask the owner.'**
+  String get pmeTsNoReceivers;
+
+  /// No description provided for @pmeTsNoAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter how much was paid.'**
+  String get pmeTsNoAmount;
+
+  /// No description provided for @pmeTsMoreThanOwed.
+  ///
+  /// In en, this message translates to:
+  /// **'That is more than this statement asks for. Pay what is owed, or pick what it is for.'**
+  String get pmeTsMoreThanOwed;
+
+  /// No description provided for @pmeTsNothingOwed.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing is owed for that. Pick something else.'**
+  String get pmeTsNothingOwed;
+
+  /// No description provided for @pmeTsScopeInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose what the payment is for: everything, only the cash, or only the parking.'**
+  String get pmeTsScopeInvalid;
+
+  /// No description provided for @pmeTsMethodInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose how the money was paid.'**
+  String get pmeTsMethodInvalid;
+
+  /// No description provided for @pmeTsMonthInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a month that has started.'**
+  String get pmeTsMonthInvalid;
+
+  /// No description provided for @pmeTsNoStatement.
+  ///
+  /// In en, this message translates to:
+  /// **'This person has no statement for this month.'**
+  String get pmeTsNoStatement;
+
+  /// No description provided for @pmeTsReceiverInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the owner, someone with Full access, or the Business account.'**
+  String get pmeTsReceiverInvalid;
+
+  /// No description provided for @pmeTsNotOwn.
+  ///
+  /// In en, this message translates to:
+  /// **'You can only say you paid for yourself. Ask the owner to record it for someone else.'**
+  String get pmeTsNotOwn;
+
+  /// No description provided for @pmeTsNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'This payment was not found.'**
+  String get pmeTsNotFound;
+
+  /// No description provided for @pmeTsNotReceiver.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the person who received this money can answer it.'**
+  String get pmeTsNotReceiver;
+
+  /// No description provided for @pmeTsNotPending.
+  ///
+  /// In en, this message translates to:
+  /// **'This payment was already answered.'**
+  String get pmeTsNotPending;
+
+  /// No description provided for @pmeTsNotUndoable.
+  ///
+  /// In en, this message translates to:
+  /// **'This payment is already undone or declined.'**
+  String get pmeTsNotUndoable;
+
+  /// No description provided for @pmeTsBillChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'The parking bill changed since it was filed, so it cannot be confirmed as it was. Decline it and ask for a new one.'**
+  String get pmeTsBillChanged;
+
+  /// No description provided for @pmeTsOwnerOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the owner or someone with Full access can do this.'**
+  String get pmeTsOwnerOnly;
+
+  /// No description provided for @pmeTsPaybackNotOwed.
+  ///
+  /// In en, this message translates to:
+  /// **'The business does not owe this person anything for this month.'**
+  String get pmeTsPaybackNotOwed;
+
+  /// No description provided for @pmeTsPaybackMore.
+  ///
+  /// In en, this message translates to:
+  /// **'That is more than the business owes this person.'**
+  String get pmeTsPaybackMore;
+
+  /// No description provided for @pmeTsUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'That did not save. Try again.'**
+  String get pmeTsUnknown;
+
+  /// No description provided for @pmeTsOwnerName.
+  ///
+  /// In en, this message translates to:
+  /// **'Owner'**
+  String get pmeTsOwnerName;
+
+  /// No description provided for @pmeFltSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search name, phone, car or VIN'**
+  String get pmeFltSearchHint;
+
+  /// No description provided for @pmeFltSearchLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Search customers'**
+  String get pmeFltSearchLabel;
+
+  /// No description provided for @pmeFltSort.
+  ///
+  /// In en, this message translates to:
+  /// **'Sort by'**
+  String get pmeFltSort;
+
+  /// No description provided for @pmeFltSortOwed.
+  ///
+  /// In en, this message translates to:
+  /// **'Most owed first'**
+  String get pmeFltSortOwed;
+
+  /// No description provided for @pmeFltSortName.
+  ///
+  /// In en, this message translates to:
+  /// **'Name A–Z'**
+  String get pmeFltSortName;
+
+  /// No description provided for @pmeFltSortCars.
+  ///
+  /// In en, this message translates to:
+  /// **'Most cars'**
+  String get pmeFltSortCars;
+
+  /// No description provided for @pmeFltPart.
+  ///
+  /// In en, this message translates to:
+  /// **'Part paid'**
+  String get pmeFltPart;
+
+  /// No description provided for @pmeFltTeam.
+  ///
+  /// In en, this message translates to:
+  /// **'Team members'**
+  String get pmeFltTeam;
+
+  /// No description provided for @pmeFltOlder.
+  ///
+  /// In en, this message translates to:
+  /// **'Owes from before'**
+  String get pmeFltOlder;
+
+  /// No description provided for @pmeFltNotDelivered.
+  ///
+  /// In en, this message translates to:
+  /// **'Invoice not delivered'**
+  String get pmeFltNotDelivered;
+
+  /// No description provided for @pmeFltChip.
+  ///
+  /// In en, this message translates to:
+  /// **'{label} {count}'**
+  String pmeFltChip(String label, String count);
+
+  /// No description provided for @pmeFltClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear filters'**
+  String get pmeFltClear;
+
+  /// No description provided for @pmeFltNoMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'No customer matches. Change the search or the filters.'**
+  String get pmeFltNoMatch;
+
   /// No description provided for @pcsAnotherHint.
   ///
   /// In en, this message translates to:

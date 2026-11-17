@@ -116,7 +116,9 @@ all-discount settle (nothing paid) needs no receiver and sends no receipt.
 
 ## Not in this release
 
-- The phone app screens (the Dart rules are in; buttons next build).
+- (Phone app: the car's Give a discount / Settle for a lower amount / Undo
+  buttons and Month end's "Settle for a lower amount" are built on branch
+  `app/monthend`, shipping in the next app build.)
 - The public Track page shows the right balance but no discount line yet.
 - "Discounts given" on the Lot ledger reports page (the Parking page has it).
 

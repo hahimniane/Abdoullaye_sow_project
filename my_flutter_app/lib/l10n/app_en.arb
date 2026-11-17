@@ -6565,6 +6565,340 @@
   },
   "pcsSaveAndAnother": "Save & register another for this sender",
   "pcsSaveOnly": "Save without printing",
+  "pmeDiscTitle": "Discounts",
+  "pmeDiscGive": "Give a discount",
+  "pmeDiscSettle": "Settle for a lower amount",
+  "pmeDiscOwedToday": "Owed today: {amount}",
+  "@pmeDiscOwedToday": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeDiscKeepsAdding": "The days keep adding up from tomorrow.",
+  "pmeDiscAmountPaid": "Amount paid now",
+  "pmeDiscAmount": "Discount amount",
+  "pmeDiscReason": "Why (required)",
+  "pmeDiscReasonHint": "e.g. Agreed with the owner, long stay",
+  "pmeDiscPreviewSettle": "Paid {paid} · Discount −{discount} · Left {left}",
+  "@pmeDiscPreviewSettle": {
+    "placeholders": {
+      "paid": {
+        "type": "String"
+      },
+      "discount": {
+        "type": "String"
+      },
+      "left": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeDiscPreviewGive": "Discount −{discount} · Left to pay {left}",
+  "@pmeDiscPreviewGive": {
+    "placeholders": {
+      "discount": {
+        "type": "String"
+      },
+      "left": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeDiscSubmitSettle": "Settle",
+  "pmeDiscSubmitGive": "Give discount",
+  "pmeDiscConfirmSettleTitle": "Settle for less?",
+  "pmeDiscConfirmSettle": "Settle this car for {paid}? {discount} is recorded as a discount.",
+  "@pmeDiscConfirmSettle": {
+    "placeholders": {
+      "paid": {
+        "type": "String"
+      },
+      "discount": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeDiscConfirmGiveTitle": "Give a discount?",
+  "pmeDiscConfirmGive": "Give a {amount} discount on this car?",
+  "@pmeDiscConfirmGive": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeDiscDoneSettle": "Settled. The discount is on the bill.",
+  "pmeDiscDoneGive": "Discount given.",
+  "pmeDiscDoneUndo": "Discount undone.",
+  "pmeDiscLine": "Discount −{amount}",
+  "@pmeDiscLine": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeDiscLineBy": "by {name}",
+  "@pmeDiscLineBy": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeDiscUndo": "Undo discount",
+  "pmeDiscUndoTitle": "Undo this discount?",
+  "pmeDiscUndoBody": "Undo this {amount} discount? The car owes it again. It stays in the history as undone.",
+  "@pmeDiscUndoBody": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeDiscUndone": "Undone · {date}",
+  "@pmeDiscUndone": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeNotAllowed": "Your account is not allowed to do this. Ask the business owner.",
+  "pmeDiscNotDirect": "A discount can only be given on a car the business records payments for (cash, Zelle...). Online and payment-link cars are paid in Stripe.",
+  "pmeDiscReasonRequired": "Say why the discount was agreed.",
+  "pmeDiscNoAmount": "Enter the discount amount.",
+  "pmeDiscNothingOwed": "This car owes nothing right now.",
+  "pmeDiscMoreThanOwed": "That is more than this car owes. Enter at most what is owed.",
+  "pmeDiscPaidNotLess": "The amount paid must be less than what is owed. For the full amount, record a normal payment.",
+  "pmeDiscReceiverRequired": "Say who took the money.",
+  "pmeDiscOwedChanged": "What this car owes has changed. Check the amount and try again.",
+  "pmeDiscNotFound": "That discount was not found.",
+  "pmeDiscAlreadyUndone": "That discount was already undone.",
+  "pmeDiscVoided": "This car record was voided.",
+  "pmeSettleKindPay": "Full or part payment",
+  "pmeSettleKindLess": "Settle for a lower amount",
+  "pmeSettleLessHint": "The bill is {bill}. Type what the customer pays now: the rest is recorded as a discount and the bill closes at $0.",
+  "@pmeSettleLessHint": {
+    "placeholders": {
+      "bill": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeSettlePaidLine": "Paid · {label}",
+  "@pmeSettlePaidLine": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeSettleDiscountLine": "Discount · {label}",
+  "@pmeSettleDiscountLine": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeSettleSave": "Settle for {amount}",
+  "@pmeSettleSave": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeSettleDone": "Settled for {paid}. {discount} recorded as a discount.",
+  "@pmeSettleDone": {
+    "placeholders": {
+      "paid": {
+        "type": "String"
+      },
+      "discount": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeSettleNotLess": "The amount paid must be less than the bill. For the full amount, record a normal payment.",
+  "pmeSettleJobsFirst": "The amount must at least pay the lot jobs on this bill: a discount only comes off parking.",
+  "pmeSettleReasonRequired": "Say why the bill was settled for less.",
+  "pmeBillPaymentFromSettlement": "This payment is part of a month settlement. Undo the settlement instead.",
+  "pmeBillPaymentDiscount": "Discount −{amount}",
+  "@pmeBillPaymentDiscount": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeBillPaymentInSettlement": "Part of a month settlement",
+  "pmeTsTitle": "Month settlement",
+  "pmeTsPaidEverything": "I paid everything",
+  "pmeTsTheyPaid": "Record that they paid everything",
+  "pmeTsButton": "{label} · {amount}",
+  "@pmeTsButton": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeTsPaidThemBack": "Paid them back",
+  "pmeTsSheetHint": "It counts once the person who received the money confirms. The amount and what it is for are kept as you send them.",
+  "pmeTsScope": "What it is for",
+  "pmeTsScopeEverything": "Everything",
+  "pmeTsScopeCash": "Only the cash I hold",
+  "pmeTsScopeParking": "Only my parking",
+  "pmeTsAmountPaid": "Amount paid",
+  "pmeTsReceiver": "Who received it",
+  "pmeTsPickReceiver": "Choose who received it",
+  "pmeTsMethodDeposit": "Bank deposit",
+  "pmeTsPreviewCash": "Cash held",
+  "pmeTsPreviewParking": "Parking and jobs",
+  "pmeTsPreviewLeft": "Left to pay",
+  "pmeTsStatementWas": "The statement was {amount}",
+  "@pmeTsStatementWas": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeTsWaitingFor": "Waiting for {name} to confirm",
+  "@pmeTsWaitingFor": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeTsWaitingForYou": "Waiting for you to confirm",
+  "pmeTsConfirmed": "Confirmed · {date}",
+  "@pmeTsConfirmed": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeTsConfirmedPlain": "Confirmed",
+  "pmeTsDeclined": "Not confirmed",
+  "pmeTsUndone": "Undone · {date}",
+  "@pmeTsUndone": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeTsReceivedBy": "received by {name}",
+  "@pmeTsReceivedBy": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeTsUndonePlain": "Undone",
+  "pmeTsUndoneBy": "by {name}",
+  "@pmeTsUndoneBy": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeTsConfirm": "Confirm",
+  "pmeTsDecline": "Decline",
+  "pmeTsUndo": "Undo",
+  "pmeTsCancelPending": "Cancel",
+  "pmeTsKeepIt": "Keep it",
+  "pmeTsDeclineTitle": "Decline this payment?",
+  "pmeTsDeclineWhy": "Why (optional)",
+  "pmeTsUndoTitle": "Undo this payment?",
+  "pmeTsUndoBody": "It takes off the parking payment and the cash hand-over together. Nobody is told.",
+  "pmeTsCancelTitle": "Cancel this payment?",
+  "pmeTsCancelBody": "It will not count. Nobody is told.",
+  "pmeTsCancelDo": "Cancel payment",
+  "pmeTsUndoDo": "Undo payment",
+  "pmeTsDoneRecorded": "Payment recorded.",
+  "pmeTsDoneSent": "Sent. It counts once the person who received it confirms.",
+  "pmeTsDoneConfirmed": "Payment confirmed.",
+  "pmeTsDoneDeclined": "Payment declined.",
+  "pmeTsDoneUndone": "Payment undone.",
+  "pmeTsDonePayback": "Paid back — recorded.",
+  "pmeTsReceiptFailed": "The WhatsApp receipt could not be sent.",
+  "pmeTsPaybackHint": "The business owes them {amount}. It is recorded as paid back for their expenses.",
+  "@pmeTsPaybackHint": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeTsPaybackAmount": "Amount paid back",
+  "pmeTsWaitingTitle": "Waiting for your OK",
+  "pmeTsWaitingLine": "{name} says they paid {amount}",
+  "@pmeTsWaitingLine": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeTsNoReceivers": "Nobody can receive the money yet. Ask the owner.",
+  "pmeTsNoAmount": "Enter how much was paid.",
+  "pmeTsMoreThanOwed": "That is more than this statement asks for. Pay what is owed, or pick what it is for.",
+  "pmeTsNothingOwed": "Nothing is owed for that. Pick something else.",
+  "pmeTsScopeInvalid": "Choose what the payment is for: everything, only the cash, or only the parking.",
+  "pmeTsMethodInvalid": "Choose how the money was paid.",
+  "pmeTsMonthInvalid": "Pick a month that has started.",
+  "pmeTsNoStatement": "This person has no statement for this month.",
+  "pmeTsReceiverInvalid": "Choose the owner, someone with Full access, or the Business account.",
+  "pmeTsNotOwn": "You can only say you paid for yourself. Ask the owner to record it for someone else.",
+  "pmeTsNotFound": "This payment was not found.",
+  "pmeTsNotReceiver": "Only the person who received this money can answer it.",
+  "pmeTsNotPending": "This payment was already answered.",
+  "pmeTsNotUndoable": "This payment is already undone or declined.",
+  "pmeTsBillChanged": "The parking bill changed since it was filed, so it cannot be confirmed as it was. Decline it and ask for a new one.",
+  "pmeTsOwnerOnly": "Only the owner or someone with Full access can do this.",
+  "pmeTsPaybackNotOwed": "The business does not owe this person anything for this month.",
+  "pmeTsPaybackMore": "That is more than the business owes this person.",
+  "pmeTsUnknown": "That did not save. Try again.",
+  "pmeTsOwnerName": "Owner",
+  "pmeFltSearchHint": "Search name, phone, car or VIN",
+  "pmeFltSearchLabel": "Search customers",
+  "pmeFltSort": "Sort by",
+  "pmeFltSortOwed": "Most owed first",
+  "pmeFltSortName": "Name A–Z",
+  "pmeFltSortCars": "Most cars",
+  "pmeFltPart": "Part paid",
+  "pmeFltTeam": "Team members",
+  "pmeFltOlder": "Owes from before",
+  "pmeFltNotDelivered": "Invoice not delivered",
+  "pmeFltChip": "{label} {count}",
+  "@pmeFltChip": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "pmeFltClear": "Clear filters",
+  "pmeFltNoMatch": "No customer matches. Change the search or the filters.",
   "pcsAnotherHint": "“Register another” keeps only the sender, for a different receiver or country.",
   "pcsBoxesCount": "{count, plural, =1{1 box} other{{count} boxes}}",
   "@pcsBoxesCount": {

@@ -13798,6 +13798,490 @@ class AppLocalizationsFr extends AppLocalizations {
   String get pcsSaveOnly => 'Enregistrer sans imprimer';
 
   @override
+  String get pmeDiscTitle => 'Remises';
+
+  @override
+  String get pmeDiscGive => 'Accorder une remise';
+
+  @override
+  String get pmeDiscSettle => 'Régler pour un montant inférieur';
+
+  @override
+  String pmeDiscOwedToday(String amount) {
+    return 'Dû aujourd\'hui : $amount';
+  }
+
+  @override
+  String get pmeDiscKeepsAdding =>
+      'Les jours continuent de s\'ajouter dès demain.';
+
+  @override
+  String get pmeDiscAmountPaid => 'Montant payé maintenant';
+
+  @override
+  String get pmeDiscAmount => 'Montant de la remise';
+
+  @override
+  String get pmeDiscReason => 'Pourquoi (obligatoire)';
+
+  @override
+  String get pmeDiscReasonHint =>
+      'ex. : convenu avec le propriétaire, long séjour';
+
+  @override
+  String pmeDiscPreviewSettle(String paid, String discount, String left) {
+    return 'Payé $paid · Remise −$discount · Reste $left';
+  }
+
+  @override
+  String pmeDiscPreviewGive(String discount, String left) {
+    return 'Remise −$discount · Reste à payer $left';
+  }
+
+  @override
+  String get pmeDiscSubmitSettle => 'Régler';
+
+  @override
+  String get pmeDiscSubmitGive => 'Accorder la remise';
+
+  @override
+  String get pmeDiscConfirmSettleTitle => 'Régler pour moins ?';
+
+  @override
+  String pmeDiscConfirmSettle(String paid, String discount) {
+    return 'Régler cette voiture pour $paid ? $discount est enregistré comme remise.';
+  }
+
+  @override
+  String get pmeDiscConfirmGiveTitle => 'Accorder une remise ?';
+
+  @override
+  String pmeDiscConfirmGive(String amount) {
+    return 'Accorder une remise de $amount sur cette voiture ?';
+  }
+
+  @override
+  String get pmeDiscDoneSettle => 'Réglé. La remise figure sur la facture.';
+
+  @override
+  String get pmeDiscDoneGive => 'Remise accordée.';
+
+  @override
+  String get pmeDiscDoneUndo => 'Remise annulée.';
+
+  @override
+  String pmeDiscLine(String amount) {
+    return 'Remise −$amount';
+  }
+
+  @override
+  String pmeDiscLineBy(String name) {
+    return 'par $name';
+  }
+
+  @override
+  String get pmeDiscUndo => 'Annuler la remise';
+
+  @override
+  String get pmeDiscUndoTitle => 'Annuler cette remise ?';
+
+  @override
+  String pmeDiscUndoBody(String amount) {
+    return 'Annuler cette remise de $amount ? La voiture la doit à nouveau. Elle reste dans l\'historique comme annulée.';
+  }
+
+  @override
+  String pmeDiscUndone(String date) {
+    return 'Annulée · $date';
+  }
+
+  @override
+  String get pmeNotAllowed =>
+      'Votre compte n\'est pas autorisé à faire cela. Demandez au propriétaire de l\'entreprise.';
+
+  @override
+  String get pmeDiscNotDirect =>
+      'Une remise ne peut être accordée que sur une voiture dont l\'entreprise enregistre les paiements (espèces, Zelle...). Les voitures payées en ligne ou par lien de paiement passent par Stripe.';
+
+  @override
+  String get pmeDiscReasonRequired =>
+      'Dites pourquoi la remise a été convenue.';
+
+  @override
+  String get pmeDiscNoAmount => 'Saisissez le montant de la remise.';
+
+  @override
+  String get pmeDiscNothingOwed => 'Cette voiture ne doit rien pour le moment.';
+
+  @override
+  String get pmeDiscMoreThanOwed =>
+      'C\'est plus que ce que doit cette voiture. Saisissez au plus ce qui est dû.';
+
+  @override
+  String get pmeDiscPaidNotLess =>
+      'Le montant payé doit être inférieur à ce qui est dû. Pour le montant complet, enregistrez un paiement normal.';
+
+  @override
+  String get pmeDiscReceiverRequired => 'Dites qui a pris l\'argent.';
+
+  @override
+  String get pmeDiscOwedChanged =>
+      'Ce que doit cette voiture a changé. Vérifiez le montant et réessayez.';
+
+  @override
+  String get pmeDiscNotFound => 'Cette remise est introuvable.';
+
+  @override
+  String get pmeDiscAlreadyUndone => 'Cette remise a déjà été annulée.';
+
+  @override
+  String get pmeDiscVoided => 'Cette fiche de voiture a été annulée.';
+
+  @override
+  String get pmeSettleKindPay => 'Paiement total ou partiel';
+
+  @override
+  String get pmeSettleKindLess => 'Régler pour un montant inférieur';
+
+  @override
+  String pmeSettleLessHint(String bill) {
+    return 'La facture est de $bill. Saisissez ce que le client paie maintenant : le reste est enregistré comme remise et la facture est soldée à 0 \$.';
+  }
+
+  @override
+  String pmeSettlePaidLine(String label) {
+    return 'Payé · $label';
+  }
+
+  @override
+  String pmeSettleDiscountLine(String label) {
+    return 'Remise · $label';
+  }
+
+  @override
+  String pmeSettleSave(String amount) {
+    return 'Régler pour $amount';
+  }
+
+  @override
+  String pmeSettleDone(String paid, String discount) {
+    return 'Réglé pour $paid. $discount enregistré comme remise.';
+  }
+
+  @override
+  String get pmeSettleNotLess =>
+      'Le montant payé doit être inférieur à la facture. Pour le montant complet, enregistrez un paiement normal.';
+
+  @override
+  String get pmeSettleJobsFirst =>
+      'Le montant doit au moins couvrir les travaux de cette facture : une remise ne s\'applique qu\'au stationnement.';
+
+  @override
+  String get pmeSettleReasonRequired =>
+      'Dites pourquoi la facture a été réglée pour moins.';
+
+  @override
+  String get pmeBillPaymentFromSettlement =>
+      'Ce paiement fait partie d\'un règlement du mois. Annulez plutôt le règlement.';
+
+  @override
+  String pmeBillPaymentDiscount(String amount) {
+    return 'Remise −$amount';
+  }
+
+  @override
+  String get pmeBillPaymentInSettlement =>
+      'Fait partie d\'un règlement du mois';
+
+  @override
+  String get pmeTsTitle => 'Règlement du mois';
+
+  @override
+  String get pmeTsPaidEverything => 'J\'ai tout payé';
+
+  @override
+  String get pmeTsTheyPaid => 'Enregistrer qu\'il a tout payé';
+
+  @override
+  String pmeTsButton(String label, String amount) {
+    return '$label · $amount';
+  }
+
+  @override
+  String get pmeTsPaidThemBack => 'Remboursé';
+
+  @override
+  String get pmeTsSheetHint =>
+      'Cela compte une fois que la personne qui a reçu l\'argent a confirmé. Le montant et son objet sont conservés tels que vous les envoyez.';
+
+  @override
+  String get pmeTsScope => 'À quoi cela sert';
+
+  @override
+  String get pmeTsScopeEverything => 'Tout';
+
+  @override
+  String get pmeTsScopeCash => 'Seulement l\'argent que je détiens';
+
+  @override
+  String get pmeTsScopeParking => 'Seulement mon stationnement';
+
+  @override
+  String get pmeTsAmountPaid => 'Montant payé';
+
+  @override
+  String get pmeTsReceiver => 'Qui l\'a reçu';
+
+  @override
+  String get pmeTsPickReceiver => 'Choisissez qui l\'a reçu';
+
+  @override
+  String get pmeTsMethodDeposit => 'Dépôt bancaire';
+
+  @override
+  String get pmeTsPreviewCash => 'Argent détenu';
+
+  @override
+  String get pmeTsPreviewParking => 'Stationnement et travaux';
+
+  @override
+  String get pmeTsPreviewLeft => 'Reste à payer';
+
+  @override
+  String pmeTsStatementWas(String amount) {
+    return 'Le relevé était de $amount';
+  }
+
+  @override
+  String pmeTsWaitingFor(String name) {
+    return 'En attente de la confirmation de $name';
+  }
+
+  @override
+  String get pmeTsWaitingForYou => 'En attente de votre confirmation';
+
+  @override
+  String pmeTsConfirmed(String date) {
+    return 'Confirmé · $date';
+  }
+
+  @override
+  String get pmeTsConfirmedPlain => 'Confirmé';
+
+  @override
+  String get pmeTsDeclined => 'Non confirmé';
+
+  @override
+  String pmeTsUndone(String date) {
+    return 'Annulé · $date';
+  }
+
+  @override
+  String pmeTsReceivedBy(String name) {
+    return 'reçu par $name';
+  }
+
+  @override
+  String get pmeTsUndonePlain => 'Annulé';
+
+  @override
+  String pmeTsUndoneBy(String name) {
+    return 'par $name';
+  }
+
+  @override
+  String get pmeTsConfirm => 'Confirmer';
+
+  @override
+  String get pmeTsDecline => 'Refuser';
+
+  @override
+  String get pmeTsUndo => 'Annuler';
+
+  @override
+  String get pmeTsCancelPending => 'Retirer';
+
+  @override
+  String get pmeTsKeepIt => 'Garder';
+
+  @override
+  String get pmeTsDeclineTitle => 'Refuser ce paiement ?';
+
+  @override
+  String get pmeTsDeclineWhy => 'Pourquoi (facultatif)';
+
+  @override
+  String get pmeTsUndoTitle => 'Annuler ce paiement ?';
+
+  @override
+  String get pmeTsUndoBody =>
+      'Cela retire ensemble le paiement du stationnement et la remise d\'argent. Personne n\'est prévenu.';
+
+  @override
+  String get pmeTsCancelTitle => 'Retirer ce paiement ?';
+
+  @override
+  String get pmeTsCancelBody => 'Il ne comptera pas. Personne n\'est prévenu.';
+
+  @override
+  String get pmeTsCancelDo => 'Retirer le paiement';
+
+  @override
+  String get pmeTsUndoDo => 'Annuler le paiement';
+
+  @override
+  String get pmeTsDoneRecorded => 'Paiement enregistré.';
+
+  @override
+  String get pmeTsDoneSent =>
+      'Envoyé. Cela compte une fois que la personne qui l\'a reçu a confirmé.';
+
+  @override
+  String get pmeTsDoneConfirmed => 'Paiement confirmé.';
+
+  @override
+  String get pmeTsDoneDeclined => 'Paiement refusé.';
+
+  @override
+  String get pmeTsDoneUndone => 'Paiement annulé.';
+
+  @override
+  String get pmeTsDonePayback => 'Remboursement enregistré.';
+
+  @override
+  String get pmeTsReceiptFailed => 'Le reçu WhatsApp n\'a pas pu être envoyé.';
+
+  @override
+  String pmeTsPaybackHint(String amount) {
+    return 'L\'entreprise lui doit $amount. C\'est enregistré comme remboursement de ses dépenses.';
+  }
+
+  @override
+  String get pmeTsPaybackAmount => 'Montant remboursé';
+
+  @override
+  String get pmeTsWaitingTitle => 'En attente de votre accord';
+
+  @override
+  String pmeTsWaitingLine(String name, String amount) {
+    return '$name dit avoir payé $amount';
+  }
+
+  @override
+  String get pmeTsNoReceivers =>
+      'Personne ne peut encore recevoir l\'argent. Demandez au propriétaire.';
+
+  @override
+  String get pmeTsNoAmount => 'Saisissez le montant payé.';
+
+  @override
+  String get pmeTsMoreThanOwed =>
+      'C\'est plus que ce que demande ce relevé. Payez ce qui est dû, ou choisissez à quoi cela sert.';
+
+  @override
+  String get pmeTsNothingOwed =>
+      'Rien n\'est dû pour cela. Choisissez autre chose.';
+
+  @override
+  String get pmeTsScopeInvalid =>
+      'Choisissez l\'objet du paiement : tout, seulement l\'argent, ou seulement le stationnement.';
+
+  @override
+  String get pmeTsMethodInvalid => 'Choisissez comment l\'argent a été payé.';
+
+  @override
+  String get pmeTsMonthInvalid => 'Choisissez un mois qui a commencé.';
+
+  @override
+  String get pmeTsNoStatement =>
+      'Cette personne n\'a pas de relevé pour ce mois.';
+
+  @override
+  String get pmeTsReceiverInvalid =>
+      'Choisissez le propriétaire, une personne avec accès complet, ou le compte de l\'entreprise.';
+
+  @override
+  String get pmeTsNotOwn =>
+      'Vous pouvez seulement dire que vous avez payé pour vous-même. Demandez au propriétaire de l\'enregistrer pour une autre personne.';
+
+  @override
+  String get pmeTsNotFound => 'Ce paiement est introuvable.';
+
+  @override
+  String get pmeTsNotReceiver =>
+      'Seule la personne qui a reçu cet argent peut répondre.';
+
+  @override
+  String get pmeTsNotPending => 'Ce paiement a déjà reçu une réponse.';
+
+  @override
+  String get pmeTsNotUndoable => 'Ce paiement est déjà annulé ou refusé.';
+
+  @override
+  String get pmeTsBillChanged =>
+      'La facture de stationnement a changé depuis le dépôt : elle ne peut pas être confirmée telle quelle. Refusez-la et demandez-en une nouvelle.';
+
+  @override
+  String get pmeTsOwnerOnly =>
+      'Seul le propriétaire ou une personne avec accès complet peut faire cela.';
+
+  @override
+  String get pmeTsPaybackNotOwed =>
+      'L\'entreprise ne doit rien à cette personne pour ce mois.';
+
+  @override
+  String get pmeTsPaybackMore =>
+      'C\'est plus que ce que l\'entreprise doit à cette personne.';
+
+  @override
+  String get pmeTsUnknown => 'Cela n\'a pas été enregistré. Réessayez.';
+
+  @override
+  String get pmeTsOwnerName => 'Propriétaire';
+
+  @override
+  String get pmeFltSearchHint => 'Rechercher nom, téléphone, voiture ou VIN';
+
+  @override
+  String get pmeFltSearchLabel => 'Rechercher des clients';
+
+  @override
+  String get pmeFltSort => 'Trier par';
+
+  @override
+  String get pmeFltSortOwed => 'Les plus dus d\'abord';
+
+  @override
+  String get pmeFltSortName => 'Nom A–Z';
+
+  @override
+  String get pmeFltSortCars => 'Le plus de voitures';
+
+  @override
+  String get pmeFltPart => 'Payé en partie';
+
+  @override
+  String get pmeFltTeam => 'Équipe';
+
+  @override
+  String get pmeFltOlder => 'Doit d\'avant';
+
+  @override
+  String get pmeFltNotDelivered => 'Facture non livrée';
+
+  @override
+  String pmeFltChip(String label, String count) {
+    return '$label $count';
+  }
+
+  @override
+  String get pmeFltClear => 'Effacer les filtres';
+
+  @override
+  String get pmeFltNoMatch =>
+      'Aucun client ne correspond. Changez la recherche ou les filtres.';
+
+  @override
   String get pcsAnotherHint =>
       '« En enregistrer un autre » ne garde que l\'expéditeur, pour un autre destinataire ou pays.';
 

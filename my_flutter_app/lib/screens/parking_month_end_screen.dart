@@ -18,10 +18,13 @@ import '../services/lot_ledger.dart' show lotDollarsToCents;
 import '../services/parking_bill_payment.dart';
 import '../services/parking_bill_payment_service.dart';
 import '../services/parking_month_statement.dart';
+import '../services/parking_month_table.dart';
 import '../services/parking_whatsapp.dart';
 import '../services/staff_balances.dart';
 import '../services/staff_expense_repayments.dart';
 import '../services/staff_statement.dart';
+import '../services/team_settle.dart';
+import '../services/team_settle_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_motion.dart';
 import '../theme/app_spacing.dart';
@@ -33,6 +36,8 @@ import '../widgets/app_snackbars.dart';
 import '../widgets/lot_sheets.dart';
 import '../widgets/parking_bill_payment_widgets.dart';
 import '../widgets/parking_invoices_card.dart';
+import '../widgets/parking_month_filter_bar.dart';
+import '../widgets/team_settle_panel.dart';
 import '../widgets/parking_whose_car.dart';
 import '../widgets/parking_messages_section.dart'
     show parkingMessageIsProblem, parkingMessageStatusText;
@@ -53,9 +58,14 @@ class ParkingMonthEndScreen extends StatefulWidget {
     this.monthKey,
     this.balancesService = const StaffBalancesService(),
     this.billPaymentService = const ParkingBillPaymentService(),
+    this.teamSettleService = const TeamSettleService(),
   });
 
   final String businessId;
+
+  /// Files, confirms, declines and undoes a team member's month settlement
+  /// (docs/TEAM_SETTLE.md).
+  final TeamSettleService teamSettleService;
 
   /// Records and undoes a payment on a customer's bill.
   final ParkingBillPaymentService billPaymentService;
@@ -106,6 +116,16 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
   /// first (docs/PARKING_BILL_PAYMENTS.md). Grouped once per snapshot, not
   /// per build. A refused read just means no payments listed on the cards.
   Map<String, List<ParkingBillPayment>> _billPayments = const {};
+
+  /// The month's team settlements ("I paid everything"), oldest first.
+  List<SettlementRecord> _settlements = const [];
+
+  /// Each team member's `users` document, for who may receive a settlement.
+  Map<String, Map<String, dynamic>> _staffProfiles = const {};
+
+  /// The search, the chips and the sort on the customer list.
+  MonthTableFilter _filter = MonthTableFilter.empty;
+  final _search = TextEditingController();
   List<Map<String, dynamic>> _inMonth = const [];
   List<Map<String, dynamic>> _unsettled = const [];
   List<Map<String, dynamic>> _undated = const [];
@@ -281,8 +301,9 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
           .snapshots()
           .listen((snap) {
             if (!mounted) return;
-            setState(
-              () => _staff = [
+            setState(() {
+              _staffProfiles = {for (final d in snap.docs) d.id: d.data()};
+              _staff = [
                 for (final d in snap.docs)
                   (
                     id: d.id,
@@ -293,8 +314,8 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
                                 '')
                             .toString(),
                   ),
-              ].where((s) => s.name.isNotEmpty).toList(),
-            );
+              ].where((s) => s.name.isNotEmpty).toList();
+            });
           }, onError: (_) {}),
     );
     _subs.add(
@@ -365,6 +386,7 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
     _monthSubs.clear();
     _subscribeInvoices(monthKey);
     _billPayments = const {};
+    _settlements = const [];
     final days = parkingMonthDays(monthKey);
     if (days == null) {
       _docs = _stayDocs = _unpaidDocs = const [];
@@ -489,6 +511,25 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
         onError: (_) {
           if (mounted && _billPayments.isNotEmpty) {
             setState(() => _billPayments = const {});
+          }
+        },
+      ),
+    );
+    // "I paid everything" (docs/TEAM_SETTLE.md): a refused read just means no
+    // settlements are listed.
+    _monthSubs.add(
+      staffMonthSettlementsSpec(id, monthKey).build(_db).snapshots().listen(
+        (snap) {
+          if (!mounted) return;
+          setState(
+            () => _settlements = settlementRecords([
+              for (final d in snap.docs) {...d.data(), 'id': d.id},
+            ]),
+          );
+        },
+        onError: (_) {
+          if (mounted && _settlements.isNotEmpty) {
+            setState(() => _settlements = const []);
           }
         },
       ),
@@ -672,6 +713,7 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
     _invoiceSub?.cancel();
     _loadingSafety?.cancel();
     _creditSafety?.cancel();
+    _search.dispose();
     super.dispose();
   }
 
@@ -965,6 +1007,40 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
           )
         : null;
 
+    // "I paid everything" (docs/TEAM_SETTLE.md): who may receive the money,
+    // and the settlements waiting for the signed-in person to confirm.
+    final myUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    final isSettleReceiver = auth.isBusinessOwner || auth.isAdmin;
+    final staffNames = {for (final s in _staff) s.id: s.name};
+    final settleReceivers = settleReceiversOf(
+      people: _staff,
+      profiles: _staffProfiles,
+      ownerUid: '${_business['ownerUid'] ?? ''}',
+      ownerFallbackName: l10n.pmeTsOwnerName,
+    );
+    final waiting = settlementsWaitingFor(
+      _settlements,
+      uid: myUid,
+      isReceiver: isSettleReceiver,
+    );
+    // The search, the chips and the sort act on the view on screen.
+    final tableContext = MonthTableContext(
+      invoiceFailed: (c) {
+        final invoice = _invoices[c.key];
+        return invoice != null && parkingMessageIsProblem(invoice);
+      },
+    );
+    final counts = monthTableCounts(
+      parkingMonthListed(summary, _view),
+      tableContext,
+    );
+    final filterBar = ParkingMonthFilterBar(
+      filter: _filter,
+      counts: counts,
+      controller: _search,
+      onChanged: (next) => setState(() => _filter = next),
+    );
+
     return Scaffold(
       backgroundColor: AppColors.cream,
       body: Column(
@@ -1152,11 +1228,47 @@ class _ParkingMonthEndScreenState extends State<ParkingMonthEndScreen> {
                     onTap: _customerActions,
                     invoices: _invoices,
                     billPayments: _billPayments,
-                    staffNames: {for (final s in _staff) s.id: s.name},
+                    staffNames: staffNames,
                     onUndoPayment: _undoBillPayment,
+                    filter: _filter,
+                    tableContext: tableContext,
+                    cardFooter: (customer) =>
+                        customer.statementStaffId.isEmpty ||
+                            customer.statementOwesCents == null
+                        ? null
+                        : TeamSettlePanel(
+                            businessId: widget.businessId,
+                            monthKey: _monthKey,
+                            staffId: customer.statementStaffId,
+                            staffName: customer.customerName,
+                            owesCents: customer.statementOwesCents!,
+                            parkingJobsCents: customer.dueCents,
+                            expenseCents: customer.expenseCreditCents,
+                            cashHeldCents: customer.cashHeldCents ?? 0,
+                            settlements: settlementsOf(
+                              _settlements,
+                              customer.statementStaffId,
+                            ),
+                            receivers: settleReceivers,
+                            names: staffNames,
+                            myUid: myUid,
+                            isReceiver: isSettleReceiver,
+                            estimating: _estimating,
+                            service: widget.teamSettleService,
+                          ),
                     leading: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [invoicesCard, ?owes],
+                      children: [
+                        TeamSettleWaitingCard(
+                          businessId: widget.businessId,
+                          waiting: waiting,
+                          names: staffNames,
+                          service: widget.teamSettleService,
+                        ),
+                        invoicesCard,
+                        ?owes,
+                        filterBar,
+                      ],
                     ),
                   ),
           ),
@@ -1384,7 +1496,18 @@ class ParkingMonthCustomerList extends StatelessWidget {
     this.billPayments = const {},
     this.staffNames = const {},
     this.onUndoPayment,
+    this.filter,
+    this.tableContext = const MonthTableContext(),
+    this.cardFooter,
   });
+
+  /// The search, chips and sort over the view on screen. Null lists the view
+  /// as the statement has it.
+  final MonthTableFilter? filter;
+  final MonthTableContext tableContext;
+
+  /// Shown at the foot of a customer's card (the team settlement panel).
+  final Widget? Function(ParkingMonthCustomer customer)? cardFooter;
 
   final ParkingMonthSummary summary;
   final ParkingMonthView view;
@@ -1408,12 +1531,17 @@ class ParkingMonthCustomerList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final listed = parkingMonthListed(summary, view);
+    final f = filter;
+    final listed = f == null
+        ? parkingMonthListed(summary, view)
+        : monthTableRows(parkingMonthListed(summary, view), f, tableContext);
     final empty = listed.isEmpty
         ? LotEmptyState(
             icon: Icons.event_available_outlined,
             title: summary.customers.isEmpty
                 ? l10n.pmeNoCars
+                : f != null && f.narrowed
+                ? l10n.pmeFltNoMatch
                 : view == ParkingMonthView.paid
                 ? l10n.pmeNobodyPaid
                 : l10n.pmeNobodyOwes,
@@ -1442,6 +1570,7 @@ class ParkingMonthCustomerList extends StatelessWidget {
           staffNames: staffNames,
           busyKey: busyKey,
           onUndoPayment: onUndoPayment,
+          footer: cardFooter?.call(customer),
           onTap: () => onTap(customer),
         );
       },
@@ -1637,11 +1766,15 @@ class _CustomerTile extends StatefulWidget {
     this.staffNames = const {},
     this.busyKey = '',
     this.onUndoPayment,
+    this.footer,
   });
 
   final ParkingMonthCustomer customer;
   final bool busy;
   final VoidCallback onTap;
+
+  /// Below the payments: a team member's month settlement.
+  final Widget? footer;
 
   /// "Payments on this bill": this customer's, newest first.
   final List<ParkingBillPayment> payments;
@@ -2067,6 +2200,7 @@ class _CustomerTileState extends State<_CustomerTile> {
                 busyKey: widget.busyKey,
                 onUndo: widget.onUndoPayment,
               ),
+            ?widget.footer,
           ],
         ),
       ),
