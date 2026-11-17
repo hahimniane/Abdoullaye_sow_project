@@ -554,6 +554,20 @@ FirestoreQuerySpec parkingBillPaymentsSpec(
   ],
 );
 
+/// The month's team settlements (`staffMonthSettlements`,
+/// docs/TEAM_SETTLE.md): "I paid everything" filed, confirmed, declined or
+/// undone. Two equalities (business and month), so no composite index.
+FirestoreQuerySpec staffMonthSettlementsSpec(
+  String businessId,
+  String monthKey,
+) => FirestoreQuerySpec(
+  collection: 'staffMonthSettlements',
+  filters: [
+    _business(businessId),
+    QueryFilterSpec('monthKey', QueryFilterOp.equal, monthKey.trim()),
+  ],
+);
+
 /// "2026-12" -> "2027-01". Unparsable keys come back unchanged.
 String nextMonthKey(String monthKey) {
   final m = RegExp(r'^(\d{4})-(\d{2})$').firstMatch(monthKey.trim());

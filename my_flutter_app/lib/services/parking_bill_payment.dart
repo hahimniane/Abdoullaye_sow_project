@@ -30,6 +30,12 @@ abstract final class BillPaymentRefusal {
   static const settledSince = 'bill_payment_settled_since';
   static const ledgerRequired = 'bill_payment_ledger_required';
 
+  // Settle for a lower amount (docs/PARKING_DISCOUNT.md, Month end).
+  static const settleNotLess = 'bill_settle_not_less';
+  static const settleJobsFirst = 'bill_settle_jobs_first';
+  static const settleReasonRequired = 'bill_settle_reason_required';
+  static const fromSettlement = 'bill_payment_from_settlement';
+
   static const all = {
     noAmount,
     moreThanOwed,
@@ -42,6 +48,10 @@ abstract final class BillPaymentRefusal {
     alreadyUndone,
     settledSince,
     ledgerRequired,
+    settleNotLess,
+    settleJobsFirst,
+    settleReasonRequired,
+    fromSettlement,
   };
 }
 
@@ -315,6 +325,130 @@ BillPaymentPlan billPaymentPlan(
   );
 }
 
+/// What a "settle for a lower amount" does on a customer's bill: the money
+/// pays the lot jobs first, then the cars oldest first; what the cars still
+/// owe becomes a discount on each car. Refused: [reason] is set.
+class BillSettlePlan {
+  const BillSettlePlan({
+    required this.ok,
+    required this.reason,
+    required this.payableCents,
+    required this.parts,
+    required this.discountParts,
+    required this.discountCents,
+  });
+
+  final bool ok;
+  final String reason;
+
+  /// The whole recordable bill (the sum of the items).
+  final int payableCents;
+  final List<BillPaymentPart> parts;
+
+  /// Per car, what is taken off as a discount.
+  final List<BillDiscountPart> discountParts;
+  final int discountCents;
+}
+
+/// What is taken off one car as a discount.
+class BillDiscountPart {
+  const BillDiscountPart({
+    required this.id,
+    required this.label,
+    required this.trackingCode,
+    required this.amountCents,
+  });
+
+  final String id;
+  final String label;
+  final String trackingCode;
+  final int amountCents;
+}
+
+/// A mirror of the server's `billSettlePlan` and the console's
+/// `billSettlePlan` (shared fixture `parking-settle-cases.json`).
+BillSettlePlan billSettlePlan(ParkingMonthCustomer customer, int paidCents) {
+  final items = billPaymentItems(customer);
+  final payable = items.fold<int>(0, (s, x) => s + x.amountCents);
+  BillSettlePlan refuse(String reason) => BillSettlePlan(
+    ok: false,
+    reason: reason,
+    payableCents: payable,
+    parts: const [],
+    discountParts: const [],
+    discountCents: 0,
+  );
+  if (payable <= 0) return refuse(BillPaymentRefusal.nothingToPay);
+  if (paidCents < 0) return refuse(BillPaymentRefusal.noAmount);
+  if (paidCents >= payable) return refuse(BillPaymentRefusal.settleNotLess);
+  final jobs = [
+    for (final x in items)
+      if (x.kind == 'activity') x,
+  ];
+  final cars = [
+    for (final x in items)
+      if (x.kind == 'car') x,
+  ];
+  if (paidCents < jobs.fold<int>(0, (s, x) => s + x.amountCents)) {
+    return refuse(BillPaymentRefusal.settleJobsFirst);
+  }
+  final owed = <String, int>{};
+  for (final item in items) {
+    final key = '${item.kind}:${item.id}';
+    owed[key] = (owed[key] ?? 0) + item.amountCents;
+  }
+  final parts = <BillPaymentPart>[];
+  final index = <String, int>{};
+  final discountIds = <String>[];
+  final discount = <String, BillDiscountPart>{};
+  var left = paidCents;
+  for (final item in [...jobs, ...cars]) {
+    final take = left < item.amountCents ? left : item.amountCents;
+    left -= take;
+    final key = '${item.kind}:${item.id}';
+    if (take > 0) {
+      final at = index[key];
+      if (at != null) {
+        parts[at] = parts[at]._more(take);
+      } else {
+        index[key] = parts.length;
+        parts.add(
+          BillPaymentPart(
+            kind: item.kind,
+            id: item.id,
+            label: item.label,
+            trackingCode: item.trackingCode,
+            amountCents: take,
+          ),
+        );
+      }
+    }
+    final rest = item.amountCents - take;
+    if (rest > 0 && item.kind == 'car') {
+      final before = discount[item.id];
+      if (before == null) discountIds.add(item.id);
+      discount[item.id] = BillDiscountPart(
+        id: item.id,
+        label: before?.label ?? item.label,
+        trackingCode: before?.trackingCode ?? item.trackingCode,
+        amountCents: (before?.amountCents ?? 0) + rest,
+      );
+    }
+  }
+  final discountParts = [for (final id in discountIds) discount[id]!];
+  return BillSettlePlan(
+    ok: true,
+    reason: '',
+    payableCents: payable,
+    parts: [
+      for (final p in parts)
+        p._withFull(p.amountCents >= (owed['${p.kind}:${p.id}'] ?? 0)),
+    ],
+    discountParts: discountParts,
+    discountCents: discountParts.fold<int>(0, (s, d) => s + d.amountCents),
+  );
+}
+
 /// "2014 Toyota Corolla, 2016 RAV4 and 2 more" - what a payment was for.
 /// [labels] are the parts' labels; [language] is 'en' or 'fr'.
 String billPaymentFor(Iterable<String> labels, [String language = 'en']) {
@@ -365,6 +499,8 @@ class ParkingBillPayment {
     required this.atMs,
     required this.undoneAtMs,
     required this.leftCents,
+    this.discountCents = 0,
+    this.settlementId = '',
   });
 
   factory ParkingBillPayment.fromMap(String id, Map<String, dynamic> row) {
@@ -399,6 +535,8 @@ class ParkingBillPayment {
       atMs: millis(row['atMs'], row['at']),
       undoneAtMs: millis(row['undoneAtMs'], row['undoneAt']),
       leftCents: whole(row['leftCents']),
+      discountCents: whole(row['discountCents']),
+      settlementId: _text(row['settlementId'], 128),
     );
   }
 
@@ -417,6 +555,13 @@ class ParkingBillPayment {
 
   /// What the bill still owed right after this payment.
   final int leftCents;
+
+  /// Settled for less: what was taken off as a discount (0 for a plain
+  /// payment).
+  final int discountCents;
+
+  /// Part of a team member's month settlement: undone with it, never alone.
+  final String settlementId;
 
   bool get undone => status == 'undone';
 }
