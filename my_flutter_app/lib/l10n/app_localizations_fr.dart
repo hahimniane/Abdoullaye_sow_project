@@ -13759,6 +13759,249 @@ class AppLocalizationsFr extends AppLocalizations {
   String get pcsAddSize => 'Ajouter les dimensions (pouces)';
 
   @override
+  String get tdyTitle => 'Aujourd\'hui';
+
+  @override
+  String get tdyHomeSubtitle => 'Ce mois-ci, ce qui attend et l\'argent';
+
+  @override
+  String get tdyThisMonth => 'Ce mois-ci';
+
+  @override
+  String tdyComparedWith(String month) {
+    return 'Comparé à $month · heure de New York';
+  }
+
+  @override
+  String get tdyRefresh => 'Actualiser';
+
+  @override
+  String get tdyRetry => 'Réessayer';
+
+  @override
+  String get tdyLoadFailed =>
+      'Impossible de charger Aujourd\'hui. Vérifiez votre connexion et réessayez.';
+
+  @override
+  String get tdyRefreshFailed =>
+      'Actualisation impossible. Derniers chiffres affichés.';
+
+  @override
+  String tdyUpdatedAt(String time) {
+    return 'Mis à jour à $time';
+  }
+
+  @override
+  String get tdyPartial =>
+      'Certains paiements n\'ont pas pu être comptés, ces totaux peuvent donc être trop bas. Actualisez dans un instant.';
+
+  @override
+  String get tdyFiguresPartial =>
+      'Certains chiffres n\'ont pas pu être chargés. Actualisez dans un instant.';
+
+  @override
+  String get tdyTilePackages => 'Colis reçus';
+
+  @override
+  String get tdyTileBarrels => 'Barils reçus';
+
+  @override
+  String get tdyTileCarsShipped => 'Voitures expédiées';
+
+  @override
+  String get tdyTileContainers => 'Conteneurs partis';
+
+  @override
+  String get tdyTileCollected => 'Argent encaissé';
+
+  @override
+  String get tdyTileOwed => 'Encore dû';
+
+  @override
+  String get tdyTileShopSales => 'Ventes en boutique';
+
+  @override
+  String get tdyTileInLot => 'Voitures sur le parking';
+
+  @override
+  String get tdyTileListings => 'Annonces actives';
+
+  @override
+  String get tdyNoteOpenNow => 'En cours';
+
+  @override
+  String get tdyNotePayments => 'Paiements';
+
+  @override
+  String get tdyNoteSpaces => 'Places';
+
+  @override
+  String get tdyVsLastMonth => 'par rapport au mois dernier';
+
+  @override
+  String get tdyNoLastMonth => 'Aucun chiffre le mois dernier';
+
+  @override
+  String get tdyNeedsAttention => 'À traiter';
+
+  @override
+  String get tdyNothingWaiting => 'Rien ne vous attend pour le moment.';
+
+  @override
+  String get tdyAttPackageRequests => 'Demandes de colis à traiter';
+
+  @override
+  String get tdyAttWaitingPackages => 'Colis en attente d\'un conteneur';
+
+  @override
+  String get tdyAttContainersLoading => 'Conteneurs en chargement';
+
+  @override
+  String get tdyAttBarrelOrders => 'Commandes de barils ouvertes';
+
+  @override
+  String get tdyAttFreightOrders => 'Commandes de fret ouvertes';
+
+  @override
+  String get tdyAttCarPurchases => 'Achats de voitures en cours';
+
+  @override
+  String get tdyAttTransport => 'Demandes de transport ouvertes';
+
+  @override
+  String get tdyAttSupport => 'Demandes d\'assistance';
+
+  @override
+  String get tdyAttPackagesOwed => 'Soldes de colis impayés';
+
+  @override
+  String get tdyAttOpenInvoices => 'Factures ouvertes';
+
+  @override
+  String get tdyAttParkingOwed => 'Soldes de parking à encaisser';
+
+  @override
+  String get tdyAttShopCredit => 'Crédit boutique à encaisser';
+
+  @override
+  String get tdyLedgerPaid => 'Paiement reçu au registre';
+
+  @override
+  String get tdyLedgerVoided => 'Écriture du registre annulée';
+
+  @override
+  String get tdyLedgerEdited => 'Écriture du registre modifiée';
+
+  @override
+  String get tdyLedgerLinked => 'Facture de parking liée';
+
+  @override
+  String get tdyLedgerUnlinked => 'Facture de parking déliée';
+
+  @override
+  String get tdyLedgerRepaid => 'Employé remboursé de ses dépenses';
+
+  @override
+  String get tdyLedgerRepaymentVoided => 'Remboursement d\'employé annulé';
+
+  @override
+  String get tdyLedgerByStaff => 'par un employé';
+
+  @override
+  String get tdyDismiss => 'Ignorer';
+
+  @override
+  String get tdyDismissFailed => 'Impossible de l\'ignorer. Réessayez.';
+
+  @override
+  String get tdyContainersTitle => 'Conteneurs en cours';
+
+  @override
+  String get tdyContainersOpen => 'Ouvrir les conteneurs';
+
+  @override
+  String get tdyContainersEmpty => 'Aucun conteneur en chargement ou en mer.';
+
+  @override
+  String get tdyContainersMore => 'Voir tous les conteneurs ouverts';
+
+  @override
+  String get tdyContainerPieces => 'Pièces';
+
+  @override
+  String get tdyContainerSailed => 'Parti le';
+
+  @override
+  String get tdyMoneyTitle => 'Argent encaissé ce mois-ci';
+
+  @override
+  String get tdyTotal => 'Total';
+
+  @override
+  String get tdyByService => 'Par service';
+
+  @override
+  String get tdyByMethod => 'Par moyen de paiement';
+
+  @override
+  String get tdyNoPayments => 'Aucun paiement enregistré ce mois-ci.';
+
+  @override
+  String get tdyLastMonth => 'Mois dernier';
+
+  @override
+  String get tdyStillOwed => 'Encore dû par les clients';
+
+  @override
+  String get tdyMoneyHint =>
+      'Paiements au comptoir (espèces, Zelle, carte en personne et autres) et paiements par carte en ligne, selon le jour de réception.';
+
+  @override
+  String get tdySvcPackages => 'Barils et colis';
+
+  @override
+  String get tdySvcInvoices => 'Factures';
+
+  @override
+  String get tdySvcLot => 'Travaux du parking';
+
+  @override
+  String get tdySvcParking => 'Parking';
+
+  @override
+  String get tdySvcShop => 'Ventes en boutique';
+
+  @override
+  String get tdySvcOnline => 'Commandes en ligne';
+
+  @override
+  String get tdyOwedShopCredit => 'Crédit boutique';
+
+  @override
+  String get tdyMethodCash => 'Espèces';
+
+  @override
+  String get tdyMethodZelle => 'Zelle';
+
+  @override
+  String get tdyMethodCashApp => 'Cash App';
+
+  @override
+  String get tdyMethodVenmo => 'Venmo';
+
+  @override
+  String get tdyMethodCheck => 'Chèque';
+
+  @override
+  String get tdyMethodCardInPerson => 'Carte en personne';
+
+  @override
+  String get tdyMethodOnline => 'En ligne (carte)';
+
+  @override
+  String get tdyMethodOther => 'Autre';
+
+  @override
   String pcsRemovePiece(int number) {
     return 'Retirer le colis $number';
   }
