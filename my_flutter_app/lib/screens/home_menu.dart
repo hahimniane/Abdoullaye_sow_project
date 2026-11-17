@@ -36,6 +36,7 @@ import '../widgets/home_destinations.dart';
 import '../widgets/customer_notification_bell.dart';
 import 'business_assistant_screen.dart';
 import 'business_today_screen.dart';
+import 'business_growth_screen.dart';
 import 'business_reviews_screen.dart';
 import 'business_transport_screen.dart';
 import 'containers_screen.dart';
@@ -1722,6 +1723,19 @@ List<HomeTool> _businessTools(
         Icons.group_outlined,
         l10n.businessPeopleTitle,
         () => Navigator.of(context).pushNamed('/add-staff'),
+      ),
+    if (businessId.isNotEmpty &&
+        auth.hasBusinessPermission(BusinessPermission.growth))
+      HomeTool(
+        'growth',
+        Icons.trending_up,
+        l10n.extGrowthTitle,
+        () => go(
+          BusinessGrowthScreen(
+            businessId: businessId,
+            canUpgrade: auth.isBusinessOwner || auth.isAdmin,
+          ),
+        ),
       ),
     if (businessId.isNotEmpty)
       HomeTool(

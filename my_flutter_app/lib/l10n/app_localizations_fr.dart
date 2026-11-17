@@ -14860,6 +14860,282 @@ class AppLocalizationsFr extends AppLocalizations {
   String get pcsGoingIn => 'Colis qui partent';
 
   @override
+  String get extCarSearchHint => 'Chercher marque, modèle, VIN, n° de stock…';
+
+  @override
+  String get extStatusAll => 'Tous les statuts';
+
+  @override
+  String get extStatusDraft => 'Brouillon';
+
+  @override
+  String get extCarsNoMatch =>
+      'Aucune annonce ne correspond à votre recherche.';
+
+  @override
+  String extBulkSelected(int n) {
+    return '$n sélectionnée(s)';
+  }
+
+  @override
+  String get extBulkApply => 'Appliquer';
+
+  @override
+  String get extBulkClear => 'Désélectionner';
+
+  @override
+  String get extBulkSetStatus => 'Changer le statut en';
+
+  @override
+  String extBulkDone(int n) {
+    return '$n annonces mises à jour.';
+  }
+
+  @override
+  String get extBulkFailed =>
+      'Impossible de modifier ces annonces. Vérifiez votre connexion ou demandez l\'accès au propriétaire, puis réessayez.';
+
+  @override
+  String extCarSelect(Object title) {
+    return 'Sélectionner $title';
+  }
+
+  @override
+  String get extFinancingNote => 'Note de financement';
+
+  @override
+  String get extFinancingNoteHint => 'ex. Financement disponible';
+
+  @override
+  String get extImageLinkTitle => 'Ajouter une photo par lien';
+
+  @override
+  String get extImageLinkHint => 'https://…';
+
+  @override
+  String get extImageLinkAdd => 'Ajouter le lien';
+
+  @override
+  String get extImageLinkInvalid =>
+      'Collez une adresse web qui commence par https://';
+
+  @override
+  String extImageLinkFull(int max) {
+    return 'Cette annonce a déjà le maximum de photos ($max).';
+  }
+
+  @override
+  String get extPurchaseSearchHint =>
+      'Chercher voiture, acheteur, téléphone, statut…';
+
+  @override
+  String get extQuickNeedsAction => 'À traiter';
+
+  @override
+  String get extQuickPaidHolds => 'Réservations payées';
+
+  @override
+  String get extPurchaseNoMatch =>
+      'Aucun dossier ne correspond à votre recherche.';
+
+  @override
+  String get extTransportSearchHint =>
+      'Chercher client, véhicule, téléphone ou référence';
+
+  @override
+  String get extTransportNoMatch =>
+      'Aucun transport accepté ne correspond à votre recherche.';
+
+  @override
+  String get extContactPhone => 'Téléphone du contact';
+
+  @override
+  String get extTransportDate => 'Date de transport';
+
+  @override
+  String get extCreditFilterOnCredit => 'À crédit';
+
+  @override
+  String get extCreditGroupNone => 'Échéance la plus proche';
+
+  @override
+  String get extCreditGroupCustomer => 'Par client';
+
+  @override
+  String get extCreditGroupCollector => 'Par encaisseur';
+
+  @override
+  String get extCreditGroupStore => 'Par magasin';
+
+  @override
+  String get extCreditOverdueOnly => 'En retard seulement';
+
+  @override
+  String get extCreditSearchHint => 'Nom ou téléphone du client';
+
+  @override
+  String get extCreditNoMatch => 'Aucun crédit ne correspond à ce filtre.';
+
+  @override
+  String get extHistoryRangeCustom => 'Personnalisé';
+
+  @override
+  String get extHistoryRangeFrom => 'Du';
+
+  @override
+  String get extHistoryRangeTo => 'Au';
+
+  @override
+  String get extHistoryRangePickFrom => 'Choisir le premier jour';
+
+  @override
+  String get extHistoryRangePickTo => 'Choisir le dernier jour';
+
+  @override
+  String get extHistoryRangeBackwards =>
+      'Le dernier jour est avant le premier. Modifiez l\'un des deux.';
+
+  @override
+  String extHistoryRangeTooLong(int max) {
+    return 'C\'est plus de $max jours. Choisissez une période plus courte.';
+  }
+
+  @override
+  String extHistoryRangeLabel(Object from, Object to) {
+    return 'Du $from au $to';
+  }
+
+  @override
+  String get extHistoryNoComparisonRange =>
+      'Aucune vente la période précédente';
+
+  @override
+  String extHistoryVsPreviousRange(Object change) {
+    return '$change par rapport à la période précédente';
+  }
+
+  @override
+  String get extGrowthTitle => 'Croissance';
+
+  @override
+  String get extGrowthSubtitle =>
+      'Votre forfait et les recommandations du conseiller IA.';
+
+  @override
+  String get extGrowthFreeTitle => 'Gratuit';
+
+  @override
+  String get extGrowthFreeBody =>
+      'Annonces, destinations, barils, achats, parking, transport, équipe et assistance.';
+
+  @override
+  String get extGrowthProTitle => 'Pro';
+
+  @override
+  String get extGrowthProBody =>
+      'Le conseiller IA, des analyses plus poussées et des frais de plateforme réduits à mesure que vous grandissez.';
+
+  @override
+  String get extGrowthCurrentPlan => 'Forfait actuel';
+
+  @override
+  String get extGrowthActive => 'Actif';
+
+  @override
+  String get extGrowthUpgrade => 'Passer à Pro';
+
+  @override
+  String get extGrowthUpgradeOwnerOnly =>
+      'Seul le propriétaire de l\'entreprise peut changer de forfait.';
+
+  @override
+  String get extGrowthCheckoutOpened =>
+      'La page de paiement est ouverte dans votre navigateur.';
+
+  @override
+  String get extGrowthOpenFailed => 'Impossible d\'ouvrir la page de paiement.';
+
+  @override
+  String get extGrowthAdvisorTitle => 'Conseiller IA de l\'entreprise';
+
+  @override
+  String get extGrowthAdvisorOn =>
+      'Générez de nouvelles recommandations à partir des dernières données de votre entreprise.';
+
+  @override
+  String get extGrowthAdvisorOff =>
+      'Disponible avec le forfait Pro. Il repère les problèmes de prix, d\'annonces et de réponses, et comment les corriger.';
+
+  @override
+  String get extGrowthGenerate => 'Générer des analyses';
+
+  @override
+  String get extGrowthGenerating =>
+      'Génération en cours… cela peut prendre une minute.';
+
+  @override
+  String get extGrowthGenerated => 'De nouvelles recommandations sont prêtes.';
+
+  @override
+  String get extGrowthNoInsights => 'Aucune recommandation pour le moment.';
+
+  @override
+  String get extGrowthNoInsightsPro =>
+      'Générez votre première série de recommandations.';
+
+  @override
+  String get extGrowthNoInsightsFree =>
+      'Passez à Pro pour débloquer le conseiller.';
+
+  @override
+  String get extGrowthFinding => 'Constat';
+
+  @override
+  String get extGrowthAction => 'Action recommandée';
+
+  @override
+  String get extGrowthCardFallbackTitle => 'Recommandation';
+
+  @override
+  String get extGrowthSevCritical => 'Critique';
+
+  @override
+  String get extGrowthSevHigh => 'Élevée';
+
+  @override
+  String get extGrowthSevMedium => 'Moyenne';
+
+  @override
+  String get extGrowthSevLow => 'Faible';
+
+  @override
+  String get extGrowthSevUnknown => 'Inconnue';
+
+  @override
+  String get extGrowthLoadFailed =>
+      'Impossible de charger votre forfait et vos recommandations.';
+
+  @override
+  String get extGrowthErrCheckoutOwner =>
+      'Seul le propriétaire de l\'entreprise peut démarrer un abonnement.';
+
+  @override
+  String get extGrowthErrCheckoutSetup =>
+      'Pro n\'est pas encore disponible à l\'achat. Réessayez plus tard.';
+
+  @override
+  String get extGrowthErrAdvisorPro =>
+      'Le conseiller IA nécessite le forfait Pro.';
+
+  @override
+  String get extGrowthErrNoAccess =>
+      'Vous n\'avez pas accès aux outils de croissance.';
+
+  @override
+  String get extGrowthErrGeneric =>
+      'Cela n\'a pas fonctionné. Vérifiez votre connexion et réessayez.';
+
+  @override
   String pcsGoingOf(int going, int total) {
     return '$going sur $total';
   }

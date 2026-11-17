@@ -710,6 +710,99 @@ void main() {
     });
   });
 
+  group('a custom date range', () {
+    Future<void> pickDay(WidgetTester tester, String key, int day) async {
+      await _tapKey(tester, key);
+      await tester.tap(find.text('$day').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('Custom shows the two ends; a first day moves the range', (
+      tester,
+    ) async {
+      await _pump(tester, _screen(_history()));
+      expect(find.byKey(const Key('hist-range-from')), findsNothing);
+      await _tapKey(tester, 'hist-kind-custom');
+      expect(find.byKey(const Key('hist-range-from')), findsOneWidget);
+      expect(
+        _text(tester, 'hist-period-label'),
+        'Oct 16, 2026 to Oct 16, 2026',
+      );
+
+      await pickDay(tester, 'hist-range-from', 15);
+      expect(
+        _text(tester, 'hist-period-label'),
+        'Oct 15, 2026 to Oct 16, 2026',
+      );
+      // Yesterday 40 dollars + today 50 dollars.
+      expect(_text(tester, 'hist-kpi-total'), r'$90.00');
+      expect(find.byKey(const Key('hist-range-error')), findsNothing);
+    });
+
+    testWidgets(
+      'a last day before the first is refused in words and the range stays',
+      (tester) async {
+        await _pump(tester, _screen(_history()));
+        await _tapKey(tester, 'hist-kind-custom');
+        await pickDay(tester, 'hist-range-to', 12);
+        expect(
+          _text(tester, 'hist-range-error'),
+          'The last day is before the first day. Change one of them.',
+        );
+        // The period on screen is still the one that loaded.
+        expect(
+          _text(tester, 'hist-period-label'),
+          'Oct 16, 2026 to Oct 16, 2026',
+        );
+        // The refused last day stays picked; moving the first day to it
+        // fixes the pair and clears the words.
+        await pickDay(tester, 'hist-range-from', 12);
+        expect(find.byKey(const Key('hist-range-error')), findsNothing);
+        expect(
+          _text(tester, 'hist-period-label'),
+          'Oct 12, 2026 to Oct 12, 2026',
+        );
+      },
+    );
+
+    testWidgets('previous moves by the length; a Week segment leaves the range', (
+      tester,
+    ) async {
+      await _pump(tester, _screen(_history()));
+      await _tapKey(tester, 'hist-kind-custom');
+      await pickDay(tester, 'hist-range-from', 15);
+      await _tapKey(tester, 'hist-previous');
+      expect(
+        _text(tester, 'hist-period-label'),
+        'Oct 13, 2026 to Oct 14, 2026',
+      );
+      await _tapKey(tester, 'hist-kind-week');
+      expect(find.byKey(const Key('hist-range-from')), findsNothing);
+      expect(_text(tester, 'hist-period-label'), 'Oct 11 – Oct 17, 2026');
+    });
+
+    testWidgets('French on a 320-wide phone', (tester) async {
+      await _pump(
+        tester,
+        _screen(_history()),
+        locale: const Locale('fr'),
+        size: const Size(320, 3200),
+      );
+      await _tapKey(tester, 'hist-kind-custom');
+      expect(find.text('Personnalisé'), findsOneWidget);
+      expect(find.text('Du'), findsOneWidget);
+      expect(find.text('Au'), findsOneWidget);
+      await pickDay(tester, 'hist-range-to', 12);
+      expect(
+        _text(tester, 'hist-range-error'),
+        "Le dernier jour est avant le premier. Modifiez l'un des deux.",
+      );
+      expect(tester.takeException(), isNull);
+    });
+  });
+
   test('the shop home and Inventory open the history', () {
     for (final path in [
       'lib/screens/shop_home_section.dart',

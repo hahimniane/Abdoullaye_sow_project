@@ -37,6 +37,7 @@ const List<String> carViewingStatusFilters = <String>[
   viewingDeclined,
   viewingExpired,
   viewingCancelled,
+  'no_show',
 ];
 
 /// A purchase or viewing state. Viewing states read as the negotiation

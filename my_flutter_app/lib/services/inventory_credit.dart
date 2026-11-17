@@ -252,8 +252,10 @@ bool inventoryCreditOverdue(InventorySale sale, {required DateTime today}) {
   return due.isBefore(DateTime(today.year, today.month, today.day));
 }
 
-/// The credit chip filter on the sales list.
-enum InventoryCreditFilter { all, open, paid }
+/// The credit chip filter on the sales list. [credit] is every sale made on
+/// credit, paid off ones (and voided ones) included, as the website's "On
+/// credit"; [open] and [paid] are the two states of it.
+enum InventoryCreditFilter { all, credit, open, paid }
 
 List<InventorySale> inventorySalesForCredit(
   Iterable<InventorySale> sales,
@@ -262,6 +264,7 @@ List<InventorySale> inventorySalesForCredit(
   for (final sale in sales)
     if (switch (filter) {
       InventoryCreditFilter.all => true,
+      InventoryCreditFilter.credit => sale.creditCents > 0,
       InventoryCreditFilter.open => sale.creditOpen,
       InventoryCreditFilter.paid =>
         sale.isOnCredit && !sale.voided && !sale.creditOpen,

@@ -12,6 +12,7 @@ import '../providers/auth_provider.dart';
 import '../services/business_activity_queries.dart';
 import '../services/business_service.dart';
 import '../services/car_viewing_service.dart';
+import '../services/purchase_filters.dart';
 import '../theme/app_colors.dart';
 import '../utils/action_confirmation.dart';
 import '../utils/car_purchase_localization.dart';
@@ -19,6 +20,7 @@ import '../utils/date_display.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/car_viewing_negotiation.dart';
 import '../widgets/language_toggle.dart';
+import '../widgets/purchase_quick_filters.dart';
 import '../widgets/support_entry_button.dart';
 
 class StaffPurchaseManagementScreen extends StatefulWidget {
@@ -82,6 +84,47 @@ class _StaffPurchaseManagementScreenState
   String _chosenBusinessId = '';
   String _status = '';
   int _pages = 1;
+
+  // Text search and the quick filters run on the page in hand.
+  String _query = '';
+  PurchaseQuickFilter _quick = PurchaseQuickFilter.all;
+
+  // The parsed records and the searched view, made once per change of the
+  // data, the search or the queue, never per build.
+  QuerySnapshot? _parsedFrom;
+  List<CarPurchase> _all = const <CarPurchase>[];
+  List<CarPurchase> _scoped = const <CarPurchase>[];
+  List<CarPurchase> _shown = const <CarPurchase>[];
+  bool _scopedIsViewings = false;
+  String _shownQuery = '';
+  PurchaseQuickFilter _shownQuick = PurchaseQuickFilter.all;
+  bool _shownStale = true;
+  int _needsActionCount = 0;
+
+  void _refreshViews(QuerySnapshot<Map<String, dynamic>> snap) {
+    if (!identical(_parsedFrom, snap) || _scopedIsViewings != _isViewings) {
+      if (!identical(_parsedFrom, snap)) {
+        _parsedFrom = snap;
+        _all = snap.docs.map(CarPurchase.fromFirestore).toList();
+      }
+      _scopedIsViewings = _isViewings;
+      _scoped =
+          _all
+              .where(
+                (purchase) => purchase.isViewingReservation == _isViewings,
+              )
+              .toList()
+            ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      _needsActionCount = purchaseNeedsActionCount(_scoped);
+      _shownStale = true;
+    }
+    if (_shownStale || _shownQuery != _query || _shownQuick != _quick) {
+      _shown = filterPurchases(_scoped, query: _query, quick: _quick);
+      _shownQuery = _query;
+      _shownQuick = _quick;
+      _shownStale = false;
+    }
+  }
 
   Future<void> _callPurchaseAction(
     BuildContext context,
@@ -234,6 +277,11 @@ class _StaffPurchaseManagementScreenState
   void _setScope(PurchaseListScope scope) {
     setState(() {
       _scope = scope;
+      // A paid hold can never match on the viewings queue.
+      if (scope == PurchaseListScope.viewings &&
+          _quick == PurchaseQuickFilter.paidHolds) {
+        _quick = PurchaseQuickFilter.all;
+      }
       final allowed = scope == PurchaseListScope.viewings
           ? carViewingStatusFilters
           : carPurchaseStatusFilters;
@@ -297,7 +345,12 @@ class _StaffPurchaseManagementScreenState
               key: ValueKey('${key.businessId}|${key.status}'),
               stream: _purchasesStreamFor(key),
               builder: (context, snapshot) {
-                Widget framed(Widget body, {int? purchases, int? viewings}) =>
+                Widget framed(
+                  Widget body, {
+                  int? purchases,
+                  int? viewings,
+                  int? needsAction,
+                }) =>
                     Column(
                       children: [
                         Padding(
@@ -331,6 +384,16 @@ class _StaffPurchaseManagementScreenState
                                 _setScope(selection.first),
                           ),
                         ),
+                        PurchaseQuickFilterBar(
+                          query: _query,
+                          quick: _quick,
+                          showPaidHolds: !_isViewings,
+                          needsActionCount: needsAction,
+                          onQueryChanged: (value) =>
+                              setState(() => _query = value),
+                          onQuickChanged: (value) =>
+                              setState(() => _quick = value),
+                        ),
                         filters,
                         Expanded(child: body),
                       ],
@@ -358,15 +421,9 @@ class _StaffPurchaseManagementScreenState
                 final pageFull = docs.length >= limit;
                 final loadingMore =
                     snapshot.connectionState == ConnectionState.waiting;
-                final all = docs.map(CarPurchase.fromFirestore).toList();
-                final purchases =
-                    all
-                        .where(
-                          (purchase) =>
-                              purchase.isViewingReservation == _isViewings,
-                        )
-                        .toList()
-                      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+                _refreshViews(snapshot.data!);
+                final all = _all;
+                final purchases = _shown;
                 final viewingCount = all
                     .where((purchase) => purchase.isViewingReservation)
                     .length;
@@ -385,9 +442,12 @@ class _StaffPurchaseManagementScreenState
                       const SizedBox(height: 48),
                       Center(
                         child: Text(
-                          _isViewings
+                          _scoped.isNotEmpty
+                              ? l10n.extPurchaseNoMatch
+                              : _isViewings
                               ? l10n.noCarViewingsYet
                               : l10n.noPurchasesYet,
+                          key: const Key('purchase-no-match'),
                         ),
                       ),
                       if (more != null) ...[const SizedBox(height: 16), more],
@@ -421,6 +481,9 @@ class _StaffPurchaseManagementScreenState
                   list,
                   purchases: pageFull ? null : purchaseCount,
                   viewings: pageFull ? null : viewingCount,
+                  needsAction: pageFull
+                      ? null
+                      : _needsActionCount,
                 );
               },
             ),

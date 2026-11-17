@@ -36,6 +36,7 @@ class TransportRequest {
     this.containerNumber = '',
     this.paymentStatus = '',
     this.totalCents = 0,
+    this.trackingProvider = '',
   });
 
   final String id;
@@ -87,6 +88,10 @@ class TransportRequest {
 
   /// Quote plus pickup fee, in cents - what the customer actually pays.
   final int totalCents;
+
+  /// '' (manual milestones) or 'carrier_api' once automated container
+  /// tracking was started on this job.
+  final String trackingProvider;
 
   bool get usesQuoteMarketplace => flowVersion >= 2;
   bool get hasSelectedQuote =>
@@ -177,6 +182,7 @@ class TransportRequest {
       containerNumber: (data['containerNumber'] ?? '') as String,
       paymentStatus: (data['paymentStatus'] ?? '') as String,
       totalCents: (data['totalCents'] as num?)?.toInt() ?? 0,
+      trackingProvider: (data['trackingProvider'] ?? '') as String,
     );
   }
 
@@ -289,6 +295,7 @@ class TransportRequest {
       containerNumber: containerNumber ?? this.containerNumber,
       paymentStatus: paymentStatus,
       totalCents: totalCents,
+      trackingProvider: trackingProvider,
     );
   }
 }

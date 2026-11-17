@@ -21,7 +21,33 @@ export 'eastern_clock.dart';
 // Periods.
 // ---------------------------------------------------------------------------
 
-enum SalesPeriodKind { day, week, month, year }
+enum SalesPeriodKind { day, week, month, year, custom }
+
+/// What one chart bar stands for.
+enum SalesGranularity { hour, day, month }
+
+/// The longest custom range offered: two years (the console's
+/// `MAX_CUSTOM_DAYS`).
+const int salesMaxCustomDays = 731;
+
+/// A custom range longer than this is charted by month, not by day (the
+/// console's `DAILY_CHART_MAX_DAYS`).
+const int salesDailyChartMaxDays = 62;
+
+/// Why a custom range cannot be shown.
+enum SalesRangeProblem { backwards, tooLong }
+
+/// Checks a custom range of wall dates, both ends included. Null when it can
+/// be shown.
+SalesRangeProblem? checkSalesRange(DateTime from, DateTime to) {
+  final a = DateTime.utc(from.year, from.month, from.day);
+  final b = DateTime.utc(to.year, to.month, to.day);
+  if (b.isBefore(a)) return SalesRangeProblem.backwards;
+  if (b.difference(a).inDays + 1 > salesMaxCustomDays) {
+    return SalesRangeProblem.tooLong;
+  }
+  return null;
+}
 
 /// One period on the shop's clock: [startDay] (a wall date) up to, not
 /// including, [endDay]; [startUtc]/[endUtc] are the instants a query uses.
@@ -57,7 +83,29 @@ class SalesPeriod {
           DateTime.utc(d.year, 1, 1),
           DateTime.utc(d.year + 1, 1, 1),
         );
+      case SalesPeriodKind.custom:
+        // A custom period is made with [SalesPeriod.range]; asked for by
+        // date alone it is that one day.
+        return SalesPeriod._(kind, d, DateTime.utc(d.year, d.month, d.day + 1));
     }
+  }
+
+  /// A custom period from wall date [from] to wall date [to], both days
+  /// included. The caller checks it with [checkSalesRange] first; a range the
+  /// wrong way round or past [salesMaxCustomDays] is made safe here (the ends
+  /// put in order, the start moved up), so this never throws.
+  factory SalesPeriod.range(DateTime from, DateTime to) {
+    var a = wallDate(from);
+    var b = wallDate(to);
+    if (b.isBefore(a)) (a, b) = (b, a);
+    if (b.difference(a).inDays + 1 > salesMaxCustomDays) {
+      a = DateTime.utc(b.year, b.month, b.day - (salesMaxCustomDays - 1));
+    }
+    return SalesPeriod._(
+      SalesPeriodKind.custom,
+      a,
+      DateTime.utc(b.year, b.month, b.day + 1),
+    );
   }
 
   /// The period of [kind] holding [now] on the shop's clock.
@@ -70,12 +118,48 @@ class SalesPeriod {
   final DateTime startUtc;
   final DateTime endUtc;
 
-  SalesPeriod get previous => SalesPeriod.containing(
-    kind,
-    DateTime.utc(startDay.year, startDay.month, startDay.day - 1),
-  );
+  /// How many days the period spans.
+  int get dayCount => endDay.difference(startDay).inDays;
 
-  SalesPeriod get next => SalesPeriod.containing(kind, endDay);
+  /// The last day included (a wall date).
+  DateTime get lastDay =>
+      DateTime.utc(endDay.year, endDay.month, endDay.day - 1);
+
+  /// The period before. A custom range moves by its own length.
+  SalesPeriod get previous => kind == SalesPeriodKind.custom
+      ? SalesPeriod._(
+          kind,
+          DateTime.utc(startDay.year, startDay.month, startDay.day - dayCount),
+          startDay,
+        )
+      : SalesPeriod.containing(
+          kind,
+          DateTime.utc(startDay.year, startDay.month, startDay.day - 1),
+        );
+
+  /// The period after. A custom range moves by its own length.
+  SalesPeriod get next => kind == SalesPeriodKind.custom
+      ? SalesPeriod._(
+          kind,
+          endDay,
+          DateTime.utc(endDay.year, endDay.month, endDay.day + dayCount),
+        )
+      : SalesPeriod.containing(kind, endDay);
+
+  /// What a bar is: an hour for a day, a day for a week or a month, a month
+  /// for a year. A custom range is hours when it is one day, days up to
+  /// [salesDailyChartMaxDays], months beyond.
+  SalesGranularity get granularity => switch (kind) {
+    SalesPeriodKind.day => SalesGranularity.hour,
+    SalesPeriodKind.week || SalesPeriodKind.month => SalesGranularity.day,
+    SalesPeriodKind.year => SalesGranularity.month,
+    SalesPeriodKind.custom =>
+      dayCount == 1
+          ? SalesGranularity.hour
+          : dayCount > salesDailyChartMaxDays
+          ? SalesGranularity.month
+          : SalesGranularity.day,
+  };
 
   /// The same kind of period, for another wall date (the calendar button).
   SalesPeriod withKind(SalesPeriodKind other) =>
@@ -91,17 +175,13 @@ class SalesPeriod {
   /// The period has started by [now] (there is nothing to see further on).
   bool startedBy(DateTime now) => !now.toUtc().isBefore(startUtc);
 
-  /// How many bars the chart has: 24 hours, 7 days, the month's days, 12
-  /// months.
-  int get bucketCount => switch (kind) {
-    SalesPeriodKind.day => 24,
-    SalesPeriodKind.week => 7,
-    SalesPeriodKind.month => DateTime.utc(
-      startDay.year,
-      startDay.month + 1,
-      0,
-    ).day,
-    SalesPeriodKind.year => 12,
+  /// How many bars the chart has: 24 hours, the days of the period, the
+  /// months it touches.
+  int get bucketCount => switch (granularity) {
+    SalesGranularity.hour => 24,
+    SalesGranularity.day => dayCount,
+    SalesGranularity.month =>
+      (lastDay.year - startDay.year) * 12 + lastDay.month - startDay.month + 1,
   };
 
   /// The bar [instant] goes in (by the wall clock: on the day the clocks
@@ -109,23 +189,28 @@ class SalesPeriod {
   int? bucketOf(DateTime? instant) {
     if (!contains(instant)) return null;
     final wall = easternWall(instant!);
-    return switch (kind) {
-      SalesPeriodKind.day => wall.hour,
-      SalesPeriodKind.week || SalesPeriodKind.month =>
+    return switch (granularity) {
+      SalesGranularity.hour => wall.hour,
+      SalesGranularity.day =>
         wallDate(wall).difference(startDay).inHours ~/ 24,
-      SalesPeriodKind.year => wall.month - 1,
+      SalesGranularity.month =>
+        (wall.year - startDay.year) * 12 + wall.month - startDay.month,
     };
   }
 
   /// The wall date each bar starts on (the hour bars all share the day).
-  DateTime bucketDay(int index) => switch (kind) {
-    SalesPeriodKind.day => startDay,
-    SalesPeriodKind.week || SalesPeriodKind.month => DateTime.utc(
+  DateTime bucketDay(int index) => switch (granularity) {
+    SalesGranularity.hour => startDay,
+    SalesGranularity.day => DateTime.utc(
       startDay.year,
       startDay.month,
       startDay.day + index,
     ),
-    SalesPeriodKind.year => DateTime.utc(startDay.year, index + 1, 1),
+    SalesGranularity.month => DateTime.utc(
+      startDay.year,
+      startDay.month + index,
+      1,
+    ),
   };
 
   @override
