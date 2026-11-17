@@ -41,6 +41,10 @@ class _Auth extends ChangeNotifier implements AuthProvider {
   @override
   String? get linkedPhoneNumber => null;
   @override
+  bool get isRealBusinessOwner => owner;
+  @override
+  bool hasBusinessPermission(String permission) => owner;
+  @override
   dynamic noSuchMethod(Invocation invocation) {
     if (invocation.isGetter) return null;
     return super.noSuchMethod(invocation);

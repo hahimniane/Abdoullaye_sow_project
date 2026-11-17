@@ -9,12 +9,14 @@ import '../models/office_location.dart';
 import '../services/office_location_service.dart';
 import '../services/package_request_service.dart';
 import '../services/package_requests.dart';
+import '../services/pay_now_payouts.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_motion.dart';
 import '../theme/app_spacing.dart';
 import '../utils/date_display.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/package_request_widgets.dart';
+import '../widgets/pay_now_payouts_panel.dart';
 
 /// The owner's package-request settings (§3): accept requests or not, the
 /// request link (copy, share, QR), opening hours per location, the areas the
@@ -29,10 +31,15 @@ class PackageRequestSettingsScreen extends StatefulWidget {
     this.service,
     this.locations,
     this.onShare,
+    this.payouts = const PayNowPayoutsService(),
   });
 
   final String businessId;
   final bool canEdit;
+
+  /// The weekly Pay now payouts read ("Laawol owes you"), shown to the people
+  /// who may edit these settings; the server decides who may see it.
+  final PayNowPayoutsService payouts;
   final PackageRequestService? service;
 
   /// The business's active locations; `officeLocations` when null.
@@ -624,6 +631,11 @@ class _PackageRequestSettingsScreenState
             ],
           ),
         ),
+        if (widget.canEdit)
+          PayNowPayoutsPanel(
+            businessId: widget.businessId,
+            service: widget.payouts,
+          ),
         // Proof at every step (docs/AIR_PACKAGES.md §1.3): three switches,
         // all off by default, saved with the rest as `proof`.
         RequestSectionTitle(l10n.proofSettingTitle),

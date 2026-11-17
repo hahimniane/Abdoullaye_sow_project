@@ -124,6 +124,8 @@ const _typeCollections = <String, String>{
   'freight_refund_issued': 'freightShipments',
   'freight_quote_received': 'freightQuoteRequests',
   'transport_request_status': 'transportRequests',
+  'transport_quote_won': 'transportRequests',
+  'transport_quote_lost': 'transportRequests',
   'parking_reservation_status': 'parkedCars',
   'car_purchase_status': 'carPurchases',
   'car_viewing_status': 'carPurchases',
@@ -397,6 +399,8 @@ NotificationRoute? _businessRouteForNotificationData(
     case 'business_member_joined':
       return const NotificationRoute('/businesses');
     case 'transport_opportunity':
+    case 'transport_quote_won':
+    case 'transport_quote_lost':
     case 'transport_job_paid':
     case 'transport_request_status':
       return const NotificationRoute('/business-transport');

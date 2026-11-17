@@ -48,6 +48,13 @@ class BusinessCardFailure implements Exception {
   /// The wallet pass cannot be made yet (the server's keys are not set up).
   bool get walletNotReady => reason == 'wallet_not_ready';
 
+  /// Only the business owner (or an admin) may change how the cards look.
+  bool get ownerOnly => reason == 'owner_only';
+
+  /// `saveSettings` refused the look: `tagline_too_long`,
+  /// `services_too_many`, `service_too_long` ...
+  bool hasReason(String code) => reasons.contains(code);
+
   /// `savePhones` refused one or more numbers (or too many).
   bool get phonesInvalid => reason == 'phones_invalid';
 
@@ -171,10 +178,20 @@ class BusinessCardService {
   /// blank rows and duplicates of the person's own number. A refused number
   /// throws a [BusinessCardFailure] whose [BusinessCardFailure.phoneErrors]
   /// name the rows by their index in [phones].
-  Future<List<CardPhone>> savePhones(List<CardPhone> phones) async {
+  ///
+  /// With [uid] (and [businessId]) it is a colleague's numbers, for whoever
+  /// manages the team (the server checks the People permission again).
+  Future<List<CardPhone>> savePhones(
+    List<CardPhone> phones, {
+    String? uid,
+    String? businessId,
+  }) async {
     final answer = callableMap(
       await _call({
         'action': 'savePhones',
+        if ((uid ?? '').isNotEmpty) 'uid': uid,
+        if ((uid ?? '').isNotEmpty && (businessId ?? '').isNotEmpty)
+          'businessId': businessId,
         'phones': [for (final phone in phones) phone.toCallable()],
       }),
     );
@@ -183,5 +200,31 @@ class BusinessCardService {
       throw const BusinessCardFailure(code: 'unknown');
     }
     return CardPhone.listFromCallable(answer['phones']);
+  }
+
+  /// `list`: the business's own card and its team's, for the Team cards
+  /// screen (who sees which cards is the server's call).
+  Future<BusinessCardList> list(String businessId) async =>
+      BusinessCardList.fromCallable(
+        await _call({'action': 'list', 'businessId': businessId}),
+      );
+
+  /// `saveSettings`: how the business's cards look (owner or admin only,
+  /// `owner_only` otherwise). Answers the settings as the server kept them.
+  Future<CardSettings> saveSettings(
+    String businessId,
+    CardSettings settings,
+  ) async {
+    final answer = callableMap(
+      await _call({
+        'action': 'saveSettings',
+        'businessId': businessId,
+        'settings': settings.toCallable(),
+      }),
+    );
+    if (answer['settings'] is! Map) {
+      throw const BusinessCardFailure(code: 'unknown');
+    }
+    return CardSettings.fromCallable(answer['settings']);
   }
 }

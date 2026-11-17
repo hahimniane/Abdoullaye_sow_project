@@ -77,6 +77,8 @@ String staffBalancesRefusalText(
     'handover_not_receiver' => l10n.sbalRefusalNotReceiver,
     'handover_not_pending' => l10n.sbalRefusalNotPending,
     'opening_owner_only' => l10n.sbalRefusalOpeningOwnerOnly,
+    'counted_sources_owner_only' => l10n.ownCountedOwnerOnly,
+    'counted_sources_invalid' => l10n.ownCountedInvalid,
     _ => l10n.lotCouldNotSave,
   };
 }
@@ -273,6 +275,7 @@ class _StaffBalancesScreenState extends State<StaffBalancesScreen> {
   bool _loading = true;
   bool _failed = false;
   final Set<String> _busy = {};
+  bool _countedBusy = false;
   final ValueNotifier<List<StaffHandover>> _history = ValueNotifier(const []);
   StreamSubscription<List<StaffHandover>>? _historySub;
 
@@ -363,6 +366,32 @@ class _StaffBalancesScreenState extends State<StaffBalancesScreen> {
       }
     } finally {
       if (mounted) setState(() => _busy.remove(handoverId));
+    }
+  }
+
+  /// One "What counts" switch: the whole choice is sent, the answer is
+  /// re-read, a refusal is said in words.
+  Future<void> _setCounted(String key, bool value) async {
+    if (_countedBusy) return;
+    final snapshot = _snapshot;
+    if (snapshot == null) return;
+    final l10n = AppLocalizations.of(context)!;
+    setState(() => _countedBusy = true);
+    try {
+      await widget.service.setCountedSources(widget.businessId, {
+        ...snapshot.counted,
+        key: value,
+      });
+      if (!mounted) return;
+      AppHaptics.commit();
+      showSuccessSnackBar(context, l10n.ownCountedSaved);
+      await _load(keep: true);
+    } on StaffBalancesFailure catch (failure) {
+      if (!mounted) return;
+      AppHaptics.refuse();
+      showErrorSnackBar(context, staffBalancesRefusalText(l10n, failure));
+    } finally {
+      if (mounted) setState(() => _countedBusy = false);
     }
   }
 
@@ -670,8 +699,110 @@ class _StaffBalancesScreenState extends State<StaffBalancesScreen> {
             ),
         const SizedBox(height: AppSpacing.sm),
         _BusinessAccountCard(row: snapshot.businessAccount),
+        const SizedBox(height: AppSpacing.md),
+        CountedSourcesCard(
+          counted: snapshot.counted,
+          canEdit: widget.isOwner,
+          busy: _countedBusy,
+          onChanged: _setCounted,
+        ),
         const SizedBox(height: AppSpacing.xl),
       ],
+    );
+  }
+}
+
+/// The label of one kind of money in "What counts".
+String countedSourceLabel(AppLocalizations l10n, String key) => switch (key) {
+  'parking' => l10n.ownCountedParking,
+  'activity' => l10n.ownCountedActivity,
+  'package' => l10n.ownCountedPackage,
+  'shop' => l10n.ownCountedShop,
+  _ => l10n.ownCountedInvoice,
+};
+
+/// "What counts as the business's money" (docs/STAFF_BALANCES.md §7): one
+/// switch per kind of money for the owner; everyone else only reads the choice.
+class CountedSourcesCard extends StatelessWidget {
+  const CountedSourcesCard({
+    super.key,
+    required this.counted,
+    required this.canEdit,
+    required this.onChanged,
+    this.busy = false,
+  });
+
+  final Map<String, bool> counted;
+  final bool canEdit;
+  final bool busy;
+  final Future<void> Function(String key, bool value) onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final on = [
+      for (final key in countedSourceKeys)
+        if (counted[key] == true) countedSourceLabel(l10n, key),
+    ];
+    return Container(
+      key: const Key('sbal-counted'),
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: AppColors.parchment,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        border: Border.all(color: AppColors.rule),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            l10n.ownCountedTitle,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: AppColors.ink,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            canEdit ? l10n.ownCountedHint : l10n.ownCountedHintStaff,
+            style: const TextStyle(
+              fontSize: 12.5,
+              height: 1.4,
+              color: AppColors.muted,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          if (canEdit)
+            // The card paints its own fill; the tiles need a Material of
+            // their own to draw their ink on.
+            Material(
+              type: MaterialType.transparency,
+              child: Column(
+                children: [
+                  for (final key in countedSourceKeys)
+                    SwitchListTile(
+                      key: Key('sbal-counted-$key'),
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                      title: Text(countedSourceLabel(l10n, key)),
+                      value: counted[key] == true,
+                      onChanged: busy ? null : (v) => onChanged(key, v),
+                    ),
+                ],
+              ),
+            )
+          else
+            Text(
+              key: const Key('sbal-counted-summary'),
+              on.isEmpty
+                  ? l10n.ownCountedNone
+                  : l10n.ownCountedSummary(on.join(', ')),
+              style: const TextStyle(fontSize: 13.5, color: AppColors.ink),
+            ),
+        ],
+      ),
     );
   }
 }

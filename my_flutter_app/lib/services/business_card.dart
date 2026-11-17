@@ -45,6 +45,9 @@ const Map<String, int> cardAccents = {
 
 const List<String> cardStyles = ['classic', 'signature'];
 
+/// The picture on the signature card's front: none, or a stock car.
+const List<String> cardPhotos = ['none', 'car'];
+
 const int cardTaglineMax = 60;
 const int cardServiceMax = 40;
 const int cardServicesMax = 6;
@@ -96,11 +99,30 @@ bool hasOwnBusinessCard({
 // The card.
 // ---------------------------------------------------------------------------
 
+/// What is wrong with a card look before it is sent, as the server's codes
+/// (`tagline_too_long`, `services_too_many`, `service_too_long`), or '' when
+/// nothing. [servicesText] is one service per line.
+String cardLookProblem({required String tagline, required String servicesText}) {
+  if (tagline.trim().length > cardTaglineMax) return 'tagline_too_long';
+  final lines = cardServiceLines(servicesText);
+  if (lines.length > cardServicesMax) return 'services_too_many';
+  if (lines.any((l) => l.length > cardServiceMax)) return 'service_too_long';
+  return '';
+}
+
+/// The services typed one per line: whitespace collapsed, blanks dropped.
+List<String> cardServiceLines(String text) => [
+  for (final line in text.split('\n'))
+    if (line.replaceAll(RegExp(r'\s+'), ' ').trim().isNotEmpty)
+      line.replaceAll(RegExp(r'\s+'), ' ').trim(),
+];
+
 class CardSettings {
   const CardSettings({
     this.style = 'classic',
     this.color = 'laawol',
     this.accent = 'red',
+    this.photo = 'none',
     this.tagline = '',
     this.services = const [],
   });
@@ -108,8 +130,36 @@ class CardSettings {
   final String style;
   final String color;
   final String accent;
+  final String photo;
   final String tagline;
   final List<String> services;
+
+  CardSettings copyWith({
+    String? style,
+    String? color,
+    String? accent,
+    String? photo,
+    String? tagline,
+    List<String>? services,
+  }) => CardSettings(
+    style: style ?? this.style,
+    color: color ?? this.color,
+    accent: accent ?? this.accent,
+    photo: photo ?? this.photo,
+    tagline: tagline ?? this.tagline,
+    services: services ?? this.services,
+  );
+
+  /// What `saveSettings` sends: the whole choice (the photo too, or saving
+  /// from the phone would reset a picture chosen on the website).
+  Map<String, Object?> toCallable() => {
+    'style': style,
+    'color': color,
+    'accent': accent,
+    'photo': photo,
+    'tagline': tagline.trim(),
+    'services': services,
+  };
 
   bool get isSignature => style == 'signature';
   int get colorValue => cardColors[color] ?? cardColors['laawol']!;
@@ -122,11 +172,13 @@ class CardSettings {
     final style = callableString(source['style']);
     final color = callableString(source['color']);
     final accent = callableString(source['accent']);
+    final photo = callableString(source['photo']);
     final lines = source['services'];
     return CardSettings(
       style: cardStyles.contains(style) ? style : 'classic',
       color: cardColors.containsKey(color) ? color : 'laawol',
       accent: cardAccents.containsKey(accent) ? accent : 'red',
+      photo: cardPhotos.contains(photo) ? photo : 'none',
       tagline: _text(source['tagline'], cardTaglineMax),
       services: [
         if (lines is List)
@@ -301,6 +353,107 @@ class BusinessCardData {
       settings: CardSettings.fromCallable(source['settings']),
     );
   }
+}
+
+/// One card of `businessCards {action: "list"}`: the card as a scan shows it,
+/// whose it is, and whether the viewer may edit that person's numbers.
+class TeamCard {
+  const TeamCard({
+    required this.card,
+    this.uid = '',
+    this.mine = false,
+    this.canEditPhones = false,
+  });
+
+  final BusinessCardData card;
+
+  /// The person's uid; '' for the business's own card.
+  final String uid;
+  final bool mine;
+  final bool canEditPhones;
+
+  bool get isBusiness => card.person == null;
+
+  /// The same row with that person's extra numbers replaced.
+  TeamCard withPhones(List<CardPhone> phones) => TeamCard(
+    card: card.withPhones(phones),
+    uid: uid,
+    mine: mine,
+    canEditPhones: canEditPhones,
+  );
+}
+
+/// The answer of `businessCards {action: "list"}`: the business's cards, the
+/// business's own first.
+class BusinessCardList {
+  const BusinessCardList({
+    this.canEdit = false,
+    this.settings = const CardSettings(),
+    this.cards = const [],
+  });
+
+  /// The viewer may change how the cards look (owner or admin).
+  final bool canEdit;
+  final CardSettings settings;
+  final List<TeamCard> cards;
+
+  factory BusinessCardList.fromCallable(Object? raw) {
+    final source = callableMap(raw);
+    final rows = source['cards'];
+    final settings = CardSettings.fromCallable(source['settings']);
+    return BusinessCardList(
+      canEdit: callableBool(source['canEdit']),
+      settings: settings,
+      cards: [
+        if (rows is List)
+          for (final row in rows)
+            if (row is Map) ?_teamCard(callableMap(row)),
+      ],
+    );
+  }
+
+  /// The list with [settings] on every card (after the look was saved).
+  BusinessCardList withSettings(CardSettings settings) => BusinessCardList(
+    canEdit: canEdit,
+    settings: settings,
+    cards: [
+      for (final c in cards)
+        TeamCard(
+          card: BusinessCardData(
+            code: c.card.code,
+            link: c.card.link,
+            person: c.card.person,
+            business: c.card.business,
+            settings: settings,
+          ),
+          uid: c.uid,
+          mine: c.mine,
+          canEditPhones: c.canEditPhones,
+        ),
+    ],
+  );
+
+  /// The list with one person's numbers replaced.
+  BusinessCardList withPhones(String code, List<CardPhone> phones) =>
+      BusinessCardList(
+        canEdit: canEdit,
+        settings: settings,
+        cards: [
+          for (final c in cards)
+            c.card.code == code ? c.withPhones(phones) : c,
+        ],
+      );
+}
+
+TeamCard? _teamCard(Map<String, Object?> row) {
+  final card = BusinessCardData.fromCallable(row);
+  if (card == null) return null;
+  return TeamCard(
+    card: card,
+    uid: callableString(row['uid']),
+    mine: callableBool(row['mine']),
+    canEditPhones: callableBool(row['canEditPhones']),
+  );
 }
 
 /// The answer of `businessCards {action: "mine"}`.

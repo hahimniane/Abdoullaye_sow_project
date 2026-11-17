@@ -13753,6 +13753,654 @@ class AppLocalizationsFr extends AppLocalizations {
   String get pcsDescriptionWhat => 'Qu\'est-ce que c\'est ?';
 
   @override
+  String get ownCountedTitle =>
+      'Ce qui compte comme l\'argent de l\'entreprise';
+
+  @override
+  String get ownCountedHint =>
+      'Décochez l\'argent qui appartient à la personne qui l\'a encaissé, comme ses propres ventes de voitures.';
+
+  @override
+  String get ownCountedHintStaff =>
+      'Le propriétaire de l\'entreprise choisit ce qui compte.';
+
+  @override
+  String get ownCountedParking => 'Parking';
+
+  @override
+  String get ownCountedActivity => 'Travaux du parc';
+
+  @override
+  String get ownCountedPackage => 'Colis et conteneurs';
+
+  @override
+  String get ownCountedShop => 'Ventes de la boutique';
+
+  @override
+  String get ownCountedInvoice => 'Factures';
+
+  @override
+  String get ownCountedSaved =>
+      'Enregistré. Les soldes ne comptent plus que ce qui est coché.';
+
+  @override
+  String get ownCountedOwnerOnly =>
+      'Seul le propriétaire de l\'entreprise peut choisir ce qui compte comme l\'argent de l\'entreprise.';
+
+  @override
+  String get ownCountedInvalid =>
+      'Choisissez ce qui compte comme l\'argent de l\'entreprise.';
+
+  @override
+  String get ownCountedNone =>
+      'Rien n\'est compté comme l\'argent de l\'entreprise.';
+
+  @override
+  String ownCountedSummary(String list) {
+    return 'Compté : $list';
+  }
+
+  @override
+  String get ownPayoutsTitle => 'Laawol vous doit';
+
+  @override
+  String get ownPayoutsAdminTitle => 'Versements Payer maintenant';
+
+  @override
+  String get ownPayoutsLede =>
+      'Les paiements par carte que Laawol a encaissés pour vous, versés par Zelle ou virement chaque lundi pour la semaine précédente (du lundi au dimanche, heure de New York). Les frais de carte, remboursements et contestations sont déduits.';
+
+  @override
+  String get ownPayoutsAdminLede =>
+      'Paiements par carte que Laawol a encaissés pour les entreprises sans Stripe propre. Envoyez à chaque entreprise ce qui lui est dû par Zelle ou virement, puis touchez Marquer comme versé.';
+
+  @override
+  String ownPayoutsOwedNow(String amount) {
+    return 'Dû maintenant : $amount';
+  }
+
+  @override
+  String ownPayoutsDueTotal(String amount) {
+    return 'Dû aux entreprises : $amount';
+  }
+
+  @override
+  String ownPayoutsBillNote(String amount) {
+    return 'Votre facture Laawol impayée de $amount est déduite du prochain versement.';
+  }
+
+  @override
+  String ownPayoutsWeekOf(String date) {
+    return 'Semaine du $date';
+  }
+
+  @override
+  String get ownPayoutsPaidOut => 'Versé';
+
+  @override
+  String get ownPayoutsNothing => 'Rien à verser cette semaine';
+
+  @override
+  String get ownPayoutsToBill => 'Porté sur la facture Laawol';
+
+  @override
+  String ownPayoutsPaidOutOn(String date) {
+    return 'Versé le $date';
+  }
+
+  @override
+  String ownPayoutsCollecting(String date) {
+    return 'Encaissement en cours. Versé le $date';
+  }
+
+  @override
+  String get ownPayoutsNoneDue => 'Aucun versement n\'est dû.';
+
+  @override
+  String get ownPayoutsLoadFailed =>
+      'Impossible de charger les versements. Réessayez.';
+
+  @override
+  String get ownPayoutsSlow =>
+      'Les versements prennent plus de temps que d\'habitude. Réessayez dans un instant.';
+
+  @override
+  String get ownPayoutsRefresh => 'Actualiser';
+
+  @override
+  String get ownPayoutsRecent => 'Versés récemment';
+
+  @override
+  String get ownPayoutsMarkPaid => 'Marquer comme versé';
+
+  @override
+  String get ownPayoutsPutOnBill => 'Porter sur la facture';
+
+  @override
+  String get ownPayoutsSheetTitleBill => 'Porter sur la facture Laawol';
+
+  @override
+  String get ownPayoutsSheetBillHint =>
+      'Cette semaine est en négatif : elle est portée sur la facture Laawol de l\'entreprise. Aucun argent n\'est envoyé.';
+
+  @override
+  String get ownPayoutsSheetHint =>
+      'Envoyez d\'abord l\'argent, puis indiquez comment vous avez payé. Toute facture Laawol impayée est déduite et enregistrée comme un paiement de facture.';
+
+  @override
+  String get ownPayoutsHowPaid => 'Comment vous avez payé';
+
+  @override
+  String get ownPayoutsMethodZelle => 'Zelle';
+
+  @override
+  String get ownPayoutsMethodBank => 'Virement';
+
+  @override
+  String get ownPayoutsMethodOther => 'Autre';
+
+  @override
+  String get ownPayoutsReference => 'Référence (facultatif)';
+
+  @override
+  String get ownPayoutsReferenceHint => 'p. ex. numéro de confirmation Zelle';
+
+  @override
+  String get ownPayoutsDonePaid =>
+      'Versé. L\'entreprise reçoit un reçu sur WhatsApp.';
+
+  @override
+  String get ownPayoutsDoneBill =>
+      'Porté sur la facture Laawol de l\'entreprise.';
+
+  @override
+  String get ownPayoutsRefNotAllowed =>
+      'Vous n\'avez pas le droit de faire cela.';
+
+  @override
+  String get ownPayoutsRefWeekNotOver =>
+      'Cette semaine n\'est pas encore terminée.';
+
+  @override
+  String get ownPayoutsRefWeekEmpty =>
+      'Rien n\'a été encaissé ni remboursé cette semaine-là.';
+
+  @override
+  String get ownPayoutsRefAlreadyPaid => 'Cette semaine est déjà versée.';
+
+  @override
+  String get ownPayoutsRefMethod =>
+      'Indiquez comment l\'argent a été envoyé : Zelle, virement ou autre.';
+
+  @override
+  String get ownPayoutsRefReferenceLong => 'La référence est trop longue.';
+
+  @override
+  String get ownPayoutsRefWeekInvalid =>
+      'Choisissez une semaine qui commence un lundi.';
+
+  @override
+  String get ownLedgerPayment => 'Paiement par carte';
+
+  @override
+  String get ownLedgerStripeFee => 'Frais de carte';
+
+  @override
+  String get ownLedgerRefund => 'Remboursement';
+
+  @override
+  String get ownLedgerChargeback => 'Contestation';
+
+  @override
+  String get ownLedgerDisputeFee => 'Frais de litige';
+
+  @override
+  String get ownLedgerBillOffset => 'Déduit pour votre facture Laawol';
+
+  @override
+  String get ownLedgerPayout => 'Versé';
+
+  @override
+  String get ownLedgerToBill => 'Porté sur votre facture Laawol';
+
+  @override
+  String get ownCardsTitle => 'Cartes de l\'équipe';
+
+  @override
+  String get ownCardsSubtitle =>
+      'Une carte pour l\'entreprise et chaque personne';
+
+  @override
+  String get ownCardsIntro =>
+      'Partagez le lien d\'une carte ou ouvrez-la. Pour imprimer les cartes dix par feuille, utilisez le site web.';
+
+  @override
+  String get ownCardsLoadFailed =>
+      'Les cartes ne se sont pas chargées. Réessayez.';
+
+  @override
+  String get ownCardsNotAllowed =>
+      'Vous ne pouvez pas voir les cartes de l\'équipe.';
+
+  @override
+  String get ownCardsYourCard => 'Votre carte';
+
+  @override
+  String get ownCardsTeamCard => 'Carte de l\'équipe';
+
+  @override
+  String get ownCardsBusinessCard => 'La carte de l\'entreprise';
+
+  @override
+  String get ownCardsNoNumber =>
+      'Aucun numéro de téléphone sur ce compte pour l\'instant : la carte n\'affiche que le numéro du bureau.';
+
+  @override
+  String get ownCardsCopyLink => 'Copier le lien';
+
+  @override
+  String get ownCardsLinkCopied => 'Lien copié';
+
+  @override
+  String get ownCardsOpen => 'Ouvrir la carte';
+
+  @override
+  String get ownCardsOpenFailed => 'Impossible d\'ouvrir la carte. Réessayez.';
+
+  @override
+  String get ownCardsAddNumbers => 'Ajouter des numéros';
+
+  @override
+  String get ownCardsEditNumbers => 'Modifier les numéros';
+
+  @override
+  String get ownCardsNumbersTitle => 'Numéros sur cette carte';
+
+  @override
+  String get ownCardsNumbersIntro =>
+      'Ajoutez jusqu\'à 3 numéros de plus à afficher sur cette carte, comme WhatsApp ou un numéro à l\'étranger.';
+
+  @override
+  String get ownCardsNumbersOwnNote =>
+      'Son numéro de connexion figure toujours sur la carte';
+
+  @override
+  String get ownCardsNumbersSaved => 'Les numéros sont enregistrés.';
+
+  @override
+  String get ownCardsNumbersSaveFailed =>
+      'Impossible d\'enregistrer les numéros. Réessayez.';
+
+  @override
+  String get ownCardsNumbersNotAllowed =>
+      'Vous ne pouvez pas modifier les numéros de cette personne.';
+
+  @override
+  String get ownCardsLookTitle => 'L\'apparence de vos cartes';
+
+  @override
+  String get ownCardsStyle => 'Style';
+
+  @override
+  String get ownCardsStylePlain => 'Blanc uni';
+
+  @override
+  String get ownCardsStyleFull => 'Pleine couleur';
+
+  @override
+  String get ownCardsColor => 'Couleur principale';
+
+  @override
+  String get ownCardsAccent => 'Deuxième couleur';
+
+  @override
+  String get ownCardsPhoto => 'Image';
+
+  @override
+  String get ownCardsPhotoNone => 'Aucune image';
+
+  @override
+  String get ownCardsPhotoCar => 'Une voiture';
+
+  @override
+  String get ownCardsTagline => 'Ligne sous le nom';
+
+  @override
+  String get ownCardsTaglineHint => 'Vente de voitures · Parking · Expédition';
+
+  @override
+  String get ownCardsTaglineNote => 'Laissez vide pour utiliser vos services.';
+
+  @override
+  String get ownCardsServices => 'Services au verso';
+
+  @override
+  String get ownCardsServicesNote => 'Un par ligne, six au maximum.';
+
+  @override
+  String get ownCardsSave => 'Enregistrer la carte';
+
+  @override
+  String get ownCardsSaved => 'Carte enregistrée.';
+
+  @override
+  String get ownCardsSaveFailed => 'La carte n\'a pas été enregistrée.';
+
+  @override
+  String get ownCardsOwnerOnly =>
+      'Seul le propriétaire de l\'entreprise peut modifier l\'apparence des cartes.';
+
+  @override
+  String get ownCardsTaglineTooLong => 'La ligne sous le nom est trop longue.';
+
+  @override
+  String get ownCardsServicesTooMany => 'Indiquez six services au maximum.';
+
+  @override
+  String get ownCardsServiceTooLong => 'Un des services est trop long.';
+
+  @override
+  String get ownCardsEntryTitle => 'Cartes de l\'équipe';
+
+  @override
+  String get ownCardsEntrySubtitle =>
+      'Voir, partager et modifier les cartes de visite de votre équipe';
+
+  @override
+  String get ownCardColorLaawol => 'Vert Laawol';
+
+  @override
+  String get ownCardColorTeal => 'Turquoise';
+
+  @override
+  String get ownCardColorIndigo => 'Indigo';
+
+  @override
+  String get ownCardColorForest => 'Vert forêt';
+
+  @override
+  String get ownCardColorBurgundy => 'Bordeaux';
+
+  @override
+  String get ownCardColorSaffron => 'Safran';
+
+  @override
+  String get ownCardColorCharcoal => 'Anthracite';
+
+  @override
+  String get ownCardColorOcean => 'Bleu océan';
+
+  @override
+  String get ownCardColorPlum => 'Prune';
+
+  @override
+  String get ownCardColorNavy => 'Bleu marine';
+
+  @override
+  String get ownCardAccentRed => 'Rouge';
+
+  @override
+  String get ownCardAccentAmber => 'Ambre';
+
+  @override
+  String get ownCardAccentBlue => 'Bleu';
+
+  @override
+  String get ownPayTitle => 'Être payé';
+
+  @override
+  String get ownPayEntrySubtitle =>
+      'Versements Stripe, frais et documents de vérification';
+
+  @override
+  String get ownPayPayoutsTitle => 'Versements';
+
+  @override
+  String get ownPayStatusReady => 'Versements activés';
+
+  @override
+  String get ownPayStatusPending => 'Connecté, vérification en attente';
+
+  @override
+  String get ownPayStatusNone => 'Configuration des versements requise';
+
+  @override
+  String get ownPayChargesOn => 'Paiements vérifiés';
+
+  @override
+  String get ownPayChargesOff => 'Paiements non vérifiés';
+
+  @override
+  String ownPayAccount(String id) {
+    return 'Compte : $id';
+  }
+
+  @override
+  String get ownPayHelpNone =>
+      'Inscrivez-vous chez Stripe pour que Laawol puisse vérifier l\'entreprise et envoyer les versements en toute sécurité.';
+
+  @override
+  String get ownPayHelpPending =>
+      'Un compte de versement Stripe est connecté. Stripe vérifie peut-être encore le compte bancaire ou demande des précisions avant le début des versements.';
+
+  @override
+  String get ownPayStart => 'Commencer l\'inscription Stripe';
+
+  @override
+  String get ownPayContinue => 'Continuer dans Stripe';
+
+  @override
+  String get ownPayRefresh => 'Actualiser le statut';
+
+  @override
+  String get ownPayOpening => 'Ouverture de Stripe...';
+
+  @override
+  String get ownPayChecking => 'Vérification du statut...';
+
+  @override
+  String get ownPayRefreshed => 'Statut mis à jour.';
+
+  @override
+  String get ownPayOpenFailed => 'Impossible d\'ouvrir la page. Réessayez.';
+
+  @override
+  String get ownPayLinkFailed =>
+      'Impossible de démarrer la configuration Stripe. Réessayez.';
+
+  @override
+  String get ownPayRefreshFailed =>
+      'Impossible d\'actualiser le statut des versements. Réessayez.';
+
+  @override
+  String get ownPayAutoFailed =>
+      'Nous n\'avons pas pu vérifier automatiquement votre statut Stripe : le statut ci-dessus est peut-être périmé. Si vous avez terminé avec Stripe, touchez Actualiser le statut.';
+
+  @override
+  String ownPayDue(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count exigences Stripe à remplir',
+      one: '1 exigence Stripe à remplir',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String ownPayPendingStripe(int count) {
+    return '$count en attente chez Stripe';
+  }
+
+  @override
+  String get ownPayNoUpload =>
+      'Ne téléversez pas de pièces d\'identité, fiscales, juridiques ou bancaires chez Laawol. Stripe doit recueillir ces informations dans son parcours d\'inscription sécurisé.';
+
+  @override
+  String get ownPayOwnerOnly =>
+      'Seul le propriétaire de l\'entreprise configure les versements.';
+
+  @override
+  String get ownPayLoadFailed =>
+      'Impossible de charger votre entreprise. Réessayez.';
+
+  @override
+  String get ownPayFeesTitle => 'Frais';
+
+  @override
+  String get ownPayPlatformFee => 'Frais de plateforme';
+
+  @override
+  String get ownPayCustomRate => 'Tarif personnalisé pour votre entreprise';
+
+  @override
+  String get ownPayDefaultRate =>
+      'Peut varier selon le service au tarif par défaut.';
+
+  @override
+  String get ownPayProcessingWho =>
+      'Qui paie les frais de traitement de Stripe';
+
+  @override
+  String get ownPayYou => 'Vous';
+
+  @override
+  String get ownPayLaawol => 'Laawol';
+
+  @override
+  String get ownPayProcessingPending =>
+      'Votre compte est réglé pour payer directement les frais de traitement de Stripe, mais cela ne prend effet qu\'une fois la configuration de vos versements Stripe terminée. D\'ici là, les paiements utilisent le réglage par défaut (Laawol paie les frais de Stripe).';
+
+  @override
+  String get ownPayFeesFailed => 'Impossible de charger vos réglages de frais.';
+
+  @override
+  String get ownDocTitle => 'Documents de vérification';
+
+  @override
+  String get ownDocReady =>
+      'Les documents de service exigés par Laawol sont complets.';
+
+  @override
+  String get ownDocIntro =>
+      'Téléversez uniquement les documents de service dont les administrateurs Laawol ont besoin. Stripe recueille les informations d\'identité, fiscales, juridiques et bancaires.';
+
+  @override
+  String ownDocComplete(int done, int total) {
+    return '$done/$total terminés';
+  }
+
+  @override
+  String get ownDocNone =>
+      'Aucun document de service Laawol requis. Les services choisis pour cette entreprise n\'exigent pas de licence ni de document d\'autorisation supplémentaire.';
+
+  @override
+  String ownDocAdminNote(String note) {
+    return 'Note de l\'administrateur : $note';
+  }
+
+  @override
+  String ownDocAdminRequest(String note) {
+    return 'Demande de l\'administrateur : $note';
+  }
+
+  @override
+  String get ownDocWaived => 'Non requis : approuvé par Laawol.';
+
+  @override
+  String get ownDocStatusMissing => 'Manquant';
+
+  @override
+  String get ownDocStatusSubmitted => 'Soumis';
+
+  @override
+  String get ownDocStatusVerified => 'Vérifié';
+
+  @override
+  String get ownDocStatusNeedsChanges => 'À corriger';
+
+  @override
+  String get ownDocStatusNotNeeded => 'Non requis';
+
+  @override
+  String get ownDocShippingAuthority => 'Autorisation de fret ou d\'expédition';
+
+  @override
+  String get ownDocShippingAuthorityNote =>
+      'Licence de transitaire, contrat d\'entrepôt, contrat de courtier en douane ou preuve d\'un partenaire de réception.';
+
+  @override
+  String get ownDocDealerLicense =>
+      'Licence de concessionnaire ou autorisation de vente';
+
+  @override
+  String get ownDocDealerLicenseNote =>
+      'Licence de concessionnaire, autorisation de revendeur, preuve d\'accès aux enchères ou permis local de vente de véhicules.';
+
+  @override
+  String get ownDocParkingProof => 'Justificatif du parking';
+
+  @override
+  String get ownDocParkingProofNote =>
+      'Bail du terrain, titre de propriété, assurance de l\'installation ou autorisation écrite de stationnement.';
+
+  @override
+  String get ownDocTransportInsurance =>
+      'Assurance et autorisation de transport';
+
+  @override
+  String get ownDocTransportInsuranceNote =>
+      'Police d\'assurance auto commerciale, autorisation de transporteur, immatriculation USDOT/MC ou contrat de transport.';
+
+  @override
+  String get ownDocOpen => 'Ouvrir le document';
+
+  @override
+  String ownDocUploaded(String name) {
+    return 'Téléversé : $name';
+  }
+
+  @override
+  String get ownDocNoFile => 'Aucun fichier téléversé pour l\'instant';
+
+  @override
+  String get ownDocChoose => 'Choisir un document';
+
+  @override
+  String ownDocSelected(String name, int kb) {
+    return '$name ($kb Ko)';
+  }
+
+  @override
+  String get ownDocUpload => 'Téléverser le document';
+
+  @override
+  String get ownDocUploading => 'Téléversement...';
+
+  @override
+  String get ownDocDone => 'Document téléversé.';
+
+  @override
+  String get ownDocFailed => 'Le document n\'a pas été téléversé. Réessayez.';
+
+  @override
+  String get ownDocBadType =>
+      'Les documents doivent être des fichiers PDF, Word ou image.';
+
+  @override
+  String get ownDocTooBig => 'Les documents doivent faire moins de 20 Mo.';
+
+  @override
+  String get ownDocEmpty => 'Ce fichier est vide.';
+
+  @override
+  String get ownDocPickFailed => 'Impossible de lire ce fichier. Réessayez.';
+
+  @override
+  String get ownDocNotAllowed =>
+      'Vous ne pouvez pas téléverser de documents pour cette entreprise.';
+
+  @override
   String get pcsPrice => 'Prix';
 
   @override

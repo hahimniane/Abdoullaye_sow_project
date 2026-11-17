@@ -23375,6 +23375,1122 @@ abstract class AppLocalizations {
   /// **'What is it?'**
   String get pcsDescriptionWhat;
 
+  /// No description provided for @ownCountedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'What counts as the business\'s money'**
+  String get ownCountedTitle;
+
+  /// No description provided for @ownCountedHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Untick money that belongs to the person who took it, like their own car sales.'**
+  String get ownCountedHint;
+
+  /// No description provided for @ownCountedHintStaff.
+  ///
+  /// In en, this message translates to:
+  /// **'The business owner chooses what counts.'**
+  String get ownCountedHintStaff;
+
+  /// No description provided for @ownCountedParking.
+  ///
+  /// In en, this message translates to:
+  /// **'Parking'**
+  String get ownCountedParking;
+
+  /// No description provided for @ownCountedActivity.
+  ///
+  /// In en, this message translates to:
+  /// **'Lot jobs'**
+  String get ownCountedActivity;
+
+  /// No description provided for @ownCountedPackage.
+  ///
+  /// In en, this message translates to:
+  /// **'Packages and containers'**
+  String get ownCountedPackage;
+
+  /// No description provided for @ownCountedShop.
+  ///
+  /// In en, this message translates to:
+  /// **'Shop sales'**
+  String get ownCountedShop;
+
+  /// No description provided for @ownCountedInvoice.
+  ///
+  /// In en, this message translates to:
+  /// **'Invoices'**
+  String get ownCountedInvoice;
+
+  /// No description provided for @ownCountedSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved. The balances now count only what is ticked.'**
+  String get ownCountedSaved;
+
+  /// No description provided for @ownCountedOwnerOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the business owner can choose what counts as the business\'s money.'**
+  String get ownCountedOwnerOnly;
+
+  /// No description provided for @ownCountedInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose what counts as the business\'s money.'**
+  String get ownCountedInvalid;
+
+  /// No description provided for @ownCountedNone.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing is counted as the business\'s money.'**
+  String get ownCountedNone;
+
+  /// No description provided for @ownCountedSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Counted: {list}'**
+  String ownCountedSummary(String list);
+
+  /// No description provided for @ownPayoutsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Laawol owes you'**
+  String get ownPayoutsTitle;
+
+  /// No description provided for @ownPayoutsAdminTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay now payouts'**
+  String get ownPayoutsAdminTitle;
+
+  /// No description provided for @ownPayoutsLede.
+  ///
+  /// In en, this message translates to:
+  /// **'Card payments Laawol collected for you, paid out by Zelle or bank every Monday for the week before (Monday to Sunday, New York time). Card fees, refunds and chargebacks are taken off.'**
+  String get ownPayoutsLede;
+
+  /// No description provided for @ownPayoutsAdminLede.
+  ///
+  /// In en, this message translates to:
+  /// **'Card payments Laawol collected for businesses without their own Stripe. Send each business what is due by Zelle or bank, then tap Mark paid out.'**
+  String get ownPayoutsAdminLede;
+
+  /// No description provided for @ownPayoutsOwedNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Owed to you now: {amount}'**
+  String ownPayoutsOwedNow(String amount);
+
+  /// No description provided for @ownPayoutsDueTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Due to businesses: {amount}'**
+  String ownPayoutsDueTotal(String amount);
+
+  /// No description provided for @ownPayoutsBillNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Your unpaid Laawol bill of {amount} is taken out of the next payout.'**
+  String ownPayoutsBillNote(String amount);
+
+  /// No description provided for @ownPayoutsWeekOf.
+  ///
+  /// In en, this message translates to:
+  /// **'Week of {date}'**
+  String ownPayoutsWeekOf(String date);
+
+  /// No description provided for @ownPayoutsPaidOut.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid out'**
+  String get ownPayoutsPaidOut;
+
+  /// No description provided for @ownPayoutsNothing.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing to pay this week'**
+  String get ownPayoutsNothing;
+
+  /// No description provided for @ownPayoutsToBill.
+  ///
+  /// In en, this message translates to:
+  /// **'Goes onto the Laawol bill'**
+  String get ownPayoutsToBill;
+
+  /// No description provided for @ownPayoutsPaidOutOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid out on {date}'**
+  String ownPayoutsPaidOutOn(String date);
+
+  /// No description provided for @ownPayoutsCollecting.
+  ///
+  /// In en, this message translates to:
+  /// **'Still collecting. Paid out on {date}'**
+  String ownPayoutsCollecting(String date);
+
+  /// No description provided for @ownPayoutsNoneDue.
+  ///
+  /// In en, this message translates to:
+  /// **'No payout is due.'**
+  String get ownPayoutsNoneDue;
+
+  /// No description provided for @ownPayoutsLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Payouts could not be loaded. Try again.'**
+  String get ownPayoutsLoadFailed;
+
+  /// No description provided for @ownPayoutsSlow.
+  ///
+  /// In en, this message translates to:
+  /// **'Payouts are taking longer than usual. Try again in a moment.'**
+  String get ownPayoutsSlow;
+
+  /// No description provided for @ownPayoutsRefresh.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh'**
+  String get ownPayoutsRefresh;
+
+  /// No description provided for @ownPayoutsRecent.
+  ///
+  /// In en, this message translates to:
+  /// **'Recently paid out'**
+  String get ownPayoutsRecent;
+
+  /// No description provided for @ownPayoutsMarkPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark paid out'**
+  String get ownPayoutsMarkPaid;
+
+  /// No description provided for @ownPayoutsPutOnBill.
+  ///
+  /// In en, this message translates to:
+  /// **'Put on the bill'**
+  String get ownPayoutsPutOnBill;
+
+  /// No description provided for @ownPayoutsSheetTitleBill.
+  ///
+  /// In en, this message translates to:
+  /// **'Put on the Laawol bill'**
+  String get ownPayoutsSheetTitleBill;
+
+  /// No description provided for @ownPayoutsSheetBillHint.
+  ///
+  /// In en, this message translates to:
+  /// **'This week nets to less than nothing, so it is charged on the business\'s Laawol bill. No money is sent.'**
+  String get ownPayoutsSheetBillHint;
+
+  /// No description provided for @ownPayoutsSheetHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Send the money first, then record how you paid. Any unpaid Laawol bill is taken out and recorded as a bill payment.'**
+  String get ownPayoutsSheetHint;
+
+  /// No description provided for @ownPayoutsHowPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'How you paid'**
+  String get ownPayoutsHowPaid;
+
+  /// No description provided for @ownPayoutsMethodZelle.
+  ///
+  /// In en, this message translates to:
+  /// **'Zelle'**
+  String get ownPayoutsMethodZelle;
+
+  /// No description provided for @ownPayoutsMethodBank.
+  ///
+  /// In en, this message translates to:
+  /// **'Bank'**
+  String get ownPayoutsMethodBank;
+
+  /// No description provided for @ownPayoutsMethodOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get ownPayoutsMethodOther;
+
+  /// No description provided for @ownPayoutsReference.
+  ///
+  /// In en, this message translates to:
+  /// **'Reference (optional)'**
+  String get ownPayoutsReference;
+
+  /// No description provided for @ownPayoutsReferenceHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. Zelle confirmation number'**
+  String get ownPayoutsReferenceHint;
+
+  /// No description provided for @ownPayoutsDonePaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid out. The business gets a receipt on WhatsApp.'**
+  String get ownPayoutsDonePaid;
+
+  /// No description provided for @ownPayoutsDoneBill.
+  ///
+  /// In en, this message translates to:
+  /// **'Put on the business\'s Laawol bill.'**
+  String get ownPayoutsDoneBill;
+
+  /// No description provided for @ownPayoutsRefNotAllowed.
+  ///
+  /// In en, this message translates to:
+  /// **'You are not allowed to do that.'**
+  String get ownPayoutsRefNotAllowed;
+
+  /// No description provided for @ownPayoutsRefWeekNotOver.
+  ///
+  /// In en, this message translates to:
+  /// **'That week is not over yet.'**
+  String get ownPayoutsRefWeekNotOver;
+
+  /// No description provided for @ownPayoutsRefWeekEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing was collected or refunded that week.'**
+  String get ownPayoutsRefWeekEmpty;
+
+  /// No description provided for @ownPayoutsRefAlreadyPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'That week is already paid out.'**
+  String get ownPayoutsRefAlreadyPaid;
+
+  /// No description provided for @ownPayoutsRefMethod.
+  ///
+  /// In en, this message translates to:
+  /// **'Say how it was sent: Zelle, bank or other.'**
+  String get ownPayoutsRefMethod;
+
+  /// No description provided for @ownPayoutsRefReferenceLong.
+  ///
+  /// In en, this message translates to:
+  /// **'The reference is too long.'**
+  String get ownPayoutsRefReferenceLong;
+
+  /// No description provided for @ownPayoutsRefWeekInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a week that starts on a Monday.'**
+  String get ownPayoutsRefWeekInvalid;
+
+  /// No description provided for @ownLedgerPayment.
+  ///
+  /// In en, this message translates to:
+  /// **'Card payment'**
+  String get ownLedgerPayment;
+
+  /// No description provided for @ownLedgerStripeFee.
+  ///
+  /// In en, this message translates to:
+  /// **'Card fee'**
+  String get ownLedgerStripeFee;
+
+  /// No description provided for @ownLedgerRefund.
+  ///
+  /// In en, this message translates to:
+  /// **'Refund'**
+  String get ownLedgerRefund;
+
+  /// No description provided for @ownLedgerChargeback.
+  ///
+  /// In en, this message translates to:
+  /// **'Chargeback'**
+  String get ownLedgerChargeback;
+
+  /// No description provided for @ownLedgerDisputeFee.
+  ///
+  /// In en, this message translates to:
+  /// **'Dispute fee'**
+  String get ownLedgerDisputeFee;
+
+  /// No description provided for @ownLedgerBillOffset.
+  ///
+  /// In en, this message translates to:
+  /// **'Taken off for your Laawol bill'**
+  String get ownLedgerBillOffset;
+
+  /// No description provided for @ownLedgerPayout.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid out'**
+  String get ownLedgerPayout;
+
+  /// No description provided for @ownLedgerToBill.
+  ///
+  /// In en, this message translates to:
+  /// **'Put on your Laawol bill'**
+  String get ownLedgerToBill;
+
+  /// No description provided for @ownCardsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Team cards'**
+  String get ownCardsTitle;
+
+  /// No description provided for @ownCardsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'A card for the business and each person'**
+  String get ownCardsSubtitle;
+
+  /// No description provided for @ownCardsIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Share a card\'s link or open it. To print cards ten to a sheet, use the website.'**
+  String get ownCardsIntro;
+
+  /// No description provided for @ownCardsLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The cards did not load. Try again.'**
+  String get ownCardsLoadFailed;
+
+  /// No description provided for @ownCardsNotAllowed.
+  ///
+  /// In en, this message translates to:
+  /// **'You cannot see the team\'s cards.'**
+  String get ownCardsNotAllowed;
+
+  /// No description provided for @ownCardsYourCard.
+  ///
+  /// In en, this message translates to:
+  /// **'Your card'**
+  String get ownCardsYourCard;
+
+  /// No description provided for @ownCardsTeamCard.
+  ///
+  /// In en, this message translates to:
+  /// **'Team card'**
+  String get ownCardsTeamCard;
+
+  /// No description provided for @ownCardsBusinessCard.
+  ///
+  /// In en, this message translates to:
+  /// **'The business\'s card'**
+  String get ownCardsBusinessCard;
+
+  /// No description provided for @ownCardsNoNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'No phone number on this account yet, so the card shows the office number only.'**
+  String get ownCardsNoNumber;
+
+  /// No description provided for @ownCardsCopyLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy link'**
+  String get ownCardsCopyLink;
+
+  /// No description provided for @ownCardsLinkCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Link copied'**
+  String get ownCardsLinkCopied;
+
+  /// No description provided for @ownCardsOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open card'**
+  String get ownCardsOpen;
+
+  /// No description provided for @ownCardsOpenFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'We could not open the card. Try again.'**
+  String get ownCardsOpenFailed;
+
+  /// No description provided for @ownCardsAddNumbers.
+  ///
+  /// In en, this message translates to:
+  /// **'Add numbers'**
+  String get ownCardsAddNumbers;
+
+  /// No description provided for @ownCardsEditNumbers.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit numbers'**
+  String get ownCardsEditNumbers;
+
+  /// No description provided for @ownCardsNumbersTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Numbers on this card'**
+  String get ownCardsNumbersTitle;
+
+  /// No description provided for @ownCardsNumbersIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Add up to 3 more numbers to show on this card, like WhatsApp or a number abroad.'**
+  String get ownCardsNumbersIntro;
+
+  /// No description provided for @ownCardsNumbersOwnNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Their sign-in number is always on the card'**
+  String get ownCardsNumbersOwnNote;
+
+  /// No description provided for @ownCardsNumbersSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'The numbers are saved.'**
+  String get ownCardsNumbersSaved;
+
+  /// No description provided for @ownCardsNumbersSaveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'We could not save the numbers. Try again.'**
+  String get ownCardsNumbersSaveFailed;
+
+  /// No description provided for @ownCardsNumbersNotAllowed.
+  ///
+  /// In en, this message translates to:
+  /// **'You cannot change this person\'s numbers.'**
+  String get ownCardsNumbersNotAllowed;
+
+  /// No description provided for @ownCardsLookTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'How your cards look'**
+  String get ownCardsLookTitle;
+
+  /// No description provided for @ownCardsStyle.
+  ///
+  /// In en, this message translates to:
+  /// **'Style'**
+  String get ownCardsStyle;
+
+  /// No description provided for @ownCardsStylePlain.
+  ///
+  /// In en, this message translates to:
+  /// **'Plain white'**
+  String get ownCardsStylePlain;
+
+  /// No description provided for @ownCardsStyleFull.
+  ///
+  /// In en, this message translates to:
+  /// **'Full color'**
+  String get ownCardsStyleFull;
+
+  /// No description provided for @ownCardsColor.
+  ///
+  /// In en, this message translates to:
+  /// **'Main color'**
+  String get ownCardsColor;
+
+  /// No description provided for @ownCardsAccent.
+  ///
+  /// In en, this message translates to:
+  /// **'Second color'**
+  String get ownCardsAccent;
+
+  /// No description provided for @ownCardsPhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Picture'**
+  String get ownCardsPhoto;
+
+  /// No description provided for @ownCardsPhotoNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No picture'**
+  String get ownCardsPhotoNone;
+
+  /// No description provided for @ownCardsPhotoCar.
+  ///
+  /// In en, this message translates to:
+  /// **'A car'**
+  String get ownCardsPhotoCar;
+
+  /// No description provided for @ownCardsTagline.
+  ///
+  /// In en, this message translates to:
+  /// **'Line under the name'**
+  String get ownCardsTagline;
+
+  /// No description provided for @ownCardsTaglineHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Car sales · Parking · Shipping'**
+  String get ownCardsTaglineHint;
+
+  /// No description provided for @ownCardsTaglineNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave empty to use your services.'**
+  String get ownCardsTaglineNote;
+
+  /// No description provided for @ownCardsServices.
+  ///
+  /// In en, this message translates to:
+  /// **'Services on the back'**
+  String get ownCardsServices;
+
+  /// No description provided for @ownCardsServicesNote.
+  ///
+  /// In en, this message translates to:
+  /// **'One per line, six at most.'**
+  String get ownCardsServicesNote;
+
+  /// No description provided for @ownCardsSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save card'**
+  String get ownCardsSave;
+
+  /// No description provided for @ownCardsSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Card saved.'**
+  String get ownCardsSaved;
+
+  /// No description provided for @ownCardsSaveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The card was not saved.'**
+  String get ownCardsSaveFailed;
+
+  /// No description provided for @ownCardsOwnerOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the business owner can change how the cards look.'**
+  String get ownCardsOwnerOnly;
+
+  /// No description provided for @ownCardsTaglineTooLong.
+  ///
+  /// In en, this message translates to:
+  /// **'The line under the name is too long.'**
+  String get ownCardsTaglineTooLong;
+
+  /// No description provided for @ownCardsServicesTooMany.
+  ///
+  /// In en, this message translates to:
+  /// **'List six services at most.'**
+  String get ownCardsServicesTooMany;
+
+  /// No description provided for @ownCardsServiceTooLong.
+  ///
+  /// In en, this message translates to:
+  /// **'One of the services is too long.'**
+  String get ownCardsServiceTooLong;
+
+  /// No description provided for @ownCardsEntryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Team cards'**
+  String get ownCardsEntryTitle;
+
+  /// No description provided for @ownCardsEntrySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'See, share and edit your team\'s business cards'**
+  String get ownCardsEntrySubtitle;
+
+  /// No description provided for @ownCardColorLaawol.
+  ///
+  /// In en, this message translates to:
+  /// **'Laawol green'**
+  String get ownCardColorLaawol;
+
+  /// No description provided for @ownCardColorTeal.
+  ///
+  /// In en, this message translates to:
+  /// **'Teal'**
+  String get ownCardColorTeal;
+
+  /// No description provided for @ownCardColorIndigo.
+  ///
+  /// In en, this message translates to:
+  /// **'Indigo'**
+  String get ownCardColorIndigo;
+
+  /// No description provided for @ownCardColorForest.
+  ///
+  /// In en, this message translates to:
+  /// **'Forest green'**
+  String get ownCardColorForest;
+
+  /// No description provided for @ownCardColorBurgundy.
+  ///
+  /// In en, this message translates to:
+  /// **'Burgundy'**
+  String get ownCardColorBurgundy;
+
+  /// No description provided for @ownCardColorSaffron.
+  ///
+  /// In en, this message translates to:
+  /// **'Saffron'**
+  String get ownCardColorSaffron;
+
+  /// No description provided for @ownCardColorCharcoal.
+  ///
+  /// In en, this message translates to:
+  /// **'Charcoal'**
+  String get ownCardColorCharcoal;
+
+  /// No description provided for @ownCardColorOcean.
+  ///
+  /// In en, this message translates to:
+  /// **'Ocean blue'**
+  String get ownCardColorOcean;
+
+  /// No description provided for @ownCardColorPlum.
+  ///
+  /// In en, this message translates to:
+  /// **'Plum'**
+  String get ownCardColorPlum;
+
+  /// No description provided for @ownCardColorNavy.
+  ///
+  /// In en, this message translates to:
+  /// **'Navy'**
+  String get ownCardColorNavy;
+
+  /// No description provided for @ownCardAccentRed.
+  ///
+  /// In en, this message translates to:
+  /// **'Red'**
+  String get ownCardAccentRed;
+
+  /// No description provided for @ownCardAccentAmber.
+  ///
+  /// In en, this message translates to:
+  /// **'Amber'**
+  String get ownCardAccentAmber;
+
+  /// No description provided for @ownCardAccentBlue.
+  ///
+  /// In en, this message translates to:
+  /// **'Blue'**
+  String get ownCardAccentBlue;
+
+  /// No description provided for @ownPayTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Getting paid'**
+  String get ownPayTitle;
+
+  /// No description provided for @ownPayEntrySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Stripe payouts, fees and verification documents'**
+  String get ownPayEntrySubtitle;
+
+  /// No description provided for @ownPayPayoutsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Payouts'**
+  String get ownPayPayoutsTitle;
+
+  /// No description provided for @ownPayStatusReady.
+  ///
+  /// In en, this message translates to:
+  /// **'Payouts enabled'**
+  String get ownPayStatusReady;
+
+  /// No description provided for @ownPayStatusPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Connected, pending verification'**
+  String get ownPayStatusPending;
+
+  /// No description provided for @ownPayStatusNone.
+  ///
+  /// In en, this message translates to:
+  /// **'Payout setup required'**
+  String get ownPayStatusNone;
+
+  /// No description provided for @ownPayChargesOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Charges verified'**
+  String get ownPayChargesOn;
+
+  /// No description provided for @ownPayChargesOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Charges not verified'**
+  String get ownPayChargesOff;
+
+  /// No description provided for @ownPayAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Account: {id}'**
+  String ownPayAccount(String id);
+
+  /// No description provided for @ownPayHelpNone.
+  ///
+  /// In en, this message translates to:
+  /// **'Register with Stripe so Laawol can verify the business and send payouts securely.'**
+  String get ownPayHelpNone;
+
+  /// No description provided for @ownPayHelpPending.
+  ///
+  /// In en, this message translates to:
+  /// **'A Stripe payout account is connected. Stripe may still be checking the bank account or requesting more details before payouts can start.'**
+  String get ownPayHelpPending;
+
+  /// No description provided for @ownPayStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Start Stripe registration'**
+  String get ownPayStart;
+
+  /// No description provided for @ownPayContinue.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue in Stripe'**
+  String get ownPayContinue;
+
+  /// No description provided for @ownPayRefresh.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh status'**
+  String get ownPayRefresh;
+
+  /// No description provided for @ownPayOpening.
+  ///
+  /// In en, this message translates to:
+  /// **'Opening Stripe...'**
+  String get ownPayOpening;
+
+  /// No description provided for @ownPayChecking.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking status...'**
+  String get ownPayChecking;
+
+  /// No description provided for @ownPayRefreshed.
+  ///
+  /// In en, this message translates to:
+  /// **'Status updated.'**
+  String get ownPayRefreshed;
+
+  /// No description provided for @ownPayOpenFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'We could not open the page. Try again.'**
+  String get ownPayOpenFailed;
+
+  /// No description provided for @ownPayLinkFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not start Stripe setup. Try again.'**
+  String get ownPayLinkFailed;
+
+  /// No description provided for @ownPayRefreshFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not refresh payout status. Try again.'**
+  String get ownPayRefreshFailed;
+
+  /// No description provided for @ownPayAutoFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'We could not check your Stripe status automatically, so the status above may be out of date. If you have finished with Stripe, press Refresh status.'**
+  String get ownPayAutoFailed;
+
+  /// No description provided for @ownPayDue.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 Stripe requirement due} other{{count} Stripe requirements due}}'**
+  String ownPayDue(int count);
+
+  /// No description provided for @ownPayPendingStripe.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} pending with Stripe'**
+  String ownPayPendingStripe(int count);
+
+  /// No description provided for @ownPayNoUpload.
+  ///
+  /// In en, this message translates to:
+  /// **'Do not upload identity, tax, legal, or bank files to Laawol. Stripe must collect those details in its secure onboarding flow.'**
+  String get ownPayNoUpload;
+
+  /// No description provided for @ownPayOwnerOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the business owner sets up payouts.'**
+  String get ownPayOwnerOnly;
+
+  /// No description provided for @ownPayLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'We could not load your business. Try again.'**
+  String get ownPayLoadFailed;
+
+  /// No description provided for @ownPayFeesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Fees'**
+  String get ownPayFeesTitle;
+
+  /// No description provided for @ownPayPlatformFee.
+  ///
+  /// In en, this message translates to:
+  /// **'Platform fee'**
+  String get ownPayPlatformFee;
+
+  /// No description provided for @ownPayCustomRate.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom rate for your business'**
+  String get ownPayCustomRate;
+
+  /// No description provided for @ownPayDefaultRate.
+  ///
+  /// In en, this message translates to:
+  /// **'May vary by service on our default rate.'**
+  String get ownPayDefaultRate;
+
+  /// No description provided for @ownPayProcessingWho.
+  ///
+  /// In en, this message translates to:
+  /// **'Who pays Stripe\'s processing fee'**
+  String get ownPayProcessingWho;
+
+  /// No description provided for @ownPayYou.
+  ///
+  /// In en, this message translates to:
+  /// **'You'**
+  String get ownPayYou;
+
+  /// No description provided for @ownPayLaawol.
+  ///
+  /// In en, this message translates to:
+  /// **'Laawol'**
+  String get ownPayLaawol;
+
+  /// No description provided for @ownPayProcessingPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Your account is set to pay Stripe\'s processing fee directly, but this only takes effect once your Stripe payout setup is complete. Until then, payments still use the default (Laawol pays Stripe\'s fee).'**
+  String get ownPayProcessingPending;
+
+  /// No description provided for @ownPayFeesFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Your fee settings could not be loaded.'**
+  String get ownPayFeesFailed;
+
+  /// No description provided for @ownDocTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Verification documents'**
+  String get ownDocTitle;
+
+  /// No description provided for @ownDocReady.
+  ///
+  /// In en, this message translates to:
+  /// **'Required Laawol service documents are complete.'**
+  String get ownDocReady;
+
+  /// No description provided for @ownDocIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload only the service documents Laawol admins need. Stripe collects identity, tax, legal, and bank details.'**
+  String get ownDocIntro;
+
+  /// No description provided for @ownDocComplete.
+  ///
+  /// In en, this message translates to:
+  /// **'{done}/{total} complete'**
+  String ownDocComplete(int done, int total);
+
+  /// No description provided for @ownDocNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No Laawol service documents required. The services selected for this business do not require extra licenses or authority documents.'**
+  String get ownDocNone;
+
+  /// No description provided for @ownDocAdminNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Admin note: {note}'**
+  String ownDocAdminNote(String note);
+
+  /// No description provided for @ownDocAdminRequest.
+  ///
+  /// In en, this message translates to:
+  /// **'Admin request: {note}'**
+  String ownDocAdminRequest(String note);
+
+  /// No description provided for @ownDocWaived.
+  ///
+  /// In en, this message translates to:
+  /// **'Not needed: approved by Laawol.'**
+  String get ownDocWaived;
+
+  /// No description provided for @ownDocStatusMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'Missing'**
+  String get ownDocStatusMissing;
+
+  /// No description provided for @ownDocStatusSubmitted.
+  ///
+  /// In en, this message translates to:
+  /// **'Submitted'**
+  String get ownDocStatusSubmitted;
+
+  /// No description provided for @ownDocStatusVerified.
+  ///
+  /// In en, this message translates to:
+  /// **'Verified'**
+  String get ownDocStatusVerified;
+
+  /// No description provided for @ownDocStatusNeedsChanges.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs changes'**
+  String get ownDocStatusNeedsChanges;
+
+  /// No description provided for @ownDocStatusNotNeeded.
+  ///
+  /// In en, this message translates to:
+  /// **'Not needed'**
+  String get ownDocStatusNotNeeded;
+
+  /// No description provided for @ownDocShippingAuthority.
+  ///
+  /// In en, this message translates to:
+  /// **'Freight or shipping authority'**
+  String get ownDocShippingAuthority;
+
+  /// No description provided for @ownDocShippingAuthorityNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Freight-forwarder license, warehouse agreement, customs broker agreement, or receiving-partner proof.'**
+  String get ownDocShippingAuthorityNote;
+
+  /// No description provided for @ownDocDealerLicense.
+  ///
+  /// In en, this message translates to:
+  /// **'Dealer license or sales authorization'**
+  String get ownDocDealerLicense;
+
+  /// No description provided for @ownDocDealerLicenseNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Dealer license, reseller authorization, auction access proof, or local vehicle sales permit.'**
+  String get ownDocDealerLicenseNote;
+
+  /// No description provided for @ownDocParkingProof.
+  ///
+  /// In en, this message translates to:
+  /// **'Parking facility proof'**
+  String get ownDocParkingProof;
+
+  /// No description provided for @ownDocParkingProofNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Lot lease, property ownership, facility insurance, or written parking authorization.'**
+  String get ownDocParkingProofNote;
+
+  /// No description provided for @ownDocTransportInsurance.
+  ///
+  /// In en, this message translates to:
+  /// **'Transport insurance and authority'**
+  String get ownDocTransportInsurance;
+
+  /// No description provided for @ownDocTransportInsuranceNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Commercial auto policy, transporter authority, USDOT/MC registration, or carrier agreement.'**
+  String get ownDocTransportInsuranceNote;
+
+  /// No description provided for @ownDocOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open document'**
+  String get ownDocOpen;
+
+  /// No description provided for @ownDocUploaded.
+  ///
+  /// In en, this message translates to:
+  /// **'Uploaded: {name}'**
+  String ownDocUploaded(String name);
+
+  /// No description provided for @ownDocNoFile.
+  ///
+  /// In en, this message translates to:
+  /// **'No file uploaded yet'**
+  String get ownDocNoFile;
+
+  /// No description provided for @ownDocChoose.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose document'**
+  String get ownDocChoose;
+
+  /// No description provided for @ownDocSelected.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} ({kb} KB)'**
+  String ownDocSelected(String name, int kb);
+
+  /// No description provided for @ownDocUpload.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload document'**
+  String get ownDocUpload;
+
+  /// No description provided for @ownDocUploading.
+  ///
+  /// In en, this message translates to:
+  /// **'Uploading...'**
+  String get ownDocUploading;
+
+  /// No description provided for @ownDocDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Document uploaded.'**
+  String get ownDocDone;
+
+  /// No description provided for @ownDocFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The document was not uploaded. Try again.'**
+  String get ownDocFailed;
+
+  /// No description provided for @ownDocBadType.
+  ///
+  /// In en, this message translates to:
+  /// **'Documents must be PDF, Word, or image files.'**
+  String get ownDocBadType;
+
+  /// No description provided for @ownDocTooBig.
+  ///
+  /// In en, this message translates to:
+  /// **'Documents must be under 20 MB.'**
+  String get ownDocTooBig;
+
+  /// No description provided for @ownDocEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'That file is empty.'**
+  String get ownDocEmpty;
+
+  /// No description provided for @ownDocPickFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'We could not read that file. Try again.'**
+  String get ownDocPickFailed;
+
+  /// No description provided for @ownDocNotAllowed.
+  ///
+  /// In en, this message translates to:
+  /// **'You cannot upload documents for this business.'**
+  String get ownDocNotAllowed;
+
   /// No description provided for @pcsPrice.
   ///
   /// In en, this message translates to:
