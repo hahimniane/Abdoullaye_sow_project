@@ -29,6 +29,7 @@ import 'auth_failure.dart';
 import 'auth_lookup_guard.dart';
 import 'auth_profile_gate.dart';
 import '../utils/app_check_recovery.dart';
+import '../utils/full_access.dart';
 import '../services/whatsapp_conversations.dart' show whatsAppMessagesOn;
 
 export 'auth_failure.dart';
@@ -115,6 +116,11 @@ class AuthProvider extends ChangeNotifier {
   bool _isStaff = false;
   bool _isAdmin = false;
   bool _isBusinessOwner = false;
+
+  /// A staff member the owner gave "Full access" (docs/STAFF_FULL_ACCESS.md):
+  /// they act as the owner everywhere, so [_isBusinessOwner] is true and
+  /// [_isStaff] false for them; only the bank stays the real owner's.
+  bool _hasFullAccess = false;
   String? _role;
   String? _adminRole;
   PlatformAccess _platformAccess = const PlatformAccess.none();
@@ -161,6 +167,13 @@ class AuthProvider extends ChangeNotifier {
   bool get isStaff => _isStaff;
   bool get isAdmin => _isAdmin;
   bool get isBusinessOwner => _isBusinessOwner;
+
+  /// A staff member with "Full access": everything the owner can do here.
+  bool get hasFullAccess => _hasFullAccess;
+
+  /// The business's real owner, not a full-access staff member acting as
+  /// one: only they connect the bank Zelle is checked against.
+  bool get isRealBusinessOwner => _isBusinessOwner && !_hasFullAccess;
   bool get hasBusinessDashboardAccess =>
       _isStaff || _isBusinessOwner || _isAdmin;
   String? get role => _role;
@@ -588,9 +601,17 @@ class AuthProvider extends ChangeNotifier {
             permissionsConfig: permissionsConfig,
           );
         }
-        _role = role;
-        _isBusinessOwner = role == 'businessOwner';
-        _isStaff = role == 'staff';
+        // A full-access staff member is their business's owner on every
+        // screen, as on the website and the server (`effectiveUser`).
+        final fullAccess = isFullAccessStaff(
+          role: role,
+          fullAccess: data?['fullAccess'],
+          businessId: data?['businessId'],
+        );
+        _hasFullAccess = fullAccess;
+        _role = fullAccess ? 'businessOwner' : role;
+        _isBusinessOwner = role == 'businessOwner' || fullAccess;
+        _isStaff = role == 'staff' && !fullAccess;
         _isAdmin = role == 'admin';
         _adminRole = adminRole;
         _platformAccess = platformAccess;
@@ -676,6 +697,7 @@ class AuthProvider extends ChangeNotifier {
     _isStaff = false;
     _isAdmin = false;
     _isBusinessOwner = false;
+    _hasFullAccess = false;
     _role = null;
     _adminRole = null;
     _platformAccess = const PlatformAccess.none();

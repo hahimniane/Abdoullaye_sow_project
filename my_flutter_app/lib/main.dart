@@ -444,7 +444,9 @@ class MyApp extends StatelessWidget {
                 final named =
                     args is BusinessBankArguments ? args.businessId : '';
                 final businessId = named.isNotEmpty ? named : own;
-                if (!auth.isBusinessOwner ||
+                // The bank is the real owner's alone: not a full-access
+                // staff member's (docs/STAFF_FULL_ACCESS.md).
+                if (!auth.isRealBusinessOwner ||
                     businessId.isEmpty ||
                     (own.isNotEmpty && own != businessId)) {
                   return const HomeMenu(showBackButton: true);

@@ -19,10 +19,12 @@ import '../widgets/zelle_check_widgets.dart';
 import 'bank_zelle_settings_screen.dart';
 
 /// Whether the signed-in person owns the business (and so may connect the
-/// bank). Read from [AuthProvider] when there is one above [context].
+/// bank). Read from [AuthProvider] when there is one above [context]. A
+/// full-access staff member acts as the owner everywhere else, but the bank
+/// stays the real owner's (docs/STAFF_FULL_ACCESS.md).
 bool zelleViewerIsOwner(BuildContext context, String businessId) {
   final auth = Provider.of<AuthProvider?>(context, listen: false);
-  if (auth == null || !auth.isBusinessOwner) return false;
+  if (auth == null || !auth.isRealBusinessOwner) return false;
   final own = auth.businessId ?? '';
   return own.isEmpty || own == businessId;
 }

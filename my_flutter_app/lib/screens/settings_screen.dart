@@ -371,9 +371,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                           ),
                         ],
-                        // Only the owner connects the bank Zelle is checked
-                        // against; staff only run the checks.
-                        if (authProvider.isBusinessOwner &&
+                        // Only the real owner connects the bank Zelle is
+                        // checked against; staff - full access included -
+                        // only run the checks.
+                        if (authProvider.isRealBusinessOwner &&
                             (authProvider.businessId ?? '').isNotEmpty) ...[
                           const Divider(height: 1),
                           _SettingRow(
