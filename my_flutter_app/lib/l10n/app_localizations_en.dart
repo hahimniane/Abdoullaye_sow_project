@@ -15226,6 +15226,1207 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pcsErrPiecesRequired => 'Add at least one piece.';
 
   @override
+  String get fltTitle => 'Fleet';
+
+  @override
+  String get fltHomeSubtitle => 'Payments, drivers, plates and bank';
+
+  @override
+  String get fltTabPayments => 'Payments';
+
+  @override
+  String get fltTabDrivers => 'Drivers';
+
+  @override
+  String get fltTabPlates => 'Plates';
+
+  @override
+  String get fltTabBank => 'Bank';
+
+  @override
+  String get fltTabSettings => 'Settings';
+
+  @override
+  String get fltCancel => 'Cancel';
+
+  @override
+  String get fltClose => 'Close';
+
+  @override
+  String get fltClear => 'Clear';
+
+  @override
+  String get fltRetry => 'Try again';
+
+  @override
+  String get fltSaved => 'Saved.';
+
+  @override
+  String get fltShowMore => 'Show more';
+
+  @override
+  String get fltYes => 'Yes';
+
+  @override
+  String get fltNo => 'No';
+
+  @override
+  String get fltRemove => 'Remove';
+
+  @override
+  String get fltEditDetails => 'Edit details';
+
+  @override
+  String get fltLoadFailed =>
+      'Fleet could not be loaded. Check your connection and try again.';
+
+  @override
+  String get fltErrOffline =>
+      'No connection. Check your internet and try again.';
+
+  @override
+  String get fltErrUnknown => 'Something went wrong. Try again.';
+
+  @override
+  String get fltRefusalOff => 'Fleet is not switched on for this business.';
+
+  @override
+  String get fltRefusalAdminOnly => 'Only a Fleet admin can do this.';
+
+  @override
+  String get fltRefusalNotFound => 'That record was not found.';
+
+  @override
+  String get fltRefusalCarTaken =>
+      'This plate already has a driver. Get it back first.';
+
+  @override
+  String get fltRefusalBadInput => 'Some details are missing or not valid.';
+
+  @override
+  String get fltRefusalNoAmount => 'Enter an amount greater than zero.';
+
+  @override
+  String get fltRefusalAlreadyUndone => 'That payment was already undone.';
+
+  @override
+  String get fltRefusalNotOpen => 'Only an open bill can be waived.';
+
+  @override
+  String get fltRefusalReasonRequired => 'Say why.';
+
+  @override
+  String get fltRefusalImportLocked =>
+      'A payment brought in from the spreadsheet cannot be undone here.';
+
+  @override
+  String get fltRefusalFriendOverlap =>
+      'Another friend already has this car on those days.';
+
+  @override
+  String get fltRefusalNoteEmpty => 'Write a note.';
+
+  @override
+  String get fltRefusalNoteVoided => 'That note was already removed.';
+
+  @override
+  String get fltRefusalBadFile =>
+      'A file is not allowed (images or PDF, up to 10 MB).';
+
+  @override
+  String get fltRefusalDepositUsed =>
+      'That deposit was already used for another payment.';
+
+  @override
+  String get fltRefusalNoBank =>
+      'Connect the business’s bank first (Profile, Bank for Zelle checks).';
+
+  @override
+  String get fltRefusalBadPhone => 'Enter a phone number with its area code.';
+
+  @override
+  String get fltRefusalWhatsappOff =>
+      'WhatsApp to drivers is off for this driver (Fleet settings).';
+
+  @override
+  String get fltRefusalNothingOwed => 'This driver owes nothing right now.';
+
+  @override
+  String get fltRefusalNoPhone =>
+      'This driver has no WhatsApp number. Add one in Edit details.';
+
+  @override
+  String get fltRefusalDriverLeft => 'This driver has left.';
+
+  @override
+  String get fltRefusalStaffOnly =>
+      'This account is not allowed to manage Fleet.';
+
+  @override
+  String get fltPeriodWeek => 'Week';
+
+  @override
+  String get fltPeriodMonth => 'Month';
+
+  @override
+  String get fltPeriodPrevious => 'Previous period';
+
+  @override
+  String get fltPeriodNext => 'Next period';
+
+  @override
+  String fltPeriodTotals(String paid, String billed) {
+    return 'Paid $paid of $billed billed';
+  }
+
+  @override
+  String get fltSearchDrivers => 'Search name, phone or plate';
+
+  @override
+  String get fltViewActive => 'Active';
+
+  @override
+  String get fltViewLeft => 'Left';
+
+  @override
+  String get fltViewEveryone => 'Everyone';
+
+  @override
+  String get fltStateOwes => 'Owes';
+
+  @override
+  String get fltStatePart => 'Part paid';
+
+  @override
+  String get fltStatePaid => 'Paid in full';
+
+  @override
+  String get fltChipLate => 'Late';
+
+  @override
+  String get fltChipOwes => 'Owes';
+
+  @override
+  String get fltChipCredit => 'Credit';
+
+  @override
+  String get fltChipNoPlate => 'No plate';
+
+  @override
+  String get fltChipNoFee => 'No plate fee';
+
+  @override
+  String get fltSortBy => 'Sort by';
+
+  @override
+  String get fltSortName => 'Name A-Z';
+
+  @override
+  String get fltSortOwed => 'Most owed first';
+
+  @override
+  String get fltSortPaid => 'Most paid first';
+
+  @override
+  String get fltSortZelleCents => 'Zelle cents';
+
+  @override
+  String get fltNoDriverMatches =>
+      'No driver matches. Change the search or the filters.';
+
+  @override
+  String get fltNoDriversYet => 'No drivers yet.';
+
+  @override
+  String get fltNoDriverInList => 'No driver in this list.';
+
+  @override
+  String fltBilledAmount(String amount) {
+    return 'Billed $amount';
+  }
+
+  @override
+  String fltLateAmount(String amount) {
+    return 'Late $amount';
+  }
+
+  @override
+  String fltCreditAmount(String amount) {
+    return 'Credit $amount';
+  }
+
+  @override
+  String get fltTileCollected => 'Collected this month';
+
+  @override
+  String fltTileOfBilled(String amount) {
+    return 'of $amount billed';
+  }
+
+  @override
+  String get fltTileNothingBilled => 'Nothing billed yet';
+
+  @override
+  String get fltTileOwed => 'Owed now';
+
+  @override
+  String fltTileDriversOwe(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count drivers owe',
+      one: '1 driver owes',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get fltTileLate => 'Late drivers';
+
+  @override
+  String fltTilePastDue(String amount) {
+    return '$amount past due';
+  }
+
+  @override
+  String get fltTileNobodyLate => 'Nobody is late';
+
+  @override
+  String get fltDriver => 'Driver';
+
+  @override
+  String get fltAddDriver => 'Add driver';
+
+  @override
+  String get fltEditDriver => 'Edit driver';
+
+  @override
+  String get fltSaveDriver => 'Save driver';
+
+  @override
+  String get fltStatusActive => 'Active';
+
+  @override
+  String get fltStatusLeft => 'Left';
+
+  @override
+  String get fltFieldFullName => 'Full name';
+
+  @override
+  String get fltFieldPhone => 'Phone';
+
+  @override
+  String get fltFieldTlc => 'TLC license';
+
+  @override
+  String get fltFieldStreet => 'Street address';
+
+  @override
+  String get fltFieldCity => 'City';
+
+  @override
+  String get fltFieldState => 'State';
+
+  @override
+  String get fltFieldZip => 'ZIP code';
+
+  @override
+  String get fltFieldNotes => 'Notes';
+
+  @override
+  String get fltFieldNote => 'Note';
+
+  @override
+  String get fltFactJoined => 'Joined';
+
+  @override
+  String get fltFactWithCompany => 'With the company';
+
+  @override
+  String get fltFactPlate => 'Current plate';
+
+  @override
+  String get fltFactOwed => 'Owed now';
+
+  @override
+  String get fltFactLate => 'Late';
+
+  @override
+  String get fltFactCredit => 'Credit';
+
+  @override
+  String get fltFactNextDue => 'Next due';
+
+  @override
+  String fltTenureYears(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count years',
+      one: '1 year',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String fltTenureMonths(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count months',
+      one: '1 month',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String fltTenureDays(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count days',
+      one: '1 day',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get fltNoZelleCents =>
+      'This driver has no Zelle cents yet (only active drivers get them).';
+
+  @override
+  String fltZelleAmountFor(String amount) {
+    return 'Zelle amount for this driver: $amount. The last two digits are the driver’s own, so the amount tells us who paid.';
+  }
+
+  @override
+  String get fltRecordPayment => 'Record a payment';
+
+  @override
+  String get fltRecordPaymentAction => 'Record payment';
+
+  @override
+  String get fltAddCharge => 'Add a charge';
+
+  @override
+  String get fltAddChargeAction => 'Add charge';
+
+  @override
+  String get fltSendReminder => 'Send WhatsApp reminder';
+
+  @override
+  String get fltReminderSent => 'The WhatsApp reminder was sent.';
+
+  @override
+  String get fltPlateCardTitle => 'Plate';
+
+  @override
+  String fltPlateSince(String day, String rent, String due) {
+    return 'Since $day · $rent · due $due';
+  }
+
+  @override
+  String get fltNoPlateNow => 'No plate right now.';
+
+  @override
+  String get fltGivePlate => 'Give a plate';
+
+  @override
+  String get fltGivePlateAction => 'Give the plate';
+
+  @override
+  String get fltPlateReturned => 'Plate returned';
+
+  @override
+  String get fltPlateReturnedAction => 'Plate returned';
+
+  @override
+  String get fltNoFreePlates =>
+      'Every plate has a driver. Add a plate first, or get one back.';
+
+  @override
+  String get fltFieldPlate => 'Plate';
+
+  @override
+  String get fltFieldStartDay => 'Starts on';
+
+  @override
+  String get fltFieldRent => 'Rent (\$)';
+
+  @override
+  String get fltFieldReturnedOn => 'Returned on';
+
+  @override
+  String get fltPeriodMonthly => 'Monthly';
+
+  @override
+  String get fltPeriodWeekly => 'Weekly';
+
+  @override
+  String get fltFieldDueDay => 'Due day of the month';
+
+  @override
+  String get fltFieldDueWeekday => 'Due weekday';
+
+  @override
+  String get fltWeekdayMon => 'Monday';
+
+  @override
+  String get fltWeekdayTue => 'Tuesday';
+
+  @override
+  String get fltWeekdayWed => 'Wednesday';
+
+  @override
+  String get fltWeekdayThu => 'Thursday';
+
+  @override
+  String get fltWeekdayFri => 'Friday';
+
+  @override
+  String get fltWeekdaySat => 'Saturday';
+
+  @override
+  String get fltWeekdaySun => 'Sunday';
+
+  @override
+  String fltRentPerMonth(String amount) {
+    return '$amount a month';
+  }
+
+  @override
+  String fltRentPerWeek(String amount) {
+    return '$amount a week';
+  }
+
+  @override
+  String get fltReturnRuleFull =>
+      'A plate returned mid-period is billed the full period.';
+
+  @override
+  String get fltReturnRuleDays =>
+      'A plate returned mid-period is billed for the days used.';
+
+  @override
+  String get fltFieldAmount => 'Amount (\$)';
+
+  @override
+  String get fltFieldPaidOn => 'Paid on';
+
+  @override
+  String get fltFieldWhatFor => 'What for';
+
+  @override
+  String get fltFieldDueOn => 'Due on';
+
+  @override
+  String get fltMethodZelle => 'Zelle';
+
+  @override
+  String get fltMethodCash => 'Cash';
+
+  @override
+  String get fltMethodOther => 'Other';
+
+  @override
+  String get fltMethodImport => 'Spreadsheet';
+
+  @override
+  String get fltPaymentHint =>
+      'It is spread over their oldest bills first; any extra becomes credit.';
+
+  @override
+  String get fltPaymentRecorded => 'Payment recorded';
+
+  @override
+  String get fltPaymentSpread =>
+      'It was spread over their open bills, oldest first.';
+
+  @override
+  String fltPaymentWentToCredit(String amount) {
+    return '$amount was more than they owed and went to their credit, which pays their next bill.';
+  }
+
+  @override
+  String get fltTrackRecord => 'Track record';
+
+  @override
+  String get fltTrackRecordEmpty => 'Nothing yet.';
+
+  @override
+  String fltEntryJoined(String plate) {
+    return 'Joined with plate $plate';
+  }
+
+  @override
+  String fltEntryCarGiven(String plate, String rent) {
+    return 'Plate $plate given, $rent';
+  }
+
+  @override
+  String fltEntryCarReturned(String plate) {
+    return 'Plate $plate returned';
+  }
+
+  @override
+  String fltEntryRentChange(String from, String to) {
+    return 'Rent changed from $from to $to';
+  }
+
+  @override
+  String fltEntryLeftBack(String day) {
+    return 'Came back after leaving on $day';
+  }
+
+  @override
+  String fltEntryLicense(String license) {
+    return 'Old TLC license $license';
+  }
+
+  @override
+  String fltEntryFriend(String name, String plate, String from, String to) {
+    return '$name drove plate $plate, $from to $to';
+  }
+
+  @override
+  String fltEntryLateFee(String label, String amount) {
+    return 'Late fee: $label, $amount';
+  }
+
+  @override
+  String fltEntryCharge(String label, String amount) {
+    return 'Charge: $label, $amount';
+  }
+
+  @override
+  String fltEntryWaived(String label, String amount, String reason) {
+    return 'Waived: $label, $amount ($reason)';
+  }
+
+  @override
+  String fltEntryNote(String text) {
+    return 'Note: $text';
+  }
+
+  @override
+  String get fltNotesTitle => 'Office notes';
+
+  @override
+  String get fltAddNote => 'Add a note';
+
+  @override
+  String get fltSaveNote => 'Save note';
+
+  @override
+  String get fltNotesEmpty => 'No notes yet.';
+
+  @override
+  String get fltNoteNoFilesHint =>
+      'Files can be added from the website. Here, notes are text only.';
+
+  @override
+  String fltNoteFilesOnly(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count files',
+      one: '1 file',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get fltNoteRemoved => 'removed';
+
+  @override
+  String get fltRemoveNoteTitle => 'Remove this note?';
+
+  @override
+  String get fltRemoveNoteMessage =>
+      'It stays visible, greyed out. Notes are never deleted.';
+
+  @override
+  String get fltFriendsTitle => 'Friends who drove';
+
+  @override
+  String get fltFriendsEmpty => 'No friend drove this driver’s car.';
+
+  @override
+  String get fltAddFriend => 'Add a friend who drove';
+
+  @override
+  String get fltSaveFriend => 'Save friend';
+
+  @override
+  String get fltFieldFromDay => 'From';
+
+  @override
+  String get fltFieldToDay => 'To';
+
+  @override
+  String get fltRemoveFriendTitle => 'Remove this friend?';
+
+  @override
+  String get fltRemoveFriendMessage =>
+      'The days stay on record, marked removed.';
+
+  @override
+  String get fltBillsTitle => 'Bills';
+
+  @override
+  String get fltBillsOpen => 'Open';
+
+  @override
+  String get fltBillsPaid => 'Paid';
+
+  @override
+  String get fltBillsWaived => 'Waived';
+
+  @override
+  String get fltBillsAll => 'All';
+
+  @override
+  String get fltNoBillsYet => 'No bills yet.';
+
+  @override
+  String get fltNoBillInList => 'No bill in this list.';
+
+  @override
+  String fltBillDue(String day) {
+    return 'Due $day';
+  }
+
+  @override
+  String fltBillPaidAmount(String amount) {
+    return 'Paid $amount';
+  }
+
+  @override
+  String get fltBillPaid => 'Paid';
+
+  @override
+  String get fltBillLate => 'Late';
+
+  @override
+  String get fltBillOpen => 'Open';
+
+  @override
+  String get fltBillWaived => 'Waived';
+
+  @override
+  String get fltBillVoid => 'Void';
+
+  @override
+  String get fltWaiveTitle => 'Waive this bill';
+
+  @override
+  String get fltWaiveAction => 'Waive';
+
+  @override
+  String get fltFieldReason => 'Reason';
+
+  @override
+  String get fltWaiveHint =>
+      'The driver no longer owes it. The reason stays in the track record.';
+
+  @override
+  String get fltPaymentsTitle => 'Payments';
+
+  @override
+  String get fltNoPaymentsYet => 'No payments yet.';
+
+  @override
+  String get fltNoPaymentInList => 'No payment in this list.';
+
+  @override
+  String fltPaymentToCredit(String amount) {
+    return '$amount to credit';
+  }
+
+  @override
+  String get fltPaymentUndoneChip => 'Undone';
+
+  @override
+  String get fltUndoAction => 'Undo';
+
+  @override
+  String get fltUndoPaymentTitle => 'Undo this payment?';
+
+  @override
+  String fltUndoPaymentMessage(String amount) {
+    return 'Undo this $amount payment? The bills it paid open again and any credit it created is taken back.';
+  }
+
+  @override
+  String get fltPaymentUndone => 'The payment was undone.';
+
+  @override
+  String get fltAddPlate => 'Add plate';
+
+  @override
+  String get fltEditPlate => 'Edit plate';
+
+  @override
+  String get fltSavePlate => 'Save plate';
+
+  @override
+  String get fltPlate => 'Plate';
+
+  @override
+  String get fltPlatesMode => 'Plates';
+
+  @override
+  String get fltPaperworkMode => 'Paperwork';
+
+  @override
+  String get fltSearchPlates => 'Search plate, company or driver';
+
+  @override
+  String get fltCarsAll => 'All';
+
+  @override
+  String get fltCarsWithDriver => 'With a driver';
+
+  @override
+  String get fltCarsFree => 'Free';
+
+  @override
+  String get fltNoPlatesYet => 'No plates yet.';
+
+  @override
+  String get fltNoPlateMatches => 'No plate matches.';
+
+  @override
+  String get fltNoDriverNow => 'No driver';
+
+  @override
+  String get fltRegistrationShort => 'Registration';
+
+  @override
+  String get fltDiamondShort => 'Diamond';
+
+  @override
+  String get fltRegistrationExpires => 'Registration expires';
+
+  @override
+  String get fltDiamondExpires => 'Diamond expires';
+
+  @override
+  String get fltExpiryExpired => 'Expired';
+
+  @override
+  String get fltExpirySoon => 'Due in 60 days';
+
+  @override
+  String get fltExpiryMissing => 'Missing';
+
+  @override
+  String get fltExpiryOk => 'OK';
+
+  @override
+  String get fltFieldCompany => 'Company';
+
+  @override
+  String get fltFieldCarOnPlate => 'Car on this plate';
+
+  @override
+  String get fltFieldVin => 'VIN';
+
+  @override
+  String get fltFieldInsurer => 'Insurer';
+
+  @override
+  String get fltFieldPolicy => 'Policy number';
+
+  @override
+  String get fltFieldPremium => 'Monthly premium (\$)';
+
+  @override
+  String get fltFieldInsuranceDueDay => 'Insurance due day';
+
+  @override
+  String get fltFieldInsurancePaidBy => 'Insurance paid by';
+
+  @override
+  String get fltFieldAutopay => 'Insurance on autopay';
+
+  @override
+  String get fltAutopayOn => 'Insurance is on autopay';
+
+  @override
+  String get fltFieldOwnership => 'Who owns the car';
+
+  @override
+  String get fltOwnerCompany => 'The company';
+
+  @override
+  String get fltOwnerDriver => 'The driver';
+
+  @override
+  String get fltCarChangedTitle => 'You changed the car on this plate';
+
+  @override
+  String get fltCarMoved => 'The plate moved to another car';
+
+  @override
+  String get fltCarMovedSince => 'Since (leave empty for today)';
+
+  @override
+  String get fltCarTypo => 'Same car: I am fixing a mistake';
+
+  @override
+  String get fltCarMovedHint =>
+      'When the plate moves, the car it was on stays in the plate’s history.';
+
+  @override
+  String get fltCarChangeAsk =>
+      'Say whether the plate moved to another car or you are fixing a mistake.';
+
+  @override
+  String get fltCarsOnPlate => 'Cars on this plate';
+
+  @override
+  String get fltCarNow => 'now';
+
+  @override
+  String fltCarUntil(String day) {
+    return 'until $day';
+  }
+
+  @override
+  String get fltWhoHadIt => 'Who had it when';
+
+  @override
+  String get fltNobodyHadIt => 'Nobody had this plate yet.';
+
+  @override
+  String fltFriendDrove(String name, String from, String to) {
+    return '$name drove it, $from to $to';
+  }
+
+  @override
+  String get fltBankTitle => 'Zelle from the bank';
+
+  @override
+  String get fltCheckBankNow => 'Check bank now';
+
+  @override
+  String get fltBankNotConnected =>
+      'Connect the business’s bank (Profile, Bank for Zelle checks) and Zelle deposits pay drivers’ bills by themselves.';
+
+  @override
+  String get fltBankGeneric => 'Bank';
+
+  @override
+  String get fltBankAutoNote =>
+      'Deposits from known drivers pay their bills by themselves.';
+
+  @override
+  String fltBankLastCheck(String day) {
+    return 'Last pay-day check: $day';
+  }
+
+  @override
+  String get fltBankTooSlow =>
+      'The bank details took too long to load. Try again.';
+
+  @override
+  String get fltBankChecked =>
+      'Bank checked. New deposits from known drivers are now paid.';
+
+  @override
+  String get fltBankLimitReached =>
+      'This month’s bank-check limit is reached: Laawol reads what the bank already sent.';
+
+  @override
+  String get fltBankRemovedTitle => 'The bank took back a deposit';
+
+  @override
+  String get fltBankRemovedHint =>
+      'The payment is still recorded. Look at the bank account: if the money is not there, undo the payment. If it is there, keep it.';
+
+  @override
+  String get fltAdminDecides => 'A Fleet admin decides.';
+
+  @override
+  String get fltKeepPayment => 'Keep it';
+
+  @override
+  String get fltKeepPaymentTitle => 'Keep this payment?';
+
+  @override
+  String get fltKeepPaymentMessage =>
+      'Do this only when the money is in the bank account.';
+
+  @override
+  String get fltPaymentKept => 'Payment kept.';
+
+  @override
+  String get fltBankWaitingTitle => 'Deposits waiting for a driver';
+
+  @override
+  String get fltBankNoneWaiting => 'No deposit is waiting for a driver.';
+
+  @override
+  String get fltBankPending => 'pending at the bank';
+
+  @override
+  String get fltDriverWhoSent => 'Driver who sent it';
+
+  @override
+  String get fltPayThisDriver => 'Pay this driver';
+
+  @override
+  String get fltPickDriverFirst => 'Pick the driver who sent it.';
+
+  @override
+  String get fltPayWithDepositTitle => 'Pay with this deposit?';
+
+  @override
+  String fltPayWithDepositMessage(String name) {
+    return 'Pay $name’s bills with this deposit? Their next deposits from the same sender are paid by themselves.';
+  }
+
+  @override
+  String get fltWaitingTwoDrivers =>
+      'It could be from two drivers: pick the right one.';
+
+  @override
+  String get fltWaitingUndone =>
+      'Its payment was undone: pick the right driver.';
+
+  @override
+  String get fltWaitingDuplicate =>
+      'This may be a Zelle already used, sent again by the bank. Pay it only if the driver really sent it twice.';
+
+  @override
+  String get fltWaitingNotZelle =>
+      'This deposit is not a Zelle (cash, a check, a card payout or a transfer). Pick the driver only if it is a driver’s payment.';
+
+  @override
+  String get fltWaitingDriverLeft =>
+      'This sender paid for a driver who left. Pick who this payment is for.';
+
+  @override
+  String get fltWaitingOwnTransfer =>
+      'This is a transfer from a bank account, not a Zelle from a person. Use it for a driver only if they really paid this way.';
+
+  @override
+  String get fltWaitingUnknown =>
+      'Laawol does not know this sender yet: pick the driver once and it is remembered.';
+
+  @override
+  String get fltSettingsTitle => 'Fleet settings';
+
+  @override
+  String get fltSettingLateFee => 'Late fee (\$, 0 for none)';
+
+  @override
+  String get fltSettingLateFeeDay =>
+      'Late fee applies on day of the month (1-28)';
+
+  @override
+  String get fltSettingFirstMonth =>
+      'First month the late fee applies (YYYY-MM)';
+
+  @override
+  String get fltSettingReturnRule => 'When a plate is returned mid-period';
+
+  @override
+  String get fltRuleFull => 'Bill the full period';
+
+  @override
+  String get fltRuleDays => 'Bill the days used';
+
+  @override
+  String get fltSettingZelleName => 'Zelle name shown to drivers';
+
+  @override
+  String get fltSettingZelleHandle => 'Zelle email or phone shown to drivers';
+
+  @override
+  String get fltSettingDriversSeeOnly => 'Drivers see only this business';
+
+  @override
+  String get fltSettingDriversSeeOnlyHint =>
+      'On: a Fleet driver sees this business’s pages and services on Laawol, and no other business.';
+
+  @override
+  String get fltSaveSettings => 'Save settings';
+
+  @override
+  String get fltSettingsSaveTitle => 'Save the Fleet settings?';
+
+  @override
+  String get fltSettingsSaveMessage =>
+      'The late fee and the plate-returned rule apply to bills from now on.';
+
+  @override
+  String get fltImportOnWebsite =>
+      'Importing a spreadsheet is done on the website, not on the phone.';
+
+  @override
+  String get fltWaTitle => 'WhatsApp to drivers';
+
+  @override
+  String get fltWaIntro =>
+      'Drivers get a receipt each time a payment is recorded, and a reminder 2 days before rent is due, on the due day, 3 days after if still unpaid, then every week.';
+
+  @override
+  String get fltWaStateOff => 'Off: no message is sent to drivers.';
+
+  @override
+  String get fltWaStateOn => 'On: drivers get receipts and reminders.';
+
+  @override
+  String fltWaStateSome(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'On for $count chosen drivers only.',
+      one: 'On for 1 chosen driver only.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get fltWaTestFirst => 'Send yourself a test first, then turn it on.';
+
+  @override
+  String get fltWaAllDrivers => 'All with a phone';
+
+  @override
+  String get fltWaChosenDrivers => 'Chosen drivers';
+
+  @override
+  String get fltWaAddDriver => 'Add a driver';
+
+  @override
+  String get fltWaNoMoreDrivers => 'No other active driver has a phone number.';
+
+  @override
+  String get fltWaSaveWho => 'Save who gets messages';
+
+  @override
+  String get fltWaTestPhone => 'Phone for a test message';
+
+  @override
+  String get fltWaSendTest => 'Send a test';
+
+  @override
+  String get fltWaTestSent =>
+      'Two test messages were sent: a receipt and a reminder. Check WhatsApp on that phone.';
+
+  @override
+  String get fltWaTestFailed =>
+      'The test could not be sent. If these messages are new, Meta may still be reviewing them: try again later.';
+
+  @override
+  String get fltWaTurnOn => 'Turn on';
+
+  @override
+  String get fltWaTurnOff => 'Turn off';
+
+  @override
+  String get fltWaTurnOnTitle => 'Turn on WhatsApp to drivers?';
+
+  @override
+  String get fltWaTurnOffTitle => 'Turn off WhatsApp to drivers?';
+
+  @override
+  String fltWaTurnOnAll(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          'From now on the $count active drivers with a phone get a receipt for each payment and reminders before and after rent is due.',
+      one:
+          'From now on the 1 active driver with a phone gets a receipt for each payment and reminders before and after rent is due.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String fltWaTurnOnSome(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          'Only $count chosen drivers get messages. No other driver gets one.',
+      one: 'Only 1 chosen driver gets messages. No other driver gets one.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get fltWaTurnOffMessage => 'No more receipts or reminders are sent.';
+
+  @override
+  String get fltScheduleTitle => 'Pay-day bank checks';
+
+  @override
+  String get fltScheduleIntro =>
+      'The bank tells Laawol about new deposits a few times a day for free. On pay days you can have Laawol ask more often, so payments show up within minutes. Each ask is a paid bank check.';
+
+  @override
+  String get fltScheduleEvery => 'How often on pay days';
+
+  @override
+  String get fltScheduleOff => 'Off: only when the bank updates';
+
+  @override
+  String get fltScheduleEveryHour => 'Every hour';
+
+  @override
+  String fltScheduleEveryMinutes(int minutes) {
+    return 'Every $minutes minutes';
+  }
+
+  @override
+  String get fltScheduleFrom => 'From';
+
+  @override
+  String get fltScheduleUntil => 'Until';
+
+  @override
+  String get fltSchedulePayDays => 'Pay days (day of the month)';
+
+  @override
+  String get fltScheduleMondays => 'Also every Monday (weekly drivers)';
+
+  @override
+  String fltScheduleQuote(int count, String amount) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          'About $count checks a month, about $amount a month. Added to your Laawol bill.',
+      one:
+          'About 1 check a month, about $amount a month. Added to your Laawol bill.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get fltScheduleNoCost =>
+      'No extra cost: deposits pay drivers when the bank updates, a few times a day.';
+
+  @override
+  String get fltScheduleSave => 'Save the schedule';
+
+  @override
+  String get fltScheduleSaveTitle => 'Save the schedule?';
+
+  @override
+  String fltScheduleSaveOn(int minutes, int count, String amount) {
+    return 'Check the bank every $minutes minutes on pay days? About $count checks a month, about $amount a month on your Laawol bill.';
+  }
+
+  @override
+  String get fltScheduleSaveOff =>
+      'Turn the pay-day bank checks off? Deposits still pay drivers when the bank updates on its own, at no cost.';
+
+  @override
   String get pcsErrPiecesTooMany => 'A package can have at most 60 pieces.';
 
   @override

@@ -7361,6 +7361,681 @@
     }
   },
   "pcsErrPiecesRequired": "Add at least one piece.",
+  "fltTitle": "Fleet",
+  "fltHomeSubtitle": "Payments, drivers, plates and bank",
+  "fltTabPayments": "Payments",
+  "fltTabDrivers": "Drivers",
+  "fltTabPlates": "Plates",
+  "fltTabBank": "Bank",
+  "fltTabSettings": "Settings",
+  "fltCancel": "Cancel",
+  "fltClose": "Close",
+  "fltClear": "Clear",
+  "fltRetry": "Try again",
+  "fltSaved": "Saved.",
+  "fltShowMore": "Show more",
+  "fltYes": "Yes",
+  "fltNo": "No",
+  "fltRemove": "Remove",
+  "fltEditDetails": "Edit details",
+  "fltLoadFailed": "Fleet could not be loaded. Check your connection and try again.",
+  "fltErrOffline": "No connection. Check your internet and try again.",
+  "fltErrUnknown": "Something went wrong. Try again.",
+  "fltRefusalOff": "Fleet is not switched on for this business.",
+  "fltRefusalAdminOnly": "Only a Fleet admin can do this.",
+  "fltRefusalNotFound": "That record was not found.",
+  "fltRefusalCarTaken": "This plate already has a driver. Get it back first.",
+  "fltRefusalBadInput": "Some details are missing or not valid.",
+  "fltRefusalNoAmount": "Enter an amount greater than zero.",
+  "fltRefusalAlreadyUndone": "That payment was already undone.",
+  "fltRefusalNotOpen": "Only an open bill can be waived.",
+  "fltRefusalReasonRequired": "Say why.",
+  "fltRefusalImportLocked": "A payment brought in from the spreadsheet cannot be undone here.",
+  "fltRefusalFriendOverlap": "Another friend already has this car on those days.",
+  "fltRefusalNoteEmpty": "Write a note.",
+  "fltRefusalNoteVoided": "That note was already removed.",
+  "fltRefusalBadFile": "A file is not allowed (images or PDF, up to 10 MB).",
+  "fltRefusalDepositUsed": "That deposit was already used for another payment.",
+  "fltRefusalNoBank": "Connect the business’s bank first (Profile, Bank for Zelle checks).",
+  "fltRefusalBadPhone": "Enter a phone number with its area code.",
+  "fltRefusalWhatsappOff": "WhatsApp to drivers is off for this driver (Fleet settings).",
+  "fltRefusalNothingOwed": "This driver owes nothing right now.",
+  "fltRefusalNoPhone": "This driver has no WhatsApp number. Add one in Edit details.",
+  "fltRefusalDriverLeft": "This driver has left.",
+  "fltRefusalStaffOnly": "This account is not allowed to manage Fleet.",
+  "fltPeriodWeek": "Week",
+  "fltPeriodMonth": "Month",
+  "fltPeriodPrevious": "Previous period",
+  "fltPeriodNext": "Next period",
+  "fltPeriodTotals": "Paid {paid} of {billed} billed",
+  "@fltPeriodTotals": {
+    "placeholders": {
+      "paid": {
+        "type": "String"
+      },
+      "billed": {
+        "type": "String"
+      }
+    }
+  },
+  "fltSearchDrivers": "Search name, phone or plate",
+  "fltViewActive": "Active",
+  "fltViewLeft": "Left",
+  "fltViewEveryone": "Everyone",
+  "fltStateOwes": "Owes",
+  "fltStatePart": "Part paid",
+  "fltStatePaid": "Paid in full",
+  "fltChipLate": "Late",
+  "fltChipOwes": "Owes",
+  "fltChipCredit": "Credit",
+  "fltChipNoPlate": "No plate",
+  "fltChipNoFee": "No plate fee",
+  "fltSortBy": "Sort by",
+  "fltSortName": "Name A-Z",
+  "fltSortOwed": "Most owed first",
+  "fltSortPaid": "Most paid first",
+  "fltSortZelleCents": "Zelle cents",
+  "fltNoDriverMatches": "No driver matches. Change the search or the filters.",
+  "fltNoDriversYet": "No drivers yet.",
+  "fltNoDriverInList": "No driver in this list.",
+  "fltBilledAmount": "Billed {amount}",
+  "@fltBilledAmount": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "fltLateAmount": "Late {amount}",
+  "@fltLateAmount": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "fltCreditAmount": "Credit {amount}",
+  "@fltCreditAmount": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "fltTileCollected": "Collected this month",
+  "fltTileOfBilled": "of {amount} billed",
+  "@fltTileOfBilled": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "fltTileNothingBilled": "Nothing billed yet",
+  "fltTileOwed": "Owed now",
+  "fltTileDriversOwe": "{count, plural, =1{1 driver owes} other{{count} drivers owe}}",
+  "@fltTileDriversOwe": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fltTileLate": "Late drivers",
+  "fltTilePastDue": "{amount} past due",
+  "@fltTilePastDue": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "fltTileNobodyLate": "Nobody is late",
+  "fltDriver": "Driver",
+  "fltAddDriver": "Add driver",
+  "fltEditDriver": "Edit driver",
+  "fltSaveDriver": "Save driver",
+  "fltStatusActive": "Active",
+  "fltStatusLeft": "Left",
+  "fltFieldFullName": "Full name",
+  "fltFieldPhone": "Phone",
+  "fltFieldTlc": "TLC license",
+  "fltFieldStreet": "Street address",
+  "fltFieldCity": "City",
+  "fltFieldState": "State",
+  "fltFieldZip": "ZIP code",
+  "fltFieldNotes": "Notes",
+  "fltFieldNote": "Note",
+  "fltFactJoined": "Joined",
+  "fltFactWithCompany": "With the company",
+  "fltFactPlate": "Current plate",
+  "fltFactOwed": "Owed now",
+  "fltFactLate": "Late",
+  "fltFactCredit": "Credit",
+  "fltFactNextDue": "Next due",
+  "fltTenureYears": "{count, plural, =1{1 year} other{{count} years}}",
+  "@fltTenureYears": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fltTenureMonths": "{count, plural, =1{1 month} other{{count} months}}",
+  "@fltTenureMonths": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fltTenureDays": "{count, plural, =1{1 day} other{{count} days}}",
+  "@fltTenureDays": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fltNoZelleCents": "This driver has no Zelle cents yet (only active drivers get them).",
+  "fltZelleAmountFor": "Zelle amount for this driver: {amount}. The last two digits are the driver’s own, so the amount tells us who paid.",
+  "@fltZelleAmountFor": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "fltRecordPayment": "Record a payment",
+  "fltRecordPaymentAction": "Record payment",
+  "fltAddCharge": "Add a charge",
+  "fltAddChargeAction": "Add charge",
+  "fltSendReminder": "Send WhatsApp reminder",
+  "fltReminderSent": "The WhatsApp reminder was sent.",
+  "fltPlateCardTitle": "Plate",
+  "fltPlateSince": "Since {day} · {rent} · due {due}",
+  "@fltPlateSince": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      },
+      "rent": {
+        "type": "String"
+      },
+      "due": {
+        "type": "String"
+      }
+    }
+  },
+  "fltNoPlateNow": "No plate right now.",
+  "fltGivePlate": "Give a plate",
+  "fltGivePlateAction": "Give the plate",
+  "fltPlateReturned": "Plate returned",
+  "fltPlateReturnedAction": "Plate returned",
+  "fltNoFreePlates": "Every plate has a driver. Add a plate first, or get one back.",
+  "fltFieldPlate": "Plate",
+  "fltFieldStartDay": "Starts on",
+  "fltFieldRent": "Rent ($)",
+  "fltFieldReturnedOn": "Returned on",
+  "fltPeriodMonthly": "Monthly",
+  "fltPeriodWeekly": "Weekly",
+  "fltFieldDueDay": "Due day of the month",
+  "fltFieldDueWeekday": "Due weekday",
+  "fltWeekdayMon": "Monday",
+  "fltWeekdayTue": "Tuesday",
+  "fltWeekdayWed": "Wednesday",
+  "fltWeekdayThu": "Thursday",
+  "fltWeekdayFri": "Friday",
+  "fltWeekdaySat": "Saturday",
+  "fltWeekdaySun": "Sunday",
+  "fltRentPerMonth": "{amount} a month",
+  "@fltRentPerMonth": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "fltRentPerWeek": "{amount} a week",
+  "@fltRentPerWeek": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "fltReturnRuleFull": "A plate returned mid-period is billed the full period.",
+  "fltReturnRuleDays": "A plate returned mid-period is billed for the days used.",
+  "fltFieldAmount": "Amount ($)",
+  "fltFieldPaidOn": "Paid on",
+  "fltFieldWhatFor": "What for",
+  "fltFieldDueOn": "Due on",
+  "fltMethodZelle": "Zelle",
+  "fltMethodCash": "Cash",
+  "fltMethodOther": "Other",
+  "fltMethodImport": "Spreadsheet",
+  "fltPaymentHint": "It is spread over their oldest bills first; any extra becomes credit.",
+  "fltPaymentRecorded": "Payment recorded",
+  "fltPaymentSpread": "It was spread over their open bills, oldest first.",
+  "fltPaymentWentToCredit": "{amount} was more than they owed and went to their credit, which pays their next bill.",
+  "@fltPaymentWentToCredit": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "fltTrackRecord": "Track record",
+  "fltTrackRecordEmpty": "Nothing yet.",
+  "fltEntryJoined": "Joined with plate {plate}",
+  "@fltEntryJoined": {
+    "placeholders": {
+      "plate": {
+        "type": "String"
+      }
+    }
+  },
+  "fltEntryCarGiven": "Plate {plate} given, {rent}",
+  "@fltEntryCarGiven": {
+    "placeholders": {
+      "plate": {
+        "type": "String"
+      },
+      "rent": {
+        "type": "String"
+      }
+    }
+  },
+  "fltEntryCarReturned": "Plate {plate} returned",
+  "@fltEntryCarReturned": {
+    "placeholders": {
+      "plate": {
+        "type": "String"
+      }
+    }
+  },
+  "fltEntryRentChange": "Rent changed from {from} to {to}",
+  "@fltEntryRentChange": {
+    "placeholders": {
+      "from": {
+        "type": "String"
+      },
+      "to": {
+        "type": "String"
+      }
+    }
+  },
+  "fltEntryLeftBack": "Came back after leaving on {day}",
+  "@fltEntryLeftBack": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "fltEntryLicense": "Old TLC license {license}",
+  "@fltEntryLicense": {
+    "placeholders": {
+      "license": {
+        "type": "String"
+      }
+    }
+  },
+  "fltEntryFriend": "{name} drove plate {plate}, {from} to {to}",
+  "@fltEntryFriend": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "plate": {
+        "type": "String"
+      },
+      "from": {
+        "type": "String"
+      },
+      "to": {
+        "type": "String"
+      }
+    }
+  },
+  "fltEntryLateFee": "Late fee: {label}, {amount}",
+  "@fltEntryLateFee": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "fltEntryCharge": "Charge: {label}, {amount}",
+  "@fltEntryCharge": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "fltEntryWaived": "Waived: {label}, {amount} ({reason})",
+  "@fltEntryWaived": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      },
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "fltEntryNote": "Note: {text}",
+  "@fltEntryNote": {
+    "placeholders": {
+      "text": {
+        "type": "String"
+      }
+    }
+  },
+  "fltNotesTitle": "Office notes",
+  "fltAddNote": "Add a note",
+  "fltSaveNote": "Save note",
+  "fltNotesEmpty": "No notes yet.",
+  "fltNoteNoFilesHint": "Files can be added from the website. Here, notes are text only.",
+  "fltNoteFilesOnly": "{count, plural, =1{1 file} other{{count} files}}",
+  "@fltNoteFilesOnly": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fltNoteRemoved": "removed",
+  "fltRemoveNoteTitle": "Remove this note?",
+  "fltRemoveNoteMessage": "It stays visible, greyed out. Notes are never deleted.",
+  "fltFriendsTitle": "Friends who drove",
+  "fltFriendsEmpty": "No friend drove this driver’s car.",
+  "fltAddFriend": "Add a friend who drove",
+  "fltSaveFriend": "Save friend",
+  "fltFieldFromDay": "From",
+  "fltFieldToDay": "To",
+  "fltRemoveFriendTitle": "Remove this friend?",
+  "fltRemoveFriendMessage": "The days stay on record, marked removed.",
+  "fltBillsTitle": "Bills",
+  "fltBillsOpen": "Open",
+  "fltBillsPaid": "Paid",
+  "fltBillsWaived": "Waived",
+  "fltBillsAll": "All",
+  "fltNoBillsYet": "No bills yet.",
+  "fltNoBillInList": "No bill in this list.",
+  "fltBillDue": "Due {day}",
+  "@fltBillDue": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "fltBillPaidAmount": "Paid {amount}",
+  "@fltBillPaidAmount": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "fltBillPaid": "Paid",
+  "fltBillLate": "Late",
+  "fltBillOpen": "Open",
+  "fltBillWaived": "Waived",
+  "fltBillVoid": "Void",
+  "fltWaiveTitle": "Waive this bill",
+  "fltWaiveAction": "Waive",
+  "fltFieldReason": "Reason",
+  "fltWaiveHint": "The driver no longer owes it. The reason stays in the track record.",
+  "fltPaymentsTitle": "Payments",
+  "fltNoPaymentsYet": "No payments yet.",
+  "fltNoPaymentInList": "No payment in this list.",
+  "fltPaymentToCredit": "{amount} to credit",
+  "@fltPaymentToCredit": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "fltPaymentUndoneChip": "Undone",
+  "fltUndoAction": "Undo",
+  "fltUndoPaymentTitle": "Undo this payment?",
+  "fltUndoPaymentMessage": "Undo this {amount} payment? The bills it paid open again and any credit it created is taken back.",
+  "@fltUndoPaymentMessage": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "fltPaymentUndone": "The payment was undone.",
+  "fltAddPlate": "Add plate",
+  "fltEditPlate": "Edit plate",
+  "fltSavePlate": "Save plate",
+  "fltPlate": "Plate",
+  "fltPlatesMode": "Plates",
+  "fltPaperworkMode": "Paperwork",
+  "fltSearchPlates": "Search plate, company or driver",
+  "fltCarsAll": "All",
+  "fltCarsWithDriver": "With a driver",
+  "fltCarsFree": "Free",
+  "fltNoPlatesYet": "No plates yet.",
+  "fltNoPlateMatches": "No plate matches.",
+  "fltNoDriverNow": "No driver",
+  "fltRegistrationShort": "Registration",
+  "fltDiamondShort": "Diamond",
+  "fltRegistrationExpires": "Registration expires",
+  "fltDiamondExpires": "Diamond expires",
+  "fltExpiryExpired": "Expired",
+  "fltExpirySoon": "Due in 60 days",
+  "fltExpiryMissing": "Missing",
+  "fltExpiryOk": "OK",
+  "fltFieldCompany": "Company",
+  "fltFieldCarOnPlate": "Car on this plate",
+  "fltFieldVin": "VIN",
+  "fltFieldInsurer": "Insurer",
+  "fltFieldPolicy": "Policy number",
+  "fltFieldPremium": "Monthly premium ($)",
+  "fltFieldInsuranceDueDay": "Insurance due day",
+  "fltFieldInsurancePaidBy": "Insurance paid by",
+  "fltFieldAutopay": "Insurance on autopay",
+  "fltAutopayOn": "Insurance is on autopay",
+  "fltFieldOwnership": "Who owns the car",
+  "fltOwnerCompany": "The company",
+  "fltOwnerDriver": "The driver",
+  "fltCarChangedTitle": "You changed the car on this plate",
+  "fltCarMoved": "The plate moved to another car",
+  "fltCarMovedSince": "Since (leave empty for today)",
+  "fltCarTypo": "Same car: I am fixing a mistake",
+  "fltCarMovedHint": "When the plate moves, the car it was on stays in the plate’s history.",
+  "fltCarChangeAsk": "Say whether the plate moved to another car or you are fixing a mistake.",
+  "fltCarsOnPlate": "Cars on this plate",
+  "fltCarNow": "now",
+  "fltCarUntil": "until {day}",
+  "@fltCarUntil": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "fltWhoHadIt": "Who had it when",
+  "fltNobodyHadIt": "Nobody had this plate yet.",
+  "fltFriendDrove": "{name} drove it, {from} to {to}",
+  "@fltFriendDrove": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "from": {
+        "type": "String"
+      },
+      "to": {
+        "type": "String"
+      }
+    }
+  },
+  "fltBankTitle": "Zelle from the bank",
+  "fltCheckBankNow": "Check bank now",
+  "fltBankNotConnected": "Connect the business’s bank (Profile, Bank for Zelle checks) and Zelle deposits pay drivers’ bills by themselves.",
+  "fltBankGeneric": "Bank",
+  "fltBankAutoNote": "Deposits from known drivers pay their bills by themselves.",
+  "fltBankLastCheck": "Last pay-day check: {day}",
+  "@fltBankLastCheck": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "fltBankTooSlow": "The bank details took too long to load. Try again.",
+  "fltBankChecked": "Bank checked. New deposits from known drivers are now paid.",
+  "fltBankLimitReached": "This month’s bank-check limit is reached: Laawol reads what the bank already sent.",
+  "fltBankRemovedTitle": "The bank took back a deposit",
+  "fltBankRemovedHint": "The payment is still recorded. Look at the bank account: if the money is not there, undo the payment. If it is there, keep it.",
+  "fltAdminDecides": "A Fleet admin decides.",
+  "fltKeepPayment": "Keep it",
+  "fltKeepPaymentTitle": "Keep this payment?",
+  "fltKeepPaymentMessage": "Do this only when the money is in the bank account.",
+  "fltPaymentKept": "Payment kept.",
+  "fltBankWaitingTitle": "Deposits waiting for a driver",
+  "fltBankNoneWaiting": "No deposit is waiting for a driver.",
+  "fltBankPending": "pending at the bank",
+  "fltDriverWhoSent": "Driver who sent it",
+  "fltPayThisDriver": "Pay this driver",
+  "fltPickDriverFirst": "Pick the driver who sent it.",
+  "fltPayWithDepositTitle": "Pay with this deposit?",
+  "fltPayWithDepositMessage": "Pay {name}’s bills with this deposit? Their next deposits from the same sender are paid by themselves.",
+  "@fltPayWithDepositMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "fltWaitingTwoDrivers": "It could be from two drivers: pick the right one.",
+  "fltWaitingUndone": "Its payment was undone: pick the right driver.",
+  "fltWaitingDuplicate": "This may be a Zelle already used, sent again by the bank. Pay it only if the driver really sent it twice.",
+  "fltWaitingNotZelle": "This deposit is not a Zelle (cash, a check, a card payout or a transfer). Pick the driver only if it is a driver’s payment.",
+  "fltWaitingDriverLeft": "This sender paid for a driver who left. Pick who this payment is for.",
+  "fltWaitingOwnTransfer": "This is a transfer from a bank account, not a Zelle from a person. Use it for a driver only if they really paid this way.",
+  "fltWaitingUnknown": "Laawol does not know this sender yet: pick the driver once and it is remembered.",
+  "fltSettingsTitle": "Fleet settings",
+  "fltSettingLateFee": "Late fee ($, 0 for none)",
+  "fltSettingLateFeeDay": "Late fee applies on day of the month (1-28)",
+  "fltSettingFirstMonth": "First month the late fee applies (YYYY-MM)",
+  "fltSettingReturnRule": "When a plate is returned mid-period",
+  "fltRuleFull": "Bill the full period",
+  "fltRuleDays": "Bill the days used",
+  "fltSettingZelleName": "Zelle name shown to drivers",
+  "fltSettingZelleHandle": "Zelle email or phone shown to drivers",
+  "fltSettingDriversSeeOnly": "Drivers see only this business",
+  "fltSettingDriversSeeOnlyHint": "On: a Fleet driver sees this business’s pages and services on Laawol, and no other business.",
+  "fltSaveSettings": "Save settings",
+  "fltSettingsSaveTitle": "Save the Fleet settings?",
+  "fltSettingsSaveMessage": "The late fee and the plate-returned rule apply to bills from now on.",
+  "fltImportOnWebsite": "Importing a spreadsheet is done on the website, not on the phone.",
+  "fltWaTitle": "WhatsApp to drivers",
+  "fltWaIntro": "Drivers get a receipt each time a payment is recorded, and a reminder 2 days before rent is due, on the due day, 3 days after if still unpaid, then every week.",
+  "fltWaStateOff": "Off: no message is sent to drivers.",
+  "fltWaStateOn": "On: drivers get receipts and reminders.",
+  "fltWaStateSome": "{count, plural, =1{On for 1 chosen driver only.} other{On for {count} chosen drivers only.}}",
+  "@fltWaStateSome": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fltWaTestFirst": "Send yourself a test first, then turn it on.",
+  "fltWaAllDrivers": "All with a phone",
+  "fltWaChosenDrivers": "Chosen drivers",
+  "fltWaAddDriver": "Add a driver",
+  "fltWaNoMoreDrivers": "No other active driver has a phone number.",
+  "fltWaSaveWho": "Save who gets messages",
+  "fltWaTestPhone": "Phone for a test message",
+  "fltWaSendTest": "Send a test",
+  "fltWaTestSent": "Two test messages were sent: a receipt and a reminder. Check WhatsApp on that phone.",
+  "fltWaTestFailed": "The test could not be sent. If these messages are new, Meta may still be reviewing them: try again later.",
+  "fltWaTurnOn": "Turn on",
+  "fltWaTurnOff": "Turn off",
+  "fltWaTurnOnTitle": "Turn on WhatsApp to drivers?",
+  "fltWaTurnOffTitle": "Turn off WhatsApp to drivers?",
+  "fltWaTurnOnAll": "{count, plural, =1{From now on the 1 active driver with a phone gets a receipt for each payment and reminders before and after rent is due.} other{From now on the {count} active drivers with a phone get a receipt for each payment and reminders before and after rent is due.}}",
+  "@fltWaTurnOnAll": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fltWaTurnOnSome": "{count, plural, =1{Only 1 chosen driver gets messages. No other driver gets one.} other{Only {count} chosen drivers get messages. No other driver gets one.}}",
+  "@fltWaTurnOnSome": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fltWaTurnOffMessage": "No more receipts or reminders are sent.",
+  "fltScheduleTitle": "Pay-day bank checks",
+  "fltScheduleIntro": "The bank tells Laawol about new deposits a few times a day for free. On pay days you can have Laawol ask more often, so payments show up within minutes. Each ask is a paid bank check.",
+  "fltScheduleEvery": "How often on pay days",
+  "fltScheduleOff": "Off: only when the bank updates",
+  "fltScheduleEveryHour": "Every hour",
+  "fltScheduleEveryMinutes": "Every {minutes} minutes",
+  "@fltScheduleEveryMinutes": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "fltScheduleFrom": "From",
+  "fltScheduleUntil": "Until",
+  "fltSchedulePayDays": "Pay days (day of the month)",
+  "fltScheduleMondays": "Also every Monday (weekly drivers)",
+  "fltScheduleQuote": "{count, plural, =1{About 1 check a month, about {amount} a month. Added to your Laawol bill.} other{About {count} checks a month, about {amount} a month. Added to your Laawol bill.}}",
+  "@fltScheduleQuote": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "fltScheduleNoCost": "No extra cost: deposits pay drivers when the bank updates, a few times a day.",
+  "fltScheduleSave": "Save the schedule",
+  "fltScheduleSaveTitle": "Save the schedule?",
+  "fltScheduleSaveOn": "Check the bank every {minutes} minutes on pay days? About {count} checks a month, about {amount} a month on your Laawol bill.",
+  "@fltScheduleSaveOn": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "fltScheduleSaveOff": "Turn the pay-day bank checks off? Deposits still pay drivers when the bank updates on its own, at no cost.",
   "pcsErrPiecesTooMany": "A package can have at most 60 pieces.",
   "pcsErrKindInvalid": "Say what each piece is: a barrel, a box, or something else.",
   "pcsErrDescriptionRequired": "Say what each box or item is.",

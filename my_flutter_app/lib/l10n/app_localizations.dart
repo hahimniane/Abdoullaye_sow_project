@@ -26279,6 +26279,2028 @@ abstract class AppLocalizations {
   /// **'Add at least one piece.'**
   String get pcsErrPiecesRequired;
 
+  /// No description provided for @fltTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Fleet'**
+  String get fltTitle;
+
+  /// No description provided for @fltHomeSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Payments, drivers, plates and bank'**
+  String get fltHomeSubtitle;
+
+  /// No description provided for @fltTabPayments.
+  ///
+  /// In en, this message translates to:
+  /// **'Payments'**
+  String get fltTabPayments;
+
+  /// No description provided for @fltTabDrivers.
+  ///
+  /// In en, this message translates to:
+  /// **'Drivers'**
+  String get fltTabDrivers;
+
+  /// No description provided for @fltTabPlates.
+  ///
+  /// In en, this message translates to:
+  /// **'Plates'**
+  String get fltTabPlates;
+
+  /// No description provided for @fltTabBank.
+  ///
+  /// In en, this message translates to:
+  /// **'Bank'**
+  String get fltTabBank;
+
+  /// No description provided for @fltTabSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings'**
+  String get fltTabSettings;
+
+  /// No description provided for @fltCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get fltCancel;
+
+  /// No description provided for @fltClose.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get fltClose;
+
+  /// No description provided for @fltClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get fltClear;
+
+  /// No description provided for @fltRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get fltRetry;
+
+  /// No description provided for @fltSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved.'**
+  String get fltSaved;
+
+  /// No description provided for @fltShowMore.
+  ///
+  /// In en, this message translates to:
+  /// **'Show more'**
+  String get fltShowMore;
+
+  /// No description provided for @fltYes.
+  ///
+  /// In en, this message translates to:
+  /// **'Yes'**
+  String get fltYes;
+
+  /// No description provided for @fltNo.
+  ///
+  /// In en, this message translates to:
+  /// **'No'**
+  String get fltNo;
+
+  /// No description provided for @fltRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get fltRemove;
+
+  /// No description provided for @fltEditDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit details'**
+  String get fltEditDetails;
+
+  /// No description provided for @fltLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Fleet could not be loaded. Check your connection and try again.'**
+  String get fltLoadFailed;
+
+  /// No description provided for @fltErrOffline.
+  ///
+  /// In en, this message translates to:
+  /// **'No connection. Check your internet and try again.'**
+  String get fltErrOffline;
+
+  /// No description provided for @fltErrUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Something went wrong. Try again.'**
+  String get fltErrUnknown;
+
+  /// No description provided for @fltRefusalOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Fleet is not switched on for this business.'**
+  String get fltRefusalOff;
+
+  /// No description provided for @fltRefusalAdminOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Only a Fleet admin can do this.'**
+  String get fltRefusalAdminOnly;
+
+  /// No description provided for @fltRefusalNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'That record was not found.'**
+  String get fltRefusalNotFound;
+
+  /// No description provided for @fltRefusalCarTaken.
+  ///
+  /// In en, this message translates to:
+  /// **'This plate already has a driver. Get it back first.'**
+  String get fltRefusalCarTaken;
+
+  /// No description provided for @fltRefusalBadInput.
+  ///
+  /// In en, this message translates to:
+  /// **'Some details are missing or not valid.'**
+  String get fltRefusalBadInput;
+
+  /// No description provided for @fltRefusalNoAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter an amount greater than zero.'**
+  String get fltRefusalNoAmount;
+
+  /// No description provided for @fltRefusalAlreadyUndone.
+  ///
+  /// In en, this message translates to:
+  /// **'That payment was already undone.'**
+  String get fltRefusalAlreadyUndone;
+
+  /// No description provided for @fltRefusalNotOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Only an open bill can be waived.'**
+  String get fltRefusalNotOpen;
+
+  /// No description provided for @fltRefusalReasonRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Say why.'**
+  String get fltRefusalReasonRequired;
+
+  /// No description provided for @fltRefusalImportLocked.
+  ///
+  /// In en, this message translates to:
+  /// **'A payment brought in from the spreadsheet cannot be undone here.'**
+  String get fltRefusalImportLocked;
+
+  /// No description provided for @fltRefusalFriendOverlap.
+  ///
+  /// In en, this message translates to:
+  /// **'Another friend already has this car on those days.'**
+  String get fltRefusalFriendOverlap;
+
+  /// No description provided for @fltRefusalNoteEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Write a note.'**
+  String get fltRefusalNoteEmpty;
+
+  /// No description provided for @fltRefusalNoteVoided.
+  ///
+  /// In en, this message translates to:
+  /// **'That note was already removed.'**
+  String get fltRefusalNoteVoided;
+
+  /// No description provided for @fltRefusalBadFile.
+  ///
+  /// In en, this message translates to:
+  /// **'A file is not allowed (images or PDF, up to 10 MB).'**
+  String get fltRefusalBadFile;
+
+  /// No description provided for @fltRefusalDepositUsed.
+  ///
+  /// In en, this message translates to:
+  /// **'That deposit was already used for another payment.'**
+  String get fltRefusalDepositUsed;
+
+  /// No description provided for @fltRefusalNoBank.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect the business’s bank first (Profile, Bank for Zelle checks).'**
+  String get fltRefusalNoBank;
+
+  /// No description provided for @fltRefusalBadPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a phone number with its area code.'**
+  String get fltRefusalBadPhone;
+
+  /// No description provided for @fltRefusalWhatsappOff.
+  ///
+  /// In en, this message translates to:
+  /// **'WhatsApp to drivers is off for this driver (Fleet settings).'**
+  String get fltRefusalWhatsappOff;
+
+  /// No description provided for @fltRefusalNothingOwed.
+  ///
+  /// In en, this message translates to:
+  /// **'This driver owes nothing right now.'**
+  String get fltRefusalNothingOwed;
+
+  /// No description provided for @fltRefusalNoPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'This driver has no WhatsApp number. Add one in Edit details.'**
+  String get fltRefusalNoPhone;
+
+  /// No description provided for @fltRefusalDriverLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'This driver has left.'**
+  String get fltRefusalDriverLeft;
+
+  /// No description provided for @fltRefusalStaffOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'This account is not allowed to manage Fleet.'**
+  String get fltRefusalStaffOnly;
+
+  /// No description provided for @fltPeriodWeek.
+  ///
+  /// In en, this message translates to:
+  /// **'Week'**
+  String get fltPeriodWeek;
+
+  /// No description provided for @fltPeriodMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'Month'**
+  String get fltPeriodMonth;
+
+  /// No description provided for @fltPeriodPrevious.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous period'**
+  String get fltPeriodPrevious;
+
+  /// No description provided for @fltPeriodNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Next period'**
+  String get fltPeriodNext;
+
+  /// No description provided for @fltPeriodTotals.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid {paid} of {billed} billed'**
+  String fltPeriodTotals(String paid, String billed);
+
+  /// No description provided for @fltSearchDrivers.
+  ///
+  /// In en, this message translates to:
+  /// **'Search name, phone or plate'**
+  String get fltSearchDrivers;
+
+  /// No description provided for @fltViewActive.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get fltViewActive;
+
+  /// No description provided for @fltViewLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'Left'**
+  String get fltViewLeft;
+
+  /// No description provided for @fltViewEveryone.
+  ///
+  /// In en, this message translates to:
+  /// **'Everyone'**
+  String get fltViewEveryone;
+
+  /// No description provided for @fltStateOwes.
+  ///
+  /// In en, this message translates to:
+  /// **'Owes'**
+  String get fltStateOwes;
+
+  /// No description provided for @fltStatePart.
+  ///
+  /// In en, this message translates to:
+  /// **'Part paid'**
+  String get fltStatePart;
+
+  /// No description provided for @fltStatePaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid in full'**
+  String get fltStatePaid;
+
+  /// No description provided for @fltChipLate.
+  ///
+  /// In en, this message translates to:
+  /// **'Late'**
+  String get fltChipLate;
+
+  /// No description provided for @fltChipOwes.
+  ///
+  /// In en, this message translates to:
+  /// **'Owes'**
+  String get fltChipOwes;
+
+  /// No description provided for @fltChipCredit.
+  ///
+  /// In en, this message translates to:
+  /// **'Credit'**
+  String get fltChipCredit;
+
+  /// No description provided for @fltChipNoPlate.
+  ///
+  /// In en, this message translates to:
+  /// **'No plate'**
+  String get fltChipNoPlate;
+
+  /// No description provided for @fltChipNoFee.
+  ///
+  /// In en, this message translates to:
+  /// **'No plate fee'**
+  String get fltChipNoFee;
+
+  /// No description provided for @fltSortBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Sort by'**
+  String get fltSortBy;
+
+  /// No description provided for @fltSortName.
+  ///
+  /// In en, this message translates to:
+  /// **'Name A-Z'**
+  String get fltSortName;
+
+  /// No description provided for @fltSortOwed.
+  ///
+  /// In en, this message translates to:
+  /// **'Most owed first'**
+  String get fltSortOwed;
+
+  /// No description provided for @fltSortPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Most paid first'**
+  String get fltSortPaid;
+
+  /// No description provided for @fltSortZelleCents.
+  ///
+  /// In en, this message translates to:
+  /// **'Zelle cents'**
+  String get fltSortZelleCents;
+
+  /// No description provided for @fltNoDriverMatches.
+  ///
+  /// In en, this message translates to:
+  /// **'No driver matches. Change the search or the filters.'**
+  String get fltNoDriverMatches;
+
+  /// No description provided for @fltNoDriversYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No drivers yet.'**
+  String get fltNoDriversYet;
+
+  /// No description provided for @fltNoDriverInList.
+  ///
+  /// In en, this message translates to:
+  /// **'No driver in this list.'**
+  String get fltNoDriverInList;
+
+  /// No description provided for @fltBilledAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Billed {amount}'**
+  String fltBilledAmount(String amount);
+
+  /// No description provided for @fltLateAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Late {amount}'**
+  String fltLateAmount(String amount);
+
+  /// No description provided for @fltCreditAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Credit {amount}'**
+  String fltCreditAmount(String amount);
+
+  /// No description provided for @fltTileCollected.
+  ///
+  /// In en, this message translates to:
+  /// **'Collected this month'**
+  String get fltTileCollected;
+
+  /// No description provided for @fltTileOfBilled.
+  ///
+  /// In en, this message translates to:
+  /// **'of {amount} billed'**
+  String fltTileOfBilled(String amount);
+
+  /// No description provided for @fltTileNothingBilled.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing billed yet'**
+  String get fltTileNothingBilled;
+
+  /// No description provided for @fltTileOwed.
+  ///
+  /// In en, this message translates to:
+  /// **'Owed now'**
+  String get fltTileOwed;
+
+  /// No description provided for @fltTileDriversOwe.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 driver owes} other{{count} drivers owe}}'**
+  String fltTileDriversOwe(int count);
+
+  /// No description provided for @fltTileLate.
+  ///
+  /// In en, this message translates to:
+  /// **'Late drivers'**
+  String get fltTileLate;
+
+  /// No description provided for @fltTilePastDue.
+  ///
+  /// In en, this message translates to:
+  /// **'{amount} past due'**
+  String fltTilePastDue(String amount);
+
+  /// No description provided for @fltTileNobodyLate.
+  ///
+  /// In en, this message translates to:
+  /// **'Nobody is late'**
+  String get fltTileNobodyLate;
+
+  /// No description provided for @fltDriver.
+  ///
+  /// In en, this message translates to:
+  /// **'Driver'**
+  String get fltDriver;
+
+  /// No description provided for @fltAddDriver.
+  ///
+  /// In en, this message translates to:
+  /// **'Add driver'**
+  String get fltAddDriver;
+
+  /// No description provided for @fltEditDriver.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit driver'**
+  String get fltEditDriver;
+
+  /// No description provided for @fltSaveDriver.
+  ///
+  /// In en, this message translates to:
+  /// **'Save driver'**
+  String get fltSaveDriver;
+
+  /// No description provided for @fltStatusActive.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get fltStatusActive;
+
+  /// No description provided for @fltStatusLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'Left'**
+  String get fltStatusLeft;
+
+  /// No description provided for @fltFieldFullName.
+  ///
+  /// In en, this message translates to:
+  /// **'Full name'**
+  String get fltFieldFullName;
+
+  /// No description provided for @fltFieldPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Phone'**
+  String get fltFieldPhone;
+
+  /// No description provided for @fltFieldTlc.
+  ///
+  /// In en, this message translates to:
+  /// **'TLC license'**
+  String get fltFieldTlc;
+
+  /// No description provided for @fltFieldStreet.
+  ///
+  /// In en, this message translates to:
+  /// **'Street address'**
+  String get fltFieldStreet;
+
+  /// No description provided for @fltFieldCity.
+  ///
+  /// In en, this message translates to:
+  /// **'City'**
+  String get fltFieldCity;
+
+  /// No description provided for @fltFieldState.
+  ///
+  /// In en, this message translates to:
+  /// **'State'**
+  String get fltFieldState;
+
+  /// No description provided for @fltFieldZip.
+  ///
+  /// In en, this message translates to:
+  /// **'ZIP code'**
+  String get fltFieldZip;
+
+  /// No description provided for @fltFieldNotes.
+  ///
+  /// In en, this message translates to:
+  /// **'Notes'**
+  String get fltFieldNotes;
+
+  /// No description provided for @fltFieldNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Note'**
+  String get fltFieldNote;
+
+  /// No description provided for @fltFactJoined.
+  ///
+  /// In en, this message translates to:
+  /// **'Joined'**
+  String get fltFactJoined;
+
+  /// No description provided for @fltFactWithCompany.
+  ///
+  /// In en, this message translates to:
+  /// **'With the company'**
+  String get fltFactWithCompany;
+
+  /// No description provided for @fltFactPlate.
+  ///
+  /// In en, this message translates to:
+  /// **'Current plate'**
+  String get fltFactPlate;
+
+  /// No description provided for @fltFactOwed.
+  ///
+  /// In en, this message translates to:
+  /// **'Owed now'**
+  String get fltFactOwed;
+
+  /// No description provided for @fltFactLate.
+  ///
+  /// In en, this message translates to:
+  /// **'Late'**
+  String get fltFactLate;
+
+  /// No description provided for @fltFactCredit.
+  ///
+  /// In en, this message translates to:
+  /// **'Credit'**
+  String get fltFactCredit;
+
+  /// No description provided for @fltFactNextDue.
+  ///
+  /// In en, this message translates to:
+  /// **'Next due'**
+  String get fltFactNextDue;
+
+  /// No description provided for @fltTenureYears.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 year} other{{count} years}}'**
+  String fltTenureYears(int count);
+
+  /// No description provided for @fltTenureMonths.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 month} other{{count} months}}'**
+  String fltTenureMonths(int count);
+
+  /// No description provided for @fltTenureDays.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 day} other{{count} days}}'**
+  String fltTenureDays(int count);
+
+  /// No description provided for @fltNoZelleCents.
+  ///
+  /// In en, this message translates to:
+  /// **'This driver has no Zelle cents yet (only active drivers get them).'**
+  String get fltNoZelleCents;
+
+  /// No description provided for @fltZelleAmountFor.
+  ///
+  /// In en, this message translates to:
+  /// **'Zelle amount for this driver: {amount}. The last two digits are the driver’s own, so the amount tells us who paid.'**
+  String fltZelleAmountFor(String amount);
+
+  /// No description provided for @fltRecordPayment.
+  ///
+  /// In en, this message translates to:
+  /// **'Record a payment'**
+  String get fltRecordPayment;
+
+  /// No description provided for @fltRecordPaymentAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Record payment'**
+  String get fltRecordPaymentAction;
+
+  /// No description provided for @fltAddCharge.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a charge'**
+  String get fltAddCharge;
+
+  /// No description provided for @fltAddChargeAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Add charge'**
+  String get fltAddChargeAction;
+
+  /// No description provided for @fltSendReminder.
+  ///
+  /// In en, this message translates to:
+  /// **'Send WhatsApp reminder'**
+  String get fltSendReminder;
+
+  /// No description provided for @fltReminderSent.
+  ///
+  /// In en, this message translates to:
+  /// **'The WhatsApp reminder was sent.'**
+  String get fltReminderSent;
+
+  /// No description provided for @fltPlateCardTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Plate'**
+  String get fltPlateCardTitle;
+
+  /// No description provided for @fltPlateSince.
+  ///
+  /// In en, this message translates to:
+  /// **'Since {day} · {rent} · due {due}'**
+  String fltPlateSince(String day, String rent, String due);
+
+  /// No description provided for @fltNoPlateNow.
+  ///
+  /// In en, this message translates to:
+  /// **'No plate right now.'**
+  String get fltNoPlateNow;
+
+  /// No description provided for @fltGivePlate.
+  ///
+  /// In en, this message translates to:
+  /// **'Give a plate'**
+  String get fltGivePlate;
+
+  /// No description provided for @fltGivePlateAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Give the plate'**
+  String get fltGivePlateAction;
+
+  /// No description provided for @fltPlateReturned.
+  ///
+  /// In en, this message translates to:
+  /// **'Plate returned'**
+  String get fltPlateReturned;
+
+  /// No description provided for @fltPlateReturnedAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Plate returned'**
+  String get fltPlateReturnedAction;
+
+  /// No description provided for @fltNoFreePlates.
+  ///
+  /// In en, this message translates to:
+  /// **'Every plate has a driver. Add a plate first, or get one back.'**
+  String get fltNoFreePlates;
+
+  /// No description provided for @fltFieldPlate.
+  ///
+  /// In en, this message translates to:
+  /// **'Plate'**
+  String get fltFieldPlate;
+
+  /// No description provided for @fltFieldStartDay.
+  ///
+  /// In en, this message translates to:
+  /// **'Starts on'**
+  String get fltFieldStartDay;
+
+  /// No description provided for @fltFieldRent.
+  ///
+  /// In en, this message translates to:
+  /// **'Rent (\$)'**
+  String get fltFieldRent;
+
+  /// No description provided for @fltFieldReturnedOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Returned on'**
+  String get fltFieldReturnedOn;
+
+  /// No description provided for @fltPeriodMonthly.
+  ///
+  /// In en, this message translates to:
+  /// **'Monthly'**
+  String get fltPeriodMonthly;
+
+  /// No description provided for @fltPeriodWeekly.
+  ///
+  /// In en, this message translates to:
+  /// **'Weekly'**
+  String get fltPeriodWeekly;
+
+  /// No description provided for @fltFieldDueDay.
+  ///
+  /// In en, this message translates to:
+  /// **'Due day of the month'**
+  String get fltFieldDueDay;
+
+  /// No description provided for @fltFieldDueWeekday.
+  ///
+  /// In en, this message translates to:
+  /// **'Due weekday'**
+  String get fltFieldDueWeekday;
+
+  /// No description provided for @fltWeekdayMon.
+  ///
+  /// In en, this message translates to:
+  /// **'Monday'**
+  String get fltWeekdayMon;
+
+  /// No description provided for @fltWeekdayTue.
+  ///
+  /// In en, this message translates to:
+  /// **'Tuesday'**
+  String get fltWeekdayTue;
+
+  /// No description provided for @fltWeekdayWed.
+  ///
+  /// In en, this message translates to:
+  /// **'Wednesday'**
+  String get fltWeekdayWed;
+
+  /// No description provided for @fltWeekdayThu.
+  ///
+  /// In en, this message translates to:
+  /// **'Thursday'**
+  String get fltWeekdayThu;
+
+  /// No description provided for @fltWeekdayFri.
+  ///
+  /// In en, this message translates to:
+  /// **'Friday'**
+  String get fltWeekdayFri;
+
+  /// No description provided for @fltWeekdaySat.
+  ///
+  /// In en, this message translates to:
+  /// **'Saturday'**
+  String get fltWeekdaySat;
+
+  /// No description provided for @fltWeekdaySun.
+  ///
+  /// In en, this message translates to:
+  /// **'Sunday'**
+  String get fltWeekdaySun;
+
+  /// No description provided for @fltRentPerMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'{amount} a month'**
+  String fltRentPerMonth(String amount);
+
+  /// No description provided for @fltRentPerWeek.
+  ///
+  /// In en, this message translates to:
+  /// **'{amount} a week'**
+  String fltRentPerWeek(String amount);
+
+  /// No description provided for @fltReturnRuleFull.
+  ///
+  /// In en, this message translates to:
+  /// **'A plate returned mid-period is billed the full period.'**
+  String get fltReturnRuleFull;
+
+  /// No description provided for @fltReturnRuleDays.
+  ///
+  /// In en, this message translates to:
+  /// **'A plate returned mid-period is billed for the days used.'**
+  String get fltReturnRuleDays;
+
+  /// No description provided for @fltFieldAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount (\$)'**
+  String get fltFieldAmount;
+
+  /// No description provided for @fltFieldPaidOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid on'**
+  String get fltFieldPaidOn;
+
+  /// No description provided for @fltFieldWhatFor.
+  ///
+  /// In en, this message translates to:
+  /// **'What for'**
+  String get fltFieldWhatFor;
+
+  /// No description provided for @fltFieldDueOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Due on'**
+  String get fltFieldDueOn;
+
+  /// No description provided for @fltMethodZelle.
+  ///
+  /// In en, this message translates to:
+  /// **'Zelle'**
+  String get fltMethodZelle;
+
+  /// No description provided for @fltMethodCash.
+  ///
+  /// In en, this message translates to:
+  /// **'Cash'**
+  String get fltMethodCash;
+
+  /// No description provided for @fltMethodOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get fltMethodOther;
+
+  /// No description provided for @fltMethodImport.
+  ///
+  /// In en, this message translates to:
+  /// **'Spreadsheet'**
+  String get fltMethodImport;
+
+  /// No description provided for @fltPaymentHint.
+  ///
+  /// In en, this message translates to:
+  /// **'It is spread over their oldest bills first; any extra becomes credit.'**
+  String get fltPaymentHint;
+
+  /// No description provided for @fltPaymentRecorded.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment recorded'**
+  String get fltPaymentRecorded;
+
+  /// No description provided for @fltPaymentSpread.
+  ///
+  /// In en, this message translates to:
+  /// **'It was spread over their open bills, oldest first.'**
+  String get fltPaymentSpread;
+
+  /// No description provided for @fltPaymentWentToCredit.
+  ///
+  /// In en, this message translates to:
+  /// **'{amount} was more than they owed and went to their credit, which pays their next bill.'**
+  String fltPaymentWentToCredit(String amount);
+
+  /// No description provided for @fltTrackRecord.
+  ///
+  /// In en, this message translates to:
+  /// **'Track record'**
+  String get fltTrackRecord;
+
+  /// No description provided for @fltTrackRecordEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing yet.'**
+  String get fltTrackRecordEmpty;
+
+  /// No description provided for @fltEntryJoined.
+  ///
+  /// In en, this message translates to:
+  /// **'Joined with plate {plate}'**
+  String fltEntryJoined(String plate);
+
+  /// No description provided for @fltEntryCarGiven.
+  ///
+  /// In en, this message translates to:
+  /// **'Plate {plate} given, {rent}'**
+  String fltEntryCarGiven(String plate, String rent);
+
+  /// No description provided for @fltEntryCarReturned.
+  ///
+  /// In en, this message translates to:
+  /// **'Plate {plate} returned'**
+  String fltEntryCarReturned(String plate);
+
+  /// No description provided for @fltEntryRentChange.
+  ///
+  /// In en, this message translates to:
+  /// **'Rent changed from {from} to {to}'**
+  String fltEntryRentChange(String from, String to);
+
+  /// No description provided for @fltEntryLeftBack.
+  ///
+  /// In en, this message translates to:
+  /// **'Came back after leaving on {day}'**
+  String fltEntryLeftBack(String day);
+
+  /// No description provided for @fltEntryLicense.
+  ///
+  /// In en, this message translates to:
+  /// **'Old TLC license {license}'**
+  String fltEntryLicense(String license);
+
+  /// No description provided for @fltEntryFriend.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} drove plate {plate}, {from} to {to}'**
+  String fltEntryFriend(String name, String plate, String from, String to);
+
+  /// No description provided for @fltEntryLateFee.
+  ///
+  /// In en, this message translates to:
+  /// **'Late fee: {label}, {amount}'**
+  String fltEntryLateFee(String label, String amount);
+
+  /// No description provided for @fltEntryCharge.
+  ///
+  /// In en, this message translates to:
+  /// **'Charge: {label}, {amount}'**
+  String fltEntryCharge(String label, String amount);
+
+  /// No description provided for @fltEntryWaived.
+  ///
+  /// In en, this message translates to:
+  /// **'Waived: {label}, {amount} ({reason})'**
+  String fltEntryWaived(String label, String amount, String reason);
+
+  /// No description provided for @fltEntryNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Note: {text}'**
+  String fltEntryNote(String text);
+
+  /// No description provided for @fltNotesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Office notes'**
+  String get fltNotesTitle;
+
+  /// No description provided for @fltAddNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a note'**
+  String get fltAddNote;
+
+  /// No description provided for @fltSaveNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Save note'**
+  String get fltSaveNote;
+
+  /// No description provided for @fltNotesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No notes yet.'**
+  String get fltNotesEmpty;
+
+  /// No description provided for @fltNoteNoFilesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Files can be added from the website. Here, notes are text only.'**
+  String get fltNoteNoFilesHint;
+
+  /// No description provided for @fltNoteFilesOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 file} other{{count} files}}'**
+  String fltNoteFilesOnly(int count);
+
+  /// No description provided for @fltNoteRemoved.
+  ///
+  /// In en, this message translates to:
+  /// **'removed'**
+  String get fltNoteRemoved;
+
+  /// No description provided for @fltRemoveNoteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove this note?'**
+  String get fltRemoveNoteTitle;
+
+  /// No description provided for @fltRemoveNoteMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'It stays visible, greyed out. Notes are never deleted.'**
+  String get fltRemoveNoteMessage;
+
+  /// No description provided for @fltFriendsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Friends who drove'**
+  String get fltFriendsTitle;
+
+  /// No description provided for @fltFriendsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No friend drove this driver’s car.'**
+  String get fltFriendsEmpty;
+
+  /// No description provided for @fltAddFriend.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a friend who drove'**
+  String get fltAddFriend;
+
+  /// No description provided for @fltSaveFriend.
+  ///
+  /// In en, this message translates to:
+  /// **'Save friend'**
+  String get fltSaveFriend;
+
+  /// No description provided for @fltFieldFromDay.
+  ///
+  /// In en, this message translates to:
+  /// **'From'**
+  String get fltFieldFromDay;
+
+  /// No description provided for @fltFieldToDay.
+  ///
+  /// In en, this message translates to:
+  /// **'To'**
+  String get fltFieldToDay;
+
+  /// No description provided for @fltRemoveFriendTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove this friend?'**
+  String get fltRemoveFriendTitle;
+
+  /// No description provided for @fltRemoveFriendMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The days stay on record, marked removed.'**
+  String get fltRemoveFriendMessage;
+
+  /// No description provided for @fltBillsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Bills'**
+  String get fltBillsTitle;
+
+  /// No description provided for @fltBillsOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get fltBillsOpen;
+
+  /// No description provided for @fltBillsPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid'**
+  String get fltBillsPaid;
+
+  /// No description provided for @fltBillsWaived.
+  ///
+  /// In en, this message translates to:
+  /// **'Waived'**
+  String get fltBillsWaived;
+
+  /// No description provided for @fltBillsAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get fltBillsAll;
+
+  /// No description provided for @fltNoBillsYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No bills yet.'**
+  String get fltNoBillsYet;
+
+  /// No description provided for @fltNoBillInList.
+  ///
+  /// In en, this message translates to:
+  /// **'No bill in this list.'**
+  String get fltNoBillInList;
+
+  /// No description provided for @fltBillDue.
+  ///
+  /// In en, this message translates to:
+  /// **'Due {day}'**
+  String fltBillDue(String day);
+
+  /// No description provided for @fltBillPaidAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid {amount}'**
+  String fltBillPaidAmount(String amount);
+
+  /// No description provided for @fltBillPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid'**
+  String get fltBillPaid;
+
+  /// No description provided for @fltBillLate.
+  ///
+  /// In en, this message translates to:
+  /// **'Late'**
+  String get fltBillLate;
+
+  /// No description provided for @fltBillOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get fltBillOpen;
+
+  /// No description provided for @fltBillWaived.
+  ///
+  /// In en, this message translates to:
+  /// **'Waived'**
+  String get fltBillWaived;
+
+  /// No description provided for @fltBillVoid.
+  ///
+  /// In en, this message translates to:
+  /// **'Void'**
+  String get fltBillVoid;
+
+  /// No description provided for @fltWaiveTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Waive this bill'**
+  String get fltWaiveTitle;
+
+  /// No description provided for @fltWaiveAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Waive'**
+  String get fltWaiveAction;
+
+  /// No description provided for @fltFieldReason.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason'**
+  String get fltFieldReason;
+
+  /// No description provided for @fltWaiveHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The driver no longer owes it. The reason stays in the track record.'**
+  String get fltWaiveHint;
+
+  /// No description provided for @fltPaymentsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Payments'**
+  String get fltPaymentsTitle;
+
+  /// No description provided for @fltNoPaymentsYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No payments yet.'**
+  String get fltNoPaymentsYet;
+
+  /// No description provided for @fltNoPaymentInList.
+  ///
+  /// In en, this message translates to:
+  /// **'No payment in this list.'**
+  String get fltNoPaymentInList;
+
+  /// No description provided for @fltPaymentToCredit.
+  ///
+  /// In en, this message translates to:
+  /// **'{amount} to credit'**
+  String fltPaymentToCredit(String amount);
+
+  /// No description provided for @fltPaymentUndoneChip.
+  ///
+  /// In en, this message translates to:
+  /// **'Undone'**
+  String get fltPaymentUndoneChip;
+
+  /// No description provided for @fltUndoAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo'**
+  String get fltUndoAction;
+
+  /// No description provided for @fltUndoPaymentTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo this payment?'**
+  String get fltUndoPaymentTitle;
+
+  /// No description provided for @fltUndoPaymentMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo this {amount} payment? The bills it paid open again and any credit it created is taken back.'**
+  String fltUndoPaymentMessage(String amount);
+
+  /// No description provided for @fltPaymentUndone.
+  ///
+  /// In en, this message translates to:
+  /// **'The payment was undone.'**
+  String get fltPaymentUndone;
+
+  /// No description provided for @fltAddPlate.
+  ///
+  /// In en, this message translates to:
+  /// **'Add plate'**
+  String get fltAddPlate;
+
+  /// No description provided for @fltEditPlate.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit plate'**
+  String get fltEditPlate;
+
+  /// No description provided for @fltSavePlate.
+  ///
+  /// In en, this message translates to:
+  /// **'Save plate'**
+  String get fltSavePlate;
+
+  /// No description provided for @fltPlate.
+  ///
+  /// In en, this message translates to:
+  /// **'Plate'**
+  String get fltPlate;
+
+  /// No description provided for @fltPlatesMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Plates'**
+  String get fltPlatesMode;
+
+  /// No description provided for @fltPaperworkMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Paperwork'**
+  String get fltPaperworkMode;
+
+  /// No description provided for @fltSearchPlates.
+  ///
+  /// In en, this message translates to:
+  /// **'Search plate, company or driver'**
+  String get fltSearchPlates;
+
+  /// No description provided for @fltCarsAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get fltCarsAll;
+
+  /// No description provided for @fltCarsWithDriver.
+  ///
+  /// In en, this message translates to:
+  /// **'With a driver'**
+  String get fltCarsWithDriver;
+
+  /// No description provided for @fltCarsFree.
+  ///
+  /// In en, this message translates to:
+  /// **'Free'**
+  String get fltCarsFree;
+
+  /// No description provided for @fltNoPlatesYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No plates yet.'**
+  String get fltNoPlatesYet;
+
+  /// No description provided for @fltNoPlateMatches.
+  ///
+  /// In en, this message translates to:
+  /// **'No plate matches.'**
+  String get fltNoPlateMatches;
+
+  /// No description provided for @fltNoDriverNow.
+  ///
+  /// In en, this message translates to:
+  /// **'No driver'**
+  String get fltNoDriverNow;
+
+  /// No description provided for @fltRegistrationShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Registration'**
+  String get fltRegistrationShort;
+
+  /// No description provided for @fltDiamondShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Diamond'**
+  String get fltDiamondShort;
+
+  /// No description provided for @fltRegistrationExpires.
+  ///
+  /// In en, this message translates to:
+  /// **'Registration expires'**
+  String get fltRegistrationExpires;
+
+  /// No description provided for @fltDiamondExpires.
+  ///
+  /// In en, this message translates to:
+  /// **'Diamond expires'**
+  String get fltDiamondExpires;
+
+  /// No description provided for @fltExpiryExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'Expired'**
+  String get fltExpiryExpired;
+
+  /// No description provided for @fltExpirySoon.
+  ///
+  /// In en, this message translates to:
+  /// **'Due in 60 days'**
+  String get fltExpirySoon;
+
+  /// No description provided for @fltExpiryMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'Missing'**
+  String get fltExpiryMissing;
+
+  /// No description provided for @fltExpiryOk.
+  ///
+  /// In en, this message translates to:
+  /// **'OK'**
+  String get fltExpiryOk;
+
+  /// No description provided for @fltFieldCompany.
+  ///
+  /// In en, this message translates to:
+  /// **'Company'**
+  String get fltFieldCompany;
+
+  /// No description provided for @fltFieldCarOnPlate.
+  ///
+  /// In en, this message translates to:
+  /// **'Car on this plate'**
+  String get fltFieldCarOnPlate;
+
+  /// No description provided for @fltFieldVin.
+  ///
+  /// In en, this message translates to:
+  /// **'VIN'**
+  String get fltFieldVin;
+
+  /// No description provided for @fltFieldInsurer.
+  ///
+  /// In en, this message translates to:
+  /// **'Insurer'**
+  String get fltFieldInsurer;
+
+  /// No description provided for @fltFieldPolicy.
+  ///
+  /// In en, this message translates to:
+  /// **'Policy number'**
+  String get fltFieldPolicy;
+
+  /// No description provided for @fltFieldPremium.
+  ///
+  /// In en, this message translates to:
+  /// **'Monthly premium (\$)'**
+  String get fltFieldPremium;
+
+  /// No description provided for @fltFieldInsuranceDueDay.
+  ///
+  /// In en, this message translates to:
+  /// **'Insurance due day'**
+  String get fltFieldInsuranceDueDay;
+
+  /// No description provided for @fltFieldInsurancePaidBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Insurance paid by'**
+  String get fltFieldInsurancePaidBy;
+
+  /// No description provided for @fltFieldAutopay.
+  ///
+  /// In en, this message translates to:
+  /// **'Insurance on autopay'**
+  String get fltFieldAutopay;
+
+  /// No description provided for @fltAutopayOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Insurance is on autopay'**
+  String get fltAutopayOn;
+
+  /// No description provided for @fltFieldOwnership.
+  ///
+  /// In en, this message translates to:
+  /// **'Who owns the car'**
+  String get fltFieldOwnership;
+
+  /// No description provided for @fltOwnerCompany.
+  ///
+  /// In en, this message translates to:
+  /// **'The company'**
+  String get fltOwnerCompany;
+
+  /// No description provided for @fltOwnerDriver.
+  ///
+  /// In en, this message translates to:
+  /// **'The driver'**
+  String get fltOwnerDriver;
+
+  /// No description provided for @fltCarChangedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'You changed the car on this plate'**
+  String get fltCarChangedTitle;
+
+  /// No description provided for @fltCarMoved.
+  ///
+  /// In en, this message translates to:
+  /// **'The plate moved to another car'**
+  String get fltCarMoved;
+
+  /// No description provided for @fltCarMovedSince.
+  ///
+  /// In en, this message translates to:
+  /// **'Since (leave empty for today)'**
+  String get fltCarMovedSince;
+
+  /// No description provided for @fltCarTypo.
+  ///
+  /// In en, this message translates to:
+  /// **'Same car: I am fixing a mistake'**
+  String get fltCarTypo;
+
+  /// No description provided for @fltCarMovedHint.
+  ///
+  /// In en, this message translates to:
+  /// **'When the plate moves, the car it was on stays in the plate’s history.'**
+  String get fltCarMovedHint;
+
+  /// No description provided for @fltCarChangeAsk.
+  ///
+  /// In en, this message translates to:
+  /// **'Say whether the plate moved to another car or you are fixing a mistake.'**
+  String get fltCarChangeAsk;
+
+  /// No description provided for @fltCarsOnPlate.
+  ///
+  /// In en, this message translates to:
+  /// **'Cars on this plate'**
+  String get fltCarsOnPlate;
+
+  /// No description provided for @fltCarNow.
+  ///
+  /// In en, this message translates to:
+  /// **'now'**
+  String get fltCarNow;
+
+  /// No description provided for @fltCarUntil.
+  ///
+  /// In en, this message translates to:
+  /// **'until {day}'**
+  String fltCarUntil(String day);
+
+  /// No description provided for @fltWhoHadIt.
+  ///
+  /// In en, this message translates to:
+  /// **'Who had it when'**
+  String get fltWhoHadIt;
+
+  /// No description provided for @fltNobodyHadIt.
+  ///
+  /// In en, this message translates to:
+  /// **'Nobody had this plate yet.'**
+  String get fltNobodyHadIt;
+
+  /// No description provided for @fltFriendDrove.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} drove it, {from} to {to}'**
+  String fltFriendDrove(String name, String from, String to);
+
+  /// No description provided for @fltBankTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Zelle from the bank'**
+  String get fltBankTitle;
+
+  /// No description provided for @fltCheckBankNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Check bank now'**
+  String get fltCheckBankNow;
+
+  /// No description provided for @fltBankNotConnected.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect the business’s bank (Profile, Bank for Zelle checks) and Zelle deposits pay drivers’ bills by themselves.'**
+  String get fltBankNotConnected;
+
+  /// No description provided for @fltBankGeneric.
+  ///
+  /// In en, this message translates to:
+  /// **'Bank'**
+  String get fltBankGeneric;
+
+  /// No description provided for @fltBankAutoNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Deposits from known drivers pay their bills by themselves.'**
+  String get fltBankAutoNote;
+
+  /// No description provided for @fltBankLastCheck.
+  ///
+  /// In en, this message translates to:
+  /// **'Last pay-day check: {day}'**
+  String fltBankLastCheck(String day);
+
+  /// No description provided for @fltBankTooSlow.
+  ///
+  /// In en, this message translates to:
+  /// **'The bank details took too long to load. Try again.'**
+  String get fltBankTooSlow;
+
+  /// No description provided for @fltBankChecked.
+  ///
+  /// In en, this message translates to:
+  /// **'Bank checked. New deposits from known drivers are now paid.'**
+  String get fltBankChecked;
+
+  /// No description provided for @fltBankLimitReached.
+  ///
+  /// In en, this message translates to:
+  /// **'This month’s bank-check limit is reached: Laawol reads what the bank already sent.'**
+  String get fltBankLimitReached;
+
+  /// No description provided for @fltBankRemovedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'The bank took back a deposit'**
+  String get fltBankRemovedTitle;
+
+  /// No description provided for @fltBankRemovedHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The payment is still recorded. Look at the bank account: if the money is not there, undo the payment. If it is there, keep it.'**
+  String get fltBankRemovedHint;
+
+  /// No description provided for @fltAdminDecides.
+  ///
+  /// In en, this message translates to:
+  /// **'A Fleet admin decides.'**
+  String get fltAdminDecides;
+
+  /// No description provided for @fltKeepPayment.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep it'**
+  String get fltKeepPayment;
+
+  /// No description provided for @fltKeepPaymentTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep this payment?'**
+  String get fltKeepPaymentTitle;
+
+  /// No description provided for @fltKeepPaymentMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Do this only when the money is in the bank account.'**
+  String get fltKeepPaymentMessage;
+
+  /// No description provided for @fltPaymentKept.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment kept.'**
+  String get fltPaymentKept;
+
+  /// No description provided for @fltBankWaitingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Deposits waiting for a driver'**
+  String get fltBankWaitingTitle;
+
+  /// No description provided for @fltBankNoneWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'No deposit is waiting for a driver.'**
+  String get fltBankNoneWaiting;
+
+  /// No description provided for @fltBankPending.
+  ///
+  /// In en, this message translates to:
+  /// **'pending at the bank'**
+  String get fltBankPending;
+
+  /// No description provided for @fltDriverWhoSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Driver who sent it'**
+  String get fltDriverWhoSent;
+
+  /// No description provided for @fltPayThisDriver.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay this driver'**
+  String get fltPayThisDriver;
+
+  /// No description provided for @fltPickDriverFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick the driver who sent it.'**
+  String get fltPickDriverFirst;
+
+  /// No description provided for @fltPayWithDepositTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay with this deposit?'**
+  String get fltPayWithDepositTitle;
+
+  /// No description provided for @fltPayWithDepositMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay {name}’s bills with this deposit? Their next deposits from the same sender are paid by themselves.'**
+  String fltPayWithDepositMessage(String name);
+
+  /// No description provided for @fltWaitingTwoDrivers.
+  ///
+  /// In en, this message translates to:
+  /// **'It could be from two drivers: pick the right one.'**
+  String get fltWaitingTwoDrivers;
+
+  /// No description provided for @fltWaitingUndone.
+  ///
+  /// In en, this message translates to:
+  /// **'Its payment was undone: pick the right driver.'**
+  String get fltWaitingUndone;
+
+  /// No description provided for @fltWaitingDuplicate.
+  ///
+  /// In en, this message translates to:
+  /// **'This may be a Zelle already used, sent again by the bank. Pay it only if the driver really sent it twice.'**
+  String get fltWaitingDuplicate;
+
+  /// No description provided for @fltWaitingNotZelle.
+  ///
+  /// In en, this message translates to:
+  /// **'This deposit is not a Zelle (cash, a check, a card payout or a transfer). Pick the driver only if it is a driver’s payment.'**
+  String get fltWaitingNotZelle;
+
+  /// No description provided for @fltWaitingDriverLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'This sender paid for a driver who left. Pick who this payment is for.'**
+  String get fltWaitingDriverLeft;
+
+  /// No description provided for @fltWaitingOwnTransfer.
+  ///
+  /// In en, this message translates to:
+  /// **'This is a transfer from a bank account, not a Zelle from a person. Use it for a driver only if they really paid this way.'**
+  String get fltWaitingOwnTransfer;
+
+  /// No description provided for @fltWaitingUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Laawol does not know this sender yet: pick the driver once and it is remembered.'**
+  String get fltWaitingUnknown;
+
+  /// No description provided for @fltSettingsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Fleet settings'**
+  String get fltSettingsTitle;
+
+  /// No description provided for @fltSettingLateFee.
+  ///
+  /// In en, this message translates to:
+  /// **'Late fee (\$, 0 for none)'**
+  String get fltSettingLateFee;
+
+  /// No description provided for @fltSettingLateFeeDay.
+  ///
+  /// In en, this message translates to:
+  /// **'Late fee applies on day of the month (1-28)'**
+  String get fltSettingLateFeeDay;
+
+  /// No description provided for @fltSettingFirstMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'First month the late fee applies (YYYY-MM)'**
+  String get fltSettingFirstMonth;
+
+  /// No description provided for @fltSettingReturnRule.
+  ///
+  /// In en, this message translates to:
+  /// **'When a plate is returned mid-period'**
+  String get fltSettingReturnRule;
+
+  /// No description provided for @fltRuleFull.
+  ///
+  /// In en, this message translates to:
+  /// **'Bill the full period'**
+  String get fltRuleFull;
+
+  /// No description provided for @fltRuleDays.
+  ///
+  /// In en, this message translates to:
+  /// **'Bill the days used'**
+  String get fltRuleDays;
+
+  /// No description provided for @fltSettingZelleName.
+  ///
+  /// In en, this message translates to:
+  /// **'Zelle name shown to drivers'**
+  String get fltSettingZelleName;
+
+  /// No description provided for @fltSettingZelleHandle.
+  ///
+  /// In en, this message translates to:
+  /// **'Zelle email or phone shown to drivers'**
+  String get fltSettingZelleHandle;
+
+  /// No description provided for @fltSettingDriversSeeOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Drivers see only this business'**
+  String get fltSettingDriversSeeOnly;
+
+  /// No description provided for @fltSettingDriversSeeOnlyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'On: a Fleet driver sees this business’s pages and services on Laawol, and no other business.'**
+  String get fltSettingDriversSeeOnlyHint;
+
+  /// No description provided for @fltSaveSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Save settings'**
+  String get fltSaveSettings;
+
+  /// No description provided for @fltSettingsSaveTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Save the Fleet settings?'**
+  String get fltSettingsSaveTitle;
+
+  /// No description provided for @fltSettingsSaveMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The late fee and the plate-returned rule apply to bills from now on.'**
+  String get fltSettingsSaveMessage;
+
+  /// No description provided for @fltImportOnWebsite.
+  ///
+  /// In en, this message translates to:
+  /// **'Importing a spreadsheet is done on the website, not on the phone.'**
+  String get fltImportOnWebsite;
+
+  /// No description provided for @fltWaTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'WhatsApp to drivers'**
+  String get fltWaTitle;
+
+  /// No description provided for @fltWaIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Drivers get a receipt each time a payment is recorded, and a reminder 2 days before rent is due, on the due day, 3 days after if still unpaid, then every week.'**
+  String get fltWaIntro;
+
+  /// No description provided for @fltWaStateOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Off: no message is sent to drivers.'**
+  String get fltWaStateOff;
+
+  /// No description provided for @fltWaStateOn.
+  ///
+  /// In en, this message translates to:
+  /// **'On: drivers get receipts and reminders.'**
+  String get fltWaStateOn;
+
+  /// No description provided for @fltWaStateSome.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{On for 1 chosen driver only.} other{On for {count} chosen drivers only.}}'**
+  String fltWaStateSome(int count);
+
+  /// No description provided for @fltWaTestFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Send yourself a test first, then turn it on.'**
+  String get fltWaTestFirst;
+
+  /// No description provided for @fltWaAllDrivers.
+  ///
+  /// In en, this message translates to:
+  /// **'All with a phone'**
+  String get fltWaAllDrivers;
+
+  /// No description provided for @fltWaChosenDrivers.
+  ///
+  /// In en, this message translates to:
+  /// **'Chosen drivers'**
+  String get fltWaChosenDrivers;
+
+  /// No description provided for @fltWaAddDriver.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a driver'**
+  String get fltWaAddDriver;
+
+  /// No description provided for @fltWaNoMoreDrivers.
+  ///
+  /// In en, this message translates to:
+  /// **'No other active driver has a phone number.'**
+  String get fltWaNoMoreDrivers;
+
+  /// No description provided for @fltWaSaveWho.
+  ///
+  /// In en, this message translates to:
+  /// **'Save who gets messages'**
+  String get fltWaSaveWho;
+
+  /// No description provided for @fltWaTestPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Phone for a test message'**
+  String get fltWaTestPhone;
+
+  /// No description provided for @fltWaSendTest.
+  ///
+  /// In en, this message translates to:
+  /// **'Send a test'**
+  String get fltWaSendTest;
+
+  /// No description provided for @fltWaTestSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Two test messages were sent: a receipt and a reminder. Check WhatsApp on that phone.'**
+  String get fltWaTestSent;
+
+  /// No description provided for @fltWaTestFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The test could not be sent. If these messages are new, Meta may still be reviewing them: try again later.'**
+  String get fltWaTestFailed;
+
+  /// No description provided for @fltWaTurnOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on'**
+  String get fltWaTurnOn;
+
+  /// No description provided for @fltWaTurnOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn off'**
+  String get fltWaTurnOff;
+
+  /// No description provided for @fltWaTurnOnTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on WhatsApp to drivers?'**
+  String get fltWaTurnOnTitle;
+
+  /// No description provided for @fltWaTurnOffTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn off WhatsApp to drivers?'**
+  String get fltWaTurnOffTitle;
+
+  /// No description provided for @fltWaTurnOnAll.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{From now on the 1 active driver with a phone gets a receipt for each payment and reminders before and after rent is due.} other{From now on the {count} active drivers with a phone get a receipt for each payment and reminders before and after rent is due.}}'**
+  String fltWaTurnOnAll(int count);
+
+  /// No description provided for @fltWaTurnOnSome.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Only 1 chosen driver gets messages. No other driver gets one.} other{Only {count} chosen drivers get messages. No other driver gets one.}}'**
+  String fltWaTurnOnSome(int count);
+
+  /// No description provided for @fltWaTurnOffMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'No more receipts or reminders are sent.'**
+  String get fltWaTurnOffMessage;
+
+  /// No description provided for @fltScheduleTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay-day bank checks'**
+  String get fltScheduleTitle;
+
+  /// No description provided for @fltScheduleIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'The bank tells Laawol about new deposits a few times a day for free. On pay days you can have Laawol ask more often, so payments show up within minutes. Each ask is a paid bank check.'**
+  String get fltScheduleIntro;
+
+  /// No description provided for @fltScheduleEvery.
+  ///
+  /// In en, this message translates to:
+  /// **'How often on pay days'**
+  String get fltScheduleEvery;
+
+  /// No description provided for @fltScheduleOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Off: only when the bank updates'**
+  String get fltScheduleOff;
+
+  /// No description provided for @fltScheduleEveryHour.
+  ///
+  /// In en, this message translates to:
+  /// **'Every hour'**
+  String get fltScheduleEveryHour;
+
+  /// No description provided for @fltScheduleEveryMinutes.
+  ///
+  /// In en, this message translates to:
+  /// **'Every {minutes} minutes'**
+  String fltScheduleEveryMinutes(int minutes);
+
+  /// No description provided for @fltScheduleFrom.
+  ///
+  /// In en, this message translates to:
+  /// **'From'**
+  String get fltScheduleFrom;
+
+  /// No description provided for @fltScheduleUntil.
+  ///
+  /// In en, this message translates to:
+  /// **'Until'**
+  String get fltScheduleUntil;
+
+  /// No description provided for @fltSchedulePayDays.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay days (day of the month)'**
+  String get fltSchedulePayDays;
+
+  /// No description provided for @fltScheduleMondays.
+  ///
+  /// In en, this message translates to:
+  /// **'Also every Monday (weekly drivers)'**
+  String get fltScheduleMondays;
+
+  /// No description provided for @fltScheduleQuote.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{About 1 check a month, about {amount} a month. Added to your Laawol bill.} other{About {count} checks a month, about {amount} a month. Added to your Laawol bill.}}'**
+  String fltScheduleQuote(int count, String amount);
+
+  /// No description provided for @fltScheduleNoCost.
+  ///
+  /// In en, this message translates to:
+  /// **'No extra cost: deposits pay drivers when the bank updates, a few times a day.'**
+  String get fltScheduleNoCost;
+
+  /// No description provided for @fltScheduleSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save the schedule'**
+  String get fltScheduleSave;
+
+  /// No description provided for @fltScheduleSaveTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Save the schedule?'**
+  String get fltScheduleSaveTitle;
+
+  /// No description provided for @fltScheduleSaveOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Check the bank every {minutes} minutes on pay days? About {count} checks a month, about {amount} a month on your Laawol bill.'**
+  String fltScheduleSaveOn(int minutes, int count, String amount);
+
+  /// No description provided for @fltScheduleSaveOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn the pay-day bank checks off? Deposits still pay drivers when the bank updates on its own, at no cost.'**
+  String get fltScheduleSaveOff;
+
   /// No description provided for @pcsErrPiecesTooMany.
   ///
   /// In en, this message translates to:
