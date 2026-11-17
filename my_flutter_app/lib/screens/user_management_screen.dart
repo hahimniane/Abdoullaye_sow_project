@@ -10,8 +10,10 @@ import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
 import '../utils/business_permissions.dart';
 import '../services/staff_invites.dart' show StaffInviteResult;
+import '../services/team_staff.dart';
 import '../widgets/app_snackbars.dart';
 import '../widgets/staff_invite_widgets.dart' show showStaffInviteResult;
+import '../widgets/team_member_card.dart' show teamRefusalText;
 
 class UserManagementScreen extends StatefulWidget {
   const UserManagementScreen({super.key});
@@ -508,6 +510,7 @@ class _MarketplacePerson {
     required this.invitationKind,
     this.accountOrigin = '',
     this.notSignedInYet = false,
+    this.fullAccess = false,
   });
 
   factory _MarketplacePerson.fromMap(Map<String, dynamic> data) {
@@ -535,6 +538,7 @@ class _MarketplacePerson {
       invitationKind: (data['invitationKind'] ?? '').toString(),
       accountOrigin: (data['accountOrigin'] ?? '').toString(),
       notSignedInYet: data['notSignedInYet'] == true,
+      fullAccess: data['fullAccess'] == true,
     );
   }
 
@@ -561,6 +565,9 @@ class _MarketplacePerson {
 
   /// Made from a shipment's number and never signed in to.
   final bool notSignedInYet;
+
+  /// A staff member with "Full access" (docs/STAFF_FULL_ACCESS.md).
+  final bool fullAccess;
 
   /// No email: password resets and verification emails cannot reach them.
   bool get hasEmail => email.trim().isNotEmpty;
@@ -846,6 +853,48 @@ class _PersonDetailSheetState extends State<_PersonDetailSheet> {
     }
   }
 
+  /// Full access on a staff member's business, by a super admin. A refusal
+  /// is said in words, never as the raw error.
+  Future<void> _setFullAccess(_MarketplacePerson person) async {
+    final l10n = AppLocalizations.of(context)!;
+    final on = !person.fullAccess;
+    final business = person.businessName.isEmpty
+        ? person.businessId
+        : person.businessName;
+    if (!await _confirm(
+      on ? l10n.pplGiveFullAccessTitle : l10n.pplRemoveFullAccessTitle,
+      on
+          ? l10n.pplAdminGiveFullAccessMessage(person.displayName, business)
+          : l10n.pplAdminRemoveFullAccessMessage(person.displayName, business),
+      on ? l10n.pplGiveFullAccess : l10n.pplRemoveFullAccess,
+    )) {
+      return;
+    }
+    if (!mounted) return;
+    final auth = context.read<AuthProvider>();
+    setState(() => _working = true);
+    try {
+      await auth.setStaffFullAccess(
+        businessId: person.businessId,
+        staffUid: person.uid,
+        permissions: person.businessPermissions,
+        fullAccess: on,
+      );
+      if (!mounted) return;
+      showSuccessSnackBar(
+        context,
+        on ? l10n.pplFullAccessGiven : l10n.pplFullAccessRemoved,
+      );
+      widget.onChanged();
+    } catch (error) {
+      if (mounted) {
+        showErrorSnackBar(context, teamRefusalText(l10n, teamRefusalOf(error)));
+      }
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
+
   Future<bool> _confirm(String title, String body, String action) async {
     return await showDialog<bool>(
           context: context,
@@ -1126,6 +1175,29 @@ class _PersonDetailSheetState extends State<_PersonDetailSheet> {
                           }, l10n.verificationEmailSent)
                         : null,
                   ),
+                // Full access: a super admin gives it, or takes it back.
+                if (person.role == 'staff' &&
+                    person.businessId.isNotEmpty &&
+                    mayGrantFullAccess(
+                      isRealOwner: false,
+                      isSuperAdmin:
+                          context.read<AuthProvider>().adminRole ==
+                          superAdminRole,
+                    )) ...[
+                  _InfoNotice(
+                    key: const Key('person-full-access-note'),
+                    icon: Icons.verified_user_outlined,
+                    text: l10n.pplFullAccessExplained,
+                  ),
+                  _ActionTile(
+                    key: const Key('person-full-access'),
+                    icon: Icons.verified_user_outlined,
+                    title: person.fullAccess
+                        ? l10n.pplRemoveFullAccess
+                        : l10n.pplGiveFullAccess,
+                    onTap: canAct ? () => _setFullAccess(person) : null,
+                  ),
+                ],
                 if (person.role == 'staff' && person.businessId.isNotEmpty)
                   _ActionTile(
                     icon: Icons.workspace_premium_outlined,
@@ -1543,6 +1615,7 @@ class _Fact extends StatelessWidget {
 
 class _ActionTile extends StatelessWidget {
   const _ActionTile({
+    super.key,
     required this.icon,
     required this.title,
     required this.onTap,

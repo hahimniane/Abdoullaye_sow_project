@@ -6522,6 +6522,149 @@
     }
   },
   "pcsKindBarrel": "Baril",
+  "shpUndoShipped": "Annuler l'expédition",
+  "shpUndoTitle": "Remettre en chargement ?",
+  "shpUndoMessage": "Remettre {title} en chargement ? À utiliser seulement s'il a été marqué expédié par erreur. Les clients déjà prévenus sur WhatsApp ne sont pas prévenus à nouveau.",
+  "@shpUndoMessage": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "shpUndoConfirm": "Remettre en chargement",
+  "shpUndoDone": "Remis en chargement.",
+  "shpSendAgain": "Renvoyer",
+  "shpResending": "Envoi…",
+  "shpResendDone": "Renvoyé",
+  "shpResendNothing": "Rien à renvoyer : tous ceux qui pouvaient le recevoir l'ont déjà, ou il est déjà en route.",
+  "shpResendNotConnected": "WhatsApp n'est pas encore connecté.",
+  "shpResendNoMessage": "Il n'y a pas encore de message à renvoyer.",
+  "shpResendFailed": "Impossible de renvoyer. Réessayez.",
+  "shpCounterTitle": "WhatsApp n'a pas pu joindre ce numéro",
+  "shpCounterHint": "Vérifiez le numéro avec le client pendant qu'il est là. Un numéro corrigé reçoit le message tout seul.",
+  "shpFixNumber": "Corriger le numéro",
+  "shpChipCount": "{label} · {count}",
+  "@shpChipCount": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "shpEveryPackageHasProof": "Chaque colis en attente a sa preuve.",
+  "shpNoPackageShipsThatWay": "Aucun colis en attente ne part ainsi.",
+  "shpEveryDestination": "Toutes les destinations",
+  "shpFilterDestination": "Filtrer par destination",
+  "shpNoDestinationMatch": "Aucun conteneur ne va vers cette destination ici.",
+  "pplOwnerTag": "Propriétaire",
+  "pplStaffTag": "Employé",
+  "pplFullAccessTag": "Accès complet",
+  "pplOwnerAccessNote": "Accès complet à l'espace de cette entreprise.",
+  "pplFullAccessExplained": "Accès complet : tout ce que le propriétaire peut faire ici, y compris les réglages, les prix et l'équipe. Le transfert de l'entreprise, Stripe et la banque restent au propriétaire.",
+  "pplGiveFullAccess": "Donner l'accès complet",
+  "pplRemoveFullAccess": "Retirer l'accès complet",
+  "pplGiveFullAccessTitle": "Donner l'accès complet ?",
+  "pplRemoveFullAccessTitle": "Retirer l'accès complet ?",
+  "pplGiveFullAccessMessage": "Donner l'accès complet à {name} ? Cette personne pourra tout faire comme vous ici, y compris les réglages, les prix et l'équipe. Le transfert de l'entreprise, Stripe et la banque restent à vous.",
+  "@pplGiveFullAccessMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "pplRemoveFullAccessMessage": "Retirer l'accès complet à {name} ? Cette personne garde seulement les autorisations cochées ci-dessous.",
+  "@pplRemoveFullAccessMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "pplAdminGiveFullAccessMessage": "Donner l'accès complet à {name} chez {business} ? Cette personne pourra tout faire comme le propriétaire, sauf transférer l'entreprise, Stripe et la banque.",
+  "@pplAdminGiveFullAccessMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "pplAdminRemoveFullAccessMessage": "Retirer l'accès complet à {name} chez {business} ?",
+  "@pplAdminRemoveFullAccessMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "business": {
+        "type": "String"
+      }
+    }
+  },
+  "pplFullAccessGiven": "Accès complet donné.",
+  "pplFullAccessRemoved": "Accès complet retiré.",
+  "pplCanManage": "Peut gérer",
+  "pplSavePermissions": "Enregistrer les autorisations",
+  "pplSavePermissionsTitle": "Enregistrer les autorisations ?",
+  "pplSavePermissionsMessage": "Enregistrer les changements d'autorisations pour {name} ?",
+  "@pplSavePermissionsMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "pplPermissionsSaved": "Autorisations enregistrées.",
+  "pplParkingBill": "Facture de parking",
+  "pplNotLinked": "Non lié",
+  "pplParkingBillHint": "Les dépenses du parc payées par cette personne sont déduites de cette facture en fin de mois.",
+  "pplLink": "Lier",
+  "pplChange": "Changer",
+  "pplUnlink": "Délier",
+  "pplUnlinkTitle": "Délier la facture de parking ?",
+  "pplUnlinkMessage": "Délier la facture de parking de {name} ? Ses dépenses du parc n'y seront plus déduites.",
+  "@pplUnlinkMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "pplParkingLinked": "Facture de parking liée.",
+  "pplParkingUnlinked": "Facture de parking déliée.",
+  "pplLinkSheetTitle": "Lier une facture de parking",
+  "pplLinkSheetHint": "Choisissez le client de parking dont cette personne paie la facture mensuelle. Ses dépenses du parc sont déduites de cette facture ; le reste, l'entreprise le lui doit.",
+  "pplFindCustomer": "Chercher un client : nom ou téléphone",
+  "pplSuggested": "Suggestions",
+  "pplEveryoneElse": "Tous les autres",
+  "pplNoMatch": "Aucun client de parking ne correspond.",
+  "pplNoCars": "Aucune voiture n'a été garée ces douze derniers mois.",
+  "pplCarsLoadFailed": "Impossible de charger les voitures garées.",
+  "pplTryAgain": "Réessayer",
+  "pplCarsCount": "{count, plural, =1{1 voiture garée} other{{count} voitures garées}}",
+  "@pplCarsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pplLikelyMatch": "Correspondance probable",
+  "pplLinkedBadge": "Lié",
+  "pplErrFullAccessOwnerOnly": "Seul le propriétaire de l'entreprise ou un super admin Laawol peut modifier l'accès complet.",
+  "pplErrFullAccessStaffOnly": "L'accès complet est réservé aux employés de cette entreprise.",
+  "pplErrNotMember": "Cette personne ne fait plus partie de l'équipe de cette entreprise.",
+  "pplErrLinkOwnerOnly": "Seul le propriétaire de l'entreprise peut lier une facture de parking.",
+  "pplErrLinkCustomer": "Choisissez le client de parking à lier.",
+  "pplErrActionInvalid": "Cette application n'est plus à jour. Mettez-la à jour et réessayez.",
+  "pplErrNotAllowed": "Votre compte n'a pas le droit de faire cela. Demandez au propriétaire de l'entreprise.",
+  "pplErrOther": "L'enregistrement a échoué. Vérifiez votre connexion et réessayez.",
   "pcsKindBox": "Carton",
   "pcsKindOther": "Autre",
   "pcsKindLabel": "Ce qu'est le colis {number}",

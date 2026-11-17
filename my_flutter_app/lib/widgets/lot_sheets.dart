@@ -63,13 +63,18 @@ class LotPrimaryBar extends StatelessWidget {
                   children: [
                     Icon(icon, size: 18, color: Colors.white),
                     const SizedBox(width: AppSpacing.sm),
-                    Text(
-                      label,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -0.1,
+                    // A long French label shortens instead of overflowing.
+                    Flexible(
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.1,
+                        ),
                       ),
                     ),
                   ],

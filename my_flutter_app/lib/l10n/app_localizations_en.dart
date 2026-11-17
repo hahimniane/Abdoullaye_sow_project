@@ -13525,6 +13525,256 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pcsKindBarrel => 'Barrel';
 
   @override
+  String get shpUndoShipped => 'Undo shipped';
+
+  @override
+  String get shpUndoTitle => 'Put back to loading?';
+
+  @override
+  String shpUndoMessage(String title) {
+    return 'Put $title back to loading? Use this only when it was marked shipped by mistake. Customers who were already told on WhatsApp are not told again.';
+  }
+
+  @override
+  String get shpUndoConfirm => 'Put back to loading';
+
+  @override
+  String get shpUndoDone => 'Back to loading.';
+
+  @override
+  String get shpSendAgain => 'Send again';
+
+  @override
+  String get shpResending => 'Sending…';
+
+  @override
+  String get shpResendDone => 'Sent again';
+
+  @override
+  String get shpResendNothing =>
+      'Nothing to send again: everyone who could get it has it, or it is already on its way.';
+
+  @override
+  String get shpResendNotConnected => 'WhatsApp is not connected yet.';
+
+  @override
+  String get shpResendNoMessage => 'There is no message to send again yet.';
+
+  @override
+  String get shpResendFailed => 'Could not send again. Try again.';
+
+  @override
+  String get shpCounterTitle => 'WhatsApp could not reach this number';
+
+  @override
+  String get shpCounterHint =>
+      'Check the number with the customer while they are here. A corrected number gets the message by itself.';
+
+  @override
+  String get shpFixNumber => 'Fix the number';
+
+  @override
+  String shpChipCount(String label, int count) {
+    return '$label · $count';
+  }
+
+  @override
+  String get shpEveryPackageHasProof => 'Every waiting package has its proof.';
+
+  @override
+  String get shpNoPackageShipsThatWay => 'No waiting package ships that way.';
+
+  @override
+  String get shpEveryDestination => 'Every destination';
+
+  @override
+  String get shpFilterDestination => 'Filter by destination';
+
+  @override
+  String get shpNoDestinationMatch =>
+      'No container goes to that destination here.';
+
+  @override
+  String get pplOwnerTag => 'Owner';
+
+  @override
+  String get pplStaffTag => 'Staff';
+
+  @override
+  String get pplFullAccessTag => 'Full access';
+
+  @override
+  String get pplOwnerAccessNote => 'Full access to this business workspace.';
+
+  @override
+  String get pplFullAccessExplained =>
+      'Full access: everything the owner can do here, including settings, prices and staff. Transferring the business and its Stripe and bank stay the owner\'s.';
+
+  @override
+  String get pplGiveFullAccess => 'Give full access';
+
+  @override
+  String get pplRemoveFullAccess => 'Remove full access';
+
+  @override
+  String get pplGiveFullAccessTitle => 'Give full access?';
+
+  @override
+  String get pplRemoveFullAccessTitle => 'Remove full access?';
+
+  @override
+  String pplGiveFullAccessMessage(String name) {
+    return 'Give $name full access? They can then do everything you can here, including settings, prices and staff. Transferring the business and its Stripe and bank stay yours.';
+  }
+
+  @override
+  String pplRemoveFullAccessMessage(String name) {
+    return 'Remove full access from $name? They keep only the permissions ticked below.';
+  }
+
+  @override
+  String pplAdminGiveFullAccessMessage(String name, String business) {
+    return 'Give $name full access at $business? They can then do everything the owner can there, except transferring the business and its Stripe and bank.';
+  }
+
+  @override
+  String pplAdminRemoveFullAccessMessage(String name, String business) {
+    return 'Remove full access from $name at $business?';
+  }
+
+  @override
+  String get pplFullAccessGiven => 'Full access given.';
+
+  @override
+  String get pplFullAccessRemoved => 'Full access removed.';
+
+  @override
+  String get pplCanManage => 'Can manage';
+
+  @override
+  String get pplSavePermissions => 'Save permissions';
+
+  @override
+  String get pplSavePermissionsTitle => 'Save permissions?';
+
+  @override
+  String pplSavePermissionsMessage(String name) {
+    return 'Save permission changes for $name?';
+  }
+
+  @override
+  String get pplPermissionsSaved => 'Staff permissions saved.';
+
+  @override
+  String get pplParkingBill => 'Parking bill';
+
+  @override
+  String get pplNotLinked => 'Not linked';
+
+  @override
+  String get pplParkingBillHint =>
+      'Lot expenses this person pays come off this bill at month end.';
+
+  @override
+  String get pplLink => 'Link';
+
+  @override
+  String get pplChange => 'Change';
+
+  @override
+  String get pplUnlink => 'Unlink';
+
+  @override
+  String get pplUnlinkTitle => 'Unlink the parking bill?';
+
+  @override
+  String pplUnlinkMessage(String name) {
+    return 'Unlink $name\'s parking bill? Their lot expenses will stop coming off it.';
+  }
+
+  @override
+  String get pplParkingLinked => 'Parking bill linked.';
+
+  @override
+  String get pplParkingUnlinked => 'Parking bill unlinked.';
+
+  @override
+  String get pplLinkSheetTitle => 'Link a parking bill';
+
+  @override
+  String get pplLinkSheetHint =>
+      'Choose the parking customer whose monthly bill this person pays. Their lot expenses come off that bill; whatever is left, the business owes them.';
+
+  @override
+  String get pplFindCustomer => 'Find a customer: name or phone';
+
+  @override
+  String get pplSuggested => 'Suggested';
+
+  @override
+  String get pplEveryoneElse => 'Everyone else';
+
+  @override
+  String get pplNoMatch => 'No parking customer matches.';
+
+  @override
+  String get pplNoCars => 'No car was parked in the last twelve months.';
+
+  @override
+  String get pplCarsLoadFailed => 'The parked cars could not be loaded.';
+
+  @override
+  String get pplTryAgain => 'Try again';
+
+  @override
+  String pplCarsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count parked cars',
+      one: '1 parked car',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pplLikelyMatch => 'Likely match';
+
+  @override
+  String get pplLinkedBadge => 'Linked';
+
+  @override
+  String get pplErrFullAccessOwnerOnly =>
+      'Only the business owner or a Laawol super admin can change full access.';
+
+  @override
+  String get pplErrFullAccessStaffOnly =>
+      'Full access is for staff of this business.';
+
+  @override
+  String get pplErrNotMember =>
+      'That person is no longer on this business\'s team.';
+
+  @override
+  String get pplErrLinkOwnerOnly =>
+      'Only the business owner can link a parking bill.';
+
+  @override
+  String get pplErrLinkCustomer => 'Choose the parking customer to link.';
+
+  @override
+  String get pplErrActionInvalid =>
+      'This app is out of date. Update it and try again.';
+
+  @override
+  String get pplErrNotAllowed =>
+      'Your account is not allowed to do this. Ask the business owner.';
+
+  @override
+  String get pplErrOther =>
+      'It did not save. Check your connection and try again.';
+
+  @override
   String get pcsKindBox => 'Box';
 
   @override

@@ -10,11 +10,15 @@ import '../l10n/app_localizations.dart';
 import '../models/support_case.dart';
 import '../models/support_message.dart';
 import '../services/container_manifest.dart' show ContainerLine;
+import '../services/line_resend.dart' show lineUpdateFailed;
+import '../services/waiting_package_service.dart'
+    show ContainerCallableCaller, callContainerCallable;
 import '../services/whatsapp_conversations.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../utils/date_display.dart';
 import 'async_action_button.dart';
+import 'line_resend_widgets.dart' show SendAgainButton;
 
 // The words and shared pieces of two-way WhatsApp in the app
 // (docs/WHATSAPP_CONVERSATIONS.md): badges and state pills for the inbox,
@@ -1409,12 +1413,21 @@ String packageUpdateTickLabel(
 }
 
 /// A line's last update, compactly: one short line per person it went to,
-/// a failure in red with its reason. Nothing when nobody has a tick.
+/// a failure in red with its reason, and "Send again" under a failure
+/// (docs/WHATSAPP_RESEND.md). Nothing when nobody has a tick.
 class PackageUpdateTicks extends StatelessWidget {
-  const PackageUpdateTicks({super.key, required this.line, this.indent = 0});
+  const PackageUpdateTicks({
+    super.key,
+    required this.line,
+    this.indent = 0,
+    this.send = callContainerCallable,
+  });
 
   final ContainerLine line;
   final double indent;
+
+  /// How "Send again" reaches the server; a fake in tests.
+  final ContainerCallableCaller send;
 
   @override
   Widget build(BuildContext context) {
@@ -1424,7 +1437,10 @@ class PackageUpdateTicks extends StatelessWidget {
     return Padding(
       key: const Key('line-update-ticks'),
       padding: EdgeInsets.only(top: 4, left: indent),
-      child: Wrap(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
         spacing: 12,
         runSpacing: 2,
         children: [
@@ -1441,6 +1457,14 @@ class PackageUpdateTicks extends StatelessWidget {
                   _ => AppColors.sage,
                 },
               ),
+            ),
+        ],
+          ),
+          if (lineUpdateFailed(line))
+            SendAgainButton(
+              businessId: line.businessId,
+              lineId: line.id,
+              send: send,
             ),
         ],
       ),

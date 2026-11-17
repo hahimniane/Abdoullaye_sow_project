@@ -20,7 +20,11 @@ void main() {
   final service = read('lib/services/inventory_service.dart');
   final pure = read('lib/services/inventory.dart');
   final home = read('lib/screens/home_menu.dart');
-  final addStaff = read('lib/screens/add_staff_screen.dart');
+  // The invite form's permission chips live in one shared widget.
+  final addStaff = [
+    read('lib/screens/add_staff_screen.dart'),
+    read('lib/widgets/staff_permission_chips.dart'),
+  ].join('\n');
   final people = read('lib/screens/user_management_screen.dart');
   final links = read('lib/services/package_link_service.dart');
   final sell = read('lib/screens/inventory_sell_screen.dart');

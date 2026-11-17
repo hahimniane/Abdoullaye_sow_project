@@ -1781,6 +1781,24 @@ class AuthProvider extends ChangeNotifier {
     });
   }
 
+  /// Gives or removes "Full access" (docs/STAFF_FULL_ACCESS.md) on one of a
+  /// business's staff, with their permissions sent along unchanged. Only the
+  /// business's real owner or a super admin is allowed; the server refuses
+  /// anyone else.
+  Future<Map<String, dynamic>> setStaffFullAccess({
+    required String businessId,
+    required String staffUid,
+    required List<String> permissions,
+    required bool fullAccess,
+  }) {
+    return _callMarketplacePeople('updateBusinessStaffPermissions', {
+      'businessId': businessId,
+      'staffUid': staffUid,
+      'businessPermissions': permissions,
+      'fullAccess': fullAccess,
+    });
+  }
+
   Future<Map<String, dynamic>> reviewAccountDeletion(String userId) {
     return _callMarketplacePeople('reviewAccountDeletion', {'userId': userId});
   }

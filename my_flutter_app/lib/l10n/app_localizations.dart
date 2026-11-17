@@ -23345,6 +23345,432 @@ abstract class AppLocalizations {
   /// **'Barrel'**
   String get pcsKindBarrel;
 
+  /// No description provided for @shpUndoShipped.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo shipped'**
+  String get shpUndoShipped;
+
+  /// No description provided for @shpUndoTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Put back to loading?'**
+  String get shpUndoTitle;
+
+  /// No description provided for @shpUndoMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Put {title} back to loading? Use this only when it was marked shipped by mistake. Customers who were already told on WhatsApp are not told again.'**
+  String shpUndoMessage(String title);
+
+  /// No description provided for @shpUndoConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Put back to loading'**
+  String get shpUndoConfirm;
+
+  /// No description provided for @shpUndoDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to loading.'**
+  String get shpUndoDone;
+
+  /// No description provided for @shpSendAgain.
+  ///
+  /// In en, this message translates to:
+  /// **'Send again'**
+  String get shpSendAgain;
+
+  /// No description provided for @shpResending.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending…'**
+  String get shpResending;
+
+  /// No description provided for @shpResendDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent again'**
+  String get shpResendDone;
+
+  /// No description provided for @shpResendNothing.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing to send again: everyone who could get it has it, or it is already on its way.'**
+  String get shpResendNothing;
+
+  /// No description provided for @shpResendNotConnected.
+  ///
+  /// In en, this message translates to:
+  /// **'WhatsApp is not connected yet.'**
+  String get shpResendNotConnected;
+
+  /// No description provided for @shpResendNoMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'There is no message to send again yet.'**
+  String get shpResendNoMessage;
+
+  /// No description provided for @shpResendFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not send again. Try again.'**
+  String get shpResendFailed;
+
+  /// No description provided for @shpCounterTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'WhatsApp could not reach this number'**
+  String get shpCounterTitle;
+
+  /// No description provided for @shpCounterHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Check the number with the customer while they are here. A corrected number gets the message by itself.'**
+  String get shpCounterHint;
+
+  /// No description provided for @shpFixNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'Fix the number'**
+  String get shpFixNumber;
+
+  /// No description provided for @shpChipCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{label} · {count}'**
+  String shpChipCount(String label, int count);
+
+  /// No description provided for @shpEveryPackageHasProof.
+  ///
+  /// In en, this message translates to:
+  /// **'Every waiting package has its proof.'**
+  String get shpEveryPackageHasProof;
+
+  /// No description provided for @shpNoPackageShipsThatWay.
+  ///
+  /// In en, this message translates to:
+  /// **'No waiting package ships that way.'**
+  String get shpNoPackageShipsThatWay;
+
+  /// No description provided for @shpEveryDestination.
+  ///
+  /// In en, this message translates to:
+  /// **'Every destination'**
+  String get shpEveryDestination;
+
+  /// No description provided for @shpFilterDestination.
+  ///
+  /// In en, this message translates to:
+  /// **'Filter by destination'**
+  String get shpFilterDestination;
+
+  /// No description provided for @shpNoDestinationMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'No container goes to that destination here.'**
+  String get shpNoDestinationMatch;
+
+  /// No description provided for @pplOwnerTag.
+  ///
+  /// In en, this message translates to:
+  /// **'Owner'**
+  String get pplOwnerTag;
+
+  /// No description provided for @pplStaffTag.
+  ///
+  /// In en, this message translates to:
+  /// **'Staff'**
+  String get pplStaffTag;
+
+  /// No description provided for @pplFullAccessTag.
+  ///
+  /// In en, this message translates to:
+  /// **'Full access'**
+  String get pplFullAccessTag;
+
+  /// No description provided for @pplOwnerAccessNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Full access to this business workspace.'**
+  String get pplOwnerAccessNote;
+
+  /// No description provided for @pplFullAccessExplained.
+  ///
+  /// In en, this message translates to:
+  /// **'Full access: everything the owner can do here, including settings, prices and staff. Transferring the business and its Stripe and bank stay the owner\'s.'**
+  String get pplFullAccessExplained;
+
+  /// No description provided for @pplGiveFullAccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Give full access'**
+  String get pplGiveFullAccess;
+
+  /// No description provided for @pplRemoveFullAccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove full access'**
+  String get pplRemoveFullAccess;
+
+  /// No description provided for @pplGiveFullAccessTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Give full access?'**
+  String get pplGiveFullAccessTitle;
+
+  /// No description provided for @pplRemoveFullAccessTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove full access?'**
+  String get pplRemoveFullAccessTitle;
+
+  /// No description provided for @pplGiveFullAccessMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Give {name} full access? They can then do everything you can here, including settings, prices and staff. Transferring the business and its Stripe and bank stay yours.'**
+  String pplGiveFullAccessMessage(String name);
+
+  /// No description provided for @pplRemoveFullAccessMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove full access from {name}? They keep only the permissions ticked below.'**
+  String pplRemoveFullAccessMessage(String name);
+
+  /// No description provided for @pplAdminGiveFullAccessMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Give {name} full access at {business}? They can then do everything the owner can there, except transferring the business and its Stripe and bank.'**
+  String pplAdminGiveFullAccessMessage(String name, String business);
+
+  /// No description provided for @pplAdminRemoveFullAccessMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove full access from {name} at {business}?'**
+  String pplAdminRemoveFullAccessMessage(String name, String business);
+
+  /// No description provided for @pplFullAccessGiven.
+  ///
+  /// In en, this message translates to:
+  /// **'Full access given.'**
+  String get pplFullAccessGiven;
+
+  /// No description provided for @pplFullAccessRemoved.
+  ///
+  /// In en, this message translates to:
+  /// **'Full access removed.'**
+  String get pplFullAccessRemoved;
+
+  /// No description provided for @pplCanManage.
+  ///
+  /// In en, this message translates to:
+  /// **'Can manage'**
+  String get pplCanManage;
+
+  /// No description provided for @pplSavePermissions.
+  ///
+  /// In en, this message translates to:
+  /// **'Save permissions'**
+  String get pplSavePermissions;
+
+  /// No description provided for @pplSavePermissionsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Save permissions?'**
+  String get pplSavePermissionsTitle;
+
+  /// No description provided for @pplSavePermissionsMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Save permission changes for {name}?'**
+  String pplSavePermissionsMessage(String name);
+
+  /// No description provided for @pplPermissionsSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Staff permissions saved.'**
+  String get pplPermissionsSaved;
+
+  /// No description provided for @pplParkingBill.
+  ///
+  /// In en, this message translates to:
+  /// **'Parking bill'**
+  String get pplParkingBill;
+
+  /// No description provided for @pplNotLinked.
+  ///
+  /// In en, this message translates to:
+  /// **'Not linked'**
+  String get pplNotLinked;
+
+  /// No description provided for @pplParkingBillHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Lot expenses this person pays come off this bill at month end.'**
+  String get pplParkingBillHint;
+
+  /// No description provided for @pplLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Link'**
+  String get pplLink;
+
+  /// No description provided for @pplChange.
+  ///
+  /// In en, this message translates to:
+  /// **'Change'**
+  String get pplChange;
+
+  /// No description provided for @pplUnlink.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlink'**
+  String get pplUnlink;
+
+  /// No description provided for @pplUnlinkTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlink the parking bill?'**
+  String get pplUnlinkTitle;
+
+  /// No description provided for @pplUnlinkMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlink {name}\'s parking bill? Their lot expenses will stop coming off it.'**
+  String pplUnlinkMessage(String name);
+
+  /// No description provided for @pplParkingLinked.
+  ///
+  /// In en, this message translates to:
+  /// **'Parking bill linked.'**
+  String get pplParkingLinked;
+
+  /// No description provided for @pplParkingUnlinked.
+  ///
+  /// In en, this message translates to:
+  /// **'Parking bill unlinked.'**
+  String get pplParkingUnlinked;
+
+  /// No description provided for @pplLinkSheetTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Link a parking bill'**
+  String get pplLinkSheetTitle;
+
+  /// No description provided for @pplLinkSheetHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the parking customer whose monthly bill this person pays. Their lot expenses come off that bill; whatever is left, the business owes them.'**
+  String get pplLinkSheetHint;
+
+  /// No description provided for @pplFindCustomer.
+  ///
+  /// In en, this message translates to:
+  /// **'Find a customer: name or phone'**
+  String get pplFindCustomer;
+
+  /// No description provided for @pplSuggested.
+  ///
+  /// In en, this message translates to:
+  /// **'Suggested'**
+  String get pplSuggested;
+
+  /// No description provided for @pplEveryoneElse.
+  ///
+  /// In en, this message translates to:
+  /// **'Everyone else'**
+  String get pplEveryoneElse;
+
+  /// No description provided for @pplNoMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'No parking customer matches.'**
+  String get pplNoMatch;
+
+  /// No description provided for @pplNoCars.
+  ///
+  /// In en, this message translates to:
+  /// **'No car was parked in the last twelve months.'**
+  String get pplNoCars;
+
+  /// No description provided for @pplCarsLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The parked cars could not be loaded.'**
+  String get pplCarsLoadFailed;
+
+  /// No description provided for @pplTryAgain.
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get pplTryAgain;
+
+  /// No description provided for @pplCarsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 parked car} other{{count} parked cars}}'**
+  String pplCarsCount(int count);
+
+  /// No description provided for @pplLikelyMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Likely match'**
+  String get pplLikelyMatch;
+
+  /// No description provided for @pplLinkedBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Linked'**
+  String get pplLinkedBadge;
+
+  /// No description provided for @pplErrFullAccessOwnerOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the business owner or a Laawol super admin can change full access.'**
+  String get pplErrFullAccessOwnerOnly;
+
+  /// No description provided for @pplErrFullAccessStaffOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Full access is for staff of this business.'**
+  String get pplErrFullAccessStaffOnly;
+
+  /// No description provided for @pplErrNotMember.
+  ///
+  /// In en, this message translates to:
+  /// **'That person is no longer on this business\'s team.'**
+  String get pplErrNotMember;
+
+  /// No description provided for @pplErrLinkOwnerOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the business owner can link a parking bill.'**
+  String get pplErrLinkOwnerOnly;
+
+  /// No description provided for @pplErrLinkCustomer.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the parking customer to link.'**
+  String get pplErrLinkCustomer;
+
+  /// No description provided for @pplErrActionInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'This app is out of date. Update it and try again.'**
+  String get pplErrActionInvalid;
+
+  /// No description provided for @pplErrNotAllowed.
+  ///
+  /// In en, this message translates to:
+  /// **'Your account is not allowed to do this. Ask the business owner.'**
+  String get pplErrNotAllowed;
+
+  /// No description provided for @pplErrOther.
+  ///
+  /// In en, this message translates to:
+  /// **'It did not save. Check your connection and try again.'**
+  String get pplErrOther;
+
   /// No description provided for @pcsKindBox.
   ///
   /// In en, this message translates to:

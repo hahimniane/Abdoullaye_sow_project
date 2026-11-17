@@ -43,6 +43,8 @@ check in 2023): the first message is the check, and a failed one is free.
 
 ## Not yet
 
-- The Flutter app shows failures but has no Send again or counter warning
-  (next build).
+- The Flutter app now has Send again (`SendAgainButton`, under a failed tick)
+  and the counter warning (`CounterAlertsBox`, on the Waiting list and in the
+  register/edit sheet; `counterAlerts` in `line_resend.dart`). It ships with
+  the next app build after the one carrying this branch.
 - No format check per country as numbers are typed (proposed; not built).

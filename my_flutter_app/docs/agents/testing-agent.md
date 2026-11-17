@@ -856,3 +856,12 @@ Add recurring failure modes, project-specific fake patterns, and useful commands
   with a camera needs a stand-in for the camera in tests, or the test never
   sees the layout a phone has.
 
+- A widget test of `ContainerDetailScreen` / `ContainersScreen` uses
+  `ContainerFeed.fixed` (it never reads Firestore on `focus`/`unfocus`) and
+  injects the server through the screen's `callable` / `caller` parameter. A
+  `Provider<AuthProvider>` fake `implements AuthProvider` with a
+  `noSuchMethod` that returns null for getters, plus the getters the screen
+  reads (`packageAccess` for the container detail). Reusing one `TeamPanel`
+  across two `pumpWidget` calls keeps the first call's streams: give it a
+  `UniqueKey`. A 320 px French test that overflows in `LotPrimaryBar` or a
+  header row is a real bug: fix the widget, not the test.
