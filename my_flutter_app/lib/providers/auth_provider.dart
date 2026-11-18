@@ -1479,6 +1479,11 @@ class AuthProvider extends ChangeNotifier {
     required String email,
     required String website,
     required List<String> enabledServices,
+
+    /// The work the app's home leads with (`parking`, `shipping`, `shop`,
+    /// `carSales`, `transport`). Omitted means "leave it as it is": only a
+    /// choice the owner made is sent.
+    String? mainWork,
     String? profileImageUrl,
     String? profileImagePath,
     required String serviceNote,
@@ -1539,6 +1544,7 @@ class AuthProvider extends ChangeNotifier {
       'email': email.trim(),
       'website': website.trim(),
       'enabledServices': enabledServices,
+      'mainWork': ?mainWork,
       'profileImageUrl': ?profileImageUrl,
       'profileImagePath': ?profileImagePath,
       'serviceNote': serviceNote.trim(),

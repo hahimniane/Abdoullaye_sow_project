@@ -23150,4 +23150,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pcsFromListBack => 'Back to the list';
+
+  @override
+  String get nhmMainWorkTitle => 'Main work';
+
+  @override
+  String get nhmMainWorkHelp => 'The app\'s home opens on this.';
 }

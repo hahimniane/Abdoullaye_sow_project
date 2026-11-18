@@ -934,21 +934,19 @@ void main() {
       expect(home, contains('isAdmin: auth.isAdmin'));
       // The hero only for someone who may sell; the shop's own "More" only
       // for a shop; the long-standing sections for everyone else.
-      final hero = home.indexOf('ShopHomeSection(');
-      final gate = home.lastIndexOf(
-        'if (layout == ShopHomeLayout.standard) ...[',
-        hero,
-      );
-      expect(gate, greaterThan(0));
-      // The standard top row first, the hero only in the else branch.
-      expect(home.substring(gate, hero), contains('] else ...['));
+      expect(home, contains('canSell: layout != ShopHomeLayout.standard'));
+      // The blocks come in the order the main work decides; the shop block
+      // carries the header only when it leads.
+      expect(home, contains('BusinessHomeColumn('));
+      expect(home, contains('homeParts(works: works, stored: _mainWork)'));
+      expect(home, contains('showHeader: leading'));
+      expect(home, contains('header: Row('));
       final more = home.indexOf('_ShopMoreSection(l10n: l10n)');
-      final services = home.indexOf('_ServicesSection(', more);
-      final activity = home.indexOf('_ActivitySection(', services);
-      expect(more, greaterThan(hero));
+      final services = home.indexOf('HomeServicesSection(', more);
+      final activity = home.indexOf('activity,', services);
+      expect(more, greaterThan(0));
       expect(services, greaterThan(more));
       expect(activity, greaterThan(services));
-      expect(home.substring(more, services), contains('else ...['));
     });
 
     test('non-shop homes keep every section they had', () {

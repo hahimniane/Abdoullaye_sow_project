@@ -52,6 +52,7 @@ class ShopHomeSection extends StatefulWidget {
     this.businessName = '',
     this.headerLeading,
     this.headerActions,
+    this.showHeader = true,
     this.approvalStatus,
     this.showTodaySales = true,
     this.source,
@@ -77,6 +78,11 @@ class ShopHomeSection extends StatefulWidget {
   /// whole row higher on the screen.
   final Widget? headerLeading;
   final Widget? headerActions;
+
+  /// False when the shop block follows another block that already carries
+  /// the business name, the bell and the language switch. The store line
+  /// (where the person sells from) is kept either way.
+  final bool showHeader;
 
   /// The business's review state when it is not yet approved ('pending',
   /// 'changes_requested'), shown as a small note; null or 'approved' shows
@@ -188,10 +194,7 @@ class _ShopHomeSectionState extends State<ShopHomeSection> {
         _listenSales();
         final watcher = _watcher;
         if (watcher != null) {
-          _transfers?.sync(
-            watcher.context,
-            storesLoaded: watcher.storesLoaded,
-          );
+          _transfers?.sync(watcher.context, storesLoaded: watcher.storesLoaded);
         }
       },
     );
@@ -528,12 +531,13 @@ class _ShopHomeSectionState extends State<ShopHomeSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _Header(
-          leading: widget.headerLeading,
-          actions: widget.headerActions,
-          businessName: widget.businessName.trim(),
-          storeLine: storeLine,
-        ),
+        if (widget.showHeader || storeLine.isNotEmpty)
+          _Header(
+            leading: widget.showHeader ? widget.headerLeading : null,
+            actions: widget.showHeader ? widget.headerActions : null,
+            businessName: widget.showHeader ? widget.businessName.trim() : '',
+            storeLine: storeLine,
+          ),
         if (status != null && status != 'approved') ...[
           const SizedBox(height: AppSpacing.sm),
           Align(
@@ -541,7 +545,8 @@ class _ShopHomeSectionState extends State<ShopHomeSection> {
             child: ShopApprovalNote(status: status),
           ),
         ],
-        const SizedBox(height: AppSpacing.lg),
+        if (widget.showHeader || storeLine.isNotEmpty || status != null)
+          const SizedBox(height: AppSpacing.lg),
         ShopSellButton(onTap: () => _openSell()),
         const SizedBox(height: AppSpacing.sm),
         _SecondaryAction(

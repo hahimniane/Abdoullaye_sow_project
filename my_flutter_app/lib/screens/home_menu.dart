@@ -58,6 +58,8 @@ import 'park_car_screen.dart';
 import 'lot_ledger_screen.dart';
 import 'shipping_home_section.dart';
 import 'shop_home_section.dart';
+import '../widgets/business_home_column.dart';
+import '../services/business_home.dart';
 import 'staff_car_management_screen.dart';
 
 export '../services/business_service_overview.dart' show ServiceCategory;
@@ -189,6 +191,12 @@ class _HomeMenuState extends State<HomeMenu> {
   Object? _tilesKey;
   List<BusinessServiceTile> _tilesCache = const [];
 
+  /// `businesses/{id}.mainWork`: the work the owner chose for the home to
+  /// lead with. Null until it arrives, when it is missing, and when the read
+  /// fails: the home then shows what it showed before the setting existed.
+  String? _mainWork;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _mainWorkSub;
+
   bool _isLoading = true;
   Timer? _loadingSafety;
   ServiceCategory _selectedCategory = ServiceCategory.all;
@@ -288,6 +296,38 @@ class _HomeMenuState extends State<HomeMenu> {
     );
   }
 
+  /// The business's chosen main work, live, so a change made on Business
+  /// profile reaches the home without a restart. Nothing waits on it: an
+  /// error or a missing value is "not chosen".
+  void _listenToMainWork(String businessId) {
+    unawaited(_mainWorkSub?.cancel());
+    _mainWorkSub = null;
+    try {
+      _mainWorkSub = FirebaseFirestore.instance
+          .collection('businesses')
+          .doc(businessId)
+          .snapshots()
+          .listen(
+            (snapshot) {
+              if (!mounted) return;
+              final value = snapshot.data()?['mainWork'];
+              final next = value is String && value.trim().isNotEmpty
+                  ? value.trim()
+                  : null;
+              if (next != _mainWork) setState(() => _mainWork = next);
+            },
+            onError: (Object error) {
+              debugPrint('Main work read failed: $error');
+              if (mounted && _mainWork != null) {
+                setState(() => _mainWork = null);
+              }
+            },
+          );
+    } catch (error) {
+      debugPrint('Main work read failed: $error');
+    }
+  }
+
   /// The lots, live. A failed read leaves the list as it was: the home then
   /// behaves as a one-lot business's does.
   void _listenToLots(String businessId) {
@@ -295,20 +335,23 @@ class _HomeMenuState extends State<HomeMenu> {
     try {
       _lotsSub = ParkingLotsService()
           .watchLots(businessId)
-          .listen((lots) {
-            if (!mounted) return;
-            setState(() {
-              _lots = lots;
-              _lotsVersion += 1;
-              // A filter on a lot that is gone would hide every car.
-              if (_lotFilter.isNotEmpty &&
-                  !lots.any((lot) => lot.id == _lotFilter)) {
-                _lotFilter = '';
-              }
-            });
-          }, onError: (Object error) {
-            debugPrint('Parking lots read failed: $error');
-          });
+          .listen(
+            (lots) {
+              if (!mounted) return;
+              setState(() {
+                _lots = lots;
+                _lotsVersion += 1;
+                // A filter on a lot that is gone would hide every car.
+                if (_lotFilter.isNotEmpty &&
+                    !lots.any((lot) => lot.id == _lotFilter)) {
+                  _lotFilter = '';
+                }
+              });
+            },
+            onError: (Object error) {
+              debugPrint('Parking lots read failed: $error');
+            },
+          );
     } catch (error) {
       debugPrint('Parking lots read failed: $error');
     }
@@ -371,6 +414,7 @@ class _HomeMenuState extends State<HomeMenu> {
     _businessId = (auth.businessId ?? '').trim();
     final businessId = _businessId;
     final hasBusiness = businessId.isNotEmpty;
+    if (hasBusiness) _listenToMainWork(businessId);
 
     if (hasBusiness && auth.hasBusinessPermission(BusinessPermission.parking)) {
       _loadParkingSpaces(businessId);
@@ -884,6 +928,7 @@ class _HomeMenuState extends State<HomeMenu> {
   @override
   void dispose() {
     unawaited(_lotsSub?.cancel());
+    unawaited(_mainWorkSub?.cancel());
     _parkingSearchController.dispose();
     _loadingSafety?.cancel();
     _freightShipmentsSubscription?.cancel();
@@ -932,9 +977,33 @@ class _HomeMenuState extends State<HomeMenu> {
               services: auth.effectiveBusinessServices,
             ) ==
             ShippingHomeLayout.simple;
+    // Which block leads: the business's main work (businesses/{id}.mainWork)
+    // decides between the blocks this person can use. Every gate below is the
+    // one the home already used; none is re-derived. The two homes that exist
+    // for one kind of business (shop only, shipping only) answer first.
+    final activityCategories = _enabledActivityCategories();
+    final works = homeWorks(
+      canSell: layout != ShopHomeLayout.standard,
+      canPark: activityCategories.contains(ServiceCategory.parking),
+      canShip: homeCanShip(
+        isAdmin: auth.isAdmin,
+        hasBusinessDashboardAccess: auth.hasBusinessDashboardAccess,
+        hasContainersAccess: auth.hasContainersAccess,
+        hasBusiness: _businessId.isNotEmpty,
+        services: auth.effectiveBusinessServices,
+      ),
+      canSellCars: activityCategories.contains(ServiceCategory.sales),
+      canTransport: activityCategories.contains(ServiceCategory.transport),
+    );
+    final parts = shopOnly
+        ? const [HomePart.shop, HomePart.services]
+        : simpleShipping
+        ? const [HomePart.shipping]
+        : homeParts(works: works, stored: _mainWork);
+    final shippingLeads = parts.first == HomePart.shipping;
     // The places it lists are the standard home's own rows, by key, so a
     // place cannot be offered on one home and refused on the other.
-    final shippingRows = simpleShipping
+    final shippingRows = shippingLeads
         ? _businessDestinations(context, auth, l10n, includeInventory: false)
         : const <HomeDestination>[];
     // A shop keeps to the 8-point grid; the long-standing home keeps its own
@@ -1009,8 +1078,9 @@ class _HomeMenuState extends State<HomeMenu> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (layout == ShopHomeLayout.standard) ...[
-                        Row(
+                      BusinessHomeColumn(
+                        parts: parts,
+                        header: Row(
                           children: [
                             if (widget.showBackButton) const BackButton(),
                             // The business's own name heads its home, as it
@@ -1034,16 +1104,38 @@ class _HomeMenuState extends State<HomeMenu> {
                             const LanguageToggle(),
                           ],
                         ),
-                        const SizedBox(height: 16),
-                      ] else ...[
+                        // One quiet row to the Today page; everything else it
+                        // shows lives on its own screen, not on this home.
+                        todayRow:
+                            _businessId.isNotEmpty &&
+                                (auth.hasBusinessDashboardAccess ||
+                                    _showsFleetRow(auth))
+                            ? Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  HomeDestinationGroup(
+                                    rows: [
+                                      if (auth.hasBusinessDashboardAccess)
+                                        _todayDestination(context, auth, l10n),
+                                      if (_showsFleetRow(auth))
+                                        _fleetDestination(context, auth, l10n),
+                                    ],
+                                  ),
+                                  const SizedBox(height: AppSpacing.lg),
+                                ],
+                              )
+                            : null,
                         // Whoever may sell: the business name shares the row
                         // with the bell and the language switch, and Sell
                         // comes straight after - no scrolling to reach it.
-                        ShopHomeSection(
+                        // When another work leads, the same block follows it
+                        // without a header of its own.
+                        shop: (leading) => ShopHomeSection(
                           key: const Key('shop-home'),
                           businessId: _businessId,
                           access: auth.inventoryAccess,
                           businessName: auth.businessName ?? '',
+                          showHeader: leading,
                           headerLeading: widget.showBackButton
                               ? const BackButton()
                               : null,
@@ -1058,96 +1150,105 @@ class _HomeMenuState extends State<HomeMenu> {
                           approvalStatus: shopOnly ? approval : null,
                           showTodaySales: shopOnly,
                         ),
-                        const SizedBox(height: AppSpacing.xl),
-                      ],
-                      // One quiet row to the Today page; everything else it
-                      // shows lives on its own screen, not on this home.
-                      if (_businessId.isNotEmpty &&
-                          (auth.hasBusinessDashboardAccess ||
-                              _showsFleetRow(auth))) ...[
-                        HomeDestinationGroup(
-                          rows: [
-                            if (auth.hasBusinessDashboardAccess)
-                              _todayDestination(context, auth, l10n),
-                            if (_showsFleetRow(auth))
-                              _fleetDestination(context, auth, l10n),
-                          ],
-                        ),
-                        const SizedBox(height: AppSpacing.lg),
-                      ],
-                      if (shopOnly)
-                        _ShopMoreSection(l10n: l10n)
-                      else if (simpleShipping) ...[
                         // Package shippers: Register a package, a few places,
                         // money, then the same tail. No service tiles. The
                         // activity feed (online orders) appears under them
-                        // only when it has records.
-                        ShippingHomeSection(
-                          key: const Key('shipping-home-section'),
-                          businessId: _businessId,
-                          businessName: auth.businessName ?? '',
-                          approvalStatus: approval,
-                          containersRow: _rowKeyed(
-                            shippingRows,
-                            'open-containers',
-                          ),
-                          // Beside its other places, whoever also holds
-                          // Containers (the standard home lists it only
-                          // for destination staff without them).
-                          deliveriesRow:
-                              auth.hasDeliveriesAccess && _businessId.isNotEmpty
-                              ? _deliveriesDestination(
-                                  context,
-                                  auth,
-                                  l10n,
-                                  _businessId,
-                                )
-                              : null,
-                          moneyRows: [
-                            for (final key in const [
-                              'open-invoices',
-                              'open-staff-balances',
-                            ])
-                              ?_rowKeyed(shippingRows, key),
-                          ],
-                          tools: _businessTools(context, auth, l10n),
-                        ),
-                        if (showRecords) ...[
-                          const SizedBox(height: 24),
-                          activity,
-                        ],
-                      ] else ...[
-                        // A shop-only business seen by someone who cannot
-                        // sell: the same calm note, above the services card.
-                        if (layout == ShopHomeLayout.standard &&
-                            showApprovalNote) ...[
-                          ShopApprovalNote(status: approval),
-                          const SizedBox(height: 16),
-                        ],
-                        // "Services. / Choose a service to get started" is an
-                        // invitation to pick something. Once the service grid
-                        // is on screen it is a caption for the thing directly
-                        // under it. Customers, who get no grid, still need it.
-                        if (tiles.isEmpty) ...[
-                          _WelcomeSection(l10n: l10n, width: width),
-                          const SizedBox(height: 24),
-                        ],
-                        _ServicesSection(
-                          l10n: l10n,
-                          width: width,
-                          tiles: tiles,
-                          isLoading: _isLoading,
-                          selectedCategory: _selectedCategory,
-                          onCategoryTapped: (category) => _selectCategory(
-                            businessServiceOverviewSelection(
-                              _selectedCategory,
-                              category,
+                        // only when it has records. At a business with other
+                        // work the standard home follows it and ends with the
+                        // tail itself.
+                        shipping: () => Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            ShippingHomeSection(
+                              key: const Key('shipping-home-section'),
+                              businessId: _businessId,
+                              businessName: simpleShipping
+                                  ? auth.businessName ?? ''
+                                  : '',
+                              approvalStatus: simpleShipping ? approval : null,
+                              showTail: simpleShipping,
+                              containersRow: _rowKeyed(
+                                shippingRows,
+                                'open-containers',
+                              ),
+                              // Beside its other places, whoever also holds
+                              // Containers (the standard home lists it only
+                              // for destination staff without them).
+                              deliveriesRow:
+                                  auth.hasDeliveriesAccess &&
+                                      _businessId.isNotEmpty
+                                  ? _deliveriesDestination(
+                                      context,
+                                      auth,
+                                      l10n,
+                                      _businessId,
+                                    )
+                                  : null,
+                              moneyRows: [
+                                for (final key in const [
+                                  'open-invoices',
+                                  'open-staff-balances',
+                                ])
+                                  ?_rowKeyed(shippingRows, key),
+                              ],
+                              tools: simpleShipping
+                                  ? _businessTools(context, auth, l10n)
+                                  : const [],
                             ),
-                          ),
+                            if (simpleShipping && showRecords) ...[
+                              const SizedBox(height: 24),
+                              activity,
+                            ],
+                          ],
                         ),
-                        const SizedBox(height: 24),
-                        activity,
-                      ],
+                        services: (shopBelow) {
+                          if (shopOnly) return _ShopMoreSection(l10n: l10n);
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // A shop-only business seen by someone who cannot
+                              // sell: the same calm note, above the services
+                              // card.
+                              if (layout == ShopHomeLayout.standard &&
+                                  showApprovalNote) ...[
+                                ShopApprovalNote(status: approval),
+                                const SizedBox(height: 16),
+                              ],
+                              // "Services. / Choose a service to get started"
+                              // is an invitation to pick something. Once the
+                              // service grid is on screen it is a caption for
+                              // the thing directly under it. Customers, who get
+                              // no grid, still need it.
+                              if (tiles.isEmpty) ...[
+                                _WelcomeSection(l10n: l10n, width: width),
+                                const SizedBox(height: 24),
+                              ],
+                              HomeServicesSection(
+                                l10n: l10n,
+                                width: width,
+                                tiles: tiles,
+                                isLoading: _isLoading,
+                                selectedCategory: _selectedCategory,
+                                onCategoryTapped: (category) => _selectCategory(
+                                  businessServiceOverviewSelection(
+                                    _selectedCategory,
+                                    category,
+                                  ),
+                                ),
+                                shopBelow: shopBelow,
+                                // The shipping block above already lists
+                                // these places.
+                                omitRowKeys: shippingLeads
+                                    ? homeShippingRowKeys
+                                    : const {},
+                                quietPrimaryAction: shippingLeads,
+                              ),
+                              const SizedBox(height: 24),
+                              activity,
+                            ],
+                          );
+                        },
+                      ),
                     ],
                   ),
                 ),
@@ -1313,14 +1414,22 @@ class _WelcomeSection extends StatelessWidget {
 /// a walk-up - stranded below a "Recent activity" heading as a plain outlined
 /// button. The order here is the order of the day: what needs doing, then the
 /// thing you do, then the console you occasionally leave for.
-class _ServicesSection extends StatelessWidget {
-  const _ServicesSection({
+/// The standard home's services block: the service tiles, the parking action,
+/// the places, and the tail. Public so a widget test can drive it with a fake
+/// sign-in; the home is its only caller.
+class HomeServicesSection extends StatelessWidget {
+  const HomeServicesSection({
+    super.key,
     required this.l10n,
     required this.width,
     required this.tiles,
     required this.isLoading,
     required this.selectedCategory,
     required this.onCategoryTapped,
+    this.shopBelow,
+    this.omitRowKeys = const {},
+    this.quietPrimaryAction = false,
+    this.showTail = true,
   });
 
   final AppLocalizations l10n;
@@ -1329,6 +1438,20 @@ class _ServicesSection extends StatelessWidget {
   final bool isLoading;
   final ServiceCategory selectedCategory;
   final ValueChanged<ServiceCategory> onCategoryTapped;
+
+  /// The shop block (with its label) when the person may sell and another
+  /// work leads: drawn under the places, before the tail.
+  final Widget? shopBelow;
+
+  /// Places another block above already lists (by row key), so no place is
+  /// offered twice.
+  final Set<String> omitRowKeys;
+
+  /// Another block leads (shipping): Record a parked car is a quiet button.
+  final bool quietPrimaryAction;
+
+  /// False when a block above carries the tail already.
+  final bool showTail;
 
   @override
   Widget build(BuildContext context) {
@@ -1339,7 +1462,10 @@ class _ServicesSection extends StatelessWidget {
     final canRecordParkedCar = auth.hasBusinessPermission(
       BusinessPermission.parking,
     );
-    final destinations = _businessDestinations(context, auth, l10n);
+    final destinations = [
+      for (final row in _businessDestinations(context, auth, l10n))
+        if (!omitRowKeys.any((key) => row.rowKey == Key(key))) row,
+    ];
     final moreTools = _businessTools(context, auth, l10n);
     // No frame around the whole home: each group below is its own white card
     // on the page, so nothing sits in a box inside a box.
@@ -1376,6 +1502,7 @@ class _ServicesSection extends StatelessWidget {
             buttonKey: const Key('record-parked-car'),
             icon: Icons.add,
             label: l10n.recordAParkedCar,
+            quiet: quietPrimaryAction,
             onTap: () {
               Navigator.of(context).push(
                 MaterialPageRoute<void>(builder: (_) => const ParkCarScreen()),
@@ -1398,10 +1525,15 @@ class _ServicesSection extends StatelessWidget {
             },
           ),
         ],
+        if (shopBelow != null) ...[
+          const SizedBox(height: AppSpacing.xl),
+          shopBelow!,
+        ],
         // Everything else the console offers, by the same permissions it
         // uses, then the console and the assistant: the tail the simple
         // shipping home ends with too.
-        BusinessHomeTail(tools: moreTools, businessId: auth.businessId ?? ''),
+        if (showTail)
+          BusinessHomeTail(tools: moreTools, businessId: auth.businessId ?? ''),
       ],
     );
   }
@@ -1501,6 +1633,15 @@ HomeDestination _deliveriesDestination(
     );
   },
 );
+
+/// The places the shipping block lists itself, so the standard block that
+/// follows it leaves them out (keys of the `_businessDestinations` rows).
+const Set<String> homeShippingRowKeys = {
+  'open-containers',
+  'open-deliveries',
+  'open-invoices',
+  'open-staff-balances',
+};
 
 /// The places a business goes from its home: the ledger, containers,
 /// inventory, invoices and the transport board, each behind the same gates it
@@ -2977,7 +3118,8 @@ class _ParkingListRow extends StatelessWidget {
                             _rowMeta(
                               businessParkingPaymentStatusLabel(l10n, fields),
                             ),
-                          if (lotName.isNotEmpty) ParkingLotBadge(name: lotName),
+                          if (lotName.isNotEmpty)
+                            ParkingLotBadge(name: lotName),
                           if (containerLink != null)
                             ContainerLinkChip(link: containerLink!),
                           _rowMeta(

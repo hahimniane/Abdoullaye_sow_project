@@ -39115,6 +39115,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Back to the list'**
   String get pcsFromListBack;
+
+  /// Business profile, Services panel: label of the list where the owner picks the work the app's home leads with.
+  ///
+  /// In en, this message translates to:
+  /// **'Main work'**
+  String get nhmMainWorkTitle;
+
+  /// One line under the Main work label on Business profile.
+  ///
+  /// In en, this message translates to:
+  /// **'The app\'s home opens on this.'**
+  String get nhmMainWorkHelp;
 }
 
 class _AppLocalizationsDelegate

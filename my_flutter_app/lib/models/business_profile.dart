@@ -16,6 +16,7 @@ class BusinessProfile {
     this.profileImagePath,
     this.logoUrl,
     this.enabledServices = defaultBusinessServiceValues,
+    this.mainWork,
     this.serviceNote,
     this.addressLine1,
     this.city,
@@ -80,6 +81,11 @@ class BusinessProfile {
   final String? profileImagePath;
   final String? logoUrl;
   final List<String> enabledServices;
+
+  /// The work the app's home leads with (`parking`, `shipping`, `shop`,
+  /// `carSales`, `transport`), or null until the owner has chosen one. Only
+  /// read here; see lib/services/business_home.dart.
+  final String? mainWork;
   final String? serviceNote;
   final String? addressLine1;
   final String? city;
@@ -176,6 +182,7 @@ class BusinessProfile {
       profileImagePath: data['profileImagePath'] as String?,
       logoUrl: data['logoUrl'] as String?,
       enabledServices: normalizeBusinessServices(data['enabledServices']),
+      mainWork: data['mainWork'] is String ? data['mainWork'] as String : null,
       serviceNote: data['serviceNote'] as String?,
       addressLine1: data['addressLine1'] as String?,
       city: data['city'] as String?,

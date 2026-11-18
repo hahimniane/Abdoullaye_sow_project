@@ -37,6 +37,7 @@ class HomePrimaryAction extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.onTap,
+    this.quiet = false,
   });
 
   final Key buttonKey;
@@ -44,8 +45,13 @@ class HomePrimaryAction extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
 
+  /// An action that is not the screen's main one (another block leads): a
+  /// white button with a hairline instead of the filled navy one.
+  final bool quiet;
+
   @override
   Widget build(BuildContext context) {
+    final foreground = quiet ? AppColors.ink : Colors.white;
     return PressableScale(
       key: buttonKey,
       onTap: onTap,
@@ -54,13 +60,18 @@ class HomePrimaryAction extends StatelessWidget {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           // Flat logo navy, like the website's main button.
-          color: AppColors.cobalt,
+          color: quiet ? AppColors.paper : AppColors.cobalt,
           borderRadius: BorderRadius.circular(14),
+          border: quiet ? Border.all(color: AppColors.rule) : null,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 19, color: Colors.white),
+            Icon(
+              icon,
+              size: 19,
+              color: quiet ? AppColors.cobaltDeep : foreground,
+            ),
             const SizedBox(width: AppSpacing.sm),
             // A long French label on a narrow phone shortens instead of
             // overflowing the button.
@@ -69,8 +80,8 @@ class HomePrimaryAction extends StatelessWidget {
                 label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: foreground,
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                   letterSpacing: 0,
