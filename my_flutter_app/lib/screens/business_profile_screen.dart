@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
+import '../services/business_home.dart';
+import '../widgets/main_work_picker.dart';
 import '../data/business_location_catalog.dart';
 import '../data/nyc_boroughs.dart';
 import '../data/us_locations.dart';
@@ -98,6 +100,9 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
   final _pickupPlanKey = GlobalKey<PickupPlanEditorState>();
   final _parkingRatesKey = GlobalKey<_ParkingRateCardsEditorState>();
   final _selectedServices = <String>{};
+
+  /// The work the app's home leads with (`mainWork`); null = not chosen.
+  HomeWork? _mainWork;
   final _sectionErrors = <_BusinessProfileSectionKey, String>{};
   String _holdPricingMode = 'flat';
   String? _hydratedBusinessSignature;
@@ -174,6 +179,7 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
       business.featureStatus,
       business.featureNote ?? '',
       business.enabledServices.join('|'),
+      business.mainWork ?? '',
       business.carHoldPricingMode,
       business.carHoldFlatFee,
       business.carHoldDailyRate,
@@ -299,6 +305,7 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
         _selectedServices
           ..clear()
           ..addAll(business.enabledServices);
+        _mainWork = HomeWork.fromKey(business.mainWork);
       });
     });
   }
@@ -603,6 +610,9 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
         email: _emailController.text,
         website: _websiteController.text,
         enabledServices: _selectedServices.toList(),
+        // Only a choice the business still has the service for; an empty or
+        // unknown value is never sent.
+        mainWork: mainWorkToSave(_mainWork?.key, _selectedServices),
         profileImageUrl: upload?.url,
         profileImagePath: upload?.path,
         serviceNote: _noteController.text,
@@ -823,6 +833,8 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
                     setState(() => _parkingCityController.text = value ?? '');
                   },
                   selectedServices: _selectedServices,
+                  mainWork: _mainWork,
+                  onMainWorkChanged: (work) => setState(() => _mainWork = work),
                   onServiceChanged: (service, selected) {
                     setState(() {
                       if (selected) {
@@ -1620,6 +1632,8 @@ class _BusinessForm extends StatelessWidget {
     required this.onParkingStateChanged,
     required this.onParkingCityChanged,
     required this.selectedServices,
+    required this.mainWork,
+    required this.onMainWorkChanged,
     required this.onServiceChanged,
   });
 
@@ -1674,6 +1688,8 @@ class _BusinessForm extends StatelessWidget {
   final ValueChanged<String?> onParkingStateChanged;
   final ValueChanged<String?> onParkingCityChanged;
   final Set<String> selectedServices;
+  final HomeWork? mainWork;
+  final ValueChanged<HomeWork> onMainWorkChanged;
   final void Function(String service, bool selected) onServiceChanged;
 
   @override
@@ -2152,6 +2168,23 @@ class _BusinessForm extends StatelessWidget {
                 if (service != ownerBusinessServiceCatalog.last)
                   const SizedBox(height: 10),
               ],
+              // The work the app's home opens on: only among the works the
+              // business has on, and only when there is a choice. A choice
+              // whose service was switched off reads as "not chosen".
+              Builder(
+                builder: (context) {
+                  final works = homeWorksOn(selectedServices);
+                  return MainWorkPicker(
+                    works: works,
+                    selected: works.contains(mainWork) ? mainWork : null,
+                    enabled: canEdit,
+                    onChanged: (work) {
+                      onSectionEdited(_BusinessProfileSectionKey.services);
+                      onMainWorkChanged(work);
+                    },
+                  );
+                },
+              ),
             ],
           ),
         ],

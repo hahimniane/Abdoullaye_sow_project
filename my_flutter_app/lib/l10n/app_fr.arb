@@ -13510,5 +13510,13 @@
   "pcsFromListBack": "Retour à la liste",
   "@pcsFromListBack": {
     "description": "Button of the price-list picker's detail step."
+  },
+  "nhmMainWorkTitle": "Activité principale",
+  "@nhmMainWorkTitle": {
+    "description": "Business profile, Services panel: label of the list where the owner picks the work the app's home leads with."
+  },
+  "nhmMainWorkHelp": "L'accueil de l'application s'ouvre sur cette activité.",
+  "@nhmMainWorkHelp": {
+    "description": "One line under the Main work label on Business profile."
   }
 }

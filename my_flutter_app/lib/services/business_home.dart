@@ -7,6 +7,8 @@
 /// the caller, from the rules the home already uses; none is re-derived here.
 library;
 
+import '../models/business_service.dart' show BusinessServiceKey;
+
 /// The works a business home can lead with.
 enum HomeWork {
   parking('parking'),
@@ -86,3 +88,75 @@ List<HomeWork> homeOtherWorks(List<HomeWork> works, HomeWork? main) => [
   for (final work in homeWorkDefaultOrder)
     if (works.contains(work) && work != main) work,
 ];
+
+/// The blocks a business home is made of, top to bottom.
+enum HomePart {
+  /// The shop block: Sell, today's numbers, quick links.
+  shop,
+
+  /// The simple shipping block: Register a package, its places, money rows.
+  shipping,
+
+  /// The standard home: the services block (its tiles, the parking action,
+  /// the places, the tail) and the activity feed that goes with it.
+  services,
+}
+
+/// The order of the home's blocks for this person.
+///
+/// - Main work shop (or none chosen and the person may sell): the shop block
+///   first, then the standard services block, exactly as before the setting.
+/// - Main work shipping, for a person who may ship at a business that has
+///   another work they can do: the simple shipping block first, then the
+///   standard services block (which carries the other works, and the shop
+///   block inside it when the person may sell).
+/// - Any other main work (parking, car sales, transport) or no work at all:
+///   the standard services block leads; the shop block, when the person may
+///   sell, follows it.
+///
+/// A shipping-only person never reaches this: the home's own simple-shipping
+/// rule answers first. [shop] is always the last part when it is not first,
+/// because it is drawn at the end of the services block.
+List<HomePart> homeParts({required List<HomeWork> works, String? stored}) {
+  final main = mainHomeWork(works, stored);
+  if (main == null) return const [HomePart.services];
+  final canSell = works.contains(HomeWork.shop);
+  if (main == HomeWork.shop) return const [HomePart.shop, HomePart.services];
+  if (main == HomeWork.shipping && works.length > 1) {
+    return [HomePart.shipping, HomePart.services, if (canSell) HomePart.shop];
+  }
+  return [HomePart.services, if (canSell) HomePart.shop];
+}
+
+/// The works a business has switched on, from its `enabledServices` values,
+/// in the default order: what Business profile offers as the main work.
+/// Parking is car parking; shipping is the package-shipping services (barrel
+/// shipping, the retired freight); shop is inventory; car sales and car
+/// transport are their own services.
+List<HomeWork> homeWorksOn(Iterable<String> services) {
+  final on = services.toSet();
+  bool has(BusinessServiceKey key) => on.contains(key.value);
+  return [
+    for (final work in homeWorkDefaultOrder)
+      if (switch (work) {
+        HomeWork.shop => has(BusinessServiceKey.inventory),
+        HomeWork.parking => has(BusinessServiceKey.carParking),
+        HomeWork.shipping =>
+          has(BusinessServiceKey.barrelShipping) ||
+              has(BusinessServiceKey.freight),
+        HomeWork.carSales => has(BusinessServiceKey.carSales),
+        HomeWork.transport => has(BusinessServiceKey.carTransport),
+      })
+        work,
+  ];
+}
+
+/// The main work to save, or null when nothing valid was chosen: the choice
+/// must be one of the works the business has on, and the picker only exists
+/// with two or more.
+String? mainWorkToSave(String? chosen, Iterable<String> services) {
+  final work = HomeWork.fromKey(chosen);
+  final on = homeWorksOn(services);
+  if (work == null || on.length < 2 || !on.contains(work)) return null;
+  return work.key;
+}

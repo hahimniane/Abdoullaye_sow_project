@@ -43,6 +43,7 @@ class ShippingHomeSection extends StatefulWidget {
     this.deliveriesRow,
     this.moneyRows = const [],
     this.tools = const [],
+    this.showTail = true,
     this.factsLoader = loadShippingHomeFacts,
     this.requestServiceBuilder,
     this.opener,
@@ -65,6 +66,10 @@ class ShippingHomeSection extends StatefulWidget {
 
   /// The console's other sections, for the tail.
   final List<HomeTool> tools;
+
+  /// False when the standard home follows this block and ends with the tail
+  /// itself: the console and assistant rows are then shown once, at the end.
+  final bool showTail;
 
   final ShippingHomeFactsLoader factsLoader;
 
@@ -252,7 +257,8 @@ class _ShippingHomeSectionState extends State<ShippingHomeSection> {
             rows: widget.moneyRows,
           ),
         ],
-        BusinessHomeTail(tools: widget.tools, businessId: widget.businessId),
+        if (widget.showTail)
+          BusinessHomeTail(tools: widget.tools, businessId: widget.businessId),
       ],
     );
   }

@@ -23510,4 +23510,11 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get pcsFromListBack => 'Retour à la liste';
+
+  @override
+  String get nhmMainWorkTitle => 'Activité principale';
+
+  @override
+  String get nhmMainWorkHelp =>
+      'L\'accueil de l\'application s\'ouvre sur cette activité.';
 }
