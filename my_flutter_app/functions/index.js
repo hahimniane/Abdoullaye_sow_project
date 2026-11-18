@@ -600,6 +600,7 @@ const {
   renderContainerLabels,
 } = require("./container_labels");
 const inventory = require("./inventory");
+const businessMainWork = require("./business_main_work");
 // Staff activity alerts: a car parked / a package saved, told to the others
 // (namespaced: its pure rules share names like toMillis with this file).
 const staffActivity = require("./staff_activity_alerts");
@@ -12428,6 +12429,7 @@ exports.updateBusinessProfile = onCall(
         freightCoverage,
         freightPaybackTable,
         pickupPlan,
+        mainWork,
       } = request.data || {};
       const user = await requireBusinessManager(callerUid, businessId);
       const db = admin.firestore();
@@ -12499,9 +12501,20 @@ exports.updateBusinessProfile = onCall(
         );
       }
 
+      // The work the app's home leads with (docs/APP_NEW_LOOK.md H2). An
+      // older app or console sends nothing, and the stored choice stays.
+      const mainWorkChange = businessMainWork.mainWorkChange(mainWork);
+      if (mainWorkChange.kind === "invalid") {
+        throw new HttpsError("invalid-argument", "Unknown main work");
+      }
+
       const now = FirestoreFieldValue.serverTimestamp();
       await businessRef.set({
         ...profile,
+        ...(mainWorkChange.kind === "set" ?
+          {mainWork: mainWorkChange.value} : {}),
+        ...(mainWorkChange.kind === "clear" ?
+          {mainWork: FirestoreFieldValue.delete()} : {}),
         enabledServices: normalizedServices,
         // A request from the application is answered once it is on.
         ...(normalizedServices.includes("inventory") &&
