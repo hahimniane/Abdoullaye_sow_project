@@ -985,12 +985,13 @@ class _HomeMenuState extends State<HomeMenu> {
     final works = homeWorks(
       canSell: layout != ShopHomeLayout.standard,
       canPark: activityCategories.contains(ServiceCategory.parking),
-      canShip:
-          !auth.isAdmin &&
-          auth.hasBusinessDashboardAccess &&
-          auth.hasContainersAccess &&
-          _businessId.isNotEmpty &&
-          auth.effectiveBusinessServices.any(shippingHomeServices.contains),
+      canShip: homeCanShip(
+        isAdmin: auth.isAdmin,
+        hasBusinessDashboardAccess: auth.hasBusinessDashboardAccess,
+        hasContainersAccess: auth.hasContainersAccess,
+        hasBusiness: _businessId.isNotEmpty,
+        services: auth.effectiveBusinessServices,
+      ),
       canSellCars: activityCategories.contains(ServiceCategory.sales),
       canTransport: activityCategories.contains(ServiceCategory.transport),
     );

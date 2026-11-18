@@ -8,6 +8,7 @@
 library;
 
 import '../models/business_service.dart' show BusinessServiceKey;
+import 'shipping_home.dart' show shippingHomeServices;
 
 /// The works a business home can lead with.
 enum HomeWork {
@@ -106,13 +107,13 @@ enum HomePart {
 ///
 /// - Main work shop (or none chosen and the person may sell): the shop block
 ///   first, then the standard services block, exactly as before the setting.
-/// - Main work shipping, for a person who may ship at a business that has
-///   another work they can do: the simple shipping block first, then the
-///   standard services block (which carries the other works, and the shop
+/// - Main work shipping, chosen by the owner, for a person who may ship at a
+///   business that has another work they can do: the simple shipping block
+///   first, then the standard services block (which carries the other works, and the shop
 ///   block inside it when the person may sell).
 /// - Any other main work (parking, car sales, transport) or no work at all:
 ///   the standard services block leads; the shop block, when the person may
-///   sell, follows it.
+///   sell, follows it. That includes shipping when nobody chose it.
 ///
 /// A shipping-only person never reaches this: the home's own simple-shipping
 /// rule answers first. [shop] is always the last part when it is not first,
@@ -121,10 +122,14 @@ List<HomePart> homeParts({required List<HomeWork> works, String? stored}) {
   final main = mainHomeWork(works, stored);
   if (main == null) return const [HomePart.services];
   final canSell = works.contains(HomeWork.shop);
-  if (main == HomeWork.shop) return const [HomePart.shop, HomePart.services];
-  if (main == HomeWork.shipping && works.length > 1) {
+  // Shipping leads only when the owner chose it (it is never the default:
+  // before the setting, such a person got the standard home).
+  if (HomeWork.fromKey(stored) == HomeWork.shipping &&
+      works.contains(HomeWork.shipping) &&
+      works.length > 1) {
     return [HomePart.shipping, HomePart.services, if (canSell) HomePart.shop];
   }
+  if (main == HomeWork.shop) return const [HomePart.shop, HomePart.services];
   return [HomePart.services, if (canSell) HomePart.shop];
 }
 
@@ -160,3 +165,20 @@ String? mainWorkToSave(String? chosen, Iterable<String> services) {
   if (work == null || on.length < 2 || !on.contains(work)) return null;
   return work.key;
 }
+
+/// Whether shipping is a work this person can lead the home with: not a
+/// platform admin, a member of the business, who holds the Containers access
+/// (`auth.hasContainersAccess`), at a business with a package-shipping
+/// service. The same gates the simple shipping home asks.
+bool homeCanShip({
+  required bool isAdmin,
+  required bool hasBusinessDashboardAccess,
+  required bool hasContainersAccess,
+  required bool hasBusiness,
+  required Iterable<String> services,
+}) =>
+    !isAdmin &&
+    hasBusinessDashboardAccess &&
+    hasContainersAccess &&
+    hasBusiness &&
+    services.any(shippingHomeServices.contains);

@@ -511,21 +511,22 @@ void main() {
         _layout(services: ['carParking', 'barrelShipping']),
         ShippingHomeLayout.standard,
       );
-      // The simple home is one branch; the standard one is its else.
-      final branch = src.indexOf('else if (simpleShipping) ...[');
-      final standard = src.indexOf('] else ...[', branch);
+      // The simple home is the shipping builder; the standard one is the
+      // services builder, and only that one builds the services block.
+      final branch = src.indexOf('shipping: () =>');
+      final standard = src.indexOf('services: (shopBelow)', branch);
       expect(branch, greaterThan(0));
       expect(standard, greaterThan(branch));
-      expect(src.substring(standard), contains('_ServicesSection('));
+      expect(src.substring(standard), contains('HomeServicesSection('));
       expect(
         src.substring(branch, standard),
-        isNot(contains('_ServicesSection(')),
+        isNot(contains('HomeServicesSection(')),
       );
     });
 
     test('the standard home keeps its header row for the simple one too', () {
       final src = home();
-      expect(src, contains('if (layout == ShopHomeLayout.standard) ...['));
+      expect(src, contains('header: Row('));
       expect(src, contains('CustomerNotificationBell()'));
       expect(src, contains('LanguageToggle()'));
     });
@@ -552,10 +553,10 @@ void main() {
 
     test('the activity feed shows under it only when it has records', () {
       final src = home();
-      final branch = src.indexOf('else if (simpleShipping) ...[');
-      final standard = src.indexOf('] else ...[', branch);
+      final branch = src.indexOf('shipping: () =>');
+      final standard = src.indexOf('services: (shopBelow)', branch);
       final block = src.substring(branch, standard);
-      expect(block, contains('if (showRecords) ...['));
+      expect(block, contains('if (simpleShipping && showRecords) ...['));
       expect(block, contains('activity,'));
       // And no history button on a clean screen.
       expect(src, contains('(simpleShipping && !showRecords)'));
