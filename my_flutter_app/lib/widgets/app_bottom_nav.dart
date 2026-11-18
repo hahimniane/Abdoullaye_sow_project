@@ -223,19 +223,24 @@ class AppBottomNav extends StatelessWidget {
                     size: 23,
                   ),
                   const SizedBox(height: 5),
-                  Text(
-                    item.label,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: isSelected ? AppColors.cobalt : AppColors.muted,
-                      fontWeight: isSelected
-                          ? FontWeight.w700
-                          : FontWeight.w600,
-                      fontSize: 10.5,
-                      height: 1.1,
-                      letterSpacing: 0,
+                  // One line, shrunk a little when it must: with six tabs a
+                  // long label ("Paramètres") used to break mid-word.
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      item.label,
+                      maxLines: 1,
+                      softWrap: false,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: isSelected ? AppColors.cobalt : AppColors.muted,
+                        fontWeight: isSelected
+                            ? FontWeight.w700
+                            : FontWeight.w600,
+                        fontSize: 10.5,
+                        height: 1.1,
+                        letterSpacing: 0,
+                      ),
                     ),
                   ),
                 ],
